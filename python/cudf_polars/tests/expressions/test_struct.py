@@ -8,6 +8,7 @@ import polars as pl
 
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
+    assert_ir_translation_raises,
 )
 
 
@@ -24,6 +25,22 @@ def test_value_counts(ldf, name, normalize):
         pl.col("a").value_counts(sort=True, name=name, normalize=normalize)
     )
     assert_gpu_result_equal(query)
+
+
+def test_value_counts_normalize_div_by_zero():
+    ldf = pl.LazyFrame({"a": []}, schema={"a": pl.Int64()})
+    query = ldf.select(pl.col("a").value_counts(normalize=True))
+    assert_gpu_result_equal(query)
+
+
+def test_groupby_value_counts_notimplemented():
+    lgb = pl.LazyFrame({"a": [1, 2, 3, 4, 5], "b": [1, 2, 3, 4, 5]}).group_by("a")
+    value_counts_expr = pl.col("b").value_counts()
+    query = lgb.agg(value_counts_expr)
+    assert_ir_translation_raises(query, NotImplementedError)
+
+    query = lgb.agg(value_counts_expr.first())
+    assert_ir_translation_raises(query, NotImplementedError)
 
 
 def test_struct(ldf):

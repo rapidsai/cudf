@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, TypeAlias, TypedDict
 import pylibcudf as plc
 from pylibcudf import expressions as plc_expr
 
+from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr
 from cudf_polars.dsl.traversal import CachingVisitor, reuse_if_unchanged
 from cudf_polars.typing import GenericTransformer
@@ -217,11 +218,16 @@ def _(node: expr.BooleanFunction, self: Transformer) -> plc_expr.Expression:
         if isinstance(haystack, expr.LiteralColumn) and len(haystack.value) < 16:
             # 16 is an arbitrary limit
             needle_ref = self(needles)
-            plc_dtype = plc.interop.from_arrow(haystack.value.type)
-            values = [
-                plc_expr.Literal(plc.Scalar.from_py(v, plc_dtype))
-                for v in haystack.value.to_pylist()
-            ]
+            if haystack.dtype.id() == plc.TypeId.LIST:
+                # Because we originally translated pl_expr.Literal with a list scalar
+                # to a expr.LiteralColumn, so the actual type is in the inner type
+                plc_dtype = DataType(haystack.dtype.polars.inner).plc
+            else:
+                plc_dtype = haystack.dtype.plc  # pragma: no cover
+            values = (
+                plc_expr.Literal(plc.Scalar.from_py(val, plc_dtype))
+                for val in haystack.value
+            )
             return reduce(
                 partial(plc_expr.Operation, plc_expr.ASTOperator.LOGICAL_OR),
                 (

@@ -19,7 +19,7 @@
 #include "random_column_generator.hpp"
 
 #include <cudf/aggregation.hpp>
-#include <cudf/ast/detail/operators.hpp>
+#include <cudf/ast/detail/operators.cuh>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column_factories.hpp>
