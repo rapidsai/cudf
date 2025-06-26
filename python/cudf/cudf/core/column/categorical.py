@@ -764,17 +764,6 @@ class CategoricalColumn(column.ColumnBase):
     def _mimic_inplace(
         self, other_col: ColumnBase, inplace: bool = False
     ) -> Self | None:
-        # if inplace:
-        #     self._offset = other_col.offset
-        #     self._size = other_col.size
-        #     self._dtype = other_col._dtype
-        #     self.set_base_data(None)
-        #     self.set_base_children(other_col.base_children)
-        #     self.set_base_mask(other_col.base_mask)
-        #     # TODO: self._clear_cache here?
-        #     out = None # type: ignore[arg-type]
-        # else:
-        #     out = other_col
         out = super()._mimic_inplace(other_col, inplace=inplace)  # type: ignore[arg-type]
         if inplace and isinstance(other_col, CategoricalColumn):
             self._codes = other_col.codes

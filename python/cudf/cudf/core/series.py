@@ -192,7 +192,6 @@ def _append_new_row_inplace(col: ColumnBase, value: ScalarLike) -> None:
             "Cannot append mixed types: "
             f"Column dtype {col.dtype} is not compatible with {res_col.dtype}"
         )
-        # res_col = res_col.as_categorical_column(cudf.CategoricalDtype())
     col._mimic_inplace(res_col, inplace=True)
 
 

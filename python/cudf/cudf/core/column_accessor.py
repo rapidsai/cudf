@@ -376,7 +376,6 @@ class ColumnAccessor(MutableMapping):
                     )
             except Exception as e:
                 raise e
-                # self.label_dtype = None
         else:
             self.label_dtype = None
         # TODO: we should move all insert logic here
