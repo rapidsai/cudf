@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 import pylibcudf as plc
 
 from cudf_polars.dsl.ir import IR, DataFrameScan, Scan, Sink, Union
+from cudf_polars.dsl.tracing import nvtx_annotate_cudf_polars
 from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 
@@ -376,6 +377,7 @@ def _prepare_sink(path: str) -> None:
     Path(path).mkdir(parents=True)
 
 
+@nvtx_annotate_cudf_polars(message="Sink")
 def _sink_partition(
     schema: Schema,
     kind: str,
