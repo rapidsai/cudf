@@ -412,6 +412,9 @@ def test_unsupported_regex_raises(pattern):
     q = df.select(pl.col("a").str.contains(pattern, strict=True))
     assert_ir_translation_raises(q, NotImplementedError)
 
+    q = df.select(pl.col("a").str.count_matches(pattern))
+    assert_ir_translation_raises(q, NotImplementedError)
+
 
 def test_string_to_integer(str_to_integer_data, integer_type):
     query = str_to_integer_data.select(pl.col("a").cast(integer_type))
