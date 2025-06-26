@@ -15,7 +15,7 @@ from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase, column_empty
 from cudf.core.missing import NA
 from cudf.core.mixins import Scannable
-from cudf.utils import cudautils
+from cudf.core.udf.utils import compile_udf
 from cudf.utils.dtypes import _get_nan_for_dtype
 
 if TYPE_CHECKING:
@@ -287,7 +287,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         if callable(unaryop):
             nb_type = numpy_support.from_dtype(self.dtype)
             nb_signature = (nb_type,)
-            compiled_op = cudautils.compile_udf(unaryop, nb_signature)
+            compiled_op = compile_udf(unaryop, nb_signature)
             np_dtype = np.dtype(compiled_op[1])
             return self.transform(compiled_op, np_dtype)
 
