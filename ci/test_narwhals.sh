@@ -25,6 +25,7 @@ rapids-pip-retry install -U -e .
 rapids-logger "Check narwhals versions"
 python -c "import narwhals; print(narwhals.show_versions())"
 
+# test_horizontal_slice_with_series: xpassing in Narwhals, fixed in cuDF https://github.com/rapidsai/cudf/pull/18558
 # test_rolling_mean_expr_lazy_grouped: xpassing in Narwhals
 # test_rolling_std_expr_lazy_grouped: xpassing in Narwhals
 # test_rolling_sum_expr_lazy_grouped: xpassing in Narwhals
@@ -40,7 +41,8 @@ and not test_rolling_sum_expr_lazy_grouped[cudf-expected_a5-4-1-True] \
 and not test_rolling_sum_expr_lazy_grouped[cudf-expected_a6-5-1-True] \
 and not test_rolling_var_expr_lazy_grouped[cudf-expected_a4-3-1-True-1] \
 and not test_rolling_var_expr_lazy_grouped[cudf-expected_a5-4-1-True-1] \
-and not test_rolling_var_expr_lazy_grouped[cudf-expected_a6-5-1-True-0]"
+and not test_rolling_var_expr_lazy_grouped[cudf-expected_a6-5-1-True-0] \
+and not test_horizontal_slice_with_series"
 
 rapids-logger "Run narwhals tests for cuDF"
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest \
