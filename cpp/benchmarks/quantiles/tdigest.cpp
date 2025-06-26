@@ -17,14 +17,8 @@
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/detail/tdigest/tdigest.hpp>
+#include <cudf/filling.hpp>
 #include <cudf/utilities/default_stream.hpp>
-
-#include <rmm/exec_policy.hpp>
-
-#include <cuda/functional>
-#include <thrust/copy.h>
-#include <thrust/execution_policy.h>
-#include <thrust/sequence.h>
 
 #include <nvbench/nvbench.cuh>
 
@@ -78,35 +72,40 @@ void bm_tdigest_merge(nvbench::state& state)
   tdigest_children.push_back(maxes.release());
   cudf::test::structs_column_wrapper tdigest(std::move(tdigest_children));
 
-  rmm::device_uvector<cudf::size_type> group_offsets(num_groups + 1, stream, mr);
-  rmm::device_uvector<cudf::size_type> group_labels(num_tdigests, stream, mr);
-  auto group_offset_iter = cudf::detail::make_counting_transform_iterator(
-    0,
-    cuda::proclaim_return_type<cudf::size_type>(
-      [tdigests_per_group] __device__(cudf::size_type i) { return i * tdigests_per_group; }));
-  thrust::copy(rmm::exec_policy_nosync(stream, mr),
-               group_offset_iter,
-               group_offset_iter + num_groups + 1,
-               group_offsets.begin());
-  auto group_label_iter = cudf::detail::make_counting_transform_iterator(
-    0,
-    cuda::proclaim_return_type<cudf::size_type>(
-      [tdigests_per_group] __device__(cudf::size_type i) { return i / tdigests_per_group; }));
-  thrust::copy(rmm::exec_policy_nosync(stream, mr),
-               group_label_iter,
-               group_label_iter + num_tdigests,
-               group_labels.begin());
+  // group offsets, labels
+  auto zero       = cudf::numeric_scalar<cudf::size_type>(0);
+  auto indices    = cudf::sequence(num_tdigests, zero);
+  auto tpg_scalar = cudf::numeric_scalar<cudf::size_type>(tdigests_per_group);
+
+  auto group_offsets = cudf::sequence(num_groups + 1, zero, tpg_scalar, stream, mr);
+  // expand 0, 1, 2, 3, 4, into 0, 0, 0, 1, 1, 1, 2, 2, 2, etc
+  auto group_labels = std::move(
+    cudf::repeat(cudf::table_view({cudf::slice(indices->view(), {0, num_groups}).front()}),
+                 tdigests_per_group,
+                 stream,
+                 mr)
+      ->release()
+      .front());
+
+  stream.synchronize();
 
   state.add_element_count(total_centroids);
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
-  state.exec(nvbench::exec_tag::timer | nvbench::exec_tag::sync,
-             [&](nvbench::launch& launch, auto& timer) {
-               timer.start();
-               auto result = cudf::tdigest::detail::group_merge_tdigest(
-                 tdigest, group_offsets, group_labels, num_groups, max_centroids, stream, mr);
-               timer.stop();
-             });
+  state.exec(
+    nvbench::exec_tag::timer | nvbench::exec_tag::sync, [&](nvbench::launch& launch, auto& timer) {
+      timer.start();
+      auto result = cudf::tdigest::detail::group_merge_tdigest(
+        tdigest,
+        {group_offsets->view().begin<cudf::size_type>(),
+         static_cast<size_t>(group_offsets->size())},
+        {group_labels->view().begin<cudf::size_type>(), static_cast<size_t>(group_labels->size())},
+        num_groups,
+        max_centroids,
+        stream,
+        mr);
+      timer.stop();
+    });
 }
 
 void bm_tdigest_reduce(nvbench::state& state)
@@ -120,52 +119,42 @@ void bm_tdigest_reduce(nvbench::state& state)
   auto mr     = rmm::mr::get_current_device_resource();
 
   // construct input values
-  auto col = cudf::make_numeric_column(
-    cudf::data_type{cudf::type_id::INT32}, num_rows, cudf::mask_state::UNALLOCATED, stream, mr);
-  thrust::sequence(rmm::exec_policy_nosync(stream),
-                   col->mutable_view().begin<int>(),
-                   col->mutable_view().end<int>(),
-                   0);
+  auto zero  = cudf::numeric_scalar<cudf::size_type>(0);
+  auto input = cudf::sequence(num_rows, zero);
 
   // group offsets, labels, valid counts
-  auto iter = thrust::make_counting_iterator(0);
-  rmm::device_uvector<cudf::size_type> group_offsets(num_groups + 1, stream, mr);
-  thrust::transform(rmm::exec_policy_nosync(stream),
-                    iter,
-                    iter + group_offsets.size(),
-                    group_offsets.begin(),
-                    cuda::proclaim_return_type<int>(
-                      [rows_per_group] __device__(int i) { return i * rows_per_group; }));
-  rmm::device_uvector<cudf::size_type> group_labels(num_rows, stream, mr);
-  thrust::transform(rmm::exec_policy_nosync(stream),
-                    iter,
-                    iter + num_rows,
-                    group_labels.begin(),
-                    cuda::proclaim_return_type<int>(
-                      [rows_per_group] __device__(int i) { return i / rows_per_group; }));
-  rmm::device_uvector<cudf::size_type> group_valid_counts(num_groups, stream, mr);
-  auto valid_count_iter = thrust::make_constant_iterator(rows_per_group);
-  thrust::copy(rmm::exec_policy_nosync(stream),
-               valid_count_iter,
-               valid_count_iter + group_valid_counts.size(),
-               group_valid_counts.begin());
+  auto rpg_scalar = cudf::numeric_scalar<cudf::size_type>(rows_per_group);
+
+  auto group_offsets = cudf::sequence(num_groups + 1, zero, rpg_scalar, stream, mr);
+  // expand 0, 1, 2, 3, 4, into 0, 0, 0, 1, 1, 1, 2, 2, 2, etc
+  auto group_labels =
+    std::move(cudf::repeat(cudf::table_view({cudf::slice(input->view(), {0, num_groups}).front()}),
+                           rows_per_group,
+                           stream,
+                           mr)
+                ->release()
+                .front());
+  auto group_valid_counts = cudf::sequence(num_groups, rpg_scalar, zero);
 
   stream.synchronize();
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
-  state.exec(nvbench::exec_tag::timer | nvbench::exec_tag::sync,
-             [&](nvbench::launch& launch, auto& timer) {
-               timer.start();
-               auto result = cudf::tdigest::detail::group_tdigest(*col,
-                                                                  group_offsets,
-                                                                  group_labels,
-                                                                  group_valid_counts,
-                                                                  num_groups,
-                                                                  max_centroids,
-                                                                  stream,
-                                                                  mr);
-               timer.stop();
-             });
+  state.exec(
+    nvbench::exec_tag::timer | nvbench::exec_tag::sync, [&](nvbench::launch& launch, auto& timer) {
+      timer.start();
+      auto result = cudf::tdigest::detail::group_tdigest(
+        *input,
+        {group_offsets->view().begin<cudf::size_type>(),
+         static_cast<size_t>(group_offsets->size())},
+        {group_labels->view().begin<cudf::size_type>(), static_cast<size_t>(group_labels->size())},
+        {group_valid_counts->view().begin<cudf::size_type>(),
+         static_cast<size_t>(group_valid_counts->size())},
+        num_groups,
+        max_centroids,
+        stream,
+        mr);
+      timer.stop();
+    });
 }
 
 NVBENCH_BENCH(bm_tdigest_merge)
