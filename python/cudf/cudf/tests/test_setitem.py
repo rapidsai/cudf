@@ -467,8 +467,8 @@ def test_series_set_item_range_index(ps, arg):
 def test_series_set_item_index_reference():
     gs1 = cudf.Series([1], index=[7])
     gs2 = cudf.Series([2], index=gs1.index)
-    gs1.loc[11] = 2
 
+    gs1.loc[11] = 2
     ps1 = pd.Series([1], index=[7])
     ps2 = pd.Series([2], index=ps1.index)
     ps1.loc[11] = 2

@@ -24,6 +24,7 @@ from cudf.api.types import (
     is_dict_like,
     is_integer,
     is_scalar,
+    is_string_dtype,
 )
 from cudf.core import indexing_utils
 from cudf.core._compat import PANDAS_LT_300
@@ -34,6 +35,7 @@ from cudf.core.accessors import (
     StructMethods,
 )
 from cudf.core.column import (
+    CategoricalColumn,
     ColumnBase,
     IntervalColumn,
     as_column,
@@ -57,6 +59,7 @@ from cudf.core.indexed_frame import (
 from cudf.core.resample import SeriesResampler
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.core.udf.scalar_function import SeriesApplyKernel
+from cudf.errors import MixedTypeError
 from cudf.utils import docutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
@@ -171,10 +174,26 @@ def _append_new_row_inplace(col: ColumnBase, value: ScalarLike) -> None:
     """
     val_col = as_column(value, dtype=col.dtype if value is None else None)
     to_type = find_common_type([val_col.dtype, col.dtype])
+    if (
+        cudf.get_option("mode.pandas_compatible")
+        and is_string_dtype(to_type)
+        and is_mixed_with_object_dtype(val_col, col)
+    ):
+        raise MixedTypeError("Cannot append mixed types")
     val_col = val_col.astype(to_type)
     old_col = col.astype(to_type)
-
-    col._mimic_inplace(concat_columns([old_col, val_col]), inplace=True)
+    res_col = concat_columns([old_col, val_col])
+    if (
+        cudf.get_option("mode.pandas_compatible")
+        and res_col.dtype != col.dtype
+        and isinstance(col, CategoricalColumn)
+    ):
+        raise MixedTypeError(
+            "Cannot append mixed types: "
+            f"Column dtype {col.dtype} is not compatible with {res_col.dtype}"
+        )
+        # res_col = res_col.as_categorical_column(cudf.CategoricalDtype())
+    col._mimic_inplace(res_col, inplace=True)
 
 
 class _SeriesIlocIndexer(_FrameIndexer):
@@ -302,8 +321,8 @@ class _SeriesLocIndexer(_FrameIndexer):
                     idx_copy = idx.copy(deep=True)
                     _append_new_row_inplace(idx_copy._column, key)
 
-                self._frame._index = idx_copy
                 _append_new_row_inplace(self._frame._column, value)
+                self._frame._index = idx_copy
                 return
             else:
                 raise e
