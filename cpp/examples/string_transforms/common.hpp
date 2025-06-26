@@ -76,7 +76,7 @@ std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(std::str
   } else if (name == "cuda" || name == "cuda-stats") {
     return make_cuda_mr();
   }
-  CUDF_FAIL("Unrecognized memory resource name", std::invalid_argument);
+  CUDF_FAIL("Unrecognized memory resource name: " + name, std::invalid_argument);
 }
 
 void write_csv(cudf::table_view const& tbl_view,
