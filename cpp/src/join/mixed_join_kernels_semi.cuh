@@ -39,7 +39,6 @@ namespace cudf::detail {
  *
  * @tparam block_size The number of threads per block for this kernel
  * @tparam has_nulls Whether or not the inputs may contain nulls.
- * @tparam Equality The type of the equality comparator used when probing the hash table.
  *
  * @param[in] has_nulls If the input has nulls
  * @param[in] left_table The left table
@@ -53,16 +52,33 @@ namespace cudf::detail {
  * @param[in] device_expression_data Container of device data required to evaluate the desired
  * expression.
  */
-template <typename Equality>
 void launch_mixed_join_semi(
   bool has_nulls,
   table_device_view left_table,
   table_device_view right_table,
   table_device_view probe,
   table_device_view build,
-  Equality equality_probe,
+  row_equality equality_probe,
   typename hash_set_type<double_row_equality_comparator,
                          row_hash>::template ref_type<cuco::contains_tag> set_ref,
+  cudf::device_span<bool> left_table_keep_mask,
+  cudf::ast::detail::expression_device_view device_expression_data,
+  detail::grid_1d const config,
+  int64_t shmem_size_per_block,
+  rmm::cuda_stream_view stream);
+
+/**
+ * @brief Overload for primitive row operators case
+ */
+void launch_mixed_join_semi(
+  bool has_nulls,
+  table_device_view left_table,
+  table_device_view right_table,
+  table_device_view probe,
+  table_device_view build,
+  cudf::row::primitive::row_equality_comparator equality_probe,
+  typename hash_set_type<primitive_double_row_equality_comparator,
+                         primitive_row_hash>::template ref_type<cuco::contains_tag> set_ref,
   cudf::device_span<bool> left_table_keep_mask,
   cudf::ast::detail::expression_device_view device_expression_data,
   detail::grid_1d const config,

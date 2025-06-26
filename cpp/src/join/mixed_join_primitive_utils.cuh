@@ -23,6 +23,10 @@
 
 namespace cudf::detail {
 
+// Primitive hash type for mixed joins - matches the pattern of row_hash in
+// mixed_join_common_utils.cuh
+using primitive_row_hash = cudf::row::primitive::row_hasher<cudf::hashing::detail::default_hash>;
+
 /**
  * @brief Equality comparator for use with cuco map methods that require expression evaluation
  * using primitive row operators.
