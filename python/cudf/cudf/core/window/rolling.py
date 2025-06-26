@@ -320,35 +320,24 @@ class Rolling(GetAttrGetItemMixin, Reducible):
                     [rolling_request],
                 ).columns()
             return ColumnBase.from_pylibcudf(plc_result)
-        else:
-            if isinstance(self.window, BaseIndexer):
-                start, end = self.window.get_window_bounds(
-                    num_values=len(self.obj),
-                    min_periods=self.min_periods,
-                    center=self.center,
-                    closed=None,
-                    step=None,
-                )
-                start = as_column(start, dtype=SIZE_TYPE_DTYPE)
-                end = as_column(end, dtype=SIZE_TYPE_DTYPE)
+        elif isinstance(self.window, BaseIndexer):
+            start, end = self.window.get_window_bounds(
+                num_values=len(self.obj),
+                min_periods=self.min_periods,
+                center=self.center,
+                closed=None,
+                step=None,
+            )
+            start = as_column(start, dtype=SIZE_TYPE_DTYPE)
+            end = as_column(end, dtype=SIZE_TYPE_DTYPE)
 
-                idx = as_column(range(len(start)))
-                preceding_window = (idx - start + np.int32(1)).astype(
-                    SIZE_TYPE_DTYPE
-                )
-                following_window = (end - idx - np.int32(1)).astype(
-                    SIZE_TYPE_DTYPE
-                )
-            else:
-                if self.center:
-                    # TODO: we can support this even though Pandas currently does not
-                    raise NotImplementedError(
-                        "center is not implemented for offset-based windows"
-                    )
-                preceding_window = as_column(self.window)
-                following_window = as_column(
-                    0, length=self.window.size, dtype=self.window.dtype
-                )
+            idx = as_column(range(len(start)))
+            preceding_window = (idx - start + np.int32(1)).astype(
+                SIZE_TYPE_DTYPE
+            )
+            following_window = (end - idx - np.int32(1)).astype(
+                SIZE_TYPE_DTYPE
+            )
             pre = preceding_window.to_pylibcudf(mode="read")
             fwd = following_window.to_pylibcudf(mode="read")
             with acquire_spill_lock():
@@ -366,6 +355,11 @@ class Rolling(GetAttrGetItemMixin, Reducible):
                         ).plc_obj,
                     )
                 )
+        else:
+            raise ValueError(
+                "self.window should have been an int, BaseIndexer, or a pandas.Timedelta "
+                f"not {type(self.window).__name__}"
+            )
 
     def _reduce(
         self,
@@ -572,14 +566,6 @@ class RollingGroupby(Rolling):
         )
 
         super().__init__(obj, window, min_periods=min_periods, center=center)
-
-        if not (
-            is_integer(self.window) or isinstance(self.window, pd.Timedelta)
-        ):
-            gb_size = groupby.size().sort_index()
-            self._group_starts = (
-                gb_size.cumsum().shift(1).fillna(0).repeat(gb_size)
-            )
 
     def _apply_agg(self, agg_name: str, **agg_kwargs) -> DataFrame | Series:
         index = MultiIndex._from_data(
