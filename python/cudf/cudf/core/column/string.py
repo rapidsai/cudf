@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, cast
 
@@ -22,6 +23,7 @@ from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     dtype_to_pylibcudf_type,
+    get_dtype_of_same_kind,
     is_dtype_obj_string,
     is_pandas_nullable_extension_dtype,
 )
@@ -30,7 +32,7 @@ from cudf.utils.temporal import infer_format
 from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterable
 
     import cupy
     import numba.cuda
@@ -282,15 +284,7 @@ class StringColumn(ColumnBase):
             skipna=skipna, min_count=min_count
         )
         if isinstance(result_col, type(self)):
-            with acquire_spill_lock():
-                plc_column = plc.strings.combine.join_strings(
-                    result_col.to_pylibcudf(mode="read"),
-                    pa_scalar_to_plc_scalar(pa.scalar("")),
-                    pa_scalar_to_plc_scalar(pa.scalar(None, type=pa.string())),
-                )
-                return ColumnBase.from_pylibcudf(plc_column).element_indexing(
-                    0
-                )
+            return result_col.join_strings("", None).element_indexing(0)
         else:
             return result_col
 
@@ -311,12 +305,7 @@ class StringColumn(ColumnBase):
 
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
         if dtype.kind == "b":
-            with acquire_spill_lock():
-                plc_column = plc.strings.attributes.count_characters(
-                    self.to_pylibcudf(mode="read")
-                )
-                result = ColumnBase.from_pylibcudf(plc_column)
-            result = result > np.int8(0)
+            result = self.count_characters() > np.int8(0)
             if not is_pandas_nullable_extension_dtype(dtype):
                 result = result.fillna(False)
             return result._with_type_metadata(dtype)  # type: ignore[return-value]
@@ -366,11 +355,7 @@ class StringColumn(ColumnBase):
                 )
             is_nat = self == "NaT"
             without_nat = self.apply_boolean_mask(is_nat.unary_operator("not"))
-            with acquire_spill_lock():
-                plc_column = plc.strings.attributes.count_characters(
-                    without_nat.to_pylibcudf(mode="read")
-                )
-                char_counts = ColumnBase.from_pylibcudf(plc_column)
+            char_counts = without_nat.count_characters()  # type: ignore[attr-defined]
             if char_counts.distinct_count(dropna=True) != 1:
                 # Unfortunately disables OK cases like:
                 # ["2020-01-01", "2020-01-01 00:00:00"]
@@ -561,7 +546,9 @@ class StringColumn(ColumnBase):
                     return as_column(
                         op == "__ne__",
                         length=len(self),
-                        dtype=np.dtype(np.bool_),
+                        dtype=get_dtype_of_same_kind(
+                            self.dtype, np.dtype(np.bool_)
+                        ),
                     ).set_mask(self.mask)
                 else:
                     return NotImplemented
@@ -573,21 +560,9 @@ class StringColumn(ColumnBase):
                         as_column(other, length=len(self)),
                     )
                 lhs, rhs = (other, self) if reflect else (self, other)
-
-                with acquire_spill_lock():
-                    plc_column = plc.strings.combine.concatenate(
-                        plc.Table(
-                            [
-                                lhs.to_pylibcudf(mode="read"),
-                                rhs.to_pylibcudf(mode="read"),
-                            ]
-                        ),
-                        pa_scalar_to_plc_scalar(pa.scalar("")),
-                        pa_scalar_to_plc_scalar(
-                            pa.scalar(None, type=pa.string())
-                        ),
-                    )
-                    return ColumnBase.from_pylibcudf(plc_column)
+                return lhs.concatenate([rhs], "", None)._with_type_metadata(
+                    self.dtype
+                )
             elif op in {
                 "__eq__",
                 "__ne__",
@@ -602,7 +577,12 @@ class StringColumn(ColumnBase):
                     other = pa_scalar_to_plc_scalar(other)
                 lhs, rhs = (other, self) if reflect else (self, other)
                 return binaryop.binaryop(
-                    lhs=lhs, rhs=rhs, op=op, dtype=np.dtype(np.bool_)
+                    lhs=lhs,
+                    rhs=rhs,
+                    op=op,
+                    dtype=get_dtype_of_same_kind(
+                        self.dtype, np.dtype(np.bool_)
+                    ),
                 )
         return NotImplemented
 
@@ -1192,3 +1172,360 @@ class StringColumn(ColumnBase):
             self.to_pylibcudf(mode="read")
         )
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def count_characters(self) -> NumericalColumn:
+        plc_column = plc.strings.attributes.count_characters(
+            self.to_pylibcudf(mode="read")
+        )
+        return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def count_bytes(self) -> NumericalColumn:
+        plc_column = plc.strings.attributes.count_bytes(
+            self.to_pylibcudf(mode="read")
+        )
+        return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def join_strings(self, separator: str, na_rep: str | None) -> Self:
+        plc_column = plc.strings.combine.join_strings(
+            self.to_pylibcudf(mode="read"),
+            pa_scalar_to_plc_scalar(pa.scalar(separator)),
+            pa_scalar_to_plc_scalar(pa.scalar(na_rep, type=pa.string())),
+        )
+        return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def concatenate(
+        self, others: Iterable[Self], sep: str, na_rep: str | None
+    ) -> Self:
+        plc_column = plc.strings.combine.concatenate(
+            plc.Table(
+                [
+                    col.to_pylibcudf(mode="read")
+                    for col in itertools.chain([self], others)
+                ]
+            ),
+            pa_scalar_to_plc_scalar(pa.scalar(sep)),
+            pa_scalar_to_plc_scalar(pa.scalar(na_rep, type=pa.string())),
+        )
+        return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def extract(self, pattern: str, flags: int) -> dict[int, Self]:
+        plc_table = plc.strings.extract.extract(
+            self.to_pylibcudf(mode="read"),
+            plc.strings.regex_program.RegexProgram.create(pattern, flags),
+        )
+        return dict(
+            enumerate(
+                type(self).from_pylibcudf(col) for col in plc_table.columns()
+            )
+        )
+
+    @acquire_spill_lock()
+    def contains_re(self, pattern: str, flags: int) -> Self:
+        plc_column = plc.strings.contains.contains_re(
+            self.to_pylibcudf(mode="read"),
+            plc.strings.regex_program.RegexProgram.create(pattern, flags),
+        )
+        return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def str_contains(self, pattern: str | Self) -> Self:
+        if isinstance(pattern, str):
+            pattern = pa_scalar_to_plc_scalar(pa.scalar(pattern))
+        else:
+            pattern = pattern.to_pylibcudf(mode="read")
+        plc_column = plc.strings.find.contains(
+            self.to_pylibcudf(mode="read"),
+            pattern,
+        )
+        return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def like(self, pattern: str, escape: str) -> Self:
+        plc_column = plc.strings.contains.like(
+            self.to_pylibcudf(mode="read"),
+            pa_scalar_to_plc_scalar(pa.scalar(pattern)),
+            pa_scalar_to_plc_scalar(pa.scalar(escape)),
+        )
+        return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def repeat_strings(self, repeats: int | ColumnBase) -> Self:
+        if isinstance(repeats, ColumnBase):
+            repeats = repeats.to_pylibcudf(mode="read")
+        plc_column = plc.strings.repeat.repeat_strings(
+            self.to_pylibcudf(mode="read"),
+            repeats,
+        )
+        return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def replace_re(
+        self,
+        pattern: list[str] | str,
+        replacement: Self | pa.Scalar,
+        max_replace_count: int = -1,
+    ) -> Self:
+        if isinstance(pattern, list) and isinstance(replacement, type(self)):
+            replacement = replacement.to_pylibcudf(mode="read")
+        elif isinstance(pattern, str) and isinstance(replacement, pa.Scalar):
+            pattern = plc.strings.regex_program.RegexProgram.create(
+                pattern,
+                plc.strings.regex_flags.RegexFlags.DEFAULT,
+            )
+            replacement = pa_scalar_to_plc_scalar(replacement)
+        else:
+            raise ValueError("Invalid pattern and replacement types")
+        plc_column = plc.strings.replace_re.replace_re(
+            self.to_pylibcudf(mode="read"),
+            pattern,
+            replacement,
+            max_replace_count,
+        )
+        return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def replace_str(self, pattern: str, replacement: pa.Scalar) -> Self:
+        plc_result = plc.strings.replace.replace(
+            self.to_pylibcudf(mode="read"),
+            pa_scalar_to_plc_scalar(pa.scalar(pattern)),
+            pa_scalar_to_plc_scalar(replacement),
+        )
+        return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def replace_with_backrefs(self, pattern: str, replacement: str) -> Self:
+        plc_result = plc.strings.replace_re.replace_with_backrefs(
+            self.to_pylibcudf(mode="read"),
+            plc.strings.regex_program.RegexProgram.create(
+                pattern, plc.strings.regex_flags.RegexFlags.DEFAULT
+            ),
+            replacement,
+        )
+        return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def slice_strings(
+        self,
+        start: int | None | NumericalColumn,
+        stop: int | None | NumericalColumn,
+        step: int | None = None,
+    ) -> Self:
+        if isinstance(start, ColumnBase) and isinstance(stop, ColumnBase):
+            start = start.to_pylibcudf(mode="read")
+            stop = stop.to_pylibcudf(mode="read")
+        elif all(isinstance(x, int) or x is None for x in (start, stop)):
+            param_dtype = pa.int32()
+            start = pa_scalar_to_plc_scalar(pa.scalar(start, type=param_dtype))
+            stop = pa_scalar_to_plc_scalar(pa.scalar(stop, type=param_dtype))
+            step = pa_scalar_to_plc_scalar(pa.scalar(step, type=param_dtype))
+        else:
+            raise ValueError("Invalid start and stop types")
+        plc_result = plc.strings.slice.slice_strings(
+            self.to_pylibcudf(mode="read"), start, stop, step
+        )
+        return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def all_characters_of_type(
+        self,
+        char_type: plc.strings.char_types.StringCharacterTypes,
+        case_type: plc.strings.char_types.StringCharacterTypes = plc.strings.char_types.StringCharacterTypes.ALL_TYPES,
+    ) -> NumericalColumn:
+        plc_result = plc.strings.char_types.all_characters_of_type(
+            self.to_pylibcudf(mode="read"), char_type, case_type
+        )
+        return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def filter_characters_of_type(
+        self,
+        types_to_remove: plc.strings.char_types.StringCharacterTypes,
+        replacement: str,
+        types_to_keep: plc.strings.char_types.StringCharacterTypes,
+    ) -> Self:
+        plc_column = plc.strings.char_types.filter_characters_of_type(
+            self.to_pylibcudf(mode="read"),
+            types_to_remove,
+            pa_scalar_to_plc_scalar(pa.scalar(replacement, type=pa.string())),
+            types_to_keep,
+        )
+        return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def replace_slice(self, start: int, stop: int, repl: str) -> Self:
+        plc_result = plc.strings.replace.replace_slice(
+            self.to_pylibcudf(mode="read"),
+            pa_scalar_to_plc_scalar(pa.scalar(repl, type=pa.string())),
+            start,
+            stop,
+        )
+        return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def get_json_object(
+        self,
+        json_path: str,
+        allow_single_quotes: bool,
+        strip_quotes_from_single_strings: bool,
+        missing_fields_as_nulls: bool,
+    ) -> Self:
+        options = plc.json.GetJsonObjectOptions(
+            allow_single_quotes=allow_single_quotes,
+            strip_quotes_from_single_strings=(
+                strip_quotes_from_single_strings
+            ),
+            missing_fields_as_nulls=missing_fields_as_nulls,
+        )
+        plc_result = plc.json.get_json_object(
+            self.to_pylibcudf(mode="read"),
+            pa_scalar_to_plc_scalar(pa.scalar(json_path)),
+            options,
+        )
+        return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def pad(
+        self, width: int, side: plc.strings.side_type.SideType, fillchar: str
+    ) -> Self:
+        plc_result = plc.strings.padding.pad(
+            self.to_pylibcudf(mode="read"),
+            width,
+            side,
+            fillchar,
+        )
+        return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def zfill(self, width: int) -> Self:
+        plc_result = plc.strings.padding.zfill(
+            self.to_pylibcudf(mode="read"),
+            width,
+        )
+        return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def strip(
+        self, side: plc.strings.side_type.SideType, to_strip: str | None = None
+    ) -> Self:
+        plc_result = plc.strings.strip.strip(
+            self.to_pylibcudf(mode="read"),
+            side,
+            pa_scalar_to_plc_scalar(
+                pa.scalar(to_strip or "", type=pa.string())
+            ),
+        )
+        return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def wrap(self, width: int) -> Self:
+        plc_result = plc.strings.wrap.wrap(
+            self.to_pylibcudf(mode="read"),
+            width,
+        )
+        return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def count_re(self, pattern: str, flags: int) -> NumericalColumn:
+        plc_result = plc.strings.contains.count_re(
+            self.to_pylibcudf(mode="read"),
+            plc.strings.regex_program.RegexProgram.create(pattern, flags),
+        )
+        return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def findall(
+        self,
+        method: Callable[
+            [plc.Column, plc.strings.regex_program.RegexProgram], plc.Column
+        ],
+        pat: str,
+        flags: int = 0,
+    ) -> Self:
+        plc_result = method(
+            self.to_pylibcudf(mode="read"),
+            plc.strings.regex_program.RegexProgram.create(pat, flags),
+        )
+        return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def find_multiple(self, patterns: Self) -> Self:
+        plc_result = plc.strings.find_multiple.find_multiple(
+            self.to_pylibcudf(mode="read"),
+            patterns.to_pylibcudf(mode="read"),
+        )
+        return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def starts_ends_with(
+        self,
+        method: Callable[[plc.Column, plc.Column | plc.Scalar], plc.Column],
+        pat: str | Self,
+    ) -> Self:
+        if isinstance(pat, str):
+            plc_pat = pa_scalar_to_plc_scalar(pa.scalar(pat, type=pa.string()))
+        elif isinstance(pat, type(self)):
+            plc_pat = pat.to_pylibcudf(mode="read")
+        else:
+            raise TypeError(
+                f"expected a str or {type(self).__name__}, not {type(pat).__name__}"
+            )
+        plc_result = method(self.to_pylibcudf(mode="read"), plc_pat)
+        return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def find(
+        self,
+        method: Callable[[plc.Column, plc.Scalar, int, int], plc.Column],
+        sub: str,
+        start: int,
+        end: int,
+    ) -> Self:
+        plc_result = method(
+            self.to_pylibcudf(mode="read"),
+            pa_scalar_to_plc_scalar(pa.scalar(sub, type=pa.string())),
+            start,
+            end,
+        )
+        return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def matches_re(self, pattern: str, flags: int) -> Self:
+        plc_result = plc.strings.contains.matches_re(
+            self.to_pylibcudf(mode="read"),
+            plc.strings.regex_program.RegexProgram.create(pattern, flags),
+        )
+        return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def code_points(self) -> Self:
+        plc_result = plc.strings.attributes.code_points(
+            self.to_pylibcudf(mode="read"),
+        )
+        return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def translate(self, table: dict) -> Self:
+        plc_result = plc.strings.translate.translate(
+            self.to_pylibcudf(mode="read"),
+            str.maketrans(table),
+        )
+        return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def filter_characters(
+        self, table: dict, keep: bool = True, repl: str | None = None
+    ) -> Self:
+        plc_result = plc.strings.translate.filter_characters(
+            self.to_pylibcudf(mode="read"),
+            str.maketrans(table),
+            plc.strings.translate.FilterType.KEEP
+            if keep
+            else plc.strings.translate.FilterType.REMOVE,
+            pa_scalar_to_plc_scalar(pa.scalar(repl, type=pa.string())),
+        )
+        return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
