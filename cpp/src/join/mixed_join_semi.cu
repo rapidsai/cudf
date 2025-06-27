@@ -123,7 +123,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
     cudf::experimental::row::equality::preprocessed_table::create(build_table, stream);
 
   // Check if we can use primitive row operators for better performance
-  bool const use_primitive_operators = false;  // cudf::is_primitive_row_op_compatible(build_table);
+  bool const use_primitive_operators = cudf::is_primitive_row_op_compatible(build_table) and
+                                       cudf::is_primitive_row_op_compatible(right_conditional);
 
   // Common setup for both primitive and non-primitive paths
   auto const preprocessed_build_conditional =
