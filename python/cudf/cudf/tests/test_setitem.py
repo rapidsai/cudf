@@ -396,7 +396,6 @@ def test_loc_setitem_extend_empty_12504():
     assert_eq(df, cdf)
 
 
-@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/12505")
 def test_loc_setitem_extend_existing_12505():
     df = pd.DataFrame({"a": [0]})
     cdf = cudf.from_pandas(df)
@@ -467,8 +466,8 @@ def test_series_set_item_range_index(ps, arg):
 def test_series_set_item_index_reference():
     gs1 = cudf.Series([1], index=[7])
     gs2 = cudf.Series([2], index=gs1.index)
-    gs1.loc[11] = 2
 
+    gs1.loc[11] = 2
     ps1 = pd.Series([1], index=[7])
     ps2 = pd.Series([2], index=ps1.index)
     ps1.loc[11] = 2
