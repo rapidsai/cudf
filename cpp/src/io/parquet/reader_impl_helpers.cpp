@@ -1243,8 +1243,6 @@ aggregate_reader_metadata::select_row_groups(
     return std::pair{static_cast<int64_t>(from_opts.first), static_cast<size_t>(from_opts.second)};
   }();
 
-  std::cout << "rows_to_skip: " << rows_to_skip << ", rows_to_read: " << rows_to_read << std::endl;
-
   // If there are no input row groups specified and zero number of rows to read, return empty
   // selection
   if (row_group_indices.empty() and rows_to_read == 0) {
