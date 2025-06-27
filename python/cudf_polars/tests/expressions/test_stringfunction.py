@@ -14,7 +14,11 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_129, POLARS_VERSION_LT_130
+from cudf_polars.utils.versions import (
+    POLARS_VERSION_LT_129,
+    POLARS_VERSION_LT_130,
+    POLARS_VERSION_LT_131,
+)
 
 
 @pytest.fixture
@@ -300,14 +304,16 @@ def test_replace_re(ldf):
         ),
     ],
 )
-def test_replace_many(request, ldf, target, repl):
-    query = ldf.select(pl.col("a").str.replace_many(target, repl))
-    # TODO: Remove when we support implode agg
+def test_replace_many(ldf, target, repl):
+    q = ldf.select(pl.col("a").str.replace_many(target, repl))
     _need_support_for_implode_agg = isinstance(repl, list)
     if POLARS_VERSION_LT_129 or _need_support_for_implode_agg:
-        assert_gpu_result_equal(query)
+        assert_gpu_result_equal(q)
+    elif POLARS_VERSION_LT_131:
+        assert_ir_translation_raises(q, NotImplementedError)
     else:
-        assert_ir_translation_raises(query, NotImplementedError)
+        # Polars 1.31 now gives us replacement argument as a list
+        assert_gpu_result_equal(q)
 
 
 @pytest.mark.parametrize(
@@ -472,6 +478,27 @@ def test_string_join(ldf, ignore_nulls, delimiter):
     assert_gpu_result_equal(q)
 
 
+def test_string_reverse(ldf):
+    q = ldf.select(pl.col("a").str.reverse())
+    assert_gpu_result_equal(q)
+
+
+def test_string_to_titlecase():
+    df = pl.LazyFrame(
+        {
+            "quotes": [
+                "'e.t. phone home'",
+                "you talkin' to me?",
+                "to infinity,and BEYOND!",
+            ]
+        }
+    )
+    q = df.with_columns(
+        quotes_title=pl.col("quotes").str.to_titlecase(),
+    )
+    assert_gpu_result_equal(q)
+
+
 @pytest.mark.parametrize("tail", [1, 2, 999, -1, 0, None])
 def test_string_tail(ldf, tail):
     q = ldf.select(pl.col("a").str.tail(tail))
@@ -481,4 +508,13 @@ def test_string_tail(ldf, tail):
 @pytest.mark.parametrize("head", [1, 2, 999, -1, 0, None])
 def test_string_head(ldf, head):
     q = ldf.select(pl.col("a").str.head(head))
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("ignore_nulls", [True, False])
+@pytest.mark.parametrize("separator", ["*", ""])
+def test_concat_horizontal(ldf, ignore_nulls, separator):
+    q = ldf.select(
+        pl.concat_str(["a", "c"], separator=separator, ignore_nulls=ignore_nulls)
+    )
     assert_gpu_result_equal(q)

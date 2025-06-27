@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -159,7 +159,8 @@ test_case<bool> interpolate_extrema_low<bool>()
 // single
 
 template <typename T>
-std::enable_if_t<std::is_floating_point_v<T>, test_case<T>> single()
+test_case<T> single()
+  requires(std::is_floating_point_v<T>)
 {
   return test_case<T>{cudf::test::fixed_width_column_wrapper<T>({7.309999942779541}),
                       {
@@ -191,14 +192,16 @@ std::enable_if_t<std::is_floating_point_v<T>, test_case<T>> single()
 }
 
 template <typename T>
-std::enable_if_t<std::is_integral_v<T> and not cudf::is_boolean<T>(), test_case<T>> single()
+test_case<T> single()
+  requires(std::is_integral_v<T> and not cudf::is_boolean<T>())
 {
   return test_case<T>{cudf::test::fixed_width_column_wrapper<T>({1}),
                       {q_expect{0.7, 1, 1, 1, 1, 1}}};
 }
 
 template <typename T>
-std::enable_if_t<cudf::is_boolean<T>(), test_case<T>> single()
+test_case<T> single()
+  requires(cudf::is_boolean<T>())
 {
   return test_case<T>{cudf::test::fixed_width_column_wrapper<T>({1}),
                       {q_expect{0.7, 1.0, 1.0, 1.0, 1.0, 1.0}}};
@@ -207,7 +210,8 @@ std::enable_if_t<cudf::is_boolean<T>(), test_case<T>> single()
 // all_invalid
 
 template <typename T>
-std::enable_if_t<std::is_floating_point_v<T>, test_case<T>> all_invalid()
+test_case<T> all_invalid()
+  requires(std::is_floating_point_v<T>)
 {
   return test_case<T>{
     cudf::test::fixed_width_column_wrapper<T>({6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.01, 0.8, 5.7},
@@ -216,7 +220,8 @@ std::enable_if_t<std::is_floating_point_v<T>, test_case<T>> all_invalid()
 }
 
 template <typename T>
-std::enable_if_t<std::is_integral_v<T> and not cudf::is_boolean<T>(), test_case<T>> all_invalid()
+test_case<T> all_invalid()
+  requires(std::is_integral_v<T> and not cudf::is_boolean<T>())
 {
   return test_case<T>{cudf::test::fixed_width_column_wrapper<T>({6, 0, 3, 4, 2, 1, -1, 1, 6},
                                                                 {0, 0, 0, 0, 0, 0, 0, 0, 0}),
@@ -224,7 +229,8 @@ std::enable_if_t<std::is_integral_v<T> and not cudf::is_boolean<T>(), test_case<
 }
 
 template <typename T>
-std::enable_if_t<cudf::is_boolean<T>(), test_case<T>> all_invalid()
+test_case<T> all_invalid()
+  requires(cudf::is_boolean<T>())
 {
   return test_case<T>{cudf::test::fixed_width_column_wrapper<T>({1, 0, 1, 1, 0, 1, 0, 1, 1},
                                                                 {0, 0, 0, 0, 0, 0, 0, 0, 0}),
@@ -234,7 +240,8 @@ std::enable_if_t<cudf::is_boolean<T>(), test_case<T>> all_invalid()
 // some invalid
 
 template <typename T>
-std::enable_if_t<std::is_same_v<T, double>, test_case<T>> some_invalid()
+test_case<T> some_invalid()
+  requires(std::is_same_v<T, double>)
 {
   T high = 0.16;
   T low  = -1.024;
@@ -252,7 +259,8 @@ std::enable_if_t<std::is_same_v<T, double>, test_case<T>> some_invalid()
 }
 
 template <typename T>
-std::enable_if_t<std::is_same_v<T, float>, test_case<T>> some_invalid()
+test_case<T> some_invalid()
+  requires(std::is_same_v<T, float>)
 {
   T high     = 0.16;
   T low      = -1.024;
@@ -270,7 +278,8 @@ std::enable_if_t<std::is_same_v<T, float>, test_case<T>> some_invalid()
 }
 
 template <typename T>
-std::enable_if_t<std::is_integral_v<T> and not cudf::is_boolean<T>(), test_case<T>> some_invalid()
+test_case<T> some_invalid()
+  requires(std::is_integral_v<T> and not cudf::is_boolean<T>())
 {
   return test_case<T>{cudf::test::fixed_width_column_wrapper<T>({6, 0, 3, 4, 2, 1, -1, 1, 6},
                                                                 {0, 0, 1, 0, 0, 0, 0, 0, 1}),
@@ -281,7 +290,8 @@ std::enable_if_t<std::is_integral_v<T> and not cudf::is_boolean<T>(), test_case<
 }
 
 template <typename T>
-std::enable_if_t<cudf::is_boolean<T>(), test_case<T>> some_invalid()
+test_case<T> some_invalid()
+  requires(cudf::is_boolean<T>())
 {
   return test_case<T>{cudf::test::fixed_width_column_wrapper<T>({1, 0, 1, 1, 0, 1, 0, 1, 1},
                                                                 {0, 0, 1, 0, 1, 0, 0, 0, 0}),
@@ -294,7 +304,8 @@ std::enable_if_t<cudf::is_boolean<T>(), test_case<T>> some_invalid()
 // unsorted
 
 template <typename T>
-std::enable_if_t<std::is_floating_point_v<T>, test_case<T>> unsorted()
+test_case<T> unsorted()
+  requires(std::is_floating_point_v<T>)
 {
   return test_case<T>{
     cudf::test::fixed_width_column_wrapper<T>({6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.00, 0.8, 5.7}),
@@ -305,7 +316,8 @@ std::enable_if_t<std::is_floating_point_v<T>, test_case<T>> unsorted()
 }
 
 template <typename T>
-std::enable_if_t<std::is_integral_v<T> and not cudf::is_boolean<T>(), test_case<T>> unsorted()
+test_case<T> unsorted()
+  requires(std::is_integral_v<T> and not cudf::is_boolean<T>())
 {
   return std::is_signed<T>()
            ? test_case<T>{cudf::test::fixed_width_column_wrapper<T>({6, 0, 3, 4, 2, 1, -1, 1, 6}),
@@ -319,7 +331,8 @@ std::enable_if_t<std::is_integral_v<T> and not cudf::is_boolean<T>(), test_case<
 }
 
 template <typename T>
-std::enable_if_t<cudf::is_boolean<T>(), test_case<T>> unsorted()
+test_case<T> unsorted()
+  requires(cudf::is_boolean<T>())
 {
   return test_case<T>{
     cudf::test::fixed_width_column_wrapper<T>({0, 0, 1, 1, 0, 1, 1, 0, 1}),

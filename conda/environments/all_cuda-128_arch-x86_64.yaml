@@ -3,9 +3,7 @@
 channels:
 - rapidsai
 - rapidsai-nightly
-- dask/label/dev
 - conda-forge
-- nvidia
 dependencies:
 - aiobotocore>=2.2.0
 - boto3>=1.21.21
@@ -57,7 +55,7 @@ dependencies:
 - nbsphinx
 - ninja
 - notebook
-- numba-cuda>=0.11.0,<0.12.0a0
+- numba-cuda>=0.14.0,<0.15.0a0
 - numba>=0.59.1,<0.62.0a0
 - numpy>=1.23,<3.0a0
 - numpydoc
@@ -66,9 +64,9 @@ dependencies:
 - openpyxl
 - packaging
 - pandas
-- pandas>=2.0,<2.2.4dev0
+- pandas>=2.0,<2.4.0dev0
 - pandoc
-- polars>=1.25,<1.31
+- polars>=1.25,<1.32
 - pre-commit
 - pyarrow>=14.0.0,<20.0.0a0
 - pydata-sphinx-theme>=0.15.4
