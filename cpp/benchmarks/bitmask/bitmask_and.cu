@@ -133,6 +133,19 @@ void BM_multi_segment_bitmask_and(nvbench::state& state)
 
 }  // anonymous namespace
 
+/*
+ * The benchmarks included in this file measure the performance of segmented reduction operation
+ * , with the operator being bitwise AND, and the element being a bitmask vector.
+ *
+ * This operation is an important kernel in the construction of struct columns, and can be
+ * particularly expensive for wide tables with deeply nested struct columns. The benchmark axes
+ * chosen capture table properties such as child column count and table width (`num_segments`),
+ * expected depth of nesting (`expected_masks_per_segment`), and table row count (`mask_size_bits`).
+ *
+ * `BM_segmented_bitmask_and` performs the segmented reduction in a single kernel, while
+ * `BM_multi_segment_bitmask_and` performs the segmented reduction by launching a reduction kernel
+ * for each segment iteratively.
+ */
 NVBENCH_BENCH(BM_segmented_bitmask_and)
   .set_name("segmented_bitmask_and")
   .add_int64_axis("num_segments", {100, 1000, 10000})
