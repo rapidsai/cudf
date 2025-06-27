@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "common_sort_impl.cuh"
 #include "faster_sort_column_impl.cuh"
+#include "sort.hpp"
 #include "sort_column_impl.cuh"
 
 #include <cudf/column/column_factories.hpp>

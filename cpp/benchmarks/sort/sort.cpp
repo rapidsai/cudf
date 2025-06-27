@@ -26,7 +26,7 @@
 template <typename DataType>
 static void bench_sort(nvbench::state& state, nvbench::type_list<DataType>)
 {
-  auto const stable    = static_cast<bool>(state.get_int64("stable"));
+  auto const ordered   = static_cast<bool>(state.get_int64("ordered"));
   auto const num_rows  = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const num_cols  = static_cast<cudf::size_type>(state.get_int64("num_cols"));
   auto const nulls     = state.get_float64("nulls");
@@ -44,10 +44,11 @@ static void bench_sort(nvbench::state& state, nvbench::type_list<DataType>)
   state.add_global_memory_writes<nvbench::int32_t>(num_rows);
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    if (stable)
-      cudf::stable_sorted_order(input);
-    else
+    if (ordered) {
       cudf::sorted_order(input);
+    } else {
+      cudf::sort(input);
+    }
   });
 }
 
@@ -57,7 +58,7 @@ using Types = nvbench::type_list<int32_t, float, cudf::timestamp_ms>;
 
 NVBENCH_BENCH_TYPES(bench_sort, NVBENCH_TYPE_AXES(Types))
   .set_name("sort")
-  .add_int64_axis("stable", {0, 1})
   .add_float64_axis("nulls", {0, 0.1})
   .add_int64_axis("num_rows", {262144, 2097152, 16777216, 67108864})
-  .add_int64_axis("num_cols", {1, 8});
+  .add_int64_axis("num_cols", {1, 8})
+  .add_int64_axis("ordered", {0, 1});
