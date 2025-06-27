@@ -105,7 +105,7 @@ class primitive_pair_equal {
     cuco::pair<hash_value_type, size_type> const& lhs,
     cuco::pair<hash_value_type, size_type> const& rhs) const noexcept
   {
-    return lhs.first == rhs.first and _check_row_equality(rhs.second, lhs.second);
+    return lhs.first == rhs.first and _check_row_equality(lhs.second, rhs.second);
   }
 
  private:
