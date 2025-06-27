@@ -39,10 +39,6 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
                   cudf::device_span<bool> left_table_keep_mask,
                   cudf::ast::detail::expression_device_view device_expression_data)
 {
-  auto constexpr cg_size = hash_set_type<double_row_equality_comparator, row_hash>::cg_size;
-
-  auto const tile = cg::tiled_partition<cg_size>(cg::this_thread_block());
-
   // Normally the casting of a shared memory array is used to create multiple
   // arrays of different types from the shared memory buffer, but here it is
   // used to circumvent conflicts between arrays of different types between
@@ -51,7 +47,8 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
   auto intermediate_storage =
     reinterpret_cast<cudf::ast::detail::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
   auto thread_intermediate_storage =
-    intermediate_storage + (tile.meta_group_rank() * device_expression_data.num_intermediates);
+    intermediate_storage +
+    (cg::this_thread_block().thread_rank() * device_expression_data.num_intermediates);
 
   // Equality evaluator to use
   auto const evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
@@ -67,17 +64,14 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
 
   // Total number of rows to query the set
   auto const outer_num_rows = left_table.num_rows();
-  // Grid stride for the tile
-  auto const cg_grid_stride =
-    cudf::detail::grid_1d::grid_stride<DEFAULT_JOIN_BLOCK_SIZE>() / cg_size;
+  // Grid stride for the thread block
+  auto const cg_grid_stride = cudf::detail::grid_1d::grid_stride<DEFAULT_JOIN_BLOCK_SIZE>();
 
   // Find all the rows in the left table that are in the hash table
-  for (auto outer_row_index =
-         cudf::detail::grid_1d::global_thread_id<DEFAULT_JOIN_BLOCK_SIZE>() / cg_size;
+  for (auto outer_row_index = cudf::detail::grid_1d::global_thread_id<DEFAULT_JOIN_BLOCK_SIZE>();
        outer_row_index < outer_num_rows;
        outer_row_index += cg_grid_stride) {
-    auto const result = set_ref_equality.contains(tile, outer_row_index);
-    if (tile.thread_rank() == 0) { left_table_keep_mask[outer_row_index] = result; }
+    left_table_keep_mask[outer_row_index] = set_ref_equality.contains(outer_row_index);
   }
 }
 
@@ -93,10 +87,6 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) mixed_join_semi(
   cudf::device_span<bool> left_table_keep_mask,
   cudf::ast::detail::expression_device_view device_expression_data)
 {
-  auto constexpr cg_size = hash_set_type<double_row_equality_comparator, row_hash>::cg_size;
-
-  auto const tile = cg::tiled_partition<cg_size>(cg::this_thread_block());
-
   // Normally the casting of a shared memory array is used to create multiple
   // arrays of different types from the shared memory buffer, but here it is
   // used to circumvent conflicts between arrays of different types between
@@ -105,7 +95,8 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) mixed_join_semi(
   auto intermediate_storage =
     reinterpret_cast<cudf::ast::detail::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
   auto thread_intermediate_storage =
-    intermediate_storage + (tile.meta_group_rank() * device_expression_data.num_intermediates);
+    intermediate_storage +
+    (cg::this_thread_block().thread_rank() * device_expression_data.num_intermediates);
 
   // Equality evaluator to use
   auto const evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
@@ -121,17 +112,14 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) mixed_join_semi(
 
   // Total number of rows to query the set
   auto const outer_num_rows = left_table.num_rows();
-  // Grid stride for the tile
-  auto const cg_grid_stride =
-    cudf::detail::grid_1d::grid_stride<DEFAULT_JOIN_BLOCK_SIZE>() / cg_size;
+  // Grid stride for the thread block
+  auto const cg_grid_stride = cudf::detail::grid_1d::grid_stride<DEFAULT_JOIN_BLOCK_SIZE>();
 
   // Find all the rows in the left table that are in the hash table
-  for (auto outer_row_index =
-         cudf::detail::grid_1d::global_thread_id<DEFAULT_JOIN_BLOCK_SIZE>() / cg_size;
+  for (auto outer_row_index = cudf::detail::grid_1d::global_thread_id<DEFAULT_JOIN_BLOCK_SIZE>();
        outer_row_index < outer_num_rows;
        outer_row_index += cg_grid_stride) {
-    auto const result = set_ref_equality.contains(tile, outer_row_index);
-    if (tile.thread_rank() == 0) { left_table_keep_mask[outer_row_index] = result; }
+    left_table_keep_mask[outer_row_index] = set_ref_equality.contains(outer_row_index);
   }
 }
 
