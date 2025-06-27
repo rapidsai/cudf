@@ -122,33 +122,32 @@ CUDF_KERNEL void offset_bitmask_binop(Binop op,
  * The kernel performs the following operations:
  * 1. Maps each warp to a segment defined by segment_offsets
  * 2. For each segment, performs the binary operation on corresponding words of source bitmasks
- * 4. Counts the number of unset bits (nulls) in the resulting bitmask for each segment
- * 5. Writes the results to the destination mask and null counts array
+ * 3. Counts the number of unset bits (nulls) in the resulting bitmask for each segment
+ * 4. Writes the results to the destination mask and null counts array
  *
  * @tparam Binop           Type of binary operator
  *
  * @param op               The binary operator to apply to the bitmasks
- * @param destinations     Device span of pointers to destination bitmasks where results will be
- * written
+ * @param num_segments     Number of segments to process
+ * @param destinations     Array of pointers to destination bitmasks where results will be written
  * @param destination_size Size of each destination mask in bitmask words (not bits)
- * @param sources          Device span of pointers to source bitmasks to be operated on
- * @param source_begin_bits Device span of bit offsets from which each source mask is to be
- * processed
+ * @param sources          Array of pointers to source bitmasks to be operated on
+ * @param source_begin_bits Array of bit offsets from which each source mask is to be processed
  * @param source_size_bits The number of bits to process in each mask
- * @param segment_offsets  Device span of indices defining the segments in the sources array
- * @param null_counts      Device span where the count of unset bits for each segment will be
- * written
+ * @param segment_offsets  Array of indices defining the segments in the sources array
+ * @param null_counts      Array where the count of unset bits for each segment will be written
  *
  */
 template <typename Binop>
 CUDF_KERNEL void segmented_offset_bitmask_binop(Binop op,
-                                                device_span<bitmask_type*> destinations,
+                                                size_type num_segments,
+                                                bitmask_type** const destinations,
                                                 size_type destination_size,
-                                                device_span<bitmask_type const* const> sources,
-                                                device_span<size_type const> source_begin_bits,
+                                                bitmask_type const* const* const sources,
+                                                size_type const* const source_begin_bits,
                                                 size_type source_size_bits,
-                                                device_span<size_type const> segment_offsets,
-                                                device_span<size_type> null_counts)
+                                                size_type const* const segment_offsets,
+                                                size_type* const null_counts)
 {
   namespace cg = cooperative_groups;
 
@@ -161,8 +160,6 @@ CUDF_KERNEL void segmented_offset_bitmask_binop(Binop op,
   auto const lane    = warp.thread_rank();
 
   // Process one segment per warp.
-  auto const num_segments = segment_offsets.size() - 1;
-  // auto const segment_id    = blockIdx.x * (blockDim.x / warp.size()) + warp_id;
   auto const segment_id    = cudf::detail::grid_1d::global_thread_id() / warp.size();
   auto const segment_start = segment_offsets[segment_id];
   auto const segment_end   = segment_offsets[segment_id + 1];
@@ -384,13 +381,14 @@ rmm::device_uvector<size_type> inplace_segmented_bitmask_binop(
                 "For segmented bitmask operations, block size must be a multiple of warp size");
   segmented_offset_bitmask_binop<<<num_blocks, block_size, 0, stream.value()>>>(
     op,
-    dest_masks,
+    segment_offsets.size() - 1,
+    dest_masks.data(),
     dest_mask_size,
-    d_masks,
-    d_begin_bits,
+    d_masks.data(),
+    d_begin_bits.data(),
     mask_size_bits,
-    d_segment_offsets,
-    cudf::device_span<size_type>(d_null_counts.data(), d_null_counts.size()));
+    d_segment_offsets.data(),
+    d_null_counts.data());
   CUDF_CHECK_CUDA(stream.value());
   return d_null_counts;
 }
