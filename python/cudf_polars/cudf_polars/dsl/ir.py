@@ -37,7 +37,7 @@ from cudf_polars.dsl.tracing import nvtx_annotate_cudf_polars
 from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.dsl.utils.windows import range_window_bounds
 from cudf_polars.utils import dtypes
-from cudf_polars.utils.versions import POLARS_VERSION_LT_128
+from cudf_polars.utils.versions import POLARS_VERSION_LT_128, POLARS_VERSION_LT_131
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Iterable, Sequence
@@ -2153,13 +2153,15 @@ class MapFunction(IR):
                 # same sub-shapes
                 raise NotImplementedError("Explode with more than one column")
             self.options = (tuple(to_explode),)
-        elif self.name == "rename":
+        elif POLARS_VERSION_LT_131 and self.name == "rename":  # pragma: no cover
+            # As of 1.31, polars validates renaming in the IR
             old, new, strict = self.options
-            # TODO: perhaps polars should validate renaming in the IR?
             if len(new) != len(set(new)) or (
                 set(new) & (set(df.schema.keys()) - set(old))
             ):
-                raise NotImplementedError("Duplicate new names in rename.")
+                raise NotImplementedError(
+                    "Duplicate new names in rename."
+                )  # pragma: no cover
             self.options = (tuple(old), tuple(new), strict)
         elif self.name == "unpivot":
             indices, pivotees, variable_name, value_name = self.options
@@ -2221,7 +2223,7 @@ class MapFunction(IR):
             # No-op in our data model
             # Don't think this appears in a plan tree from python
             return df  # pragma: no cover
-        elif name == "rename":
+        elif POLARS_VERSION_LT_131 and name == "rename":  # pragma: no cover
             # final tag is "swapping" which is useful for the
             # optimiser (it blocks some pushdown operations)
             old, new, _ = options
