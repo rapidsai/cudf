@@ -5051,6 +5051,14 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         1    1    1    1  1.0 -2.0
         2    2    2    2  2.0 -4.0
         """
+        warnings.warn(
+            "DataFrame.apply_rows is deprecated and will be "
+            "removed in a future release. Please use `apply` "
+            "or use a custom numba kernel instead or refer "
+            "to the UDF guidelines for more information "
+            "https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html",
+            FutureWarning,
+        )
         for col in incols:
             current_col_dtype = self._data[col].dtype
             if current_col_dtype == CUDF_STRING_DTYPE or isinstance(
