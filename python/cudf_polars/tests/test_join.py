@@ -9,6 +9,7 @@ import polars as pl
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
+    get_default_engine,
 )
 
 
@@ -71,7 +72,7 @@ def test_non_coalesce_join(left, right, how, nulls_equal, join_expr):
     query = left.join(
         right, on=join_expr, how=how, nulls_equal=nulls_equal, coalesce=False
     )
-    assert_gpu_result_equal(query, check_row_order=how == "left")
+    assert_gpu_result_equal(query, check_row_order=False)
 
 
 @pytest.mark.parametrize(
@@ -85,16 +86,30 @@ def test_coalesce_join(left, right, how, nulls_equal, join_expr):
     query = left.join(
         right, on=join_expr, how=how, nulls_equal=nulls_equal, coalesce=True
     )
-    assert_gpu_result_equal(query, check_row_order=how == "left")
+    assert_gpu_result_equal(query, check_row_order=False)
 
 
 def test_left_join_with_slice(left, right, nulls_equal, zlice):
     q = left.join(right, on="a", how="left", nulls_equal=nulls_equal, coalesce=True)
 
     if zlice is not None:
+        # neither polars nor cudf guarantee row order.
+        # left.join(right).slice(slice) is a fundamentally sensitive to
+        # the row ordering of the join algorithm. So we can just check
+        # the things that invariant to the ordering.
         q = q.slice(*zlice)
 
-    assert_gpu_result_equal(q)
+        engine = get_default_engine()
+
+        # Check the number of rows
+        assert_gpu_result_equal(q.select(pl.len()))
+
+        # Check that the schema matches
+        result = q.collect(engine=engine)
+        assert result.schema == q.collect_schema()
+
+    else:
+        assert_gpu_result_equal(q, check_row_order=False)
 
 
 def test_cross_join(left, right, zlice):
@@ -114,7 +129,7 @@ def test_cross_join(left, right, zlice):
 )
 def test_join_literal_key(left, right, left_on, right_on):
     q = left.join(right, left_on=left_on, right_on=right_on, how="inner")
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, check_row_order=False)
 
 
 @pytest.mark.parametrize(

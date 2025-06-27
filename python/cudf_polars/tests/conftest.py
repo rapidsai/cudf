@@ -31,6 +31,17 @@ def pytest_addoption(parser):
         help="Scheduler to use for 'streaming' executor.",
     )
 
+    parser.addoption(
+        "--blocksize-mode",
+        action="store",
+        default="default",
+        choices=("small", "default"),
+        help=(
+            "Blocksize to use for 'streaming' executor. Set to 'small' "
+            "to run most tests with multiple partitions."
+        ),
+    )
+
 
 def pytest_configure(config):
     import cudf_polars.testing.asserts
@@ -43,6 +54,9 @@ def pytest_configure(config):
 
     cudf_polars.testing.asserts.DEFAULT_EXECUTOR = config.getoption("--executor")
     cudf_polars.testing.asserts.DEFAULT_SCHEDULER = config.getoption("--scheduler")
+    cudf_polars.testing.asserts.DEFAULT_BLOCKSIZE_MODE = config.getoption(
+        "--blocksize-mode"
+    )
 
 
 def pytest_sessionstart(session):
