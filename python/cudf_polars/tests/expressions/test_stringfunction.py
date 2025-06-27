@@ -14,7 +14,11 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_129, POLARS_VERSION_LT_130
+from cudf_polars.utils.versions import (
+    POLARS_VERSION_LT_129,
+    POLARS_VERSION_LT_130,
+    POLARS_VERSION_LT_131,
+)
 
 
 @pytest.fixture
@@ -300,14 +304,16 @@ def test_replace_re(ldf):
         ),
     ],
 )
-def test_replace_many(request, ldf, target, repl):
-    query = ldf.select(pl.col("a").str.replace_many(target, repl))
-    # TODO: Remove when we support implode agg
+def test_replace_many(ldf, target, repl):
+    q = ldf.select(pl.col("a").str.replace_many(target, repl))
     _need_support_for_implode_agg = isinstance(repl, list)
     if POLARS_VERSION_LT_129 or _need_support_for_implode_agg:
-        assert_gpu_result_equal(query)
+        assert_gpu_result_equal(q)
+    elif POLARS_VERSION_LT_131:
+        assert_ir_translation_raises(q, NotImplementedError)
     else:
-        assert_ir_translation_raises(query, NotImplementedError)
+        # Polars 1.31 now gives us replacement argument as a list
+        assert_gpu_result_equal(q)
 
 
 @pytest.mark.parametrize(
@@ -469,6 +475,11 @@ def test_string_to_numeric_invalid(numeric_type):
 @pytest.mark.parametrize("delimiter", ["", "/"])
 def test_string_join(ldf, ignore_nulls, delimiter):
     q = ldf.select(pl.col("a").str.join(delimiter, ignore_nulls=ignore_nulls))
+    assert_gpu_result_equal(q)
+
+
+def test_string_reverse(ldf):
+    q = ldf.select(pl.col("a").str.reverse())
     assert_gpu_result_equal(q)
 
 
