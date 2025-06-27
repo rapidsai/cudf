@@ -224,6 +224,25 @@ class flattened_table {
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 
+
+/**
+ * @brief Enforces null consistency in struct columns by propagating nulls from parent to descendants.
+ *
+ * For each struct column in the input vector, this function ensures that nulls from the root-level
+ * null mask are properly superimposed onto all descendant columns in the struct hierarchy.
+ * The function also sanitizes null strings/lists in the descendant columns to ensure nulls always 
+ * have their sizes equal to 0, maintaining consistent null semantics throughout the column hierarchy.
+ *
+ * @param columns Vector of columns to process, with struct columns getting null consistency enforcement
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate new device memory
+ * @return A vector of columns with nulls properly propagated from parent structs to all descendants
+ */
+[[nodiscard]] std::vector<std::unique_ptr<column>> enforce_null_consistency(
+    std::vector<std::unique_ptr<column>> columns,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr);
+
 /**
  * @brief Push down nulls from the given input column into its children columns, using bitwise AND.
  *

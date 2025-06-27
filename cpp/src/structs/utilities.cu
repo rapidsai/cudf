@@ -560,6 +560,84 @@ std::vector<std::unique_ptr<column>> superimpose_and_sanitize_nulls(
   return purged_columns;
 }
 
+std::vector<std::unique_ptr<column>> enforce_null_consistency(
+  std::vector<std::unique_ptr<column>> columns,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  
+  // Prepare containers to store information about struct columns
+  std::vector<size_type> struct_column_positions;  // Stores positions of struct columns in output
+  std::vector<bitmask_type const*> struct_root_masks;      // Stores null masks of struct columns
+  std::vector<std::unique_ptr<column>> struct_child_cols;  // Stores child columns of all structs
+                                                           
+  // Helper struct to store and manipulate struct column properties
+  struct contents {
+    size_type null_count                          = 0;        // Number of null values in the struct
+    std::unique_ptr<rmm::device_buffer> null_mask = nullptr;  // Null mask buffer for the struct
+    size_type num_children                        = 0;  // Number of child columns in this struct
+    size_type num_elements                        = 0;  // Number of rows in the struct
+  };
+
+  std::vector<contents> struct_contents;  // Store properties of each struct column
+
+  for (size_t i = 0; i < columns.size(); i++) {
+    // Process only nullable struct columns
+    if (columns[i]->type().id() == cudf::type_id::STRUCT && columns[i]->nullable()) {
+      struct_column_positions.push_back(i);  // Record position of this struct column
+
+      // Store the struct's properties
+      struct_contents.push_back(contents{.null_count   = columns[i]->null_count(),
+                                         .num_children = columns[i]->num_children(),
+                                         .num_elements = columns[i]->size()});
+
+      auto col_contents                = columns[i]->release();
+      struct_contents.back().null_mask = std::move(col_contents.null_mask);
+
+      // Add null mask pointers for each child of this struct
+      struct_root_masks.insert(
+        struct_root_masks.end(),
+        col_contents.children.size(),
+        static_cast<bitmask_type const*>(struct_contents.back().null_mask->data()));
+
+      // Add all child columns from this struct
+      for (auto& child : col_contents.children) {
+        struct_child_cols.push_back(std::move(child));
+      }
+    }
+  }
+
+  // Apply parent struct nulls to all child columns (if there are any struct columns)
+  if (!struct_root_masks.empty()) {
+    struct_child_cols = superimpose_and_sanitize_nulls(
+      struct_root_masks, std::move(struct_child_cols), stream, mr);
+  }
+
+  // Rebuild struct columns with the updated child columns
+  auto offset = 0;
+  for (size_t i = 0; i < struct_column_positions.size(); i++) {
+    // Collect children for this specific struct
+    std::vector<std::unique_ptr<column>> children;
+    for (auto j = 0; j < struct_contents[i].num_children; j++) {
+      children.emplace_back(std::move(struct_child_cols[offset + j]));
+    }
+    offset += struct_contents[i].num_children;
+
+    // Replace the original struct column with a reconstructed one containing updated children
+    columns[struct_column_positions[i]] =
+      std::make_unique<column>(cudf::data_type{type_id::STRUCT},
+                               struct_contents[i].num_elements,
+                               rmm::device_buffer{},  // Empty data buffer. Structs hold no data.
+                               std::move(*struct_contents[i].null_mask),
+                               struct_contents[i].null_count,
+                               std::move(children));
+  }
+
+  return columns;
+}
+
+
 std::pair<column_view, temporary_nullable_data> push_down_nulls(column_view const& input,
                                                                 rmm::cuda_stream_view stream,
                                                                 rmm::device_async_resource_ref mr)
