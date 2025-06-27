@@ -9,6 +9,7 @@ import polars as pl
 
 from cudf_polars import Translator
 from cudf_polars.experimental.parallel import lower_ir_graph
+from cudf_polars.experimental.statistics import collect_source_stats
 from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
 from cudf_polars.testing.io import make_partitioned_source
 from cudf_polars.utils.config import ConfigOptions
@@ -84,3 +85,57 @@ def test_split_scan_predicate(tmp_path, df, mask):
         },
     )
     assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize("parquet_metadata_samples", [1, 3])
+@pytest.mark.parametrize("parquet_rowgroup_samples", [1, 2])
+def test_column_source_statistics(
+    tmp_path,
+    df,
+    parquet_metadata_samples,
+    parquet_rowgroup_samples,
+):
+    n_files = 3
+    make_partitioned_source(df, tmp_path, "parquet", n_files=n_files)
+    q = pl.scan_parquet(tmp_path)
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "target_partition_size": 10_000,
+            "scheduler": DEFAULT_SCHEDULER,
+            "parquet_metadata_samples": parquet_metadata_samples,
+            "parquet_rowgroup_samples": parquet_rowgroup_samples,
+        },
+    )
+    q1 = q.select(pl.col("x"), pl.col("y"))
+    qir1 = Translator(q1._ldf.visit(), engine).translate_ir()
+    stats = collect_source_stats(qir1, ConfigOptions.from_polars_engine(engine))
+    source_stats_y = stats.column_stats[qir1]["y"].source_stats
+    y_unique_fraction = source_stats_y.unique_fraction
+    y_cardinality = source_stats_y.cardinality
+    assert y_unique_fraction < 1.0
+    assert y_unique_fraction > 0.0
+    if parquet_metadata_samples >= n_files:
+        # We should have "exact" cardinality statistics
+        assert y_cardinality == df.height
+        assert "cardinality" in source_stats_y.exact
+    else:
+        # We should have "estimated" cardinality statistics
+        assert y_cardinality > 0
+        assert "cardinality" not in source_stats_y.exact
+    assert_gpu_result_equal(q1.sort(pl.col("x")).slice(0, 2), engine=engine)
+
+    # Source statistics of "y" should match after GroupBy/Select/HConcat/Sort
+    q2 = (
+        q.group_by(pl.col("y"))
+        .sum()
+        .select(pl.col("x").max(), pl.col("y"))
+        .with_columns((pl.col("x") * pl.col("x")).alias("x2"))
+    )
+    qir2 = Translator(q2._ldf.visit(), engine).translate_ir()
+    stats = collect_source_stats(qir2, ConfigOptions.from_polars_engine(engine))
+    source_stats_y = stats.column_stats[qir2]["y"].source_stats
+    assert source_stats_y.unique_fraction == y_unique_fraction
+    assert y_cardinality == source_stats_y.cardinality
+    assert_gpu_result_equal(q2.sort(pl.col("y")).slice(0, 2), engine=engine)

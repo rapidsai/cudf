@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-partition dispatch functions."""
 
@@ -12,8 +12,9 @@ if TYPE_CHECKING:
     from typing import TypeAlias
 
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.experimental.base import PartitionInfo
+    from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.typing import GenericTransformer
+    from cudf_polars.utils.config import ConfigOptions
 
 
 LowerIRTransformer: TypeAlias = (
@@ -80,5 +81,25 @@ def generate_ir_tasks(
     See Also
     --------
     task_graph
+    """
+    raise AssertionError(f"Unhandled type {type(ir)}")  # pragma: no cover
+
+
+@singledispatch
+def add_source_stats(
+    ir: IR, stats: StatsCollector, config_options: ConfigOptions
+) -> None:
+    """
+    Add basic source statistics for an IR node.
+
+    Parameters
+    ----------
+    ir
+        The IR node to collect source statistics for.
+    stats
+        The `StatsCollector` object to update with new
+        source statistics.
+    config_options
+        GPUEngine configuration options.
     """
     raise AssertionError(f"Unhandled type {type(ir)}")  # pragma: no cover
