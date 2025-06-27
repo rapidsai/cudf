@@ -256,8 +256,8 @@ class aggregate_reader_metadata {
    */
   [[nodiscard]] std::tuple<int64_t,
                            std::vector<std::vector<size_type>>,
-                           std::vector<std::vector<size_type>>,
-                           std::vector<std::vector<size_type>>>
+                           std::vector<std::vector<size_t>>,
+                           std::vector<std::vector<size_t>>>
   apply_row_bounds_filter(cudf::host_span<std::vector<size_type> const> input_row_group_indices,
                           int64_t rows_to_skip,
                           int64_t rows_to_read) const;
