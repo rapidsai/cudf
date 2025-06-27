@@ -228,10 +228,9 @@ class bloom_filter_expression_converter : public equality_literals_collector {
         CUDF_EXPECTS(literal_iter != equality_literals.end(), "Could not find the literal ptr");
         col_literal_offset += std::distance(equality_literals.cbegin(), literal_iter);
 
-        // Evaluate boolean is_true(value) expression as NOT(NOT(value))
+        // Evaluate boolean is_true(value) expression as IDENTITY(value)
         auto const& value = _bloom_filter_expr.push(ast::column_reference{col_literal_offset});
-        _bloom_filter_expr.push(ast::operation{
-          ast_operator::NOT, _bloom_filter_expr.push(ast::operation{ast_operator::NOT, value})});
+        _bloom_filter_expr.push(ast::operation{ast_operator::IDENTITY, value});
       }
       // For all other expressions, push an always true expression
       else {
@@ -512,7 +511,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   host_span<std::vector<ast::literal*> const> literals,
   size_type total_row_groups,
   host_span<data_type const> output_dtypes,
-  host_span<int const> bloom_filter_col_schemas,
+  host_span<cudf::size_type const> bloom_filter_col_schemas,
   std::reference_wrapper<ast::expression const> filter,
   rmm::cuda_stream_view stream) const
 {
