@@ -102,8 +102,8 @@ class Node(Generic[T]):
 
         Override this in subclasses, rather than :meth:`__eq__`.
 
-        Parameter
-        ---------
+        Parameters
+        ----------
         other
             object of same type to compare to.
 
