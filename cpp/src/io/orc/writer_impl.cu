@@ -25,6 +25,7 @@
 #include "writer_impl.hpp"
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/batched_memcpy.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
