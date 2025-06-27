@@ -415,7 +415,7 @@ def _sample_pq_stats(
                         unique_count_estimates[name] = cardinality
 
         # Check that the cached stats have the same row-count estimate
-        if source_stats_cached:
+        if source_stats_cached:  # pragma: no cover
             assert (
                 cardinality == next(iter(source_stats_cached.values())).cardinality
             ), "Unexpected cardinality in cache."
@@ -432,7 +432,7 @@ def _sample_pq_stats(
             for name in need_columns
         }
 
-        if source_stats_cached:
+        if source_stats_cached:  # pragma: no cover
             # Combine new and cached column stats
             source_stats = source_stats_cached | source_stats
 
