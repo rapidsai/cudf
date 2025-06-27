@@ -3,6 +3,8 @@
 
 set -euo pipefail
 
+source ci/use_gha_tools_from_branch.sh
+
 RAPIDS_VERSION="$(rapids-version)"
 RAPIDS_VERSION_MAJOR_MINOR="$(rapids-version-major-minor)"
 export RAPIDS_VERSION
@@ -10,6 +12,8 @@ export RAPIDS_VERSION_MAJOR_MINOR
 
 rapids-logger "Create test conda environment"
 . /opt/conda/etc/profile.d/conda.sh
+
+source ci/use_conda_packages_from_prs.sh
 
 ENV_YAML_DIR="$(mktemp -d)"
 
