@@ -2154,15 +2154,15 @@ class MapFunction(IR):
                 raise NotImplementedError("Explode with more than one column")
             self.options = (tuple(to_explode),)
         elif POLARS_VERSION_LT_131 and self.name == "rename":  # pragma: no cover
-            # As of 1.31, polars validates renaming in the IR # pragma: no cover
-            old, new, strict = self.options  # pragma: no cover
-            if len(new) != len(set(new)) or (  # pragma: no cover
-                set(new) & (set(df.schema.keys()) - set(old))  # pragma: no cover
-            ):  # pragma: no cover
+            # As of 1.31, polars validates renaming in the IR
+            old, new, strict = self.options
+            if len(new) != len(set(new)) or (
+                set(new) & (set(df.schema.keys()) - set(old))
+            ):
                 raise NotImplementedError(
                     "Duplicate new names in rename."
                 )  # pragma: no cover
-            self.options = (tuple(old), tuple(new), strict)  # pragma: no cover
+            self.options = (tuple(old), tuple(new), strict)
         elif self.name == "unpivot":
             indices, pivotees, variable_name, value_name = self.options
             value_name = "value" if value_name is None else value_name
@@ -2223,7 +2223,7 @@ class MapFunction(IR):
             # No-op in our data model
             # Don't think this appears in a plan tree from python
             return df  # pragma: no cover
-        elif name == "rename":
+        elif POLARS_VERSION_LT_131 and name == "rename":  # pragma: no cover
             # final tag is "swapping" which is useful for the
             # optimiser (it blocks some pushdown operations)
             old, new, _ = options
