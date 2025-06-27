@@ -684,7 +684,8 @@ table_with_metadata reader::impl::read_chunk_internal(read_mode mode)
     }
   }
 
-  out_columns = cudf::structs::detail::enforce_null_consistency(std::move(out_columns), _stream, _mr);
+  out_columns =
+    cudf::structs::detail::enforce_null_consistency(std::move(out_columns), _stream, _mr);
 
   // Check if number of rows per source should be included in output metadata.
   if (include_output_num_rows_per_source()) {

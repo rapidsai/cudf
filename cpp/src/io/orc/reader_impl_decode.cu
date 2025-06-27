@@ -1008,7 +1008,8 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
     });
   _chunk_read_data.decoded_table = std::make_unique<table>(std::move(out_columns));
 
-  out_columns = cudf::structs::detail::enforce_null_consistency(std::move(out_columns), _stream, _mr);
+  out_columns =
+    cudf::structs::detail::enforce_null_consistency(std::move(out_columns), _stream, _mr);
 
   // Free up temp memory used for decoding.
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {

@@ -566,12 +566,12 @@ std::vector<std::unique_ptr<column>> enforce_null_consistency(
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  
+
   // Prepare containers to store information about struct columns
   std::vector<size_type> struct_column_positions;  // Stores positions of struct columns in output
   std::vector<bitmask_type const*> struct_root_masks;      // Stores null masks of struct columns
   std::vector<std::unique_ptr<column>> struct_child_cols;  // Stores child columns of all structs
-                                                           
+
   // Helper struct to store and manipulate struct column properties
   struct contents {
     size_type null_count                          = 0;        // Number of null values in the struct
@@ -610,8 +610,8 @@ std::vector<std::unique_ptr<column>> enforce_null_consistency(
 
   // Apply parent struct nulls to all child columns (if there are any struct columns)
   if (!struct_root_masks.empty()) {
-    struct_child_cols = superimpose_and_sanitize_nulls(
-      struct_root_masks, std::move(struct_child_cols), stream, mr);
+    struct_child_cols =
+      superimpose_and_sanitize_nulls(struct_root_masks, std::move(struct_child_cols), stream, mr);
   }
 
   // Rebuild struct columns with the updated child columns
@@ -636,7 +636,6 @@ std::vector<std::unique_ptr<column>> enforce_null_consistency(
 
   return columns;
 }
-
 
 std::pair<column_view, temporary_nullable_data> push_down_nulls(column_view const& input,
                                                                 rmm::cuda_stream_view stream,
