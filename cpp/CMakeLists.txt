@@ -683,8 +683,9 @@ add_library(
   src/sort/is_sorted.cu
   src/sort/rank.cu
   src/sort/segmented_sort.cu
-  src/sort/sort_column.cu
   src/sort/sort.cu
+  src/sort/sort_column.cu
+  src/sort/sort_radix.cu
   src/sort/stable_segmented_sort.cu
   src/sort/stable_sort_column.cu
   src/sort/stable_sort.cu
@@ -809,6 +810,7 @@ add_library(
   src/utilities/cuda.cpp
   src/utilities/cuda_memcpy.cu
   src/utilities/default_stream.cpp
+  src/utilities/grid_1d.cu
   src/utilities/host_memory.cpp
   src/utilities/host_worker_pool.cpp
   src/utilities/linked_column.cpp
