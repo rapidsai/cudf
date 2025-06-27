@@ -513,8 +513,11 @@ void reader::impl::compute_input_passes()
   // handle optional skip_rows/num_rows parameters.
   auto const& row_groups_info = _file_itm_data.row_groups;
 
+  // Maximum number of rows we can read in a single pass.
+  auto constexpr max_rows_per_pass = static_cast<size_t>(std::numeric_limits<size_type>::max());
+
   // if the user hasn't specified an input size limit, read everything in a single pass.
-  if (_input_pass_read_limit == 0) {
+  if (_file_itm_data.global_num_rows <= max_rows_per_pass and _input_pass_read_limit == 0) {
     _file_itm_data.input_pass_row_group_offsets.push_back(0);
     _file_itm_data.input_pass_row_group_offsets.push_back(row_groups_info.size());
     _file_itm_data.input_pass_start_row_count.push_back(0);
@@ -537,11 +540,12 @@ void reader::impl::compute_input_passes()
   std::size_t cur_pass_byte_size = 0;
   std::size_t cur_rg_start       = 0;
   std::size_t cur_row_count      = 0;
+  std::size_t cur_pass_num_rows  = 0;
   _file_itm_data.input_pass_row_group_offsets.push_back(0);
   _file_itm_data.input_pass_start_row_count.push_back(0);
 
   // To handle global_skip_rows when computing input passes
-  int skip_rows = _file_itm_data.global_skip_rows;
+  int64_t skip_rows = _file_itm_data.global_skip_rows;
 
   for (size_t cur_rg_index = 0; cur_rg_index < row_groups_info.size(); cur_rg_index++) {
     auto const& rgi       = row_groups_info[cur_rg_index];
@@ -559,17 +563,20 @@ void reader::impl::compute_input_passes()
 
     //  Set skip_rows = 0 as it is no longer needed for subsequent row_groups
     skip_rows = 0;
-
-    // can we add this row group
-    if (cur_pass_byte_size + compressed_rg_size >= comp_read_limit) {
+    // do we need to create a pass boundary here?
+    if (cur_pass_byte_size + compressed_rg_size >= comp_read_limit or
+        cur_pass_num_rows + row_group_rows >= max_rows_per_pass) {
       // A single row group (the current one) is larger than the read limit:
       // We always need to include at least one row group, so end the pass at the end of the current
       // row group
       if (cur_rg_start == cur_rg_index) {
+        CUDF_EXPECTS(std::cmp_less_equal(row_group.num_rows, max_rows_per_pass),
+                     "Number of rows in each row group must be smaller than the column size limit");
         _file_itm_data.input_pass_row_group_offsets.push_back(cur_rg_index + 1);
         _file_itm_data.input_pass_start_row_count.push_back(cur_row_count + row_group_rows);
         cur_rg_start       = cur_rg_index + 1;
         cur_pass_byte_size = 0;
+        cur_pass_num_rows  = 0;
       }
       // End the pass at the end of the previous row group
       else {
@@ -577,9 +584,11 @@ void reader::impl::compute_input_passes()
         _file_itm_data.input_pass_start_row_count.push_back(cur_row_count);
         cur_rg_start       = cur_rg_index;
         cur_pass_byte_size = compressed_rg_size;
+        cur_pass_num_rows  = row_group_rows;
       }
     } else {
       cur_pass_byte_size += compressed_rg_size;
+      cur_pass_num_rows += row_group_rows;
     }
     cur_row_count += row_group_rows;
   }

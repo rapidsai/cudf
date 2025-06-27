@@ -390,6 +390,11 @@ void reader::impl::preprocess_file(read_mode mode)
                                  _expr_conv.get_converted_expr(),
                                  _stream);
 
+  CUDF_EXPECTS(
+    mode == read_mode::CHUNKED_READ or
+      std::cmp_less_equal(_file_itm_data.global_num_rows, std::numeric_limits<size_type>::max()),
+    "Number of reading rows exceeds cudf's column size limit.");
+
   // Inclusive scan the number of rows per source
   if (not _expr_conv.get_converted_expr().has_value() and mode == read_mode::CHUNKED_READ) {
     _file_itm_data.exclusive_sum_num_rows_per_source.resize(

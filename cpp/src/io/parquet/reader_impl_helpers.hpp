@@ -203,7 +203,7 @@ class aggregate_reader_metadata {
    * @param rg_info Struct used to summarize metadata for a single row group
    * @param chunk_start_row Global index of first row in the row group
    */
-  void column_info_for_row_group(row_group_info& rg_info, size_type chunk_start_row) const;
+  void column_info_for_row_group(row_group_info& rg_info, size_t chunk_start_row) const;
 
   /**
    * @brief Returns the required alignment for bloom filter buffers
@@ -500,7 +500,7 @@ class aggregate_reader_metadata {
    *         struct containing the number of row groups surviving each predicate pushdown filter
    */
   [[nodiscard]] std::tuple<int64_t,
-                           size_type,
+                           size_t,
                            std::vector<row_group_info>,
                            std::vector<size_t>,
                            size_type,
@@ -508,7 +508,7 @@ class aggregate_reader_metadata {
   select_row_groups(host_span<std::unique_ptr<datasource> const> sources,
                     host_span<std::vector<size_type> const> row_group_indices,
                     int64_t row_start,
-                    std::optional<size_type> const& row_count,
+                    std::optional<int64_t> const& row_count,
                     host_span<data_type const> output_dtypes,
                     host_span<int const> output_column_schemas,
                     std::optional<std::reference_wrapper<ast::expression const>> filter,
