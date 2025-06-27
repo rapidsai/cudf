@@ -317,11 +317,14 @@ include(cmake/thirdparty/get_thread_pool.cmake)
 # find zstd
 include(cmake/thirdparty/get_zstd.cmake)
 
+# find roaring
+include(cmake/thirdparty/get_roaring.cmake)
+
 # Workaround until https://github.com/rapidsai/rapids-cmake/issues/176 is resolved
 if(NOT BUILD_SHARED_LIBS)
   include("${rapids-cmake-dir}/export/find_package_file.cmake")
   list(APPEND METADATA_KINDS BUILD INSTALL)
-  list(APPEND dependencies KvikIO ZLIB nvcomp nanoarrow zstd)
+  list(APPEND dependencies KvikIO ZLIB nvcomp nanoarrow zstd roaring)
 
   foreach(METADATA_KIND IN LISTS METADATA_KINDS)
     foreach(dep IN LISTS dependencies)
@@ -531,6 +534,7 @@ add_library(
   src/io/parquet/compact_protocol_writer.cpp
   src/io/parquet/decode_preprocess.cu
   src/io/parquet/experimental/dictionary_page_filter.cu
+  src/io/parquet/experimental/functions.cu
   src/io/parquet/experimental/hybrid_scan.cpp
   src/io/parquet/experimental/hybrid_scan_helpers.cpp
   src/io/parquet/experimental/hybrid_scan_impl.cpp
@@ -899,6 +903,8 @@ target_include_directories(
          "$<BUILD_INTERFACE:${JITIFY_INCLUDE_DIR}>"
          "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
          "$<BUILD_INTERFACE:${CUDF_GENERATED_INCLUDE_DIR}/include>"
+         "$<BUILD_INTERFACE:${roaring_C_INCLUDE_DIR}>"
+         "$<BUILD_INTERFACE:${roaring_CPP_INCLUDE_DIR}>"
   PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
           "$<BUILD_INTERFACE:${nanoarrow_SOURCE_DIR}/src>"
           "$<BUILD_INTERFACE:${FlatBuffers_SOURCE_DIR}/include>"
@@ -962,7 +968,7 @@ target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL rapids_logger::rapids_logger rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
   PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
-          kvikio::kvikio nanoarrow zstd
+          kvikio::kvikio nanoarrow zstd roaring
 )
 
 # Add Conda library, and include paths if specified
