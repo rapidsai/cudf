@@ -23,6 +23,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/join/join.hpp>
 #include <cudf/reduction.hpp>
