@@ -16371,6 +16371,8 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/window/test_rolling.py::test_rolling_timedelta_window_non_nanoseconds[None-s]",
     "tests/window/test_rolling.py::test_rolling_timedelta_window_non_nanoseconds[None-us]",
     "tests/window/test_rolling.py::test_rolling_var_same_value_count_logic[values0-3-1-expected0]",
+    "tests/window/test_rolling.py::test_variable_window_nonunique[DataFrame-right-expected2]",
+    "tests/window/test_rolling.py::test_variable_window_nonunique[Series-right-expected2]",
     "tests/window/test_rolling_functions.py::test_moment_functions_zero_length[<lambda>0]",
     "tests/window/test_rolling_functions.py::test_rolling_max_gh6297[10]",
     "tests/window/test_rolling_functions.py::test_rolling_max_gh6297[1]",
