@@ -131,6 +131,7 @@ class RunConfig:
     shuffle: str | None = None
     broadcast_join_limit: int | None = None
     blocksize: int | None = None
+    max_rows_per_partition: int | None = None
     threads: int
     iterations: int
     timestamp: str = dataclasses.field(
@@ -192,6 +193,7 @@ class RunConfig:
             rapidsmpf_oom_protection=args.rapidsmpf_oom_protection,
             spill_device=args.spill_device,
             rapidsmpf_spill=args.rapidsmpf_spill,
+            max_rows_per_partition=args.max_rows_per_partition,
         )
 
     def serialize(self) -> dict:
@@ -229,6 +231,12 @@ class RunConfig:
                     f"mean time: {statistics.mean(record.duration for record in records):0.4f}"
                 )
                 print("=======================================")
+        total_mean_time = sum(
+            statistics.mean(record.duration for record in records)
+            for records in self.records.values()
+            if records
+        )
+        print(f"Total mean time across all queries: {total_mean_time:.4f} seconds")
 
 
 def get_data(
@@ -306,6 +314,12 @@ def parse_args(args: Sequence[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--blocksize",
+        default=None,
+        type=int,
+        help="Approx. partition size.",
+    )
+    parser.add_argument(
+        "--max-rows-per-partition",
         default=None,
         type=int,
         help="Approx. partition size.",
