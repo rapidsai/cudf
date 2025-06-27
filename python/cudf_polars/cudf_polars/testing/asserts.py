@@ -325,6 +325,7 @@ def assert_sink_result_equal(
     read_kwargs: dict | None = None,
     write_kwargs: dict | None = None,
     executor: str | None = None,
+    blocksize_mode: Literal["small", "default"] | None = None,
 ) -> None:
     """
     Assert that writing a LazyFrame via sink produces the same output.
@@ -345,6 +346,12 @@ def assert_sink_result_equal(
     executor
         The executor configuration to pass to `GPUEngine`. If not specified
         uses the module level `Executor` attribute.
+    blocksize_mode
+        The "mode" to use for choosing the blocksize for the streaming executor.
+        If not specified, uses the module level ``DEFAULT_BLOCKSIZE_MODE`` attribute.
+        Set to "small" to configure small values for ``max_rows_per_partition``
+        and ``target_partition_size``, which will typically cause many partitions
+        to be created while executing the query.
 
     Raises
     ------
@@ -353,15 +360,7 @@ def assert_sink_result_equal(
     ValueError
         If the file extension is not one of the supported formats.
     """
-    if engine is None:
-        executor = executor or DEFAULT_EXECUTOR
-        engine = GPUEngine(
-            raise_on_fail=True,
-            executor=executor,
-            executor_options=(
-                {"scheduler": DEFAULT_SCHEDULER} if executor == "streaming" else {}
-            ),
-        )
+    engine = engine or get_default_engine(executor, blocksize_mode)
     path = Path(path)
     read_kwargs = read_kwargs or {}
     write_kwargs = write_kwargs or {}
@@ -378,7 +377,15 @@ def assert_sink_result_equal(
     sink_fn(gpu_path, engine=engine, **write_kwargs)
 
     expected = read_fn(cpu_path, **read_kwargs)
-    result = read_fn(gpu_path, **read_kwargs)
+    # the multi-partition executor might produce multiple files, one per partition.
+    if (
+        isinstance(engine, GPUEngine)
+        and engine.config["executor"] == "streaming"
+        and gpu_path.is_dir()
+    ):
+        result = read_fn(gpu_path.joinpath("*"), **read_kwargs)
+    else:
+        result = read_fn(gpu_path, **read_kwargs)
 
     assert_frame_equal(expected, result)
 
