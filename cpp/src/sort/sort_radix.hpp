@@ -47,5 +47,19 @@ std::unique_ptr<column> sort_radix(column_view const& input,
                                    rmm::cuda_stream_view stream,
                                    rmm::device_async_resource_ref mr);
 
+/**
+ * @brief Sort a column using radix sort
+ *
+ * This should only be used for fixed-width columns with no nulls.
+ *
+ * @param input The column to sort
+ * @param indices The indices to return
+ * @param ascending The sort order
+ * @param stream The CUDA stream to use
+ */
+void sorted_order_radix(column_view const& input,
+                        mutable_column_view& indices,
+                        bool ascending,
+                        rmm::cuda_stream_view stream);
 }  // namespace detail
 }  // namespace cudf
