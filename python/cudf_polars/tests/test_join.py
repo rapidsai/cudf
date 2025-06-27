@@ -106,9 +106,7 @@ def test_left_join_with_slice(left, right, nulls_equal, zlice):
 
         # Check that the schema matches
         result = q.collect(engine=engine)
-        expected = q.collect()
-
-        assert result.schema == expected.schema
+        assert result.schema == q.collect_schema()
 
     else:
         assert_gpu_result_equal(q, check_row_order=False)
