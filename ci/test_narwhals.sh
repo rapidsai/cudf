@@ -4,7 +4,9 @@
 # Support invoking test_python_cudf.sh outside the script directory
 cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../ || exit 1
 
+source ci/use_gha_tools_from_branch.sh
 source rapids-init-pip
+source ci/use_wheels_from_prs.sh
 
 # Common setup steps shared by Python test jobs
 source ./ci/test_python_common.sh test_python_narwhals

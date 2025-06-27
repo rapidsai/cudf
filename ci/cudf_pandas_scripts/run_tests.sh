@@ -5,7 +5,9 @@
 
 set -eoxu pipefail
 
+source ci/use_gha_tools_from_branch.sh
 source rapids-init-pip
+source ci/use_wheels_from_prs.sh
 
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${PWD}/test-results"}
 RAPIDS_COVERAGE_DIR=${RAPIDS_COVERAGE_DIR:-"${PWD}/coverage-results"}

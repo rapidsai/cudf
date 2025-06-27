@@ -4,6 +4,8 @@
 # Support invoking test_cpp.sh outside the script directory
 cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../
 
+source ci/use_gha_tools_from_branch.sh
+
 source ./ci/test_cpp_common.sh
 
 EXITCODE=0
