@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import operator
 import warnings
 from collections.abc import Mapping
@@ -21,7 +22,7 @@ import cudf
 # only, need to figure out why the `np` alias is insufficient then remove.
 from cudf.api.types import is_dtype_equal, is_scalar
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core._internals import copying, search, sorting
+from cudf.core._internals import copying, sorting
 from cudf.core.abc import Serializable
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
@@ -1476,12 +1477,12 @@ class Frame(BinaryOperand, Scannable, Serializable):
         ]
 
         outcol = ColumnBase.from_pylibcudf(
-            search.search_sorted(
+            sorting.search_sorted(
                 sources,
                 values,
                 side,
-                ascending=ascending,
-                na_position=na_position,
+                ascending=itertools.repeat(ascending, times=len(sources)),
+                na_position=itertools.repeat(na_position, times=len(sources)),
             )
         )
 
@@ -1584,7 +1585,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
     def _get_sorted_inds(
         self,
         by=None,
-        ascending=True,
+        ascending: bool | Iterable[bool] = True,
         na_position: Literal["first", "last"] = "last",
     ) -> ColumnBase:
         """
@@ -1596,16 +1597,17 @@ class Frame(BinaryOperand, Scannable, Serializable):
         else:
             to_sort = self._get_columns_by_label(list(by))._columns
 
-        if is_scalar(ascending):
-            ascending_lst = [ascending] * len(to_sort)
+        if isinstance(ascending, bool):
+            ascending_iter: Iterable[bool] = itertools.repeat(
+                ascending, times=len(to_sort)
+            )
         else:
-            ascending_lst = list(ascending)
-
+            ascending_iter = ascending
         return ColumnBase.from_pylibcudf(
             sorting.order_by(
-                list(to_sort),
-                ascending_lst,
-                na_position,
+                to_sort,
+                ascending_iter,
+                itertools.repeat(na_position, times=len(to_sort)),
                 stable=True,
             )
         )
@@ -2040,26 +2042,6 @@ class Frame(BinaryOperand, Scannable, Serializable):
         """Bitwise invert (~) for integral dtypes, logical NOT for bools."""
         return self._from_data_like_self(
             self._data._from_columns_like_self((~col for col in self._columns))
-        )
-
-    @_performance_tracking
-    def nunique(self, dropna: bool = True):
-        """
-        Returns a per column mapping with counts of unique values for
-        each column.
-
-        Parameters
-        ----------
-        dropna : bool, default True
-            Don't include NaN in the counts.
-
-        Returns
-        -------
-        dict
-            Name and unique value counts of each column in frame.
-        """
-        raise NotImplementedError(
-            f"{type(self).__name__} does not implement nunique"
         )
 
     @staticmethod
