@@ -151,9 +151,6 @@ def test_groupby_len(df, keys):
     "expr",
     [
         (pl.col("int").max() + pl.col("float").min()).max(),
-        pl.when(pl.col("int") < pl.lit(2))
-        .then(pl.col("float").sum())
-        .otherwise(pl.lit(-2)),
     ],
 )
 def test_groupby_unsupported(df, expr):
@@ -265,3 +262,15 @@ def test_groupby_len_with_nulls():
     df = pl.DataFrame({"a": [1, 1, 1, 2], "b": [1, None, 2, 3]})
     q = df.lazy().group_by("a").agg(pl.col("b").len())
     assert_gpu_result_equal(q, check_row_order=False)
+
+
+def test_groupby_ternary(df):
+    df = df.with_columns(
+        foo=pl.when(pl.col("int") % 2 == 0).then(True).otherwise(False)  # noqa: FBT003
+    )
+
+    expr = pl.when(pl.col("foo")).then(pl.col("int")).otherwise(0).sum()
+
+    q = df.group_by("key1", maintain_order=True).agg(expr)
+
+    assert_gpu_result_equal(q)

@@ -38,7 +38,7 @@ def test_rolling_datetime(time_unit):
     assert_gpu_result_equal(q)
 
 
-def test_rolling_date_raises():
+def test_rolling_date():
     dates = [
         "2020-01-01",
         "2020-01-01",
@@ -56,7 +56,7 @@ def test_rolling_date_raises():
         max_a=pl.max("a").rolling(index_column="dt", period="10d", offset="2d"),
     )
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_gpu_result_equal(q)
 
 
 @pytest.mark.parametrize("dtype", [pl.Int32, pl.UInt32, pl.Int64, pl.UInt64])
