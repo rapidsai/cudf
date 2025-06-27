@@ -6,8 +6,9 @@
 
 from __future__ import annotations
 
+import functools
 from enum import IntEnum, auto
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from polars.exceptions import InvalidOperationError
 
@@ -89,6 +90,28 @@ class StringFunction(Expr):
                 raise ValueError("StringFunction required")
             return getattr(cls, name)
 
+    _valid_ops: ClassVar[set[Name]] = {
+        Name.ConcatHorizontal,
+        Name.ConcatVertical,
+        Name.ContainsAny,
+        Name.Contains,
+        Name.CountMatches,
+        Name.EndsWith,
+        Name.Head,
+        Name.Lowercase,
+        Name.Replace,
+        Name.ReplaceMany,
+        Name.Slice,
+        Name.Strptime,
+        Name.StartsWith,
+        Name.StripChars,
+        Name.StripCharsStart,
+        Name.StripCharsEnd,
+        Name.Uppercase,
+        Name.Reverse,
+        Name.Tail,
+        Name.Titlecase,
+    }
     __slots__ = ("_regex_program", "name", "options")
     _non_child = ("dtype", "name", "options")
 
@@ -107,33 +130,32 @@ class StringFunction(Expr):
         self._validate_input()
 
     def _validate_input(self) -> None:
-        if self.name not in (
-            StringFunction.Name.ConcatHorizontal,
-            StringFunction.Name.ConcatVertical,
-            StringFunction.Name.Contains,
-            StringFunction.Name.EndsWith,
-            StringFunction.Name.Head,
-            StringFunction.Name.Lowercase,
-            StringFunction.Name.Replace,
-            StringFunction.Name.ReplaceMany,
-            StringFunction.Name.Slice,
-            StringFunction.Name.Strptime,
-            StringFunction.Name.StartsWith,
-            StringFunction.Name.StripChars,
-            StringFunction.Name.StripCharsStart,
-            StringFunction.Name.StripCharsEnd,
-            StringFunction.Name.Uppercase,
-            StringFunction.Name.Reverse,
-            StringFunction.Name.Tail,
-            StringFunction.Name.Titlecase,
-        ):
+        if self.name not in self._valid_ops:
             raise NotImplementedError(f"String function {self.name!r}")
+        if self.name is StringFunction.Name.CountMatches:
+            (literal,) = self.options
+            if literal:
+                raise NotImplementedError(
+                    f"{literal=} is not supported for count_matches"
+                )
+            literal_expr = self.children[1]
+            assert isinstance(literal_expr, Literal)
+            pattern = literal_expr.value
+            try:
+                self._regex_program = plc.strings.regex_program.RegexProgram.create(
+                    pattern,
+                    flags=plc.strings.regex_flags.RegexFlags.DEFAULT,
+                )
+            except RuntimeError as e:
+                raise NotImplementedError(
+                    f"Unsupported regex {pattern} for GPU engine."
+                ) from e
         if self.name is StringFunction.Name.Contains:
             literal, strict = self.options
             if not literal:
                 if not strict:
                     raise NotImplementedError(
-                        "f{strict=} is not supported for regex contains"
+                        f"{strict=} is not supported for regex contains"
                     )
                 if not isinstance(self.children[1], Literal):
                     raise NotImplementedError(
@@ -267,6 +289,37 @@ class StringFunction(Expr):
                     plc.strings.contains.contains_re(column.obj, self._regex_program),
                     dtype=self.dtype,
                 )
+        elif self.name is StringFunction.Name.ContainsAny:
+            (ascii_case_insensitive,) = self.options
+            child, arg = self.children
+            column = child.evaluate(df, context=context).obj
+            targets = arg.evaluate(df, context=context).obj
+            if ascii_case_insensitive:
+                column = plc.strings.case.to_lower(column)
+                targets = plc.strings.case.to_lower(targets)
+            contains = plc.strings.find_multiple.contains_multiple(
+                column,
+                targets,
+            )
+            binary_or = functools.partial(
+                plc.binaryop.binary_operation,
+                op=plc.binaryop.BinaryOperator.BITWISE_OR,
+                output_type=self.dtype.plc,
+            )
+            return Column(
+                functools.reduce(binary_or, contains.columns()),
+                dtype=self.dtype,
+            )
+        elif self.name is StringFunction.Name.CountMatches:
+            (child, _) = self.children
+            column = child.evaluate(df, context=context).obj
+            return Column(
+                plc.unary.cast(
+                    plc.strings.contains.count_re(column, self._regex_program),
+                    self.dtype.plc,
+                ),
+                dtype=self.dtype,
+            )
         elif self.name is StringFunction.Name.Slice:
             child, expr_offset, expr_length = self.children
             assert isinstance(expr_offset, Literal)
