@@ -483,6 +483,8 @@ class hybrid_scan_reader {
  * @param row_group_row_offsets Original row offsets for each input row group
  * @param row_group_num_rows Number of rows for each input row group
  * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate device memory of the table in the returned
+ * table_with_metadata
  *
  * @return Read table with index column and deletions applied, along with its metadata
  */
@@ -491,7 +493,8 @@ table_with_metadata read_parquet_and_apply_deletion_vector(
   roaring64_bitmap_t const* deletion_vector,
   cudf::host_span<size_type const> row_group_row_offsets,
   cudf::host_span<size_type const> row_group_num_rows,
-  rmm::cuda_stream_view stream);
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
 
 /** @} */  // end of group
 
