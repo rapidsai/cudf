@@ -22,6 +22,7 @@
 #include "mixed_join_primitive_utils.cuh"
 
 #include <cudf/ast/detail/expression_parser.hpp>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/span.hpp>
 
