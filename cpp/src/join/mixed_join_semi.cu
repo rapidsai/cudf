@@ -201,8 +201,9 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
 
     insert_rows(row_set);
 
+    // TODO: build and probe are swapped here, to fix with mixed join migration
     auto const equality_probe = cudf::row::primitive::row_equality_comparator{
-      has_nulls, preprocessed_probe, preprocessed_build, compare_nulls};
+      has_nulls, preprocessed_build, preprocessed_probe, compare_nulls};
     auto const row_hash_probe = cudf::row::primitive::row_hasher{has_nulls, preprocessed_probe};
 
     hash_set_ref_type<primitive_double_row_equality_comparator, primitive_row_hash> const
