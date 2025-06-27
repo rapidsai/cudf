@@ -122,13 +122,65 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
     cudf::experimental::row::equality::preprocessed_table::create(build_table, stream);
 
   // Check if we can use primitive row operators for better performance
-  bool const use_primitive_operators = cudf::is_primitive_row_op_compatible(build_table);
+  bool const use_primitive_operators = false;  // cudf::is_primitive_row_op_compatible(build_table);
+
+  // Common setup for both primitive and non-primitive paths
+  auto const preprocessed_build_conditional =
+    cudf::experimental::row::equality::preprocessed_table::create(right_conditional, stream);
+  auto const preprocessed_probe =
+    cudf::experimental::row::equality::preprocessed_table::create(probe_table, stream);
+
+  // Create device views
+  auto const probe_view             = table_device_view::create(probe_table, stream);
+  auto const build_view             = table_device_view::create(build_table, stream);
+  auto const left_conditional_view  = table_device_view::create(left_conditional, stream);
+  auto const right_conditional_view = table_device_view::create(right_conditional, stream);
+
+  // Common kernel launch configuration
+  auto const probe_num_rows = probe_table.num_rows();
+  detail::grid_1d const config(probe_num_rows * DEFAULT_MIXED_SEMI_JOIN_CG_SIZE,
+                               DEFAULT_JOIN_BLOCK_SIZE);
+  auto const shmem_size_per_block =
+    parser.shmem_per_thread *
+    cuco::detail::int_div_ceil(config.num_threads_per_block, DEFAULT_MIXED_SEMI_JOIN_CG_SIZE);
+
+  // Vector used to indicate indices from left/probe table which are present in output
+  auto left_table_keep_mask = rmm::device_uvector<bool>(probe_table.num_rows(), stream);
 
   // Create row comparators and hash table based on operator compatibility
+
+  // Lambda to insert rows into hash set - common for both paths
+  auto insert_rows = [&](auto& row_set) {
+    auto iter = thrust::make_counting_iterator(0);
+    if ((compare_nulls == null_equality::EQUAL) or (not nullable(build_table))) {
+      row_set.insert_async(iter, iter + right_num_rows, stream.value());
+    } else {
+      thrust::counting_iterator<cudf::size_type> stencil(0);
+      auto const [row_bitmask, _] =
+        cudf::detail::bitmask_and(build_table, stream, cudf::get_current_device_resource_ref());
+      row_is_valid pred{static_cast<bitmask_type const*>(row_bitmask.data())};
+      row_set.insert_if_async(iter, iter + right_num_rows, stencil, pred, stream.value());
+    }
+  };
+
+  // Lambda to launch kernel - common for both paths
+  auto launch_kernel = [&](auto const& equality_probe, auto const& row_set_ref) {
+    launch_mixed_join_semi(has_nulls,
+                           *left_conditional_view,
+                           *right_conditional_view,
+                           *probe_view,
+                           *build_view,
+                           equality_probe,
+                           row_set_ref,
+                           cudf::device_span<bool>(left_table_keep_mask),
+                           parser.device_expression_data,
+                           config,
+                           shmem_size_per_block,
+                           stream);
+  };
+
   if (use_primitive_operators) {
     // Use primitive row operators for equality comparison (better performance)
-    auto const preprocessed_build_conditional =
-      cudf::experimental::row::equality::preprocessed_table::create(right_conditional, stream);
     auto const equality_build_equality = cudf::row::primitive::row_equality_comparator{
       build_nulls, preprocessed_build, preprocessed_build, compare_nulls};
     auto const equality_build_conditional = cudf::row::primitive::row_equality_comparator{
@@ -145,23 +197,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
       cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
       {stream.value()}};
 
-    auto iter = thrust::make_counting_iterator(0);
+    insert_rows(row_set);
 
-    // skip rows that are null here.
-    if ((compare_nulls == null_equality::EQUAL) or (not nullable(build_table))) {
-      row_set.insert_async(iter, iter + right_num_rows, stream.value());
-    } else {
-      thrust::counting_iterator<cudf::size_type> stencil(0);
-      auto const [row_bitmask, _] =
-        cudf::detail::bitmask_and(build_table, stream, cudf::get_current_device_resource_ref());
-      row_is_valid pred{static_cast<bitmask_type const*>(row_bitmask.data())};
-
-      // insert valid rows
-      row_set.insert_if_async(iter, iter + right_num_rows, stencil, pred, stream.value());
-    }
-
-    auto const preprocessed_probe =
-      cudf::experimental::row::equality::preprocessed_table::create(probe_table, stream);
     auto const equality_probe = cudf::row::primitive::row_equality_comparator{
       has_nulls, preprocessed_probe, preprocessed_build, compare_nulls};
     auto const row_hash_probe = cudf::row::primitive::row_hasher{has_nulls, preprocessed_probe};
@@ -169,50 +206,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
     hash_set_ref_type<primitive_double_row_equality_comparator, primitive_row_hash> const
       row_set_ref = row_set.ref(cuco::contains).rebind_hash_function(row_hash_probe);
 
-    // Vector used to indicate indices from left/probe table which are present in output
-    auto left_table_keep_mask = rmm::device_uvector<bool>(probe_table.num_rows(), stream);
-
-    auto const probe_view             = table_device_view::create(probe_table, stream);
-    auto const build_view             = table_device_view::create(build_table, stream);
-    auto const left_conditional_view  = table_device_view::create(left_conditional, stream);
-    auto const right_conditional_view = table_device_view::create(right_conditional, stream);
-
-    auto const probe_num_rows = probe_table.num_rows();
-    detail::grid_1d const config(probe_num_rows * DEFAULT_MIXED_SEMI_JOIN_CG_SIZE,
-                                 DEFAULT_JOIN_BLOCK_SIZE);
-    auto const shmem_size_per_block =
-      parser.shmem_per_thread *
-      cuco::detail::int_div_ceil(config.num_threads_per_block, DEFAULT_MIXED_SEMI_JOIN_CG_SIZE);
-
-    launch_mixed_join_semi(has_nulls,
-                           *left_conditional_view,
-                           *right_conditional_view,
-                           *probe_view,
-                           *build_view,
-                           equality_probe,
-                           row_set_ref,
-                           cudf::device_span<bool>(left_table_keep_mask),
-                           parser.device_expression_data,
-                           config,
-                           shmem_size_per_block,
-                           stream);
-
-    auto gather_map =
-      std::make_unique<rmm::device_uvector<size_type>>(probe_table.num_rows(), stream, mr);
-
-    // gather_map_end will be the end of valid data in gather_map
-    auto gather_map_end =
-      thrust::copy_if(rmm::exec_policy(stream),
-                      thrust::counting_iterator<size_type>(0),
-                      thrust::counting_iterator<size_type>(probe_table.num_rows()),
-                      left_table_keep_mask.begin(),
-                      gather_map->begin(),
-                      [join_type] __device__(bool keep_row) {
-                        return keep_row == (join_type == detail::join_kind::LEFT_SEMI_JOIN);
-                      });
-
-    gather_map->resize(cuda::std::distance(gather_map->begin(), gather_map_end), stream);
-    return gather_map;
+    launch_kernel(equality_probe, row_set_ref);
   } else {
     // Use non-primitive row operators (original implementation)
     auto const row_hash_build = cudf::experimental::row::hash::row_hasher{preprocessed_build};
@@ -230,8 +224,6 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
       preprocessed_build, preprocessed_build};
     auto const equality_build_equality =
       row_comparator_build.equal_to<false>(build_nulls, compare_nulls);
-    auto const preprocessed_build_conditional =
-      cudf::experimental::row::equality::preprocessed_table::create(right_conditional, stream);
     auto const row_comparator_conditional_build =
       cudf::experimental::row::equality::two_table_comparator{preprocessed_build_conditional,
                                                               preprocessed_build_conditional};
@@ -248,23 +240,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
       cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
       {stream.value()}};
 
-    auto iter = thrust::make_counting_iterator(0);
+    insert_rows(row_set);
 
-    // skip rows that are null here.
-    if ((compare_nulls == null_equality::EQUAL) or (not nullable(build_table))) {
-      row_set.insert_async(iter, iter + right_num_rows, stream.value());
-    } else {
-      thrust::counting_iterator<cudf::size_type> stencil(0);
-      auto const [row_bitmask, _] =
-        cudf::detail::bitmask_and(build_table, stream, cudf::get_current_device_resource_ref());
-      row_is_valid pred{static_cast<bitmask_type const*>(row_bitmask.data())};
-
-      // insert valid rows
-      row_set.insert_if_async(iter, iter + right_num_rows, stencil, pred, stream.value());
-    }
-
-    auto const preprocessed_probe =
-      cudf::experimental::row::equality::preprocessed_table::create(probe_table, stream);
     auto const row_comparator = cudf::experimental::row::equality::two_table_comparator{
       preprocessed_build, preprocessed_probe};
     auto const equality_probe = row_comparator.equal_to<false>(has_nulls, compare_nulls);
@@ -274,51 +251,26 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
     hash_set_ref_type<double_row_equality_comparator, row_hash> const row_set_ref =
       row_set.ref(cuco::contains).rebind_hash_function(hash_probe);
 
-    // Vector used to indicate indices from left/probe table which are present in output
-    auto left_table_keep_mask = rmm::device_uvector<bool>(probe_table.num_rows(), stream);
-
-    auto const probe_view             = table_device_view::create(probe_table, stream);
-    auto const build_view             = table_device_view::create(build_table, stream);
-    auto const left_conditional_view  = table_device_view::create(left_conditional, stream);
-    auto const right_conditional_view = table_device_view::create(right_conditional, stream);
-
-    auto const probe_num_rows = probe_table.num_rows();
-    detail::grid_1d const config(probe_num_rows * DEFAULT_MIXED_SEMI_JOIN_CG_SIZE,
-                                 DEFAULT_JOIN_BLOCK_SIZE);
-    auto const shmem_size_per_block =
-      parser.shmem_per_thread *
-      cuco::detail::int_div_ceil(config.num_threads_per_block, DEFAULT_MIXED_SEMI_JOIN_CG_SIZE);
-
-    launch_mixed_join_semi(has_nulls,
-                           *left_conditional_view,
-                           *right_conditional_view,
-                           *probe_view,
-                           *build_view,
-                           equality_probe,
-                           row_set_ref,
-                           cudf::device_span<bool>(left_table_keep_mask),
-                           parser.device_expression_data,
-                           config,
-                           shmem_size_per_block,
-                           stream);
-
-    auto gather_map =
-      std::make_unique<rmm::device_uvector<size_type>>(probe_table.num_rows(), stream, mr);
-
-    // gather_map_end will be the end of valid data in gather_map
-    auto gather_map_end =
-      thrust::copy_if(rmm::exec_policy(stream),
-                      thrust::counting_iterator<size_type>(0),
-                      thrust::counting_iterator<size_type>(probe_table.num_rows()),
-                      left_table_keep_mask.begin(),
-                      gather_map->begin(),
-                      [join_type] __device__(bool keep_row) {
-                        return keep_row == (join_type == detail::join_kind::LEFT_SEMI_JOIN);
-                      });
-
-    gather_map->resize(cuda::std::distance(gather_map->begin(), gather_map_end), stream);
-    return gather_map;
+    launch_kernel(equality_probe, row_set_ref);
   }
+
+  // Common post-processing for both paths
+  auto gather_map =
+    std::make_unique<rmm::device_uvector<size_type>>(probe_table.num_rows(), stream, mr);
+
+  // gather_map_end will be the end of valid data in gather_map
+  auto gather_map_end =
+    thrust::copy_if(rmm::exec_policy(stream),
+                    thrust::counting_iterator<size_type>(0),
+                    thrust::counting_iterator<size_type>(probe_table.num_rows()),
+                    left_table_keep_mask.begin(),
+                    gather_map->begin(),
+                    [join_type] __device__(bool keep_row) {
+                      return keep_row == (join_type == detail::join_kind::LEFT_SEMI_JOIN);
+                    });
+
+  gather_map->resize(cuda::std::distance(gather_map->begin(), gather_map_end), stream);
+  return gather_map;
 }
 
 }  // namespace detail
