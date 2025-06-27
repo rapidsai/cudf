@@ -480,8 +480,8 @@ class hybrid_scan_reader {
  *
  * @param options The options used to read Parquet file
  * @param deletion_vector Roaring bitmap deletion vector to apply
- * @param rg_offsets_and_sizes Original row offsets for each input row group
- * @param rg_num_rows Number of rows for each input row group
+ * @param row_group_row_offsets Original row offsets for each input row group
+ * @param row_group_num_rows Number of rows for each input row group
  * @param stream CUDA stream used for device memory operations and kernel launches
  *
  * @return Read table with index column and deletions applied, along with its metadata
@@ -489,8 +489,8 @@ class hybrid_scan_reader {
 table_with_metadata read_parquet_and_apply_deletion_vector(
   parquet_reader_options const& options,
   roaring64_bitmap_t const* deletion_vector,
-  cudf::host_span<size_type const> rg_offsets,
-  cudf::host_span<size_type const> rg_num_rows,
+  cudf::host_span<size_type const> row_group_row_offsets,
+  cudf::host_span<size_type const> row_group_num_rows,
   rmm::cuda_stream_view stream);
 
 /** @} */  // end of group

@@ -107,7 +107,7 @@ table_with_metadata read_parquet_and_apply_deletion_vector(
 
   auto table_with_index = std::make_unique<cudf::table>(std::move(columns_with_index));
 
-  // Add `index` column to the table schema infomation
+  // Add `index` column to the table schema information
   auto schema_info_with_index = std::vector<cudf::io::column_name_info>{};
   schema_info_with_index.reserve(metadata.schema_info.size() + 1);
   schema_info_with_index.emplace_back("index");
