@@ -17,8 +17,10 @@ from cudf_polars.dsl.ir import (
     HConcat,
     HStack,
     Join,
+    Projection,
     Scan,
     Select,
+    Sort,
     Union,
 )
 from cudf_polars.dsl.traversal import traversal
@@ -188,3 +190,18 @@ def _(ir: HConcat, stats: StatsCollector, config_options: ConfigOptions) -> None
 def _(ir: Union, stats: StatsCollector, config_options: ConfigOptions) -> None:
     # TODO: Might be able to preserve source statistics
     stats.column_stats[ir] = {name: ColumnStats(name=name) for name in ir.schema}
+
+
+def _add_source_stats_preserve(
+    ir: IR, stats: StatsCollector, config_options: ConfigOptions
+) -> None:
+    (child,) = ir.children
+    stats.column_stats[ir] = {
+        name: value
+        for name, value in stats.column_stats.get(child, {}).items()
+        if name in ir.schema
+    }
+
+
+add_source_stats.register(Projection, _add_source_stats_preserve)
+add_source_stats.register(Sort, _add_source_stats_preserve)
