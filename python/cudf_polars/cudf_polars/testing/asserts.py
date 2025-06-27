@@ -186,6 +186,7 @@ def get_default_engine(
     See Also
     --------
     assert_gpu_result_equal
+    assert_sink_result_equal
     """
     executor_options: dict[str, Any] = {}
     executor = executor or DEFAULT_EXECUTOR
