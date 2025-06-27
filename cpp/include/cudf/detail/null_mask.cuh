@@ -113,11 +113,11 @@ CUDF_KERNEL void offset_bitmask_binop(Binop op,
 }
 
 /**
- * @brief Performs a segmented binary operation on bitmasks with configurable bit offsets
+ * @brief Performs a segmented binary operation on bitmasks with configurable bit offsets.
  *
- * This kernel applies a binary operation across multiple segments of bitmasks. Each segment is
- * processed by a separate warp, and the result is written directly to the destination mask for
- * that segment.
+ * For each segment in the input masks array, this kernel applies a binary reduction operation. Each
+ * segment is processed by a separate warp, and the result is written directly to the destination
+ * mask for that segment.
  *
  * The kernel performs the following operations:
  * 1. Maps each warp to a segment defined by segment_offsets
@@ -267,7 +267,7 @@ segmented_bitmask_binop(Binop op,
     h_destination_masks_ptrs.push_back(
       static_cast<bitmask_type*>(h_destination_masks.back()->data()));
   }
-  auto destination_masks = cudf::detail::make_device_uvector(
+  auto destination_masks = cudf::detail::make_device_uvector_async(
     h_destination_masks_ptrs, stream, cudf::get_current_device_resource_ref());
 
   // for destination size, pass number of words in each destination buffer instead of number of bits

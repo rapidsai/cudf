@@ -320,6 +320,8 @@ std::vector<std::unique_ptr<column>> superimpose_nulls(std::vector<bitmask_type 
   CUDF_EXPECTS(null_masks.size() == inputs.size(),
                "The number of null masks to apply must match the number of input columns");
 
+  if (inputs.empty()) { return inputs; }
+
   auto const num_rows = inputs[0]->size();
   std::vector<bitmask_type const*> sources;
   std::vector<size_type> segment_offsets;
