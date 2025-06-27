@@ -50,8 +50,7 @@ def test_dataframe_apply_rows(dtype, has_nulls, pessimistic):
         {"a": gdf_series_a, "b": gdf_series_b, "c": gdf_series_c}
     )
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", FutureWarning)
+    with pytest.warns(FutureWarning):
         df_actual = df_original.apply_rows(
             _kernel_multiply,
             ["a", "b"],
