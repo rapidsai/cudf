@@ -241,6 +241,7 @@ def _(node: pl_ir.Scan, translator: Translator, schema: Schema) -> ir.IR:
         skip_rows = 0
     else:
         skip_rows, n_rows = pre_slice
+
     return ir.Scan(
         schema,
         typ,
