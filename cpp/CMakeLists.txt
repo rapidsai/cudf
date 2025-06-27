@@ -687,8 +687,9 @@ add_library(
   src/sort/is_sorted.cu
   src/sort/rank.cu
   src/sort/segmented_sort.cu
-  src/sort/sort_column.cu
   src/sort/sort.cu
+  src/sort/sort_column.cu
+  src/sort/sort_radix.cu
   src/sort/stable_segmented_sort.cu
   src/sort/stable_sort_column.cu
   src/sort/stable_sort.cu
