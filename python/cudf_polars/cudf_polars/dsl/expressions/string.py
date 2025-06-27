@@ -155,7 +155,7 @@ class StringFunction(Expr):
             if not literal:
                 if not strict:
                     raise NotImplementedError(
-                        "f{strict=} is not supported for regex contains"
+                        f"{strict=} is not supported for regex contains"
                     )
                 if not isinstance(self.children[1], Literal):
                     raise NotImplementedError(

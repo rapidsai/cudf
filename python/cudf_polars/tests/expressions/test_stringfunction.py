@@ -153,7 +153,7 @@ def test_supported_stringfunction_expression(ldf):
 
 
 def test_unsupported_stringfunction(ldf):
-    q = ldf.select(pl.col("a").str.decode("hex"))
+    q = ldf.select(pl.col("a").str.encode("hex"))
 
     assert_ir_translation_raises(q, NotImplementedError)
 
