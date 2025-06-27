@@ -25,6 +25,8 @@ if TYPE_CHECKING:
     import pathlib
     from collections.abc import Sequence
 
+import textwrap
+
 
 @dataclasses.dataclass
 class Record:
@@ -252,17 +254,24 @@ def parse_args(args: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="Cudf-Polars PDS-H Benchmarks",
         description="Experimental streaming-executor benchmarks.",
+        formatter_class=argparse.RawTextHelpFormatter,
     )
     parser.add_argument(
         "query",
         type=_query_type,
-        help="Query number.",
+        help=textwrap.dedent("""\
+            Query to run. One of the following:
+            - A single number (e.g., 11)
+            - A comma-separated list of query numbers (e.g., 1,3,7)
+            - The string 'all' to run all queries (1 through 22)"""),
     )
     parser.add_argument(
         "--path",
         type=str,
         default=os.environ.get("PDSH_DATASET_PATH"),
-        help="Full PDS-H dataset directory path.",
+        help=textwrap.dedent("""\
+            Path to the root directory of the PDS-H dataset.
+            Defaults to the PDSH_DATASET_PATH environment variable."""),
     )
     parser.add_argument(
         "--root",
@@ -280,7 +289,9 @@ def parse_args(args: Sequence[str] | None = None) -> argparse.Namespace:
         "--suffix",
         type=str,
         default=".parquet",
-        help="Table file suffix.",
+        help=textwrap.dedent("""\
+            File suffix for input table files.
+            Default: .parquet"""),
     )
     parser.add_argument(
         "-e",
@@ -288,7 +299,11 @@ def parse_args(args: Sequence[str] | None = None) -> argparse.Namespace:
         default="streaming",
         type=str,
         choices=["in-memory", "streaming", "cpu"],
-        help="Executor.",
+        help=textwrap.dedent("""\
+            Query executor backend:
+                - in-memory : Evaluate query in GPU memory
+                - streaming : Partitioned evaluation (default)
+                - cpu       : Use Polars CPU engine"""),
     )
     parser.add_argument(
         "-s",
@@ -296,7 +311,10 @@ def parse_args(args: Sequence[str] | None = None) -> argparse.Namespace:
         default="synchronous",
         type=str,
         choices=["synchronous", "distributed"],
-        help="Scheduler to use with the 'streaming' executor.",
+        help=textwrap.dedent("""\
+            Scheduler type to use with the 'streaming' executor.
+                - synchronous : Run locally single-process
+                - distributed : Use Dask for multi-GPU execution"""),
     )
     parser.add_argument(
         "--n-workers",
@@ -352,7 +370,9 @@ def parse_args(args: Sequence[str] | None = None) -> argparse.Namespace:
         "--rmm-pool-size",
         default=0.5,
         type=float,
-        help="RMM pool size (fractional).",
+        help=textwrap.dedent("""\
+            Fraction of total GPU memory to allocate for RMM pool.
+            Default: 0.5 (50%% of GPU memory)"""),
     )
     parser.add_argument(
         "--rmm-async",
