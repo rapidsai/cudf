@@ -625,7 +625,10 @@ void reader::impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_li
   auto const pass_end = pass.skip_rows + pass.num_rows;
   max_row             = std::min<size_t>(max_row, pass_end);
   CUDF_EXPECTS(max_row > subpass.skip_rows, "Unexpected short subpass", std::underflow_error);
-  subpass.num_rows = max_row - subpass.skip_rows;
+  // Limit the number of rows to read in this subpass to the cudf's column size limit - 1 (for
+  // lists)
+  subpass.num_rows =
+    std::min<size_t>(std::numeric_limits<size_type>::max() - 1, max_row - subpass.skip_rows);
 
   // now split up the output into chunks as necessary
   compute_output_chunks_for_subpass();
