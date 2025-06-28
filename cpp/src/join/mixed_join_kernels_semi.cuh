@@ -19,14 +19,14 @@
 #include "join_common_utils.cuh"
 #include "join_common_utils.hpp"
 #include "mixed_join_common_utils.cuh"
+#include "mixed_join_primitive_utils.cuh"
 
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/span.hpp>
 
-namespace cudf {
-namespace detail {
+namespace cudf::detail {
 
 /**
  * @brief Performs a semi join using the combination of a hash lookup to
@@ -53,19 +53,37 @@ namespace detail {
  * @param[in] device_expression_data Container of device data required to evaluate the desired
  * expression.
  */
-void launch_mixed_join_semi(bool has_nulls,
-                            table_device_view left_table,
-                            table_device_view right_table,
-                            table_device_view probe,
-                            table_device_view build,
-                            row_equality const equality_probe,
-                            hash_set_ref_type set_ref,
-                            cudf::device_span<bool> left_table_keep_mask,
-                            cudf::ast::detail::expression_device_view device_expression_data,
-                            detail::grid_1d const config,
-                            int64_t shmem_size_per_block,
-                            rmm::cuda_stream_view stream);
+void launch_mixed_join_semi(
+  bool has_nulls,
+  table_device_view left_table,
+  table_device_view right_table,
+  table_device_view probe,
+  table_device_view build,
+  row_equality equality_probe,
+  typename hash_set_type<double_row_equality_comparator,
+                         row_hash>::template ref_type<cuco::contains_tag> set_ref,
+  cudf::device_span<bool> left_table_keep_mask,
+  cudf::ast::detail::expression_device_view device_expression_data,
+  detail::grid_1d const config,
+  int64_t shmem_size_per_block,
+  rmm::cuda_stream_view stream);
 
-}  // namespace detail
+/**
+ * @brief Overload for primitive row operators case
+ */
+void launch_mixed_join_semi(
+  bool has_nulls,
+  table_device_view left_table,
+  table_device_view right_table,
+  table_device_view probe,
+  table_device_view build,
+  cudf::row::primitive::row_equality_comparator equality_probe,
+  typename hash_set_type<primitive_double_row_equality_comparator,
+                         primitive_row_hash>::template ref_type<cuco::contains_tag> set_ref,
+  cudf::device_span<bool> left_table_keep_mask,
+  cudf::ast::detail::expression_device_view device_expression_data,
+  detail::grid_1d const config,
+  int64_t shmem_size_per_block,
+  rmm::cuda_stream_view stream);
 
-}  // namespace cudf
+}  // namespace cudf::detail
