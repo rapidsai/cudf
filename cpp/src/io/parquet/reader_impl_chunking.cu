@@ -25,6 +25,7 @@
 
 #include <thrust/transform_scan.h>
 
+#include <algorithm>
 #include <numeric>
 
 namespace cudf::io::parquet::detail {
@@ -537,10 +538,10 @@ void reader::impl::compute_input_passes()
     _input_pass_read_limit > 0
       ? static_cast<size_t>(_input_pass_read_limit * input_limit_compression_reserve)
       : std::numeric_limits<std::size_t>::max();
-  std::size_t cur_pass_byte_size = 0;
-  std::size_t cur_rg_start       = 0;
-  std::size_t cur_row_count      = 0;
-  std::size_t cur_pass_num_rows  = 0;
+  std::size_t cur_pass_byte_size     = 0;
+  std::size_t cur_rg_start           = 0;
+  std::size_t cur_row_count          = 0;
+  std::size_t cur_pass_num_leaf_rows = 0;
   _file_itm_data.input_pass_row_group_offsets.push_back(0);
   _file_itm_data.input_pass_start_row_count.push_back(0);
 
@@ -561,11 +562,20 @@ void reader::impl::compute_input_passes()
                                   ? (rgi.start_row + row_group.num_rows - skip_rows)
                                   : row_group.num_rows;
 
+    // Get the number of leaf-level rows (or number or values) in this row group
+    auto const row_group_leaf_rows =
+      std::max_element(row_group.columns.cbegin(),
+                       row_group.columns.cend(),
+                       [](auto const& a, auto const& b) {
+                         return a.meta_data.num_values < b.meta_data.num_values;
+                       })
+        ->meta_data.num_values;
+
     //  Set skip_rows = 0 as it is no longer needed for subsequent row_groups
     skip_rows = 0;
     // do we need to create a pass boundary here?
     if (cur_pass_byte_size + compressed_rg_size >= comp_read_limit or
-        cur_pass_num_rows + row_group_rows >= max_rows_per_pass) {
+        cur_pass_num_leaf_rows + row_group_leaf_rows >= max_rows_per_pass) {
       // A single row group (the current one) is larger than the read limit:
       // We always need to include at least one row group, so end the pass at the end of the current
       // row group
@@ -574,21 +584,21 @@ void reader::impl::compute_input_passes()
                      "Number of rows in each row group must be smaller than the column size limit");
         _file_itm_data.input_pass_row_group_offsets.push_back(cur_rg_index + 1);
         _file_itm_data.input_pass_start_row_count.push_back(cur_row_count + row_group_rows);
-        cur_rg_start       = cur_rg_index + 1;
-        cur_pass_byte_size = 0;
-        cur_pass_num_rows  = 0;
+        cur_rg_start           = cur_rg_index + 1;
+        cur_pass_byte_size     = 0;
+        cur_pass_num_leaf_rows = 0;
       }
       // End the pass at the end of the previous row group
       else {
         _file_itm_data.input_pass_row_group_offsets.push_back(cur_rg_index);
         _file_itm_data.input_pass_start_row_count.push_back(cur_row_count);
-        cur_rg_start       = cur_rg_index;
-        cur_pass_byte_size = compressed_rg_size;
-        cur_pass_num_rows  = row_group_rows;
+        cur_rg_start           = cur_rg_index;
+        cur_pass_byte_size     = compressed_rg_size;
+        cur_pass_num_leaf_rows = row_group_leaf_rows;
       }
     } else {
       cur_pass_byte_size += compressed_rg_size;
-      cur_pass_num_rows += row_group_rows;
+      cur_pass_num_leaf_rows += row_group_leaf_rows;
     }
     cur_row_count += row_group_rows;
   }

@@ -393,7 +393,8 @@ void reader::impl::preprocess_file(read_mode mode)
   CUDF_EXPECTS(
     mode == read_mode::CHUNKED_READ or
       std::cmp_less_equal(_file_itm_data.global_num_rows, std::numeric_limits<size_type>::max()),
-    "Number of reading rows exceeds cudf's column size limit.");
+    "READ_ALL mode does not support reading number of rows more than cudf's column size limit. "
+    "For reading larger number of rows, please use chunked_parquet_reader.");
 
   // Inclusive scan the number of rows per source
   if (not _expr_conv.get_converted_expr().has_value() and mode == read_mode::CHUNKED_READ) {
@@ -740,7 +741,7 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
         : num_keys_per_col * std::max<size_t>(1, max_keys_per_iter / num_keys_per_col);
 
     // Size iterator. Indexes pages by sorted order
-    rmm::device_uvector<size_type> size_input{num_keys_per_iter, _stream};
+    rmm::device_uvector<size_t> size_input{num_keys_per_iter, _stream};
 
     // To keep track of the starting key of an iteration
     size_t key_start = 0;
@@ -801,7 +802,10 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
           // if this is a list column add 1 for non-leaf levels for the terminating offset
           if (out_buf.type.id() == type_id::LIST && l_idx < max_depth) { buffer_size++; }
           CUDF_EXPECTS(buffer_size <= std::numeric_limits<cudf::size_type>::max(),
-                       "Number of list column rows exceeds cudf's column size limit",
+                       "Number of list column rows exceeds the column size limit. " +
+                         std::string((mode == read_mode::CHUNKED_READ)
+                                       ? "Consider reducing the `pass_read_limit`."
+                                       : ""),
                        std::overflow_error);
           // allocate
           // we're going to start null mask as all valid and then turn bits off if necessary
