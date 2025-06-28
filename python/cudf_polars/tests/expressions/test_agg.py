@@ -16,6 +16,7 @@ from cudf_polars.testing.asserts import (
 @pytest.fixture(
     params=[
         # regular aggs from Agg
+        "any",
         "min",
         "max",
         "median",
@@ -69,6 +70,8 @@ def df(dtype, with_nulls, is_sorted):
 
 
 def test_agg(df, agg):
+    if agg == "any":
+        pytest.skip("Does not apply")
     expr = getattr(pl.col("a"), agg)()
     q = df.select(expr)
 
