@@ -154,7 +154,31 @@ def decompose_single_agg(
                 expr.Col(agg.dtype, name)
             )
     if isinstance(agg, expr.Ternary):
-        raise NotImplementedError("Ternary inside groupby")
+        when, then, otherwise = agg.children
+
+        when_aggs, when_post = decompose_single_agg(
+            expr.NamedExpr(next(name_generator), when), name_generator, is_top=False
+        )
+        then_aggs, then_post = decompose_single_agg(
+            expr.NamedExpr(next(name_generator), then), name_generator, is_top=is_top
+        )
+        otherwise_aggs, otherwise_post = decompose_single_agg(
+            expr.NamedExpr(next(name_generator), otherwise),
+            name_generator,
+            is_top=is_top,
+        )
+
+        return (
+            when_aggs + then_aggs + otherwise_aggs,
+            named_expr.reconstruct(
+                expr.Ternary(
+                    agg.dtype,
+                    when_post.value,
+                    then_post.value,
+                    otherwise_post.value,
+                )
+            ),
+        )
     if agg.is_pointwise:
         aggs, posts = _decompose_aggs(
             (expr.NamedExpr(next(name_generator), child) for child in agg.children),

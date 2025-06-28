@@ -202,3 +202,30 @@ def test_unsupported_agg():
         .agg(pl.col("values").n_unique())
     )
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_grouped_rolling_ternary():
+    df = pl.LazyFrame(
+        {
+            "foo": ["a", "a", "b", "b"],
+            "time": pl.select(
+                pl.date_range(
+                    start=pl.lit("2025-07-01"), end=pl.lit("2025-07-04"), interval="1d"
+                )
+            ).to_series(),
+            "value": [10, 20, 30, 40],
+            "bar": [True, False, True, False],
+        }
+    )
+
+    expr = pl.when(pl.col("bar")).then(pl.col("value")).otherwise(0).sum()
+
+    q = (
+        df.sort("time")
+        .rolling(
+            index_column="time", period="2d", offset="0d", group_by="foo", closed="both"
+        )
+        .agg(expr)
+    )
+
+    assert_gpu_result_equal(q)
