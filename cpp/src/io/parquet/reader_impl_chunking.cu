@@ -518,6 +518,8 @@ void reader::impl::compute_input_passes()
   auto constexpr max_rows_per_pass = static_cast<size_t>(std::numeric_limits<size_type>::max());
 
   // if the user hasn't specified an input size limit, read everything in a single pass.
+  // FIXME: MH: We need to check the number of leaf-level rows here instead or just don't do it for
+  // mode == CHUNKED
   if (_file_itm_data.global_num_rows <= max_rows_per_pass and _input_pass_read_limit == 0) {
     _file_itm_data.input_pass_row_group_offsets.push_back(0);
     _file_itm_data.input_pass_row_group_offsets.push_back(row_groups_info.size());
