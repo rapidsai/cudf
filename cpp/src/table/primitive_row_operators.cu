@@ -21,6 +21,9 @@
 namespace cudf {
 bool is_primitive_row_op_compatible(cudf::table_view const& table)
 {
-  return table.num_columns() == 1 and cudf::is_numeric(table.column(0).type());
+  for (cudf::size_type i = 0; i < table.num_columns(); ++i) {
+    if (!cudf::is_numeric(table.column(i).type())) { return false; }
+  }
+  return true;
 }
 }  // namespace cudf
