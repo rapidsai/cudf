@@ -60,6 +60,8 @@ struct filter_histogram {
   }
 };
 
+/// @brief A gather-filter operation that filters the elements of an input range base on a
+/// pre-computed flag. The flag serves as both a stencil and a gather map.
 template <typename InputIterator>
 auto filter_by(InputIterator input_begin,
                InputIterator input_end,
@@ -90,13 +92,12 @@ struct filter_dispatcher;
 template <>
 struct filter_dispatcher<false> {
   template <typename T>
-  requires(cudf::is_rep_layout_compatible<T>() &&
-           cudf::is_fixed_width<T>()) std::unique_ptr<cudf::column>
-  operator()(cudf::column_device_view const& col,
-             cudf::size_type num_selected,
-             cudf::size_type const* flag_iterator,
-             rmm::cuda_stream_view stream,
-             rmm::device_async_resource_ref mr) const
+    requires(cudf::is_rep_layout_compatible<T>() && cudf::is_fixed_width<T>())
+  std::unique_ptr<cudf::column> operator()(cudf::column_device_view const& col,
+                                           cudf::size_type num_selected,
+                                           cudf::size_type const* flag_iterator,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr) const
   {
     auto filtered =
       filter_by(col.data<T>(), col.data<T>() + col.size(), num_selected, flag_iterator, stream, mr);
@@ -107,12 +108,12 @@ struct filter_dispatcher<false> {
   }
 
   template <typename T>
-  requires(cudf::is_fixed_point<T>()) std::unique_ptr<cudf::column>
-  operator()(cudf::column_device_view const& col,
-             cudf::size_type num_selected,
-             cudf::size_type const* flag_iterator,
-             rmm::cuda_stream_view stream,
-             rmm::device_async_resource_ref mr) const
+    requires(cudf::is_fixed_point<T>())
+  std::unique_ptr<cudf::column> operator()(cudf::column_device_view const& col,
+                                           cudf::size_type num_selected,
+                                           cudf::size_type const* flag_iterator,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr) const
   {
     auto filtered = filter_by(col.data<typename T::rep>(),  // actually uses the underlying rep type
                               col.data<typename T::rep>() + col.size(),
@@ -127,12 +128,12 @@ struct filter_dispatcher<false> {
   }
 
   template <typename T>
-  requires(std::is_same_v<T, cudf::string_view>) std::unique_ptr<cudf::column>
-  operator()(cudf::column_device_view const& col,
-             cudf::size_type num_selected,
-             cudf::size_type const* flag_iterator,
-             rmm::cuda_stream_view stream,
-             rmm::device_async_resource_ref mr) const
+    requires(std::is_same_v<T, cudf::string_view>)
+  std::unique_ptr<cudf::column> operator()(cudf::column_device_view const& col,
+                                           cudf::size_type num_selected,
+                                           cudf::size_type const* flag_iterator,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr) const
   {
     auto filtered = filter_by(col.begin<cudf::string_view>(),
                               col.begin<cudf::string_view>() + col.size(),
