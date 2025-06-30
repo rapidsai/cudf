@@ -910,10 +910,14 @@ encoded_data encode_columns(orc_table_view const& orc_table,
     std::vector<size_type> indices;
     for (auto const& stripe : segmentation.stripes) {
       for (auto rg_idx_it = stripe.cbegin(); rg_idx_it < stripe.cend() - 1; ++rg_idx_it) {
+#if defined(__GNUC__) && (__GNUC__ >= 14)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdangling-reference"
+#endif
         auto const& chunk = chunks[col_idx][*rg_idx_it];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
 #pragma GCC diagnostic pop
+#endif
         indices.push_back(chunk.start_row);
         indices.push_back(chunk.start_row + chunk.num_rows);
       }
@@ -1001,10 +1005,14 @@ encoded_data encode_columns(orc_table_view const& orc_table,
         // Set offsets
         for (auto rg_idx_it = stripe.cbegin(); rg_idx_it < stripe.cend(); ++rg_idx_it) {
           auto const rg_idx = *rg_idx_it;
+#if defined(__GNUC__) && (__GNUC__ >= 14)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdangling-reference"
+#endif
           auto const& ck = chunks[col_idx][rg_idx];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
 #pragma GCC diagnostic pop
+#endif
           auto& strm = col_streams[rg_idx];
 
           if (strm_id < 0 or (strm_type == CI_DATA && streams[strm_id].length == 0 &&
