@@ -1,5 +1,6 @@
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
 import datetime
+import decimal
 
 import pyarrow as pa
 import pytest
@@ -28,6 +29,7 @@ def np():
         datetime.datetime(2020, 1, 1, microsecond=1),
         datetime.timedelta(1),
         datetime.timedelta(days=1, microseconds=1),
+        decimal.Decimal("3.14"),
     ],
     ids=repr,
 )
@@ -38,8 +40,18 @@ def py_scalar(request):
 def test_from_py(py_scalar):
     result = plc.Scalar.from_py(py_scalar)
     expected = pa.scalar(py_scalar)
-    assert plc.interop.to_arrow(result).equals(expected)
-    assert plc.interop.to_arrow(result.type()).equals(expected.type)
+    if isinstance(py_scalar, decimal.Decimal):
+        # libcudf decimals don't have precision so we must use to_py
+        # instead of to_arrow
+        assert result.to_py() == expected.as_py()
+    else:
+        assert plc.interop.to_arrow(result).equals(expected)
+    if isinstance(py_scalar, decimal.Decimal):
+        assert plc.interop.to_arrow(
+            result.type(), precision=len(py_scalar.as_tuple().digits)
+        ).equals(expected.type)
+    else:
+        assert plc.interop.to_arrow(result.type()).equals(expected.type)
 
 
 def test_to_py_none():
@@ -249,7 +261,12 @@ def test_round_trip_scalar_through_column(py_scalar):
         plc.Scalar.from_py(py_scalar), 1
     ).to_scalar()
     expected = pa.scalar(py_scalar)
-    assert plc.interop.to_arrow(result).equals(expected)
+    if isinstance(py_scalar, decimal.Decimal):
+        # libcudf decimals don't have precision so we must use to_py
+        # instead of to_arrow
+        assert result.to_py() == expected.as_py()
+    else:
+        assert plc.interop.to_arrow(result).equals(expected)
 
 
 def test_non_constant_column_to_scalar_raises():
@@ -257,3 +274,8 @@ def test_non_constant_column_to_scalar_raises():
         ValueError, match="to_scalar only works for columns of size 1"
     ):
         plc.Column.from_arrow(pa.array([0, 1])).to_scalar()
+
+
+def test_roundtrip_python_decimal():
+    d = decimal.Decimal("3.14")
+    assert d == plc.Scalar.from_py(d).to_py()
