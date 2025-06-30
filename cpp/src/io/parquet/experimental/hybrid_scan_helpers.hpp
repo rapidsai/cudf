@@ -203,6 +203,49 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
     host_span<cudf::size_type const> output_column_schemas,
     std::reference_wrapper<ast::expression const> filter,
     rmm::cuda_stream_view stream) const;
+
+  /**
+   * @brief Filter data pages using statistics page-level statistics based on predicate filter
+   *
+   * @param row_group_indices Input row groups indices
+   * @param output_dtypes Datatypes of output columns
+   * @param output_column_schemas schema indices of output columns
+   * @param filter AST expression to filter data pages based on `PageIndex` statistics
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the returned column's device memory
+   *
+   * @return A boolean column representing a mask of rows surviving the predicate filter at
+   *         page-level
+   */
+  [[nodiscard]] std::unique_ptr<cudf::column> filter_data_pages_with_stats(
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    cudf::host_span<cudf::data_type const> output_dtypes,
+    cudf::host_span<cudf::size_type const> output_column_schemas,
+    std::reference_wrapper<ast::expression const> filter,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
+
+  /**
+   * @brief Computes which data pages need decoding to construct input columns based on the row mask
+   *
+   * Compute a vector of boolean vectors indicating which data pages need to be decoded to
+   * construct each input column based on the row mask, one vector per column
+   *
+   * @param row_mask Boolean column indicating which rows need to be read after page-pruning
+   * @param row_group_indices Input row groups indices
+   * @param output_dtypes Datatypes of output columns
+   * @param output_column_schemas schema indices of output columns
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   *
+   * @return A vector of boolean vectors indicating which data pages need to be decoded to produce
+   *         the output table based on the input row mask, one per input column
+   */
+  [[nodiscard]] std::vector<thrust::host_vector<bool>> compute_data_page_mask(
+    cudf::column_view row_mask,
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    cudf::host_span<cudf::data_type const> output_dtypes,
+    cudf::host_span<cudf::size_type const> output_column_schemas,
+    rmm::cuda_stream_view stream) const;
 };
 
 /**

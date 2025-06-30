@@ -237,7 +237,7 @@ class UnaryFunction(Expr):
                 null_order=null_order,
             )
         elif self.name == "value_counts":
-            (sort, parallel, name, normalize) = self.options
+            (sort, _, _, normalize) = self.options
             count_agg = [plc.aggregation.count(plc.types.NullPolicy.INCLUDE)]
             gb_requests = [
                 plc.groupby.GroupByRequest(

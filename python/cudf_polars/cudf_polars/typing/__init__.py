@@ -18,6 +18,7 @@ from typing import (
 )
 
 import polars as pl
+import polars.datatypes
 from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 
 if TYPE_CHECKING:
@@ -83,6 +84,8 @@ PolarsExpr: TypeAlias = Union[
 
 PolarsSchema: TypeAlias = dict[str, pl.DataType]
 Schema: TypeAlias = dict[str, "DataType"]
+
+PolarsDataType: TypeAlias = polars.datatypes.DataTypeClass | polars.datatypes.DataType
 
 Slice: TypeAlias = tuple[int, int | None]
 
@@ -184,7 +187,7 @@ class ColumnOptions(TypedDict):
     order: plc.types.Order
     null_order: plc.types.NullOrder
     name: str | None
-    dtype: str | None
+    dtype: str
 
 
 class DeserializedColumnOptions(TypedDict):
@@ -200,7 +203,7 @@ class DeserializedColumnOptions(TypedDict):
     order: plc.types.Order
     null_order: plc.types.NullOrder
     name: str | None
-    dtype: DataType | None
+    dtype: DataType
 
 
 class ColumnHeader(TypedDict):

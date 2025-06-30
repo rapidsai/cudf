@@ -3,7 +3,7 @@ files:
   all:
     output: conda
     matrix:
-      cuda: ["12.8"]
+      cuda: ["12.9"]
       arch: [x86_64, aarch64]
     includes:
       - build_base
@@ -401,7 +401,6 @@ files:
 channels:
   - rapidsai
   - rapidsai-nightly
-  - dask/label/dev
   - conda-forge
 dependencies:
   build_base:
@@ -700,7 +699,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - polars>=1.25,<1.31
+          - polars>=1.25,<1.32
   run_cudf_polars_experimental:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -735,7 +734,7 @@ dependencies:
               cuda: "12.*"
             packages:
               - cuda-sanitizer-api
-          - matrix:  # Fallback for CUDA 12 or no matrix
+          - matrix: # Fallback for CUDA 12 or no matrix
             packages:
   # packages we want in the 'test_cpp' group in 'files', for CI, but which
   # shouldn't be added to 'all' for building a development environment
@@ -783,7 +782,7 @@ dependencies:
         matrices:
           - matrix: {dependencies: "oldest", arch: "aarch64", cuda: "12.*"}
             packages:
-              - cupy==12.2.0  # cupy 12.2.0 is the earliest with CUDA 12 ARM packages.
+              - cupy==12.2.0 # cupy 12.2.0 is the earliest with CUDA 12 ARM packages.
           - matrix: {dependencies: "oldest"}
             packages:
               - cupy==12.0.0

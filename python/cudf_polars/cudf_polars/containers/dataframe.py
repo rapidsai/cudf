@@ -20,14 +20,14 @@ if TYPE_CHECKING:
 
     from typing_extensions import Any, CapsuleType, Self
 
-    from cudf_polars.typing import ColumnOptions, DataFrameHeader, Slice
+    from cudf_polars.typing import ColumnOptions, DataFrameHeader, PolarsDataType, Slice
 
 
 __all__: list[str] = ["DataFrame"]
 
 
 def _create_polars_column_metadata(
-    name: str | None, dtype: pl.DataType | None
+    name: str, dtype: PolarsDataType
 ) -> plc.interop.ColumnMetadata:
     """Create ColumnMetadata preserving pl.Struct field names."""
     if isinstance(dtype, pl.Struct):
@@ -37,7 +37,10 @@ def _create_polars_column_metadata(
         ]
     else:
         children_meta = []
-    return plc.interop.ColumnMetadata(name=name, children_meta=children_meta)
+    timezone = dtype.time_zone if isinstance(dtype, pl.Datetime) else None
+    return plc.interop.ColumnMetadata(
+        name=name, timezone=timezone or "", children_meta=children_meta
+    )
 
 
 # This is also defined in pylibcudf.interop
@@ -72,6 +75,7 @@ class DataFrame:
         if any(c.name is None for c in columns):
             raise ValueError("All columns must have a name")
         self.columns = [cast(NamedColumn, c) for c in columns]
+        self.dtypes = [c.dtype for c in self.columns]
         self.column_map = {c.name: c for c in self.columns}
         self.table = plc.Table([c.obj for c in self.columns])
 
@@ -89,12 +93,8 @@ class DataFrame:
         # serialise with names we control and rename with that map.
         name_map = {f"column_{i}": name for i, name in enumerate(self.column_map)}
         metadata = [
-            _create_polars_column_metadata(
-                name,
-                # Can remove the getattr if we ever consistently set Column.dtype
-                getattr(col.dtype, "polars", None),
-            )
-            for name, col in zip(name_map, self.columns, strict=True)
+            _create_polars_column_metadata(name, dtype.polars)
+            for name, dtype in zip(name_map, self.dtypes, strict=True)
         ]
         table_with_metadata = _ObjectWithArrowMetadata(self.table, metadata)
         df = pl.DataFrame(table_with_metadata)
@@ -148,7 +148,9 @@ class DataFrame:
         )
 
     @classmethod
-    def from_table(cls, table: plc.Table, names: Sequence[str]) -> Self:
+    def from_table(
+        cls, table: plc.Table, names: Sequence[str], dtypes: Sequence[DataType]
+    ) -> Self:
         """
         Create from a pylibcudf table.
 
@@ -158,6 +160,8 @@ class DataFrame:
             Pylibcudf table to obtain columns from
         names
             Names for the columns
+        dtypes
+            Dtypes for the columns
 
         Returns
         -------
@@ -172,9 +176,8 @@ class DataFrame:
         if table.num_columns() != len(names):
             raise ValueError("Mismatching name and table length.")
         return cls(
-            # TODO: Pass along dtypes here
-            Column(c, name=name)
-            for c, name in zip(table.columns(), names, strict=True)
+            Column(c, name=name, dtype=dtype)
+            for c, name, dtype in zip(table.columns(), names, dtypes, strict=True)
         )
 
     @classmethod
@@ -317,7 +320,11 @@ class DataFrame:
     def filter(self, mask: Column) -> Self:
         """Return a filtered table given a mask."""
         table = plc.stream_compaction.apply_boolean_mask(self.table, mask.obj)
-        return type(self).from_table(table, self.column_names).sorted_like(self)
+        return (
+            type(self)
+            .from_table(table, self.column_names, self.dtypes)
+            .sorted_like(self)
+        )
 
     def slice(self, zlice: Slice | None) -> Self:
         """
@@ -338,4 +345,8 @@ class DataFrame:
         (table,) = plc.copying.slice(
             self.table, conversion.from_polars_slice(zlice, num_rows=self.num_rows)
         )
-        return type(self).from_table(table, self.column_names).sorted_like(self)
+        return (
+            type(self)
+            .from_table(table, self.column_names, self.dtypes)
+            .sorted_like(self)
+        )

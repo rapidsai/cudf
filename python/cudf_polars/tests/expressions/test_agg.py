@@ -8,6 +8,7 @@ import polars as pl
 
 from cudf_polars.dsl import expr
 from cudf_polars.testing.asserts import (
+    DEFAULT_BLOCKSIZE_MODE,
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
@@ -74,7 +75,11 @@ def test_agg(df, agg):
 
     # https://github.com/rapidsai/cudf/issues/15852
     check_dtypes = agg not in {"n_unique", "median"}
-    if not check_dtypes and q.collect_schema()["a"] != pl.Float64:
+    if (
+        not check_dtypes
+        and q.collect_schema()["a"] != pl.Float64
+        and DEFAULT_BLOCKSIZE_MODE == "default"
+    ):
         with pytest.raises(AssertionError):
             assert_gpu_result_equal(q)
     assert_gpu_result_equal(q, check_dtypes=check_dtypes, check_exact=False)
