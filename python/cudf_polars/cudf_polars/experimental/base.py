@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterator
+    from collections.abc import Callable, Generator, Iterator
 
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IR
@@ -47,6 +47,30 @@ def get_key_name(node: Node) -> str:
     return f"{type(node).__name__.lower()}-{hash(node)}"
 
 
+class UniqueSourceStats:
+    """
+    Unique source statistics.
+
+    Parameters
+    ----------
+    count
+        Unique-value count.
+    fraction
+        Unique-value fraction.
+    """
+
+    __slots__ = ("count", "fraction")
+
+    def __init__(
+        self,
+        *,
+        count: int | None = None,
+        fraction: float | None = None,
+    ):
+        self.count = count
+        self.fraction = fraction
+
+
 class ColumnSourceStats:
     """
     Column source statistics.
@@ -55,10 +79,8 @@ class ColumnSourceStats:
     ----------
     cardinality
         Cardinality (row count).
-    unique_count
-        Unique-value count.
-    unique_fraction
-        Unique-value fraction.
+    unique_stats
+        Unique-value statistics.
     storage_size_per_file
         Average un-compressed storage size for this
         column in a single file. This value is used to
@@ -74,11 +96,10 @@ class ColumnSourceStats:
     """
 
     __slots__ = (
+        "_unique_stats",
         "cardinality",
         "exact",
         "storage_size_per_file",
-        "unique_count",
-        "unique_fraction",
     )
 
     def __init__(
@@ -86,15 +107,37 @@ class ColumnSourceStats:
         *,
         cardinality: int | None = None,
         storage_size_per_file: int | None = None,
-        unique_count: int | None = None,
-        unique_fraction: float | None = None,
         exact: tuple[str, ...] = (),
+        unique_stats: Callable[..., UniqueSourceStats]
+        | UniqueSourceStats
+        | None = None,
     ):
         self.cardinality = cardinality
         self.storage_size_per_file = storage_size_per_file
-        self.unique_count = unique_count
-        self.unique_fraction = unique_fraction
         self.exact = exact
+        self._unique_stats = unique_stats
+
+    @property
+    def unique_stats(self) -> UniqueSourceStats:
+        """Get unique-value statistics."""
+        if self._unique_stats is None:
+            return UniqueSourceStats()
+        if isinstance(self._unique_stats, UniqueSourceStats):
+            return self._unique_stats
+        elif callable(self._unique_stats):
+            return self._unique_stats()
+        else:
+            raise TypeError()
+
+    @property
+    def unique_count(self) -> int | None:
+        """Get unique count."""
+        return self.unique_stats.count
+
+    @property
+    def unique_fraction(self) -> float | None:
+        """Get unique fraction."""
+        return self.unique_stats.fraction
 
 
 class ColumnStats:
@@ -133,3 +176,21 @@ class StatsCollector:
     def __init__(self) -> None:
         self.cardinality: dict[IR, int] = {}
         self.column_stats: dict[IR, dict[str, ColumnStats]] = {}
+
+
+# class SourceInfo:
+#     paths: tuple[str]
+#     columns: set[str]
+#     key_columns: set[str]
+
+#     def __init__(self, paths: Sequence[str], columns: Sequence[str], key_columns: set[str]):
+#         self.paths = tuple(paths)
+#         self.columns = set(columns)
+#         self.key_columns = set(key_columns)
+
+#     def update(self, columns: Sequence[str], key_columns: Sequence[str]):
+#         new_columns = self.columns.union(columns)
+#         new_key_columns = self.key_columns.union(key_columns)
+#         if new_columns - self.columns or new_key_columns - self.key_columns:
+#             return SourceInfo(self.paths, new_columns, new_key_columns)
+#         return self
