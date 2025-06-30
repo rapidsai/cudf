@@ -126,9 +126,16 @@ def test_column_source_statistics(
         assert "cardinality" not in source_stats_y.exact
     assert_gpu_result_equal(q1.sort(pl.col("x")).slice(0, 2), engine=engine)
 
-    # Source statistics of "y" should match after GroupBy/Select/HConcat/Sort
+    # Source statistics of "y" should match after GroupBy/Select/HStack/etc
     q2 = (
-        q.group_by(pl.col("y"))
+        pl.concat(
+            [
+                q.select(pl.col("x")),
+                q.select(pl.col("y")),
+            ],
+            how="horizontal",
+        )
+        .group_by(pl.col("y"))
         .sum()
         .select(pl.col("x").max(), pl.col("y"))
         .with_columns((pl.col("x") * pl.col("x")).alias("x2"))

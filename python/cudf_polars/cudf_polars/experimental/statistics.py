@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from cudf_polars.dsl import expr
 from cudf_polars.dsl.ir import (
     IR,
+    Cache,
     ConditionalJoin,
     DataFrameScan,
     GroupBy,
@@ -23,7 +24,7 @@ from cudf_polars.dsl.ir import (
     Sort,
     Union,
 )
-from cudf_polars.dsl.traversal import traversal
+from cudf_polars.dsl.traversal import post_traversal
 from cudf_polars.experimental.base import (
     ColumnSourceStats,
     ColumnStats,
@@ -39,7 +40,7 @@ if TYPE_CHECKING:
 def collect_source_stats(root: IR, config_options: ConfigOptions) -> StatsCollector:
     """Collect basic source statistics."""
     stats: StatsCollector = StatsCollector()
-    for node in list(traversal([root]))[::-1]:
+    for node in post_traversal([root]):
         add_source_stats(node, stats, config_options)
     return stats
 
@@ -157,7 +158,7 @@ def _(ir: HStack, stats: StatsCollector, config_options: ConfigOptions) -> None:
     (child,) = ir.children
     child_column_stats = stats.column_stats.get(child, {})
     new_cols = {
-        n.name: child_column_stats[n.value.name]
+        n.name: child_column_stats.get(n.value.name, ColumnStats(name=n.name))
         if isinstance(n.value, expr.Col)
         else ColumnStats(name=n.name)
         for n in ir.columns
@@ -203,5 +204,6 @@ def _add_source_stats_preserve(
     }
 
 
+add_source_stats.register(Cache, _add_source_stats_preserve)
 add_source_stats.register(Projection, _add_source_stats_preserve)
 add_source_stats.register(Sort, _add_source_stats_preserve)
