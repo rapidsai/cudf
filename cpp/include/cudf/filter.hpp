@@ -49,12 +49,12 @@ namespace CUDF_EXPORT cudf {
  *
  * The size of the resulting column is the size of the largest column.
  *
- * @param columns        Immutable views of the columns to filter
+ * @param columns       Immutable views of the columns to filter
  * @param predicate_udf The PTX/CUDA string of the transform function to apply
  * @param is_ptx        true: the UDF is treated as PTX code; false: the UDF is treated as CUDA code
  * @param user_data     User-defined device data to pass to the UDF.
- * @param copy_mask  Optional vector of booleans indicating which columns to copy from the input
- *                   columns to the output. If not provided, all columns are copied.
+ * @param copy_mask     Optional vector of booleans indicating which columns to copy from the input
+ *                      columns to the output. If not provided, all columns are copied.
  * @param stream        CUDA stream used for device memory operations and kernel launches
  * @param mr            Device memory resource used to allocate the returned column's device memory
  * @return              The filtered target columns
