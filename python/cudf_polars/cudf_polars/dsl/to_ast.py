@@ -192,7 +192,10 @@ def _(node: expr.BooleanFunction, self: Transformer) -> plc_expr.Expression:
             if haystack.dtype.id() == plc.TypeId.LIST:
                 # Because we originally translated pl_expr.Literal with a list scalar
                 # to a expr.LiteralColumn, so the actual type is in the inner type
-                plc_dtype = DataType(haystack.dtype.polars.inner).plc
+                #
+                # the type-ignore is safe because the for plc.TypeID.LIST, we know
+                # we have a polars.List type, which has an inner attribute.
+                plc_dtype = DataType(haystack.dtype.polars.inner).plc  # type: ignore[attr-defined]
             else:
                 plc_dtype = haystack.dtype.plc  # pragma: no cover
             values = (

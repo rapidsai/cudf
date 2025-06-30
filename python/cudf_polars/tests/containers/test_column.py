@@ -9,6 +9,7 @@ import polars as pl
 
 import pylibcudf as plc
 
+import cudf_polars.containers.column
 import cudf_polars.containers.datatype
 from cudf_polars.containers import Column, DataType
 
@@ -21,6 +22,25 @@ def test_non_scalar_access_raises():
     )
     with pytest.raises(ValueError):
         _ = column.obj_scalar
+
+
+def test_check_sorted():
+    dtype = DataType(pl.Int8())
+    column = Column(
+        plc.Column.from_iterable_of_py([0, 1, 2], dtype.plc),
+        dtype=dtype,
+    )
+    assert column.check_sorted(
+        order=plc.types.Order.ASCENDING, null_order=plc.types.NullOrder.AFTER
+    )
+    column.set_sorted(
+        is_sorted=plc.types.Sorted.YES,
+        order=plc.types.Order.ASCENDING,
+        null_order=plc.types.NullOrder.AFTER,
+    )
+    assert column.check_sorted(
+        order=plc.types.Order.ASCENDING, null_order=plc.types.NullOrder.AFTER
+    )
 
 
 @pytest.mark.parametrize("length", [0, 1])
@@ -153,3 +173,69 @@ def test_serialize_cache_miss():
     cudf_polars.containers.datatype._from_polars.cache_clear()
     result = Column.deserialize(header, frames)
     assert result.dtype == dtype
+
+
+# datetimes return instances of DataType, rather than DataTypeClass
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        pl.Binary,
+        pl.Binary(),
+        pl.Boolean,
+        pl.Boolean(),
+        pl.Categorical(),
+        pl.Date,
+        pl.Date(),
+        pl.Datetime,
+        pl.Datetime(),
+        pl.Float32,
+        pl.Float32(),
+        pl.Int8,
+        pl.Int8(),
+        pl.List(pl.Int8()),
+        pl.List(pl.Int8),
+        pl.Object,
+        pl.Object(),
+        pl.String,
+        pl.String(),
+        pl.Time,
+        pl.Time(),
+        pl.UInt8,
+        pl.UInt8(),
+        # These fail.
+        pytest.param(
+            pl.Enum(["a", "b"]),
+            marks=pytest.mark.xfail(reason="Enum is not supported", strict=True),
+        ),
+        pytest.param(
+            pl.List(pl.Decimal(10)),
+            marks=pytest.mark.xfail(
+                reason="List[Decimal] is not supported", strict=True
+            ),
+        ),
+        # These Error
+        pytest.param(
+            pl.Array(pl.Int8, shape=(1,)),
+            marks=pytest.mark.xfail(reason="Array[Int8] is not supported", strict=True),
+        ),
+        pytest.param(
+            pl.Array(pl.Int8(), shape=(1,)),
+            marks=pytest.mark.xfail(reason="Array[Int8] is not supported", strict=True),
+        ),
+        pytest.param(
+            pl.Struct([pl.Field("a", pl.Int8), pl.Field("b", pl.Int8)]),
+            marks=pytest.mark.xfail(reason="Struct is not supported", strict=True),
+        ),
+        pytest.param(
+            pl.Struct([pl.Field("a", pl.Int8()), pl.Field("b", pl.Int8())]),
+            marks=pytest.mark.xfail(reason="Struct is not supported", strict=True),
+        ),
+    ],
+)
+def test_dtype_short_repr_to_dtype_roundtrip(dtype: pl.DataType):
+    result = cudf_polars.containers.column._dtype_short_repr_to_dtype(
+        pl.polars.dtype_str_repr(dtype)
+    )
+    assert result == dtype
