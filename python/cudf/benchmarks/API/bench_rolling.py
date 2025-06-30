@@ -27,7 +27,7 @@ def bench_rolling(benchmark, num_rows, num_cols, index, window):
 
     df = cudf.DataFrame(
         {str(i): range(num_rows) for i in range(num_cols)},
-        index=cudf.from_pandas(index(num_rows)),
+        index=index(num_rows),
     )
     benchmark(bench_func, df, window)
 
@@ -56,7 +56,7 @@ def bench_groupby_rolling(
 
     df = cudf.DataFrame(
         {str(i): range(num_rows) for i in range(num_cols)},
-        index=cudf.from_pandas(index(num_rows)),
+        index=index(num_rows),
     )
     rng = np.random.default_rng(0)
     df["a"] = rng.choice(
