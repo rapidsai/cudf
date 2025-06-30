@@ -1380,15 +1380,6 @@ class GroupBy(IR):
             requests.append(plc.groupby.GroupByRequest(col, [value.agg_request]))
             names.append(name)
         group_keys, raw_tables = grouper.aggregate(requests)
-        # results = [
-        #     Column(column, name=name, dtype=request.value.dtype)
-        #     for name, column, request in zip(
-        #         names,
-        #         itertools.chain.from_iterable(t.columns() for t in raw_tables),
-        #         agg_requests,
-        #         strict=True,
-        #     )
-        # ]
         results = []
         for name, column, request in zip(
             names,
