@@ -5,6 +5,8 @@ from __future__ import annotations
 import polars as pl
 from polars.testing import assert_frame_equal
 
+from cudf_polars.testing.asserts import get_default_engine
+
 
 def test_profile_basic():
     df = pl.LazyFrame(
@@ -17,8 +19,7 @@ def test_profile_basic():
     )
 
     q = df.sort("a").group_by("a", pl.col("b")).agg(pl.col("d").sum())
-
-    result, timings = q.profile(engine="gpu")
+    result, timings = q.profile(engine=get_default_engine())
 
     assert "gpu-ir-translation" in timings["node"]
 

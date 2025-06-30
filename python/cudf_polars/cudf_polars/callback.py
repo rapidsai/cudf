@@ -237,7 +237,11 @@ def _callback(
         elif config_options.executor.name == "streaming":
             from cudf_polars.experimental.parallel import evaluate_streaming
 
-            return evaluate_streaming(ir, config_options).to_polars()
+            df = evaluate_streaming(ir, config_options).to_polars()
+            if timer is None:
+                return df
+            else:
+                return df, timer.timings
         assert_never(f"Unknown executor '{config_options.executor}'")
 
 
