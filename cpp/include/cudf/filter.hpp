@@ -30,6 +30,7 @@ namespace CUDF_EXPORT cudf {
 /**
  * @brief Creates a new column by applying a filter function against every
  * element of the input columns.
+ *
  * Null values in the input columns are considered as not matching the filter.
  *
  * Computes:
