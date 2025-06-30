@@ -27,7 +27,7 @@ def metadata_from_arrow_type(
                 pa_type.field(i).type, pa_type.field(i).name
             )
             child_meta.append(field_meta)
-        metadata = plc.interop.ColumnMetadata(name, child_meta)
+        metadata = plc.interop.ColumnMetadata(name, children_meta=child_meta)
     elif pa.types.is_struct(pa_type):
         child_meta = []
         for i in range(pa_type.num_fields):
@@ -38,7 +38,7 @@ def metadata_from_arrow_type(
         metadata = plc.interop.ColumnMetadata(
             name,
             # libcudf does not store field names, so just match pyarrow's.
-            child_meta,
+            children_meta=child_meta,
         )
     return metadata
 

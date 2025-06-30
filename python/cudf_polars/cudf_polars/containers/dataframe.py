@@ -37,7 +37,10 @@ def _create_polars_column_metadata(
         ]
     else:
         children_meta = []
-    return plc.interop.ColumnMetadata(name=name, children_meta=children_meta)
+    timezone = dtype.time_zone if isinstance(dtype, pl.Datetime) else None
+    return plc.interop.ColumnMetadata(
+        name=name, timezone=timezone or "", children_meta=children_meta
+    )
 
 
 # This is also defined in pylibcudf.interop
