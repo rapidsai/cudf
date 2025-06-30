@@ -844,4 +844,48 @@ TEST_F(TransformTest, NullLogicalOr)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 }
 
+TEST(TransformTest, ScalarOnly)
+{
+  auto column = column_wrapper<int>{1, 2, 3, 4, 5};
+  auto table  = cudf::table_view{{column}};
+
+  cudf::ast::tree tree{};
+
+  auto first_value  = cudf::numeric_scalar(0);
+  auto second_value = cudf::numeric_scalar(1);
+  auto first        = cudf::ast::literal(first_value);
+  auto second       = cudf::ast::literal(second_value);
+
+  auto const& neq =
+    tree.push(cudf::ast::operation{cudf::ast::ast_operator::NOT_EQUAL, first, second});
+
+  auto result = cudf::compute_column(table, neq);
+
+  auto expected = column_wrapper<bool>{true, true, true, true, true};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TEST(TransformTest, ComplexScalarOnly)
+{
+  auto column = column_wrapper<int>{1, 2, 3, 4, 5};
+  auto table  = cudf::table_view{{column}};
+
+  cudf::ast::tree tree{};
+
+  auto first_value  = cudf::string_scalar("first");
+  auto second_value = cudf::string_scalar("second");
+  auto first        = cudf::ast::literal(first_value);
+  auto second       = cudf::ast::literal(second_value);
+
+  auto const& neq =
+    tree.push(cudf::ast::operation{cudf::ast::ast_operator::NOT_EQUAL, first, second});
+
+  auto result = cudf::compute_column(table, neq);
+
+  auto expected = column_wrapper<bool>{true, true, true, true, true};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
 CUDF_TEST_PROGRAM_MAIN()
