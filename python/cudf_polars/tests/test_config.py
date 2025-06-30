@@ -275,3 +275,8 @@ def test_validate_raise_on_fail() -> None:
 def test_validate_executor() -> None:
     with pytest.raises(ValueError, match="Unknown executor 'foo'"):
         ConfigOptions.from_polars_engine(pl.GPUEngine(executor="foo"))
+
+
+def test_default_executor() -> None:
+    config = ConfigOptions.from_polars_engine(pl.GPUEngine())
+    assert config.executor.name == "streaming"

@@ -52,3 +52,4 @@ Launch on Google Colab
 
    usage
    engine_options
+   api

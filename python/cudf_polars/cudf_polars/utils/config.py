@@ -15,10 +15,10 @@ from typing import TYPE_CHECKING, Literal
 if TYPE_CHECKING:
     from typing_extensions import Self
 
-    import polars as pl
+    import polars.lazyframe.engine_config
 
 
-__all__ = ["ConfigOptions"]
+__all__ = ["ConfigOptions", "InMemoryExecutor", "ParquetOptions", "StreamingExecutor"]
 
 
 # TODO: Use enum.StrEnum when we drop Python 3.10
@@ -60,7 +60,7 @@ class ShuffleMethod(str, enum.Enum):
     * ``ShuffleMethod.TASKS`` : Use the task-based shuffler.
     * ``ShuffleMethod.RAPIDSMPF`` : Use the rapidsmpf scheduler.
 
-    In :class:`StreamingExecutor`, the default of ``None`` will attempt to use
+    In :class:`cudf_polars.utils.config.StreamingExecutor`, the default of ``None`` will attempt to use
     ``ShuffleMethod.RAPIDSMPF``, but will fall back to ``ShuffleMethod.TASKS``
     if rapidsmpf is not installed.
     """
@@ -92,7 +92,7 @@ class ParquetOptions:
     chunk_read_limit: int = 0
     pass_read_limit: int = 0
 
-    def __post_init__(self) -> None:
+    def __post_init__(self) -> None:  # noqa: D105
         if not isinstance(self.chunked, bool):
             raise TypeError("chunked must be a bool")
         if not isinstance(self.chunk_read_limit, int):
@@ -204,7 +204,7 @@ class StreamingExecutor:
     shuffle_method: ShuffleMethod | None = None
     rapidsmpf_spill: bool = False
 
-    def __post_init__(self) -> None:
+    def __post_init__(self) -> None:  # noqa: D105
         if self.scheduler == "synchronous" and self.shuffle_method == "rapidsmpf":
             raise ValueError(
                 "rapidsmpf shuffle method is not supported for synchronous scheduler"
@@ -245,7 +245,7 @@ class StreamingExecutor:
         if not isinstance(self.rapidsmpf_spill, bool):
             raise TypeError("rapidsmpf_spill must be bool")
 
-    def __hash__(self) -> int:
+    def __hash__(self) -> int:  # noqa: D105
         # cardinality factory, a dict, isn't natively hashable. We'll dump it
         # to json and hash that.
         d = dataclasses.asdict(self)
@@ -280,10 +280,10 @@ class ConfigOptions:
         query. ``False`` by default.
     parquet_options
         Options controlling parquet file reading and writing. See
-        :class:`ParquetOptions` for more.
+        :class:`~cudf_polars.utils.config.ParquetOptions` for more.
     executor
-        The executor to use for the GPU engine. See :class:`StreamingExecutor`
-        and :class:`InMemoryExecutor` for more.
+        The executor to use for the GPU engine. See :class:`~cudf_polars.utils.config.StreamingExecutor`
+        and :class:`~cudf_polars.utils.config.InMemoryExecutor` for more.
     device
         The GPU used to run the query. If not provided, the
         query uses the current CUDA device.
@@ -297,13 +297,10 @@ class ConfigOptions:
     device: int | None = None
 
     @classmethod
-    def from_polars_engine(cls, engine: pl.GPUEngine) -> Self:
-        """
-        Create a `ConfigOptions` object from a `pl.GPUEngine` object.
-
-        This creates our internal, typed, configuration object from the
-        user-provided `polars.GPUEngine` object.
-        """
+    def from_polars_engine(
+        cls, engine: polars.lazyframe.engine_config.GPUEngine
+    ) -> Self:
+        """Create a :class:`ConfigOptions` from a :class:`~polars.lazyframe.engine_config.GPUEngine`."""
         # these are the valid top-level keys in the engine.config that
         # the user passes as **kwargs to GPUEngine.
         valid_options = {
@@ -317,9 +314,9 @@ class ConfigOptions:
         if extra_options:
             raise TypeError(f"Unsupported executor_options: {extra_options}")
 
-        user_executor = engine.config.get("executor", "in-memory")
+        user_executor = engine.config.get("executor")
         if user_executor is None:
-            user_executor = "in-memory"
+            user_executor = "streaming"
         user_executor_options = engine.config.get("executor_options", {})
         user_parquet_options = engine.config.get("parquet_options", {})
         user_raise_on_fail = engine.config.get("raise_on_fail", False)
