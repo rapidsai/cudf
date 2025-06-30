@@ -290,9 +290,11 @@ class BooleanFunction(Expr):
             needles, haystack = columns
             if haystack.obj.type().id() == plc.TypeId.LIST:
                 # Unwrap values from the list column
+                # the type: ignore is safe because we know that the type ID is LIST,
+                # which always has an inner attribute.
                 haystack = Column(
                     haystack.obj.children()[1],
-                    dtype=DataType(haystack.dtype.polars.inner),
+                    dtype=DataType(haystack.dtype.polars.inner),  # type: ignore[attr-defined]
                 ).astype(needles.dtype)
             if haystack.size:
                 return Column(
