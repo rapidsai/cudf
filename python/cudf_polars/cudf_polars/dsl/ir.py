@@ -1388,10 +1388,11 @@ class GroupBy(IR):
             strict=True,
         ):
             dtype = request.value.dtype
+            result_col = column
             if isinstance(request.value, expr.Agg) and request.value.name == "n_unique":
-                col = plc.unary.cast(column, plc.DataType(plc.TypeId.UINT32))
+                result_col = plc.unary.cast(column, plc.DataType(plc.TypeId.UINT32))
                 dtype = DataType(pl.UInt32)
-            results.append(Column(col, name=name, dtype=dtype))
+            results.append(Column(result_col, name=name, dtype=dtype))
         result_keys = [
             Column(grouped_key, name=key.name, dtype=key.dtype)
             for key, grouped_key in zip(keys, group_keys.columns(), strict=True)
