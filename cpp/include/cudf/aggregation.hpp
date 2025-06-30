@@ -402,8 +402,6 @@ std::unique_ptr<Base> make_argmin_aggregation();
  * @param output_type Desired output data type; defaults to INT32
  * @return A NUNIQUE aggregation object
  */
-// template <typename Base = aggregation>
-// std::unique_ptr<Base> make_nunique_aggregation(null_policy null_handling = null_policy::EXCLUDE);
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_nunique_aggregation(null_policy null_handling = null_policy::EXCLUDE,
                                                std::optional<data_type> output_type = std::nullopt);
