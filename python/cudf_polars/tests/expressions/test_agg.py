@@ -73,7 +73,7 @@ def test_agg(df, agg):
     q = df.select(expr)
 
     # https://github.com/rapidsai/cudf/issues/15852
-    check_dtypes = agg not in {"n_unique", "median"}
+    check_dtypes = agg not in {"median"}
     if not check_dtypes and q.collect_schema()["a"] != pl.Float64:
         with pytest.raises(AssertionError):
             assert_gpu_result_equal(q)
@@ -83,12 +83,6 @@ def test_agg(df, agg):
 def test_bool_agg(agg, request):
     if agg == "cum_min" or agg == "cum_max":
         pytest.skip("Does not apply")
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=agg == "n_unique",
-            reason="Wrong dtype we get Int32, polars gets UInt32",
-        )
-    )
     df = pl.LazyFrame({"a": [True, False, None, True]})
     expr = getattr(pl.col("a"), agg)()
     q = df.select(expr)

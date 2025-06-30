@@ -1380,15 +1380,27 @@ class GroupBy(IR):
             requests.append(plc.groupby.GroupByRequest(col, [value.agg_request]))
             names.append(name)
         group_keys, raw_tables = grouper.aggregate(requests)
-        results = [
-            Column(column, name=name, dtype=request.value.dtype)
-            for name, column, request in zip(
-                names,
-                itertools.chain.from_iterable(t.columns() for t in raw_tables),
-                agg_requests,
-                strict=True,
-            )
-        ]
+        # results = [
+        #     Column(column, name=name, dtype=request.value.dtype)
+        #     for name, column, request in zip(
+        #         names,
+        #         itertools.chain.from_iterable(t.columns() for t in raw_tables),
+        #         agg_requests,
+        #         strict=True,
+        #     )
+        # ]
+        results = []
+        for name, column, request in zip(
+            names,
+            itertools.chain.from_iterable(t.columns() for t in raw_tables),
+            agg_requests,
+            strict=True,
+        ):
+            dtype = request.value.dtype
+            if isinstance(request.value, expr.Agg) and request.value.name == "n_unique":
+                col = plc.unary.cast(column, plc.DataType(plc.TypeId.UINT32))
+                dtype = DataType(pl.UInt32)
+            results.append(Column(col, name=name, dtype=dtype))
         result_keys = [
             Column(grouped_key, name=key.name, dtype=key.dtype)
             for key, grouped_key in zip(keys, group_keys.columns(), strict=True)

@@ -9,14 +9,16 @@ from __future__ import annotations
 from functools import partial
 from typing import TYPE_CHECKING, Any, ClassVar
 
+import polars as pl
+
 import pylibcudf as plc
 
-from cudf_polars.containers import Column
+from cudf_polars.containers import Column, DataType
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal
 
 if TYPE_CHECKING:
-    from cudf_polars.containers import DataFrame, DataType
+    from cudf_polars.containers import DataFrame
 
 __all__ = ["Agg"]
 
@@ -223,4 +225,8 @@ class Agg(Expr):
         # Aggregations like quantiles may have additional children that were
         # preprocessed into pylibcudf requests.
         child = self.children[0]
-        return self.op(child.evaluate(df, context=context))
+        result = self.op(child.evaluate(df, context=context))
+        if self.name == "n_unique":
+            result = result.astype(DataType(pl.UInt32))
+
+        return result
