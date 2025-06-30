@@ -219,7 +219,7 @@ class flattened_table {
  * @return A vector of new columns with the null masks applied and nulls sanitized
  */
 [[nodiscard]] std::vector<std::unique_ptr<column>> superimpose_and_sanitize_nulls(
-  std::vector<bitmask_type const*> null_masks,
+  host_span<bitmask_type const* const> null_masks,
   std::vector<std::unique_ptr<column>> inputs,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);

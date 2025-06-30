@@ -310,10 +310,11 @@ std::unique_ptr<column> superimpose_nulls(bitmask_type const* null_mask,
  * @param mr Device memory resource used to allocate new device memory
  * @return A new column with potentially new null mask
  */
-std::vector<std::unique_ptr<column>> superimpose_nulls(std::vector<bitmask_type const*> null_masks,
-                                                       std::vector<std::unique_ptr<column>> inputs,
-                                                       rmm::cuda_stream_view stream,
-                                                       rmm::device_async_resource_ref mr)
+std::vector<std::unique_ptr<column>> superimpose_nulls(
+  host_span<bitmask_type const* const> null_masks,
+  std::vector<std::unique_ptr<column>> inputs,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -538,7 +539,7 @@ std::unique_ptr<column> superimpose_and_sanitize_nulls(bitmask_type const* null_
 }
 
 std::vector<std::unique_ptr<column>> superimpose_and_sanitize_nulls(
-  std::vector<bitmask_type const*> null_masks,
+  host_span<bitmask_type const* const> null_masks,
   std::vector<std::unique_ptr<column>> inputs,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)

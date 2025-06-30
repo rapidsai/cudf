@@ -167,7 +167,7 @@ CUDF_KERNEL void segmented_offset_bitmask_binop(Binop op,
   auto const destination   = destinations[segment_id];
 
   // Exit early if this warp doesn't have a valid segment
-  if (segment_id >= num_segments) return;
+  if (segment_id >= num_segments) { return; }
 
   // Calculate bit range information
   auto const last_bit_index    = source_size_bits - 1;
@@ -259,10 +259,20 @@ segmented_bitmask_binop(Binop op,
                         rmm::device_async_resource_ref mr)
 {
   auto const num_bytes = bitmask_allocation_size_bytes(mask_size_bits);
+  CUDF_EXPECTS(
+    std::all_of(masks_begin_bits.begin(), masks_begin_bits.end(), [](auto b) { return b >= 0; }),
+    "Invalid range.");
+  CUDF_EXPECTS(mask_size_bits > 0, "Invalid bit range.");
+  CUDF_EXPECTS(std::all_of(masks.begin(), masks.end(), [](auto p) { return p != nullptr; }),
+               "Mask pointer cannot be null");
+  CUDF_EXPECTS(segment_offsets.size() >= 2,
+               "At least one segment needs to be passed for bitwise operations");
+  auto const num_segments = segment_offsets.size() - 1;
+
   std::vector<std::unique_ptr<rmm::device_buffer>> h_destination_masks;
-  h_destination_masks.reserve(segment_offsets.size() - 1);
+  h_destination_masks.reserve(num_segments);
   std::vector<bitmask_type*> h_destination_masks_ptrs;
-  h_destination_masks_ptrs.reserve(segment_offsets.size() - 1);
+  h_destination_masks_ptrs.reserve(num_segments);
   for (size_t i = 0; i < segment_offsets.size() - 1; i++) {
     h_destination_masks.push_back(std::make_unique<rmm::device_buffer>(num_bytes, stream, mr));
     h_destination_masks_ptrs.push_back(
@@ -365,6 +375,8 @@ rmm::device_uvector<size_type> inplace_segmented_bitmask_binop(
   CUDF_EXPECTS(mask_size_bits > 0, "Invalid bit range.");
   CUDF_EXPECTS(std::all_of(masks.begin(), masks.end(), [](auto p) { return p != nullptr; }),
                "Mask pointer cannot be null");
+  CUDF_EXPECTS(segment_offsets.size() >= 2,
+               "At least one segment needs to be passed for bitwise operations");
 
   rmm::device_uvector<size_type> d_null_counts(segment_offsets.size() - 1, stream, mr);
   auto temp_mr      = cudf::get_current_device_resource_ref();
