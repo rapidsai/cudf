@@ -689,18 +689,22 @@ make_argmin_aggregation<groupby_aggregation>();
 
 /// Factory to create an NUNIQUE aggregation
 template <typename Base>
-std::unique_ptr<Base> make_nunique_aggregation(null_policy null_handling)
+std::unique_ptr<Base> make_nunique_aggregation(null_policy null_handling,
+                                               std::optional<data_type> output_type)
 {
-  return std::make_unique<detail::nunique_aggregation>(null_handling);
+  return std::make_unique<detail::nunique_aggregation>(null_handling, output_type);
 }
 template CUDF_EXPORT std::unique_ptr<aggregation> make_nunique_aggregation<aggregation>(
-  null_policy null_handling);
+  null_policy null_handling, std::optional<data_type> output_type);
 template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
-make_nunique_aggregation<groupby_aggregation>(null_policy null_handling);
+make_nunique_aggregation<groupby_aggregation>(null_policy null_handling,
+                                              std::optional<data_type> output_type);
 template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
-make_nunique_aggregation<reduce_aggregation>(null_policy null_handling);
+make_nunique_aggregation<reduce_aggregation>(null_policy null_handling,
+                                             std::optional<data_type> output_type);
 template CUDF_EXPORT std::unique_ptr<segmented_reduce_aggregation>
-make_nunique_aggregation<segmented_reduce_aggregation>(null_policy null_handling);
+make_nunique_aggregation<segmented_reduce_aggregation>(null_policy null_handling,
+                                                       std::optional<data_type> output_type);
 
 /// Factory to create an NTH_ELEMENT aggregation
 template <typename Base>

@@ -576,18 +576,22 @@ class nunique_aggregation final : public groupby_aggregation,
                                   public reduce_aggregation,
                                   public segmented_reduce_aggregation {
  public:
-  nunique_aggregation(null_policy null_handling)
-    : aggregation{NUNIQUE}, _null_handling{null_handling}
+  nunique_aggregation(null_policy null_handling,
+                      std::optional<data_type> output_type = std::nullopt)
+    : aggregation{NUNIQUE},
+      _null_handling{null_handling},
+      _output_type{output_type.value_or(data_type{type_id::INT32})}
   {
   }
 
   null_policy _null_handling;  ///< include or exclude nulls
+  data_type _output_type;      ///< output type
 
   [[nodiscard]] bool is_equal(aggregation const& _other) const override
   {
     if (!this->aggregation::is_equal(_other)) { return false; }
     auto const& other = dynamic_cast<nunique_aggregation const&>(_other);
-    return _null_handling == other._null_handling;
+    return _null_handling == other._null_handling && _output_type == other._output_type;
   }
 
   [[nodiscard]] size_t do_hash() const override
@@ -597,7 +601,7 @@ class nunique_aggregation final : public groupby_aggregation,
 
   [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
-    return std::make_unique<nunique_aggregation>(*this);
+    return std::make_unique<nunique_aggregation>(_null_handling, _output_type);
   }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
@@ -609,7 +613,8 @@ class nunique_aggregation final : public groupby_aggregation,
  private:
   [[nodiscard]] size_t hash_impl() const
   {
-    return std::hash<int>{}(static_cast<int>(_null_handling));
+    return std::hash<int>{}(static_cast<int>(_null_handling)) ^
+           std::hash<int>{}(static_cast<int>(_output_type.id()));
   }
 };
 

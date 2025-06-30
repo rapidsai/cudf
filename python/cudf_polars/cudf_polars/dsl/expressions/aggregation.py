@@ -45,8 +45,10 @@ class Agg(Expr):
         elif name == "median":
             req = plc.aggregation.median()
         elif name == "n_unique":
-            # TODO: datatype of result
-            req = plc.aggregation.nunique(null_handling=plc.types.NullPolicy.INCLUDE)
+            req = plc.aggregation.nunique(
+                null_handling=plc.types.NullPolicy.INCLUDE,
+                output_type=plc.DataType(plc.TypeId.UINT32),
+            )
         elif name == "first" or name == "last":
             req = None
         elif name == "mean":

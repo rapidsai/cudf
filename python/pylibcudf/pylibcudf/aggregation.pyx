@@ -78,7 +78,7 @@ from pylibcudf.libcudf.aggregation import \
     rank_percentage as RankPercentage  # no-cython-lint
 from pylibcudf.libcudf.aggregation import udf_type as UdfType  # no-cython-lint
 
-from .types cimport DataType
+from .types cimport DataType, type_id
 
 
 __all__ = [
@@ -472,7 +472,10 @@ cpdef Aggregation argmin():
     return Aggregation.from_libcudf(move(make_argmin_aggregation[aggregation]()))
 
 
-cpdef Aggregation nunique(null_policy null_handling = null_policy.EXCLUDE):
+cpdef Aggregation nunique(
+    null_policy null_handling = null_policy.EXCLUDE,
+    DataType output_type = None,
+):
     """Create a nunique aggregation.
 
     For details, see :cpp:func:`make_nunique_aggregation`.
@@ -481,14 +484,20 @@ cpdef Aggregation nunique(null_policy null_handling = null_policy.EXCLUDE):
     ----------
     null_handling : null_policy, default EXCLUDE
         Whether or not nulls should be included.
+    output_type : DataType, optional
+        The output type.
+        Defaults to INT32 if not specified.
 
     Returns
     -------
     Aggregation
         The nunique aggregation.
     """
+    if output_type is None:
+        output_type = DataType(type_id.INT32)
+
     return Aggregation.from_libcudf(
-        move(make_nunique_aggregation[aggregation](null_handling))
+        move(make_nunique_aggregation[aggregation](null_handling, output_type.c_obj))
     )
 
 

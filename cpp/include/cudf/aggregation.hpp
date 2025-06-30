@@ -21,6 +21,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <vector>
 
 /**
@@ -398,10 +399,14 @@ std::unique_ptr<Base> make_argmin_aggregation();
  *
  * NUNIQUE returns the number of unique elements.
  * @param null_handling Indicates if null values will be counted
+ * @param output_type Desired output data type; defaults to INT32
  * @return A NUNIQUE aggregation object
  */
+// template <typename Base = aggregation>
+// std::unique_ptr<Base> make_nunique_aggregation(null_policy null_handling = null_policy::EXCLUDE);
 template <typename Base = aggregation>
-std::unique_ptr<Base> make_nunique_aggregation(null_policy null_handling = null_policy::EXCLUDE);
+std::unique_ptr<Base> make_nunique_aggregation(null_policy null_handling = null_policy::EXCLUDE,
+                                               std::optional<data_type> output_type = std::nullopt);
 
 /**
  * @brief Factory to create a NTH_ELEMENT aggregation

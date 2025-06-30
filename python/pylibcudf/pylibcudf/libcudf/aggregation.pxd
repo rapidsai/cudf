@@ -152,7 +152,8 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
     cdef unique_ptr[T] make_argmin_aggregation[T]() except +libcudf_exception_handler
 
     cdef unique_ptr[T] make_nunique_aggregation[T](
-        null_policy null_handling
+        null_policy null_handling,
+        data_type output_type
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[T] make_nth_element_aggregation[T](

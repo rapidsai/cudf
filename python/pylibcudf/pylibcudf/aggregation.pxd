@@ -84,7 +84,10 @@ cpdef Aggregation argmin()
 
 cpdef Aggregation ewma(float center_of_mass, ewm_history history)
 
-cpdef Aggregation nunique(null_policy null_handling = *)
+cpdef Aggregation nunique(
+    null_policy null_handling = *,
+    DataType output_type = *,
+)
 
 cpdef Aggregation nth_element(size_type n, null_policy null_handling = *)
 
