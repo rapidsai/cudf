@@ -78,7 +78,7 @@ namespace {
 constexpr size_type max_cpu_groups = 32;
 bool use_cpu_for_cluster_computation(size_type num_groups)
 {
-  return disable_cpu_cluster_computation ? false : num_groups <= max_cpu_groups * 2;
+  return (not disable_cpu_cluster_computation) and (num_groups <= max_cpu_groups * 2);
 }
 
 // maximum temporary memory we will allow for using a worst-case allocation strategy that allows us
@@ -198,15 +198,6 @@ struct nearest_value_centroid_weights {
   GroupOffsetsIter group_offsets;    // groups
   size_type const* tdigest_offsets;  // tdigests within a group
 
-  nearest_value_centroid_weights(double const* _cumulative_weights,
-                                 GroupOffsetsIter _group_offsets,
-                                 size_type const* _tdigest_offsets)
-    : cumulative_weights(_cumulative_weights),
-      group_offsets(_group_offsets),
-      tdigest_offsets(_tdigest_offsets)
-  {
-  }
-
   cuda::std::pair<double, int> operator()
     CUDF_HOST_DEVICE(double next_limit, size_type group_index) const
   {
@@ -279,17 +270,6 @@ struct cumulative_centroid_weight {
   GroupOffsetsIter group_offsets;    // groups
   cudf::device_span<size_type const> tdigest_offsets;  // tdigests with a group
 
-  cumulative_centroid_weight(double const* _cumulative_weights,
-                             GroupLabelsIter _group_labels,
-                             GroupOffsetsIter _group_offsets,
-                             cudf::device_span<size_type const> _tdigest_offsets)
-    : cumulative_weights(_cumulative_weights),
-      group_labels(_group_labels),
-      group_offsets(_group_offsets),
-      tdigest_offsets(_tdigest_offsets)
-  {
-  }
-
   /**
    * @brief Returns the cumulative weight for a given value index. The index `n` is the index of
    * `n`-th non-empty cluster.
@@ -344,15 +324,6 @@ struct centroid_group_info {
   double const* cumulative_weights;  // cumulative weights of non-empty clusters
   GroupOffsetsIter group_offsets;
   size_type const* tdigest_offsets;
-
-  centroid_group_info(double const* _cumulative_weights,
-                      GroupOffsetsIter _group_offsets,
-                      size_type const* _tdigest_offsets)
-    : cumulative_weights(_cumulative_weights),
-      group_offsets(_group_offsets),
-      tdigest_offsets(_tdigest_offsets)
-  {
-  }
 
   CUDF_HOST_DEVICE cuda::std::tuple<double, size_type, size_type> operator()(
     size_type group_index) const
@@ -472,7 +443,7 @@ CUDF_HOST_DEVICE void generate_cluster_limit(int group_index,
   // we will generate at most delta clusters.
   double total_weight;
   size_type group_size, group_start;
-  thrust::tie(total_weight, group_size, group_start) = group_info(group_index);
+  cuda::std::tie(total_weight, group_size, group_start) = group_info(group_index);
 
   // start at the correct place based on our cluster offset.
   double* cluster_wl =
@@ -499,8 +470,8 @@ CUDF_HOST_DEVICE void generate_cluster_limit(int group_index,
   sincos(1.0 / delta_norm, &sin_dn, &cos_dn);
 
   // compute the first cluster limit
-  double nearest_w = 0.0f;  // unnecessary, but compiler issues an incorrect warning otherwise
-  int nearest_w_index;      // group-relative index into the input stream
+  double nearest_w = 0.0;  // unnecessary, but compiler issues an incorrect warning otherwise
+  int nearest_w_index;     // group-relative index into the input stream
   while (true) {
     cur_weight = next_limit < 0 ? 0 : max(cur_weight + 1, nearest_w);
     if (cur_weight >= total_weight) { break; }
@@ -520,7 +491,7 @@ CUDF_HOST_DEVICE void generate_cluster_limit(int group_index,
     // compute the weight we will be at in the input values just before closing off the current
     // cluster (because adding the next value will cross the current limit).
     // NOTE: can't use structured bindings here
-    thrust::tie(nearest_w, nearest_w_index) = nearest_weight(next_limit, group_index);
+    cuda::std::tie(nearest_w, nearest_w_index) = nearest_weight(next_limit, group_index);
 
     // because of the way the scale functions work, it is possible to generate clusters
     // in such a way that we end up with "gaps" where there are no input values that

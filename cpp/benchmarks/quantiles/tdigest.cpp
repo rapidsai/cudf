@@ -92,20 +92,18 @@ void bm_tdigest_merge(nvbench::state& state)
   state.add_element_count(total_centroids);
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
-  state.exec(
-    nvbench::exec_tag::timer | nvbench::exec_tag::sync, [&](nvbench::launch& launch, auto& timer) {
-      timer.start();
-      auto result = cudf::tdigest::detail::group_merge_tdigest(
-        tdigest,
-        {group_offsets->view().begin<cudf::size_type>(),
-         static_cast<size_t>(group_offsets->size())},
-        {group_labels->view().begin<cudf::size_type>(), static_cast<size_t>(group_labels->size())},
-        num_groups,
-        max_centroids,
-        stream,
-        mr);
-      timer.stop();
-    });
+  state.exec(nvbench::exec_tag::timer | nvbench::exec_tag::sync,
+             [&](nvbench::launch& launch, auto& timer) {
+               timer.start();
+               auto result = cudf::tdigest::detail::group_merge_tdigest(tdigest,
+                                                                        group_offsets->view(),
+                                                                        group_labels->view(),
+                                                                        num_groups,
+                                                                        max_centroids,
+                                                                        stream,
+                                                                        mr);
+               timer.stop();
+             });
 }
 
 void bm_tdigest_reduce(nvbench::state& state)
@@ -139,46 +137,43 @@ void bm_tdigest_reduce(nvbench::state& state)
   stream.synchronize();
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
-  state.exec(
-    nvbench::exec_tag::timer | nvbench::exec_tag::sync, [&](nvbench::launch& launch, auto& timer) {
-      timer.start();
-      auto result = cudf::tdigest::detail::group_tdigest(
-        *input,
-        {group_offsets->view().begin<cudf::size_type>(),
-         static_cast<size_t>(group_offsets->size())},
-        {group_labels->view().begin<cudf::size_type>(), static_cast<size_t>(group_labels->size())},
-        {group_valid_counts->view().begin<cudf::size_type>(),
-         static_cast<size_t>(group_valid_counts->size())},
-        num_groups,
-        max_centroids,
-        stream,
-        mr);
-      timer.stop();
-    });
+  state.exec(nvbench::exec_tag::timer | nvbench::exec_tag::sync,
+             [&](nvbench::launch& launch, auto& timer) {
+               timer.start();
+               auto result = cudf::tdigest::detail::group_tdigest(*input,
+                                                                  group_offsets->view(),
+                                                                  group_labels->view(),
+                                                                  group_valid_counts->view(),
+                                                                  num_groups,
+                                                                  max_centroids,
+                                                                  stream,
+                                                                  mr);
+               timer.stop();
+             });
 }
 
 NVBENCH_BENCH(bm_tdigest_merge)
-  .set_name("TDigest merge many tiny groups")
+  .set_name("merge-many-tiny")
   .add_int64_axis("num_tdigests", {500'000})
   .add_int64_axis("tdigest_size", {1, 1000})
   .add_int64_axis("tdigests_per_group", {1})
   .add_int64_axis("max_centroids", {10000, 1000});
 
 NVBENCH_BENCH(bm_tdigest_merge)
-  .set_name("TDigest merge many small groups")
+  .set_name("merge-many-small")
   .add_int64_axis("num_tdigests", {500'000})
   .add_int64_axis("tdigest_size", {1, 1000})
   .add_int64_axis("tdigests_per_group", {3})
   .add_int64_axis("max_centroids", {10000, 1000});
 
 NVBENCH_BENCH(bm_tdigest_reduce)
-  .set_name("TDigest reduce many small groups")
+  .set_name("reduce-many-small")
   .add_int64_axis("num_groups", {2000})
   .add_int64_axis("rows_per_group", {1, 32, 100})
   .add_int64_axis("max_centroids", {10000, 1000});
 
 NVBENCH_BENCH(bm_tdigest_reduce)
-  .set_name("TDigest reduce few large groups")
+  .set_name("reduce-few-large")
   .add_int64_axis("num_groups", {1, 16, 64})
   .add_int64_axis("rows_per_group", {5'000'000, 1'000'000})
   .add_int64_axis("max_centroids", {10000, 1000});

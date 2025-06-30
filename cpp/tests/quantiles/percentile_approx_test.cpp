@@ -141,22 +141,22 @@ void percentile_approx_test(cudf::column_view const& _keys,
     // slice it all up so we have keys/columns for everything.
     std::vector<cudf::column_view> keys;
     std::vector<cudf::column_view> values;
-    for (size_t idx = 0; idx < groups.offsets.size() - 1; idx++) {
+    for (size_t g_idx = 0; g_idx < groups.offsets.size() - 1; g_idx++) {
       auto k =
-        cudf::slice(groups.keys->get_column(0), {groups.offsets[idx], groups.offsets[idx + 1]});
+        cudf::slice(groups.keys->get_column(0), {groups.offsets[g_idx], groups.offsets[g_idx + 1]});
       keys.push_back(k[0]);
 
-      auto v =
-        cudf::slice(groups.values->get_column(0), {groups.offsets[idx], groups.offsets[idx + 1]});
+      auto v = cudf::slice(groups.values->get_column(0),
+                           {groups.offsets[g_idx], groups.offsets[g_idx + 1]});
       values.push_back(v[0]);
     }
 
     std::vector<std::unique_ptr<cudf::column>> groupby_parts;
     std::vector<std::unique_ptr<cudf::column>> reduce_parts;
-    for (size_t idx = 0; idx < values.size(); idx++) {
+    for (size_t v_idx = 0; v_idx < values.size(); v_idx++) {
       // via groupby
       auto groupby = [&](cudf::column_view const& values, int delta) {
-        cudf::table_view t({keys[idx]});
+        cudf::table_view t({keys[v_idx]});
         cudf::groupby::groupby gb(t);
         std::vector<cudf::groupby::aggregation_request> requests;
         std::vector<std::unique_ptr<cudf::groupby_aggregation>> aggregations;
@@ -164,10 +164,10 @@ void percentile_approx_test(cudf::column_view const& _keys,
         requests.push_back({values, std::move(aggregations)});
         return std::move(gb.aggregate(requests).second[0].results[0]);
       };
-      groupby_parts.push_back(cudf::type_dispatcher(values[idx].type(),
+      groupby_parts.push_back(cudf::type_dispatcher(values[v_idx].type(),
                                                     percentile_approx_dispatch{},
                                                     groupby,
-                                                    values[idx],
+                                                    values[v_idx],
                                                     delta,
                                                     percentages,
                                                     ulps));
@@ -188,10 +188,10 @@ void percentile_approx_test(cudf::column_view const& _keys,
         return cudf::make_structs_column(tbl.num_rows(), std::move(cols), 0, rmm::device_buffer());
       };
       // groupby path
-      reduce_parts.push_back(cudf::type_dispatcher(values[idx].type(),
+      reduce_parts.push_back(cudf::type_dispatcher(values[v_idx].type(),
                                                    percentile_approx_dispatch{},
                                                    reduce,
-                                                   values[idx],
+                                                   values[v_idx],
                                                    delta,
                                                    percentages,
                                                    ulps));
