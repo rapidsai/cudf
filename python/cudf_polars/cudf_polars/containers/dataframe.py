@@ -20,14 +20,14 @@ if TYPE_CHECKING:
 
     from typing_extensions import Any, CapsuleType, Self
 
-    from cudf_polars.typing import ColumnOptions, DataFrameHeader, Slice
+    from cudf_polars.typing import ColumnOptions, DataFrameHeader, PolarsDataType, Slice
 
 
 __all__: list[str] = ["DataFrame"]
 
 
 def _create_polars_column_metadata(
-    name: str | None, dtype: pl.DataType
+    name: str, dtype: PolarsDataType
 ) -> plc.interop.ColumnMetadata:
     """Create ColumnMetadata preserving pl.Struct field names."""
     if isinstance(dtype, pl.Struct):
