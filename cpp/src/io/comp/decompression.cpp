@@ -654,7 +654,7 @@ size_t get_uncompressed_size(compression_type compression, host_span<uint8_t con
 [[nodiscard]] size_t get_decompression_scratch_size(decompression_info const& di)
 {
   if (di.type == compression_type::NONE or
-      get_host_engine_state(di.type) == host_engine_state::OFF) {
+      get_host_engine_state(di.type) == host_engine_state::ON) {
     return 0;
   }
 
@@ -662,7 +662,7 @@ size_t get_uncompressed_size(compression_type compression, host_span<uint8_t con
   auto nvcomp_disabled   = nvcomp_type.has_value() ? nvcomp::is_decompression_disabled(*nvcomp_type)
                                                    : "invalid compression type";
   if (not nvcomp_disabled) {
-    nvcomp::batched_decompress_temp_size(
+    return nvcomp::batched_decompress_temp_size(
       nvcomp_type.value(), di.num_pages, di.max_page_decompressed_size, di.total_decompressed_size);
   }
 
