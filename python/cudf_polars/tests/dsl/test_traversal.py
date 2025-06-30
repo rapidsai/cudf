@@ -16,6 +16,7 @@ from cudf_polars.dsl import expr, ir
 from cudf_polars.dsl.traversal import (
     CachingVisitor,
     make_recursive,
+    post_traversal,
     reuse_if_unchanged,
     traversal,
 )
@@ -52,6 +53,22 @@ def test_traversal_unique():
     assert len(unique_exprs) == 3
     assert set(unique_exprs) == {expr.Col(dt, "a"), expr.Col(dt, "b"), e3}
     assert unique_exprs == [e3, expr.Col(dt, "b"), expr.Col(dt, "a")]
+
+
+def test_post_traversal_unique():
+    dt = DataType(pl.datatypes.Int8())
+
+    e1 = make_expr(dt, "a", "a")
+    unique_exprs = list(post_traversal([e1]))
+    assert unique_exprs == [expr.Col(dt, "a"), e1]
+
+    e2 = make_expr(dt, "a", "b")
+    unique_exprs = list(post_traversal([e2]))
+    assert unique_exprs == [expr.Col(dt, "a"), expr.Col(dt, "b"), e2]
+
+    e3 = make_expr(dt, "b", "a")
+    unique_exprs = list(post_traversal([e3]))
+    assert unique_exprs == [expr.Col(dt, "b"), expr.Col(dt, "a"), e3]
 
 
 def rename(e, rec):
