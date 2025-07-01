@@ -25,7 +25,7 @@
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
 
-#include <cuda/std/tuple.h>
+#include <cuda/std/tuple>
 #include <thrust/iterator/zip_iterator.h>
 
 #include <algorithm>

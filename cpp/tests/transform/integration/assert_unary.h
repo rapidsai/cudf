@@ -20,7 +20,7 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 
-#include <cuda/std/tuple.h>
+#include <cuda/std/tuple>
 #include <thrust/iterator/zip_iterator.h>
 
 #include <algorithm>
