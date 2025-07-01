@@ -29,6 +29,7 @@ from cudf_polars.dsl.utils.replace import replace
 from cudf_polars.dsl.utils.rolling import rewrite_rolling
 from cudf_polars.typing import Schema
 from cudf_polars.utils import config, sorting
+from cudf_polars.utils.versions import POLARS_VERSION_LT_131
 
 if TYPE_CHECKING:
     from polars import GPUEngine
@@ -89,7 +90,7 @@ class Translator:
         # IR is versioned with major.minor, minor is bumped for backwards
         # compatible changes (e.g. adding new nodes), major is bumped for
         # incompatible changes (e.g. renaming nodes).
-        if (version := self.visitor.version()) >= (7, 1):
+        if (version := self.visitor.version()) >= (8, 1):
             e = NotImplementedError(
                 f"No support for polars IR {version=}"
             )  # pragma: no cover; no such version for now.
@@ -225,6 +226,12 @@ def _(node: pl_ir.Scan, translator: Translator, schema: Schema) -> ir.IR:
     with_columns = file_options.with_columns
     row_index = file_options.row_index
     include_file_paths = file_options.include_file_paths
+    if not POLARS_VERSION_LT_131:
+        deletion_files = file_options.deletion_files  # pragma: no cover
+        if deletion_files:  # pragma: no cover
+            raise NotImplementedError(
+                "Iceberg format is not supported in cudf-polars. Furthermore, row-level deletions are not supported."
+            )  # pragma: no cover
     config_options = translator.config_options
     parquet_options = config_options.parquet_options
 

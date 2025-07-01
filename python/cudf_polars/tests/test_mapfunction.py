@@ -11,6 +11,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+from cudf_polars.utils.versions import POLARS_VERSION_LT_131
 
 
 def test_explode_multiple_raises():
@@ -40,7 +41,12 @@ def test_rename_duplicate_raises(mapping):
 
     q = df.rename(mapping)
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    if POLARS_VERSION_LT_131:
+        assert_ir_translation_raises(q, NotImplementedError)
+    else:
+        # Now raises before translation
+        with pytest.raises(pl.exceptions.DuplicateError, match="is duplicate"):
+            assert_ir_translation_raises(q, NotImplementedError)
 
 
 @pytest.mark.parametrize(

@@ -20,14 +20,14 @@ if TYPE_CHECKING:
 
     from typing_extensions import Any, CapsuleType, Self
 
-    from cudf_polars.typing import ColumnOptions, DataFrameHeader, Slice
+    from cudf_polars.typing import ColumnOptions, DataFrameHeader, PolarsDataType, Slice
 
 
 __all__: list[str] = ["DataFrame"]
 
 
 def _create_polars_column_metadata(
-    name: str | None, dtype: pl.DataType
+    name: str, dtype: PolarsDataType
 ) -> plc.interop.ColumnMetadata:
     """Create ColumnMetadata preserving pl.Struct field names."""
     if isinstance(dtype, pl.Struct):
@@ -37,7 +37,10 @@ def _create_polars_column_metadata(
         ]
     else:
         children_meta = []
-    return plc.interop.ColumnMetadata(name=name, children_meta=children_meta)
+    timezone = dtype.time_zone if isinstance(dtype, pl.Datetime) else None
+    return plc.interop.ColumnMetadata(
+        name=name, timezone=timezone or "", children_meta=children_meta
+    )
 
 
 # This is also defined in pylibcudf.interop
