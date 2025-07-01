@@ -765,7 +765,7 @@ add_library(
   src/structs/scan/scan_inclusive.cu
   src/structs/structs_column_factories.cu
   src/structs/structs_column_view.cpp
-  src/structs/utilities.cpp
+  src/structs/utilities.cu
   src/table/primitive_row_operators.cu
   src/table/row_operators.cu
   src/table/table.cpp
