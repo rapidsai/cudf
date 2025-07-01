@@ -155,7 +155,7 @@ struct device_optional_span : device_span<T> {
   }
 
   /// @brief converts the optional span to a regular non-nullable span.
-  [[nodiscard]] __device__ base to_span() const { return static_cast<base const&>(*this); }
+  [[nodiscard]] __device__ base to_span() const noexcept { return static_cast<base const&>(*this); }
 
 #endif
 };
