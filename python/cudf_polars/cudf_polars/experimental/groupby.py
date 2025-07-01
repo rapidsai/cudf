@@ -13,7 +13,7 @@ import polars as pl
 import pylibcudf as plc
 
 from cudf_polars.containers import DataType
-from cudf_polars.dsl.expr import Agg, BinOp, Cast, Col, Len, NamedExpr
+from cudf_polars.dsl.expr import Agg, BinOp, Col, Len, NamedExpr
 from cudf_polars.dsl.ir import GroupBy, Select, Slice
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.dsl.utils.naming import unique_names
@@ -103,10 +103,7 @@ def decompose(
                 aggfunc = "sum"
             else:
                 aggfunc = expr.name
-            if expr.name == "n_unique":
-                selection = NamedExpr(name, Cast(dtype, Col(dtype, name)))
-            else:
-                selection = NamedExpr(name, Col(dtype, name))
+            selection = NamedExpr(name, Col(dtype, name))
             aggregation = [NamedExpr(name, expr)]
             reduction = [NamedExpr(name, Agg(dtype, aggfunc, None, Col(dtype, name)))]
             return selection, aggregation, reduction, expr.name == "n_unique"
