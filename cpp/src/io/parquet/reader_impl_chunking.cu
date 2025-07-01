@@ -25,7 +25,6 @@
 
 #include <thrust/transform_scan.h>
 
-#include <algorithm>
 #include <numeric>
 
 namespace cudf::io::parquet::detail {
