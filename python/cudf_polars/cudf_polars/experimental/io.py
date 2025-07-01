@@ -279,7 +279,7 @@ class SplitScan(IR):
         )
 
 
-class UniquePqSampler:
+class UniqueSamplerPq:
     """
     Unique-value Parquet sampler.
 
@@ -394,7 +394,7 @@ def _sample_pq_stats_impl(
     paths: tuple[str, ...],
     max_file_samples: int,
     max_rg_samples: int,
-) -> tuple[UniquePqSampler, dict[str, ColumnSourceStats]]:
+) -> tuple[UniqueSamplerPq, dict[str, ColumnSourceStats]]:
     total_file_count = len(paths)
     stride = max(1, int(total_file_count / max_file_samples))
     sample_paths = paths[: stride * max_file_samples : stride]
@@ -434,7 +434,7 @@ def _sample_pq_stats_impl(
     all_columns = list(mean_uncompressed_size_per_file)
 
     # Create a mutable sampler for unique-value statistics
-    unique_sampler = UniquePqSampler(
+    unique_sampler = UniqueSamplerPq(
         sample_paths,
         cardinality,
         num_row_groups_per_sampled_file,

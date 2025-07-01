@@ -106,23 +106,21 @@ def _get_unique_fractions(
     user_unique_fractions: dict[str, float],
     column_stats: MutableMapping[str, ColumnStats],
 ) -> dict[str, float]:
-    # Start with table statistics
-    unique_fractions: dict[str, float] = {}
+    # Start with user-defined `"unique_fraction"` config
+    unique_fractions: dict[str, float] = {
+        c: max(min(f, 1.0), 0.00001)
+        for c, f in user_unique_fractions.items()
+        if c in column_names
+    }
+
+    # Update with table statistics
     for c, stats in column_stats.items():
         if (
             c in column_names
+            and c not in unique_fractions
             and (source_stats := stats.source_stats) is not None
             and source_stats.unique_fraction is not None
         ):
             unique_fractions[c] = source_stats.unique_fraction
-
-    # Update with user-defined `"unique_fraction"` config
-    unique_fractions.update(
-        {
-            c: max(min(f, 1.0), 0.00001)
-            for c, f in user_unique_fractions.items()
-            if c in column_names
-        }
-    )
 
     return unique_fractions
