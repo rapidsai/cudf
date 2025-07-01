@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from collections import deque
 from typing import TYPE_CHECKING, Any, Generic
 
 from cudf_polars.typing import U_contra, V_co
@@ -64,7 +65,7 @@ def post_traversal(nodes: Sequence[NodeT]) -> Generator[NodeT, None, None]:
     in-order from left to right.
     """
     seen = set()
-    lifo = []
+    lifo: deque[NodeT] = deque()
 
     for node in nodes:
         if node not in seen:
