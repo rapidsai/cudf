@@ -87,9 +87,17 @@ class StructFunction(Expr):
         if self.name == StructFunction.Name.FieldByIndex:
             return Column(column.obj.children()[self.options[0]], dtype=self.dtype)
         elif self.name == StructFunction.Name.FieldByName:
-            field_names = [field.name for field in self.children[0].dtype.polars.fields]
+            field_index = next(
+                (
+                    i
+                    for i, field in enumerate(self.children[0].dtype.polars.fields)
+                    if field.name == self.options[0]
+                ),
+                None,
+            )
+            assert field_index is not None
             return Column(
-                column.obj.children()[field_names.index(self.options[0])],
+                column.obj.children()[field_index],
                 dtype=self.dtype,
             )
         elif self.name == StructFunction.Name.JsonEncode:
