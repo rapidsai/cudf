@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import pylibcudf as plc
+import polars as pl
 
 from cudf_polars.dsl import expr
 from cudf_polars.dsl.expr import Col, Len
@@ -126,10 +126,9 @@ def _(
         count = scan.fast_count()
         dtype = ir.exprs[0].value.dtype
 
-        col = plc.Column.from_scalar(plc.Scalar.from_py(count, dtype.plc), 1)
-        arr = plc.interop.to_arrow(col)
-
-        lit_expr = expr.LiteralColumn(dtype, arr)
+        lit_expr = expr.LiteralColumn(
+            dtype, pl.Series(values=[count], dtype=dtype.polars)
+        )
         named_expr = expr.NamedExpr(ir.exprs[0].name or "len", lit_expr)
 
         new_node = Select(

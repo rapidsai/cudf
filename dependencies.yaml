@@ -171,7 +171,7 @@ files:
       - pyarrow_run
       - depends_on_cupy
       - depends_on_libcudf
-      - depends_on_pylibcudf
+      - depends_on_pylibcudf_pyarrow
       - depends_on_rmm
   py_test_cudf:
     output: pyproject
@@ -242,8 +242,15 @@ files:
     includes:
       - depends_on_libcudf
       - depends_on_rmm
-      - pyarrow_run
       - run_pylibcudf
+  py_run_pylibcudf_pyarrow:
+    output: pyproject
+    pyproject_dir: python/pylibcudf
+    extras:
+      table: project.optional-dependencies
+      key: pyarrow
+    includes:
+      - pyarrow_run
   py_test_pylibcudf:
     output: pyproject
     pyproject_dir: python/pylibcudf
@@ -251,6 +258,7 @@ files:
       table: project.optional-dependencies
       key: test
     includes:
+      - pyarrow_run
       - test_python_common
       - test_python_cudf_common
       - test_python_pylibcudf
@@ -927,6 +935,25 @@ dependencies:
             packages:
               - pylibcudf-cu12==25.8.*,>=0.0.0a0
           - {matrix: null, packages: [*pylibcudf_unsuffixed]}
+  depends_on_pylibcudf_pyarrow:
+    common:
+      - output_types: conda
+        packages:
+          - &plc_unsuffixed pylibcudf==25.8.*,>=0.0.0a0
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          - --extra-index-url=https://pypi.nvidia.com
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
+              - pylibcudf-cu12[pyarrow]==25.8.*,>=0.0.0a0
+          - {matrix: null, packages: [*plc_unsuffixed]}
   depends_on_cudf:
     common:
       - output_types: conda
