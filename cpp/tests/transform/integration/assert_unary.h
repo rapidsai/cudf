@@ -44,6 +44,9 @@ void ASSERT_UNARY(cudf::column_view const& out, cudf::column_view const& in, Typ
     EXPECT_EQ(out_val, static_cast<TypeOut>(ope(in_val)));
   });
 
+  auto in_valid  = in_h.second;
+  auto out_valid = out_h.second;
+
   ASSERT_TRUE(out_valid.size() == in_valid.size());
 
   auto valid_begin =
