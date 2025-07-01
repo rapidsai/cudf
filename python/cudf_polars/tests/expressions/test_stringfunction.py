@@ -541,3 +541,9 @@ def test_count_matches(ldf):
 def test_count_matches_literal_unsupported(ldf):
     q = ldf.select(pl.col("a").str.count_matches("a", literal=True))
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_extract_groups():
+    ldf = pl.LazyFrame({"a": ["foo bar baz", None]})
+    q = ldf.select(pl.col("a").str.extract_groups(r"(\S+) (\S+) (.+)"))
+    assert_gpu_result_equal(q)
