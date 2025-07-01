@@ -137,7 +137,7 @@ struct filter_dispatcher<false> {
                               flag_iterator,
                               stream,
                               mr);
-    return cudf::make_strings_column(filtered, {}, stream, mr);
+    return cudf::make_strings_column(filtered, cudf::string_view{nullptr,0}, stream, mr);
   }
 
   template <typename T>
