@@ -543,7 +543,22 @@ def test_count_matches_literal_unsupported(ldf):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
-def test_extract_groups():
-    ldf = pl.LazyFrame({"a": ["foo bar baz", None]})
-    q = ldf.select(pl.col("a").str.extract_groups(r"(\S+) (\S+) (.+)"))
+@pytest.fixture
+def ldf_no_unicode():
+    return pl.LazyFrame({"a": ["?!. 123 foo", None]})
+
+
+def test_extract(ldf_no_unicode):
+    q = ldf_no_unicode.select(pl.col("a").str.extract(r"(\S+) (\d+) (.+)", 1))
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("group_index", [0, 2])
+def test_extract_group_index_unsupported(ldf_no_unicode, group_index):
+    q = ldf_no_unicode.select(pl.col("a").str.extract(r"(\d+) (\S+) (.+)", group_index))
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_extract_groups(ldf_no_unicode):
+    q = ldf_no_unicode.select(pl.col("a").str.extract_groups(r"(\S+) (\S+) (.+)"))
     assert_gpu_result_equal(q)

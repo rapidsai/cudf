@@ -97,6 +97,7 @@ class StringFunction(Expr):
         Name.Contains,
         Name.CountMatches,
         Name.EndsWith,
+        Name.Extract,
         Name.ExtractGroups,
         Name.Head,
         Name.Lowercase,
@@ -156,6 +157,14 @@ class StringFunction(Expr):
                     )
                 pattern = self.children[1].value
                 self._regex_program = self._create_regex_program(pattern)
+        elif self.name is StringFunction.Name.Extract:
+            (group_index,) = self.options
+            if group_index != 1:
+                raise NotImplementedError("Extract only supports group_index=1")
+            literal_expr = self.children[1]
+            assert isinstance(literal_expr, Literal)
+            pattern = literal_expr.value
+            self._regex_program = self._create_regex_program(pattern)
         elif self.name is StringFunction.Name.ExtractGroups:
             (_, pattern) = self.options
             self._regex_program = self._create_regex_program(pattern)
@@ -323,6 +332,13 @@ class StringFunction(Expr):
                 ),
                 dtype=self.dtype,
             )
+        elif self.name is StringFunction.Name.Extract:
+            column = self.children[0].evaluate(df, context=context).obj
+            plc_table = plc.strings.extract.extract(
+                column,
+                self._regex_program,
+            )
+            return Column(plc_table.columns()[0], dtype=self.dtype)
         elif self.name is StringFunction.Name.ExtractGroups:
             column = self.children[0].evaluate(df, context=context).obj
             plc_table = plc.strings.extract.extract(
