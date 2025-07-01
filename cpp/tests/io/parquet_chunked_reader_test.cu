@@ -1913,7 +1913,7 @@ TEST_F(ParquetReaderTest, ManyLargeLists)
 
   // Generate a large list<bool> column
   constexpr cudf::size_type num_rows      = 10'000'000;
-  constexpr cudf::size_type bools_per_row = 2;
+  constexpr cudf::size_type bools_per_row = 4;
   auto offsets_iter = cudf::detail::make_counting_transform_iterator(0, offset_gen{bools_per_row});
   auto offsets_col  = cudf::make_fixed_width_column(
     cudf::data_type{cudf::type_id::INT32}, num_rows + 1, cudf::mask_state::UNALLOCATED);
@@ -1942,7 +1942,7 @@ TEST_F(ParquetReaderTest, ManyLargeLists)
   // Write the table to parquet
   cudf::io::write_parquet(out_opts);
 
-  // Times to concat filepath to overflow cudf column size limits
+  // Times to concat filepath to (just slightly) overflow cudf column size limits
   constexpr cudf::size_type reads_to_overflow =
     (std::numeric_limits<cudf::size_type>::max() / (num_rows * bools_per_row)) + 1;
 
@@ -1953,6 +1953,17 @@ TEST_F(ParquetReaderTest, ManyLargeLists)
 
   // Expect an overflow error when reading the files
   EXPECT_THROW(cudf::io::read_parquet(in_opts), std::overflow_error);
+
+  // Now read the files with the chunked reader (no limits) without the overflow error
+  auto const reader = cudf::io::chunked_parquet_reader(0, 0, in_opts);
+  auto num_chunks   = 0;
+  while (reader.has_next()) {
+    EXPECT_NO_THROW(std::ignore = reader.read_chunk());
+    num_chunks++;
+  }
+  // We will end up with exactly two chunks as the total number of leaf rows is just above 2B rows
+  // per table chunk limit and we haven't set any chunk or pass read limits
+  EXPECT_EQ(num_chunks, 2);
 }
 
 TEST_P(ParquetChunkedDecompressionTest, RoundTripBasic)
