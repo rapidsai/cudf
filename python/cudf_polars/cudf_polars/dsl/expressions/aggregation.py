@@ -223,5 +223,4 @@ class Agg(Expr):
         # Aggregations like quantiles may have additional children that were
         # preprocessed into pylibcudf requests.
         child = self.children[0]
-
         return self.op(child.evaluate(df, context=context))

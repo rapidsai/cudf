@@ -104,7 +104,7 @@ def decompose(
             else:
                 aggfunc = expr.name
             if expr.name == "n_unique":
-                selection = NamedExpr(name, Cast(DataType(pl.UInt32), Col(dtype, name)))
+                selection = NamedExpr(name, Cast(dtype, Col(dtype, name)))
             else:
                 selection = NamedExpr(name, Col(dtype, name))
             aggregation = [NamedExpr(name, expr)]
