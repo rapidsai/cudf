@@ -118,7 +118,7 @@ class ColumnSourceStats:
             self._unique_stats = UniqueSourceStats()
         elif isinstance(unique_stats, UniqueSourceStats) or callable(unique_stats):
             self._unique_stats = unique_stats
-        else:
+        else:  # pragma: no cover
             raise TypeError(f"Unexpected unique_stats argument, got {unique_stats}")
 
     @property

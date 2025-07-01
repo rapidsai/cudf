@@ -116,6 +116,7 @@ def test_column_source_statistics(
     y_cardinality = source_stats_y.cardinality
     assert y_unique_fraction < 1.0
     assert y_unique_fraction > 0.0
+    assert source_stats_y.unique_count is None
     if parquet_metadata_samples >= n_files:
         # We should have "exact" cardinality statistics
         assert y_cardinality == df.height
