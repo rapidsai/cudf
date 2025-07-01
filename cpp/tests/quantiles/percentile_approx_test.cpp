@@ -127,9 +127,10 @@ void percentile_approx_test(cudf::column_view const& _keys,
                             std::vector<double> const& percentages,
                             cudf::size_type ulps)
 {
-  bool disable_cpu_cluster_computation[2] = {true, false};
+  bool is_cpu_cluster_computation_disabled[2] = {true, false};
   for (int idx = 0; idx < 2; idx++) {
-    cudf::tdigest::detail::disable_cpu_cluster_computation = disable_cpu_cluster_computation[idx];
+    cudf::tdigest::detail::is_cpu_cluster_computation_disabled =
+      is_cpu_cluster_computation_disabled[idx];
 
     // first pass:  validate the actual percentages we get per group.
 

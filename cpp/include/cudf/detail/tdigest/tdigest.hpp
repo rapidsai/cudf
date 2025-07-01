@@ -28,7 +28,7 @@ namespace CUDF_EXPORT cudf {
 namespace tdigest::detail {
 
 // for testing purposes
-extern bool disable_cpu_cluster_computation;
+extern bool is_cpu_cluster_computation_disabled;
 
 /**
  * @brief Generate a tdigest column from a grouped, sorted set of numeric input values.

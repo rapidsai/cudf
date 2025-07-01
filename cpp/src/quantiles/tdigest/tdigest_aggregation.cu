@@ -60,7 +60,7 @@ namespace cudf {
 namespace tdigest {
 namespace detail {
 
-bool disable_cpu_cluster_computation = false;
+bool is_cpu_cluster_computation_disabled = false;
 
 namespace {
 
@@ -78,7 +78,7 @@ namespace {
 constexpr size_type max_cpu_groups = 32;
 bool use_cpu_for_cluster_computation(size_type num_groups)
 {
-  return (not disable_cpu_cluster_computation) and (num_groups <= max_cpu_groups * 2);
+  return (not is_cpu_cluster_computation_disabled) and (num_groups <= max_cpu_groups * 2);
 }
 
 // maximum temporary memory we will allow for using a worst-case allocation strategy that allows us
