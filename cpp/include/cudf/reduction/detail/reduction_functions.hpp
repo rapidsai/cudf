@@ -370,7 +370,7 @@ std::unique_ptr<scalar> bitwise_reduction(bitwise_op bit_op,
 /**
  * @brief Computes quantile of elements in input column
  *
- * @throw cudf::logic_error if input column type is not arithmetic type
+ * @throw std::invalid_argument if input column type is not arithmetic type
  *
  * @param col Input column to compute quantile
  * @param qvalue Quantile value
