@@ -1383,14 +1383,7 @@ class GroupBy(IR):
             names.append(name)
         group_keys, raw_tables = grouper.aggregate(requests)
         results = [
-            Column(
-                plc.unary.cast(column, plc.DataType(plc.TypeId.UINT32))
-                if isinstance(request.value, expr.Agg)
-                and request.value.name == "n_unique"
-                else column,
-                name=name,
-                dtype=schema[name],
-            )
+            Column(column, name=name, dtype=schema[name])
             for name, column, request in zip(
                 names,
                 itertools.chain.from_iterable(t.columns() for t in raw_tables),

@@ -846,6 +846,8 @@ def _(
     )
     if value.name == "count" and value.dtype.id() != plc.TypeId.INT32:
         return expr.Cast(value.dtype, value)
+    if value.name == "n_unique":
+        return expr.Cast(value.dtype, value)
     return value
 
 
