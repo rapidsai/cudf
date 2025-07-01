@@ -14,6 +14,9 @@ python -m pytest --cache-clear "$@" tests
 # Test the "streaming" executor
 python -m pytest --cache-clear "$@" tests --executor streaming
 
+# Test the "streaming" executor with small blocksize
+python -m pytest --cache-clear "$@" tests --executor streaming --blocksize-mode small
+
 # Run experimental tests with Distributed cluster
 python -m pytest --cache-clear "$@" "tests/experimental" \
     --executor streaming \

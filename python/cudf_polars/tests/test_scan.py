@@ -331,10 +331,13 @@ def test_scan_parquet_only_row_index_raises(df, tmp_path):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
-def test_scan_include_file_path(request, tmp_path, format, scan_fn, df):
+@pytest.mark.parametrize("n_rows", [None, 2])
+def test_scan_include_file_path(request, tmp_path, format, scan_fn, df, n_rows):
+    if n_rows is not None:
+        df = df.head(n_rows)
     make_partitioned_source(df, tmp_path / "file", format)
 
-    q = scan_fn(tmp_path / "file", include_file_paths="files")
+    q = scan_fn(tmp_path / "file", include_file_paths="files", n_rows=n_rows)
 
     if format == "ndjson":
         assert_ir_translation_raises(q, NotImplementedError)

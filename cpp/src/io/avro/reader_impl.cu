@@ -22,6 +22,7 @@
 #include "io/utilities/hostdevice_vector.hpp"
 
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/datasource.hpp>
@@ -583,6 +584,8 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
       }
     }
   }
+
+  out_columns = cudf::structs::detail::enforce_null_consistency(std::move(out_columns), stream, mr);
 
   // Return column names
   metadata_out.schema_info.reserve(selected_columns.size());
