@@ -2,13 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import pytest
+
 import polars as pl
 from polars.testing import assert_frame_equal
 
-from cudf_polars.testing.asserts import get_default_engine
 
-
-def test_profile_basic():
+@pytest.mark.parametrize("executor", ["in-memory", "streaming"])
+def test_profile_basic(executor: str) -> None:
     df = pl.LazyFrame(
         {
             "a": [1, 2, 1, 3, 5, None, None],
@@ -19,7 +20,7 @@ def test_profile_basic():
     )
 
     q = df.sort("a").group_by("a", pl.col("b")).agg(pl.col("d").sum())
-    result, timings = q.profile(engine=get_default_engine())
+    result, timings = q.profile(engine=pl.GPUEngine(executor=executor))
 
     assert "gpu-ir-translation" in timings["node"]
 
