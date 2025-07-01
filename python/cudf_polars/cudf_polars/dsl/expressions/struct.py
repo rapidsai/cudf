@@ -44,11 +44,11 @@ class StructFunction(Expr):
             """Convert from polars' `StructFunction`."""
             try:
                 function, name = str(obj).split(".", maxsplit=1)
-            except ValueError:
+            except ValueError:  # pragma: no cover
                 # Failed to unpack string
-                function = None
+                function = None  # pragma: no cover
             if function != "StructFunction":
-                raise ValueError("StructFunction required")
+                raise ValueError("StructFunction required")  # pragma: no cover
             return getattr(cls, name)
 
     __slots__ = ("name", "options")
@@ -76,7 +76,9 @@ class StructFunction(Expr):
         self.children = children
         self.is_pointwise = True
         if self.name not in self._valid_ops:
-            raise NotImplementedError(f"Struct function {self.name}")
+            raise NotImplementedError(
+                f"Struct function {self.name}"
+            )  # pragma: no cover
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
@@ -84,9 +86,7 @@ class StructFunction(Expr):
         """Evaluate this expression given a dataframe for context."""
         columns = [child.evaluate(df, context=context) for child in self.children]
         (column,) = columns
-        if self.name == StructFunction.Name.FieldByIndex:
-            return Column(column.obj.children()[self.options[0]], dtype=self.dtype)
-        elif self.name == StructFunction.Name.FieldByName:
+        if self.name == StructFunction.Name.FieldByName:
             field_index = next(
                 (
                     i
