@@ -64,7 +64,7 @@ def post_traversal(nodes: Sequence[NodeT]) -> Generator[NodeT, None, None]:
     Unique nodes in the expressions, child before parent, children
     in-order from left to right.
     """
-    seen = set()
+    seen: set[NodeT] = set()
     lifo: deque[NodeT] = deque()
 
     for node in nodes:
