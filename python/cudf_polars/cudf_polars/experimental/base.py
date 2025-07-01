@@ -108,26 +108,25 @@ class ColumnSourceStats:
         cardinality: int | None = None,
         storage_size_per_file: int | None = None,
         exact: tuple[str, ...] = (),
-        unique_stats: Callable[..., UniqueSourceStats]
-        | UniqueSourceStats
-        | None = None,
+        unique_stats: Any = None,
     ):
         self.cardinality = cardinality
         self.storage_size_per_file = storage_size_per_file
         self.exact = exact
-        self._unique_stats = unique_stats
+        self._unique_stats: Callable[..., UniqueSourceStats] | UniqueSourceStats
+        if unique_stats is None:
+            self._unique_stats = UniqueSourceStats()
+        elif isinstance(unique_stats, UniqueSourceStats) or callable(unique_stats):
+            self._unique_stats = unique_stats
+        else:
+            raise TypeError(f"Unexpected unique_stats argument, got {unique_stats}")
 
     @property
     def unique_stats(self) -> UniqueSourceStats:
         """Get unique-value statistics."""
-        if self._unique_stats is None:
-            return UniqueSourceStats()
-        if isinstance(self._unique_stats, UniqueSourceStats):
-            return self._unique_stats
-        elif callable(self._unique_stats):
+        if callable(self._unique_stats):
             return self._unique_stats()
-        else:
-            raise TypeError()
+        return self._unique_stats
 
     @property
     def unique_count(self) -> int | None:
@@ -176,21 +175,3 @@ class StatsCollector:
     def __init__(self) -> None:
         self.cardinality: dict[IR, int] = {}
         self.column_stats: dict[IR, dict[str, ColumnStats]] = {}
-
-
-# class SourceInfo:
-#     paths: tuple[str]
-#     columns: set[str]
-#     key_columns: set[str]
-
-#     def __init__(self, paths: Sequence[str], columns: Sequence[str], key_columns: set[str]):
-#         self.paths = tuple(paths)
-#         self.columns = set(columns)
-#         self.key_columns = set(key_columns)
-
-#     def update(self, columns: Sequence[str], key_columns: Sequence[str]):
-#         new_columns = self.columns.union(columns)
-#         new_key_columns = self.key_columns.union(key_columns)
-#         if new_columns - self.columns or new_key_columns - self.key_columns:
-#             return SourceInfo(self.paths, new_columns, new_key_columns)
-#         return self

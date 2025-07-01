@@ -28,7 +28,7 @@ from cudf_polars.experimental.base import (
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, MutableMapping, Sequence
+    from collections.abc import MutableMapping, Sequence
 
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import NamedExpr
@@ -36,29 +36,6 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.typing import Schema
     from cudf_polars.utils.config import ConfigOptions, ParquetOptions
-
-
-# Cache source stats for each tuple of path names
-_SOURCE_STATS_CACHE: dict[tuple[str, ...], dict[str, ColumnSourceStats]] = {}
-_SOURCE_STATS_CACHE_KEYS: list[tuple[str, ...]] = []
-_SOURCE_STATS_CACHE_MAX_ITEMS: int = 10
-
-
-def _update_source_stats_cache(
-    key: tuple[str, ...],
-    value: dict[str, ColumnSourceStats],
-) -> None:
-    """Update _SOURCE_STATS_CACHE with LRU eviction."""
-    if key in _SOURCE_STATS_CACHE_KEYS:
-        _SOURCE_STATS_CACHE_KEYS.remove(key)
-
-    if key not in _SOURCE_STATS_CACHE and (
-        len(_SOURCE_STATS_CACHE) >= _SOURCE_STATS_CACHE_MAX_ITEMS
-    ):
-        del _SOURCE_STATS_CACHE[_SOURCE_STATS_CACHE_KEYS.pop(0)]
-
-    _SOURCE_STATS_CACHE_KEYS.append(key)
-    _SOURCE_STATS_CACHE[key] = value
 
 
 @lower_ir_node.register(DataFrameScan)
@@ -302,68 +279,122 @@ class SplitScan(IR):
         )
 
 
-def _pq_unique_stats_collector(
-    sample_paths: tuple[str, ...],
-    cardinality: int,
-    num_row_groups_per_sampled_file: Sequence[int],
-    max_rg_samples: int,
-) -> Callable[..., UniqueSourceStats]:
-    n = 0
-    samples: defaultdict[str, list[int]] = defaultdict(list)
-    for path, num_rgs in zip(
-        sample_paths, num_row_groups_per_sampled_file, strict=True
-    ):
-        for rg_id in range(num_rgs):
-            n += 1
-            samples[path].append(rg_id)
-            if n == max_rg_samples:
-                break
-        if n == max_rg_samples:
-            break
+class UniquePqSampler:
+    """
+    Unique-value Parquet sampler.
 
-    @functools.lru_cache
-    def get_unique_stats(column: str) -> UniqueSourceStats:
+    Parameters
+    ----------
+    paths
+        Sample paths.
+    cardinality
+        Full dataset cardinality.
+    num_row_groups_per_file
+        Number of row-groups in each sampled file.
+    max_rg_samples
+        Maximum number of row-groups to read.
+    """
+
+    def __init__(
+        self,
+        paths: tuple[str, ...],
+        cardinality: int,
+        num_row_groups_per_file: Sequence[int],
+        max_rg_samples: int,
+    ):
+        self.paths = paths
+        self.cardinality = cardinality
+        self.num_row_groups_per_file = num_row_groups_per_file
+        self.max_rg_samples = max_rg_samples
+        self.missing_columns: set[str] = set()
+        self.stats: dict[str, UniqueSourceStats] = {}
+
+    def _collect(self) -> None:
+        """Collect unique-value statistics."""
+        n = 0
+        samples: defaultdict[str, list[int]] = defaultdict(list)
+        for path, num_rgs in zip(self.paths, self.num_row_groups_per_file, strict=True):
+            for rg_id in range(num_rgs):
+                n += 1
+                samples[path].append(rg_id)
+                if n == self.max_rg_samples:
+                    break
+            if n == self.max_rg_samples:
+                break
+
         options = plc.io.parquet.ParquetReaderOptions.builder(
             plc.io.SourceInfo(list(samples))
         ).build()
-        options.set_columns([column])
+        options.set_columns(list(self.missing_columns))
         options.set_row_groups(list(samples.values()))
         tbl_w_meta = plc.io.parquet.read_parquet(options)
         row_group_num_rows = tbl_w_meta.tbl.num_rows()
-
-        row_group_unique_count = plc.stream_compaction.distinct_count(
-            tbl_w_meta.columns[0],
-            plc.types.NullPolicy.INCLUDE,
-            plc.types.NanPolicy.NAN_IS_NULL,
-        )
-        result = {
-            "fraction": max(
-                min(1.0, row_group_unique_count / row_group_num_rows),
-                0.00001,
+        for name, column in zip(
+            tbl_w_meta.column_names(), tbl_w_meta.columns, strict=True
+        ):
+            row_group_unique_count = plc.stream_compaction.distinct_count(
+                column,
+                plc.types.NullPolicy.INCLUDE,
+                plc.types.NanPolicy.NAN_IS_NULL,
             )
-        }
-        # Assume that if every row is unique then this is a
-        # primary key otherwise it's a foreign key and we
-        # can't use the single row group count estimate
-        # Example, consider a "foreign" key that has 100
-        # unique values. If we sample from a single row group,
-        # we likely obtain a unique count of 100. But we can't
-        # necessarily deduce that that means that the unique
-        # count is 100 / num_rows_in_group * num_rows_in_file
-        if row_group_unique_count == row_group_num_rows:
-            result["count"] = cardinality
+            result = {
+                "fraction": max(
+                    min(1.0, row_group_unique_count / row_group_num_rows),
+                    0.00001,
+                )
+            }
+            # Assume that if every row is unique then this is a
+            # primary key otherwise it's a foreign key and we
+            # can't use the single row group count estimate
+            # Example, consider a "foreign" key that has 100
+            # unique values. If we sample from a single row group,
+            # we likely obtain a unique count of 100. But we can't
+            # necessarily deduce that that means that the unique
+            # count is 100 / num_rows_in_group * num_rows_in_file
+            if row_group_unique_count == row_group_num_rows:
+                result["count"] = self.cardinality
 
-        return UniqueSourceStats(**result)
+            self.stats[name] = UniqueSourceStats(**result)
 
-    return get_unique_stats
+    def add_columns(self, names: Sequence[str]) -> None:
+        """
+        Lazily add columns needing unique-value statistics.
+
+        Parameters
+        ----------
+        names
+            Column names to add.
+        """
+        for name in names:
+            if name not in self.missing_columns and name not in self.stats:
+                self.missing_columns.add(name)
+
+    def __call__(self, name: str) -> UniqueSourceStats | None:
+        """
+        Get unique-value statistics.
+
+        Parameters
+        ----------
+        name
+            Column name to extract statistics for.
+        """
+        if self.max_rg_samples < 1:
+            return None  # pragma: no cover
+
+        if name not in self.stats:
+            self.add_columns([name])
+            self._collect()
+            self.missing_columns = set()
+        assert name in self.stats, f"Failed to sample column {name}"
+        return self.stats[name]
 
 
 @functools.lru_cache(maxsize=10)
-def _get_pq_column_source_stats(
+def _sample_pq_stats_impl(
     paths: tuple[str, ...],
     max_file_samples: int,
     max_rg_samples: int,
-) -> dict[str, ColumnSourceStats]:
+) -> tuple[UniquePqSampler, dict[str, ColumnSourceStats]]:
     total_file_count = len(paths)
     stride = max(1, int(total_file_count / max_file_samples))
     sample_paths = paths[: stride * max_file_samples : stride]
@@ -401,7 +432,9 @@ def _get_pq_column_source_stats(
         name: statistics.mean(sizes) for name, sizes in column_sizes_per_file.items()
     }
     all_columns = list(mean_uncompressed_size_per_file)
-    unique_stats = _pq_unique_stats_collector(
+
+    # Create a mutable sampler for unique-value statistics
+    unique_sampler = UniquePqSampler(
         sample_paths,
         cardinality,
         num_row_groups_per_sampled_file,
@@ -409,11 +442,11 @@ def _get_pq_column_source_stats(
     )
 
     # Construct estimated column statistics
-    return {
+    return unique_sampler, {
         name: ColumnSourceStats(
             cardinality=cardinality,
             storage_size_per_file=mean_uncompressed_size_per_file[name],
-            unique_stats=functools.partial(unique_stats, name),
+            unique_stats=functools.partial(unique_sampler, name),
             exact=exact_stats,
         )
         for name in all_columns
@@ -427,155 +460,17 @@ def _sample_pq_stats(
         "'in-memory' executor not supported in '_sample_pq_stats"
     )
 
-    return _get_pq_column_source_stats(
+    unique_sampler, stats = _sample_pq_stats_impl(
         tuple(ir.paths),
         config_options.executor.parquet_metadata_samples,
         config_options.executor.parquet_rowgroup_samples,
     )
 
+    # For now, just sample all columns if/when we are
+    # reading the data anyway.
+    unique_sampler.add_columns(list(ir.schema))
 
-# def _sample_pq_stats(
-#     ir: Scan, config_options: ConfigOptions
-# ) -> dict[str, ColumnSourceStats]:
-#     assert config_options.executor.name == "streaming", (
-#         "'in-memory' executor not supported in '_sample_pq_stats"
-#     )
-
-#     max_file_samples = config_options.executor.parquet_metadata_samples
-#     max_rg_samples = config_options.executor.parquet_rowgroup_samples
-
-#     total_file_count = len(ir.paths)
-#     stride = max(1, int(total_file_count / max_file_samples))
-#     sample_paths = ir.paths[: stride * max_file_samples : stride]
-#     sampled_file_count = len(sample_paths)
-#     exact_stats: tuple[str, ...] = ()
-
-#     # Check table-stats cache
-#     source_stats_cached: MutableMapping[str, ColumnSourceStats]
-#     try:
-#         source_stats_cached = _SOURCE_STATS_CACHE[tuple(ir.paths)]
-#     except KeyError:
-#         source_stats_cached = {}
-#     finally:
-#         source_stats = source_stats_cached
-
-#     if need_columns := (set(ir.schema) - source_stats_cached.keys()):
-#         # Still need columns missing from the cache
-#         sample_metadata = plc.io.parquet_metadata.read_parquet_metadata(
-#             plc.io.SourceInfo(sample_paths)
-#         )
-
-#         if total_file_count == sampled_file_count:
-#             # We know the "exact" cardinality from our sample
-#             cardinality = sample_metadata.num_rows()
-#             exact_stats = ("cardinality",)
-#         else:
-#             # We must estimate/extrapolate the cardinality from our sample
-#             num_rows_per_sampled_file = int(
-#                 sample_metadata.num_rows() / sampled_file_count
-#             )
-#             cardinality = num_rows_per_sampled_file * total_file_count
-
-#         num_row_groups_per_sampled_file = sample_metadata.num_rowgroups_per_file()
-#         rowgroup_offsets_per_file = list(
-#             itertools.accumulate(num_row_groups_per_sampled_file, initial=0)
-#         )
-
-#         column_sizes_per_file = {
-#             name: [
-#                 sum(uncompressed_sizes[start:end])
-#                 for (start, end) in itertools.pairwise(rowgroup_offsets_per_file)
-#             ]
-#             for name, uncompressed_sizes in sample_metadata.columnchunk_metadata().items()
-#         }
-
-#         # Revise need_columns, since some columns may not be in the file
-#         need_columns = need_columns.intersection(column_sizes_per_file)
-
-#     if need_columns:
-#         # We have un-cached column metadata to process
-
-#         # Calculate the `mean_uncompressed_size_per_file` for each column
-#         mean_uncompressed_size_per_file = {
-#             name: statistics.mean(sizes)
-#             for name, sizes in column_sizes_per_file.items()
-#         }
-
-#         # Collect real unique-count of first row-group
-#         unique_count_estimates: dict[str, int] = {}
-#         unique_fraction_estimates: dict[str, float] = {}
-#         if max_rg_samples > 0:
-#             n = 0
-#             samples: defaultdict[str, list[int]] = defaultdict(list)
-#             for path, num_rgs in zip(
-#                 sample_paths, num_row_groups_per_sampled_file, strict=True
-#             ):
-#                 for rg_id in range(num_rgs):
-#                     n += 1
-#                     samples[path].append(rg_id)
-#                     if n == max_rg_samples:
-#                         break
-#                 if n == max_rg_samples:
-#                     break
-#             options = plc.io.parquet.ParquetReaderOptions.builder(
-#                 plc.io.SourceInfo(list(samples))
-#             ).build()
-#             options.set_columns([c for c in ir.schema if c in need_columns])
-#             options.set_row_groups(list(samples.values()))
-#             tbl_w_meta = plc.io.parquet.read_parquet(options)
-#             row_group_num_rows = tbl_w_meta.tbl.num_rows()
-#             for name, column in zip(
-#                 tbl_w_meta.column_names(), tbl_w_meta.columns, strict=True
-#             ):
-#                 if name in need_columns:
-#                     row_group_unique_count = plc.stream_compaction.distinct_count(
-#                         column,
-#                         plc.types.NullPolicy.INCLUDE,
-#                         plc.types.NanPolicy.NAN_IS_NULL,
-#                     )
-#                     unique_fraction_estimates[name] = max(
-#                         min(1.0, row_group_unique_count / row_group_num_rows),
-#                         0.00001,
-#                     )
-#                     # Assume that if every row is unique then this is a
-#                     # primary key otherwise it's a foreign key and we
-#                     # can't use the single row group count estimate
-#                     # Example, consider a "foreign" key that has 100
-#                     # unique values. If we sample from a single row group,
-#                     # we likely obtain a unique count of 100. But we can't
-#                     # necessarily deduce that that means that the unique
-#                     # count is 100 / num_rows_in_group * num_rows_in_file
-#                     if row_group_unique_count == row_group_num_rows:
-#                         unique_count_estimates[name] = cardinality
-
-#         # Check that the cached stats have the same row-count estimate
-#         if source_stats_cached:  # pragma: no cover
-#             assert (
-#                 cardinality == next(iter(source_stats_cached.values())).cardinality
-#             ), "Unexpected cardinality in cache."
-
-#         # Construct estimated column statistics
-#         source_stats = {
-#             name: ColumnSourceStats(
-#                 cardinality=cardinality,
-#                 storage_size_per_file=mean_uncompressed_size_per_file[name],
-#                 unique_count=unique_count_estimates.get(name),
-#                 unique_fraction=unique_fraction_estimates.get(name),
-#                 exact=exact_stats,
-#             )
-#             for name in need_columns
-#         }
-
-#         if source_stats_cached:  # pragma: no cover
-#             # Combine new and cached column stats
-#             source_stats = source_stats_cached | source_stats
-
-#     if source_stats:
-#         # Update the cache
-#         _update_source_stats_cache(tuple(ir.paths), source_stats)
-
-#     # Return relevant source stats
-#     return {name: css for name, css in source_stats.items() if name in ir.schema}
+    return stats
 
 
 @lower_ir_node.register(Scan)
