@@ -12,7 +12,6 @@ from cudf_polars.dsl import expr
 from cudf_polars.dsl.ir import (
     IR,
     Cache,
-    ConditionalJoin,
     DataFrameScan,
     GroupBy,
     HConcat,
@@ -55,11 +54,9 @@ def _(ir: IR, stats: StatsCollector, config_options: ConfigOptions) -> None:
             name: child_column_stats.get(name, ColumnStats(name=name))
             for name in ir.schema
         }
-    else:  # pragma: no cover
-        # Multi-child nodes require custom logic
-        raise NotImplementedError(
-            f"No add_source_stats dispatch registered for {type(ir)}."
-        )
+    else:
+        # Multi-child nodes loose all information by default.
+        stats.column_stats[ir] = {name: ColumnStats(name=name) for name in ir.schema}
 
 
 @add_source_stats.register(Scan)
@@ -136,20 +133,13 @@ def _(ir: Join, stats: StatsCollector, config_options: ConfigOptions) -> None:
     stats.column_stats[ir] = kstats | jstats
 
 
-@add_source_stats.register(ConditionalJoin)
-def _(ir: Join, stats: StatsCollector, config_options: ConfigOptions) -> None:
-    # TODO: Fix this.
-    stats.column_stats[ir] = {name: ColumnStats(name=name) for name in ir.schema}
-
-
 @add_source_stats.register(GroupBy)
 def _(ir: GroupBy, stats: StatsCollector, config_options: ConfigOptions) -> None:
     (child,) = ir.children
     child_column_stats = stats.column_stats.get(child, {})
     stats.column_stats[ir] = {
-        n.name: child_column_stats[n.name]
+        n.name: child_column_stats.get(n.name, ColumnStats(name=n.name))
         for n in ir.keys
-        if n.name in child_column_stats
     } | {n.name: ColumnStats(name=n.name) for n in ir.agg_requests}
 
 
