@@ -508,19 +508,16 @@ void reader::impl::create_global_chunk_info()
   }
 }
 
-void reader::impl::compute_input_passes()
+void reader::impl::compute_input_passes(read_mode mode)
 {
   // at this point, row_groups has already been filtered down to just the row groups we need to
   // handle optional skip_rows/num_rows parameters.
   auto const& row_groups_info = _file_itm_data.row_groups;
 
-  // Maximum number of rows we can read in a single pass.
-  auto constexpr max_rows_per_pass = static_cast<size_t>(std::numeric_limits<size_type>::max());
-
-  // if the user hasn't specified an input size limit, read everything in a single pass.
-  // FIXME: MH: We need to check the number of leaf-level rows here instead or just don't do it for
-  // mode == CHUNKED
-  if (_file_itm_data.global_num_rows <= max_rows_per_pass and _input_pass_read_limit == 0) {
+  // If we are reading all rows at once, read everything in a single pass. We can't use
+  // `_input_pass_read_limit` as test here for `CHUNKED_READ` mode as we may need to create a pass
+  // using max column size limits
+  if (mode == read_mode::READ_ALL) {
     _file_itm_data.input_pass_row_group_offsets.push_back(0);
     _file_itm_data.input_pass_row_group_offsets.push_back(row_groups_info.size());
     _file_itm_data.input_pass_start_row_count.push_back(0);
@@ -535,15 +532,20 @@ void reader::impl::compute_input_passes()
   }
 
   // generate passes. make sure to account for the case where a single row group doesn't fit within
-  //
+  // the read limit
   std::size_t const comp_read_limit =
     _input_pass_read_limit > 0
       ? static_cast<size_t>(_input_pass_read_limit * input_limit_compression_reserve)
       : std::numeric_limits<std::size_t>::max();
+
+  // Maximum number of rows we can read in a single pass is bounded by cudf's column size limit
+  auto constexpr max_leaf_rows_per_pass =
+    static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max());
+
   std::size_t cur_pass_byte_size     = 0;
+  std::size_t cur_pass_num_leaf_rows = 0;
   std::size_t cur_rg_start           = 0;
   std::size_t cur_row_count          = 0;
-  std::size_t cur_pass_num_leaf_rows = 0;
   _file_itm_data.input_pass_row_group_offsets.push_back(0);
   _file_itm_data.input_pass_start_row_count.push_back(0);
 
@@ -577,12 +579,12 @@ void reader::impl::compute_input_passes()
     skip_rows = 0;
     // do we need to create a pass boundary here?
     if (cur_pass_byte_size + compressed_rg_size >= comp_read_limit or
-        cur_pass_num_leaf_rows + row_group_leaf_rows >= max_rows_per_pass) {
+        cur_pass_num_leaf_rows + row_group_leaf_rows >= max_leaf_rows_per_pass) {
       // A single row group (the current one) is larger than the read limit:
       // We always need to include at least one row group, so end the pass at the end of the current
       // row group
       if (cur_rg_start == cur_rg_index) {
-        CUDF_EXPECTS(std::cmp_less_equal(row_group.num_rows, max_rows_per_pass),
+        CUDF_EXPECTS(std::cmp_less_equal(row_group.num_rows, max_leaf_rows_per_pass),
                      "Number of rows in each row group must be smaller than the column size limit");
         _file_itm_data.input_pass_row_group_offsets.push_back(cur_rg_index + 1);
         _file_itm_data.input_pass_start_row_count.push_back(cur_row_count + row_group_rows);

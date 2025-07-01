@@ -417,7 +417,7 @@ void reader::impl::preprocess_file(read_mode mode)
     create_global_chunk_info();
 
     // compute schedule of input reads.
-    compute_input_passes();
+    compute_input_passes(mode);
   }
 
 #if defined(PARQUET_CHUNK_LOGGING)
