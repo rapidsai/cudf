@@ -1330,6 +1330,7 @@ class GroupBy(IR):
         self.zlice = zlice
         self.children = (df,)
         self._non_child_args = (
+            schema,
             self.keys,
             self.agg_requests,
             maintain_order,
@@ -1338,14 +1339,16 @@ class GroupBy(IR):
 
     @classmethod
     @nvtx_annotate_cudf_polars(message="GroupBy")
-    def do_evaluate(
+    def do_evaluate(  # noqa: D102
         cls,
+        schema: Schema,
         keys_in: Sequence[expr.NamedExpr],
         agg_requests: Sequence[expr.NamedExpr],
         maintain_order: bool,  # noqa: FBT001
         zlice: Zlice | None,
         df: DataFrame,
     ) -> DataFrame:
+        print(schema)
         """Evaluate and return a dataframe."""
         keys = broadcast(*(k.evaluate(df) for k in keys_in), target_length=df.num_rows)
         sorted = (
@@ -1380,19 +1383,22 @@ class GroupBy(IR):
             requests.append(plc.groupby.GroupByRequest(col, [value.agg_request]))
             names.append(name)
         group_keys, raw_tables = grouper.aggregate(requests)
-        results = []
-        for name, column, request in zip(
-            names,
-            itertools.chain.from_iterable(t.columns() for t in raw_tables),
-            agg_requests,
-            strict=True,
-        ):
-            dtype = request.value.dtype
-            result_col = column
-            if isinstance(request.value, expr.Agg) and request.value.name == "n_unique":
-                result_col = plc.unary.cast(column, plc.DataType(plc.TypeId.UINT32))
-                dtype = DataType(pl.UInt32)
-            results.append(Column(result_col, name=name, dtype=dtype))
+        results = [
+            Column(
+                plc.unary.cast(column, plc.DataType(plc.TypeId.UINT32))
+                if isinstance(request.value, expr.Agg)
+                and request.value.name == "n_unique"
+                else column,
+                name=name,
+                dtype=schema[name],
+            )
+            for name, column, request in zip(
+                names,
+                itertools.chain.from_iterable(t.columns() for t in raw_tables),
+                agg_requests,
+                strict=True,
+            )
+        ]
         result_keys = [
             Column(grouped_key, name=key.name, dtype=key.dtype)
             for key, grouped_key in zip(keys, group_keys.columns(), strict=True)
