@@ -844,9 +844,7 @@ def _(
         node.options,
         *(translator.translate_expr(n=n, schema=schema) for n in node.arguments),
     )
-    if value.name == "count" and value.dtype.id() != plc.TypeId.INT32:
-        return expr.Cast(value.dtype, value)
-    if value.name == "n_unique":
+    if value.name in ("count", "n_unique") and value.dtype.id() != plc.TypeId.INT32:
         return expr.Cast(value.dtype, value)
     return value
 
