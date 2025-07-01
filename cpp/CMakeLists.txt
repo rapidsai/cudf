@@ -630,6 +630,7 @@ add_library(
   src/reductions/min.cu
   src/reductions/minmax.cu
   src/reductions/nth_element.cu
+  src/reductions/nunique.cu
   src/reductions/product.cu
   src/reductions/reductions.cpp
   src/reductions/scan/rank_scan.cu

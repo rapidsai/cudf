@@ -21,7 +21,6 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/quantiles.hpp>
 #include <cudf/detail/sorting.hpp>
-#include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/reduction/detail/histogram.hpp>
@@ -98,11 +97,7 @@ std::unique_ptr<scalar> reduce_aggregate_impl(
     }
     case aggregation::NUNIQUE: {
       auto nunique_agg = static_cast<cudf::detail::nunique_aggregation const&>(agg);
-      return cudf::make_fixed_width_scalar(
-        cudf::detail::distinct_count(
-          col, nunique_agg._null_handling, nan_policy::NAN_IS_VALID, stream),
-        stream,
-        mr);
+      return nunique(col, nunique_agg._null_handling, output_dtype, stream, mr);
     }
     case aggregation::NTH_ELEMENT: {
       auto nth_agg = static_cast<cudf::detail::nth_element_aggregation const&>(agg);
