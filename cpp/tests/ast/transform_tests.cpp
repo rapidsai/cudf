@@ -844,7 +844,7 @@ TEST_F(TransformTest, NullLogicalOr)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 }
 
-TEST(TransformTest, ScalarOnly)
+TEST_F(TransformTest, ScalarOnly)
 {
   auto column = column_wrapper<int>{1, 2, 3, 4, 5};
   auto table  = cudf::table_view{{column}};
@@ -866,7 +866,7 @@ TEST(TransformTest, ScalarOnly)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TEST(TransformTest, ComplexScalarOnly)
+TEST_F(TransformTest, ComplexScalarOnly)
 {
   auto column = column_wrapper<int>{1, 2, 3, 4, 5};
   auto table  = cudf::table_view{{column}};
