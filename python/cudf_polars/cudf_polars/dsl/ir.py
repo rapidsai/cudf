@@ -1339,7 +1339,7 @@ class GroupBy(IR):
 
     @classmethod
     @nvtx_annotate_cudf_polars(message="GroupBy")
-    def do_evaluate(  # noqa: D102
+    def do_evaluate(
         cls,
         schema: Schema,
         keys_in: Sequence[expr.NamedExpr],
@@ -1348,7 +1348,6 @@ class GroupBy(IR):
         zlice: Zlice | None,
         df: DataFrame,
     ) -> DataFrame:
-        print(schema)
         """Evaluate and return a dataframe."""
         keys = broadcast(*(k.evaluate(df) for k in keys_in), target_length=df.num_rows)
         sorted = (

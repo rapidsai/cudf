@@ -9,16 +9,14 @@ from __future__ import annotations
 from functools import partial
 from typing import TYPE_CHECKING, Any, ClassVar
 
-import polars as pl
-
 import pylibcudf as plc
 
-from cudf_polars.containers import Column, DataType
+from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal
 
 if TYPE_CHECKING:
-    from cudf_polars.containers import DataFrame
+    from cudf_polars.containers import DataFrame, DataType
 
 __all__ = ["Agg"]
 
@@ -227,6 +225,6 @@ class Agg(Expr):
         child = self.children[0]
         result = self.op(child.evaluate(df, context=context))
         if self.name == "n_unique":
-            result = result.astype(DataType(pl.UInt32))
+            result = result.astype(self.dtype)
 
         return result
