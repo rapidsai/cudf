@@ -18,7 +18,6 @@
 #include "jit/helpers.hpp"
 #include "jit/parser.hpp"
 #include "jit/span.cuh"
-#include "jit/util.hpp"
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -28,7 +27,6 @@
 #include <cudf/jit/runtime_support.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/reshape.hpp>
-#include <cudf/stream_compaction.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -36,7 +34,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/remove.h>
+#include <thrust/copy.h>
 
 #include <jit_preprocessed_files/filter/jit/kernel.cu.jit.hpp>
 
