@@ -68,33 +68,41 @@ std::unique_ptr<scalar> reduce_aggregate_impl(
       return standard_deviation(col, output_dtype, var_agg._ddof, stream, mr);
     }
     case aggregation::MEDIAN: {
-      auto current_mr = cudf::get_current_device_resource_ref();
-      auto sorted_indices =
-        cudf::detail::sorted_order(table_view{{col}}, {}, {null_order::AFTER}, stream, current_mr);
-      auto valid_sorted_indices =
-        cudf::detail::split(*sorted_indices, {col.size() - col.null_count()}, stream)[0];
-      auto col_ptr = cudf::detail::quantile(
-        col, {0.5}, interpolation::LINEAR, valid_sorted_indices, true, stream, current_mr);
-      return cudf::detail::get_element(*col_ptr, 0, stream, mr);
+      // auto current_mr = cudf::get_current_device_resource_ref();
+      // auto sorted_indices =
+      //   cudf::detail::sorted_order(table_view{{col}}, {}, {null_order::AFTER}, stream,
+      //   current_mr);
+      // auto valid_sorted_indices =
+      //   cudf::detail::split(*sorted_indices, {col.size() - col.null_count()}, stream)[0];
+      // auto col_ptr = cudf::detail::quantile(
+      //   col, {0.5}, interpolation::LINEAR, valid_sorted_indices, true, stream, current_mr);
+      // return cudf::detail::get_element(*col_ptr, 0, stream, mr);
+      return quantile(col, 0.5, interpolation::LINEAR, output_dtype, stream, mr);
     }
     case aggregation::QUANTILE: {
       auto quantile_agg = static_cast<cudf::detail::quantile_aggregation const&>(agg);
       CUDF_EXPECTS(quantile_agg._quantiles.size() == 1,
                    "Reduction quantile accepts only one quantile value");
-      auto current_mr = cudf::get_current_device_resource_ref();
-      auto sorted_indices =
-        cudf::detail::sorted_order(table_view{{col}}, {}, {null_order::AFTER}, stream, current_mr);
-      auto valid_sorted_indices =
-        cudf::detail::split(*sorted_indices, {col.size() - col.null_count()}, stream)[0];
-
-      auto col_ptr = cudf::detail::quantile(col,
-                                            quantile_agg._quantiles,
-                                            quantile_agg._interpolation,
-                                            valid_sorted_indices,
-                                            true,
-                                            stream,
-                                            current_mr);
-      return cudf::detail::get_element(*col_ptr, 0, stream, mr);
+      // auto current_mr = cudf::get_current_device_resource_ref();
+      // auto sorted_indices =
+      //   cudf::detail::sorted_order(table_view{{col}}, {}, {null_order::AFTER}, stream,
+      //   current_mr);
+      // auto valid_sorted_indices =
+      //   cudf::detail::split(*sorted_indices, {col.size() - col.null_count()}, stream)[0];
+      // auto col_ptr = cudf::detail::quantile(col,
+      //                                       quantile_agg._quantiles,
+      //                                       quantile_agg._interpolation,
+      //                                       valid_sorted_indices,
+      //                                       true,
+      //                                       stream,
+      //                                       current_mr);
+      // return cudf::detail::get_element(*col_ptr, 0, stream, mr);
+      return quantile(col,
+                      quantile_agg._quantiles.front(),
+                      quantile_agg._interpolation,
+                      output_dtype,
+                      stream,
+                      mr);
     }
     case aggregation::NUNIQUE: {
       auto nunique_agg = static_cast<cudf::detail::nunique_aggregation const&>(agg);
