@@ -44,6 +44,7 @@ cdef extern from "cudf/interop.hpp" namespace "cudf" \
         column_metadata() except +libcudf_exception_handler
         column_metadata(string name_) except +libcudf_exception_handler
         string name
+        string timezone
         vector[column_metadata] children_meta
 
 

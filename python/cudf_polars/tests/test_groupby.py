@@ -255,7 +255,8 @@ def test_groupby_maintain_order_random(nrows, nkeys, with_nulls):
             )
         )
     q = df.lazy().group_by(key_names, maintain_order=True).agg(pl.col("value").sum())
-    assert_gpu_result_equal(q)
+    # The streaming executor is too slow for large n_rows with blocksize_mode="small"
+    assert_gpu_result_equal(q, blocksize_mode="default" if nrows > 30 else None)
 
 
 def test_groupby_len_with_nulls():
