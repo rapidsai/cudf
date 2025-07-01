@@ -370,10 +370,10 @@ std::unique_ptr<scalar> bitwise_reduction(bitwise_op bit_op,
 /**
  * @brief Computes the number of unique elements in the input column
  *
- * @param col input column to compute the number of unique elements
+ * @param col Input column to compute the number of unique elements
  * @param null_handling Indicates if null values will be counted while computing the number of
  * unique elements
- * @param output_dtype data type of return type
+ * @param output_dtype Data type of return type
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return Number of unique elements as scalar of type `output_dtype`
