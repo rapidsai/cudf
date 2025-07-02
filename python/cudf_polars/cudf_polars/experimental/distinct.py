@@ -51,7 +51,8 @@ def lower_distinct(
     config_options
         GPUEngine configuration options.
     unique_fraction
-        Fractional unique count to use for algorithm selection.
+        Fraction of unique values to total values. Used for algorithm selection.
+        A value of `1.0` means the column is unique.
 
     Returns
     -------
