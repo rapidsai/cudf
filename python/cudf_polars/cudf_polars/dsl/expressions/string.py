@@ -286,7 +286,7 @@ class StringFunction(Expr):
             )
         elif self.name is StringFunction.Name.ConcatVertical:
             (child,) = self.children
-            column = child.evaluate(df, context=context)
+            column = child.evaluate(df, context=context).astype(self.dtype)
             delimiter, ignore_nulls = self.options
             if column.null_count > 0 and not ignore_nulls:
                 return Column(plc.Column.all_null_like(column.obj, 1), dtype=self.dtype)

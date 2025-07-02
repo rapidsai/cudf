@@ -481,6 +481,14 @@ def test_string_join(ldf, ignore_nulls, delimiter):
     assert_gpu_result_equal(q)
 
 
+@pytest.mark.parametrize("ignore_nulls", [False, True])
+@pytest.mark.parametrize("delimiter", ["", "-"])
+def test_string_join_non_string_data(ignore_nulls, delimiter):
+    ldf = pl.LazyFrame({"a": [1, None, 3]})
+    q = ldf.select(pl.col("a").str.join(delimiter, ignore_nulls=ignore_nulls))
+    assert_gpu_result_equal(q)
+
+
 def test_string_reverse(ldf):
     q = ldf.select(pl.col("a").str.reverse())
     assert_gpu_result_equal(q)
