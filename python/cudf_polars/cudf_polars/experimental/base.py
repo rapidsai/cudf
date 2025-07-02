@@ -44,3 +44,136 @@ class PartitionInfo:
 def get_key_name(node: Node) -> str:
     """Generate the key name for a Node."""
     return f"{type(node).__name__.lower()}-{hash(node)}"
+
+
+class RowCountInfo:
+    """
+    Row-count information.
+
+    Parameters
+    ----------
+    value
+        Row-count value.
+    exact
+        Whether row-count is known exactly.
+    """
+
+    __slots__ = ("exact", "value")
+
+    def __init__(
+        self,
+        *,
+        value: int | None = None,
+        exact: bool = False,
+    ):
+        self.value = value
+        self.exact = exact
+
+
+class UniqueInfo:
+    """
+    Unique-value statistics.
+
+    Parameters
+    ----------
+    count
+        Unique-value count.
+    fraction
+        Unique-value fraction.
+    exact
+        Whether unique-value statistics are known exactly.
+    """
+
+    __slots__ = ("count", "exact", "fraction")
+
+    def __init__(
+        self,
+        *,
+        count: int | None = None,
+        fraction: float | None = None,
+        exact: bool = False,
+    ):
+        self.count = count
+        self.fraction = fraction
+        self.exact = exact
+
+
+class StorageSizeInfo:
+    """
+    Average storage-size information.
+
+    Parameters
+    ----------
+    value
+        Average file size.
+    exact
+        Whether the storage size is known exactly.
+    """
+
+    __slots__ = ("exact", "value")
+
+    def __init__(
+        self,
+        *,
+        value: int | None = None,
+        exact: bool = False,
+    ):
+        self.value = value
+        self.exact = exact
+
+
+class DataSourceStats:
+    """Datasource statistics manager."""
+
+    @property
+    def row_count(self) -> RowCountInfo:
+        """Data source row-count estimate."""
+        return RowCountInfo()
+
+    def unique(self, column: str) -> UniqueInfo:
+        """Return unique-value statistics."""
+        return UniqueInfo()
+
+    def storage_size(self, column: str) -> StorageSizeInfo:
+        """Return the average column size for a single file."""
+        return StorageSizeInfo()
+
+    def add_unique_stats_column(self, column: str) -> None:
+        """Add a column needing unique-value statistics."""
+
+
+class ColumnStats:
+    """
+    Column statistics.
+
+    Parameters
+    ----------
+    name
+        Column name.
+    source
+        Datasource statistics.
+    source_name
+        Source-column name.
+    unique_info
+        Unique-value statistics.
+    """
+
+    __slots__ = ("name", "source", "source_name", "unique_info")
+
+    name: str
+    source: DataSourceStats
+    source_name: str
+    unique_info: UniqueInfo
+
+    def __init__(
+        self,
+        name: str,
+        *,
+        source: DataSourceStats | None = None,
+        source_name: str | None = None,
+        unique_info: UniqueInfo | None = None,
+    ) -> None:
+        self.name = name
+        self.source = source or DataSourceStats()
+        self.source_name = source_name or name
+        self.unique_info = unique_info or UniqueInfo()
