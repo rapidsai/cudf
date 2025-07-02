@@ -266,3 +266,10 @@ def test_groupby_len_with_nulls():
     df = pl.DataFrame({"a": [1, 1, 1, 2], "b": [1, None, 2, 3]})
     q = df.lazy().group_by("a").agg(pl.col("b").len())
     assert_gpu_result_equal(q, check_row_order=False)
+
+
+@pytest.mark.parametrize("column", ["int", "string", "uint16_with_null"])
+def test_groupby_nunique(df: pl.LazyFrame, column):
+    q = df.group_by("key1").agg(pl.col(column).n_unique())
+
+    assert_gpu_result_equal(q, check_row_order=False)

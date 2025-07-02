@@ -68,15 +68,7 @@ def test_groupby_single_partitions(df, op, keys):
 @pytest.mark.parametrize("keys", [("y",), ("y", "z")])
 def test_groupby_agg(df, engine, op, keys):
     agg = getattr(pl.col("x"), op)()
-    if op == "n_unique":
-        agg = agg.cast(pl.Int64)
     q = df.group_by(*keys).agg(agg)
-    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
-
-
-@pytest.mark.parametrize("keys", [("y",), ("y", "z")])
-def test_groupby_n_unique(df, engine, keys):
-    q = df.group_by(*keys).agg(pl.col("xx").n_unique().cast(pl.Int64))
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
