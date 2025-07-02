@@ -67,9 +67,19 @@ expression_parser::expression_parser(
   bool has_nulls,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
-  : _left{left}, _right{right}, _expression_count{0}, _intermediate_counter{}, _has_nulls(has_nulls)
+  : _left{left},
+    _right{right},
+    _expression_count{0},
+    _intermediate_counter{},
+    _has_nulls(has_nulls),
+    _has_complex_type{false}
 {
   expr.accept(*this);
+  _has_complex_type =
+    std::any_of(_data_references.begin(), _data_references.end(), [&](auto const& ref) {
+      return ast::detail::is_complex_type(ref.data_type.id());
+    });
+
   move_to_device(stream, mr);
 }
 

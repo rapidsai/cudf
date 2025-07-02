@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cudf/ast/detail/operators.cuh>
+#include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -201,6 +202,20 @@ class expression_parser {
     cudf::size_type max_used{0};
   };
 
+  /**
+   * @brief Check if any of the data references in the expression have a complex type.
+   *
+   * @return true if the expression has a complex type
+   */
+  [[nodiscard]] bool has_complex_type() const { return _has_complex_type; }
+
+  /**
+   * @brief Check if any of the data references in the expression has nulls.
+   *
+   * @return true if the expression has a nullable type
+   */
+  [[nodiscard]] bool has_nulls() const { return _has_nulls; }
+
   expression_device_view device_expression_data;  ///< The collection of data required to evaluate
                                                   ///< the expression on the device.
   int shmem_per_thread;
@@ -266,6 +281,7 @@ class expression_parser {
   cudf::size_type _expression_count;
   intermediate_counter _intermediate_counter;
   bool _has_nulls;
+  bool _has_complex_type;
   std::vector<detail::device_data_reference> _data_references;
   std::vector<ast_operator> _operators;
   std::vector<cudf::size_type> _operator_arities;

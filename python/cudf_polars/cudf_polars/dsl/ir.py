@@ -1330,6 +1330,7 @@ class GroupBy(IR):
         self.zlice = zlice
         self.children = (df,)
         self._non_child_args = (
+            schema,
             self.keys,
             self.agg_requests,
             maintain_order,
@@ -1340,6 +1341,7 @@ class GroupBy(IR):
     @nvtx_annotate_cudf_polars(message="GroupBy")
     def do_evaluate(
         cls,
+        schema: Schema,
         keys_in: Sequence[expr.NamedExpr],
         agg_requests: Sequence[expr.NamedExpr],
         maintain_order: bool,  # noqa: FBT001
@@ -1381,7 +1383,7 @@ class GroupBy(IR):
             names.append(name)
         group_keys, raw_tables = grouper.aggregate(requests)
         results = [
-            Column(column, name=name, dtype=request.value.dtype)
+            Column(column, name=name, dtype=schema[name])
             for name, column, request in zip(
                 names,
                 itertools.chain.from_iterable(t.columns() for t in raw_tables),

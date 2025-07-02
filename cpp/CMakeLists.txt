@@ -534,6 +534,7 @@ add_library(
   src/io/parquet/experimental/hybrid_scan.cpp
   src/io/parquet/experimental/hybrid_scan_helpers.cpp
   src/io/parquet/experimental/hybrid_scan_impl.cpp
+  src/io/parquet/experimental/page_index_filter.cu
   src/io/parquet/page_data.cu
   src/io/parquet/chunk_dict.cu
   src/io/parquet/page_enc.cu
@@ -678,14 +679,13 @@ add_library(
   src/search/contains_scalar.cu
   src/search/contains_table.cu
   src/search/search_ordered.cu
-  src/sort/faster_sort_column.cu
-  src/sort/faster_stable_sort_column.cu
   src/sort/is_sorted.cu
   src/sort/rank.cu
   src/sort/segmented_sort.cu
   src/sort/sort.cu
   src/sort/sort_column.cu
   src/sort/sort_radix.cu
+  src/sort/sorted_order_radix.cu
   src/sort/stable_segmented_sort.cu
   src/sort/stable_sort_column.cu
   src/sort/stable_sort.cu
@@ -765,7 +765,7 @@ add_library(
   src/structs/scan/scan_inclusive.cu
   src/structs/structs_column_factories.cu
   src/structs/structs_column_view.cpp
-  src/structs/utilities.cpp
+  src/structs/utilities.cu
   src/table/primitive_row_operators.cu
   src/table/row_operators.cu
   src/table/table.cpp
