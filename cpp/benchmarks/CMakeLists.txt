@@ -222,7 +222,7 @@ ConfigureBench(QUANTILES_BENCH quantiles/quantiles.cpp)
 # ##################################################################################################
 # * tdigest benchmark
 # --------------------------------------------------------------------------------
-ConfigureNVBench(TDIGEST_NVBENCH quantiles/tdigest.cu)
+ConfigureNVBench(TDIGEST_NVBENCH quantiles/tdigest.cpp)
 
 # ##################################################################################################
 # * type_dispatcher benchmark ---------------------------------------------------------------------
