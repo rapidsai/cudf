@@ -480,8 +480,8 @@ class hybrid_scan_reader {
  *
  * @param options The options used to read Parquet file
  * @param deletion_vector Roaring bitmap deletion vector to apply
- * @param row_group_row_offsets Original row offsets for each input row group
- * @param row_group_num_rows Number of rows for each input row group
+ * @param row_group_offsets Row index offsets for each input row group
+ * @param row_group_num_rows Number of rows in each input row group
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the table in the returned
  * table_with_metadata
@@ -491,7 +491,31 @@ class hybrid_scan_reader {
 table_with_metadata read_parquet_and_apply_deletion_vector(
   parquet_reader_options const& options,
   roaring64_bitmap_t const* deletion_vector,
-  cudf::host_span<size_type const> row_group_row_offsets,
+  cudf::host_span<size_t const> row_group_offsets,
+  cudf::host_span<size_type const> row_group_num_rows,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
+
+/**
+ * @brief Reads a table from parquet source, adds an index column to the read table, and apply the
+ * deletion vector
+ *
+ * @ingroup io_readers
+ *
+ * @param options The options used to read Parquet file
+ * @param serialized_roaring64_bytes Span of `frozen` serialized roaring bitmap buffer
+ * @param row_group_offsets Row index offsets for each input row group
+ * @param row_group_num_rows Number of rows in each input row group
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate device memory of the table in the returned
+ * table_with_metadata
+ *
+ * @return Read table with index column and deletions applied, along with its metadata
+ */
+table_with_metadata read_parquet_and_apply_deletion_vector(
+  parquet_reader_options const& options,
+  cudf::host_span<std::byte const> serialized_roaring64_bytes,
+  cudf::host_span<size_t const> row_group_offsets,
   cudf::host_span<size_type const> row_group_num_rows,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);

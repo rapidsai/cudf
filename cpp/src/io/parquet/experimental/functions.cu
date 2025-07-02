@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/experimental/hybrid_scan.hpp>
 #include <cudf/stream_compaction.hpp>
@@ -22,11 +23,13 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
+#include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 
 #include <cuda/functional>
 #include <thrust/host_vector.h>
 #include <thrust/scatter.h>
+#include <thrust/sequence.h>
 
 #include <numeric>
 
@@ -34,79 +37,214 @@ using namespace roaring::api;
 
 namespace cudf::io::parquet::experimental {
 
+namespace {
+
+/**
+ * @brief Computes a host vector of row indices from the specified row group row offsets and counts
+ *
+ * @param row_group_offsets Host span of row group offsets
+ * @param row_group_num_rows Host span of number of rows in each row group
+ * @param num_rows Total number of table rows
+ * @param stream CUDA stream for kernel launches and data transfers
+ *
+ * @return Host vector of row indices
+ */
+auto compute_row_indices(cudf::host_span<size_t const> row_group_offsets,
+                         cudf::host_span<size_type const> row_group_num_rows,
+                         size_type num_rows,
+                         rmm::cuda_stream_view stream)
+{
+  // Total number of row groups
+  auto const num_row_groups = static_cast<size_type>(row_group_num_rows.size());
+
+  // If no row group offsets and counts are specified, simply return the range: [0, num_rows) as row
+  // indices
+  if (row_group_offsets.empty()) {
+    auto host_row_indices = cudf::detail::make_host_vector<size_t>(num_rows, stream);
+    std::iota(host_row_indices.begin(), host_row_indices.end(), 0);
+    return host_row_indices;
+  }
+
+  // Convert number of rows in each row group to row group span offsets. Here, a span is the range
+  // of (table) rows that belong to a row group
+  auto row_group_span_offsets =
+    cudf::detail::make_host_vector<size_type>(num_row_groups + 1, stream);
+  row_group_span_offsets[0] = 0;
+  std::inclusive_scan(
+    row_group_num_rows.begin(), row_group_num_rows.end(), row_group_span_offsets.begin() + 1);
+
+  // Check if the last span ends at the total number of table rows
+  CUDF_EXPECTS(row_group_span_offsets.back() == num_rows,
+               "Mismatch in number of rows in table and specified row group offsets");
+
+  // Host vector to store the row indices
+  auto row_indices = cudf::detail::make_host_vector<size_t>(num_rows, stream);
+  // Initialize all row indices to 1 so that we can do a segmented inclusive scan
+  std::fill(row_indices.begin(), row_indices.end(), 1);
+
+  // Host vector to store the row group index (or span) for each row that it belongs to
+  auto row_group_keys = cudf::detail::make_host_vector<size_type>(num_rows, stream);
+  // Initialize all row group keys to 0
+  std::fill(row_group_keys.begin(), row_group_keys.end(), 0);
+
+  // Scatter row group offsets and row group indices (or span indices) to their corresponding
+  // row group span offsets
+  auto in_iter =
+    thrust::make_zip_iterator(row_group_offsets.begin(), thrust::counting_iterator<size_type>(0));
+  auto out_iter = thrust::make_zip_iterator(row_indices.begin(), row_group_keys.begin());
+  thrust::scatter(in_iter, in_iter + num_row_groups, row_group_span_offsets.begin(), out_iter);
+
+  // Fill in the the rest of the row group span indices using inclusive scan with the maximum
+  // operator
+  thrust::inclusive_scan(row_group_keys.begin(),
+                         row_group_keys.end(),
+                         row_group_keys.begin(),
+                         cuda::maximum<cudf::size_type>());
+
+  // Segmented inclusive scan to compute the rest of the row indices
+  thrust::inclusive_scan_by_key(
+    row_group_keys.begin(), row_group_keys.end(), row_indices.begin(), row_indices.begin());
+
+  return row_indices;
+}
+
+/**
+ * @brief Builds a UINT64 row indiex column from the specified host span of row indices
+ *
+ * @param row_indices Host span of row indices
+ * @param num_rows Number of rows in the column
+ * @param stream CUDA stream for kernel launches and data transfers
+ * @param mr Device memory resource to allocate device memory for the row indices column
+ *
+ * @return Unique pointer to the row index column
+ */
+auto build_row_index_column(cudf::host_span<size_t const> row_indices,
+                            size_type num_rows,
+                            rmm::cuda_stream_view stream,
+                            rmm::device_async_resource_ref mr)
+{
+  rmm::device_buffer row_indices_buffer{num_rows * sizeof(size_t), stream, mr};
+
+  cudf::detail::cuda_memcpy_async<size_t>(
+    device_span<size_t>{static_cast<size_t*>(row_indices_buffer.data()), row_indices.size()},
+    row_indices,
+    stream);
+
+  return std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::UINT64},
+                                        num_rows,
+                                        std::move(row_indices_buffer),
+                                        rmm::device_buffer{},
+                                        cudf::size_type{0});
+}
+
+/**
+ * @brief Builds a BOOL8 row mask column from the specified host span of row indices and the
+ * roaring64 deletion vector
+ *
+ * @param row_indices Host span of row indices
+ * @param deletion_vector Pointer to the roaring64 deletion vector
+ * @param num_rows Number of rows in the column
+ * @param stream CUDA stream for kernel launches and data transfers
+ * @param mr Device memory resource to allocate device memory for the row mask column
+ *
+ * @return Unique pointer to the row mask column
+ */
+auto build_row_mask_column(cudf::host_span<size_t const> row_indices,
+                           roaring64_bitmap_t const* deletion_vector,
+                           size_type num_rows,
+                           rmm::cuda_stream_view stream,
+                           rmm::device_async_resource_ref mr)
+{
+  // Host vector to store the row mask
+  auto host_row_mask = cudf::detail::make_host_vector<bool>(num_rows, stream);
+
+  auto constexpr thread_pool_size = 16;
+
+  // Use a thread pool to bulk query the deletion vector and fill up the host row mask
+  std::vector<std::future<void>> row_mask_tasks;
+  row_mask_tasks.reserve(thread_pool_size);
+  std::for_each(
+    thrust::counting_iterator(0),
+    thrust::counting_iterator(thread_pool_size),
+    [&](auto const thread_idx) {
+      row_mask_tasks.emplace_back(
+        cudf::detail::host_worker_pool().submit_task([&, thread_idx = thread_idx] {
+          // Thread local roaring64 context for faster (bulk) contains operations
+          auto roaring64_context =
+            roaring64_bulk_context_t{.high_bytes = {0, 0, 0, 0, 0, 0}, .leaf = nullptr};
+
+          // Fill up the row mask using the deletion vector
+          for (auto row_idx = thread_idx; row_idx < num_rows; row_idx += thread_pool_size) {
+            // Check if each row index is not present in the deletion vector
+            host_row_mask[row_idx] = not roaring64_bitmap_contains_bulk(
+              deletion_vector, &roaring64_context, static_cast<uint64_t>(row_indices[row_idx]));
+          }
+        }));
+    });
+
+  // Wait for all tasks to complete
+  std::for_each(
+    row_mask_tasks.begin(), row_mask_tasks.end(), [&](auto& task) { std::move(task).get(); });
+
+  // Device buffer for the row mask column
+  auto row_mask_column_buffer = rmm::device_buffer{num_rows * sizeof(bool), stream, mr};
+
+  // Copy the row mask to the device
+  cudf::detail::cuda_memcpy_async<bool>(
+    device_span<bool>{static_cast<bool*>(row_mask_column_buffer.data()),
+                      static_cast<size_t>(num_rows)},
+    host_row_mask,
+    stream);
+
+  // Convert the row mask buffer into a BOOL8 column
+  return std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::BOOL8},
+                                        num_rows,
+                                        std::move(row_mask_column_buffer),
+                                        rmm::device_buffer{},
+                                        cudf::size_type{0});
+}
+
+}  // namespace
+
 table_with_metadata read_parquet_and_apply_deletion_vector(
   parquet_reader_options const& options,
   roaring64_bitmap_t const* deletion_vector,
-  cudf::host_span<size_type const> row_group_row_offsets,
+  cudf::host_span<size_t const> row_group_offsets,
   cudf::host_span<size_type const> row_group_num_rows,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  // Total number of row groups
-  auto const num_row_groups = row_group_num_rows.size();
-
-  CUDF_EXPECTS(row_group_row_offsets.size() == num_row_groups,
-               "Mismatch in size of row group offsets and number of rows");
-  CUDF_EXPECTS(not options.get_filter().has_value(),
-               "AST filter is not supported. Use the deletion vector instead");
-
-  // Compute row group segment offsets
-  auto row_group_segment_offsets =
-    cudf::detail::make_host_vector<size_type>(num_row_groups + 1, stream);
-  row_group_segment_offsets[0] = 0;
-  std::inclusive_scan(
-    row_group_num_rows.begin(), row_group_num_rows.end(), row_group_segment_offsets.begin() + 1);
-
-  // Total number of rows in the table
-  auto const num_rows = row_group_segment_offsets.back();
-
-  // Host vector of row indices
-  auto host_row_indices = cudf::detail::make_host_vector<size_t>(num_rows, stream);
-  std::fill(host_row_indices.begin(), host_row_indices.end(), 1);
-
-  // Scatter the row group offsets to corresponding row indices
-  thrust::scatter(row_group_row_offsets.begin(),
-                  row_group_row_offsets.end(),
-                  row_group_segment_offsets.begin(),
-                  host_row_indices.begin());
-
-  // Segmented inclusive scan to compute the rest of the row indices
-  std::for_each(thrust::counting_iterator<size_type>(0),
-                thrust::counting_iterator<size_type>(num_row_groups),
-                [&](auto i) {
-                  auto start_row_index = row_group_segment_offsets[i];
-                  auto end_row_index   = row_group_segment_offsets[i + 1];
-                  std::inclusive_scan(host_row_indices.begin() + start_row_index,
-                                      host_row_indices.begin() + end_row_index,
-                                      host_row_indices.begin() + start_row_index);
-                });
-
-  auto row_index_buffer = rmm::device_buffer{host_row_indices.size() * sizeof(size_t), stream, mr};
-  cudf::detail::cuda_memcpy_async<size_t>(
-    device_span<size_t>{static_cast<size_t*>(row_index_buffer.data()), host_row_indices.size()},
-    host_row_indices,
-    stream);
-  auto row_index_column = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::UINT64},
-                                                         num_rows,
-                                                         std::move(row_index_buffer),
-                                                         rmm::device_buffer{},
-                                                         cudf::size_type{0});
+  CUDF_EXPECTS(row_group_offsets.size() == row_group_num_rows.size(),
+               "Encountered a mismatch in the size of row group offsets and row counts vectors");
+  CUDF_EXPECTS(
+    not options.get_filter().has_value(),
+    "Encountered a non-null AST filter expression. Use a roaring64 bitmap deletion vector to "
+    "filter the table instead");
 
   // Read the parquet table
   auto [table, metadata] = cudf::io::read_parquet(options, stream, mr);
+  auto const num_rows    = table->num_rows();
 
-  CUDF_EXPECTS(table->num_rows() == num_rows,
-               "Mismatch in number of rows in table and row offsets");
+  // Compute a row index host vector from the specified row group offsets and counts
+  auto row_indices = compute_row_indices(row_group_offsets, row_group_num_rows, num_rows, stream);
 
-  auto table_columns_and_index = std::vector<std::unique_ptr<cudf::column>>{};
-  table_columns_and_index.reserve(table->num_columns() + 1);
-  table_columns_and_index.push_back(std::move(row_index_column));
-  auto table_contents = table->release();
-  table_columns_and_index.insert(table_columns_and_index.end(),
-                                 std::make_move_iterator(table_contents.begin()),
-                                 std::make_move_iterator(table_contents.end()));
+  // Build the index column and prepend it to the table columns
+  auto row_index_column = build_row_index_column(row_indices, num_rows, stream, mr);
+  CUDF_EXPECTS(row_index_column->type().id() == cudf::type_id::UINT64,
+               "Index column must be of type UINT64");
+  // Vector to store the index and table columns
+  auto index_and_table_columns = std::vector<std::unique_ptr<cudf::column>>{};
+  index_and_table_columns.reserve(table->num_columns() + 1);
+  index_and_table_columns.push_back(std::move(row_index_column));
+  auto table_columns = table->release();
+  // Insert table columns after the index column
+  index_and_table_columns.insert(index_and_table_columns.end(),
+                                 std::make_move_iterator(table_columns.begin()),
+                                 std::make_move_iterator(table_columns.end()));
+  // Table with the index and table columns
+  auto table_with_index = std::make_unique<cudf::table>(std::move(index_and_table_columns));
 
-  // Add `index` column to the table schema information
+  // Likewise, prepend the `index` column metadata to the table schema information
   auto updated_schema_info = std::vector<cudf::io::column_name_info>{};
   updated_schema_info.reserve(metadata.schema_info.size() + 1);
   updated_schema_info.emplace_back("index");
@@ -115,50 +253,47 @@ table_with_metadata read_parquet_and_apply_deletion_vector(
                              std::make_move_iterator(metadata.schema_info.end()));
   metadata.schema_info = std::move(updated_schema_info);
 
-  // Move index and other table columns to a new table
-  auto table_with_index = std::make_unique<cudf::table>(std::move(table_columns_and_index));
-
-  // If deletion vector doesn't exist or is empty, return early with the table with index column and
-  // the updated metadata
-  if (not deletion_vector or roaring64_bitmap_get_cardinality(deletion_vector)) {
+  // If roaring bitmap is nullptr or empty, return the table with index column and the
+  // updated metadata
+  if (not deletion_vector or not roaring64_bitmap_get_cardinality(deletion_vector)) {
     return table_with_metadata{std::move(table_with_index), std::move(metadata)};
   }
 
-  // Host vector to store the row mask
-  auto host_row_mask = cudf::detail::make_host_vector<bool>(num_rows, stream);
-
-  // Context for the roaring64 bitmap for faster (bulk) contains operations
-  auto roaring64_context =
-    roaring64_bulk_context_t{.high_bytes = {0, 0, 0, 0, 0, 0}, .leaf = nullptr};
-
-  // Fill up the row mask using the deletion vector
-  std::transform(
-    host_row_indices.begin(), host_row_indices.end(), host_row_mask.begin(), [&](auto i) {
-      // Check if each row index is not present in the deletion vector
-      return not roaring64_bitmap_contains_bulk(
-        deletion_vector, &roaring64_context, host_row_indices[i]);
-    });
-
-  // Device buffer for the row mask column
-  auto row_mask = rmm::device_buffer{num_rows * sizeof(bool), stream};
-
-  // Copy the row mask to the device
-  cudf::detail::cuda_memcpy_async<bool>(
-    device_span<bool>{static_cast<bool*>(row_mask.data()), static_cast<size_t>(num_rows)},
-    host_row_mask,
-    stream);
-
-  // Convert the row mask buffer into a BOOL8 column
-  auto row_mask_column = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::BOOL8},
-                                                        num_rows,
-                                                        std::move(row_mask),
-                                                        rmm::device_buffer{},
-                                                        cudf::size_type{0});
+  // Build the row mask column using the host row indices and the deletion (roaring64) vector
+  auto row_mask_column = build_row_mask_column(
+    row_indices, deletion_vector, num_rows, stream, cudf::get_current_device_resource_ref());
 
   // Apply the row mask to the table and return the resultant table along with the updated metadata
   return table_with_metadata{
     cudf::apply_boolean_mask(table_with_index->view(), row_mask_column->view(), stream, mr),
     std::move(metadata)};
+}
+
+table_with_metadata read_parquet_and_apply_deletion_vector(
+  parquet_reader_options const& options,
+  cudf::host_span<std::byte const> serialized_roaring64_bytes,
+  cudf::host_span<size_t const> row_group_offsets,
+  cudf::host_span<size_type const> row_group_num_rows,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  auto const roaring64_bitmap = [&]() -> roaring64_bitmap_t* {
+    if (serialized_roaring64_bytes.empty()) { return nullptr; }
+
+    // Deserialize the roaring64 bitmap from the frozen serialized bytes
+    auto roaring64_bitmap = roaring64_bitmap_portable_deserialize_safe(
+      reinterpret_cast<char const*>(serialized_roaring64_bytes.data()),
+      static_cast<size_t>(serialized_roaring64_bytes.size()));
+
+    // Validate the deserialized roaring64 bitmap
+    CUDF_EXPECTS(roaring64_bitmap_internal_validate(roaring64_bitmap, nullptr),
+                 "Encountered an inconsistent roaring64 bitmap after deserialization");
+
+    return roaring64_bitmap;
+  }();
+
+  return read_parquet_and_apply_deletion_vector(
+    options, roaring64_bitmap, row_group_offsets, row_group_num_rows, stream, mr);
 }
 
 }  // namespace cudf::io::parquet::experimental

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "tests/io/parquet_common.hpp"
+#include "parquet_common.hpp"
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
