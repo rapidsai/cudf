@@ -250,11 +250,7 @@ def _callback(
                     """)
                 raise NotImplementedError(msg)
 
-            df = evaluate_streaming(ir, config_options).to_polars()
-            if timer is None:
-                return df
-            else:
-                return df, timer.timings
+            return evaluate_streaming(ir, config_options).to_polars()
         assert_never(f"Unknown executor '{config_options.executor}'")
 
 
