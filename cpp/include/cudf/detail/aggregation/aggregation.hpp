@@ -1375,7 +1375,7 @@ struct target_type_impl<Source,
 
 constexpr bool is_sum_product_agg(aggregation::Kind k)
 {
-  return (k == aggregation::SUM) || (k == aggregation::SUM_ANSI) || (k == aggregation::PRODUCT) ||
+  return (k == aggregation::SUM) || (k == aggregation::PRODUCT) ||
          (k == aggregation::SUM_OF_SQUARES);
 }
 
@@ -1419,14 +1419,6 @@ template <typename Source, aggregation::Kind k>
 struct target_type_impl<Source,
                         k,
                         std::enable_if_t<is_duration<Source>() && (k == aggregation::SUM)>> {
-  using type = Source;
-};
-
-// Summing ANSI duration types, use same type accumulator
-template <typename Source, aggregation::Kind k>
-struct target_type_impl<Source,
-                        k,
-                        std::enable_if_t<is_duration<Source>() && (k == aggregation::SUM_ANSI)>> {
   using type = Source;
 };
 

@@ -110,8 +110,7 @@ template <typename Source>
 struct update_target_element_shmem<
   Source,
   cudf::aggregation::SUM_ANSI,
-  cuda::std::enable_if_t<cudf::is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
-                         !cudf::is_timestamp<Source>()>> {
+  cuda::std::enable_if_t<std::is_same_v<Source, int64_t> && cudf::has_atomic_support<Source>()>> {
   __device__ void operator()(cuda::std::byte* target,
                              bool* target_mask,
                              cudf::size_type target_index,
@@ -122,6 +121,8 @@ struct update_target_element_shmem<
     using DeviceSource = cudf::detail::underlying_source_t<Source, aggregation::SUM_ANSI>;
 
     auto* target_casted = reinterpret_cast<DeviceTarget*>(target);
+    // For SUM_ANSI, we need to detect overflow and set to null if it occurs
+    // For now, use regular atomic add - overflow detection will be added later
     cudf::detail::atomic_add(&target_casted[target_index],
                              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
 

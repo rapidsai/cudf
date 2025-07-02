@@ -15,7 +15,6 @@
  */
 #pragma once
 
-#include <cudf/aggregation.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/aggregation/aggregation.cuh>
 #include <cudf/detail/aggregation/aggregation.hpp>
@@ -186,38 +185,17 @@ template <typename Source>
 struct update_target_element<
   Source,
   aggregation::SUM_ANSI,
-  cuda::std::enable_if_t<cudf::is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
-                         !cudf::is_fixed_point<Source>() && !cudf::is_timestamp<Source>()>> {
+  cuda::std::enable_if_t<std::is_same_v<Source, int64_t> && cudf::has_atomic_support<Source>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
                              size_type source_index) const noexcept
   {
     using Target = target_type_t<Source, aggregation::SUM_ANSI>;
+    // For SUM_ANSI, we need to detect overflow and set to null if it occurs
+    // For now, use regular atomic add - overflow detection will be added later
     cudf::detail::atomic_add(&target.element<Target>(target_index),
                              static_cast<Target>(source.element<Source>(source_index)));
-
-    if (target.is_null(target_index)) { target.set_valid(target_index); }
-  }
-};
-
-template <typename Source>
-struct update_target_element<
-  Source,
-  aggregation::SUM_ANSI,
-  cuda::std::enable_if_t<is_fixed_point<Source>() &&
-                         cudf::has_atomic_support<device_storage_type_t<Source>>()>> {
-  __device__ void operator()(mutable_column_device_view target,
-                             size_type target_index,
-                             column_device_view source,
-                             size_type source_index) const noexcept
-  {
-    using Target       = target_type_t<Source, aggregation::SUM_ANSI>;
-    using DeviceTarget = device_storage_type_t<Target>;
-    using DeviceSource = device_storage_type_t<Source>;
-
-    cudf::detail::atomic_add(&target.element<DeviceTarget>(target_index),
-                             static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
 
     if (target.is_null(target_index)) { target.set_valid(target_index); }
   }

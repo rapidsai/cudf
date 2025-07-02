@@ -255,6 +255,11 @@ std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
 std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
   data_type col_type, sum_ansi_aggregation const& agg)
 {
+  // SUM_ANSI can only be applied to INT64 columns
+  if (col_type.id() != type_id::INT64) {
+    CUDF_FAIL("SUM_ANSI aggregation can only be applied to INT64 columns");
+  }
+
   std::vector<std::unique_ptr<aggregation>> aggs_to_run;
   aggs_to_run.push_back(agg.clone());
 
