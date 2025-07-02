@@ -38,8 +38,13 @@ def traversal(nodes: Sequence[NodeT]) -> Generator[NodeT, None, None]:
     Unique nodes in the expressions, parent before child, children
     in-order from left to right.
     """
-    seen = set(nodes)
-    lifo = list(nodes)
+    seen: set[NodeT] = set()
+    lifo: deque[NodeT] = deque()
+
+    for node in nodes:
+        if node not in seen:
+            lifo.append(node)
+            seen.add(node)
 
     while lifo:
         node = lifo.pop()

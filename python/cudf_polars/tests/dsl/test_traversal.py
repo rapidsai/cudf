@@ -31,7 +31,7 @@ def make_expr(dt, n1, n2):
 
 
 def test_traversal_unique():
-    dt = DataType(pl.datatypes.Int8())
+    dt = DataType(pl.Int8())
 
     e1 = make_expr(dt, "a", "a")
     unique_exprs = list(traversal([e1]))
@@ -56,7 +56,7 @@ def test_traversal_unique():
 
 
 def test_post_traversal_unique():
-    dt = DataType(pl.datatypes.Int8())
+    dt = DataType(pl.Int8())
 
     e1 = make_expr(dt, "a", "a")
     unique_exprs = list(post_traversal([e1]))
@@ -72,7 +72,7 @@ def test_post_traversal_unique():
 
 
 def test_post_traversal_multi():
-    dt = DataType(pl.datatypes.Int8())
+    dt = DataType(pl.Int8())
 
     e1 = make_expr(dt, "a", "a")
     e2 = make_expr(dt, "a", "b")
@@ -97,7 +97,7 @@ def rename(e, rec):
 
 
 def test_caching_visitor():
-    dt = DataType(pl.datatypes.Int8())
+    dt = DataType(pl.Int8())
 
     e1 = make_expr(dt, "a", "b")
 
@@ -121,7 +121,7 @@ def test_caching_visitor():
 
 
 def test_noop_visitor():
-    dt = DataType(pl.datatypes.Int8())
+    dt = DataType(pl.Int8())
 
     e1 = make_expr(dt, "a", "b")
 
