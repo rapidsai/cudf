@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from functools import partial, reduce, singledispatch
-from typing import TYPE_CHECKING, TypeAlias
+from typing import TYPE_CHECKING, TypeAlias, TypedDict
 
 import pylibcudf as plc
 from pylibcudf import expressions as plc_expr
@@ -19,7 +19,6 @@ from cudf_polars.typing import GenericTransformer
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from cudf_polars.typing import ExprTransformer
 
 # Can't merge these op-mapping dictionaries because scoped enum values
 # are exposed by cython with equality/hash based one their underlying
@@ -92,7 +91,43 @@ REVERSED_COMPARISON = {
 }
 
 
-Transformer: TypeAlias = GenericTransformer[expr.Expr, plc_expr.Expression]
+class ASTState(TypedDict):
+    """
+    State for AST transformations.
+
+    Parameters
+    ----------
+    for_parquet
+        Indicator for whether this transformation should provide an expression
+        suitable for use in parquet filters.
+    """
+
+    for_parquet: bool
+
+
+class ExprTransformerState(TypedDict):
+    """
+    State used for AST transformation when inserting column references.
+
+    Parameters
+    ----------
+    name_to_index
+        Mapping from column names to column indices in the table
+        eventually used for evaluation.
+    table_ref
+        pylibcudf `TableReference` indicating whether column
+        references are coming from the left or right table.
+    """
+
+    name_to_index: Mapping[str, int]
+    table_ref: plc.expressions.TableReference
+
+
+Transformer: TypeAlias = GenericTransformer[expr.Expr, plc_expr.Expression, ASTState]
+ExprTransformer: TypeAlias = GenericTransformer[
+    expr.Expr, expr.Expr, ExprTransformerState
+]
+"""Protocol for transformation of Expr nodes."""
 
 
 @singledispatch
@@ -105,14 +140,8 @@ def _to_ast(node: expr.Expr, self: Transformer) -> plc_expr.Expression:
     node
         Expression to translate.
     self
-        Recursive transformer. The state dictionary should contain a
-       `for_parquet` key indicating if this transformation should
-        provide an expression suitable for use in parquet filters.
-
-        If `for_parquet` is `False`, the dictionary should contain a
-        `name_to_index` mapping that maps column names to their
-        integer index in the table that will be used for evaluation of
-        the expression.
+        Recursive transformer. The state dictionary is an instance of
+        :class:`ASTState`.
 
     Returns
     -------
@@ -249,7 +278,7 @@ def to_parquet_filter(node: expr.Expr) -> plc_expr.Expression | None:
     -------
     pylibcudf Expression if conversion is possible, otherwise None.
     """
-    mapper = CachingVisitor(_to_ast, state={"for_parquet": True})
+    mapper: Transformer = CachingVisitor(_to_ast, state={"for_parquet": True})
     try:
         return mapper(node)
     except (KeyError, NotImplementedError):
@@ -275,7 +304,7 @@ def to_ast(node: expr.Expr) -> plc_expr.Expression | None:
     -------
     pylibcudf Expression if conversion is possible, otherwise None.
     """
-    mapper = CachingVisitor(_to_ast, state={"for_parquet": False})
+    mapper: Transformer = CachingVisitor(_to_ast, state={"for_parquet": False})
     try:
         return mapper(node)
     except (KeyError, NotImplementedError):
@@ -323,7 +352,8 @@ def insert_colrefs(
     -------
     New expression with column references inserted.
     """
-    mapper = CachingVisitor(
-        _insert_colrefs, state={"table_ref": table_ref, "name_to_index": name_to_index}
+    mapper: ExprTransformer = CachingVisitor(
+        _insert_colrefs,
+        state={"name_to_index": name_to_index, "table_ref": table_ref},
     )
     return mapper(node)
