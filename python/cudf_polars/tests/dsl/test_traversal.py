@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from functools import singledispatch
+from typing import TypeAlias, TypedDict
 
 import polars as pl
 from polars.testing import assert_frame_equal
@@ -13,6 +14,7 @@ import pylibcudf as plc
 from cudf_polars import Translator
 from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr, ir
+from cudf_polars.dsl.to_ast import ExprTransformer
 from cudf_polars.dsl.traversal import (
     CachingVisitor,
     make_recursive,
@@ -20,7 +22,14 @@ from cudf_polars.dsl.traversal import (
     reuse_if_unchanged,
     traversal,
 )
-from cudf_polars.typing import ExprTransformer, IRTransformer
+from cudf_polars.typing import GenericTransformer
+
+
+class State(TypedDict):
+    expr_mapper: ExprTransformer
+
+
+IRTransformer: TypeAlias = GenericTransformer[ir.IR, ir.IR, State]
 
 
 def make_expr(dt, n1, n2):
@@ -158,7 +167,7 @@ def test_rewrite_ir_node():
             )
         return reuse_if_unchanged(node, rec)
 
-    mapper = CachingVisitor(replace_df)
+    mapper = CachingVisitor(replace_df, state={})
 
     new = mapper(orig)
 
@@ -188,7 +197,7 @@ def test_rewrite_scan_node(tmp_path):
             )
         return reuse_if_unchanged(node, rec)
 
-    mapper = CachingVisitor(replace_scan)
+    mapper = CachingVisitor(replace_scan, state={})
 
     orig = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
     new = mapper(orig)
@@ -222,7 +231,8 @@ def test_rewrite_names_and_ops():
 
     @_transform.register
     def _(e: expr.Col, fn: ExprTransformer):
-        mapping = fn.state["mapping"]
+        # We've added an extra key to the state, so ignore this type error.
+        mapping = fn.state["mapping"]  # type: ignore
         if e.name in mapping:
             return type(e)(e.dtype, mapping[e.name])
         return e

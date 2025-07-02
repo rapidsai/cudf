@@ -8,7 +8,11 @@ from __future__ import annotations
 from collections import deque
 from typing import TYPE_CHECKING, Any, Generic
 
-from cudf_polars.typing import U_contra, V_co
+from cudf_polars.typing import (
+    StateT_co,
+    U_contra,
+    V_co,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Mapping, MutableMapping, Sequence
@@ -89,7 +93,9 @@ def post_traversal(nodes: Sequence[NodeT]) -> Generator[NodeT, None, None]:
             lifo.pop()
 
 
-def reuse_if_unchanged(node: NodeT, fn: GenericTransformer[NodeT, NodeT]) -> NodeT:
+def reuse_if_unchanged(
+    node: NodeT, fn: GenericTransformer[NodeT, NodeT, StateT_co]
+) -> NodeT:
     """
     Recipe for transforming nodes that returns the old object if unchanged.
 
@@ -117,10 +123,10 @@ def reuse_if_unchanged(node: NodeT, fn: GenericTransformer[NodeT, NodeT]) -> Nod
 
 
 def make_recursive(
-    fn: Callable[[U_contra, GenericTransformer[U_contra, V_co]], V_co],
+    fn: Callable[[U_contra, GenericTransformer[U_contra, V_co, StateT_co]], V_co],
     *,
-    state: Mapping[str, Any] | None = None,
-) -> GenericTransformer[U_contra, V_co]:
+    state: Mapping[str, Any],
+) -> GenericTransformer[U_contra, V_co, StateT_co]:
     """
     No-op wrapper for recursive visitors.
 
@@ -156,11 +162,11 @@ def make_recursive(
     def rec(node: U_contra) -> V_co:
         return fn(node, rec)  # type: ignore[arg-type]
 
-    rec.state = state if state is not None else {}  # type: ignore[attr-defined]
+    rec.state = state  # type: ignore[attr-defined]
     return rec  # type: ignore[return-value]
 
 
-class CachingVisitor(Generic[U_contra, V_co]):
+class CachingVisitor(Generic[U_contra, V_co, StateT_co]):
     """
     Caching wrapper for recursive visitors.
 
@@ -188,13 +194,13 @@ class CachingVisitor(Generic[U_contra, V_co]):
 
     def __init__(
         self,
-        fn: Callable[[U_contra, GenericTransformer[U_contra, V_co]], V_co],
+        fn: Callable[[U_contra, GenericTransformer[U_contra, V_co, StateT_co]], V_co],
         *,
-        state: Mapping[str, Any] | None = None,
+        state: StateT_co,
     ) -> None:
         self.fn = fn
         self.cache: MutableMapping[U_contra, V_co] = {}
-        self.state = state if state is not None else {}
+        self.state = state
 
     def __call__(self, value: U_contra) -> V_co:
         """
