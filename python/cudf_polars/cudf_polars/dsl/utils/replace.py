@@ -56,6 +56,6 @@ def replace(nodes: Sequence[NodeT], replacements: Mapping[NodeT, NodeT]) -> list
         Of nodes with replacements performed.
     """
     mapper: GenericTransformer[NodeT, NodeT, State] = CachingVisitor(
-        _replace, state=State({"replacements": replacements})
+        _replace, state={"replacements": replacements}
     )
     return [mapper(node) for node in nodes]

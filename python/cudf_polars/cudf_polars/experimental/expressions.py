@@ -533,12 +533,14 @@ def decompose_expr_graph(
 
     The state dictionary is an instance of :class:`State`.
     """
-    state = State(
-        input_ir=input_ir,
-        input_partition_info=partition_info[input_ir],
-        config_options=config_options,
-        unique_names=unique_names((named_expr.name, *input_ir.schema.keys())),
+    mapper: ExprDecomposer = CachingVisitor(
+        _decompose,
+        state={
+            "input_ir": input_ir,
+            "input_partition_info": partition_info[input_ir],
+            "config_options": config_options,
+            "unique_names": unique_names((named_expr.name, *input_ir.schema.keys())),
+        },
     )
-    mapper = CachingVisitor(_decompose, state=state)
     expr, input_ir, partition_info = mapper(named_expr.value)
     return named_expr.reconstruct(expr), input_ir, partition_info

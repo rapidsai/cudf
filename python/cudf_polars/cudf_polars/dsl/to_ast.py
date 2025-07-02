@@ -278,7 +278,7 @@ def to_parquet_filter(node: expr.Expr) -> plc_expr.Expression | None:
     -------
     pylibcudf Expression if conversion is possible, otherwise None.
     """
-    mapper = CachingVisitor(_to_ast, state=ASTState(for_parquet=True))
+    mapper: Transformer = CachingVisitor(_to_ast, state={"for_parquet": True})
     try:
         return mapper(node)
     except (KeyError, NotImplementedError):
@@ -304,7 +304,7 @@ def to_ast(node: expr.Expr) -> plc_expr.Expression | None:
     -------
     pylibcudf Expression if conversion is possible, otherwise None.
     """
-    mapper = CachingVisitor(_to_ast, state=ASTState(for_parquet=False))
+    mapper: Transformer = CachingVisitor(_to_ast, state={"for_parquet": False})
     try:
         return mapper(node)
     except (KeyError, NotImplementedError):
@@ -352,8 +352,8 @@ def insert_colrefs(
     -------
     New expression with column references inserted.
     """
-    mapper = CachingVisitor(
+    mapper: ExprTransformer = CachingVisitor(
         _insert_colrefs,
-        state=ExprTransformerState(name_to_index=name_to_index, table_ref=table_ref),
+        state={"name_to_index": name_to_index, "table_ref": table_ref},
     )
     return mapper(node)

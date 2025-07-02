@@ -278,9 +278,14 @@ function `rewrite` with type `Expr -> (Expr -> T) -> T`:
 
 ```python
 from cudf_polars.typing import GenericTransformer
+from typing import TypedDict
+
+class State(TypedDict):
+    ...
+
 
 @singledispatch
-def rewrite(e: Expr, rec: GenericTransformer[Expr, T]) -> T:
+def rewrite(e: Expr, rec: GenericTransformer[Expr, T, State]) -> T:
     ...
 ```
 
