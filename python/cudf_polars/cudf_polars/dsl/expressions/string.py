@@ -98,6 +98,7 @@ class StringFunction(Expr):
         Name.CountMatches,
         Name.EndsWith,
         Name.Head,
+        Name.JsonPathMatch,
         Name.Lowercase,
         Name.Replace,
         Name.ReplaceMany,
@@ -318,6 +319,15 @@ class StringFunction(Expr):
                     plc.strings.contains.count_re(column, self._regex_program),
                     self.dtype.plc,
                 ),
+                dtype=self.dtype,
+            )
+        elif self.name is StringFunction.Name.JsonPathMatch:
+            (child, expr) = self.children
+            column = child.evaluate(df, context=context).obj
+            assert isinstance(expr, Literal)
+            json_path = plc.Scalar.from_py(expr.value, expr.dtype.plc)
+            return Column(
+                plc.json.get_json_object(column, json_path),
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.Slice:

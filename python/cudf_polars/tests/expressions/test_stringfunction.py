@@ -541,3 +541,9 @@ def test_count_matches(ldf):
 def test_count_matches_literal_unsupported(ldf):
     q = ldf.select(pl.col("a").str.count_matches("a", literal=True))
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_json_path_match():
+    df = pl.LazyFrame({"a": ['{"a":"1"}', None, '{"a":2}', '{"a":2.1}', '{"a":true}']})
+    q = df.select(pl.col("a").str.json_path_match("$.a"))
+    assert_gpu_result_equal(q)
