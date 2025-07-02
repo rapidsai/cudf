@@ -14,7 +14,11 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_129, POLARS_VERSION_LT_130
+from cudf_polars.utils.versions import (
+    POLARS_VERSION_LT_129,
+    POLARS_VERSION_LT_130,
+    POLARS_VERSION_LT_131,
+)
 
 
 @pytest.fixture
@@ -149,7 +153,7 @@ def test_supported_stringfunction_expression(ldf):
 
 
 def test_unsupported_stringfunction(ldf):
-    q = ldf.select(pl.col("a").str.count_matches("e", literal=True))
+    q = ldf.select(pl.col("a").str.encode("hex"))
 
     assert_ir_translation_raises(q, NotImplementedError)
 
@@ -300,14 +304,16 @@ def test_replace_re(ldf):
         ),
     ],
 )
-def test_replace_many(request, ldf, target, repl):
-    query = ldf.select(pl.col("a").str.replace_many(target, repl))
-    # TODO: Remove when we support implode agg
+def test_replace_many(ldf, target, repl):
+    q = ldf.select(pl.col("a").str.replace_many(target, repl))
     _need_support_for_implode_agg = isinstance(repl, list)
     if POLARS_VERSION_LT_129 or _need_support_for_implode_agg:
-        assert_gpu_result_equal(query)
+        assert_gpu_result_equal(q)
+    elif POLARS_VERSION_LT_131:
+        assert_ir_translation_raises(q, NotImplementedError)
     else:
-        assert_ir_translation_raises(query, NotImplementedError)
+        # Polars 1.31 now gives us replacement argument as a list
+        assert_gpu_result_equal(q)
 
 
 @pytest.mark.parametrize(
@@ -418,6 +424,9 @@ def test_unsupported_regex_raises(pattern):
     q = df.select(pl.col("a").str.contains(pattern, strict=True))
     assert_ir_translation_raises(q, NotImplementedError)
 
+    q = df.select(pl.col("a").str.count_matches(pattern))
+    assert_ir_translation_raises(q, NotImplementedError)
+
 
 def test_string_to_integer(str_to_integer_data, integer_type):
     query = str_to_integer_data.select(pl.col("a").cast(integer_type))
@@ -512,3 +521,23 @@ def test_concat_horizontal(ldf, ignore_nulls, separator):
         pl.concat_str(["a", "c"], separator=separator, ignore_nulls=ignore_nulls)
     )
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("ascii_case_insensitive", [True, False])
+def test_contains_any(ldf, ascii_case_insensitive):
+    q = ldf.select(
+        pl.col("a").str.contains_any(
+            ["a", "b", "c"], ascii_case_insensitive=ascii_case_insensitive
+        )
+    )
+    assert_gpu_result_equal(q)
+
+
+def test_count_matches(ldf):
+    q = ldf.select(pl.col("a").str.count_matches("a"))
+    assert_gpu_result_equal(q)
+
+
+def test_count_matches_literal_unsupported(ldf):
+    q = ldf.select(pl.col("a").str.count_matches("a", literal=True))
+    assert_ir_translation_raises(q, NotImplementedError)
