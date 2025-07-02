@@ -541,3 +541,13 @@ def test_count_matches(ldf):
 def test_count_matches_literal_unsupported(ldf):
     q = ldf.select(pl.col("a").str.count_matches("a", literal=True))
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_strip_prefix(ldf):
+    q = ldf.select(pl.col("a").str.strip_prefix("A"))
+    assert_gpu_result_equal(q)
+
+
+def test_strip_suffix(ldf):
+    q = ldf.select(pl.col("a").str.strip_suffix("e"))
+    assert_gpu_result_equal(q)

@@ -107,6 +107,8 @@ class StringFunction(Expr):
         Name.StripChars,
         Name.StripCharsStart,
         Name.StripCharsEnd,
+        Name.StripPrefix,
+        Name.StripSuffix,
         Name.Uppercase,
         Name.Reverse,
         Name.Tail,
@@ -348,6 +350,50 @@ class StringFunction(Expr):
                     column.obj,
                     plc.Scalar.from_py(start, plc.DataType(plc.TypeId.INT32)),
                     plc.Scalar.from_py(stop, plc.DataType(plc.TypeId.INT32)),
+                ),
+                dtype=self.dtype,
+            )
+        elif self.name is StringFunction.Name.StripPrefix:
+            child, expr = self.children
+            column = child.evaluate(df, context=context).obj
+            assert isinstance(expr, Literal)
+            prefix = plc.Scalar.from_py(expr.value, expr.dtype.plc)
+            starts_with = plc.strings.find.starts_with(
+                column,
+                prefix,
+            )
+            prefix_sliced = plc.strings.slice.slice_strings(
+                column,
+                plc.Scalar.from_py(len(expr.value), plc.DataType(plc.TypeId.INT32)),
+                plc.Scalar.from_py(None, plc.DataType(plc.TypeId.INT32)),
+            )
+            return Column(
+                plc.copying.copy_if_else(
+                    prefix_sliced,
+                    column,
+                    starts_with,
+                ),
+                dtype=self.dtype,
+            )
+        elif self.name is StringFunction.Name.StripSuffix:
+            child, expr = self.children
+            column = child.evaluate(df, context=context).obj
+            assert isinstance(expr, Literal)
+            suffix = plc.Scalar.from_py(expr.value, expr.dtype.plc)
+            ends_with = plc.strings.find.ends_with(
+                column,
+                suffix,
+            )
+            suffix_sliced = plc.strings.slice.slice_strings(
+                column,
+                plc.Scalar.from_py(0, plc.DataType(plc.TypeId.INT32)),
+                plc.Scalar.from_py(-len(expr.value), plc.DataType(plc.TypeId.INT32)),
+            )
+            return Column(
+                plc.copying.copy_if_else(
+                    suffix_sliced,
+                    column,
+                    ends_with,
                 ),
                 dtype=self.dtype,
             )
