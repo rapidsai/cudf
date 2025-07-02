@@ -324,6 +324,19 @@ class ConfigOptions:
         user_parquet_options = engine.config.get("parquet_options", {})
         user_raise_on_fail = engine.config.get("raise_on_fail", False)
 
+        # Backward compatibility for "cardinality_factor"
+        # TODO: Remove this in 25.10
+        if "cardinality_factor" in user_executor_options:
+            warnings.warn(
+                "The 'cardinality_factor' configuration is deprecated. "
+                "Please use 'unique_fraction' instead.",
+                FutureWarning,
+                stacklevel=2,
+            )
+            cardinality_factor = user_executor_options.pop("cardinality_factor")
+            if "unique_fraction" not in user_executor_options:
+                user_executor_options["unique_fraction"] = cardinality_factor
+
         # These are user-provided options, so we need to actually validate
         # them.
 
