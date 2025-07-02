@@ -99,6 +99,8 @@ class StringFunction(Expr):
         Name.EndsWith,
         Name.Head,
         Name.JsonPathMatch,
+        Name.LenBytes,
+        Name.LenChars,
         Name.Lowercase,
         Name.Replace,
         Name.ReplaceMany,
@@ -328,6 +330,22 @@ class StringFunction(Expr):
             json_path = plc.Scalar.from_py(expr.value, expr.dtype.plc)
             return Column(
                 plc.json.get_json_object(column, json_path),
+                dtype=self.dtype,
+            )
+        elif self.name is StringFunction.Name.LenBytes:
+            column = self.children[0].evaluate(df, context=context).obj
+            return Column(
+                plc.unary.cast(
+                    plc.strings.attributes.count_bytes(column), self.dtype.plc
+                ),
+                dtype=self.dtype,
+            )
+        elif self.name is StringFunction.Name.LenChars:
+            column = self.children[0].evaluate(df, context=context).obj
+            return Column(
+                plc.unary.cast(
+                    plc.strings.attributes.count_characters(column), self.dtype.plc
+                ),
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.Slice:
