@@ -159,8 +159,8 @@ class StringFunction(Expr):
                 self._regex_program = self._create_regex_program(pattern)
         elif self.name is StringFunction.Name.Extract:
             (group_index,) = self.options
-            if group_index != 1:
-                raise NotImplementedError("Extract only supports group_index=1")
+            if group_index == 0:
+                raise NotImplementedError(f"{group_index=} is not supported")
             literal_expr = self.children[1]
             assert isinstance(literal_expr, Literal)
             pattern = literal_expr.value
@@ -333,12 +333,14 @@ class StringFunction(Expr):
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.Extract:
+            (group_index,) = self.options
             column = self.children[0].evaluate(df, context=context).obj
-            plc_table = plc.strings.extract.extract(
-                column,
-                self._regex_program,
+            return Column(
+                plc.strings.extract.extract_single(
+                    column, self._regex_program, group_index - 1
+                ),
+                dtype=self.dtype,
             )
-            return Column(plc_table.columns()[0], dtype=self.dtype)
         elif self.name is StringFunction.Name.ExtractGroups:
             column = self.children[0].evaluate(df, context=context).obj
             plc_table = plc.strings.extract.extract(
