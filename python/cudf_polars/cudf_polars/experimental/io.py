@@ -533,10 +533,7 @@ class PqSourceStats(DataSourceStats):
             )
             result = {
                 "exact": exact,
-                "fraction": max(
-                    min(1.0, row_group_unique_count / row_group_num_rows),
-                    0.00001,
-                ),
+                "fraction": row_group_unique_count / row_group_num_rows,
             }
             # Assume that if every row is unique then this is a
             # primary key otherwise it's a foreign key and we
@@ -633,6 +630,7 @@ class DataFrameSourceStats(DataSourceStats):
 
     def __init__(self, df: Any):
         self._df = df
+        self._key_columns: set[str] = set()
         self._unique_stats: dict[str, UniqueInfo] = {}
 
     @functools.cached_property
@@ -644,7 +642,7 @@ class DataFrameSourceStats(DataSourceStats):
         """Return unique-value statistics."""
         if column not in self._unique_stats:
             count = pl.DataFrame._from_pydf(self._df).n_unique(subset=[column])
-            fraction = max(min(count / self.row_count, 1.0), 0.00001)
+            fraction = count / self.row_count
             self._unique_stats[column] = UniqueInfo(
                 count=count,
                 fraction=fraction,
