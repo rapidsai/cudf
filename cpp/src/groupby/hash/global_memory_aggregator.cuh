@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,8 +48,8 @@ struct update_target_element_gmem<
                              cuda::std::byte* source,
                              cudf::size_type source_index) const noexcept
   {
-    using DeviceType          = cudf::detail::underlying_target_t<Source, aggregation::MIN>;
-    DeviceType* source_casted = reinterpret_cast<DeviceType*>(source);
+    using DeviceType    = cudf::detail::underlying_target_t<Source, aggregation::MIN>;
+    auto* source_casted = reinterpret_cast<DeviceType*>(source);
     cudf::detail::atomic_min(&target.element<DeviceType>(target_index),
                              static_cast<DeviceType>(source_casted[source_index]));
 
@@ -68,8 +68,8 @@ struct update_target_element_gmem<
                              cuda::std::byte* source,
                              cudf::size_type source_index) const noexcept
   {
-    using DeviceType          = cudf::detail::underlying_target_t<Source, aggregation::MAX>;
-    DeviceType* source_casted = reinterpret_cast<DeviceType*>(source);
+    using DeviceType    = cudf::detail::underlying_target_t<Source, aggregation::MAX>;
+    auto* source_casted = reinterpret_cast<DeviceType*>(source);
     cudf::detail::atomic_max(&target.element<DeviceType>(target_index),
                              static_cast<DeviceType>(source_casted[source_index]));
 
@@ -89,8 +89,29 @@ struct update_target_element_gmem<
                              cuda::std::byte* source,
                              cudf::size_type source_index) const noexcept
   {
-    using DeviceType          = cudf::detail::underlying_target_t<Source, aggregation::SUM>;
-    DeviceType* source_casted = reinterpret_cast<DeviceType*>(source);
+    using DeviceType    = cudf::detail::underlying_target_t<Source, aggregation::SUM>;
+    auto* source_casted = reinterpret_cast<DeviceType*>(source);
+    cudf::detail::atomic_add(&target.element<DeviceType>(target_index),
+                             static_cast<DeviceType>(source_casted[source_index]));
+
+    if (target.is_null(target_index)) { target.set_valid(target_index); }
+  }
+};
+
+template <typename Source>
+struct update_target_element_gmem<
+  Source,
+  cudf::aggregation::SUM_ANSI,
+  cuda::std::enable_if_t<cudf::is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
+                         !cudf::is_timestamp<Source>()>> {
+  __device__ void operator()(cudf::mutable_column_device_view target,
+                             cudf::size_type target_index,
+                             cudf::column_device_view source_column,
+                             cuda::std::byte* source,
+                             cudf::size_type source_index) const noexcept
+  {
+    using DeviceType    = cudf::detail::underlying_target_t<Source, aggregation::SUM_ANSI>;
+    auto* source_casted = reinterpret_cast<DeviceType*>(source);
     cudf::detail::atomic_add(&target.element<DeviceType>(target_index),
                              static_cast<DeviceType>(source_casted[source_index]));
 
@@ -112,8 +133,8 @@ struct update_target_element_gmem<
   {
     using Target = cudf::detail::target_type_t<Source, cudf::aggregation::SUM_OF_SQUARES>;
 
-    Target* source_casted = reinterpret_cast<Target*>(source);
-    Target value          = static_cast<Target>(source_casted[source_index]);
+    auto* source_casted = reinterpret_cast<Target*>(source);
+    auto value          = static_cast<Target>(source_casted[source_index]);
 
     cudf::detail::atomic_add(&target.element<Target>(target_index), value);
 
@@ -134,7 +155,7 @@ struct update_target_element_gmem<
   {
     using Target = cudf::detail::target_type_t<Source, cudf::aggregation::PRODUCT>;
 
-    Target* source_casted = reinterpret_cast<Target*>(source);
+    auto* source_casted = reinterpret_cast<Target*>(source);
     cudf::detail::atomic_mul(&target.element<Target>(target_index),
                              static_cast<Target>(source_casted[source_index]));
 
@@ -158,7 +179,7 @@ struct update_target_element_gmem<
   {
     using Target = cudf::detail::target_type_t<Source, cudf::aggregation::COUNT_VALID>;
 
-    Target* source_casted = reinterpret_cast<Target*>(source);
+    auto* source_casted = reinterpret_cast<Target*>(source);
     cudf::detail::atomic_add(&target.element<Target>(target_index),
                              static_cast<Target>(source_casted[source_index]));
 
@@ -180,7 +201,7 @@ struct update_target_element_gmem<
   {
     using Target = cudf::detail::target_type_t<Source, cudf::aggregation::COUNT_ALL>;
 
-    Target* source_casted = reinterpret_cast<Target*>(source);
+    auto* source_casted = reinterpret_cast<Target*>(source);
     cudf::detail::atomic_add(&target.element<Target>(target_index),
                              static_cast<Target>(source_casted[source_index]));
 
@@ -201,7 +222,7 @@ struct update_target_element_gmem<
                              cudf::size_type source_index) const noexcept
   {
     using Target             = cudf::detail::target_type_t<Source, cudf::aggregation::ARGMAX>;
-    Target* source_casted    = reinterpret_cast<Target*>(source);
+    auto* source_casted      = reinterpret_cast<Target*>(source);
     auto source_argmax_index = source_casted[source_index];
     auto old                 = cudf::detail::atomic_cas(
       &target.element<Target>(target_index), cudf::detail::ARGMAX_SENTINEL, source_argmax_index);
@@ -229,7 +250,7 @@ struct update_target_element_gmem<
                              cudf::size_type source_index) const noexcept
   {
     using Target             = cudf::detail::target_type_t<Source, cudf::aggregation::ARGMIN>;
-    Target* source_casted    = reinterpret_cast<Target*>(source);
+    auto* source_casted      = reinterpret_cast<Target*>(source);
     auto source_argmin_index = source_casted[source_index];
     auto old                 = cudf::detail::atomic_cas(
       &target.element<Target>(target_index), cudf::detail::ARGMIN_SENTINEL, source_argmin_index);

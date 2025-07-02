@@ -40,6 +40,8 @@ class simple_aggregations_collector {  // Declares the interface for the simple 
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class sum_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
+                                                          class sum_ansi_aggregation const& agg);
+  virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class product_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class min_aggregation const& agg);
@@ -116,6 +118,7 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
   // Declare overloads for each kind of a agg to dispatch
   virtual void visit(aggregation const& agg);
   virtual void visit(class sum_aggregation const& agg);
+  virtual void visit(class sum_ansi_aggregation const& agg);
   virtual void visit(class product_aggregation const& agg);
   virtual void visit(class min_aggregation const& agg);
   virtual void visit(class max_aggregation const& agg);
@@ -168,6 +171,30 @@ class sum_aggregation final : public rolling_aggregation,
   [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<sum_aggregation>(*this);
+  }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
+};
+
+/**
+ * @brief Derived class for specifying a sum_ansi aggregation
+ */
+class sum_ansi_aggregation final : public rolling_aggregation,
+                                   public groupby_aggregation,
+                                   public groupby_scan_aggregation,
+                                   public reduce_aggregation,
+                                   public scan_aggregation,
+                                   public segmented_reduce_aggregation {
+ public:
+  sum_ansi_aggregation() : aggregation(SUM_ANSI) {}
+
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
+  {
+    return std::make_unique<sum_ansi_aggregation>(*this);
   }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
@@ -1348,7 +1375,7 @@ struct target_type_impl<Source,
 
 constexpr bool is_sum_product_agg(aggregation::Kind k)
 {
-  return (k == aggregation::SUM) || (k == aggregation::PRODUCT) ||
+  return (k == aggregation::SUM) || (k == aggregation::SUM_ANSI) || (k == aggregation::PRODUCT) ||
          (k == aggregation::SUM_OF_SQUARES);
 }
 
@@ -1369,6 +1396,15 @@ struct target_type_impl<
   using type = Source;
 };
 
+// SUM_ANSI is only supported for INT64 types
+template <typename Source, aggregation::Kind k>
+struct target_type_impl<
+  Source,
+  k,
+  std::enable_if_t<std::is_same_v<Source, int64_t> && (k == aggregation::SUM_ANSI)>> {
+  using type = int64_t;
+};
+
 // Summing/Multiplying float/doubles, use same type accumulator
 template <typename Source, aggregation::Kind k>
 struct target_type_impl<
@@ -1383,6 +1419,14 @@ template <typename Source, aggregation::Kind k>
 struct target_type_impl<Source,
                         k,
                         std::enable_if_t<is_duration<Source>() && (k == aggregation::SUM)>> {
+  using type = Source;
+};
+
+// Summing ANSI duration types, use same type accumulator
+template <typename Source, aggregation::Kind k>
+struct target_type_impl<Source,
+                        k,
+                        std::enable_if_t<is_duration<Source>() && (k == aggregation::SUM_ANSI)>> {
   using type = Source;
 };
 
@@ -1599,6 +1643,8 @@ CUDF_HOST_DEVICE inline decltype(auto) aggregation_dispatcher(aggregation::Kind 
   switch (k) {
     case aggregation::SUM:
       return f.template operator()<aggregation::SUM>(std::forward<Ts>(args)...);
+    case aggregation::SUM_ANSI:
+      return f.template operator()<aggregation::SUM_ANSI>(std::forward<Ts>(args)...);
     case aggregation::PRODUCT:
       return f.template operator()<aggregation::PRODUCT>(std::forward<Ts>(args)...);
     case aggregation::MIN:

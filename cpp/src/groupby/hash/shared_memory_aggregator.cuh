@@ -53,7 +53,7 @@ struct update_target_element_shmem<
     using DeviceTarget = cudf::detail::underlying_target_t<Source, aggregation::MIN>;
     using DeviceSource = cudf::detail::underlying_source_t<Source, aggregation::MIN>;
 
-    DeviceTarget* target_casted = reinterpret_cast<DeviceTarget*>(target);
+    auto* target_casted = reinterpret_cast<DeviceTarget*>(target);
     cudf::detail::atomic_min(&target_casted[target_index],
                              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
 
@@ -75,7 +75,7 @@ struct update_target_element_shmem<
     using DeviceTarget = cudf::detail::underlying_target_t<Source, aggregation::MAX>;
     using DeviceSource = cudf::detail::underlying_source_t<Source, aggregation::MAX>;
 
-    DeviceTarget* target_casted = reinterpret_cast<DeviceTarget*>(target);
+    auto* target_casted = reinterpret_cast<DeviceTarget*>(target);
     cudf::detail::atomic_max(&target_casted[target_index],
                              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
 
@@ -98,7 +98,30 @@ struct update_target_element_shmem<
     using DeviceTarget = cudf::detail::underlying_target_t<Source, aggregation::SUM>;
     using DeviceSource = cudf::detail::underlying_source_t<Source, aggregation::SUM>;
 
-    DeviceTarget* target_casted = reinterpret_cast<DeviceTarget*>(target);
+    auto* target_casted = reinterpret_cast<DeviceTarget*>(target);
+    cudf::detail::atomic_add(&target_casted[target_index],
+                             static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
+
+    set_mask(target_mask + target_index);
+  }
+};
+
+template <typename Source>
+struct update_target_element_shmem<
+  Source,
+  cudf::aggregation::SUM_ANSI,
+  cuda::std::enable_if_t<cudf::is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
+                         !cudf::is_timestamp<Source>()>> {
+  __device__ void operator()(cuda::std::byte* target,
+                             bool* target_mask,
+                             cudf::size_type target_index,
+                             cudf::column_device_view source,
+                             cudf::size_type source_index) const noexcept
+  {
+    using DeviceTarget = cudf::detail::underlying_target_t<Source, aggregation::SUM_ANSI>;
+    using DeviceSource = cudf::detail::underlying_source_t<Source, aggregation::SUM_ANSI>;
+
+    auto* target_casted = reinterpret_cast<DeviceTarget*>(target);
     cudf::detail::atomic_add(&target_casted[target_index],
                              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
 
@@ -117,9 +140,9 @@ struct update_target_element_shmem<
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
-    using Target          = cudf::detail::target_type_t<Source, cudf::aggregation::SUM_OF_SQUARES>;
-    Target* target_casted = reinterpret_cast<Target*>(target);
-    auto value            = static_cast<Target>(source.element<Source>(source_index));
+    using Target        = cudf::detail::target_type_t<Source, cudf::aggregation::SUM_OF_SQUARES>;
+    auto* target_casted = reinterpret_cast<Target*>(target);
+    auto value          = static_cast<Target>(source.element<Source>(source_index));
     cudf::detail::atomic_add(&target_casted[target_index], value * value);
 
     set_mask(target_mask + target_index);
@@ -137,8 +160,8 @@ struct update_target_element_shmem<
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
-    using Target          = cudf::detail::target_type_t<Source, cudf::aggregation::PRODUCT>;
-    Target* target_casted = reinterpret_cast<Target*>(target);
+    using Target        = cudf::detail::target_type_t<Source, cudf::aggregation::PRODUCT>;
+    auto* target_casted = reinterpret_cast<Target*>(target);
     cudf::detail::atomic_mul(&target_casted[target_index],
                              static_cast<Target>(source.element<Source>(source_index)));
 
@@ -159,8 +182,8 @@ struct update_target_element_shmem<
                              cudf::size_type source_index) const noexcept
   {
     // The nullability was checked prior to this call in the `shmem_element_aggregator` functor
-    using Target          = cudf::detail::target_type_t<Source, cudf::aggregation::COUNT_VALID>;
-    Target* target_casted = reinterpret_cast<Target*>(target);
+    using Target        = cudf::detail::target_type_t<Source, cudf::aggregation::COUNT_VALID>;
+    auto* target_casted = reinterpret_cast<Target*>(target);
     cudf::detail::atomic_add(&target_casted[target_index], Target{1});
   }
 };
@@ -177,8 +200,8 @@ struct update_target_element_shmem<
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
-    using Target          = cudf::detail::target_type_t<Source, cudf::aggregation::COUNT_ALL>;
-    Target* target_casted = reinterpret_cast<Target*>(target);
+    using Target        = cudf::detail::target_type_t<Source, cudf::aggregation::COUNT_ALL>;
+    auto* target_casted = reinterpret_cast<Target*>(target);
     cudf::detail::atomic_add(&target_casted[target_index], Target{1});
 
     // Assumes target is already set to be valid
@@ -197,9 +220,9 @@ struct update_target_element_shmem<
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
-    using Target          = cudf::detail::target_type_t<Source, cudf::aggregation::ARGMAX>;
-    Target* target_casted = reinterpret_cast<Target*>(target);
-    auto old              = cudf::detail::atomic_cas(
+    using Target        = cudf::detail::target_type_t<Source, cudf::aggregation::ARGMAX>;
+    auto* target_casted = reinterpret_cast<Target*>(target);
+    auto old            = cudf::detail::atomic_cas(
       &target_casted[target_index], cudf::detail::ARGMAX_SENTINEL, source_index);
     if (old != cudf::detail::ARGMAX_SENTINEL) {
       while (source.element<Source>(source_index) > source.element<Source>(old)) {
@@ -223,9 +246,9 @@ struct update_target_element_shmem<
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
-    using Target          = cudf::detail::target_type_t<Source, cudf::aggregation::ARGMIN>;
-    Target* target_casted = reinterpret_cast<Target*>(target);
-    auto old              = cudf::detail::atomic_cas(
+    using Target        = cudf::detail::target_type_t<Source, cudf::aggregation::ARGMIN>;
+    auto* target_casted = reinterpret_cast<Target*>(target);
+    auto old            = cudf::detail::atomic_cas(
       &target_casted[target_index], cudf::detail::ARGMIN_SENTINEL, source_index);
     if (old != cudf::detail::ARGMIN_SENTINEL) {
       while (source.element<Source>(source_index) < source.element<Source>(old)) {

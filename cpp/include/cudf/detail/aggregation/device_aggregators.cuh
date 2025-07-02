@@ -32,7 +32,8 @@ namespace cudf::detail {
 template <aggregation::Kind k>
 __device__ constexpr bool uses_underlying_type()
 {
-  return k == aggregation::MIN or k == aggregation::MAX or k == aggregation::SUM;
+  return k == aggregation::MIN or k == aggregation::MAX or k == aggregation::SUM or
+         k == aggregation::SUM_ANSI;
 }
 
 /// Gets the underlying target type for the given source type and aggregation kind
@@ -171,6 +172,47 @@ struct update_target_element<
                              size_type source_index) const noexcept
   {
     using Target       = target_type_t<Source, aggregation::SUM>;
+    using DeviceTarget = device_storage_type_t<Target>;
+    using DeviceSource = device_storage_type_t<Source>;
+
+    cudf::detail::atomic_add(&target.element<DeviceTarget>(target_index),
+                             static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
+
+    if (target.is_null(target_index)) { target.set_valid(target_index); }
+  }
+};
+
+template <typename Source>
+struct update_target_element<
+  Source,
+  aggregation::SUM_ANSI,
+  cuda::std::enable_if_t<cudf::is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
+                         !cudf::is_fixed_point<Source>() && !cudf::is_timestamp<Source>()>> {
+  __device__ void operator()(mutable_column_device_view target,
+                             size_type target_index,
+                             column_device_view source,
+                             size_type source_index) const noexcept
+  {
+    using Target = target_type_t<Source, aggregation::SUM_ANSI>;
+    cudf::detail::atomic_add(&target.element<Target>(target_index),
+                             static_cast<Target>(source.element<Source>(source_index)));
+
+    if (target.is_null(target_index)) { target.set_valid(target_index); }
+  }
+};
+
+template <typename Source>
+struct update_target_element<
+  Source,
+  aggregation::SUM_ANSI,
+  cuda::std::enable_if_t<is_fixed_point<Source>() &&
+                         cudf::has_atomic_support<device_storage_type_t<Source>>()>> {
+  __device__ void operator()(mutable_column_device_view target,
+                             size_type target_index,
+                             column_device_view source,
+                             size_type source_index) const noexcept
+  {
+    using Target       = target_type_t<Source, aggregation::SUM_ANSI>;
     using DeviceTarget = device_storage_type_t<Target>;
     using DeviceSource = device_storage_type_t<Source>;
 
