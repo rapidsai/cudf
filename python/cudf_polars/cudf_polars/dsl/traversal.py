@@ -85,7 +85,7 @@ def reuse_if_unchanged(
 def make_recursive(
     fn: Callable[[U_contra, GenericTransformer[U_contra, V_co, StateT_co]], V_co],
     *,
-    state: Mapping[str, Any] | None = None,
+    state: Mapping[str, Any],
 ) -> GenericTransformer[U_contra, V_co, StateT_co]:
     """
     No-op wrapper for recursive visitors.
@@ -122,7 +122,7 @@ def make_recursive(
     def rec(node: U_contra) -> V_co:
         return fn(node, rec)  # type: ignore[arg-type]
 
-    rec.state = state if state is not None else {}  # type: ignore[attr-defined]
+    rec.state = state  # type: ignore[attr-defined]
     return rec  # type: ignore[return-value]
 
 
