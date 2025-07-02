@@ -24,11 +24,11 @@ __all__ = ["ConfigOptions"]
 
 
 @functools.cache
-def rapidsmpf_available() -> bool:
+def rapidsmpf_available() -> bool:  # pragma: no cover
     """Query whether rapidsmpf is available as a shuffle method."""
     try:
         return importlib.util.find_spec("rapidsmpf.integrations.dask") is not None
-    except ImportError:
+    except (ImportError, ValueError):
         return False
 
 
