@@ -13,7 +13,11 @@ from cudf_polars.dsl.expressions.base import Col, NamedExpr
 from cudf_polars.dsl.ir import Distinct
 from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.dispatch import lower_ir_node
-from cudf_polars.experimental.utils import _fallback_inform, _lower_ir_fallback
+from cudf_polars.experimental.utils import (
+    _fallback_inform,
+    _get_unique_fractions,
+    _lower_ir_fallback,
+)
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -29,7 +33,7 @@ def lower_distinct(
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
     *,
-    cardinality: float | None = None,
+    unique_fraction: float | None = None,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     """
     Lower a Distinct IR into partition-wise stages.
@@ -46,8 +50,8 @@ def lower_distinct(
         associated partitioning information.
     config_options
         GPUEngine configuration options.
-    cardinality
-        Cardinality factor to use for algorithm selection.
+    unique_fraction
+        Fractional unique count to use for algorithm selection.
 
     Returns
     -------
@@ -112,14 +116,14 @@ def lower_distinct(
             # partitions. For now, we raise an error to fall back
             # to one partition.
             raise NotImplementedError("Unsupported slice for multiple partitions.")
-    elif cardinality is not None:
-        # Use cardinality to determine partitioningcardinality
-        n_ary = min(max(int(1.0 / cardinality), 2), child_count)
-        output_count = max(int(cardinality * child_count), 1)
+    elif unique_fraction is not None:
+        # Use unique_fraction to determine partitioning
+        n_ary = min(max(int(1.0 / unique_fraction), 2), child_count)
+        output_count = max(int(unique_fraction * child_count), 1)
 
     if output_count > 1 and require_tree_reduction:
         # Need to reduce down to a single partition even
-        # if the cardinality is large.
+        # if the unique_fraction is large.
         output_count = 1
         _fallback_inform(
             "Unsupported unique options for multiple partitions.",
@@ -168,20 +172,22 @@ def _(
         "'in-memory' executor not supported in 'lower_ir_node'"
     )
 
-    subset: frozenset = ir.subset or frozenset(ir.schema)
-    cardinality_factor = {
-        c: max(min(f, 1.0), 0.00001)
-        for c, f in config_options.executor.cardinality_factor.items()
-        if c in subset
-    }
-    cardinality = max(cardinality_factor.values()) if cardinality_factor else None
+    subset: frozenset[str] = ir.subset or frozenset(ir.schema)
+    unique_fraction_dict = _get_unique_fractions(
+        tuple(subset),
+        config_options.executor.unique_fraction,
+    )
+    unique_fraction = (
+        max(unique_fraction_dict.values()) if unique_fraction_dict else None
+    )
+
     try:
         return lower_distinct(
             ir,
             child,
             partition_info,
             config_options,
-            cardinality=cardinality,
+            unique_fraction=unique_fraction,
         )
     except NotImplementedError as err:
         return _lower_ir_fallback(ir, rec, msg=str(err))
