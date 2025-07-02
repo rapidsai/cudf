@@ -97,6 +97,7 @@ class StringFunction(Expr):
         Name.Contains,
         Name.CountMatches,
         Name.EndsWith,
+        Name.Find,
         Name.Head,
         Name.Lowercase,
         Name.Replace,
@@ -171,6 +172,19 @@ class StringFunction(Expr):
                     raise NotImplementedError(
                         f"Unsupported regex {pattern} for GPU engine."
                     ) from e
+        if self.name is StringFunction.Name.Find:
+            literal, strict = self.options
+            if not literal:
+                if not strict:
+                    raise NotImplementedError(
+                        f"{strict=} is not supported for regex contains"
+                    )
+                if not isinstance(self.children[1], Literal):
+                    raise NotImplementedError(
+                        "Regex contains only supports a scalar pattern"
+                    )
+                pattern = self.children[1].value
+                self._regex_program = self._create_regex_program(pattern)
         elif self.name is StringFunction.Name.Replace:
             _, literal = self.options
             if not literal:
@@ -226,6 +240,21 @@ class StringFunction(Expr):
                 raise NotImplementedError(
                     "strip operations only support scalar patterns"
                 )
+
+    @staticmethod
+    def _create_regex_program(
+        pattern: str,
+        flags: plc.strings.regex_flags.RegexFlags = plc.strings.regex_flags.RegexFlags.DEFAULT,
+    ) -> plc.strings.regex_program.RegexProgram:
+        try:
+            return plc.strings.regex_program.RegexProgram.create(
+                pattern,
+                flags=flags,
+            )
+        except RuntimeError as e:
+            raise NotImplementedError(
+                f"Unsupported regex {pattern} for GPU engine."
+            ) from e
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
@@ -320,6 +349,34 @@ class StringFunction(Expr):
                 ),
                 dtype=self.dtype,
             )
+        elif self.name is StringFunction.Name.Find:
+            literal, _ = self.options
+            (child, expr) = self.children
+            column = child.evaluate(df, context=context).obj
+            if literal:
+                assert isinstance(expr, Literal)
+                plc_column = plc.strings.find.find(
+                    column,
+                    plc.Scalar.from_py(expr.value, expr.dtype.plc),
+                )
+            else:
+                plc_column = plc.strings.findall.find_re(
+                    column,
+                    self._regex_program,
+                )
+            # Polars returns None for not found, libcudf returns -1
+            new_mask, null_count = plc.transform.bools_to_mask(
+                plc.binaryop.binary_operation(
+                    plc_column,
+                    plc.Scalar.from_py(-1, plc_column.type()),
+                    plc.binaryop.BinaryOperator.NOT_EQUAL,
+                    plc.DataType(plc.TypeId.BOOL8),
+                )
+            )
+            plc_column = plc.unary.cast(
+                plc_column.with_mask(new_mask, null_count), self.dtype.plc
+            )
+            return Column(plc_column, dtype=self.dtype)
         elif self.name is StringFunction.Name.Slice:
             child, expr_offset, expr_length = self.children
             assert isinstance(expr_offset, Literal)
