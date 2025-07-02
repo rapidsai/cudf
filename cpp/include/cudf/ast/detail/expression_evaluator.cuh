@@ -34,12 +34,6 @@
 
 namespace cudf::ast::detail {
 
-CUDF_HOST_DEVICE constexpr bool is_complex_type(cudf::type_id type)
-{
-  return type == cudf::type_id::DECIMAL32 || type == cudf::type_id::DECIMAL64 ||
-         type == cudf::type_id::DECIMAL128 || type == cudf::type_id::STRING;
-}
-
 /**
  * @brief Maps void for string and decimal types
  *
