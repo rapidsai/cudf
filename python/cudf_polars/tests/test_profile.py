@@ -8,8 +8,7 @@ import polars as pl
 from polars.testing import assert_frame_equal
 
 
-@pytest.mark.parametrize("executor", ["in-memory", "streaming"])
-def test_profile_basic(executor: str) -> None:
+def test_profile_basic() -> None:
     df = pl.LazyFrame(
         {
             "a": [1, 2, 1, 3, 5, None, None],
@@ -20,8 +19,19 @@ def test_profile_basic(executor: str) -> None:
     )
 
     q = df.sort("a").group_by("a", pl.col("b")).agg(pl.col("d").sum())
-    result, timings = q.profile(engine=pl.GPUEngine(executor=executor))
+    result, timings = q.profile(engine=pl.GPUEngine(executor="in-memory"))
 
     assert "gpu-ir-translation" in timings["node"]
 
     assert_frame_equal(result, q.collect(engine="in-memory"), check_row_order=False)
+
+
+def test_profile_streaming_raises() -> None:
+    df = pl.LazyFrame({"a": [1, 2, 3, 4]})
+    q = df.sort("a").group_by("a").len()
+
+    with pytest.raises(
+        NotImplementedError,
+        match=r"profile\(\) is not supported with the streaming executor.",
+    ):
+        q.profile(engine=pl.GPUEngine(executor="streaming"))

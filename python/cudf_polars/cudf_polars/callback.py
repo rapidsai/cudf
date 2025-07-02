@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import textwrap
 import time
 import warnings
 from functools import cache, partial
@@ -236,6 +237,18 @@ def _callback(
                 return df, timer.timings
         elif config_options.executor.name == "streaming":
             from cudf_polars.experimental.parallel import evaluate_streaming
+
+            if timer is not None:
+                msg = textwrap.dedent("""\
+                    profile() is not supported with the streaming executor.
+
+                    To profile execution with the streaming executor and 'synchronous' scheduler,
+                    use NVIDIA NSight Systems.
+
+                    To profile execution with the streaming executor and 'distributed' scheduler,
+                    use Dask's built-in profiling tools.
+                    """)
+                raise NotImplementedError(msg)
 
             df = evaluate_streaming(ir, config_options).to_polars()
             if timer is None:

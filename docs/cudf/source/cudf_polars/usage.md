@@ -30,12 +30,12 @@ With `raise_on_fail=True`, the query will raise an exception if it cannot be run
 
 ## GPU Profiling
 
-With the default `"streaming"` executor, we recommend using [NVIDIA NSight Systems](https://developer.nvidia.com/nsight-systems) to profile your queries.
+The `streaming` executor does not support profiling query execution through the `LazyFrame.profile` method. With the default `synchronous` scheduler for the `streaming` executor, we recommend using [NVIDIA NSight Systems](https://developer.nvidia.com/nsight-systems) to profile your queries.
 cudf-polars includes [nvtx](https://nvidia.github.io/NVTX/) annotations to help you understand where time is being spent.
 
-With the `"distributed"` scheduler for the `"streaming"` executor, we recommend using Dask's [built-in diagnostics](https://docs.dask.org/en/stable/diagnostics-distributed.html).
+With the `distributed` scheduler for the `streaming` executor, we recommend using Dask's [built-in diagnostics](https://docs.dask.org/en/stable/diagnostics-distributed.html).
 
-Finally, with the `"in-memory"` executor you can profile your code using [`LazyFrame.profile`](https://docs.pola.rs/api/python/stable/reference/lazyframe/api/polars.LazyFrame.profile.html).
+Finally, with the `"in-memory"` does support [`LazyFrame.profile`](https://docs.pola.rs/api/python/stable/reference/lazyframe/api/polars.LazyFrame.profile.html).
 
 ```python
 import polars as pl
