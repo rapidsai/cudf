@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import math
+
 import pytest
 
 import polars as pl
@@ -58,3 +60,40 @@ def test_dataframescan_concat(df):
     )
     df2 = pl.concat([df, df])
     assert_gpu_result_equal(df2, engine=engine)
+
+
+def test_source_statistics(df):
+    from cudf_polars.experimental.io import _extract_dataframescan_source_stats
+
+    row_count = df.collect().height
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "max_rows_per_partition": 1_000,
+            "scheduler": DEFAULT_SCHEDULER,
+        },
+    )
+    ir = Translator(df._ldf.visit(), engine).translate_ir()
+    column_stats = _extract_dataframescan_source_stats(ir)
+
+    # Source info is the same for all columns
+    source = column_stats["x"].source
+    assert source is column_stats["y"].source
+    assert source is column_stats["z"].source
+    assert source.row_count.value == row_count
+    assert source.row_count.exact
+
+    # Storage stats should be available
+    assert source.storage_size("x").value is None
+
+    # Check unique stats
+    assert source.unique("x").count == row_count
+    assert source.unique("x").fraction == 1.0
+    assert source.unique("x").exact
+    assert source.unique("y").count == 3
+    assert math.isclose(source.unique("y").fraction, 3 / row_count, abs_tol=1e-4)
+    assert source.unique("y").exact
+    assert source.unique("z").count == 5
+    assert math.isclose(source.unique("y").fraction, 5 / row_count, abs_tol=1e-4)
+    assert source.unique("z").exact

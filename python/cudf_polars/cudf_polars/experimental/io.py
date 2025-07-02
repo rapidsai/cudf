@@ -636,13 +636,18 @@ class DataFrameSourceStats(DataSourceStats):
     @functools.cached_property
     def row_count(self) -> RowCountInfo:
         """Data source row-count estimate."""
-        return RowCountInfo(value=self._df.height, exact=True)
+        return RowCountInfo(value=self._df.height(), exact=True)
 
     def unique(self, column: str) -> UniqueInfo:
         """Return unique-value statistics."""
         if column not in self._unique_stats:
-            count = pl.DataFrame._from_pydf(self._df).n_unique(subset=[column])
-            fraction = count / self.row_count
+            row_count = self.row_count.value
+            count = (
+                pl.DataFrame._from_pydf(self._df).n_unique(subset=[column])
+                if row_count
+                else 0
+            )
+            fraction = (count / row_count) if row_count else 1.0
             self._unique_stats[column] = UniqueInfo(
                 count=count,
                 fraction=fraction,

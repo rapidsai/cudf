@@ -84,3 +84,49 @@ def test_split_scan_predicate(tmp_path, df, mask):
         },
     )
     assert_gpu_result_equal(q, engine=engine)
+
+
+def test_source_statistics(tmp_path, df):
+    from cudf_polars.experimental.io import _extract_scan_source_stats
+
+    n_files = 3
+    make_partitioned_source(df, tmp_path, "parquet", n_files=n_files)
+    q = pl.scan_parquet(tmp_path)
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "target_partition_size": 10_000,
+            "scheduler": DEFAULT_SCHEDULER,
+        },
+    )
+    ir = Translator(q._ldf.visit(), engine).translate_ir()
+    column_stats = _extract_scan_source_stats(ir)
+
+    # Source info is the same for all columns
+    source = column_stats["x"].source
+    assert source is column_stats["y"].source
+    assert source is column_stats["z"].source
+    assert source.row_count.value == df.height
+    assert source.row_count.exact  # Sampled 3 files
+
+    # Storage stats should be available
+    assert source.storage_size("x").value > 0
+    assert source.storage_size("y").value > 0
+
+    # source._unique_stats should be empty
+    assert set(source._unique_stats) == set()
+
+    assert source.unique("x").count == df.height
+    assert source.unique("x").fraction == 1.0
+
+    # source._unique_stats should only contain 'x'
+    assert set(source._unique_stats) == {"x"}
+
+    # Mark 'z' as a key column, and query 'y' stats
+    source.add_unique_stats_column("z")
+    assert source.unique("y").count is None  # Sampled 1 row-group
+    assert source.unique("y").fraction < 1.0
+
+    # source._unique_stats should contain all columns now
+    assert set(source._unique_stats) == {"x", "y", "z"}
