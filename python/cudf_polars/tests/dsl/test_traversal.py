@@ -71,6 +71,24 @@ def test_post_traversal_unique():
     assert unique_exprs == [expr.Col(dt, "b"), expr.Col(dt, "a"), e3]
 
 
+def test_post_traversal_multi():
+    dt = DataType(pl.datatypes.Int8())
+
+    e1 = make_expr(dt, "a", "a")
+    e2 = make_expr(dt, "a", "b")
+    e3 = make_expr(dt, "b", "a")
+
+    unique_exprs = list(post_traversal([e1, e2, e3]))
+    assert len(unique_exprs) == 5
+    assert unique_exprs == [
+        expr.Col(dt, "b"),
+        expr.Col(dt, "a"),
+        e3,
+        e2,
+        e1,
+    ]
+
+
 def rename(e, rec):
     mapping = rec.state["mapping"]
     if isinstance(e, expr.Col) and e.name in mapping:
