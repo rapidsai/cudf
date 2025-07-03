@@ -562,3 +562,19 @@ def test_extract_group_index_0_unsupported(ldf_extract):
 def test_extract_groups(ldf_extract):
     q = ldf_extract.select(pl.col("a").str.extract_groups(r"(\S+) (\d+) (.+)"))
     assert_gpu_result_equal(q)
+
+
+def test_json_path_match():
+    df = pl.LazyFrame({"a": ['{"a":"1"}', None, '{"a":2}', '{"a":2.1}', '{"a":true}']})
+    q = df.select(pl.col("a").str.json_path_match("$.a"))
+    assert_gpu_result_equal(q)
+
+
+def test_len_bytes(ldf):
+    q = ldf.select(pl.col("a").str.len_bytes())
+    assert_gpu_result_equal(q)
+
+
+def test_len_chars(ldf):
+    q = ldf.select(pl.col("a").str.len_chars())
+    assert_gpu_result_equal(q)
