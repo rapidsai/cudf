@@ -260,22 +260,18 @@ class row_hasher {
   __device__ auto operator()(size_type row_index) const
   {
     // avoid hash combine call if there is only one column
-    auto hash =
-      cudf::type_dispatcher<dispatch_primitive_type>(_table.column(0).type(),
-                                                     element_hasher<Hash>{_has_nulls},
-                                                     _seed,
-                                                     _table.column(0),
-                                                     row_index);
+    auto hash = cudf::type_dispatcher<dispatch_primitive_type>(_table.column(0).type(),
+                                                               element_hasher<Hash>{_has_nulls},
+                                                               _seed,
+                                                               _table.column(0),
+                                                               row_index);
 
     element_hasher<Hash> hasher{_has_nulls};
     for (size_type i = 1; i < _table.num_columns(); ++i) {
       hash = cudf::hashing::detail::hash_combine(
         hash,
-        cudf::type_dispatcher<dispatch_primitive_type>(_table.column(i).type(),
-                                                       hasher,
-                                                       _seed,
-                                                       _table.column(i),
-                                                       row_index));
+        cudf::type_dispatcher<dispatch_primitive_type>(
+          _table.column(i).type(), hasher, _seed, _table.column(i), row_index));
     }
     return hash;
   }
