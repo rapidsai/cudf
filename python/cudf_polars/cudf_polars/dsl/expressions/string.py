@@ -399,7 +399,7 @@ class StringFunction(Expr):
             ref_column = children[0]
             if (remainder := n - len(children)) > 0:
                 children.extend(
-                    plc.Column.all_null_like(ref_column, remainder)
+                    plc.Column.all_null_like(ref_column, ref_column.size())
                     for _ in range(remainder + 1)
                 )
             plc_column = plc.Column(
