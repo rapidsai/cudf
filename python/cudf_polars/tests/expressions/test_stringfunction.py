@@ -234,6 +234,22 @@ def test_slice_column(slice_column_data):
 
 
 @pytest.fixture
+def ldf_split():
+    return pl.LazyFrame({"a": ["a b", "a_b", "a_b_c", "a_b c_d", None]})
+
+
+@pytest.mark.parametrize("n", [1, 2, 10])
+def test_split_extract(ldf_split, n):
+    query = ldf_split.select(pl.col("a").str.split_exact("_", n))
+    assert_gpu_result_equal(query)
+
+
+def test_split_extract_inclusive_unsupported(ldf_split):
+    query = ldf_split.select(pl.col("a").str.split_exact("_", 1, inclusive=True))
+    assert_ir_translation_raises(query, NotImplementedError)
+
+
+@pytest.fixture
 def to_datetime_data():
     return pl.LazyFrame(
         {

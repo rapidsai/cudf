@@ -105,6 +105,7 @@ class StringFunction(Expr):
         Name.Replace,
         Name.ReplaceMany,
         Name.Slice,
+        Name.SplitExact,
         Name.Strptime,
         Name.StartsWith,
         Name.StripChars,
@@ -212,6 +213,10 @@ class StringFunction(Expr):
                 raise NotImplementedError(
                     "Slice only supports literal start and stop values"
                 )
+        elif self.name is StringFunction.Name.SplitExact:
+            (_, inclusive) = self.options
+            if inclusive:
+                raise NotImplementedError(f"{inclusive=} is not supported for split")
         elif self.name is StringFunction.Name.Strptime:
             format, _, exact, cache = self.options
             if cache:
@@ -379,6 +384,34 @@ class StringFunction(Expr):
                 ),
                 dtype=self.dtype,
             )
+        elif self.name is StringFunction.Name.SplitExact:
+            (n, _) = self.options
+            child, expr = self.children
+            column = child.evaluate(df, context=context).obj
+            assert isinstance(expr, Literal)
+            by = plc.Scalar.from_py(expr.value, expr.dtype.plc)
+            plc_table = plc.strings.split.split.split(
+                column,
+                by,
+                -1,
+            )
+            children = plc_table.columns()
+            ref_column = children[0]
+            if (remainder := n - len(children)) > 0:
+                children.extend(
+                    plc.Column.all_null_like(ref_column, remainder)
+                    for _ in range(remainder + 1)
+                )
+            plc_column = plc.Column(
+                self.dtype.plc,
+                ref_column.size(),
+                None,
+                None,
+                0,
+                ref_column.offset(),
+                children[: n + 1],
+            )
+            return Column(plc_column, dtype=self.dtype)
         elif self.name in {
             StringFunction.Name.StripChars,
             StringFunction.Name.StripCharsStart,
