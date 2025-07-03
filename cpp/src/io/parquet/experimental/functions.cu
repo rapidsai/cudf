@@ -259,7 +259,6 @@ table_with_metadata read_parquet_and_apply_deletion_vector(
 table_with_metadata read_parquet_and_apply_serialized_deletion_vector(
   parquet_reader_options const& options,
   cudf::host_span<std::byte const> serialized_roaring64_bytes,
-  roaring64_serialization_format serialization_format,
   cudf::host_span<size_t const> row_group_offsets,
   cudf::host_span<size_type const> row_group_num_rows,
   rmm::cuda_stream_view stream,
@@ -269,23 +268,12 @@ table_with_metadata read_parquet_and_apply_serialized_deletion_vector(
     if (serialized_roaring64_bytes.empty()) { return nullptr; }
 
     // Deserialize the roaring64 bitmap from the frozen serialized bytes
-    auto roaring64_bitmap = [&]() {
-      if (serialization_format == roaring64_serialization_format::PORTABLE) {
-        auto roaring64_bitmap = roaring64_bitmap_portable_deserialize_safe(
-          reinterpret_cast<char const*>(serialized_roaring64_bytes.data()),
-          static_cast<size_t>(serialized_roaring64_bytes.size()));
-        CUDF_EXPECTS(roaring64_bitmap, "Failed to deserialize the portable roaring64 bitmap");
-        return roaring64_bitmap;
-      } else {
-        auto roaring64_bitmap = roaring64_bitmap_frozen_view(
-          reinterpret_cast<char const*>(serialized_roaring64_bytes.data()),
-          static_cast<size_t>(serialized_roaring64_bytes.size()));
-        CUDF_EXPECTS(roaring64_bitmap, "Failed to deserialize the frozen roaring64 bitmap");
-        return roaring64_bitmap;
-      }
-    }();
+    auto roaring64_bitmap = roaring64_bitmap_portable_deserialize_safe(
+      reinterpret_cast<char const*>(serialized_roaring64_bytes.data()),
+      static_cast<size_t>(serialized_roaring64_bytes.size()));
 
     // Validate the deserialized roaring64 bitmap
+    CUDF_EXPECTS(roaring64_bitmap, "Failed to deserialize the portable roaring64 bitmap");
     CUDF_EXPECTS(roaring64_bitmap_internal_validate(roaring64_bitmap, nullptr),
                  "Encountered an inconsistent roaring64 bitmap after deserialization");
 
