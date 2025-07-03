@@ -40,6 +40,38 @@ namespace detail {
 
 namespace {
 
+struct split_part_ws_tokenizer_fn : base_ws_split_tokenizer<split_part_ws_tokenizer_fn> {
+  __device__ void process_tokens(int64_t pos_begin,
+                                 int64_t pos_end,
+                                 device_span<int64_t const> delimiters,
+                                 device_span<string_index_pair> d_tokens) const
+  {
+    auto const base_ptr    = d_strings.head<char>();
+    auto const token_count = static_cast<size_type>(d_tokens.size());
+
+    auto token_idx = size_type{0};
+    auto last_pos  = pos_begin;
+    for (size_t di = 0; di < delimiters.size() && token_idx < token_count; ++di) {
+      auto const d_pos = delimiters[di];
+      if (last_pos == d_pos) {
+        ++last_pos;
+        continue;
+      }
+      d_tokens[token_idx++] = string_index_pair{base_ptr + last_pos, d_pos - last_pos};
+      last_pos              = d_pos + 1;
+    }
+    // include anything leftover
+    if (token_idx < token_count) {
+      d_tokens[token_idx] = string_index_pair{base_ptr + last_pos, pos_end - last_pos};
+    }
+  }
+
+  split_part_ws_tokenizer_fn(column_device_view const& d_strings, size_type index)
+    : base_ws_split_tokenizer(d_strings, index + 2)
+  {
+  }
+};
+
 template <typename Tokenizer, typename DelimiterFn>
 std::unique_ptr<column> split_part_fn(strings_column_view const& input,
                                       size_type index,
@@ -59,16 +91,16 @@ std::unique_ptr<column> split_part_fn(strings_column_view const& input,
 
   // get just the indexed value of each element
   auto d_indices = rmm::device_uvector<string_index_pair>(input.size(), stream);
-  thrust::transform(rmm::exec_policy(stream),
-                    thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(input.size()),
-                    d_indices.begin(),
-                    [d_offsets, d_tokens, index] __device__(size_type idx) {
-                      auto const offset      = d_offsets[idx];
-                      auto const token_count = static_cast<size_type>(d_offsets[idx + 1] - offset);
-                      return (index < token_count) ? d_tokens[offset + index]
-                                                   : string_index_pair{nullptr, 0};
-                    });
+  thrust::transform(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator<size_type>(0),
+    thrust::make_counting_iterator<size_type>(input.size()),
+    d_indices.begin(),
+    [d_offsets, d_tokens, index] __device__(size_type idx) {
+      auto const offset      = d_offsets[idx];
+      auto const token_count = static_cast<size_type>(d_offsets[idx + 1] - offset);
+      return (index < token_count) ? d_tokens[offset + index] : string_index_pair{nullptr, 0};
+    });
 
   return make_strings_column(d_indices.begin(), d_indices.end(), stream, mr);
 }
@@ -88,7 +120,7 @@ std::unique_ptr<column> split_part(strings_column_view const& input,
 
   auto d_strings = column_device_view::create(input.parent(), stream);
   if (delimiter.size() == 0) {
-    auto tokenizer = split_ws_tokenizer_fn{*d_strings, cuda::std::numeric_limits<size_type>::max()};
+    auto tokenizer    = split_part_ws_tokenizer_fn{*d_strings, index};
     auto delimiter_fn = whitespace_delimiter_fn{};
     return split_part_fn(input, index, tokenizer, delimiter_fn, stream, mr);
   }
