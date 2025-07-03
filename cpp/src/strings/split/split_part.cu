@@ -91,16 +91,16 @@ std::unique_ptr<column> split_part_fn(strings_column_view const& input,
 
   // get just the indexed value of each element
   auto d_indices = rmm::device_uvector<string_index_pair>(input.size(), stream);
-  thrust::transform(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(input.size()),
-    d_indices.begin(),
-    [d_offsets, d_tokens, index] __device__(size_type idx) {
-      auto const offset      = d_offsets[idx];
-      auto const token_count = static_cast<size_type>(d_offsets[idx + 1] - offset);
-      return (index < token_count) ? d_tokens[offset + index] : string_index_pair{nullptr, 0};
-    });
+  thrust::transform(rmm::exec_policy(stream),
+                    thrust::make_counting_iterator<size_type>(0),
+                    thrust::make_counting_iterator<size_type>(input.size()),
+                    d_indices.begin(),
+                    [d_offsets, d_tokens, index] __device__(size_type idx) {
+                      auto const offset      = d_offsets[idx];
+                      auto const token_count = static_cast<size_type>(d_offsets[idx + 1] - offset);
+                      return (index < token_count) ? d_tokens[offset + index]
+                                                   : string_index_pair{nullptr, 0};
+                    });
 
   return make_strings_column(d_indices.begin(), d_indices.end(), stream, mr);
 }
