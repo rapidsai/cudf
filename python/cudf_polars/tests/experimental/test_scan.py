@@ -87,7 +87,7 @@ def test_split_scan_predicate(tmp_path, df, mask):
 
 
 def test_source_statistics(tmp_path, df):
-    from cudf_polars.experimental.io import _extract_scan_source_stats
+    from cudf_polars.experimental.io import _extract_scan_stats
 
     n_files = 3
     make_partitioned_source(df, tmp_path, "parquet", n_files=n_files)
@@ -101,7 +101,7 @@ def test_source_statistics(tmp_path, df):
         },
     )
     ir = Translator(q._ldf.visit(), engine).translate_ir()
-    column_stats = _extract_scan_source_stats(ir)
+    column_stats = _extract_scan_stats(ir)
 
     # Source info is the same for all columns
     source = column_stats["x"].source

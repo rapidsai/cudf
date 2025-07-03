@@ -72,7 +72,7 @@ class RowCountInfo:
 
 class UniqueInfo:
     """
-    Unique-value statistics.
+    Unique-value information.
 
     Parameters
     ----------
@@ -81,7 +81,7 @@ class UniqueInfo:
     fraction
         Unique-value fraction.
     exact
-        Whether unique-value statistics are known exactly.
+        Whether the unique-value statistics are known exactly.
     """
 
     __slots__ = ("count", "exact", "fraction")
@@ -122,8 +122,17 @@ class StorageSizeInfo:
         self.exact = exact
 
 
-class DataSourceStats:
-    """Datasource statistics manager."""
+class DataSourceInfo:
+    """
+    Datasource information.
+
+    Notes
+    -----
+    This class should be sub-classed for specific
+    datasource types (e.g. Parquet, DataFrame, etc.).
+    The required properties/methods enable lazy
+    sampling of the underlying datasource.
+    """
 
     @property
     def row_count(self) -> RowCountInfo:
@@ -131,7 +140,7 @@ class DataSourceStats:
         return RowCountInfo()
 
     def unique(self, column: str) -> UniqueInfo:
-        """Return unique-value statistics."""
+        """Return unique-value information."""
         return UniqueInfo()
 
     def storage_size(self, column: str) -> StorageSizeInfo:
@@ -139,7 +148,7 @@ class DataSourceStats:
         return StorageSizeInfo()
 
     def add_unique_stats_column(self, column: str) -> None:
-        """Add a column needing unique-value statistics."""
+        """Add a column needing unique-value information."""
 
 
 class ColumnStats:
@@ -151,17 +160,17 @@ class ColumnStats:
     name
         Column name.
     source
-        Datasource statistics.
+        Datasource information.
     source_name
         Source-column name.
     unique_info
-        Unique-value statistics.
+        Unique-value information.
     """
 
     __slots__ = ("name", "source", "source_name", "unique_info")
 
     name: str
-    source: DataSourceStats
+    source: DataSourceInfo
     source_name: str
     unique_info: UniqueInfo
 
@@ -169,11 +178,11 @@ class ColumnStats:
         self,
         name: str,
         *,
-        source: DataSourceStats | None = None,
+        source: DataSourceInfo | None = None,
         source_name: str | None = None,
         unique_info: UniqueInfo | None = None,
     ) -> None:
         self.name = name
-        self.source = source or DataSourceStats()
+        self.source = source or DataSourceInfo()
         self.source_name = source_name or name
         self.unique_info = unique_info or UniqueInfo()

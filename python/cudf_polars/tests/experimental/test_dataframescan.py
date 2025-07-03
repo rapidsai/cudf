@@ -63,7 +63,7 @@ def test_dataframescan_concat(df):
 
 
 def test_source_statistics(df):
-    from cudf_polars.experimental.io import _extract_dataframescan_source_stats
+    from cudf_polars.experimental.io import _extract_dataframescan_stats
 
     row_count = df.collect().height
     engine = pl.GPUEngine(
@@ -75,7 +75,7 @@ def test_source_statistics(df):
         },
     )
     ir = Translator(df._ldf.visit(), engine).translate_ir()
-    column_stats = _extract_dataframescan_source_stats(ir)
+    column_stats = _extract_dataframescan_stats(ir)
 
     # Source info is the same for all columns
     source = column_stats["x"].source

@@ -22,7 +22,7 @@ import pylibcudf as plc
 from cudf_polars.dsl.ir import IR, DataFrameScan, Scan, Sink, Union
 from cudf_polars.experimental.base import (
     ColumnStats,
-    DataSourceStats,
+    DataSourceInfo,
     PartitionInfo,
     RowCountInfo,
     StorageSizeInfo,
@@ -115,7 +115,7 @@ class ScanPartitionPlan:
             )
 
             blocksize: int = config_options.executor.target_partition_size
-            column_stats = _extract_scan_source_stats(ir)
+            column_stats = _extract_scan_stats(ir)
             column_sizes: list[int] = []
             for name, cs in column_stats.items():
                 storage_size = cs.source.storage_size(name)
@@ -414,9 +414,9 @@ def _(
     return graph
 
 
-class PqSourceStats(DataSourceStats):
+class PqSourceInfo(DataSourceInfo):
     """
-    Parquet datasource statistics manager.
+    Parquet datasource information.
 
     Parameters
     ----------
@@ -563,7 +563,7 @@ class PqSourceStats(DataSourceStats):
         return self._row_count
 
     def unique(self, column: str) -> UniqueInfo:
-        """Return unique-value statistics."""
+        """Return unique-value information."""
         if self.max_file_samples < 1 or self.max_rg_samples < 1:
             return UniqueInfo()  # pragma: no cover
 
@@ -586,7 +586,7 @@ class PqSourceStats(DataSourceStats):
         return self._mean_size_per_file.get(column, StorageSizeInfo())
 
     def add_unique_stats_column(self, column: str) -> None:
-        """Add a column needing unique-value statistics."""
+        """Add a column needing unique-value information."""
         if column not in self._key_columns and column not in self._unique_stats:
             self._key_columns.add(column)
 
@@ -596,15 +596,20 @@ def _sample_pq_stats(
     paths: tuple[str, ...],
     max_file_samples: int,
     max_rg_samples: int,
-) -> PqSourceStats:
-    """Return Parquet datasource statistics."""
-    return PqSourceStats(paths, max_file_samples, max_rg_samples)
+) -> PqSourceInfo:
+    """Return Parquet datasource information."""
+    return PqSourceInfo(paths, max_file_samples, max_rg_samples)
 
 
-def _extract_scan_source_stats(ir: Scan) -> dict[str, ColumnStats]:
+def _extract_scan_stats(ir: Scan) -> dict[str, ColumnStats]:
+    """Extract base ColumnStats for a Scan node."""
     if ir.typ == "parquet":
         # TODO: Make max_file_samples and max_rg_samples configurable
-        source_stats = _sample_pq_stats(tuple(ir.paths), 3, 1)
+        max_file_samples = 3
+        max_rg_samples = 1
+        source_stats = _sample_pq_stats(
+            tuple(ir.paths), max_file_samples, max_rg_samples
+        )
         return {
             name: ColumnStats(
                 name=name,
@@ -618,9 +623,9 @@ def _extract_scan_source_stats(ir: Scan) -> dict[str, ColumnStats]:
         return {name: ColumnStats(name=name) for name in ir.schema}
 
 
-class DataFrameSourceStats(DataSourceStats):
+class DataFrameSourceInfo(DataSourceInfo):
     """
-    DataFrame statistics manager.
+    In-memory DataFrame source information.
 
     Parameters
     ----------
@@ -639,7 +644,7 @@ class DataFrameSourceStats(DataSourceStats):
         return RowCountInfo(value=self._df.height(), exact=True)
 
     def unique(self, column: str) -> UniqueInfo:
-        """Return unique-value statistics."""
+        """Return unique-value information."""
         if column not in self._unique_stats:
             row_count = self.row_count.value
             count = (
@@ -656,8 +661,9 @@ class DataFrameSourceStats(DataSourceStats):
         return self._unique_stats[column]
 
 
-def _extract_dataframescan_source_stats(ir: DataFrameScan) -> dict[str, ColumnStats]:
-    source_stats = DataFrameSourceStats(ir.df)
+def _extract_dataframescan_stats(ir: DataFrameScan) -> dict[str, ColumnStats]:
+    """Extract base ColumnStats for a DataFrameScan node."""
+    source_stats = DataFrameSourceInfo(ir.df)
     return {
         name: ColumnStats(
             name=name,
