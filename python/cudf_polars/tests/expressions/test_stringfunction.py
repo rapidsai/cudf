@@ -576,3 +576,19 @@ def test_find_literal(ldf_find, literal, pattern):
 def test_find_literal_false_column_unsupported(ldf_find):
     q = ldf_find.select(pl.col("a").str.find(pl.col("pat"), literal=False))
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_json_path_match():
+    df = pl.LazyFrame({"a": ['{"a":"1"}', None, '{"a":2}', '{"a":2.1}', '{"a":true}']})
+    q = df.select(pl.col("a").str.json_path_match("$.a"))
+    assert_gpu_result_equal(q)
+
+
+def test_len_bytes(ldf):
+    q = ldf.select(pl.col("a").str.len_bytes())
+    assert_gpu_result_equal(q)
+
+
+def test_len_chars(ldf):
+    q = ldf.select(pl.col("a").str.len_chars())
+    assert_gpu_result_equal(q)
