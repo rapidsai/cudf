@@ -133,6 +133,7 @@ static constexpr bool is_group_reduction_supported()
   switch (K) {
     case aggregation::SUM:
       return cudf::is_numeric<T>() || cudf::is_duration<T>() || cudf::is_fixed_point<T>();
+    case aggregation::SUM_ANSI: return std::is_same_v<T, int64_t>;
     case aggregation::PRODUCT: return cudf::detail::is_product_supported<T>();
     case aggregation::MIN:
     case aggregation::MAX: return cudf::is_fixed_width<T>() and is_relationally_comparable<T, T>();
@@ -167,45 +168,55 @@ struct group_reduction_functor<
 
     if (values.is_empty()) { return result; }
 
-    // Perform segmented reduction.
-    auto const do_reduction = [&](auto const& inp_iter, auto const& out_iter, auto const& binop) {
-      thrust::reduce_by_key(rmm::exec_policy(stream),
-                            group_labels.data(),
-                            group_labels.data() + group_labels.size(),
-                            inp_iter,
-                            thrust::make_discard_iterator(),
-                            out_iter,
-                            cuda::std::equal_to{},
-                            binop);
-    };
-
-    auto const d_values_ptr = column_device_view::create(values, stream);
-    auto const result_begin = result->mutable_view().template begin<ResultDType>();
-
-    if constexpr (K == aggregation::ARGMAX || K == aggregation::ARGMIN) {
-      auto const count_iter = thrust::make_counting_iterator<ResultType>(0);
-      auto const binop      = cudf::detail::element_argminmax_fn<T>{
-        *d_values_ptr, values.has_nulls(), K == aggregation::ARGMIN};
-      do_reduction(count_iter, result_begin, binop);
+    // Special handling for SUM_ANSI
+    if constexpr (K == aggregation::SUM_ANSI) {
+      // SUM_ANSI requires overflow detection which can't be done with simple reduction
+      // For now, fall back to a simpler approach that doesn't support overflow detection
+      // in sort-based groupby - this is a limitation we accept for the initial implementation
+      CUDF_FAIL(
+        "SUM_ANSI overflow detection not supported in sort-based groupby. Use hash-based groupby "
+        "instead.");
     } else {
-      using OpType    = cudf::detail::corresponding_operator_t<K>;
-      auto init       = OpType::template identity<ResultDType>();
-      auto inp_values = cudf::detail::make_counting_transform_iterator(
-        0,
-        null_replaced_value_accessor<SourceDType, ResultDType>{
-          *d_values_ptr, init, values.has_nulls()});
-      do_reduction(inp_values, result_begin, OpType{});
-    }
+      // Perform segmented reduction.
+      auto const do_reduction = [&](auto const& inp_iter, auto const& out_iter, auto const& binop) {
+        thrust::reduce_by_key(rmm::exec_policy(stream),
+                              group_labels.data(),
+                              group_labels.data() + group_labels.size(),
+                              inp_iter,
+                              thrust::make_discard_iterator(),
+                              out_iter,
+                              cuda::std::equal_to{},
+                              binop);
+      };
 
-    if (values.has_nulls()) {
-      rmm::device_uvector<bool> validity(num_groups, stream);
-      do_reduction(cudf::detail::make_validity_iterator(*d_values_ptr),
-                   validity.begin(),
-                   cuda::std::logical_or{});
+      auto const d_values_ptr = column_device_view::create(values, stream);
+      auto const result_begin = result->mutable_view().template begin<ResultDType>();
 
-      auto [null_mask, null_count] =
-        cudf::detail::valid_if(validity.begin(), validity.end(), cuda::std::identity{}, stream, mr);
-      result->set_null_mask(std::move(null_mask), null_count);
+      if constexpr (K == aggregation::ARGMAX || K == aggregation::ARGMIN) {
+        auto const count_iter = thrust::make_counting_iterator<ResultType>(0);
+        auto const binop      = cudf::detail::element_argminmax_fn<T>{
+          *d_values_ptr, values.has_nulls(), K == aggregation::ARGMIN};
+        do_reduction(count_iter, result_begin, binop);
+      } else {
+        using OpType    = cudf::detail::corresponding_operator_t<K>;
+        auto init       = OpType::template identity<ResultDType>();
+        auto inp_values = cudf::detail::make_counting_transform_iterator(
+          0,
+          null_replaced_value_accessor<SourceDType, ResultDType>{
+            *d_values_ptr, init, values.has_nulls()});
+        do_reduction(inp_values, result_begin, OpType{});
+      }
+
+      if (values.has_nulls()) {
+        rmm::device_uvector<bool> validity(num_groups, stream);
+        do_reduction(cudf::detail::make_validity_iterator(*d_values_ptr),
+                     validity.begin(),
+                     cuda::std::logical_or{});
+
+        auto [null_mask, null_count] = cudf::detail::valid_if(
+          validity.begin(), validity.end(), cuda::std::identity{}, stream, mr);
+        result->set_null_mask(std::move(null_mask), null_count);
+      }
     }
     return result;
   }

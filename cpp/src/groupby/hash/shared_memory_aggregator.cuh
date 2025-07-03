@@ -21,6 +21,7 @@
 #include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/utilities/traits.cuh>
 
+#include <cuda/atomic>
 #include <cuda/std/cstddef>
 #include <cuda/std/type_traits>
 
@@ -117,16 +118,30 @@ struct update_target_element_shmem<
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
-    using DeviceTarget = cudf::detail::underlying_target_t<Source, aggregation::SUM_ANSI>;
-    using DeviceSource = cudf::detail::underlying_source_t<Source, aggregation::SUM_ANSI>;
+    using DeviceType = device_storage_type_t<int64_t>;
 
-    auto* target_casted = reinterpret_cast<DeviceTarget*>(target);
-    // For SUM_ANSI, we need to detect overflow and set to null if it occurs
-    // For now, use regular atomic add - overflow detection will be added later
-    cudf::detail::atomic_add(&target_casted[target_index],
-                             static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
+    auto* target_casted = reinterpret_cast<DeviceType*>(target);
+    auto source_value   = source.element<DeviceType>(source_index);
+    auto* target_ptr    = &target_casted[target_index];
 
-    set_mask(target_mask + target_index);
+    DeviceType assumed;
+    DeviceType new_val;
+
+    do {
+      assumed = *target_ptr;
+      // Check for overflow before addition
+      if ((source_value > 0 && assumed > INT64_MAX - source_value) ||
+          (source_value < 0 && assumed < INT64_MIN - source_value)) {
+        // Overflow detected - set target mask to false and return immediately
+        cudf::detail::atomic_min(&target_mask[target_index], false);
+        return;
+      }
+      new_val = assumed + source_value;
+    } while (!cuda::atomic_ref<DeviceType, cuda::thread_scope_block>(*target_ptr)
+                .compare_exchange_strong(assumed, new_val, cuda::std::memory_order_relaxed));
+
+    // Only set target mask to true if no overflow occurred and target was previously invalid
+    if (!target_mask[target_index]) { cudf::detail::atomic_max(&target_mask[target_index], true); }
   }
 };
 

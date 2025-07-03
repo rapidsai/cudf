@@ -56,6 +56,32 @@ std::unique_ptr<column> group_sum(column_view const& values,
                                   rmm::device_async_resource_ref mr);
 
 /**
+ * @brief Internal API to calculate groupwise sum with ANSI SQL overflow behavior
+ *
+ * @code{.pseudo}
+ * values       = [2, 1, 4, -1, -2, <NA>, 4, <NA>]
+ * group_labels = [0, 0, 0,  1,  1,    2, 2,    3]
+ * num_groups   = 4
+ *
+ * group_sum    = [7, -3, 4, <NA>]
+ * @endcode
+ *
+ * If overflow occurs during summation, the result will be NULL for that group.
+ * Only supports int64_t values.
+ *
+ * @param values Grouped values to get sum of
+ * @param num_groups Number of groups
+ * @param group_labels ID of group that the corresponding value belongs to
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+std::unique_ptr<column> group_sum_ansi(column_view const& values,
+                                       size_type num_groups,
+                                       cudf::device_span<size_type const> group_labels,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::device_async_resource_ref mr);
+
+/**
  * @brief Internal API to calculate groupwise product
  *
  * @code{.pseudo}

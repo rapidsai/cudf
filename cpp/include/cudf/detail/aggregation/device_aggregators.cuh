@@ -24,6 +24,7 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/traits.cuh>
 
+#include <cuda/atomic>
 #include <cuda/std/type_traits>
 
 namespace cudf::detail {
@@ -191,12 +192,27 @@ struct update_target_element<
                              column_device_view source,
                              size_type source_index) const noexcept
   {
-    using Target = target_type_t<Source, aggregation::SUM_ANSI>;
-    // For SUM_ANSI, we need to detect overflow and set to null if it occurs
-    // For now, use regular atomic add - overflow detection will be added later
-    cudf::detail::atomic_add(&target.element<Target>(target_index),
-                             static_cast<Target>(source.element<Source>(source_index)));
+    using Target      = target_type_t<Source, aggregation::SUM_ANSI>;
+    auto source_value = static_cast<Target>(source.element<Source>(source_index));
 
+    // For SUM_ANSI, detect overflow using atomic compare-and-swap
+    Target* target_ptr = &target.element<Target>(target_index);
+    Target assumed;
+    Target new_val;
+    do {
+      assumed = *target_ptr;
+      // Check for overflow before addition
+      if ((source_value > 0 && assumed > INT64_MAX - source_value) ||
+          (source_value < 0 && assumed < INT64_MIN - source_value)) {
+        // Overflow detected - set target to null and return immediately
+        target.set_null(target_index);
+        return;
+      }
+      new_val = assumed + source_value;
+    } while (!cuda::atomic_ref<Target, cuda::thread_scope_device>(*target_ptr)
+                .compare_exchange_strong(assumed, new_val, cuda::std::memory_order_relaxed));
+
+    // Only set target to valid if no overflow occurred and target was previously null
     if (target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };

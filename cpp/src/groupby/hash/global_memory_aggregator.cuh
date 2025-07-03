@@ -21,6 +21,7 @@
 #include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/utilities/traits.cuh>
 
+#include <cuda/atomic>
 #include <cuda/std/cstddef>
 #include <cuda/std/type_traits>
 
@@ -98,24 +99,37 @@ struct update_target_element_gmem<
   }
 };
 
-template <typename Source>
-struct update_target_element_gmem<
-  Source,
-  cudf::aggregation::SUM_ANSI,
-  cuda::std::enable_if_t<std::is_same_v<Source, int64_t> && cudf::has_atomic_support<Source>()>> {
+template <>
+struct update_target_element_gmem<int64_t, cudf::aggregation::SUM_ANSI> {
   __device__ void operator()(cudf::mutable_column_device_view target,
                              cudf::size_type target_index,
                              cudf::column_device_view source_column,
                              cuda::std::byte* source,
                              cudf::size_type source_index) const noexcept
   {
-    using DeviceType    = cudf::detail::underlying_target_t<Source, aggregation::SUM_ANSI>;
-    auto* source_casted = reinterpret_cast<DeviceType*>(source);
-    // For SUM_ANSI, we need to detect overflow and set to null if it occurs
-    // For now, use regular atomic add - overflow detection will be added later
-    cudf::detail::atomic_add(&target.element<DeviceType>(target_index),
-                             static_cast<DeviceType>(source_casted[source_index]));
+    using DeviceType = device_storage_type_t<int64_t>;
 
+    auto* source_casted = reinterpret_cast<DeviceType*>(source);
+    auto source_value   = source_casted[source_index];
+    auto* target_ptr    = &target.element<DeviceType>(target_index);
+
+    DeviceType assumed;
+    DeviceType new_val;
+
+    do {
+      assumed = *target_ptr;
+      // Check for overflow before addition
+      if ((source_value > 0 && assumed > INT64_MAX - source_value) ||
+          (source_value < 0 && assumed < INT64_MIN - source_value)) {
+        // Overflow detected - set target to null and return immediately
+        target.set_null(target_index);
+        return;
+      }
+      new_val = assumed + source_value;
+    } while (!cuda::atomic_ref<DeviceType, cuda::thread_scope_device>(*target_ptr)
+                .compare_exchange_strong(assumed, new_val, cuda::std::memory_order_relaxed));
+
+    // Only set target to valid if no overflow occurred and target was previously null
     if (target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };

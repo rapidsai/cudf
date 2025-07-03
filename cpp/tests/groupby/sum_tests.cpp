@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -229,4 +229,174 @@ TYPED_TEST(GroupBySumFixedPointTest, GroupByHashSumDecimalAsValue)
     auto agg8 = cudf::make_product_aggregation<cudf::groupby_aggregation>();
     EXPECT_THROW(test_single_agg(keys, vals, expect_keys, {}, std::move(agg8)), cudf::logic_error);
   }
+}
+
+// ============================================================================
+// SUM_ANSI tests
+// ============================================================================
+
+struct groupby_sum_ansi_test : public cudf::test::BaseFixture {};
+
+TEST_F(groupby_sum_ansi_test, basic)
+{
+  using int32_col = cudf::test::fixed_width_column_wrapper<int32_t>;
+  using int64_col = cudf::test::fixed_width_column_wrapper<int64_t>;
+
+  auto const keys        = int32_col{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+  auto const vals        = int64_col{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  auto const expect_keys = int32_col{1, 2, 3};
+  auto const expect_vals = int64_col{9, 19, 17};
+
+  auto test_sum_ansi = [&](auto const use_sort) {
+    auto agg = cudf::make_sum_ansi_aggregation<cudf::groupby_aggregation>();
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg), use_sort);
+  };
+
+  test_sum_ansi(force_use_sort_impl::NO);
+  EXPECT_THROW(test_sum_ansi(force_use_sort_impl::YES), cudf::logic_error);
+}
+
+TEST_F(groupby_sum_ansi_test, empty_cols)
+{
+  using int32_col = cudf::test::fixed_width_column_wrapper<int32_t>;
+  using int64_col = cudf::test::fixed_width_column_wrapper<int64_t>;
+
+  auto const keys        = int32_col{};
+  auto const vals        = int64_col{};
+  auto const expect_keys = int32_col{};
+  auto const expect_vals = int64_col{};
+
+  auto test_sum_ansi = [&](auto const use_sort) {
+    auto agg = cudf::make_sum_ansi_aggregation<cudf::groupby_aggregation>();
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg), use_sort);
+  };
+
+  test_sum_ansi(force_use_sort_impl::NO);
+  EXPECT_THROW(test_sum_ansi(force_use_sort_impl::YES), cudf::logic_error);
+}
+
+TEST_F(groupby_sum_ansi_test, positive_overflow)
+{
+  using int32_col = cudf::test::fixed_width_column_wrapper<int32_t>;
+  using int64_col = cudf::test::fixed_width_column_wrapper<int64_t>;
+
+  // Test positive overflow: INT64_MAX + 1 should result in null
+  auto const keys = int32_col{1, 1};
+  std::vector<int64_t> vals_vec{std::numeric_limits<int64_t>::max(), 1};
+  auto const vals        = int64_col(vals_vec.begin(), vals_vec.end());
+  auto const expect_keys = int32_col{1};
+  auto const expect_vals = int64_col({0}, cudf::test::iterators::all_nulls());
+
+  auto test_sum_ansi = [&](auto const use_sort) {
+    auto agg = cudf::make_sum_ansi_aggregation<cudf::groupby_aggregation>();
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg), use_sort);
+  };
+
+  test_sum_ansi(force_use_sort_impl::NO);
+  EXPECT_THROW(test_sum_ansi(force_use_sort_impl::YES), cudf::logic_error);
+}
+
+TEST_F(groupby_sum_ansi_test, negative_overflow)
+{
+  using int32_col = cudf::test::fixed_width_column_wrapper<int32_t>;
+  using int64_col = cudf::test::fixed_width_column_wrapper<int64_t>;
+
+  // Test negative overflow: INT64_MIN + (-1) should result in null
+  auto const keys = int32_col{1, 1};
+  std::vector<int64_t> vals_vec{std::numeric_limits<int64_t>::min(), -1};
+  auto const vals        = int64_col(vals_vec.begin(), vals_vec.end());
+  auto const expect_keys = int32_col{1};
+  auto const expect_vals = int64_col({0}, cudf::test::iterators::all_nulls());
+
+  auto test_sum_ansi = [&](auto const use_sort) {
+    auto agg = cudf::make_sum_ansi_aggregation<cudf::groupby_aggregation>();
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg), use_sort);
+  };
+
+  test_sum_ansi(force_use_sort_impl::NO);
+  EXPECT_THROW(test_sum_ansi(force_use_sort_impl::YES), cudf::logic_error);
+}
+
+TEST_F(groupby_sum_ansi_test, mixed_overflow_and_normal)
+{
+  using int32_col = cudf::test::fixed_width_column_wrapper<int32_t>;
+  using int64_col = cudf::test::fixed_width_column_wrapper<int64_t>;
+
+  // Test mixed case: one group overflows, another doesn't
+  auto const keys = int32_col{1, 1, 2, 2};
+  std::vector<int64_t> vals_vec{std::numeric_limits<int64_t>::max(), 1, 100, 200};
+  auto const vals        = int64_col(vals_vec.begin(), vals_vec.end());
+  auto const expect_keys = int32_col{1, 2};
+  auto const expect_vals = int64_col({0, 300}, {false, true});
+
+  auto test_sum_ansi = [&](auto const use_sort) {
+    auto agg = cudf::make_sum_ansi_aggregation<cudf::groupby_aggregation>();
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg), use_sort);
+  };
+
+  test_sum_ansi(force_use_sort_impl::NO);
+  EXPECT_THROW(test_sum_ansi(force_use_sort_impl::YES), cudf::logic_error);
+}
+
+TEST_F(groupby_sum_ansi_test, multiple_values_leading_to_overflow)
+{
+  using int32_col = cudf::test::fixed_width_column_wrapper<int32_t>;
+  using int64_col = cudf::test::fixed_width_column_wrapper<int64_t>;
+
+  // Test multiple values that eventually lead to overflow
+  auto large_val  = std::numeric_limits<int64_t>::max() / 2 + 1;
+  auto const keys = int32_col{1, 1, 1};
+  std::vector<int64_t> vals_vec{large_val, large_val, large_val};
+  auto const vals        = int64_col(vals_vec.begin(), vals_vec.end());
+  auto const expect_keys = int32_col{1};
+  auto const expect_vals = int64_col({0}, cudf::test::iterators::all_nulls());
+
+  auto test_sum_ansi = [&](auto const use_sort) {
+    auto agg = cudf::make_sum_ansi_aggregation<cudf::groupby_aggregation>();
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg), use_sort);
+  };
+
+  test_sum_ansi(force_use_sort_impl::NO);
+  EXPECT_THROW(test_sum_ansi(force_use_sort_impl::YES), cudf::logic_error);
+}
+
+TEST_F(groupby_sum_ansi_test, near_overflow_boundary)
+{
+  using int32_col = cudf::test::fixed_width_column_wrapper<int32_t>;
+  using int64_col = cudf::test::fixed_width_column_wrapper<int64_t>;
+
+  // Test values that are close to overflow boundary but don't overflow
+  auto near_max   = std::numeric_limits<int64_t>::max() - 10;
+  auto const keys = int32_col{1, 1};
+  std::vector<int64_t> vals_vec{near_max, 5};
+  auto const vals        = int64_col(vals_vec.begin(), vals_vec.end());
+  auto const expect_keys = int32_col{1};
+  auto const expect_vals = int64_col{near_max + 5};
+
+  auto test_sum_ansi = [&](auto const use_sort) {
+    auto agg = cudf::make_sum_ansi_aggregation<cudf::groupby_aggregation>();
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg), use_sort);
+  };
+
+  test_sum_ansi(force_use_sort_impl::NO);
+  EXPECT_THROW(test_sum_ansi(force_use_sort_impl::YES), cudf::logic_error);
+}
+
+TEST_F(groupby_sum_ansi_test, null_keys_and_values)
+{
+  using int32_col = cudf::test::fixed_width_column_wrapper<int32_t>;
+  using int64_col = cudf::test::fixed_width_column_wrapper<int64_t>;
+
+  auto const keys        = int32_col{1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4};
+  auto const vals        = int64_col{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 4};
+  auto const expect_keys = int32_col{1, 2, 3, 4};
+  auto const expect_vals = int64_col{9, 14, 10, 0};
+
+  auto test_sum_ansi = [&](auto const use_sort) {
+    auto agg = cudf::make_sum_ansi_aggregation<cudf::groupby_aggregation>();
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg), use_sort);
+  };
+
+  test_sum_ansi(force_use_sort_impl::NO);
+  EXPECT_THROW(test_sum_ansi(force_use_sort_impl::YES), cudf::logic_error);
 }

@@ -452,6 +452,7 @@ add_library(
   src/groupby/sort/group_quantiles.cu
   src/groupby/sort/group_std.cu
   src/groupby/sort/group_sum.cu
+  src/groupby/sort/group_sum_ansi.cu
   src/groupby/sort/group_count_scan.cu
   src/groupby/sort/group_max_scan.cu
   src/groupby/sort/group_min_scan.cu
