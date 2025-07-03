@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/debug_utilities.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 
@@ -826,6 +827,37 @@ TEST_F(StringsSplitTest, AllNullsCase)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(list_result->view(), expected);
   list_result = cudf::strings::rsplit_record_re(sv, *prog);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(list_result->view(), expected);
+
+  auto part_result = cudf::strings::split_part(sv, cudf::string_scalar("-"), 0);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(part_result->view(), input);
+  part_result = cudf::strings::split_part(sv, cudf::string_scalar("-"), 1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(part_result->view(), input);
+}
+
+TEST_F(StringsSplitTest, SplitPart)
+{
+  cudf::test::strings_column_wrapper input({"a-b-c", "é-bb-c", "a-bé-ccc", "", "", "xx-yy zz"},
+                                           {true, true, true, false, true, true});
+  auto sv       = cudf::strings_column_view(input);
+  auto result   = cudf::strings::split_part(sv, cudf::string_scalar("-"), 0);
+  auto expected = cudf::test::strings_column_wrapper({"a", "é", "a", "", "", "xx"},
+                                                     {true, true, true, false, true, true});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
+
+  result   = cudf::strings::split_part(sv, cudf::string_scalar("-"), 1);
+  expected = cudf::test::strings_column_wrapper({"b", "bb", "bé", "", "", "yy zz"},
+                                                {true, true, true, false, false, true});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
+
+  result   = cudf::strings::split_part(sv, cudf::string_scalar("-"), 2);
+  expected = cudf::test::strings_column_wrapper({"c", "c", "ccc", "", "", ""},
+                                                {true, true, true, false, false, false});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
+
+  result   = cudf::strings::split_part(sv, cudf::string_scalar("-"), 3);
+  expected = cudf::test::strings_column_wrapper({"", "", "", "", "", ""},
+                                                {false, false, false, false, false, false});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
 }
 
 TEST_F(StringsSplitTest, Partition)
@@ -1019,4 +1051,8 @@ TEST_F(StringsSplitTest, InvalidParameter)
                cudf::logic_error);
   EXPECT_THROW(cudf::strings::rpartition(strings_view, cudf::string_scalar("", false)),
                cudf::logic_error);
+  EXPECT_THROW(cudf::strings::split_part(strings_view, cudf::string_scalar("", false), 0),
+               std::invalid_argument);
+  EXPECT_THROW(cudf::strings::split_part(strings_view, cudf::string_scalar("", false), -1),
+               std::invalid_argument);
 }

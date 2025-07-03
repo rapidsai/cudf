@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -238,6 +238,31 @@ std::unique_ptr<column> rsplit_record(
   strings_column_view const& strings,
   string_scalar const& delimiter    = string_scalar(""),
   size_type maxsplit                = -1,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Returns a columns of strings by splitting each string using the
+ * specified delimiter and returning the string at the specified index.
+ *
+ * The number of rows in the output columns will be the same as the
+ * input column. The output column will contain the string at the specified index
+ * for each string in the input column.
+ *
+ * Any null string entries return corresponding null output columns.
+ *
+ * @param strings_column Strings instance for this operation
+ * @param delimiter UTF-8 encoded string indicating the split points in each string;
+ *        Default of empty string indicates split on whitespace
+ * @param index The index of the string to return from the split
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New column of strings
+ */
+std::unique_ptr<column> split_part(
+  strings_column_view const& strings_column,
+  string_scalar const& delimiter    = string_scalar(""),
+  size_type index                   = 0,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
