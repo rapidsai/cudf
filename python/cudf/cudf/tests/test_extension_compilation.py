@@ -8,8 +8,7 @@ from numba import cuda, types
 from numba.cuda import compile_ptx
 from numba.np.numpy_support import from_dtype
 
-import rmm
-
+import cudf
 from cudf import NA
 from cudf.core.udf.api import Masked
 from cudf.core.udf.masked_typing import MaskedType
@@ -108,10 +107,10 @@ def test_execute_masked_binary(op, ty):
         if u != r1.value:
             err[0] = 3
 
-    err = rmm.DeviceBuffer(size=np.dtype("int8").itemsize)
+    err = cudf.Series([0], dtype="int8")
     with _CUDFNumbaConfig():
         test_kernel[1, 1](1, 2, err)
-    assert err.copy_to_host()[0] == 0
+    assert err[0] == 0
 
 
 @pytest.mark.parametrize("op", ops)
@@ -216,7 +215,7 @@ def test_is_na(fn):
         if not invalid_is_na:
             err[0] = 2
 
-    err = cp.asarray([0], dtype="int8")
+    err = cudf.Series([0], dtype="int8")
     with _CUDFNumbaConfig():
         test_kernel[1, 1](err)
     assert err[0] == 0
@@ -306,7 +305,7 @@ def test_na_masked_comparisons(fn, ty):
         if invalid_cmp_na:
             err[0] = 2
 
-    err = cp.asarray([0], dtype="int8")
+    err = cudf.Series(cp.asarray([0], dtype="int8"))
     with _CUDFNumbaConfig():
         test_kernel[1, 1](err)
     assert err[0] == 0
