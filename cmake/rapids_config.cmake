@@ -15,7 +15,6 @@
 set(rapids-cmake-repo srinivasyadav18/rapids-cmake)
 set(rapids-cmake-branch test_cuda_extents)
 
-
 file(READ "${CMAKE_CURRENT_LIST_DIR}/../VERSION" _rapids_version)
 if(_rapids_version MATCHES [[^([0-9][0-9])\.([0-9][0-9])\.([0-9][0-9])]])
   set(RAPIDS_VERSION_MAJOR "${CMAKE_MATCH_1}")
