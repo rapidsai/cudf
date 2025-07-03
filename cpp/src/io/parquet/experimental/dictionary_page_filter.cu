@@ -24,6 +24,8 @@
 #include <cudf/ast/expressions.hpp>
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/hashing/detail/default_hash.cuh>
 #include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/utilities/span.hpp>
@@ -93,9 +95,9 @@ using hasher_type = cudf::hashing::detail::MurmurHash3_x86_32<T>;
 
 /// cuco::static_set_ref storage type
 using storage_type     = cuco::bucket_storage<slot_type,
-                                              BUCKET_SIZE,
-                                              cuco::extent<std::size_t>,
-                                              cudf::detail::cuco_allocator<char>>;
+                                          BUCKET_SIZE,
+                                          cuco::extent<std::size_t>,
+                                          cudf::detail::cuco_allocator<char>>;
 using storage_ref_type = typename storage_type::ref_type;
 
 /**

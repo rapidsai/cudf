@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "tests/io/parquet_common.hpp"
+#include "parquet_common.hpp"
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -193,10 +193,12 @@ cudf::test::fixed_width_column_wrapper<T> descending_low_cardinality()
  * The function creates a table by concatenating the same set of columns NumTableConcats times.
  * It then writes this table to a Parquet host buffer with column level statistics.
  *
+ * @tparam T Data type for columns 0 and 1
  * @tparam NumTableConcats Number of times to concatenate the base table (must be >= 1)
+ * @tparam IsConstantStrings Whether to use constant strings for column 2
  * @return Tuple of table and Parquet host buffer
  */
-template <typename T, size_t NumTableConcats>
+template <typename T, size_t NumTableConcats, bool IsConstantStrings = true>
 auto create_parquet_with_stats(
   cudf::size_type col2_value             = 100,
   cudf::io::compression_type compression = cudf::io::compression_type::AUTO,
@@ -212,7 +214,14 @@ auto create_parquet_with_stats(
       return testdata::descending<T>();
     }
   }();
-  auto col2 = constant_strings(col2_value);  // constant stringified value
+
+  auto col2 = [&]() {
+    if constexpr (IsConstantStrings) {
+      return constant_strings(col2_value);  // constant stringified value
+    } else {
+      return testdata::ascending<cudf::string_view>();  // ascending strings
+    }
+  }();
 
   auto expected = table_view{{col0, col1, col2}};
   auto table    = cudf::concatenate(std::vector<table_view>(NumTableConcats, expected));
@@ -384,7 +393,7 @@ TEST_F(ParquetExperimentalReaderTest, TestFilterRowGroupsWithStats)
   // Create a table with 4 row groups each with a single page.
   auto constexpr num_concat         = 1;
   auto constexpr rows_per_row_group = page_size_for_ordered_tests;
-  auto [written_table, file_buffer] = create_parquet_with_stats<T, num_concat>();
+  auto [written_table, file_buffer] = create_parquet_with_stats<T, num_concat, false>();
 
   // Filtering AST - table[0] < 50
   auto literal_value     = cudf::numeric_scalar<T>(50);
@@ -426,6 +435,170 @@ TEST_F(ParquetExperimentalReaderTest, TestFilterRowGroupsWithStats)
   // Expect all row groups to be filtered out with stats
   EXPECT_EQ(stats_filtered_row_groups.size(), 0);
   EXPECT_EQ(reader->total_rows_in_row_groups(stats_filtered_row_groups), 0);
+}
+
+template <typename T>
+struct PageFilteringWithPageIndexStats : public ParquetExperimentalReaderTest {};
+
+// Unsigned numeric types except booleans for columns 0 and 1 for page index stats tests
+using SignedIntegralTypesNotBool =
+  cudf::test::ContainedIn<cudf::test::Types<int8_t, int16_t, int32_t, int64_t>>;
+using PageFilteringTestTypes =
+  cudf::test::RemoveIf<SignedIntegralTypesNotBool,
+                       cudf::test::Concat<cudf::test::IntegralTypesNotBool>>;
+
+TYPED_TEST_SUITE(PageFilteringWithPageIndexStats, PageFilteringTestTypes);
+
+TYPED_TEST(PageFilteringWithPageIndexStats, TestFilterPagesWithPageIndexStats)
+{
+  using T = TypeParam;
+
+  srand(31337);
+
+  // A table concatenated multiple times by itself with result in a parquet file with a row group
+  // per concatenation with multiple pages per row group. Since all row groups will be identical, we
+  // can only prune pages based on `PageIndex` stats
+  auto constexpr num_concat = 2;
+  auto const file_buffer    = std::get<1>(create_parquet_with_stats<T, num_concat, false>());
+
+  // Input file buffer span
+  auto const file_buffer_span = cudf::host_span<uint8_t const>(
+    reinterpret_cast<uint8_t const*>(file_buffer.data()), file_buffer.size());
+
+  // Helper function to test data page filteration using page index stats
+  auto const test_filter_data_pages_with_stats =
+    [&](cudf::ast::operation const& filter_expression,
+        cudf::size_type const num_filter_columns,
+        cudf::size_type const expected_num_pages_after_page_index_filter,
+        rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+        rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) {
+      // Create reader options with empty source info
+      cudf::io::parquet_reader_options options =
+        cudf::io::parquet_reader_options::builder().filter(filter_expression);
+
+      // Fetch footer and page index bytes from the buffer.
+      auto const footer_buffer = fetch_footer_bytes(file_buffer_span);
+
+      // Create hybrid scan reader with footer bytes
+      auto const reader = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
+        footer_buffer, options);
+
+      // Get all row groups from the reader
+      auto input_row_group_indices = reader->all_row_groups(options);
+
+      // Span to track current row group indices
+      auto current_row_group_indices = cudf::host_span<cudf::size_type>(input_row_group_indices);
+
+      // Calling `filter_data_pages_with_stats` before setting up the page index should raise an
+      // error
+      EXPECT_THROW(std::ignore = reader->filter_data_pages_with_stats(
+                     current_row_group_indices, options, stream, mr),
+                   std::runtime_error);
+
+      // Set up the page index
+      auto const page_index_byte_range = reader->page_index_byte_range();
+      auto const page_index_buffer =
+        fetch_page_index_bytes(file_buffer_span, page_index_byte_range);
+      reader->setup_page_index(page_index_buffer);
+
+      // Filter the data pages with page index stats
+      auto const [row_mask, data_page_mask] =
+        reader->filter_data_pages_with_stats(current_row_group_indices, options, stream, mr);
+      EXPECT_EQ(data_page_mask.size(), num_filter_columns);
+
+      auto const expected_num_rows = reader->total_rows_in_row_groups(current_row_group_indices);
+      EXPECT_EQ(row_mask->type().id(), cudf::type_id::BOOL8);
+      EXPECT_EQ(row_mask->size(), expected_num_rows);
+      EXPECT_EQ(row_mask->null_count(), 0);
+
+      // Half the pages should survive the page index filter
+
+      // Count the number of pages that survive the page index filter
+      auto const num_pages_after_page_index_filter =
+        std::accumulate(data_page_mask.begin(),
+                        data_page_mask.end(),
+                        cudf::size_type{0},
+                        [](auto sum, auto const& page_mask) {
+                          return sum + std::count(page_mask.cbegin(), page_mask.cend(), true);
+                        });
+      EXPECT_EQ(num_pages_after_page_index_filter, expected_num_pages_after_page_index_filter);
+    };
+
+  // Filtering AST - table[0] < 100
+  {
+    auto literal_value     = cudf::numeric_scalar<T>(T{100});
+    auto const literal     = cudf::ast::literal(literal_value);
+    auto const col_ref     = cudf::ast::column_name_reference("col0");
+    auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref, literal);
+    auto constexpr num_filter_columns = 1;
+    // Half the pages should be filtered out by the page index filter
+    auto constexpr expected_num_pages_after_page_index_filter =
+      num_concat * (num_ordered_rows / page_size_for_ordered_tests) / 2;
+    test_filter_data_pages_with_stats(
+      filter_expression, num_filter_columns, expected_num_pages_after_page_index_filter);
+  }
+
+  // Filtering AST - table[2] >= 10000
+  {
+    auto literal_value = cudf::string_scalar("000010000");
+    auto literal       = cudf::ast::literal(literal_value);
+    auto col_ref       = cudf::ast::column_name_reference("col2");
+    auto filter_expression =
+      cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col_ref, literal);
+    auto constexpr num_filter_columns = 1;
+    // Half the pages should be filtered out by the page index filter
+    auto constexpr expected_num_pages_after_page_index_filter =
+      num_concat * (num_ordered_rows / page_size_for_ordered_tests) / 2;
+    test_filter_data_pages_with_stats(
+      filter_expression, num_filter_columns, expected_num_pages_after_page_index_filter);
+  }
+
+  // Filtering AST - table[0] < 50 AND table[2] < "000010000"
+  {
+    auto literal_value1 = cudf::numeric_scalar<T>(T{50});
+    auto const literal1 = cudf::ast::literal(literal_value1);
+    auto const col_ref1 = cudf::ast::column_name_reference("col0");
+    auto filter_expression1 =
+      cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref1, literal1);
+
+    auto literal_value2 = cudf::string_scalar("000010000");
+    auto literal2       = cudf::ast::literal(literal_value2);
+    auto col_ref2       = cudf::ast::column_name_reference("col2");
+    auto filter_expression2 =
+      cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref2, literal2);
+
+    auto filter_expression = cudf::ast::operation(
+      cudf::ast::ast_operator::LOGICAL_AND, filter_expression1, filter_expression2);
+    auto constexpr num_filter_columns = 2;
+    // Only one page per num_concat per filter column should survive
+    auto constexpr expected_num_pages_after_page_index_filter = 1 * num_concat * num_filter_columns;
+    test_filter_data_pages_with_stats(
+      filter_expression, num_filter_columns, expected_num_pages_after_page_index_filter);
+  }
+
+  // Filtering AST - table[0] > 150 OR table[2] < "000005000"
+  {
+    auto literal_value1 = cudf::numeric_scalar<T>(T{150});
+    auto const literal1 = cudf::ast::literal(literal_value1);
+    auto const col_ref1 = cudf::ast::column_name_reference("col0");
+    auto filter_expression1 =
+      cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref1, literal1);
+
+    auto literal_value2 = cudf::string_scalar("000005000");
+    auto literal2       = cudf::ast::literal(literal_value2);
+    auto col_ref2       = cudf::ast::column_name_reference("col2");
+    auto filter_expression2 =
+      cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref2, literal2);
+
+    auto filter_expression = cudf::ast::operation(
+      cudf::ast::ast_operator::LOGICAL_OR, filter_expression1, filter_expression2);
+    auto constexpr num_filter_columns = 2;
+    // Two pages (3rd and 0th from respective conditions) per num_concat per filter column should
+    // survive
+    auto constexpr expected_num_pages_after_page_index_filter = 2 * num_concat * num_filter_columns;
+    test_filter_data_pages_with_stats(
+      filter_expression, num_filter_columns, expected_num_pages_after_page_index_filter);
+  }
 }
 
 TEST_F(ParquetExperimentalReaderTest, TestFilterRowGroupsWithDictBasic)

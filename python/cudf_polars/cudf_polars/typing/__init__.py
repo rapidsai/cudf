@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Hashable, MutableMapping
 from typing import (
     TYPE_CHECKING,
@@ -13,30 +14,36 @@ from typing import (
     NewType,
     Protocol,
     TypeVar,
-    TypedDict,
     Union,
 )
 
 import polars as pl
+import polars.datatypes
 from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Callable
     from typing import TypeAlias
 
     import pylibcudf as plc
 
     from cudf_polars.containers import DataFrame, DataType
-    from cudf_polars.dsl import expr, ir, nodebase
+    from cudf_polars.dsl import nodebase
+
+
+if sys.version_info >= (3, 11):
+    # Inheriting from TypeDict + Generic added in python 3.11
+    from typing import TypedDict  # pragma: no cover
+else:
+    from typing_extensions import TypedDict  # pragma: no cover
+
 
 __all__: list[str] = [
     "ClosedInterval",
     "ColumnHeader",
     "ColumnOptions",
     "DataFrameHeader",
-    "ExprTransformer",
     "GenericTransformer",
-    "IRTransformer",
     "NodeTraverser",
     "OptimizationArgs",
     "PolarsExpr",
@@ -83,6 +90,8 @@ PolarsExpr: TypeAlias = Union[
 
 PolarsSchema: TypeAlias = dict[str, pl.DataType]
 Schema: TypeAlias = dict[str, "DataType"]
+
+PolarsDataType: TypeAlias = polars.datatypes.DataTypeClass | polars.datatypes.DataType
 
 Slice: TypeAlias = tuple[int, int | None]
 
@@ -147,10 +156,11 @@ OptimizationArgs: TypeAlias = Literal[
 
 U_contra = TypeVar("U_contra", bound=Hashable, contravariant=True)
 V_co = TypeVar("V_co", covariant=True)
+StateT_co = TypeVar("StateT_co", covariant=True)
 NodeT = TypeVar("NodeT", bound="nodebase.Node[Any]")
 
 
-class GenericTransformer(Protocol[U_contra, V_co]):
+class GenericTransformer(Protocol[U_contra, V_co, StateT_co]):
     """Abstract protocol for recursive visitors."""
 
     def __call__(self, __value: U_contra) -> V_co:
@@ -158,17 +168,9 @@ class GenericTransformer(Protocol[U_contra, V_co]):
         ...
 
     @property
-    def state(self) -> Mapping[str, Any]:
-        """Arbitrary immutable state."""
+    def state(self) -> StateT_co:
+        """Transform-specific immutable state."""
         ...
-
-
-# Quotes to avoid circular import
-ExprTransformer: TypeAlias = GenericTransformer["expr.Expr", "expr.Expr"]
-"""Protocol for transformation of Expr nodes."""
-
-IRTransformer: TypeAlias = GenericTransformer["ir.IR", "ir.IR"]
-"""Protocol for transformation of IR nodes."""
 
 
 class ColumnOptions(TypedDict):

@@ -153,7 +153,7 @@ def test_supported_stringfunction_expression(ldf):
 
 
 def test_unsupported_stringfunction(ldf):
-    q = ldf.select(pl.col("a").str.count_matches("e", literal=True))
+    q = ldf.select(pl.col("a").str.encode("hex"))
 
     assert_ir_translation_raises(q, NotImplementedError)
 
@@ -424,6 +424,9 @@ def test_unsupported_regex_raises(pattern):
     q = df.select(pl.col("a").str.contains(pattern, strict=True))
     assert_ir_translation_raises(q, NotImplementedError)
 
+    q = df.select(pl.col("a").str.count_matches(pattern))
+    assert_ir_translation_raises(q, NotImplementedError)
+
 
 def test_string_to_integer(str_to_integer_data, integer_type):
     query = str_to_integer_data.select(pl.col("a").cast(integer_type))
@@ -517,4 +520,40 @@ def test_concat_horizontal(ldf, ignore_nulls, separator):
     q = ldf.select(
         pl.concat_str(["a", "c"], separator=separator, ignore_nulls=ignore_nulls)
     )
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("ascii_case_insensitive", [True, False])
+def test_contains_any(ldf, ascii_case_insensitive):
+    q = ldf.select(
+        pl.col("a").str.contains_any(
+            ["a", "b", "c"], ascii_case_insensitive=ascii_case_insensitive
+        )
+    )
+    assert_gpu_result_equal(q)
+
+
+def test_count_matches(ldf):
+    q = ldf.select(pl.col("a").str.count_matches("a"))
+    assert_gpu_result_equal(q)
+
+
+def test_count_matches_literal_unsupported(ldf):
+    q = ldf.select(pl.col("a").str.count_matches("a", literal=True))
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_json_path_match():
+    df = pl.LazyFrame({"a": ['{"a":"1"}', None, '{"a":2}', '{"a":2.1}', '{"a":true}']})
+    q = df.select(pl.col("a").str.json_path_match("$.a"))
+    assert_gpu_result_equal(q)
+
+
+def test_len_bytes(ldf):
+    q = ldf.select(pl.col("a").str.len_bytes())
+    assert_gpu_result_equal(q)
+
+
+def test_len_chars(ldf):
+    q = ldf.select(pl.col("a").str.len_chars())
     assert_gpu_result_equal(q)
