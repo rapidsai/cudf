@@ -30,7 +30,7 @@ from cudf_polars.experimental.base import (
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping, Sequence
+    from collections.abc import MutableMapping
 
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import NamedExpr
@@ -435,22 +435,35 @@ class PqSourceInfo(DataSourceInfo):
         self.paths = paths
         self.max_file_samples = max_file_samples
         self.max_rg_samples = max_rg_samples
-        # Helper attributes
-        self._key_columns: set[str] = set()
+        # Helper attributes - General
+        stride = max(1, int(len(paths) / max_file_samples))
+        self._sample_paths: tuple[str, ...] = paths[
+            : stride * max_file_samples : stride
+        ]
+        self._key_columns: set[str] = set()  # Used to fuse lazy row-group sampling
+        # Helper attributes - Updated in _sample_metadata
+        self._metadata_sampled: bool = False
+        self._row_count: RowCountInfo = RowCountInfo()
+        self._num_row_groups_per_file: tuple[int, ...] = ()
+        self._mean_size_per_file: dict[str, StorageSizeInfo] = {}
+        self._all_columns: tuple[str, ...] = ()
+        # Helper attributes - Updated in _sample_row_groups
         self._unique_stats: dict[str, UniqueInfo] = {}
-        self._row_count: RowCountInfo | None = None
-        self._num_row_groups_per_file: Sequence[int] | None = None
-        self._mean_size_per_file: dict[str, StorageSizeInfo] | None = None
-        self._sample_paths: tuple[str, ...] | None = None
 
     def _sample_metadata(self) -> None:
         """Sample Parquet metadata."""
+        if self._metadata_sampled:
+            # Metadata was already sampled
+            return
+
+        if not self._sample_paths:  # pragma: no cover
+            # No paths to sample from
+            self._metadata_sampled = True
+            return
+
         total_file_count = len(self.paths)
-        stride = max(1, int(total_file_count / self.max_file_samples))
-        self._sample_paths = self.paths[: stride * self.max_file_samples : stride]
         sampled_file_count = len(self._sample_paths)
         exact: bool = False
-
         sample_metadata = plc.io.parquet_metadata.read_parquet_metadata(
             plc.io.SourceInfo(list(self._sample_paths))
         )
@@ -479,21 +492,36 @@ class PqSourceInfo(DataSourceInfo):
             for name, uncompressed_sizes in sample_metadata.columnchunk_metadata().items()
         }
 
+        self._all_columns = tuple(column_sizes_per_file)
         self._mean_size_per_file = {
             name: StorageSizeInfo(value=int(statistics.mean(sizes)))
             for name, sizes in column_sizes_per_file.items()
         }
-        self._num_row_groups_per_file = num_row_groups_per_sampled_file
-        self._row_count = RowCountInfo(value=row_count, exact=exact)
+        self._num_row_groups_per_file = tuple(num_row_groups_per_sampled_file)
+        self._row_count.value = row_count
+        self._row_count.exact = exact
+        self._metadata_sampled = True
 
     def _sample_row_groups(self) -> None:
         """Estimate unique-value statistics from a row-group sample."""
-        if self._row_count is None:
-            self._sample_metadata()  # pragma: no cover; Usually sampled before row-groups
+        if not self._sample_paths or self.max_rg_samples < 1:
+            # No row-groups to sample from
+            return  # pragma: no cover
+
+        self._sample_metadata()  # Need metadata
+
+        if not (
+            key_columns := [
+                key for key in self._key_columns if key in self._all_columns
+            ]
+        ):
+            # No key columns are available in the file
+            return  # pragma: no cover
+
+        sampled_file_count = len(self._sample_paths)
         if (
-            self._num_row_groups_per_file is None
-            or self._sample_paths is None
-            or self._row_count is None
+            self._row_count.value is None
+            or len(self._num_row_groups_per_file) != sampled_file_count
         ):
             raise ValueError("Parquet metadata sampling failed.")  # pragma: no cover
 
@@ -510,14 +538,14 @@ class PqSourceInfo(DataSourceInfo):
             if n == self.max_rg_samples:
                 break
 
-        exact = len(self._sample_paths) == len(
-            self.paths
-        ) and self.max_rg_samples >= sum(self._num_row_groups_per_file)
+        exact = sampled_file_count == len(self.paths) and self.max_rg_samples >= sum(
+            self._num_row_groups_per_file
+        )
 
         options = plc.io.parquet.ParquetReaderOptions.builder(
             plc.io.SourceInfo(list(samples))
         ).build()
-        options.set_columns(list(self._key_columns))
+        options.set_columns(key_columns)
         options.set_row_groups(list(samples.values()))
         tbl_w_meta = plc.io.parquet.read_parquet(options)
         row_group_num_rows = tbl_w_meta.tbl.num_rows()
@@ -551,36 +579,21 @@ class PqSourceInfo(DataSourceInfo):
     @property
     def row_count(self) -> RowCountInfo:
         """Data source row-count estimate."""
-        if self.max_file_samples < 1:
-            return RowCountInfo()  # pragma: no cover
-
-        if self._row_count is None:
-            self._sample_metadata()
-
-        assert self._row_count is not None, "metadata sampling failed."
+        self._sample_metadata()
         return self._row_count
 
     def unique(self, column: str) -> UniqueInfo:
         """Return unique-value information."""
-        if self.max_file_samples < 1 or self.max_rg_samples < 1:
-            return UniqueInfo()  # pragma: no cover
-
-        if column not in self._unique_stats:
+        self._sample_metadata()
+        if column not in self._unique_stats and column in self._all_columns:
             self.add_unique_stats_column(column)
             self._sample_row_groups()
             self._key_columns = set()
-
         return self._unique_stats.get(column, UniqueInfo())
 
     def storage_size(self, column: str) -> StorageSizeInfo:
         """Return the average column size for a single file."""
-        if self.max_file_samples < 1:
-            return StorageSizeInfo()  # pragma: no cover
-
-        if self._mean_size_per_file is None:
-            self._sample_metadata()
-
-        assert self._mean_size_per_file is not None, "metadata sampling failed"
+        self._sample_metadata()
         return self._mean_size_per_file.get(column, StorageSizeInfo())
 
     def add_unique_stats_column(self, column: str) -> None:
