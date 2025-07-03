@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "common_sort_impl.cuh"
+#include "sort.hpp"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/table/experimental/row_operators.cuh>

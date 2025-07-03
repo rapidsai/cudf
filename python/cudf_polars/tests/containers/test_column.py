@@ -9,6 +9,7 @@ import polars as pl
 
 import pylibcudf as plc
 
+import cudf_polars.containers.datatype
 from cudf_polars.containers import Column, DataType
 
 
@@ -128,3 +129,27 @@ def test_deserialize_ctor_kwargs_list_dtype():
         "dtype": DataType(pl_type),
     }
     assert result == expected
+
+
+def test_serialize_cache_miss():
+    dtype = DataType(pl.Int8())
+    column = Column(
+        plc.column_factories.make_numeric_column(dtype.plc, 2, plc.MaskState.ALL_VALID),
+        dtype=dtype,
+    )
+    header, frames = column.serialize()
+    assert header == {"column_kwargs": column.serialize_ctor_kwargs(), "frame_count": 2}
+    assert len(frames) == 2
+    assert frames[0].nbytes > 0
+    assert frames[1].nbytes > 0
+
+    # https://github.com/rapidsai/cudf/pull/18953
+    # In a multi-GPU setup, we might attempt to deserialize a column
+    # whose type we haven't seen before. polars lets you use either the
+    # class (`pl.Int8`) or an instance (`pl.Int8()`) in most places
+    # for types that are not parameterized. These are equal and have
+    # the same hash, so they cache the same, but have some difference
+    # in behavior (e.g. isinstance).
+    cudf_polars.containers.datatype._from_polars.cache_clear()
+    result = Column.deserialize(header, frames)
+    assert result.dtype == dtype

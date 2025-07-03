@@ -137,6 +137,7 @@ class Shuffle(IR):
         return df
 
 
+@nvtx_annotate_cudf_polars(message="Shuffle")
 def _partition_dataframe(
     df: DataFrame,
     keys: tuple[NamedExpr, ...],
