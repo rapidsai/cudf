@@ -388,22 +388,22 @@ class StringFunction(Expr):
         elif self.name is StringFunction.Name.SplitN:
             n = self.options[0]
             child, expr = self.children
-            column = child.evaluate(df, context=context).obj
+            column = child.evaluate(df, context=context)
             if n == 1:
                 plc_column = plc.Column(
                     self.dtype.plc,
-                    column.size(),  # type: ignore[operator]
+                    column.obj.size(),
                     None,
                     None,
                     0,
-                    column.offset(),  # type: ignore[attr-defined]
-                    [column],
+                    column.obj.offset(),
+                    [column.obj],
                 )
             else:
                 assert isinstance(expr, Literal)
                 by = plc.Scalar.from_py(expr.value, expr.dtype.plc)
                 plc_table = plc.strings.split.split.split(
-                    column,
+                    column.obj,
                     by,
                     n - 1,
                 )
