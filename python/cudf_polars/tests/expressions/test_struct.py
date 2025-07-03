@@ -54,9 +54,13 @@ def test_with_fields(ldf):
     assert_ir_translation_raises(query, NotImplementedError)
 
 
-@pytest.mark.parametrize("method", ["prefix_fields", "suffix_fields"])
-def test_prefix_suffix_fields(ldf, method):
-    query = ldf.select(getattr(pl.col("a").name, method)("foo").struct.unnest())
+@pytest.mark.parametrize(
+    "expr",
+    [pl.col("a").name.prefix_fields, pl.col("a").name.suffix_fields],
+    ids=lambda x: x.__name__,
+)
+def test_prefix_suffix_fields(ldf, expr):
+    query = ldf.select(expr("foo").struct.unnest())
     assert_gpu_result_equal(query)
 
 
