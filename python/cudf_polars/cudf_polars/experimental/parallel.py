@@ -83,7 +83,9 @@ def lower_ir_graph(
     --------
     lower_ir_node
     """
-    mapper = CachingVisitor(lower_ir_node, state={"config_options": config_options})
+    mapper: LowerIRTransformer = CachingVisitor(
+        lower_ir_node, state={"config_options": config_options}
+    )
     return mapper(ir)
 
 
