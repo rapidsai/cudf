@@ -18,12 +18,12 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 
+#include <algorithm>
+
 namespace cudf {
 bool is_primitive_row_op_compatible(cudf::table_view const& table)
 {
-  for (cudf::size_type i = 0; i < table.num_columns(); ++i) {
-    if (!cudf::is_numeric(table.column(i).type())) { return false; }
-  }
-  return true;
+  return std::all_of(
+    table.begin(), table.end(), [](auto const& col) { return cudf::is_numeric(col.type()); });
 }
 }  // namespace cudf
