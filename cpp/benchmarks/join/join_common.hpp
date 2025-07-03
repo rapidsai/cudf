@@ -18,7 +18,9 @@
 
 #include "generate_input_tables.cuh"
 
+#include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/common/nvbench_utilities.hpp>
+#include <benchmarks/common/table_utilities.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 
 #include <cudf/ast/expressions.hpp>
@@ -58,7 +60,7 @@ struct null75_generator {
   }
 };
 
-enum class join_t { CONDITIONAL, MIXED, HASH };
+enum class join_t { CONDITIONAL, MIXED, HASH, SORT_MERGE };
 
 template <typename Key,
           bool Nullable,
@@ -188,6 +190,45 @@ void BM_join(state_type& state, Join JoinFunc, int multiplicity = 1, double sele
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       auto result = JoinFunc(left_table.select(columns_to_join),
                              right_table.select(columns_to_join),
+                             cudf::null_equality::UNEQUAL);
+    });
+    set_throughputs(state);
+  }
+}
+
+template <join_t join_type = join_t::HASH, typename state_type, typename Join>
+void BM_join_with_datatype(state_type& state, std::vector<cudf::type_id>& key_types, Join JoinFunc)
+{
+  auto const right_size = static_cast<size_t>(state.get_int64("right_size"));
+  auto const left_size  = static_cast<size_t>(state.get_int64("left_size"));
+
+  if (right_size > left_size) {
+    state.skip("Skip large right table");
+    return;
+  }
+
+  auto const num_keys = key_types.size();
+  key_types.push_back(cudf::type_id::INT32);
+  auto const left_tbl =
+    create_random_table(key_types, table_size_bytes{left_size}, data_profile_builder());
+  auto const left_view = left_tbl->view();
+  auto const right_tbl =
+    create_random_table(key_types, table_size_bytes{right_size}, data_profile_builder());
+  auto const right_view = right_tbl->view();
+
+  auto const join_input_size = estimate_size(right_view) + estimate_size(left_view);
+
+  // Setup join parameters and result table
+  std::vector<cudf::size_type> columns_to_join(num_keys);
+  std::iota(columns_to_join.begin(), columns_to_join.end(), 0);
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
+
+  if constexpr (join_type == join_t::HASH || join_type == join_t::SORT_MERGE) {
+    state.add_element_count(join_input_size, "join_input_size");  // number of bytes
+    state.template add_global_memory_reads<nvbench::int8_t>(join_input_size);
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      auto result = JoinFunc(left_view.select(columns_to_join),
+                             right_view.select(columns_to_join),
                              cudf::null_equality::UNEQUAL);
     });
     set_throughputs(state);
