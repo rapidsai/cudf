@@ -35,9 +35,11 @@ class StructFunction(Expr):
         PrefixFields = auto()
         SuffixFields = auto()
         JsonEncode = auto()
-        WithFields = auto()  # TODO: Implement in Polars
-        MapFieldNames = auto()  # TODO: Implement in Polars
-        MultipleFields = auto()  # TODO: Implement in Polars
+        WithFields = auto()  # TODO: https://github.com/rapidsai/cudf/pull/19052
+        MapFieldNames = auto()  # TODO: https://github.com/rapidsai/cudf/issues/19285
+        MultipleFields = (
+            auto()
+        )  # https://github.com/pola-rs/polars/pull/23022#issuecomment-2933910958
 
         @classmethod
         def from_polars(cls, obj: pl_expr.StructFunction) -> Self:
