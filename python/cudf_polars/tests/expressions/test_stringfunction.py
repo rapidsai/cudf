@@ -553,6 +553,22 @@ def test_strip_suffix(ldf):
     assert_gpu_result_equal(q)
 
 
+def test_strip_prefix_suffix_dupes():
+    ldf = pl.LazyFrame({"a": ["a", "aa", "ab", "bb", "b"]})
+
+    q = ldf.select(pl.col("a").str.strip_prefix("a"))
+    assert_gpu_result_equal(q)
+
+    q = ldf.select(pl.col("a").str.strip_suffix("a"))
+    assert_gpu_result_equal(q)
+
+    q = ldf.select(pl.col("a").str.strip_prefix("b"))
+    assert_gpu_result_equal(q)
+
+    q = ldf.select(pl.col("a").str.strip_suffix("b"))
+    assert_gpu_result_equal(q)
+
+
 def test_json_path_match():
     df = pl.LazyFrame({"a": ['{"a":"1"}', None, '{"a":2}', '{"a":2.1}', '{"a":true}']})
     q = df.select(pl.col("a").str.json_path_match("$.a"))
