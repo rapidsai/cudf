@@ -14,7 +14,9 @@ from cudf_polars.testing.asserts import (
 
 @pytest.fixture
 def ldf():
-    return pl.LazyFrame({"a": [{"b": "c", "d": "e"}, {"b": None, "d": "g"}]})
+    return pl.LazyFrame(
+        {"a": [{"b": "c", "d": "e", "f": "g"}, {"b": None, "d": "g", "f": "h"}]}
+    )
 
 
 def test_field_getitem(ldf):
@@ -22,8 +24,9 @@ def test_field_getitem(ldf):
     assert_gpu_result_equal(query)
 
 
-def test_field(ldf):
-    query = ldf.select(pl.col("a").struct.field("b"))
+@pytest.mark.parametrize("fields", [("b",), ("b", "d"), ("^b.*|f.*$",)])
+def test_field(ldf, fields):
+    query = ldf.select(pl.col("a").struct.field(*fields))
     assert_gpu_result_equal(query)
 
 
@@ -38,7 +41,9 @@ def test_json_encode(ldf):
 
 
 def test_rename_fields(ldf):
-    query = ldf.select(pl.col("a").struct.rename_fields(["1", "2"]).struct.unnest())
+    query = ldf.select(
+        pl.col("a").struct.rename_fields(["1", "2", "3"]).struct.unnest()
+    )
     assert_gpu_result_equal(query)
 
 
