@@ -436,7 +436,7 @@ class PqSourceInfo(DataSourceInfo):
         self.max_file_samples = max_file_samples
         self.max_rg_samples = max_rg_samples
         # Helper attributes - General
-        stride = max(1, int(len(paths) / max_file_samples))
+        stride = max(1, int(len(paths) / max_file_samples)) if max_file_samples else 1
         self._sample_paths: tuple[str, ...] = paths[
             : stride * max_file_samples : stride
         ]
@@ -456,7 +456,7 @@ class PqSourceInfo(DataSourceInfo):
             # Metadata was already sampled
             return
 
-        if not self._sample_paths:  # pragma: no cover
+        if not self._sample_paths:
             # No paths to sample from
             self._metadata_sampled = True
             return
@@ -506,7 +506,7 @@ class PqSourceInfo(DataSourceInfo):
         """Estimate unique-value statistics from a row-group sample."""
         if not self._sample_paths or self.max_rg_samples < 1:
             # No row-groups to sample from
-            return  # pragma: no cover
+            return
 
         self._sample_metadata()  # Need metadata
 
@@ -515,8 +515,8 @@ class PqSourceInfo(DataSourceInfo):
                 key for key in self._key_columns if key in self._all_columns
             ]
         ):
-            # No key columns are available in the file
-            return  # pragma: no cover
+            # No key columns found in the file
+            return  # pragma: no cover; should never get here
 
         sampled_file_count = len(self._sample_paths)
         if (
@@ -612,12 +612,13 @@ def _sample_pq_stats(
     return PqSourceInfo(paths, max_file_samples, max_rg_samples)
 
 
-def _extract_scan_stats(ir: Scan) -> dict[str, ColumnStats]:
+def _extract_scan_stats(
+    ir: Scan, *, max_file_samples: int = 3, max_rg_samples: int = 1
+) -> dict[str, ColumnStats]:
     """Extract base ColumnStats for a Scan node."""
     if ir.typ == "parquet":
-        # TODO: Make max_file_samples and max_rg_samples configurable
-        max_file_samples = 3
-        max_rg_samples = 1
+        # TODO: Add max_file_samples and max_rg_samples
+        # to the ConfigOption system.
         source_stats = _sample_pq_stats(
             tuple(ir.paths), max_file_samples, max_rg_samples
         )
@@ -666,7 +667,7 @@ class DataFrameSourceInfo(DataSourceInfo):
                 count=unique_count,
                 fraction=unique_fraction,
             )
-        return self._unique_stats[column]
+        return self._unique_stats.get(column, UniqueInfo())
 
 
 def _extract_dataframescan_stats(ir: DataFrameScan) -> dict[str, ColumnStats]:

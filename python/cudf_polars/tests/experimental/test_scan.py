@@ -88,7 +88,16 @@ def test_split_scan_predicate(tmp_path, df, mask):
 
 @pytest.mark.parametrize("n_files", [1, 3])
 @pytest.mark.parametrize("row_group_size", [None, 10_000])
-def test_source_statistics(tmp_path, df, n_files, row_group_size):
+@pytest.mark.parametrize("max_file_samples", [3, 0])
+@pytest.mark.parametrize("max_rg_samples", [1, 0])
+def test_source_statistics(
+    tmp_path,
+    df,
+    n_files,
+    row_group_size,
+    max_file_samples,
+    max_rg_samples,
+):
     from cudf_polars.experimental.io import _extract_scan_stats
 
     make_partitioned_source(
@@ -108,35 +117,64 @@ def test_source_statistics(tmp_path, df, n_files, row_group_size):
         },
     )
     ir = Translator(q._ldf.visit(), engine).translate_ir()
-    column_stats = _extract_scan_stats(ir)
+    column_stats = _extract_scan_stats(
+        ir,
+        max_file_samples=max_file_samples,
+        max_rg_samples=max_rg_samples,
+    )
 
     # Source info is the same for all columns
     source = column_stats["x"].source
     assert source is column_stats["y"].source
     assert source is column_stats["z"].source
-    assert source.row_count.value == df.height
-    assert source.row_count.exact  # Sampled 3 files
+    if max_file_samples:
+        assert source.row_count.value == df.height
+        assert source.row_count.exact
+    else:
+        assert source.row_count.value is None
 
     # Storage stats should be available
-    assert source.storage_size("x").value > 0
-    assert source.storage_size("y").value > 0
+    if max_file_samples:
+        assert source.storage_size("x").value > 0
+        assert source.storage_size("y").value > 0
+    else:
+        assert source.storage_size("x").value is None
+        assert source.storage_size("y").value is None
+
+    # Check that we can query a missing column name
+    assert source.storage_size("foo").value is None
+    assert source.unique("foo").count is None
+    assert source.unique("foo").fraction is None
 
     # source._unique_stats should be empty
     assert set(source._unique_stats) == set()
 
-    assert source.unique("x").count == df.height
-    assert source.unique("x").fraction == 1.0
+    if max_file_samples and max_rg_samples:
+        assert source.unique("x").count == df.height
+        assert source.unique("x").fraction == 1.0
+    else:
+        assert source.unique("x").count is None
+        assert source.unique("x").fraction is None
 
     # source._unique_stats should only contain 'x'
-    assert set(source._unique_stats) == {"x"}
-
-    # Mark 'z' as a key column, and query 'y' stats
-    source.add_unique_stats_column("z")
-    if n_files == 1 and row_group_size == 10_000:
-        assert source.unique("y").count == 3
+    if max_file_samples and max_rg_samples:
+        assert set(source._unique_stats) == {"x"}
     else:
-        assert source.unique("y").count is None
-    assert source.unique("y").fraction < 1.0
+        assert set(source._unique_stats) == set()
 
-    # source._unique_stats should contain all columns now
-    assert set(source._unique_stats) == {"x", "y", "z"}
+    # Check add_unique_stats_column behavior
+    if max_file_samples and max_rg_samples:
+        # Can add a "bad"/missing key column
+        source.add_unique_stats_column("foo")
+        assert source.unique("foo").count is None
+
+        # Mark 'z' as a key column, and query 'y' stats
+        source.add_unique_stats_column("z")
+        if n_files == 1 and row_group_size == 10_000:
+            assert source.unique("y").count == 3
+        else:
+            assert source.unique("y").count is None
+        assert source.unique("y").fraction < 1.0
+
+        # source._unique_stats should contain all columns now
+        assert set(source._unique_stats) == {"x", "y", "z"}
