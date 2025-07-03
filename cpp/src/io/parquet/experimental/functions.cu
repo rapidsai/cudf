@@ -124,12 +124,9 @@ auto build_column_from_host_data(cudf::host_span<T const> host_data,
                                  rmm::cuda_stream_view stream,
                                  rmm::device_async_resource_ref mr)
 {
-  auto const num_rows = host_data.size();
-  if (num_rows == 0 or host_data.empty()) {
-    return std::make_unique<cudf::column>(
-      cudf::data_type{data_type}, num_rows, rmm::device_buffer{}, rmm::device_buffer{}, 0);
-  }
+  CUDF_EXPECTS(not host_data.empty(), "Encountered an empty host column data span");
 
+  auto const num_rows = host_data.size();
   rmm::device_buffer buffer{num_rows * sizeof(T), stream, mr};
   cudf::detail::cuda_memcpy_async<T>(
     cudf::device_span<T>{static_cast<T*>(buffer.data()), num_rows}, host_data, stream);
@@ -217,8 +214,6 @@ table_with_metadata read_parquet_and_apply_deletion_vector(
   // Build the index column and prepend it to the table columns
   auto row_index_column =
     build_column_from_host_data<size_t>(row_indices, cudf::type_id::UINT64, stream, mr);
-  CUDF_EXPECTS(row_index_column->type().id() == cudf::type_id::UINT64,
-               "Index column must be of type UINT64");
   // Vector to store the index and table columns
   auto index_and_table_columns = std::vector<std::unique_ptr<cudf::column>>{};
   index_and_table_columns.reserve(table->num_columns() + 1);
