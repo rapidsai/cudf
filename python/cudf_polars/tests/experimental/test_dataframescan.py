@@ -84,16 +84,16 @@ def test_source_statistics(df):
     assert source.row_count.value == row_count
     assert source.row_count.exact
 
-    # Storage stats should be available
+    # Storage stats should not be available
     assert source.storage_size("x").value is None
 
     # Check unique stats
-    assert source.unique("x").count == row_count
-    assert source.unique("x").fraction == 1.0
-    assert source.unique("x").exact
-    assert source.unique("y").count == 3
-    assert math.isclose(source.unique("y").fraction, 3 / row_count, abs_tol=1e-4)
-    assert source.unique("y").exact
-    assert source.unique("z").count == 5
-    assert math.isclose(source.unique("y").fraction, 5 / row_count, abs_tol=1e-4)
-    assert source.unique("z").exact
+    assert math.isclose(source.unique("x").count, row_count, rel_tol=1e-2)
+    assert math.isclose(source.unique("x").fraction, 1.0, abs_tol=1e-2)
+    assert not source.unique("x").exact
+    assert math.isclose(source.unique("y").count, 3, rel_tol=1e-2)
+    assert math.isclose(source.unique("y").fraction, 3 / row_count, abs_tol=1e-2)
+    assert not source.unique("y").exact
+    assert math.isclose(source.unique("z").count, 5, rel_tol=1e-2)
+    assert math.isclose(source.unique("y").fraction, 5 / row_count, abs_tol=1e-2)
+    assert not source.unique("z").exact

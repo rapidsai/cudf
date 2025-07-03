@@ -15,8 +15,6 @@ from enum import IntEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-import polars as pl
-
 import pylibcudf as plc
 
 from cudf_polars.dsl.ir import IR, DataFrameScan, Scan, Sink, Union
@@ -591,7 +589,7 @@ class PqSourceInfo(DataSourceInfo):
             self._key_columns.add(column)
 
 
-@functools.lru_cache(maxsize=10)
+@functools.cache
 def _sample_pq_stats(
     paths: tuple[str, ...],
     max_file_samples: int,
@@ -647,16 +645,13 @@ class DataFrameSourceInfo(DataSourceInfo):
         """Return unique-value information."""
         if column not in self._unique_stats:
             row_count = self.row_count.value
-            count = (
-                pl.DataFrame._from_pydf(self._df).n_unique(subset=[column])
-                if row_count
-                else 0
+            unique_count = (
+                self._df.get_column(column).approx_n_unique() if row_count else 0
             )
-            fraction = (count / row_count) if row_count else 1.0
+            unique_fraction = min((unique_count / row_count), 1.0) if row_count else 1.0
             self._unique_stats[column] = UniqueInfo(
-                count=count,
-                fraction=fraction,
-                exact=True,
+                count=unique_count,
+                fraction=unique_fraction,
             )
         return self._unique_stats[column]
 
@@ -672,3 +667,12 @@ def _extract_dataframescan_stats(ir: DataFrameScan) -> dict[str, ColumnStats]:
         )
         for name in ir.schema
     }
+
+
+def _clear_source_info_cache() -> None:
+    """Clear DataSourceInfo caches."""
+    # TODO: Avoid clearing the cache if we can
+    # check that the underlying data hasn't changed.
+
+    # Clear PqSourceInfo cache
+    _sample_pq_stats.cache_clear()

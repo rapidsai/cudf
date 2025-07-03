@@ -79,7 +79,9 @@ class UniqueInfo:
     count
         Unique-value count.
     fraction
-        Unique-value fraction.
+        Unique-value fraction. This corresponds to the total
+        number of unique values (count) divided by the total
+        number of rows.
     exact
         Whether the unique-value statistics are known exactly.
     """
