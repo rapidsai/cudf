@@ -39,6 +39,10 @@ def test_json_encode(ldf):
     query = ldf.select(pl.col("a").struct.json_encode())
     assert_gpu_result_equal(query)
 
+    ldf_newlines = pl.LazyFrame({"a": [{"b": "c\nd", "d": "\r\nz"}]})
+    query = ldf_newlines.select(pl.col("a").struct.json_encode())
+    assert_gpu_result_equal(query)
+
 
 def test_rename_fields(ldf):
     query = ldf.select(
