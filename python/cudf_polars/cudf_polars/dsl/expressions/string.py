@@ -381,47 +381,34 @@ class StringFunction(Expr):
                 ),
                 dtype=self.dtype,
             )
-        elif self.name is StringFunction.Name.StripPrefix:
+        elif self.name in {
+            StringFunction.Name.StripPrefix,
+            StringFunction.Name.StripSuffix,
+        }:
             child, expr = self.children
             column = child.evaluate(df, context=context).obj
             assert isinstance(expr, Literal)
-            prefix = plc.Scalar.from_py(expr.value, expr.dtype.plc)
-            starts_with = plc.strings.find.starts_with(
+            target = plc.Scalar.from_py(expr.value, expr.dtype.plc)
+            if self.name == StringFunction.Name.StripPrefix:
+                find = plc.strings.find.starts_with
+                start = len(expr.value)
+                end: int | None = None
+            else:
+                find = plc.strings.find.ends_with
+                start = 0
+                end = -len(expr.value)
+
+            mask = find(column, target)
+            sliced = plc.strings.slice.slice_strings(
                 column,
-                prefix,
-            )
-            prefix_sliced = plc.strings.slice.slice_strings(
-                column,
-                plc.Scalar.from_py(len(expr.value), plc.DataType(plc.TypeId.INT32)),
-                plc.Scalar.from_py(None, plc.DataType(plc.TypeId.INT32)),
+                plc.Scalar.from_py(start, plc.DataType(plc.TypeId.INT32)),
+                plc.Scalar.from_py(end, plc.DataType(plc.TypeId.INT32)),
             )
             return Column(
                 plc.copying.copy_if_else(
-                    prefix_sliced,
+                    sliced,
                     column,
-                    starts_with,
-                ),
-                dtype=self.dtype,
-            )
-        elif self.name is StringFunction.Name.StripSuffix:
-            child, expr = self.children
-            column = child.evaluate(df, context=context).obj
-            assert isinstance(expr, Literal)
-            suffix = plc.Scalar.from_py(expr.value, expr.dtype.plc)
-            ends_with = plc.strings.find.ends_with(
-                column,
-                suffix,
-            )
-            suffix_sliced = plc.strings.slice.slice_strings(
-                column,
-                plc.Scalar.from_py(0, plc.DataType(plc.TypeId.INT32)),
-                plc.Scalar.from_py(-len(expr.value), plc.DataType(plc.TypeId.INT32)),
-            )
-            return Column(
-                plc.copying.copy_if_else(
-                    suffix_sliced,
-                    column,
-                    ends_with,
+                    mask,
                 ),
                 dtype=self.dtype,
             )
