@@ -70,7 +70,7 @@ the query on a single GPU. You can instead use the `"distributed"` scheduler to
 execute the query in parallel on a single node with multiple GPUs or multiple
 nodes with one or more GPUs.
 
-```{admonition}
+```{note}
 The distributed scheduler is considered experimental and might change without warning.
 ```
 
