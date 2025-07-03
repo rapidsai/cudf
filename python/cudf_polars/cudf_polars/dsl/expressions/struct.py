@@ -46,11 +46,11 @@ class StructFunction(Expr):
             """Convert from polars' `StructFunction`."""
             try:
                 function, name = str(obj).split(".", maxsplit=1)
-            except ValueError:  # pragma: no cover
+            except ValueError:
                 # Failed to unpack string
-                function = None  # pragma: no cover
+                function = None
             if function != "StructFunction":
-                raise ValueError("StructFunction required")  # pragma: no cover
+                raise ValueError("StructFunction required")
             return getattr(cls, name)
 
     __slots__ = ("name", "options")
