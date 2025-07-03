@@ -491,7 +491,7 @@ class PqSourceInfo(DataSourceInfo):
     def _sample_row_groups(self) -> None:
         """Estimate unique-value statistics from a row-group sample."""
         if self._row_count is None:
-            self._sample_metadata()
+            self._sample_metadata()  # pragma: no cover; Usually sampled before row-groups
         if (
             self._num_row_groups_per_file is None
             or self._sample_paths is None

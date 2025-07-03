@@ -86,11 +86,18 @@ def test_split_scan_predicate(tmp_path, df, mask):
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_source_statistics(tmp_path, df):
+@pytest.mark.parametrize("n_files", [1, 3])
+@pytest.mark.parametrize("row_group_size", [None, 10_000])
+def test_source_statistics(tmp_path, df, n_files, row_group_size):
     from cudf_polars.experimental.io import _extract_scan_stats
 
-    n_files = 3
-    make_partitioned_source(df, tmp_path, "parquet", n_files=n_files)
+    make_partitioned_source(
+        df,
+        tmp_path,
+        "parquet",
+        n_files=n_files,
+        row_group_size=row_group_size,
+    )
     q = pl.scan_parquet(tmp_path)
     engine = pl.GPUEngine(
         raise_on_fail=True,
@@ -125,7 +132,10 @@ def test_source_statistics(tmp_path, df):
 
     # Mark 'z' as a key column, and query 'y' stats
     source.add_unique_stats_column("z")
-    assert source.unique("y").count is None  # Sampled 1 row-group
+    if n_files == 1 and row_group_size == 10_000:
+        assert source.unique("y").count == 3
+    else:
+        assert source.unique("y").count is None
     assert source.unique("y").fraction < 1.0
 
     # source._unique_stats should contain all columns now

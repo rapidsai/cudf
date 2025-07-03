@@ -137,11 +137,11 @@ class DataSourceInfo:
     @property
     def row_count(self) -> RowCountInfo:
         """Data source row-count estimate."""
-        return RowCountInfo()
+        return RowCountInfo()  # pragma: no cover
 
     def unique(self, column: str) -> UniqueInfo:
         """Return unique-value information."""
-        return UniqueInfo()
+        return UniqueInfo()  # pragma: no cover
 
     def storage_size(self, column: str) -> StorageSizeInfo:
         """Return the average column size for a single file."""
