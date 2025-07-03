@@ -26,7 +26,7 @@
 
 namespace filters {
 
-struct TypeSupportTest : public cudf::test::BaseFixture {
+struct FilterTestFixture : public cudf::test::BaseFixture {
  protected:
   void SetUp() override
   {
@@ -43,14 +43,14 @@ struct TypeSupportTest : public cudf::test::BaseFixture {
 };
 
 template <typename T>
-struct NumericSupportTest : public TypeSupportTest {};
+struct FilterNumericTest : public FilterTestFixture {};
 
 using NumericTypesNotBool =
   cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
 
-TYPED_TEST_SUITE(NumericSupportTest, NumericTypesNotBool);
+TYPED_TEST_SUITE(FilterNumericTest, NumericTypesNotBool);
 
-TYPED_TEST(NumericSupportTest, Assertions)
+TYPED_TEST(FilterNumericTest, NoAssertions)
 {
   using T = TypeParam;
 
@@ -69,11 +69,11 @@ TYPED_TEST(NumericSupportTest, Assertions)
 }
 
 template <typename T>
-struct ChronoTypeSupportTest : public TypeSupportTest {};
+struct FilterChronoTest : public FilterTestFixture {};
 
-TYPED_TEST_SUITE(ChronoTypeSupportTest, cudf::test::ChronoTypes);
+TYPED_TEST_SUITE(FilterChronoTest, cudf::test::ChronoTypes);
 
-TYPED_TEST(ChronoTypeSupportTest, Assertions)
+TYPED_TEST(FilterChronoTest, NoAssertions)
 {
   using T = TypeParam;
 
@@ -91,11 +91,11 @@ TYPED_TEST(ChronoTypeSupportTest, Assertions)
 }
 
 template <typename T>
-struct FixedPointSupportTest : public TypeSupportTest {};
+struct FilterFixedPointTest : public FilterTestFixture {};
 
-TYPED_TEST_SUITE(FixedPointSupportTest, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FilterFixedPointTest, cudf::test::FixedPointTypes);
 
-TYPED_TEST(FixedPointSupportTest, Assertions)
+TYPED_TEST(FilterFixedPointTest, NoAssertions)
 {
   using T = TypeParam;
 
@@ -115,12 +115,7 @@ TYPED_TEST(FixedPointSupportTest, Assertions)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, results[0]->view());
 }
 
-template <typename T>
-struct StringSupportTest : public TypeSupportTest {};
-
-TYPED_TEST_SUITE(StringSupportTest, cudf::test::StringTypes);
-
-TYPED_TEST(StringSupportTest, Assertions)
+TEST_F(FilterTestFixture, StringNoAssertions)
 {
   auto a = cudf::test::strings_column_wrapper{{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"},
                                               {1, 0, 1, 1, 1, 1, 1, 1, 0, 0}};

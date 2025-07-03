@@ -35,6 +35,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/copy.h>
 
 #include <jit_preprocessed_files/filter/jit/kernel.cu.jit.hpp>
@@ -46,7 +47,7 @@ namespace cudf {
 
 namespace {
 
-struct filter_stencil {
+struct filter_predicate {
   static constexpr cudf::size_type NOT_APPLIED = -1;
 
   constexpr __device__ bool operator()(cudf::size_type flag) const { return flag != NOT_APPLIED; }
@@ -56,27 +57,30 @@ struct filter_stencil {
 struct filter_histogram {
   constexpr __device__ cudf::size_type operator()(cudf::size_type flag) const
   {
-    return (flag == filter_stencil::NOT_APPLIED) ? 0 : 1;
+    return (flag == filter_predicate::NOT_APPLIED) ? 0 : 1;
   }
 };
 
 /// @brief A gather-filter operation that filters the elements of an input range base on a
-/// pre-computed flag. The flag serves as both a stencil and a gather map.
+/// pre-computed stencil. The stencil serves as both a stencil and a gather map.
 template <typename InputIterator>
 auto filter_by(InputIterator input_begin,
                InputIterator input_end,
                cudf::size_type num_selected,
-               cudf::size_type const* flag,
+               cudf::size_type const* stencil,
                rmm::cuda_stream_view stream,
                rmm::device_async_resource_ref mr)
 {
   rmm::device_uvector<typename std::iterator_traits<InputIterator>::value_type> output(
     static_cast<size_t>(num_selected), stream, mr);
 
-  auto output_size = std::distance(
-    output.begin(),
-    thrust::copy_if(
-      rmm::exec_policy(stream), input_begin, input_end, flag, output.begin(), filter_stencil{}));
+  auto output_size = cuda::std::distance(output.begin(),
+                                         thrust::copy_if(rmm::exec_policy(stream),
+                                                         input_begin,
+                                                         input_end,
+                                                         stencil,
+                                                         output.begin(),
+                                                         filter_predicate{}));
 
   CUDF_EXPECTS(output_size == num_selected,
                "The number of selected items does not match the expected count.",  // < This should
@@ -95,12 +99,12 @@ struct filter_dispatcher<false> {
     requires(cudf::is_rep_layout_compatible<T>() && cudf::is_fixed_width<T>())
   std::unique_ptr<cudf::column> operator()(cudf::column_device_view const& col,
                                            cudf::size_type num_selected,
-                                           cudf::size_type const* flag_iterator,
+                                           cudf::size_type const* stencil_iterator,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr) const
   {
-    auto filtered =
-      filter_by(col.data<T>(), col.data<T>() + col.size(), num_selected, flag_iterator, stream, mr);
+    auto filtered = filter_by(
+      col.data<T>(), col.data<T>() + col.size(), num_selected, stencil_iterator, stream, mr);
     auto filtered_size = filtered.size();
     auto out =
       cudf::column(col.type(), filtered_size, filtered.release(), rmm::device_buffer{}, 0, {});
@@ -111,14 +115,14 @@ struct filter_dispatcher<false> {
     requires(cudf::is_fixed_point<T>())
   std::unique_ptr<cudf::column> operator()(cudf::column_device_view const& col,
                                            cudf::size_type num_selected,
-                                           cudf::size_type const* flag_iterator,
+                                           cudf::size_type const* stencil_iterator,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr) const
   {
     auto filtered = filter_by(col.data<typename T::rep>(),  // actually uses the underlying rep type
                               col.data<typename T::rep>() + col.size(),
                               num_selected,
-                              flag_iterator,
+                              stencil_iterator,
                               stream,
                               mr);
     auto filtered_size = filtered.size();
@@ -131,14 +135,14 @@ struct filter_dispatcher<false> {
     requires(std::is_same_v<T, cudf::string_view>)
   std::unique_ptr<cudf::column> operator()(cudf::column_device_view const& col,
                                            cudf::size_type num_selected,
-                                           cudf::size_type const* flag_iterator,
+                                           cudf::size_type const* stencil_iterator,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr) const
   {
     auto filtered = filter_by(col.begin<cudf::string_view>(),
                               col.begin<cudf::string_view>() + col.size(),
                               num_selected,
-                              flag_iterator,
+                              stencil_iterator,
                               stream,
                               mr);
     return cudf::make_strings_column(filtered, cudf::string_view{nullptr, 0}, stream, mr);
@@ -147,13 +151,13 @@ struct filter_dispatcher<false> {
   template <typename T>
   std::unique_ptr<cudf::column> operator()(cudf::column_device_view const& col,
                                            cudf::size_type num_selected,
-                                           cudf::size_type const* flag_iterator,
+                                           cudf::size_type const* stencil_iterator,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr) const
   {
     CUDF_FAIL("Unsupported column type for filter operation: " +
                 cudf::type_to_name(cudf::data_type{cudf::type_to_id<T>()}),
-              cudf::logic_error);
+              std::invalid_argument);
   }
 };
 
