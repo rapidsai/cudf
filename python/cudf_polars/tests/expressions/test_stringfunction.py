@@ -239,6 +239,12 @@ def ldf_split():
 
 
 @pytest.mark.parametrize("n", [1, 2, 10])
+def test_split_n(ldf_split, n):
+    query = ldf_split.select(pl.col("a").str.splitn("_", n))
+    assert_gpu_result_equal(query)
+
+
+@pytest.mark.parametrize("n", [1, 2, 10])
 def test_split_extract(ldf_split, n):
     query = ldf_split.select(pl.col("a").str.split_exact("_", n))
     assert_gpu_result_equal(query)
