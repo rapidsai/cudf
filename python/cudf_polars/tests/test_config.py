@@ -262,7 +262,7 @@ def test_validate_shuffle_method_defaults(rapidsmpf_available) -> None:
     "option",
     [
         "max_rows_per_partition",
-        "cardinality_factor",
+        "unique_fraction",
         "target_partition_size",
         "groupby_n_ary",
         "broadcast_join_limit",
@@ -275,6 +275,16 @@ def test_validate_max_rows_per_partition(option: str) -> None:
             pl.GPUEngine(
                 executor="streaming",
                 executor_options={option: object()},
+            )
+        )
+
+
+def test_cardinality_factor_compat() -> None:
+    with pytest.warns(FutureWarning, match="configuration is deprecated"):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={"cardinality_factor": {}},
             )
         )
 
