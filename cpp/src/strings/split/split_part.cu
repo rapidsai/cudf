@@ -88,7 +88,7 @@ std::unique_ptr<column> split_part(strings_column_view const& input,
 
   auto d_strings = column_device_view::create(input.parent(), stream);
   if (delimiter.size() == 0) {
-    auto tokenizer    = split_ws_tokenizer_fn{*d_strings, index + 2};
+    auto tokenizer = split_ws_tokenizer_fn{*d_strings, cuda::std::numeric_limits<size_type>::max()};
     auto delimiter_fn = whitespace_delimiter_fn{};
     return split_part_fn(input, index, tokenizer, delimiter_fn, stream, mr);
   }

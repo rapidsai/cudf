@@ -17,7 +17,6 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/debug_utilities.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 
@@ -838,23 +837,53 @@ TEST_F(StringsSplitTest, SplitPart)
 {
   cudf::test::strings_column_wrapper input({"a-b-c", "é-bb-c", "a-bé-ccc", "", "", "xx-yy zz"},
                                            {true, true, true, false, true, true});
-  auto sv       = cudf::strings_column_view(input);
-  auto result   = cudf::strings::split_part(sv, cudf::string_scalar("-"), 0);
+  auto sv        = cudf::strings_column_view(input);
+  auto delimiter = cudf::string_scalar("-");
+
+  auto result   = cudf::strings::split_part(sv, delimiter, 0);
   auto expected = cudf::test::strings_column_wrapper({"a", "é", "a", "", "", "xx"},
                                                      {true, true, true, false, true, true});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
 
-  result   = cudf::strings::split_part(sv, cudf::string_scalar("-"), 1);
+  result   = cudf::strings::split_part(sv, delimiter, 1);
   expected = cudf::test::strings_column_wrapper({"b", "bb", "bé", "", "", "yy zz"},
                                                 {true, true, true, false, false, true});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
 
-  result   = cudf::strings::split_part(sv, cudf::string_scalar("-"), 2);
+  result   = cudf::strings::split_part(sv, delimiter, 2);
   expected = cudf::test::strings_column_wrapper({"c", "c", "ccc", "", "", ""},
                                                 {true, true, true, false, false, false});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
 
-  result   = cudf::strings::split_part(sv, cudf::string_scalar("-"), 3);
+  result   = cudf::strings::split_part(sv, delimiter, 3);
+  expected = cudf::test::strings_column_wrapper({"", "", "", "", "", ""},
+                                                {false, false, false, false, false, false});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
+}
+
+TEST_F(StringsSplitTest, SplitPartWhitespace)
+{
+  cudf::test::strings_column_wrapper input({"a b  c", "é  bb c", " a bé ccc ", "", "", "xx yy-zz"},
+                                           {true, true, true, false, true, true});
+  auto sv        = cudf::strings_column_view(input);
+  auto delimiter = cudf::string_scalar("");
+
+  auto result   = cudf::strings::split_part(sv, delimiter, 0);
+  auto expected = cudf::test::strings_column_wrapper({"a", "é", "a", "", "", "xx"},
+                                                     {true, true, true, false, false, true});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
+
+  result   = cudf::strings::split_part(sv, delimiter, 1);
+  expected = cudf::test::strings_column_wrapper({"b", "bb", "bé", "", "", "yy-zz"},
+                                                {true, true, true, false, false, true});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
+
+  result   = cudf::strings::split_part(sv, delimiter, 2);
+  expected = cudf::test::strings_column_wrapper({"c", "c", "ccc", "", "", ""},
+                                                {true, true, true, false, false, false});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
+
+  result   = cudf::strings::split_part(sv, delimiter, 3);
   expected = cudf::test::strings_column_wrapper({"", "", "", "", "", ""},
                                                 {false, false, false, false, false, false});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);

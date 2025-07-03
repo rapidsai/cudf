@@ -251,7 +251,7 @@ std::unique_ptr<column> rsplit_record(
  *
  * Any null string entries return corresponding null output columns.
  *
- * @param strings_column Strings instance for this operation
+ * @param input Strings instance for this operation
  * @param delimiter UTF-8 encoded string indicating the split points in each string;
  *        Default of empty string indicates split on whitespace
  * @param index The index of the string to return from the split
@@ -260,7 +260,7 @@ std::unique_ptr<column> rsplit_record(
  * @return New column of strings
  */
 std::unique_ptr<column> split_part(
-  strings_column_view const& strings_column,
+  strings_column_view const& input,
   string_scalar const& delimiter    = string_scalar(""),
   size_type index                   = 0,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
