@@ -27,6 +27,15 @@ void nvbench_inner_join(nvbench::state& state,
                                            nvbench::enum_type<NullEquality>,
                                            nvbench::enum_type<Algorithm>>)
 {
+  if (Nullable == false && NullEquality == cudf::null_equality::UNEQUAL) {
+    state.skip(
+      "Since the keys are not nullable, how null entries are to be compared by the join algorithm "
+      "is "
+      "immaterial. Therefore, we skip running the benchmark when null equality is set to "
+      "UNEQUAL since the performance numbers will be the same as when null equality is set to "
+      "EQUAL.");
+    return;
+  }
   auto const multiplicity = static_cast<cudf::size_type>(state.get_int64("multiplicity"));
   auto hash_join          = [](cudf::table_view const& left_input,
                       cudf::table_view const& right_input,
