@@ -37,8 +37,7 @@
 #include <functional>
 #include <numeric>
 
-// Base test fixture for tests
-struct ParquetExperimentalApisTest : public cudf::test::BaseFixture {};
+using cudf::io::parquet::experimental::roaring64_serialization_format;
 
 using namespace roaring;
 
@@ -122,6 +121,28 @@ auto build_expected_row_indices(cudf::host_span<size_t const> row_group_offsets,
     });
 
   return expected_row_indices;
+}
+
+template <roaring64_serialization_format serialization_format>
+auto serialize_deletion_vector(roaring64_bitmap_t* deletion_vector)
+{
+  if constexpr (serialization_format == roaring64_serialization_format::PORTABLE) {
+    auto const num_bytes = roaring64_bitmap_portable_size_in_bytes(deletion_vector);
+    EXPECT_GT(num_bytes, 0);
+    auto serialized_bitmap = thrust::host_vector<std::byte>(num_bytes);
+    std::ignore            = roaring64_bitmap_portable_serialize(
+      deletion_vector, reinterpret_cast<char*>(serialized_bitmap.data()));
+    return serialized_bitmap;
+  } else {
+    std::ignore          = roaring64_bitmap_shrink_to_fit(deletion_vector);
+    auto const num_bytes = roaring64_bitmap_frozen_size_in_bytes(deletion_vector);
+    EXPECT_GT(num_bytes, 0);
+    auto serialized_bitmap       = thrust::host_vector<std::byte>(num_bytes);
+    auto const num_bytes_written = roaring64_bitmap_frozen_serialize(
+      deletion_vector, reinterpret_cast<char*>(serialized_bitmap.data()));
+    serialized_bitmap.resize(num_bytes_written);
+    return serialized_bitmap;
+  }
 }
 
 /**
@@ -245,7 +266,9 @@ std::unique_ptr<cudf::table> build_expected_table(cudf::table_view const input_t
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory for the returned table
  */
-template <typename DeletionVector>
+template <
+  typename DeletionVector,
+  roaring64_serialization_format serialization_format = roaring64_serialization_format::PORTABLE>
 void test_read_parquet_and_apply_deletion_vector(
   cudf::host_span<char const> parquet_buffer,
   DeletionVector const deletion_vector,
@@ -262,7 +285,7 @@ void test_read_parquet_and_apply_deletion_vector(
                 "DeletionVector must either be a pointer to a roaring64 bitmap or a host span "
                 "containing portable serialized roaring64 bitmap bytes");
 
-  using namespace cudf::io::parquet;
+  using namespace cudf::io::parquet::experimental;
 
   // Build the row mask column
   auto row_mask_column =
@@ -277,9 +300,23 @@ void test_read_parquet_and_apply_deletion_vector(
     cudf::host_span<char const>(parquet_buffer.data(), parquet_buffer.size())};
 
   // Read parquet
-  auto in_opts         = cudf::io::parquet_reader_options::builder(source_info).build();
-  auto [read_table, _] = experimental::read_parquet_and_apply_deletion_vector(
-    in_opts, deletion_vector, row_group_offsets, row_group_num_rows, stream, mr);
+  auto in_opts          = cudf::io::parquet_reader_options::builder(source_info).build();
+  auto const read_table = [&]() -> std::unique_ptr<cudf::table> {
+    if constexpr (std::is_same_v<DeletionVector, roaring64_bitmap_t*>) {
+      return read_parquet_and_apply_deletion_vector(
+               in_opts, deletion_vector, row_group_offsets, row_group_num_rows, stream, mr)
+        .tbl;
+    } else {
+      return read_parquet_and_apply_serialized_deletion_vector(in_opts,
+                                                               deletion_vector,
+                                                               serialization_format,
+                                                               row_group_offsets,
+                                                               row_group_num_rows,
+                                                               stream,
+                                                               mr)
+        .tbl;
+    }
+  }();
 
   // Compare the read table to the expected table
   CUDF_TEST_EXPECT_TABLES_EQUAL(read_table->view(), expected_table->view());
@@ -385,6 +422,9 @@ TYPED_TEST(Roaring64BitmapBasicsTest, TestRoaring64BitmapBasics)
                             [&](auto key) { return contained[key] != not is_even[key]; }));
   }
 }
+
+// Base test fixture for tests
+struct ParquetExperimentalApisTest : public cudf::test::BaseFixture {};
 
 TEST_F(ParquetExperimentalApisTest, TestDeletionVectors)
 {
@@ -497,103 +537,109 @@ TEST_F(ParquetExperimentalApisTest, TestSerializedDeletionVectors)
     num_rows, num_row_groups, num_columns, include_validity, stream, mr);
 
   // Test read parquet with a simple row index column and apply serialized deletion vector
-  {
-    auto expected_row_indices = thrust::host_vector<size_t>(num_rows);
-    std::iota(expected_row_indices.begin(), expected_row_indices.end(), size_t{0});
+  auto test_serialized_deletion_vector_simple =
+    [&]<roaring64_serialization_format serialization_format>() {
+      auto expected_row_indices = thrust::host_vector<size_t>(num_rows);
+      std::iota(expected_row_indices.begin(), expected_row_indices.end(), size_t{0});
 
-    // Build the expected row index column
-    auto expected_row_index_column =
-      build_column_from_host_data<size_t>(expected_row_indices, cudf::type_id::UINT64, stream, mr);
+      // Build the expected row index column
+      auto expected_row_index_column = build_column_from_host_data<size_t>(
+        expected_row_indices, cudf::type_id::UINT64, stream, mr);
 
-    // Construct a roaring64 deletion vector and corresponding row mask
-    auto [deletion_vector, input_row_mask] =
-      build_deletion_vector(num_rows, deletion_probability, expected_row_indices);
+      // Construct a roaring64 deletion vector and corresponding row mask
+      auto [deletion_vector, input_row_mask] =
+        build_deletion_vector(num_rows, deletion_probability, expected_row_indices);
 
-    // Serialize the deletion vector
-    auto const num_bytes = roaring64_bitmap_portable_size_in_bytes(deletion_vector);
-    EXPECT_GT(num_bytes, 0);
-    auto serialized_roaring64_bitmap = thrust::host_vector<std::byte>(num_bytes);
-    roaring64_bitmap_portable_serialize(
-      deletion_vector, reinterpret_cast<char*>(serialized_roaring64_bitmap.data()));
+      // Serialize the deletion vector
+      auto serialized_bitmap = serialize_deletion_vector<serialization_format>(deletion_vector);
+      auto deletion_vector_span =
+        cudf::host_span<std::byte const>(serialized_bitmap.data(), serialized_bitmap.size());
 
-    test_read_parquet_and_apply_deletion_vector(
-      parquet_buffer,
-      cudf::host_span<std::byte const>(serialized_roaring64_bitmap.data(),
-                                       serialized_roaring64_bitmap.size()),
-      {},
-      {},
-      input_table->view(),
-      input_row_mask,
-      expected_row_index_column->view(),
-      stream,
-      mr);
-  }
+      test_read_parquet_and_apply_deletion_vector<decltype(deletion_vector_span),
+                                                  serialization_format>(
+        parquet_buffer,
+        deletion_vector_span,
+        {},
+        {},
+        input_table->view(),
+        input_row_mask,
+        expected_row_index_column->view(),
+        stream,
+        mr);
+    };
+
+  test_serialized_deletion_vector_simple.operator()<roaring64_serialization_format::PORTABLE>();
+  test_serialized_deletion_vector_simple.operator()<roaring64_serialization_format::FROZEN>();
 
   // Test read parquet with a custom row index column and apply serialized deletion vector
-  {
-    std::mt19937 engine{0xf00d};
+  auto test_serialized_deletion_vector_custom_row_group_offsets =
+    [&]<roaring64_serialization_format serialization_format>() {
+      std::mt19937 engine{0xf00d};
 
-    // Row index offsets for each row group
-    auto row_group_offsets = thrust::host_vector<size_t>{static_cast<size_t>(std::llround(0.5e6)),
-                                                         static_cast<size_t>(std::llround(1e6)),
-                                                         static_cast<size_t>(std::llround(2e6)),
-                                                         static_cast<size_t>(std::llround(3e6)),
-                                                         static_cast<size_t>(std::llround(4e6))};
+      // Row index offsets for each row group
+      auto row_group_offsets = thrust::host_vector<size_t>{static_cast<size_t>(std::llround(0.5e6)),
+                                                           static_cast<size_t>(std::llround(1e6)),
+                                                           static_cast<size_t>(std::llround(2e6)),
+                                                           static_cast<size_t>(std::llround(3e6)),
+                                                           static_cast<size_t>(std::llround(4e6))};
 
-    // Split the `num_rows` into `num_row_groups` spans
-    auto row_group_splits = std::vector<cudf::size_type>(num_row_groups - 1);
-    {
-      std::uniform_int_distribution<cudf::size_type> dist{1, num_rows};
-      std::generate(
-        row_group_splits.begin(), row_group_splits.end(), [&]() { return dist(engine); });
-      std::sort(row_group_splits.begin(), row_group_splits.end());
-    }
+      // Split the `num_rows` into `num_row_groups` spans
+      auto row_group_splits = std::vector<cudf::size_type>(num_row_groups - 1);
+      {
+        std::uniform_int_distribution<cudf::size_type> dist{1, num_rows};
+        std::generate(
+          row_group_splits.begin(), row_group_splits.end(), [&]() { return dist(engine); });
+        std::sort(row_group_splits.begin(), row_group_splits.end());
+      }
 
-    // Number of rows in each row group span
-    auto row_group_num_rows = std::vector<cudf::size_type>{};
-    {
-      row_group_num_rows.reserve(num_row_groups);
-      auto previous_split = cudf::size_type{0};
-      std::transform(row_group_splits.begin(),
-                     row_group_splits.end(),
-                     std::back_inserter(row_group_num_rows),
-                     [&](auto current_split) {
-                       auto current_split_size = current_split - previous_split;
-                       previous_split          = current_split;
-                       return current_split_size;
-                     });
-      row_group_num_rows.push_back(num_rows - row_group_splits.back());
-    }
+      // Number of rows in each row group span
+      auto row_group_num_rows = std::vector<cudf::size_type>{};
+      {
+        row_group_num_rows.reserve(num_row_groups);
+        auto previous_split = cudf::size_type{0};
+        std::transform(row_group_splits.begin(),
+                       row_group_splits.end(),
+                       std::back_inserter(row_group_num_rows),
+                       [&](auto current_split) {
+                         auto current_split_size = current_split - previous_split;
+                         previous_split          = current_split;
+                         return current_split_size;
+                       });
+        row_group_num_rows.push_back(num_rows - row_group_splits.back());
+      }
 
-    // Build the host vector of expected row indices
-    auto expected_row_indices =
-      build_expected_row_indices(row_group_offsets, row_group_num_rows, num_rows);
+      // Build the host vector of expected row indices
+      auto expected_row_indices =
+        build_expected_row_indices(row_group_offsets, row_group_num_rows, num_rows);
 
-    // Build the expected row index column
-    auto expected_row_index_column =
-      build_column_from_host_data<size_t>(expected_row_indices, cudf::type_id::UINT64, stream, mr);
+      // Build the expected row index column
+      auto expected_row_index_column = build_column_from_host_data<size_t>(
+        expected_row_indices, cudf::type_id::UINT64, stream, mr);
 
-    // Construct a roaring64 deletion vector and corresponding row mask
-    auto [deletion_vector, input_row_mask] =
-      build_deletion_vector(num_rows, deletion_probability, expected_row_indices);
+      // Construct a roaring64 deletion vector and corresponding row mask
+      auto [deletion_vector, input_row_mask] =
+        build_deletion_vector(num_rows, deletion_probability, expected_row_indices);
 
-    // Serialize the deletion vector
-    auto const num_bytes = roaring64_bitmap_portable_size_in_bytes(deletion_vector);
-    EXPECT_GT(num_bytes, 0);
-    auto serialized_roaring64_bitmap = thrust::host_vector<std::byte>(num_bytes);
-    roaring64_bitmap_portable_serialize(
-      deletion_vector, reinterpret_cast<char*>(serialized_roaring64_bitmap.data()));
+      // Serialize the deletion vector
+      auto serialized_bitmap = serialize_deletion_vector<serialization_format>(deletion_vector);
+      auto deletion_vector_span =
+        cudf::host_span<std::byte const>(serialized_bitmap.data(), serialized_bitmap.size());
 
-    test_read_parquet_and_apply_deletion_vector(
-      parquet_buffer,
-      cudf::host_span<std::byte const>(serialized_roaring64_bitmap.data(),
-                                       serialized_roaring64_bitmap.size()),
-      row_group_offsets,
-      row_group_num_rows,
-      input_table->view(),
-      input_row_mask,
-      expected_row_index_column->view(),
-      stream,
-      mr);
-  }
+      test_read_parquet_and_apply_deletion_vector<decltype(deletion_vector_span),
+                                                  serialization_format>(
+        parquet_buffer,
+        deletion_vector_span,
+        row_group_offsets,
+        row_group_num_rows,
+        input_table->view(),
+        input_row_mask,
+        expected_row_index_column->view(),
+        stream,
+        mr);
+    };
+
+  test_serialized_deletion_vector_custom_row_group_offsets
+    .operator()<roaring64_serialization_format::PORTABLE>();
+  test_serialized_deletion_vector_custom_row_group_offsets
+    .operator()<roaring64_serialization_format::FROZEN>();
 }

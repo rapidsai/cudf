@@ -497,13 +497,22 @@ table_with_metadata read_parquet_and_apply_deletion_vector(
   rmm::device_async_resource_ref mr);
 
 /**
- * @brief Reads a table from parquet source, prepends an index column to it, and deserializes the
- * portable roaring64 deletion vector and applies it to the read table
+ * @brief Serialization format of the roaring64 bitmap buffer
+ */
+enum class roaring64_serialization_format : uint8_t {
+  PORTABLE,  ///< Portable format
+  FROZEN     ///< Frozen format
+};
+
+/**
+ * @brief Reads a table from parquet source, prepends an index column to it, deserializes the
+ * roaring64 deletion vector and applies it to the read table
  *
  * @ingroup io_readers
  *
  * @param options The options used to read Parquet file
  * @param serialized_roaring64_bytes Span of `portable` serialized roaring bitmap buffer
+ * @param serialization_format Serialization format of the roaring64 bitmap buffer
  * @param row_group_offsets Row index offsets for each input row group
  * @param row_group_num_rows Number of rows in each input row group
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -512,9 +521,10 @@ table_with_metadata read_parquet_and_apply_deletion_vector(
  *
  * @return Read table with index column and deletions applied, along with its metadata
  */
-table_with_metadata read_parquet_and_apply_deletion_vector(
+table_with_metadata read_parquet_and_apply_serialized_deletion_vector(
   parquet_reader_options const& options,
   cudf::host_span<std::byte const> serialized_roaring64_bytes,
+  roaring64_serialization_format serialization_format,
   cudf::host_span<size_t const> row_group_offsets,
   cudf::host_span<size_type const> row_group_num_rows,
   rmm::cuda_stream_view stream,
