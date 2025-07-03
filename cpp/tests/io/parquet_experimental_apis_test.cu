@@ -226,10 +226,11 @@ TYPED_TEST(Roaring64BitmapBasicsTest, TestRoaring64BitmapBasics)
     auto roaring64_context =
       roaring64_bulk_context_t{.high_bytes = {0, 0, 0, 0, 0, 0}, .leaf = nullptr};
 
-    std::for_each(
-      thrust::counting_iterator<Key>(0), thrust::counting_iterator<Key>(num_keys), [&](auto key) {
-        contained[key] = roaring64_bitmap_contains_bulk(roaring64_bitmap, &roaring64_context, key);
-      });
+    // Query all keys and store results
+    std::for_each(thrust::counting_iterator(0), thrust::counting_iterator(num_keys), [&](auto key) {
+      contained[key] =
+        roaring64_bitmap_contains_bulk(roaring64_bitmap, &roaring64_context, static_cast<Key>(key));
+    });
 
     EXPECT_TRUE(std::none_of(contained.begin(), contained.end(), std::identity{}));
   }
@@ -241,17 +242,18 @@ TYPED_TEST(Roaring64BitmapBasicsTest, TestRoaring64BitmapBasics)
       roaring64_bulk_context_t{.high_bytes = {0, 0, 0, 0, 0, 0}, .leaf = nullptr};
 
     // Insert all keys into the bitmap
-    std::for_each(
-      thrust::counting_iterator<Key>(0), thrust::counting_iterator<Key>(num_keys), [&](auto key) {
-        roaring64_bitmap_add_bulk(roaring64_bitmap, &roaring64_context, key);
-      });
+    std::for_each(thrust::counting_iterator(0), thrust::counting_iterator(num_keys), [&](auto key) {
+      roaring64_bitmap_add_bulk(roaring64_bitmap, &roaring64_context, static_cast<Key>(key));
+    });
 
     // Reset the context
     roaring64_context = roaring64_bulk_context_t{.high_bytes = {0, 0, 0, 0, 0, 0}, .leaf = nullptr};
-    std::for_each(
-      thrust::counting_iterator<Key>(0), thrust::counting_iterator<Key>(num_keys), [&](auto key) {
-        contained[key] = roaring64_bitmap_contains_bulk(roaring64_bitmap, &roaring64_context, key);
-      });
+
+    // Query all keys and store results
+    std::for_each(thrust::counting_iterator(0), thrust::counting_iterator(num_keys), [&](auto key) {
+      contained[key] =
+        roaring64_bitmap_contains_bulk(roaring64_bitmap, &roaring64_context, static_cast<Key>(key));
+    });
 
     EXPECT_TRUE(std::all_of(contained.begin(), contained.end(), std::identity{}));
   }
@@ -269,17 +271,20 @@ TYPED_TEST(Roaring64BitmapBasicsTest, TestRoaring64BitmapBasics)
     auto is_even =
       cudf::detail::make_counting_transform_iterator(0, [](auto const i) { return i % 2 == 0; });
 
-    std::for_each(
-      thrust::counting_iterator<Key>(0), thrust::counting_iterator<Key>(num_keys), [&](auto key) {
-        if (is_even[key]) { roaring64_bitmap_add_bulk(roaring64_bitmap, &roaring64_context, key); }
-      });
+    std::for_each(thrust::counting_iterator(0), thrust::counting_iterator(num_keys), [&](auto key) {
+      if (is_even[key]) {
+        roaring64_bitmap_add_bulk(roaring64_bitmap, &roaring64_context, static_cast<Key>(key));
+      }
+    });
 
     // Reset the context
     roaring64_context = roaring64_bulk_context_t{.high_bytes = {0, 0, 0, 0, 0, 0}, .leaf = nullptr};
-    std::for_each(
-      thrust::counting_iterator<Key>(0), thrust::counting_iterator<Key>(num_keys), [&](auto key) {
-        contained[key] = roaring64_bitmap_contains_bulk(roaring64_bitmap, &roaring64_context, key);
-      });
+
+    // Query all keys and store results
+    std::for_each(thrust::counting_iterator(0), thrust::counting_iterator(num_keys), [&](auto key) {
+      contained[key] =
+        roaring64_bitmap_contains_bulk(roaring64_bitmap, &roaring64_context, static_cast<Key>(key));
+    });
 
     // Check that all even keys are contained
     EXPECT_TRUE(std::all_of(thrust::counting_iterator<cudf::size_type>(0),

@@ -109,32 +109,32 @@ auto compute_row_indices(cudf::host_span<size_t const> row_group_offsets,
 }
 
 /**
- * @brief Builds a UINT64 row indiex column from the specified host span of row indices
+ * @brief Builds a cudf column from a span of host data
  *
- * @param row_indices Host span of row indices
- * @param num_rows Number of rows in the column
- * @param stream CUDA stream for kernel launches and data transfers
- * @param mr Device memory resource to allocate device memory for the row indices column
+ * @param host_data Span of host data
+ * @param data_type The data type of the column
+ * @param stream The stream to use for the operation
+ * @param mr The memory resource to use for the operation
  *
- * @return Unique pointer to the row index column
+ * @return A unique pointer to a column containing the row mask
  */
-auto build_row_index_column(cudf::host_span<size_t const> row_indices,
-                            size_type num_rows,
-                            rmm::cuda_stream_view stream,
-                            rmm::device_async_resource_ref mr)
+template <typename T>
+auto build_column_from_host_data(cudf::host_span<T const> host_data,
+                                 cudf::type_id data_type,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::device_async_resource_ref mr)
 {
-  rmm::device_buffer row_indices_buffer{num_rows * sizeof(size_t), stream, mr};
+  auto const num_rows = host_data.size();
+  if (num_rows == 0 or host_data.empty()) {
+    return std::make_unique<cudf::column>(
+      cudf::data_type{data_type}, num_rows, rmm::device_buffer{}, rmm::device_buffer{}, 0);
+  }
 
-  cudf::detail::cuda_memcpy_async<size_t>(
-    device_span<size_t>{static_cast<size_t*>(row_indices_buffer.data()), row_indices.size()},
-    row_indices,
-    stream);
-
-  return std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::UINT64},
-                                        num_rows,
-                                        std::move(row_indices_buffer),
-                                        rmm::device_buffer{},
-                                        cudf::size_type{0});
+  rmm::device_buffer buffer{num_rows * sizeof(T), stream, mr};
+  cudf::detail::cuda_memcpy_async<T>(
+    cudf::device_span<T>{static_cast<T*>(buffer.data()), num_rows}, host_data, stream);
+  return std::make_unique<cudf::column>(
+    cudf::data_type{data_type}, num_rows, std::move(buffer), rmm::device_buffer{}, 0);
 }
 
 /**
@@ -156,7 +156,7 @@ auto build_row_mask_column(cudf::host_span<size_t const> row_indices,
                            rmm::device_async_resource_ref mr)
 {
   // Host vector to store the row mask
-  auto host_row_mask = cudf::detail::make_host_vector<bool>(num_rows, stream);
+  auto row_mask = cudf::detail::make_host_vector<bool>(num_rows, stream);
 
   auto constexpr thread_pool_size = 16;
 
@@ -176,7 +176,7 @@ auto build_row_mask_column(cudf::host_span<size_t const> row_indices,
           // Fill up the row mask using the deletion vector
           for (auto row_idx = thread_idx; row_idx < num_rows; row_idx += thread_pool_size) {
             // Check if each row index is not present in the deletion vector
-            host_row_mask[row_idx] = not roaring64_bitmap_contains_bulk(
+            row_mask[row_idx] = not roaring64_bitmap_contains_bulk(
               deletion_vector, &roaring64_context, static_cast<uint64_t>(row_indices[row_idx]));
           }
         }));
@@ -186,22 +186,8 @@ auto build_row_mask_column(cudf::host_span<size_t const> row_indices,
   std::for_each(
     row_mask_tasks.begin(), row_mask_tasks.end(), [&](auto& task) { std::move(task).get(); });
 
-  // Device buffer for the row mask column
-  auto row_mask_column_buffer = rmm::device_buffer{num_rows * sizeof(bool), stream, mr};
-
-  // Copy the row mask to the device
-  cudf::detail::cuda_memcpy_async<bool>(
-    device_span<bool>{static_cast<bool*>(row_mask_column_buffer.data()),
-                      static_cast<size_t>(num_rows)},
-    host_row_mask,
-    stream);
-
   // Convert the row mask buffer into a BOOL8 column
-  return std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::BOOL8},
-                                        num_rows,
-                                        std::move(row_mask_column_buffer),
-                                        rmm::device_buffer{},
-                                        cudf::size_type{0});
+  return build_column_from_host_data<bool>(row_mask, cudf::type_id::BOOL8, stream, mr);
 }
 
 }  // namespace
@@ -229,7 +215,8 @@ table_with_metadata read_parquet_and_apply_deletion_vector(
   auto row_indices = compute_row_indices(row_group_offsets, row_group_num_rows, num_rows, stream);
 
   // Build the index column and prepend it to the table columns
-  auto row_index_column = build_row_index_column(row_indices, num_rows, stream, mr);
+  auto row_index_column =
+    build_column_from_host_data<size_t>(row_indices, cudf::type_id::UINT64, stream, mr);
   CUDF_EXPECTS(row_index_column->type().id() == cudf::type_id::UINT64,
                "Index column must be of type UINT64");
   // Vector to store the index and table columns
