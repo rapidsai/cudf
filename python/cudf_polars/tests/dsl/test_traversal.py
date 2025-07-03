@@ -18,6 +18,7 @@ from cudf_polars.dsl.to_ast import ExprTransformer
 from cudf_polars.dsl.traversal import (
     CachingVisitor,
     make_recursive,
+    post_traversal,
     reuse_if_unchanged,
     traversal,
 )
@@ -39,7 +40,7 @@ def make_expr(dt, n1, n2):
 
 
 def test_traversal_unique():
-    dt = DataType(pl.datatypes.Int8())
+    dt = DataType(pl.Int8())
 
     e1 = make_expr(dt, "a", "a")
     unique_exprs = list(traversal([e1]))
@@ -63,6 +64,40 @@ def test_traversal_unique():
     assert unique_exprs == [e3, expr.Col(dt, "b"), expr.Col(dt, "a")]
 
 
+def test_post_traversal_unique():
+    dt = DataType(pl.Int8())
+
+    e1 = make_expr(dt, "a", "a")
+    unique_exprs = list(post_traversal([e1]))
+    assert unique_exprs == [expr.Col(dt, "a"), e1]
+
+    e2 = make_expr(dt, "a", "b")
+    unique_exprs = list(post_traversal([e2]))
+    assert unique_exprs == [expr.Col(dt, "a"), expr.Col(dt, "b"), e2]
+
+    e3 = make_expr(dt, "b", "a")
+    unique_exprs = list(post_traversal([e3]))
+    assert unique_exprs == [expr.Col(dt, "b"), expr.Col(dt, "a"), e3]
+
+
+def test_post_traversal_multi():
+    dt = DataType(pl.Int8())
+
+    e1 = make_expr(dt, "a", "a")
+    e2 = make_expr(dt, "a", "b")
+    e3 = make_expr(dt, "b", "a")
+
+    unique_exprs = list(post_traversal([e1, e2, e3]))
+    assert len(unique_exprs) == 5
+    assert unique_exprs == [
+        expr.Col(dt, "b"),
+        expr.Col(dt, "a"),
+        e3,
+        e2,
+        e1,
+    ]
+
+
 def rename(e, rec):
     mapping = rec.state["mapping"]
     if isinstance(e, expr.Col) and e.name in mapping:
@@ -71,7 +106,7 @@ def rename(e, rec):
 
 
 def test_caching_visitor():
-    dt = DataType(pl.datatypes.Int8())
+    dt = DataType(pl.Int8())
 
     e1 = make_expr(dt, "a", "b")
 
@@ -95,7 +130,7 @@ def test_caching_visitor():
 
 
 def test_noop_visitor():
-    dt = DataType(pl.datatypes.Int8())
+    dt = DataType(pl.Int8())
 
     e1 = make_expr(dt, "a", "b")
 
