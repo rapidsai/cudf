@@ -240,13 +240,11 @@ def _callback(
 
             if timer is not None:
                 msg = textwrap.dedent("""\
-                    profile() is not supported with the streaming executor.
+                    LazyFrame.profile() is not supported with the streaming executor.
+                    To profile execution with the streaming executor, use:
 
-                    To profile execution with the streaming executor and 'synchronous' scheduler,
-                    use NVIDIA NSight Systems.
-
-                    To profile execution with the streaming executor and 'distributed' scheduler,
-                    use Dask's built-in profiling tools.
+                    - NVIDIA NSight Systems with the 'streaming' scheduler.
+                    - Dask's built-in profiling tools with the 'distributed' scheduler.
                     """)
                 raise NotImplementedError(msg)
 

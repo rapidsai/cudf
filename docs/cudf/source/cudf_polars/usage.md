@@ -35,7 +35,7 @@ cudf-polars includes [nvtx](https://nvidia.github.io/NVTX/) annotations to help 
 
 With the `distributed` scheduler for the `streaming` executor, we recommend using Dask's [built-in diagnostics](https://docs.dask.org/en/stable/diagnostics-distributed.html).
 
-Finally, with the `"in-memory"` does support [`LazyFrame.profile`](https://docs.pola.rs/api/python/stable/reference/lazyframe/api/polars.LazyFrame.profile.html).
+Finally, the `"in-memory"` *does* support [`LazyFrame.profile`](https://docs.pola.rs/api/python/stable/reference/lazyframe/api/polars.LazyFrame.profile.html).
 
 ```python
 import polars as pl

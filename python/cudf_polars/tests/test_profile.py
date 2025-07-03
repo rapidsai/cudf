@@ -26,7 +26,8 @@ def test_profile_basic() -> None:
     assert_frame_equal(result, q.collect(engine="in-memory"), check_row_order=False)
 
 
-def test_profile_streaming_raises() -> None:
+@pytest.mark.parametrize("scheduler", ["synchronous", "distributed"])
+def test_profile_streaming_raises(scheduler: str) -> None:
     df = pl.LazyFrame({"a": [1, 2, 3, 4]})
     q = df.sort("a").group_by("a").len()
 
@@ -34,4 +35,8 @@ def test_profile_streaming_raises() -> None:
         NotImplementedError,
         match=r"profile\(\) is not supported with the streaming executor.",
     ):
-        q.profile(engine=pl.GPUEngine(executor="streaming"))
+        q.profile(
+            engine=pl.GPUEngine(
+                executor="streaming", executor_options={"scheduler": scheduler}
+            )
+        )
