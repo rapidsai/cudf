@@ -496,7 +496,7 @@ TEST_F(ParquetExperimentalApisTest, TestSerializedDeletionVectors)
   auto [input_table, parquet_buffer] = create_parquet_table_and_buffer(
     num_rows, num_row_groups, num_columns, include_validity, stream, mr);
 
-  // Test read parquet with a simple row index column and apply deletion vector
+  // Test read parquet with a simple row index column and apply serialized deletion vector
   {
     auto expected_row_indices = thrust::host_vector<size_t>(num_rows);
     std::iota(expected_row_indices.begin(), expected_row_indices.end(), size_t{0});
@@ -512,7 +512,6 @@ TEST_F(ParquetExperimentalApisTest, TestSerializedDeletionVectors)
     // Serialize the deletion vector
     auto const num_bytes = roaring64_bitmap_portable_size_in_bytes(deletion_vector);
     EXPECT_GT(num_bytes, 0);
-
     auto serialized_roaring64_bitmap = thrust::host_vector<std::byte>(num_bytes);
     roaring64_bitmap_portable_serialize(
       deletion_vector, reinterpret_cast<char*>(serialized_roaring64_bitmap.data()));
@@ -530,16 +529,16 @@ TEST_F(ParquetExperimentalApisTest, TestSerializedDeletionVectors)
       mr);
   }
 
-  // Test read parquet with a custom row index column and apply deletion vector
+  // Test read parquet with a custom row index column and apply serialized deletion vector
   {
     std::mt19937 engine{0xf00d};
 
     // Row index offsets for each row group
-    auto row_group_offsets = thrust::host_vector<size_t>{static_cast<size_t>(std::llround(2e9)),
-                                                         static_cast<size_t>(std::llround(2.5e9)),
-                                                         static_cast<size_t>(std::llround(3e9)),
-                                                         static_cast<size_t>(std::llround(3.5e9)),
-                                                         static_cast<size_t>(std::llround(4e9))};
+    auto row_group_offsets = thrust::host_vector<size_t>{static_cast<size_t>(std::llround(0.5e6)),
+                                                         static_cast<size_t>(std::llround(1e6)),
+                                                         static_cast<size_t>(std::llround(2e6)),
+                                                         static_cast<size_t>(std::llround(3e6)),
+                                                         static_cast<size_t>(std::llround(4e6))};
 
     // Split the `num_rows` into `num_row_groups` spans
     auto row_group_splits = std::vector<cudf::size_type>(num_row_groups - 1);
