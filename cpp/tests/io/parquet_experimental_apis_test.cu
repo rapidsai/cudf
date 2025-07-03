@@ -42,38 +42,6 @@ using namespace roaring;
 namespace {
 
 /**
- * @brief Creates a table and writes it to Parquet host buffer
- *
- * @param num_rows Number of rows in the table
- * @param num_row_groups Number of row groups in the table
- * @param num_columns Number of columns in the table
- * @param include_validity Whether to include validity in the table
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate device memory for the returned table
- *
- * @return A pair of a unique pointer to the table and a vector containing written Parquet data
- */
-std::pair<std::unique_ptr<cudf::table>, std::vector<char>> create_parquet_table_and_buffer(
-  cudf::size_type num_rows,
-  cudf::size_type num_row_groups,
-  cudf::size_type num_columns,
-  bool include_validity,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
-{
-  auto input_table = create_random_fixed_table<float>(num_columns, num_rows, include_validity);
-  // Write table to parquet buffer
-  auto buffer = std::vector<char>{};
-  auto out_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info(&buffer), input_table->view())
-      .row_group_size_rows(num_rows / num_row_groups)
-      .build();
-  cudf::io::write_parquet(out_opts);
-
-  return {std::move(input_table), std::move(buffer)};
-}
-
-/**
  * @brief Builds a host vector of expected row indices from the specified row group offsets and
  * row counts
  *
@@ -138,26 +106,6 @@ auto serialize_deletion_vector(roaring64_bitmap_t const* deletion_vector)
   return serialized_bitmap;
 }
 
-/**
- * @brief Deserializes a roaring64 bitmap from a host vector of std::bytes
- *
- * @param serialized_bitmap_bytes Host vector of bytes containing the serialized roaring64 bitmap
- *
- * @return Pointer to the deserialized roaring64 bitmap
- */
-auto deserialize_deletion_vector(cudf::host_span<std::byte const> serialized_bitmap_bytes)
-{
-  // Check if we can deserialize the roaring64 bitmap from the serialized bytes
-  EXPECT_GT(roaring64_bitmap_portable_deserialize_size(
-              reinterpret_cast<char const*>(serialized_bitmap_bytes.data()),
-              static_cast<size_t>(serialized_bitmap_bytes.size())),
-            0);
-
-  // Deserialize the roaring64 bitmap from the frozen serialized bytes
-  return roaring64_bitmap_portable_deserialize_safe(
-    reinterpret_cast<char const*>(serialized_bitmap_bytes.data()),
-    static_cast<size_t>(serialized_bitmap_bytes.size()));
-}
 /**
  * @brief Builds a roaring64 deletion vector and a (host) row mask vector based on the specified
  * probability of a row being deleted
@@ -323,6 +271,7 @@ void test_read_parquet_and_apply_deletion_vector(
 
 }  // namespace
 
+// Base test fixture for basic roaring64 bitmap tests
 template <typename T>
 struct Roaring64BitmapBasicsTest : public cudf::test::BaseFixture {};
 
@@ -448,8 +397,16 @@ TYPED_TEST(Roaring64BitmapBasicsTest, TestRoaring64BitmapSerialization)
   // Free the original bitmap
   roaring64_bitmap_free(roaring64_bitmap);
 
+  // Check if we can deserialize the roaring64 bitmap from the serialized bytes
+  EXPECT_GT(roaring64_bitmap_portable_deserialize_size(
+              reinterpret_cast<char const*>(serialized_bitmap.data()),
+              static_cast<size_t>(serialized_bitmap.size())),
+            0);
+
   // Deserialize the bitmap buffer
-  roaring64_bitmap = deserialize_deletion_vector(serialized_bitmap);
+  roaring64_bitmap = roaring64_bitmap_portable_deserialize_safe(
+    reinterpret_cast<char const*>(serialized_bitmap.data()),
+    static_cast<size_t>(serialized_bitmap.size()));
 
   // Validate the deserialized roaring64 bitmap
   EXPECT_TRUE(roaring64_bitmap != nullptr);
@@ -494,8 +451,15 @@ TEST_F(ParquetExperimentalApisTest, TestDeletionVectors)
   auto const stream                   = cudf::get_default_stream();
   auto const mr                       = cudf::get_current_device_resource_ref();
 
-  auto [input_table, parquet_buffer] = create_parquet_table_and_buffer(
-    num_rows, num_row_groups, num_columns, include_validity, stream, mr);
+  auto input_table = create_random_fixed_table<float>(num_columns, num_rows, include_validity);
+
+  // Write table to parquet buffer
+  auto parquet_buffer = std::vector<char>{};
+  auto out_opts = cudf::io::parquet_writer_options::builder(cudf::io::sink_info(&parquet_buffer),
+                                                            input_table->view())
+                    .row_group_size_rows(num_rows / num_row_groups)
+                    .build();
+  cudf::io::write_parquet(out_opts);
 
   // Test read parquet with a simple row index column and apply deletion vector
   {
