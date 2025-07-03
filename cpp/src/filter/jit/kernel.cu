@@ -21,16 +21,10 @@
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
-#include <cudf/utilities/traits.hpp>
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
-#include <cuda/std/climits>
 #include <cuda/std/cstddef>
-#include <cuda/std/limits>
-#include <cuda/std/type_traits>
-
-#include <cstddef>
 
 // clang-format off
 #include "filter/jit/operation-udf.hpp"
