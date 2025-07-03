@@ -631,7 +631,7 @@ def _extract_scan_stats(
             for name in ir.schema
         }
 
-    else:
+    else:  # pragma: no cover
         return {name: ColumnStats(name=name) for name in ir.schema}
 
 
