@@ -121,7 +121,14 @@ auto build_expected_row_indices(cudf::host_span<size_t const> row_group_offsets,
   return expected_row_indices;
 }
 
-auto serialize_deletion_vector(roaring64_bitmap_t* deletion_vector)
+/**
+ * @brief Serializes a roaring64 bitmap to a host vector of std::bytes
+ *
+ * @param deletion_vector Pointer to the roaring64 bitmap to serialize
+ *
+ * @return Host vector of bytes containing the serialized roaring64 bitmap
+ */
+auto serialize_deletion_vector(roaring64_bitmap_t const* deletion_vector)
 {
   auto const num_bytes = roaring64_bitmap_portable_size_in_bytes(deletion_vector);
   EXPECT_GT(num_bytes, 0);
@@ -131,6 +138,26 @@ auto serialize_deletion_vector(roaring64_bitmap_t* deletion_vector)
   return serialized_bitmap;
 }
 
+/**
+ * @brief Deserializes a roaring64 bitmap from a host vector of std::bytes
+ *
+ * @param serialized_bitmap_bytes Host vector of bytes containing the serialized roaring64 bitmap
+ *
+ * @return Pointer to the deserialized roaring64 bitmap
+ */
+auto deserialize_deletion_vector(cudf::host_span<std::byte const> serialized_bitmap_bytes)
+{
+  // Check if we can deserialize the roaring64 bitmap from the serialized bytes
+  EXPECT_GT(roaring64_bitmap_portable_deserialize_size(
+              reinterpret_cast<char const*>(serialized_bitmap_bytes.data()),
+              static_cast<size_t>(serialized_bitmap_bytes.size())),
+            0);
+
+  // Deserialize the roaring64 bitmap from the frozen serialized bytes
+  return roaring64_bitmap_portable_deserialize_safe(
+    reinterpret_cast<char const*>(serialized_bitmap_bytes.data()),
+    static_cast<size_t>(serialized_bitmap_bytes.size()));
+}
 /**
  * @brief Builds a roaring64 deletion vector and a (host) row mask vector based on the specified
  * probability of a row being deleted
@@ -155,7 +182,7 @@ auto build_deletion_vector(cudf::size_type num_rows,
   auto input_row_mask = thrust::host_vector<bool>(num_rows);
   std::generate(input_row_mask.begin(), input_row_mask.end(), [&]() { return dist(engine); });
 
-  auto* deletion_vector = roaring64_bitmap_create();
+  auto deletion_vector = roaring64_bitmap_create();
 
   // Context for the roaring64 bitmap for faster (bulk) add operations
   auto roaring64_context =
@@ -171,7 +198,7 @@ auto build_deletion_vector(cudf::size_type num_rows,
                   }
                 });
 
-  return std::make_pair(deletion_vector, input_row_mask);
+  return std::make_pair(std::move(deletion_vector), std::move(input_row_mask));
 }
 
 /**
@@ -368,7 +395,7 @@ TYPED_TEST(Roaring64BitmapBasicsTest, TestRoaring64BitmapBasics)
     // Clear the bitmap
     roaring64_bitmap_clear(roaring64_bitmap);
 
-    // Reset the context
+    // Context for bulk add operation
     auto roaring64_context =
       roaring64_bulk_context_t{.high_bytes = {0, 0, 0, 0, 0, 0}, .leaf = nullptr};
 
@@ -402,7 +429,66 @@ TYPED_TEST(Roaring64BitmapBasicsTest, TestRoaring64BitmapBasics)
   }
 }
 
-// Base test fixture for tests
+TYPED_TEST(Roaring64BitmapBasicsTest, TestRoaring64BitmapSerialization)
+{
+  auto constexpr num_keys = 100'000;
+  using Key               = TypeParam;
+
+  // Build the roaring64 bitmap
+  auto roaring64_bitmap = roaring64_bitmap_create();
+
+  auto roaring64_context =
+    roaring64_bulk_context_t{.high_bytes = {0, 0, 0, 0, 0, 0}, .leaf = nullptr};
+
+  auto is_even =
+    cudf::detail::make_counting_transform_iterator(0, [](auto const i) { return i % 2 == 0; });
+
+  std::for_each(thrust::counting_iterator(0), thrust::counting_iterator(num_keys), [&](auto key) {
+    if (is_even[key]) {
+      roaring64_bitmap_add_bulk(roaring64_bitmap, &roaring64_context, static_cast<Key>(key));
+    }
+  });
+
+  auto const serialized_bitmap = serialize_deletion_vector(roaring64_bitmap);
+  EXPECT_GT(serialized_bitmap.size(), 0);
+
+  // Free the original bitmap
+  roaring64_bitmap_free(roaring64_bitmap);
+
+  // Deserialize the bitmap buffer
+  roaring64_bitmap = deserialize_deletion_vector(serialized_bitmap);
+
+  // Validate the deserialized roaring64 bitmap
+  EXPECT_TRUE(roaring64_bitmap != nullptr);
+  EXPECT_TRUE(roaring64_bitmap_internal_validate(roaring64_bitmap, nullptr));
+
+  // Host vector of booleans to store the result of bitmap queries
+  auto contained = thrust::host_vector<bool>(num_keys, false);
+
+  // Reset the context
+  roaring64_context = roaring64_bulk_context_t{.high_bytes = {0, 0, 0, 0, 0, 0}, .leaf = nullptr};
+
+  // Query all keys in the deserialized bitmap and store results
+  std::for_each(thrust::counting_iterator(0), thrust::counting_iterator(num_keys), [&](auto key) {
+    contained[key] =
+      roaring64_bitmap_contains_bulk(roaring64_bitmap, &roaring64_context, static_cast<Key>(key));
+  });
+
+  // Check that all even keys are contained
+  EXPECT_TRUE(std::all_of(thrust::counting_iterator<cudf::size_type>(0),
+                          thrust::counting_iterator<cudf::size_type>(num_keys),
+                          [&](auto key) { return contained[key] == is_even[key]; }));
+
+  // Check that all other (odd) keys are not contained
+  EXPECT_TRUE(std::all_of(thrust::counting_iterator<cudf::size_type>(0),
+                          thrust::counting_iterator<cudf::size_type>(num_keys),
+                          [&](auto key) { return contained[key] != not is_even[key]; }));
+
+  // Free the deserialized bitmap
+  roaring64_bitmap_free(roaring64_bitmap);
+}
+
+// Base test fixture for API tests
 struct ParquetExperimentalApisTest : public cudf::test::BaseFixture {};
 
 TEST_F(ParquetExperimentalApisTest, TestDeletionVectors)
@@ -440,6 +526,9 @@ TEST_F(ParquetExperimentalApisTest, TestDeletionVectors)
                                                 expected_row_index_column->view(),
                                                 stream,
                                                 mr);
+
+    // Free the deletion vector
+    roaring64_bitmap_free(deletion_vector);
   }
 
   // Test read parquet with a custom row index column and apply deletion vector
@@ -499,6 +588,9 @@ TEST_F(ParquetExperimentalApisTest, TestDeletionVectors)
                                                 expected_row_index_column->view(),
                                                 stream,
                                                 mr);
+
+    // Free the deletion vector
+    roaring64_bitmap_free(deletion_vector);
   }
 }
 
@@ -542,6 +634,9 @@ TEST_F(ParquetExperimentalApisTest, TestSerializedDeletionVectors)
                                                 expected_row_index_column->view(),
                                                 stream,
                                                 mr);
+
+    // Free the deletion vector
+    roaring64_bitmap_free(deletion_vector);
   }
 
   // Test read parquet with a custom row index column and apply serialized deletion vector
@@ -606,5 +701,8 @@ TEST_F(ParquetExperimentalApisTest, TestSerializedDeletionVectors)
                                                 expected_row_index_column->view(),
                                                 stream,
                                                 mr);
+
+    // Free the deletion vector
+    roaring64_bitmap_free(deletion_vector);
   }
 }

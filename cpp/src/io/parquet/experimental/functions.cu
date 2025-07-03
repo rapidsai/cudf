@@ -267,6 +267,12 @@ table_with_metadata read_parquet_and_apply_serialized_deletion_vector(
   auto const roaring64_bitmap = [&]() -> roaring64_bitmap_t* {
     if (serialized_roaring64_bytes.empty()) { return nullptr; }
 
+    // Check if we can deserialize the roaring64 bitmap from the serialized bytes
+    CUDF_EXPECTS(roaring64_bitmap_portable_deserialize_size(
+                   reinterpret_cast<char const*>(serialized_roaring64_bytes.data()),
+                   static_cast<size_t>(serialized_roaring64_bytes.size())),
+                 "Failed to deserialize the roaring64 bitmap");
+
     // Deserialize the roaring64 bitmap from the frozen serialized bytes
     auto roaring64_bitmap = roaring64_bitmap_portable_deserialize_safe(
       reinterpret_cast<char const*>(serialized_roaring64_bytes.data()),
