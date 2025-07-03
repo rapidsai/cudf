@@ -27,6 +27,7 @@
 #include <cudf/jit/runtime_support.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/reshape.hpp>
+#include <cudf/table/table.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -37,6 +38,9 @@
 #include <thrust/copy.h>
 
 #include <jit_preprocessed_files/filter/jit/kernel.cu.jit.hpp>
+
+#include <utility>
+#include <vector>
 
 namespace cudf {
 
