@@ -197,11 +197,11 @@ void BM_parquet_filter_string_row_groups_with_dicts_common(nvbench::state& state
 
 void BM_parquet_filter_string_rowgroups_with_dicts(nvbench::state& state)
 {
-  auto const num_row_groups    = static_cast<cudf::size_type>(state.get_int64("num_row_groups"));
-  auto const min_length        = static_cast<cudf::size_type>(state.get_int64("min_length"));
-  auto const max_length        = static_cast<cudf::size_type>(state.get_int64("max_length"));
-  auto const cardinality       = static_cast<cudf::size_type>(state.get_int64("cardinality"));
-  auto const use_many_literals = static_cast<bool>(state.get_int64("many_literals"));
+  auto const num_row_groups = static_cast<cudf::size_type>(state.get_int64("num_row_groups"));
+  auto const min_length     = static_cast<cudf::size_type>(state.get_int64("min_length"));
+  auto const max_length     = static_cast<cudf::size_type>(state.get_int64("max_length"));
+  auto const cardinality    = static_cast<cudf::size_type>(state.get_int64("cardinality"));
+  auto const is_inline_eval = static_cast<bool>(state.get_int64("is_inline"));
 
   auto table_profile =
     data_profile_builder()
@@ -224,7 +224,7 @@ void BM_parquet_filter_string_rowgroups_with_dicts(nvbench::state& state)
   return BM_parquet_filter_string_row_groups_with_dicts_common(
     state,
     table_profile,
-    use_many_literals ? filter_expr_many_literals : filter_expr_few_literals,
+    is_inline_eval ? filter_expr_few_literals : filter_expr_many_literals,
     num_row_groups,
     (static_cast<double>(min_length) + static_cast<double>(max_length)) / 2,
     cardinality);
@@ -237,4 +237,4 @@ NVBENCH_BENCH(BM_parquet_filter_string_rowgroups_with_dicts)
   .add_int64_axis("min_length", {4})
   .add_int64_axis("max_length", {32, 64, 128})
   .add_int64_axis("cardinality", {100, 1'000, 10'000})
-  .add_int64_axis("many_literals", {false, true});
+  .add_int64_axis("is_inline", {true, false});
