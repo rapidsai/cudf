@@ -307,6 +307,13 @@ ConfigureNVBench(
 )
 
 # ##################################################################################################
+# * parquet experimental reader benchmark ----------------------------------------------------------------------
+ConfigureNVBench(
+  PARQUET_EXPERIMENTAL_READER_NVBENCH io/parquet/experimental/parquet_dictionary_page_filter.cpp
+)
+
+
+# ##################################################################################################
 # * parquet multithread reader benchmark
 # ----------------------------------------------------------------------
 ConfigureNVBench(PARQUET_MULTITHREAD_READER_NVBENCH io/parquet/parquet_reader_multithread.cpp)
