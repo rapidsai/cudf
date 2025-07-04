@@ -74,11 +74,11 @@ cudf::host_span<uint8_t const> fetch_footer_bytes(cudf::host_span<uint8_t const>
 }
 
 /**
- * @brief Fetches a host span of Parquet PageIndexbytes from the input buffer span
+ * @brief Fetches a host span of Parquet page index bytes from the input buffer span
  *
  * @param buffer Input buffer span
- * @param page_index_bytes Byte range of `PageIndex` to fetch
- * @return A host span of the PageIndex bytes
+ * @param page_index_bytes Byte range of page index to fetch
+ * @return A host span of the page index bytes
  */
 cudf::host_span<uint8_t const> fetch_page_index_bytes(
   cudf::host_span<uint8_t const> buffer, cudf::io::text::byte_range_info const page_index_bytes)
