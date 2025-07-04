@@ -649,43 +649,46 @@ CUDF_KERNEL void __launch_bounds__(DECODE_BLOCK_SIZE)
                             cudf::size_type dictionary_col_idx,
                             kernel_error::pointer error)
 {
-  // Each thread decodes one dictionary page and inserts into the corresponding cuco hash set
+  // Single thread from each warp decodes one dictionary page and inserts into the corresponding
+  // cuco hash set
+  auto const warp = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
 
-  // Current row group index
-  for (size_type row_group_idx = cudf::detail::grid_1d::global_thread_id();
-       row_group_idx < total_row_groups;
-       row_group_idx += cudf::detail::grid_1d::grid_stride()) {
-    // Global index of the current column chunk (dictionary page)
-    auto const chunk_idx      = dictionary_col_idx + (row_group_idx * num_dictionary_columns);
-    auto const& page          = pages[chunk_idx];
-    auto const& page_data     = page.page_data;
-    auto const page_data_size = page.uncompressed_page_size;
+  // Index of the current column chunk of the column
+  auto const row_group_idx = cudf::detail::grid_1d::global_thread_id() / cudf::detail::warp_size;
 
-    // Break if an error has been set
-    if (is_error_set(error)) { break; }
+  // Return early if the row group index is out of bounds
+  if (row_group_idx >= total_row_groups) { return; }
 
-    // If empty buffer or no input values, then return early
-    if (page.num_input_values == 0 or page_data_size == 0) { continue; }
+  // Global index of the current column chunk (dictionary page)
+  auto const chunk_idx      = dictionary_col_idx + (row_group_idx * num_dictionary_columns);
+  auto const& page          = pages[chunk_idx];
+  auto const& page_data     = page.page_data;
+  auto const page_data_size = page.uncompressed_page_size;
 
-    using equality_fn_type    = insert_equality_functor<cudf::string_view>;
-    using hash_fn_type        = insert_hash_functor<cudf::string_view>;
-    using probing_scheme_type = cuco::linear_probing<SET_CG_SIZE, hash_fn_type>;
+  // If empty buffer or no input values, then return early
+  if (page.num_input_values == 0 or page_data_size == 0) { return; }
 
-    // Set storage reference for the current cuco hash set
-    storage_ref_type const storage_ref{set_offsets[row_group_idx + 1] - set_offsets[row_group_idx],
-                                       set_storage + set_offsets[row_group_idx]};
+  using equality_fn_type    = insert_equality_functor<cudf::string_view>;
+  using hash_fn_type        = insert_hash_functor<cudf::string_view>;
+  using probing_scheme_type = cuco::linear_probing<SET_CG_SIZE, hash_fn_type>;
 
-    // Create a view of the hash set
-    auto hash_set_ref   = cuco::static_set_ref{cuco::empty_key<key_type>{EMPTY_KEY_SENTINEL},
-                                             equality_fn_type{decoded_data},
-                                             probing_scheme_type{hash_fn_type{decoded_data}},
-                                             cuco::thread_scope_thread,
-                                             storage_ref};
-    auto set_insert_ref = hash_set_ref.rebind_operators(cuco::insert);
+  // Set storage reference for the current cuco hash set
+  storage_ref_type const storage_ref{set_offsets[row_group_idx + 1] - set_offsets[row_group_idx],
+                                     set_storage + set_offsets[row_group_idx]};
 
-    // Offset into the running sum of values to be decoded from all column chunks of this column
-    auto const value_offset = value_offsets[row_group_idx];
+  // Create a view of the hash set
+  auto hash_set_ref   = cuco::static_set_ref{cuco::empty_key<key_type>{EMPTY_KEY_SENTINEL},
+                                           equality_fn_type{decoded_data},
+                                           probing_scheme_type{hash_fn_type{decoded_data}},
+                                           cuco::thread_scope_thread,
+                                           storage_ref};
+  auto set_insert_ref = hash_set_ref.rebind_operators(cuco::insert);
 
+  // Offset into the running sum of values to be decoded from all column chunks of this column
+  auto const value_offset = value_offsets[row_group_idx];
+
+  // Decode values from the current dictionary page with single warp thread
+  if (warp.thread_rank() == 0) {
     auto buffer_offset      = int32_t{0};
     auto num_values_decoded = key_type{0};
 
@@ -819,34 +822,36 @@ CUDF_KERNEL void __launch_bounds__(DECODE_BLOCK_SIZE)
                                cudf::size_type dictionary_col_idx,
                                kernel_error::pointer error)
 {
-  // Each thread decodes values from one dictionary page and evaluates all input
+  // Single thread from each warp decodes values from one dictionary page and evaluates all input
   // predicates against them
+  auto const warp = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
 
-  // Current row group index
-  for (size_type row_group_idx = cudf::detail::grid_1d::global_thread_id();
-       row_group_idx < total_row_groups;
-       row_group_idx += cudf::detail::grid_1d::grid_stride()) {
-    // Global index of the current column chunk (dictionary page)
-    auto const chunk_idx      = dictionary_col_idx + (row_group_idx * num_dictionary_columns);
-    auto const& page          = pages[chunk_idx];
-    auto const& page_data     = page.page_data;
-    auto const page_data_size = page.uncompressed_page_size;
+  // Index of the current column chunk of the column
+  auto const row_group_idx = cudf::detail::grid_1d::global_thread_id() / cudf::detail::warp_size;
 
-    // Break if an error has been set
-    if (is_error_set(error)) { break; }
+  // Return early if the row group index is out of bounds
+  if (row_group_idx >= total_row_groups) { return; }
 
-    // If the page buffer is empty or has no values to decode, set results and continue
-    if (page.num_input_values == 0 or page_data_size == 0) {
-      if (row_group_idx < total_row_groups) {
-        for (auto i = 0; i < total_num_scalars; ++i) {
-          // Set the result to true (keep) if the operator is EQUAL, otherwise set it to false (do
-          // not prune)
-          results[i][row_group_idx] = operators[i] == ast::ast_operator::EQUAL;
-        }
+  // Global index of the current column chunk (dictionary page)
+  auto const chunk_idx      = dictionary_col_idx + (row_group_idx * num_dictionary_columns);
+  auto const& page          = pages[chunk_idx];
+  auto const& page_data     = page.page_data;
+  auto const page_data_size = page.uncompressed_page_size;
+
+  // If the page buffer is empty or has no values to decode, set results and continue
+  if (page.num_input_values == 0 or page_data_size == 0) {
+    if (warp.thread_rank() == 0 and row_group_idx < total_row_groups) {
+      for (auto i = 0; i < total_num_scalars; ++i) {
+        // Set the result to true (keep) if the operator is EQUAL, otherwise set it to false (do
+        // not prune)
+        results[i][row_group_idx] = operators[i] == ast::ast_operator::EQUAL;
       }
-      continue;
     }
+    return;
+  }
 
+  // Decode values from the current dictionary page with single warp thread
+  if (warp.thread_rank() == 0) {
     // Initialize results for all predicates to false
     for (auto i = 0; i < total_num_scalars; ++i) {
       results[i][row_group_idx] = false;
@@ -881,9 +886,8 @@ CUDF_KERNEL void __launch_bounds__(DECODE_BLOCK_SIZE)
           // If the operator is NOT_EQUAL, set the result to true (row group to be pruned) if and
           // only if this is the only value in the dictionary page (all values are unique).
           // Otherwise set it to true (row group to be kept)
-          results[scalar_idx][row_group_idx] = operators[scalar_idx] == ast::ast_operator::NOT_EQUAL
-                                                 ? page.num_input_values == 1
-                                                 : true;
+          results[scalar_idx][row_group_idx] =
+            operators[scalar_idx] == ast::ast_operator::EQUAL or page.num_input_values == 1;
         }
       }
 
@@ -1156,24 +1160,15 @@ struct dictionary_caster {
       // Check if the physical type is a string
       CUDF_EXPECTS(physical_type == parquet::Type::BYTE_ARRAY, "Unsupported physical type");
 
-      // Compute an optimal thread block size for the query kernel so that we can decode all string
-      // dictionary pages, one per thread
-      auto block_size = std::max<cudf::size_type>(cudf::detail::warp_size, total_row_groups);
-      // Round up to the next power of 2 if block size is not already a multiple of the warp size
-      if (block_size % cudf::detail::warp_size != 0) {
-        block_size = cudf::size_type{1}
-                     << (32 - cuda::std::countl_zero(static_cast<uint32_t>(block_size)));
-      }
-      // Cap the block size at DECODE_BLOCK_SIZE
-      block_size = std::min<cudf::size_type>(block_size, DECODE_BLOCK_SIZE);
-
-      // Number of thread blocks to get at least `total_row_groups` threads
+      // Number of warps per thread block
+      size_t const warps_per_block = DECODE_BLOCK_SIZE / cudf::detail::warp_size;
+      // Number of thread blocks to get at least `total_row_groups` warps
       auto const num_blocks =
-        cudf::util::div_rounding_up_safe<size_t>(total_row_groups, DECODE_BLOCK_SIZE);
+        cudf::util::div_rounding_up_safe<size_t>(total_row_groups, warps_per_block);
 
       // Decode string dictionaries and insert them to cuco hash sets, one dictionary per
       // warp
-      build_string_dictionaries<<<num_blocks, block_size, 0, stream.value()>>>(
+      build_string_dictionaries<<<num_blocks, DECODE_BLOCK_SIZE, 0, stream.value()>>>(
         pages.device_begin(),
         decoded_data,
         set_storage.data(),
@@ -1300,23 +1295,15 @@ struct dictionary_caster {
                     "decoder block size must be a multiple of warp_size");
       CUDF_EXPECTS(physical_type == parquet::Type::BYTE_ARRAY, "Unsupported physical type");
 
-      // Compute an optimal thread block size for the query kernel so that we can decode all string
-      // dictionary pages, one per thread
-      auto block_size = std::max<cudf::size_type>(cudf::detail::warp_size, total_row_groups);
-      if (block_size % cudf::detail::warp_size != 0) {
-        block_size = cudf::size_type{1}
-                     << (32 - cuda::std::countl_zero(static_cast<uint32_t>(block_size)));
-      }
-      // Cap the block size at DECODE_BLOCK_SIZE
-      block_size = std::min<cudf::size_type>(block_size, DECODE_BLOCK_SIZE);
-
-      // Number of thread blocks to get at least `total_row_groups` threads
+      // Number of warps per thread block
+      size_t const warps_per_block = DECODE_BLOCK_SIZE / cudf::detail::warp_size;
+      // Number of thread blocks to get at least `total_row_groups` warps
       auto const num_blocks =
-        cudf::util::div_rounding_up_safe<size_t>(total_row_groups, block_size);
+        cudf::util::div_rounding_up_safe<size_t>(total_row_groups, warps_per_block);
 
       // Decode string dictionaries and evaluate all literals against them, one dictionary per
       // warp
-      evaluate_few_string_literals<<<num_blocks, block_size, 0, stream.value()>>>(
+      evaluate_few_string_literals<<<num_blocks, DECODE_BLOCK_SIZE, 0, stream.value()>>>(
         pages.device_begin(),
         results_ptrs,
         scalars.data(),
