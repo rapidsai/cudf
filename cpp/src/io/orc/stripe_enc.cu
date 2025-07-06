@@ -19,7 +19,7 @@
 #include "io/utilities/time_utils.cuh"
 #include "orc_gpu.hpp"
 
-#include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/utilities/batched_memcpy.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/functional.hpp>

@@ -62,8 +62,6 @@ def _from_polars(dtype: pl.DataType) -> plc.DataType:
     elif isinstance(dtype, pl.Time):
         raise NotImplementedError("Time of day dtype not implemented")
     elif isinstance(dtype, pl.Datetime):
-        if dtype.time_zone is not None:
-            raise NotImplementedError("Time zone support")
         if dtype.time_unit == "ms":
             return plc.DataType(plc.TypeId.TIMESTAMP_MILLISECONDS)
         elif dtype.time_unit == "us":
