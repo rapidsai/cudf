@@ -49,9 +49,7 @@ std::unique_ptr<column> compute_column(table_view const& table,
 
   auto const parser = ast::detail::expression_parser{expr, table, has_nulls, stream, mr};
 
-  auto const has_complex_type = std::any_of(table.begin(), table.end(), [&](auto const& col) {
-    return ast::detail::is_complex_type(col.type().id());
-  });
+  auto const has_complex_type = parser.has_complex_type();
 
   auto const output_column_mask_state =
     has_nulls ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED;

@@ -19,6 +19,7 @@
 #include "error.hpp"
 
 #include <cudf/detail/stream_compaction.hpp>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/null_mask.hpp>
@@ -682,6 +683,9 @@ table_with_metadata reader::impl::read_chunk_internal(read_mode mode)
       out_columns.emplace_back(make_column(_output_buffers[i], nullptr, metadata, _stream));
     }
   }
+
+  out_columns =
+    cudf::structs::detail::enforce_null_consistency(std::move(out_columns), _stream, _mr);
 
   // Check if number of rows per source should be included in output metadata.
   if (include_output_num_rows_per_source()) {
