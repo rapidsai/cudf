@@ -39,7 +39,9 @@ engine = pl.GPUEngine(
 )
 ```
 
-See [Configuration Reference](#cudf-polars-api) for a full list of options.
+See [Configuration Reference](#cudf-polars-api) for a full list of options, and
+[Streaming Execution](#cudf-polars-streaming) for more on the streaming executor,
+including multi-GPU execution.
 
 ## Parquet Reader Options
 
@@ -62,48 +64,6 @@ engine = GPUEngine(
 result = query.collect(engine=engine)
 ```
 Note that passing `chunked: False` disables chunked reading entirely, and thus `chunk_read_limit` and `pass_read_limit` will have no effect.
-
-## Experimental Multi-GPU Scheduling
-
-By default, the `streaming` executor uses a synchronous *scheduler* to execute
-the query on a single GPU. You can instead use the `distributed` scheduler to
-execute the query in parallel on a single node with multiple GPUs or multiple
-nodes with one or more GPUs.
-
-```{note}
-The distributed scheduler is considered experimental and might change without warning.
-```
-
-```python
-import polars as pl
-engine = pl.GPUEngine(
-    executor="streaming",
-    executor_options={
-        "scheduler": "distributed"
-    }
-)
-```
-
-When you actually compute the results (using `.collect()` or `.sink_<method>`),
-you'll need to have a [Dask](http://dask.org/) Cluster active. For example,
-using a [dask-cuda](https://docs.rapids.ai/api/dask-cuda/stable/)
-`LocalCUDACluster` with one worker per GPU:
-
-```python
-from dask_cuda import LocalCUDACluster
-
-cluster = LocalCUDACluster()
-client = cluster.get_client()
-
-q = ...
-
-q.collect(engine=engine)
-```
-
-This will execute the query in parallel using all the GPUs available on your
-system by default. See the
-[dask-cuda](https://docs.rapids.ai/api/dask-cuda/stable/) documentation for
-more.
 
 ## Disabling CUDA Managed Memory
 
