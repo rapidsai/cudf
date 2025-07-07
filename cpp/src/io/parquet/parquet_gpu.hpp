@@ -844,9 +844,9 @@ void decode_split_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
  * @param buff_addrs Host span of corresponding output col buffer end addresses
  * @param stream CUDA stream to use
  */
-void WriteFinalOffsets(host_span<size_type const> offsets,
-                       host_span<size_type* const> buff_addrs,
-                       rmm::cuda_stream_view stream);
+void write_final_offsets(host_span<size_type const> offsets,
+                         host_span<size_type* const> buff_addrs,
+                         rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for reading the DELTA_BINARY_PACKED column data stored in the pages

@@ -42,7 +42,7 @@ namespace cudf::io::parquet::detail {
 /**
  * @brief Implementation for Parquet reader
  */
-class reader::impl {
+class reader_impl {
  public:
   /**
    * @brief Constructor from an array of dataset sources with reader options.
@@ -55,10 +55,10 @@ class reader::impl {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit impl(std::vector<std::unique_ptr<datasource>>&& sources,
-                parquet_reader_options const& options,
-                rmm::cuda_stream_view stream,
-                rmm::device_async_resource_ref mr);
+  explicit reader_impl(std::vector<std::unique_ptr<datasource>>&& sources,
+                       parquet_reader_options const& options,
+                       rmm::cuda_stream_view stream,
+                       rmm::device_async_resource_ref mr);
 
   /**
    * @brief Read an entire set or a subset of data and returns a set of columns
@@ -100,12 +100,12 @@ class reader::impl {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit impl(std::size_t chunk_read_limit,
-                std::size_t pass_read_limit,
-                std::vector<std::unique_ptr<datasource>>&& sources,
-                parquet_reader_options const& options,
-                rmm::cuda_stream_view stream,
-                rmm::device_async_resource_ref mr);
+  explicit reader_impl(std::size_t chunk_read_limit,
+                       std::size_t pass_read_limit,
+                       std::vector<std::unique_ptr<datasource>>&& sources,
+                       parquet_reader_options const& options,
+                       rmm::cuda_stream_view stream,
+                       rmm::device_async_resource_ref mr);
 
   /**
    * @copydoc cudf::io::chunked_parquet_reader::has_next

@@ -41,7 +41,7 @@
 
 namespace cudf::io::parquet::detail {
 
-void reader::impl::build_string_dict_indices()
+void reader_impl::build_string_dict_indices()
 {
   CUDF_FUNC_RANGE();
 
@@ -84,7 +84,7 @@ void reader::impl::build_string_dict_indices()
   pass.chunks.device_to_host(_stream);
 }
 
-void reader::impl::allocate_nesting_info()
+void reader_impl::allocate_nesting_info()
 {
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
@@ -246,7 +246,7 @@ void reader::impl::allocate_nesting_info()
   page_nesting_decode_info.host_to_device_async(_stream);
 }
 
-void reader::impl::allocate_level_decode_space()
+void reader_impl::allocate_level_decode_space()
 {
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
@@ -272,7 +272,7 @@ void reader::impl::allocate_level_decode_space()
   }
 }
 
-std::pair<bool, std::future<void>> reader::impl::read_column_chunks()
+std::pair<bool, std::future<void>> reader_impl::read_column_chunks()
 {
   auto const& row_groups_info = _pass_itm_data->row_groups;
 
@@ -336,7 +336,7 @@ std::pair<bool, std::future<void>> reader::impl::read_column_chunks()
                                    _stream)};
 }
 
-void reader::impl::read_compressed_data()
+void reader_impl::read_compressed_data()
 {
   auto& pass = *_pass_itm_data;
 
@@ -362,7 +362,7 @@ void reader::impl::read_compressed_data()
                "Encountered page_offsets / num_columns mismatch");
 }
 
-void reader::impl::preprocess_file(read_mode mode)
+void reader_impl::preprocess_file(read_mode mode)
 {
   CUDF_EXPECTS(!_file_preprocessed, "Attempted to preprocess file more than once");
 
@@ -443,7 +443,7 @@ void reader::impl::preprocess_file(read_mode mode)
   _file_preprocessed = true;
 }
 
-void reader::impl::generate_list_column_row_counts(is_estimate_row_counts is_estimate_row_counts)
+void reader_impl::generate_list_column_row_counts(is_estimate_row_counts is_estimate_row_counts)
 {
   auto& pass = *_pass_itm_data;
 
@@ -488,7 +488,7 @@ void reader::impl::generate_list_column_row_counts(is_estimate_row_counts is_est
   _stream.synchronize();
 }
 
-void reader::impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_limit)
+void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_limit)
 {
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
@@ -627,7 +627,7 @@ void reader::impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_li
   compute_output_chunks_for_subpass();
 }
 
-void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_rows)
+void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_rows)
 {
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
@@ -818,7 +818,7 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
     nullmask_bufs, std::numeric_limits<cudf::bitmask_type>::max(), _stream);
 }
 
-cudf::detail::host_vector<size_t> reader::impl::calculate_page_string_offsets()
+cudf::detail::host_vector<size_t> reader_impl::calculate_page_string_offsets()
 {
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
