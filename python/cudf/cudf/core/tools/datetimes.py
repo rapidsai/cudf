@@ -438,7 +438,7 @@ class DateOffset:
     See Also
     --------
     pandas.DateOffset : The equivalent Pandas object that this
-    object replicates
+        object replicates.
 
     Examples
     --------
