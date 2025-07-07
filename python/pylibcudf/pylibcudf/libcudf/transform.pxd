@@ -11,6 +11,7 @@ from pylibcudf.libcudf.expressions cimport expression
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport bitmask_type, data_type, size_type
+from pylibcudf.libcudf.jit cimport udf_source_type
 
 from rmm.librmm.device_buffer cimport device_buffer
 
@@ -37,7 +38,7 @@ cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
         const vector[column_view] & inputs,
         const string & transform_udf,
         data_type output_type,
-        bool is_ptx
+        udf_source_type source_type
     ) except +libcudf_exception_handler
 
     cdef pair[unique_ptr[table], unique_ptr[column]] encode(

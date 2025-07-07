@@ -18,6 +18,7 @@
 
 #include <cudf/ast/expressions.hpp>
 #include <cudf/types.hpp>
+#include <cudf/jit/udf.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
@@ -54,7 +55,7 @@ namespace CUDF_EXPORT cudf {
  * @param inputs        Immutable views of the input columns to transform
  * @param transform_udf The PTX/CUDA string of the transform function to apply
  * @param output_type   The output type that is compatible with the output type in the UDF
- * @param is_ptx        true: the UDF is treated as PTX code; false: the UDF is treated as CUDA code
+ * @param source_type   The source type of the UDF
  * @param user_data     User-defined device data to pass to the UDF.
  * @param stream        CUDA stream used for device memory operations and kernel launches
  * @param mr            Device memory resource used to allocate the returned column's device memory
@@ -65,7 +66,7 @@ std::unique_ptr<column> transform(
   std::vector<column_view> const& inputs,
   std::string const& transform_udf,
   data_type output_type,
-  bool is_ptx,
+  udf_source_type source_type,
   std::optional<void*> user_data    = std::nullopt,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());

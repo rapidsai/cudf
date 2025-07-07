@@ -61,18 +61,19 @@ jitify2::ConfiguredKernel build_transform_kernel(
   std::vector<column_view> const& input_columns,
   bool has_user_data,
   std::string const& udf,
-  bool is_ptx,
+  udf_source_type source_type,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
   auto const cuda_source =
-    is_ptx ? cudf::jit::parse_single_function_ptx(
-               udf,
-               "GENERIC_TRANSFORM_OP",
-               cudf::jit::build_ptx_params(cudf::jit::column_type_names(output_columns),
-                                           cudf::jit::column_type_names(input_columns),
-                                           has_user_data))
-           : cudf::jit::parse_single_function_cuda(udf, "GENERIC_TRANSFORM_OP");
+    (source_type == udf_source_type::PTX)
+      ? cudf::jit::parse_single_function_ptx(
+          udf,
+          "GENERIC_TRANSFORM_OP",
+          cudf::jit::build_ptx_params(cudf::jit::column_type_names(output_columns),
+                                      cudf::jit::column_type_names(input_columns),
+                                      has_user_data))
+      : cudf::jit::parse_single_function_cuda(udf, "GENERIC_TRANSFORM_OP");
 
   return get_kernel(jitify2::reflection::Template(kernel_name)
                       .instantiate(cudf::jit::build_jit_template_params(
@@ -90,17 +91,18 @@ jitify2::ConfiguredKernel build_span_kernel(std::string const& kernel_name,
                                             std::vector<column_view> const& input_columns,
                                             bool has_user_data,
                                             std::string const& udf,
-                                            bool is_ptx,
+                                            udf_source_type source_type,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr)
 {
   auto const cuda_source =
-    is_ptx ? cudf::jit::parse_single_function_ptx(
-               udf,
-               "GENERIC_TRANSFORM_OP",
-               cudf::jit::build_ptx_params(
-                 span_outputs, cudf::jit::column_type_names(input_columns), has_user_data))
-           : cudf::jit::parse_single_function_cuda(udf, "GENERIC_TRANSFORM_OP");
+    (source_type == udf_source_type::PTX)
+      ? cudf::jit::parse_single_function_ptx(
+          udf,
+          "GENERIC_TRANSFORM_OP",
+          cudf::jit::build_ptx_params(
+            span_outputs, cudf::jit::column_type_names(input_columns), has_user_data))
+      : cudf::jit::parse_single_function_cuda(udf, "GENERIC_TRANSFORM_OP");
 
   return get_kernel(jitify2::reflection::Template(kernel_name)
                       .instantiate(cudf::jit::build_jit_template_params(
@@ -193,7 +195,7 @@ std::unique_ptr<column> transform_operation(column_view base_column,
                                             data_type output_type,
                                             std::vector<column_view> const& inputs,
                                             std::string const& udf,
-                                            bool is_ptx,
+                                            udf_source_type source_type,
                                             std::optional<void*> user_data,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr)
@@ -211,7 +213,7 @@ std::unique_ptr<column> transform_operation(column_view base_column,
                                        inputs,
                                        user_data.has_value(),
                                        udf,
-                                       is_ptx,
+                                       source_type,
                                        stream,
                                        mr);
 
@@ -223,7 +225,7 @@ std::unique_ptr<column> transform_operation(column_view base_column,
 std::unique_ptr<column> string_view_operation(column_view base_column,
                                               std::vector<column_view> const& inputs,
                                               std::string const& udf,
-                                              bool is_ptx,
+                                              udf_source_type source_type,
                                               std::optional<void*> user_data,
                                               rmm::cuda_stream_view stream,
                                               rmm::device_async_resource_ref mr)
@@ -236,7 +238,7 @@ std::unique_ptr<column> string_view_operation(column_view base_column,
                                   inputs,
                                   user_data.has_value(),
                                   udf,
-                                  is_ptx,
+                                  source_type,
                                   stream,
                                   mr);
 
@@ -293,7 +295,7 @@ namespace detail {
 std::unique_ptr<column> transform(std::vector<column_view> const& inputs,
                                   std::string const& udf,
                                   data_type output_type,
-                                  bool is_ptx,
+                                  udf_source_type source_type,
                                   std::optional<void*> user_data,
                                   rmm::cuda_stream_view stream,
                                   rmm::device_async_resource_ref mr)
@@ -308,10 +310,10 @@ std::unique_ptr<column> transform(std::vector<column_view> const& inputs,
 
   if (is_fixed_width(output_type)) {
     return transformation::jit::transform_operation(
-      *base_column, output_type, inputs, udf, is_ptx, user_data, stream, mr);
+      *base_column, output_type, inputs, udf, source_type, user_data, stream, mr);
   } else if (output_type.id() == type_id::STRING) {
     return transformation::jit::string_view_operation(
-      *base_column, inputs, udf, is_ptx, user_data, stream, mr);
+      *base_column, inputs, udf, source_type, user_data, stream, mr);
   } else {
     CUDF_FAIL("Unsupported output type for transform operation");
   }
@@ -322,13 +324,13 @@ std::unique_ptr<column> transform(std::vector<column_view> const& inputs,
 std::unique_ptr<column> transform(std::vector<column_view> const& inputs,
                                   std::string const& udf,
                                   data_type output_type,
-                                  bool is_ptx,
+                                  udf_source_type source_type,
                                   std::optional<void*> user_data,
                                   rmm::cuda_stream_view stream,
                                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::transform(inputs, udf, output_type, is_ptx, user_data, stream, mr);
+  return detail::transform(inputs, udf, output_type, source_type, user_data, stream, mr);
 }
 
 }  // namespace cudf

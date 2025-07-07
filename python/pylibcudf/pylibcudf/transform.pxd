@@ -1,12 +1,14 @@
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from libcpp cimport bool
 from pylibcudf.libcudf.types cimport bitmask_type, data_type
+from pylibcudf.libcudf.jit cimport udf_source_type
 
 from .column cimport Column
 from .expressions cimport Expression
 from .gpumemoryview cimport gpumemoryview
 from .table cimport Table
 from .types cimport DataType
+from .jit cimport UDFSourceType
 
 
 cpdef tuple[gpumemoryview, int] nans_to_nulls(Column input)
@@ -20,7 +22,7 @@ cpdef Column mask_to_bools(Py_ssize_t bitmask, int begin_bit, int end_bit)
 cpdef Column transform(list[Column] inputs,
                        str transform_udf,
                        DataType output_type,
-                       bool is_ptx)
+                       UDFSourceType source_type)
 
 cpdef tuple[Table, Column] encode(Table input)
 
