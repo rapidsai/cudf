@@ -512,6 +512,8 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
   _stream.synchronize();
 }
 
+reader_impl::reader_impl() : _options{} {}
+
 reader_impl::reader_impl(std::vector<std::unique_ptr<datasource>>&& sources,
                          parquet_reader_options const& options,
                          rmm::cuda_stream_view stream,
@@ -533,13 +535,13 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
                          rmm::device_async_resource_ref mr)
   : _stream{stream},
     _mr{mr},
+    _sources{std::move(sources)},
+    _output_chunk_read_limit{chunk_read_limit},
+    _input_pass_read_limit{pass_read_limit},
     _options{options.get_timestamp_type(),
              options.get_skip_rows(),
              options.get_num_rows(),
-             options.get_row_groups()},
-    _sources{std::move(sources)},
-    _output_chunk_read_limit{chunk_read_limit},
-    _input_pass_read_limit{pass_read_limit}
+             options.get_row_groups()}
 {
   // Open and parse the source dataset metadata
   _metadata = std::make_unique<aggregate_reader_metadata>(
