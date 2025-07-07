@@ -10,6 +10,7 @@ from polars.testing.asserts import assert_frame_equal
 
 import rmm
 
+import cudf_polars.utils.config
 from cudf_polars.callback import default_memory_resource
 from cudf_polars.dsl.ir import DataFrameScan
 from cudf_polars.testing.asserts import (
@@ -18,6 +19,14 @@ from cudf_polars.testing.asserts import (
 )
 from cudf_polars.utils.config import ConfigOptions
 from cudf_polars.utils.versions import POLARS_VERSION_LT_130
+
+
+@pytest.fixture(params=[False, True], ids=["norapidsmpf", "rapidsmpf"])
+def rapidsmpf_available(request, monkeypatch):
+    monkeypatch.setattr(
+        cudf_polars.utils.config, "rapidsmpf_available", lambda: request.param
+    )
+    return request.param
 
 
 def test_polars_verbose_warns(monkeypatch):
@@ -133,7 +142,7 @@ def test_parquet_options(executor: str) -> None:
     assert config.parquet_options.chunked is False
 
 
-def test_validate_streaming_executor_shuffle_method() -> None:
+def test_validate_streaming_executor_shuffle_method(rapidsmpf_available) -> None:
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(
             executor="streaming",
@@ -143,17 +152,17 @@ def test_validate_streaming_executor_shuffle_method() -> None:
     assert config.executor.name == "streaming"
     assert config.executor.shuffle_method == "tasks"
 
-    config = ConfigOptions.from_polars_engine(
-        pl.GPUEngine(
-            executor="streaming",
-            executor_options={
-                "shuffle_method": "rapidsmpf",
-                "scheduler": "distributed",
-            },
-        )
+    engine = pl.GPUEngine(
+        executor="streaming",
+        executor_options={"shuffle_method": "rapidsmpf", "scheduler": "distributed"},
     )
-    assert config.executor.name == "streaming"
-    assert config.executor.shuffle_method == "rapidsmpf"
+    if rapidsmpf_available:
+        config = ConfigOptions.from_polars_engine(engine)
+        assert config.executor.name == "streaming"
+        assert config.executor.shuffle_method == "rapidsmpf"
+    else:
+        with pytest.raises(ValueError, match="rapidsmpf is not installed"):
+            ConfigOptions.from_polars_engine(engine)
 
     # rapidsmpf with sync is not allowed
 
@@ -215,14 +224,30 @@ def test_validate_scheduler() -> None:
         )
 
 
-def test_validate_shuffle_method() -> None:
+def test_validate_shuffle_method_defaults(rapidsmpf_available) -> None:
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(
             executor="streaming",
         )
     )
     assert config.executor.name == "streaming"
-    assert config.executor.shuffle_method is None
+    assert (
+        config.executor.shuffle_method == "tasks"
+    )  # Default for synchronous scheduler
+
+    # Test default for distributed scheduler depends on rapidsmpf availability
+    config = ConfigOptions.from_polars_engine(
+        pl.GPUEngine(
+            executor="streaming",
+            executor_options={"scheduler": "distributed"},
+        )
+    )
+    assert config.executor.name == "streaming"
+    if rapidsmpf_available:
+        # Should be "rapidsmpf" if available, otherwise "tasks"
+        assert config.executor.shuffle_method == "rapidsmpf"
+    else:
+        assert config.executor.shuffle_method == "tasks"
 
     with pytest.raises(ValueError, match="'foo' is not a valid ShuffleMethod"):
         ConfigOptions.from_polars_engine(
