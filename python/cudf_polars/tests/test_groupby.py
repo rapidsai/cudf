@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import itertools
+import random
 from datetime import date
 
-import numpy as np
 import pytest
 
 import polars as pl
@@ -243,8 +243,9 @@ def test_groupby_agg_broadcast_raises(df):
 @pytest.mark.parametrize("nkeys", [1, 2, 4])
 def test_groupby_maintain_order_random(nrows, nkeys, with_nulls):
     key_names = [f"key{key}" for key in range(nkeys)]
-    key_values = [np.random.randint(100, size=nrows) for _ in key_names]
-    value = np.random.randint(-100, 100, size=nrows)
+    rng = random.Random(2)
+    key_values = [rng.choices(range(100), k=nrows) for _ in key_names]
+    value = rng.choices(range(-100, 100), k=nrows)
     df = pl.DataFrame(dict(zip(key_names, key_values, strict=True), value=value))
     if with_nulls:
         df = df.with_columns(
@@ -257,10 +258,18 @@ def test_groupby_maintain_order_random(nrows, nkeys, with_nulls):
             )
         )
     q = df.lazy().group_by(key_names, maintain_order=True).agg(pl.col("value").sum())
-    assert_gpu_result_equal(q)
+    # The streaming executor is too slow for large n_rows with blocksize_mode="small"
+    assert_gpu_result_equal(q, blocksize_mode="default" if nrows > 30 else None)
 
 
 def test_groupby_len_with_nulls():
     df = pl.DataFrame({"a": [1, 1, 1, 2], "b": [1, None, 2, 3]})
     q = df.lazy().group_by("a").agg(pl.col("b").len())
+    assert_gpu_result_equal(q, check_row_order=False)
+
+
+@pytest.mark.parametrize("column", ["int", "string", "uint16_with_null"])
+def test_groupby_nunique(df: pl.LazyFrame, column):
+    q = df.group_by("key1").agg(pl.col(column).n_unique())
+
     assert_gpu_result_equal(q, check_row_order=False)

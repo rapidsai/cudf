@@ -3,7 +3,6 @@
 channels:
 - rapidsai
 - rapidsai-nightly
-- dask/label/dev
 - conda-forge
 dependencies:
 - aiobotocore>=2.2.0
@@ -24,7 +23,7 @@ dependencies:
 - cuda-nvtx-dev
 - cuda-python>=12.6.2,<13.0a0
 - cuda-sanitizer-api
-- cuda-version=12.8
+- cuda-version=12.9
 - cupy>=12.0.0
 - cxx-compiler
 - cython>=3.0.3
@@ -66,7 +65,7 @@ dependencies:
 - pandas
 - pandas>=2.0,<2.4.0dev0
 - pandoc
-- polars>=1.25,<1.31
+- polars>=1.25,<1.32
 - pre-commit
 - pyarrow>=14.0.0,<20.0.0a0
 - pydata-sphinx-theme>=0.15.4
@@ -101,4 +100,4 @@ dependencies:
 - typing_extensions>=4.0.0
 - zlib>=1.2.13
 - zstandard
-name: all_cuda-128_arch-aarch64
+name: all_cuda-129_arch-aarch64
