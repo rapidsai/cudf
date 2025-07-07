@@ -81,7 +81,7 @@ def test_groupby_agg_config_options(df, op, keys):
         executor_options={
             "max_rows_per_partition": 4,
             # Trigger shuffle-based groupby
-            "cardinality_factor": {"z": 0.5},
+            "unique_fraction": {"z": 0.5},
             # Check that we can change the n-ary factor
             "groupby_n_ary": 8,
             "scheduler": DEFAULT_SCHEDULER,

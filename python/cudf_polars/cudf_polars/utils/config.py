@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import dataclasses
 import enum
+import functools
+import importlib.util
 import json
 import os
 import warnings
@@ -19,6 +21,15 @@ if TYPE_CHECKING:
 
 
 __all__ = ["ConfigOptions"]
+
+
+@functools.cache
+def rapidsmpf_available() -> bool:  # pragma: no cover
+    """Query whether rapidsmpf is available as a shuffle method."""
+    try:
+        return importlib.util.find_spec("rapidsmpf.integrations.dask") is not None
+    except (ImportError, ValueError):
+        return False
 
 
 # TODO: Use enum.StrEnum when we drop Python 3.10
@@ -59,10 +70,6 @@ class ShuffleMethod(str, enum.Enum):
 
     * ``ShuffleMethod.TASKS`` : Use the task-based shuffler.
     * ``ShuffleMethod.RAPIDSMPF`` : Use the rapidsmpf scheduler.
-
-    In :class:`StreamingExecutor`, the default of ``None`` will attempt to use
-    ``ShuffleMethod.RAPIDSMPF``, but will fall back to ``ShuffleMethod.TASKS``
-    if rapidsmpf is not installed.
     """
 
     TASKS = "tasks"
@@ -163,13 +170,13 @@ class StreamingExecutor:
         The maximum number of rows to process per partition. 1_000_000 by default.
         When the number of rows exceeds this value, the query will be split into
         multiple partitions and executed in parallel.
-    cardinality_factor
+    unique_fraction
         A dictionary mapping column names to floats between 0 and 1 (inclusive
         on the right).
 
         Each factor estimates the fractional number of unique values in the
         column. By default, ``1.0`` is used for any column not included in
-        ``cardinality_factor``.
+        ``unique_fraction``.
     target_partition_size
         Target partition size for IO tasks. This configuration currently
         controls how large parquet files are split into multiple partitions.
@@ -185,9 +192,9 @@ class StreamingExecutor:
         The maximum number of partitions to allow for the smaller table in
         a broadcast join.
     shuffle_method
-        The method to use for shuffling data between workers. ``None``
-        by default, which will use 'rapidsmpf' if installed and fall back to
-        'tasks' if not.
+        The method to use for shuffling data between workers. Defaults to
+        'rapidsmpf' for distributed scheduler if available (otherwise 'tasks'),
+        and 'tasks' for synchronous scheduler.
     rapidsmpf_spill
         Whether to wrap task arguments and output in objects that are
         spillable by 'rapidsmpf'.
@@ -204,14 +211,30 @@ class StreamingExecutor:
     scheduler: Scheduler = Scheduler.SYNCHRONOUS
     fallback_mode: StreamingFallbackMode = StreamingFallbackMode.WARN
     max_rows_per_partition: int = 1_000_000
-    cardinality_factor: dict[str, float] = dataclasses.field(default_factory=dict)
+    unique_fraction: dict[str, float] = dataclasses.field(default_factory=dict)
     target_partition_size: int = 0
     groupby_n_ary: int = 32
     broadcast_join_limit: int = 0
-    shuffle_method: ShuffleMethod | None = None
+    shuffle_method: ShuffleMethod = ShuffleMethod.TASKS
     rapidsmpf_spill: bool = False
 
     def __post_init__(self) -> None:
+        # Handle shuffle_method defaults for streaming executor
+        if self.shuffle_method is None:
+            if self.scheduler == "distributed" and rapidsmpf_available():
+                # For distributed scheduler, prefer rapidsmpf if available
+                object.__setattr__(self, "shuffle_method", "rapidsmpf")
+            else:
+                object.__setattr__(self, "shuffle_method", "tasks")
+        else:
+            if (
+                self.scheduler == "distributed"
+                and self.shuffle_method == "rapidsmpf"
+                and not rapidsmpf_available()
+            ):
+                raise ValueError(
+                    "rapidsmpf shuffle method requested, but rapidsmpf is not installed"
+                )
         if self.scheduler == "synchronous" and self.shuffle_method == "rapidsmpf":
             raise ValueError(
                 "rapidsmpf shuffle method is not supported for synchronous scheduler"
@@ -233,16 +256,13 @@ class StreamingExecutor:
                 2 if self.scheduler == "distributed" else 32,
             )
         object.__setattr__(self, "scheduler", Scheduler(self.scheduler))
-        if self.shuffle_method is not None:
-            object.__setattr__(
-                self, "shuffle_method", ShuffleMethod(self.shuffle_method)
-            )
+        object.__setattr__(self, "shuffle_method", ShuffleMethod(self.shuffle_method))
 
         # Type / value check everything else
         if not isinstance(self.max_rows_per_partition, int):
             raise TypeError("max_rows_per_partition must be an int")
-        if not isinstance(self.cardinality_factor, dict):
-            raise TypeError("cardinality_factor must be a dict of column name to float")
+        if not isinstance(self.unique_fraction, dict):
+            raise TypeError("unique_fraction must be a dict of column name to float")
         if not isinstance(self.target_partition_size, int):
             raise TypeError("target_partition_size must be an int")
         if not isinstance(self.groupby_n_ary, int):
@@ -256,7 +276,7 @@ class StreamingExecutor:
         # cardinality factory, a dict, isn't natively hashable. We'll dump it
         # to json and hash that.
         d = dataclasses.asdict(self)
-        d["cardinality_factor"] = json.dumps(d["cardinality_factor"])
+        d["unique_fraction"] = json.dumps(d["unique_fraction"])
         return hash(tuple(sorted(d.items())))
 
 
@@ -331,6 +351,19 @@ class ConfigOptions:
         user_parquet_options = engine.config.get("parquet_options", {})
         user_raise_on_fail = engine.config.get("raise_on_fail", False)
 
+        # Backward compatibility for "cardinality_factor"
+        # TODO: Remove this in 25.10
+        if "cardinality_factor" in user_executor_options:
+            warnings.warn(
+                "The 'cardinality_factor' configuration is deprecated. "
+                "Please use 'unique_fraction' instead.",
+                FutureWarning,
+                stacklevel=2,
+            )
+            cardinality_factor = user_executor_options.pop("cardinality_factor")
+            if "unique_fraction" not in user_executor_options:
+                user_executor_options["unique_fraction"] = cardinality_factor
+
         # These are user-provided options, so we need to actually validate
         # them.
 
@@ -346,9 +379,9 @@ class ConfigOptions:
             case "in-memory":
                 executor = InMemoryExecutor(**user_executor_options)
             case "streaming":
+                user_executor_options = user_executor_options.copy()
+                user_executor_options.setdefault("shuffle_method", None)
                 executor = StreamingExecutor(**user_executor_options)
-                # Update with the streaming defaults, but user options take precedence.
-
             case _:  # pragma: no cover; Unreachable
                 raise ValueError(f"Unsupported executor: {user_executor}")
 
