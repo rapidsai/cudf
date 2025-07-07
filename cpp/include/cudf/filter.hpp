@@ -36,7 +36,7 @@ namespace CUDF_EXPORT cudf {
  * Computes:
  * `out[i]... = predicate(columns[i]... ) ? (columns[i]...): not-applied`.
  *
- * Note that for every scalar in `predicate_columns` (columns of size 1), `predicate_columns[i] ==
+ * Note that for every scalar in `columns` (columns of size 1), `columns[i] ==
  * input[0]`
  *
  *
