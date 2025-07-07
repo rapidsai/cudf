@@ -118,7 +118,7 @@ class PandasCompatListProcessor:
         self.config = app.config
         self.env = app.env
         self.domain = cast(
-            "PandasCompatDomain", app.env.get_domain("pandascompat")
+            PandasCompatDomain, app.env.get_domain("pandascompat")
         )
         self.document = new_document("")
         self.process(doctree, docname)

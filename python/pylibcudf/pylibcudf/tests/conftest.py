@@ -1,5 +1,6 @@
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # Tell ruff it's OK that some imports occur after the sys.path.insert
+# ruff: noqa: E402
 import io
 import os
 import pathlib

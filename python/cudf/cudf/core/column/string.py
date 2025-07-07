@@ -556,7 +556,7 @@ class StringColumn(ColumnBase):
             if op == "__add__":
                 if isinstance(other, pa.Scalar):
                     other = cast(
-                        "StringColumn",
+                        StringColumn,
                         as_column(other, length=len(self)),
                     )
                 lhs, rhs = (other, self) if reflect else (self, other)
@@ -935,7 +935,7 @@ class StringColumn(ColumnBase):
         Helper function for methods that modify characters e.g. to_lower
         """
         plc_column = method(self.to_pylibcudf(mode="read"))
-        return cast("Self", ColumnBase.from_pylibcudf(plc_column))
+        return cast(Self, ColumnBase.from_pylibcudf(plc_column))
 
     def to_lower(self) -> Self:
         return self._modify_characters(plc.strings.case.to_lower)
@@ -962,7 +962,7 @@ class StringColumn(ColumnBase):
             pattern.to_pylibcudf(mode="read"),
             replacements.to_pylibcudf(mode="read"),
         )
-        return cast("Self", ColumnBase.from_pylibcudf(plc_result))
+        return cast(Self, ColumnBase.from_pylibcudf(plc_result))
 
     @acquire_spill_lock()
     def is_hex(self) -> NumericalColumn:
@@ -1022,7 +1022,7 @@ class StringColumn(ColumnBase):
             ),
             maxsplit,
         )
-        return cast("Self", ColumnBase.from_pylibcudf(plc_column))
+        return cast(Self, ColumnBase.from_pylibcudf(plc_column))
 
     def split_record_re(self, pattern: str, maxsplit: int) -> Self:
         return self._split_record_re(
