@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,9 @@
 
 namespace CUDF_EXPORT cudf {
 namespace tdigest::detail {
+
+// for testing purposes
+extern bool is_cpu_cluster_computation_disabled;
 
 /**
  * @brief Generate a tdigest column from a grouped, sorted set of numeric input values.

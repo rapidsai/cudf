@@ -27,19 +27,20 @@ from cudf.api.types import (
 )
 from cudf.core import indexing_utils
 from cudf.core._compat import PANDAS_LT_300
+from cudf.core.accessors import (
+    CategoricalAccessor,
+    ListMethods,
+    StringMethods,
+    StructMethods,
+)
 from cudf.core.column import (
     ColumnBase,
     IntervalColumn,
     as_column,
 )
-from cudf.core.column.categorical import (
-    CategoricalAccessor,
-)
 from cudf.core.column.column import concat_columns
-from cudf.core.column.lists import ListMethods
-from cudf.core.column.string import StringMethods
-from cudf.core.column.struct import StructMethods
 from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.dtypes import CategoricalDtype
 from cudf.core.groupby.groupby import SeriesGroupBy, groupby_doc_template
 from cudf.core.index import (
     DatetimeIndex,
@@ -50,7 +51,6 @@ from cudf.core.index import (
 from cudf.core.indexed_frame import (
     IndexedFrame,
     _FrameIndexer,
-    _get_label_range_or_mask,
     _indices_from_labels,
     doc_reset_index_template,
 )
@@ -246,6 +246,15 @@ class _SeriesLocIndexer(_FrameIndexer):
 
     @_performance_tracking
     def __getitem__(self, arg: Any) -> ScalarLike | DataFrameOrSeries:
+        if not isinstance(self._frame.index, cudf.MultiIndex):
+            indexing_spec = indexing_utils.parse_row_loc_indexer(
+                indexing_utils.destructure_series_loc_indexer(
+                    arg, self._frame
+                ),
+                self._frame.index,
+            )
+            return self._frame._getitem_preprocessed(indexing_spec)
+
         if isinstance(arg, pd.MultiIndex):
             arg = cudf.from_pandas(arg)
 
@@ -319,16 +328,10 @@ class _SeriesLocIndexer(_FrameIndexer):
             arg = arg[0]
         if _is_scalar_or_zero_d_array(arg):
             index_dtype = self._frame.index.dtype
-            warn_msg = (
-                "Series.__getitem__ treating keys as positions is deprecated. "
-                "In a future version, integer keys will always be treated "
-                "as labels (consistent with DataFrame behavior). To access "
-                "a value by position, use `ser.iloc[pos]`"
-            )
             if not is_dtype_obj_numeric(
                 index_dtype, include_decimal=False
             ) and not (
-                isinstance(index_dtype, cudf.CategoricalDtype)
+                isinstance(index_dtype, CategoricalDtype)
                 and index_dtype.categories.dtype.kind in "iu"
             ):
                 # TODO: switch to cudf.utils.dtypes.is_integer(arg)
@@ -336,6 +339,12 @@ class _SeriesLocIndexer(_FrameIndexer):
                     # Do not remove until pandas 3.0 support is added.
                     assert PANDAS_LT_300, (
                         "Need to drop after pandas-3.0 support is added."
+                    )
+                    warn_msg = (
+                        "Series.__getitem__ treating keys as positions is deprecated. "
+                        "In a future version, integer keys will always be treated "
+                        "as labels (consistent with DataFrame behavior). To access "
+                        "a value by position, use `ser.iloc[pos]`"
                     )
                     warnings.warn(warn_msg, FutureWarning)
                     return arg
@@ -354,9 +363,15 @@ class _SeriesLocIndexer(_FrameIndexer):
                 raise KeyError("Label scalar is out of bounds")
 
         elif isinstance(arg, slice):
-            return _get_label_range_or_mask(
-                self._frame.index, arg.start, arg.stop, arg.step
+            indexer = indexing_utils.find_label_range_or_mask(
+                arg, self._frame.index
             )
+            if isinstance(indexer, indexing_utils.EmptyIndexer):
+                return slice(0, 0, 1)
+            elif isinstance(indexer, indexing_utils.SliceIndexer):
+                return indexer.key
+            else:
+                return indexer.key.column
         elif isinstance(arg, (cudf.MultiIndex, pd.MultiIndex)):
             if isinstance(arg, pd.MultiIndex):
                 arg = cudf.MultiIndex.from_pandas(arg)
@@ -1019,7 +1034,36 @@ class Series(SingleColumnFrame, IndexedFrame):
         return self._to_frame(name=name, index=self.index)
 
     @_performance_tracking
-    def memory_usage(self, index: bool = True, deep: bool = False) -> int:
+    def memory_usage(self, index: bool = True, deep: bool = False) -> int:  # type: ignore[override]
+        """
+        Return the memory usage of the Series.
+
+        Parameters
+        ----------
+        index : bool, default True
+            Specifies whether to include the memory usage of the index.
+        deep : bool, default False
+            The deep parameter is ignored and is only included for pandas
+            compatibility.
+
+        Returns
+        -------
+        int
+            The total memory usage in bytes.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(range(3), index=['a','b','c'])
+        >>> s.memory_usage()
+        43
+
+        Not including the index gives the size of the rest of the data, which
+        is necessarily smaller:
+
+        >>> s.memory_usage(index=False)
+        24
+        """
         return self._column.memory_usage + (
             self.index.memory_usage() if index else 0
         )
@@ -1230,6 +1274,25 @@ class Series(SingleColumnFrame, IndexedFrame):
     def __getitem__(self, arg):
         if isinstance(arg, slice):
             return self.iloc[arg]
+        elif is_integer(arg) and not (
+            (
+                isinstance(self.index.dtype, CategoricalDtype)
+                and self.index.dtype.categories.dtype.kind in {"i", "u", "f"}
+            )
+            or self.index.dtype.kind in {"i", "u", "f"}
+        ):
+            # Do not remove until pandas 3.0 support is added.
+            assert PANDAS_LT_300, (
+                "Need to drop after pandas-3.0 support is added."
+            )
+            warnings.warn(
+                "Series.__getitem__ treating keys as positions is deprecated "
+                "In a future version, integer keys will always be treated as labels "
+                "(consistent with DataFrame behavior) To access a value by position, "
+                "use `ser.iloc[pos]`",
+                FutureWarning,
+            )
+            return self.iloc[arg]
         else:
             return self.loc[arg]
 
@@ -1259,7 +1322,7 @@ class Series(SingleColumnFrame, IndexedFrame):
                 preprocess = cudf.concat([top, bottom])
         else:
             preprocess = self
-        if isinstance(preprocess.dtype, cudf.CategoricalDtype):
+        if isinstance(preprocess.dtype, CategoricalDtype):
             min_rows = (
                 height
                 if pd.get_option("display.min_rows") == 0
@@ -1295,7 +1358,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             output = repr(preprocess._pandas_repr_compatible().to_pandas())
 
         lines = output.split("\n")
-        if isinstance(preprocess.dtype, cudf.CategoricalDtype):
+        if isinstance(preprocess.dtype, CategoricalDtype):
             category_memory = lines[-1]
             if preprocess.dtype.categories.dtype.kind == "f":
                 category_memory = category_memory.replace("'", "").split(": ")
@@ -1326,7 +1389,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             lines = output.split(",")
             lines[-1] = " dtype: %s)" % self.dtype
             return ",".join(lines)
-        if isinstance(preprocess._column.dtype, cudf.CategoricalDtype):
+        if isinstance(preprocess._column.dtype, CategoricalDtype):
             lines.append(category_memory)
         return "\n".join(lines)
 
@@ -1431,20 +1494,16 @@ class Series(SingleColumnFrame, IndexedFrame):
                 if (
                     obj.null_count == len(obj)
                     or len(obj) == 0
-                    or isinstance(obj._column.dtype, cudf.CategoricalDtype)
-                    or isinstance(objs[0]._column.dtype, cudf.CategoricalDtype)
+                    or isinstance(obj._column.dtype, CategoricalDtype)
+                    or isinstance(objs[0]._column.dtype, CategoricalDtype)
                 ):
                     continue
 
                 if (
                     not dtype_mismatch
                     and (
-                        not isinstance(
-                            objs[0]._column.dtype, cudf.CategoricalDtype
-                        )
-                        and not isinstance(
-                            obj._column.dtype, cudf.CategoricalDtype
-                        )
+                        not isinstance(objs[0]._column.dtype, CategoricalDtype)
+                        and not isinstance(obj._column.dtype, CategoricalDtype)
                     )
                     and objs[0].dtype != obj.dtype
                 ):
@@ -3025,9 +3084,9 @@ class Series(SingleColumnFrame, IndexedFrame):
             res = res[res.index.notna()]
         else:
             res = self.groupby(self, dropna=dropna).count(dropna=dropna)
-            if isinstance(self.dtype, cudf.CategoricalDtype) and len(
-                res
-            ) != len(self.dtype.categories):
+            if isinstance(self.dtype, CategoricalDtype) and len(res) != len(
+                self.dtype.categories
+            ):
                 # For categorical dtypes: When there exists
                 # categories in dtypes and they are missing in the
                 # column, `value_counts` will have to return
@@ -3117,7 +3176,7 @@ class Series(SingleColumnFrame, IndexedFrame):
                 np_array_q = np.asarray(q)
             except TypeError:
                 try:
-                    np_array_q = as_column(q).values_host
+                    np_array_q = cupy.asarray(q).get()
                 except TypeError:
                     raise TypeError(
                         f"q must be a scalar or array-like, got {type(q)}"
