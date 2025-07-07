@@ -108,14 +108,14 @@ class Shuffle(IR):
     _non_child = ("schema", "keys", "shuffle_method")
     keys: tuple[NamedExpr, ...]
     """Keys to shuffle on."""
-    shuffle_method: ShuffleMethod | None
+    shuffle_method: ShuffleMethod
     """Shuffle method to use."""
 
     def __init__(
         self,
         schema: Schema,
         keys: tuple[NamedExpr, ...],
-        shuffle_method: ShuffleMethod | None,
+        shuffle_method: ShuffleMethod,
         df: IR,
     ):
         self.schema = schema
@@ -129,7 +129,7 @@ class Shuffle(IR):
         cls,
         schema: Schema,
         keys: tuple[NamedExpr, ...],
-        shuffle_method: ShuffleMethod | None,
+        shuffle_method: ShuffleMethod,
         df: DataFrame,
     ) -> DataFrame:  # pragma: no cover
         """Evaluate and return a dataframe."""
@@ -137,6 +137,7 @@ class Shuffle(IR):
         return df
 
 
+@nvtx_annotate_cudf_polars(message="Shuffle")
 def _partition_dataframe(
     df: DataFrame,
     keys: tuple[NamedExpr, ...],
@@ -262,13 +263,14 @@ def _(
     # Try using rapidsmpf shuffler if we have "simple" shuffle
     # keys, and the "shuffle_method" config is set to "rapidsmpf"
     _keys: list[Col]
-    if shuffle_method in (None, "rapidsmpf") and len(
+    if shuffle_method == "rapidsmpf" and len(
         _keys := [ne.value for ne in ir.keys if isinstance(ne.value, Col)]
     ) == len(ir.keys):  # pragma: no cover
-        shuffle_on = [k.name for k in _keys]
-        try:
-            from rapidsmpf.integrations.dask import rapidsmpf_shuffle_graph
+        from rapidsmpf.integrations.dask import rapidsmpf_shuffle_graph
 
+        shuffle_on = [k.name for k in _keys]
+
+        try:
             return rapidsmpf_shuffle_graph(
                 get_key_name(ir.children[0]),
                 get_key_name(ir),
@@ -281,15 +283,13 @@ def _(
                     "dtypes": list(ir.schema.values()),
                 },
             )
-        except (ImportError, ValueError) as err:
-            # ImportError: rapidsmpf is not installed
+        except ValueError as err:
             # ValueError: rapidsmpf couldn't find a distributed client
             if shuffle_method == "rapidsmpf":
                 # Only raise an error if the user specifically
                 # set the shuffle method to "rapidsmpf"
                 raise ValueError(
-                    "Rapidsmp is not installed correctly or the current "
-                    "Dask cluster does not support rapidsmpf shuffling."
+                    "The current Dask cluster does not support rapidsmpf shuffling."
                 ) from err
 
     # Simple task-based fall-back

@@ -8,6 +8,7 @@ import polars as pl
 
 from cudf_polars.dsl import expr
 from cudf_polars.testing.asserts import (
+    DEFAULT_BLOCKSIZE_MODE,
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
@@ -73,8 +74,12 @@ def test_agg(df, agg):
     q = df.select(expr)
 
     # https://github.com/rapidsai/cudf/issues/15852
-    check_dtypes = agg not in {"n_unique", "median"}
-    if not check_dtypes and q.collect_schema()["a"] != pl.Float64:
+    check_dtypes = agg not in {"median"}
+    if (
+        not check_dtypes
+        and q.collect_schema()["a"] != pl.Float64
+        and DEFAULT_BLOCKSIZE_MODE == "default"
+    ):
         with pytest.raises(AssertionError):
             assert_gpu_result_equal(q)
     assert_gpu_result_equal(q, check_dtypes=check_dtypes, check_exact=False)
@@ -83,12 +88,6 @@ def test_agg(df, agg):
 def test_bool_agg(agg, request):
     if agg == "cum_min" or agg == "cum_max":
         pytest.skip("Does not apply")
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=agg == "n_unique",
-            reason="Wrong dtype we get Int32, polars gets UInt32",
-        )
-    )
     df = pl.LazyFrame({"a": [True, False, None, True]})
     expr = getattr(pl.col("a"), agg)()
     q = df.select(expr)

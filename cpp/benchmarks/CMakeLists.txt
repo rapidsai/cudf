@@ -222,7 +222,7 @@ ConfigureBench(QUANTILES_BENCH quantiles/quantiles.cpp)
 # ##################################################################################################
 # * tdigest benchmark
 # --------------------------------------------------------------------------------
-ConfigureNVBench(TDIGEST_NVBENCH quantiles/tdigest.cu)
+ConfigureNVBench(TDIGEST_NVBENCH quantiles/tdigest.cpp)
 
 # ##################################################################################################
 # * type_dispatcher benchmark ---------------------------------------------------------------------
@@ -288,7 +288,11 @@ ConfigureNVBench(
 
 # ##################################################################################################
 # * null_mask benchmark ---------------------------------------------------------------------------
-ConfigureNVBench(NULLMASK_NVBENCH null_mask/set_null_mask.cpp)
+ConfigureNVBench(NULLMASK_NVBENCH bitmask/set_null_mask.cpp)
+
+# ##################################################################################################
+# * bitmask benchmark ---------------------------------------------------------------------------
+ConfigureNVBench(BITMASK_NVBENCH bitmask/bitmask_and.cu)
 
 # ##################################################################################################
 # * parquet writer benchmark ----------------------------------------------------------------------
@@ -300,6 +304,13 @@ ConfigureNVBench(
 # * parquet reader benchmark ----------------------------------------------------------------------
 ConfigureNVBench(
   PARQUET_READER_NVBENCH io/parquet/parquet_reader_input.cpp io/parquet/parquet_reader_options.cpp
+)
+
+# ##################################################################################################
+# * parquet experimental reader benchmark
+# ----------------------------------------------------------------------
+ConfigureNVBench(
+  PARQUET_EXPERIMENTAL_READER_NVBENCH io/parquet/experimental/parquet_dictionary_page_filter.cpp
 )
 
 # ##################################################################################################

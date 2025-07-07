@@ -9,15 +9,21 @@ on:
   workflow_dispatch:
     inputs:
       branch:
+        description: |
+          branch: git branch the workflow run targets.
+          Required even when 'sha' is provided because it is also used for organizing artifacts.
         required: true
         type: string
       date:
+        description: "date: Date (YYYY-MM-DD) this run is for. Used to organize artifacts produced by nightly builds"
         required: true
         type: string
       sha:
+        description: "sha: full git commit SHA to check out"
         required: true
         type: string
       build_type:
+        description: "build_type: one of [branch, nightly, pull-request]"
         type: string
         default: nightly
 
