@@ -25,11 +25,6 @@
 #include <cuda/std/type_traits>
 
 namespace cudf::groupby::detail::hash {
-__device__ constexpr void set_mask(bool* mask)
-{
-  if (not *mask) { cudf::detail::atomic_max(mask, true); }
-}
-
 template <typename Source, cudf::aggregation::Kind k>
 struct update_target_element_shmem {
   __device__ void operator()(cuda::std::byte*,
