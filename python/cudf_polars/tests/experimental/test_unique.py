@@ -34,7 +34,7 @@ def test_unique(df, keep, subset, maintain_order, cardinality):
         executor_options={
             "max_rows_per_partition": 50,
             "scheduler": DEFAULT_SCHEDULER,
-            "cardinality_factor": cardinality,
+            "unique_fraction": cardinality,
             "fallback_mode": "silent",
         },
     )
@@ -55,7 +55,7 @@ def test_unique_fallback(df):
         executor_options={
             "max_rows_per_partition": 50,
             "scheduler": DEFAULT_SCHEDULER,
-            "cardinality_factor": {"y": 1.0},
+            "unique_fraction": {"y": 1.0},
             "fallback_mode": "raise",
         },
     )
@@ -76,7 +76,7 @@ def test_unique_select(df, maintain_order, cardinality):
         executor_options={
             "max_rows_per_partition": 4,
             "scheduler": DEFAULT_SCHEDULER,
-            "cardinality_factor": cardinality,
+            "unique_fraction": cardinality,
             "fallback_mode": "silent",
         },
     )
