@@ -293,6 +293,9 @@ def test_astype_aware_to_aware(unit):
 @pytest.mark.parametrize("fmt", ["%Y-%m-%dT%H:%M%z", "%Y-%m-%dT%H:%M"])
 def test_strftime_tz_aware_as_utc(fmt):
     data = [datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc)]
-    result = cudf.Series(data).dt.strftime(fmt)
-    expected = pd.Series(data).dt.tz_convert("UTC").dt.strftime(fmt)
+    cudf_pacific = cudf.Series(data).dt.tz_convert("US/Pacific")
+    pd_utc = pd.Series(data)
+    assert cudf_pacific.dtype != pd_utc.dtype
+    result = cudf_pacific.dt.strftime(fmt)
+    expected = pd_utc.dt.strftime(fmt)
     assert_eq(result, expected)
