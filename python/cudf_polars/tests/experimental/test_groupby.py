@@ -68,15 +68,7 @@ def test_groupby_single_partitions(df, op, keys):
 @pytest.mark.parametrize("keys", [("y",), ("y", "z")])
 def test_groupby_agg(df, engine, op, keys):
     agg = getattr(pl.col("x"), op)()
-    if op == "n_unique":
-        agg = agg.cast(pl.Int64)
     q = df.group_by(*keys).agg(agg)
-    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
-
-
-@pytest.mark.parametrize("keys", [("y",), ("y", "z")])
-def test_groupby_n_unique(df, engine, keys):
-    q = df.group_by(*keys).agg(pl.col("xx").n_unique().cast(pl.Int64))
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
@@ -89,7 +81,7 @@ def test_groupby_agg_config_options(df, op, keys):
         executor_options={
             "max_rows_per_partition": 4,
             # Trigger shuffle-based groupby
-            "cardinality_factor": {"z": 0.5},
+            "unique_fraction": {"z": 0.5},
             # Check that we can change the n-ary factor
             "groupby_n_ary": 8,
             "scheduler": DEFAULT_SCHEDULER,
@@ -185,6 +177,20 @@ def test_groupby_agg_duplicate(
 def test_groupby_agg_empty(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
     q = df.group_by("y").agg()
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+@pytest.mark.parametrize("zlice", [(0, 2), (2, 2), (-2, None)])
+def test_groupby_then_slice(
+    df: pl.LazyFrame, engine: pl.GPUEngine, zlice: tuple[int, int]
+) -> None:
+    df = pl.LazyFrame(
+        {
+            "x": [0, 1, 2, 3] * 2,
+            "y": [1, 2, 1, 2] * 2,
+        }
+    )
+    q = df.group_by("y", maintain_order=True).max().slice(*zlice)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 def test_groupby_on_equality(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
