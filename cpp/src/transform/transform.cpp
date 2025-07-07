@@ -45,7 +45,7 @@ jitify2::Kernel get_kernel(std::string const& kernel_name, std::string const& cu
   return cudf::jit::get_program_cache(*transform_jit_kernel_cu_jit)
     .get_kernel(kernel_name,
                 {},
-                {{"transform/jit/operation-udf.hpp", cuda_source}},
+                {{"cudf/detail/operation-udf.hpp", cuda_source}},
                 {"-arch=sm_.",
                  "--device-int128",
                  // TODO: remove when we upgrade to CCCL >= 3.0

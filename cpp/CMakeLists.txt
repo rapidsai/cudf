@@ -419,7 +419,6 @@ add_library(
   src/filling/fill.cu
   src/filling/repeat.cu
   src/filling/sequence.cu
-  src/filter/filter.cu
   src/groupby/groupby.cu
   src/groupby/hash/compute_aggregations.cu
   src/groupby/hash/compute_aggregations_null.cu
@@ -696,6 +695,7 @@ add_library(
   src/stream_compaction/distinct_helpers.cu
   src/stream_compaction/drop_nans.cu
   src/stream_compaction/drop_nulls.cu
+  src/stream_compaction/filter/filter.cu
   src/stream_compaction/stable_distinct.cu
   src/stream_compaction/unique.cu
   src/stream_compaction/unique_count.cu

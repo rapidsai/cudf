@@ -23,7 +23,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/filter.hpp>
+#include <cudf/stream_compaction.hpp>
 #include <cudf/jit/runtime_support.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/reshape.hpp>
@@ -232,7 +232,7 @@ jitify2::Kernel get_kernel(std::string const& kernel_name, std::string const& cu
   return cudf::jit::get_program_cache(*filter_jit_kernel_cu_jit)
     .get_kernel(kernel_name,
                 {},
-                {{"filter/jit/operation-udf.hpp", cuda_source}},
+                {{"cudf/detail/operation-udf.hpp", cuda_source}},
                 {"-arch=sm_.",
                  "--device-int128",
                  // TODO: remove when we upgrade to CCCL >= 3.0

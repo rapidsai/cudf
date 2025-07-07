@@ -20,8 +20,8 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
-#include <cudf/filter.hpp>
 #include <cudf/jit/runtime_support.hpp>
+#include <cudf/stream_compaction.hpp>
 
 namespace filters {
 

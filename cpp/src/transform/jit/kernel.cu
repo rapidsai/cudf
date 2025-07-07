@@ -27,7 +27,7 @@
 #include <cuda/std/cstddef>
 
 // clang-format off
-#include "transform/jit/operation-udf.hpp"
+#include <cudf/detail/operation-udf.hpp>
 // clang-format on
 
 namespace cudf {
