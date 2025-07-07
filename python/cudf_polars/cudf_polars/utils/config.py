@@ -198,6 +198,13 @@ class StreamingExecutor:
     rapidsmpf_spill
         Whether to wrap task arguments and output in objects that are
         spillable by 'rapidsmpf'.
+
+    Notes
+    -----
+    The streaming executor does not currently support profiling a query via
+    the ``.profile()`` method. We recommend using nsys to profile queries
+    with the 'synchronous' scheduler and Dask's built-in profiling tools
+    with the 'distributed' scheduler.
     """
 
     name: Literal["streaming"] = dataclasses.field(default="streaming", init=False)
