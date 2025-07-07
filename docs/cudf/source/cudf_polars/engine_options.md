@@ -21,13 +21,15 @@ The `streaming` executor is the default, and is equivalent to passing
 files) into multiple pieces and streaming those pieces through the series of
 operations needed to produce the final result.
 
-We also provide an `in-memory` executor. This executor can be faster for very
-small inputs, where the overhead of splitting inputs and executing them in
-batches isn't worth it. However, each input and intermediate DataFrame must fit
-in (device) memory for the `in-memory` executor to work.
+We also provide an `in-memory` executor. This executor is often faster when the
+underlying data fits comfortably in device memory, because the overhead of splitting
+inputs and executing them in batches is less beneficial at this scale. With that said,
+this executor must rely on Unified Virtual Memory (UVM) if the input and intermediate
+data do not fit in device memory.
 
-In general, we recommend using the default `streaming` executor. The `streaming`
-includes several configuration options, which can be provided with the `executor_options`
+In general, we recommend starting with the default `streaming` executor, because
+it scales significantly better than `in-memory`. The `streaming` executor includes
+several configuration options, which can be provided with the `executor_options`
 key when constructing the `GPUEngine`:
 
 ```python
