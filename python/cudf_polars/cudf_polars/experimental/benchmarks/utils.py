@@ -288,7 +288,7 @@ def get_executor_options(
         and benchmark.__name__ == "PDSHQueries"
         and run_config.executor == "streaming"
     ):
-        executor_options["cardinality_factor"] = {
+        executor_options["unique_fraction"] = {
             "c_custkey": 0.05,
             "l_orderkey": 1.0,
             "l_partkey": 0.1,
