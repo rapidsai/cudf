@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1111,6 +1111,23 @@ TEST_F(SortDouble, InfinityAndNan)
       {5, 11, 0, 14, 7, 8, 6, 4, 10, 1, 2, 3, 9, 12, 13});
   auto results = cudf::sorted_order(cudf::table_view({input}));
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+}
+
+TYPED_TEST(Sort, TopK)
+{
+  using T = TypeParam;
+  if (std::is_same_v<T, bool>) { GTEST_SKIP(); }
+
+  auto itr   = thrust::counting_iterator<int32_t>(0);
+  auto input = cudf::test::fixed_width_column_wrapper<T, int32_t>(itr, itr + 100);
+  auto expected =
+    cudf::test::fixed_width_column_wrapper<T, int32_t>({99, 98, 97, 96, 95, 94, 93, 92, 91, 90});
+  auto result = cudf::top_k(input, 10);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+  result = cudf::top_k(input, 50, cudf::order::ASCENDING);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(cudf::slice(input, {0, 50}).front(), result->view());
+
+  EXPECT_THROW(cudf::top_k(input, 101), std::invalid_argument);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
