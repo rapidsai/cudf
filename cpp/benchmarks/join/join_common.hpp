@@ -22,6 +22,7 @@
 #include <benchmarks/common/nvbench_utilities.hpp>
 #include <benchmarks/common/table_utilities.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/join/nvbench_helpers.hpp>
 
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -43,8 +44,19 @@
 
 #include <vector>
 
+using JOIN_ALGORITHM      = nvbench::enum_type_list<join_t::HASH, join_t::SORT_MERGE>;
 using JOIN_KEY_TYPE_RANGE = nvbench::type_list<nvbench::int32_t, nvbench::int64_t>;
 using JOIN_NULLABLE_RANGE = nvbench::enum_type_list<false, true>;
+using JOIN_DATATYPES      = nvbench::enum_type_list<data_type::INTEGRAL,
+                                                    data_type::FLOAT,
+                                                    data_type::DECIMAL,
+                                                    data_type::TIMESTAMP,
+                                                    data_type::DURATION,
+                                                    data_type::STRING,
+                                                    data_type::LIST,
+                                                    data_type::STRUCT>;
+using JOIN_NULL_EQUALITY =
+  nvbench::enum_type_list<cudf::null_equality::EQUAL, cudf::null_equality::UNEQUAL>;
 
 auto const JOIN_SIZE_RANGE = std::vector<nvbench::int64_t>{1000, 100'000, 10'000'000};
 
@@ -59,8 +71,6 @@ struct null75_generator {
     return (rand_gen(engine) & 3) == 0;
   }
 };
-
-enum class join_t { CONDITIONAL, MIXED, HASH, SORT_MERGE };
 
 template <typename Key,
           bool Nullable,
@@ -196,7 +206,12 @@ void BM_join(state_type& state, Join JoinFunc, int multiplicity = 1, double sele
   }
 }
 
-template <join_t join_type = join_t::HASH, typename state_type, typename Join>
+template <typename Key,
+          bool Nullable,
+          join_t join_type                  = join_t::HASH,
+          cudf::null_equality compare_nulls = cudf::null_equality::UNEQUAL,
+          typename state_type,
+          typename Join>
 void BM_join_with_datatype(state_type& state, std::vector<cudf::type_id>& key_types, Join JoinFunc)
 {
   auto const right_size = static_cast<size_t>(state.get_int64("right_size"));
@@ -207,13 +222,15 @@ void BM_join_with_datatype(state_type& state, std::vector<cudf::type_id>& key_ty
     return;
   }
 
+  auto profile        = data_profile_builder().null_probability(Nullable ? 0.2 : 0);
   auto const num_keys = key_types.size();
+
+  // payload column
   key_types.push_back(cudf::type_id::INT32);
-  auto const left_tbl =
-    create_random_table(key_types, table_size_bytes{left_size}, data_profile_builder());
-  auto const left_view = left_tbl->view();
-  auto const right_tbl =
-    create_random_table(key_types, table_size_bytes{right_size}, data_profile_builder());
+
+  auto const left_tbl   = create_random_table(key_types, table_size_bytes{left_size}, profile);
+  auto const left_view  = left_tbl->view();
+  auto const right_tbl  = create_random_table(key_types, table_size_bytes{right_size}, profile);
   auto const right_view = right_tbl->view();
 
   auto const join_input_size = estimate_size(right_view) + estimate_size(left_view);
@@ -227,9 +244,8 @@ void BM_join_with_datatype(state_type& state, std::vector<cudf::type_id>& key_ty
     state.add_element_count(join_input_size, "join_input_size");  // number of bytes
     state.template add_global_memory_reads<nvbench::int8_t>(join_input_size);
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-      auto result = JoinFunc(left_view.select(columns_to_join),
-                             right_view.select(columns_to_join),
-                             cudf::null_equality::UNEQUAL);
+      auto result = JoinFunc(
+        left_view.select(columns_to_join), right_view.select(columns_to_join), compare_nulls);
     });
     set_throughputs(state);
   }

@@ -16,11 +16,26 @@
 
 #pragma once
 
-#include <benchmarks/join/join_common.hpp>
+#include <benchmarks/common/generate_input.hpp>
 
 #include <cudf/types.hpp>
 
 #include <nvbench/nvbench.cuh>
+
+enum class join_t { CONDITIONAL, MIXED, HASH, SORT_MERGE };
+
+enum class data_type : int32_t {
+  INTEGRAL        = static_cast<int32_t>(type_group_id::INTEGRAL),
+  INTEGRAL_SIGNED = static_cast<int32_t>(type_group_id::INTEGRAL_SIGNED),
+  FLOAT           = static_cast<int32_t>(type_group_id::FLOATING_POINT),
+  BOOL8           = static_cast<int32_t>(cudf::type_id::BOOL8),
+  DECIMAL         = static_cast<int32_t>(type_group_id::FIXED_POINT),
+  TIMESTAMP       = static_cast<int32_t>(type_group_id::TIMESTAMP),
+  DURATION        = static_cast<int32_t>(type_group_id::DURATION),
+  STRING          = static_cast<int32_t>(cudf::type_id::STRING),
+  LIST            = static_cast<int32_t>(cudf::type_id::LIST),
+  STRUCT          = static_cast<int32_t>(cudf::type_id::STRUCT)
+};
 
 NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
   cudf::null_equality,
@@ -39,6 +54,25 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
     switch (value) {
       case join_t::HASH: return "HASH";
       case join_t::SORT_MERGE: return "SORT_MERGE";
+      default: return "Unknown";
+    }
+  },
+  [](auto) { return std::string{}; })
+
+NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
+  data_type,
+  [](data_type value) {
+    switch (value) {
+      case data_type::INTEGRAL: return "INTEGRAL";
+      case data_type::INTEGRAL_SIGNED: return "INTEGRAL_SIGNED";
+      case data_type::FLOAT: return "FLOAT";
+      case data_type::BOOL8: return "BOOL8";
+      case data_type::DECIMAL: return "DECIMAL";
+      case data_type::TIMESTAMP: return "TIMESTAMP";
+      case data_type::DURATION: return "DURATION";
+      case data_type::STRING: return "STRING";
+      case data_type::LIST: return "LIST";
+      case data_type::STRUCT: return "STRUCT";
       default: return "Unknown";
     }
   },

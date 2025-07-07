@@ -77,14 +77,9 @@ void nvbench_full_join(nvbench::state& state)
   BM_join<nvbench::int64_t, false>(state, join, multiplicity);
 }
 
-using NULL_EQUALITY =
-  nvbench::enum_type_list<cudf::null_equality::EQUAL, cudf::null_equality::UNEQUAL>;
-
-using ALGORITHM = nvbench::enum_type_list<join_t::HASH, join_t::SORT_MERGE>;
-
 NVBENCH_BENCH_TYPES(
   nvbench_inner_join,
-  NVBENCH_TYPE_AXES(JOIN_KEY_TYPE_RANGE, JOIN_NULLABLE_RANGE, NULL_EQUALITY, ALGORITHM))
+  NVBENCH_TYPE_AXES(JOIN_KEY_TYPE_RANGE, JOIN_NULLABLE_RANGE, JOIN_NULL_EQUALITY, JOIN_ALGORITHM))
   .set_name("high_multiplicity_inner_join")
   .set_type_axes_names({"Key", "Nullable", "NullEquality", "Algorithm"})
   .add_int64_axis("left_size", {100'000})
