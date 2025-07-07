@@ -368,8 +368,7 @@ class ColumnAccessor(MutableMapping):
                 if (
                     pd_idx1.dtype != pd_idx2.dtype
                     and is_mixed_with_object_dtype(pd_idx1, pd_idx2)
-                    and pd.api.types.infer_dtype(pd_idx1)  # noqa: TID251
-                    != pd.api.types.infer_dtype(pd_idx2)  # noqa: TID251
+                    and pd_idx1.inferred_type != pd_idx2.inferred_type
                 ):
                     raise MixedTypeError(
                         "Cannot insert column with mixed types when label_dtype is set"

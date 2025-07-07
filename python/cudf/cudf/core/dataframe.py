@@ -371,9 +371,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 )
             self._frame._data.insert(key[1], new_ser._column)
         else:
-            if is_scalar(value) and not isinstance(
-                self._frame.index, cudf.MultiIndex
-            ):
+            if is_scalar(value):
                 try:
                     if len(columns_df._column_names) > 0:
                         self._frame[

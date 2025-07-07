@@ -1962,9 +1962,9 @@ class MultiIndex(Index):
             return self._return_get_indexer_result(result.values)
         try:
             target = cudf.MultiIndex.from_tuples(target)
-        except MixedTypeError as e:
-            raise e
-        except TypeError:
+        except TypeError as e:
+            if isinstance(e, MixedTypeError):
+                raise e
             return self._return_get_indexer_result(result.values)
 
         join_keys = [
