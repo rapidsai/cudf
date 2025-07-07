@@ -70,8 +70,6 @@ struct update_target_element<Source, aggregation::MIN> {
     using Target = target_type_t<Source, aggregation::MIN>;
     cudf::detail::atomic_min(&target.element<Target>(target_index),
                              static_cast<Target>(source.element<Source>(source_index)));
-
-    if (target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
 
@@ -89,8 +87,6 @@ struct update_target_element<Source, aggregation::MIN> {
 
     cudf::detail::atomic_min(&target.element<DeviceTarget>(target_index),
                              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
-
-    if (target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
 
@@ -106,8 +102,6 @@ struct update_target_element<Source, aggregation::MAX> {
     using Target = target_type_t<Source, aggregation::MAX>;
     cudf::detail::atomic_max(&target.element<Target>(target_index),
                              static_cast<Target>(source.element<Source>(source_index)));
-
-    if (target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
 
@@ -125,8 +119,6 @@ struct update_target_element<Source, aggregation::MAX> {
 
     cudf::detail::atomic_max(&target.element<DeviceTarget>(target_index),
                              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
-
-    if (target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
 
@@ -142,8 +134,6 @@ struct update_target_element<Source, aggregation::SUM> {
     using Target = target_type_t<Source, aggregation::SUM>;
     cudf::detail::atomic_add(&target.element<Target>(target_index),
                              static_cast<Target>(source.element<Source>(source_index)));
-
-    if (target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
 
@@ -161,8 +151,6 @@ struct update_target_element<Source, aggregation::SUM> {
 
     cudf::detail::atomic_add(&target.element<DeviceTarget>(target_index),
                              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
-
-    if (target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
 
@@ -236,7 +224,6 @@ struct update_target_element<Source, aggregation::SUM_OF_SQUARES> {
     using Target = target_type_t<Source, aggregation::SUM_OF_SQUARES>;
     auto value   = static_cast<Target>(source.element<Source>(source_index));
     cudf::detail::atomic_add(&target.element<Target>(target_index), value * value);
-    if (target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
 
@@ -251,7 +238,6 @@ struct update_target_element<Source, aggregation::PRODUCT> {
     using Target = target_type_t<Source, aggregation::PRODUCT>;
     cudf::detail::atomic_mul(&target.element<Target>(target_index),
                              static_cast<Target>(source.element<Source>(source_index)));
-    if (target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
 
@@ -265,8 +251,6 @@ struct update_target_element<Source, aggregation::COUNT_VALID> {
   {
     using Target = target_type_t<Source, aggregation::COUNT_VALID>;
     cudf::detail::atomic_add(&target.element<Target>(target_index), Target{1});
-
-    // It is assumed the output for COUNT_VALID is initialized to be all valid
   }
 };
 
@@ -280,8 +264,6 @@ struct update_target_element<Source, aggregation::COUNT_ALL> {
   {
     using Target = target_type_t<Source, aggregation::COUNT_ALL>;
     cudf::detail::atomic_add(&target.element<Target>(target_index), Target{1});
-
-    // It is assumed the output for COUNT_ALL is initialized to be all valid
   }
 };
 
@@ -302,8 +284,6 @@ struct update_target_element<Source, aggregation::ARGMAX> {
         old = cudf::detail::atomic_cas(&target.element<Target>(target_index), old, source_index);
       }
     }
-
-    if (target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
 
@@ -324,8 +304,6 @@ struct update_target_element<Source, aggregation::ARGMIN> {
         old = cudf::detail::atomic_cas(&target.element<Target>(target_index), old, source_index);
       }
     }
-
-    if (target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
 
@@ -344,6 +322,12 @@ struct elementwise_aggregator {
     if constexpr (k != cudf::aggregation::COUNT_ALL) {
       if (source.is_null(source_index)) { return; }
     }
+
+    // The output for COUNT_VALID and COUNT_ALL is initialized to be all valid
+    if constexpr (!(k == cudf::aggregation::COUNT_VALID or k == cudf::aggregation::COUNT_ALL)) {
+      if (target.is_null(target_index)) { target.set_valid(target_index); }
+    }
+
     update_target_element<Source, k>{}(target, target_index, source, source_index);
   }
 };

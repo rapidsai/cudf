@@ -51,8 +51,6 @@ struct update_target_element_gmem<Source, cudf::aggregation::MIN> {
     DeviceType* source_casted = reinterpret_cast<DeviceType*>(source);
     cudf::detail::atomic_min(&target.element<DeviceType>(target_index),
                              static_cast<DeviceType>(source_casted[source_index]));
-
-    if (target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
 
@@ -69,8 +67,6 @@ struct update_target_element_gmem<Source, cudf::aggregation::MAX> {
     DeviceType* source_casted = reinterpret_cast<DeviceType*>(source);
     cudf::detail::atomic_max(&target.element<DeviceType>(target_index),
                              static_cast<DeviceType>(source_casted[source_index]));
-
-    if (target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
 
@@ -88,8 +84,6 @@ struct update_target_element_gmem<Source, cudf::aggregation::SUM> {
     DeviceType* source_casted = reinterpret_cast<DeviceType*>(source);
     cudf::detail::atomic_add(&target.element<DeviceType>(target_index),
                              static_cast<DeviceType>(source_casted[source_index]));
-
-    if (target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
 
@@ -109,8 +103,6 @@ struct update_target_element_gmem<Source, cudf::aggregation::SUM_OF_SQUARES> {
     Target value          = static_cast<Target>(source_casted[source_index]);
 
     cudf::detail::atomic_add(&target.element<Target>(target_index), value);
-
-    if (target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
 
@@ -128,8 +120,6 @@ struct update_target_element_gmem<Source, cudf::aggregation::PRODUCT> {
     Target* source_casted = reinterpret_cast<Target*>(source);
     cudf::detail::atomic_mul(&target.element<Target>(target_index),
                              static_cast<Target>(source_casted[source_index]));
-
-    if (target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
 
@@ -149,8 +139,6 @@ struct update_target_element_gmem<Source, cudf::aggregation::COUNT_VALID> {
     Target* source_casted = reinterpret_cast<Target*>(source);
     cudf::detail::atomic_add(&target.element<Target>(target_index),
                              static_cast<Target>(source_casted[source_index]));
-
-    // It is assumed the output for COUNT_VALID is initialized to be all valid
   }
 };
 
@@ -168,8 +156,6 @@ struct update_target_element_gmem<Source, cudf::aggregation::COUNT_ALL> {
     Target* source_casted = reinterpret_cast<Target*>(source);
     cudf::detail::atomic_add(&target.element<Target>(target_index),
                              static_cast<Target>(source_casted[source_index]));
-
-    // It is assumed the output for COUNT_ALL is initialized to be all valid
   }
 };
 
@@ -195,8 +181,6 @@ struct update_target_element_gmem<Source, cudf::aggregation::ARGMAX> {
           cudf::detail::atomic_cas(&target.element<Target>(target_index), old, source_argmax_index);
       }
     }
-
-    if (target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
 
@@ -222,8 +206,6 @@ struct update_target_element_gmem<Source, cudf::aggregation::ARGMIN> {
           cudf::detail::atomic_cas(&target.element<Target>(target_index), old, source_argmin_index);
       }
     }
-
-    if (target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
 
@@ -251,6 +233,11 @@ struct gmem_element_aggregator {
     // Early exit for all aggregation kinds since shared memory aggregation of
     // `COUNT_ALL` is always valid
     if (!source_mask[source_index]) { return; }
+
+    // The output for COUNT_VALID and COUNT_ALL is initialized to be all valid
+    if constexpr (!(k == cudf::aggregation::COUNT_VALID or k == cudf::aggregation::COUNT_ALL)) {
+      if (target.is_null(target_index)) { target.set_valid(target_index); }
+    }
 
     update_target_element_gmem<Source, k>{}(
       target, target_index, source_column, source, source_index);

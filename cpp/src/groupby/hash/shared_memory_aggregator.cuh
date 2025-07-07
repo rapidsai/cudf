@@ -32,8 +32,10 @@ __device__ constexpr void set_mask(bool* mask)
 
 template <typename Source, cudf::aggregation::Kind k>
 struct update_target_element_shmem {
-  __device__ void operator()(
-    cuda::std::byte*, bool*, cudf::size_type, cudf::column_device_view, cudf::size_type) const
+  __device__ void operator()(cuda::std::byte*,
+                             cudf::size_type,
+                             cudf::column_device_view,
+                             cudf::size_type) const
   {
     CUDF_UNREACHABLE("Invalid source type and aggregation combination.");
   }
@@ -43,7 +45,6 @@ template <typename Source>
   requires(cudf::is_fixed_width<Source>() && cudf::has_atomic_support<Source>())
 struct update_target_element_shmem<Source, cudf::aggregation::MIN> {
   __device__ void operator()(cuda::std::byte* target,
-                             bool* target_mask,
                              cudf::size_type target_index,
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
@@ -54,8 +55,6 @@ struct update_target_element_shmem<Source, cudf::aggregation::MIN> {
     DeviceTarget* target_casted = reinterpret_cast<DeviceTarget*>(target);
     cudf::detail::atomic_min(&target_casted[target_index],
                              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
-
-    set_mask(target_mask + target_index);
   }
 };
 
@@ -63,7 +62,6 @@ template <typename Source>
   requires(cudf::is_fixed_width<Source>() && cudf::has_atomic_support<Source>())
 struct update_target_element_shmem<Source, cudf::aggregation::MAX> {
   __device__ void operator()(cuda::std::byte* target,
-                             bool* target_mask,
                              cudf::size_type target_index,
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
@@ -74,8 +72,6 @@ struct update_target_element_shmem<Source, cudf::aggregation::MAX> {
     DeviceTarget* target_casted = reinterpret_cast<DeviceTarget*>(target);
     cudf::detail::atomic_max(&target_casted[target_index],
                              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
-
-    set_mask(target_mask + target_index);
   }
 };
 
@@ -84,7 +80,6 @@ template <typename Source>
            !cudf::is_timestamp<Source>())
 struct update_target_element_shmem<Source, cudf::aggregation::SUM> {
   __device__ void operator()(cuda::std::byte* target,
-                             bool* target_mask,
                              cudf::size_type target_index,
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
@@ -95,8 +90,6 @@ struct update_target_element_shmem<Source, cudf::aggregation::SUM> {
     DeviceTarget* target_casted = reinterpret_cast<DeviceTarget*>(target);
     cudf::detail::atomic_add(&target_casted[target_index],
                              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
-
-    set_mask(target_mask + target_index);
   }
 };
 
@@ -104,7 +97,6 @@ template <typename Source>
   requires(cudf::detail::is_product_supported<Source>())
 struct update_target_element_shmem<Source, cudf::aggregation::SUM_OF_SQUARES> {
   __device__ void operator()(cuda::std::byte* target,
-                             bool* target_mask,
                              cudf::size_type target_index,
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
@@ -113,8 +105,6 @@ struct update_target_element_shmem<Source, cudf::aggregation::SUM_OF_SQUARES> {
     Target* target_casted = reinterpret_cast<Target*>(target);
     auto value            = static_cast<Target>(source.element<Source>(source_index));
     cudf::detail::atomic_add(&target_casted[target_index], value * value);
-
-    set_mask(target_mask + target_index);
   }
 };
 
@@ -122,7 +112,6 @@ template <typename Source>
   requires(cudf::detail::is_product_supported<Source>())
 struct update_target_element_shmem<Source, cudf::aggregation::PRODUCT> {
   __device__ void operator()(cuda::std::byte* target,
-                             bool* target_mask,
                              cudf::size_type target_index,
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
@@ -131,8 +120,6 @@ struct update_target_element_shmem<Source, cudf::aggregation::PRODUCT> {
     Target* target_casted = reinterpret_cast<Target*>(target);
     cudf::detail::atomic_mul(&target_casted[target_index],
                              static_cast<Target>(source.element<Source>(source_index)));
-
-    set_mask(target_mask + target_index);
   }
 };
 
@@ -140,7 +127,6 @@ template <typename Source>
   requires(cudf::detail::is_valid_aggregation<Source, cudf::aggregation::COUNT_VALID>())
 struct update_target_element_shmem<Source, cudf::aggregation::COUNT_VALID> {
   __device__ void operator()(cuda::std::byte* target,
-                             bool* target_mask,
                              cudf::size_type target_index,
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
@@ -156,7 +142,6 @@ template <typename Source>
   requires(cudf::detail::is_valid_aggregation<Source, cudf::aggregation::COUNT_ALL>())
 struct update_target_element_shmem<Source, cudf::aggregation::COUNT_ALL> {
   __device__ void operator()(cuda::std::byte* target,
-                             bool* target_mask,
                              cudf::size_type target_index,
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
@@ -164,8 +149,6 @@ struct update_target_element_shmem<Source, cudf::aggregation::COUNT_ALL> {
     using Target          = cudf::detail::target_type_t<Source, cudf::aggregation::COUNT_ALL>;
     Target* target_casted = reinterpret_cast<Target*>(target);
     cudf::detail::atomic_add(&target_casted[target_index], Target{1});
-
-    // Assumes target is already set to be valid
   }
 };
 
@@ -174,7 +157,6 @@ template <typename Source>
            cudf::is_relationally_comparable<Source, Source>())
 struct update_target_element_shmem<Source, cudf::aggregation::ARGMAX> {
   __device__ void operator()(cuda::std::byte* target,
-                             bool* target_mask,
                              cudf::size_type target_index,
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
@@ -188,8 +170,6 @@ struct update_target_element_shmem<Source, cudf::aggregation::ARGMAX> {
         old = cudf::detail::atomic_cas(&target_casted[target_index], old, source_index);
       }
     }
-
-    set_mask(target_mask + target_index);
   }
 };
 
@@ -198,7 +178,6 @@ template <typename Source>
            cudf::is_relationally_comparable<Source, Source>())
 struct update_target_element_shmem<Source, cudf::aggregation::ARGMIN> {
   __device__ void operator()(cuda::std::byte* target,
-                             bool* target_mask,
                              cudf::size_type target_index,
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
@@ -212,8 +191,6 @@ struct update_target_element_shmem<Source, cudf::aggregation::ARGMIN> {
         old = cudf::detail::atomic_cas(&target_casted[target_index], old, source_index);
       }
     }
-
-    set_mask(target_mask + target_index);
   }
 };
 
@@ -241,8 +218,15 @@ struct shmem_element_aggregator {
     if constexpr (k != cudf::aggregation::COUNT_ALL) {
       if (source.is_null(source_index)) { return; }
     }
-    update_target_element_shmem<Source, k>{}(
-      target, target_mask, target_index, source, source_index);
+
+    // The output for COUNT_VALID and COUNT_ALL is initialized to be all valid
+    if constexpr (!(k == cudf::aggregation::COUNT_VALID or k == cudf::aggregation::COUNT_ALL)) {
+      if (!target_mask[target_index]) {
+        cudf::detail::atomic_max(target_mask + target_index, true);
+      }
+    }
+
+    update_target_element_shmem<Source, k>{}(target, target_index, source, source_index);
   }
 };
 }  // namespace cudf::groupby::detail::hash
