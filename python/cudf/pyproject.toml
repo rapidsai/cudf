@@ -32,7 +32,6 @@ dependencies = [
     "pyarrow>=14.0.0,<20.0.0a0,!=17.0.0; platform_machine=='aarch64'",
     "pyarrow>=14.0.0,<20.0.0a0; platform_machine=='x86_64'",
     "pylibcudf==25.8.*,>=0.0.0a0",
-    "pynvjitlink>=0.0.0a0",
     "rich",
     "rmm==25.8.*,>=0.0.0a0",
     "typing_extensions>=4.0.0",

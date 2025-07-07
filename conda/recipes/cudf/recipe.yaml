@@ -84,7 +84,6 @@ requirements:
     # xref: https://github.com/rapidsai/cudf/issues/12822
     - cuda-nvrtc
     - cuda-python >=12.6.2,<13.0a0
-    - pynvjitlink
     - if: linux and x86_64
       then:
         - libcufile

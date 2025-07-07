@@ -683,26 +683,15 @@ dependencies:
             packages: &run_cudf_packages_all_cu12
               - cuda-python>=12.6.2,<13.0a0
           - {matrix: null, packages: *run_cudf_packages_all_cu12}
-      - output_types: conda
-        matrices:
-          - matrix: {cuda: "12.*"}
-            packages:
-              - &pynvjitlink_unsuffixed pynvjitlink>=0.0.0a0
       - output_types: [requirements, pyproject]
         matrices:
           - matrix:
               cuda: "12.*"
               cuda_suffixed: "true"
             packages:
-              - pynvjitlink-cu12>=0.0.0a0
               - nvidia-cuda-nvcc-cu12
               - nvidia-cuda-nvrtc-cu12
-          - matrix:
-              cuda: "12.*"
-              cuda_suffixed: "false"
-            packages: &run_cudf_cu12_unsuffixed
-              - *pynvjitlink_unsuffixed
-          - {matrix: null, packages: *run_cudf_cu12_unsuffixed}
+          - {matrix: null, packages: []}
   run_cudf_polars:
     common:
       - output_types: [conda, requirements, pyproject]
