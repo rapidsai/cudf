@@ -38,7 +38,7 @@
 #include <cuda/std/iterator>
 #include <thrust/copy.h>
 
-#include <jit_preprocessed_files/filter/jit/kernel.cu.jit.hpp>
+#include <jit_preprocessed_files/stream_compaction/filter/jit/kernel.cu.jit.hpp>
 
 #include <utility>
 #include <vector>
@@ -229,7 +229,7 @@ void perform_checks(column_view base_column,
 
 jitify2::Kernel get_kernel(std::string const& kernel_name, std::string const& cuda_source)
 {
-  return cudf::jit::get_program_cache(*filter_jit_kernel_cu_jit)
+  return cudf::jit::get_program_cache(*stream_compaction_filter_jit_kernel_cu_jit)
     .get_kernel(kernel_name,
                 {},
                 {{"cudf/detail/operation-udf.hpp", cuda_source}},
