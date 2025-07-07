@@ -350,7 +350,7 @@ struct round_dispatch_fn {
   std::unique_ptr<column> operator()(Args&&...)
     requires(not is_supported<T>())
   {
-    CUDF_FAIL("Type not support for cudf::round_decimal");
+    CUDF_UNREACHABLE("type not support for cudf::round_decimal");
   }
 
   template <typename T>
@@ -373,7 +373,7 @@ struct round_dispatch_fn {
         else if (decimal_places == 0) return round_with<T, half_even_zero       >(input, decimal_places, stream, mr);
         else if (decimal_places >  0) return round_with<T, half_even_positive   >(input, decimal_places, stream, mr);
         else                          return round_with<T, half_even_negative   >(input, decimal_places, stream, mr);
-      default: CUDF_FAIL("Undefined rounding method");
+      default: CUDF_UNREACHABLE("unknown rounding method");
     }
     // clang-format on
   }
