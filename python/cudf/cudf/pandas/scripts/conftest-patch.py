@@ -16169,6 +16169,7 @@ NODEIDS_THAT_FLAKY_XFAIL_WITH_CUDF_PANDAS = {
     "tests/extension/test_string.py::TestStringArray::test_getitem_series_integer_with_missing_raises[string=string[pyarrow]-True-integer-array]",
     "tests/extension/test_string.py::TestStringArray::test_getitem_series_integer_with_missing_raises[string=string[python]-False-integer-array]",
     "tests/extension/test_string.py::TestStringArray::test_getitem_series_integer_with_missing_raises[string=string[python]-True-integer-array]",
+    "tests/indexing/test_indexing.py::TestMisc::test_no_reference_cycle",
     "tests/frame/indexing/test_indexing.py::TestDataFrameIndexing::test_type_error_multiindex",
     "tests/generic/test_finalize.py::test_finalize_called[asfreq', 'h0]",
     "tests/generic/test_finalize.py::test_finalize_called[asfreq', 'h1]",
