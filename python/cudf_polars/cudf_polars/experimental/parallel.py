@@ -210,7 +210,10 @@ def post_process_task_graph(
     return graph
 
 
-def evaluate_streaming(ir: IR, config_options: ConfigOptions) -> DataFrame:
+def evaluate_streaming(
+    ir: IR,
+    config_options: ConfigOptions,
+) -> DataFrame:
     """
     Evaluate an IR graph with partitioning.
 
