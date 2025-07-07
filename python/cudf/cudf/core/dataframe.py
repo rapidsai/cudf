@@ -89,7 +89,7 @@ from cudf.core.missing import NA
 from cudf.core.mixins import GetAttrGetItemMixin
 from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import DataFrameResampler
-from cudf.core.series import Series, _append_new_row_inplace
+from cudf.core.series import Series
 from cudf.core.udf.row_function import DataFrameApplyKernel
 from cudf.errors import MixedTypeError
 from cudf.options import get_option
@@ -380,32 +380,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     for col in columns_df._column_names:
                         self._frame[col].loc[key[0]] = value
                 except KeyError:
-                    idx = self._frame.index
-                    if isinstance(idx, cudf.RangeIndex):
-                        if isinstance(key[0], int) and (
-                            key[0] == idx[-1] + idx.step
-                        ):
-                            idx_copy = cudf.RangeIndex(
-                                start=idx.start,
-                                stop=idx.stop + idx.step,
-                                step=idx.step,
-                                name=idx.name,
-                            )
-                        else:
-                            idx_copy = idx._as_int_index()
-                            _append_new_row_inplace(idx_copy._column, key[0])
-                    else:
-                        # TODO: Modifying index in place is bad because
-                        # our index are immutable, but columns are not (which
-                        # means our index are mutable with internal APIs).
-                        # Get rid of the deep copy once columns too are
-                        # immutable.
-                        idx_copy = idx.copy(deep=True)
-                        _append_new_row_inplace(idx_copy._column, key[0])
-
-                    for col in columns_df._column_names:
-                        _append_new_row_inplace(self._frame._data[col], value)
-                    self._frame._index = idx_copy
+                    self.append_new_row(key, value, columns_df=columns_df)
 
             elif isinstance(value, cudf.DataFrame):
                 if value.shape != self._frame.loc[key[0]].shape:

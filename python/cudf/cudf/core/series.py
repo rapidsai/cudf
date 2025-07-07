@@ -24,7 +24,6 @@ from cudf.api.types import (
     is_dict_like,
     is_integer,
     is_scalar,
-    is_string_dtype,
 )
 from cudf.core import indexing_utils
 from cudf.core._compat import PANDAS_LT_300
@@ -35,7 +34,6 @@ from cudf.core.accessors import (
     StructMethods,
 )
 from cudf.core.column import (
-    CategoricalColumn,
     ColumnBase,
     IntervalColumn,
     as_column,
@@ -59,7 +57,6 @@ from cudf.core.indexed_frame import (
 from cudf.core.resample import SeriesResampler
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.core.udf.scalar_function import SeriesApplyKernel
-from cudf.errors import MixedTypeError
 from cudf.utils import docutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
@@ -166,33 +163,6 @@ def _describe_categorical(obj, percentiles):
             }
         )
     return data
-
-
-def _append_new_row_inplace(col: ColumnBase, value: ScalarLike) -> None:
-    """Append a scalar `value` to the end of `col` inplace.
-    Cast to common type if possible
-    """
-    val_col = as_column(value, dtype=col.dtype if value is None else None)
-    to_type = find_common_type([val_col.dtype, col.dtype])
-    if (
-        cudf.get_option("mode.pandas_compatible")
-        and is_string_dtype(to_type)
-        and is_mixed_with_object_dtype(val_col, col)
-    ):
-        raise MixedTypeError("Cannot append mixed types")
-    val_col = val_col.astype(to_type)
-    old_col = col.astype(to_type)
-    res_col = concat_columns([old_col, val_col])
-    if (
-        cudf.get_option("mode.pandas_compatible")
-        and res_col.dtype != col.dtype
-        and isinstance(col, CategoricalColumn)
-    ):
-        raise MixedTypeError(
-            "Cannot append mixed types: "
-            f"Column dtype {col.dtype} is not compatible with {res_col.dtype}"
-        )
-    col._mimic_inplace(res_col, inplace=True)
 
 
 class _SeriesIlocIndexer(_FrameIndexer):
@@ -308,29 +278,7 @@ class _SeriesLocIndexer(_FrameIndexer):
                 and not isinstance(self._frame.index, cudf.MultiIndex)
                 and is_scalar(value)
             ):
-                idx = self._frame.index
-                if isinstance(idx, cudf.RangeIndex):
-                    if isinstance(key, int) and (key == idx[-1] + idx.step):
-                        idx_copy = cudf.RangeIndex(
-                            start=idx.start,
-                            stop=idx.stop + idx.step,
-                            step=idx.step,
-                            name=idx.name,
-                        )
-                    else:
-                        idx_copy = idx._as_int_index()
-                        _append_new_row_inplace(idx_copy._column, key)
-                else:
-                    # TODO: Modifying index in place is bad because
-                    # our index are immutable, but columns are not (which
-                    # means our index are mutable with internal APIs).
-                    # Get rid of the deep copy once columns too are
-                    # immutable.
-                    idx_copy = idx.copy(deep=True)
-                    _append_new_row_inplace(idx_copy._column, key)
-
-                _append_new_row_inplace(self._frame._column, value)
-                self._frame._index = idx_copy
+                self.append_new_row(key, value, column=True)
                 return
             else:
                 raise e
