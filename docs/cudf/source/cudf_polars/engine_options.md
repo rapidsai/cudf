@@ -4,7 +4,7 @@ The `polars.GPUEngine` object may be configured in several different ways.
 
 ## Executor
 
-`cudf-polars` includes multiple *executors*, backends that take a Polars query and execute it to produce the result (either an in-memory `polars.DataFrame` from `.collect()` or one or more files with `.sink_<method>`). These can be specified with the `"executor"` option when you create the `GPUEngine`.
+`cudf-polars` includes multiple *executors*, backends that take a Polars query and execute it to produce the result (either an in-memory `polars.DataFrame` from `.collect()` or one or more files with `.sink_<method>`). These can be specified with the `executor` option when you create the `GPUEngine`.
 
 ```python
 import polars as pl
@@ -65,8 +65,8 @@ Note that passing `chunked: False` disables chunked reading entirely, and thus `
 
 ## Experimental Multi-GPU Scheduling
 
-By default, the `"streaming"` executor uses a synchronous *scheduler* to execute
-the query on a single GPU. You can instead use the `"distributed"` scheduler to
+By default, the `streaming` executor uses a synchronous *scheduler* to execute
+the query on a single GPU. You can instead use the `distributed` scheduler to
 execute the query in parallel on a single node with multiple GPUs or multiple
 nodes with one or more GPUs.
 
