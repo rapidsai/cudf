@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import dataclasses
 import enum
+import functools
+import importlib.util
 import json
 import os
 import warnings
@@ -19,6 +21,15 @@ if TYPE_CHECKING:
 
 
 __all__ = ["ConfigOptions"]
+
+
+@functools.cache
+def rapidsmpf_available() -> bool:  # pragma: no cover
+    """Query whether rapidsmpf is available as a shuffle method."""
+    try:
+        return importlib.util.find_spec("rapidsmpf.integrations.dask") is not None
+    except (ImportError, ValueError):
+        return False
 
 
 # TODO: Use enum.StrEnum when we drop Python 3.10
@@ -59,10 +70,6 @@ class ShuffleMethod(str, enum.Enum):
 
     * ``ShuffleMethod.TASKS`` : Use the task-based shuffler.
     * ``ShuffleMethod.RAPIDSMPF`` : Use the rapidsmpf scheduler.
-
-    In :class:`StreamingExecutor`, the default of ``None`` will attempt to use
-    ``ShuffleMethod.RAPIDSMPF``, but will fall back to ``ShuffleMethod.TASKS``
-    if rapidsmpf is not installed.
     """
 
     TASKS = "tasks"
@@ -106,23 +113,7 @@ def default_blocksize(scheduler: str) -> int:
     try:
         # Use PyNVML to find the worker device size.
         import pynvml
-
-        pynvml.nvmlInit()
-        index = os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0]
-        if index and not index.isnumeric():  # pragma: no cover
-            # This means device_index is UUID.
-            # This works for both MIG and non-MIG device UUIDs.
-            handle = pynvml.nvmlDeviceGetHandleByUUID(str.encode(index))
-            if pynvml.nvmlDeviceIsMigDeviceHandle(handle):
-                # Additionally get parent device handle
-                # if the device itself is a MIG instance
-                handle = pynvml.nvmlDeviceGetDeviceHandleFromMigDeviceHandle(handle)
-        else:
-            handle = pynvml.nvmlDeviceGetHandleByIndex(int(index))
-
-        device_size = pynvml.nvmlDeviceGetMemoryInfo(handle).total
-
-    except (ImportError, ValueError, pynvml.NVMLError) as err:  # pragma: no cover
+    except (ImportError, ValueError) as err:  # pragma: no cover
         # Fall back to a conservative 12GiB default
         warnings.warn(
             "Failed to query the device size with NVML. Please "
@@ -131,6 +122,30 @@ def default_blocksize(scheduler: str) -> int:
             stacklevel=1,
         )
         device_size = 12 * 1024**3
+    else:
+        try:
+            pynvml.nvmlInit()
+            index = os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0]
+            if index and not index.isnumeric():  # pragma: no cover
+                # This means device_index is UUID.
+                # This works for both MIG and non-MIG device UUIDs.
+                handle = pynvml.nvmlDeviceGetHandleByUUID(str.encode(index))
+                if pynvml.nvmlDeviceIsMigDeviceHandle(handle):
+                    # Additionally get parent device handle
+                    # if the device itself is a MIG instance
+                    handle = pynvml.nvmlDeviceGetDeviceHandleFromMigDeviceHandle(handle)
+            else:
+                handle = pynvml.nvmlDeviceGetHandleByIndex(int(index))
+
+            device_size = pynvml.nvmlDeviceGetMemoryInfo(handle).total
+        except pynvml.NVMLError as err:  # pragma: no cover
+            warnings.warn(
+                "Failed to query the device size with NVML. Please "
+                "set 'target_partition_size' to a literal byte size to "
+                f"silence this warning. Original error: {err}",
+                stacklevel=1,
+            )
+            device_size = 12 * 1024**3
 
     if scheduler == "distributed":
         # Distributed execution requires a conservative
@@ -185,12 +200,19 @@ class StreamingExecutor:
         The maximum number of partitions to allow for the smaller table in
         a broadcast join.
     shuffle_method
-        The method to use for shuffling data between workers. ``None``
-        by default, which will use 'rapidsmpf' if installed and fall back to
-        'tasks' if not.
+        The method to use for shuffling data between workers. Defaults to
+        'rapidsmpf' for distributed scheduler if available (otherwise 'tasks'),
+        and 'tasks' for synchronous scheduler.
     rapidsmpf_spill
         Whether to wrap task arguments and output in objects that are
         spillable by 'rapidsmpf'.
+
+    Notes
+    -----
+    The streaming executor does not currently support profiling a query via
+    the ``.profile()`` method. We recommend using nsys to profile queries
+    with the 'synchronous' scheduler and Dask's built-in profiling tools
+    with the 'distributed' scheduler.
     """
 
     name: Literal["streaming"] = dataclasses.field(default="streaming", init=False)
@@ -201,10 +223,26 @@ class StreamingExecutor:
     target_partition_size: int = 0
     groupby_n_ary: int = 32
     broadcast_join_limit: int = 0
-    shuffle_method: ShuffleMethod | None = None
+    shuffle_method: ShuffleMethod = ShuffleMethod.TASKS
     rapidsmpf_spill: bool = False
 
     def __post_init__(self) -> None:
+        # Handle shuffle_method defaults for streaming executor
+        if self.shuffle_method is None:
+            if self.scheduler == "distributed" and rapidsmpf_available():
+                # For distributed scheduler, prefer rapidsmpf if available
+                object.__setattr__(self, "shuffle_method", "rapidsmpf")
+            else:
+                object.__setattr__(self, "shuffle_method", "tasks")
+        else:
+            if (
+                self.scheduler == "distributed"
+                and self.shuffle_method == "rapidsmpf"
+                and not rapidsmpf_available()
+            ):
+                raise ValueError(
+                    "rapidsmpf shuffle method requested, but rapidsmpf is not installed"
+                )
         if self.scheduler == "synchronous" and self.shuffle_method == "rapidsmpf":
             raise ValueError(
                 "rapidsmpf shuffle method is not supported for synchronous scheduler"
@@ -226,10 +264,7 @@ class StreamingExecutor:
                 2 if self.scheduler == "distributed" else 32,
             )
         object.__setattr__(self, "scheduler", Scheduler(self.scheduler))
-        if self.shuffle_method is not None:
-            object.__setattr__(
-                self, "shuffle_method", ShuffleMethod(self.shuffle_method)
-            )
+        object.__setattr__(self, "shuffle_method", ShuffleMethod(self.shuffle_method))
 
         # Type / value check everything else
         if not isinstance(self.max_rows_per_partition, int):
@@ -352,9 +387,9 @@ class ConfigOptions:
             case "in-memory":
                 executor = InMemoryExecutor(**user_executor_options)
             case "streaming":
+                user_executor_options = user_executor_options.copy()
+                user_executor_options.setdefault("shuffle_method", None)
                 executor = StreamingExecutor(**user_executor_options)
-                # Update with the streaming defaults, but user options take precedence.
-
             case _:  # pragma: no cover; Unreachable
                 raise ValueError(f"Unsupported executor: {user_executor}")
 

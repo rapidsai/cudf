@@ -98,6 +98,9 @@ class StringFunction(Expr):
         Name.CountMatches,
         Name.EndsWith,
         Name.Head,
+        Name.JsonPathMatch,
+        Name.LenBytes,
+        Name.LenChars,
         Name.Lowercase,
         Name.Replace,
         Name.ReplaceMany,
@@ -317,6 +320,31 @@ class StringFunction(Expr):
                 plc.unary.cast(
                     plc.strings.contains.count_re(column, self._regex_program),
                     self.dtype.plc,
+                ),
+                dtype=self.dtype,
+            )
+        elif self.name is StringFunction.Name.JsonPathMatch:
+            (child, expr) = self.children
+            column = child.evaluate(df, context=context).obj
+            assert isinstance(expr, Literal)
+            json_path = plc.Scalar.from_py(expr.value, expr.dtype.plc)
+            return Column(
+                plc.json.get_json_object(column, json_path),
+                dtype=self.dtype,
+            )
+        elif self.name is StringFunction.Name.LenBytes:
+            column = self.children[0].evaluate(df, context=context).obj
+            return Column(
+                plc.unary.cast(
+                    plc.strings.attributes.count_bytes(column), self.dtype.plc
+                ),
+                dtype=self.dtype,
+            )
+        elif self.name is StringFunction.Name.LenChars:
+            column = self.children[0].evaluate(df, context=context).obj
+            return Column(
+                plc.unary.cast(
+                    plc.strings.attributes.count_characters(column), self.dtype.plc
                 ),
                 dtype=self.dtype,
             )
