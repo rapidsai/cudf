@@ -380,7 +380,9 @@ class reader_impl {
   named_to_reference_converter _expr_conv{std::nullopt, table_metadata{}};
 
   std::vector<std::unique_ptr<datasource>> _sources;
-  std::unique_ptr<aggregate_reader_metadata> _metadata;
+
+  // Number of sources
+  size_t _num_sources{0};
 
   // input columns to be processed
   std::vector<input_column_info> _input_columns;
@@ -393,6 +395,9 @@ class reader_impl {
 
   // _output_buffers associated schema indices
   std::vector<int> _output_column_schemas;
+
+  // Page mask for filtering out data pages
+  thrust::host_vector<bool> _page_mask;
 
   // _output_buffers associated metadata
   std::unique_ptr<table_metadata> _output_metadata;
@@ -434,6 +439,8 @@ class reader_impl {
     std::optional<int64_t> num_rows;
     std::vector<std::vector<size_type>> row_group_indices;
   } const _options;
+
+  std::unique_ptr<aggregate_reader_metadata> _metadata;
 };
 
 }  // namespace cudf::io::parquet::detail

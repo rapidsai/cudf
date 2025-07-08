@@ -103,7 +103,7 @@ void reader_impl::allocate_nesting_info()
     // Get the max_definition_level of this column across all sources.
     auto max_definition_level = _metadata->get_schema(schema_idx).max_definition_level + 1;
     std::for_each(thrust::make_counting_iterator(static_cast<size_t>(1)),
-                  thrust::make_counting_iterator(_sources.size()),
+                  thrust::make_counting_iterator(_num_sources),
                   [&](auto const src_file_idx) {
                     auto const& schema = _metadata->get_schema(
                       _metadata->map_schema_index(schema_idx, src_file_idx), src_file_idx);
@@ -166,7 +166,7 @@ void reader_impl::allocate_nesting_info()
     // if this column has lists, generate depth remapping
     std::for_each(
       thrust::make_counting_iterator(static_cast<size_t>(0)),
-      thrust::make_counting_iterator(_sources.size()),
+      thrust::make_counting_iterator(_num_sources),
       [&](auto const src_file_idx) {
         auto const mapped_schema_idx = _metadata->map_schema_index(src_col_schema, src_file_idx);
         if (_metadata->get_schema(mapped_schema_idx, src_file_idx).max_repetition_level > 0) {

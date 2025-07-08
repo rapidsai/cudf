@@ -215,8 +215,8 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
 
   // TODO: Page pruning not yet implemented (especially for the chunked reader) so set all pages in
   // this subpass to be decoded.
-  auto host_page_mask = cudf::detail::make_host_vector<bool>(subpass.pages.size(), _stream);
-  std::fill(host_page_mask.begin(), host_page_mask.end(), true);
+  auto host_page_mask =
+    _page_mask.empty() ? thrust::host_vector<bool>(subpass.pages.size(), true) : _page_mask;
   auto page_mask = cudf::detail::make_device_uvector_async(host_page_mask, _stream, _mr);
 
   // Create an empty device vector to store the initial str offset for large string columns from for
@@ -536,6 +536,7 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
   : _stream{stream},
     _mr{mr},
     _sources{std::move(sources)},
+    _num_sources{_sources.size()},
     _output_chunk_read_limit{chunk_read_limit},
     _input_pass_read_limit{pass_read_limit},
     _options{options.get_timestamp_type(),
