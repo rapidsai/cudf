@@ -35,7 +35,7 @@ class StructFunction(Expr):
         PrefixFields = auto()
         SuffixFields = auto()
         JsonEncode = auto()
-        WithFields = auto()  # TODO: https://github.com/rapidsai/cudf/pull/19052
+        WithFields = auto()  # TODO: https://github.com/rapidsai/cudf/issues/19284
         MapFieldNames = auto()  # TODO: https://github.com/rapidsai/cudf/issues/19285
         MultipleFields = (
             auto()
