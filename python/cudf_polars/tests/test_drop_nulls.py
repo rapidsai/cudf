@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -52,14 +52,14 @@ def test_fill_null(null_data, value):
 def test_fill_null_with_strategy(null_data, strategy):
     q = null_data.select(pl.col("a").fill_null(strategy=strategy))
 
-    # Not yet exposed to python from rust
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_gpu_result_equal(q)
 
 
 @pytest.mark.parametrize("strategy", ["forward", "backward"])
 @pytest.mark.parametrize("limit", [0, 1, 2])
 def test_fill_null_with_limit(null_data, strategy, limit):
     q = null_data.select(pl.col("a").fill_null(strategy=strategy, limit=limit))
-
-    # Not yet exposed to python from rust
-    assert_ir_translation_raises(q, NotImplementedError)
+    if limit != 0:
+        assert_ir_translation_raises(q, NotImplementedError)
+    else:
+        assert_gpu_result_equal(q)

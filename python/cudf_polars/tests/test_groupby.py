@@ -273,3 +273,19 @@ def test_groupby_nunique(df: pl.LazyFrame, column):
     q = df.group_by("key1").agg(pl.col(column).n_unique())
 
     assert_gpu_result_equal(q, check_row_order=False)
+
+
+@pytest.mark.parametrize(
+    "strategy", ["forward", "backward", "min", "max", "mean", "zero", "one"]
+)
+def test_groupby_fill_null_with_strategy(strategy):
+    lf = pl.LazyFrame(
+        {
+            "key": [1, 1, 2, 2, 2],
+            "val": [None, 2, None, 4, None],
+        }
+    )
+
+    q = lf.group_by("key").agg(pl.col("val").fill_null(strategy=strategy))
+
+    assert_ir_translation_raises(q, NotImplementedError)
