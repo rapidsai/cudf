@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,13 +42,15 @@ class CUDF_EXPORT chunked_parquet_writer_options;
 
 namespace parquet::detail {
 
+// Forward declaration of the implementation class
+class reader_impl;
+
 /**
  * @brief Class to read Parquet dataset data into columns.
  */
 class reader {
  protected:
-  class impl;
-  std::unique_ptr<impl> _impl;
+  std::unique_ptr<reader_impl> _impl;
 
   /**
    * @brief Default constructor, needed for subclassing.

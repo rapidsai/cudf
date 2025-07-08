@@ -42,10 +42,15 @@ namespace cudf::io::parquet::detail {
 /**
  * @brief Implementation for Parquet reader
  */
-class reader::impl {
+class reader_impl {
  public:
   /**
-   * @brief Constructor from an array of dataset sources with reader options.
+   * @brief Default constructor for subclassing
+   */
+  reader_impl();
+
+  /**
+   * @brief Constructor from an array of dataset sources with reader options
    *
    * By using this constructor, each call to `read()` or `read_chunk()` will perform reading the
    * entire given file.
@@ -55,10 +60,10 @@ class reader::impl {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit impl(std::vector<std::unique_ptr<datasource>>&& sources,
-                parquet_reader_options const& options,
-                rmm::cuda_stream_view stream,
-                rmm::device_async_resource_ref mr);
+  explicit reader_impl(std::vector<std::unique_ptr<datasource>>&& sources,
+                       parquet_reader_options const& options,
+                       rmm::cuda_stream_view stream,
+                       rmm::device_async_resource_ref mr);
 
   /**
    * @brief Read an entire set or a subset of data and returns a set of columns
@@ -100,12 +105,12 @@ class reader::impl {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit impl(std::size_t chunk_read_limit,
-                std::size_t pass_read_limit,
-                std::vector<std::unique_ptr<datasource>>&& sources,
-                parquet_reader_options const& options,
-                rmm::cuda_stream_view stream,
-                rmm::device_async_resource_ref mr);
+  explicit reader_impl(std::size_t chunk_read_limit,
+                       std::size_t pass_read_limit,
+                       std::vector<std::unique_ptr<datasource>>&& sources,
+                       parquet_reader_options const& options,
+                       rmm::cuda_stream_view stream,
+                       rmm::device_async_resource_ref mr);
 
   /**
    * @copydoc cudf::io::chunked_parquet_reader::has_next
@@ -119,7 +124,7 @@ class reader::impl {
 
   // top level functions involved with ratcheting through the passes, subpasses
   // and output chunks of the read process
- private:
+ protected:
   /**
    * @brief The enum indicating whether the data sources are read all at once or chunk by chunk.
    */
@@ -182,7 +187,7 @@ class reader::impl {
   table_with_metadata read_chunk_internal(read_mode mode);
 
   // utility functions
- private:
+ protected:
   /**
    * @brief Read the set of column chunks to be processed for this pass.
    *
@@ -322,7 +327,7 @@ class reader::impl {
            _file_itm_data._current_input_pass < _file_itm_data.num_passes();
   }
 
- private:
+ protected:
   /**
    * @brief Check if the user has specified custom row bounds
    *
@@ -371,16 +376,6 @@ class reader::impl {
   rmm::cuda_stream_view _stream;
   rmm::device_async_resource_ref _mr{cudf::get_current_device_resource_ref()};
 
-  // Reader configs.
-  struct {
-    // timestamp_type
-    data_type timestamp_type;
-    // User specified reading rows/stripes selection.
-    int64_t const skip_rows;
-    std::optional<int64_t> num_rows;
-    std::vector<std::vector<size_type>> row_group_indices;
-  } const _options;
-
   // name to reference converter to extract AST output filter
   named_to_reference_converter _expr_conv{std::nullopt, table_metadata{}};
 
@@ -428,6 +423,17 @@ class reader::impl {
 
   std::size_t _output_chunk_read_limit{0};  // output chunk size limit in bytes
   std::size_t _input_pass_read_limit{0};    // input pass memory usage limit in bytes
+
+ private:
+  // Reader configs.
+  struct {
+    // timestamp_type
+    data_type timestamp_type;
+    // User specified reading rows/stripes selection.
+    int64_t const skip_rows;
+    std::optional<int64_t> num_rows;
+    std::vector<std::vector<size_type>> row_group_indices;
+  } const _options;
 };
 
 }  // namespace cudf::io::parquet::detail
