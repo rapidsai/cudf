@@ -136,7 +136,6 @@ and not test_eof_states \
 and not test_array_tz \
 and not test_resample_empty_dataframe"
 
-TEST_THAT_USE_WEAKREFS="not test_no_reference_cycle"
 TEST_THAT_USE_STRING_DTYPE_GROUPBY="not test_string_dtype_all_na"
 
 # TODO: Add reason to skip these tests
@@ -155,7 +154,7 @@ PYTEST_IGNORES=("--ignore=tests/io/parser/common/test_read_errors.py"
 
 PANDAS_CI="1" timeout 90m python -m pytest -p cudf.pandas \
     --import-mode=importlib \
-    -k "$TEST_THAT_NEED_MOTO_SERVER and $TEST_THAT_CRASH_PYTEST_WORKERS and $TEST_THAT_NEED_REASON_TO_SKIP and $TEST_THAT_USE_WEAKREFS and $TEST_THAT_USE_STRING_DTYPE_GROUPBY" \
+    -k "$TEST_THAT_NEED_MOTO_SERVER and $TEST_THAT_CRASH_PYTEST_WORKERS and $TEST_THAT_NEED_REASON_TO_SKIP and $TEST_THAT_USE_STRING_DTYPE_GROUPBY" \
     "${PYTEST_IGNORES[@]}" \
     "$@"
 
