@@ -437,7 +437,7 @@ class DateOffset:
 
     See Also
     --------
-    pandas.DateOffset : The equivalent Pandas object that this
+    pandas.tseries.offsets.DateOffset : The equivalent Pandas object that this
         object replicates.
 
     Examples
@@ -463,17 +463,18 @@ class DateOffset:
     -----
     Note that cuDF does not yet support DateOffset arguments
     that 'replace' units in the datetime data being operated on
-    such as
-        - year
-        - month
-        - week
-        - day
-        - hour
-        - minute
-        - second
-        - microsecond
-        - millisecond
-        - nanosecond
+    such as:
+
+    - year
+    - month
+    - week
+    - day
+    - hour
+    - minute
+    - second
+    - microsecond
+    - millisecond
+    - nanosecond
 
     cuDF does not yet support rounding via a `normalize`
     keyword argument.
