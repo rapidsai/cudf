@@ -267,6 +267,7 @@ def test_validate_shuffle_method_defaults(rapidsmpf_available) -> None:
         "groupby_n_ary",
         "broadcast_join_limit",
         "rapidsmpf_spill",
+        "sink_to_directory",
     ],
 )
 def test_validate_max_rows_per_partition(option: str) -> None:

@@ -206,6 +206,11 @@ class StreamingExecutor:
     rapidsmpf_spill
         Whether to wrap task arguments and output in objects that are
         spillable by 'rapidsmpf'.
+    sink_to_directory
+        Whether multi-partition sink operations should write to a directory
+        rather than a single file. By default, this will be set to True for
+        the 'distributed' scheduler and False otherwise. The 'distrubuted'
+        scheduler does not currently support `sink_to_directory=False`.
 
     Notes
     -----
@@ -225,6 +230,7 @@ class StreamingExecutor:
     broadcast_join_limit: int = 0
     shuffle_method: ShuffleMethod = ShuffleMethod.TASKS
     rapidsmpf_spill: bool = False
+    sink_to_directory: bool | None = None
 
     def __post_init__(self) -> None:
         # Handle shuffle_method defaults for streaming executor
@@ -266,6 +272,15 @@ class StreamingExecutor:
         object.__setattr__(self, "scheduler", Scheduler(self.scheduler))
         object.__setattr__(self, "shuffle_method", ShuffleMethod(self.shuffle_method))
 
+        if self.scheduler == "distributed":
+            if self.sink_to_directory is False:
+                raise ValueError(
+                    "The distributed scheduler requires sink_to_directory=False"
+                )
+            object.__setattr__(self, "sink_to_directory", True)
+        elif self.sink_to_directory is None:
+            object.__setattr__(self, "sink_to_directory", False)
+
         # Type / value check everything else
         if not isinstance(self.max_rows_per_partition, int):
             raise TypeError("max_rows_per_partition must be an int")
@@ -279,6 +294,8 @@ class StreamingExecutor:
             raise TypeError("broadcast_join_limit must be an int")
         if not isinstance(self.rapidsmpf_spill, bool):
             raise TypeError("rapidsmpf_spill must be bool")
+        if not isinstance(self.sink_to_directory, bool):
+            raise TypeError("sink_to_directory must be bool")
 
     def __hash__(self) -> int:
         # cardinality factory, a dict, isn't natively hashable. We'll dump it

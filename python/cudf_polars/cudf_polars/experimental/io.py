@@ -11,6 +11,7 @@ import math
 import random
 import statistics
 from enum import IntEnum
+from io import BytesIO
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -21,7 +22,7 @@ from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 
 if TYPE_CHECKING:
-    from collections.abc import Hashable, MutableMapping
+    from collections.abc import Callable, Hashable, MutableMapping
 
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import NamedExpr
@@ -402,18 +403,9 @@ def _(
     )
 
     # TODO: Support cloud storage
-    exists = Path(ir.path).exists()
-    if (
-        exists and executor_options.scheduler == "distributed"
-    ):  # pragma: no cover; Requires distributed testing
+    if Path(ir.path).exists() and executor_options.sink_to_directory:
         raise NotImplementedError(
-            "Writing to an existing path is not yet supported "
-            "by the distributed GPU streaming executor."
-        )
-    elif exists and ir.kind != "Parquet":  # pragma: no cover
-        # TODO: Test this.
-        raise NotImplementedError(
-            "Writing to an existing path is not yet supported for {kind}."
+            "Writing to an existing path is not supported when sinking to a directory."
         )
 
     new_node = StreamingSink(
@@ -432,7 +424,7 @@ def _prepare_sink_directory(path: str) -> None:
     Path(path).mkdir(parents=True)
 
 
-def _sink_partition_to_directory(
+def _sink_to_directory(
     schema: Schema,
     kind: str,
     path: str,
@@ -444,7 +436,7 @@ def _sink_partition_to_directory(
     return Sink.do_evaluate(schema, kind, path, options, df)
 
 
-def _sink_partition_to_parquet_file(
+def _sink_to_parquet_file(
     schema: Schema,
     path: str,
     options: dict[str, Any],
@@ -489,7 +481,78 @@ def _sink_partition_to_parquet_file(
         return writer
 
 
-def _sink_partition_to_file(
+def _sink_to_csv_file(
+    schema: Schema,
+    path: str,
+    options: dict[str, Any],
+    finalize: bool,  # noqa: FBT001
+    ready: bool | None,
+    df: DataFrame,
+) -> bool | DataFrame:
+    """Sink a partition to an open Parquet file."""
+    # Write to BytesIO buffer.
+    # TODO: Append directly to existing file if/when possible.
+    buffer = BytesIO()
+    target = plc.io.types.SinkInfo([buffer])
+    serialize = options["serialize_options"]
+    include_header = options["include_header"] if ready is None else False
+    options = (
+        plc.io.csv.CsvWriterOptions.builder(target, df.table)
+        .include_header(include_header)
+        .names(df.column_names if include_header else [])
+        .na_rep(serialize["null"])
+        .line_terminator(serialize["line_terminator"])
+        .inter_column_delimiter(chr(serialize["separator"]))
+        .build()
+    )
+    plc.io.csv.write_csv(options)
+
+    # Append BytesIO buffer to path
+    with Path.open(Path(path), "ab") as f:
+        buffer.seek(0)
+        f.write(buffer.getvalue())
+
+    # Finalize or return ready signal
+    return df if finalize else True
+
+
+def _sink_to_json_file(
+    schema: Schema,
+    path: str,
+    options: dict[str, Any],
+    finalize: bool,  # noqa: FBT001
+    ready: bool | None,
+    df: DataFrame,
+) -> bool | DataFrame:
+    """Sink a partition to an open Json file."""
+    # Write to BytesIO buffer.
+    # TODO: Append directly to existing file if/when possible.
+    buffer = BytesIO()
+    target = plc.io.types.SinkInfo([buffer])
+    metadata = plc.io.TableWithMetadata(
+        df.table, [(col, []) for col in df.column_names]
+    )
+    options = (
+        plc.io.json.JsonWriterOptions.builder(target, df.table)
+        .lines(val=True)
+        .na_rep("null")
+        .include_nulls(val=True)
+        .metadata(metadata)
+        .utf8_escaped(val=False)
+        .build()
+    )
+    plc.io.json.write_json(options)
+
+    # Append BytesIO buffer to path
+    with Path.open(Path(path), "ab") as f:
+        buffer.seek(0)
+        f.write(buffer.getvalue())
+
+    # Finalize or return ready signal
+    return df if finalize else True
+
+
+def _sink_to_file(
     schema: Schema,
     kind: str,
     path: str,
@@ -497,21 +560,26 @@ def _sink_partition_to_file(
     finalize: bool,  # noqa: FBT001
     writer_state: Any,
     df: DataFrame,
-) -> DataFrame:
+) -> Any:
     """Sink a partition to an open file."""
+    sink_function: Callable[..., Any]
     if kind == "Parquet":
-        return _sink_partition_to_parquet_file(
-            schema,
-            path,
-            options,
-            finalize,
-            writer_state,
-            df,
-        )
+        sink_function = _sink_to_parquet_file
+    elif kind == "Csv":
+        sink_function = _sink_to_csv_file
+    elif kind == "Json":
+        sink_function = _sink_to_json_file
     else:  # pragma: no cover; Shouldn't get here.
-        raise NotImplementedError(
-            f"{kind} not yet supported in _sink_partition_to_file"
-        )
+        raise NotImplementedError(f"{kind} not yet supported in _sink_to_file")
+
+    return sink_function(
+        schema,
+        path,
+        options,
+        finalize,
+        writer_state,
+        df,
+    )
 
 
 def _file_sink_graph(
@@ -534,7 +602,7 @@ def _file_sink_graph(
     sink_name = get_key_name(sink)
     graph: MutableMapping[Any, Any] = {
         (sink_name, i): (
-            _sink_partition_to_file,
+            _sink_to_file,
             sink.schema,
             sink.kind,
             sink.path,
@@ -573,7 +641,7 @@ def _directory_sink_graph(
     width = math.ceil(math.log10(count))
     graph: MutableMapping[Any, Any] = {
         (name, i): (
-            _sink_partition_to_directory,
+            _sink_to_directory,
             sink.schema,
             sink.kind,
             f"{sink.path}/part.{str(i).zfill(width)}.{suffix}",
@@ -591,7 +659,7 @@ def _directory_sink_graph(
 def _(
     ir: StreamingSink, partition_info: MutableMapping[IR, PartitionInfo]
 ) -> MutableMapping[Any, Any]:
-    if ir.sink.kind == "Parquet" and ir.executor_options.scheduler == "synchronous":
-        return _file_sink_graph(ir, partition_info)
-    else:
+    if ir.executor_options.sink_to_directory:
         return _directory_sink_graph(ir, partition_info)
+    else:
+        return _file_sink_graph(ir, partition_info)
