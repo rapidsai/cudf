@@ -369,7 +369,7 @@ hybrid_scan_reader_impl::get_input_column_chunk_byte_ranges(
   column_chunk_byte_ranges.reserve(num_chunks);
 
   std::for_each(thrust::counting_iterator<size_t>(0),
-                thrust::counting_iterator(num_row_groups),
+                thrust::counting_iterator(row_group_indices.size()),
                 [&](auto const source_idx) {
                   auto const& row_groups = row_group_indices[source_idx];
                   for (auto const row_group_index : row_groups) {
@@ -480,6 +480,10 @@ void hybrid_scan_reader_impl::reset_internal_state()
   _pass_itm_data.reset();
   _page_mask.clear();
   _output_metadata.reset();
+  _options.timestamp_type = cudf::data_type{};
+  _options.num_rows       = std::nullopt;
+  _options.row_group_indices.clear();
+  _num_sources = 0;
 }
 
 void hybrid_scan_reader_impl::initialize_options(
@@ -492,12 +496,10 @@ void hybrid_scan_reader_impl::initialize_options(
   table_metadata metadata;
   populate_metadata(metadata);
 
-  _uses_custom_row_bounds = (options.get_num_rows().has_value() or options.get_skip_rows() > 0);
-
   // Strings may be returned as either string or categorical columns
   _strings_to_categorical = options.is_enabled_convert_strings_to_categories();
 
-  _options.timestamp_type = options.get_timestamp_type();
+  _options.timestamp_type = cudf::data_type{options.get_timestamp_type().id()};
 
   // Binary columns can be read as binary or strings
   _reader_column_schema = options.get_column_schema();
@@ -643,7 +645,7 @@ void hybrid_scan_reader_impl::decode_page_data(size_t skip_rows, size_t num_rows
                is_treat_fixed_length_as_string(chunk.logical_type);
       });
 
-    if (!_has_page_index || _uses_custom_row_bounds || has_flba) {
+    if (!_has_page_index || uses_custom_row_bounds(read_mode::READ_ALL) || has_flba) {
       ComputePageStringSizes(subpass.pages,
                              pass.chunks,
                              delta_temp_buf,

@@ -320,6 +320,7 @@ ConfigureTest(
   io/parquet_chunked_reader_test.cu
   io/parquet_chunked_writer_test.cpp
   io/parquet_experimental_reader_test.cpp
+  io/parquet_experimental_reader_materialize.cpp
   io/parquet_common.cpp
   io/parquet_misc_test.cpp
   io/parquet_reader_test.cpp

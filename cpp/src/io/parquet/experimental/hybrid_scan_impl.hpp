@@ -195,6 +195,17 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
   enum class read_columns_mode { FILTER_COLUMNS, PAYLOAD_COLUMNS };
 
   /**
+   * @brief Check if the user has specified custom row bounds
+   *
+   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
+   * @return True if the user has specified custom row bounds
+   */
+  [[nodiscard]] bool uses_custom_row_bounds(read_mode mode) const
+  {
+    return (_options.num_rows.has_value() or _options.skip_rows != 0);
+  }
+
+  /**
    * @brief Initialize the necessary options related internal variables for use later on
    *
    * @param row_group_indices Row group indices to read
@@ -204,6 +215,14 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
   void initialize_options(cudf::host_span<std::vector<size_type> const> row_group_indices,
                           parquet_reader_options const& options,
                           rmm::cuda_stream_view stream);
+
+  /**
+   * @brief Allocate data buffers for the output columns.
+   *
+   * @param skip_rows Crop all rows below skip_rows
+   * @param num_rows Maximum number of rows to read
+   */
+  void allocate_columns(size_t skip_rows, size_t num_rows);
 
   /**
    * @brief Set the mask for pages
@@ -369,21 +388,6 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
                                       RowMaskView row_mask);
 
   /**
-   * @brief Allocate data buffers for the output columns.
-   *
-   * @param skip_rows Crop all rows below skip_rows
-   * @param num_rows Maximum number of rows to read
-   */
-  void allocate_columns(size_t skip_rows, size_t num_rows);
-
-  /**
-   * @brief Calculate per-page offsets for string data
-   *
-   * @return Vector of total string data sizes for each column
-   */
-  cudf::detail::host_vector<size_t> calculate_page_string_offsets();
-
-  /**
    * @brief Converts the page data and outputs to columns.
    *
    * @param skip_rows Minimum number of rows from start
@@ -421,8 +425,6 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
 
   // timestamp_type
   cudf::data_type _timestamp_type;
-
-  bool _uses_custom_row_bounds{false};
 
   bool _is_filter_columns_selected{false};
   bool _is_payload_columns_selected{false};

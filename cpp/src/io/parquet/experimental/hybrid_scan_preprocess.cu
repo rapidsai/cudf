@@ -219,7 +219,7 @@ void hybrid_scan_reader_impl::allocate_columns(size_t skip_rows, size_t num_rows
   // account. PageInfo::skipped_values, which tells us where to start decoding in the input to
   // respect the user bounds. It is only necessary to do this second pass if uses_custom_row_bounds
   // is set (if the user has specified artificial bounds).
-  if (_uses_custom_row_bounds) {
+  if (uses_custom_row_bounds(read_mode::READ_ALL)) {
     parquet::detail::compute_page_sizes(subpass.pages,
                                         pass.chunks,
                                         skip_rows,
@@ -396,39 +396,6 @@ void hybrid_scan_reader_impl::allocate_columns(size_t skip_rows, size_t num_rows
   // Need to set null mask bufs to all high bits
   cudf::detail::batched_memset<cudf::bitmask_type>(
     nullmask_bufs, std::numeric_limits<cudf::bitmask_type>::max(), _stream);
-}
-
-cudf::detail::host_vector<size_t> hybrid_scan_reader_impl::calculate_page_string_offsets()
-{
-  auto& pass    = *_pass_itm_data;
-  auto& subpass = *pass.subpass;
-
-  auto page_keys = make_page_key_iterator(subpass.pages);
-
-  rmm::device_uvector<size_t> d_col_sizes(_input_columns.size(), _stream);
-
-  // use page_index to fetch page string sizes in the proper order
-  auto val_iter = thrust::make_transform_iterator(
-    subpass.pages.device_begin(), parquet::detail::page_to_string_size{pass.chunks.d_begin()});
-
-  // do scan by key to calculate string offsets for each page
-  thrust::exclusive_scan_by_key(
-    rmm::exec_policy_nosync(_stream),
-    page_keys,
-    page_keys + subpass.pages.size(),
-    val_iter,
-    parquet::detail::page_offset_output_iter{subpass.pages.device_ptr()});
-
-  // now sum up page sizes
-  rmm::device_uvector<int> reduce_keys(d_col_sizes.size(), _stream);
-  thrust::reduce_by_key(rmm::exec_policy_nosync(_stream),
-                        page_keys,
-                        page_keys + subpass.pages.size(),
-                        val_iter,
-                        reduce_keys.begin(),
-                        d_col_sizes.begin());
-
-  return cudf::detail::make_host_vector(d_col_sizes, _stream);
 }
 
 std::tuple<bool,
