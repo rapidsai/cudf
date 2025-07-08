@@ -264,9 +264,9 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         )
 
     @functools.cached_property
-    def _plc_windows(self) -> tuple[plc.Column, plc.Column]:
+    def _plc_windows(self) -> tuple[plc.Column, plc.Column] | tuple[int, int]:
         """
-        Return the preceding and following columns to pass into
+        Return the preceding and following windows to pass into
         pylibcudf.rolling.rolling_window
         """
         if isinstance(self.window, (int, pd.Timedelta)):
@@ -281,11 +281,11 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
             else:
                 if self.center:
                     pre = (self.window // 2) + 1
-                    fwd = self.window - (pre)
+                    fwd = self.window - pre
                 else:
                     pre = self.window
                     fwd = 0
-                orderby_obj = as_column(range(len(self.obj)))
+                return (pre, fwd)
             if self._group_keys is not None:
                 group_cols: list[plc.Column] = [
                     col.to_pylibcudf(mode="read")
