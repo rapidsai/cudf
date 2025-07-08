@@ -58,13 +58,14 @@ def test_sink_parquet(
         engine=engine,
     )
 
-    check_path = Path(tmp_path / "test_sink_gpu.parquet")
-    expected_file_count = df.collect().height // max_rows_per_partition
-    if expected_file_count > 1:
-        assert check_path.is_dir()
-        assert len(list(check_path.iterdir())) == expected_file_count
-    else:
-        assert not check_path.is_dir()
+    if DEFAULT_SCHEDULER == "distributed":
+        check_path = Path(tmp_path / "test_sink_gpu.parquet")
+        expected_file_count = df.collect().height // max_rows_per_partition
+        if expected_file_count > 1:
+            assert check_path.is_dir()
+            assert len(list(check_path.iterdir())) == expected_file_count
+        else:
+            assert not check_path.is_dir()
 
 
 def test_sink_parquet_raises(request, df, tmp_path):
@@ -87,9 +88,12 @@ def test_sink_parquet_raises(request, df, tmp_path):
     # We can write to a file once, but not twice
     path = tmp_path / "test_sink_raises.parquet"
     df.sink_parquet(path, engine=engine)
-    if POLARS_VERSION_LT_130:
-        with pytest.raises(pl.exceptions.ComputeError, match="not supported"):
-            df.sink_parquet(path, engine=engine)
+    if DEFAULT_SCHEDULER == "distributed":
+        if POLARS_VERSION_LT_130:
+            with pytest.raises(pl.exceptions.ComputeError, match="not supported"):
+                df.sink_parquet(path, engine=engine)
+        else:
+            with pytest.raises(NotImplementedError, match="not supported"):
+                df.sink_parquet(path, engine=engine)
     else:
-        with pytest.raises(NotImplementedError, match="not supported"):
-            df.sink_parquet(path, engine=engine)
+        df.sink_parquet(path, engine=engine)
