@@ -380,6 +380,7 @@ class reader_impl {
   named_to_reference_converter _expr_conv{std::nullopt, table_metadata{}};
 
   std::vector<std::unique_ptr<datasource>> _sources;
+  std::unique_ptr<aggregate_reader_metadata> _metadata;
 
   // Number of sources
   size_t _num_sources{0};
@@ -439,8 +440,6 @@ class reader_impl {
     std::optional<int64_t> num_rows;
     std::vector<std::vector<size_type>> row_group_indices;
   } const _options;
-
-  std::unique_ptr<aggregate_reader_metadata> _metadata;
 };
 
 }  // namespace cudf::io::parquet::detail

@@ -60,7 +60,7 @@ void hybrid_scan_reader_impl::create_global_chunk_info(parquet_reader_options co
   if (_has_page_index and not row_groups_info.empty()) {
     // use first row group to define mappings (assumes same schema for each file)
     auto const& rg      = row_groups_info[0];
-    auto const& columns = _metadata->get_row_group(rg.index, rg.source_index).columns;
+    auto const& columns = _extended_metadata->get_row_group(rg.index, rg.source_index).columns;
     column_mapping.resize(num_input_columns);
     std::transform(
       _input_columns.begin(), _input_columns.end(), column_mapping.begin(), [&](auto const& col) {
@@ -69,8 +69,8 @@ void hybrid_scan_reader_impl::create_global_chunk_info(parquet_reader_options co
                                    columns.end(),
                                    [&](auto const& col_chunk) {
                                      return col_chunk.schema_idx ==
-                                            _metadata->map_schema_index(col.schema_idx,
-                                                                        rg.source_index);
+                                            _extended_metadata->map_schema_index(col.schema_idx,
+                                                                                 rg.source_index);
                                    });
             it != columns.end()) {
           return std::distance(columns.begin(), it);
@@ -83,7 +83,7 @@ void hybrid_scan_reader_impl::create_global_chunk_info(parquet_reader_options co
   auto remaining_rows = num_rows;
   auto skip_rows      = _file_itm_data.global_skip_rows;
   for (auto const& rg : row_groups_info) {
-    auto const& row_group      = _metadata->get_row_group(rg.index, rg.source_index);
+    auto const& row_group      = _extended_metadata->get_row_group(rg.index, rg.source_index);
     auto const row_group_start = rg.start_row;
     auto const row_group_rows  = std::min<int>(remaining_rows, row_group.num_rows);
 
@@ -91,9 +91,10 @@ void hybrid_scan_reader_impl::create_global_chunk_info(parquet_reader_options co
     for (size_t i = 0; i < num_input_columns; ++i) {
       auto col = _input_columns[i];
       // look up metadata
-      auto& col_meta = _metadata->get_column_metadata(rg.index, rg.source_index, col.schema_idx);
-      auto& schema   = _metadata->get_schema(
-        _metadata->map_schema_index(col.schema_idx, rg.source_index), rg.source_index);
+      auto& col_meta =
+        _extended_metadata->get_column_metadata(rg.index, rg.source_index, col.schema_idx);
+      auto& schema = _extended_metadata->get_schema(
+        _extended_metadata->map_schema_index(col.schema_idx, rg.source_index), rg.source_index);
 
       auto [clock_rate, logical_type] = parquet::detail::conversion_info(
         cudf::io::parquet::detail::to_type_id(schema,
@@ -124,7 +125,7 @@ void hybrid_scan_reader_impl::create_global_chunk_info(parquet_reader_options co
                           row_group_rows,
                           schema.max_definition_level,
                           schema.max_repetition_level,
-                          _metadata->get_output_nesting_depth(col.schema_idx),
+                          _extended_metadata->get_output_nesting_depth(col.schema_idx),
                           parquet::detail::required_bits(schema.max_definition_level),
                           parquet::detail::required_bits(schema.max_repetition_level),
                           col_meta.codec,
@@ -144,36 +145,6 @@ void hybrid_scan_reader_impl::create_global_chunk_info(parquet_reader_options co
     // Set skip_rows = 0 as it is no longer needed for subsequent row_groups
     skip_rows = 0;
   }
-}
-
-void hybrid_scan_reader_impl::compute_input_passes()
-{
-  // at this point, row_groups has already been filtered down to just the row groups we need to
-  // handle optional skip_rows/num_rows parameters.
-  auto const& row_groups_info = _file_itm_data.row_groups;
-
-  // read everything in a single pass.
-  _file_itm_data.input_pass_row_group_offsets.push_back(0);
-  _file_itm_data.input_pass_row_group_offsets.push_back(row_groups_info.size());
-  _file_itm_data.input_pass_start_row_count.push_back(0);
-  auto rg_row_count = cudf::detail::make_counting_transform_iterator(0, [&](size_t i) {
-    auto const& rgi       = row_groups_info[i];
-    auto const& row_group = _metadata->get_row_group(rgi.index, rgi.source_index);
-    return row_group.num_rows;
-  });
-  _file_itm_data.input_pass_start_row_count.push_back(
-    std::reduce(rg_row_count, rg_row_count + row_groups_info.size()));
-  return;
-}
-
-void hybrid_scan_reader_impl::compute_output_chunks_for_subpass()
-{
-  auto& pass    = *_pass_itm_data;
-  auto& subpass = *pass.subpass;
-
-  // simple case : no chunk size, no splits
-  subpass.output_chunk_read_info.push_back({subpass.skip_rows, subpass.num_rows});
-  return;
 }
 
 void hybrid_scan_reader_impl::handle_chunking(
@@ -352,13 +323,11 @@ void hybrid_scan_reader_impl::setup_next_subpass(parquet_reader_options const& o
   // decompress the data pages in this subpass; also decompress the dictionary pages in this pass,
   // if this is the first subpass in the pass
   if (pass.has_compressed_data) {
-    // Empty page mask indicates all pages must be decompressed
-    auto const empty_page_mask = cudf::host_span<bool>{};
     auto [pass_data, subpass_data] =
       parquet::detail::decompress_page_data(pass.chunks,
                                             is_first_subpass ? pass.pages : host_span<PageInfo>{},
                                             subpass.pages,
-                                            empty_page_mask,
+                                            _page_mask,
                                             _stream,
                                             _mr);
 
@@ -388,7 +357,7 @@ void hybrid_scan_reader_impl::setup_next_subpass(parquet_reader_options const& o
 
   // preprocess pages (computes row counts for lists, computes output chunks and computes
   // the actual row counts we will be able load out of this subpass)
-  preprocess_subpass_pages(0);
+  preprocess_subpass_pages(read_mode::READ_ALL, 0);
 }
 
 void hybrid_scan_reader_impl::update_row_mask(cudf::column_view in_row_mask,

@@ -125,7 +125,7 @@ void hybrid_scan_reader_impl::prepare_row_groups(
   _file_itm_data.global_skip_rows = 0;
 
   std::tie(_file_itm_data.global_num_rows, _file_itm_data.row_groups) =
-    _metadata->select_row_groups(row_group_indices);
+    _extended_metadata->select_row_groups(row_group_indices);
 
   // check for page indexes
   _has_page_index = std::all_of(_file_itm_data.row_groups.cbegin(),
@@ -145,241 +145,6 @@ void hybrid_scan_reader_impl::prepare_row_groups(
   _file_preprocessed = true;
 }
 
-void hybrid_scan_reader_impl::allocate_level_decode_space()
-{
-  auto& pass    = *_pass_itm_data;
-  auto& subpass = *pass.subpass;
-
-  auto& pages = subpass.pages;
-
-  // TODO: this could be made smaller if we ignored dictionary pages and pages with no
-  // repetition data.
-  size_t const per_page_decode_buf_size =
-    cudf::io::parquet::detail::LEVEL_DECODE_BUF_SIZE * 2 * pass.level_type_size;
-  auto const decode_buf_size = per_page_decode_buf_size * pages.size();
-  subpass.level_decode_data =
-    rmm::device_buffer(decode_buf_size, _stream, cudf::get_current_device_resource_ref());
-
-  // distribute the buffers
-  auto* buf = static_cast<uint8_t*>(subpass.level_decode_data.data());
-  for (size_t idx = 0; idx < pages.size(); idx++) {
-    auto& p = pages[idx];
-
-    p.lvl_decode_buf[level_type::DEFINITION] = buf;
-    buf += (cudf::io::parquet::detail::LEVEL_DECODE_BUF_SIZE * pass.level_type_size);
-    p.lvl_decode_buf[level_type::REPETITION] = buf;
-    buf += (cudf::io::parquet::detail::LEVEL_DECODE_BUF_SIZE * pass.level_type_size);
-  }
-}
-
-void hybrid_scan_reader_impl::build_string_dict_indices()
-{
-  CUDF_FUNC_RANGE();
-
-  auto& pass = *_pass_itm_data;
-
-  // compute number of indices per chunk and a summed total
-  rmm::device_uvector<size_t> str_dict_index_count(pass.chunks.size() + 1, _stream);
-  thrust::fill(
-    rmm::exec_policy_nosync(_stream), str_dict_index_count.begin(), str_dict_index_count.end(), 0);
-  thrust::for_each(rmm::exec_policy_nosync(_stream),
-                   pass.pages.d_begin(),
-                   pass.pages.d_end(),
-                   parquet::detail::set_str_dict_index_count{str_dict_index_count, pass.chunks});
-
-  size_t const total_str_dict_indexes = thrust::reduce(
-    rmm::exec_policy(_stream), str_dict_index_count.begin(), str_dict_index_count.end());
-  if (total_str_dict_indexes == 0) { return; }
-
-  // convert to offsets
-  rmm::device_uvector<size_t>& str_dict_index_offsets = str_dict_index_count;
-  thrust::exclusive_scan(rmm::exec_policy_nosync(_stream),
-                         str_dict_index_offsets.begin(),
-                         str_dict_index_offsets.end(),
-                         str_dict_index_offsets.begin(),
-                         0);
-
-  // allocate and distribute pointers
-  pass.str_dict_index =
-    cudf::detail::make_zeroed_device_uvector_async<parquet::detail::string_index_pair>(
-      total_str_dict_indexes, _stream, cudf::get_current_device_resource_ref());
-
-  auto iter = thrust::make_counting_iterator(0);
-  thrust::for_each(rmm::exec_policy_nosync(_stream),
-                   iter,
-                   iter + pass.chunks.size(),
-                   parquet::detail::set_str_dict_index_ptr{
-                     pass.str_dict_index.data(), str_dict_index_offsets, pass.chunks});
-
-  // compute the indices
-  parquet::detail::build_string_dictionary_index(
-    pass.chunks.device_ptr(), pass.chunks.size(), _stream);
-  pass.chunks.device_to_host(_stream);
-}
-
-void hybrid_scan_reader_impl::allocate_nesting_info()
-{
-  auto& pass    = *_pass_itm_data;
-  auto& subpass = *pass.subpass;
-
-  auto const num_columns         = _input_columns.size();
-  auto& pages                    = subpass.pages;
-  auto& page_nesting_info        = subpass.page_nesting_info;
-  auto& page_nesting_decode_info = subpass.page_nesting_decode_info;
-
-  // generate the number of nesting info structs needed per-page, by column
-  std::vector<int> per_page_nesting_info_size(num_columns);
-  auto iter = thrust::make_counting_iterator(size_type{0});
-  std::transform(iter, iter + num_columns, per_page_nesting_info_size.begin(), [&](size_type i) {
-    // Schema index of the current input column
-    auto const schema_idx = _input_columns[i].schema_idx;
-    // Get the max_definition_level of this column across all sources.
-    auto max_definition_level = _metadata->get_schema(schema_idx).max_definition_level + 1;
-    std::for_each(thrust::make_counting_iterator(1),
-                  thrust::make_counting_iterator(_num_sources),
-                  [&](auto const src_file_idx) {
-                    auto const& schema = _metadata->get_schema(
-                      _metadata->map_schema_index(schema_idx, src_file_idx), src_file_idx);
-                    max_definition_level =
-                      std::max(max_definition_level, schema.max_definition_level + 1);
-                  });
-
-    return std::max(max_definition_level, _metadata->get_output_nesting_depth(schema_idx));
-  });
-
-  // compute total # of page_nesting infos needed and allocate space. doing this in one
-  // buffer to keep it to a single gpu allocation
-  auto counting_iter                    = thrust::make_counting_iterator(size_t{0});
-  size_t const total_page_nesting_infos = std::accumulate(
-    counting_iter, counting_iter + num_columns, size_t{0}, [&](auto total, size_t index) {
-      return total + (per_page_nesting_info_size[index] * subpass.column_page_count[index]);
-    });
-
-  page_nesting_info =
-    cudf::detail::hostdevice_vector<PageNestingInfo>{total_page_nesting_infos, _stream};
-  page_nesting_decode_info =
-    cudf::detail::hostdevice_vector<PageNestingDecodeInfo>{total_page_nesting_infos, _stream};
-
-  // update pointers in the PageInfos
-  int target_page_index = 0;
-  int src_info_index    = 0;
-  for (size_t idx = 0; idx < _input_columns.size(); idx++) {
-    auto const src_col_schema = _input_columns[idx].schema_idx;
-
-    for (size_t p_idx = 0; p_idx < subpass.column_page_count[idx]; p_idx++) {
-      pages[target_page_index + p_idx].nesting = page_nesting_info.device_ptr() + src_info_index;
-      pages[target_page_index + p_idx].nesting_decode =
-        page_nesting_decode_info.device_ptr() + src_info_index;
-
-      pages[target_page_index + p_idx].nesting_info_size = per_page_nesting_info_size[idx];
-      // Set the number of output nesting levels from the zeroth source as nesting must be
-      // identical across sources.
-      pages[target_page_index + p_idx].num_output_nesting_levels =
-        _metadata->get_output_nesting_depth(src_col_schema);
-
-      src_info_index += per_page_nesting_info_size[idx];
-    }
-    target_page_index += subpass.column_page_count[idx];
-  }
-
-  // Reset the target_page_index
-  target_page_index = 0;
-
-  // fill in
-  int nesting_info_index = 0;
-  for (size_t idx = 0; idx < _input_columns.size(); idx++) {
-    auto const src_col_schema = _input_columns[idx].schema_idx;
-
-    // real depth of the output cudf column hierarchy (1 == no nesting, 2 == 1 level, etc)
-    // nesting depth must be same across sources so getting it from the zeroth source is ok
-    int const max_output_depth = _metadata->get_output_nesting_depth(src_col_schema);
-
-    // Map to store depths if this column has lists
-    std::map<std::pair<int, int>, std::pair<std::vector<int>, std::vector<int>>> depth_remapping;
-    // if this column has lists, generate depth remapping
-    std::for_each(
-      thrust::make_counting_iterator(0),
-      thrust::make_counting_iterator(_num_sources),
-      [&](auto const src_file_idx) {
-        auto const mapped_schema_idx = _metadata->map_schema_index(src_col_schema, src_file_idx);
-        if (_metadata->get_schema(mapped_schema_idx, src_file_idx).max_repetition_level > 0) {
-          parquet::detail::generate_depth_remappings(
-            depth_remapping, src_col_schema, mapped_schema_idx, src_file_idx, *_metadata);
-        }
-      });
-
-    // fill in host-side nesting info
-    int schema_idx = src_col_schema;
-    // This is okay as we only use this to check stubness of cur_schema and
-    // to get its parent's indices, both of which are one to one mapped.
-    auto cur_schema = _metadata->get_schema(schema_idx);
-    int cur_depth   = max_output_depth - 1;
-    while (schema_idx > 0) {
-      // stub columns (basically the inner field of a list schema element) are not real columns.
-      // we can ignore them for the purposes of output nesting info
-      if (!cur_schema.is_stub()) {
-        // initialize each page within the chunk
-        for (size_t p_idx = 0; p_idx < subpass.column_page_count[idx]; p_idx++) {
-          // Source file index for the current page.
-          auto const src_file_idx =
-            pass.chunks[pages[target_page_index + p_idx].chunk_idx].src_file_idx;
-          PageNestingInfo* pni =
-            &page_nesting_info[nesting_info_index + (p_idx * per_page_nesting_info_size[idx])];
-
-          PageNestingDecodeInfo* nesting_info =
-            &page_nesting_decode_info[nesting_info_index +
-                                      (p_idx * per_page_nesting_info_size[idx])];
-
-          auto const mapped_src_col_schema =
-            _metadata->map_schema_index(src_col_schema, src_file_idx);
-          // if we have lists, set our start and end depth remappings
-          if (_metadata->get_schema(mapped_src_col_schema, src_file_idx).max_repetition_level > 0) {
-            auto remap = depth_remapping.find({src_col_schema, src_file_idx});
-            CUDF_EXPECTS(remap != depth_remapping.end(),
-                         "Could not find depth remapping for schema");
-            std::vector<int> const& rep_depth_remap = (remap->second.first);
-            std::vector<int> const& def_depth_remap = (remap->second.second);
-
-            for (size_t m = 0; m < rep_depth_remap.size(); m++) {
-              nesting_info[m].start_depth = rep_depth_remap[m];
-            }
-            for (size_t m = 0; m < def_depth_remap.size(); m++) {
-              nesting_info[m].end_depth = def_depth_remap[m];
-            }
-          }
-
-          // Get the schema from the current input source.
-          auto& actual_cur_schema = _metadata->get_schema(
-            _metadata->map_schema_index(schema_idx, src_file_idx), src_file_idx);
-
-          // values indexed by output column index
-          nesting_info[cur_depth].max_def_level = actual_cur_schema.max_definition_level;
-          pni[cur_depth].size                   = 0;
-          pni[cur_depth].type                   = cudf::io::parquet::detail::to_type_id(
-            actual_cur_schema, _strings_to_categorical, _timestamp_type.id());
-          pni[cur_depth].nullable =
-            cur_schema.repetition_type == cudf::io::parquet::FieldRepetitionType::OPTIONAL;
-        }
-
-        // move up the hierarchy
-        cur_depth--;
-      }
-
-      // next schema
-      schema_idx = cur_schema.parent_idx;
-      cur_schema = _metadata->get_schema(schema_idx);
-    }
-
-    // Offset the page and nesting info indices
-    target_page_index += subpass.column_page_count[idx];
-    nesting_info_index += (per_page_nesting_info_size[idx] * subpass.column_page_count[idx]);
-  }
-
-  // copy nesting info to the device
-  page_nesting_info.host_to_device_async(_stream);
-  page_nesting_decode_info.host_to_device_async(_stream);
-}
-
 bool hybrid_scan_reader_impl::setup_column_chunks()
 {
   auto const& row_groups_info = _pass_itm_data->row_groups;
@@ -397,7 +162,8 @@ bool hybrid_scan_reader_impl::setup_column_chunks()
     for (size_t i = 0; i < num_input_columns; ++i) {
       auto const& col = _input_columns[i];
       // look up metadata
-      auto& col_meta = _metadata->get_column_metadata(rg.index, rg.source_index, col.schema_idx);
+      auto& col_meta =
+        _extended_metadata->get_column_metadata(rg.index, rg.source_index, col.schema_idx);
 
       if (col_meta.codec != Compression::UNCOMPRESSED) {
         total_decompressed_size += col_meta.total_uncompressed_size;
@@ -438,127 +204,6 @@ void hybrid_scan_reader_impl::setup_compressed_data(
   parquet::detail::decode_page_headers(pass, unsorted_pages, _has_page_index, _stream);
   CUDF_EXPECTS(pass.page_offsets.size() - 1 == static_cast<size_t>(_input_columns.size()),
                "Encountered page_offsets / num_columns mismatch");
-}
-
-void hybrid_scan_reader_impl::preprocess_subpass_pages(size_t chunk_read_limit)
-{
-  auto& pass    = *_pass_itm_data;
-  auto& subpass = *pass.subpass;
-
-  // iterate over all input columns and determine if they contain lists.
-  // TODO: we could do this once at the file level instead of every time we get in here. the set of
-  // columns we are processing does not change over multiple passes/subpasses/output chunks.
-  bool has_lists = false;
-  for (size_t idx = 0; idx < _input_columns.size(); idx++) {
-    auto const& input_col  = _input_columns[idx];
-    size_t const max_depth = input_col.nesting_depth();
-
-    auto* cols = &_output_buffers;
-    for (size_t l_idx = 0; l_idx < max_depth; l_idx++) {
-      auto& out_buf = (*cols)[input_col.nesting[l_idx]];
-      cols          = &out_buf.children;
-
-      // if this has a list parent, we have to get column sizes from the
-      // data computed during ComputePageSizes
-      if (out_buf.user_data &
-          cudf::io::parquet::detail::PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) {
-        has_lists = true;
-        break;
-      }
-    }
-    if (has_lists) { break; }
-  }
-
-  // in some cases we will need to do further preprocessing of pages.
-  // - if we have lists, the num_rows field in PageInfo will be incorrect coming out of the file
-  // - if we are doing a chunked read, we need to compute the size of all string data
-  if (has_lists || chunk_read_limit > 0) {
-    // computes:
-    // PageNestingInfo::num_rows for each page. the true number of rows (taking repetition into
-    // account), not just the number of values. PageNestingInfo::size for each level of nesting, for
-    // each page.
-    //
-    // we will be applying a later "trim" pass if skip_rows/num_rows is being used, which can happen
-    // if:
-    // - user has passed custom row bounds
-    // - we will be doing a chunked read
-    parquet::detail::compute_page_sizes(subpass.pages,
-                                        pass.chunks,
-                                        0,  // 0-max size_t. process all possible rows
-                                        std::numeric_limits<size_t>::max(),
-                                        true,                  // compute num_rows
-                                        chunk_read_limit > 0,  // compute string sizes
-                                        _pass_itm_data->level_type_size,
-                                        _stream);
-  }
-
-  // computes:
-  // PageInfo::chunk_row (the chunk-relative row index) for all pages in the pass. The start_row
-  // field in ColumnChunkDesc is the absolute row index for the whole file. chunk_row in PageInfo is
-  // relative to the beginning of the chunk. so in the kernels, chunk.start_row + page.chunk_row
-  // gives us the absolute row index
-  auto key_input =
-    thrust::make_transform_iterator(pass.pages.d_begin(), parquet::detail::get_page_chunk_idx{});
-  auto page_input =
-    thrust::make_transform_iterator(pass.pages.d_begin(), parquet::detail::get_page_num_rows{});
-  thrust::exclusive_scan_by_key(rmm::exec_policy_nosync(_stream),
-                                key_input,
-                                key_input + pass.pages.size(),
-                                page_input,
-                                parquet::detail::chunk_row_output_iter{pass.pages.device_ptr()});
-
-  // retrieve pages back
-  pass.pages.device_to_host_async(_stream);
-  _stream.synchronize();
-
-  // at this point we have an accurate row count so we can compute how many rows we will actually be
-  // able to decode for this pass. we will have selected a set of pages for each column in the
-  // row group, but not every page will have the same number of rows. so, we can only read as many
-  // rows as the smallest batch (by column) we have decompressed.
-  size_t first_page_index = 0;
-  size_t max_row          = std::numeric_limits<size_t>::max();
-  auto const last_pass_row =
-    _file_itm_data.input_pass_start_row_count[_file_itm_data._current_input_pass + 1];
-  // for each column
-  for (size_t idx = 0; idx < subpass.column_page_count.size(); idx++) {
-    // compute max row for this column in the subpass
-    auto const& last_page  = subpass.pages[first_page_index + (subpass.column_page_count[idx] - 1)];
-    auto const& last_chunk = pass.chunks[last_page.chunk_idx];
-    auto max_col_row       = static_cast<size_t>(last_chunk.start_row) +
-                       static_cast<size_t>(last_page.chunk_row) +
-                       static_cast<size_t>(last_page.num_rows);
-
-    // special case.  list rows can span page boundaries, but we can't tell if that is happening
-    // here because we have not yet decoded the pages. the very last row starting in the page may
-    // not terminate in the page. to handle this, only decode up to the second to last row in the
-    // subpass since we know that will safely completed.
-    bool const is_list = last_chunk.max_level[level_type::REPETITION] > 0;
-    // corner case: only decode up to the second-to-last row, except if this is the last page in the
-    // entire pass. this handles the case where we only have 1 chunk, 1 page, and potentially even
-    // just 1 row.
-    if (is_list && max_col_row < last_pass_row) {
-      // compute min row for this column in the subpass
-      auto const& first_page  = subpass.pages[first_page_index];
-      auto const& first_chunk = pass.chunks[first_page.chunk_idx];
-      auto const min_col_row =
-        static_cast<size_t>(first_chunk.start_row) + static_cast<size_t>(first_page.chunk_row);
-
-      // must have at least 2 rows in the subpass.
-      CUDF_EXPECTS((max_col_row - min_col_row) > 1, "Unexpected short subpass");
-      max_col_row--;
-    }
-
-    max_row = std::min(max_row, max_col_row);
-
-    first_page_index += subpass.column_page_count[idx];
-  }
-  subpass.skip_rows   = pass.skip_rows + pass.processed_rows;
-  auto const pass_end = pass.skip_rows + pass.num_rows;
-  max_row             = std::min(max_row, pass_end);
-  subpass.num_rows    = max_row - subpass.skip_rows;
-
-  // now split up the output into chunks as necessary
-  compute_output_chunks_for_subpass();
 }
 
 void hybrid_scan_reader_impl::allocate_columns(size_t skip_rows, size_t num_rows)
@@ -797,7 +442,8 @@ hybrid_scan_reader_impl::prepare_dictionaries(
   rmm::cuda_stream_view stream)
 {
   // Create row group information for the input row group indices
-  auto const row_groups_info = std::get<1>(_metadata->select_row_groups(row_group_indices));
+  auto const row_groups_info =
+    std::get<1>(_extended_metadata->select_row_groups(row_group_indices));
 
   CUDF_EXPECTS(row_groups_info.size() * _input_columns.size() == dictionary_page_data.size(),
                "Dictionary page data size must match the number of row groups times the number of "
@@ -818,14 +464,15 @@ hybrid_scan_reader_impl::prepare_dictionaries(
 
   // For all row groups
   for (auto const& rg : row_groups_info) {
-    auto const& row_group = _metadata->get_row_group(rg.index, rg.source_index);
+    auto const& row_group = _extended_metadata->get_row_group(rg.index, rg.source_index);
 
     // For all columns with dictionary page and (in)equality predicate
     for (auto col_schema_idx : dictionary_col_schemas) {
       // look up metadata
-      auto& col_meta = _metadata->get_column_metadata(rg.index, rg.source_index, col_schema_idx);
-      auto& schema   = _metadata->get_schema(
-        _metadata->map_schema_index(col_schema_idx, rg.source_index), rg.source_index);
+      auto& col_meta =
+        _extended_metadata->get_column_metadata(rg.index, rg.source_index, col_schema_idx);
+      auto& schema = _extended_metadata->get_schema(
+        _extended_metadata->map_schema_index(col_schema_idx, rg.source_index), rg.source_index);
 
       // dictionary data buffer for this column chunk
       auto& dict_page_data = dictionary_page_data[chunk_idx];

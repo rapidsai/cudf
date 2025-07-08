@@ -41,12 +41,13 @@ namespace cudf::io::parquet::experimental::detail {
 using io::detail::inline_column_buffer;
 using parquet::detail::ColumnChunkDesc;
 using parquet::detail::decode_kernel_mask;
+using parquet::detail::file_intermediate_data;
+using parquet::detail::named_to_reference_converter;
 using parquet::detail::PageInfo;
 using parquet::detail::PageNestingDecodeInfo;
 using text::byte_range_info;
 
 namespace {
-
 // Tests the passed in logical type for a FIXED_LENGTH_BYTE_ARRAY column to see if it should
 // be treated as a string. Currently the only logical type that has special handling is DECIMAL.
 // Other valid types in the future would be UUID (still treated as string) and FLOAT16 (which
@@ -76,26 +77,29 @@ hybrid_scan_reader_impl::hybrid_scan_reader_impl(cudf::host_span<uint8_t const> 
                                                  parquet_reader_options const& options)
 {
   // Open and parse the source dataset metadata
-  _metadata = std::make_unique<aggregate_reader_metadata>(
+  _extended_metadata = std::make_unique<aggregate_reader_metadata>(
     footer_bytes,
     options.is_enabled_use_arrow_schema(),
     options.get_columns().has_value() and options.is_enabled_allow_mismatched_pq_schemas());
+
+  // Make a copy of _extended_metadata to _metadata
+  _metadata = std::make_unique<aggregate_reader_metadata>(*_extended_metadata);
 }
 
 FileMetaData hybrid_scan_reader_impl::parquet_metadata() const
 {
-  return _metadata->parquet_metadata();
+  return _extended_metadata->parquet_metadata();
 }
 
 byte_range_info hybrid_scan_reader_impl::page_index_byte_range() const
 {
-  return _metadata->page_index_byte_range();
+  return _extended_metadata->page_index_byte_range();
 }
 
 void hybrid_scan_reader_impl::setup_page_index(
   cudf::host_span<uint8_t const> page_index_bytes) const
 {
-  _metadata->setup_page_index(page_index_bytes);
+  _extended_metadata->setup_page_index(page_index_bytes);
 }
 
 void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode,
@@ -113,8 +117,9 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
     _filter_columns_names =
       cudf::io::parquet::detail::get_column_names_in_expression(options.get_filter(), {});
     // Select only filter columns using the base `select_columns` method
-    std::tie(_input_columns, _output_buffers, _output_column_schemas) = _metadata->select_columns(
-      _filter_columns_names, {}, use_pandas_metadata, strings_to_categorical, timestamp_type_id);
+    std::tie(_input_columns, _output_buffers, _output_column_schemas) =
+      _extended_metadata->select_columns(
+        _filter_columns_names, {}, use_pandas_metadata, strings_to_categorical, timestamp_type_id);
 
     _is_filter_columns_selected  = true;
     _is_payload_columns_selected = false;
@@ -122,11 +127,11 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
     if (_is_payload_columns_selected) { return; }
 
     std::tie(_input_columns, _output_buffers, _output_column_schemas) =
-      _metadata->select_payload_columns(options.get_columns(),
-                                        _filter_columns_names,
-                                        use_pandas_metadata,
-                                        strings_to_categorical,
-                                        timestamp_type_id);
+      _extended_metadata->select_payload_columns(options.get_columns(),
+                                                 _filter_columns_names,
+                                                 use_pandas_metadata,
+                                                 strings_to_categorical,
+                                                 timestamp_type_id);
 
     _is_payload_columns_selected = true;
     _is_filter_columns_selected  = false;
@@ -147,7 +152,7 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
 std::vector<size_type> hybrid_scan_reader_impl::all_row_groups(
   parquet_reader_options const& options) const
 {
-  auto const num_row_groups = _metadata->get_num_row_groups();
+  auto const num_row_groups = _extended_metadata->get_num_row_groups();
   auto row_groups_indices   = std::vector<size_type>(num_row_groups);
   std::iota(row_groups_indices.begin(), row_groups_indices.end(), size_type{0});
   return row_groups_indices;
@@ -156,7 +161,7 @@ std::vector<size_type> hybrid_scan_reader_impl::all_row_groups(
 size_type hybrid_scan_reader_impl::total_rows_in_row_groups(
   cudf::host_span<std::vector<size_type> const> row_group_indices) const
 {
-  return _metadata->total_rows_in_row_groups(row_group_indices);
+  return _extended_metadata->total_rows_in_row_groups(row_group_indices);
 }
 
 std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_with_stats(
@@ -176,11 +181,11 @@ std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_w
                "Columns names in filter expression must be convertible to index references");
   auto output_dtypes = get_output_types(_output_buffers_template);
 
-  return _metadata->filter_row_groups_with_stats(row_group_indices,
-                                                 output_dtypes,
-                                                 _output_column_schemas,
-                                                 expr_conv.get_converted_expr().value(),
-                                                 stream);
+  return _extended_metadata->filter_row_groups_with_stats(row_group_indices,
+                                                          output_dtypes,
+                                                          _output_column_schemas,
+                                                          expr_conv.get_converted_expr().value(),
+                                                          stream);
 }
 
 std::pair<std::vector<byte_range_info>, std::vector<byte_range_info>>
@@ -201,15 +206,15 @@ hybrid_scan_reader_impl::secondary_filters_byte_ranges(
   auto output_dtypes = get_output_types(_output_buffers_template);
 
   auto const bloom_filter_bytes =
-    _metadata->get_bloom_filter_bytes(row_group_indices,
-                                      output_dtypes,
-                                      _output_column_schemas,
-                                      expr_conv.get_converted_expr().value());
+    _extended_metadata->get_bloom_filter_bytes(row_group_indices,
+                                               output_dtypes,
+                                               _output_column_schemas,
+                                               expr_conv.get_converted_expr().value());
   auto const dictionary_page_bytes =
-    _metadata->get_dictionary_page_bytes(row_group_indices,
-                                         output_dtypes,
-                                         _output_column_schemas,
-                                         expr_conv.get_converted_expr().value());
+    _extended_metadata->get_dictionary_page_bytes(row_group_indices,
+                                                  output_dtypes,
+                                                  _output_column_schemas,
+                                                  expr_conv.get_converted_expr().value());
 
   return {bloom_filter_bytes, dictionary_page_bytes};
 }
@@ -270,15 +275,16 @@ hybrid_scan_reader_impl::filter_row_groups_with_dictionary_pages(
   }
 
   // Filter row groups using dictionary pages
-  return _metadata->filter_row_groups_with_dictionary_pages(chunks,
-                                                            pages,
-                                                            row_group_indices,
-                                                            literals,
-                                                            operators,
-                                                            output_dtypes,
-                                                            dictionary_col_schemas,
-                                                            expr_conv.get_converted_expr().value(),
-                                                            stream);
+  return _extended_metadata->filter_row_groups_with_dictionary_pages(
+    chunks,
+    pages,
+    row_group_indices,
+    literals,
+    operators,
+    output_dtypes,
+    dictionary_col_schemas,
+    expr_conv.get_converted_expr().value(),
+    stream);
 }
 
 std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_with_bloom_filters(
@@ -299,12 +305,13 @@ std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_w
                "Columns names in filter expression must be convertible to index references");
   auto output_dtypes = get_output_types(_output_buffers_template);
 
-  return _metadata->filter_row_groups_with_bloom_filters(bloom_filter_data,
-                                                         row_group_indices,
-                                                         output_dtypes,
-                                                         _output_column_schemas,
-                                                         expr_conv.get_converted_expr().value(),
-                                                         stream);
+  return _extended_metadata->filter_row_groups_with_bloom_filters(
+    bloom_filter_data,
+    row_group_indices,
+    output_dtypes,
+    _output_column_schemas,
+    expr_conv.get_converted_expr().value(),
+    stream);
 }
 
 std::pair<std::unique_ptr<cudf::column>, std::vector<thrust::host_vector<bool>>>
@@ -326,14 +333,15 @@ hybrid_scan_reader_impl::filter_data_pages_with_stats(
                "Columns names in filter expression must be convertible to index references");
   auto output_dtypes = get_output_types(_output_buffers_template);
 
-  auto row_mask = _metadata->filter_data_pages_with_stats(row_group_indices,
-                                                          output_dtypes,
-                                                          _output_column_schemas,
-                                                          expr_conv.get_converted_expr().value(),
-                                                          stream,
-                                                          mr);
+  auto row_mask =
+    _extended_metadata->filter_data_pages_with_stats(row_group_indices,
+                                                     output_dtypes,
+                                                     _output_column_schemas,
+                                                     expr_conv.get_converted_expr().value(),
+                                                     stream,
+                                                     mr);
 
-  auto data_page_mask = _metadata->compute_data_page_mask(
+  auto data_page_mask = _extended_metadata->compute_data_page_mask(
     row_mask->view(), row_group_indices, output_dtypes, _output_column_schemas, stream);
 
   return {std::move(row_mask), std::move(data_page_mask)};
@@ -369,8 +377,8 @@ hybrid_scan_reader_impl::get_input_column_chunk_byte_ranges(
                     // columns)
                     for (auto const& col : _input_columns) {
                       // look up metadata
-                      auto const& col_meta =
-                        _metadata->get_column_metadata(row_group_index, source_idx, col.schema_idx);
+                      auto const& col_meta = _extended_metadata->get_column_metadata(
+                        row_group_index, source_idx, col.schema_idx);
 
                       auto const chunk_offset =
                         (col_meta.dictionary_page_offset != 0)
@@ -454,7 +462,7 @@ table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns(
 
   auto output_dtypes = get_output_types(_output_buffers_template);
 
-  auto data_page_mask = _metadata->compute_data_page_mask(
+  auto data_page_mask = _extended_metadata->compute_data_page_mask(
     row_mask, row_group_indices, output_dtypes, _output_column_schemas, stream);
 
   prepare_data(row_group_indices, std::move(column_chunk_buffers), data_page_mask, options);
@@ -462,34 +470,6 @@ table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns(
   // Make sure we haven't gone past the input passes
   CUDF_EXPECTS(_file_itm_data._current_input_pass < _file_itm_data.num_passes(), "");
   return read_chunk_internal(read_columns_mode::PAYLOAD_COLUMNS, row_mask);
-}
-
-void hybrid_scan_reader_impl::populate_metadata(table_metadata& out_metadata) const
-{
-  // Return column names
-  out_metadata.schema_info.resize(_output_buffers.size());
-  for (size_t i = 0; i < _output_column_schemas.size(); i++) {
-    auto const& schema               = _metadata->get_schema(_output_column_schemas[i]);
-    out_metadata.schema_info[i].name = schema.name;
-    out_metadata.schema_info[i].is_nullable =
-      schema.repetition_type != cudf::io::parquet::FieldRepetitionType::REQUIRED;
-  }
-
-  // Return user metadata
-  out_metadata.per_file_user_data = _metadata->get_key_value_metadata();
-  out_metadata.user_data          = {out_metadata.per_file_user_data[0].begin(),
-                                     out_metadata.per_file_user_data[0].end()};
-}
-
-bool hybrid_scan_reader_impl::has_more_work() const
-{
-  return _file_itm_data.num_passes() > 0 &&
-         _file_itm_data._current_input_pass < _file_itm_data.num_passes();
-}
-
-bool hybrid_scan_reader_impl::is_first_output_chunk() const
-{
-  return _file_itm_data._output_chunk_count == 0;
 }
 
 void hybrid_scan_reader_impl::reset_internal_state()
@@ -517,10 +497,10 @@ void hybrid_scan_reader_impl::initialize_options(
   // Strings may be returned as either string or categorical columns
   _strings_to_categorical = options.is_enabled_convert_strings_to_categories();
 
+  _options.timestamp_type = options.get_timestamp_type();
+
   // Binary columns can be read as binary or strings
   _reader_column_schema = options.get_column_schema();
-
-  _timestamp_type = options.get_timestamp_type();
 
   _num_sources = row_group_indices.size();
 
@@ -595,7 +575,7 @@ table_with_metadata hybrid_scan_reader_impl::read_chunk_internal(
     auto metadata           = _reader_column_schema.has_value()
                                 ? std::make_optional<reader_column_schema>((*_reader_column_schema)[i])
                                 : std::nullopt;
-    auto const& schema      = _metadata->get_schema(_output_column_schemas[i]);
+    auto const& schema      = _extended_metadata->get_schema(_output_column_schemas[i]);
     auto const logical_type = schema.logical_type.value_or(LogicalType{});
     // FIXED_LEN_BYTE_ARRAY never read as string.
     // TODO: if we ever decide that the default reader behavior is to treat unannotated BINARY
@@ -635,13 +615,13 @@ void hybrid_scan_reader_impl::decode_page_data(size_t skip_rows, size_t num_rows
   // Should not reach here if there is no page data.
   CUDF_EXPECTS(subpass.pages.size() > 0, "There are no pages to decode");
 
-  size_t const sum_max_depths =
-    std::accumulate(pass.chunks.begin(),
-                    pass.chunks.end(),
-                    size_t{0},
-                    [&](auto cursum, ColumnChunkDesc const& chunk) {
-                      return cursum + _metadata->get_output_nesting_depth(chunk.src_col_schema);
-                    });
+  size_t const sum_max_depths = std::accumulate(
+    pass.chunks.begin(),
+    pass.chunks.end(),
+    size_t{0},
+    [&](auto cursum, ColumnChunkDesc const& chunk) {
+      return cursum + _extended_metadata->get_output_nesting_depth(chunk.src_col_schema);
+    });
 
   // figure out which kernels to run
   auto const kernel_mask = GetAggregatedDecodeKernelMask(subpass.pages, _stream);
@@ -711,7 +691,8 @@ void hybrid_scan_reader_impl::decode_page_data(size_t skip_rows, size_t num_rows
     CUDF_EXPECTS(input_col.schema_idx == pass.chunks[c].src_col_schema,
                  "Column/page schema index mismatch");
 
-    size_t const max_depth = _metadata->get_output_nesting_depth(pass.chunks[c].src_col_schema);
+    size_t const max_depth =
+      _extended_metadata->get_output_nesting_depth(pass.chunks[c].src_col_schema);
     chunk_offsets.push_back(chunk_off);
 
     // get a slice of size `nesting depth` from `chunk_nested_valids` to store an array of pointers
@@ -1032,7 +1013,7 @@ void hybrid_scan_reader_impl::decode_page_data(size_t skip_rows, size_t num_rows
     }
   }
   // Write the final offsets for list and string columns in a batched manner
-  parquet::detail::WriteFinalOffsets(final_offsets, out_buffers, _stream);
+  parquet::detail::write_final_offsets(final_offsets, out_buffers, _stream);
 
   // update null counts in the final column buffers
   for (size_t idx = 0; idx < subpass.pages.size(); idx++) {
