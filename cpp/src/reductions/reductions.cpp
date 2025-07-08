@@ -142,7 +142,7 @@ std::unique_ptr<scalar> reduce_aggregate_impl(
       auto const udf_ptr = dynamic_cast<reduce_host_udf const*>(udf_base_ptr.get());
       CUDF_EXPECTS(udf_ptr != nullptr, "Invalid HOST_UDF instance for reduction.");
       return (*udf_ptr)(col, output_dtype, init, stream, mr);
-    }  // case aggregation::HOST_UDF
+    }
     case aggregation::BITWISE_AGG: {
       auto const bitwise_agg = static_cast<cudf::detail::bitwise_aggregation const&>(agg);
       return bitwise_reduction(bitwise_agg.bit_op, col, stream, mr);

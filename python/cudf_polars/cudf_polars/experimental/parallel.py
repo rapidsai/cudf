@@ -83,7 +83,9 @@ def lower_ir_graph(
     --------
     lower_ir_node
     """
-    mapper = CachingVisitor(lower_ir_node, state={"config_options": config_options})
+    mapper: LowerIRTransformer = CachingVisitor(
+        lower_ir_node, state={"config_options": config_options}
+    )
     return mapper(ir)
 
 
@@ -208,7 +210,10 @@ def post_process_task_graph(
     return graph
 
 
-def evaluate_streaming(ir: IR, config_options: ConfigOptions) -> DataFrame:
+def evaluate_streaming(
+    ir: IR,
+    config_options: ConfigOptions,
+) -> DataFrame:
     """
     Evaluate an IR graph with partitioning.
 

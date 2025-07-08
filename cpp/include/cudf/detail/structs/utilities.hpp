@@ -202,6 +202,50 @@ class flattened_table {
   rmm::device_async_resource_ref mr);
 
 /**
+ * @brief Superimpose nulls from multiple null masks into corresponding input columns
+ *
+ * This function applies each null mask to its corresponding input column using bitwise AND
+ * operations. For each column, nulls are propagated from the mask to the column and its
+ * descendants, and any null strings/lists in the descendant columns are sanitized to ensure nulls
+ * always have their sizes equal to 0.
+ *
+ * The function recursively processes struct descendants in each column. Each null mask is
+ * expected to have the same size in bits as its corresponding input column.
+ *
+ * @param null_masks Vector of null mask pointers to be applied to the input columns
+ * @param inputs Vector of input columns to apply the null masks to
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate new device memory
+ * @return A vector of new columns with the null masks applied and nulls sanitized
+ */
+[[nodiscard]] std::vector<std::unique_ptr<column>> superimpose_and_sanitize_nulls(
+  host_span<bitmask_type const* const> null_masks,
+  std::vector<std::unique_ptr<column>> inputs,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
+
+/**
+ * @brief Enforces null consistency in struct columns by propagating nulls from parent to
+ * descendants.
+ *
+ * For each struct column in the input vector, this function ensures that nulls from the root-level
+ * null mask are properly superimposed onto all descendant columns in the struct hierarchy.
+ * The function also sanitizes null strings/lists in the descendant columns to ensure nulls always
+ * have their sizes equal to 0, maintaining consistent null semantics throughout the column
+ * hierarchy.
+ *
+ * @param columns Vector of columns to process, with struct columns getting null consistency
+ * enforcement
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate new device memory
+ * @return A vector of columns with nulls properly propagated from parent structs to all descendants
+ */
+[[nodiscard]] std::vector<std::unique_ptr<column>> enforce_null_consistency(
+  std::vector<std::unique_ptr<column>> columns,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
+
+/**
  * @brief Push down nulls from the given input column into its children columns, using bitwise AND.
  *
  * This function constructs a new column_view instance equivalent to the input column_view,
