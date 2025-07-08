@@ -26,6 +26,7 @@
 
 #include <cuco/hash_functions.cuh>
 #include <cuda/std/cstddef>
+#include <cuda/std/span>
 
 namespace cudf::hashing::detail {
 
@@ -43,7 +44,7 @@ struct MurmurHash3_x86_32 {
   __device__ constexpr result_type compute_bytes(cuda::std::byte const* bytes,
                                                  std::uint64_t size) const
   {
-    return this->_impl.compute_hash(bytes, size);
+    return this->_impl.compute_hash(cuda::std::span<const cuda::std::byte>(bytes, size));
   }
 
  private:
