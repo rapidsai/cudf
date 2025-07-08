@@ -140,7 +140,8 @@ __device__ void is_even(bool* out, int32_t a) { *out = (a % 2 == 0); }
   )***";
 
   if (!cudf::is_runtime_jit_supported()) {
-    EXPECT_THROW(cudf::filter({a}, cuda, false, std::nullopt, std::vector{true}), std::logic_error);
+    EXPECT_THROW(cudf::filter({a}, cuda, false, std::nullopt, std::vector{true}),
+                 cudf::logic_error);
   } else {
     EXPECT_NO_THROW(cudf::filter({a}, cuda, false, std::nullopt, std::vector{true}););
   }
@@ -156,9 +157,9 @@ __device__ void is_divisible(bool* out, int32_t a, int32_t b) { *out = ((a % b) 
 
   EXPECT_NO_THROW(cudf::filter({a, b}, cuda, false, std::nullopt, std::vector{true, true}));
   EXPECT_THROW(cudf::filter({a, b}, cuda, false, std::nullopt, std::vector{true}),
-               std::logic_error);
+               cudf::logic_error);
   EXPECT_THROW(cudf::filter({a, b}, cuda, false, std::nullopt, std::vector{true, true, true}),
-               std::logic_error);
+               cudf::logic_error);
 }
 
 struct FilterTest : public FilterTestFixture {};

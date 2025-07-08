@@ -439,8 +439,8 @@ cudf::size_type distinct_count(table_view const& input,
  * size 1)
  * @throws std::invalid_argument if `output_type` or any of the inputs are not fixed-width or string
  * types
- * @throws std::logic_error if JIT is not supported by the runtime
- * @throws std::logic_error if the size of `copy_mask` does not match the number of input columns
+ * @throws cudf::logic_error if JIT is not supported by the runtime
+ * @throws std::invalid_argument if the size of `copy_mask` does not match the number of input columns
  *
  * The size of the resulting column is the size of the largest column.
  *
