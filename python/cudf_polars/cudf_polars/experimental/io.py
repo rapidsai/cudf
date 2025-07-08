@@ -521,9 +521,9 @@ def _sink_to_json_file(
     path: str,
     options: dict[str, Any],
     finalize: bool,  # noqa: FBT001
-    ready: bool | None,
+    ready: None,
     df: DataFrame,
-) -> bool | DataFrame:
+) -> DataFrame | None:
     """Sink a partition to an open Json file."""
     # Write to BytesIO buffer.
     # TODO: Append directly to existing file if/when possible.
@@ -549,7 +549,7 @@ def _sink_to_json_file(
         f.write(buffer.getvalue())
 
     # Finalize or return ready signal
-    return df if finalize else True
+    return df if finalize else None
 
 
 def _sink_to_file(
