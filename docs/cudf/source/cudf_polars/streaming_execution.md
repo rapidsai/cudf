@@ -127,6 +127,17 @@ If you request a `"distributed"` scheduler but do not have a cluster
 deployed, `collect`ing the query will fail.
 ````
 
+### Streaming sink operations
+
+When the `"distributed"` scheduler is active, sink operations like
+`df.sink_parquet("my_path")` will always produce a directory of files.
+It is not currently possible to disable this behavior.
+
+When the `"sycnhronous"` scheduler is active, sink operations will
+generate a single file by default. However, you may opt into the
+distributed sink behavior by adding `{"sink_to_directory": True}`
+to your `executor_options` dictionary.
+
 ## Get Started
 
 The experimental streaming GPU executor is now available. For a quick
