@@ -125,6 +125,8 @@ std::unique_ptr<column> split_part(strings_column_view const& input,
     return split_part_fn(input, index, tokenizer, delimiter_fn, stream, mr);
   }
 
+  // Set the max_tokens to stop splitting once index is achieved.
+  // The max_tokens is set to index+2 to ensure a complete split occurs at index.
   auto tokenizer    = split_tokenizer_fn{*d_strings, delimiter.size(), index + 2};
   auto delimiter_fn = string_delimiter_fn{delimiter.value(stream)};
   return split_part_fn(input, index, tokenizer, delimiter_fn, stream, mr);

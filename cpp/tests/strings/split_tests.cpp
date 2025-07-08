@@ -783,6 +783,11 @@ TEST_F(StringsSplitTest, SplitZeroSizeStringsColumns)
   EXPECT_TRUE(list_result->size() == 0);
   list_result = cudf::strings::rsplit_record_re(zero_size_strings_column, *prog);
   EXPECT_TRUE(list_result->size() == 0);
+
+  auto part_result = cudf::strings::split_part(zero_size_strings_column);
+  EXPECT_TRUE(part_result->size() == 0);
+  part_result = cudf::strings::split_part(zero_size_strings_column, target, 1);
+  EXPECT_TRUE(part_result->size() == 0);
 }
 
 // This test specifically for https://github.com/rapidsai/custrings/issues/119

@@ -242,19 +242,17 @@ std::unique_ptr<column> rsplit_record(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
- * @brief Returns a columns of strings by splitting each string using the
- * specified delimiter and returning the string at the specified index.
+ * @brief Returns a columns of strings by splitting each input string using the
+ * specified delimiter and returning the string at the specified index
  *
- * The number of rows in the output columns will be the same as the
- * input column. The output column will contain the string at the specified index
- * for each string in the input column.
- *
- * Any null string entries return corresponding null output columns.
+ * Any null rows in the input return corresponding null output rows.
+ * A null row is also returned if the number of tokens computed by splitting
+ * the string for that row is less than the `index`.
  *
  * @param input Strings instance for this operation
  * @param delimiter UTF-8 encoded string indicating the split points in each string;
  *        Default of empty string indicates split on whitespace
- * @param index The index of the string to return from the split
+ * @param index The 0-based index of the string to return from the split
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New column of strings
