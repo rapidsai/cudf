@@ -373,7 +373,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
         else:
             if is_scalar(value):
                 try:
-                    if len(columns_df._column_names) > 0:
+                    if columns_df._num_columns:
                         self._frame[
                             columns_df._column_names[0]
                         ].loc._loc_to_iloc(key[0])

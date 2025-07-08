@@ -213,7 +213,7 @@ class MultiIndex(Index):
             if (
                 cudf.get_option("mode.pandas_compatible")
                 and nan_as_null is False
-                and not isinstance(result_col, column.NumericalColumn)
+                and not is_dtype_obj_numeric(result_col.dtype)
                 and not is_pandas_nullable_extension_dtype(level.dtype)
                 and result_col.has_nulls(include_nan=False)
             ):
@@ -222,7 +222,7 @@ class MultiIndex(Index):
                 )
             if (
                 cudf.get_option("mode.pandas_compatible")
-                and isinstance(result_col, column.NumericalColumn)
+                and not is_dtype_obj_numeric(result_col.dtype)
                 and result_col.has_nulls(include_nan=False)
                 and nan_as_null is False
                 and not is_pandas_nullable_extension_dtype(level.dtype)

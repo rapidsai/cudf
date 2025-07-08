@@ -217,7 +217,7 @@ class _FrameIndexer:
         # Normalize key for tuple/list or int
         key_val = key[0] if isinstance(key, (tuple, list)) else key
 
-        if isinstance(idx, cudf.RangeIndex):
+        if isinstance(idx, RangeIndex):
             if isinstance(key_val, int) and (key_val == idx[-1] + idx.step):
                 idx_copy = cudf.RangeIndex(
                     start=idx.start,
