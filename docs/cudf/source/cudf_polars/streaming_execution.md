@@ -130,8 +130,8 @@ deployed, `collect`ing the query will fail.
 ### Streaming sink operations
 
 When the `"distributed"` scheduler is active, sink operations like
-`df.sink_parquet("my_path")` will always produce a directory of files.
-It is not currently possible to disable this behavior.
+`df.sink_parquet("my_path")` will always produce a directory containing
+one or more files. It is not currently possible to disable this behavior.
 
 When the `"sycnhronous"` scheduler is active, sink operations will
 generate a single file by default. However, you may opt into the
