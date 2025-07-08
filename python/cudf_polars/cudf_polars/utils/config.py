@@ -12,9 +12,11 @@ import importlib.util
 import json
 import os
 import warnings
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, TypeVar
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from typing_extensions import Self
 
     import polars as pl
@@ -159,6 +161,35 @@ def default_blocksize(scheduler: str) -> int:
     return max(blocksize, 256_000_000)
 
 
+T = TypeVar("T")
+
+
+def from_env(name: str, type: Callable[[str], T], default: T) -> T:
+    """
+    Get an engine value from the environment.
+
+    Parameters
+    ----------
+    name
+        The name of the engine variable. The environment
+        variable looked up will have ``CUDF_POLARS__`` prefixed.
+    type
+        How to convert the value from the environment.
+    default
+        The default value to use if the environment variable is not set.
+    """
+    prefix = "CUDF_POLARS"
+    value = os.environ.get(f"{prefix}__{name}")
+    if value is None:
+        return default
+    return type(value)
+
+
+def target_partition_size_default() -> int:
+    """The default factory for StreamingExecutor.target_partition_size."""
+    return from_env("STREAMING__TARGET_PARTITION_SIZE", int, 0)
+
+
 @dataclasses.dataclass(frozen=True, eq=True)
 class StreamingExecutor:
     """
@@ -186,10 +217,26 @@ class StreamingExecutor:
         column. By default, ``1.0`` is used for any column not included in
         ``unique_fraction``.
     target_partition_size
-        Target partition size for IO tasks. This configuration currently
+        Target partition size, in bytes, for IO tasks. This configuration currently
         controls how large parquet files are split into multiple partitions.
         Files larger than ``target_partition_size`` bytes are split into multiple
         partitions.
+
+        This can be set via
+
+        - keyword argument to ``polars.GPUEngine``
+        - the ``CUDF_POLARS__STREAMING__TARGET_PARTITION_SIZE`` environment variable
+
+        By default, cudf-polars uses a target partition size that's a fraction
+        of the device memory, where the fraction depends on the scheduler:
+
+        - distributed: 1/40th of the device memory
+        - synchronous: 1/16th of the device memory
+
+        The optional pynvml dependency is used to query the device memory size. If
+        pynvml is not available, a warning is emitted and the device size is assumed
+        to be 12 GiB.
+
     groupby_n_ary
         The factor by which the number of partitions is decreased when performing
         a groupby on a partitioned column. For example, if a column has 64 partitions,
@@ -220,7 +267,9 @@ class StreamingExecutor:
     fallback_mode: StreamingFallbackMode = StreamingFallbackMode.WARN
     max_rows_per_partition: int = 1_000_000
     unique_fraction: dict[str, float] = dataclasses.field(default_factory=dict)
-    target_partition_size: int = 0
+    target_partition_size: int = dataclasses.field(
+        default_factory=target_partition_size_default
+    )
     groupby_n_ary: int = 32
     broadcast_join_limit: int = 0
     shuffle_method: ShuffleMethod = ShuffleMethod.TASKS
