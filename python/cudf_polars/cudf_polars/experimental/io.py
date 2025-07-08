@@ -382,13 +382,7 @@ class StreamingSink(IR):
 
     def get_hashable(self) -> Hashable:
         """Hashable representation of the node."""
-        return (
-            type(self),
-            self.sink,
-            # TODO: Hash full executor_options properly.
-            self.executor_options.scheduler,
-            *self.children,
-        )
+        return (type(self), self.sink, *self.children)
 
 
 @lower_ir_node.register(Sink)
@@ -405,7 +399,9 @@ def _(
     # TODO: Support cloud storage
     if Path(ir.path).exists() and executor_options.sink_to_directory:
         raise NotImplementedError(
-            "Writing to an existing path is not supported when sinking to a directory."
+            "Writing to an existing path is not supported when sinking "
+            "to a directory. If you are using the 'distributed' scheduler, "
+            "please remove the target directory before calling 'collect'. "
         )
 
     new_node = StreamingSink(
@@ -627,14 +623,6 @@ def _directory_sink_graph(
     count = partition_info[ir].count
     child_name = get_key_name(ir.children[0])
     sink = ir.sink
-    if count == 1:
-        return {
-            (name, 0): (
-                sink.do_evaluate,
-                *sink._non_child_args,
-                (child_name, 0),
-            )
-        }
 
     setup_name = f"setup-{name}"
     suffix = sink.kind.lower()

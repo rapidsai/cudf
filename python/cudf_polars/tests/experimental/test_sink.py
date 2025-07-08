@@ -97,11 +97,9 @@ def test_sink_parquet_directory(
 
     check_path = Path(tmp_path / "test_sink_gpu.parquet")
     expected_file_count = df.collect().height // max_rows_per_partition
+    assert check_path.is_dir()
     if expected_file_count > 1:
-        assert check_path.is_dir()
         assert len(list(check_path.iterdir())) == expected_file_count
-    else:
-        assert not check_path.is_dir()
 
 
 def test_sink_parquet_raises(request, df, tmp_path):
