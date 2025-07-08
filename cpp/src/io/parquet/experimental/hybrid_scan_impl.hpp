@@ -217,14 +217,6 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
                           rmm::cuda_stream_view stream);
 
   /**
-   * @brief Allocate data buffers for the output columns.
-   *
-   * @param skip_rows Crop all rows below skip_rows
-   * @param num_rows Maximum number of rows to read
-   */
-  void allocate_columns(size_t skip_rows, size_t num_rows);
-
-  /**
    * @brief Set the mask for pages
    *
    * @param data_page_mask Input data page mask from page-pruning step

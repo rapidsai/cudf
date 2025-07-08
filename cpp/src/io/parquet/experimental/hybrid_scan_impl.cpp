@@ -567,7 +567,7 @@ table_with_metadata hybrid_scan_reader_impl::read_chunk_internal(
   auto const& read_info = subpass.output_chunk_read_info[subpass.current_output_chunk];
 
   // Allocate memory buffers for the output columns.
-  allocate_columns(read_info.skip_rows, read_info.num_rows);
+  allocate_columns(read_mode::READ_ALL, read_info.skip_rows, read_info.num_rows);
 
   // Parse data into the output buffers.
   decode_page_data(read_info.skip_rows, read_info.num_rows);
