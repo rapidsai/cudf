@@ -28,7 +28,7 @@ def _maybe_shuffle_frame(
     frame: IR,
     on: tuple[NamedExpr, ...],
     partition_info: MutableMapping[IR, PartitionInfo],
-    shuffle_method: ShuffleMethod | None,
+    shuffle_method: ShuffleMethod,
     output_count: int,
 ) -> IR:
     # Shuffle `frame` if it isn't already shuffled.
@@ -59,7 +59,7 @@ def _make_hash_join(
     partition_info: MutableMapping[IR, PartitionInfo],
     left: IR,
     right: IR,
-    shuffle_method: ShuffleMethod | None,
+    shuffle_method: ShuffleMethod,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     # Shuffle left and right dataframes (if necessary)
     new_left = _maybe_shuffle_frame(
@@ -143,7 +143,7 @@ def _make_bcast_join(
     partition_info: MutableMapping[IR, PartitionInfo],
     left: IR,
     right: IR,
-    shuffle_method: ShuffleMethod | None,
+    shuffle_method: ShuffleMethod,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     if ir.options[0] != "Inner":
         left_count = partition_info[left].count
