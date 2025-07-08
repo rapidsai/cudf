@@ -23,6 +23,7 @@
 
 #include "hybrid_scan_helpers.hpp"
 #include "io/parquet/parquet_gpu.hpp"
+#include "io/parquet/reader_impl.hpp"
 #include "io/parquet/reader_impl_chunking.hpp"
 
 #include <cudf/io/detail/utils.hpp>
@@ -192,7 +193,7 @@ class hybrid_scan_reader_impl {
   /**
    * @brief The enum indicating whether we are reading the filter columns or the payload columns
    */
-  enum class read_mode { FILTER_COLUMNS, PAYLOAD_COLUMNS };
+  enum class read_columns_mode { FILTER_COLUMNS, PAYLOAD_COLUMNS };
 
   /**
    * @brief Initialize the necessary options related internal variables for use later on
@@ -224,10 +225,10 @@ class hybrid_scan_reader_impl {
   /**
    * @brief Select the columns to be read based on the read mode
    *
-   * @param read_mode Read mode indicating if we are reading filter or payload columns
+   * @param read_columns_mode Read mode indicating if we are reading filter or payload columns
    * @param options Reader options
    */
-  void select_columns(read_mode read_mode, parquet_reader_options const& options);
+  void select_columns(read_columns_mode read_columns_mode, parquet_reader_options const& options);
 
   /**
    * @brief Get the byte ranges for the input column chunks
@@ -412,7 +413,7 @@ class hybrid_scan_reader_impl {
    *
    * @tparam RowMaskView View type of the row mask column
    *
-   * @param[in] read_mode Read mode indicating if we are reading filter or payload columns
+   * @param[in] read_columns_mode Read mode indicating if we are reading filter or payload columns
    * @param[in,out] out_metadata The output table metadata
    * @param[in,out] out_columns The columns for building the output table
    * @param[in,out] row_mask Boolean column indicating which rows need to be read after page-pruning
@@ -420,7 +421,7 @@ class hybrid_scan_reader_impl {
    * @return The output table along with columns' metadata
    */
   template <typename RowMaskView>
-  table_with_metadata finalize_output(read_mode read_mode,
+  table_with_metadata finalize_output(read_columns_mode read_columns_mode,
                                       table_metadata& out_metadata,
                                       std::vector<std::unique_ptr<column>>& out_columns,
                                       RowMaskView row_mask);
@@ -479,13 +480,14 @@ class hybrid_scan_reader_impl {
    * This function is called internally and expects all preprocessing steps have already been done.
    *
    * @tparam RowMaskView View type of the row mask column
-   * @param[in] read_mode Read mode indicating if we are reading filter or payload columns
+   * @param[in] read_columns_mode Read mode indicating if we are reading filter or payload columns
    * @param[in,out] row_mask Boolean column indicating which rows need to be read after page-pruning
    *                         for filter columns, or after materialize step for payload columns
    * @return The output table along with columns' metadata
    */
   template <typename RowMaskView>
-  table_with_metadata read_chunk_internal(read_mode read_mode, RowMaskView row_mask);
+  table_with_metadata read_chunk_internal(read_columns_mode read_columns_mode,
+                                          RowMaskView row_mask);
 
   /**
    * @brief Check if this is the first output chunk
