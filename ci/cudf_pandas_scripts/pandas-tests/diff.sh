@@ -16,8 +16,12 @@ PY_VER="310"
 PR_ARTIFACT=$(rapids-s3-path)cuda12_$(arch)_py${PY_VER}.pr-${RAPIDS_FULL_VERSION}-results.json
 
 rapids-logger "Fetching latest available results from nightly"
-aws s3api list-objects-v2 --bucket rapids-downloads --prefix "nightly/" --query "sort_by(Contents[?ends_with(Key, '_py${PY_VER}.main-${RAPIDS_FULL_VERSION}-results.json')], &LastModified)[::].[Key]" --output text  | tee s3_output.txt
-COMPARE_ENV=$(tail -n 1 s3_output.txt)
+aws s3api list-objects-v2 --bucket rapids-downloads --prefix "nightly/cudf/" --delimiter "/" --query 'CommonPrefixes[].[Prefix]' --output text  | tee s3_output.txt
+# This should give a prefix like "nightly/cudf/YYYY-MM-DD/"
+PREFIX=$(sort s3_output.txt | tail -n 1)
+# Now get the single results.json file under that key
+COMPARE_ENV=$(aws s3api list-objects-v2 --bucket rapids-downloads --prefix "${PREFIX}" --query "sort_by(Contents[?ends_with(Key, '_py${PY_VER}.main-${RAPIDS_FULL_VERSION}-results.json')], &LastModified)[::].Key" )
+
 rapids-logger "Latest available results from nightly: ${COMPARE_ENV}"
 
 aws s3 cp "s3://rapids-downloads/${COMPARE_ENV}" main-results.json
