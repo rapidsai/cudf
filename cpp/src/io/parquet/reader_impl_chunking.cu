@@ -577,8 +577,8 @@ void reader::impl::compute_input_passes(read_mode mode)
     //  Set skip_rows = 0 as it is no longer needed for subsequent row_groups
     skip_rows = 0;
     // do we need to create a pass boundary here?
-    if (cur_pass_byte_size + compressed_rg_size >= comp_read_limit or
-        cur_pass_num_leaf_rows + row_group_leaf_rows >= max_leaf_rows_per_pass) {
+    if ((cur_pass_byte_size + compressed_rg_size >= comp_read_limit) or
+        (cur_pass_num_leaf_rows + row_group_leaf_rows >= max_leaf_rows_per_pass)) {
       // A single row group (the current one) is larger than the read limit:
       // We always need to include at least one row group, so end the pass at the end of the current
       // row group
