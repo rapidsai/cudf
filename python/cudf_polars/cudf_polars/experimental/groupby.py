@@ -21,7 +21,7 @@ from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.dispatch import lower_ir_node
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import Shuffle
-from cudf_polars.experimental.utils import _lower_ir_fallback
+from cudf_polars.experimental.utils import _get_unique_fractions, _lower_ir_fallback
 
 if TYPE_CHECKING:
     from collections.abc import Generator, MutableMapping
@@ -188,25 +188,17 @@ def _(
 
     config_options = rec.state["config_options"]
     assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'generate_ir_tasks'"
+        "'in-memory' executor not supported in 'lower_ir_node'"
     )
 
     child_count = partition_info[child].count
-    cardinality_factor = {
-        c: min(f, 1.0)
-        for c, f in config_options.executor.cardinality_factor.items()
-        if c in groupby_key_columns
-    }
-    if cardinality_factor:
-        # The `cardinality_factor` dictionary can be used
-        # to specify a mapping between column names and
-        # cardinality "factors". Each factor estimates the
-        # fractional number of unique values in the column.
-        # Each value should be in the range (0, 1].
-        post_aggregation_count = max(
-            int(max(cardinality_factor.values()) * child_count),
-            1,
-        )
+    if unique_fraction_dict := _get_unique_fractions(
+        groupby_key_columns,
+        config_options.executor.unique_fraction,
+    ):
+        # Use unique_fraction to determine output partitioning
+        unique_fraction = max(unique_fraction_dict.values())
+        post_aggregation_count = max(int(unique_fraction * child_count), 1)
 
     new_node: IR
     name_generator = unique_names(ir.schema.keys())
