@@ -130,15 +130,38 @@ TEST_F(FilterTestFixture, StringNoAssertions)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, results[0]->view());
 }
 
-struct FilterTest : public cudf::test::BaseFixture {
- protected:
-  void SetUp() override
-  {
-    if (!cudf::is_runtime_jit_supported()) {
-      GTEST_SKIP() << "Skipping tests that require runtime JIT support";
-    }
+struct FilterAssertsTest : public FilterTestFixture {};
+
+TEST_F(FilterAssertsTest, RuntimeSupport)
+{
+  auto a           = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+  std::string cuda = R"***(
+__device__ void is_even(bool* out, int32_t a) { *out = (a % 2 == 0); }
+  )***";
+
+  if (!cudf::is_runtime_jit_supported()) {
+    EXPECT_THROW(cudf::filter({a}, cuda, false, std::nullopt, std::vector{true}), std::logic_error);
+  } else {
+    EXPECT_NO_THROW(cudf::filter({a}, cuda, false, std::nullopt, std::vector{true}););
   }
-};
+}
+
+TEST_F(FilterAssertsTest, CopyMask)
+{
+  auto a           = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+  auto b           = cudf::test::fixed_width_column_wrapper<int32_t>{2};
+  std::string cuda = R"***(
+__device__ void is_divisible(bool* out, int32_t a, int32_t b) { *out = ((a % b) == 0); }
+  )***";
+
+  EXPECT_NO_THROW(cudf::filter({a, b}, cuda, false, std::nullopt, std::vector{true, true}));
+  EXPECT_THROW(cudf::filter({a, b}, cuda, false, std::nullopt, std::vector{true}),
+               std::logic_error);
+  EXPECT_THROW(cudf::filter({a, b}, cuda, false, std::nullopt, std::vector{true, true, true}),
+               std::logic_error);
+}
+
+struct FilterTest : public FilterTestFixture {};
 
 TEST_F(FilterTest, Basic)
 {

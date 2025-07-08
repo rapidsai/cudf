@@ -112,26 +112,6 @@ struct filter_dispatcher<false> {
   }
 
   template <typename T>
-    requires(cudf::is_fixed_point<T>())
-  std::unique_ptr<cudf::column> operator()(cudf::column_device_view const& col,
-                                           cudf::size_type num_selected,
-                                           cudf::size_type const* stencil_iterator,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr) const
-  {
-    auto filtered = filter_by(col.data<typename T::rep>(),  // actually uses the underlying rep type
-                              col.data<typename T::rep>() + col.size(),
-                              num_selected,
-                              stencil_iterator,
-                              stream,
-                              mr);
-    auto filtered_size = filtered.size();
-    auto out =
-      cudf::column(col.type(), filtered_size, filtered.release(), rmm::device_buffer{}, 0, {});
-    return std::make_unique<cudf::column>(std::move(out));
-  }
-
-  template <typename T>
     requires(std::is_same_v<T, cudf::string_view>)
   std::unique_ptr<cudf::column> operator()(cudf::column_device_view const& col,
                                            cudf::size_type num_selected,
@@ -168,13 +148,13 @@ std::unique_ptr<cudf::column> filter_column(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  return cudf::type_dispatcher(column.type(),
-                               filter_dispatcher<false>{},
-                               column,
-                               num_selected,
-                               filter_indices.begin(),
-                               stream,
-                               mr);
+  return cudf::type_dispatcher<dispatch_storage_type>(column.type(),
+                                                      filter_dispatcher<false>{},
+                                                      column,
+                                                      num_selected,
+                                                      filter_indices.begin(),
+                                                      stream,
+                                                      mr);
 }
 
 void launch_filter_kernel(jitify2::ConfiguredKernel& kernel,
