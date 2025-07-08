@@ -535,14 +535,14 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
                          rmm::device_async_resource_ref mr)
   : _stream{stream},
     _mr{mr},
-    _sources{std::move(sources)},
-    _num_sources{_sources.size()},
-    _output_chunk_read_limit{chunk_read_limit},
-    _input_pass_read_limit{pass_read_limit},
     _options{options.get_timestamp_type(),
              options.get_skip_rows(),
              options.get_num_rows(),
-             options.get_row_groups()}
+             options.get_row_groups()},
+    _sources{std::move(sources)},
+    _num_sources{_sources.size()},
+    _output_chunk_read_limit{chunk_read_limit},
+    _input_pass_read_limit{pass_read_limit}
 {
   // Open and parse the source dataset metadata
   _metadata = std::make_unique<aggregate_reader_metadata>(
