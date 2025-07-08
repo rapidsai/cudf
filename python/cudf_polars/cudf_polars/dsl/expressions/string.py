@@ -425,11 +425,15 @@ class StringFunction(Expr):
                 ),
                 dtype=self.dtype,
             )
-        elif self.name is StringFunction.Name.SplitN:
+        elif self.name in {
+            StringFunction.Name.SplitExact,
+            StringFunction.Name.SplitN,
+        }:
+            is_split_n = self.name is StringFunction.Name.SplitN
             n = self.options[0]
             child, expr = self.children
             column = child.evaluate(df, context=context)
-            if n == 1:
+            if n == 1 and self.name is StringFunction.Name.SplitN:
                 plc_column = plc.Column(
                     self.dtype.plc,
                     column.obj.size(),
@@ -442,18 +446,23 @@ class StringFunction(Expr):
             else:
                 assert isinstance(expr, Literal)
                 by = plc.Scalar.from_py(expr.value, expr.dtype.plc)
+                # See https://github.com/pola-rs/polars/issues/11640
+                # for SplitN vs SplitExact edge case behaviors
+                max_splits = n if is_split_n else 0
                 plc_table = plc.strings.split.split.split(
                     column.obj,
                     by,
-                    n - 1,
+                    max_splits - 1,
                 )
                 children = plc_table.columns()
                 ref_column = children[0]
                 if (remainder := n - len(children)) > 0:
                     children.extend(
                         plc.Column.all_null_like(ref_column, ref_column.size())
-                        for _ in range(remainder)
+                        for _ in range(remainder + int(not is_split_n))
                     )
+                if not is_split_n:
+                    children = children[: n + 1]
                 plc_column = plc.Column(
                     self.dtype.plc,
                     ref_column.size(),
@@ -463,34 +472,6 @@ class StringFunction(Expr):
                     ref_column.offset(),
                     children,
                 )
-            return Column(plc_column, dtype=self.dtype)
-        elif self.name is StringFunction.Name.SplitExact:
-            (n, _) = self.options
-            child, expr = self.children
-            column = child.evaluate(df, context=context).obj
-            assert isinstance(expr, Literal)
-            by = plc.Scalar.from_py(expr.value, expr.dtype.plc)
-            plc_table = plc.strings.split.split.split(
-                column,
-                by,
-                -1,
-            )
-            children = plc_table.columns()
-            ref_column = children[0]
-            if (remainder := n - len(children)) > 0:
-                children.extend(
-                    plc.Column.all_null_like(ref_column, ref_column.size())
-                    for _ in range(remainder + 1)
-                )
-            plc_column = plc.Column(
-                self.dtype.plc,
-                ref_column.size(),
-                None,
-                None,
-                0,
-                ref_column.offset(),
-                children[: n + 1],
-            )
             return Column(plc_column, dtype=self.dtype)
         elif self.name in {
             StringFunction.Name.StripChars,

@@ -245,12 +245,12 @@ def test_split_n(ldf_split, n):
 
 
 @pytest.mark.parametrize("n", [1, 2, 10])
-def test_split_extract(ldf_split, n):
+def test_split_exact(ldf_split, n):
     query = ldf_split.select(pl.col("a").str.split_exact("_", n))
     assert_gpu_result_equal(query)
 
 
-def test_split_extract_inclusive_unsupported(ldf_split):
+def test_split_exact_inclusive_unsupported(ldf_split):
     query = ldf_split.select(pl.col("a").str.split_exact("_", 1, inclusive=True))
     assert_ir_translation_raises(query, NotImplementedError)
 
