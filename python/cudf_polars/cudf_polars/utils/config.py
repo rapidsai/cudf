@@ -210,7 +210,7 @@ class StreamingExecutor:
         Whether multi-partition sink operations should write to a directory
         rather than a single file. By default, this will be set to True for
         the 'distributed' scheduler and False otherwise. The 'distrubuted'
-        scheduler does not currently support `sink_to_directory=False`.
+        scheduler does not currently support ``sink_to_directory=False``.
 
     Notes
     -----
