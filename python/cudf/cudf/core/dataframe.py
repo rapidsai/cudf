@@ -380,6 +380,9 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     for col in columns_df._column_names:
                         self._frame[col].loc[key[0]] = value
                 except KeyError:
+                    # TODO: There is a potential bug here if the inplace modifications
+                    # done above fail half-way we are left with a partially modified
+                    # frame. Need to handle this case better.
                     self.append_new_row(key, value, columns_df=columns_df)
 
             elif isinstance(value, cudf.DataFrame):
