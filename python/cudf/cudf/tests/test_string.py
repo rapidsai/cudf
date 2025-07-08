@@ -825,8 +825,11 @@ def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na, na_raise):
 
     with expectation:
         with expect_warning_if(
-            na in (None, ""),
-            match="Passing a string to `na` is deprecated and will raise in a future version",
+            na == "" or (na is None and not (flags_raise or na_raise)),
+            match=(
+                "Allowing a non-bool 'na' in obj.str.contains is deprecated "
+                "and will raise in a future version."
+            ),
         ):
             expect = ps.str.contains(pat, flags=flags, na=na, regex=regex)
             got = gs.str.contains(pat, flags=flags, na=na, regex=regex)

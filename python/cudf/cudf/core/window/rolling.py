@@ -1,28 +1,29 @@
 # Copyright (c) 2020-2025, NVIDIA CORPORATION
 from __future__ import annotations
 
+import functools
 import itertools
 import warnings
 from typing import TYPE_CHECKING
 
-import numba
 import numpy as np
 import pandas as pd
 from pandas.api.indexers import BaseIndexer
 
 import pylibcudf as plc
 
-from cudf.api.types import is_integer, is_number
+from cudf.api.types import is_integer, is_number, is_scalar
 from cudf.core._internals import aggregation
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.mixins import GetAttrGetItemMixin, Reducible
 from cudf.core.multiindex import MultiIndex
 from cudf.options import get_option
-from cudf.utils import cudautils
 from cudf.utils.dtypes import SIZE_TYPE_DTYPE
 
 if TYPE_CHECKING:
+    from typing_extensions import Self
+
     from cudf.core.dataframe import DataFrame
     from cudf.core.index import Index
     from cudf.core.series import Series
@@ -34,16 +35,16 @@ class _RollingBase:
     """
 
     obj: DataFrame | Series
-    _group_keys: Index | None = None
 
     def _apply_agg_column(
         self, source_column: ColumnBase, agg_name: str
     ) -> ColumnBase:
         raise NotImplementedError
 
-    def _apply_agg(self, agg_name: str) -> DataFrame | Series:
+    def _apply_agg(self, agg_name: str, **agg_kwargs) -> DataFrame | Series:
         applied = (
-            self._apply_agg_column(col, agg_name) for col in self.obj._columns
+            self._apply_agg_column(col, agg_name, **agg_kwargs)
+            for col in self.obj._columns
         )
         return self.obj._from_data_like_self(
             self.obj._data._from_columns_like_self(applied)
@@ -196,8 +197,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
 
     _PROTECTED_KEYS = frozenset(("obj",))
 
-    _time_window = False
-    _group_keys = None
+    _group_keys: Index | None = None
 
     _VALID_REDUCTIONS = {
         "sum",
@@ -220,16 +220,8 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         closed: str | None = None,
         step: int | None = None,
         method: str = "single",
-    ):
-        if get_option("mode.pandas_compatible"):
-            obj = obj.nans_to_nulls()
-        self.obj = obj  # type: ignore[assignment]
-        self.window = window
-        self.min_periods = min_periods
+    ) -> None:
         self.center = center
-        self._normalize()
-        # for var & std only?
-        self.agg_params: dict[str, int] = {}
         if axis != 0:
             warnings.warn(
                 "axis is deprecated with will be removed in a future version. "
@@ -254,7 +246,15 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         if method != "single":
             raise NotImplementedError("method is currently not supported")
 
-    def __getitem__(self, arg):
+        if get_option("mode.pandas_compatible"):
+            obj = obj.nans_to_nulls()
+        self.obj = obj  # type: ignore[assignment]
+
+        self.window, self.min_periods = self._normalize_window_and_min_periods(
+            window, min_periods
+        )
+
+    def __getitem__(self, arg) -> Self:
         if isinstance(arg, tuple):
             arg = list(arg)
         return self.obj[arg].rolling(
@@ -263,26 +263,29 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
             center=self.center,
         )
 
-    def _apply_agg_column(self, source_column, agg_name) -> ColumnBase:
-        min_periods = self.min_periods or 1
-        if isinstance(self.window, int):
-            if self.center:
-                pre = (self.window // 2) + 1
-                fwd = self.window - (pre)
-            else:
-                pre = self.window
+    @functools.cached_property
+    def _plc_windows(self) -> tuple[plc.Column, plc.Column]:
+        """
+        Return the preceding and following columns to pass into
+        pylibcudf.rolling.rolling_window
+        """
+        if isinstance(self.window, (int, pd.Timedelta)):
+            if isinstance(self.window, pd.Timedelta):
+                if self.center:
+                    raise NotImplementedError(
+                        "center is not implemented for frequency-based windows"
+                    )
+                pre = self.window.value
                 fwd = 0
-            rolling_request = plc.rolling.RollingRequest(
-                source_column.to_pylibcudf(mode="read"),
-                min_periods,
-                aggregation.make_aggregation(
-                    agg_name,
-                    {"dtype": source_column.dtype}
-                    if callable(agg_name)
-                    else self.agg_params,
-                ).plc_obj,
-            )
-            orderby_obj = as_column(range(len(source_column)))
+                orderby_obj = self.obj.index._column.astype(np.dtype(np.int64))
+            else:
+                if self.center:
+                    pre = (self.window // 2) + 1
+                    fwd = self.window - (pre)
+                else:
+                    pre = self.window
+                    fwd = 0
+                orderby_obj = as_column(range(len(self.obj)))
             if self._group_keys is not None:
                 group_cols: list[plc.Column] = [
                     col.to_pylibcudf(mode="read")
@@ -291,70 +294,69 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
             else:
                 group_cols = []
             group_keys = plc.Table(group_cols)
-            with acquire_spill_lock():
-                (plc_result,) = plc.rolling.grouped_range_rolling_window(
-                    group_keys,
-                    orderby_obj.to_pylibcudf(mode="read"),
-                    plc.types.Order.ASCENDING,
-                    plc.types.NullOrder.BEFORE,
-                    plc.rolling.BoundedOpen(plc.Scalar.from_py(pre)),
-                    plc.rolling.BoundedClosed(plc.Scalar.from_py(fwd)),
-                    [rolling_request],
-                ).columns()
-            return ColumnBase.from_pylibcudf(plc_result)
-        else:
-            if isinstance(self.window, BaseIndexer):
-                start, end = self.window.get_window_bounds(
-                    num_values=len(self.obj),
-                    min_periods=self.min_periods,
-                    center=self.center,
-                    closed=None,
-                    step=None,
-                )
-                start = as_column(start, dtype=SIZE_TYPE_DTYPE)
-                end = as_column(end, dtype=SIZE_TYPE_DTYPE)
+            return plc.rolling.make_range_windows(
+                group_keys,
+                orderby_obj.to_pylibcudf(mode="read"),
+                plc.types.Order.ASCENDING,
+                plc.types.NullOrder.BEFORE,
+                plc.rolling.BoundedOpen(plc.Scalar.from_py(pre)),
+                plc.rolling.BoundedClosed(plc.Scalar.from_py(fwd)),
+            )
+        elif isinstance(self.window, BaseIndexer):
+            start, end = self.window.get_window_bounds(
+                num_values=len(self.obj),
+                min_periods=self.min_periods,
+                center=self.center,
+                closed=None,
+                step=None,
+            )
+            start = as_column(start, dtype=SIZE_TYPE_DTYPE)
+            end = as_column(end, dtype=SIZE_TYPE_DTYPE)
 
-                idx = as_column(range(len(start)))
-                preceding_window = (idx - start + np.int32(1)).astype(
-                    SIZE_TYPE_DTYPE
+            idx = as_column(range(len(start)))
+            preceding_window = (idx - start + np.int32(1)).astype(
+                SIZE_TYPE_DTYPE
+            )
+            following_window = (end - idx - np.int32(1)).astype(
+                SIZE_TYPE_DTYPE
+            )
+            return (
+                preceding_window.to_pylibcudf(mode="read"),
+                following_window.to_pylibcudf(mode="read"),
+            )
+        else:
+            raise ValueError(
+                "self.window should have been an int, BaseIndexer, or a pandas.Timedelta "
+                f"not {type(self.window).__name__}"
+            )
+
+    def _apply_agg_column(
+        self, source_column: ColumnBase, agg_name: str, **agg_kwargs
+    ) -> ColumnBase:
+        pre, fwd = self._plc_windows
+        rolling_agg = aggregation.make_aggregation(
+            agg_name,
+            {"dtype": source_column.dtype}
+            if callable(agg_name)
+            else agg_kwargs,
+        ).plc_obj
+        with acquire_spill_lock():
+            return ColumnBase.from_pylibcudf(
+                plc.rolling.rolling_window(
+                    source_column.to_pylibcudf(mode="read"),
+                    pre,
+                    fwd,
+                    self.min_periods or 1,
+                    rolling_agg,
                 )
-                following_window = (end - idx - np.int32(1)).astype(
-                    SIZE_TYPE_DTYPE
-                )
-            else:
-                if self.center:
-                    # TODO: we can support this even though Pandas currently does not
-                    raise NotImplementedError(
-                        "center is not implemented for offset-based windows"
-                    )
-                preceding_window = as_column(self.window)
-                following_window = as_column(
-                    0, length=self.window.size, dtype=self.window.dtype
-                )
-            pre = preceding_window.to_pylibcudf(mode="read")
-            fwd = following_window.to_pylibcudf(mode="read")
-            with acquire_spill_lock():
-                return ColumnBase.from_pylibcudf(
-                    plc.rolling.rolling_window(
-                        source_column.to_pylibcudf(mode="read"),
-                        pre,
-                        fwd,
-                        min_periods,
-                        aggregation.make_aggregation(
-                            agg_name,
-                            {"dtype": source_column.dtype}
-                            if callable(agg_name)
-                            else self.agg_params,
-                        ).plc_obj,
-                    )
-                )
+            )
 
     def _reduce(
         self,
         op: str,
         *args,
         **kwargs,
-    ):
+    ) -> DataFrame | Series:
         """Calculate the rolling {op}.
 
         Returns
@@ -364,7 +366,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         """
         return self._apply_agg(op)
 
-    def var(self, ddof=1):
+    def var(self, ddof: int = 1) -> DataFrame | Series:
         """Calculate the rolling variance.
 
         Parameters
@@ -379,10 +381,9 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         Series or DataFrame
             Return type is the same as the original object.
         """
-        self.agg_params["ddof"] = ddof
-        return self._apply_agg("var")
+        return self._apply_agg("var", ddof=ddof)
 
-    def std(self, ddof=1):
+    def std(self, ddof: int = 1) -> DataFrame | Series:
         """Calculate the rolling standard deviation.
 
         Parameters
@@ -397,10 +398,9 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         Series or DataFrame
             Return type is the same as the original object.
         """
-        self.agg_params["ddof"] = ddof
-        return self._apply_agg("std")
+        return self._apply_agg("std", ddof=ddof)
 
-    def count(self):
+    def count(self) -> DataFrame | Series:
         """Calculate the rolling count of non NaN observations.
 
         Returns
@@ -410,7 +410,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         """
         return self._apply_agg("count")
 
-    def apply(self, func, *args, **kwargs):
+    def apply(self, func, *args, **kwargs) -> DataFrame | Series:
         """
         Calculate the rolling custom aggregation function.
 
@@ -476,21 +476,15 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         6    1
         dtype: int64
         """
-        has_nulls = False
-        if self.obj.ndim == 1:
-            if self.obj._column.has_nulls():
-                has_nulls = True
-        else:
-            for col in self.obj._data:
-                if self.obj[col].has_nulls:
-                    has_nulls = True
-        if has_nulls:
+        if any(col.has_nulls() for col in self.obj._columns):
             raise NotImplementedError(
                 "Handling UDF with null values is not yet supported"
             )
         return self._apply_agg(func)
 
-    def _normalize(self):
+    def _normalize_window_and_min_periods(
+        self, window, min_periods
+    ) -> tuple[int | pd.Timedelta | BaseIndexer, int | None]:
         """
         Normalize the *window* and *min_periods* args
 
@@ -505,65 +499,40 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
           If *min_periods* is unspecified, it is set to 1.
           Only valid for datetime index.
         """
-        window, min_periods = self.window, self.min_periods
         if is_number(window):
             # only allow integers
             if not is_integer(window):
                 raise ValueError("window must be an integer")
             if window <= 0:
                 raise ValueError("window cannot be zero or negative")
-            if self.min_periods is None:
-                min_periods = window
-        else:
-            if isinstance(
-                window, (numba.cuda.devicearray.DeviceNDArray, BaseIndexer)
-            ):
-                # window is a device_array of window sizes or BaseIndexer
-                self.window = window
-                self.min_periods = min_periods
-                return
-
-            if self.obj.index.dtype.kind != "M":
-                raise ValueError(
-                    "window must be an integer for non datetime index"
-                )
-
-            self._time_window = True
-
+            if min_periods is None:
+                return window, window
+            else:
+                return window, min_periods
+        elif isinstance(window, BaseIndexer):
+            return window, min_periods
+        elif is_scalar(window):
             try:
                 window = pd.to_timedelta(window)
-                # to_timedelta will also convert np.arrays etc.,
-                if not isinstance(window, pd.Timedelta):
-                    raise ValueError
-                window = window.to_timedelta64()
             except ValueError as e:
                 raise ValueError(
-                    "window must be integer or convertible to a timedelta"
+                    "window must be integer, BaseIndexer, or convertible to a timedelta"
                 ) from e
-            if self.min_periods is None:
-                min_periods = 1
-
-        self.window = self._window_to_window_sizes(window)
-        self.min_periods = min_periods
-
-    def _window_to_window_sizes(self, window):
-        """
-        For non-fixed width windows,
-        convert the window argument into window sizes.
-        """
-        if is_integer(window):
-            return window
-        else:
-            with acquire_spill_lock():
-                return cudautils.window_sizes_from_offset(
-                    self.obj.index._column.data_array_view(mode="write"),
-                    window,
+            if self.obj.index.dtype.kind != "M":
+                raise ValueError(
+                    "index must be a DatetimeIndex for a frequency-based window"
                 )
+            if min_periods is None:
+                return window, 1
+            else:
+                return window, min_periods
+        else:
+            raise ValueError(
+                "window must be integer, BaseIndexer, or convertible to a timedelta"
+            )
 
-    def __repr__(self):
-        return "{} [window={},min_periods={},center={}]".format(
-            self.__class__.__name__, self.window, self.min_periods, self.center
-        )
+    def __repr__(self) -> str:
+        return f"{type(self).__name__} [window={self.window},min_periods={self.min_periods},center={self.center}]"
 
 
 class RollingGroupby(Rolling):
@@ -586,40 +555,25 @@ class RollingGroupby(Rolling):
             sort_order
         )
 
-        if not is_integer(window):
-            gb_size = groupby.size().sort_index()
-            self._group_starts = (
-                gb_size.cumsum().shift(1).fillna(0).repeat(gb_size)
-            )
-
         super().__init__(obj, window, min_periods=min_periods, center=center)
 
-    def _window_to_window_sizes(self, window):
-        if is_integer(window):
-            return super()._window_to_window_sizes(window)
-        else:
-            with acquire_spill_lock():
-                return cudautils.grouped_window_sizes_from_offset(
-                    self.obj.index._column.data_array_view(mode="read"),
-                    self._group_starts,
-                    window,
-                )
-
-    def _apply_agg(self, agg_name):
+    def _apply_agg(self, agg_name: str, **agg_kwargs) -> DataFrame | Series:
         index = MultiIndex._from_data(
             dict(
                 enumerate(
                     itertools.chain(
-                        self._group_keys._columns, self.obj.index._columns
+                        self._group_keys._columns,  # type: ignore[union-attr]
+                        self.obj.index._columns,
                     )
                 )
             )
         )
         index.names = list(
             itertools.chain(
-                self._group_keys._column_names, self.obj.index._column_names
+                self._group_keys._column_names,  # type: ignore[union-attr]
+                self.obj.index._column_names,
             )
         )
-        result = super()._apply_agg(agg_name)
+        result = super()._apply_agg(agg_name, **agg_kwargs)
         result.index = index
         return result
