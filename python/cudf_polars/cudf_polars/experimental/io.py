@@ -408,7 +408,7 @@ def _(
     ):  # pragma: no cover; Requires distributed testing
         raise NotImplementedError(
             "Writing to an existing path is not yet supported "
-            "for {kind}, or by the distributed GPU streaming executor."
+            "by the distributed GPU streaming executor."
         )
     elif exists and ir.kind != "Parquet":  # pragma: no cover
         # TODO: Test this.
