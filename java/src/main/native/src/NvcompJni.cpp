@@ -283,7 +283,7 @@ Java_ai_rapids_cudf_nvcomp_NvcompJni_batchedZstdCompressAsync(JNIEnv* env,
     auto compressed_out_sizes = reinterpret_cast<std::size_t*>(j_compressed_sizes_out_ptr);
     auto stream               = reinterpret_cast<cudaStream_t>(j_stream);
     // FIXME how to use these statuses ? They are not used either in the corresponding
-    // decompression.
+    // decompressor.
     auto comp_statuses = rmm::device_uvector<nvcompStatus_t>(batch_size, stream);
     auto status        = nvcompBatchedZstdCompressAsync(in_ptrs,
                                                  in_sizes,
