@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import functools
+import io
 from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -98,6 +99,7 @@ class StringFunction(Expr):
         Name.CountMatches,
         Name.EndsWith,
         Name.Head,
+        Name.JsonDecode,
         Name.JsonPathMatch,
         Name.LenBytes,
         Name.LenChars,
@@ -320,6 +322,39 @@ class StringFunction(Expr):
                 plc.unary.cast(
                     plc.strings.contains.count_re(column, self._regex_program),
                     self.dtype.plc,
+                ),
+                dtype=self.dtype,
+            )
+        elif self.name is StringFunction.Name.JsonDecode:
+            plc_column = self.children[0].evaluate(df, context=context).obj
+            buff = io.StringIO(
+                plc.strings.combine.join_strings(
+                    plc_column,
+                    plc.Scalar.from_py("\n", plc_column.type()),
+                    plc.Scalar.from_py("NULL", plc_column.type()),
+                )
+                .to_scalar()
+                .to_py()
+            )
+            source = plc.io.types.SourceInfo([buff])
+            options = (
+                plc.io.json.JsonReaderOptions.builder(source)
+                .lines(val=True)
+                .compression(plc.io.types.CompressionType.NONE)
+                .recovery_mode(plc.io.types.JSONRecoveryMode.RECOVER_WITH_NULL)
+                .build()
+            )
+            plc_table_with_metadata = plc.io.json.read_json(options)
+            ref_column = plc_table_with_metadata.columns[0]
+            return Column(
+                plc.Column(
+                    self.dtype.plc,
+                    ref_column.size(),
+                    None,
+                    ref_column.null_mask(),
+                    ref_column.null_count(),
+                    ref_column.offset(),
+                    plc_table_with_metadata.columns,
                 ),
                 dtype=self.dtype,
             )

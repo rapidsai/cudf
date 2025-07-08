@@ -543,9 +543,20 @@ def test_count_matches_literal_unsupported(ldf):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
-def test_json_path_match():
-    df = pl.LazyFrame({"a": ['{"a":"1"}', None, '{"a":2}', '{"a":2.1}', '{"a":true}']})
-    q = df.select(pl.col("a").str.json_path_match("$.a"))
+@pytest.fixture
+def ldf_jsonlike():
+    return pl.LazyFrame(
+        {"a": ['{"a":"1"}', None, '{"a":"2"}', '{"a":"2.1"}', '{"a":"true"}']}
+    )
+
+
+def test_json_decode(ldf_jsonlike):
+    q = ldf_jsonlike.select(pl.col("a").str.json_decode(pl.Struct({"a": pl.String()})))
+    assert_gpu_result_equal(q)
+
+
+def test_json_path_match(ldf_jsonlike):
+    q = ldf_jsonlike.select(pl.col("a").str.json_path_match("$.a"))
     assert_gpu_result_equal(q)
 
 
