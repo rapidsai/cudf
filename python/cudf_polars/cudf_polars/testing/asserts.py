@@ -112,7 +112,6 @@ def assert_gpu_result_equal(
     # the 'misc' is for 'error: Keywords must be strings'
     expect = lazydf.collect(**final_polars_collect_kwargs)  # type: ignore[call-overload,misc]
     got = lazydf.collect(**final_cudf_collect_kwargs, engine=engine)  # type: ignore[call-overload,misc]
-    breakpoint()
     assert_frame_equal(
         expect,
         got,
