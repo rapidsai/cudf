@@ -1,96 +1,60 @@
-/*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
-#pragma once
+#include "jit/accessors.cuh"
+#include "jit/span.cuh"
 
 #include "join/conditional_join_kernel_utils.cuh"
-#include "join/join_common_utils.cuh"
-#include "join/join_common_utils.hpp"
-
-#include <cudf/ast/detail/expression_evaluator.cuh>
-#include <cudf/ast/detail/expression_parser.hpp>
-#include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/column/column_device_view_base.cuh>
+#include <cudf/detail/join/join.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
-#include <cudf/table/table_device_view.cuh>
+#include <cudf/strings/string_view.cuh>
+#include <cudf/types.hpp>
+#include <cudf/utilities/traits.hpp>
+#include <cudf/wrappers/durations.hpp>
+#include <cudf/wrappers/timestamps.hpp>
 
-#include <cub/cub.cuh>
+#include <cuda/std/climits>
+#include <cuda/std/cstddef>
+#include <cuda/std/limits>
+#include <cuda/std/type_traits>
+
+#include <cstddef>
+
+// clang-format off
+#include "transform/jit/operation-udf.hpp"
+// clang-format on
 
 namespace cudf {
-namespace detail {
+namespace joining {
+namespace jit {
 
-/**
- * @brief Computes the output size of joining the left table to the right table.
- *
- * This method uses a nested loop to iterate over the left and right tables and count the number of
- * matches according to a boolean expression.
- *
- * @tparam block_size The number of threads per block for this kernel
- * @tparam has_nulls Whether or not the inputs may contain nulls.
- *
- * @param[in] left_table The left table
- * @param[in] right_table The right table
- * @param[in] join_type The type of join to be performed
- * @param[in] device_expression_data Container of device data required to evaluate the desired
- * expression.
- * @param[in] swap_tables If true, the kernel was launched with one thread per right row and
- * the kernel needs to internally loop over left rows. Otherwise, loop over right rows.
- * @param[out] output_size The resulting output size
- */
 template <int block_size, bool has_nulls>
-CUDF_KERNEL void compute_conditional_join_output_size(
-  table_device_view left_table,
-  table_device_view right_table,
-  join_kind join_type,
-  ast::detail::expression_device_view device_expression_data,
-  bool const swap_tables,
-  std::size_t* output_size)
+CUDF_KERNEL void compute_conditional_join_output_size(table_device_view const* tables,
+                                                      join_kind join_type,
+                                                      bool const swap_tables,
+                                                      std::size_t* output_size)
 {
-  // The (required) extern storage of the shared memory array leads to
-  // conflicting declarations between different templates. The easiest
-  // workaround is to declare an arbitrary (here char) array type then cast it
-  // after the fact to the appropriate type.
-  extern __shared__ char raw_intermediate_storage[];
-  cudf::ast::detail::IntermediateDataType<has_nulls>* intermediate_storage =
-    reinterpret_cast<cudf::ast::detail::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
-  auto thread_intermediate_storage =
-    &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
-
   std::size_t thread_counter{0};
   auto const start_idx = cudf::detail::grid_1d::global_thread_id<block_size>();
   auto const stride    = cudf::detail::grid_1d::grid_stride<block_size>();
 
+  auto const left_table                        = tables[0];
+  auto const right_table                       = tables[1];
   cudf::thread_index_type const left_num_rows  = left_table.num_rows();
   cudf::thread_index_type const right_num_rows = right_table.num_rows();
   auto const outer_num_rows                    = (swap_tables ? right_num_rows : left_num_rows);
   auto const inner_num_rows                    = (swap_tables ? left_num_rows : right_num_rows);
-
-  auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
-    left_table, right_table, device_expression_data);
 
   for (cudf::thread_index_type outer_row_index = start_idx; outer_row_index < outer_num_rows;
        outer_row_index += stride) {
     bool found_match = false;
     for (cudf::thread_index_type inner_row_index = 0; inner_row_index < inner_num_rows;
          ++inner_row_index) {
-      auto output_dest = cudf::ast::detail::value_expression_result<bool, has_nulls>();
       cudf::size_type const left_row_index  = swap_tables ? inner_row_index : outer_row_index;
       cudf::size_type const right_row_index = swap_tables ? outer_row_index : inner_row_index;
-      evaluator.evaluate(
-        output_dest, left_row_index, right_row_index, 0, thread_intermediate_storage);
-      if (output_dest.is_valid() && output_dest.value()) {
+
+      bool predicate_match = false;
+      GENERIC_BINARY_PREDICATE(&predicate_match);
+      if (predicate_match) {
         if ((join_type != join_kind::LEFT_ANTI_JOIN) &&
             !(join_type == join_kind::LEFT_SEMI_JOIN && found_match)) {
           ++thread_counter;
@@ -146,7 +110,6 @@ CUDF_KERNEL void conditional_join(table_device_view left_table,
                                   cudf::size_type* join_output_l,
                                   cudf::size_type* join_output_r,
                                   std::size_t* current_idx,
-                                  cudf::ast::detail::expression_device_view device_expression_data,
                                   std::size_t const max_size,
                                   bool const swap_tables)
 {
@@ -274,14 +237,12 @@ CUDF_KERNEL void conditional_join(table_device_view left_table,
 }
 
 template <cudf::size_type block_size, cudf::size_type output_cache_size, bool has_nulls>
-CUDF_KERNEL void conditional_join_anti_semi(
-  table_device_view left_table,
-  table_device_view right_table,
-  join_kind join_type,
-  cudf::size_type* join_output_l,
-  std::size_t* current_idx,
-  cudf::ast::detail::expression_device_view device_expression_data,
-  std::size_t const max_size)
+CUDF_KERNEL void conditional_join_anti_semi(table_device_view left_table,
+                                            table_device_view right_table,
+                                            join_kind join_type,
+                                            cudf::size_type* join_output_l,
+                                            std::size_t* current_idx,
+                                            std::size_t const max_size)
 {
   constexpr int num_warps = block_size / detail::warp_size;
   __shared__ std::size_t current_idx_shared[num_warps];
@@ -367,6 +328,6 @@ CUDF_KERNEL void conditional_join_anti_semi(
   }
 }
 
-}  // namespace detail
-
+}  // namespace jit
+}  // namespace joining
 }  // namespace cudf
