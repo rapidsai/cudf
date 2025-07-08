@@ -376,6 +376,16 @@ class reader_impl {
   rmm::cuda_stream_view _stream;
   rmm::device_async_resource_ref _mr{cudf::get_current_device_resource_ref()};
 
+  // Reader configs.
+  struct {
+    // timestamp_type
+    data_type timestamp_type;
+    // User specified reading rows/stripes selection.
+    int64_t const skip_rows;
+    std::optional<int64_t> num_rows;
+    std::vector<std::vector<size_type>> row_group_indices;
+  } const _options;
+
   // name to reference converter to extract AST output filter
   named_to_reference_converter _expr_conv{std::nullopt, table_metadata{}};
 
@@ -429,17 +439,6 @@ class reader_impl {
 
   std::size_t _output_chunk_read_limit{0};  // output chunk size limit in bytes
   std::size_t _input_pass_read_limit{0};    // input pass memory usage limit in bytes
-
- private:
-  // Reader configs.
-  struct {
-    // timestamp_type
-    data_type timestamp_type;
-    // User specified reading rows/stripes selection.
-    int64_t const skip_rows;
-    std::optional<int64_t> num_rows;
-    std::vector<std::vector<size_type>> row_group_indices;
-  } const _options;
 };
 
 }  // namespace cudf::io::parquet::detail
