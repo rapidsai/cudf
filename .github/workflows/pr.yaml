@@ -350,8 +350,8 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-25.08
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cudf_pandas
     with:
-      # This selects "ARCH=amd64 + the latest supported Python + CUDA".
-      matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
+      # This selects "ARCH=amd64 + the oldest supported Python + latest supported CUDA".
+      matrix_filter: map(select(.ARCH == "amd64")) | max_by(.CUDA_VER|split(".")|map(tonumber)) | min_by(.PY_VER|split(".")|map(tonumber))
       build_type: pull-request
       script: ci/cudf_pandas_scripts/pandas-tests/run.sh pr
       # Hide test failures because they exceed the GITHUB_STEP_SUMMARY output limit.
