@@ -16,6 +16,7 @@ from cudf.api.types import is_integer, is_number, is_scalar
 from cudf.core._internals import aggregation
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
+from cudf.core.copy_types import GatherMap
 from cudf.core.mixins import GetAttrGetItemMixin, Reducible
 from cudf.core.multiindex import MultiIndex
 from cudf.options import get_option
@@ -554,15 +555,22 @@ class RollingGroupby(Rolling):
     """
 
     def __init__(self, groupby, window, min_periods=None, center=False):
-        sort_order = groupby.grouping.keys.argsort()
+        sort_order = GatherMap.from_column_unchecked(
+            groupby.grouping.keys._get_sorted_inds(),
+            len(groupby.obj),
+            nullify=False,
+        )
 
         # TODO: there may be overlap between the columns
         # of `groupby.grouping.keys` and `groupby.obj`.
         # As an optimization, avoid gathering those twice.
-        self._group_keys = groupby.grouping.keys.take(sort_order)
-        obj = groupby.obj.drop(columns=groupby.grouping._named_columns).take(
-            sort_order
+        # TODO: Unify Index._gather interface with that of IndexedFrame._gather
+        self._group_keys = groupby.grouping.keys._gather(
+            sort_order.column, nullify=False, check_bounds=False
         )
+        obj = groupby.obj.drop(
+            columns=groupby.grouping._named_columns
+        )._gather(sort_order)
 
         super().__init__(obj, window, min_periods=min_periods, center=center)
 
