@@ -665,12 +665,14 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cachetools
-          - &numba-cuda-dep numba-cuda>=0.16.0,<0.17.0a0
           - &numba-dep numba>=0.59.1,<0.62.0a0
           - nvtx>=0.2.1
           - packaging
           - rich
           - typing_extensions>=4.0.0
+      - output_types: [conda]
+        packages:
+          - &numba-cuda-dep numba-cuda>=0.16.0,<0.17.0a0
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -683,6 +685,14 @@ dependencies:
             packages: &run_cudf_packages_all_cu12
               - cuda-python>=12.6.2,<13.0a0
           - {matrix: null, packages: *run_cudf_packages_all_cu12}
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix: {cuda: "12.*"}
+            packages:
+              - &numba-cuda-cu12-dep numba-cuda[cu12]>=0.16.0,<0.17.0a0
+          - matrix: # Fallback for no matrix
+            packages:
+              - *numba-cuda-cu12-dep
       - output_types: [requirements, pyproject]
         matrices:
           - matrix:
@@ -738,7 +748,7 @@ dependencies:
               cuda: "12.*"
             packages:
               - cuda-sanitizer-api
-          - matrix: # Fallback for CUDA 12 or no matrix
+          - matrix: # Fallback for no matrix
             packages:
   # packages we want in the 'test_cpp' group in 'files', for CI, but which
   # shouldn't be added to 'all' for building a development environment
@@ -768,18 +778,30 @@ dependencies:
   test_python_cudf_common:
     specific:
       # Define additional constraints for testing with oldest dependencies.
-      - output_types: [conda, requirements]
+      - output_types: [conda, requirements, pyproject]
         matrices:
           - matrix: {dependencies: "oldest"}
             packages:
-              - numba-cuda==0.16.0
               - numba==0.59.1
               - pandas==2.0.*
           - matrix: {dependencies: "latest"}
             packages:
-              - *numba-cuda-dep
               - *numba-dep
               - pandas==2.3.0
+          - matrix:
+            packages:
+      - output_types: conda
+        matrices:
+          - matrix: {dependencies: "oldest", cuda: "12.*"}
+            packages:
+              - numba-cuda==0.16.0
+          - matrix:
+            packages:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix: {dependencies: "oldest", cuda: "12.*"}
+            packages:
+              - numba-cuda[cu12]==0.16.0
           - matrix:
             packages:
       - output_types: conda
@@ -864,8 +886,6 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - dask-cuda==25.8.*,>=0.0.0a0
-          - *numba-cuda-dep
-          - *numba-dep
     specific:
       - output_types: [conda, requirements]
         matrices:
