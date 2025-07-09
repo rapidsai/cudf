@@ -21,7 +21,7 @@ from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Hashable, MutableMapping
+    from collections.abc import Hashable, MutableMapping
 
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import NamedExpr
@@ -475,69 +475,6 @@ def _sink_to_parquet_file(
         return writer
 
 
-def _sink_to_csv_file(
-    path: str,
-    options: dict[str, Any],
-    finalize: bool,  # noqa: FBT001
-    ready: bool | None,
-    df: DataFrame,
-) -> bool | DataFrame:
-    """Sink a partition to an open Parquet file."""
-    # Append to path
-    if ready is None:
-        mode = "wb"
-        include_header = options["include_header"]
-    else:
-        mode = "ab"
-        include_header = False
-    with Path.open(Path(path), mode) as f:
-        sink = plc.io.types.SinkInfo([f])
-        serialize = options["serialize_options"]
-        options = (
-            plc.io.csv.CsvWriterOptions.builder(sink, df.table)
-            .include_header(include_header)
-            .names(df.column_names if include_header else [])
-            .na_rep(serialize["null"])
-            .line_terminator(serialize["line_terminator"])
-            .inter_column_delimiter(chr(serialize["separator"]))
-            .build()
-        )
-        plc.io.csv.write_csv(options)
-
-    # Finalize or return ready signal
-    return df if finalize else True
-
-
-def _sink_to_json_file(
-    path: str,
-    options: dict[str, Any],
-    finalize: bool,  # noqa: FBT001
-    ready: bool | None,
-    df: DataFrame,
-) -> bool | DataFrame:
-    """Sink a partition to an open Json file."""
-    # Append to path
-    mode = "wb" if ready is None else "ab"
-    with Path.open(Path(path), mode) as f:
-        sink = plc.io.types.SinkInfo([f])
-        metadata = plc.io.TableWithMetadata(
-            df.table, [(col, []) for col in df.column_names]
-        )
-        options = (
-            plc.io.json.JsonWriterOptions.builder(sink, df.table)
-            .lines(val=True)
-            .na_rep("null")
-            .include_nulls(val=True)
-            .metadata(metadata)
-            .utf8_escaped(val=False)
-            .build()
-        )
-        plc.io.json.write_json(options)
-
-    # Finalize or return ready signal
-    return df if finalize else True
-
-
 def _sink_to_file(
     kind: str,
     path: str,
@@ -547,23 +484,38 @@ def _sink_to_file(
     df: DataFrame,
 ) -> Any:
     """Sink a partition to an open file."""
-    sink_function: Callable[..., Any]
     if kind == "Parquet":
-        sink_function = _sink_to_parquet_file
+        # Parquet writer will pass along a
+        # ChunkedParquetWriter "writer state".
+        return _sink_to_parquet_file(
+            path,
+            options,
+            finalize,
+            writer_state,
+            df,
+        )
     elif kind == "Csv":
-        sink_function = _sink_to_csv_file
+        use_options = options.copy()
+        if writer_state is None:
+            mode = "wb"
+        else:
+            mode = "ab"
+            use_options["include_header"] = False
+        with Path.open(Path(path), mode) as f:
+            sink = plc.io.types.SinkInfo([f])
+            Sink._write_csv(sink, use_options, df)
     elif kind == "Json":
-        sink_function = _sink_to_json_file
+        mode = "wb" if writer_state is None else "ab"
+        with Path.open(Path(path), mode) as f:
+            sink = plc.io.types.SinkInfo([f])
+            Sink._write_json(sink, df)
     else:  # pragma: no cover; Shouldn't get here.
         raise NotImplementedError(f"{kind} not yet supported in _sink_to_file")
 
-    return sink_function(
-        path,
-        options,
-        finalize,
-        writer_state,
-        df,
-    )
+    # Default return type is bool | DataFrame.
+    # We only return a DataFrame for the final sink task.
+    # The other tasks return a "ready" signal of True.
+    return df if finalize else True
 
 
 def _file_sink_graph(
