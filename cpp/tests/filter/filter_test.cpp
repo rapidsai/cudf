@@ -157,9 +157,9 @@ __device__ void is_divisible(bool* out, int32_t a, int32_t b) { *out = ((a % b) 
 
   EXPECT_NO_THROW(cudf::filter({a, b}, cuda, false, std::nullopt, std::vector{true, true}));
   EXPECT_THROW(cudf::filter({a, b}, cuda, false, std::nullopt, std::vector{true}),
-               cudf::logic_error);
+               std::invalid_argument);
   EXPECT_THROW(cudf::filter({a, b}, cuda, false, std::nullopt, std::vector{true, true, true}),
-               cudf::logic_error);
+               std::invalid_argument);
 }
 
 struct FilterTest : public FilterTestFixture {};
