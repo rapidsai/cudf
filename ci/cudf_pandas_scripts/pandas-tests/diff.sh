@@ -12,7 +12,7 @@ RAPIDS_FULL_VERSION=$(<./VERSION)
 rapids-logger "Github job name: ${GH_JOB_NAME}"
 rapids-logger "Rapids version: ${RAPIDS_FULL_VERSION}"
 
-PY_VER="310"
+PY_VER="313"
 PR_ARTIFACT=$(rapids-s3-path)cuda12_$(arch)_py${PY_VER}.pr-${RAPIDS_FULL_VERSION}-results.json
 
 rapids-logger "Fetching latest available results from nightly"
