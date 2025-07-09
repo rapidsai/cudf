@@ -14,7 +14,63 @@ from cudf_polars.testing.asserts import (
 
 @pytest.fixture
 def ldf():
-    return pl.LazyFrame({"a": [{"b": "c", "d": "e"}, {"b": None, "d": "g"}]})
+    return pl.LazyFrame(
+        {"a": [{"b": "c", "d": "e", "f": "g"}, {"b": None, "d": "g", "f": "h"}]}
+    )
+
+
+def test_field_getitem(ldf):
+    query = ldf.select(pl.col("a").struct[0])
+    assert_gpu_result_equal(query)
+
+
+@pytest.mark.parametrize("fields", [("b",), ("b", "d"), ("^b.*|f.*$",)])
+def test_field(ldf, fields):
+    query = ldf.select(pl.col("a").struct.field(*fields))
+    assert_gpu_result_equal(query)
+
+
+def test_unnest(ldf):
+    query = ldf.select(pl.col("a").struct.unnest())
+    assert_gpu_result_equal(query)
+
+
+def test_json_encode(ldf):
+    query = ldf.select(pl.col("a").struct.json_encode())
+    assert_gpu_result_equal(query)
+
+    ldf_newlines = pl.LazyFrame({"a": [{"b": "c\nd", "d": "\r\nz"}]})
+    query = ldf_newlines.select(pl.col("a").struct.json_encode())
+    assert_gpu_result_equal(query)
+
+
+def test_rename_fields(ldf):
+    query = ldf.select(
+        pl.col("a").struct.rename_fields(["1", "2", "3"]).struct.unnest()
+    )
+    assert_gpu_result_equal(query)
+
+
+def test_with_fields(ldf):
+    query = ldf.select(
+        pl.col("a").struct.with_fields(pl.field("b").str.len_chars()).struct.unnest()
+    )
+    assert_ir_translation_raises(query, NotImplementedError)
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [pl.col("a").name.prefix_fields, pl.col("a").name.suffix_fields],
+    ids=lambda x: x.__name__,
+)
+def test_prefix_suffix_fields(ldf, expr):
+    query = ldf.select(expr("foo").struct.unnest())
+    assert_gpu_result_equal(query)
+
+
+def test_map_field_names(ldf):
+    query = ldf.select(pl.col("a").name.map_fields(lambda x: x.upper()).struct.unnest())
+    assert_ir_translation_raises(query, NotImplementedError)
 
 
 @pytest.mark.parametrize("name", [None, "my_count"])
