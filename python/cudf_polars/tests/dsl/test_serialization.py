@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -12,9 +12,12 @@ from polars.polars import _expr_nodes as pl_expr
 from cudf_polars.dsl.expressions.boolean import BooleanFunction
 from cudf_polars.dsl.expressions.datetime import TemporalFunction
 from cudf_polars.dsl.expressions.string import StringFunction
+from cudf_polars.dsl.expressions.struct import StructFunction
 
 
-@pytest.fixture(params=[BooleanFunction, StringFunction, TemporalFunction])
+@pytest.fixture(
+    params=[BooleanFunction, StringFunction, TemporalFunction, StructFunction]
+)
 def function(request):
     return request.param
 
