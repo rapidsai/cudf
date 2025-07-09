@@ -27,7 +27,7 @@ void nvbench_inner_join(nvbench::state& state,
                                            nvbench::enum_type<NullEquality>,
                                            nvbench::enum_type<Algorithm>>)
 {
-  if constexpr (Nullable == false && NullEquality == cudf::null_equality::UNEQUAL) {
+  if constexpr (not Nullable && NullEquality == cudf::null_equality::UNEQUAL) {
     state.skip(
       "Since the keys are not nullable, how null entries are to be compared by the join algorithm "
       "is immaterial. Therefore, we skip running the benchmark when null equality is set to "
