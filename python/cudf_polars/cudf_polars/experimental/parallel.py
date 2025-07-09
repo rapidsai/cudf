@@ -263,12 +263,13 @@ def _(
     # Check zlice
     if ir.zlice is not None:
         offset, length = ir.zlice
-        if length is None:  # pragma: no cover
-            return _lower_ir_fallback(
-                ir, rec, msg="This slice is not supported for multiple partitions."
-            )
         return rec(
-            Slice(ir.schema, offset, length, Union(ir.schema, None, *ir.children))
+            Slice(
+                ir.schema,
+                offset,
+                length,
+                Union(ir.schema, None, *ir.children),
+            )
         )
 
     # Lower children

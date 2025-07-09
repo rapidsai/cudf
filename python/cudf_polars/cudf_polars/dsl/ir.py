@@ -2016,10 +2016,10 @@ class Slice(IR):
     _non_child = ("schema", "offset", "length")
     offset: int
     """Start of the slice."""
-    length: int
+    length: int | None
     """Length of the slice."""
 
-    def __init__(self, schema: Schema, offset: int, length: int, df: IR):
+    def __init__(self, schema: Schema, offset: int, length: int | None, df: IR):
         self.schema = schema
         self.offset = offset
         self.length = length

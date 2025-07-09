@@ -28,7 +28,7 @@ class Slice(Expr):
         self,
         dtype: DataType,
         offset: int,
-        length: int,
+        length: int | None,
         column: Expr,
     ) -> None:
         self.dtype = dtype
