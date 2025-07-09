@@ -12,7 +12,7 @@ import importlib.util
 import json
 import os
 import warnings
-from typing import TYPE_CHECKING, Literal, TypeVar
+from typing import TYPE_CHECKING, Literal, TypeVar, cast
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -196,6 +196,22 @@ def target_partition_size_default() -> int:
     return from_env("STREAMING__TARGET_PARTITION_SIZE", int, 0)
 
 
+def streaming_fallback_mode_default() -> StreamingFallbackMode:
+    """The default factory for StreamingExecutor.fallback_mode."""
+    # We need the cast to avoid the error
+    #   Expression of type "type[StreamingFallbackMode] | StreamingFallbackMode"
+    #   is incompatible with return type "StreamingFallbackMode"
+
+    return cast(
+        StreamingFallbackMode,
+        from_env(
+            "STREAMING__FALLBACK_MODE",
+            StreamingFallbackMode,
+            StreamingFallbackMode.WARN,
+        ),
+    )
+
+
 @dataclasses.dataclass(frozen=True, eq=True)
 class StreamingExecutor:
     """
@@ -211,6 +227,9 @@ class StreamingExecutor:
     fallback_mode
         How to handle errors when the GPU engine fails to execute a query.
         ``StreamingFallbackMode.WARN`` by default.
+
+        This can be set using the ``CUDF_POLARS__STREAMING__FALLBACK_MODE``
+        environment variable.
     max_rows_per_partition
         The maximum number of rows to process per partition. 1_000_000 by default.
         When the number of rows exceeds this value, the query will be split into
@@ -275,7 +294,9 @@ class StreamingExecutor:
 
     name: Literal["streaming"] = dataclasses.field(default="streaming", init=False)
     scheduler: Scheduler = Scheduler.SYNCHRONOUS
-    fallback_mode: StreamingFallbackMode = StreamingFallbackMode.WARN
+    fallback_mode: StreamingFallbackMode = dataclasses.field(
+        default_factory=streaming_fallback_mode_default
+    )
     max_rows_per_partition: int = 1_000_000
     unique_fraction: dict[str, float] = dataclasses.field(default_factory=dict)
     target_partition_size: int = dataclasses.field(
