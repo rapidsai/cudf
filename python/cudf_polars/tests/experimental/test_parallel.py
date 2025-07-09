@@ -17,6 +17,7 @@ from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.parallel import get_scheduler, lower_ir_graph, task_graph
 from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
 from cudf_polars.utils.config import ConfigOptions
+from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 
 def test_evaluate_streaming():
@@ -231,4 +232,14 @@ def test_fallback_on_concat_zlice(engine: pl.GPUEngine) -> None:
         ]
     ).tail(1)
 
-    assert_gpu_result_equal(q, engine=engine)
+    if POLARS_VERSION_LT_130:
+        with pytest.raises(
+            pl.exceptions.ComputeError,
+            match="This slice not supported for multiple partitions.",
+        ):
+            assert_gpu_result_equal(q, engine=engine)
+    else:
+        with pytest.raises(
+            UserWarning, match="This slice not supported for multiple partitions."
+        ):
+            assert_gpu_result_equal(q, engine=engine)

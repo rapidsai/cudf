@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import itertools
 import operator
 from functools import partial, reduce
 from typing import TYPE_CHECKING, Any
@@ -260,9 +261,14 @@ def _(
     ir: Union, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     # Check zlice
-    if ir.zlice is not None:  # pragma: no cover
-        return _lower_ir_fallback(
-            ir, rec, msg="zlice is not supported for multiple partitions."
+    if ir.zlice is not None:
+        offset, length = ir.zlice
+        if length is None:  # pragma: no cover
+            return _lower_ir_fallback(
+                ir, rec, msg="This slice is not supported for multiple partitions."
+            )
+        return rec(
+            Slice(ir.schema, offset, length, Union(ir.schema, None, *ir.children))
         )
 
     # Lower children
@@ -283,16 +289,12 @@ def _(
     ir: Union, partition_info: MutableMapping[IR, PartitionInfo]
 ) -> MutableMapping[Any, Any]:
     key_name = get_key_name(ir)
-    child_keys = [
-        child_key
+    partition = itertools.count()
+    return {
+        (key_name, next(partition)): child_key
         for child in ir.children
         for child_key in partition_info[child].keys(child)
-    ]
-
-    if partition_info[ir].count == 1:
-        return {(key_name, 0): (Union.do_evaluate, ir.zlice, *child_keys)}
-    else:
-        return {(key_name, i): child_key for i, child_key in enumerate(child_keys)}
+    }
 
 
 @lower_ir_node.register(MapFunction)
