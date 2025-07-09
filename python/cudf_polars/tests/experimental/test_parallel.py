@@ -220,3 +220,15 @@ def test_rename_concat(engine: pl.GPUEngine) -> None:
         ]
     )
     assert_gpu_result_equal(q, engine=engine)
+
+
+def test_fallback_on_concat_zlice():
+    q = pl.concat(
+        [
+            pl.LazyFrame({"a": [1, 2]}),
+            pl.LazyFrame({"a": [3, 4]}),
+            pl.LazyFrame({"a": [5, 6]}),
+        ]
+    ).tail(1)
+
+    assert_gpu_result_equal(q)

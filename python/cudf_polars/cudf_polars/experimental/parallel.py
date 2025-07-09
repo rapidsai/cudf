@@ -284,12 +284,16 @@ def _(
     ir: Union, partition_info: MutableMapping[IR, PartitionInfo]
 ) -> MutableMapping[Any, Any]:
     key_name = get_key_name(ir)
-    partition = itertools.count()
-    return {
-        (key_name, next(partition)): child_key
-        for child in ir.children
-        for child_key in partition_info[child].keys(child)
-    }
+    if partition_info[ir].count == 1:
+        child_keys = [k for c in ir.children for k in partition_info[c].keys(c)]
+        return {(key_name, 0): (Union.do_evaluate, ir.zlice, *child_keys)}
+    else:
+        partition = itertools.count()
+        return {
+            (key_name, next(partition)): child_key
+            for child in ir.children
+            for child_key in partition_info[child].keys(child)
+        }
 
 
 @lower_ir_node.register(MapFunction)

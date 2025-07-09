@@ -35,6 +35,7 @@ class Slice(Expr):
         self.offset = offset
         self.length = length
         self.children = (column,)
+        self.is_pointwise = False
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
