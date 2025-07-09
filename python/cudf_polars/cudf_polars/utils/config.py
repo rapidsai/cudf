@@ -275,7 +275,7 @@ class StreamingExecutor:
         if self.scheduler == "distributed":
             if self.sink_to_directory is False:
                 raise ValueError(
-                    "The distributed scheduler requires sink_to_directory=False"
+                    "The distributed scheduler requires sink_to_directory=True"
                 )
             object.__setattr__(self, "sink_to_directory", True)
         elif self.sink_to_directory is None:
