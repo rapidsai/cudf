@@ -4779,7 +4779,10 @@ class DatetimeProperties(BaseDatelikeProperties):
             :meth:`pandas.DatetimeIndex.strftime`
 
             The following date format identifiers are not yet
-            supported: ``%c``, ``%x``,``%X``
+            supported: ``%c``, ``%x``, ``%X``.
+
+            Timezone-aware datetimes will always be represented as UTC
+            even if ``%z`` is not specified.
         """
 
         if not isinstance(date_format, str):
