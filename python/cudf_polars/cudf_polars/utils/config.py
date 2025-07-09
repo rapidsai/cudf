@@ -164,7 +164,7 @@ def default_blocksize(scheduler: str) -> int:
 T = TypeVar("T")
 
 
-def from_env(name: str, type: Callable[[str], T], default: T) -> T:
+def from_env(name: str, converter: Callable[[str], T], default: T) -> T:
     """
     Get an engine value from the environment.
 
@@ -173,16 +173,18 @@ def from_env(name: str, type: Callable[[str], T], default: T) -> T:
     name
         The name of the engine variable. The environment
         variable looked up will have ``CUDF_POLARS__`` prefixed.
-    type
+    converter
         How to convert the value from the environment.
     default
         The default value to use if the environment variable is not set.
     """
+    # TODO: Support other config options
+    # https://github.com/rapidsai/cudf/issues/19330
     prefix = "CUDF_POLARS"
     value = os.environ.get(f"{prefix}__{name}")
     if value is None:
         return default
-    return type(value)
+    return converter(value)
 
 
 def target_partition_size_default() -> int:
