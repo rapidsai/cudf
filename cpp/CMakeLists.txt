@@ -534,6 +534,7 @@ add_library(
   src/io/parquet/experimental/hybrid_scan.cpp
   src/io/parquet/experimental/hybrid_scan_helpers.cpp
   src/io/parquet/experimental/hybrid_scan_impl.cpp
+  src/io/parquet/experimental/hybrid_scan_preprocess.cu
   src/io/parquet/experimental/page_index_filter.cu
   src/io/parquet/page_data.cu
   src/io/parquet/chunk_dict.cu
@@ -765,7 +766,7 @@ add_library(
   src/structs/scan/scan_inclusive.cu
   src/structs/structs_column_factories.cu
   src/structs/structs_column_view.cpp
-  src/structs/utilities.cpp
+  src/structs/utilities.cu
   src/table/primitive_row_operators.cu
   src/table/row_operators.cu
   src/table/table.cpp
