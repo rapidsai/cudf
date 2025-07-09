@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from collections import deque
-from typing import TYPE_CHECKING, Any, Generic
+from typing import TYPE_CHECKING, Generic
 
 from cudf_polars.typing import (
     StateT_co,
@@ -15,7 +15,7 @@ from cudf_polars.typing import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator, Mapping, MutableMapping, Sequence
+    from collections.abc import Callable, Generator, MutableMapping, Sequence
 
     from cudf_polars.typing import GenericTransformer, NodeT
 
@@ -125,7 +125,10 @@ def reuse_if_unchanged(
 def make_recursive(
     fn: Callable[[U_contra, GenericTransformer[U_contra, V_co, StateT_co]], V_co],
     *,
-    state: Mapping[str, Any],
+    # make_recursive is a type constructor with covariant state parameter
+    # not a normal function for which the parameter would be contravariant
+    # hence the type ignore
+    state: StateT_co,  # type: ignore[misc]
 ) -> GenericTransformer[U_contra, V_co, StateT_co]:
     """
     No-op wrapper for recursive visitors.
