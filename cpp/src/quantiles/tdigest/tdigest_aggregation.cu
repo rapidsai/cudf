@@ -1134,9 +1134,9 @@ struct typed_group_tdigest {
       // and reference those instead
       if (use_cpu_for_cluster_computation(num_groups)) {
         auto temp_mr = cudf::get_pinned_memory_resource();
-        rmm::device_uvector<size_type> p_group_offsets =
+        auto p_group_offsets =
           cudf::detail::make_device_uvector_async(group_offsets, stream, temp_mr);
-        rmm::device_uvector<size_type> p_group_valid_counts =
+        auto p_group_valid_counts =
           cudf::detail::make_device_uvector_async(group_valid_counts, stream, temp_mr);
         auto ret = generate_group_cluster_info(
           delta,
