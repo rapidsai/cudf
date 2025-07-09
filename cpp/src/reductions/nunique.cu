@@ -44,7 +44,7 @@ struct nunique_scalar_fn {
                                            rmm::cuda_stream_view,
                                            rmm::device_async_resource_ref) const
   {
-    CUDF_FAIL("NUNIQUE is not supported for non-numeric types");
+    CUDF_FAIL("NUNIQUE is not supported for boolean or non-numeric types", std::invalid_argument);
   }
 };
 }  // namespace

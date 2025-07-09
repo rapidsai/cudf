@@ -1131,6 +1131,14 @@ TEST_F(ReductionEmptyTest, empty_column)
   EXPECT_EQ(dynamic_cast<cudf::numeric_scalar<cudf::size_type>*>(result.get())->value(), 1);
 }
 
+TEST_F(ReductionEmptyTest, Errors)
+{
+  auto input     = cudf::test::fixed_width_column_wrapper<int32_t>({7, 8, 9});
+  auto agg       = cudf::make_nunique_aggregation<cudf::reduce_aggregation>();
+  auto bool_type = cudf::data_type{cudf::type_id::BOOL8};
+  EXPECT_THROW(cudf::reduce(input, *agg, bool_type), std::invalid_argument);
+}
+
 // ----------------------------------------------------------------------------
 
 struct ReductionParamTest : public ReductionTest<double>,
