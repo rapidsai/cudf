@@ -783,25 +783,12 @@ dependencies:
           - matrix: {dependencies: "oldest"}
             packages:
               - numba==0.59.1
+              - numba-cuda==0.16.0
               - pandas==2.0.*
           - matrix: {dependencies: "latest"}
             packages:
               - *numba-dep
               - pandas==2.3.0
-          - matrix:
-            packages:
-      - output_types: conda
-        matrices:
-          - matrix: {dependencies: "oldest", cuda: "12.*"}
-            packages:
-              - numba-cuda==0.16.0
-          - matrix:
-            packages:
-      - output_types: [requirements, pyproject]
-        matrices:
-          - matrix: {dependencies: "oldest", cuda: "12.*"}
-            packages:
-              - numba-cuda[cu12]==0.16.0
           - matrix:
             packages:
       - output_types: conda
