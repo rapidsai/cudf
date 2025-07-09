@@ -33,6 +33,47 @@
 
 using namespace cudf::strings::udf;
 
+/**
+ * @brief Destructor for a udf_string object.
+ *
+ * NRT API compatible destructor for udf_string objects.
+ *
+ * @param udf_str Pointer to the udf_string object to be destructed.
+ * @param size Size of the udf_string object (not used).
+ * @param dtor_info Additional information for the destructor (not used).
+ */
+__device__ void udf_str_dtor(void* udf_str, size_t size, void* dtor_info)
+{
+  auto ptr = reinterpret_cast<udf_string*>(udf_str);
+  ptr->~udf_string();
+}
+
+__device__ void* make_meminfo_for_new_udf_string(void* udf_str)
+{
+  struct mi_str_allocation {
+    NRT_MemInfo mi;
+    udf_string st;
+  };
+
+  mi_str_allocation* mi_and_str = (mi_str_allocation*)NRT_Allocate(sizeof(mi_str_allocation));
+  if (mi_and_str != NULL) {
+    auto mi_ptr        = &(mi_and_str->mi);
+    udf_string* st_ptr = &(mi_and_str->st);
+
+    // udf_str_dtor can destruct the string without knowing the size
+    size_t size = 0;
+    NRT_MemInfo_init(mi_ptr, st_ptr, size, udf_str_dtor, NULL);
+
+    // copy the udf_string to the extra heap space
+    udf_string* in_str_ptr = reinterpret_cast<udf_string*>(udf_str);
+    memcpy(st_ptr, in_str_ptr, sizeof(udf_string));
+    return &(mi_and_str->mi);
+  } else {
+    __trap();
+    return nullptr;  // Unreachable but added to avoid compiler warnings
+  }
+}
+
 extern "C" __device__ int len(int* nb_retval, void const* str)
 {
   auto sv    = reinterpret_cast<cudf::string_view const*>(str);
@@ -251,7 +292,7 @@ extern "C" __device__ int string_view_from_udf_string(int* nb_retval,
   return 0;
 }
 
-extern "C" __device__ int strip(int* nb_retval,
+extern "C" __device__ int strip(void** out_meminfo,
                                 void* udf_str,
                                 void* const* to_strip,
                                 void* const* strip_str)
@@ -261,11 +302,12 @@ extern "C" __device__ int strip(int* nb_retval,
   auto udf_str_ptr   = new (udf_str) udf_string;
 
   *udf_str_ptr = strip(*to_strip_ptr, *strip_str_ptr);
+  *out_meminfo = make_meminfo_for_new_udf_string(udf_str);
 
   return 0;
 }
 
-extern "C" __device__ int lstrip(int* nb_retval,
+extern "C" __device__ int lstrip(void** out_meminfo,
                                  void* udf_str,
                                  void* const* to_strip,
                                  void* const* strip_str)
@@ -275,11 +317,12 @@ extern "C" __device__ int lstrip(int* nb_retval,
   auto udf_str_ptr   = new (udf_str) udf_string;
 
   *udf_str_ptr = strip(*to_strip_ptr, *strip_str_ptr, cudf::strings::side_type::LEFT);
+  *out_meminfo = make_meminfo_for_new_udf_string(udf_str);
 
   return 0;
 }
 
-extern "C" __device__ int rstrip(int* nb_retval,
+extern "C" __device__ int rstrip(void** out_meminfo,
                                  void* udf_str,
                                  void* const* to_strip,
                                  void* const* strip_str)
@@ -289,10 +332,11 @@ extern "C" __device__ int rstrip(int* nb_retval,
   auto udf_str_ptr   = new (udf_str) udf_string;
 
   *udf_str_ptr = strip(*to_strip_ptr, *strip_str_ptr, cudf::strings::side_type::RIGHT);
+  *out_meminfo = make_meminfo_for_new_udf_string(udf_str);
 
   return 0;
 }
-extern "C" __device__ int upper(int* nb_retval,
+extern "C" __device__ int upper(void** out_meminfo,
                                 void* udf_str,
                                 void const* st,
                                 std::uintptr_t flags_table,
@@ -312,11 +356,12 @@ extern "C" __device__ int upper(int* nb_retval,
   cudf::strings::udf::chars_tables tables{flags_table_ptr, cases_table_ptr, special_table_ptr};
 
   *udf_str_ptr = to_upper(tables, *st_ptr);
+  *out_meminfo = make_meminfo_for_new_udf_string(udf_str);
 
   return 0;
 }
 
-extern "C" __device__ int lower(int* nb_retval,
+extern "C" __device__ int lower(void** out_meminfo,
                                 void* udf_str,
                                 void const* st,
                                 std::uintptr_t flags_table,
@@ -335,10 +380,15 @@ extern "C" __device__ int lower(int* nb_retval,
 
   cudf::strings::udf::chars_tables tables{flags_table_ptr, cases_table_ptr, special_table_ptr};
   *udf_str_ptr = to_lower(tables, *st_ptr);
+  *out_meminfo = make_meminfo_for_new_udf_string(udf_str);
+
   return 0;
 }
 
-extern "C" __device__ int concat(int* nb_retval, void* udf_str, void* const* lhs, void* const* rhs)
+extern "C" __device__ int concat(void** out_meminfo,
+                                 void* udf_str,
+                                 void* const* lhs,
+                                 void* const* rhs)
 {
   auto lhs_ptr = reinterpret_cast<cudf::string_view const*>(lhs);
   auto rhs_ptr = reinterpret_cast<cudf::string_view const*>(rhs);
@@ -348,8 +398,34 @@ extern "C" __device__ int concat(int* nb_retval, void* udf_str, void* const* lhs
   udf_string result;
   result.append(*lhs_ptr).append(*rhs_ptr);
   *udf_str_ptr = result;
+  *out_meminfo = make_meminfo_for_new_udf_string(udf_str);
   return 0;
 }
+
+/*
+
+  struct mi_str_allocation {
+    NRT_MemInfo mi;
+    udf_string st;
+  };
+  mi_str_allocation* mi_and_str = (mi_str_allocation*)NRT_Allocate(sizeof(mi_str_allocation));
+  if (mi_and_str != NULL) {
+    auto mi_ptr        = &(mi_and_str->mi);
+    udf_string* st_ptr = &(mi_and_str->st);
+
+    // udf_str_dtor can destruct the string without knowing the size
+    size_t size = 0;
+    NRT_MemInfo_init(mi_ptr, st_ptr, size, udf_str_dtor, NULL);
+
+    // copy the udf_string to the extra heap space
+    udf_string* in_str_ptr = reinterpret_cast<udf_string*>(udf_str);
+    memcpy(st_ptr, in_str_ptr, sizeof(udf_string));
+    *out_meminfo = &(mi_and_str->mi);
+  } else {
+    *out_meminfo = NULL;
+    __trap();
+  }
+*/
 
 extern "C" __device__ int replace(
   int* nb_retval, void* udf_str, void* const src, void* const to_replace, void* const replacement)
@@ -721,57 +797,4 @@ make_definition_corr(BlockCorr, int32, int32_t);
 make_definition_corr(BlockCorr, int64, int64_t);
 
 #undef make_definition_corr
-}
-
-/**
- * @brief Destructor for a udf_string object.
- *
- * NRT API compatible destructor for udf_string objects.
- *
- * @param udf_str Pointer to the udf_string object to be destructed.
- * @param size Size of the udf_string object (not used).
- * @param dtor_info Additional information for the destructor (not used).
- */
-__device__ void udf_str_dtor(void* udf_str, size_t size, void* dtor_info)
-{
-  auto ptr = reinterpret_cast<udf_string*>(udf_str);
-  ptr->~udf_string();
-}
-
-/**
- * @brief Initialize a MemInfo to track a newly created cudf::udf_string.
- *
- * Shim functions are passed stack memory into which udf_string objects are constructed
- * so this function persists a copy to the heap for use when destructing
- * the object later on. The returned MemInfo tracks the heap copy.
- *
- * @param out_meminfo Pointer to value through which to return the MemInfo.
- * @param udf_str Pointer to the newly created udf_string object.
- *
- *
- */
-extern "C" __device__ int init_udf_string_meminfo(void** out_meminfo, void* udf_str)
-{
-  struct mi_str_allocation {
-    NRT_MemInfo mi;
-    udf_string st;
-  };
-  mi_str_allocation* mi_and_str = (mi_str_allocation*)NRT_Allocate(sizeof(mi_str_allocation));
-  if (mi_and_str != NULL) {
-    auto mi_ptr        = &(mi_and_str->mi);
-    udf_string* st_ptr = &(mi_and_str->st);
-
-    // udf_str_dtor can destruct the string without knowing the size
-    size_t size = 0;
-    NRT_MemInfo_init(mi_ptr, st_ptr, size, udf_str_dtor, NULL);
-
-    // copy the udf_string to the extra heap space
-    udf_string* in_str_ptr = reinterpret_cast<udf_string*>(udf_str);
-    memcpy(st_ptr, in_str_ptr, sizeof(udf_string));
-    *out_meminfo = &(mi_and_str->mi);
-  } else {
-    *out_meminfo = NULL;
-    __trap();
-  }
-  return 0;
 }

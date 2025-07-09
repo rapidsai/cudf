@@ -34,13 +34,17 @@ _UDF_STRING_PTR = types.CPointer(udf_string)
 # CUDA function declarations
 # read-only (input is a string_view, output is a fixed with type)
 _string_view_len = cuda.declare_device("len", size_type(_STR_VIEW_PTR))
+
+
 _concat_string_view = cuda.declare_device(
-    "concat", types.void(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR)
+    "concat", types.voidptr(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR)
 )
 
 _string_view_replace = cuda.declare_device(
     "replace",
-    types.void(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR),
+    types.voidptr(
+        _UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR
+    ),
 )
 
 
@@ -54,7 +58,7 @@ def _declare_binary_func(lhs, rhs, out, name):
 
 def _declare_strip_func(name):
     return cuda.declare_device(
-        name, size_type(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR)
+        name, types.voidptr(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR)
     )
 
 
@@ -93,7 +97,7 @@ _declare_bool_str_int_func = partial(
 def _declare_upper_or_lower(func):
     return cuda.declare_device(
         func,
-        types.void(
+        types.voidptr(
             _UDF_STRING_PTR,
             _STR_VIEW_PTR,
             types.uintp,
@@ -315,17 +319,26 @@ def concat_impl(context, builder, sig, args):
     managed_ptr = builder.alloca(
         default_manager[managed_udf_string].get_value_type()
     )
+
     udf_str_ptr = builder.gep(
         managed_ptr, [ir.IntType(32)(0), ir.IntType(32)(1)]
     )
-    _ = context.compile_internal(
+
+    meminfo = context.compile_internal(
         builder,
         call_concat_string_view,
-        types.void(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR),
+        types.voidptr(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR),
         (udf_str_ptr, lhs_ptr, rhs_ptr),
     )
 
-    return _finalize_new_managed_udf_string(context, builder, managed_ptr)
+    managed = cgutils.create_struct_proxy(managed_udf_string)(
+        context,
+        builder,
+        value=builder.load(managed_ptr),
+    )
+    managed.meminfo = meminfo
+
+    return managed._getvalue()
 
 
 def call_string_view_replace(result, src, to_replace, replacement):
@@ -349,16 +362,21 @@ def replace_impl(context, builder, sig, args):
         managed_ptr, [ir.IntType(32)(0), ir.IntType(32)(1)]
     )
 
-    _ = context.compile_internal(
+    meminfo = context.compile_internal(
         builder,
         call_string_view_replace,
-        types.void(
+        types.voidptr(
             _UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR
         ),
         (udf_str_ptr, src_ptr, to_replace_ptr, replacement_ptr),
     )
-
-    return _finalize_new_managed_udf_string(context, builder, managed_ptr)
+    managed = cgutils.create_struct_proxy(managed_udf_string)(
+        context,
+        builder,
+        value=builder.load(managed_ptr),
+    )
+    managed.meminfo = meminfo
+    return managed._getvalue()
 
 
 def create_binary_string_func(binary_func, retty):
@@ -405,15 +423,24 @@ def create_binary_string_func(binary_func, retty):
                     managed_ptr, [ir.IntType(32)(0), ir.IntType(32)(1)]
                 )
 
-                _ = context.compile_internal(
+                meminfo = context.compile_internal(
                     builder,
                     cuda_func,
-                    size_type(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR),
+                    types.voidptr(
+                        _UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR
+                    ),
                     (udf_str_ptr, lhs_ptr, rhs_ptr),
                 )
-                return _finalize_new_managed_udf_string(
-                    context, builder, managed_ptr
+                managed = cgutils.create_struct_proxy(managed_udf_string)(
+                    context,
+                    builder,
+                    value=builder.load(
+                        managed_ptr
+                    ),  # {i8*, {i8*, i32, i32}}* -> {i8*, {i8*, i32, i32}}
                 )
+                managed.meminfo = meminfo
+
+                return managed._getvalue()
 
         # binary_func can be attribute-like: str.binary_func
         # or operator-like: binary_func(str, other)
@@ -576,10 +603,10 @@ def create_upper_or_lower(id_func):
             udf_str_ptr = builder.gep(
                 managed_ptr, [ir.IntType(32)(0), ir.IntType(32)(1)]
             )
-            _ = context.compile_internal(
+            meminfo = context.compile_internal(
                 builder,
                 cuda_func,
-                types.void(
+                types.voidptr(
                     _UDF_STRING_PTR,
                     _STR_VIEW_PTR,
                     types.uintp,
@@ -594,9 +621,15 @@ def create_upper_or_lower(id_func):
                     special_tbl_ptr,
                 ),
             )
-            return _finalize_new_managed_udf_string(
-                context, builder, managed_ptr
+            managed = cgutils.create_struct_proxy(managed_udf_string)(
+                context,
+                builder,
+                value=builder.load(
+                    managed_ptr
+                ),  # {i8*, {i8*, i32, i32}}* -> {i8*, {i8*, i32, i32}}
             )
+            managed.meminfo = meminfo
+            return managed._getvalue()
 
         return id_func_impl
 
