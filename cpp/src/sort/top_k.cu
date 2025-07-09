@@ -40,7 +40,10 @@ std::unique_ptr<column> top_k(column_view const& col,
   CUDF_EXPECTS(k <= col.size(),
                "k must be less than or equal to the number of rows in the column",
                std::invalid_argument);
-  auto indices = sorted_order<sort_method::STABLE>(col, sort_order, null_order::AFTER, stream, mr);
+
+  // code will be specialized for fixed-width types once CUB topk function is available
+  auto nulls     = sort_order == order::ASCENDING ? null_order::AFTER : null_order::BEFORE;
+  auto indices   = sorted_order<sort_method::STABLE>(col, sort_order, nulls, stream, mr);
   auto k_indices = cudf::detail::split(indices->view(), {k}, stream).front();
   auto result    = cudf::detail::gather(cudf::table_view({col}),
                                      k_indices,
@@ -49,6 +52,21 @@ std::unique_ptr<column> top_k(column_view const& col,
                                      stream,
                                      mr);
   return std::move(result->release().front());
+}
+
+std::unique_ptr<column> top_k_order(column_view const& col,
+                                    size_type k,
+                                    order sort_order,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::device_async_resource_ref mr)
+{
+  CUDF_EXPECTS(k <= col.size(),
+               "k must be less than or equal to the number of rows in the column",
+               std::invalid_argument);
+
+  auto nulls   = sort_order == order::ASCENDING ? null_order::AFTER : null_order::BEFORE;
+  auto indices = sorted_order<sort_method::STABLE>(col, sort_order, nulls, stream, mr);
+  return std::make_unique<column>(cudf::detail::split(indices->view(), {k}, stream).front());
 }
 
 }  // namespace detail
@@ -61,6 +79,16 @@ std::unique_ptr<column> top_k(column_view const& col,
 {
   CUDF_FUNC_RANGE();
   return detail::top_k(col, k, sort_order, stream, mr);
+}
+
+std::unique_ptr<column> top_k_order(column_view const& col,
+                                    size_type k,
+                                    order sort_order,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::top_k_order(col, k, sort_order, stream, mr);
 }
 
 }  // namespace cudf
