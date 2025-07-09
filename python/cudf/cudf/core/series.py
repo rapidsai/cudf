@@ -165,18 +165,6 @@ def _describe_categorical(obj, percentiles):
     return data
 
 
-def _append_new_row_inplace(col: ColumnBase, value: ScalarLike) -> None:
-    """Append a scalar `value` to the end of `col` inplace.
-    Cast to common type if possible
-    """
-    val_col = as_column(value, dtype=col.dtype if value is None else None)
-    to_type = find_common_type([val_col.dtype, col.dtype])
-    val_col = val_col.astype(to_type)
-    old_col = col.astype(to_type)
-
-    col._mimic_inplace(concat_columns([old_col, val_col]), inplace=True)
-
-
 class _SeriesIlocIndexer(_FrameIndexer):
     """
     For integer-location based selection.
@@ -290,29 +278,7 @@ class _SeriesLocIndexer(_FrameIndexer):
                 and not isinstance(self._frame.index, cudf.MultiIndex)
                 and is_scalar(value)
             ):
-                idx = self._frame.index
-                if isinstance(idx, cudf.RangeIndex):
-                    if isinstance(key, int) and (key == idx[-1] + idx.step):
-                        idx_copy = cudf.RangeIndex(
-                            start=idx.start,
-                            stop=idx.stop + idx.step,
-                            step=idx.step,
-                            name=idx.name,
-                        )
-                    else:
-                        idx_copy = idx._as_int_index()
-                        _append_new_row_inplace(idx_copy._column, key)
-                else:
-                    # TODO: Modifying index in place is bad because
-                    # our index are immutable, but columns are not (which
-                    # means our index are mutable with internal APIs).
-                    # Get rid of the deep copy once columns too are
-                    # immutable.
-                    idx_copy = idx.copy(deep=True)
-                    _append_new_row_inplace(idx_copy._column, key)
-
-                self._frame._index = idx_copy
-                _append_new_row_inplace(self._frame._column, value)
+                self.append_new_row(key, value, column=True)
                 return
             else:
                 raise e
