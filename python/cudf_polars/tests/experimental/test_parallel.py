@@ -222,7 +222,7 @@ def test_rename_concat(engine: pl.GPUEngine) -> None:
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_fallback_on_concat_zlice():
+def test_fallback_on_concat_zlice(engine: pl.GPUEngine) -> None:
     q = pl.concat(
         [
             pl.LazyFrame({"a": [1, 2]}),
@@ -231,4 +231,4 @@ def test_fallback_on_concat_zlice():
         ]
     ).tail(1)
 
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
