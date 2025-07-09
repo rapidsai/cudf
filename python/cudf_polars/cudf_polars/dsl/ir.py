@@ -798,6 +798,40 @@ class Sink(IR):
         )  # pragma: no cover
 
     @classmethod
+    def _write_csv(
+        cls, target: plc.io.SinkInfo, options: dict[str, Any], df: DataFrame
+    ) -> None:
+        """Write CSV data to a sink."""
+        serialize = options["serialize_options"]
+        options = (
+            plc.io.csv.CsvWriterOptions.builder(target, df.table)
+            .include_header(options["include_header"])
+            .names(df.column_names if options["include_header"] else [])
+            .na_rep(serialize["null"])
+            .line_terminator(serialize["line_terminator"])
+            .inter_column_delimiter(chr(serialize["separator"]))
+            .build()
+        )
+        plc.io.csv.write_csv(options)
+
+    @classmethod
+    def _write_json(cls, target: plc.io.SinkInfo, df: DataFrame) -> None:
+        """Write Json data to a sink."""
+        metadata = plc.io.TableWithMetadata(
+            df.table, [(col, []) for col in df.column_names]
+        )
+        options = (
+            plc.io.json.JsonWriterOptions.builder(target, df.table)
+            .lines(val=True)
+            .na_rep("null")
+            .include_nulls(val=True)
+            .metadata(metadata)
+            .utf8_escaped(val=False)
+            .build()
+        )
+        plc.io.json.write_json(options)
+
+    @classmethod
     @nvtx_annotate_cudf_polars(message="Sink")
     def do_evaluate(
         cls,
@@ -813,17 +847,7 @@ class Sink(IR):
         if options.get("mkdir", False):
             Path(path).parent.mkdir(parents=True, exist_ok=True)
         if kind == "Csv":
-            serialize = options["serialize_options"]
-            options = (
-                plc.io.csv.CsvWriterOptions.builder(target, df.table)
-                .include_header(options["include_header"])
-                .names(df.column_names if options["include_header"] else [])
-                .na_rep(serialize["null"])
-                .line_terminator(serialize["line_terminator"])
-                .inter_column_delimiter(chr(serialize["separator"]))
-                .build()
-            )
-            plc.io.csv.write_csv(options)
+            cls._write_csv(target, options, df)
 
         elif kind == "Parquet":
             metadata = plc.io.types.TableInputMetadata(df.table)
@@ -846,19 +870,7 @@ class Sink(IR):
             plc.io.parquet.write_parquet(writer_options)
 
         elif kind == "Json":
-            metadata = plc.io.TableWithMetadata(
-                df.table, [(col, []) for col in df.column_names]
-            )
-            options = (
-                plc.io.json.JsonWriterOptions.builder(target, df.table)
-                .lines(val=True)
-                .na_rep("null")
-                .include_nulls(val=True)
-                .metadata(metadata)
-                .utf8_escaped(val=False)
-                .build()
-            )
-            plc.io.json.write_json(options)
+            cls._write_json(target, df)
 
         return DataFrame([])
 
