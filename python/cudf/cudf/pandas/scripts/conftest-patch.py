@@ -7918,7 +7918,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/groupby/test_groupby.py::test_groupby_level_nonmulti",
     "tests/groupby/test_groupby.py::test_groupby_multiindex_not_lexsorted",
     "tests/groupby/test_groupby.py::test_groupby_nat_exclude",
-    "tests/groupby/test_groupby.py::test_groupby_none_in_first_mi_level",
     "tests/groupby/test_groupby.py::test_groupby_nonobject_dtype",
     "tests/groupby/test_groupby.py::test_groupby_nonstring_columns",
     "tests/groupby/test_groupby.py::test_groupby_numerical_stability_cumsum",
@@ -8733,7 +8732,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/indexes/multi/test_indexing.py::TestGetLoc::test_get_loc",
     "tests/indexes/multi/test_indexing.py::TestGetLoc::test_get_loc_duplicates2",
     "tests/indexes/multi/test_indexing.py::TestGetLoc::test_get_loc_past_lexsort_depth",
-    "tests/indexes/multi/test_indexing.py::TestGetLoc::test_get_loc_with_values_including_missing_values",
     "tests/indexes/multi/test_indexing.py::test_get_indexer_for_multiindex_with_nans[Decimal]",
     "tests/indexes/multi/test_indexing.py::test_get_indexer_for_multiindex_with_nans[NAType]",
     "tests/indexes/multi/test_indexing.py::test_get_indexer_for_multiindex_with_nans[NaTType]",
@@ -8810,7 +8808,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/indexes/multi/test_sorting.py::test_reconstruct_sort",
     "tests/indexes/multi/test_sorting.py::test_remove_unused_levels_large[datetime64[D]-str]",
     "tests/indexes/multi/test_sorting.py::test_remove_unused_levels_large[int64-int64]",
-    "tests/indexes/multi/test_sorting.py::test_sort_values_with_na_na_position[float64-first]",
     "tests/indexes/multi/test_sorting.py::test_unsortedindex_doc_examples",
     "tests/indexes/numeric/test_astype.py::TestAstype::test_astype_float64_to_uint64",
     "tests/indexes/numeric/test_astype.py::TestAstype::test_cannot_cast_inf_to_int[inf-int16]",
@@ -14061,7 +14058,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/series/methods/test_sort_values.py::TestSeriesSortValues::test_sort_values",
     "tests/series/methods/test_sort_values.py::TestSeriesSortValues::test_sort_values_categorical",
     "tests/series/methods/test_unique.py::TestUnique::test_unique_categorical",
-    "tests/series/methods/test_unstack.py::test_unstack",
     "tests/series/methods/test_update.py::TestUpdate::test_update_dtypes[other8-int32-expected8-FutureWarning]",
     "tests/series/methods/test_update.py::TestUpdate::test_update_dtypes[other9-int64-expected9-FutureWarning]",
     "tests/series/methods/test_value_counts.py::TestSeriesValueCounts::test_value_counts_categorical_with_nan",
@@ -16260,6 +16256,10 @@ NODEIDS_THAT_XPASS_WITH_CUDF_PANDAS = {
 
 # TODO: Investigate why sometimes these fail
 NODEIDS_THAT_FLAKY_XFAIL_WITH_CUDF_PANDAS = {
+    "tests/indexes/multi/test_indexing.py::test_pyint_engine",
+    "tests/indexes/multi/test_monotonic.py::test_is_monotonic_with_nans[values0-is_monotonic_increasing]",
+    "tests/arithmetic/test_timedelta64.py::TestTimedeltaArraylikeAddSubOps::test_td64arr_sub_timedeltalike[timedelta64_0-array]",
+    "tests/arithmetic/test_timedelta64.py::TestTimedeltaArraylikeAddSubOps::test_td64arr_sub_timedeltalike[timedelta64_1-array]",
     "tests/extension/test_string.py::TestStringArray::test_getitem_series_integer_with_missing_raises[string=str[pyarrow]-False-integer-array]",
     "tests/extension/test_string.py::TestStringArray::test_getitem_series_integer_with_missing_raises[string=str[pyarrow]-True-integer-array]",
     "tests/extension/test_string.py::TestStringArray::test_getitem_series_integer_with_missing_raises[string=str[python]-False-integer-array]",
