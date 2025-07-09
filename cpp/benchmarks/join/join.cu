@@ -79,8 +79,8 @@ NVBENCH_BENCH_TYPES(
   .set_name("inner_join")
   .set_type_axes_names({"Key", "Nullable", "NullEquality", "Datatype"})
   .add_int64_axis("num_keys", nvbench::range(1, 5, 1))
-  .add_int64_power_of_two_axis("left_size", nvbench::range(20, 29, 1))
-  .add_int64_power_of_two_axis("right_size", nvbench::range(20, 29, 1));
+  .add_int64_power_of_two_axis("left_size", nvbench::range(10, 20, 1))
+  .add_int64_power_of_two_axis("right_size", nvbench::range(10, 20, 1));
 
 NVBENCH_BENCH_TYPES(
   nvbench_left_join,

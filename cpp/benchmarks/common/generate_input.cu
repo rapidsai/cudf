@@ -36,6 +36,7 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/traits.hpp>
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
@@ -923,6 +924,36 @@ std::unique_ptr<cudf::table> create_sequence_table(std::vector<cudf::type_id> co
     return col;
   });
   return std::make_unique<cudf::table>(std::move(columns));
+}
+
+std::unique_ptr<cudf::table> create_distinct_rows_table(std::vector<cudf::type_id> const& dtype_ids,
+                                                          row_count num_rows,
+                                                          std::optional<double> null_probability, 
+                                                          unsigned seed) {
+  auto seed_engine = deterministic_engine(seed);
+  thrust::uniform_int_distribution<unsigned> seed_dist;
+
+  auto columns = std::vector<std::unique_ptr<cudf::column>>(dtype_ids.size());
+  std::transform(dtype_ids.begin(), dtype_ids.end(), columns.begin(), [&](auto dtype) mutable {
+    auto dt = cudf::data_type{dtype};
+    if (is_numeric(dt)) {
+      auto init = cudf::make_default_constructed_scalar(dt);
+      auto col  = cudf::sequence(num_rows.count, *init);
+      auto [mask, count] =
+        create_random_null_mask(num_rows.count, null_probability, seed_dist(seed_engine));
+      col->set_null_mask(std::move(mask), count);
+      return col;
+    }
+    if (dt.id() == cudf::type_id::STRING) {
+      auto col  = create_string_column(num_rows.count, 256, 5); 
+      auto [mask, count] =
+        create_random_null_mask(num_rows.count, null_probability, seed_dist(seed_engine));
+      col->set_null_mask(std::move(mask), count);
+      return col;
+    }
+  });
+  return std::make_unique<cudf::table>(std::move(columns));
+
 }
 
 std::unique_ptr<cudf::column> create_string_column(cudf::size_type num_rows,

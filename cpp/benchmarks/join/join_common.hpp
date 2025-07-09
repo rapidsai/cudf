@@ -222,8 +222,10 @@ void BM_join_with_datatype(state_type& state, std::vector<cudf::type_id>& key_ty
     return;
   }
 
-  auto profile        = data_profile_builder().null_probability(Nullable ? 0.2 : 0);
   auto const num_keys = key_types.size();
+
+#if 1
+  auto profile        = data_profile_builder().null_probability(Nullable ? 0.3 : 0);
 
   // payload column
   key_types.push_back(cudf::type_id::INT32);
@@ -232,6 +234,82 @@ void BM_join_with_datatype(state_type& state, std::vector<cudf::type_id>& key_ty
   auto const left_view  = left_tbl->view();
   auto const right_tbl  = create_random_table(key_types, table_size_bytes{right_size}, profile);
   auto const right_view = right_tbl->view();
+  std::printf("left_table: %d rows, %d cols\nright_table: %d rows, %d cols\n", left_tbl->num_rows(), left_tbl->num_columns(), right_tbl->num_rows(), right_tbl->num_columns());
+#endif
+  
+#if 0
+  assert(num_keys <= 2);
+  // Generate build and probe tables
+  auto right_random_null_mask = [](int size) {
+    // roughly 75% nulls
+    auto validity =
+      thrust::make_transform_iterator(thrust::make_counting_iterator(0), null75_generator{});
+    return cudf::detail::valid_if(validity,
+                                  validity + size,
+                                  cuda::std::identity{},
+                                  cudf::get_default_stream(),
+                                  cudf::get_current_device_resource_ref());
+  };
+
+  std::unique_ptr<cudf::column> right_key_column0 = [&]() {
+    auto [null_mask, null_count] = right_random_null_mask(right_size);
+    return Nullable
+             ? cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<Key>()),
+                                         right_size,
+                                         std::move(null_mask),
+                                         null_count)
+             : cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<Key>()), right_size);
+  }();
+  std::unique_ptr<cudf::column> left_key_column0 = [&]() {
+    auto [null_mask, null_count] = right_random_null_mask(left_size);
+    return Nullable
+             ? cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<Key>()),
+                                         left_size,
+                                         std::move(null_mask),
+                                         null_count)
+             : cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<Key>()), left_size);
+  }();
+
+  // build table is right table, probe table is left table
+  auto multiplicity = 1;
+  auto selectivity = 0.3;
+  generate_input_tables<Key, cudf::size_type>(right_key_column0->mutable_view().data<Key>(),
+                                              right_size,
+                                              left_key_column0->mutable_view().data<Key>(),
+                                              left_size,
+                                              selectivity,
+                                              multiplicity);
+
+  // Copy right_key_column0 and left_key_column0 into new columns.
+  // If Nullable, the new columns will be assigned new nullmasks.
+  auto const right_key_column1 = [&]() {
+    auto col = std::make_unique<cudf::column>(right_key_column0->view());
+    if (Nullable) {
+      auto [null_mask, null_count] = right_random_null_mask(right_size);
+      col->set_null_mask(std::move(null_mask), null_count);
+    }
+    return col;
+  }();
+  auto const left_key_column1 = [&]() {
+    auto col = std::make_unique<cudf::column>(left_key_column0->view());
+    if (Nullable) {
+      auto [null_mask, null_count] = right_random_null_mask(left_size);
+      col->set_null_mask(std::move(null_mask), null_count);
+    }
+    return col;
+  }();
+
+  auto init                 = cudf::make_fixed_width_scalar<Key>(static_cast<Key>(0));
+  auto right_payload_column = cudf::sequence(right_size, *init);
+  auto left_payload_column  = cudf::sequence(left_size, *init);
+
+  CUDF_CHECK_CUDA(0);
+
+  cudf::table_view right_view(
+    {right_key_column0->view(), right_key_column1->view(), *right_payload_column});
+  cudf::table_view left_view(
+    {left_key_column0->view(), left_key_column1->view(), *left_payload_column});
+#endif
 
   auto const join_input_size = estimate_size(right_view) + estimate_size(left_view);
 
