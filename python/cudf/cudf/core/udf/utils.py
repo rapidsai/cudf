@@ -21,6 +21,7 @@ from numba.types import CPointer, Record, Tuple
 import rmm
 
 from cudf._lib import strings_udf
+from cudf.core.buffer import as_buffer
 from cudf.core.udf.masked_typing import MaskedType
 from cudf.core.udf.strings_typing import (
     string_view,
@@ -367,7 +368,9 @@ def set_malloc_heap_size(size=None):
 
 def column_to_string_view_array_init_heap(col: plc.Column) -> Buffer:
     # lazily allocate heap only when a string needs to be returned
-    return strings_udf.column_to_string_view_array(col)
+    return as_buffer(
+        strings_udf.column_to_string_view_array(col), exposed=True
+    )
 
 
 class UDFError(RuntimeError):
