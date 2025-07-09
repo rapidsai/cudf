@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
-# TODO: remove need for this
+# TODO: Document StringFunction to remove noqa
 # ruff: noqa: D101
 """DSL nodes for string operations."""
 
@@ -98,6 +98,8 @@ class StringFunction(Expr):
         Name.Contains,
         Name.CountMatches,
         Name.EndsWith,
+        Name.Extract,
+        Name.ExtractGroups,
         Name.Head,
         Name.JsonDecode,
         Name.JsonPathMatch,
@@ -146,15 +148,7 @@ class StringFunction(Expr):
             literal_expr = self.children[1]
             assert isinstance(literal_expr, Literal)
             pattern = literal_expr.value
-            try:
-                self._regex_program = plc.strings.regex_program.RegexProgram.create(
-                    pattern,
-                    flags=plc.strings.regex_flags.RegexFlags.DEFAULT,
-                )
-            except RuntimeError as e:
-                raise NotImplementedError(
-                    f"Unsupported regex {pattern} for GPU engine."
-                ) from e
+            self._regex_program = self._create_regex_program(pattern)
         if self.name is StringFunction.Name.Contains:
             literal, strict = self.options
             if not literal:
@@ -167,15 +161,18 @@ class StringFunction(Expr):
                         "Regex contains only supports a scalar pattern"
                     )
                 pattern = self.children[1].value
-                try:
-                    self._regex_program = plc.strings.regex_program.RegexProgram.create(
-                        pattern,
-                        flags=plc.strings.regex_flags.RegexFlags.DEFAULT,
-                    )
-                except RuntimeError as e:
-                    raise NotImplementedError(
-                        f"Unsupported regex {pattern} for GPU engine."
-                    ) from e
+                self._regex_program = self._create_regex_program(pattern)
+        elif self.name is StringFunction.Name.Extract:
+            (group_index,) = self.options
+            if group_index == 0:
+                raise NotImplementedError(f"{group_index=} is not supported")
+            literal_expr = self.children[1]
+            assert isinstance(literal_expr, Literal)
+            pattern = literal_expr.value
+            self._regex_program = self._create_regex_program(pattern)
+        elif self.name is StringFunction.Name.ExtractGroups:
+            (_, pattern) = self.options
+            self._regex_program = self._create_regex_program(pattern)
         elif self.name is StringFunction.Name.Replace:
             _, literal = self.options
             if not literal:
@@ -231,6 +228,21 @@ class StringFunction(Expr):
                 raise NotImplementedError(
                     "strip operations only support scalar patterns"
                 )
+
+    @staticmethod
+    def _create_regex_program(
+        pattern: str,
+        flags: plc.strings.regex_flags.RegexFlags = plc.strings.regex_flags.RegexFlags.DEFAULT,
+    ) -> plc.strings.regex_program.RegexProgram:
+        try:
+            return plc.strings.regex_program.RegexProgram.create(
+                pattern,
+                flags=flags,
+            )
+        except RuntimeError as e:
+            raise NotImplementedError(
+                f"Unsupported regex {pattern} for GPU engine."
+            ) from e
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
@@ -322,6 +334,34 @@ class StringFunction(Expr):
                 plc.unary.cast(
                     plc.strings.contains.count_re(column, self._regex_program),
                     self.dtype.plc,
+                ),
+                dtype=self.dtype,
+            )
+        elif self.name is StringFunction.Name.Extract:
+            (group_index,) = self.options
+            column = self.children[0].evaluate(df, context=context).obj
+            return Column(
+                plc.strings.extract.extract_single(
+                    column, self._regex_program, group_index - 1
+                ),
+                dtype=self.dtype,
+            )
+        elif self.name is StringFunction.Name.ExtractGroups:
+            column = self.children[0].evaluate(df, context=context).obj
+            plc_table = plc.strings.extract.extract(
+                column,
+                self._regex_program,
+            )
+            ref_column = plc_table.columns()[0]
+            return Column(
+                plc.Column(
+                    self.dtype.plc,
+                    ref_column.size(),
+                    None,
+                    ref_column.null_mask(),
+                    ref_column.null_count(),
+                    ref_column.offset(),
+                    plc_table.columns(),
                 ),
                 dtype=self.dtype,
             )

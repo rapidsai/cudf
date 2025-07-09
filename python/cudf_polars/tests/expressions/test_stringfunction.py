@@ -560,6 +560,27 @@ def test_json_path_match(ldf_jsonlike):
     assert_gpu_result_equal(q)
 
 
+@pytest.fixture
+def ldf_extract():
+    return pl.LazyFrame({"a": ["?!. 123 foo", None]})
+
+
+@pytest.mark.parametrize("group_index", [1, 2])
+def test_extract(ldf_extract, group_index):
+    q = ldf_extract.select(pl.col("a").str.extract(r"(\S+) (\d+) (.+)", group_index))
+    assert_gpu_result_equal(q)
+
+
+def test_extract_group_index_0_unsupported(ldf_extract):
+    q = ldf_extract.select(pl.col("a").str.extract(r"(\S+) (\d+) (.+)", 0))
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_extract_groups(ldf_extract):
+    q = ldf_extract.select(pl.col("a").str.extract_groups(r"(\S+) (\d+) (.+)"))
+    assert_gpu_result_equal(q)
+
+
 def test_len_bytes(ldf):
     q = ldf.select(pl.col("a").str.len_bytes())
     assert_gpu_result_equal(q)
