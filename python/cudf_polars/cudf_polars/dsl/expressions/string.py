@@ -409,6 +409,8 @@ class StringFunction(Expr):
             return Column(plc_column, dtype=self.dtype)
         elif self.name is StringFunction.Name.JsonDecode:
             plc_column = self.children[0].evaluate(df, context=context).obj
+            # Once https://github.com/rapidsai/cudf/issues/19338 is implemented,
+            # we can use do this conversion on host.
             buff = io.StringIO(
                 plc.strings.combine.join_strings(
                     plc_column,
