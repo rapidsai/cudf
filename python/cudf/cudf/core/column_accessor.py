@@ -20,6 +20,8 @@ import pandas as pd
 import cudf
 from cudf.api.types import infer_dtype, is_scalar
 from cudf.core import column
+from cudf.errors import MixedTypeError
+from cudf.utils.dtypes import is_mixed_with_object_dtype
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -357,6 +359,24 @@ class ColumnAccessor(MutableMapping):
         elif old_ncols > 0 and len(value) != self.nrows:
             raise ValueError("All columns must be of equal length")
 
+        if cudf.get_option("mode.pandas_compatible"):
+            try:
+                pd_idx1 = pd.Index(
+                    [*list(self.names), name], dtype=self.label_dtype
+                )
+                pd_idx2 = pd.Index([*list(self.names), name])
+                if (
+                    pd_idx1.dtype != pd_idx2.dtype
+                    and is_mixed_with_object_dtype(pd_idx1, pd_idx2)
+                    and pd_idx1.inferred_type != pd_idx2.inferred_type
+                ):
+                    raise MixedTypeError(
+                        "Cannot insert column with mixed types when label_dtype is set"
+                    )
+            except Exception as e:
+                raise e
+        else:
+            self.label_dtype = None
         # TODO: we should move all insert logic here
         if loc == old_ncols:
             self._data[name] = value
@@ -366,13 +386,6 @@ class ColumnAccessor(MutableMapping):
             self._data = dict(zip(new_keys, new_values))
         self._clear_cache(old_ncols, old_ncols + 1)
         # The type(name) may no longer match the prior label_dtype
-        if cudf.get_option("mode.pandas_compatible"):
-            try:
-                pd.Index([*list(self.names), name], dtype=self.label_dtype)
-            except Exception:
-                self.label_dtype = None
-        else:
-            self.label_dtype = None
 
     def copy(self, deep: bool = False) -> Self:
         """
