@@ -105,11 +105,6 @@ void hybrid_scan_reader_impl::setup_page_index(
 void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode,
                                              parquet_reader_options const& options)
 {
-  // Strings may be returned as either string or categorical columns
-  auto const strings_to_categorical = options.is_enabled_convert_strings_to_categories();
-  auto const use_pandas_metadata    = options.is_enabled_use_pandas_metadata();
-  auto const timestamp_type_id      = options.get_timestamp_type().id();
-
   // Select only columns required by the filter
   if (read_columns_mode == read_columns_mode::FILTER_COLUMNS) {
     if (_is_filter_columns_selected) { return; }
@@ -118,8 +113,11 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
       cudf::io::parquet::detail::get_column_names_in_expression(options.get_filter(), {});
     // Select only filter columns using the base `select_columns` method
     std::tie(_input_columns, _output_buffers, _output_column_schemas) =
-      _extended_metadata->select_columns(
-        _filter_columns_names, {}, use_pandas_metadata, strings_to_categorical, timestamp_type_id);
+      _extended_metadata->select_columns(_filter_columns_names,
+                                         {},
+                                         _use_pandas_metadata,
+                                         _strings_to_categorical,
+                                         _options.timestamp_type.id());
 
     _is_filter_columns_selected  = true;
     _is_payload_columns_selected = false;
@@ -129,9 +127,9 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
     std::tie(_input_columns, _output_buffers, _output_column_schemas) =
       _extended_metadata->select_payload_columns(options.get_columns(),
                                                  _filter_columns_names,
-                                                 use_pandas_metadata,
-                                                 strings_to_categorical,
-                                                 timestamp_type_id);
+                                                 _use_pandas_metadata,
+                                                 _strings_to_categorical,
+                                                 _options.timestamp_type.id());
 
     _is_payload_columns_selected = true;
     _is_filter_columns_selected  = false;
@@ -402,6 +400,9 @@ hybrid_scan_reader_impl::filter_column_chunks_byte_ranges(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options)
 {
+  CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
+  CUDF_EXPECTS(options.get_filter().has_value(), "Encountered empty converted filter expression");
+
   select_columns(read_columns_mode::FILTER_COLUMNS, options);
   return get_input_column_chunk_byte_ranges(row_group_indices);
 }
@@ -411,6 +412,9 @@ hybrid_scan_reader_impl::payload_column_chunks_byte_ranges(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options)
 {
+  CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
+  CUDF_EXPECTS(options.get_filter().has_value(), "Encountered empty converted filter expression");
+
   select_columns(read_columns_mode::PAYLOAD_COLUMNS, options);
   return get_input_column_chunk_byte_ranges(row_group_indices);
 }
@@ -423,17 +427,20 @@ table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns(
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
+  CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
+  CUDF_EXPECTS(options.get_filter().has_value(), "Encountered empty converted filter expression");
+
   reset_internal_state();
 
   table_metadata metadata;
   populate_metadata(metadata);
   _expr_conv = named_to_reference_converter(options.get_filter(), metadata);
 
-  select_columns(read_columns_mode::FILTER_COLUMNS, options);
+  CUDF_EXPECTS(_expr_conv.get_converted_expr().has_value(), "Filter expression must not be empty");
 
   initialize_options(row_group_indices, options, stream);
 
-  CUDF_EXPECTS(_expr_conv.get_converted_expr().has_value(), "Filter expression must not be empty");
+  select_columns(read_columns_mode::FILTER_COLUMNS, options);
 
   // If the data page mask is empty, ensure the row mask is all valid
   sanitize_row_mask(data_page_mask, row_mask);
@@ -452,13 +459,15 @@ table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns(
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
+  CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
   CUDF_EXPECTS(row_mask.null_count() == 0,
                "Row mask must not have any nulls when materializing payload column");
 
   reset_internal_state();
-  select_columns(read_columns_mode::PAYLOAD_COLUMNS, options);
 
   initialize_options(row_group_indices, options, stream);
+
+  select_columns(read_columns_mode::PAYLOAD_COLUMNS, options);
 
   auto output_dtypes = get_output_types(_output_buffers_template);
 
@@ -483,7 +492,10 @@ void hybrid_scan_reader_impl::reset_internal_state()
   _options.timestamp_type = cudf::data_type{};
   _options.num_rows       = std::nullopt;
   _options.row_group_indices.clear();
-  _num_sources = 0;
+  _num_sources             = 0;
+  _input_pass_read_limit   = 0;
+  _output_chunk_read_limit = 0;
+  _strings_to_categorical  = false;
 }
 
 void hybrid_scan_reader_impl::initialize_options(
@@ -491,15 +503,12 @@ void hybrid_scan_reader_impl::initialize_options(
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
-  // Save the name to reference converter to extract output filter AST in
-  // `preprocess_file()` and `finalize_output()`
-  table_metadata metadata;
-  populate_metadata(metadata);
-
   // Strings may be returned as either string or categorical columns
   _strings_to_categorical = options.is_enabled_convert_strings_to_categories();
 
   _options.timestamp_type = cudf::data_type{options.get_timestamp_type().id()};
+
+  _use_pandas_metadata = options.is_enabled_use_pandas_metadata();
 
   // Binary columns can be read as binary or strings
   _reader_column_schema = options.get_column_schema();

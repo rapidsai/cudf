@@ -415,8 +415,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
 
   std::optional<std::vector<std::string>> _filter_columns_names;
 
-  // timestamp_type
-  cudf::data_type _timestamp_type;
+  bool _use_pandas_metadata{false};
 
   bool _is_filter_columns_selected{false};
   bool _is_payload_columns_selected{false};

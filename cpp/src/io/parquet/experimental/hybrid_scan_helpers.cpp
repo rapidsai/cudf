@@ -288,7 +288,7 @@ aggregate_reader_metadata::select_row_groups(
       auto const num_rows_this_rg = get_row_group(rowgroup_idx, src_idx).num_rows;
       rows_to_read += num_rows_this_rg;
       num_rows_per_source[src_idx] += num_rows_this_rg;
-      selection.emplace_back(rowgroup_idx, rows_to_read, src_idx);
+      selection.emplace_back(rowgroup_idx, chunk_start_row, src_idx);
       // if page-level indexes are present, then collect extra chunk and page info.
       column_info_for_row_group(selection.back(), chunk_start_row);
       total_row_groups++;
