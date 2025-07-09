@@ -1537,7 +1537,8 @@ TYPED_TEST(ReductionTest, UniqueCount)
   std::vector<int> int_values({1, -3, 1, 2, 0, 2, -4, 45});  // 6 unique values
   std::vector<bool> host_bools({true, true, true, false, true, true, true, true});
   std::vector<T> v = convert_values<T>(int_values);
-  auto output_type = cudf::data_type{cudf::type_to_id<cudf::size_type>()};
+
+  auto const output_type = cudf::data_type{cudf::type_to_id<cudf::size_type>()};
 
   // test without nulls
   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
