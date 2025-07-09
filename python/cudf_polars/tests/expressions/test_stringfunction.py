@@ -563,6 +563,14 @@ def test_json_decode(ldf_jsonlike):
     assert_gpu_result_equal(q)
 
 
+def test_json_decode_nested():
+    ldf = pl.LazyFrame({"a": ['{"a": {"b": 1}}', None]})
+    q = ldf.select(
+        pl.col("a").str.json_decode(pl.Struct({"a": pl.Struct({"b": pl.Int64()})}))
+    )
+    assert_gpu_result_equal(q)
+
+
 def test_json_path_match(ldf_jsonlike):
     q = ldf_jsonlike.select(pl.col("a").str.json_path_match("$.a"))
     assert_gpu_result_equal(q)
