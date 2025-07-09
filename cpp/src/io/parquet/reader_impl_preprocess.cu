@@ -395,7 +395,8 @@ void reader::impl::preprocess_file(read_mode mode)
     mode == read_mode::CHUNKED_READ or
       std::cmp_less_equal(_file_itm_data.global_num_rows, std::numeric_limits<size_type>::max()),
     "READ_ALL mode does not support reading number of rows more than cudf's column size limit. "
-    "For reading larger number of rows, please use chunked_parquet_reader.");
+    "For reading larger number of rows, please use chunked_parquet_reader.",
+    std::overflow_error);
 
   // Inclusive scan the number of rows per source
   if (not _expr_conv.get_converted_expr().has_value() and mode == read_mode::CHUNKED_READ) {
