@@ -16256,6 +16256,7 @@ NODEIDS_THAT_XPASS_WITH_CUDF_PANDAS = {
 
 # TODO: Investigate why sometimes these fail
 NODEIDS_THAT_FLAKY_XFAIL_WITH_CUDF_PANDAS = {
+    "tests/indexing/test_chaining_and_caching.py::TestChaining::test_detect_chained_assignment_warnings_errors",
     "tests/indexes/multi/test_indexing.py::test_pyint_engine",
     "tests/indexes/multi/test_monotonic.py::test_is_monotonic_with_nans[values0-is_monotonic_increasing]",
     "tests/arithmetic/test_timedelta64.py::TestTimedeltaArraylikeAddSubOps::test_td64arr_sub_timedeltalike[timedelta64_0-array]",
