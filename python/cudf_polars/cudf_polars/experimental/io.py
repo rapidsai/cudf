@@ -11,7 +11,6 @@ import math
 import random
 import statistics
 from enum import IntEnum
-from io import BytesIO
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -433,7 +432,6 @@ def _sink_to_directory(
 
 
 def _sink_to_parquet_file(
-    schema: Schema,
     path: str,
     options: dict[str, Any],
     finalize: bool,  # noqa: FBT001
@@ -478,7 +476,6 @@ def _sink_to_parquet_file(
 
 
 def _sink_to_csv_file(
-    schema: Schema,
     path: str,
     options: dict[str, Any],
     finalize: bool,  # noqa: FBT001
@@ -486,70 +483,62 @@ def _sink_to_csv_file(
     df: DataFrame,
 ) -> bool | DataFrame:
     """Sink a partition to an open Parquet file."""
-    # Write to BytesIO buffer.
-    # TODO: Append directly to existing file if/when possible.
-    buffer = BytesIO()
-    target = plc.io.types.SinkInfo([buffer])
-    serialize = options["serialize_options"]
-    include_header = options["include_header"] if ready is None else False
-    options = (
-        plc.io.csv.CsvWriterOptions.builder(target, df.table)
-        .include_header(include_header)
-        .names(df.column_names if include_header else [])
-        .na_rep(serialize["null"])
-        .line_terminator(serialize["line_terminator"])
-        .inter_column_delimiter(chr(serialize["separator"]))
-        .build()
-    )
-    plc.io.csv.write_csv(options)
-
-    # Append BytesIO buffer to path
-    with Path.open(Path(path), "ab") as f:
-        buffer.seek(0)
-        f.write(buffer.getvalue())
+    # Append to path
+    if ready is None:
+        mode = "wb"
+        include_header = options["include_header"]
+    else:
+        mode = "ab"
+        include_header = False
+    with Path.open(Path(path), mode) as f:
+        sink = plc.io.types.SinkInfo([f])
+        serialize = options["serialize_options"]
+        options = (
+            plc.io.csv.CsvWriterOptions.builder(sink, df.table)
+            .include_header(include_header)
+            .names(df.column_names if include_header else [])
+            .na_rep(serialize["null"])
+            .line_terminator(serialize["line_terminator"])
+            .inter_column_delimiter(chr(serialize["separator"]))
+            .build()
+        )
+        plc.io.csv.write_csv(options)
 
     # Finalize or return ready signal
     return df if finalize else True
 
 
 def _sink_to_json_file(
-    schema: Schema,
     path: str,
     options: dict[str, Any],
     finalize: bool,  # noqa: FBT001
-    ready: None,
+    ready: bool | None,
     df: DataFrame,
-) -> DataFrame | None:
+) -> bool | DataFrame:
     """Sink a partition to an open Json file."""
-    # Write to BytesIO buffer.
-    # TODO: Append directly to existing file if/when possible.
-    buffer = BytesIO()
-    target = plc.io.types.SinkInfo([buffer])
-    metadata = plc.io.TableWithMetadata(
-        df.table, [(col, []) for col in df.column_names]
-    )
-    options = (
-        plc.io.json.JsonWriterOptions.builder(target, df.table)
-        .lines(val=True)
-        .na_rep("null")
-        .include_nulls(val=True)
-        .metadata(metadata)
-        .utf8_escaped(val=False)
-        .build()
-    )
-    plc.io.json.write_json(options)
-
-    # Append BytesIO buffer to path
-    with Path.open(Path(path), "ab") as f:
-        buffer.seek(0)
-        f.write(buffer.getvalue())
+    # Append to path
+    mode = "wb" if ready is None else "ab"
+    with Path.open(Path(path), mode) as f:
+        sink = plc.io.types.SinkInfo([f])
+        metadata = plc.io.TableWithMetadata(
+            df.table, [(col, []) for col in df.column_names]
+        )
+        options = (
+            plc.io.json.JsonWriterOptions.builder(sink, df.table)
+            .lines(val=True)
+            .na_rep("null")
+            .include_nulls(val=True)
+            .metadata(metadata)
+            .utf8_escaped(val=False)
+            .build()
+        )
+        plc.io.json.write_json(options)
 
     # Finalize or return ready signal
-    return df if finalize else None
+    return df if finalize else True
 
 
 def _sink_to_file(
-    schema: Schema,
     kind: str,
     path: str,
     options: dict[str, Any],
@@ -569,7 +558,6 @@ def _sink_to_file(
         raise NotImplementedError(f"{kind} not yet supported in _sink_to_file")
 
     return sink_function(
-        schema,
         path,
         options,
         finalize,
@@ -599,7 +587,6 @@ def _file_sink_graph(
     graph: MutableMapping[Any, Any] = {
         (sink_name, i): (
             _sink_to_file,
-            sink.schema,
             sink.kind,
             sink.path,
             sink.options,

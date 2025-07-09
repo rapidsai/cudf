@@ -10,6 +10,7 @@ import pytest
 import polars as pl
 
 from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_sink_result_equal
+from cudf_polars.utils.config import ConfigOptions
 from cudf_polars.utils.versions import POLARS_VERSION_LT_128, POLARS_VERSION_LT_130
 
 
@@ -102,7 +103,24 @@ def test_sink_parquet_directory(
         assert len(list(check_path.iterdir())) == expected_file_count
 
 
+def test_sink_parquet_distributed_raises():
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "scheduler": "distributed",
+            "sink_to_directory": False,
+        },
+    )
+    with pytest.raises(ValueError, match="distributed scheduler"):
+        ConfigOptions.from_polars_engine(engine)
+
+
 def test_sink_parquet_raises(request, df, tmp_path):
+    if DEFAULT_SCHEDULER == "distributed":
+        # We end up with an extra row per partition.
+        pytest.skip("Distributed requires sink_to_directory=True")
+
     request.applymarker(
         pytest.mark.xfail(
             condition=POLARS_VERSION_LT_128,
@@ -110,7 +128,6 @@ def test_sink_parquet_raises(request, df, tmp_path):
         )
     )
 
-    path = tmp_path / "test_sink_raises.parquet"
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
@@ -120,34 +137,25 @@ def test_sink_parquet_raises(request, df, tmp_path):
             "sink_to_directory": False,
         },
     )
+    path = tmp_path / "test_sink_raises.parquet"
+    df.sink_parquet(path, engine=engine)
 
-    if DEFAULT_SCHEDULER == "distributed":
-        if POLARS_VERSION_LT_130:
-            with pytest.raises(
-                pl.exceptions.ComputeError, match="distributed scheduler"
-            ):
-                df.sink_parquet(path, engine=engine)
-        else:
-            with pytest.raises(ValueError, match="distributed scheduler"):
-                df.sink_parquet(path, engine=engine)
+    # Cannot overwrite an existing path with sink_to_directory=True
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "max_rows_per_partition": 100_000,
+            "scheduler": DEFAULT_SCHEDULER,
+            "sink_to_directory": True,
+        },
+    )
+    if POLARS_VERSION_LT_130:
+        with pytest.raises(pl.exceptions.ComputeError, match="not supported"):
+            df.sink_parquet(path, engine=engine)
     else:
-        # Cannot overwrite an existing path with sink_to_directory=True
-        df.sink_parquet(path, engine=engine)
-        engine = pl.GPUEngine(
-            raise_on_fail=True,
-            executor="streaming",
-            executor_options={
-                "max_rows_per_partition": 100_000,
-                "scheduler": DEFAULT_SCHEDULER,
-                "sink_to_directory": True,
-            },
-        )
-        if POLARS_VERSION_LT_130:
-            with pytest.raises(pl.exceptions.ComputeError, match="not supported"):
-                df.sink_parquet(path, engine=engine)
-        else:
-            with pytest.raises(NotImplementedError, match="not supported"):
-                df.sink_parquet(path, engine=engine)
+        with pytest.raises(NotImplementedError, match="not supported"):
+            df.sink_parquet(path, engine=engine)
 
 
 @pytest.mark.parametrize("include_header", [True, False])
