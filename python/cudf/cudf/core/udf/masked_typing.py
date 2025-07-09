@@ -481,7 +481,9 @@ for unary_op in unary_ops:
 def _is_valid_string_arg(ty):
     return (
         isinstance(ty, MaskedType)
-        and isinstance(ty.value_type, (StringView, UDFString))
+        and isinstance(
+            ty.value_type, (StringView, UDFString, ManagedUDFString)
+        )
     ) or isinstance(ty, types.StringLiteral)
 
 
