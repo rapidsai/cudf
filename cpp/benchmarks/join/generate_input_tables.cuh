@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <benchmarks/common/generate_input.hpp>
+
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/cuda.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
@@ -34,6 +36,7 @@
 #include <curand_kernel.h>
 
 #include <cassert>
+#include <vector>
 
 CUDF_KERNEL void init_curand(curandState* state, int const nstates)
 {
@@ -179,4 +182,17 @@ void generate_input_tables(key_type* const build_tbl,
                                                           num_states);
 
   CUDF_CHECK_CUDA(0);
+}
+
+std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> 
+generate_input_tables(std::vector<cudf::type_id> const &key_types, 
+                      cudf::size_type build_table_numrows,
+                      cudf::size_type probe_table_numrows,
+                      double selectivity, 
+                      int multiplicity) 
+{
+  // Construct build table
+  // Unique table has build_table_numrows / multiplicity numroes
+  auto unique_rows_table_numrows = build_table_numrows / multiplicity;
+  auto unique_rows_table = create_distinct_rows_table(key_types, unique_rows_table_numrows);
 }

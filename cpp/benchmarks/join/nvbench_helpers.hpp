@@ -24,17 +24,14 @@
 
 enum class join_t { CONDITIONAL, MIXED, HASH, SORT_MERGE };
 
+// TODO: need to add list and struct
 enum class data_type : int32_t {
   INTEGRAL        = static_cast<int32_t>(type_group_id::INTEGRAL),
   INTEGRAL_SIGNED = static_cast<int32_t>(type_group_id::INTEGRAL_SIGNED),
   FLOAT           = static_cast<int32_t>(type_group_id::FLOATING_POINT),
   BOOL8           = static_cast<int32_t>(cudf::type_id::BOOL8),
   DECIMAL         = static_cast<int32_t>(type_group_id::FIXED_POINT),
-  TIMESTAMP       = static_cast<int32_t>(type_group_id::TIMESTAMP),
-  DURATION        = static_cast<int32_t>(type_group_id::DURATION),
-  STRING          = static_cast<int32_t>(cudf::type_id::STRING),
-  LIST            = static_cast<int32_t>(cudf::type_id::LIST),
-  STRUCT          = static_cast<int32_t>(cudf::type_id::STRUCT)
+  STRING          = static_cast<int32_t>(cudf::type_id::STRING)
 };
 
 NVBENCH_DECLARE_ENUM_TYPE_STRINGS(

@@ -30,6 +30,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/combine.hpp>
+#include <cudf/strings/convert/convert_integers.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
@@ -949,8 +950,12 @@ std::unique_ptr<cudf::table> create_distinct_rows_table(std::vector<cudf::type_i
       auto [mask, count] =
         create_random_null_mask(num_rows.count, null_probability, seed_dist(seed_engine));
       col->set_null_mask(std::move(mask), count);
+      auto int_col  = cudf::sequence(num_rows.count, *cudf::make_default_constructed_scalar(cudf::data_type{cudf::type_id::INT32}));
+      auto int2strcol = cudf::strings::from_integers(int_col->view());
+      auto finalcol = cudf::strings::concatenate(cudf::table_view({col->view(), int2strcol->view()}));
       return col;
     }
+    CUDF_FAIL("dtype not supported");
   });
   return std::make_unique<cudf::table>(std::move(columns));
 
