@@ -285,7 +285,16 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
                 else:
                     pre = self.window
                     fwd = 0
-                return (pre, fwd)
+                if self._group_keys is None:
+                    # If we're doing ungrouped rolling window with
+                    # integer offsets, no need to create
+                    # preceding/following columns.
+                    return pre, fwd
+                # TODO: Expose cudf::grouped_rolling_window and use
+                # that instead (perhaps), or implement an equivalent
+                # to make_range_windows that takes integer window
+                # bounds and group keys.
+                orderby_obj = as_column(range(len(self.obj)))
             if self._group_keys is not None:
                 group_cols: list[plc.Column] = [
                     col.to_pylibcudf(mode="read")
