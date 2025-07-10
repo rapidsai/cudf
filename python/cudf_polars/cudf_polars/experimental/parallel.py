@@ -210,7 +210,10 @@ def post_process_task_graph(
     return graph
 
 
-def evaluate_streaming(ir: IR, config_options: ConfigOptions) -> DataFrame:
+def evaluate_streaming(
+    ir: IR,
+    config_options: ConfigOptions,
+) -> DataFrame:
     """
     Evaluate an IR graph with partitioning.
 
@@ -258,9 +261,15 @@ def _(
     ir: Union, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     # Check zlice
-    if ir.zlice is not None:  # pragma: no cover
-        return _lower_ir_fallback(
-            ir, rec, msg="zlice is not supported for multiple partitions."
+    if ir.zlice is not None:
+        offset, length = ir.zlice
+        return rec(
+            Slice(
+                ir.schema,
+                offset,
+                length,
+                Union(ir.schema, None, *ir.children),
+            )
         )
 
     # Lower children
