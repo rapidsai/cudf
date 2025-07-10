@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/table/table_device_view_base.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -35,50 +36,28 @@
  */
 
 namespace CUDF_EXPORT cudf {
-namespace detail {
 
 /**
- * @brief Base class for a device table of `ColumnDeviceView`s
- *
- * This class should not be used directly. Instead:
- * - `table_device_view` should be used for a table of columns of type `column_device_view`
- * - `mutable_table_device_view` should be used for a table of columns of type
- * `mutable_column_device_view`
- *
- * All public constructors and member functions of `table_device_view_base` are
- * available in both `table_device_view` and `mutable_table_device_view`.
- *
- * @tparam ColumnDeviceView The type of column device view the table contains:
- *                          expects column_device_view or mutable_column_device_view
- * @tparam HostTableView The type of table view used to create the table device view:
- *                       expects table_view or mutable_table_view
+ * @brief Table device view that is usable in device memory
  */
-template <typename ColumnDeviceView, typename HostTableView>
-class table_device_view_base {
+class table_device_view : public table_device_view_core {
  public:
-  table_device_view_base()                              = delete;
-  ~table_device_view_base()                             = default;
-  table_device_view_base(table_device_view_base const&) = default;  ///< Copy constructor
-  table_device_view_base(table_device_view_base&&)      = default;  ///< Move constructor
-  /**
-   * @brief Copy assignment operator
-   *
-   * @return Reference to this object
-   */
-  table_device_view_base& operator=(table_device_view_base const&) = default;
-  /**
-   * @brief Move assignment operator
-   *
-   * @return Reference to this object (after transferring ownership)
-   */
-  table_device_view_base& operator=(table_device_view_base&&) = default;
+  using host_type =
+    table_view;  ///< The type of host table view used to create the table device view
+  using descendant_storage_type =
+    rmm::device_buffer;  ///< Type of device container or storage used to store the descendants
+  using base        = table_device_view_core;  ///< Base class for table device view
+  using column_type = column_device_view;      ///< Type of column device view the table contains
 
   /**
    * @brief Returns an iterator to the first view in the `table`.
    *
    * @return An iterator to the first view in the `table`
    */
-  __device__ ColumnDeviceView* begin() const noexcept { return _columns; }
+  __device__ column_type* begin() const noexcept
+  {
+    return static_cast<column_type*>(base::begin());
+  }
 
   /**
    * @brief Returns an iterator one past the last column view in the `table`.
@@ -88,7 +67,7 @@ class table_device_view_base {
    *
    * @return An iterator to one past the last column view in the `table`
    */
-  __device__ ColumnDeviceView* end() const noexcept { return _columns + _num_columns; }
+  __device__ column_type* end() const noexcept { return static_cast<column_type*>(base::end()); }
 
   /**
    * @brief Returns a reference to the view of the specified column
@@ -96,11 +75,9 @@ class table_device_view_base {
    * @param column_index The index of the desired column
    * @return A reference to the desired column
    */
-  __device__ ColumnDeviceView const& column(size_type column_index) const noexcept
+  __device__ column_type const& column(size_type column_index) const noexcept
   {
-    assert(column_index >= 0);
-    assert(column_index < _num_columns);
-    return _columns[column_index];
+    return static_cast<column_type const&>(base::column(column_index));
   }
 
   /**
@@ -109,26 +86,10 @@ class table_device_view_base {
    * @param column_index The index of the desired column
    * @return A reference to the desired column
    */
-  __device__ ColumnDeviceView& column(size_type column_index) noexcept
+  __device__ column_type& column(size_type column_index) noexcept
   {
-    assert(column_index >= 0);
-    assert(column_index < _num_columns);
-    return _columns[column_index];
+    return static_cast<column_type&>(base::column(column_index));
   }
-
-  /**
-   * @brief Returns the number of columns
-   *
-   * @return The number of columns
-   */
-  [[nodiscard]] __host__ __device__ size_type num_columns() const noexcept { return _num_columns; }
-
-  /**
-   * @brief Returns the number of rows
-   *
-   * @return The number of rows
-   */
-  [[nodiscard]] __host__ __device__ size_type num_rows() const noexcept { return _num_rows; }
 
   /**
    * @brief Destroy the `table_device_view` object.
@@ -138,30 +99,6 @@ class table_device_view_base {
    */
   void destroy();
 
- private:
-  ColumnDeviceView* _columns{};  ///< Array of view objects in device memory
-  size_type _num_rows{};
-  size_type _num_columns{};
-
- protected:
-  /**
-   * @brief Construct a new table device view base object from host table_view
-   *
-   * @param source_view The host table_view to create table device view from
-   * @param stream The CUDA stream to use for device memory allocation
-   */
-  table_device_view_base(HostTableView source_view, rmm::cuda_stream_view stream);
-
-  /// Pointer to device memory holding the descendant storage
-  rmm::device_buffer* _descendant_storage{};
-};
-}  // namespace detail
-
-/**
- * @brief Table device view that is usable in device memory
- */
-class table_device_view : public detail::table_device_view_base<column_device_view, table_view> {
- public:
   /**
    * @brief Factory to construct a table device view that is usable in device memory.
    *
@@ -176,19 +113,22 @@ class table_device_view : public detail::table_device_view_base<column_device_vi
    * @return A `unique_ptr` to a `table_device_view` that makes the data from `source_view`
    * available in device memory
    */
-  static auto create(table_view source_view,
+  static auto create(host_type source_view,
                      rmm::cuda_stream_view stream = cudf::get_default_stream())
   {
-    auto deleter = [](table_device_view* t) { t->destroy(); };
+    auto deleter = +[](table_device_view* t) { t->destroy(); };
     return std::unique_ptr<table_device_view, decltype(deleter)>{
       new table_device_view(source_view, stream), deleter};
   }
 
  private:
-  table_device_view(table_view source_view, rmm::cuda_stream_view stream)
-    : detail::table_device_view_base<column_device_view, table_view>(source_view, stream)
-  {
-  }
+  /**
+   * @brief Construct a new table device view base object from host table_view
+   *
+   * @param source_view The host table_view to create table device view from
+   * @param stream The CUDA stream to use for device memory allocation
+   */
+  table_device_view(host_type source_view, rmm::cuda_stream_view stream);
 };
 
 /**
@@ -196,9 +136,66 @@ class table_device_view : public detail::table_device_view_base<column_device_vi
  *
  * Elements of the table can be modified in device memory.
  */
-class mutable_table_device_view
-  : public detail::table_device_view_base<mutable_column_device_view, mutable_table_view> {
+class mutable_table_device_view : public mutable_table_device_view_core {
  public:
+  using host_type =
+    mutable_table_view;  ///< The type of host table view used to create the table device view
+  using descendant_storage_type =
+    rmm::device_buffer;  ///< Type of device container or storage used to store the descendants
+  using base = mutable_table_device_view_core;  ///< Base class for table device view
+  using column_type =
+    mutable_column_device_view;  ///< Type of column device view the table contains
+
+  /**
+   * @brief Returns an iterator to the first view in the `table`.
+   *
+   * @return An iterator to the first view in the `table`
+   */
+  __device__ column_type* begin() const noexcept
+  {
+    return static_cast<column_type*>(base::begin());
+  }
+
+  /**
+   * @brief Returns an iterator one past the last column view in the `table`.
+   *
+   * `end()` acts as a place holder. Attempting to dereference it results in
+   * undefined behavior.
+   *
+   * @return An iterator to one past the last column view in the `table`
+   */
+  __device__ column_type* end() const noexcept { return static_cast<column_type*>(base::end()); }
+
+  /**
+   * @brief Returns a reference to the view of the specified column
+   *
+   * @param column_index The index of the desired column
+   * @return A reference to the desired column
+   */
+  __device__ column_type const& column(size_type column_index) const noexcept
+  {
+    return static_cast<column_type const&>(base::column(column_index));
+  }
+
+  /**
+   * @brief Returns a reference to the view of the specified column
+   *
+   * @param column_index The index of the desired column
+   * @return A reference to the desired column
+   */
+  __device__ column_type& column(size_type column_index) noexcept
+  {
+    return static_cast<column_type&>(base::column(column_index));
+  }
+
+  /**
+   * @brief Destroy the `mutable_table_device_view` object.
+   *
+   * @note Does not free the table data, simply frees the device memory
+   * allocated to hold the constituent column views.
+   */
+  void destroy();
+
   /**
    * @brief Factory to construct a mutable table device view that is usable in device memory.
    *
@@ -213,21 +210,30 @@ class mutable_table_device_view
    * @return A `unique_ptr` to a `mutable_table_device_view` that makes the data from `source_view`
    * available in device memory
    */
-  static auto create(mutable_table_view source_view,
+  static auto create(host_type source_view,
                      rmm::cuda_stream_view stream = cudf::get_default_stream())
   {
-    auto deleter = [](mutable_table_device_view* t) { t->destroy(); };
+    auto deleter = +[](mutable_table_device_view* t) { t->destroy(); };
     return std::unique_ptr<mutable_table_device_view, decltype(deleter)>{
       new mutable_table_device_view(source_view, stream), deleter};
   }
 
  private:
-  mutable_table_device_view(mutable_table_view source_view, rmm::cuda_stream_view stream)
-    : detail::table_device_view_base<mutable_column_device_view, mutable_table_view>(source_view,
-                                                                                     stream)
-  {
-  }
+  /**
+   * @brief Construct a new table device view base object from host mutable_table_view
+   *
+   * @param source_view The host mutable_table_view to create table device view from
+   * @param stream The CUDA stream to use for device memory allocation
+   */
+  mutable_table_device_view(host_type source_view, rmm::cuda_stream_view stream);
 };
+
+static_assert(sizeof(table_device_view) == sizeof(table_device_view_core),
+              "table_device_view and table_device_view_core must be bitwise-compatible");
+
+static_assert(
+  sizeof(mutable_table_device_view) == sizeof(mutable_table_device_view_core),
+  "mutable_table_device_view and mutable_table_device_view_core must be bitwise-compatible");
 
 /**
  * @brief Copies the contents of a table_view to a column device view in contiguous device memory

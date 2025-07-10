@@ -27,9 +27,9 @@ function(jit_preprocess_files)
   get_target_property(libcub_raw_includes CCCL::CUB INTERFACE_INCLUDE_DIRECTORIES)
   get_target_property(libthrust_raw_includes Thrust::Thrust INTERFACE_INCLUDE_DIRECTORIES)
   set(includes)
-  foreach(inc IN LISTS libcudacxx_raw_includes libcub_raw_includes 
-  libthrust_raw_includes 
-  CUDAToolkit_INCLUDE_DIRS)
+  foreach(inc IN LISTS libcudacxx_raw_includes libcub_raw_includes libthrust_raw_includes
+                       CUDAToolkit_INCLUDE_DIRS
+  )
     list(APPEND includes "-I${inc}")
   endforeach()
   foreach(ARG_FILE ${ARG_FILES})
@@ -67,7 +67,7 @@ endif()
 
 jit_preprocess_files(
   SOURCE_DIRECTORY ${CUDF_SOURCE_DIR}/src FILES binaryop/jit/kernel.cu transform/jit/kernel.cu
-  rolling/jit/kernel.cu
+  rolling/jit/kernel.cu join/jit/conditional_join_jit_kernel.cu
 )
 
 add_custom_target(

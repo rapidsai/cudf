@@ -777,11 +777,11 @@ class alignas(16) mutable_column_device_view : public mutable_column_device_view
 };
 
 static_assert(sizeof(column_device_view) == sizeof(column_device_view_core),
-              "column_device_view and raw_column_device_view must be bitwise-compatible");
+              "column_device_view and column_device_view_core must be bitwise-compatible");
 
 static_assert(
   sizeof(mutable_column_device_view) == sizeof(mutable_column_device_view_core),
-  "mutable_column_device_view and raw_mutable_column_device_view must be bitwise-compatible");
+  "mutable_column_device_view and mutable_column_device_view_core must be bitwise-compatible");
 
 namespace detail {
 
