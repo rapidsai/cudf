@@ -270,13 +270,15 @@ extern "C" __device__ int pycount(int* nb_retval, void const* str, void const* s
   return 0;
 }
 
-extern "C" __device__ int udf_string_from_string_view(int* nb_retbal,
+extern "C" __device__ int udf_string_from_string_view(void** out_meminfo,
                                                       void const* str,
                                                       void* udf_str)
 {
   auto str_view_ptr = reinterpret_cast<cudf::string_view const*>(str);
   auto udf_str_ptr  = new (udf_str) udf_string;
   *udf_str_ptr      = udf_string(*str_view_ptr);
+
+  *out_meminfo = make_meminfo_for_new_udf_string(udf_str);
 
   return 0;
 }
@@ -401,31 +403,6 @@ extern "C" __device__ int concat(void** out_meminfo,
   *out_meminfo = make_meminfo_for_new_udf_string(udf_str);
   return 0;
 }
-
-/*
-
-  struct mi_str_allocation {
-    NRT_MemInfo mi;
-    udf_string st;
-  };
-  mi_str_allocation* mi_and_str = (mi_str_allocation*)NRT_Allocate(sizeof(mi_str_allocation));
-  if (mi_and_str != NULL) {
-    auto mi_ptr        = &(mi_and_str->mi);
-    udf_string* st_ptr = &(mi_and_str->st);
-
-    // udf_str_dtor can destruct the string without knowing the size
-    size_t size = 0;
-    NRT_MemInfo_init(mi_ptr, st_ptr, size, udf_str_dtor, NULL);
-
-    // copy the udf_string to the extra heap space
-    udf_string* in_str_ptr = reinterpret_cast<udf_string*>(udf_str);
-    memcpy(st_ptr, in_str_ptr, sizeof(udf_string));
-    *out_meminfo = &(mi_and_str->mi);
-  } else {
-    *out_meminfo = NULL;
-    __trap();
-  }
-*/
 
 extern "C" __device__ int replace(
   int* nb_retval, void* udf_str, void* const src, void* const to_replace, void* const replacement)

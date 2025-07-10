@@ -161,13 +161,20 @@ def cast_string_view_to_managed_udf_string(
     )
 
     builder.store(val, sv_ptr)
-    _ = context.compile_internal(
+    meminfo = context.compile_internal(
         builder,
         call_create_udf_string_from_string_view,
-        nb_signature(types.void, _STR_VIEW_PTR, types.CPointer(udf_string)),
+        nb_signature(types.voidptr, _STR_VIEW_PTR, types.CPointer(udf_string)),
         (sv_ptr, udf_str_ptr),
     )
-    return _finalize_new_managed_udf_string(context, builder, managed_ptr)
+    managed = cgutils.create_struct_proxy(managed_udf_string)(
+        context,
+        builder,
+        value=builder.load(managed_ptr),
+    )
+    managed.meminfo = meminfo
+
+    return managed._getvalue()
 
 
 @cuda_lowering_registry.lower_cast(managed_udf_string, string_view)
@@ -203,42 +210,6 @@ _init_udf_string_meminfo = cuda.declare_device(
 
 def init_udf_string_meminfo(udf_str):
     return _init_udf_string_meminfo(udf_str)
-
-
-def _finalize_new_managed_udf_string(context, builder, managed_ptr):
-    """
-    Allocate a udf_string and a NRT_MemInfo as part of one struct
-    and initialize the NRT_MemInfo with a refct=1.
-    """
-
-    # {i8*, i32, i32}*
-    udf_str_ptr = builder.gep(
-        managed_ptr, [ir.IntType(32)(0), ir.IntType(32)(1)]
-    )
-
-    # Call the shim function which initializes an NRT_MemInfo object around the
-    # udf_string pointer. The resulting pointer points to a heap allocation. A
-    # copy of the udf_string is made, although its underlying data isn't copied
-    # See shim.cu for details.
-    meminfo = context.compile_internal(
-        builder,
-        init_udf_string_meminfo,
-        types.voidptr(_UDF_STRING_PTR),
-        (udf_str_ptr,),
-    )
-
-    managed = cgutils.create_struct_proxy(managed_udf_string)(
-        context,
-        builder,
-        value=builder.load(
-            managed_ptr
-        ),  # {i8*, {i8*, i32, i32}}* -> {i8*, {i8*, i32, i32}}
-    )
-    # i8* = i8*
-    managed.meminfo = meminfo
-
-    # {i8*, {i8*, i32, i32}} by _value_
-    return managed._getvalue()
 
 
 _create_udf_string_from_string_view = cuda.declare_device(
