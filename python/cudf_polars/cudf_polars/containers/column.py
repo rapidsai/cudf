@@ -430,7 +430,7 @@ class Column:
                 plc.aggregation.sum(),
                 plc.types.SIZE_TYPE,
             ).to_py()
-            return result if result is not None else 0
+            return result
         return 0
 
     @property
