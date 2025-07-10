@@ -824,8 +824,10 @@ cluster_info generate_group_cluster_info(int delta,
     cinfo.num_clusters =
       rmm::device_uvector(p_num_clusters, stream, cudf::get_current_device_resource_ref());
     auto p_cluster_start = std::move(cinfo.cluster_start);
-    cinfo.cluster_start =
-      rmm::device_uvector(p_cluster_start, stream, cudf::get_current_device_resource_ref());
+    // cluster_start is returned as part of the output, so make sure to use the user supplied mr
+    // instead of the current resource.
+    cinfo.cluster_start = rmm::device_uvector(p_cluster_start, stream, mr);
+    stream.synchronize();
   }
 
   // if we are in the simple case we need to recompute the total clusters. allocated_cluster count
@@ -838,6 +840,7 @@ cluster_info generate_group_cluster_info(int delta,
       : allocated_clusters;
 
   stream.synchronize();
+
   return cinfo;
 }
 
@@ -1127,32 +1130,32 @@ struct typed_group_tdigest {
   {
     // first, generate cluster weight information for each input group
     auto cinfo = [&]() {
-      auto& _group_offsets      = group_offsets;
-      auto& _group_valid_counts = group_valid_counts;
-
-      rmm::device_uvector<size_type> p_group_offsets(
-        0, stream, cudf::get_current_device_resource_ref());
-      rmm::device_uvector<size_type> p_group_valid_counts(
-        0, stream, cudf::get_current_device_resource_ref());
-
       // if we will be at least partially using the CPU here, move the important values into pinned
       // and reference those instead
       if (use_cpu_for_cluster_computation(num_groups)) {
-        auto temp_mr    = cudf::get_pinned_memory_resource();
-        p_group_offsets = cudf::detail::make_device_uvector_async(group_offsets, stream, temp_mr);
-        p_group_valid_counts =
+        auto temp_mr = cudf::get_pinned_memory_resource();
+        auto p_group_offsets =
+          cudf::detail::make_device_uvector_async(group_offsets, stream, temp_mr);
+        auto p_group_valid_counts =
           cudf::detail::make_device_uvector_async(group_valid_counts, stream, temp_mr);
-        _group_offsets      = p_group_offsets;
-        _group_valid_counts = p_group_valid_counts;
+        auto ret = generate_group_cluster_info(
+          delta,
+          num_groups,
+          nearest_value_scalar_weights_grouped{p_group_offsets.begin()},
+          scalar_group_info_grouped{p_group_valid_counts.begin(), p_group_offsets.begin()},
+          cumulative_scalar_weight_grouped{p_group_offsets},
+          col.null_count() > 0,
+          stream,
+          mr);
         stream.synchronize();
+        return ret;
       }
-
       return generate_group_cluster_info(
         delta,
         num_groups,
-        nearest_value_scalar_weights_grouped{_group_offsets.begin()},
-        scalar_group_info_grouped{_group_valid_counts.begin(), _group_offsets.begin()},
-        cumulative_scalar_weight_grouped{_group_offsets},
+        nearest_value_scalar_weights_grouped{group_offsets.begin()},
+        scalar_group_info_grouped{group_valid_counts.begin(), group_offsets.begin()},
+        cumulative_scalar_weight_grouped{group_offsets},
         col.null_count() > 0,
         stream,
         mr);
