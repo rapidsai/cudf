@@ -98,7 +98,6 @@ rapids-logger "pytest cudf.pandas serial"
 
 python -m pytest -p cudf.pandas \
     --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
-    --dist=worksteal \
     -k "not profiler" \
     -m "serial" \
     --config-file=./python/cudf/pyproject.toml \
