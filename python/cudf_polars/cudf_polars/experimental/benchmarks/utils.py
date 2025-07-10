@@ -504,8 +504,8 @@ def parse_args(
         "--protocol",
         default="ucx",
         type=str,
-        choices=["ucx", "ucxx"],
-        help="Communication protocol to use for Dask: ucx (UCX-Py) or ucxx)",
+        choices=["ucx-old", "ucx"],
+        help="Communication protocol to use for Dask: ucx (uses ucxx) or ucx-old (uses ucx-py)",
     )
     parser.add_argument(
         "--shuffle",
