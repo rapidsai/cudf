@@ -69,7 +69,7 @@ test_nan \
 "
 
 rapids-logger "Run narwhals tests for cuDF Polars"
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 NARWHALS_POLARS_GPU=1 python -m pytest \
+CUDF_POLARS__STREAMING__FALLBACK_MODE=silent PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 NARWHALS_POLARS_GPU=1 python -m pytest \
     --cache-clear \
     --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars-narwhals.xml" \
     -p xdist \
