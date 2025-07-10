@@ -420,7 +420,7 @@ class ConfigOptions:
     raise_on_fail: bool = False
     parquet_options: ParquetOptions = dataclasses.field(default_factory=ParquetOptions)
     executor: StreamingExecutor | InMemoryExecutor = dataclasses.field(
-        default_factory=InMemoryExecutor
+        default_factory=StreamingExecutor
     )
     device: int | None = None
 
