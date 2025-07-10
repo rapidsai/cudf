@@ -1559,6 +1559,14 @@ TYPED_TEST(ReductionTest, UniqueCount)
                 output_type)
               .first,
             expected_null_value1);
+
+  EXPECT_EQ(this
+              ->template reduction_test<uint32_t>(
+                col_nulls,
+                *cudf::make_nunique_aggregation<reduce_aggregation>(cudf::null_policy::EXCLUDE),
+                cudf::data_type{cudf::type_to_id<uint32_t>()})
+              .first,
+            expected_null_value1);
 }
 
 template <typename T>
