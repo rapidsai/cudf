@@ -621,7 +621,7 @@ sort_merge_join::partitioned_inner_join(sort_merge_join::partition_context const
                                         rmm::cuda_stream_view stream,
                                         rmm::device_async_resource_ref mr)
 {
-  cudf::scoped_range range{"sort_merge_inner_join::partitioned_inner_join"};
+  cudf::scoped_range range{"sort_merge_join::partitioned_inner_join"};
   auto const left_partition_start_idx = context.left_start_idx;
   auto const left_partition_end_idx   = context.left_end_idx;
   auto null_processed_table_start_idx = left_partition_start_idx;
