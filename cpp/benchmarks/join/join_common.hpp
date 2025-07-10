@@ -58,11 +58,12 @@ struct null75_generator {
   }
 };
 
-enum class join_t { CONDITIONAL, MIXED, HASH };
+enum class join_t { CONDITIONAL, MIXED, HASH, SORT_MERGE };
 
 template <typename Key,
           bool Nullable,
-          join_t join_type = join_t::HASH,
+          join_t join_type                  = join_t::HASH,
+          cudf::null_equality compare_nulls = cudf::null_equality::UNEQUAL,
           typename state_type,
           typename Join>
 void BM_join(state_type& state, Join JoinFunc, int multiplicity = 1, double selectivity = 0.3)
@@ -157,14 +158,14 @@ void BM_join(state_type& state, Join JoinFunc, int multiplicity = 1, double sele
   // Setup join parameters and result table
   [[maybe_unused]] std::vector<cudf::size_type> columns_to_join = {0};
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
+
   if constexpr (join_type == join_t::CONDITIONAL) {
     auto const col_ref_left_0  = cudf::ast::column_reference(0);
     auto const col_ref_right_0 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
     auto left_zero_eq_right_zero =
       cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref_left_0, col_ref_right_0);
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-      auto result =
-        JoinFunc(left_table, right_table, left_zero_eq_right_zero, cudf::null_equality::UNEQUAL);
+      auto result = JoinFunc(left_table, right_table, left_zero_eq_right_zero, compare_nulls);
       ;
     });
   }
@@ -179,16 +180,15 @@ void BM_join(state_type& state, Join JoinFunc, int multiplicity = 1, double sele
                              left_table.select({1}),
                              right_table.select({1}),
                              left_zero_eq_right_zero,
-                             cudf::null_equality::UNEQUAL);
+                             compare_nulls);
     });
   }
-  if constexpr (join_type == join_t::HASH) {
+  if constexpr (join_type == join_t::HASH || join_type == join_t::SORT_MERGE) {
     state.add_element_count(join_input_size, "join_input_size");  // number of bytes
     state.template add_global_memory_reads<nvbench::int8_t>(join_input_size);
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-      auto result = JoinFunc(left_table.select(columns_to_join),
-                             right_table.select(columns_to_join),
-                             cudf::null_equality::UNEQUAL);
+      auto result = JoinFunc(
+        left_table.select(columns_to_join), right_table.select(columns_to_join), compare_nulls);
     });
     set_throughputs(state);
   }
