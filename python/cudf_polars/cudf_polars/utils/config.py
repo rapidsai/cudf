@@ -28,7 +28,7 @@ import importlib.util
 import json
 import os
 import warnings
-from typing import TYPE_CHECKING, Literal, TypeVar, cast
+from typing import TYPE_CHECKING, Literal, TypeVar
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -108,10 +108,38 @@ class ShuffleMethod(str, enum.Enum):
     RAPIDSMPF = "rapidsmpf"
 
 
+T = TypeVar("T")
+
+
+def _make_default_factory(
+    key: str, converter: Callable[[str], T], default: T
+) -> Callable[[], T]:
+    def default_factory() -> T:
+        v = os.environ.get(key)
+        if v is None:
+            return default
+        return converter(v)
+
+    return default_factory
+
+
+def _bool_converter(v: str) -> bool:
+    lowered = v.lower()
+    if lowered in {"1", "true", "yes", "y"}:
+        return True
+    elif lowered in {"0", "false", "no", "n"}:
+        return False
+    else:
+        raise ValueError(f"Invalid boolean value: {v}")
+
+
 @dataclasses.dataclass(frozen=True)
 class ParquetOptions:
     """
     Configuration for the cudf-polars Parquet engine.
+
+    These options can be configured via environment variables
+    with the prefix ``CUDF_POLARS__PARQUET_OPTIONS__``.
 
     Parameters
     ----------
@@ -127,9 +155,23 @@ class ParquetOptions:
         or 0 if there is no limit.
     """
 
-    chunked: bool = True
-    chunk_read_limit: int = 0
-    pass_read_limit: int = 0
+    _env_prefix = "CUDF_POLARS__PARQUET_OPTIONS"
+
+    chunked: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__CHUNKED", _bool_converter, default=True
+        )
+    )
+    chunk_read_limit: int = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__CHUNK_READ_LIMIT", int, default=0
+        )
+    )
+    pass_read_limit: int = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__PASS_READ_LIMIT", int, default=0
+        )
+    )
 
     def __post_init__(self) -> None:  # noqa: D105
         if not isinstance(self.chunked, bool):
@@ -191,57 +233,13 @@ def default_blocksize(scheduler: str) -> int:
     return max(blocksize, 256_000_000)
 
 
-T = TypeVar("T")
-
-
-def from_env(name: str, converter: Callable[[str], T], default: T) -> T:
-    """
-    Get an engine value from the environment.
-
-    Parameters
-    ----------
-    name
-        The name of the engine variable. The environment
-        variable looked up will have ``CUDF_POLARS__`` prefixed.
-    converter
-        How to convert the value from the environment.
-    default
-        The default value to use if the environment variable is not set.
-    """
-    # TODO: Support other config options
-    # https://github.com/rapidsai/cudf/issues/19330
-    prefix = "CUDF_POLARS"
-    value = os.environ.get(f"{prefix}__{name}")
-    if value is None:
-        return default
-    return converter(value)
-
-
-def target_partition_size_default() -> int:
-    """The default factory for StreamingExecutor.target_partition_size."""
-    return from_env("STREAMING__TARGET_PARTITION_SIZE", int, 0)
-
-
-def streaming_fallback_mode_default() -> StreamingFallbackMode:
-    """The default factory for StreamingExecutor.fallback_mode."""
-    # We need the cast to avoid the error
-    #   Expression of type "type[StreamingFallbackMode] | StreamingFallbackMode"
-    #   is incompatible with return type "StreamingFallbackMode"
-
-    return cast(
-        StreamingFallbackMode,
-        from_env(
-            "STREAMING__FALLBACK_MODE",
-            StreamingFallbackMode,
-            StreamingFallbackMode.WARN,
-        ),
-    )
-
-
 @dataclasses.dataclass(frozen=True, eq=True)
 class StreamingExecutor:
     """
     Configuration for the cudf-polars streaming executor.
+
+    These options can be configured via environment variables
+    with the prefix ``CUDF_POLARS__STREAMING__``.
 
     Parameters
     ----------
@@ -318,21 +316,61 @@ class StreamingExecutor:
     with the 'distributed' scheduler.
     """
 
+    _env_prefix = "CUDF_POLARS__STREAMING"
+
     name: Literal["streaming"] = dataclasses.field(default="streaming", init=False)
-    scheduler: Scheduler = Scheduler.SYNCHRONOUS
+    scheduler: Scheduler = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__SCHEDULER", Scheduler.__call__, Scheduler.SYNCHRONOUS
+        )
+    )
     fallback_mode: StreamingFallbackMode = dataclasses.field(
-        default_factory=streaming_fallback_mode_default
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__FALLBACK_MODE",
+            StreamingFallbackMode.__call__,
+            StreamingFallbackMode.WARN,
+        )
     )
-    max_rows_per_partition: int = 1_000_000
-    unique_fraction: dict[str, float] = dataclasses.field(default_factory=dict)
+    max_rows_per_partition: int = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__MAX_ROWS_PER_PARTITION", int, 1_000_000
+        )
+    )
+    unique_fraction: dict[str, float] = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__UNIQUE_FRACTION", json.loads, {}
+        )
+    )
     target_partition_size: int = dataclasses.field(
-        default_factory=target_partition_size_default
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__TARGET_PARTITION_SIZE", int, 0
+        )
     )
-    groupby_n_ary: int = 32
-    broadcast_join_limit: int = 0
-    shuffle_method: ShuffleMethod = ShuffleMethod.TASKS
-    rapidsmpf_spill: bool = False
-    sink_to_directory: bool | None = None
+    groupby_n_ary: int = dataclasses.field(
+        default_factory=_make_default_factory(f"{_env_prefix}__GROUPBY_N_ARY", int, 32)
+    )
+    broadcast_join_limit: int = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__BROADCAST_JOIN_LIMIT", int, 0
+        )
+    )
+    shuffle_method: ShuffleMethod = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__SHUFFLE_METHOD",
+            ShuffleMethod.__call__,
+            ShuffleMethod.TASKS,
+        )
+    )
+    rapidsmpf_spill: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__RAPIDSMPF_SPILL", _bool_converter, default=False
+        )
+    )
+    sink_to_directory: bool | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__SINK_TO_DIRECTORY", _bool_converter, None
+        )
+    )
 
     def __post_init__(self) -> None:  # noqa: D105
         # Handle shuffle_method defaults for streaming executor
@@ -468,11 +506,13 @@ class ConfigOptions:
         if extra_options:
             raise TypeError(f"Unsupported executor_options: {extra_options}")
 
+        env_prefix = "CUDF_POLARS"
         user_executor = engine.config.get("executor")
         if user_executor is None:
-            user_executor = "streaming"
+            user_executor = os.environ.get(f"{env_prefix}__EXECUTOR", "streaming")
         user_executor_options = engine.config.get("executor_options", {})
         user_parquet_options = engine.config.get("parquet_options", {})
+        # This is set in polars, and so can't be overridden by the environment
         user_raise_on_fail = engine.config.get("raise_on_fail", False)
 
         # Backward compatibility for "cardinality_factor"
