@@ -1,7 +1,23 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Config utilities."""
+"""
+Configuration utilities for the cudf-polars engine.
+
+Most users will not construct these objects directly. Instead, you'll pass
+keyword arguments to :class:`~polars.lazyframe.engine_config.GPUEngine`. The
+majority of the options are passed as `**kwargs` and collected into the
+configuration described below:
+
+.. code-block:: python
+
+   >>> import polars as pl
+   >>> engine = pl.GPUEngine(
+   ...     executor="streaming",
+   ...     executor_options={"fallback_mode": "raise"}
+   ... )
+
+"""
 
 from __future__ import annotations
 
