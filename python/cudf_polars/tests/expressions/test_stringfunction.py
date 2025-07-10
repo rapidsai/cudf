@@ -481,6 +481,14 @@ def test_string_join(ldf, ignore_nulls, delimiter):
     assert_gpu_result_equal(q)
 
 
+@pytest.mark.parametrize("ignore_nulls", [False, True])
+@pytest.mark.parametrize("delimiter", ["", "-"])
+def test_string_join_non_string_data(ignore_nulls, delimiter):
+    ldf = pl.LazyFrame({"a": [1, None, 3]})
+    q = ldf.select(pl.col("a").str.join(delimiter, ignore_nulls=ignore_nulls))
+    assert_gpu_result_equal(q)
+
+
 def test_string_reverse(ldf):
     q = ldf.select(pl.col("a").str.reverse())
     assert_gpu_result_equal(q)
@@ -541,6 +549,54 @@ def test_count_matches(ldf):
 def test_count_matches_literal_unsupported(ldf):
     q = ldf.select(pl.col("a").str.count_matches("a", literal=True))
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+@pytest.fixture
+def ldf_find():
+    return pl.LazyFrame(
+        {
+            "a": ["Crab", "Lobster", None, "Crustacean", "Cra|eb"],
+            "pat": ["a[bc]", "b.t", "[aeiuo]", "(?i)A[BC]", r"\d"],
+        }
+    )
+
+
+def test_find_literal_false_strict_false_unsupported(ldf_find):
+    q = ldf_find.select(pl.col("a").str.find("a", literal=False, strict=False))
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+@pytest.mark.parametrize("literal", [True, False])
+@pytest.mark.parametrize("pattern", ["a|e", "a"])
+def test_find_literal(ldf_find, literal, pattern):
+    q = ldf_find.select(pl.col("a").str.find(pattern, literal=literal))
+    assert_gpu_result_equal(q)
+
+
+def test_find_literal_false_column_unsupported(ldf_find):
+    q = ldf_find.select(pl.col("a").str.find(pl.col("pat"), literal=False))
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+@pytest.fixture
+def ldf_extract():
+    return pl.LazyFrame({"a": ["?!. 123 foo", None]})
+
+
+@pytest.mark.parametrize("group_index", [1, 2])
+def test_extract(ldf_extract, group_index):
+    q = ldf_extract.select(pl.col("a").str.extract(r"(\S+) (\d+) (.+)", group_index))
+    assert_gpu_result_equal(q)
+
+
+def test_extract_group_index_0_unsupported(ldf_extract):
+    q = ldf_extract.select(pl.col("a").str.extract(r"(\S+) (\d+) (.+)", 0))
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_extract_groups(ldf_extract):
+    q = ldf_extract.select(pl.col("a").str.extract_groups(r"(\S+) (\d+) (.+)"))
+    assert_gpu_result_equal(q)
 
 
 def test_json_path_match():

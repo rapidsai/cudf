@@ -2418,6 +2418,14 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     )
 
             if is_na_like(other):
+                if (
+                    cudf.get_option("mode.pandas_compatible")
+                    and not is_pandas_nullable_extension_dtype(self.dtype)
+                    and self.dtype.kind not in {"i", "f", "u"}
+                ):
+                    raise MixedTypeError(
+                        "Cannot use None or np.nan with non-Pandas nullable dtypes."
+                    )
                 return self, pa_scalar_to_plc_scalar(
                     pa.scalar(None, type=cudf_dtype_to_pa_type(self.dtype))
                 )
@@ -2466,9 +2474,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     else other.dtype,
                 ]
             )
-
-        if is_mixed_with_object_dtype(as_column(other), self) or (
-            self.dtype.kind == "b" and common_dtype.kind != "b"
+        other_col = as_column(other)
+        if (
+            is_mixed_with_object_dtype(other_col, self)
+            or (self.dtype.kind == "b" and common_dtype.kind != "b")
+            or (other_col.dtype.kind == "b" and self.dtype.kind != "b")
         ):
             raise TypeError(mixed_err)
 
@@ -2948,7 +2958,9 @@ def as_column(
             if isinstance(arbitrary, NumpyExtensionArray):
                 # infer_dtype does not handle NumpyExtensionArray
                 arbitrary = np.array(arbitrary, dtype=object)
-            inferred_dtype = infer_dtype(arbitrary)
+            inferred_dtype = infer_dtype(
+                arbitrary, skipna=not cudf.get_option("mode.pandas_compatible")
+            )
             if inferred_dtype in ("mixed-integer", "mixed-integer-float"):
                 raise MixedTypeError("Cannot create column with mixed types")
             elif dtype is None and inferred_dtype not in (
@@ -2984,6 +2996,14 @@ def as_column(
                 arbitrary,
                 from_pandas=True,
             )
+            if (
+                cudf.get_option("mode.pandas_compatible")
+                and inferred_dtype == "mixed"
+                and not isinstance(
+                    pyarrow_array.type, (pa.ListType, pa.StructType)
+                )
+            ):
+                raise MixedTypeError("Cannot create column with mixed types")
             return as_column(
                 pyarrow_array,
                 dtype=dtype,
