@@ -1713,6 +1713,9 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
         if gather_map.dtype.kind not in "iu":
             gather_map = gather_map.astype(SIZE_TYPE_DTYPE)
 
+        # TODO: This call is purely to validate the bounds if
+        # check_bounds is True, require instead that the caller
+        # provides a GatherMap.
         GatherMap(gather_map, len(self), nullify=not check_bounds or nullify)
         return self._from_columns_like_self(
             [
