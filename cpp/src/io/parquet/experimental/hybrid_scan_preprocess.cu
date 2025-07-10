@@ -136,7 +136,7 @@ void hybrid_scan_reader_impl::prepare_row_groups(
     create_global_chunk_info();
 
     // compute schedule of input reads.
-    compute_input_passes();
+    compute_input_passes(read_mode::READ_ALL);
   }
 
   _file_preprocessed = true;

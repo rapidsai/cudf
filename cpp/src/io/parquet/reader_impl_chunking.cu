@@ -505,7 +505,7 @@ void reader_impl::create_global_chunk_info()
   }
 }
 
-void reader::impl::compute_input_passes(read_mode mode)
+void reader_impl::compute_input_passes(read_mode mode)
 {
   // at this point, row_groups has already been filtered down to just the row groups we need to
   // handle optional skip_rows/num_rows parameters.
