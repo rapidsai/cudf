@@ -24,6 +24,8 @@
 #include <cudf/detail/utilities/cuda.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/filling.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
@@ -196,7 +198,7 @@ generate_input_tables(std::vector<cudf::type_id> const &key_types,
                       int multiplicity, 
                       rmm::cuda_stream_view stream) 
 {
-  double const null_probability = Nullable ? 0.3 : 0;
+  double const null_probability = Nullable ? 0.75 : 0;
   // Construct build and probe tables
   // Unique table has build_table_numrows / multiplicity numroes
   auto unique_rows_build_table_numrows = static_cast<cudf::size_type>(build_table_numrows / multiplicity);
@@ -245,5 +247,16 @@ generate_input_tables(std::vector<cudf::type_id> const &key_types,
   auto build_table = cudf::gather(unique_rows_build_table->view(), build_table_gather_map->view(), cudf::out_of_bounds_policy::DONT_CHECK, stream);
   auto probe_table = cudf::gather(unique_rows_build_table->view(), probe_table_gather_map->view(), cudf::out_of_bounds_policy::DONT_CHECK, stream); 
 
-  return std::pair{std::move(build_table), std::move(probe_table)};
+  auto init  = cudf::make_fixed_width_scalar<cudf::size_type>(static_cast<cudf::size_type>(0));
+  auto build_table_payload_column = cudf::sequence(build_table_numrows, *init);
+  auto probe_table_payload_column  = cudf::sequence(probe_table_numrows, *init);
+
+  auto build_cols = build_table->release();
+  build_cols.emplace_back(std::move(build_table_payload_column));
+  build_cols.emplace_back(cudf::sequence(build_table_numrows, *init));
+  auto probe_cols = probe_table->release();
+  probe_cols.emplace_back(std::move(probe_table_payload_column));
+  probe_cols.emplace_back(cudf::sequence(build_table_numrows, *init));
+
+  return std::pair{std::make_unique<cudf::table>(std::move(build_cols)), std::make_unique<cudf::table>(std::move(probe_cols))};
 }

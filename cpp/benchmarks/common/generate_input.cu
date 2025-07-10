@@ -941,15 +941,17 @@ std::unique_ptr<cudf::table> create_distinct_rows_table(std::vector<cudf::type_i
       auto init = cudf::make_default_constructed_scalar(dt, stream);
       auto col  = cudf::sequence(num_rows.count, *init);
 
+      /*
       auto print_column = [stream](cudf::column_view col) {
         std::printf("Data: ");
-        auto colspan = cudf::device_span<std::int8_t const>(col.begin<std::int8_t>(), col.size());
-        auto h_coldata = cudf::detail::make_std_vector<std::int8_t>(colspan, stream);
+        auto colspan = cudf::device_span<cudf::size_type const>(col.begin<cudf::size_type>(), col.size());
+        auto h_coldata = cudf::detail::make_std_vector<cudf::size_type>(colspan, stream);
         for(auto e : h_coldata)
           std::printf("%d ", e);
         std::printf("\n");
       };
       print_column(col->view());
+      */
 
       auto [mask, count] =
         create_random_null_mask(num_rows.count, null_probability, seed_dist(seed_engine));

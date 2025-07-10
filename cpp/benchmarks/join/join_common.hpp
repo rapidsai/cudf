@@ -52,6 +52,8 @@ using JOIN_DATATYPES      = nvbench::enum_type_list<data_type::INTEGRAL,
                                                     data_type::FLOAT,
                                                     data_type::BOOL8,
                                                     data_type::DECIMAL,
+                                                    data_type::INT32,
+                                                    data_type::INT64,
                                                     data_type::STRING>;
 using JOIN_NULL_EQUALITY =
   nvbench::enum_type_list<cudf::null_equality::EQUAL, cudf::null_equality::UNEQUAL>;
@@ -204,8 +206,7 @@ void BM_join(state_type& state, Join JoinFunc, int multiplicity = 1, double sele
   }
 }
 
-template <typename Key,
-          bool Nullable,
+template <bool Nullable,
           join_t join_type                  = join_t::HASH,
           cudf::null_equality compare_nulls = cudf::null_equality::UNEQUAL,
           typename state_type,
@@ -233,12 +234,14 @@ void BM_join_with_datatype(state_type& state, std::vector<cudf::type_id>& key_ty
     std::printf(s.c_str());
     std::printf(": nrows = %d, ncols = %d\n", t.num_rows(), t.num_columns());
     auto col = t.column(0);
+    /*
     std::printf("Data: ");
     auto colspan = cudf::device_span<cudf::size_type const>(col.begin<cudf::size_type>(), col.size());
     auto h_coldata = cudf::detail::make_std_vector<cudf::size_type>(colspan, stream);
     for(auto e : h_coldata)
       std::printf("%d ", e);
     std::printf("\n");
+    */
   };
   print_table("build_table", build_table->view());
   print_table("probe_table", probe_table->view());
