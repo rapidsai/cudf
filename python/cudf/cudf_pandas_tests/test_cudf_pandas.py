@@ -1736,6 +1736,9 @@ def test_numpy_ndarray_numba_ufunc(array):
     assert_eq(add_one_ufunc(arr1), add_one_ufunc(arr2))
 
 
+@pytest.mark.filterwarnings(
+    "ignore:Grid size:numba.core.errors.NumbaPerformanceWarning"
+)
 def test_numpy_ndarray_numba_cuda_ufunc(array):
     arr1, arr2 = array
 
