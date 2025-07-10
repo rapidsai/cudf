@@ -562,6 +562,9 @@ def test_json_decode(ldf_jsonlike):
     q = ldf_jsonlike.select(pl.col("a").str.json_decode(pl.Struct({"a": pl.String()})))
     assert_gpu_result_equal(q)
 
+    q = ldf_jsonlike.select(pl.col("a").str.json_decode(None))
+    assert_ir_translation_raises(q, NotImplementedError)
+
 
 def test_json_decode_nested():
     ldf = pl.LazyFrame({"a": ['{"a": {"b": 1}}', None]})

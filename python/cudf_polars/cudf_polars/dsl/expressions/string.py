@@ -410,7 +410,7 @@ class StringFunction(Expr):
         elif self.name is StringFunction.Name.JsonDecode:
             plc_column = self.children[0].evaluate(df, context=context).obj
             # Once https://github.com/rapidsai/cudf/issues/19338 is implemented,
-            # we can use do this conversion on host.
+            # we can use do this conversion on device.
             buff = io.StringIO(
                 plc.strings.combine.join_strings(
                     plc_column,
@@ -429,6 +429,8 @@ class StringFunction(Expr):
                 .build()
             )
             plc_table_with_metadata = plc.io.json.read_json(options)
+            # TODO: Use factory function in https://github.com/rapidsai/cudf/issues/19339
+            # once implemented
             ref_column = plc_table_with_metadata.columns[0]
             return Column(
                 plc.Column(
