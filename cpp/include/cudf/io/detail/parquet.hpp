@@ -113,8 +113,8 @@ class chunked_reader : private reader {
    * ```
    *
    * If `chunk_read_limit == 0` (i.e., no output limit), and `pass_read_limit == 0` (no input
-   * temporary memory size limit) a call to `read_chunk()` will read the whole file and return a
-   * table containing all rows.
+   * temporary memory size limit), a call to `read_chunk()` will read the whole file (at most 2
+   * billion rows at once) and return corresponding table(s).
    *
    * The chunk_read_limit parameter controls the size of the output chunks produces.  If the user
    * specifies 100 MB of data, the reader will attempt to return chunks containing tables that have
@@ -137,8 +137,8 @@ class chunked_reader : private reader {
    *  }
    * @endcode
    *
-   * With a pass_read_limit of `0` you are simply saying you have one pass that reads the entire
-   * file as normal.
+   * With a pass_read_limit of `0` you are simply saying you have one pass that reads up to 2
+   * billion rows (or the entire file if smaller) as normal.
    *
    * @param chunk_read_limit Limit on total number of bytes to be returned per read,
    * or `0` if there is no limit

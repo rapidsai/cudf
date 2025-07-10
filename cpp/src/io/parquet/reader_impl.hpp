@@ -310,9 +310,11 @@ class reader_impl {
   void create_global_chunk_info();
 
   /**
-   * @brief Computes all of the passes we will perform over the file.
+   * @brief Computes all of the passes we will perform over the file
+   *
+   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
    */
-  void compute_input_passes();
+  void compute_input_passes(read_mode mode);
 
   /**
    * @brief Given a set of pages that have had their sizes computed by nesting level and
