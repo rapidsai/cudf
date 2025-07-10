@@ -27,11 +27,10 @@ void nvbench_lchm_inner_join(nvbench::state& state,
                                            nvbench::enum_type<NullEquality>,
                                            nvbench::enum_type<Algorithm>>)
 {
-  if (Nullable == false && NullEquality == cudf::null_equality::UNEQUAL) {
+  if constexpr (not Nullable && NullEquality == cudf::null_equality::UNEQUAL) {
     state.skip(
       "Since the keys are not nullable, how null entries are to be compared by the join algorithm "
-      "is "
-      "immaterial. Therefore, we skip running the benchmark when null equality is set to "
+      "is immaterial. Therefore, we skip running the benchmark when null equality is set to "
       "UNEQUAL since the performance numbers will be the same as when null equality is set to "
       "EQUAL.");
     return;

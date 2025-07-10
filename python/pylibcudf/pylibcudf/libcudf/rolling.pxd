@@ -33,7 +33,7 @@ cdef extern from "cudf/rolling.hpp" namespace "cudf" nogil:
     cdef cppclass current_row(range_window_type):
         current_row() noexcept
 
-    unique_ptr[table] grouped_range_rolling_window(
+    cdef unique_ptr[table] grouped_range_rolling_window(
         const table_view& group_keys,
         const column_view& orderby,
         order order,
@@ -56,6 +56,15 @@ cdef extern from "cudf/rolling.hpp" namespace "cudf" nogil:
         size_type following_window,
         size_type min_periods,
         rolling_aggregation& agg) except +libcudf_exception_handler
+
+    cdef pair[unique_ptr[column], unique_ptr[column]] make_range_windows(
+        const table_view& group_keys,
+        const column_view& orderby,
+        order order,
+        null_order null_order,
+        range_window_type preceding,
+        range_window_type following,
+    ) except +libcudf_exception_handler
 
     bool is_valid_rolling_aggregation(
         data_type source, Kind kind
