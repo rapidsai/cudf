@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 import datetime
 import os
@@ -287,4 +287,15 @@ def test_astype_aware_to_aware(unit):
         expected.dtype.unit, zoneinfo.ZoneInfo(str(expected.dtype.tz))
     )
     expected = ser.astype(zoneinfo_type)
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("fmt", ["%Y-%m-%dT%H:%M%z", "%Y-%m-%dT%H:%M"])
+def test_strftime_tz_aware_as_utc(fmt):
+    data = [datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc)]
+    cudf_pacific = cudf.Series(data).dt.tz_convert("US/Pacific")
+    pd_utc = pd.Series(data)
+    assert cudf_pacific.dtype != pd_utc.dtype
+    result = cudf_pacific.dt.strftime(fmt)
+    expected = pd_utc.dt.strftime(fmt)
     assert_eq(result, expected)

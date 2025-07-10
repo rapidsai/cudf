@@ -21,13 +21,17 @@ from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping
+    from collections.abc import Hashable, MutableMapping
 
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.typing import Schema
-    from cudf_polars.utils.config import ConfigOptions, ParquetOptions
+    from cudf_polars.utils.config import (
+        ConfigOptions,
+        ParquetOptions,
+        StreamingExecutor,
+    )
 
 
 @lower_ir_node.register(DataFrameScan)
@@ -359,29 +363,68 @@ def _(
     return ir, {ir: PartitionInfo(count=1)}  # pragma: no cover
 
 
+class StreamingSink(IR):
+    """Sink a dataframe in streaming mode."""
+
+    __slots__ = ("executor_options", "sink")
+    _non_child = ("schema", "sink", "executor_options")
+
+    sink: Sink
+    executor_options: StreamingExecutor
+
+    def __init__(
+        self,
+        schema: Schema,
+        sink: Sink,
+        executor_options: StreamingExecutor,
+        df: IR,
+    ):
+        self.schema = schema
+        self.sink = sink
+        self.executor_options = executor_options
+        self.children = (df,)
+
+    def get_hashable(self) -> Hashable:
+        """Hashable representation of the node."""
+        return (type(self), self.sink, *self.children)
+
+
 @lower_ir_node.register(Sink)
 def _(
     ir: Sink, rec: LowerIRTransformer
-) -> tuple[Sink, MutableMapping[IR, PartitionInfo]]:
+) -> tuple[StreamingSink, MutableMapping[IR, PartitionInfo]]:
     child, partition_info = rec(ir.children[0])
-    if Path(ir.path).exists():
-        # TODO: Support cloud storage
+    executor_options = rec.state["config_options"].executor
+
+    assert executor_options.name == "streaming", (
+        "'in-memory' executor not supported in 'lower_ir_node'"
+    )
+
+    # TODO: Support cloud storage
+    if Path(ir.path).exists() and executor_options.sink_to_directory:
         raise NotImplementedError(
-            "Writing to an existing path is not supported "
-            "by the GPU streaming executor."
+            "Writing to an existing path is not supported when sinking "
+            "to a directory. If you are using the 'distributed' scheduler, "
+            "please remove the target directory before calling 'collect'. "
         )
-    new_node = ir.reconstruct([child])
+
+    new_node = StreamingSink(
+        ir.schema,
+        ir.reconstruct([child]),
+        executor_options,
+        child,
+    )
     partition_info[new_node] = partition_info[child]
     return new_node, partition_info
 
 
-def _prepare_sink(path: str) -> None:
+def _prepare_sink_directory(path: str) -> None:
     """Prepare for a multi-partition sink."""
     # TODO: Support cloud storage
     Path(path).mkdir(parents=True)
 
 
-def _sink_partition(
+def _sink_to_directory(
     schema: Schema,
     kind: str,
     path: str,
@@ -389,40 +432,166 @@ def _sink_partition(
     df: DataFrame,
     ready: None,
 ) -> DataFrame:
-    """Sink a partition to disk."""
+    """Sink a partition to a new file."""
     return Sink.do_evaluate(schema, kind, path, options, df)
 
 
-@generate_ir_tasks.register(Sink)
-def _(
-    ir: Sink, partition_info: MutableMapping[IR, PartitionInfo]
+def _sink_to_parquet_file(
+    path: str,
+    options: dict[str, Any],
+    finalize: bool,  # noqa: FBT001
+    writer: plc.io.parquet.ChunkedParquetWriter | None,
+    df: DataFrame,
+) -> plc.io.parquet.ChunkedParquetWriter | DataFrame:
+    """Sink a partition to an open Parquet file."""
+    # Set up a new chunked Parquet writer if necessary.
+    if writer is None:
+        metadata = plc.io.types.TableInputMetadata(df.table)
+        for i, name in enumerate(df.column_names):
+            metadata.column_metadata[i].set_name(name)
+
+        sink = plc.io.types.SinkInfo([path])
+        builder = plc.io.parquet.ChunkedParquetWriterOptions.builder(sink)
+        compression = options["compression"]
+        if compression != "Uncompressed":
+            builder.compression(
+                getattr(plc.io.types.CompressionType, compression.upper())
+            )
+
+        if options["data_page_size"] is not None:
+            builder.max_page_size_bytes(options["data_page_size"])
+        if options["row_group_size"] is not None:
+            builder.row_group_size_rows(options["row_group_size"])
+
+        writer_options = builder.metadata(metadata).build()
+        writer = plc.io.parquet.ChunkedParquetWriter.from_options(writer_options)
+
+    # Append to the open Parquet file.
+    assert isinstance(writer, plc.io.parquet.ChunkedParquetWriter), (
+        "ChunkedParquetWriter is required."
+    )
+    writer.write(df.table)
+
+    # Finalize or return active writer.
+    if finalize:
+        writer.close([])
+        return df
+    else:
+        return writer
+
+
+def _sink_to_file(
+    kind: str,
+    path: str,
+    options: dict[str, Any],
+    finalize: bool,  # noqa: FBT001
+    writer_state: Any,
+    df: DataFrame,
+) -> Any:
+    """Sink a partition to an open file."""
+    if kind == "Parquet":
+        # Parquet writer will pass along a
+        # ChunkedParquetWriter "writer state".
+        return _sink_to_parquet_file(
+            path,
+            options,
+            finalize,
+            writer_state,
+            df,
+        )
+    elif kind == "Csv":
+        use_options = options.copy()
+        if writer_state is None:
+            mode = "wb"
+        else:
+            mode = "ab"
+            use_options["include_header"] = False
+        with Path.open(Path(path), mode) as f:
+            sink = plc.io.types.SinkInfo([f])
+            Sink._write_csv(sink, use_options, df)
+    elif kind == "Json":
+        mode = "wb" if writer_state is None else "ab"
+        with Path.open(Path(path), mode) as f:
+            sink = plc.io.types.SinkInfo([f])
+            Sink._write_json(sink, df)
+    else:  # pragma: no cover; Shouldn't get here.
+        raise NotImplementedError(f"{kind} not yet supported in _sink_to_file")
+
+    # Default return type is bool | DataFrame.
+    # We only return a DataFrame for the final sink task.
+    # The other tasks return a "ready" signal of True.
+    return df if finalize else True
+
+
+def _file_sink_graph(
+    ir: StreamingSink, partition_info: MutableMapping[IR, PartitionInfo]
 ) -> MutableMapping[Any, Any]:
+    """Sink to a single file."""
     name = get_key_name(ir)
     count = partition_info[ir].count
     child_name = get_key_name(ir.children[0])
+    sink = ir.sink
     if count == 1:
         return {
             (name, 0): (
-                ir.do_evaluate,
-                *ir._non_child_args,
+                sink.do_evaluate,
+                *sink._non_child_args,
                 (child_name, 0),
             )
         }
 
+    sink_name = get_key_name(sink)
+    graph: MutableMapping[Any, Any] = {
+        (sink_name, i): (
+            _sink_to_file,
+            sink.kind,
+            sink.path,
+            sink.options,
+            i == count - 1,  # Whether to finalize
+            None if i == 0 else (sink_name, i - 1),  # Writer state
+            (child_name, i),
+        )
+        for i in range(count)
+    }
+
+    # Make sure final tasks point to empty DataFrame output
+    graph.update({(name, i): (sink_name, count - 1) for i in range(count)})
+    return graph
+
+
+def _directory_sink_graph(
+    ir: StreamingSink, partition_info: MutableMapping[IR, PartitionInfo]
+) -> MutableMapping[Any, Any]:
+    """Sink to a directory of files."""
+    name = get_key_name(ir)
+    count = partition_info[ir].count
+    child_name = get_key_name(ir.children[0])
+    sink = ir.sink
+
     setup_name = f"setup-{name}"
-    suffix = ir.kind.lower()
+    suffix = sink.kind.lower()
     width = math.ceil(math.log10(count))
     graph: MutableMapping[Any, Any] = {
         (name, i): (
-            _sink_partition,
-            ir.schema,
-            ir.kind,
-            f"{ir.path}/part.{str(i).zfill(width)}.{suffix}",
-            ir.options,
+            _sink_to_directory,
+            sink.schema,
+            sink.kind,
+            f"{sink.path}/part.{str(i).zfill(width)}.{suffix}",
+            sink.options,
             (child_name, i),
             setup_name,
         )
         for i in range(count)
     }
-    graph[setup_name] = (_prepare_sink, ir.path)
+    graph[setup_name] = (_prepare_sink_directory, sink.path)
     return graph
+
+
+@generate_ir_tasks.register(StreamingSink)
+def _(
+    ir: StreamingSink, partition_info: MutableMapping[IR, PartitionInfo]
+) -> MutableMapping[Any, Any]:
+    if ir.executor_options.sink_to_directory:
+        return _directory_sink_graph(ir, partition_info)
+    else:
+        return _file_sink_graph(ir, partition_info)
