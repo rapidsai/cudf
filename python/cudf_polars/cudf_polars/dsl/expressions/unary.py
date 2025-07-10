@@ -110,6 +110,7 @@ class UnaryFunction(Expr):
             "set_sorted",
             "unique",
             "value_counts",
+            "rank",
         }
     )
     _supported_cum_aggs = frozenset(
@@ -149,6 +150,12 @@ class UnaryFunction(Expr):
                 raise NotImplementedError(
                     "reverse=True is not supported for cumulative aggregations"
                 )
+        if self.name == "rank":
+            method, _, seed = self.options
+            if method in {"random", "ordinal"}:
+                raise NotImplementedError("ranking is not yet supported")
+            if seed is not None:
+                raise NotImplementedError("seed is not yet supported")
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
@@ -328,6 +335,33 @@ class UnaryFunction(Expr):
                     null_count=0,
                     offset=0,
                     children=children,
+                ),
+                dtype=self.dtype,
+            )
+        elif self.name == "rank":
+            (column,) = (child.evaluate(df, context=context) for child in self.children)
+            method_str, descending, _ = self.options
+
+            method = {
+                "first": plc.aggregation.RankMethod.FIRST,
+                "average": plc.aggregation.RankMethod.AVERAGE,
+                "min": plc.aggregation.RankMethod.MIN,
+                "max": plc.aggregation.RankMethod.MAX,
+                "dense": plc.aggregation.RankMethod.DENSE,
+            }.get(method_str)
+
+            order = (
+                plc.types.Order.DESCENDING if descending else plc.types.Order.ASCENDING
+            )
+
+            return Column(
+                plc.sorting.rank(
+                    column.obj,
+                    method,
+                    order,
+                    plc.types.NullPolicy.INCLUDE,
+                    plc.types.NullOrder.BEFORE,
+                    percentage=False,
                 ),
                 dtype=self.dtype,
             )

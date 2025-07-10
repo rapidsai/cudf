@@ -8,7 +8,10 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.asserts import (
+    assert_gpu_result_equal,
+    assert_ir_translation_raises,
+)
 
 
 @pytest.fixture(
@@ -96,3 +99,18 @@ def test_log(ldf, natural):
 def test_negate(ldf, col):
     q = ldf.select(-pl.col(col))
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("method", ["average", "min", "max", "dense"])
+@pytest.mark.parametrize("descending", [False, True])
+def test_rank_supported(ldf, method, descending):
+    expr = pl.col("a").rank(method=method, descending=descending)
+    q = ldf.select(expr)
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("method", ["ordinal", "random"])
+def test_rank_unsupported(ldf, method):
+    expr = pl.col("a").rank(method=method)
+    q = ldf.select(expr)
+    assert_ir_translation_raises(q, NotImplementedError)
