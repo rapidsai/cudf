@@ -213,8 +213,8 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
     }
   }
 
-  // TODO: Page pruning not yet implemented (especially for the chunked reader) so set all pages in
-  // this subpass to be decoded.
+  // Use the `_page_mask` from page pruning stage, if non empty, otherwise set all pages in this
+  // subpass to be decoded
   auto host_page_mask = [&]() {
     if (_page_mask.empty()) {
       auto page_mask = cudf::detail::make_host_vector<bool>(subpass.pages.size(), _stream);
