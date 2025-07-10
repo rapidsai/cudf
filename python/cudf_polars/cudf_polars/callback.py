@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import textwrap
 import time
 import warnings
 from functools import cache, partial
@@ -21,6 +22,7 @@ import pylibcudf
 import rmm
 from rmm._cuda import gpu
 
+from cudf_polars.dsl.tracing import CUDF_POLARS_NVTX_DOMAIN
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.utils.timer import Timer
 
@@ -222,7 +224,7 @@ def _callback(
     if timer is not None:
         assert should_time
     with (
-        nvtx.annotate(message="ExecuteIR", domain="cudf_polars"),
+        nvtx.annotate(message="ExecuteIR", domain=CUDF_POLARS_NVTX_DOMAIN),
         # Device must be set before memory resource is obtained.
         set_device(config_options.device),
         set_memory_resource(memory_resource),
@@ -235,6 +237,16 @@ def _callback(
                 return df, timer.timings
         elif config_options.executor.name == "streaming":
             from cudf_polars.experimental.parallel import evaluate_streaming
+
+            if timer is not None:
+                msg = textwrap.dedent("""\
+                    LazyFrame.profile() is not supported with the streaming executor.
+                    To profile execution with the streaming executor, use:
+
+                    - NVIDIA NSight Systems with the 'streaming' scheduler.
+                    - Dask's built-in profiling tools with the 'distributed' scheduler.
+                    """)
+                raise NotImplementedError(msg)
 
             return evaluate_streaming(ir, config_options).to_polars()
         assert_never(f"Unknown executor '{config_options.executor}'")
@@ -277,7 +289,7 @@ def execute_with_cudf(
 
     memory_resource = config.memory_resource
 
-    with nvtx.annotate(message="ConvertIR", domain="cudf_polars"):
+    with nvtx.annotate(message="ConvertIR", domain=CUDF_POLARS_NVTX_DOMAIN):
         translator = Translator(nt, config)
         ir = translator.translate_ir()
         ir_translation_errors = translator.errors

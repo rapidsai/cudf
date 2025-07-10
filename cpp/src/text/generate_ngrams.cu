@@ -21,6 +21,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 #include <cudf/lists/detail/lists_column_factories.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
@@ -320,14 +321,9 @@ CUDF_KERNEL void character_ngram_hash_kernel(cudf::column_device_view const d_st
                                              cudf::size_type const* d_ngram_offsets,
                                              cudf::hash_value_type* d_results)
 {
-  auto const idx = cudf::detail::grid_1d::global_thread_id();
-  if (idx >= (static_cast<cudf::thread_index_type>(d_strings.size()) * cudf::detail::warp_size)) {
-    return;
-  }
-
+  auto const idx     = cudf::detail::grid_1d::global_thread_id();
   auto const str_idx = idx / cudf::detail::warp_size;
-
-  if (d_strings.is_null(str_idx)) { return; }
+  if (str_idx >= d_strings.size() or d_strings.is_null(str_idx)) { return; }
   auto const d_str = d_strings.element<cudf::string_view>(str_idx);
   if (d_str.empty()) { return; }
 
@@ -338,7 +334,10 @@ CUDF_KERNEL void character_ngram_hash_kernel(cudf::column_device_view const d_st
 
   auto const end        = d_str.data() + d_str.size_bytes();
   auto const warp_count = (d_str.size_bytes() / cudf::detail::warp_size) + 1;
-  auto const lane_idx   = idx % cudf::detail::warp_size;
+
+  namespace cg        = cooperative_groups;
+  auto const warp     = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
+  auto const lane_idx = warp.thread_rank();
 
   auto d_hashes = d_results + ngram_offset;
   auto itr      = d_str.data() + lane_idx;
@@ -353,7 +352,7 @@ CUDF_KERNEL void character_ngram_hash_kernel(cudf::column_device_view const d_st
       if (left == 0) { hash = hasher(cudf::string_view(itr, bytes)); }
     }
     hvs[threadIdx.x] = hash;  // store hash into shared memory
-    __syncwarp();
+    warp.sync();
     if (lane_idx == 0) {
       // copy valid hash values into d_hashes
       auto const hashes = &hvs[threadIdx.x];
@@ -362,7 +361,7 @@ CUDF_KERNEL void character_ngram_hash_kernel(cudf::column_device_view const d_st
           return h != 0;
         });
     }
-    __syncwarp();
+    warp.sync();
     itr += cudf::detail::warp_size;
   }
 }

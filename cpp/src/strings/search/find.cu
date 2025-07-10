@@ -20,6 +20,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/find.hpp>
@@ -126,7 +127,8 @@ CUDF_KERNEL void finder_warp_parallel_fn(column_device_view const d_strings,
   auto const warp     = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
   auto const lane_idx = warp.thread_rank();
 
-  auto const str_idx = warp.meta_group_rank();
+  auto const tid     = cudf::detail::grid_1d::global_thread_id();
+  auto const str_idx = tid / cudf::detail::warp_size;
   if (str_idx >= d_strings.size() or d_strings.is_null(str_idx)) { return; }
 
   auto const d_str    = d_strings.element<string_view>(str_idx);

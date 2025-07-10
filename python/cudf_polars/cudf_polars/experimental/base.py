@@ -4,10 +4,10 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Generator, Iterator
 
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.nodebase import Node
@@ -34,6 +34,11 @@ class PartitionInfo:
         """Return the partitioned keys for a given node."""
         name = get_key_name(node)
         yield from ((name, i) for i in range(self.count))
+
+    def __rich_repr__(self) -> Generator[Any, None, None]:
+        """Formatting for rich.pretty.pprint."""
+        yield "count", self.count
+        yield "partitioned_on", self.partitioned_on
 
 
 def get_key_name(node: Node) -> str:

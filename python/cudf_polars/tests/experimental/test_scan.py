@@ -61,9 +61,26 @@ def test_target_partition_size(tmp_path, df, blocksize, n_files):
 
     # Check partitioning
     qir = Translator(q._ldf.visit(), engine).translate_ir()
-    ir, info = lower_ir_graph(qir, ConfigOptions(engine.config))
+    ir, info = lower_ir_graph(qir, ConfigOptions.from_polars_engine(engine))
     count = info[ir].count
     if blocksize <= 12_000:
         assert count > n_files
     else:
         assert count < n_files
+
+
+@pytest.mark.parametrize("mask", [None, pl.col("x") < 1_000])
+def test_split_scan_predicate(tmp_path, df, mask):
+    make_partitioned_source(df, tmp_path, "parquet", n_files=1)
+    q = pl.scan_parquet(tmp_path)
+    if mask is not None:
+        q = q.filter(mask)
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "target_partition_size": 1_000,
+            "scheduler": DEFAULT_SCHEDULER,
+        },
+    )
+    assert_gpu_result_equal(q, engine=engine)

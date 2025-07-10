@@ -126,6 +126,20 @@ def make_intermediate_proxy_type(name, fast_type, slow_type):
     )
 
 
+try:
+    # List Accessor in pandas was introduced in 2.2.0 only
+    pd_ListAccessor = pd.core.arrays.arrow.accessors.ListAccessor
+except AttributeError:
+    pd_ListAccessor = _Unusable
+
+
+try:
+    # Struct Accessor in pandas was introduced in 2.2.0 only
+    pd_StructAccessor = pd.core.arrays.arrow.accessors.StructAccessor
+except AttributeError:
+    pd_StructAccessor = _Unusable
+
+
 class _AccessorAttr:
     """
     Descriptor that ensures that accessors like `.dt` and `.str`
@@ -212,13 +226,24 @@ CombinedDatetimelikeProperties = make_intermediate_proxy_type(
 
 StringMethods = make_intermediate_proxy_type(
     "StringMethods",
-    cudf.core.column.string.StringMethods,
+    cudf.core.accessors.string.StringMethods,
     pd.core.strings.accessor.StringMethods,
 )
 
+ListMethods = make_intermediate_proxy_type(
+    "ListMethods",
+    cudf.core.accessors.lists.ListMethods,
+    pd_ListAccessor,
+)
+
+StructAccessor = make_intermediate_proxy_type(
+    "StructAccessor",
+    cudf.core.accessors.struct.StructMethods,
+    pd_StructAccessor,
+)
 _CategoricalAccessor = make_intermediate_proxy_type(
     "CategoricalAccessor",
-    cudf.core.column.categorical.CategoricalAccessor,
+    cudf.core.accessors.categorical.CategoricalAccessor,
     pd.core.arrays.categorical.CategoricalAccessor,
 )
 
@@ -295,6 +320,8 @@ Series = make_final_proxy_type(
         "__iter__": custom_iter,
         "dt": _AccessorAttr(CombinedDatetimelikeProperties),
         "str": _AccessorAttr(StringMethods),
+        "list": _AccessorAttr(ListMethods),
+        "struct": _AccessorAttr(StructAccessor),
         "cat": _AccessorAttr(_CategoricalAccessor),
         "_constructor": _FastSlowAttribute("_constructor"),
         "_constructor_expanddim": _FastSlowAttribute("_constructor_expanddim"),
@@ -632,12 +659,38 @@ if cudf.core._compat.PANDAS_GE_210:
         pd.core.arrays.string_arrow.ArrowStringArrayNumpySemantics,
         fast_to_slow=_Unusable(),
         slow_to_fast=_Unusable(),
+        additional_attributes={
+            "_pa_array": _FastSlowAttribute("_pa_array", private=True),
+        },
     )
+
+if cudf.core._compat.PANDAS_GE_230:
+    StringArrayNumpySemantics = make_final_proxy_type(
+        "StringArrayNumpySemantics",
+        _Unusable,
+        pd.core.arrays.string_.StringArrayNumpySemantics,
+        bases=(StringArray,),
+        fast_to_slow=_Unusable(),
+        slow_to_fast=_Unusable(),
+    )
+
 
 ArrowStringArray = make_final_proxy_type(
     "ArrowStringArray",
     _Unusable,
     pd.core.arrays.string_arrow.ArrowStringArray,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "_pa_array": _FastSlowAttribute("_pa_array", private=True),
+    },
+)
+
+
+StorageExtensionDtype = make_final_proxy_type(
+    "StorageExtensionDtype",
+    _Unusable,
+    pd.core.dtypes.base.StorageExtensionDtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
 )
@@ -1073,6 +1126,9 @@ register_proxy_func(pd.read_pickle)(
 )
 
 register_proxy_func(pd.to_pickle)(_FunctionProxy(_Unusable(), pd.to_pickle))
+register_proxy_func(pd.api.types.is_list_like)(  # noqa: TID251
+    _FunctionProxy(_Unusable(), pd.api.types.is_list_like)  # noqa: TID251
+)
 
 
 def _get_eval_locals_and_globals(level, local_dict=None, global_dict=None):
@@ -1821,6 +1877,9 @@ ArrowExtensionArray = make_final_proxy_type(
     pd.arrays.ArrowExtensionArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    additional_attributes={
+        "_pa_array": _FastSlowAttribute("_pa_array", private=True),
+    },
 )
 
 

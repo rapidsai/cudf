@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
 
 import polars as pl
@@ -12,18 +14,21 @@ from cudf_polars.testing.asserts import (
 )
 from cudf_polars.utils.versions import POLARS_VERSION_LT_128, POLARS_VERSION_LT_130
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 
 @pytest.fixture(params=[False, True], ids=["no_nulls", "nulls"])
-def has_nulls(request):
+def has_nulls(request: pytest.FixtureRequest) -> bool:
     return request.param
 
 
 @pytest.fixture(params=[False, True], ids=["include_nulls", "ignore_nulls"])
-def ignore_nulls(request):
+def ignore_nulls(request: pytest.FixtureRequest) -> bool:
     return request.param
 
 
-def test_booleanfunction_reduction(ignore_nulls):
+def test_booleanfunction_reduction(*, ignore_nulls: bool) -> None:
     ldf = pl.LazyFrame(
         {
             "a": pl.Series([1, 2, 3.0, 2, 5], dtype=pl.Float64()),
@@ -70,7 +75,9 @@ def test_booleanfunction_all_any_kleene(expr, ignore_nulls):
     ids=lambda f: f"{f.__name__}()",
 )
 @pytest.mark.parametrize("has_nans", [False, True], ids=["no_nans", "nans"])
-def test_boolean_function_unary(expr, has_nans, has_nulls):
+def test_boolean_function_unary(
+    expr: Callable[[pl.Expr], pl.Expr], *, has_nans: bool, has_nulls: bool
+) -> None:
     values: list[float | None] = [1, 2, 3, 4, 5]
     if has_nans:
         values[3] = float("nan")
@@ -226,14 +233,13 @@ def test_boolean_is_in_raises_unsupported():
 def test_boolean_is_in_with_nested_list_raises():
     ldf = pl.LazyFrame({"x": [1, 2, 3], "y": [[1, 2], [2, 3], [4]]})
     q = ldf.select(pl.col("x").is_in(pl.col("y")))
-
     if POLARS_VERSION_LT_128:
         assert_ir_translation_raises(q, NotImplementedError)
     elif POLARS_VERSION_LT_130:
         with pytest.raises(pl.exceptions.ComputeError, match="Column types mismatch"):
             assert_gpu_result_equal(q)
     else:
-        with pytest.raises(RuntimeError, match="Column types mismatch"):
+        with pytest.raises(AssertionError, match="DataFrames are different"):
             assert_gpu_result_equal(q)
 
 

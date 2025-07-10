@@ -19,6 +19,7 @@
 #include "error.hpp"
 
 #include <cudf/detail/stream_compaction.hpp>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/null_mask.hpp>
@@ -247,16 +248,16 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
   int s_idx = 0;
 
   auto decode_data = [&](decode_kernel_mask decoder_mask) {
-    DecodePageData(subpass.pages,
-                   pass.chunks,
-                   num_rows,
-                   skip_rows,
-                   level_type_size,
-                   decoder_mask,
-                   page_mask,
-                   initial_str_offsets,
-                   error_code.data(),
-                   streams[s_idx++]);
+    detail::decode_page_data(subpass.pages,
+                             pass.chunks,
+                             num_rows,
+                             skip_rows,
+                             level_type_size,
+                             decoder_mask,
+                             page_mask,
+                             initial_str_offsets,
+                             error_code.data(),
+                             streams[s_idx++]);
   };
 
   // launch string decoder for plain encoded flat columns
@@ -306,40 +307,40 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
 
   // launch delta byte array decoder
   if (BitAnd(kernel_mask, decode_kernel_mask::DELTA_BYTE_ARRAY) != 0) {
-    DecodeDeltaByteArray(subpass.pages,
-                         pass.chunks,
-                         num_rows,
-                         skip_rows,
-                         level_type_size,
-                         page_mask,
-                         initial_str_offsets,
-                         error_code.data(),
-                         streams[s_idx++]);
+    decode_delta_byte_array(subpass.pages,
+                            pass.chunks,
+                            num_rows,
+                            skip_rows,
+                            level_type_size,
+                            page_mask,
+                            initial_str_offsets,
+                            error_code.data(),
+                            streams[s_idx++]);
   }
 
   // launch delta length byte array decoder
   if (BitAnd(kernel_mask, decode_kernel_mask::DELTA_LENGTH_BA) != 0) {
-    DecodeDeltaLengthByteArray(subpass.pages,
-                               pass.chunks,
-                               num_rows,
-                               skip_rows,
-                               level_type_size,
-                               page_mask,
-                               initial_str_offsets,
-                               error_code.data(),
-                               streams[s_idx++]);
+    decode_delta_length_byte_array(subpass.pages,
+                                   pass.chunks,
+                                   num_rows,
+                                   skip_rows,
+                                   level_type_size,
+                                   page_mask,
+                                   initial_str_offsets,
+                                   error_code.data(),
+                                   streams[s_idx++]);
   }
 
   // launch delta binary decoder
   if (BitAnd(kernel_mask, decode_kernel_mask::DELTA_BINARY) != 0) {
-    DecodeDeltaBinary(subpass.pages,
-                      pass.chunks,
-                      num_rows,
-                      skip_rows,
-                      level_type_size,
-                      page_mask,
-                      error_code.data(),
-                      streams[s_idx++]);
+    decode_delta_binary(subpass.pages,
+                        pass.chunks,
+                        num_rows,
+                        skip_rows,
+                        level_type_size,
+                        page_mask,
+                        error_code.data(),
+                        streams[s_idx++]);
   }
 
   // launch byte stream split decoder
@@ -359,14 +360,14 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
 
   // launch byte stream split decoder
   if (BitAnd(kernel_mask, decode_kernel_mask::BYTE_STREAM_SPLIT) != 0) {
-    DecodeSplitPageData(subpass.pages,
-                        pass.chunks,
-                        num_rows,
-                        skip_rows,
-                        level_type_size,
-                        page_mask,
-                        error_code.data(),
-                        streams[s_idx++]);
+    decode_split_page_data(subpass.pages,
+                           pass.chunks,
+                           num_rows,
+                           skip_rows,
+                           level_type_size,
+                           page_mask,
+                           error_code.data(),
+                           streams[s_idx++]);
   }
 
   // launch fixed width type decoder
@@ -416,14 +417,14 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
 
   // launch the catch-all page decoder
   if (BitAnd(kernel_mask, decode_kernel_mask::GENERAL) != 0) {
-    DecodePageData(subpass.pages,
-                   pass.chunks,
-                   num_rows,
-                   skip_rows,
-                   level_type_size,
-                   page_mask,
-                   error_code.data(),
-                   streams[s_idx++]);
+    detail::decode_page_data(subpass.pages,
+                             pass.chunks,
+                             num_rows,
+                             skip_rows,
+                             level_type_size,
+                             page_mask,
+                             error_code.data(),
+                             streams[s_idx++]);
   }
 
   // synchronize the streams
@@ -469,8 +470,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
         out_buf.user_data |= PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED;
       } else if (out_buf.type.id() == type_id::STRING) {
         // only if it is not a large strings column
-        if (col_string_sizes[idx] <=
-            static_cast<size_t>(strings::detail::get_offset64_threshold())) {
+        if (std::cmp_less_equal(col_string_sizes[idx], strings::detail::get_offset64_threshold())) {
           out_buffers.emplace_back(static_cast<size_type*>(out_buf.data()) + out_buf.size);
           final_offsets.emplace_back(static_cast<size_type>(col_string_sizes[idx]));
         }
@@ -683,6 +683,9 @@ table_with_metadata reader::impl::read_chunk_internal(read_mode mode)
       out_columns.emplace_back(make_column(_output_buffers[i], nullptr, metadata, _stream));
     }
   }
+
+  out_columns =
+    cudf::structs::detail::enforce_null_consistency(std::move(out_columns), _stream, _mr);
 
   // Check if number of rows per source should be included in output metadata.
   if (include_output_num_rows_per_source()) {

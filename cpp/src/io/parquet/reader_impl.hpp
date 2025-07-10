@@ -224,7 +224,7 @@ class reader::impl {
    * - The total sizes of all output columns at all nesting levels
    * - The starting output buffer offset for each page, for each nesting level
    *
-   * For flat schemas, these values are computed during header decoding (see gpuDecodePageHeaders).
+   * For flat schemas, these values are computed during header decoding (see decode_page_headers).
    *
    * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
    * @param chunk_read_limit Limit on total number of bytes to be returned per read,
@@ -305,9 +305,11 @@ class reader::impl {
   void create_global_chunk_info();
 
   /**
-   * @brief Computes all of the passes we will perform over the file.
+   * @brief Computes all of the passes we will perform over the file
+   *
+   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
    */
-  void compute_input_passes();
+  void compute_input_passes(read_mode mode);
 
   /**
    * @brief Given a set of pages that have had their sizes computed by nesting level and
@@ -332,7 +334,7 @@ class reader::impl {
   [[nodiscard]] bool uses_custom_row_bounds(read_mode mode) const
   {
     // TODO: `read_mode` is hardcoded to `true` when `read_mode::CHUNKED_READ` to enforce
-    // `ComputePageSizes()` computation for all remaining chunks.
+    // `compute_page_sizes()` computation for all remaining chunks.
     return (mode == read_mode::READ_ALL)
              ? (_options.num_rows.has_value() or _options.skip_rows != 0)
              : true;
