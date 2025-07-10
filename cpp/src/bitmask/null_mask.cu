@@ -37,6 +37,7 @@
 
 #include <cooperative_groups.h>
 #include <cub/cub.cuh>
+#include <cuda/atomic>
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
 #include <thrust/device_ptr.h>
@@ -105,6 +106,11 @@ rmm::device_buffer create_null_mask(size_type size,
 namespace {
 
 /**
+ * @brief Enum to specify whether to atomically bulk set terminal null mask words
+ */
+enum class is_safe_mode : bool { YES = true, NO = false };
+
+/**
  * @brief Sets a range of bits in a null mask in parallel using the threads in cooperative group
  *
  * @tparam ThreadGroup Typename of the cooperative group (inferred)
@@ -116,7 +122,7 @@ namespace {
  * @param[in]  number_of_mask_words The total number of 32-bit words in the null mask
  * @param[in]  group Cooperative group (1d grid or thread block)
  */
-template <typename ThreadGroup>
+template <typename ThreadGroup, is_safe_mode mode>
 __device__ void set_null_mask_impl(bitmask_type* __restrict__ destination,
                                    size_type begin_bit,
                                    size_type end_bit,
@@ -139,14 +145,26 @@ __device__ void set_null_mask_impl(bitmask_type* __restrict__ destination,
       if (destination_word_index == last_word) {
         mask = mask & set_least_significant_bits(intra_word_index(end_bit));
       }
-      x[destination_word_index] =
-        valid ? x[destination_word_index] | mask : x[destination_word_index] & ~mask;
+      if constexpr (mode == is_safe_mode::YES) {
+        // Atomic ref to the destination word. Using thread block scope as this case is only
+        // encountered when ThreadGroup = cg::thread_block
+        auto destination_word_ref =
+          cuda::atomic_ref<bitmask_type, cuda::thread_scope_block>(x[destination_word_index]);
+
+        auto constexpr memory_order = cuda::std::memory_order_relaxed;
+        valid ? destination_word_ref.fetch_or(mask, memory_order)
+              : destination_word_ref.fetch_and(~mask, memory_order);
+      } else {
+        x[destination_word_index] =
+          valid ? x[destination_word_index] | mask : x[destination_word_index] & ~mask;
+      }
     } else {
       x[destination_word_index] = fill_value;
     }
   }
 }
 
+template <is_safe_mode mode>
 CUDF_KERNEL void set_null_masks_kernel(cudf::device_span<bitmask_type*> destinations,
                                        cudf::device_span<size_type const> begin_bits,
                                        cudf::device_span<size_type const> end_bits,
@@ -156,12 +174,12 @@ CUDF_KERNEL void set_null_masks_kernel(cudf::device_span<bitmask_type*> destinat
   auto const bitmask_idx = cg::this_grid().block_rank();
   // Return early if nothing to do
   if (begin_bits[bitmask_idx] == end_bits[bitmask_idx]) { return; }
-  set_null_mask_impl(destinations[bitmask_idx],
-                     begin_bits[bitmask_idx],
-                     end_bits[bitmask_idx],
-                     valids[bitmask_idx],
-                     numbers_of_mask_words[bitmask_idx],
-                     cg::this_thread_block());
+  set_null_mask_impl<cg::thread_block, mode>(destinations[bitmask_idx],
+                                             begin_bits[bitmask_idx],
+                                             end_bits[bitmask_idx],
+                                             valids[bitmask_idx],
+                                             numbers_of_mask_words[bitmask_idx],
+                                             cg::this_thread_block());
 }
 
 CUDF_KERNEL void set_null_mask_kernel(bitmask_type* destination,
@@ -170,12 +188,14 @@ CUDF_KERNEL void set_null_mask_kernel(bitmask_type* destination,
                                       bool valid,
                                       size_type number_of_mask_words)
 {
-  set_null_mask_impl(destination, begin_bit, end_bit, valid, number_of_mask_words, cg::this_grid());
+  set_null_mask_impl<cg::grid_group, is_safe_mode::NO>(
+    destination, begin_bit, end_bit, valid, number_of_mask_words, cg::this_grid());
 }
 }  // namespace
 
 // Set pre-allocated null masks of given bit ranges [begin_bit, end_bit) to valids, if valid==true,
 // or null, otherwise;
+template <is_safe_mode mode>
 void set_null_masks(cudf::host_span<bitmask_type*> bitmasks,
                     cudf::host_span<size_type const> begin_bits,
                     cudf::host_span<size_type const> end_bits,
@@ -240,7 +260,7 @@ void set_null_masks(cudf::host_span<bitmask_type*> bitmasks,
   // Cap block size to 1024 threads
   block_size = std::min<size_t>(block_size, 1024);
 
-  set_null_masks_kernel<<<num_bitmasks, block_size, 0, stream.value()>>>(
+  set_null_masks_kernel<mode><<<num_bitmasks, block_size, 0, stream.value()>>>(
     destinations, d_begin_bits, d_end_bits, d_valids, number_of_mask_words);
   CUDF_CHECK_CUDA(stream.value());
 }
@@ -289,14 +309,28 @@ void set_null_mask(bitmask_type* bitmask,
   return detail::set_null_mask(bitmask, begin_bit, end_bit, valid, stream);
 }
 
-// Bulk set pre-allocated null masks to corresponding valid state in the corresponding bit ranges
-void set_null_masks(cudf::host_span<bitmask_type*> bitmasks,
-                    cudf::host_span<size_type const> begin_bits,
-                    cudf::host_span<size_type const> end_bits,
-                    cudf::host_span<bool const> valids,
-                    rmm::cuda_stream_view stream)
+// Bulk set pre-allocated null masks to corresponding valid state without handling intra-word
+// aliasing in the corresponding bit ranges
+void set_null_masks_unsafe(cudf::host_span<bitmask_type*> bitmasks,
+                           cudf::host_span<size_type const> begin_bits,
+                           cudf::host_span<size_type const> end_bits,
+                           cudf::host_span<bool const> valids,
+                           rmm::cuda_stream_view stream)
 {
-  return detail::set_null_masks(bitmasks, begin_bits, end_bits, valids, stream);
+  return detail::set_null_masks<detail::is_safe_mode::NO>(
+    bitmasks, begin_bits, end_bits, valids, stream);
+}
+
+// Bulk set pre-allocated null masks to corresponding valid state safely handling intra-word
+// aliasing in the corresponding bit ranges
+void set_null_masks_safe(cudf::host_span<bitmask_type*> bitmasks,
+                         cudf::host_span<size_type const> begin_bits,
+                         cudf::host_span<size_type const> end_bits,
+                         cudf::host_span<bool const> valids,
+                         rmm::cuda_stream_view stream)
+{
+  return detail::set_null_masks<detail::is_safe_mode::YES>(
+    bitmasks, begin_bits, end_bits, valids, stream);
 }
 
 namespace detail {
