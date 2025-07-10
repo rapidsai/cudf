@@ -215,8 +215,15 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
 
   // TODO: Page pruning not yet implemented (especially for the chunked reader) so set all pages in
   // this subpass to be decoded.
-  auto host_page_mask =
-    _page_mask.empty() ? thrust::host_vector<bool>(subpass.pages.size(), true) : _page_mask;
+  auto host_page_mask = [&]() {
+    if (_page_mask.empty()) {
+      auto page_mask = cudf::detail::make_host_vector<bool>(subpass.pages.size(), _stream);
+      std::fill(page_mask.begin(), page_mask.end(), true);
+      return page_mask;
+    } else {
+      return _page_mask;
+    }
+  }();
 
   CUDF_EXPECTS(host_page_mask.size() == subpass.pages.size(),
                "Page mask size must be equal to the number of pages in the subpass");
@@ -516,7 +523,10 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
   _stream.synchronize();
 }
 
-reader_impl::reader_impl() : _options{} {}
+reader_impl::reader_impl()
+  : _options{}, _page_mask{cudf::detail::make_host_vector<bool>(0, cudf::get_default_stream())}
+{
+}
 
 reader_impl::reader_impl(std::vector<std::unique_ptr<datasource>>&& sources,
                          parquet_reader_options const& options,
@@ -544,6 +554,7 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
              options.get_num_rows(),
              options.get_row_groups()},
     _sources{std::move(sources)},
+    _page_mask{cudf::detail::make_host_vector<bool>(0, _stream)},
     _output_chunk_read_limit{chunk_read_limit},
     _input_pass_read_limit{pass_read_limit}
 {
@@ -638,7 +649,7 @@ table_with_metadata reader_impl::read_chunk_internal(read_mode mode)
   // Copy number of total input row groups and number of surviving row groups from predicate
   // pushdown.
   out_metadata.num_input_row_groups = _file_itm_data.num_input_row_groups;
-  // Copy the number surviving row groups from each predicate pushdown only if the filter has value.
+  // Copy the number surviving row groups from each predicate pushdown only if the filter has value
   if (_expr_conv.get_converted_expr().has_value()) {
     out_metadata.num_row_groups_after_stats_filter =
       _file_itm_data.surviving_row_groups.after_stats_filter;
