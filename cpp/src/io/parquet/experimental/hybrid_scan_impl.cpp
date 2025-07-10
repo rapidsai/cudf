@@ -77,13 +77,12 @@ hybrid_scan_reader_impl::hybrid_scan_reader_impl(cudf::host_span<uint8_t const> 
                                                  parquet_reader_options const& options)
 {
   // Open and parse the source dataset metadata
-  _extended_metadata = std::make_unique<aggregate_reader_metadata>(
+  _metadata = std::make_unique<aggregate_reader_metadata>(
     footer_bytes,
     options.is_enabled_use_arrow_schema(),
     options.get_columns().has_value() and options.is_enabled_allow_mismatched_pq_schemas());
 
-  // Make a copy of _extended_metadata to _metadata
-  _metadata = std::make_unique<aggregate_reader_metadata>(*_extended_metadata);
+  _extended_metadata = static_cast<aggregate_reader_metadata*>(_metadata.get());
 }
 
 FileMetaData hybrid_scan_reader_impl::parquet_metadata() const
@@ -258,7 +257,7 @@ hybrid_scan_reader_impl::filter_row_groups_with_dictionary_pages(
                   std::back_inserter(dictionary_col_schemas),
                   [](auto& dict_literals) { return not dict_literals.empty(); });
 
-  // Prepare column chunks and dictionary page headers filtering
+  // Prepare dictionary column chunks and decode page headers
   auto [has_compressed_data, chunks, pages] = prepare_dictionaries(
     row_group_indices, dictionary_page_data, dictionary_col_schemas, options, stream);
 

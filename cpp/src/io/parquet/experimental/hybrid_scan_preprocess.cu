@@ -16,9 +16,8 @@
 
 #include "hybrid_scan_helpers.hpp"
 #include "hybrid_scan_impl.hpp"
-#include "io/parquet/parquet_gpu.hpp"
-#include "io/parquet/reader_impl_chunking_utils.cuh"
 #include "io/parquet/reader_impl_preprocess_utils.cuh"
+#include "io/utilities/time_utils.cuh"
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -43,11 +42,7 @@ namespace {
 
 using parquet::detail::chunk_page_info;
 using parquet::detail::ColumnChunkDesc;
-using parquet::detail::input_col_info;
-using parquet::detail::level_type;
 using parquet::detail::PageInfo;
-using parquet::detail::PageNestingDecodeInfo;
-using parquet::detail::PageNestingInfo;
 
 /**
  * @brief Decode the dictionary page information from each column chunk
@@ -121,11 +116,13 @@ void hybrid_scan_reader_impl::prepare_row_groups(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options)
 {
-  // Hybrid scan reader does not support skip rows
-  _file_itm_data.global_skip_rows = 0;
-
-  std::tie(_file_itm_data.global_num_rows, _file_itm_data.row_groups) =
-    _extended_metadata->select_row_groups(row_group_indices);
+  std::tie(_file_itm_data.global_skip_rows,
+           _file_itm_data.global_num_rows,
+           _file_itm_data.row_groups,
+           _file_itm_data.num_rows_per_source,
+           _file_itm_data.num_input_row_groups,
+           _file_itm_data.surviving_row_groups) =
+    _extended_metadata->select_row_groups({}, row_group_indices, {}, {}, {}, {}, {}, _stream);
 
   // check for page indexes
   _has_page_index = std::all_of(_file_itm_data.row_groups.cbegin(),
@@ -136,7 +133,7 @@ void hybrid_scan_reader_impl::prepare_row_groups(
       not _input_columns.empty()) {
     // fills in chunk information without physically loading or decompressing
     // the associated data
-    create_global_chunk_info(options);
+    create_global_chunk_info();
 
     // compute schedule of input reads.
     compute_input_passes();
@@ -217,8 +214,8 @@ hybrid_scan_reader_impl::prepare_dictionaries(
   rmm::cuda_stream_view stream)
 {
   // Create row group information for the input row group indices
-  auto const row_groups_info =
-    std::get<1>(_extended_metadata->select_row_groups(row_group_indices));
+  auto const row_groups_info = std::get<2>(
+    _extended_metadata->select_row_groups({}, row_group_indices, {}, {}, {}, {}, {}, _stream));
 
   CUDF_EXPECTS(row_groups_info.size() * _input_columns.size() == dictionary_page_data.size(),
                "Dictionary page data size must match the number of row groups times the number of "
@@ -256,13 +253,15 @@ hybrid_scan_reader_impl::prepare_dictionaries(
       has_compressed_data |=
         col_meta.codec != Compression::UNCOMPRESSED and col_meta.total_compressed_size > 0;
 
-      auto const [clock_rate, _] = parquet::detail::conversion_info(
+      // TODO: Use `parquet::detail::conversion_info` instead of directly computing `clock_rate`
+      // when AST support for decimals is available
+      auto const column_type_id =
         parquet::detail::to_type_id(schema,
                                     options.is_enabled_convert_strings_to_categories(),
-                                    options.get_timestamp_type().id()),
-        options.get_timestamp_type().id(),
-        schema.type,
-        schema.logical_type);
+                                    options.get_timestamp_type().id());
+      auto const clock_rate = is_chrono(data_type{column_type_id})
+                                ? to_clockrate(options.get_timestamp_type().id())
+                                : int32_t{0};
 
       // Create a column chunk descriptor - zero/null values for all fields that are not needed
       chunks[chunk_idx] = ColumnChunkDesc(static_cast<int64_t>(dict_page_data.size()),
@@ -303,6 +302,54 @@ hybrid_scan_reader_impl::prepare_dictionaries(
   decode_dictionary_page_headers(chunks, pages, stream);
 
   return {has_compressed_data, std::move(chunks), std::move(pages)};
+}
+
+void hybrid_scan_reader_impl::update_row_mask(cudf::column_view in_row_mask,
+                                              cudf::mutable_column_view out_row_mask,
+                                              rmm::cuda_stream_view stream)
+{
+  auto const total_rows = static_cast<cudf::size_type>(in_row_mask.size());
+
+  CUDF_EXPECTS(total_rows == out_row_mask.size(),
+               "Input and output row mask columns must have the same number of rows");
+  CUDF_EXPECTS(out_row_mask.type().id() == type_id::BOOL8,
+               "Output row mask column must be a boolean column");
+
+  // Update output row mask such that out_row_mask[i] = true, iff in_row_mask[i] is valid and true.
+  // This is inline with the masking behavior of cudf::detail::apply_boolean_mask.
+  thrust::transform(rmm::exec_policy_nosync(stream),
+                    thrust::counting_iterator<cudf::size_type>(0),
+                    thrust::make_counting_iterator(total_rows),
+                    out_row_mask.begin<bool>(),
+                    [is_nullable = in_row_mask.nullable(),
+                     in_row_mask = in_row_mask.begin<bool>(),
+                     in_bitmask  = in_row_mask.null_mask()] __device__(auto row_idx) {
+                      auto const is_valid = not is_nullable or bit_is_set(in_bitmask, row_idx);
+                      auto const is_true  = in_row_mask[row_idx];
+                      if (is_nullable) {
+                        return is_valid and is_true;
+                      } else {
+                        return is_true;
+                      }
+                    });
+
+  // Make sure the null mask of the output row mask column is all valid after the update. This is
+  // to correctly assess if a payload column data page can be pruned. An invalid row in the row mask
+  // column means the corresponding data page cannot be pruned.
+  if (out_row_mask.nullable()) {
+    cudf::set_null_mask(out_row_mask.null_mask(), 0, total_rows, true, stream);
+    out_row_mask.set_null_count(0);
+  }
+}
+
+void hybrid_scan_reader_impl::sanitize_row_mask(
+  cudf::host_span<thrust::host_vector<bool> const> data_page_mask,
+  cudf::mutable_column_view row_mask)
+{
+  if (data_page_mask.empty()) {
+    thrust::fill(
+      rmm::exec_policy_nosync(_stream), row_mask.begin<bool>(), row_mask.end<bool>(), true);
+  }
 }
 
 }  // namespace cudf::io::parquet::experimental::detail

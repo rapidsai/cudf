@@ -838,25 +838,6 @@ set_source_files_properties(
 )
 
 set_property(
-  SOURCE   
-  src/io/parquet/experimental/dictionary_page_filter.cu
-  src/io/parquet/experimental/hybrid_scan.cpp
-  src/io/parquet/experimental/hybrid_scan_chunking.cu
-  src/io/parquet/experimental/hybrid_scan_helpers.cpp
-  src/io/parquet/experimental/hybrid_scan_impl.cpp
-  src/io/parquet/experimental/hybrid_scan_preprocess.cu
-  src/io/parquet/experimental/page_index_filter.cu
-  src/io/parquet/reader_impl.cpp
-  src/io/parquet/reader_impl_chunking.cu
-  src/io/parquet/reader_impl_chunking_utils.cu
-  src/io/parquet/reader_impl_helpers.cpp
-  src/io/parquet/reader_impl_preprocess.cu
-  src/io/parquet/reader_impl_preprocess_utils.cu
-  APPEND
-  PROPERTY COMPILE_FLAGS " -g -O0"
-)
-
-set_property(
   SOURCE src/io/parquet/writer_impl.cu
   APPEND
   PROPERTY COMPILE_DEFINITIONS "CUDF_VERSION=${PROJECT_VERSION}"

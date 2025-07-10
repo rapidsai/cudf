@@ -50,6 +50,13 @@ class reader_impl {
   reader_impl();
 
   /**
+   * @brief Virtual destructor to allow for correct destruction of derived classes.
+   *
+   * This makes the class polymorphic.
+   */
+  virtual ~reader_impl() = default;
+
+  /**
    * @brief Constructor from an array of dataset sources with reader options
    *
    * By using this constructor, each call to `read()` or `read_chunk()` will perform reading the

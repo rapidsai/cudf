@@ -274,7 +274,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
                     parquet_reader_options const& options);
 
   /**
-   * @brief Prepare dictionaries for dictionary page filtering
+   * @brief Create descriptors for filter column chunks and decode dictionary page headers
    *
    * @param row_group_indices The row groups to read
    * @param dictionary_page_data Device buffers containing dictionary page data
@@ -328,18 +328,6 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
                        parquet_reader_options const& options);
 
   /**
-   * @brief Setup step for the next decompression subpass.
-   *
-   * A 'subpass' is defined as a subset of pages within a pass that are
-   * decompressed and decoded as a batch. Subpasses may be further subdivided
-   * into output chunks.
-   *
-   * @param options Parquet reader options
-   *
-   */
-  void setup_next_subpass(parquet_reader_options const& options);
-
-  /**
    * @brief Setup pointers to columns chunks to be processed for this pass.
    *
    * Does not decompress the chunk data.
@@ -388,14 +376,6 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
   void decode_page_data(size_t skip_rows, size_t num_rows);
 
   /**
-   * @brief Creates file-wide parquet chunk information.
-   *
-   * Creates information about all chunks in the file, storing it in
-   * the file-wide _file_itm_data structure.
-   */
-  void create_global_chunk_info(parquet_reader_options const& options);
-
-  /**
    * @brief Read a chunk of data and return an output table.
    *
    * This function is called internally and expects all preprocessing steps have already been done.
@@ -411,7 +391,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
                                           RowMaskView row_mask);
 
  private:
-  std::unique_ptr<aggregate_reader_metadata> _extended_metadata;
+  aggregate_reader_metadata* _extended_metadata;
 
   std::optional<std::vector<std::string>> _filter_columns_names;
 

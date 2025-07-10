@@ -319,8 +319,6 @@ ConfigureTest(
   io/parquet_bloom_filter_test.cu
   io/parquet_chunked_reader_test.cu
   io/parquet_chunked_writer_test.cpp
-  io/parquet_experimental_reader_test.cpp
-  io/parquet_experimental_reader_materialize.cpp
   io/parquet_common.cpp
   io/parquet_misc_test.cpp
   io/parquet_reader_test.cpp
@@ -330,15 +328,16 @@ ConfigureTest(
   GPUS 1
   PERCENT 30
 )
-
-set_property(
-  SOURCE   
-  io/parquet_experimental_reader_test.cpp
-  io/parquet_experimental_reader_materialize.cpp
-  APPEND
-  PROPERTY COMPILE_FLAGS " -g -O0"
+ConfigureTest(
+  HYBRID_SCAN_TEST
+  io/experimental/hybrid_scan_test.cpp
+  io/experimental/hybrid_scan_common.cpp
+  io/experimental/hybrid_scan_predicate_pushdown_test.cpp
+  io/parquet_common.cpp
+  io/parquet_test.cpp
+  GPUS 1
+  PERCENT 30
 )
-
 ConfigureTest(
   JSON_TEST io/json/json_test.cpp io/json/json_chunked_reader.cu
   GPUS 1
