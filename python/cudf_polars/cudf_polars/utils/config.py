@@ -38,7 +38,15 @@ if TYPE_CHECKING:
     import polars.lazyframe.engine_config
 
 
-__all__ = ["ConfigOptions", "InMemoryExecutor", "ParquetOptions", "StreamingExecutor"]
+__all__ = [
+    "ConfigOptions",
+    "InMemoryExecutor",
+    "ParquetOptions",
+    "Scheduler",
+    "ShuffleMethod",
+    "StreamingExecutor",
+    "StreamingFallbackMode",
+]
 
 
 @functools.cache
@@ -74,8 +82,10 @@ class Scheduler(str, enum.Enum):
     """
     The scheduler to use for the streaming executor.
 
-    * ``Scheduler.SYNCHRONOUS`` : Use the synchronous scheduler.
-    * ``Scheduler.DISTRIBUTED`` : Use the distributed scheduler.
+    * ``Scheduler.SYNCHRONOUS`` : A zero-dependency, synchronous,
+      single-threaded scheduler.
+    * ``Scheduler.DISTRIBUTED`` : A Dask-based distributed scheduler.
+      Using this scheduler requires an active Dask cluster.
     """
 
     SYNCHRONOUS = "synchronous"

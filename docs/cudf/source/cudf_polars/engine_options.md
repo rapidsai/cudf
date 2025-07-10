@@ -15,17 +15,21 @@ query = ...
 result = query.collect(engine=engine)
 ```
 
-The `streaming` executor is the default, and is equivalent to passing
-`engine="gpu"` or `engine=pl.GPUEngine()` to `collect`. At a high-level, the
-`streaming` executor works by breaking inputs (in-memory DataFrames or parquet
-files) into multiple pieces and streaming those pieces through the series of
-operations needed to produce the final result.
+The `streaming` executor is the default executor as of RAPIDS 25.08, and is
+equivalent to passing `engine="gpu"` or `engine=pl.GPUEngine()` to `collect`. At
+a high-level, the `streaming` executor works by breaking inputs (in-memory
+DataFrames or parquet files) into multiple pieces and streaming those pieces
+through the series of operations needed to produce the final result.
 
 We also provide an `in-memory` executor. This executor is often faster when the
 underlying data fits comfortably in device memory, because the overhead of splitting
 inputs and executing them in batches is less beneficial at this scale. With that said,
 this executor must rely on Unified Virtual Memory (UVM) if the input and intermediate
-data do not fit in device memory.
+data do not fit in device memory. The `in-memory` executor can be used with
+
+```python
+engine = pl.GPUEngine(executor="in-memory")
+```
 
 In general, we recommend starting with the default `streaming` executor, because
 it scales significantly better than `in-memory`. The `streaming` executor includes
