@@ -78,22 +78,26 @@ def test_source_statistics(df):
     column_stats = _extract_dataframescan_stats(ir)
 
     # Source info is the same for all columns
-    source = column_stats["x"].source
-    assert source is column_stats["y"].source
-    assert source is column_stats["z"].source
-    assert source.row_count.value == row_count
-    assert source.row_count.exact
+    source_info = column_stats["x"].source_info
+    assert source_info is column_stats["y"].source_info
+    assert source_info is column_stats["z"].source_info
+    assert source_info.row_count.value == row_count
+    assert source_info.row_count.exact
 
     # Storage stats should not be available
-    assert source.storage_size("x").value is None
+    assert source_info.storage_size("x").value is None
 
     # Check unique stats
-    assert math.isclose(source.unique_count("x").value, row_count, rel_tol=1e-2)
-    assert math.isclose(source.unique_fraction("x").value, 1.0, abs_tol=1e-2)
-    assert not source.unique_count("x").exact
-    assert math.isclose(source.unique_count("y").value, 3, rel_tol=1e-2)
-    assert math.isclose(source.unique_fraction("y").value, 3 / row_count, abs_tol=1e-2)
-    assert not source.unique_count("y").exact
-    assert math.isclose(source.unique_count("z").value, 5, rel_tol=1e-2)
-    assert math.isclose(source.unique_fraction("z").value, 5 / row_count, abs_tol=1e-2)
-    assert not source.unique_count("z").exact
+    assert math.isclose(source_info.unique_count("x").value, row_count, rel_tol=1e-2)
+    assert math.isclose(source_info.unique_fraction("x").value, 1.0, abs_tol=1e-2)
+    assert not source_info.unique_count("x").exact
+    assert math.isclose(source_info.unique_count("y").value, 3, rel_tol=1e-2)
+    assert math.isclose(
+        source_info.unique_fraction("y").value, 3 / row_count, abs_tol=1e-2
+    )
+    assert not source_info.unique_count("y").exact
+    assert math.isclose(source_info.unique_count("z").value, 5, rel_tol=1e-2)
+    assert math.isclose(
+        source_info.unique_fraction("z").value, 5 / row_count, abs_tol=1e-2
+    )
+    assert not source_info.unique_count("z").exact

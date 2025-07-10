@@ -185,10 +185,10 @@ class ColumnStats:
         Unique-value count estimate.
     """
 
-    __slots__ = ("name", "source", "source_name", "unique_count")
+    __slots__ = ("name", "source_info", "source_name", "unique_count")
 
     name: str
-    source: DataSourceInfo
+    source_info: DataSourceInfo
     source_name: str
     unique_count: UniqueCount
 
@@ -196,11 +196,11 @@ class ColumnStats:
         self,
         name: str,
         *,
-        source: DataSourceInfo | None = None,
+        source_info: DataSourceInfo | None = None,
         source_name: str | None = None,
         unique_count: UniqueCount | None = None,
     ) -> None:
         self.name = name
-        self.source = source or DataSourceInfo()
+        self.source_info = source_info or DataSourceInfo()
         self.source_name = source_name or name
         self.unique_count = unique_count or UniqueCount()

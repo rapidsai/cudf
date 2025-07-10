@@ -121,7 +121,7 @@ class ScanPartitionPlan:
             column_stats = _extract_scan_stats(ir)
             column_sizes: list[int] = []
             for name, cs in column_stats.items():
-                storage_size = cs.source.storage_size(name)
+                storage_size = cs.source_info.storage_size(name)
                 if storage_size.value is not None:
                     column_sizes.append(storage_size.value)
 
@@ -797,13 +797,13 @@ def _extract_scan_stats(
     if ir.typ == "parquet":
         # TODO: Add max_file_samples and max_rg_samples
         # to the ConfigOption system.
-        source_stats = _sample_pq_stats(
+        source_info = _sample_pq_stats(
             tuple(ir.paths), max_file_samples, max_rg_samples
         )
         return {
             name: ColumnStats(
                 name=name,
-                source=source_stats,
+                source_info=source_info,
                 source_name=name,
             )
             for name in ir.schema
@@ -858,11 +858,11 @@ class DataFrameSourceInfo(DataSourceInfo):
 
 def _extract_dataframescan_stats(ir: DataFrameScan) -> dict[str, ColumnStats]:
     """Extract base ColumnStats for a DataFrameScan node."""
-    source_stats = DataFrameSourceInfo(ir.df)
+    source_info = DataFrameSourceInfo(ir.df)
     return {
         name: ColumnStats(
             name=name,
-            source=source_stats,
+            source_info=source_info,
             source_name=name,
         )
         for name in ir.schema
