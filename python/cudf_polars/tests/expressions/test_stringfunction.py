@@ -566,6 +566,13 @@ def test_json_decode(ldf_jsonlike):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
+@pytest.mark.parametrize("dtype", [pl.Int64(), pl.Float64()])
+def test_json_decode_numeric_types(dtype):
+    ldf = pl.LazyFrame({"a": ['{"a": 1}', None, '{"a": 2}']})
+    q = ldf.select(pl.col("a").str.json_decode(pl.Struct({"a": dtype})))
+    assert_gpu_result_equal(q)
+
+
 def test_json_decode_nested():
     ldf = pl.LazyFrame({"a": ['{"a": {"b": 1}}', None]})
     q = ldf.select(

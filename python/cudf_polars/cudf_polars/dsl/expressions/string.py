@@ -29,6 +29,19 @@ if TYPE_CHECKING:
 
 __all__ = ["StringFunction"]
 
+JsonDecodeType = list[tuple[str, plc.DataType, "JsonDecodeType"]]
+
+
+def _dtypes_for_json_decode(dtype: DataType) -> JsonDecodeType:
+    """Get the dtypes for json decode."""
+    if dtype.id() == plc.TypeId.STRUCT:
+        return [
+            (field.name, child.plc, _dtypes_for_json_decode(child))
+            for field, child in zip(dtype.polars.fields, dtype.children, strict=True)
+        ]
+    else:
+        return []
+
 
 class StringFunction(Expr):
     class Name(IntEnum):
@@ -424,6 +437,7 @@ class StringFunction(Expr):
             options = (
                 plc.io.json.JsonReaderOptions.builder(source)
                 .lines(val=True)
+                .dtypes(_dtypes_for_json_decode(self.dtype))
                 .compression(plc.io.types.CompressionType.NONE)
                 .recovery_mode(plc.io.types.JSONRecoveryMode.RECOVER_WITH_NULL)
                 .build()
