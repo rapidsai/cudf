@@ -544,7 +544,6 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
              options.get_num_rows(),
              options.get_row_groups()},
     _sources{std::move(sources)},
-    _num_sources{_sources.size()},
     _output_chunk_read_limit{chunk_read_limit},
     _input_pass_read_limit{pass_read_limit}
 {
@@ -553,6 +552,9 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
     _sources,
     options.is_enabled_use_arrow_schema(),
     options.get_columns().has_value() and options.is_enabled_allow_mismatched_pq_schemas());
+
+  // Number of input sources
+  _num_sources = _sources.size();
 
   // Strings may be returned as either string or categorical columns
   _strings_to_categorical = options.is_enabled_convert_strings_to_categories();
