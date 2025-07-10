@@ -24,8 +24,12 @@ function(jit_preprocess_files)
   cmake_parse_arguments(ARG "" "SOURCE_DIRECTORY" "FILES" ${ARGN})
 
   get_target_property(libcudacxx_raw_includes CCCL::libcudacxx INTERFACE_INCLUDE_DIRECTORIES)
+  get_target_property(libcub_raw_includes CCCL::CUB INTERFACE_INCLUDE_DIRECTORIES)
+  get_target_property(libthrust_raw_includes Thrust::Thrust INTERFACE_INCLUDE_DIRECTORIES)
   set(includes)
-  foreach(inc IN LISTS libcudacxx_raw_includes CUDAToolkit_INCLUDE_DIRS)
+  foreach(inc IN LISTS libcudacxx_raw_includes libcub_raw_includes 
+  libthrust_raw_includes 
+  CUDAToolkit_INCLUDE_DIRS)
     list(APPEND includes "-I${inc}")
   endforeach()
   foreach(ARG_FILE ${ARG_FILES})
