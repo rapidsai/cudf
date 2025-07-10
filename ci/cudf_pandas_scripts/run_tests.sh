@@ -76,6 +76,7 @@ fi
 python -m pip install certifi ipykernel
 python -m ipykernel install --user --name python3
 
+rapids-logger "pytest cudf.pandas parallel"
 # The third-party integration tests are ignored because they are run in a separate nightly CI job
 # TODO: Root-cause why we cannot run the tests in profile.py in parallel and reconsider adding
 # them back. Tracking https://github.com/rapidsai/cudf/issues/18261
@@ -84,9 +85,26 @@ python -m pytest -p cudf.pandas \
     --numprocesses=8 \
     --dist=worksteal \
     -k "not profiler" \
+    -m "not serial" \
+    --config-file=./python/cudf/pyproject.toml \
     --cov-config=./python/cudf/.coveragerc \
     --cov=cudf \
     --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-pandas-coverage.xml" \
+    --cov-report=term \
+    ./python/cudf/cudf_pandas_tests/
+
+
+rapids-logger "pytest cudf.pandas serial"
+
+python -m pytest -p cudf.pandas \
+    --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
+    --dist=worksteal \
+    -k "not profiler" \
+    -m "serial" \
+    --config-file=./python/cudf/pyproject.toml \
+    --cov-config=./python/cudf/.coveragerc \
+    --cov=cudf \
+    --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-pandas-coverage-serial.xml" \
     --cov-report=term \
     ./python/cudf/cudf_pandas_tests/
 

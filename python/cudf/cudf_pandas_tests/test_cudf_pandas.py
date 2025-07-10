@@ -1464,6 +1464,7 @@ def test_holidays_within_dates(holiday, start, expected):
     ) == [utc.localize(dt) for dt in expected]
 
 
+@pytest.mark.serial
 @pytest.mark.parametrize(
     "env_value",
     ["", "cuda", "pool", "async", "managed", "managed_pool", "abc"],
