@@ -98,8 +98,12 @@ def test_source_statistics(
     max_file_samples,
     max_rg_samples,
 ):
-    from cudf_polars.experimental.io import _extract_scan_stats
+    from cudf_polars.experimental.io import (
+        _clear_source_info_cache,
+        _extract_scan_stats,
+    )
 
+    _clear_source_info_cache()
     make_partitioned_source(
         df,
         tmp_path,
@@ -143,18 +147,18 @@ def test_source_statistics(
 
     # Check that we can query a missing column name
     assert source.storage_size("foo").value is None
-    assert source.unique("foo").count is None
-    assert source.unique("foo").fraction is None
+    assert source.unique_count("foo").value is None
+    assert source.unique_fraction("foo").value is None
 
     # source._unique_stats should be empty
     assert set(source._unique_stats) == set()
 
     if max_file_samples and max_rg_samples:
-        assert source.unique("x").count == df.height
-        assert source.unique("x").fraction == 1.0
+        assert source.unique_count("x").value == df.height
+        assert source.unique_fraction("x").value == 1.0
     else:
-        assert source.unique("x").count is None
-        assert source.unique("x").fraction is None
+        assert source.unique_fraction("x").value is None
+        assert source.unique_count("x").value is None
 
     # source._unique_stats should only contain 'x'
     if max_file_samples and max_rg_samples:
@@ -166,15 +170,16 @@ def test_source_statistics(
     if max_file_samples and max_rg_samples:
         # Can add a "bad"/missing key column
         source.add_unique_stats_column("foo")
-        assert source.unique("foo").count is None
+        # assert source.unique_count("x").value is None
+        assert set(source._unique_stats) == {"x"}
 
         # Mark 'z' as a key column, and query 'y' stats
         source.add_unique_stats_column("z")
         if n_files == 1 and row_group_size == 10_000:
-            assert source.unique("y").count == 3
+            assert source.unique_count("y").value == 3
         else:
-            assert source.unique("y").count is None
-        assert source.unique("y").fraction < 1.0
+            assert source.unique_count("y").value is None
+        assert source.unique_fraction("y").value < 1.0
 
         # source._unique_stats should contain all columns now
         assert set(source._unique_stats) == {"x", "y", "z"}

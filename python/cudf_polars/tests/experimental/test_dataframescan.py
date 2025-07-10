@@ -88,12 +88,12 @@ def test_source_statistics(df):
     assert source.storage_size("x").value is None
 
     # Check unique stats
-    assert math.isclose(source.unique("x").count, row_count, rel_tol=1e-2)
-    assert math.isclose(source.unique("x").fraction, 1.0, abs_tol=1e-2)
-    assert not source.unique("x").exact
-    assert math.isclose(source.unique("y").count, 3, rel_tol=1e-2)
-    assert math.isclose(source.unique("y").fraction, 3 / row_count, abs_tol=1e-2)
-    assert not source.unique("y").exact
-    assert math.isclose(source.unique("z").count, 5, rel_tol=1e-2)
-    assert math.isclose(source.unique("y").fraction, 5 / row_count, abs_tol=1e-2)
-    assert not source.unique("z").exact
+    assert math.isclose(source.unique_count("x").value, row_count, rel_tol=1e-2)
+    assert math.isclose(source.unique_fraction("x").value, 1.0, abs_tol=1e-2)
+    assert not source.unique_count("x").exact
+    assert math.isclose(source.unique_count("y").value, 3, rel_tol=1e-2)
+    assert math.isclose(source.unique_fraction("y").value, 3 / row_count, abs_tol=1e-2)
+    assert not source.unique_count("y").exact
+    assert math.isclose(source.unique_count("z").value, 5, rel_tol=1e-2)
+    assert math.isclose(source.unique_fraction("z").value, 5 / row_count, abs_tol=1e-2)
+    assert not source.unique_count("z").exact

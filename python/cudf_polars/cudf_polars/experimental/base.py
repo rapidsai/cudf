@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterator
@@ -46,17 +46,16 @@ def get_key_name(node: Node) -> str:
     return f"{type(node).__name__.lower()}-{hash(node)}"
 
 
-class RowCountInfo:
-    """
-    Row-count information.
+@runtime_checkable
+class ColumnStat(Protocol):
+    """Generic column-statistic protocol."""
 
-    Parameters
-    ----------
-    value
-        Row-count value.
-    exact
-        Whether row-count is known exactly.
-    """
+    value: Any
+    exact: bool
+
+
+class IntColumnStat(ColumnStat):
+    """Integer column statistic."""
 
     __slots__ = ("exact", "value")
 
@@ -70,37 +69,61 @@ class RowCountInfo:
         self.exact = exact
 
 
-class UniqueInfo:
-    """
-    Unique-value information.
+class FloatColumnStat(ColumnStat):
+    """Float column statistic."""
 
-    Parameters
-    ----------
-    count
-        Unique-value count.
-    fraction
-        Unique-value fraction. This corresponds to the total
-        number of unique values (count) divided by the total
-        number of rows.
-    exact
-        Whether the unique-value statistics are known exactly.
-    """
-
-    __slots__ = ("count", "exact", "fraction")
+    __slots__ = ("exact", "value")
 
     def __init__(
         self,
         *,
-        count: int | None = None,
-        fraction: float | None = None,
+        value: float | None = None,
         exact: bool = False,
     ):
-        self.count = count
-        self.fraction = fraction
+        self.value = value
         self.exact = exact
 
 
-class StorageSizeInfo:
+class RowCount(IntColumnStat):
+    """
+    Row-count statistic.
+
+    Parameters
+    ----------
+    value
+        Row-count value.
+    exact
+        Whether row-count is known exactly.
+    """
+
+
+class UniqueCount(IntColumnStat):
+    """
+    Unique-value count statistic.
+
+    Parameters
+    ----------
+    value
+        Unique-value count.
+    exact
+        Whether unique-value count is known exactly.
+    """
+
+
+class UniqueFraction(FloatColumnStat):
+    """
+    Unique-value fraction statistic.
+
+    Parameters
+    ----------
+    value
+        Unique-value fraction.
+    exact
+        Whether unique-value fraction is known exactly.
+    """
+
+
+class StorageSize(IntColumnStat):
     """
     Average storage-size information.
 
@@ -111,17 +134,6 @@ class StorageSizeInfo:
     exact
         Whether the storage size is known exactly.
     """
-
-    __slots__ = ("exact", "value")
-
-    def __init__(
-        self,
-        *,
-        value: int | None = None,
-        exact: bool = False,
-    ):
-        self.value = value
-        self.exact = exact
 
 
 class DataSourceInfo:
@@ -137,17 +149,21 @@ class DataSourceInfo:
     """
 
     @property
-    def row_count(self) -> RowCountInfo:
+    def row_count(self) -> RowCount:
         """Data source row-count estimate."""
-        return RowCountInfo()  # pragma: no cover
+        return RowCount()  # pragma: no cover
 
-    def unique(self, column: str) -> UniqueInfo:
-        """Return unique-value information."""
-        return UniqueInfo()  # pragma: no cover
+    def unique_count(self, column: str) -> UniqueCount:
+        """Return unique-value count estimate."""
+        return UniqueCount()  # pragma: no cover
 
-    def storage_size(self, column: str) -> StorageSizeInfo:
+    def unique_fraction(self, column: str) -> UniqueFraction:
+        """Return unique-value fraction estimate."""
+        return UniqueFraction()  # pragma: no cover
+
+    def storage_size(self, column: str) -> StorageSize:
         """Return the average column size for a single file."""
-        return StorageSizeInfo()
+        return StorageSize()
 
     def add_unique_stats_column(self, column: str) -> None:
         """Add a column needing unique-value information."""
@@ -165,16 +181,16 @@ class ColumnStats:
         Datasource information.
     source_name
         Source-column name.
-    unique_info
-        Unique-value information.
+    unique_count
+        Unique-value count estimate.
     """
 
-    __slots__ = ("name", "source", "source_name", "unique_info")
+    __slots__ = ("name", "source", "source_name", "unique_count")
 
     name: str
     source: DataSourceInfo
     source_name: str
-    unique_info: UniqueInfo
+    unique_count: UniqueCount
 
     def __init__(
         self,
@@ -182,9 +198,9 @@ class ColumnStats:
         *,
         source: DataSourceInfo | None = None,
         source_name: str | None = None,
-        unique_info: UniqueInfo | None = None,
+        unique_count: UniqueCount | None = None,
     ) -> None:
         self.name = name
         self.source = source or DataSourceInfo()
         self.source_name = source_name or name
-        self.unique_info = unique_info or UniqueInfo()
+        self.unique_count = unique_count or UniqueCount()
