@@ -1,5 +1,6 @@
 # Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
+import datetime
 import decimal
 import operator
 import warnings
@@ -2673,4 +2674,13 @@ def test_eq_ne_non_comparable_types(
     if with_na:
         expected_data[0] = None
     expected = cudf.Series(expected_data)
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("op", _binops_compare)
+def test_binops_compare_stdlib_date_scalar(op):
+    dt = datetime.date(2020, 1, 1)
+    data = [dt]
+    result = op(cudf.Series(data), dt)
+    expected = op(pd.Series(data), dt)
     assert_eq(result, expected)
