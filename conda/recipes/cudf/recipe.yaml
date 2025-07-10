@@ -78,11 +78,6 @@ requirements:
     - ${{ pin_compatible("rmm", upper_bound="x.x") }}
     - fsspec >=0.6.0
     - cuda-cudart
-    # Needed by Numba for CUDA support
-    - cuda-nvcc-impl
-    # TODO: Add nvjitlink here
-    # xref: https://github.com/rapidsai/cudf/issues/12822
-    - cuda-nvrtc
     - cuda-python >=12.6.2,<13.0a0
     - if: linux and x86_64
       then:
