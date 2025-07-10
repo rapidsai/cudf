@@ -217,6 +217,10 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
   // this subpass to be decoded.
   auto host_page_mask =
     _page_mask.empty() ? thrust::host_vector<bool>(subpass.pages.size(), true) : _page_mask;
+
+  CUDF_EXPECTS(host_page_mask.size() == subpass.pages.size(),
+               "Page mask size must be equal to the number of pages in the subpass");
+
   auto page_mask = cudf::detail::make_device_uvector_async(host_page_mask, _stream, _mr);
 
   // Create an empty device vector to store the initial str offset for large string columns from for
