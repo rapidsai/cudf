@@ -48,13 +48,11 @@ using JOIN_ALGORITHM      = nvbench::enum_type_list<join_t::HASH, join_t::SORT_M
 using JOIN_KEY_TYPE_RANGE = nvbench::type_list<nvbench::int32_t, nvbench::int64_t>;
 using JOIN_NULLABLE_RANGE = nvbench::enum_type_list<false, true>;
 using JOIN_DATATYPES      = nvbench::enum_type_list<data_type::INTEGRAL,
+                                                    data_type::INTEGRAL_SIGNED,
                                                     data_type::FLOAT,
+                                                    data_type::BOOL8,
                                                     data_type::DECIMAL,
-                                                    data_type::TIMESTAMP,
-                                                    data_type::DURATION,
-                                                    data_type::STRING,
-                                                    data_type::LIST,
-                                                    data_type::STRUCT>;
+                                                    data_type::STRING>;
 using JOIN_NULL_EQUALITY =
   nvbench::enum_type_list<cudf::null_equality::EQUAL, cudf::null_equality::UNEQUAL>;
 
@@ -212,7 +210,7 @@ template <typename Key,
           cudf::null_equality compare_nulls = cudf::null_equality::UNEQUAL,
           typename state_type,
           typename Join>
-void BM_join_with_datatype(state_type& state, std::vector<cudf::type_id>& key_types, Join JoinFunc)
+void BM_join_with_datatype(state_type& state, std::vector<cudf::type_id>& key_types, Join JoinFunc, int multiplicity = 1, double selectivity = 0.3)
 {
   auto const right_size = static_cast<size_t>(state.get_int64("right_size"));
   auto const left_size  = static_cast<size_t>(state.get_int64("left_size"));
@@ -222,96 +220,30 @@ void BM_join_with_datatype(state_type& state, std::vector<cudf::type_id>& key_ty
     return;
   }
 
+  std::printf("key_types = ");
+  for(auto id : key_types)
+    std::printf("%d ", static_cast<std::underlying_type<cudf::type_id>::type>(id));
+  std::printf("\n");
+
   auto const num_keys = key_types.size();
+  auto stream = cudf::get_default_stream();
+  auto [build_table, probe_table] = generate_input_tables<Nullable>(key_types, right_size, left_size, selectivity, multiplicity, stream);
 
-#if 1
-  auto profile        = data_profile_builder().null_probability(Nullable ? 0.3 : 0);
-
-  // payload column
-  key_types.push_back(cudf::type_id::INT32);
-
-  auto const left_tbl   = create_random_table(key_types, table_size_bytes{left_size}, profile);
-  auto const left_view  = left_tbl->view();
-  auto const right_tbl  = create_random_table(key_types, table_size_bytes{right_size}, profile);
-  auto const right_view = right_tbl->view();
-  std::printf("left_table: %d rows, %d cols\nright_table: %d rows, %d cols\n", left_tbl->num_rows(), left_tbl->num_columns(), right_tbl->num_rows(), right_tbl->num_columns());
-#endif
-  
-#if 0
-  assert(num_keys <= 2);
-  // Generate build and probe tables
-  auto right_random_null_mask = [](int size) {
-    // roughly 75% nulls
-    auto validity =
-      thrust::make_transform_iterator(thrust::make_counting_iterator(0), null75_generator{});
-    return cudf::detail::valid_if(validity,
-                                  validity + size,
-                                  cuda::std::identity{},
-                                  cudf::get_default_stream(),
-                                  cudf::get_current_device_resource_ref());
+  auto print_table = [stream](std::string s, cudf::table_view t) {
+    std::printf(s.c_str());
+    std::printf(": nrows = %d, ncols = %d\n", t.num_rows(), t.num_columns());
+    auto col = t.column(0);
+    std::printf("Data: ");
+    auto colspan = cudf::device_span<cudf::size_type const>(col.begin<cudf::size_type>(), col.size());
+    auto h_coldata = cudf::detail::make_std_vector<cudf::size_type>(colspan, stream);
+    for(auto e : h_coldata)
+      std::printf("%d ", e);
+    std::printf("\n");
   };
+  print_table("build_table", build_table->view());
+  print_table("probe_table", probe_table->view());
 
-  std::unique_ptr<cudf::column> right_key_column0 = [&]() {
-    auto [null_mask, null_count] = right_random_null_mask(right_size);
-    return Nullable
-             ? cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<Key>()),
-                                         right_size,
-                                         std::move(null_mask),
-                                         null_count)
-             : cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<Key>()), right_size);
-  }();
-  std::unique_ptr<cudf::column> left_key_column0 = [&]() {
-    auto [null_mask, null_count] = right_random_null_mask(left_size);
-    return Nullable
-             ? cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<Key>()),
-                                         left_size,
-                                         std::move(null_mask),
-                                         null_count)
-             : cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<Key>()), left_size);
-  }();
-
-  // build table is right table, probe table is left table
-  auto multiplicity = 1;
-  auto selectivity = 0.3;
-  generate_input_tables<Key, cudf::size_type>(right_key_column0->mutable_view().data<Key>(),
-                                              right_size,
-                                              left_key_column0->mutable_view().data<Key>(),
-                                              left_size,
-                                              selectivity,
-                                              multiplicity);
-
-  // Copy right_key_column0 and left_key_column0 into new columns.
-  // If Nullable, the new columns will be assigned new nullmasks.
-  auto const right_key_column1 = [&]() {
-    auto col = std::make_unique<cudf::column>(right_key_column0->view());
-    if (Nullable) {
-      auto [null_mask, null_count] = right_random_null_mask(right_size);
-      col->set_null_mask(std::move(null_mask), null_count);
-    }
-    return col;
-  }();
-  auto const left_key_column1 = [&]() {
-    auto col = std::make_unique<cudf::column>(left_key_column0->view());
-    if (Nullable) {
-      auto [null_mask, null_count] = right_random_null_mask(left_size);
-      col->set_null_mask(std::move(null_mask), null_count);
-    }
-    return col;
-  }();
-
-  auto init                 = cudf::make_fixed_width_scalar<Key>(static_cast<Key>(0));
-  auto right_payload_column = cudf::sequence(right_size, *init);
-  auto left_payload_column  = cudf::sequence(left_size, *init);
-
-  CUDF_CHECK_CUDA(0);
-
-  cudf::table_view right_view(
-    {right_key_column0->view(), right_key_column1->view(), *right_payload_column});
-  cudf::table_view left_view(
-    {left_key_column0->view(), left_key_column1->view(), *left_payload_column});
-#endif
-
-  auto const join_input_size = estimate_size(right_view) + estimate_size(left_view);
+  auto const join_input_size = estimate_size(build_table->view()) + estimate_size(probe_table->view());
 
   // Setup join parameters and result table
   std::vector<cudf::size_type> columns_to_join(num_keys);
@@ -323,7 +255,7 @@ void BM_join_with_datatype(state_type& state, std::vector<cudf::type_id>& key_ty
     state.template add_global_memory_reads<nvbench::int8_t>(join_input_size);
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       auto result = JoinFunc(
-        left_view.select(columns_to_join), right_view.select(columns_to_join), compare_nulls);
+        build_table->view().select(columns_to_join), probe_table->view().select(columns_to_join), compare_nulls);
     });
     set_throughputs(state);
   }

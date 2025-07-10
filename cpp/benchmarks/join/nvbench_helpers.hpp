@@ -65,11 +65,7 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
       case data_type::FLOAT: return "FLOAT";
       case data_type::BOOL8: return "BOOL8";
       case data_type::DECIMAL: return "DECIMAL";
-      case data_type::TIMESTAMP: return "TIMESTAMP";
-      case data_type::DURATION: return "DURATION";
       case data_type::STRING: return "STRING";
-      case data_type::LIST: return "LIST";
-      case data_type::STRUCT: return "STRUCT";
       default: return "Unknown";
     }
   },

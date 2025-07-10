@@ -21,7 +21,7 @@
 #include <cudf/join/sort_merge_join.hpp>
 
 template <typename Key, bool Nullable, cudf::null_equality NullEquality, join_t Algorithm>
-void nvbench_inner_join(nvbench::state& state,
+void nvbench_lchm_inner_join(nvbench::state& state,
                         nvbench::type_list<Key,
                                            nvbench::enum_type<Nullable>,
                                            nvbench::enum_type<NullEquality>,
@@ -55,7 +55,7 @@ void nvbench_inner_join(nvbench::state& state,
   }
 }
 
-void nvbench_left_join(nvbench::state& state)
+void nvbench_lchm_left_join(nvbench::state& state)
 {
   auto const multiplicity = static_cast<cudf::size_type>(state.get_int64("multiplicity"));
   auto join               = [](cudf::table_view const& left_input,
@@ -66,7 +66,7 @@ void nvbench_left_join(nvbench::state& state)
   BM_join<nvbench::int64_t, false>(state, join, multiplicity);
 }
 
-void nvbench_full_join(nvbench::state& state)
+void nvbench_lchm_full_join(nvbench::state& state)
 {
   auto const multiplicity = static_cast<cudf::size_type>(state.get_int64("multiplicity"));
   auto join               = [](cudf::table_view const& left_input,
@@ -78,7 +78,7 @@ void nvbench_full_join(nvbench::state& state)
 }
 
 NVBENCH_BENCH_TYPES(
-  nvbench_inner_join,
+  nvbench_lchm_inner_join,
   NVBENCH_TYPE_AXES(JOIN_KEY_TYPE_RANGE, JOIN_NULLABLE_RANGE, JOIN_NULL_EQUALITY, JOIN_ALGORITHM))
   .set_name("high_multiplicity_inner_join")
   .set_type_axes_names({"Key", "Nullable", "NullEquality", "Algorithm"})
@@ -86,13 +86,13 @@ NVBENCH_BENCH_TYPES(
   .add_int64_axis("right_size", {100'000})
   .add_int64_axis("multiplicity", {10, 20, 50, 100, 1'000, 10'000, 50'000});
 
-NVBENCH_BENCH(nvbench_left_join)
+NVBENCH_BENCH(nvbench_lchm_left_join)
   .set_name("high_multiplicity_left_join")
   .add_int64_axis("left_size", {100'000})
   .add_int64_axis("right_size", {100'000})
   .add_int64_axis("multiplicity", {10, 20, 50, 100, 1'000, 10'000, 50'000});
 
-NVBENCH_BENCH(nvbench_full_join)
+NVBENCH_BENCH(nvbench_lchm_full_join)
   .set_name("high_multiplicity_full_join")
   .add_int64_axis("left_size", {100'000})
   .add_int64_axis("right_size", {100'000})
