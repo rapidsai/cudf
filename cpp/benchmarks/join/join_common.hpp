@@ -209,7 +209,11 @@ template <bool Nullable,
           cudf::null_equality compare_nulls = cudf::null_equality::UNEQUAL,
           typename state_type,
           typename Join>
-void BM_join_with_datatype(state_type& state, std::vector<cudf::type_id>& key_types, Join JoinFunc, int multiplicity = 1, double selectivity = 0.3)
+void BM_join_with_datatype(state_type& state,
+                           std::vector<cudf::type_id>& key_types,
+                           Join JoinFunc,
+                           int multiplicity   = 1,
+                           double selectivity = 0.3)
 {
   auto const right_size = static_cast<size_t>(state.get_int64("right_size"));
   auto const left_size  = static_cast<size_t>(state.get_int64("left_size"));
@@ -219,11 +223,13 @@ void BM_join_with_datatype(state_type& state, std::vector<cudf::type_id>& key_ty
     return;
   }
 
-  auto const num_keys = key_types.size();
-  auto stream = cudf::get_default_stream();
-  auto [build_table, probe_table] = generate_input_tables<Nullable>(key_types, right_size, left_size, multiplicity, selectivity, stream);
+  auto const num_keys             = key_types.size();
+  auto stream                     = cudf::get_default_stream();
+  auto [build_table, probe_table] = generate_input_tables<Nullable>(
+    key_types, right_size, left_size, multiplicity, selectivity, stream);
 
-  auto const join_input_size = estimate_size(build_table->view()) + estimate_size(probe_table->view());
+  auto const join_input_size =
+    estimate_size(build_table->view()) + estimate_size(probe_table->view());
 
   // Setup join parameters and result table
   std::vector<cudf::size_type> columns_to_join(num_keys);
@@ -234,8 +240,9 @@ void BM_join_with_datatype(state_type& state, std::vector<cudf::type_id>& key_ty
     state.add_element_count(join_input_size, "join_input_size");  // number of bytes
     state.template add_global_memory_reads<nvbench::int8_t>(join_input_size);
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-      auto result = JoinFunc(
-        probe_table->view().select(columns_to_join), build_table->view().select(columns_to_join), compare_nulls);
+      auto result = JoinFunc(probe_table->view().select(columns_to_join),
+                             build_table->view().select(columns_to_join),
+                             compare_nulls);
     });
     set_throughputs(state);
   }

@@ -928,9 +928,11 @@ std::unique_ptr<cudf::table> create_sequence_table(std::vector<cudf::type_id> co
 }
 
 std::unique_ptr<cudf::table> create_distinct_rows_table(std::vector<cudf::type_id> const& dtype_ids,
-                                                          row_count num_rows,
-                                                          std::optional<double> null_probability, 
-                                                          unsigned seed, rmm::cuda_stream_view stream) {
+                                                        row_count num_rows,
+                                                        std::optional<double> null_probability,
+                                                        unsigned seed,
+                                                        rmm::cuda_stream_view stream)
+{
   auto seed_engine = deterministic_engine(seed);
   thrust::uniform_int_distribution<unsigned> seed_dist;
 
@@ -946,19 +948,21 @@ std::unique_ptr<cudf::table> create_distinct_rows_table(std::vector<cudf::type_i
       return col;
     }
     if (dt.id() == cudf::type_id::STRING) {
-      auto col  = create_string_column(num_rows.count, 256, 5); 
+      auto col = create_string_column(num_rows.count, 256, 5);
       auto [mask, count] =
         create_random_null_mask(num_rows.count, null_probability, seed_dist(seed_engine));
       col->set_null_mask(std::move(mask), count);
-      auto int_col  = cudf::sequence(num_rows.count, *cudf::make_default_constructed_scalar(cudf::data_type{cudf::type_id::INT32}));
+      auto int_col = cudf::sequence(
+        num_rows.count,
+        *cudf::make_default_constructed_scalar(cudf::data_type{cudf::type_id::INT32}));
       auto int2strcol = cudf::strings::from_integers(int_col->view());
-      auto finalcol = cudf::strings::concatenate(cudf::table_view({col->view(), int2strcol->view()}));
+      auto finalcol =
+        cudf::strings::concatenate(cudf::table_view({col->view(), int2strcol->view()}));
       return cudf::purge_nonempty_nulls(finalcol->view(), stream);
     }
     CUDF_FAIL("dtype not supported");
   });
   return std::make_unique<cudf::table>(std::move(columns));
-
 }
 
 std::unique_ptr<cudf::column> create_string_column(cudf::size_type num_rows,

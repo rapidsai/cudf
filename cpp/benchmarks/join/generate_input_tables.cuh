@@ -190,22 +190,24 @@ void generate_input_tables(key_type* const build_tbl,
 }
 
 template <bool Nullable>
-std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> 
-generate_input_tables(std::vector<cudf::type_id> const &key_types, 
-                      cudf::size_type build_table_numrows,
-                      cudf::size_type probe_table_numrows,
-                      int multiplicity, 
-                      double selectivity, 
-                      rmm::cuda_stream_view stream) 
+std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> generate_input_tables(
+  std::vector<cudf::type_id> const& key_types,
+  cudf::size_type build_table_numrows,
+  cudf::size_type probe_table_numrows,
+  int multiplicity,
+  double selectivity,
+  rmm::cuda_stream_view stream)
 {
   double const null_probability = Nullable ? 0.3 : 0;
   // Construct build and probe tables
   // Unique table has build_table_numrows / multiplicity numroes
-  auto unique_rows_build_table_numrows = static_cast<cudf::size_type>(build_table_numrows / multiplicity);
-  auto unique_rows_build_table = create_distinct_rows_table(key_types, row_count{unique_rows_build_table_numrows + 1}, null_probability);
+  auto unique_rows_build_table_numrows =
+    static_cast<cudf::size_type>(build_table_numrows / multiplicity);
+  auto unique_rows_build_table = create_distinct_rows_table(
+    key_types, row_count{unique_rows_build_table_numrows + 1}, null_probability);
 
   constexpr int block_size = 128;
-  
+
   // Maximize exposed parallelism while minimizing storage for curand state
   int num_blocks_init_build_tbl{-1};
   CUDF_CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
@@ -224,34 +226,53 @@ generate_input_tables(std::vector<cudf::type_id> const &key_types,
 
   CUDF_CHECK_CUDA(0);
 
-  auto build_table_gather_map = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32}, build_table_numrows, cudf::mask_state::ALL_VALID, stream); 
-  init_build_tbl<cudf::size_type, cudf::size_type><<<num_sms * num_blocks_init_build_tbl, block_size, 0, stream.value()>>>(
-    build_table_gather_map->mutable_view().data<cudf::size_type>(), build_table_numrows, multiplicity, devStates.data(), num_states);
-
-  CUDF_CHECK_CUDA(0);
-
-  auto const rand_max = build_table_numrows;
-  auto probe_table_gather_map = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32}, probe_table_numrows, cudf::mask_state::ALL_VALID, stream); 
-  init_probe_tbl<cudf::size_type, cudf::size_type>
-    <<<num_sms * num_blocks_init_build_tbl, block_size, 0, stream.value()>>>(probe_table_gather_map->mutable_view().data<cudf::size_type>(),
-                                                          probe_table_numrows,
+  auto build_table_gather_map = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32},
                                                           build_table_numrows,
-                                                          rand_max,
-                                                          selectivity,
-                                                          multiplicity,
-                                                          devStates.data(),
-                                                          num_states);
+                                                          cudf::mask_state::ALL_VALID,
+                                                          stream);
+  init_build_tbl<cudf::size_type, cudf::size_type>
+    <<<num_sms * num_blocks_init_build_tbl, block_size, 0, stream.value()>>>(
+      build_table_gather_map->mutable_view().data<cudf::size_type>(),
+      build_table_numrows,
+      multiplicity,
+      devStates.data(),
+      num_states);
 
   CUDF_CHECK_CUDA(0);
 
-  auto build_table = cudf::gather(unique_rows_build_table->view(), build_table_gather_map->view(), cudf::out_of_bounds_policy::DONT_CHECK, stream);
-  auto probe_table = cudf::gather(unique_rows_build_table->view(), probe_table_gather_map->view(), cudf::out_of_bounds_policy::DONT_CHECK, stream); 
+  auto const rand_max         = build_table_numrows;
+  auto probe_table_gather_map = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32},
+                                                          probe_table_numrows,
+                                                          cudf::mask_state::ALL_VALID,
+                                                          stream);
+  init_probe_tbl<cudf::size_type, cudf::size_type>
+    <<<num_sms * num_blocks_init_build_tbl, block_size, 0, stream.value()>>>(
+      probe_table_gather_map->mutable_view().data<cudf::size_type>(),
+      probe_table_numrows,
+      build_table_numrows,
+      rand_max,
+      selectivity,
+      multiplicity,
+      devStates.data(),
+      num_states);
 
-  auto init  = cudf::make_fixed_width_scalar<cudf::size_type>(static_cast<cudf::size_type>(0));
+  CUDF_CHECK_CUDA(0);
+
+  auto build_table = cudf::gather(unique_rows_build_table->view(),
+                                  build_table_gather_map->view(),
+                                  cudf::out_of_bounds_policy::DONT_CHECK,
+                                  stream);
+  auto probe_table = cudf::gather(unique_rows_build_table->view(),
+                                  probe_table_gather_map->view(),
+                                  cudf::out_of_bounds_policy::DONT_CHECK,
+                                  stream);
+
+  auto init       = cudf::make_fixed_width_scalar<cudf::size_type>(static_cast<cudf::size_type>(0));
   auto build_cols = build_table->release();
   build_cols.emplace_back(cudf::sequence(build_table_numrows, *init));
   auto probe_cols = probe_table->release();
   probe_cols.emplace_back(cudf::sequence(build_table_numrows, *init));
 
-  return std::pair{std::make_unique<cudf::table>(std::move(build_cols)), std::make_unique<cudf::table>(std::move(probe_cols))};
+  return std::pair{std::make_unique<cudf::table>(std::move(build_cols)),
+                   std::make_unique<cudf::table>(std::move(probe_cols))};
 }

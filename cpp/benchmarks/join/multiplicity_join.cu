@@ -22,10 +22,10 @@
 
 template <typename Key, bool Nullable, cudf::null_equality NullEquality, join_t Algorithm>
 void nvbench_lchm_inner_join(nvbench::state& state,
-                        nvbench::type_list<Key,
-                                           nvbench::enum_type<Nullable>,
-                                           nvbench::enum_type<NullEquality>,
-                                           nvbench::enum_type<Algorithm>>)
+                             nvbench::type_list<Key,
+                                                nvbench::enum_type<Nullable>,
+                                                nvbench::enum_type<NullEquality>,
+                                                nvbench::enum_type<Algorithm>>)
 {
   if constexpr (not Nullable && NullEquality == cudf::null_equality::UNEQUAL) {
     state.skip(

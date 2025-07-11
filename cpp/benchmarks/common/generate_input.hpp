@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -704,7 +704,7 @@ std::unique_ptr<cudf::table> create_distinct_rows_table(
   row_count num_rows,
   std::optional<double> null_probability = std::nullopt,
   unsigned seed                          = 1,
-  rmm::cuda_stream_view stream = cudf::get_default_stream());
+  rmm::cuda_stream_view stream           = cudf::get_default_stream());
 
 /**
  * @brief Repeats the input data types cyclically to fill a vector of @ref num_cols
