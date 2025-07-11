@@ -276,4 +276,3 @@ def has_nulls(request):
 )
 def has_nans(request):
     return request.param
-
