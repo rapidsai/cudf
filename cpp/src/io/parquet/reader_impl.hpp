@@ -25,6 +25,7 @@
 #include "reader_impl_chunking.hpp"
 #include "reader_impl_helpers.hpp"
 
+#include <cudf/detail/utilities/host_vector.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/parquet.hpp>
@@ -48,13 +49,6 @@ class reader_impl {
    * @brief Default constructor for subclassing
    */
   reader_impl();
-
-  /**
-   * @brief Virtual destructor to allow for correct destruction of derived classes.
-   *
-   * This makes the class polymorphic.
-   */
-  virtual ~reader_impl() = default;
 
   /**
    * @brief Constructor from an array of dataset sources with reader options
@@ -417,7 +411,7 @@ class reader_impl {
   std::vector<int> _output_column_schemas;
 
   // Page mask for filtering out data pages
-  thrust::host_vector<bool> _page_mask;
+  cudf::detail::host_vector<bool> _page_mask;
 
   // _output_buffers associated metadata
   std::unique_ptr<table_metadata> _output_metadata;
