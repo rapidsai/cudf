@@ -481,7 +481,6 @@ void sort_merge_join::postprocess_indices(device_span<size_type> smaller_indices
 template <typename MergeOperation>
 auto sort_merge_join::invoke_merge(table_view right_view, table_view left_view, MergeOperation&& op)
 {
-  CUDF_FUNC_RANGE();
   auto has_right_sorting_order = preprocessed_right._null_processed_table_sorted_order.has_value();
   auto has_left_sorting_order  = preprocessed_left._null_processed_table_sorted_order.has_value();
   if (has_right_sorting_order && has_left_sorting_order) {
