@@ -86,7 +86,7 @@ struct SetBitmaskTest : public cudf::test::BaseFixture {
     expect_bitmask_equal(static_cast<cudf::bitmask_type*>(mask.data()), 0, expected);
   }
 
-  void test_null_partition_bulk(cudf::size_type size, cudf::size_type middle, bool valid)
+  void test_null_partition_bulk_unsafe(cudf::size_type size, cudf::size_type middle, bool valid)
   {
     thrust::host_vector<bool> expected1(size);
     thrust::host_vector<bool> expected2(size);
