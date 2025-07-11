@@ -43,6 +43,7 @@ DESELECTED_TESTS_STR=$(printf -- " --deselect %s" "${DESELECTED_TESTS[@]}")
 # Don't quote the `DESELECTED_...` variable because `pytest` can't handle
 # multiple quoted arguments inline
 # shellcheck disable=SC2086
+rapids-logger "Run polars tests with the streaming executor"
 python -m pytest \
        --import-mode=importlib \
        --cache-clear \
@@ -54,4 +55,37 @@ python -m pytest \
        --tb=native \
        $DESELECTED_TESTS_STR \
        "$@" \
-       py-polars/tests
+       py-polars/tests \
+       --executor streaming
+
+rapids-logger "Run polars tests with the streaming executor with a small blocksize"
+python -m pytest \
+       --import-mode=importlib \
+       --cache-clear \
+       -m "" \
+       -p cudf_polars.testing.plugin \
+       -n 8 \
+       --dist=worksteal \
+       -vv \
+       --tb=native \
+       $DESELECTED_TESTS_STR \
+       "$@" \
+       py-polars/tests \
+       --executor streaming \
+       --blocksize-mode small
+
+
+rapids-logger "Run polars tests with the in-memory executor"
+python -m pytest \
+       --import-mode=importlib \
+       --cache-clear \
+       -m "" \
+       -p cudf_polars.testing.plugin \
+       -n 8 \
+       --dist=worksteal \
+       -vv \
+       --tb=native \
+       $DESELECTED_TESTS_STR \
+       "$@" \
+       py-polars/tests \
+       --executor in-memory
