@@ -2,11 +2,8 @@
 
 from enum import IntEnum
 
-
-
 class UDFSourceType(IntEnum):
     CUDA = ...
     PTX = ...
-
 
 def is_runtime_jit_supported() -> bool: ...

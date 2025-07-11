@@ -2,9 +2,9 @@
 from pylibcudf.column import Column
 from pylibcudf.expressions import Expression
 from pylibcudf.gpumemoryview import gpumemoryview
+from pylibcudf.libcudf.jit import UDFSourceType
 from pylibcudf.table import Table
 from pylibcudf.types import DataType
-from pylibcudf.libcudf.jit import UDFSourceType
 
 def nans_to_nulls(input: Column) -> tuple[gpumemoryview, int]: ...
 def compute_column(input: Table, expr: Expression) -> Column: ...
@@ -14,7 +14,7 @@ def transform(
     inputs: list[Column],
     transform_udf: str,
     output_type: DataType,
-    source_type: UDFSourceType
+    source_type: UDFSourceType,
 ) -> Column: ...
 def encode(input: Table) -> tuple[Table, Column]: ...
 def one_hot_encode(input: Column, categories: Column) -> Table: ...

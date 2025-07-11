@@ -8,7 +8,7 @@ from .expressions cimport Expression
 from .gpumemoryview cimport gpumemoryview
 from .table cimport Table
 from .types cimport DataType
-from .jit cimport UDFSourceType
+from .jit cimport udf_source_type as UDFSourceType
 
 
 cpdef tuple[gpumemoryview, int] nans_to_nulls(Column input)

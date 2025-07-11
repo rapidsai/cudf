@@ -17,8 +17,8 @@
 #pragma once
 
 #include <cudf/ast/expressions.hpp>
-#include <cudf/types.hpp>
 #include <cudf/jit/udf.hpp>
+#include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
