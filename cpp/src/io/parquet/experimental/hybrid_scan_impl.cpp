@@ -446,8 +446,6 @@ table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns(
 
   prepare_data(row_group_indices, std::move(column_chunk_buffers), data_page_mask, options);
 
-  // Make sure we haven't gone past the input passes
-  CUDF_EXPECTS(_file_itm_data._current_input_pass < _file_itm_data.num_passes(), "");
   return read_chunk_internal(read_columns_mode::FILTER_COLUMNS, row_mask);
 }
 
@@ -475,8 +473,6 @@ table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns(
 
   prepare_data(row_group_indices, std::move(column_chunk_buffers), data_page_mask, options);
 
-  // Make sure we haven't gone past the input passes
-  CUDF_EXPECTS(_file_itm_data._current_input_pass < _file_itm_data.num_passes(), "");
   return read_chunk_internal(read_columns_mode::PAYLOAD_COLUMNS, row_mask);
 }
 
@@ -1204,8 +1200,6 @@ void hybrid_scan_reader_impl::update_output_nullmasks_for_pruned_pages(
 void hybrid_scan_reader_impl::set_page_mask(
   cudf::host_span<thrust::host_vector<bool> const> data_page_mask)
 {
-  CUDF_EXPECTS(_file_itm_data._current_input_pass < _file_itm_data.num_passes(), "Invalid pass");
-
   auto const& pass   = _pass_itm_data;
   auto const& chunks = pass->chunks;
 
