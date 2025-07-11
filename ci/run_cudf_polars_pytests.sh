@@ -8,11 +8,11 @@ set -euo pipefail
 # Support invoking run_cudf_polars_pytests.sh outside the script directory
 cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../python/cudf_polars/
 
-# Test the default "in-memory" executor
-python -m pytest --cache-clear "$@" tests
+# Test the "in-memory" executor
+python -m pytest --cache-clear "$@" tests --executor in-memory
 
-# Test the "streaming" executor
-python -m pytest --cache-clear "$@" tests --executor streaming
+# Test the default "streaming" executor
+python -m pytest --cache-clear "$@" tests
 
 # Test the "streaming" executor with small blocksize
 python -m pytest --cache-clear "$@" tests --executor streaming --blocksize-mode small
