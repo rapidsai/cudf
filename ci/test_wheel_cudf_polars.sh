@@ -49,16 +49,28 @@ set +e
 PASSED=()
 FAILED=()
 
-for version in ${POLARS_VERSIONS}; do
+read -r -a VERSIONS <<< "${POLARS_VERSIONS}"
+LATEST_VERSION="${VERSIONS[${#VERSIONS[@]}-1]}"
+
+for version in "${VERSIONS[@]}"; do
     rapids-logger "Installing polars==${version}"
     pip install -U "polars==${version}"
 
     rapids-logger "Running tests for polars==${version}"
+
+    if [ "${version}" == "${LATEST_VERSION}" ]; then
+        COVERAGE_ARGS=(
+            --cov=cudf_polars
+            --cov-fail-under=100
+            --cov-report=term-missing:skip-covered
+            --cov-config=./pyproject.toml
+        )
+    else
+        COVERAGE_ARGS=(--no-cov)
+    fi
+
     ./ci/run_cudf_polars_pytests.sh \
-        --cov=cudf_polars \
-        --cov-fail-under=100 \
-        --cov-report=term-missing:skip-covered \
-        --cov-config=./pyproject.toml \
+        "${COVERAGE_ARGS[@]}" \
         --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars-${version}.xml"
 
     if [ $? -ne 0 ]; then
