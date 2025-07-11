@@ -183,7 +183,23 @@ def assert_column_eq(
 
             np.testing.assert_array_almost_equal(lh_arr, rh_arr)
     else:
-        assert lhs.equals(rhs)
+        if not lhs.equals(rhs):
+            try:
+                left = lhs.to_numpy()
+                right = rhs.to_numpy()
+            except pa.ArrowInvalid:
+                left = lhs.to_pylist()
+                right = rhs.to_pylist()
+
+            if isinstance(left, np.ndarray):
+                np.testing.assert_array_equal(left, right)
+            else:
+                assert left == right
+
+            # If we get here, they're not equal according to lhs.equals,
+            # but *are* equal according to the numpy/python assertion machinery.
+            # So we'll raise an AssertionError with a nice error message.
+            raise AssertionError(f"Arrays are not equal. {left} != {right}")
 
 
 def assert_table_eq(pa_table: pa.Table, plc_table: plc.Table) -> None:
