@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
 
 import polars as pl
@@ -12,6 +14,10 @@ from cudf_polars.testing.asserts import (
 )
 from cudf_polars.testing.io import make_partitioned_source
 from cudf_polars.utils.versions import POLARS_VERSION_LT_128
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
 
 NO_CHUNK_ENGINE = pl.GPUEngine(raise_on_fail=True, parquet_options={"chunked": False})
 
@@ -465,3 +471,14 @@ def test_scan_csv_without_header_and_new_column_names_raises(df, tmp_path):
     make_partitioned_source(df, path, "csv", write_kwargs={"include_header": False})
     q = pl.scan_csv(path, has_header=False)
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_scan_with_row_index(tmp_path: Path) -> None:
+    df = pl.DataFrame({"a": [1, 2, 3, 4]})
+    df.write_csv(tmp_path / "test-0.csv")
+    df.write_csv(tmp_path / "test-1.csv")
+
+    result = pl.scan_csv(
+        tmp_path / "test-*.csv", row_index_name="index", row_index_offset=0
+    )
+    assert_gpu_result_equal(result)

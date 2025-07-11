@@ -292,7 +292,17 @@ def test_bug_in_current_and_maybe_future_versions(...):
 
 If pandas makes a bugfix release and fixes this, then we'll see it in CI immediately, patch it, and bump `PANDAS_CURRENT_SUPPORTED_VERSION` which also usually happens during pandas upgrades.
 
+### Parallelization
+
+The majority of our tests are run in parallel using
+[pytest-xdist](https://pytest-xdist.readthedocs.io/en/stable/). If a test needs
+to be run serially, say because it requires a large fraction of the GPU memory
+of our test node, mark with with `@pytest.mark.serial`. Tests marked with
+`@serial` will be excluded from the main `pytest` run with `-m not serial` and
+run subsequentlly with `-m serial`.
+
 ## Test Parallelism: How many pytest-xdist workers should be used?
+
 When running cuDF tests with `pytest-xdist`, the number of parallel workers is explicitly set to `-n 8` rather than using `-n auto`. While `-n auto` launches one worker per available CPU core, cuDF tests are generally constrained by the amount of available GPU memory per worker.
 
 For example, on an NVIDIA L4 GPU with 24 GB of memory, using 8 parallel workers assumes each worker will consume approximately 3 GB or less. If more than 8 workers are launched, it's likely that multiple memory-intensive tests will run at the same time, increasing the risk of GPU out-of-memory (OOM) errors.
