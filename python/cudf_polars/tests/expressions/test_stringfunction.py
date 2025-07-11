@@ -14,7 +14,11 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_129, POLARS_VERSION_LT_130
+from cudf_polars.utils.versions import (
+    POLARS_VERSION_LT_129,
+    POLARS_VERSION_LT_130,
+    POLARS_VERSION_LT_131,
+)
 
 
 @pytest.fixture
@@ -149,7 +153,7 @@ def test_supported_stringfunction_expression(ldf):
 
 
 def test_unsupported_stringfunction(ldf):
-    q = ldf.select(pl.col("a").str.count_matches("e", literal=True))
+    q = ldf.select(pl.col("a").str.encode("hex"))
 
     assert_ir_translation_raises(q, NotImplementedError)
 
@@ -300,14 +304,16 @@ def test_replace_re(ldf):
         ),
     ],
 )
-def test_replace_many(request, ldf, target, repl):
-    query = ldf.select(pl.col("a").str.replace_many(target, repl))
-    # TODO: Remove when we support implode agg
+def test_replace_many(ldf, target, repl):
+    q = ldf.select(pl.col("a").str.replace_many(target, repl))
     _need_support_for_implode_agg = isinstance(repl, list)
     if POLARS_VERSION_LT_129 or _need_support_for_implode_agg:
-        assert_gpu_result_equal(query)
+        assert_gpu_result_equal(q)
+    elif POLARS_VERSION_LT_131:
+        assert_ir_translation_raises(q, NotImplementedError)
     else:
-        assert_ir_translation_raises(query, NotImplementedError)
+        # Polars 1.31 now gives us replacement argument as a list
+        assert_gpu_result_equal(q)
 
 
 @pytest.mark.parametrize(
@@ -418,6 +424,9 @@ def test_unsupported_regex_raises(pattern):
     q = df.select(pl.col("a").str.contains(pattern, strict=True))
     assert_ir_translation_raises(q, NotImplementedError)
 
+    q = df.select(pl.col("a").str.count_matches(pattern))
+    assert_ir_translation_raises(q, NotImplementedError)
+
 
 def test_string_to_integer(str_to_integer_data, integer_type):
     query = str_to_integer_data.select(pl.col("a").cast(integer_type))
@@ -472,6 +481,19 @@ def test_string_join(ldf, ignore_nulls, delimiter):
     assert_gpu_result_equal(q)
 
 
+@pytest.mark.parametrize("ignore_nulls", [False, True])
+@pytest.mark.parametrize("delimiter", ["", "-"])
+def test_string_join_non_string_data(ignore_nulls, delimiter):
+    ldf = pl.LazyFrame({"a": [1, None, 3]})
+    q = ldf.select(pl.col("a").str.join(delimiter, ignore_nulls=ignore_nulls))
+    assert_gpu_result_equal(q)
+
+
+def test_string_reverse(ldf):
+    q = ldf.select(pl.col("a").str.reverse())
+    assert_gpu_result_equal(q)
+
+
 def test_string_to_titlecase():
     df = pl.LazyFrame(
         {
@@ -506,4 +528,88 @@ def test_concat_horizontal(ldf, ignore_nulls, separator):
     q = ldf.select(
         pl.concat_str(["a", "c"], separator=separator, ignore_nulls=ignore_nulls)
     )
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("ascii_case_insensitive", [True, False])
+def test_contains_any(ldf, ascii_case_insensitive):
+    q = ldf.select(
+        pl.col("a").str.contains_any(
+            ["a", "b", "c"], ascii_case_insensitive=ascii_case_insensitive
+        )
+    )
+    assert_gpu_result_equal(q)
+
+
+def test_count_matches(ldf):
+    q = ldf.select(pl.col("a").str.count_matches("a"))
+    assert_gpu_result_equal(q)
+
+
+def test_count_matches_literal_unsupported(ldf):
+    q = ldf.select(pl.col("a").str.count_matches("a", literal=True))
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+@pytest.fixture
+def ldf_find():
+    return pl.LazyFrame(
+        {
+            "a": ["Crab", "Lobster", None, "Crustacean", "Cra|eb"],
+            "pat": ["a[bc]", "b.t", "[aeiuo]", "(?i)A[BC]", r"\d"],
+        }
+    )
+
+
+def test_find_literal_false_strict_false_unsupported(ldf_find):
+    q = ldf_find.select(pl.col("a").str.find("a", literal=False, strict=False))
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+@pytest.mark.parametrize("literal", [True, False])
+@pytest.mark.parametrize("pattern", ["a|e", "a"])
+def test_find_literal(ldf_find, literal, pattern):
+    q = ldf_find.select(pl.col("a").str.find(pattern, literal=literal))
+    assert_gpu_result_equal(q)
+
+
+def test_find_literal_false_column_unsupported(ldf_find):
+    q = ldf_find.select(pl.col("a").str.find(pl.col("pat"), literal=False))
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+@pytest.fixture
+def ldf_extract():
+    return pl.LazyFrame({"a": ["?!. 123 foo", None]})
+
+
+@pytest.mark.parametrize("group_index", [1, 2])
+def test_extract(ldf_extract, group_index):
+    q = ldf_extract.select(pl.col("a").str.extract(r"(\S+) (\d+) (.+)", group_index))
+    assert_gpu_result_equal(q)
+
+
+def test_extract_group_index_0_unsupported(ldf_extract):
+    q = ldf_extract.select(pl.col("a").str.extract(r"(\S+) (\d+) (.+)", 0))
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_extract_groups(ldf_extract):
+    q = ldf_extract.select(pl.col("a").str.extract_groups(r"(\S+) (\d+) (.+)"))
+    assert_gpu_result_equal(q)
+
+
+def test_json_path_match():
+    df = pl.LazyFrame({"a": ['{"a":"1"}', None, '{"a":2}', '{"a":2.1}', '{"a":true}']})
+    q = df.select(pl.col("a").str.json_path_match("$.a"))
+    assert_gpu_result_equal(q)
+
+
+def test_len_bytes(ldf):
+    q = ldf.select(pl.col("a").str.len_bytes())
+    assert_gpu_result_equal(q)
+
+
+def test_len_chars(ldf):
+    q = ldf.select(pl.col("a").str.len_chars())
     assert_gpu_result_equal(q)

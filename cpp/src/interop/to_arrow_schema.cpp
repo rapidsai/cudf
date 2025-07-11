@@ -42,22 +42,23 @@ struct dispatch_to_arrow_type {
   }
 
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
-  int operator()(column_view input_view, column_metadata const&, ArrowSchema* out)
+  int operator()(column_view input_view, column_metadata const& metadata, ArrowSchema* out)
   {
     cudf::type_id const id = input_view.type().id();
+    auto timezone          = metadata.timezone.c_str();
     switch (id) {
       case cudf::type_id::TIMESTAMP_SECONDS:
         return ArrowSchemaSetTypeDateTime(
-          out, NANOARROW_TYPE_TIMESTAMP, NANOARROW_TIME_UNIT_SECOND, nullptr);
+          out, NANOARROW_TYPE_TIMESTAMP, NANOARROW_TIME_UNIT_SECOND, timezone);
       case cudf::type_id::TIMESTAMP_MILLISECONDS:
         return ArrowSchemaSetTypeDateTime(
-          out, NANOARROW_TYPE_TIMESTAMP, NANOARROW_TIME_UNIT_MILLI, nullptr);
+          out, NANOARROW_TYPE_TIMESTAMP, NANOARROW_TIME_UNIT_MILLI, timezone);
       case cudf::type_id::TIMESTAMP_MICROSECONDS:
         return ArrowSchemaSetTypeDateTime(
-          out, NANOARROW_TYPE_TIMESTAMP, NANOARROW_TIME_UNIT_MICRO, nullptr);
+          out, NANOARROW_TYPE_TIMESTAMP, NANOARROW_TIME_UNIT_MICRO, timezone);
       case cudf::type_id::TIMESTAMP_NANOSECONDS:
         return ArrowSchemaSetTypeDateTime(
-          out, NANOARROW_TYPE_TIMESTAMP, NANOARROW_TIME_UNIT_NANO, nullptr);
+          out, NANOARROW_TYPE_TIMESTAMP, NANOARROW_TIME_UNIT_NANO, timezone);
       case cudf::type_id::DURATION_SECONDS:
         return ArrowSchemaSetTypeDateTime(
           out, NANOARROW_TYPE_DURATION, NANOARROW_TIME_UNIT_SECOND, nullptr);

@@ -24,6 +24,7 @@ from cudf_polars.dsl.ir import (
     HStack,
     MapFunction,
     Projection,
+    Slice,
     Union,
 )
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
@@ -32,6 +33,7 @@ from cudf_polars.experimental.dispatch import (
     generate_ir_tasks,
     lower_ir_node,
 )
+from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.utils import _concat, _lower_ir_fallback
 
 if TYPE_CHECKING:
@@ -81,7 +83,9 @@ def lower_ir_graph(
     --------
     lower_ir_node
     """
-    mapper = CachingVisitor(lower_ir_node, state={"config_options": config_options})
+    mapper: LowerIRTransformer = CachingVisitor(
+        lower_ir_node, state={"config_options": config_options}
+    )
     return mapper(ir)
 
 
@@ -206,7 +210,10 @@ def post_process_task_graph(
     return graph
 
 
-def evaluate_streaming(ir: IR, config_options: ConfigOptions) -> DataFrame:
+def evaluate_streaming(
+    ir: IR,
+    config_options: ConfigOptions,
+) -> DataFrame:
     """
     Evaluate an IR graph with partitioning.
 
@@ -254,9 +261,13 @@ def _(
     ir: Union, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     # Check zlice
-    if ir.zlice is not None:  # pragma: no cover
-        return _lower_ir_fallback(
-            ir, rec, msg="zlice is not supported for multiple partitions."
+    if ir.zlice is not None:
+        return rec(
+            Slice(
+                ir.schema,
+                *ir.zlice,
+                Union(ir.schema, None, *ir.children),
+            )
         )
 
     # Lower children
@@ -334,6 +345,29 @@ lower_ir_node.register(Projection, _lower_ir_pwise_preserve)
 lower_ir_node.register(Filter, _lower_ir_pwise_preserve)
 lower_ir_node.register(Cache, _lower_ir_pwise)
 lower_ir_node.register(HConcat, _lower_ir_pwise)
+
+
+@lower_ir_node.register(Slice)
+def _(
+    ir: Slice, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    if ir.offset == 0:
+        # Taking the first N rows.
+        # We don't know how large each partition is, so we reduce.
+        new_node, partition_info = _lower_ir_pwise(ir, rec)
+        if partition_info[new_node].count > 1:
+            # Collapse down to single partition
+            inter = Repartition(new_node.schema, new_node)
+            partition_info[inter] = PartitionInfo(count=1)
+            # Slice reduced partition
+            new_node = ir.reconstruct([inter])
+            partition_info[new_node] = PartitionInfo(count=1)
+        return new_node, partition_info
+
+    # Fallback
+    return _lower_ir_fallback(
+        ir, rec, msg="This slice not supported for multiple partitions."
+    )
 
 
 @lower_ir_node.register(HStack)

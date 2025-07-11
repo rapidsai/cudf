@@ -2926,6 +2926,9 @@ TEST_F(ParquetReaderTest, DISABLED_ListsWideTable)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result->view());
 }
 
+//////////////////////////////////////////
+// row bounds and predicate pushdown tests
+
 TEST_F(ParquetReaderTest, RowBoundsAndFilter)
 {
   auto constexpr num_files                = 3;

@@ -13,6 +13,7 @@ import pyarrow as pa
 import pylibcudf as plc
 
 import cudf
+from cudf.api.extensions import no_default
 from cudf.api.types import is_integer, is_scalar
 from cudf.core.accessors.base_accessor import BaseAccessor
 from cudf.core.column.column import ColumnBase, as_column
@@ -622,7 +623,7 @@ class StringMethods(BaseAccessor):
         pat: str | Sequence,
         case: bool = True,
         flags: int = 0,
-        na=np.nan,
+        na=no_default,
         regex: bool = True,
     ) -> Series | Index:
         r"""
@@ -734,7 +735,18 @@ class StringMethods(BaseAccessor):
             The `flags` parameter currently only supports re.DOTALL and
             re.MULTILINE.
         """
-        if na is not np.nan:
+        if (
+            na is not no_default
+            and not pd.isna(na)
+            and not isinstance(na, bool)
+        ):
+            # GH#59561
+            warnings.warn(
+                "Allowing a non-bool 'na' in obj.str.contains is deprecated "
+                "and will raise in a future version.",
+                FutureWarning,
+            )
+        if na not in {no_default, np.nan}:
             raise NotImplementedError("`na` parameter is not yet supported")
         if regex and isinstance(pat, re.Pattern):
             flags = pat.flags & ~re.U

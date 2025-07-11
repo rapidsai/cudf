@@ -13,7 +13,7 @@ from cudf_polars.containers import Column, DataType
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal
 from cudf_polars.utils import dtypes
-from cudf_polars.utils.versions import POLARS_VERSION_LT_128, POLARS_VERSION_LT_129
+from cudf_polars.utils.versions import POLARS_VERSION_LT_129
 
 if TYPE_CHECKING:
     from cudf_polars.containers import DataFrame, DataType
@@ -110,6 +110,7 @@ class UnaryFunction(Expr):
             "set_sorted",
             "unique",
             "value_counts",
+            "null_count",
         }
     )
     _supported_cum_aggs = frozenset(
@@ -157,6 +158,15 @@ class UnaryFunction(Expr):
         if self.name == "mask_nans":
             (child,) = self.children
             return child.evaluate(df, context=context).mask_nans()
+        if self.name == "null_count":
+            (column,) = (child.evaluate(df, context=context) for child in self.children)
+            return Column(
+                plc.Column.from_scalar(
+                    plc.Scalar.from_py(column.null_count, self.dtype.plc),
+                    1,
+                ),
+                dtype=self.dtype,
+            )
         if self.name == "round":
             round_mode = "half_away_from_zero"
             if POLARS_VERSION_LT_129:
@@ -237,7 +247,7 @@ class UnaryFunction(Expr):
                 null_order=null_order,
             )
         elif self.name == "value_counts":
-            (sort, parallel, name, normalize) = self.options
+            (sort, _, _, normalize) = self.options
             count_agg = [plc.aggregation.count(plc.types.NullPolicy.INCLUDE)]
             gb_requests = [
                 plc.groupby.GroupByRequest(
@@ -306,10 +316,8 @@ class UnaryFunction(Expr):
             else:
                 evaluated = self.children[1].evaluate(df, context=context)
                 arg = evaluated.obj_scalar if evaluated.is_scalar else evaluated.obj
-            if (
-                not POLARS_VERSION_LT_128
-                and isinstance(arg, plc.Scalar)
-                and dtypes.can_cast(column.obj.type(), arg.type())
+            if isinstance(arg, plc.Scalar) and dtypes.can_cast(
+                column.obj.type(), arg.type()
             ):  # pragma: no cover
                 arg = plc.unary.cast(
                     plc.Column.from_scalar(arg, 1), column.obj.type()
