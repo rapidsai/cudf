@@ -26,10 +26,33 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         action="store_true",
         help="Turn off fallback to CPU when running tests (default use fallback)",
     )
+    group.addoption(
+        "--executor",
+        action="store",
+        default="in-memory",
+        choices=("in-memory", "streaming"),
+        help="Executor to use for GPUEngine.",
+    )
+    group.addoption(
+        "--blocksize-mode",
+        action="store",
+        default="default",
+        choices=("small", "default"),
+        help=(
+            "Blocksize to use for 'streaming' executor. Set to 'small' "
+            "to run most tests with multiple partitions."
+        ),
+    )
 
 
 def pytest_configure(config: pytest.Config) -> None:
     """Enable use of this module as a pytest plugin to enable GPU collection."""
+    import cudf_polars.testing.asserts
+
+    cudf_polars.testing.asserts.DEFAULT_EXECUTOR = config.getoption("--executor")
+    cudf_polars.testing.asserts.DEFAULT_BLOCKSIZE_MODE = config.getoption(
+        "--blocksize-mode"
+    )
     no_fallback = config.getoption("--cudf-polars-no-fallback")
     if no_fallback:
         collect = polars.LazyFrame.collect
