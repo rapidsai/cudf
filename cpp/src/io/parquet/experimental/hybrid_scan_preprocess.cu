@@ -124,6 +124,12 @@ void hybrid_scan_reader_impl::prepare_row_groups(
            _file_itm_data.surviving_row_groups) =
     _extended_metadata->select_row_groups({}, row_group_indices, {}, {}, {}, {}, {}, _stream);
 
+  CUDF_EXPECTS(
+    std::cmp_less_equal(_file_itm_data.global_num_rows, std::numeric_limits<size_type>::max()),
+    "READ_ALL mode does not support reading number of rows more than cudf's column size limit. "
+    "For reading larger number of rows, please use chunked_parquet_reader.",
+    std::overflow_error);
+
   // check for page indexes
   _has_page_index = std::all_of(_file_itm_data.row_groups.cbegin(),
                                 _file_itm_data.row_groups.cend(),
