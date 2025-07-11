@@ -48,7 +48,7 @@ __device__ void udf_str_dtor(void* udf_str, size_t size, void* dtor_info)
   ptr->~udf_string();
 }
 
-__device__ void* make_meminfo_for_new_udf_string(void* udf_str)
+__device__ NRT_MemInfo* make_meminfo_for_new_udf_string(udf_string* udf_str)
 {
   struct mi_str_allocation {
     NRT_MemInfo mi;
@@ -278,7 +278,7 @@ extern "C" __device__ int udf_string_from_string_view(void** out_meminfo,
   auto udf_str_ptr  = new (udf_str) udf_string;
   *udf_str_ptr      = udf_string(*str_view_ptr);
 
-  *out_meminfo = make_meminfo_for_new_udf_string(udf_str);
+  *out_meminfo = make_meminfo_for_new_udf_string(udf_str_ptr);
 
   return 0;
 }
@@ -304,7 +304,7 @@ extern "C" __device__ int strip(void** out_meminfo,
   auto udf_str_ptr   = new (udf_str) udf_string;
 
   *udf_str_ptr = strip(*to_strip_ptr, *strip_str_ptr);
-  *out_meminfo = make_meminfo_for_new_udf_string(udf_str);
+  *out_meminfo = make_meminfo_for_new_udf_string(udf_str_ptr);
 
   return 0;
 }
@@ -319,7 +319,7 @@ extern "C" __device__ int lstrip(void** out_meminfo,
   auto udf_str_ptr   = new (udf_str) udf_string;
 
   *udf_str_ptr = strip(*to_strip_ptr, *strip_str_ptr, cudf::strings::side_type::LEFT);
-  *out_meminfo = make_meminfo_for_new_udf_string(udf_str);
+  *out_meminfo = make_meminfo_for_new_udf_string(udf_str_ptr);
 
   return 0;
 }
@@ -334,7 +334,7 @@ extern "C" __device__ int rstrip(void** out_meminfo,
   auto udf_str_ptr   = new (udf_str) udf_string;
 
   *udf_str_ptr = strip(*to_strip_ptr, *strip_str_ptr, cudf::strings::side_type::RIGHT);
-  *out_meminfo = make_meminfo_for_new_udf_string(udf_str);
+  *out_meminfo = make_meminfo_for_new_udf_string(udf_str_ptr);
 
   return 0;
 }
@@ -358,7 +358,7 @@ extern "C" __device__ int upper(void** out_meminfo,
   cudf::strings::udf::chars_tables tables{flags_table_ptr, cases_table_ptr, special_table_ptr};
 
   *udf_str_ptr = to_upper(tables, *st_ptr);
-  *out_meminfo = make_meminfo_for_new_udf_string(udf_str);
+  *out_meminfo = make_meminfo_for_new_udf_string(udf_str_ptr);
 
   return 0;
 }
@@ -382,7 +382,7 @@ extern "C" __device__ int lower(void** out_meminfo,
 
   cudf::strings::udf::chars_tables tables{flags_table_ptr, cases_table_ptr, special_table_ptr};
   *udf_str_ptr = to_lower(tables, *st_ptr);
-  *out_meminfo = make_meminfo_for_new_udf_string(udf_str);
+  *out_meminfo = make_meminfo_for_new_udf_string(udf_str_ptr);
 
   return 0;
 }
@@ -400,7 +400,7 @@ extern "C" __device__ int concat(void** out_meminfo,
   udf_string result;
   result.append(*lhs_ptr).append(*rhs_ptr);
   *udf_str_ptr = result;
-  *out_meminfo = make_meminfo_for_new_udf_string(udf_str);
+  *out_meminfo = make_meminfo_for_new_udf_string(udf_str_ptr);
   return 0;
 }
 
@@ -416,7 +416,7 @@ extern "C" __device__ int replace(void** out_meminfo,
 
   auto udf_str_ptr = new (udf_str) udf_string;
   *udf_str_ptr     = replace(*src_ptr, *to_replace_ptr, *replacement_ptr);
-  *out_meminfo     = make_meminfo_for_new_udf_string(udf_str);
+  *out_meminfo     = make_meminfo_for_new_udf_string(udf_str_ptr);
 
   return 0;
 }
