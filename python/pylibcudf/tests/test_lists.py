@@ -161,6 +161,8 @@ def test_reverse(list_column):
     assert_column_eq(expect, got)
 
 
+# https://github.com/rapidsai/cudf/issues/19346
+@pytest.mark.flaky(reruns=5)
 def test_segmented_gather(test_data):
     list_column1, list_column2 = test_data[0]
 

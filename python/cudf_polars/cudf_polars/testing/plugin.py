@@ -12,8 +12,11 @@ import pytest
 
 import polars
 
+from cudf_polars.utils.config import StreamingFallbackMode
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
+    from typing import Any
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -47,19 +50,29 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 
 def pytest_configure(config: pytest.Config) -> None:
     """Enable use of this module as a pytest plugin to enable GPU collection."""
-    import cudf_polars.testing.asserts
-
-    cudf_polars.testing.asserts.DEFAULT_EXECUTOR = config.getoption("--executor")
-    cudf_polars.testing.asserts.DEFAULT_BLOCKSIZE_MODE = config.getoption(
-        "--blocksize-mode"
-    )
     no_fallback = config.getoption("--cudf-polars-no-fallback")
+    executor = config.getoption("--executor")
+    blocksize_mode = config.getoption("--blocksize-mode")
     if no_fallback:
         collect = polars.LazyFrame.collect
         engine = polars.GPUEngine(raise_on_fail=no_fallback)
         # https://github.com/python/mypy/issues/2427
         polars.LazyFrame.collect = partialmethod(collect, engine=engine)  # type: ignore[method-assign,assignment]
+    elif executor == "in-memory":
+        collect = polars.LazyFrame.collect
+        engine = polars.GPUEngine(executor=executor)
+        polars.LazyFrame.collect = partialmethod(collect, engine=engine)  # type: ignore[method-assign,assignment]
+    elif executor == "streaming" and blocksize_mode == "small":
+        executor_options: dict[str, Any] = {}
+        executor_options["max_rows_per_partition"] = 4
+        executor_options["target_partition_size"] = 10
+        # We expect many tests to fall back, so silence the warnings
+        executor_options["fallback_mode"] = StreamingFallbackMode.SILENT
+        collect = polars.LazyFrame.collect
+        engine = polars.GPUEngine(executor=executor, executor_options=executor_options)
+        polars.LazyFrame.collect = partialmethod(collect, engine=engine)  # type: ignore[method-assign,assignment]
     else:
+        # run with streaming executor and default blocksize
         polars.Config.set_engine_affinity("gpu")
     config.addinivalue_line(
         "filterwarnings",
