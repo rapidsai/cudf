@@ -24,18 +24,20 @@ def test_assert_column_eq_ok(values: list) -> None:
 
 
 @pytest.mark.parametrize(
-    "left, right",
+    "left, right, match",
     [
-        ([1, 2, 3], [1, 2, 4]),
-        ([1, 2, 3], [1, 2, None]),
-        ([[1, 2], [3]], [[1, 2], [3, 4]]),
-        ([[1, 2], [3]], [[1, 2], None]),
-        ([{"a": 1}, {"a": 2}], [{"a": 1}, {"a": 3}]),
-        ([{"a": 1}, {"a": 2}], [{"a": 1}, None]),
+        ([1, 2, 3], [1, 2, 4], "Arrays are not equal"),
+        ([1, 2, 3], [1, 2, None], "assert"),
+        ([[1, 2], [3]], [[1, 2], [3, 4]], "assert"),
+        ([[1, 2], [3]], [[1, 2], None], "assert"),
+        ([{"a": 1}, {"a": 2}], [{"a": 1}, {"a": 3}], "assert"),
+        ([{"a": 1}, {"a": 2}], [{"a": 1}, None], "assert"),
     ],
 )
-def test_assert_column_eq_ok_raises(left: list, right: list) -> None:
+def test_assert_column_eq_ok_raises(
+    left: list, right: list, match: str
+) -> None:
     array = pa.array(left)
     column = plc.Column.from_arrow(array)
-    with pytest.raises(AssertionError):
+    with pytest.raises(AssertionError, match=match):
         assert_column_eq(column, pa.array(right))
