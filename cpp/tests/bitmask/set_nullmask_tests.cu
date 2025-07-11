@@ -142,7 +142,7 @@ struct SetBitmaskTest : public cudf::test::BaseFixture {
     valids[0]   = valid;
     valids[1]   = !valid;
 
-    cudf::set_null_masks_safe(masks, begins, ends, valids);
+    cudf::set_null_masks(masks, begins, ends, valids);
     // Verify bitmasks
     expect_bitmask_equal(static_cast<cudf::bitmask_type*>(mask.data()), 0, expected);
   }
@@ -193,7 +193,7 @@ TEST_F(SetBitmaskTest, null_mask_partition_bulk_safe)
 TEST_F(SetBitmaskTest, null_mask_bulk_empty)
 {
   EXPECT_NO_THROW(cudf::set_null_masks_unsafe({}, {}, {}, {}));
-  EXPECT_NO_THROW(cudf::set_null_masks_safe({}, {}, {}, {}));
+  EXPECT_NO_THROW(cudf::set_null_masks({}, {}, {}, {}));
 }
 
 TEST_F(SetBitmaskTest, error_range)
