@@ -262,12 +262,10 @@ def _(
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     # Check zlice
     if ir.zlice is not None:
-        offset, length = ir.zlice
         return rec(
             Slice(
                 ir.schema,
-                offset,
-                length,
+                *ir.zlice,
                 Union(ir.schema, None, *ir.children),
             )
         )
