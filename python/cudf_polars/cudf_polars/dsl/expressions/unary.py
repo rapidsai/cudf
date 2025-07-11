@@ -110,6 +110,7 @@ class UnaryFunction(Expr):
             "set_sorted",
             "unique",
             "value_counts",
+            "null_count",
         }
     )
     _supported_cum_aggs = frozenset(
@@ -157,6 +158,15 @@ class UnaryFunction(Expr):
         if self.name == "mask_nans":
             (child,) = self.children
             return child.evaluate(df, context=context).mask_nans()
+        if self.name == "null_count":
+            (column,) = (child.evaluate(df, context=context) for child in self.children)
+            return Column(
+                plc.Column.from_scalar(
+                    plc.Scalar.from_py(column.null_count, self.dtype.plc),
+                    1,
+                ),
+                dtype=self.dtype,
+            )
         if self.name == "round":
             round_mode = "half_away_from_zero"
             if POLARS_VERSION_LT_129:
