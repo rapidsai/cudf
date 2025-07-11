@@ -261,9 +261,13 @@ def _(
     ir: Union, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     # Check zlice
-    if ir.zlice is not None:  # pragma: no cover
-        return _lower_ir_fallback(
-            ir, rec, msg="zlice is not supported for multiple partitions."
+    if ir.zlice is not None:
+        return rec(
+            Slice(
+                ir.schema,
+                *ir.zlice,
+                Union(ir.schema, None, *ir.children),
+            )
         )
 
     # Lower children

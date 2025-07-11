@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,14 +14,16 @@
  * limitations under the License.
  */
 
+#include "runtime/context.hpp"
+
+#include <cudf/context.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <jitify2.hpp>
+#include <jit/cache.hpp>
 
 #include <filesystem>
 
 namespace cudf {
-namespace jit {
 namespace {
 
 // Get the directory in home to use for storing the cache
@@ -110,16 +112,13 @@ std::size_t try_parse_numeric_env_var(char const* const env_name, std::size_t de
 }
 }  // namespace
 
-jitify2::ProgramCache<>& get_program_cache(jitify2::PreprocessedProgramData preprog)
+jitify2::ProgramCache<>& jit::program_cache::get(jitify2::PreprocessedProgramData preprog)
 {
-  static std::mutex caches_mutex{};
-  static std::unordered_map<std::string, std::unique_ptr<jitify2::ProgramCache<>>> caches{};
+  std::lock_guard<std::mutex> const caches_lock(_caches_mutex);
 
-  std::lock_guard<std::mutex> const caches_lock(caches_mutex);
+  auto existing_cache = _caches.find(preprog.name());
 
-  auto existing_cache = caches.find(preprog.name());
-
-  if (existing_cache == caches.end()) {
+  if (existing_cache == _caches.end()) {
     auto const kernel_limit_proc =
       try_parse_numeric_env_var("LIBCUDF_KERNEL_CACHE_LIMIT_PER_PROCESS", 10'000);
     auto const kernel_limit_disk =
@@ -130,14 +129,17 @@ jitify2::ProgramCache<>& get_program_cache(jitify2::PreprocessedProgramData prep
     auto const cache_dir = kernel_limit_disk == 0 ? std::string{} : get_program_cache_dir();
 
     auto const res =
-      caches.insert({preprog.name(),
-                     std::make_unique<jitify2::ProgramCache<>>(
-                       kernel_limit_proc, preprog, nullptr, cache_dir, kernel_limit_disk)});
+      _caches.insert({preprog.name(),
+                      std::make_unique<jitify2::ProgramCache<>>(
+                        kernel_limit_proc, preprog, nullptr, cache_dir, kernel_limit_disk)});
     existing_cache = res.first;
   }
 
   return *(existing_cache->second);
 }
 
-}  // namespace jit
+jitify2::ProgramCache<>& jit::get_program_cache(jitify2::PreprocessedProgramData preprog)
+{
+  return cudf::get_context().program_cache().get(preprog);
+}
 }  // namespace cudf
