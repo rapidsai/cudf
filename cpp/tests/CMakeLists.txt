@@ -329,11 +329,8 @@ ConfigureTest(
   PERCENT 30
 )
 ConfigureTest(
-  HYBRID_SCAN_TEST
-  io/experimental/hybrid_scan_filters_test.cpp
-  io/experimental/hybrid_scan_common.cpp
-  io/parquet_test.cpp
-  io/parquet_common.cpp
+  HYBRID_SCAN_TEST io/experimental/hybrid_scan_filters_test.cpp
+  io/experimental/hybrid_scan_common.cpp io/parquet_test.cpp io/parquet_common.cpp
   GPUS 1
   PERCENT 30
 )
