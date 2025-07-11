@@ -1,8 +1,10 @@
 #!/bin/bash
 # Copyright (c) 2025, NVIDIA CORPORATION.
 
+set -euo pipefail
+
 # Support invoking test_python_cudf.sh outside the script directory
-cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../ || exit 1
+cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../
 
 source rapids-init-pip
 
@@ -19,13 +21,30 @@ set +e
 rapids-logger "pytest narwhals"
 NARWHALS_VERSION=$(python -c "import narwhals; print(narwhals.__version__)")
 git clone https://github.com/narwhals-dev/narwhals.git --depth=1 -b "v${NARWHALS_VERSION}" narwhals
-pushd narwhals || exit 1
+pushd narwhals
 rapids-pip-retry install -U -e .
 
 rapids-logger "Check narwhals versions"
 python -c "import narwhals; print(narwhals.show_versions())"
 
-TESTS_TO_ALWAYS_SKIP_CUDF="test_date_lit[cudf]" # pa.date32() is not supported in cudf
+# test_horizontal_slice_with_series: xpassing in Narwhals, fixed in cuDF https://github.com/rapidsai/cudf/pull/18558
+# test_rolling_mean_expr_lazy_grouped: xpassing in Narwhals
+# test_rolling_std_expr_lazy_grouped: xpassing in Narwhals
+# test_rolling_sum_expr_lazy_grouped: xpassing in Narwhals
+# test_rolling_var_expr_lazy_grouped: xpassing in Narwhals
+TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF="not test_rolling_mean_expr_lazy_grouped[cudf-expected_a4-3-1-True] \
+and not test_rolling_mean_expr_lazy_grouped[cudf-expected_a5-4-1-True] \
+and not test_rolling_mean_expr_lazy_grouped[cudf-expected_a6-5-1-True] \
+and not test_rolling_std_expr_lazy_grouped[cudf-expected_a4-3-1-True-1] \
+and not test_rolling_std_expr_lazy_grouped[cudf-expected_a5-4-1-True-1] \
+and not test_rolling_std_expr_lazy_grouped[cudf-expected_a6-5-1-True-0] \
+and not test_rolling_sum_expr_lazy_grouped[cudf-expected_a4-3-1-True] \
+and not test_rolling_sum_expr_lazy_grouped[cudf-expected_a5-4-1-True] \
+and not test_rolling_sum_expr_lazy_grouped[cudf-expected_a6-5-1-True] \
+and not test_rolling_var_expr_lazy_grouped[cudf-expected_a4-3-1-True-1] \
+and not test_rolling_var_expr_lazy_grouped[cudf-expected_a5-4-1-True-1] \
+and not test_rolling_var_expr_lazy_grouped[cudf-expected_a6-5-1-True-0] \
+and not test_horizontal_slice_with_series"
 
 rapids-logger "Run narwhals tests for cuDF"
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest \
@@ -35,9 +54,7 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest \
     -p env \
     -p no:pytest_benchmark \
     -p cudf.testing.narwhals_test_plugin \
-    -k "not ( \
-        ${TESTS_TO_ALWAYS_SKIP_CUDF} \
-    )" \
+    -k "$TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF" \
     --numprocesses=8 \
     --dist=worksteal \
     --constructors=cudf
@@ -110,7 +127,7 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 NARWHALS_DEFAULT_CONSTRUCTORS=pandas python -m 
     --numprocesses=8 \
     --dist=worksteal
 
-popd || exit 1
+popd
 
 rapids-logger "Test script exiting with value: $EXITCODE"
 exit ${EXITCODE}

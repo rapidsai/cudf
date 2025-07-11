@@ -1,63 +1,10 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 from pickle import dumps
 
 import cachetools
 from numba import cuda
 from numba.np import numpy_support
-
-from cudf.utils._numba import _CUDFNumbaConfig
-
-#
-# Misc kernels
-#
-
-
-@cuda.jit
-def gpu_window_sizes_from_offset(arr, window_sizes, offset):
-    i = cuda.grid(1)
-    j = i
-    if i < arr.size:
-        while j > -1:
-            if (arr[i] - arr[j]) >= offset:
-                break
-            j -= 1
-        window_sizes[i] = i - j
-
-
-def window_sizes_from_offset(arr, offset):
-    window_sizes = cuda.device_array(shape=(arr.shape), dtype="int32")
-    if arr.size > 0:
-        with _CUDFNumbaConfig():
-            gpu_window_sizes_from_offset.forall(arr.size)(
-                arr, window_sizes, offset
-            )
-    return window_sizes
-
-
-@cuda.jit
-def gpu_grouped_window_sizes_from_offset(
-    arr, window_sizes, group_starts, offset
-):
-    i = cuda.grid(1)
-    j = i
-    if i < arr.size:
-        while j > (group_starts[i] - 1):
-            if (arr[i] - arr[j]) >= offset:
-                break
-            j -= 1
-        window_sizes[i] = i - j
-
-
-def grouped_window_sizes_from_offset(arr, group_starts, offset):
-    window_sizes = cuda.device_array(shape=(arr.shape), dtype="int32")
-    if arr.size > 0:
-        with _CUDFNumbaConfig():
-            gpu_grouped_window_sizes_from_offset.forall(arr.size)(
-                arr, window_sizes, group_starts, offset
-            )
-    return window_sizes
-
 
 # This cache is keyed on the (signature, code, closure variables) of UDFs, so
 # it can hit for distinct functions that are similar. The lru_cache wrapping

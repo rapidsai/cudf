@@ -7,18 +7,31 @@ from __future__ import annotations
 
 import dataclasses
 import enum
+import functools
+import importlib.util
 import json
 import os
 import warnings
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, TypeVar
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from typing_extensions import Self
 
     import polars as pl
 
 
 __all__ = ["ConfigOptions"]
+
+
+@functools.cache
+def rapidsmpf_available() -> bool:  # pragma: no cover
+    """Query whether rapidsmpf is available as a shuffle method."""
+    try:
+        return importlib.util.find_spec("rapidsmpf.integrations.dask") is not None
+    except (ImportError, ValueError):
+        return False
 
 
 # TODO: Use enum.StrEnum when we drop Python 3.10
@@ -59,10 +72,6 @@ class ShuffleMethod(str, enum.Enum):
 
     * ``ShuffleMethod.TASKS`` : Use the task-based shuffler.
     * ``ShuffleMethod.RAPIDSMPF`` : Use the rapidsmpf scheduler.
-
-    In :class:`StreamingExecutor`, the default of ``None`` will attempt to use
-    ``ShuffleMethod.RAPIDSMPF``, but will fall back to ``ShuffleMethod.TASKS``
-    if rapidsmpf is not installed.
     """
 
     TASKS = "tasks"
@@ -106,23 +115,7 @@ def default_blocksize(scheduler: str) -> int:
     try:
         # Use PyNVML to find the worker device size.
         import pynvml
-
-        pynvml.nvmlInit()
-        index = os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0]
-        if index and not index.isnumeric():  # pragma: no cover
-            # This means device_index is UUID.
-            # This works for both MIG and non-MIG device UUIDs.
-            handle = pynvml.nvmlDeviceGetHandleByUUID(str.encode(index))
-            if pynvml.nvmlDeviceIsMigDeviceHandle(handle):
-                # Additionally get parent device handle
-                # if the device itself is a MIG instance
-                handle = pynvml.nvmlDeviceGetDeviceHandleFromMigDeviceHandle(handle)
-        else:
-            handle = pynvml.nvmlDeviceGetHandleByIndex(int(index))
-
-        device_size = pynvml.nvmlDeviceGetMemoryInfo(handle).total
-
-    except (ImportError, ValueError, pynvml.NVMLError) as err:  # pragma: no cover
+    except (ImportError, ValueError) as err:  # pragma: no cover
         # Fall back to a conservative 12GiB default
         warnings.warn(
             "Failed to query the device size with NVML. Please "
@@ -131,6 +124,30 @@ def default_blocksize(scheduler: str) -> int:
             stacklevel=1,
         )
         device_size = 12 * 1024**3
+    else:
+        try:
+            pynvml.nvmlInit()
+            index = os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0]
+            if index and not index.isnumeric():  # pragma: no cover
+                # This means device_index is UUID.
+                # This works for both MIG and non-MIG device UUIDs.
+                handle = pynvml.nvmlDeviceGetHandleByUUID(str.encode(index))
+                if pynvml.nvmlDeviceIsMigDeviceHandle(handle):
+                    # Additionally get parent device handle
+                    # if the device itself is a MIG instance
+                    handle = pynvml.nvmlDeviceGetDeviceHandleFromMigDeviceHandle(handle)
+            else:
+                handle = pynvml.nvmlDeviceGetHandleByIndex(int(index))
+
+            device_size = pynvml.nvmlDeviceGetMemoryInfo(handle).total
+        except pynvml.NVMLError as err:  # pragma: no cover
+            warnings.warn(
+                "Failed to query the device size with NVML. Please "
+                "set 'target_partition_size' to a literal byte size to "
+                f"silence this warning. Original error: {err}",
+                stacklevel=1,
+            )
+            device_size = 12 * 1024**3
 
     if scheduler == "distributed":
         # Distributed execution requires a conservative
@@ -142,6 +159,37 @@ def default_blocksize(scheduler: str) -> int:
         blocksize = int(device_size * 0.0625)
 
     return max(blocksize, 256_000_000)
+
+
+T = TypeVar("T")
+
+
+def from_env(name: str, converter: Callable[[str], T], default: T) -> T:
+    """
+    Get an engine value from the environment.
+
+    Parameters
+    ----------
+    name
+        The name of the engine variable. The environment
+        variable looked up will have ``CUDF_POLARS__`` prefixed.
+    converter
+        How to convert the value from the environment.
+    default
+        The default value to use if the environment variable is not set.
+    """
+    # TODO: Support other config options
+    # https://github.com/rapidsai/cudf/issues/19330
+    prefix = "CUDF_POLARS"
+    value = os.environ.get(f"{prefix}__{name}")
+    if value is None:
+        return default
+    return converter(value)
+
+
+def target_partition_size_default() -> int:
+    """The default factory for StreamingExecutor.target_partition_size."""
+    return from_env("STREAMING__TARGET_PARTITION_SIZE", int, 0)
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
@@ -163,18 +211,34 @@ class StreamingExecutor:
         The maximum number of rows to process per partition. 1_000_000 by default.
         When the number of rows exceeds this value, the query will be split into
         multiple partitions and executed in parallel.
-    cardinality_factor
+    unique_fraction
         A dictionary mapping column names to floats between 0 and 1 (inclusive
         on the right).
 
         Each factor estimates the fractional number of unique values in the
         column. By default, ``1.0`` is used for any column not included in
-        ``cardinality_factor``.
+        ``unique_fraction``.
     target_partition_size
-        Target partition size for IO tasks. This configuration currently
+        Target partition size, in bytes, for IO tasks. This configuration currently
         controls how large parquet files are split into multiple partitions.
         Files larger than ``target_partition_size`` bytes are split into multiple
         partitions.
+
+        This can be set via
+
+        - keyword argument to ``polars.GPUEngine``
+        - the ``CUDF_POLARS__STREAMING__TARGET_PARTITION_SIZE`` environment variable
+
+        By default, cudf-polars uses a target partition size that's a fraction
+        of the device memory, where the fraction depends on the scheduler:
+
+        - distributed: 1/40th of the device memory
+        - synchronous: 1/16th of the device memory
+
+        The optional pynvml dependency is used to query the device memory size. If
+        pynvml is not available, a warning is emitted and the device size is assumed
+        to be 12 GiB.
+
     groupby_n_ary
         The factor by which the number of partitions is decreased when performing
         a groupby on a partitioned column. For example, if a column has 64 partitions,
@@ -185,26 +249,57 @@ class StreamingExecutor:
         The maximum number of partitions to allow for the smaller table in
         a broadcast join.
     shuffle_method
-        The method to use for shuffling data between workers. ``None``
-        by default, which will use 'rapidsmpf' if installed and fall back to
-        'tasks' if not.
+        The method to use for shuffling data between workers. Defaults to
+        'rapidsmpf' for distributed scheduler if available (otherwise 'tasks'),
+        and 'tasks' for synchronous scheduler.
     rapidsmpf_spill
         Whether to wrap task arguments and output in objects that are
         spillable by 'rapidsmpf'.
+    sink_to_directory
+        Whether multi-partition sink operations should write to a directory
+        rather than a single file. By default, this will be set to True for
+        the 'distributed' scheduler and False otherwise. The 'distrubuted'
+        scheduler does not currently support ``sink_to_directory=False``.
+
+    Notes
+    -----
+    The streaming executor does not currently support profiling a query via
+    the ``.profile()`` method. We recommend using nsys to profile queries
+    with the 'synchronous' scheduler and Dask's built-in profiling tools
+    with the 'distributed' scheduler.
     """
 
     name: Literal["streaming"] = dataclasses.field(default="streaming", init=False)
     scheduler: Scheduler = Scheduler.SYNCHRONOUS
     fallback_mode: StreamingFallbackMode = StreamingFallbackMode.WARN
     max_rows_per_partition: int = 1_000_000
-    cardinality_factor: dict[str, float] = dataclasses.field(default_factory=dict)
-    target_partition_size: int = 0
+    unique_fraction: dict[str, float] = dataclasses.field(default_factory=dict)
+    target_partition_size: int = dataclasses.field(
+        default_factory=target_partition_size_default
+    )
     groupby_n_ary: int = 32
     broadcast_join_limit: int = 0
-    shuffle_method: ShuffleMethod | None = None
+    shuffle_method: ShuffleMethod = ShuffleMethod.TASKS
     rapidsmpf_spill: bool = False
+    sink_to_directory: bool | None = None
 
     def __post_init__(self) -> None:
+        # Handle shuffle_method defaults for streaming executor
+        if self.shuffle_method is None:
+            if self.scheduler == "distributed" and rapidsmpf_available():
+                # For distributed scheduler, prefer rapidsmpf if available
+                object.__setattr__(self, "shuffle_method", "rapidsmpf")
+            else:
+                object.__setattr__(self, "shuffle_method", "tasks")
+        else:
+            if (
+                self.scheduler == "distributed"
+                and self.shuffle_method == "rapidsmpf"
+                and not rapidsmpf_available()
+            ):
+                raise ValueError(
+                    "rapidsmpf shuffle method requested, but rapidsmpf is not installed"
+                )
         if self.scheduler == "synchronous" and self.shuffle_method == "rapidsmpf":
             raise ValueError(
                 "rapidsmpf shuffle method is not supported for synchronous scheduler"
@@ -226,16 +321,22 @@ class StreamingExecutor:
                 2 if self.scheduler == "distributed" else 32,
             )
         object.__setattr__(self, "scheduler", Scheduler(self.scheduler))
-        if self.shuffle_method is not None:
-            object.__setattr__(
-                self, "shuffle_method", ShuffleMethod(self.shuffle_method)
-            )
+        object.__setattr__(self, "shuffle_method", ShuffleMethod(self.shuffle_method))
+
+        if self.scheduler == "distributed":
+            if self.sink_to_directory is False:
+                raise ValueError(
+                    "The distributed scheduler requires sink_to_directory=True"
+                )
+            object.__setattr__(self, "sink_to_directory", True)
+        elif self.sink_to_directory is None:
+            object.__setattr__(self, "sink_to_directory", False)
 
         # Type / value check everything else
         if not isinstance(self.max_rows_per_partition, int):
             raise TypeError("max_rows_per_partition must be an int")
-        if not isinstance(self.cardinality_factor, dict):
-            raise TypeError("cardinality_factor must be a dict of column name to float")
+        if not isinstance(self.unique_fraction, dict):
+            raise TypeError("unique_fraction must be a dict of column name to float")
         if not isinstance(self.target_partition_size, int):
             raise TypeError("target_partition_size must be an int")
         if not isinstance(self.groupby_n_ary, int):
@@ -244,12 +345,14 @@ class StreamingExecutor:
             raise TypeError("broadcast_join_limit must be an int")
         if not isinstance(self.rapidsmpf_spill, bool):
             raise TypeError("rapidsmpf_spill must be bool")
+        if not isinstance(self.sink_to_directory, bool):
+            raise TypeError("sink_to_directory must be bool")
 
     def __hash__(self) -> int:
         # cardinality factory, a dict, isn't natively hashable. We'll dump it
         # to json and hash that.
         d = dataclasses.asdict(self)
-        d["cardinality_factor"] = json.dumps(d["cardinality_factor"])
+        d["unique_fraction"] = json.dumps(d["unique_fraction"])
         return hash(tuple(sorted(d.items())))
 
 
@@ -324,6 +427,19 @@ class ConfigOptions:
         user_parquet_options = engine.config.get("parquet_options", {})
         user_raise_on_fail = engine.config.get("raise_on_fail", False)
 
+        # Backward compatibility for "cardinality_factor"
+        # TODO: Remove this in 25.10
+        if "cardinality_factor" in user_executor_options:
+            warnings.warn(
+                "The 'cardinality_factor' configuration is deprecated. "
+                "Please use 'unique_fraction' instead.",
+                FutureWarning,
+                stacklevel=2,
+            )
+            cardinality_factor = user_executor_options.pop("cardinality_factor")
+            if "unique_fraction" not in user_executor_options:
+                user_executor_options["unique_fraction"] = cardinality_factor
+
         # These are user-provided options, so we need to actually validate
         # them.
 
@@ -339,9 +455,9 @@ class ConfigOptions:
             case "in-memory":
                 executor = InMemoryExecutor(**user_executor_options)
             case "streaming":
+                user_executor_options = user_executor_options.copy()
+                user_executor_options.setdefault("shuffle_method", None)
                 executor = StreamingExecutor(**user_executor_options)
-                # Update with the streaming defaults, but user options take precedence.
-
             case _:  # pragma: no cover; Unreachable
                 raise ValueError(f"Unsupported executor: {user_executor}")
 

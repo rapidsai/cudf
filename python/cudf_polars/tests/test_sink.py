@@ -7,6 +7,7 @@ import pytest
 import polars as pl
 
 from cudf_polars.testing.asserts import (
+    DEFAULT_BLOCKSIZE_MODE,
     assert_sink_ir_translation_raises,
     assert_sink_result_equal,
 )
@@ -36,6 +37,9 @@ def test_sink_csv(
             reason="not supported until polars 1.28",
         )
     )
+    if line_terminator == "\n\n" and DEFAULT_BLOCKSIZE_MODE == "small":
+        # We end up with an extra row per partition.
+        pytest.skip("Multi-line terminator not supported with small blocksize")
     assert_sink_result_equal(
         df,
         tmp_path / "out.csv",
@@ -44,6 +48,9 @@ def test_sink_csv(
             "null_value": null_value,
             "line_terminator": line_terminator,
             "separator": separator,
+        },
+        read_kwargs={
+            "has_header": include_header,
         },
     )
 
