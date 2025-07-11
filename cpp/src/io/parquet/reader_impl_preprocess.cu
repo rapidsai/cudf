@@ -497,7 +497,7 @@ void reader::impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_li
   // TODO: we could do this once at the file level instead of every time we get in here. the set of
   // columns we are processing does not change over multiple passes/subpasses/output chunks.
   bool has_lists = false;
-  for (const auto& input_col : _input_columns) {
+  for (auto const& input_col : _input_columns) {
     size_t const max_depth = input_col.nesting_depth();
 
     auto* cols = &_output_buffers;
