@@ -96,3 +96,19 @@ def test_log(ldf, natural):
 def test_negate(ldf, col):
     q = ldf.select(-pl.col(col))
     assert_gpu_result_equal(q)
+
+
+def test_null_count():
+    lf = pl.LazyFrame(
+        {
+            "foo": [1, None, 3],
+            "bar": [None, None, 1],
+            "baz": [1, 2, 3],
+        }
+    )
+    q = lf.select(
+        pl.col("foo").is_null().sum(),
+        pl.col("bar").is_null().sum(),
+        pl.col("baz").is_null().sum(),
+    )
+    assert_gpu_result_equal(q)
