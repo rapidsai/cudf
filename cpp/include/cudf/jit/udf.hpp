@@ -15,14 +15,16 @@
  */
 
 #pragma once
+
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 
 namespace CUDF_EXPORT cudf {
 
+/// @brief The source type of a user-defined function (UDF) used in JIT compilation.
 enum class udf_source_type : std::int32_t {
-  CUDA = 0,  ///< The UDF is a CUDA string
-  PTX  = 1   ///< The UDF is a PTX string
+  CUDA = 0,  ///< The UDF is a CUDA source-code string
+  PTX  = 1   ///< The UDF is a PTX source-code string
 };
 
-}
+}  // namespace CUDF_EXPORT cudf
