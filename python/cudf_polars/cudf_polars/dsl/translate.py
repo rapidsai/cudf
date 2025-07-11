@@ -655,7 +655,7 @@ def _(
         if name in needs_cast:
             return expr.Cast(dtype, result_expr)
         return result_expr
-    elif isinstance(name, pl_expr.StructFunction):
+    elif not POLARS_VERSION_LT_131 and isinstance(name, pl_expr.StructFunction):
         return expr.StructFunction(
             dtype,
             expr.StructFunction.Name.from_polars(name),
