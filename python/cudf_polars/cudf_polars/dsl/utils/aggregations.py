@@ -84,6 +84,8 @@ def decompose_single_agg(
     """
     agg = named_expr.value
     name = named_expr.name
+    if isinstance(agg, expr.UnaryFunction) and agg.name == "null_count":
+        raise NotImplementedError("null_count is not supported inside groupby context")
     if isinstance(agg, expr.Col):
         # TODO: collect_list produces null for empty group in libcudf, empty list in polars.
         # But we need the nested value type, so need to track proper dtypes in our DSL.

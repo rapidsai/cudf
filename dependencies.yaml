@@ -138,6 +138,7 @@ files:
       - depends_on_dask_cudf
       - depends_on_pylibcudf
       - depends_on_libcudf
+      - depends_on_cudf_polars
       - docs
       - py_version
   py_build_cudf:
@@ -836,6 +837,7 @@ dependencies:
           - hypothesis>=6.131.7
           - pytest-benchmark
           - pytest-cases>=3.8.2
+          - pytest-rerunfailures
           - scipy
           - zstandard
       - output_types: conda
