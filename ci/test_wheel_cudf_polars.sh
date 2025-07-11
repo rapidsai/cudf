@@ -50,7 +50,7 @@ PASSED=()
 FAILED=()
 
 read -r -a VERSIONS <<< "${POLARS_VERSIONS}"
-LATEST_VERSION="${VERSIONS[${#VERSIONS[@]}-1]}"
+LATEST_VERSION="${VERSIONS[-1]}"
 
 for version in "${VERSIONS[@]}"; do
     rapids-logger "Installing polars==${version}"
