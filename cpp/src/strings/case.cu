@@ -22,6 +22,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/strings/case.hpp>
 #include <cudf/strings/detail/char_tables.hpp>
 #include <cudf/strings/detail/strings_children.cuh>

@@ -839,9 +839,6 @@ class DatetimeTZColumn(DatetimeColumn):
         offsets_from_utc = offsets.take(indices, nullify=True)
         return self + offsets_from_utc
 
-    def strftime(self, format: str) -> StringColumn:
-        return self._local_time.strftime(format)
-
     def as_string_column(self, dtype) -> StringColumn:
         return self._local_time.as_string_column(dtype)
 

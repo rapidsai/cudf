@@ -25,6 +25,7 @@ from cudf.testing._utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
     assert_exceptions_equal,
+    expect_warning_if,
 )
 from cudf.utils import dtypes as dtypeutils
 
@@ -823,8 +824,15 @@ def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na, na_raise):
         expectation = pytest.raises(NotImplementedError)
 
     with expectation:
-        expect = ps.str.contains(pat, flags=flags, na=na, regex=regex)
-        got = gs.str.contains(pat, flags=flags, na=na, regex=regex)
+        with expect_warning_if(
+            na == "" or (na is None and not (flags_raise or na_raise)),
+            match=(
+                "Allowing a non-bool 'na' in obj.str.contains is deprecated "
+                "and will raise in a future version."
+            ),
+        ):
+            expect = ps.str.contains(pat, flags=flags, na=na, regex=regex)
+            got = gs.str.contains(pat, flags=flags, na=na, regex=regex)
         assert_eq(expect, got)
 
 

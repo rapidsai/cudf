@@ -3,6 +3,7 @@
 from cython.operator cimport dereference
 from libcpp cimport bool
 from libcpp.memory cimport make_unique, unique_ptr
+from libcpp.pair cimport pair
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 from pylibcudf.libcudf cimport rolling as cpp_rolling
@@ -239,3 +240,53 @@ cpdef bool is_valid_rolling_aggregation(DataType source, Aggregation agg):
     True if the aggregation is supported.
     """
     return cpp_rolling.is_valid_rolling_aggregation(source.c_obj, agg.kind())
+
+
+cpdef tuple make_range_windows(
+    Table group_keys,
+    Column orderby,
+    order order,
+    null_order null_order,
+    PrecedingRangeWindowType preceding,
+    FollowingRangeWindowType following,
+):
+    """
+    Constructs preceding and following columns given window range specifications.
+
+    Parameters
+    ----------
+    group_keys
+        Possibly empty table of sorted keys defining groups.
+    orderby
+        Column defining window ranges. Must be sorted, if
+       ``group_keys`` is not empty, must be sorted groupwise.
+    order
+        Sort order of the ``orderby`` column.
+    null_order
+        Null sort order in the sorted ``orderby`` column
+    preceding
+        The type of the preceding window offset.
+    following
+        The type of the following window offset.
+
+    Returns
+    -------
+    tuple[Column, Column]
+        A tuple of preceding and following columns that define the window bounds
+        for each row suitable for passing to `rolling_window`.
+    """
+    cdef pair[unique_ptr[column], unique_ptr[column]] result
+
+    with nogil:
+        result = cpp_rolling.make_range_windows(
+            group_keys.view(),
+            orderby.view(),
+            order,
+            null_order,
+            dereference(preceding.c_obj.get()),
+            dereference(following.c_obj.get()),
+        )
+    return (
+        Column.from_libcudf(move(result.first)),
+        Column.from_libcudf(move(result.second))
+    )

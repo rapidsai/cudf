@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import pylibcudf as plc
+import polars as pl
 
 from cudf_polars.dsl import expr
 from cudf_polars.dsl.expr import Col, Len
@@ -16,7 +16,6 @@ from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.dispatch import lower_ir_node
 from cudf_polars.experimental.expressions import decompose_expr_graph
 from cudf_polars.experimental.utils import _lower_ir_fallback
-from cudf_polars.utils.versions import POLARS_VERSION_LT_128
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -109,8 +108,7 @@ def _(
     child, partition_info = rec(ir.children[0])
     pi = partition_info[child]
     if (
-        not POLARS_VERSION_LT_128
-        and pi.count == 1
+        pi.count == 1
         and Select._is_len_expr(ir.exprs)
         and isinstance(child, Union)
         and len(child.children) == 1
@@ -122,10 +120,9 @@ def _(
         count = scan.fast_count()
         dtype = ir.exprs[0].value.dtype
 
-        col = plc.Column.from_scalar(plc.Scalar.from_py(count, dtype.plc), 1)
-        arr = plc.interop.to_arrow(col)
-
-        lit_expr = expr.LiteralColumn(dtype, arr)
+        lit_expr = expr.LiteralColumn(
+            dtype, pl.Series(values=[count], dtype=dtype.polars)
+        )
         named_expr = expr.NamedExpr(ir.exprs[0].name or "len", lit_expr)
 
         new_node = Select(
