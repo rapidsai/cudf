@@ -10,8 +10,11 @@ import pylibcudf as plc
     "values",
     [
         [1, 2, 3],
+        [1, None, 3],
         [[1, 2], [3]],
+        [[1, 2], [3], None],
         [{"a": 1}, {"a": 2}],
+        [{"a": 1}, {"a": 2}, None],
     ],
 )
 def test_assert_column_eq_ok(values: list) -> None:
@@ -24,8 +27,11 @@ def test_assert_column_eq_ok(values: list) -> None:
     "left, right",
     [
         ([1, 2, 3], [1, 2, 4]),
+        ([1, 2, 3], [1, 2, None]),
         ([[1, 2], [3]], [[1, 2], [3, 4]]),
+        ([[1, 2], [3]], [[1, 2], None]),
         ([{"a": 1}, {"a": 2}], [{"a": 1}, {"a": 3}]),
+        ([{"a": 1}, {"a": 2}], [{"a": 1}, None]),
     ],
 )
 def test_assert_column_eq_ok_raises(left: list, right: list) -> None:
