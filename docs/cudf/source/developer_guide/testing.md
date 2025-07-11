@@ -297,6 +297,6 @@ When running cuDF tests with `pytest-xdist`, the number of parallel workers is e
 
 For example, on an NVIDIA L4 GPU with 24 GB of memory, using 8 parallel workers assumes each worker will consume approximately 3 GB or less. If more than 8 workers are launched, it's likely that multiple memory-intensive tests will run at the same time, increasing the risk of GPU out-of-memory (OOM) errors.
 
-While a GPU with more memory like an H100 could support more than 8 workers, it’s more robust to pick a value that works across all harware used in CI (e.g., L4, A100, V100).
+While a GPU with more memory like an H100 could support more than 8 workers, it's more robust to pick a value that works across all harware used in CI (e.g., L4, A100, V100).
 
 If you're running the test suite on lower-resource systems (e.g., with 8–12 GB of GPU memory), you may need to reduce the number of workers (e.g., `-n 4`, `-n 2`) to avoid OOM errors.
