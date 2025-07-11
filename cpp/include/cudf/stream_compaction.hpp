@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/jit/udf.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/export.hpp>
@@ -447,7 +448,7 @@ cudf::size_type distinct_count(table_view const& input,
  *
  * @param columns       Immutable views of the columns to filter
  * @param predicate_udf The PTX/CUDA string of the transform function to apply
- * @param is_ptx        true: the UDF is treated as PTX code; false: the UDF is treated as CUDA code
+ * @param source_type   The source type of the UDF
  * @param user_data     User-defined device data to pass to the UDF.
  * @param copy_mask     Optional vector of booleans indicating which columns to copy from the input
  *                      columns to the output. If not provided, all columns are copied.
@@ -458,7 +459,7 @@ cudf::size_type distinct_count(table_view const& input,
 std::vector<std::unique_ptr<column>> filter(
   std::vector<column_view> const& columns,
   std::string const& predicate_udf,
-  bool is_ptx,
+  udf_source_type source_type,
   std::optional<void*> user_data             = std::nullopt,
   std::optional<std::vector<bool>> copy_mask = std::nullopt,
   rmm::cuda_stream_view stream               = cudf::get_default_stream(),
