@@ -940,19 +940,6 @@ std::unique_ptr<cudf::table> create_distinct_rows_table(std::vector<cudf::type_i
     if (is_numeric(dt)) {
       auto init = cudf::make_default_constructed_scalar(dt, stream);
       auto col  = cudf::sequence(num_rows.count, *init);
-
-      /*
-      auto print_column = [stream](cudf::column_view col) {
-        std::printf("Data: ");
-        auto colspan = cudf::device_span<cudf::size_type const>(col.begin<cudf::size_type>(), col.size());
-        auto h_coldata = cudf::detail::make_std_vector<cudf::size_type>(colspan, stream);
-        for(auto e : h_coldata)
-          std::printf("%d ", e);
-        std::printf("\n");
-      };
-      print_column(col->view());
-      */
-
       auto [mask, count] =
         create_random_null_mask(num_rows.count, null_probability, seed_dist(seed_engine));
       col->set_null_mask(std::move(mask), count);
@@ -966,7 +953,7 @@ std::unique_ptr<cudf::table> create_distinct_rows_table(std::vector<cudf::type_i
       auto int_col  = cudf::sequence(num_rows.count, *cudf::make_default_constructed_scalar(cudf::data_type{cudf::type_id::INT32}));
       auto int2strcol = cudf::strings::from_integers(int_col->view());
       auto finalcol = cudf::strings::concatenate(cudf::table_view({col->view(), int2strcol->view()}));
-      return col;
+      return cudf::purge_nonempty_nulls(finalcol->view(), stream);
     }
     CUDF_FAIL("dtype not supported");
   });

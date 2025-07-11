@@ -50,8 +50,6 @@ using JOIN_NULLABLE_RANGE = nvbench::enum_type_list<false, true>;
 using JOIN_DATATYPES      = nvbench::enum_type_list<data_type::INTEGRAL,
                                                     data_type::INTEGRAL_SIGNED,
                                                     data_type::FLOAT,
-                                                    data_type::BOOL8,
-                                                    data_type::DECIMAL,
                                                     data_type::INT32,
                                                     data_type::INT64,
                                                     data_type::STRING>;
@@ -221,30 +219,9 @@ void BM_join_with_datatype(state_type& state, std::vector<cudf::type_id>& key_ty
     return;
   }
 
-  std::printf("key_types = ");
-  for(auto id : key_types)
-    std::printf("%d ", static_cast<std::underlying_type<cudf::type_id>::type>(id));
-  std::printf("\n");
-
   auto const num_keys = key_types.size();
   auto stream = cudf::get_default_stream();
-  auto [build_table, probe_table] = generate_input_tables<Nullable>(key_types, right_size, left_size, selectivity, multiplicity, stream);
-
-  auto print_table = [stream](std::string s, cudf::table_view t) {
-    std::printf(s.c_str());
-    std::printf(": nrows = %d, ncols = %d\n", t.num_rows(), t.num_columns());
-    auto col = t.column(0);
-    /*
-    std::printf("Data: ");
-    auto colspan = cudf::device_span<cudf::size_type const>(col.begin<cudf::size_type>(), col.size());
-    auto h_coldata = cudf::detail::make_std_vector<cudf::size_type>(colspan, stream);
-    for(auto e : h_coldata)
-      std::printf("%d ", e);
-    std::printf("\n");
-    */
-  };
-  print_table("build_table", build_table->view());
-  print_table("probe_table", probe_table->view());
+  auto [build_table, probe_table] = generate_input_tables<Nullable>(key_types, right_size, left_size, multiplicity, selectivity, stream);
 
   auto const join_input_size = estimate_size(build_table->view()) + estimate_size(probe_table->view());
 
@@ -258,7 +235,7 @@ void BM_join_with_datatype(state_type& state, std::vector<cudf::type_id>& key_ty
     state.template add_global_memory_reads<nvbench::int8_t>(join_input_size);
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       auto result = JoinFunc(
-        build_table->view().select(columns_to_join), probe_table->view().select(columns_to_join), compare_nulls);
+        probe_table->view().select(columns_to_join), build_table->view().select(columns_to_join), compare_nulls);
     });
     set_throughputs(state);
   }

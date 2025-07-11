@@ -27,14 +27,6 @@ void nvbench_inner_join(nvbench::state& state,
                                            nvbench::enum_type<DataType>>)
 {
   auto const num_keys = state.get_int64("num_keys");
-
-  std::cout << "DataType = " << static_cast<int32_t>(DataType) << std::endl;
-  std::cout << "get_type_or_group = ";
-  auto haha = get_type_or_group(static_cast<int32_t>(DataType));
-  for(auto id : haha) 
-    std::printf("%d ", static_cast<std::underlying_type<cudf::type_id>::type>(id));
-  std::printf("\n");
-
   auto dtypes         = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
 
   auto join = [](cudf::table_view const& left_input,
