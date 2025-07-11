@@ -19,6 +19,7 @@ authors = [
 license = { text = "Apache-2.0" }
 requires-python = ">=3.10"
 dependencies = [
+    "packaging",
     "polars>=1.25,<1.32",
     "pylibcudf==25.8.*,>=0.0.0a0",
     "typing-extensions; python_version < '3.11'",

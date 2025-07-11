@@ -708,6 +708,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - polars>=1.25,<1.32
+          - packaging
     specific:
       - output_types: [requirements, pyproject]
         matrices:
