@@ -708,7 +708,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - polars>=1.25,<1.32
+          - polars>=1.28,<1.32
     specific:
       - output_types: [requirements, pyproject]
         matrices:

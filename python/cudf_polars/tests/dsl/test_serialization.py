@@ -12,11 +12,16 @@ from polars.polars import _expr_nodes as pl_expr
 from cudf_polars.dsl.expressions.boolean import BooleanFunction
 from cudf_polars.dsl.expressions.datetime import TemporalFunction
 from cudf_polars.dsl.expressions.string import StringFunction
-from cudf_polars.dsl.expressions.struct import StructFunction
+from cudf_polars.utils.versions import POLARS_VERSION_LT_131
+
+if not POLARS_VERSION_LT_131:
+    from cudf_polars.dsl.expressions.struct import StructFunction
 
 
 @pytest.fixture(
-    params=[BooleanFunction, StringFunction, TemporalFunction, StructFunction]
+    params=[BooleanFunction, StringFunction, TemporalFunction]
+    if POLARS_VERSION_LT_131
+    else [BooleanFunction, StringFunction, TemporalFunction, StructFunction]
 )
 def function(request):
     return request.param
