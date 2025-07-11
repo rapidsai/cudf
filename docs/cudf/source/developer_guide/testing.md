@@ -292,11 +292,11 @@ def test_bug_in_current_and_maybe_future_versions(...):
 
 If pandas makes a bugfix release and fixes this, then we'll see it in CI immediately, patch it, and bump `PANDAS_CURRENT_SUPPORTED_VERSION` which also usually happens during pandas upgrades.
 
-## Test Parallelism: Why cuDF Tests Use `-n 8`
+## Test Parallelism: How many pytest-xdist workers should be used?
 When running cuDF tests with `pytest-xdist`, the number of parallel workers is explicitly set to `-n 8` rather than using `-n auto`. While `-n auto` launches one worker per available CPU core, cuDF tests are generally constrained by the amount of available GPU memory per worker.
 
 For example, on an NVIDIA L4 GPU with 24 GB of memory, using 8 parallel workers assumes each worker will consume approximately 3 GB or less. If more than 8 workers are launched, it's likely that multiple memory-intensive tests will run at the same time, increasing the risk of GPU out-of-memory (OOM) errors.
 
-While a GPU with more memory like an H100 could support more than 8 workers, it's more robust to pick a value that works across all harware used in CI (e.g., L4, A100, V100).
+While a GPU with more memory could support more than 8 workers, it is more robust to pick a value that works across all hardware used in CI.
 
 If you're running the test suite on lower-resource systems (e.g., with 8–12 GB of GPU memory), you may need to reduce the number of workers (e.g., `-n 4`, `-n 2`) to avoid OOM errors.
