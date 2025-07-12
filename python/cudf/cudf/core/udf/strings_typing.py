@@ -25,7 +25,7 @@ class UDFString(types.Type):
         super().__init__(name="udf_string")
 
     @property
-    def return_type(self):
+    def return_as(self):
         return self
 
 
@@ -36,7 +36,7 @@ class ManagedUDFString(types.Type):
         super().__init__(name="managed_udf_string")
 
     @property
-    def return_type(self):
+    def return_as(self):
         return self
 
 
@@ -47,7 +47,7 @@ class StringView(types.Type):
         super().__init__(name="string_view")
 
     @property
-    def return_type(self):
+    def return_as(self):
         return ManagedUDFString()
 
 

@@ -111,7 +111,7 @@ class ApplyKernelBase(ABC):
         else:
             result = numpy_support.from_dtype(np.dtype(output_type))
 
-        result = result if result.is_internal else result.return_type
+        result = result if result.is_internal else result.return_as
 
         # _get_udf_return_type will throw a TypingError if the user tries to use
         # a field in the row containing an unsupported dtype, except in the

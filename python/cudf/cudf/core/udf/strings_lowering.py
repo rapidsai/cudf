@@ -6,7 +6,6 @@ from functools import partial
 from llvmlite import ir
 from numba import cuda, types
 from numba.core import cgutils
-from numba.core.datamodel import default_manager
 from numba.core.typing import signature as nb_signature
 from numba.cuda.cudaimpl import (
     lower as cuda_lower,
@@ -151,10 +150,12 @@ def cast_string_literal_to_string_view(context, builder, fromty, toty, val):
 def cast_string_view_to_managed_udf_string(
     context, builder, fromty, toty, val
 ):
-    sv_ptr = builder.alloca(default_manager[fromty].get_value_type())
+    sv_ptr = builder.alloca(
+        context.data_model_manager[fromty].get_value_type()
+    )
 
     managed_ptr = builder.alloca(
-        default_manager[managed_udf_string].get_value_type()
+        context.data_model_manager[managed_udf_string].get_value_type()
     )
     udf_str_ptr = builder.gep(
         managed_ptr, [ir.IntType(32)(0), ir.IntType(32)(1)]
@@ -181,9 +182,11 @@ def cast_string_view_to_managed_udf_string(
 def cast_managed_udf_string_to_string_view(
     context, builder, fromty, toty, val
 ):
-    sv_ptr = builder.alloca(default_manager[toty].get_value_type())
+    sv_ptr = builder.alloca(context.data_model_manager[toty].get_value_type())
 
-    managed_ptr = builder.alloca(default_manager[fromty].get_value_type())
+    managed_ptr = builder.alloca(
+        context.data_model_manager[fromty].get_value_type()
+    )
     builder.store(val, managed_ptr)
 
     udf_str_ptr = builder.gep(
@@ -202,16 +205,7 @@ def cast_managed_udf_string_to_string_view(
     return result._getvalue()
 
 
-# Utilities
-_init_udf_string_meminfo = cuda.declare_device(
-    "init_udf_string_meminfo", types.voidptr(_UDF_STRING_PTR)
-)
-
-
-def init_udf_string_meminfo(udf_str):
-    return _init_udf_string_meminfo(udf_str)
-
-
+# Utilities and Casts
 _create_udf_string_from_string_view = cuda.declare_device(
     "udf_string_from_string_view",
     types.void(_STR_VIEW_PTR, _UDF_STRING_PTR),
@@ -288,7 +282,7 @@ def concat_impl(context, builder, sig, args):
     builder.store(args[1], rhs_ptr)
 
     managed_ptr = builder.alloca(
-        default_manager[managed_udf_string].get_value_type()
+        context.data_model_manager[managed_udf_string].get_value_type()
     )
 
     udf_str_ptr = builder.gep(
@@ -327,7 +321,7 @@ def replace_impl(context, builder, sig, args):
     builder.store(args[2], replacement_ptr)
 
     managed_ptr = builder.alloca(
-        default_manager[managed_udf_string].get_value_type()
+        context.data_model_manager[managed_udf_string].get_value_type()
     )
     udf_str_ptr = builder.gep(
         managed_ptr, [ir.IntType(32)(0), ir.IntType(32)(1)]
@@ -388,7 +382,9 @@ def create_binary_string_func(binary_func, retty):
                 # codes, for instance).
 
                 managed_ptr = builder.alloca(
-                    default_manager[managed_udf_string].get_value_type()
+                    context.data_model_manager[
+                        managed_udf_string
+                    ].get_value_type()
                 )
                 udf_str_ptr = builder.gep(
                     managed_ptr, [ir.IntType(32)(0), ir.IntType(32)(1)]
@@ -569,7 +565,7 @@ def create_upper_or_lower(id_func):
             )
 
             managed_ptr = builder.alloca(
-                default_manager[managed_udf_string].get_value_type()
+                context.data_model_manager[managed_udf_string].get_value_type()
             )
             udf_str_ptr = builder.gep(
                 managed_ptr, [ir.IntType(32)(0), ir.IntType(32)(1)]
