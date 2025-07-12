@@ -150,7 +150,6 @@ std::unique_ptr<rmm::device_uvector<size_type>>
 merge<LargerIterator, SmallerIterator>::matches_per_row(rmm::cuda_stream_view stream,
                                                         rmm::device_async_resource_ref mr)
 {
-  cudf::scoped_range range{"sort_merge_join::merge::matches_per_row"};
   auto temp_mr             = cudf::get_current_device_resource_ref();
   auto smaller_dv_ptr      = cudf::table_device_view::create(smaller, stream);
   auto larger_dv_ptr       = cudf::table_device_view::create(larger, stream);
@@ -215,7 +214,6 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
 merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
                                                    rmm::device_async_resource_ref mr)
 {
-  cudf::scoped_range range{"sort_merge_join::merge::merge"};
   auto temp_mr              = cudf::get_current_device_resource_ref();
   auto const larger_numrows = larger.num_rows();
   auto smaller_dv_ptr       = cudf::table_device_view::create(smaller, stream);
@@ -319,7 +317,6 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
 
 void sort_merge_join::preprocessed_table::populate_nonnull_filter(rmm::cuda_stream_view stream)
 {
-  cudf::scoped_range range{"sort_merge_join::preprocessed_table::populate_nonnull_filter"};
   auto table   = this->_table_view;
   auto temp_mr = cudf::get_current_device_resource_ref();
   // remove rows that have nulls at any nesting level
@@ -373,7 +370,6 @@ void sort_merge_join::preprocessed_table::populate_nonnull_filter(rmm::cuda_stre
 
 void sort_merge_join::preprocessed_table::apply_nonnull_filter(rmm::cuda_stream_view stream)
 {
-  cudf::scoped_range range{"sort_merge_join::preprocessed_table::apply_nonnull_filter"};
   auto temp_mr = cudf::get_current_device_resource_ref();
   // construct bool column to apply mask
   cudf::scalar_type_t<bool> true_scalar(true, true, stream, temp_mr);
@@ -395,7 +391,6 @@ void sort_merge_join::preprocessed_table::preprocess_unprocessed_table(rmm::cuda
 
 void sort_merge_join::preprocessed_table::get_sorted_order(rmm::cuda_stream_view stream)
 {
-  cudf::scoped_range range{"sort_merge_join::preprocessed_table::get_sorted_order"};
   auto temp_mr = cudf::get_current_device_resource_ref();
   std::vector<cudf::order> column_order(_null_processed_table_view.num_columns(),
                                         cudf::order::ASCENDING);
@@ -436,7 +431,6 @@ sort_merge_join::sort_merge_join(table_view const& right,
 rmm::device_uvector<size_type> sort_merge_join::preprocessed_table::map_table_to_unprocessed(
   rmm::cuda_stream_view stream)
 {
-  cudf::scoped_range range{"sort_merge_join::preprocessed_table::map_table_to_unprocessed"};
   CUDF_EXPECTS(_validity_mask.has_value() && _num_nulls.has_value(), "Mapping is not possible");
   auto temp_mr = cudf::get_current_device_resource_ref();
   rmm::device_uvector<size_type> table_mapping(
@@ -454,7 +448,6 @@ void sort_merge_join::postprocess_indices(device_span<size_type> smaller_indices
                                           device_span<size_type> larger_indices,
                                           rmm::cuda_stream_view stream)
 {
-  cudf::scoped_range range{"sort_merge_join::preprocessed_table::postprocess_indices"};
   if (compare_nulls == null_equality::UNEQUAL) {
     // if a table has no nullable column, then there's no postprocessing to be done
     auto is_left_nullable  = has_nested_nulls(preprocessed_left._table_view);
@@ -532,7 +525,7 @@ sort_merge_join::inner_join(table_view const& left,
                             rmm::cuda_stream_view stream,
                             rmm::device_async_resource_ref mr)
 {
-  cudf::scoped_range range{"sort_merge_join::sort_merge_join::inner_join"};
+  cudf::scoped_range range{"sort_merge_join::inner_join"};
   // Sanity checks
   CUDF_EXPECTS(left.num_columns() != 0,
                "Number of columns in left keys must be non-zero for a join");
@@ -571,7 +564,7 @@ sort_merge_join::match_context sort_merge_join::inner_join_match_context(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  cudf::scoped_range range{"sort_merge_join::sort_merge_join::inner_join_match_context"};
+  cudf::scoped_range range{"sort_merge_join::inner_join_match_context"};
   // Sanity checks
   CUDF_EXPECTS(left.num_columns() != 0,
                "Number of columns in left keys must be non-zero for a join");
@@ -628,7 +621,7 @@ sort_merge_join::partitioned_inner_join(sort_merge_join::partition_context const
                                         rmm::cuda_stream_view stream,
                                         rmm::device_async_resource_ref mr)
 {
-  cudf::scoped_range range{"sort_merge_join::sort_merge_inner_join::partitioned_inner_join"};
+  cudf::scoped_range range{"sort_merge_join::partitioned_inner_join"};
   auto const left_partition_start_idx = context.left_start_idx;
   auto const left_partition_end_idx   = context.left_end_idx;
   auto null_processed_table_start_idx = left_partition_start_idx;
@@ -678,6 +671,7 @@ sort_merge_inner_join(cudf::table_view const& left_keys,
                       rmm::cuda_stream_view stream,
                       rmm::device_async_resource_ref mr)
 {
+  cudf::scoped_range range{"sort_merge_inner_join"};
   cudf::sort_merge_join obj(right_keys, sorted::NO, compare_nulls, stream);
   return obj.inner_join(left_keys, sorted::NO, stream, mr);
 }
@@ -690,6 +684,7 @@ merge_inner_join(cudf::table_view const& left_keys,
                  rmm::cuda_stream_view stream,
                  rmm::device_async_resource_ref mr)
 {
+  cudf::scoped_range range{"merge_inner_join"};
   cudf::sort_merge_join obj(right_keys, sorted::YES, compare_nulls, stream);
   return obj.inner_join(left_keys, sorted::YES, stream, mr);
 }

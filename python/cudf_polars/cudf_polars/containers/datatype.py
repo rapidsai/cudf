@@ -111,6 +111,15 @@ class DataType:
         """The pylibcudf.TypeId of this DataType."""
         return self.plc.id()
 
+    @property
+    def children(self) -> list[DataType]:
+        """The children types of this DataType."""
+        if self.plc.id() == plc.TypeId.STRUCT:
+            return [DataType(field.dtype) for field in self.polars.fields]
+        elif self.plc.id() == plc.TypeId.LIST:
+            return [DataType(self.polars.inner)]
+        return []
+
     def __eq__(self, other: object) -> bool:
         """Equality of DataTypes."""
         if not isinstance(other, DataType):

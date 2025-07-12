@@ -173,7 +173,8 @@ def assert_column_eq(
             # and then filter out nans
             lhs_nans = pc.is_nan(lh_arr)
             rhs_nans = pc.is_nan(rh_arr)
-            assert lhs_nans.equals(rhs_nans)
+            if not lhs_nans.equals(rhs_nans):
+                raise_array_not_equal(lhs_nans, rhs_nans)
 
             if pc.any(lhs_nans) or pc.any(rhs_nans):
                 # masks must be equal at this point
@@ -183,7 +184,29 @@ def assert_column_eq(
 
             np.testing.assert_array_almost_equal(lh_arr, rh_arr)
     else:
-        assert lhs.equals(rhs)
+        if not lhs.equals(rhs):
+            raise_array_not_equal(lhs, rhs)
+
+
+def raise_array_not_equal(lhs: pa.Array, rhs: pa.Array) -> None:
+    try:
+        left = lhs.to_numpy()
+        right = rhs.to_numpy()
+        is_ndarray = True
+    except pa.ArrowInvalid:
+        left = lhs.to_pylist()
+        right = rhs.to_pylist()
+        is_ndarray = False
+
+    if is_ndarray:
+        np.testing.assert_array_equal(left, right)
+    else:
+        assert left == right
+
+    # If we get here, they're not equal according to lhs.equals,
+    # but *are* equal according to the numpy/python assertion machinery.
+    # So we'll raise an AssertionError with a nice error message.
+    raise AssertionError(f"Arrays are not equal. {left} != {right}")
 
 
 def assert_table_eq(pa_table: pa.Table, plc_table: plc.Table) -> None:
