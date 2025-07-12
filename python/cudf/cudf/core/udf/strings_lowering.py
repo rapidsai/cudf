@@ -235,6 +235,9 @@ def setitem_cpointer_managed_udf_string(context, builder, sig, args):
     base_ptr, idx, val = args
     elem_ptr = builder.gep(base_ptr, [idx])
     builder.store(val, elem_ptr)
+    # Storing a Managed UDF String in a CPointer array effectively creates a
+    # new reference; represent this by incrementing the refcount of the source
+    # of the assignment
     context.nrt.incref(builder, managed_udf_string, val)
 
 

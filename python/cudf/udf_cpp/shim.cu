@@ -64,7 +64,7 @@ __device__ NRT_MemInfo* make_meminfo_for_new_udf_string(udf_string* udf_str)
     size_t size = 0;
     NRT_MemInfo_init(mi_ptr, st_ptr, size, udf_str_dtor, NULL);
 
-    // copy the udf_string to the extra heap space
+    // copy the udf_string to the allocated heap space
     udf_string* in_str_ptr = reinterpret_cast<udf_string*>(udf_str);
     memcpy(st_ptr, in_str_ptr, sizeof(udf_string));
     return &(mi_and_str->mi);

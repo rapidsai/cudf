@@ -50,7 +50,7 @@ class udf_string;
 std::unique_ptr<rmm::device_buffer> to_string_view_array(cudf::column_view const input);
 
 /**
- * @brief Return a STRINGS column given an array of managed_udf_string objects
+ * @brief Return a strings column given an array of managed_udf_string objects
  *
  * This will make a copy of the strings in managed_strings in order to build
  * the output column.

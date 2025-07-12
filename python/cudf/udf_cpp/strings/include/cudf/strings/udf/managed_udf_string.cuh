@@ -17,9 +17,7 @@
 #pragma once
 #include <cudf/strings/udf/udf_string.hpp>
 
-namespace cudf {
-namespace strings {
-namespace udf {
+namespace cudf::strings::udf {
 
 /*
 `meminfo` is a MemInfo struct from numba-cuda
