@@ -275,11 +275,8 @@ extern "C" __device__ int udf_string_from_string_view(void** out_meminfo,
                                                       void* udf_str)
 {
   auto str_view_ptr = reinterpret_cast<cudf::string_view const*>(str);
-  auto udf_str_ptr  = new (udf_str) udf_string;
-  *udf_str_ptr      = udf_string(*str_view_ptr);
-
-  *out_meminfo = make_meminfo_for_new_udf_string(udf_str_ptr);
-
+  auto udf_str_ptr  = new (udf_str) udf_string(*str_view_ptr);
+  *out_meminfo      = make_meminfo_for_new_udf_string(udf_str_ptr);
   return 0;
 }
 
@@ -288,9 +285,7 @@ extern "C" __device__ int string_view_from_udf_string(int* nb_retval,
                                                       void* str)
 {
   auto udf_str_ptr = reinterpret_cast<udf_string const*>(udf_str);
-  auto sv_ptr      = new (str) cudf::string_view;
-  *sv_ptr          = cudf::string_view(*udf_str_ptr);
-
+  auto sv_ptr      = new (str) cudf::string_view(*udf_str_ptr);
   return 0;
 }
 
@@ -301,11 +296,8 @@ extern "C" __device__ int strip(void** out_meminfo,
 {
   auto to_strip_ptr  = reinterpret_cast<cudf::string_view const*>(to_strip);
   auto strip_str_ptr = reinterpret_cast<cudf::string_view const*>(strip_str);
-  auto udf_str_ptr   = new (udf_str) udf_string;
-
-  *udf_str_ptr = strip(*to_strip_ptr, *strip_str_ptr);
-  *out_meminfo = make_meminfo_for_new_udf_string(udf_str_ptr);
-
+  auto udf_str_ptr   = new (udf_str) udf_string(strip(*to_strip_ptr, *strip_str_ptr));
+  *out_meminfo       = make_meminfo_for_new_udf_string(udf_str_ptr);
   return 0;
 }
 
@@ -316,11 +308,9 @@ extern "C" __device__ int lstrip(void** out_meminfo,
 {
   auto to_strip_ptr  = reinterpret_cast<cudf::string_view const*>(to_strip);
   auto strip_str_ptr = reinterpret_cast<cudf::string_view const*>(strip_str);
-  auto udf_str_ptr   = new (udf_str) udf_string;
-
-  *udf_str_ptr = strip(*to_strip_ptr, *strip_str_ptr, cudf::strings::side_type::LEFT);
+  auto udf_str_ptr =
+    new (udf_str) udf_string(strip(*to_strip_ptr, *strip_str_ptr, cudf::strings::side_type::LEFT));
   *out_meminfo = make_meminfo_for_new_udf_string(udf_str_ptr);
-
   return 0;
 }
 
@@ -331,13 +321,12 @@ extern "C" __device__ int rstrip(void** out_meminfo,
 {
   auto to_strip_ptr  = reinterpret_cast<cudf::string_view const*>(to_strip);
   auto strip_str_ptr = reinterpret_cast<cudf::string_view const*>(strip_str);
-  auto udf_str_ptr   = new (udf_str) udf_string;
-
-  *udf_str_ptr = strip(*to_strip_ptr, *strip_str_ptr, cudf::strings::side_type::RIGHT);
+  auto udf_str_ptr =
+    new (udf_str) udf_string(strip(*to_strip_ptr, *strip_str_ptr, cudf::strings::side_type::RIGHT));
   *out_meminfo = make_meminfo_for_new_udf_string(udf_str_ptr);
-
   return 0;
 }
+
 extern "C" __device__ int upper(void** out_meminfo,
                                 void* udf_str,
                                 void const* st,
@@ -345,8 +334,7 @@ extern "C" __device__ int upper(void** out_meminfo,
                                 std::uintptr_t cases_table,
                                 std::uintptr_t special_table)
 {
-  auto udf_str_ptr = new (udf_str) udf_string;
-  auto st_ptr      = reinterpret_cast<cudf::string_view const*>(st);
+  auto st_ptr = reinterpret_cast<cudf::string_view const*>(st);
 
   auto flags_table_ptr =
     reinterpret_cast<cudf::strings::detail::character_flags_table_type*>(flags_table);
@@ -357,9 +345,8 @@ extern "C" __device__ int upper(void** out_meminfo,
 
   cudf::strings::udf::chars_tables tables{flags_table_ptr, cases_table_ptr, special_table_ptr};
 
-  *udf_str_ptr = to_upper(tables, *st_ptr);
-  *out_meminfo = make_meminfo_for_new_udf_string(udf_str_ptr);
-
+  auto udf_str_ptr = new (udf_str) udf_string(to_upper(tables, *st_ptr));
+  *out_meminfo     = make_meminfo_for_new_udf_string(udf_str_ptr);
   return 0;
 }
 
@@ -370,8 +357,7 @@ extern "C" __device__ int lower(void** out_meminfo,
                                 std::uintptr_t cases_table,
                                 std::uintptr_t special_table)
 {
-  auto udf_str_ptr = new (udf_str) udf_string;
-  auto st_ptr      = reinterpret_cast<cudf::string_view const*>(st);
+  auto st_ptr = reinterpret_cast<cudf::string_view const*>(st);
 
   auto flags_table_ptr =
     reinterpret_cast<cudf::strings::detail::character_flags_table_type*>(flags_table);
@@ -381,9 +367,9 @@ extern "C" __device__ int lower(void** out_meminfo,
     reinterpret_cast<cudf::strings::detail::special_case_mapping*>(special_table);
 
   cudf::strings::udf::chars_tables tables{flags_table_ptr, cases_table_ptr, special_table_ptr};
-  *udf_str_ptr = to_lower(tables, *st_ptr);
-  *out_meminfo = make_meminfo_for_new_udf_string(udf_str_ptr);
 
+  auto udf_str_ptr = new (udf_str) udf_string(to_lower(tables, *st_ptr));
+  *out_meminfo     = make_meminfo_for_new_udf_string(udf_str_ptr);
   return 0;
 }
 
@@ -395,12 +381,10 @@ extern "C" __device__ int concat(void** out_meminfo,
   auto lhs_ptr = reinterpret_cast<cudf::string_view const*>(lhs);
   auto rhs_ptr = reinterpret_cast<cudf::string_view const*>(rhs);
 
-  auto udf_str_ptr = new (udf_str) udf_string;
-
   udf_string result;
   result.append(*lhs_ptr).append(*rhs_ptr);
-  *udf_str_ptr = result;
-  *out_meminfo = make_meminfo_for_new_udf_string(udf_str_ptr);
+  auto udf_str_ptr = new (udf_str) udf_string(std::move(result));
+  *out_meminfo     = make_meminfo_for_new_udf_string(udf_str_ptr);
   return 0;
 }
 
@@ -414,10 +398,8 @@ extern "C" __device__ int replace(void** out_meminfo,
   auto to_replace_ptr  = reinterpret_cast<cudf::string_view const*>(to_replace);
   auto replacement_ptr = reinterpret_cast<cudf::string_view const*>(replacement);
 
-  auto udf_str_ptr = new (udf_str) udf_string;
-  *udf_str_ptr     = replace(*src_ptr, *to_replace_ptr, *replacement_ptr);
+  auto udf_str_ptr = new (udf_str) udf_string(replace(*src_ptr, *to_replace_ptr, *replacement_ptr));
   *out_meminfo     = make_meminfo_for_new_udf_string(udf_str_ptr);
-
   return 0;
 }
 
