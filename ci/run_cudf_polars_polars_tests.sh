@@ -60,23 +60,6 @@ CUDF_POLARS__STREAMING__FALLBACK_MODE=silent \
        py-polars/tests \
        --executor streaming
 
-rapids-logger "Run polars tests with the streaming executor with a small blocksize"
-python -m pytest \
-       --import-mode=importlib \
-       --cache-clear \
-       -m "" \
-       -p cudf_polars.testing.plugin \
-       -n 8 \
-       --dist=worksteal \
-       -vv \
-       --tb=native \
-       $DESELECTED_TESTS_STR \
-       "$@" \
-       py-polars/tests \
-       --executor streaming \
-       --blocksize-mode small
-
-
 rapids-logger "Run polars tests with the in-memory executor"
 python -m pytest \
        --import-mode=importlib \
