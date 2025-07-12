@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,11 +21,11 @@
 #include <cudf/detail/search.hpp>
 #include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/table/experimental/row_operators.cuh>
+#include <cudf/table/primitive_row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_checks.hpp>
-#include <cudf/table/primitive_row_operators.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -210,66 +210,64 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
   auto contained = rmm::device_uvector<bool>(needles.num_rows(), stream, mr);
 
   auto const haystack_iter = cudf::detail::make_counting_transform_iterator(
-      size_type{0}, cuda::proclaim_return_type<rhs_index_type>([] __device__(auto idx) {
-        return rhs_index_type{idx};
-      }));
+    size_type{0}, cuda::proclaim_return_type<rhs_index_type>([] __device__(auto idx) {
+      return rhs_index_type{idx};
+    }));
 
   auto const needles_iter = cudf::detail::make_counting_transform_iterator(
     size_type{0}, cuda::proclaim_return_type<lhs_index_type>([] __device__(auto idx) {
       return lhs_index_type{idx};
     }));
 
-  auto const helper_func =
-    [&](auto const& d_equal, auto const& probing_scheme) {
+  auto const helper_func = [&](auto const& d_equal, auto const& probing_scheme) {
+    auto set = cuco::static_set{
+      cuco::extent{compute_hash_table_size(haystack.num_rows())},
+      cuco::empty_key{rhs_index_type{-1}},
+      d_equal,
+      probing_scheme,
+      {},
+      {},
+      cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
+      stream.value()};
 
-      auto set = cuco::static_set{
-        cuco::extent{compute_hash_table_size(haystack.num_rows())},
-        cuco::empty_key{rhs_index_type{-1}},
-        d_equal,
-        probing_scheme,
-        {},
-        {},
-        cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
-        stream.value()};
+    if (haystack_has_nulls && compare_nulls == null_equality::UNEQUAL) {
+      auto const bitmask_buffer_and_ptr = build_row_bitmask(haystack, stream);
+      auto const row_bitmask_ptr        = bitmask_buffer_and_ptr.second;
 
-      if (haystack_has_nulls && compare_nulls == null_equality::UNEQUAL) {
-        auto const bitmask_buffer_and_ptr = build_row_bitmask(haystack, stream);
-        auto const row_bitmask_ptr        = bitmask_buffer_and_ptr.second;
+      // If the haystack table has nulls but they are compared unequal, don't insert them.
+      // Otherwise, it was known to cause performance issue:
+      // - https://github.com/rapidsai/cudf/pull/6943
+      // - https://github.com/rapidsai/cudf/pull/8277
+      set.insert_if_async(haystack_iter,
+                          haystack_iter + haystack.num_rows(),
+                          thrust::counting_iterator<size_type>(0),  // stencil
+                          row_is_valid{row_bitmask_ptr},
+                          stream.value());
+    } else {
+      set.insert_async(haystack_iter, haystack_iter + haystack.num_rows(), stream.value());
+    }
 
-        // If the haystack table has nulls but they are compared unequal, don't insert them.
-        // Otherwise, it was known to cause performance issue:
-        // - https://github.com/rapidsai/cudf/pull/6943
-        // - https://github.com/rapidsai/cudf/pull/8277
-        set.insert_if_async(haystack_iter,
-                            haystack_iter + haystack.num_rows(),
+    if (needles_has_nulls && compare_nulls == null_equality::UNEQUAL) {
+      auto const bitmask_buffer_and_ptr = build_row_bitmask(needles, stream);
+      auto const row_bitmask_ptr        = bitmask_buffer_and_ptr.second;
+      set.contains_if_async(needles_iter,
+                            needles_iter + needles.num_rows(),
                             thrust::counting_iterator<size_type>(0),  // stencil
                             row_is_valid{row_bitmask_ptr},
+                            contained.begin(),
                             stream.value());
-      } else {
-        set.insert_async(haystack_iter, haystack_iter + haystack.num_rows(), stream.value());
-      }
-
-      if (needles_has_nulls && compare_nulls == null_equality::UNEQUAL) {
-        auto const bitmask_buffer_and_ptr = build_row_bitmask(needles, stream);
-        auto const row_bitmask_ptr        = bitmask_buffer_and_ptr.second;
-        set.contains_if_async(needles_iter,
-                              needles_iter + needles.num_rows(),
-                              thrust::counting_iterator<size_type>(0),  // stencil
-                              row_is_valid{row_bitmask_ptr},
-                              contained.begin(),
-                              stream.value());
-      } else {
-        set.contains_async(
-          needles_iter, needles_iter + needles.num_rows(), contained.begin(), stream.value());
-      }
-    };
+    } else {
+      set.contains_async(
+        needles_iter, needles_iter + needles.num_rows(), contained.begin(), stream.value());
+    }
+  };
 
   if (cudf::is_primitive_row_op_compatible(haystack)) {
     auto const d_haystack_hasher =
       cudf::row::primitive::row_hasher{nullate::DYNAMIC{has_any_nulls}, preprocessed_haystack};
-    auto const d_needle_hasher = cudf::row::primitive::row_hasher{
-      nullate::DYNAMIC{has_any_nulls}, preprocessed_needles};
-    auto const d_hasher = hasher_adapter{d_haystack_hasher, d_needle_hasher};
+    auto const d_needle_hasher =
+      cudf::row::primitive::row_hasher{nullate::DYNAMIC{has_any_nulls}, preprocessed_needles};
+    auto const d_hasher     = hasher_adapter{d_haystack_hasher, d_needle_hasher};
     auto const d_self_equal = cudf::row::primitive::row_equality_comparator{
       nullate::DYNAMIC{has_any_nulls}, preprocessed_haystack, preprocessed_haystack, compare_nulls};
     auto const d_two_table_equal = cudf::row::primitive::row_equality_comparator{
@@ -283,7 +281,8 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
     auto const d_needle_hasher   = needle_hasher.device_hasher(nullate::DYNAMIC{has_any_nulls});
     auto const d_hasher          = hasher_adapter{d_haystack_hasher, d_needle_hasher};
 
-    auto const self_equal = cudf::experimental::row::equality::self_comparator(preprocessed_haystack);
+    auto const self_equal =
+      cudf::experimental::row::equality::self_comparator(preprocessed_haystack);
     auto const two_table_equal = cudf::experimental::row::equality::two_table_comparator(
       preprocessed_needles, preprocessed_haystack);
 
@@ -298,13 +297,13 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
                                     helper_func);
     } else {
       dispatch_nan_comparator<false>(compare_nulls,
-                                    compare_nans,
-                                    haystack_has_nulls,
-                                    has_any_nulls,
-                                    self_equal,
-                                    two_table_equal,
-                                    d_hasher,
-                                    helper_func);
+                                     compare_nans,
+                                     haystack_has_nulls,
+                                     has_any_nulls,
+                                     self_equal,
+                                     two_table_equal,
+                                     d_hasher,
+                                     helper_func);
     }
   }
   return contained;
