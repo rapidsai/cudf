@@ -147,18 +147,18 @@ def test_source_statistics(
 
     # Check that we can query a missing column name
     assert source_info.storage_size("foo").value is None
-    assert source_info.unique_count("foo").value is None
-    assert source_info.unique_fraction("foo").value is None
+    assert source_info.unique_stats("foo").count.value is None
+    assert source_info.unique_stats("foo").fraction.value is None
 
     # source._unique_stats should be empty
     assert set(source_info._unique_stats) == set()
 
     if max_file_samples and max_rg_samples:
-        assert source_info.unique_count("x").value == df.height
-        assert source_info.unique_fraction("x").value == 1.0
+        assert source_info.unique_stats("x").count.value == df.height
+        assert source_info.unique_stats("x").fraction.value == 1.0
     else:
-        assert source_info.unique_fraction("x").value is None
-        assert source_info.unique_count("x").value is None
+        assert source_info.unique_stats("x").count.value is None
+        assert source_info.unique_stats("x").fraction.value is None
 
     # source_info._unique_stats should only contain 'x'
     if max_file_samples and max_rg_samples:
@@ -175,10 +175,10 @@ def test_source_statistics(
         # Mark 'z' as a key column, and query 'y' stats
         source_info.add_unique_stats_column("z")
         if n_files == 1 and row_group_size == 10_000:
-            assert source_info.unique_count("y").value == 3
+            assert source_info.unique_stats("y").count.value == 3
         else:
-            assert source_info.unique_count("y").value is None
-        assert source_info.unique_fraction("y").value < 1.0
+            assert source_info.unique_stats("y").count.value is None
+        assert source_info.unique_stats("y").fraction.value < 1.0
 
         # source_info._unique_stats should contain all columns now
         assert set(source_info._unique_stats) == {"x", "y", "z"}

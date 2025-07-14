@@ -102,13 +102,9 @@ class DataSourceInfo:
         """Data source row-count estimate."""
         return ColumnStat[int]()  # pragma: no cover
 
-    def unique_count(self, column: str) -> ColumnStat[int]:
-        """Return unique-value count estimate."""
-        return ColumnStat[int]()  # pragma: no cover
-
-    def unique_fraction(self, column: str) -> ColumnStat[float]:
-        """Return unique-value fraction estimate."""
-        return ColumnStat[float]()  # pragma: no cover
+    def unique_stats(self, column: str) -> UniqueStats:
+        """Return unique-value statistics for a column."""
+        return UniqueStats()  # pragma: no cover
 
     def storage_size(self, column: str) -> ColumnStat[int]:
         """Return the average column size for a single file."""
@@ -130,16 +126,16 @@ class ColumnStats:
         Datasource information.
     source_name
         Source-column name.
-    unique_count
-        Unique-value count estimate.
+    unique_stats
+        Unique-value statistics.
     """
 
-    __slots__ = ("name", "source_info", "source_name", "unique_count")
+    __slots__ = ("name", "source_info", "source_name", "unique_stats")
 
     name: str
     source_info: DataSourceInfo
     source_name: str
-    unique_count: ColumnStat[int]
+    unique_stats: UniqueStats
 
     def __init__(
         self,
@@ -147,9 +143,9 @@ class ColumnStats:
         *,
         source_info: DataSourceInfo | None = None,
         source_name: str | None = None,
-        unique_count: ColumnStat[int] | None = None,
+        unique_stats: UniqueStats | None = None,
     ) -> None:
         self.name = name
         self.source_info = source_info or DataSourceInfo()
         self.source_name = source_name or name
-        self.unique_count = unique_count or ColumnStat[int]()
+        self.unique_stats = unique_stats or UniqueStats()

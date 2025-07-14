@@ -88,16 +88,18 @@ def test_source_statistics(df):
     assert source_info.storage_size("x").value is None
 
     # Check unique stats
-    assert math.isclose(source_info.unique_count("x").value, row_count, rel_tol=1e-2)
-    assert math.isclose(source_info.unique_fraction("x").value, 1.0, abs_tol=1e-2)
-    assert not source_info.unique_count("x").exact
-    assert math.isclose(source_info.unique_count("y").value, 3, rel_tol=1e-2)
     assert math.isclose(
-        source_info.unique_fraction("y").value, 3 / row_count, abs_tol=1e-2
+        source_info.unique_stats("x").count.value, row_count, rel_tol=1e-2
     )
-    assert not source_info.unique_count("y").exact
-    assert math.isclose(source_info.unique_count("z").value, 5, rel_tol=1e-2)
+    assert math.isclose(source_info.unique_stats("x").fraction.value, 1.0, abs_tol=1e-2)
+    assert not source_info.unique_stats("x").count.exact
+    assert math.isclose(source_info.unique_stats("y").count.value, 3, rel_tol=1e-2)
     assert math.isclose(
-        source_info.unique_fraction("z").value, 5 / row_count, abs_tol=1e-2
+        source_info.unique_stats("y").fraction.value, 3 / row_count, abs_tol=1e-2
     )
-    assert not source_info.unique_count("z").exact
+    assert not source_info.unique_stats("y").count.exact
+    assert math.isclose(source_info.unique_stats("z").count.value, 5, rel_tol=1e-2)
+    assert math.isclose(
+        source_info.unique_stats("z").fraction.value, 5 / row_count, abs_tol=1e-2
+    )
+    assert not source_info.unique_stats("z").count.exact

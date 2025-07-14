@@ -762,15 +762,10 @@ class PqSourceInfo(DataSourceInfo):
             self._sample_row_groups()
             self._key_columns = set()
 
-    def unique_count(self, column: str) -> ColumnStat[int]:
-        """Return unique-value count."""
+    def unique_stats(self, column: str) -> UniqueStats:
+        """Return unique-value statistics for a column."""
         self._update_unique_stats(column)
-        return self._unique_stats.get(column, UniqueStats()).count
-
-    def unique_fraction(self, column: str) -> ColumnStat[float]:
-        """Return unique-value fraction."""
-        self._update_unique_stats(column)
-        return self._unique_stats.get(column, UniqueStats()).fraction
+        return self._unique_stats.get(column, UniqueStats())
 
     def storage_size(self, column: str) -> ColumnStat[int]:
         """Return the average column size for a single file."""
@@ -848,15 +843,10 @@ class DataFrameSourceInfo(DataSourceInfo):
                 ColumnStat[float](value=unique_fraction),
             )
 
-    def unique_count(self, column: str) -> ColumnStat[int]:
-        """Return unique-value count estimate."""
+    def unique_stats(self, column: str) -> UniqueStats:
+        """Return unique-value statistics for a column."""
         self._update_unique_stats(column)
-        return self._unique_stats.get(column, UniqueStats()).count
-
-    def unique_fraction(self, column: str) -> ColumnStat[float]:
-        """Return unique-value fraction estimate."""
-        self._update_unique_stats(column)
-        return self._unique_stats.get(column, UniqueStats()).fraction
+        return self._unique_stats.get(column, UniqueStats())
 
 
 def _extract_dataframescan_stats(ir: DataFrameScan) -> dict[str, ColumnStats]:
