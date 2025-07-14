@@ -33,7 +33,9 @@ enum class data_type : int32_t {
   FLOAT           = static_cast<int32_t>(type_group_id::FLOATING_POINT),
   BOOL8           = static_cast<int32_t>(cudf::type_id::BOOL8),
   DECIMAL         = static_cast<int32_t>(type_group_id::FIXED_POINT),
-  STRING          = static_cast<int32_t>(cudf::type_id::STRING)
+  STRING          = static_cast<int32_t>(cudf::type_id::STRING),
+  LIST            = static_cast<int32_t>(cudf::type_id::LIST),
+  STRUCT          = static_cast<int32_t>(cudf::type_id::STRUCT)
 };
 
 NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
@@ -70,6 +72,8 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
       case data_type::BOOL8: return "BOOL8";
       case data_type::DECIMAL: return "DECIMAL";
       case data_type::STRING: return "STRING";
+      case data_type::LIST: return "LIST";
+      case data_type::STRUCT: return "STRUCT";
       default: return "Unknown";
     }
   },

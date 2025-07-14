@@ -52,6 +52,7 @@ using JOIN_DATATYPES      = nvbench::enum_type_list<data_type::INTEGRAL,
                                                     data_type::FLOAT,
                                                     data_type::INT32,
                                                     data_type::INT64,
+                                                    data_type::LIST,
                                                     data_type::STRING>;
 using JOIN_NULL_EQUALITY =
   nvbench::enum_type_list<cudf::null_equality::EQUAL, cudf::null_equality::UNEQUAL>;

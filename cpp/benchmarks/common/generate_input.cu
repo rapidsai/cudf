@@ -27,6 +27,7 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/filling.hpp>
+#include <cudf/lists/combine.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/combine.hpp>
@@ -948,17 +949,43 @@ std::unique_ptr<cudf::table> create_distinct_rows_table(std::vector<cudf::type_i
       return col;
     }
     if (dt.id() == cudf::type_id::STRING) {
-      auto col = create_string_column(num_rows.count, 256, 5);
-      auto [mask, count] =
-        create_random_null_mask(num_rows.count, null_probability, seed_dist(seed_engine));
-      col->set_null_mask(std::move(mask), count);
+      auto const profile = data_profile{data_profile_builder().null_probability(null_probability).distribution(dt.id(), distribution_id::NORMAL, 0, 256)};
+      auto col = create_random_column(cudf::type_id::STRING, num_rows, profile, seed);
       auto int_col = cudf::sequence(
         num_rows.count,
         *cudf::make_default_constructed_scalar(cudf::data_type{cudf::type_id::INT32}));
       auto int2strcol = cudf::strings::from_integers(int_col->view());
-      auto finalcol =
-        cudf::strings::concatenate(cudf::table_view({col->view(), int2strcol->view()}));
-      return cudf::purge_nonempty_nulls(finalcol->view(), stream);
+      return cudf::strings::concatenate(cudf::table_view({col->view(), int2strcol->view()}));
+    }
+    if (dt.id() == cudf::type_id::LIST) {
+      auto const depth = 1;
+      auto profile = data_profile{data_profile_builder()
+          .cardinality(0)
+          .distribution(cudf::type_id::LIST, distribution_id::UNIFORM, 0, 20)
+          .list_depth(depth)
+          .null_probability(null_probability)};
+      auto col = create_random_column(cudf::type_id::LIST, num_rows, profile, seed);
+      auto int_col = cudf::sequence(
+        num_rows.count,
+        *cudf::make_default_constructed_scalar(cudf::data_type{cudf::type_id::INT32}));
+      auto offsets = cudf::sequence(num_rows.count + 1, cudf::numeric_scalar<cudf::size_type>(0));
+      auto int_lists_col = cudf::make_lists_column(num_rows.count, std::move(offsets), std::move(int_col), 0, rmm::device_buffer{});
+      return cudf::lists::concatenate_rows(cudf::table_view({col->view(), int_lists_col->view()}));
+    }
+    if (dt.id() == cudf::type_id::STRUCT) {
+      auto const depth = 1;
+      auto profile = data_profile{data_profile_builder()
+          .cardinality(0)
+          .distribution(cudf::type_id::LIST, distribution_id::UNIFORM, 0, 20)
+          .list_depth(depth)
+          .null_probability(null_probability)};
+      auto col = create_random_column(cudf::type_id::LIST, num_rows, profile, seed);
+      auto int_col = cudf::sequence(
+        num_rows.count,
+        *cudf::make_default_constructed_scalar(cudf::data_type{cudf::type_id::INT32}));
+      auto offsets = cudf::sequence(num_rows.count + 1, cudf::numeric_scalar<cudf::size_type>(0));
+      auto int_lists_col = cudf::make_lists_column(num_rows.count, std::move(offsets), std::move(int_col), 0, rmm::device_buffer{});
+      return cudf::lists::concatenate_rows(cudf::table_view({col->view(), int_lists_col->view()}));
     }
     CUDF_FAIL("dtype not supported");
   });
