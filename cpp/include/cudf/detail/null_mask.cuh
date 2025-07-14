@@ -509,7 +509,10 @@ struct bit_to_word_index {
 };
 
 struct popcount {
-  __device__ inline size_type operator()(bitmask_type word) const { return cuda::std::popcount(word); }
+  __device__ inline size_type operator()(bitmask_type word) const
+  {
+    return cuda::std::popcount(word);
+  }
 };
 
 // Count set/unset bits in a segmented null mask, using offset iterators accessible by the device.
