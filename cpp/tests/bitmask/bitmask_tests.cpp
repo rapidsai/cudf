@@ -725,6 +725,104 @@ TEST_F(MergeBitmaskTest, TestBitmaskAnd)
     result3_mask.data(), odd.data(), cudf::num_bitmask_words(input2.num_rows()));
 }
 
+TEST_F(MergeBitmaskTest, TestSegmentedBitmaskAndSingleSegment)
+{
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col1({0, 1, 0, 1, 1}, {0, 1, 1, 1, 0});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {1, 1, 0, 1, 0});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col3({0, 2, 1, 0, 255}, {1, 1, 1, 1, 1});
+
+  auto const num_rows = 5;
+  {
+    std::vector<cudf::column_view> const colviews{bools_col3};
+    std::vector<cudf::size_type> const segment_offsets{0, 1};
+    auto const [result_masks, result_null_count] =
+      cudf::segmented_bitmask_and(colviews, segment_offsets);
+    EXPECT_EQ(result_null_count.size(), 1);
+    EXPECT_EQ(result_masks.size(), 1);
+    EXPECT_EQ(result_null_count[0], 0);
+    CUDF_TEST_EXPECT_EQUAL_BUFFERS(result_masks[0]->data(),
+                                   static_cast<cudf::column_view>(bools_col3).null_mask(),
+                                   cudf::num_bitmask_words(num_rows));
+  }
+
+  {
+    std::vector<cudf::column_view> const colviews{bools_col1, bools_col2};
+    std::vector<cudf::size_type> const segment_offsets{0, 2};
+    auto const [result_masks, result_null_count] =
+      cudf::segmented_bitmask_and(colviews, segment_offsets);
+    EXPECT_EQ(result_null_count.size(), 1);
+    EXPECT_EQ(result_masks.size(), 1);
+    EXPECT_EQ(result_null_count[0], 3);
+    auto odd_indices =
+      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+    auto const odd =
+      std::get<0>(cudf::test::detail::make_null_mask(odd_indices, odd_indices + num_rows));
+    CUDF_TEST_EXPECT_EQUAL_BUFFERS(
+      result_masks[0]->data(), odd.data(), cudf::num_bitmask_words(num_rows));
+  }
+
+  {
+    std::vector<cudf::column_view> const colviews{bools_col1, bools_col2, bools_col3};
+    std::vector<cudf::size_type> const segment_offsets{0, 3};
+    auto const [result_masks, result_null_count] =
+      cudf::segmented_bitmask_and(colviews, segment_offsets);
+    EXPECT_EQ(result_null_count.size(), 1);
+    EXPECT_EQ(result_masks.size(), 1);
+    EXPECT_EQ(result_null_count[0], 3);
+    auto odd_indices =
+      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+    auto const odd =
+      std::get<0>(cudf::test::detail::make_null_mask(odd_indices, odd_indices + num_rows));
+    CUDF_TEST_EXPECT_EQUAL_BUFFERS(
+      result_masks[0]->data(), odd.data(), cudf::num_bitmask_words(num_rows));
+  }
+}
+
+TEST_F(MergeBitmaskTest, TestSegmentedBitmaskAndMultipleSegments)
+{
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col1({0, 1, 0, 1, 1}, {0, 1, 1, 1, 0});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {1, 1, 0, 1, 0});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col3({0, 2, 1, 0, 255}, {1, 1, 1, 1, 1});
+
+  auto const num_rows = 5;
+  {
+    std::vector<cudf::column_view> const colviews{bools_col1, bools_col2};
+    std::vector<cudf::size_type> const segment_offsets{0, 1, 2};
+    auto const [result_masks, result_null_count] =
+      cudf::segmented_bitmask_and(colviews, segment_offsets);
+    EXPECT_EQ(result_null_count.size(), 2);
+    EXPECT_EQ(result_masks.size(), 2);
+    EXPECT_EQ(result_null_count[0], 2);
+    EXPECT_EQ(result_null_count[1], 2);
+    CUDF_TEST_EXPECT_EQUAL_BUFFERS(result_masks[0]->data(),
+                                   static_cast<cudf::column_view>(bools_col1).null_mask(),
+                                   cudf::num_bitmask_words(num_rows));
+    CUDF_TEST_EXPECT_EQUAL_BUFFERS(result_masks[1]->data(),
+                                   static_cast<cudf::column_view>(bools_col2).null_mask(),
+                                   cudf::num_bitmask_words(num_rows));
+  }
+
+  {
+    std::vector<cudf::column_view> const colviews{bools_col1, bools_col2, bools_col3};
+    std::vector<cudf::size_type> const segment_offsets{0, 2, 3};
+    auto const [result_masks, result_null_count] =
+      cudf::segmented_bitmask_and(colviews, segment_offsets);
+    EXPECT_EQ(result_null_count.size(), 2);
+    EXPECT_EQ(result_masks.size(), 2);
+    EXPECT_EQ(result_null_count[0], 3);
+    EXPECT_EQ(result_null_count[1], 0);
+    auto odd_indices =
+      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+    auto const odd =
+      std::get<0>(cudf::test::detail::make_null_mask(odd_indices, odd_indices + num_rows));
+    CUDF_TEST_EXPECT_EQUAL_BUFFERS(
+      result_masks[0]->data(), odd.data(), cudf::num_bitmask_words(num_rows));
+    CUDF_TEST_EXPECT_EQUAL_BUFFERS(result_masks[1]->data(),
+                                   static_cast<cudf::column_view>(bools_col3).null_mask(),
+                                   cudf::num_bitmask_words(num_rows));
+  }
+}
+
 TEST_F(MergeBitmaskTest, TestBitmaskOr)
 {
   cudf::test::fixed_width_column_wrapper<bool> const bools_col1({0, 1, 0, 1, 1}, {1, 1, 0, 0, 1});

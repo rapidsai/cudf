@@ -359,11 +359,11 @@ struct column_merger {
   // column merger operator;
   //
   template <typename Element>
-  std::enable_if_t<is_rep_layout_compatible<Element>(), std::unique_ptr<column>> operator()(
-    column_view const& lcol,
-    column_view const& rcol,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr) const
+  std::unique_ptr<column> operator()(column_view const& lcol,
+                                     column_view const& rcol,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr) const
+    requires(is_rep_layout_compatible<Element>())
   {
     auto lsz         = lcol.size();
     auto merged_size = lsz + rcol.size();

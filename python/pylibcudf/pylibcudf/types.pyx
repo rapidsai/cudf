@@ -24,7 +24,7 @@ from pylibcudf.libcudf.types import sorted as Sorted  # no-cython-lint, isort:sk
 from functools import cache
 
 try:
-    from pyarrow import lib as pa
+    import pyarrow as pa
 
     pa_err = None
 
@@ -67,6 +67,8 @@ try:
 except ImportError as e:
     pa = None
     pa_err = e
+    ARROW_TO_PYLIBCUDF_TYPES = {}
+    LIBCUDF_TO_ARROW_TYPES = {}
 
 
 __all__ = [
@@ -264,38 +266,42 @@ cpdef size_t size_of(DataType t):
     with nogil:
         return cpp_size_of(t.c_obj)
 
-if pa is not None:
-    @cache
-    def _from_arrow(obj: pa.DataType) -> DataType:
-        if (
-            getattr(pa, "Decimal32Type", None) is not None
-            and isinstance(obj, pa.Decimal32Type)
-        ):
-            return DataType(type_id.DECIMAL32, scale=-obj.scale)
-        if (
-            getattr(pa, "Decimal64Type", None) is not None
-            and isinstance(obj, pa.Decimal64Type)
-        ):
-            return DataType(type_id.DECIMAL64, scale=-obj.scale)
-        if isinstance(obj, pa.Decimal128Type):
-            return DataType(type_id.DECIMAL128, scale=-obj.scale)
-        elif isinstance(obj, pa.StructType):
-            # Recurse to catch unsupported field types
-            for field in obj:
-                _from_arrow(field.type)
-            return DataType(type_id.STRUCT)
-        elif isinstance(obj, pa.ListType):
-            # Recurse to catch unsupported inner types
-            _from_arrow(obj.value_type)
-            return DataType(type_id.LIST)
-        else:
-            try:
-                return DataType(ARROW_TO_PYLIBCUDF_TYPES[obj])
-            except KeyError:
-                raise TypeError(f"Unable to convert {obj} to cudf datatype")
-else:
-    def _from_arrow(obj: pa.DataType) -> DataType:
-        raise pa_err
+
+@cache
+def _from_arrow(obj: pa.DataType) -> DataType:
+    if pa_err is not None:
+        raise RuntimeError(
+            "pyarrow was not found on your system. Please "
+            "pip install pylibcudf with the [pyarrow] extra for a "
+            "compatible pyarrow version."
+        ) from pa_err
+    if (
+        getattr(pa, "Decimal32Type", None) is not None
+        and isinstance(obj, pa.Decimal32Type)
+    ):
+        return DataType(type_id.DECIMAL32, scale=-obj.scale)
+    if (
+        getattr(pa, "Decimal64Type", None) is not None
+        and isinstance(obj, pa.Decimal64Type)
+    ):
+        return DataType(type_id.DECIMAL64, scale=-obj.scale)
+    if isinstance(obj, pa.Decimal128Type):
+        return DataType(type_id.DECIMAL128, scale=-obj.scale)
+    elif isinstance(obj, pa.StructType):
+        # Recurse to catch unsupported field types
+        for field in obj:
+            _from_arrow(field.type)
+        return DataType(type_id.STRUCT)
+    elif isinstance(obj, pa.ListType):
+        # Recurse to catch unsupported inner types
+        _from_arrow(obj.value_type)
+        return DataType(type_id.LIST)
+    else:
+        try:
+            return DataType(ARROW_TO_PYLIBCUDF_TYPES[obj])
+        except KeyError:
+            raise TypeError(f"Unable to convert {obj} to cudf datatype")
+
 
 SIZE_TYPE = DataType(type_to_id[size_type]())
 SIZE_TYPE_ID = SIZE_TYPE.id()

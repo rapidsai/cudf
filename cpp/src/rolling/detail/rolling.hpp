@@ -40,16 +40,17 @@ struct rolling_store_output_functor<_T, true> {
   // marked as invalid with a null.
 
   // SFINAE for non-bool, non-timestamp types
-  template <typename T                                                             = _T,
-            std::enable_if_t<!(cudf::is_boolean<T>() || cudf::is_timestamp<T>())>* = nullptr>
+  template <typename T = _T>
   CUDF_HOST_DEVICE inline void operator()(T& out, T& val, size_type count)
+    requires(!(cudf::is_boolean<T>() || cudf::is_timestamp<T>()))
   {
     if (count > 0) { out = val / count; }
   }
 
   // SFINAE for timestamp types
-  template <typename T = _T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
+  template <typename T = _T>
   CUDF_HOST_DEVICE inline void operator()(T& out, T& val, size_type count)
+    requires(cudf::is_timestamp<T>())
   {
     if (count > 0) { out = static_cast<T>(val.time_since_epoch() / count); }
   }

@@ -17,13 +17,14 @@
 #pragma once
 
 #include "error.hpp"
-#include "io/comp/comp.hpp"
+#include "io/comp/compression.hpp"
 #include "io/parquet/parquet_common.hpp"
 #include "io/statistics/statistics.cuh"
 #include "io/utilities/column_buffer.hpp"
 
 #include <cudf/detail/device_scalar.hpp>
 #include <cudf/io/datasource.hpp>
+#include <cudf/io/detail/codec.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
@@ -619,12 +620,12 @@ struct EncColumnChunk {
  */
 struct EncPage {
   // all pointers at the top to keep things properly aligned
-  uint8_t* page_data;                              //!< Ptr to uncompressed page
-  uint8_t* compressed_data;                        //!< Ptr to compressed page
-  EncColumnChunk* chunk;                           //!< Chunk that this page belongs to
-  cudf::io::detail::compression_result* comp_res;  //!< Ptr to compression result
-  uint32_t* def_histogram;  //!< Histogram of counts for each definition level
-  uint32_t* rep_histogram;  //!< Histogram of counts for each repetition level
+  uint8_t* page_data;                             //!< Ptr to uncompressed page
+  uint8_t* compressed_data;                       //!< Ptr to compressed page
+  EncColumnChunk* chunk;                          //!< Chunk that this page belongs to
+  cudf::io::detail::codec_exec_result* comp_res;  //!< Ptr to compression result
+  uint32_t* def_histogram;                        //!< Histogram of counts for each definition level
+  uint32_t* rep_histogram;                        //!< Histogram of counts for each repetition level
   // put this here in case it's ever made 64-bit
   encode_kernel_mask kernel_mask;  //!< Mask used to control which encoding kernels to run
   // the rest can be 4 byte aligned
@@ -843,9 +844,9 @@ void decode_split_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
  * @param buff_addrs Host span of corresponding output col buffer end addresses
  * @param stream CUDA stream to use
  */
-void WriteFinalOffsets(host_span<size_type const> offsets,
-                       host_span<size_type* const> buff_addrs,
-                       rmm::cuda_stream_view stream);
+void write_final_offsets(host_span<size_type const> offsets,
+                         host_span<size_type* const> buff_addrs,
+                         rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for reading the DELTA_BINARY_PACKED column data stored in the pages
@@ -1045,7 +1046,7 @@ void EncodePages(device_span<EncPage> pages,
                  bool write_v2_headers,
                  device_span<device_span<uint8_t const>> comp_in,
                  device_span<device_span<uint8_t>> comp_out,
-                 device_span<cudf::io::detail::compression_result> comp_res,
+                 device_span<cudf::io::detail::codec_exec_result> comp_res,
                  rmm::cuda_stream_view stream);
 
 /**
@@ -1068,7 +1069,7 @@ void DecideCompression(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view
  * @param[in] stream CUDA stream to use
  */
 void EncodePageHeaders(device_span<EncPage> pages,
-                       device_span<cudf::io::detail::compression_result const> comp_res,
+                       device_span<cudf::io::detail::codec_exec_result const> comp_res,
                        device_span<statistics_chunk const> page_stats,
                        statistics_chunk const* chunk_stats,
                        rmm::cuda_stream_view stream);

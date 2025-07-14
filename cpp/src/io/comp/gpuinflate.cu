@@ -1024,7 +1024,7 @@ template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
   inflate_kernel(device_span<device_span<uint8_t const> const> inputs,
                  device_span<device_span<uint8_t> const> outputs,
-                 device_span<compression_result> results,
+                 device_span<codec_exec_result> results,
                  gzip_header_included parse_hdr)
 {
   __shared__ __align__(16) inflate_state_s state_g;
@@ -1133,9 +1133,9 @@ CUDF_KERNEL void __launch_bounds__(block_size)
     results[z].bytes_written = state->out - state->outbase;
     results[z].status        = [&]() {
       switch (state->err) {
-        case 0: return compression_status::SUCCESS;
-        case 1: return compression_status::OUTPUT_OVERFLOW;
-        default: return compression_status::FAILURE;
+        case 0: return codec_status::SUCCESS;
+        case 1: return codec_status::OUTPUT_OVERFLOW;
+        default: return codec_status::FAILURE;
       }
     }();
   }
@@ -1202,7 +1202,7 @@ CUDF_KERNEL void __launch_bounds__(1024)
 
 void gpuinflate(device_span<device_span<uint8_t const> const> inputs,
                 device_span<device_span<uint8_t> const> outputs,
-                device_span<compression_result> results,
+                device_span<codec_exec_result> results,
                 gzip_header_included parse_hdr,
                 rmm::cuda_stream_view stream)
 {

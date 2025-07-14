@@ -19,6 +19,7 @@
 #include "text/subword/detail/wordpiece_tokenizer.hpp"
 
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/error.hpp>
 

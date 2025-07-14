@@ -63,14 +63,6 @@ option(
          stream to external libraries."
   OFF
 )
-
-# Option to add all symbols to the dynamic symbol table in the library file, allowing to retrieve
-# human-readable stacktrace for debugging.
-option(
-  CUDF_BUILD_STACKTRACE_DEBUG
-  "Replace the current optimization flags by the options '-rdynamic -Og -NDEBUG', useful for debugging with stacktrace retrieval"
-  OFF
-)
 option(DISABLE_DEPRECATION_WARNINGS "Disable warnings generated from deprecated declarations." OFF)
 
 # Option to enable line info in CUDA device compilation to allow introspection when profiling /
@@ -113,10 +105,6 @@ message(VERBOSE "CUDF: Use a file cache for JIT compiled kernels: ${JITIFY_USE_C
 message(VERBOSE "CUDF: Build with per-thread default stream: ${CUDF_USE_PER_THREAD_DEFAULT_STREAM}")
 message(
   VERBOSE
-  "CUDF: Replace the current optimization flags by the options '-rdynamic -Og' (useful for debugging with stacktrace retrieval): ${CUDF_BUILD_STACKTRACE_DEBUG}"
-)
-message(
-  VERBOSE
   "CUDF: Disable warnings generated from deprecated declarations: ${DISABLE_DEPRECATION_WARNINGS}"
 )
 message(
@@ -138,10 +126,6 @@ if(BUILD_TESTS AND NOT CUDF_BUILD_TESTUTIL)
     FATAL_ERROR
       "Tests cannot be built without building cudf test utils. Please set CUDF_BUILD_TESTUTIL=ON or BUILD_TESTS=OFF"
   )
-endif()
-
-if(CUDF_BUILD_STACKTRACE_DEBUG AND NOT CMAKE_COMPILER_IS_GNUCXX)
-  message(FATAL_ERROR "CUDF_BUILD_STACKTRACE_DEBUG is only supported with GCC compiler")
 endif()
 
 set(CUDF_CXX_FLAGS "")
@@ -502,8 +486,8 @@ add_library(
   src/io/avro/avro_gpu.cu
   src/io/avro/reader_impl.cu
   src/io/comp/brotli_dict.cpp
-  src/io/comp/comp.cpp
-  src/io/comp/comp.cu
+  src/io/comp/compression.cpp
+  src/io/comp/compression.cu
   src/io/comp/common.cpp
   src/io/comp/cpu_unbz2.cpp
   src/io/comp/debrotli.cu
@@ -511,7 +495,7 @@ add_library(
   src/io/comp/nvcomp_adapter.cpp
   src/io/comp/nvcomp_adapter.cu
   src/io/comp/snap.cu
-  src/io/comp/uncomp.cpp
+  src/io/comp/decompression.cpp
   src/io/comp/unsnap.cu
   src/io/csv/csv_gpu.cu
   src/io/csv/durations.cu
@@ -550,6 +534,8 @@ add_library(
   src/io/parquet/experimental/hybrid_scan.cpp
   src/io/parquet/experimental/hybrid_scan_helpers.cpp
   src/io/parquet/experimental/hybrid_scan_impl.cpp
+  src/io/parquet/experimental/hybrid_scan_preprocess.cu
+  src/io/parquet/experimental/page_index_filter.cu
   src/io/parquet/page_data.cu
   src/io/parquet/chunk_dict.cu
   src/io/parquet/page_enc.cu
@@ -563,6 +549,7 @@ add_library(
   src/io/parquet/reader_impl_chunking_utils.cu
   src/io/parquet/reader_impl_helpers.cpp
   src/io/parquet/reader_impl_preprocess.cu
+  src/io/parquet/reader_impl_preprocess_utils.cu
   src/io/parquet/stats_filter_helpers.cpp
   src/io/parquet/writer_impl.cu
   src/io/parquet/writer_impl_helpers.cpp
@@ -644,6 +631,7 @@ add_library(
   src/reductions/min.cu
   src/reductions/minmax.cu
   src/reductions/nth_element.cu
+  src/reductions/nunique.cu
   src/reductions/product.cu
   src/reductions/reductions.cpp
   src/reductions/scan/rank_scan.cu
@@ -687,19 +675,20 @@ add_library(
   src/rolling/range_window_bounds.cpp
   src/rolling/rolling.cpp
   src/round/round.cu
+  src/runtime/context.cpp
   src/scalar/scalar.cpp
   src/scalar/scalar_factories.cpp
   src/search/contains_column.cu
   src/search/contains_scalar.cu
   src/search/contains_table.cu
   src/search/search_ordered.cu
-  src/sort/faster_sort_column.cu
-  src/sort/faster_stable_sort_column.cu
   src/sort/is_sorted.cu
   src/sort/rank.cu
   src/sort/segmented_sort.cu
-  src/sort/sort_column.cu
   src/sort/sort.cu
+  src/sort/sort_column.cu
+  src/sort/sort_radix.cu
+  src/sort/sorted_order_radix.cu
   src/sort/stable_segmented_sort.cu
   src/sort/stable_sort_column.cu
   src/sort/stable_sort.cu
@@ -709,6 +698,7 @@ add_library(
   src/stream_compaction/distinct_helpers.cu
   src/stream_compaction/drop_nans.cu
   src/stream_compaction/drop_nulls.cu
+  src/stream_compaction/filter/filter.cu
   src/stream_compaction/stable_distinct.cu
   src/stream_compaction/unique.cu
   src/stream_compaction/unique_count.cu
@@ -779,7 +769,8 @@ add_library(
   src/structs/scan/scan_inclusive.cu
   src/structs/structs_column_factories.cu
   src/structs/structs_column_view.cpp
-  src/structs/utilities.cpp
+  src/structs/utilities.cu
+  src/table/primitive_row_operators.cu
   src/table/row_operators.cu
   src/table/table.cpp
   src/table/table_device_view.cu
@@ -823,12 +814,12 @@ add_library(
   src/utilities/cuda.cpp
   src/utilities/cuda_memcpy.cu
   src/utilities/default_stream.cpp
+  src/utilities/grid_1d.cu
   src/utilities/host_memory.cpp
   src/utilities/host_worker_pool.cpp
   src/utilities/linked_column.cpp
   src/utilities/logger.cpp
   src/utilities/prefetch.cpp
-  src/utilities/stacktrace.cpp
   src/utilities/stream_pool.cpp
   src/utilities/traits.cpp
   src/utilities/type_checks.cpp
@@ -906,31 +897,6 @@ target_compile_options(
   cudf PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
                "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
 )
-
-if(CUDF_BUILD_STACKTRACE_DEBUG)
-  # Remove any optimization level to avoid nvcc warning "incompatible redefinition for option
-  # 'optimize'".
-  string(REGEX REPLACE "(\-O[0123])" "" CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS}")
-  string(REGEX REPLACE "(\-O[0123])" "" CMAKE_CUDA_FLAGS_RELEASE "${CMAKE_CUDA_FLAGS_RELEASE}")
-  string(REGEX REPLACE "(\-O[0123])" "" CMAKE_CUDA_FLAGS_MINSIZEREL
-                       "${CMAKE_CUDA_FLAGS_MINSIZEREL}"
-  )
-  string(REGEX REPLACE "(\-O[0123])" "" CMAKE_CUDA_FLAGS_RELWITHDEBINFO
-                       "${CMAKE_CUDA_FLAGS_RELWITHDEBINFO}"
-  )
-
-  add_library(cudf_backtrace INTERFACE)
-  target_compile_definitions(cudf_backtrace INTERFACE CUDF_BUILD_STACKTRACE_DEBUG)
-  target_compile_options(
-    cudf_backtrace INTERFACE "$<$<COMPILE_LANGUAGE:CXX>:-Og>"
-                             "$<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-Og>"
-  )
-  target_link_options(
-    cudf_backtrace INTERFACE "$<$<LINK_LANGUAGE:CXX>:-rdynamic>"
-    "$<$<LINK_LANGUAGE:CUDA>:-Xlinker=-rdynamic>"
-  )
-  target_link_libraries(cudf PRIVATE cudf_backtrace)
-endif()
 
 # Specify include paths for the current target and dependents
 target_include_directories(
@@ -1147,9 +1113,7 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
   # depending via ctest and whether it has been updated to expose public stream APIs.
   foreach(_mode cudf testing)
     set(_tgt "cudf_identify_stream_usage_mode_${_mode}")
-    add_library(
-      ${_tgt} SHARED src/utilities/stacktrace.cpp tests/utilities/identify_stream_usage.cpp
-    )
+    add_library(${_tgt} SHARED tests/utilities/identify_stream_usage.cpp)
 
     if(CUDF_USE_PER_THREAD_DEFAULT_STREAM)
       target_compile_definitions(
@@ -1169,10 +1133,6 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
     )
     target_include_directories(${_tgt} PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>")
     target_link_libraries(${_tgt} PUBLIC CUDA::cudart rmm::rmm)
-
-    if(CUDF_BUILD_STACKTRACE_DEBUG)
-      target_link_libraries(${_tgt} PRIVATE cudf_backtrace)
-    endif()
 
     rapids_cuda_set_runtime(${_tgt} USE_STATIC ${CUDA_STATIC_RUNTIME})
     add_library(cudf::${_tgt} ALIAS ${_tgt})

@@ -8,7 +8,7 @@ cudf.pandas:
   - 'python/cudf/cudf/pandas/**'
   - 'python/cudf/cudf_pandas_tests/**'
 
-cudf.polars:
+cudf-polars:
   - 'python/cudf_polars/**'
 
 pylibcudf:

@@ -11,9 +11,9 @@ Benchmark
 ---------
 
 .. note::
-   The following benchmarks were performed with `POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY` environment variable set to `"0"`.
+   The following benchmarks were performed with the ``POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY`` environment variable set to ``"0"``.
    Using managed memory (the default) imposes a performance cost in order to avoid out of memory errors.
-   Peak performance can still be attained by setting the environment variable to 1.
+   Peak performance can still be attained by setting the environment variable to ``0``.
 
 We reproduced the `Polars Decision Support (PDS) <https://github.com/pola-rs/polars-benchmark>`__ benchmark to compare Polars GPU engine with the default CPU settings across several dataset sizes. Here are the results:
 
@@ -37,6 +37,15 @@ Learn More
 
 The GPU engine for Polars is now available in Open Beta and the engine is undergoing rapid development. To learn more, visit the `GPU Support page <https://docs.pola.rs/user-guide/gpu-support/>`__ on the Polars website.
 
+.. toctree::
+   :maxdepth: 1
+   :caption: Contents:
+
+   usage
+   streaming_execution
+   engine_options
+   api
+
 Launch on Google Colab
 ----------------------
 
@@ -45,10 +54,3 @@ Launch on Google Colab
    :target: https://nvda.ws/4eKlWZW
 
    Try out the GPU engine for Polars in a free GPU notebook environment. Sign in with your Google account and `launch the demo on Colab <https://nvda.ws/4eKlWZW>`__.
-
-.. toctree::
-   :maxdepth: 1
-   :caption: Contents:
-
-   usage
-   engine_options

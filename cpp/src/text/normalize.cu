@@ -26,6 +26,8 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/strings/case.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
