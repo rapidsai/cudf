@@ -1057,10 +1057,12 @@ cdef class Column:
         if not all(
             isinstance(child, Column)
             and reference_child.size() == child.size()
+            and reference_child.null_count() == child.null_count()
             for child in children
         ):
             raise ValueError(
-                "All child columns must be of type Column and have the same size"
+                "All child columns must be of type Column and have the same size "
+                "and null count."
             )
 
         return cls(
