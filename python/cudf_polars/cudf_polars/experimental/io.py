@@ -24,10 +24,6 @@ from cudf_polars.experimental.base import (
     DataSourceInfo,
     PartitionInfo,
     UniqueStats,
-    # RowCount,
-    # StorageSize,
-    # UniqueCount,
-    # UniqueFraction,
     get_key_name,
 )
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
