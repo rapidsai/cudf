@@ -1126,6 +1126,8 @@ def test_datetime_dateoffset_binaryop(
     got = op(gsr, goffset)
 
     if is_timezone_aware_dtype(dtype):
+        assert isinstance(expect.dtype, pd.DatetimeTZDtype)
+        assert str(expect.dtype.tz) == str(got.dtype.tz)
         expect = expect.dt.tz_convert("UTC")
         got = got.dt.tz_convert("UTC")
 
@@ -1135,6 +1137,8 @@ def test_datetime_dateoffset_binaryop(
     got = op(gsr, -goffset)
 
     if is_timezone_aware_dtype(dtype):
+        assert isinstance(expect.dtype, pd.DatetimeTZDtype)
+        assert str(expect.dtype.tz) == str(got.dtype.tz)
         expect = expect.dt.tz_convert("UTC")
         got = got.dt.tz_convert("UTC")
 
