@@ -285,7 +285,12 @@ def _(
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     partition_info: MutableMapping[IR, PartitionInfo]
     config_options = rec.state["config_options"]
-    if ir.typ in ("csv", "parquet", "ndjson") and ir.n_rows == -1 and ir.skip_rows == 0:
+    if (
+        ir.typ in ("csv", "parquet", "ndjson")
+        and ir.n_rows == -1
+        and ir.skip_rows == 0
+        and ir.row_index is None
+    ):
         plan = ScanPartitionPlan.from_scan(ir, config_options)
         paths = list(ir.paths)
         if plan.flavor == ScanPartitionFlavor.SPLIT_FILES:
