@@ -224,13 +224,12 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
   void set_page_mask(cudf::host_span<thrust::host_vector<bool> const> data_page_mask);
 
   /**
-   * @brief Ensure the row mask is all valid if data page mask is empty
+   * @brief Fill a BOOL8 row mask column with the specified value
    *
-   * @param data_page_mask Input data page mask
    * @param row_mask The row mask to sanitize
+   * @param value The boolean value to fill
    */
-  void sanitize_row_mask(cudf::host_span<thrust::host_vector<bool> const> data_page_mask,
-                         cudf::mutable_column_view row_mask);
+  void fill_row_mask(cudf::mutable_column_view row_mask, bool value = true);
 
   /**
    * @brief Select the columns to be read based on the read mode

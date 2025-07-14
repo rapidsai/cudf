@@ -23,6 +23,7 @@
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
+#include <cudf/filling.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/error.hpp>
@@ -441,8 +442,11 @@ table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns(
 
   select_columns(read_columns_mode::FILTER_COLUMNS, options);
 
-  // If the data page mask is empty, ensure the row mask is all valid
-  sanitize_row_mask(data_page_mask, row_mask);
+  // If the data page mask is empty, fill the row mask with all true values
+  if (data_page_mask.empty()) {
+    auto const value = cudf::numeric_scalar<bool>(true, true, stream);
+    cudf::fill_in_place(row_mask, 0, row_mask.size(), value, stream);
+  }
 
   prepare_data(row_group_indices, std::move(column_chunk_buffers), data_page_mask, options);
 
@@ -717,6 +721,37 @@ void hybrid_scan_reader_impl::decode_page_data(size_t skip_rows, size_t num_rows
 
     chunk_off += max_depth;
 
+    // fill in the arrays on the host.  there are some important considerations to
+    // take into account here for nested columns.  specifically, with structs
+    // there is sharing of output buffers between input columns.  consider this schema
+    //
+    //  required group field_id=1 name {
+    //    required binary field_id=2 firstname (String);
+    //    required binary field_id=3 middlename (String);
+    //    required binary field_id=4 lastname (String);
+    // }
+    //
+    // there are 3 input columns of data here (firstname, middlename, lastname), but
+    // only 1 output column (name).  The structure of the output column buffers looks like
+    // the schema itself
+    //
+    // struct      (name)
+    //     string  (firstname)
+    //     string  (middlename)
+    //     string  (lastname)
+    //
+    // The struct column can contain validity information. the problem is, the decode
+    // step for the input columns will all attempt to decode this validity information
+    // because each one has it's own copy of the repetition/definition levels. but
+    // since this is all happening in parallel it would mean multiple blocks would
+    // be stomping all over the same memory randomly.  to work around this, we set
+    // things up so that only 1 child of any given nesting level fills in the
+    // data (offsets in the case of lists) or validity information for the higher
+    // levels of the hierarchy that are shared.  In this case, it would mean we
+    // would just choose firstname to be the one that decodes the validity for name.
+    //
+    // we do this by only handing out the pointers to the first child we come across.
+    //
     auto* cols = &_output_buffers;
     for (size_t idx = 0; idx < max_depth; idx++) {
       auto& out_buf = (*cols)[input_col.nesting[idx]];
@@ -744,6 +779,23 @@ void hybrid_scan_reader_impl::decode_page_data(size_t skip_rows, size_t num_rows
     }
   }
 
+  // Use the `_page_mask` from page pruning stage, if non empty, otherwise set all pages in this
+  // subpass to be decoded
+  auto host_page_mask = [&]() {
+    if (_page_mask.empty()) {
+      auto page_mask = cudf::detail::make_host_vector<bool>(subpass.pages.size(), _stream);
+      std::fill(page_mask.begin(), page_mask.end(), true);
+      return page_mask;
+    } else {
+      return _page_mask;
+    }
+  }();
+
+  CUDF_EXPECTS(host_page_mask.size() == subpass.pages.size(),
+               "Page mask size must be equal to the number of pages in the subpass");
+
+  auto page_mask = cudf::detail::make_device_uvector_async(host_page_mask, _stream, _mr);
+
   // Create an empty device vector to store the initial str offset for large string columns from for
   // string decoders.
   auto initial_str_offsets = rmm::device_uvector<size_t>{0, _stream, _mr};
@@ -762,10 +814,6 @@ void hybrid_scan_reader_impl::decode_page_data(size_t skip_rows, size_t num_rows
       cudf::detail::make_device_uvector_async(host_offsets_vector, _stream, _mr);
     chunk_nested_str_data.host_to_device_async(_stream);
   }
-
-  // create a device page mask
-  auto page_mask = cudf::detail::make_device_uvector_async<bool>(
-    _page_mask, _stream, cudf::get_current_device_resource_ref());
 
   // create this before we fork streams
   cudf::io::parquet::kernel_error error_code(_stream);
@@ -824,12 +872,12 @@ void hybrid_scan_reader_impl::decode_page_data(size_t skip_rows, size_t num_rows
     decode_data(decode_kernel_mask::STRING_STREAM_SPLIT);
   }
 
-  // launch byte-stream-split encoded nested columns
+  // launch string decoder for byte-stream-split encoded nested columns
   if (BitAnd(kernel_mask, decode_kernel_mask::STRING_STREAM_SPLIT_NESTED) != 0) {
     decode_data(decode_kernel_mask::STRING_STREAM_SPLIT_NESTED);
   }
 
-  // launch byte-stream-split encoded list columns
+  // launch string decoder for byte-stream-split encoded list columns
   if (BitAnd(kernel_mask, decode_kernel_mask::STRING_STREAM_SPLIT_LIST) != 0) {
     decode_data(decode_kernel_mask::STRING_STREAM_SPLIT_LIST);
   }
@@ -1004,8 +1052,7 @@ void hybrid_scan_reader_impl::decode_page_data(size_t skip_rows, size_t num_rows
         out_buf.user_data |= cudf::io::parquet::detail::PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED;
       } else if (out_buf.type.id() == type_id::STRING) {
         // only if it is not a large strings column
-        if (col_string_sizes[idx] <=
-            static_cast<size_t>(strings::detail::get_offset64_threshold())) {
+        if (std::cmp_less_equal(col_string_sizes[idx], strings::detail::get_offset64_threshold())) {
           out_buffers.emplace_back(static_cast<size_type*>(out_buf.data()) + out_buf.size);
           final_offsets.emplace_back(static_cast<size_type>(col_string_sizes[idx]));
         }

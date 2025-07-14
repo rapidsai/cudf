@@ -348,14 +348,4 @@ void hybrid_scan_reader_impl::update_row_mask(cudf::column_view in_row_mask,
   }
 }
 
-void hybrid_scan_reader_impl::sanitize_row_mask(
-  cudf::host_span<thrust::host_vector<bool> const> data_page_mask,
-  cudf::mutable_column_view row_mask)
-{
-  if (data_page_mask.empty()) {
-    thrust::fill(
-      rmm::exec_policy_nosync(_stream), row_mask.begin<bool>(), row_mask.end<bool>(), true);
-  }
-}
-
 }  // namespace cudf::io::parquet::experimental::detail
