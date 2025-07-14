@@ -313,30 +313,7 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
     }
   };
 
-  auto col = construct_column(buffer, schema_info, schema);
-  if (buffer.type.id() == type_id::STRUCT) {
-    if (col->nullable()) {
-      auto col_contents = col->release();
-      for (auto& child : col_contents.children) {
-        child = structs::detail::superimpose_and_sanitize_nulls(
-          static_cast<bitmask_type const*>(col_contents.null_mask->data()),
-          buffer._null_count,
-          std::move(child),
-          stream,
-          buffer._mr);
-      }
-
-      return std::make_unique<column>(
-        cudf::data_type{type_id::STRUCT},
-        buffer.size,
-        rmm::device_buffer{},  // Empty data buffer. Structs hold no data.
-        std::move(*col_contents.null_mask),
-        buffer._null_count,
-        std::move(col_contents.children));
-    }
-  }
-
-  return col;
+  return construct_column(buffer, schema_info, schema);
 }
 
 /**

@@ -1,6 +1,8 @@
 #!/bin/bash
 # Copyright (c) 2022-2025, NVIDIA CORPORATION.
 
+set -euo pipefail
+
 # Support invoking test_cpp.sh outside the script directory
 cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../
 

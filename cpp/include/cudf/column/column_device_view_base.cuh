@@ -400,7 +400,7 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
   }
 
   /**
-   * @brief Returns reference to element at the specified index.
+   * @brief Returns a copy of the element at the specified index
    *
    * If the element at the specified index is NULL, i.e.,
    * `is_null(element_index) == true`, then any attempt to use the result will
@@ -414,7 +414,7 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
    *
    * @tparam T The element type
    * @param element_index Position of the desired element
-   * @return reference to the element at the specified index
+   * @return The element at the specified index
    */
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   [[nodiscard]] __device__ T element(size_type element_index) const noexcept
@@ -750,33 +750,4 @@ class alignas(16) mutable_column_device_view_core : public detail::column_device
   size_type _num_children{};                      ///< The number of child columns
 };
 
-namespace detail {
-
-#ifdef __CUDACC__  // because set_bit in bit.hpp is wrapped with __CUDACC__
-
-/**
- * @brief Convenience function to get offset word from a bitmask
- *
- * @see copy_offset_bitmask
- * @see offset_bitmask_binop
- */
-__device__ inline bitmask_type get_mask_offset_word(bitmask_type const* __restrict__ source,
-                                                    size_type destination_word_index,
-                                                    size_type source_begin_bit,
-                                                    size_type source_end_bit)
-{
-  size_type source_word_index = destination_word_index + word_index(source_begin_bit);
-  bitmask_type curr_word      = source[source_word_index];
-  bitmask_type next_word      = 0;
-  if (word_index(source_end_bit - 1) >
-      word_index(source_begin_bit +
-                 destination_word_index * detail::size_in_bits<bitmask_type>())) {
-    next_word = source[source_word_index + 1];
-  }
-  return __funnelshift_r(curr_word, next_word, source_begin_bit);
-}
-
-#endif
-
-}  // namespace detail
 }  // namespace CUDF_EXPORT cudf
