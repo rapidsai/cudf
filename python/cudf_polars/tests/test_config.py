@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import sys
+
 import pytest
 
 import polars as pl
@@ -267,6 +269,7 @@ def test_validate_shuffle_method_defaults(rapidsmpf_available) -> None:
         "groupby_n_ary",
         "broadcast_join_limit",
         "rapidsmpf_spill",
+        "sink_to_directory",
     ],
 )
 def test_validate_max_rows_per_partition(option: str) -> None:
@@ -277,6 +280,44 @@ def test_validate_max_rows_per_partition(option: str) -> None:
                 executor_options={option: object()},
             )
         )
+
+
+def test_target_partition_size_warns(monkeypatch: pytest.MonkeyPatch) -> None:
+    with monkeypatch.context() as m:
+        m.setitem(sys.modules, "pynvml", None)
+        engine = pl.GPUEngine(executor="streaming")
+
+        with pytest.warns(UserWarning, match="Failed to query"):
+            ConfigOptions.from_polars_engine(engine)
+
+
+def test_target_partition_from_env(
+    monkeypatch: pytest.MonkeyPatch, recwarn: pytest.WarningsRecorder
+) -> None:
+    with monkeypatch.context() as m:
+        m.setitem(sys.modules, "pynvml", None)
+        m.setenv("CUDF_POLARS__STREAMING__TARGET_PARTITION_SIZE", "100")
+
+        engine = pl.GPUEngine(executor="streaming")
+        ConfigOptions.from_polars_engine(engine)  # no warning
+        assert len(recwarn) == 0
+
+
+def test_fallback_mode_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    with monkeypatch.context() as m:
+        m.setenv("CUDF_POLARS__STREAMING__FALLBACK_MODE", "silent")
+        engine = pl.GPUEngine(executor="streaming")
+        config = ConfigOptions.from_polars_engine(engine)
+        assert config.executor.name == "streaming"
+        assert config.executor.fallback_mode == "silent"
+
+    with monkeypatch.context() as m:
+        m.setenv("CUDF_POLARS__STREAMING__FALLBACK_MODE", "foo")
+        engine = pl.GPUEngine(executor="streaming")
+        with pytest.raises(
+            ValueError, match="'foo' is not a valid StreamingFallbackMode"
+        ):
+            ConfigOptions.from_polars_engine(engine)
 
 
 def test_cardinality_factor_compat() -> None:
@@ -310,3 +351,8 @@ def test_validate_raise_on_fail() -> None:
 def test_validate_executor() -> None:
     with pytest.raises(ValueError, match="Unknown executor 'foo'"):
         ConfigOptions.from_polars_engine(pl.GPUEngine(executor="foo"))
+
+
+def test_default_executor() -> None:
+    config = ConfigOptions.from_polars_engine(pl.GPUEngine())
+    assert config.executor.name == "streaming"

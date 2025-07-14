@@ -29,6 +29,16 @@ def convert_to_rmm(frame):
         return frame
 
 
+@pytest.mark.filterwarnings(
+    # If exceptions in threads aren't handled, they get raised as a warning by
+    # Pytest. The warnings raised by this test correspond to unhandled
+    # `ResourceWarning`s in `distributed.node`
+    #
+    # Since Pytest 8, these warnings get elevated to errors and exit the test
+    # suite, so we selectively filter them here if the unraisable exception
+    # concerns `socket.socket`
+    "ignore:.*socket.socket.*:pytest.PytestUnraisableExceptionWarning"
+)
 @pytest.mark.parametrize(
     "polars_tbl",
     [
