@@ -586,16 +586,49 @@ def _(
 
 
 class ParquetMetadata:
-    """Parquet metadata container."""
+    """
+    Parquet metadata container.
+
+    Parameters
+    ----------
+    paths
+        Parquet-dataset paths.
+    max_file_samples
+        Maximum number of files to sample for metadata.
+    """
+
+    __slots__ = (
+        "all_columns",
+        "max_file_samples",
+        "mean_size_per_file",
+        "num_row_groups_per_file",
+        "paths",
+        "row_count",
+        "sample_paths",
+    )
+
+    paths: tuple[str, ...]
+    """Parquet-dataset paths."""
+    max_file_samples: int
+    """Maximum number of files to sample for metadata."""
+    row_count: ColumnStat[int]
+    """Total row-count estimate."""
+    num_row_groups_per_file: tuple[int, ...]
+    """Number of row groups in each sampled file."""
+    mean_size_per_file: dict[str, ColumnStat[int]]
+    """Average column storage size in a single file."""
+    all_columns: tuple[str, ...]
+    """All column names found it the dataset."""
+    sample_paths: tuple[str, ...]
+    """Sampled file paths."""
 
     def __init__(self, paths: tuple[str, ...], max_file_samples: int):
         self.paths = paths
         self.max_file_samples = max_file_samples
-        self.row_count: ColumnStat[int] = ColumnStat[int]()
-        self.num_row_groups_per_file: tuple[int, ...] = ()
-        self.mean_size_per_file: dict[str, ColumnStat[int]] = {}
-        self.all_columns: tuple[str, ...] = ()
-
+        self.row_count = ColumnStat[int]()
+        self.num_row_groups_per_file = ()
+        self.mean_size_per_file = {}
+        self.all_columns = ()
         stride = max(1, int(len(paths) / max_file_samples)) if max_file_samples else 1
         self.sample_paths = paths[: stride * max_file_samples : stride]
 
@@ -651,7 +684,7 @@ class ParquetSourceInfo(DataSourceInfo):
     Parameters
     ----------
     paths
-        Sample paths.
+        Parquet-dataset paths.
     max_file_samples
         Maximum number of files to sample metadata from.
     max_rg_samples
