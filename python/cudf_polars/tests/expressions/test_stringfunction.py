@@ -617,6 +617,32 @@ def test_count_matches_literal_unsupported(ldf):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
+def test_strip_prefix(ldf):
+    q = ldf.select(pl.col("a").str.strip_prefix("A"))
+    assert_gpu_result_equal(q)
+
+
+def test_strip_suffix(ldf):
+    q = ldf.select(pl.col("a").str.strip_suffix("e"))
+    assert_gpu_result_equal(q)
+
+
+def test_strip_prefix_suffix_dupes():
+    ldf = pl.LazyFrame({"a": ["a", "aa", "ab", "bb", "b"]})
+
+    q = ldf.select(pl.col("a").str.strip_prefix("a"))
+    assert_gpu_result_equal(q)
+
+    q = ldf.select(pl.col("a").str.strip_suffix("a"))
+    assert_gpu_result_equal(q)
+
+    q = ldf.select(pl.col("a").str.strip_prefix("b"))
+    assert_gpu_result_equal(q)
+
+    q = ldf.select(pl.col("a").str.strip_suffix("b"))
+    assert_gpu_result_equal(q)
+
+
 @pytest.fixture
 def ldf_jsonlike():
     return pl.LazyFrame(
