@@ -78,7 +78,9 @@ class UniqueStats:
     count
         Unique-value count.
     fraction
-        Unique-value fraction.
+        Unique-value fraction. This corresponds to the total
+        number of unique values (count) divided by the total
+        number of rows.
     """
 
     count: ColumnStat[int] = dataclasses.field(default_factory=ColumnStat[int])

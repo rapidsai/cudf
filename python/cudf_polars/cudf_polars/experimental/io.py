@@ -585,60 +585,29 @@ def _(
         return _file_sink_graph(ir, partition_info)
 
 
-class PqSourceInfo(DataSourceInfo):
-    """
-    Parquet datasource information.
+class ParquetMetadata:
+    """Parquet metadata container."""
 
-    Parameters
-    ----------
-    paths
-        Sample paths.
-    max_file_samples
-        Maximum number of files to sample metadata from.
-    max_rg_samples
-        Maximum number of row-groups to sample data from.
-    """
-
-    def __init__(
-        self,
-        paths: tuple[str, ...],
-        max_file_samples: int,
-        max_rg_samples: int,
-    ):
+    def __init__(self, paths: tuple[str, ...], max_file_samples: int):
         self.paths = paths
         self.max_file_samples = max_file_samples
-        self.max_rg_samples = max_rg_samples
-        # Helper attributes - General
+        self.row_count: ColumnStat[int] = ColumnStat[int]()
+        self.num_row_groups_per_file: tuple[int, ...] = ()
+        self.mean_size_per_file: dict[str, ColumnStat[int]] = {}
+        self.all_columns: tuple[str, ...] = ()
+
         stride = max(1, int(len(paths) / max_file_samples)) if max_file_samples else 1
-        self._sample_paths: tuple[str, ...] = paths[
-            : stride * max_file_samples : stride
-        ]
-        self._key_columns: set[str] = set()  # Used to fuse lazy row-group sampling
-        # Helper attributes - Updated in _sample_metadata
-        self._metadata_sampled: bool = False
-        self._row_count: ColumnStat[int] = ColumnStat[int]()
-        self._num_row_groups_per_file: tuple[int, ...] = ()
-        self._mean_size_per_file: dict[str, ColumnStat[int]] = {}
-        self._all_columns: tuple[str, ...] = ()
-        # Helper attributes - Updated in _sample_row_groups
-        self._unique_stats: dict[str, UniqueStats] = {}
+        self.sample_paths = paths[: stride * max_file_samples : stride]
 
-    def _sample_metadata(self) -> None:
-        """Sample Parquet metadata."""
-        if self._metadata_sampled:
-            # Metadata was already sampled
-            return
-
-        if not self._sample_paths:
+        if not self.sample_paths:
             # No paths to sample from
-            self._metadata_sampled = True
             return
 
         total_file_count = len(self.paths)
-        sampled_file_count = len(self._sample_paths)
+        sampled_file_count = len(self.sample_paths)
         exact: bool = False
         sample_metadata = plc.io.parquet_metadata.read_parquet_metadata(
-            plc.io.SourceInfo(list(self._sample_paths))
+            plc.io.SourceInfo(list(self.sample_paths))
         )
 
         if total_file_count == sampled_file_count:
@@ -665,44 +634,78 @@ class PqSourceInfo(DataSourceInfo):
             for name, uncompressed_sizes in sample_metadata.columnchunk_metadata().items()
         }
 
-        self._all_columns = tuple(column_sizes_per_file)
-        self._mean_size_per_file = {
+        self.all_columns = tuple(column_sizes_per_file)
+        self.mean_size_per_file = {
             name: ColumnStat[int](value=int(statistics.mean(sizes)))
             for name, sizes in column_sizes_per_file.items()
         }
-        self._num_row_groups_per_file = tuple(num_row_groups_per_sampled_file)
-        self._row_count.value = row_count
-        self._row_count.exact = exact
-        self._metadata_sampled = True
+        self.num_row_groups_per_file = tuple(num_row_groups_per_sampled_file)
+        self.row_count.value = row_count
+        self.row_count.exact = exact
+
+
+class ParquetSourceInfo(DataSourceInfo):
+    """
+    Parquet datasource information.
+
+    Parameters
+    ----------
+    paths
+        Sample paths.
+    max_file_samples
+        Maximum number of files to sample metadata from.
+    max_rg_samples
+        Maximum number of row-groups to sample data from.
+    """
+
+    def __init__(
+        self,
+        paths: tuple[str, ...],
+        max_file_samples: int,
+        max_rg_samples: int,
+    ):
+        self.paths = paths
+        self.max_file_samples = max_file_samples
+        self.max_rg_samples = max_rg_samples
+        # Helper attributes
+        self._key_columns: set[str] = set()  # Used to fuse lazy row-group sampling
+        self._unique_stats: dict[str, UniqueStats] = {}
+
+    @functools.cached_property
+    def metadata(self) -> ParquetMetadata:
+        """Return PArquet metadata."""
+        return ParquetMetadata(self.paths, self.max_file_samples)
+
+    @property
+    def row_count(self) -> ColumnStat[int]:
+        """Data source row-count estimate."""
+        return self.metadata.row_count
 
     def _sample_row_groups(self) -> None:
         """Estimate unique-value statistics from a row-group sample."""
-        if not self._sample_paths or self.max_rg_samples < 1:
+        sample_paths = self.metadata.sample_paths
+        if not sample_paths or self.max_rg_samples < 1:
             # No row-groups to sample from
             return
 
-        self._sample_metadata()  # Need metadata
-
+        all_columns = self.metadata.all_columns
         if not (
-            key_columns := [
-                key for key in self._key_columns if key in self._all_columns
-            ]
+            key_columns := [key for key in self._key_columns if key in all_columns]
         ):  # pragma: no cover; should never get here
             # No key columns found in the file
-            raise ValueError(f"None of {self._key_columns} in {self._all_columns}")
+            raise ValueError(f"None of {self._key_columns} in {all_columns}")
 
-        sampled_file_count = len(self._sample_paths)
+        sampled_file_count = len(sample_paths)
+        num_row_groups_per_file = self.metadata.num_row_groups_per_file
         if (
-            self._row_count.value is None
-            or len(self._num_row_groups_per_file) != sampled_file_count
+            self.row_count.value is None
+            or len(num_row_groups_per_file) != sampled_file_count
         ):
             raise ValueError("Parquet metadata sampling failed.")  # pragma: no cover
 
         n = 0
         samples: defaultdict[str, list[int]] = defaultdict(list)
-        for path, num_rgs in zip(
-            self._sample_paths, self._num_row_groups_per_file, strict=True
-        ):
+        for path, num_rgs in zip(sample_paths, num_row_groups_per_file, strict=True):
             for rg_id in range(num_rgs):
                 n += 1
                 samples[path].append(rg_id)
@@ -712,7 +715,7 @@ class PqSourceInfo(DataSourceInfo):
                 break
 
         exact = sampled_file_count == len(self.paths) and self.max_rg_samples >= sum(
-            self._num_row_groups_per_file
+            num_row_groups_per_file
         )
 
         options = plc.io.parquet.ParquetReaderOptions.builder(
@@ -743,21 +746,14 @@ class PqSourceInfo(DataSourceInfo):
             if exact:
                 count = row_group_unique_count
             elif row_group_unique_count == row_group_num_rows:
-                count = self._row_count.value
+                count = self.row_count.value
             self._unique_stats[name] = UniqueStats(
                 ColumnStat[int](value=count, exact=exact),
                 ColumnStat[float](value=fraction, exact=exact),
             )
 
-    @property
-    def row_count(self) -> ColumnStat[int]:
-        """Data source row-count estimate."""
-        self._sample_metadata()
-        return self._row_count
-
     def _update_unique_stats(self, column: str) -> None:
-        self._sample_metadata()
-        if column not in self._unique_stats and column in self._all_columns:
+        if column not in self._unique_stats and column in self.metadata.all_columns:
             self.add_unique_stats_column(column)
             self._sample_row_groups()
             self._key_columns = set()
@@ -769,8 +765,7 @@ class PqSourceInfo(DataSourceInfo):
 
     def storage_size(self, column: str) -> ColumnStat[int]:
         """Return the average column size for a single file."""
-        self._sample_metadata()
-        return self._mean_size_per_file.get(column, ColumnStat[int]())
+        return self.metadata.mean_size_per_file.get(column, ColumnStat[int]())
 
     def add_unique_stats_column(self, column: str) -> None:
         """Add a column needing unique-value information."""
@@ -783,9 +778,9 @@ def _sample_pq_stats(
     paths: tuple[str, ...],
     max_file_samples: int,
     max_rg_samples: int,
-) -> PqSourceInfo:
+) -> ParquetSourceInfo:
     """Return Parquet datasource information."""
-    return PqSourceInfo(paths, max_file_samples, max_rg_samples)
+    return ParquetSourceInfo(paths, max_file_samples, max_rg_samples)
 
 
 def _extract_scan_stats(
@@ -867,5 +862,5 @@ def _clear_source_info_cache() -> None:
     # TODO: Avoid clearing the cache if we can
     # check that the underlying data hasn't changed.
 
-    # Clear PqSourceInfo cache
+    # Clear ParquetSourceInfo cache
     _sample_pq_stats.cache_clear()
