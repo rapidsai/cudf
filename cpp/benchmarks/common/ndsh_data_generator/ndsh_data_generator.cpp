@@ -27,7 +27,6 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/groupby.hpp>
-#include <cudf/round.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/strings/combine.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
@@ -321,16 +320,10 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(cudf::table_view const& o
   auto l_quantity = generate_random_numeric_column<int8_t>(1, 50, l_num_rows, stream, mr);
 
   // Generate the `l_discount` column
-  auto l_discount = [&]() {
-    auto const col = generate_random_numeric_column<double>(0.00, 0.10, l_num_rows, stream, mr);
-    return cudf::round(col->view(), 2);
-  }();
+  auto l_discount = generate_random_numeric_column<double>(0.00, 0.10, l_num_rows, stream, mr);
 
   // Generate the `l_tax` column
-  auto l_tax = [&]() {
-    auto const col = generate_random_numeric_column<double>(0.00, 0.08, l_num_rows, stream, mr);
-    return cudf::round(col->view(), 2);
-  }();
+  auto l_tax = generate_random_numeric_column<double>(0.00, 0.08, l_num_rows, stream, mr);
 
   // Get the orderdate column from the `l_base` table
   auto const ol_orderdate_ts = std::move(l_base_columns[1]);
@@ -533,7 +526,7 @@ std::unique_ptr<cudf::table> generate_orders_dependent(cudf::table_view const& l
     requests[0].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
     requests[0].values = l_charge->view();
     auto agg_result    = gb.aggregate(requests);
-    return cudf::round(agg_result.second[0].results[0]->view(), 2);
+    return std::move(agg_result.second[0].results[0]);
   }();
   orders_dependent_columns.push_back(std::move(o_totalprice));
   return std::make_unique<cudf::table>(std::move(orders_dependent_columns));
@@ -570,10 +563,8 @@ std::unique_ptr<cudf::table> generate_partsupp(double scale_factor,
   auto ps_availqty = generate_random_numeric_column<int16_t>(1, 9999, ps_num_rows, stream, mr);
 
   // Generate the `ps_supplycost` column
-  auto ps_supplycost = [&]() {
-    auto const col = generate_random_numeric_column<double>(1.00, 1000.00, ps_num_rows, stream, mr);
-    return cudf::round(col->view(), 2);
-  }();
+  auto ps_supplycost =
+    generate_random_numeric_column<double>(1.00, 1000.00, ps_num_rows, stream, mr);
 
   // Generate the `ps_comment` column
   // NOTE: This column is not compliant with clause 4.2.2.10 of the TPC-H specification
@@ -748,13 +739,12 @@ generate_orders_lineitem_part(double scale_factor,
     auto const l_quantity_fp =
       cudf::cast(l_quantity->view(), cudf::data_type{cudf::type_id::FLOAT64});
     auto const p_retailprice = std::move(joined_table_columns[3]);
-    auto const col           = cudf::binary_operation(l_quantity_fp->view(),
-                                            p_retailprice->view(),
-                                            cudf::binary_operator::MUL,
-                                            cudf::data_type{cudf::type_id::FLOAT64},
-                                            stream,
-                                            mr);
-    return cudf::round(col->view(), 2);
+    return cudf::binary_operation(l_quantity_fp->view(),
+                                  p_retailprice->view(),
+                                  cudf::binary_operator::MUL,
+                                  cudf::data_type{cudf::type_id::FLOAT64},
+                                  stream,
+                                  mr);
   }();
 
   // Insert the `l_extendedprice` column into the partial columns of the `lineitem` table
@@ -826,10 +816,7 @@ std::unique_ptr<cudf::table> generate_supplier(double scale_factor,
   auto s_phone = generate_phone_column(num_rows, stream, mr);
 
   // Generate the `s_acctbal` column
-  auto s_acctbal = [&]() {
-    auto const col = generate_random_numeric_column<double>(-999.99, 9999.99, num_rows, stream, mr);
-    return cudf::round(col->view(), 2);
-  }();
+  auto s_acctbal = generate_random_numeric_column<double>(-999.99, 9999.99, num_rows, stream, mr);
 
   // Generate the `s_comment` column
   // NOTE: This column is not compliant with clause 4.2.2.10 of the TPC-H specification
@@ -890,10 +877,7 @@ std::unique_ptr<cudf::table> generate_customer(double scale_factor,
   auto c_phone = generate_phone_column(num_rows, stream, mr);
 
   // Generate the `c_acctbal` column
-  auto c_acctbal = [&]() {
-    auto const col = generate_random_numeric_column<double>(-999.99, 9999.99, num_rows, stream, mr);
-    return cudf::round(col->view(), 2);
-  }();
+  auto c_acctbal = generate_random_numeric_column<double>(-999.99, 9999.99, num_rows, stream, mr);
 
   // Generate the `c_mktsegment` column
   auto c_mktsegment = generate_random_string_column_from_set(
