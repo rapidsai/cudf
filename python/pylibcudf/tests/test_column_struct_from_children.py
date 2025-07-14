@@ -19,27 +19,27 @@ def children_plc(children_arrow):
     return [plc.Column.from_arrow(child) for child in children_arrow]
 
 
-def test_as_struct_column_empty_children():
+def test_struct_from_children_empty_children():
     with pytest.raises(ValueError):
-        plc.Column.as_struct_column([])
+        plc.Column.struct_from_children([])
 
 
-def test_as_struct_column_children_not_column():
+def test_struct_from_children_children_not_column():
     with pytest.raises(ValueError):
-        plc.Column.as_struct_column([[1, 2, 3], [4, 5, 6]])
+        plc.Column.struct_from_children([[1, 2, 3], [4, 5, 6]])
 
 
-def test_as_struct_column_children_different_sizes(children_plc):
+def test_struct_from_children_children_different_sizes(children_plc):
     new_child_size = children_plc[0].size() + 1
     children = itertools.chain(
         children_plc, [plc.Column.from_arrow(pa.array([1] * new_child_size))]
     )
     with pytest.raises(ValueError):
-        plc.Column.as_struct_column(children)
+        plc.Column.struct_from_children(children)
 
 
-def test_as_struct_column_struct_list(children_plc):
-    result = plc.Column.as_struct_column(children_plc)
+def test_struct_from_children_struct_list(children_plc):
+    result = plc.Column.struct_from_children(children_plc)
     expected = plc.interop.to_arrow(
         plc.Column(
             plc.DataType(plc.TypeId.STRUCT),

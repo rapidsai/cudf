@@ -1029,7 +1029,7 @@ cdef class Column:
         return Column.from_array_interface(ArrayInterfaceWrapper(iface))
 
     @classmethod
-    def as_struct_column(cls, children: Iterable[Column]):
+    def struct_from_children(cls, children: Iterable[Column]):
         """
         Create a struct Column from a list of child columns.
 
@@ -1053,13 +1053,10 @@ cdef class Column:
         if len(children) == 0:
             raise ValueError("Must provide at least one child column")
         reference_child = children[0]
-        if not (
-            isinstance(reference_child, Column)
-            and all(
-                isinstance(child, Column)
-                and reference_child.size() == child.size()
-                for child in children
-            )
+        if not all(
+            isinstance(child, Column)
+            and reference_child.size() == child.size()
+            for child in children
         ):
             raise ValueError(
                 "All child columns must be of type Column and have the same size"

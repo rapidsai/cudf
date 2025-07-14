@@ -382,7 +382,7 @@ class StringFunction(Expr):
                 self._regex_program,
             )
             return Column(
-                plc.Column.as_struct_column(plc_table.columns()),
+                plc.Column.struct_from_children(plc_table.columns()),
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.Find:
@@ -437,7 +437,7 @@ class StringFunction(Expr):
             )
             plc_table_with_metadata = plc.io.json.read_json(options)
             return Column(
-                plc.Column.as_struct_column(plc_table_with_metadata.columns),
+                plc.Column.struct_from_children(plc_table_with_metadata.columns),
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.JsonPathMatch:
