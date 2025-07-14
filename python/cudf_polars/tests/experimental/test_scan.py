@@ -182,3 +182,26 @@ def test_source_statistics(
 
         # source_info._unique_stats should contain all columns now
         assert set(source_info._unique_stats) == {"x", "y", "z"}
+
+
+def test_source_statistics_csv(tmp_path, df):
+    from cudf_polars.experimental.io import _extract_scan_stats
+
+    make_partitioned_source(df, tmp_path, "csv", n_files=3)
+    q = pl.scan_csv(tmp_path)
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "target_partition_size": 10_000,
+            "scheduler": DEFAULT_SCHEDULER,
+        },
+    )
+    ir = Translator(q._ldf.visit(), engine).translate_ir()
+    column_stats = _extract_scan_stats(ir)
+
+    # Source info should be empty for CSV
+    source_info = column_stats["x"].source_info
+    assert source_info.row_count.value is None
+    assert source_info.unique_stats("x").count.value is None
+    assert source_info.unique_stats("x").fraction.value is None

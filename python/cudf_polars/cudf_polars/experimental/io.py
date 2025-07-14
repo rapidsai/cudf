@@ -687,9 +687,9 @@ class PqSourceInfo(DataSourceInfo):
             key_columns := [
                 key for key in self._key_columns if key in self._all_columns
             ]
-        ):
+        ):  # pragma: no cover; should never get here
             # No key columns found in the file
-            return  # pragma: no cover; should never get here
+            raise ValueError(f"None of {self._key_columns} in {self._all_columns}")
 
         sampled_file_count = len(self._sample_paths)
         if (
@@ -807,7 +807,7 @@ def _extract_scan_stats(
             for name in ir.schema
         }
 
-    else:  # pragma: no cover
+    else:
         return {name: ColumnStats(name=name) for name in ir.schema}
 
 
