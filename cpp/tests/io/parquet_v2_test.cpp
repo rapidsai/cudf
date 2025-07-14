@@ -24,6 +24,8 @@
 #include <cudf/io/parquet.hpp>
 
 #include <array>
+#include <format>
+#include <string>
 
 using cudf::test::iterators::no_nulls;
 

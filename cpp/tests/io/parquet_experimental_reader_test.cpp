@@ -38,6 +38,9 @@
 
 #include <src/io/parquet/parquet_gpu.hpp>
 
+#include <format>
+#include <string>
+
 // Base test fixture for tests
 struct ParquetExperimentalReaderTest : public cudf::test::BaseFixture {};
 
