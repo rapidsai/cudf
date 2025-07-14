@@ -148,8 +148,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_nvcomp_NvcompJni_batchedLZ4Decompres
     auto chunk_size       = static_cast<std::size_t>(j_chunk_size);
     auto total_size       = static_cast<std::size_t>(j_max_total_size);
     std::size_t temp_size = 0;
-    auto status =
-      nvcompBatchedLZ4DecompressGetTempSizeAsync(batch_size, chunk_size, &temp_size, total_size);
+    auto status           = nvcompBatchedLZ4DecompressGetTempSizeAsync(
+      batch_size, chunk_size, nvcompBatchedLZ4DecompressDefaultOpts, &temp_size, total_size);
     check_nvcomp_status(env, status);
     return static_cast<jlong>(temp_size);
   }
@@ -310,8 +310,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_nvcomp_NvcompJni_batchedZstdDecompre
     auto chunk_size       = static_cast<std::size_t>(j_chunk_size);
     auto total_size       = static_cast<std::size_t>(j_max_total_size);
     std::size_t temp_size = 0;
-    auto status =
-      nvcompBatchedZstdDecompressGetTempSizeAsync(batch_size, chunk_size, &temp_size, total_size);
+    auto status           = nvcompBatchedZstdDecompressGetTempSizeAsync(
+      batch_size, chunk_size, nvcompBatchedZstdDecompressDefaultOpts, &temp_size, total_size);
     check_nvcomp_status(env, status);
     return static_cast<jlong>(temp_size);
   }
