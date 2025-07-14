@@ -24,7 +24,7 @@ reader::reader(std::vector<std::unique_ptr<datasource>>&& sources,
                parquet_reader_options const& options,
                rmm::cuda_stream_view stream,
                rmm::device_async_resource_ref mr)
-  : _impl(std::make_unique<impl>(std::move(sources), options, stream, mr))
+  : _impl(std::make_unique<reader_impl>(std::move(sources), options, stream, mr))
 {
 }
 
@@ -39,7 +39,7 @@ chunked_reader::chunked_reader(std::size_t chunk_read_limit,
                                rmm::cuda_stream_view stream,
                                rmm::device_async_resource_ref mr)
 {
-  _impl = std::make_unique<impl>(
+  _impl = std::make_unique<reader_impl>(
     chunk_read_limit, pass_read_limit, std::move(sources), options, stream, mr);
 }
 
