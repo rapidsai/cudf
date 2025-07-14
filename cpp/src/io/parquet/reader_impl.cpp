@@ -445,6 +445,9 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
   page_nesting.device_to_host_async(_stream);
   page_nesting_decode.device_to_host_async(_stream);
 
+  // Invalidate output buffer nullmasks at row indices spanned by pruned pages
+  update_output_nullmasks_for_pruned_pages(host_page_mask);
+
   // Copy over initial string offsets from device
   auto h_initial_str_offsets = cudf::detail::make_host_vector_async(initial_str_offsets, _stream);
 
@@ -860,6 +863,86 @@ bool reader_impl::has_next()
   // if not has_more_work then check if this is the first pass in an empty
   // table and return true so it could be read once.
   return has_more_work() or is_first_output_chunk();
+}
+
+void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool const> page_mask)
+{
+  auto const& subpass    = _pass_itm_data->subpass;
+  auto const& pages      = subpass->pages;
+  auto const& chunks     = _pass_itm_data->chunks;
+  auto const num_columns = _input_columns.size();
+
+  CUDF_EXPECTS(pages.size() == page_mask.size(), "Page mask size mismatch");
+
+  // Return early if page mask is empty or all pages are required
+  if (page_mask.empty() or
+      std::all_of(page_mask.begin(), page_mask.end(), [](auto const& v) { return v; })) {
+    return;
+  }
+
+  auto page_and_mask_begin =
+    thrust::make_zip_iterator(thrust::make_tuple(pages.host_begin(), page_mask.begin()));
+
+  auto null_masks = std::vector<bitmask_type*>{};
+  auto begin_bits = std::vector<cudf::size_type>{};
+  auto end_bits   = std::vector<cudf::size_type>{};
+
+  thrust::for_each(
+    page_and_mask_begin, page_and_mask_begin + pages.size(), [&](auto const& page_and_mask_pair) {
+      // Return if the page is valid
+      if (thrust::get<1>(page_and_mask_pair)) { return; }
+
+      auto const& page     = thrust::get<0>(page_and_mask_pair);
+      auto const chunk_idx = page.chunk_idx;
+      auto const start_row = chunks[chunk_idx].start_row + page.chunk_row;
+      auto const end_row   = start_row + page.num_rows;
+      auto& input_col      = _input_columns[chunk_idx % num_columns];
+      auto max_depth       = input_col.nesting_depth();
+      auto* cols           = &_output_buffers;
+
+      for (size_t l_idx = 0; l_idx < max_depth; l_idx++) {
+        auto& out_buf = (*cols)[input_col.nesting[l_idx]];
+        cols          = &out_buf.children;
+        // Continue if the current column is a list column
+        if (out_buf.user_data &
+            cudf::io::parquet::detail::PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) {
+          continue;
+        }
+        // Add the nullmask and bit bounds to corresponding lists
+        null_masks.emplace_back(out_buf.null_mask());
+        begin_bits.emplace_back(start_row);
+        end_bits.emplace_back(end_row);
+
+        // Increment the null count
+        out_buf.null_count() += (end_row - start_row);
+      }
+    });
+
+  // Update the nullmask in bulk if there are more than 16 pages
+  constexpr auto min_nullmasks_for_bulk_update = 16;
+
+  // Disabling bulk update to avoid unsafe bulk update until aliasing is handled
+  constexpr auto can_bulk_update = false;
+
+  // Bulk update the nullmasks if more than 16 pages.
+  if (can_bulk_update and null_masks.size() >= min_nullmasks_for_bulk_update) {
+    auto valids = cudf::detail::make_host_vector<bool>(null_masks.size(), _stream);
+    std::fill(valids.begin(), valids.end(), false);
+    cudf::set_null_masks(null_masks, begin_bits, end_bits, valids, _stream);
+  }
+  // Otherwise, update the nullmasks in a loop
+  else {
+    auto nullmask_iter = thrust::make_zip_iterator(
+      thrust::make_tuple(null_masks.begin(), begin_bits.begin(), end_bits.begin()));
+    thrust::for_each(
+      nullmask_iter, nullmask_iter + null_masks.size(), [&](auto const& nullmask_tuple) {
+        cudf::set_null_mask(thrust::get<0>(nullmask_tuple),
+                            thrust::get<1>(nullmask_tuple),
+                            thrust::get<2>(nullmask_tuple),
+                            false,
+                            _stream);
+      });
+  }
 }
 
 namespace {
