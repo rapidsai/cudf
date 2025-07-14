@@ -46,7 +46,7 @@ void BM_from_arrow_host_stringview(nvbench::state& state)
     auto const size = distribution(generator);
     auto const ptr  = characters.data();
     total_size += size;
-    ArrowArrayAppendString(&input, {ptr, size});
+    NANOARROW_THROW_NOT_OK(ArrowArrayAppendString(&input, {ptr, size}));
   }
   NANOARROW_THROW_NOT_OK(
     ArrowArrayFinishBuilding(&input, NANOARROW_VALIDATION_LEVEL_NONE, nullptr));
@@ -57,7 +57,7 @@ void BM_from_arrow_host_stringview(nvbench::state& state)
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
 
   ArrowSchema schema;
-  ArrowSchemaInitFromType(&schema, NANOARROW_TYPE_STRING_VIEW);
+  NANOARROW_THROW_NOT_OK(ArrowSchemaInitFromType(&schema, NANOARROW_TYPE_STRING_VIEW));
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     auto result = cudf::from_arrow_column(&schema, &input);

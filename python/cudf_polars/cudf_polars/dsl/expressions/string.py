@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import functools
+import io
 from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -27,6 +28,19 @@ if TYPE_CHECKING:
     from cudf_polars.containers import DataFrame, DataType
 
 __all__ = ["StringFunction"]
+
+JsonDecodeType = list[tuple[str, plc.DataType, "JsonDecodeType"]]
+
+
+def _dtypes_for_json_decode(dtype: DataType) -> JsonDecodeType:
+    """Get the dtypes for json decode."""
+    if dtype.id() == plc.TypeId.STRUCT:
+        return [
+            (field.name, child.plc, _dtypes_for_json_decode(child))
+            for field, child in zip(dtype.polars.fields, dtype.children, strict=True)
+        ]
+    else:
+        return []
 
 
 class StringFunction(Expr):
@@ -99,7 +113,9 @@ class StringFunction(Expr):
         Name.EndsWith,
         Name.Extract,
         Name.ExtractGroups,
+        Name.Find,
         Name.Head,
+        Name.JsonDecode,
         Name.JsonPathMatch,
         Name.LenBytes,
         Name.LenChars,
@@ -114,6 +130,8 @@ class StringFunction(Expr):
         Name.StripChars,
         Name.StripCharsStart,
         Name.StripCharsEnd,
+        Name.StripPrefix,
+        Name.StripSuffix,
         Name.Uppercase,
         Name.Reverse,
         Name.Tail,
@@ -149,7 +167,7 @@ class StringFunction(Expr):
             assert isinstance(literal_expr, Literal)
             pattern = literal_expr.value
             self._regex_program = self._create_regex_program(pattern)
-        if self.name is StringFunction.Name.Contains:
+        elif self.name is StringFunction.Name.Contains:
             literal, strict = self.options
             if not literal:
                 if not strict:
@@ -173,6 +191,19 @@ class StringFunction(Expr):
         elif self.name is StringFunction.Name.ExtractGroups:
             (_, pattern) = self.options
             self._regex_program = self._create_regex_program(pattern)
+        elif self.name is StringFunction.Name.Find:
+            literal, strict = self.options
+            if not literal:
+                if not strict:
+                    raise NotImplementedError(
+                        f"{strict=} is not supported for regex contains"
+                    )
+                if not isinstance(self.children[1], Literal):
+                    raise NotImplementedError(
+                        "Regex contains only supports a scalar pattern"
+                    )
+                pattern = self.children[1].value
+                self._regex_program = self._create_regex_program(pattern)
         elif self.name is StringFunction.Name.Replace:
             _, literal = self.options
             if not literal:
@@ -278,7 +309,7 @@ class StringFunction(Expr):
             )
         elif self.name is StringFunction.Name.ConcatVertical:
             (child,) = self.children
-            column = child.evaluate(df, context=context)
+            column = child.evaluate(df, context=context).astype(self.dtype)
             delimiter, ignore_nulls = self.options
             if column.null_count > 0 and not ignore_nulls:
                 return Column(plc.Column.all_null_like(column.obj, 1), dtype=self.dtype)
@@ -366,6 +397,72 @@ class StringFunction(Expr):
                     ref_column.null_count(),
                     ref_column.offset(),
                     plc_table.columns(),
+                ),
+                dtype=self.dtype,
+            )
+        elif self.name is StringFunction.Name.Find:
+            literal, _ = self.options
+            (child, expr) = self.children
+            column = child.evaluate(df, context=context).obj
+            if literal:
+                assert isinstance(expr, Literal)
+                plc_column = plc.strings.find.find(
+                    column,
+                    plc.Scalar.from_py(expr.value, expr.dtype.plc),
+                )
+            else:
+                plc_column = plc.strings.findall.find_re(
+                    column,
+                    self._regex_program,
+                )
+            # Polars returns None for not found, libcudf returns -1
+            new_mask, null_count = plc.transform.bools_to_mask(
+                plc.binaryop.binary_operation(
+                    plc_column,
+                    plc.Scalar.from_py(-1, plc_column.type()),
+                    plc.binaryop.BinaryOperator.NOT_EQUAL,
+                    plc.DataType(plc.TypeId.BOOL8),
+                )
+            )
+            plc_column = plc.unary.cast(
+                plc_column.with_mask(new_mask, null_count), self.dtype.plc
+            )
+            return Column(plc_column, dtype=self.dtype)
+        elif self.name is StringFunction.Name.JsonDecode:
+            plc_column = self.children[0].evaluate(df, context=context).obj
+            # Once https://github.com/rapidsai/cudf/issues/19338 is implemented,
+            # we can use do this conversion on device.
+            buff = io.StringIO(
+                plc.strings.combine.join_strings(
+                    plc_column,
+                    plc.Scalar.from_py("\n", plc_column.type()),
+                    plc.Scalar.from_py("NULL", plc_column.type()),
+                )
+                .to_scalar()
+                .to_py()
+            )
+            source = plc.io.types.SourceInfo([buff])
+            options = (
+                plc.io.json.JsonReaderOptions.builder(source)
+                .lines(val=True)
+                .dtypes(_dtypes_for_json_decode(self.dtype))
+                .compression(plc.io.types.CompressionType.NONE)
+                .recovery_mode(plc.io.types.JSONRecoveryMode.RECOVER_WITH_NULL)
+                .build()
+            )
+            plc_table_with_metadata = plc.io.json.read_json(options)
+            # TODO: Use factory function in https://github.com/rapidsai/cudf/issues/19339
+            # once implemented
+            ref_column = plc_table_with_metadata.columns[0]
+            return Column(
+                plc.Column(
+                    self.dtype.plc,
+                    ref_column.size(),
+                    None,
+                    ref_column.null_mask(),
+                    ref_column.null_count(),
+                    ref_column.offset(),
+                    plc_table_with_metadata.columns,
                 ),
                 dtype=self.dtype,
             )
@@ -473,6 +570,37 @@ class StringFunction(Expr):
                     children,
                 )
             return Column(plc_column, dtype=self.dtype)
+        elif self.name in {
+            StringFunction.Name.StripPrefix,
+            StringFunction.Name.StripSuffix,
+        }:
+            child, expr = self.children
+            column = child.evaluate(df, context=context).obj
+            assert isinstance(expr, Literal)
+            target = plc.Scalar.from_py(expr.value, expr.dtype.plc)
+            if self.name == StringFunction.Name.StripPrefix:
+                find = plc.strings.find.starts_with
+                start = len(expr.value)
+                end: int | None = None
+            else:
+                find = plc.strings.find.ends_with
+                start = 0
+                end = -len(expr.value)
+
+            mask = find(column, target)
+            sliced = plc.strings.slice.slice_strings(
+                column,
+                plc.Scalar.from_py(start, plc.DataType(plc.TypeId.INT32)),
+                plc.Scalar.from_py(end, plc.DataType(plc.TypeId.INT32)),
+            )
+            return Column(
+                plc.copying.copy_if_else(
+                    sliced,
+                    column,
+                    mask,
+                ),
+                dtype=self.dtype,
+            )
         elif self.name in {
             StringFunction.Name.StripChars,
             StringFunction.Name.StripCharsStart,

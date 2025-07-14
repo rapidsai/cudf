@@ -231,6 +231,8 @@ TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/unit/constructors/test_constructors.py::test_init_pydantic_2x": "pydantic deprecation warning",
     "tests/unit/constructors/test_constructors.py::test_init_structured_objects_nested[_TestFooPD-_TestBarPD-_TestBazPD]": "pydantic deprecation warning",
     "tests/unit/series/test_series.py::test_init_structured_objects": "pydantic deprecation warning",
+    "tests/unit/series/test_describe.py::test_series_describe_float": "https://github.com/rapidsai/cudf/issues/19324",
+    "tests/unit/series/test_describe.py::test_series_describe_int": "https://github.com/rapidsai/cudf/issues/19324",
     "tests/unit/streaming/test_streaming.py::test_streaming_apply": "https://github.com/pola-rs/polars/issues/22558",
 }
 
