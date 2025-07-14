@@ -88,7 +88,7 @@ for a minimal build of libcudf without using conda are also listed below.
 
 Compilers:
 
-* `gcc` version 11.4+
+* `gcc` version 13.3+
 * `nvcc` version 12.0+
 * `cmake` version 3.29.6+
 
