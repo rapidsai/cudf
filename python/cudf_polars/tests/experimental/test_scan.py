@@ -160,7 +160,7 @@ def test_source_statistics(
         assert source_info.unique_fraction("x").value is None
         assert source_info.unique_count("x").value is None
 
-    # source._unique_stats should only contain 'x'
+    # source_info._unique_stats should only contain 'x'
     if max_file_samples and max_rg_samples:
         assert set(source_info._unique_stats) == {"x"}
     else:
@@ -170,7 +170,6 @@ def test_source_statistics(
     if max_file_samples and max_rg_samples:
         # Can add a "bad"/missing key column
         source_info.add_unique_stats_column("foo")
-        # assert source.unique_count("x").value is None
         assert set(source_info._unique_stats) == {"x"}
 
         # Mark 'z' as a key column, and query 'y' stats
@@ -181,5 +180,5 @@ def test_source_statistics(
             assert source_info.unique_count("y").value is None
         assert source_info.unique_fraction("y").value < 1.0
 
-        # source._unique_stats should contain all columns now
+        # source_info._unique_stats should contain all columns now
         assert set(source_info._unique_stats) == {"x", "y", "z"}
