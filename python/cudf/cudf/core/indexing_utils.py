@@ -9,7 +9,11 @@ import numpy as np
 
 import pylibcudf as plc
 
-from cudf.api.types import _is_scalar_or_zero_d_array, is_integer
+from cudf.api.types import (
+    _is_scalar_or_zero_d_array,
+    is_bool_dtype,
+    is_integer,
+)
 from cudf.core.column.column import as_column
 from cudf.core.copy_types import BooleanMask, GatherMap
 from cudf.core.dtypes import CategoricalDtype
@@ -92,6 +96,22 @@ def expand_key(key: Any, frame: DataFrame | Series) -> tuple[Any, ...]:
     into a supported indexing type.
     """
     dim = len(frame.shape)
+    # import pdb;pdb.set_trace()
+    if isinstance(key, bool) and not (
+        is_bool_dtype(frame.index.dtype)
+        or frame.index.dtype.name == "boolean"
+        or isinstance(frame.index, MultiIndex)
+        and is_bool_dtype(frame.index.get_level_values(0).dtype)
+    ):
+        raise KeyError(
+            f"{key}: boolean label can not be used without a boolean index"
+        )
+
+    if isinstance(key, slice) and (
+        isinstance(key.start, bool) or isinstance(key.stop, bool)
+    ):
+        raise TypeError(f"{key}: boolean values can not be used in a slice")
+
     if isinstance(key, tuple):
         # Key potentially indexes rows and columns, slice-expand to
         # shape of frame

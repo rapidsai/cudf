@@ -1977,6 +1977,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             raise ValueError(
                 "Column searchsorted expects values to be column of same dtype"
             )
+        if is_pandas_nullable_extension_dtype(self.dtype) and self.has_nulls(
+            include_nan=True
+        ):
+            raise ValueError(
+                "searchsorted requires array to be sorted, which is impossible "
+                "with NAs present."
+            )
         return ColumnBase.from_pylibcudf(
             sorting.search_sorted(  # type: ignore[return-value]
                 [self],
@@ -2246,14 +2253,18 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def copy_if_else(
         self, other: Self | plc.Scalar, boolean_mask: NumericalColumn
     ) -> Self:
-        return type(self).from_pylibcudf(  # type: ignore[return-value]
-            plc.copying.copy_if_else(
-                self.to_pylibcudf(mode="read"),
-                other
-                if isinstance(other, plc.Scalar)
-                else other.to_pylibcudf(mode="read"),
-                boolean_mask.to_pylibcudf(mode="read"),
+        return (
+            type(self)
+            .from_pylibcudf(  # type: ignore[return-value]
+                plc.copying.copy_if_else(
+                    self.to_pylibcudf(mode="read"),
+                    other
+                    if isinstance(other, plc.Scalar)
+                    else other.to_pylibcudf(mode="read"),
+                    boolean_mask.to_pylibcudf(mode="read"),
+                )
             )
+            ._with_type_metadata(self.dtype)
         )
 
     def split_by_offsets(
@@ -3411,4 +3422,4 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
             plc.concatenate.concatenate(
                 [col.to_pylibcudf(mode="read") for col in objs_with_len]
             )
-        )
+        )._with_type_metadata(objs_with_len[0].dtype)  # type: ignore[return-value]

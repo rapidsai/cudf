@@ -104,6 +104,7 @@ from cudf.utils.dtypes import (
     get_dtype_of_same_kind,
     is_column_like,
     is_dtype_obj_numeric,
+    is_mixed_with_object_dtype,
     min_signed_type,
 )
 from cudf.utils.ioutils import (
@@ -255,6 +256,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
 
     @_performance_tracking
     def __getitem__(self, arg):
+        # import pdb;pdb.set_trace()
         if isinstance(self._frame.index, MultiIndex):
             # This try/except block allows the use of pandas-like
             # tuple arguments to index into MultiIndex dataframes.
@@ -443,6 +445,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
     """
 
     def __getitem__(self, arg):
+        # import pdb;pdb.set_trace()
         (
             row_key,
             (
@@ -1426,6 +1429,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         6  6  6  6
         8  8  8  8
         """
+        # import pdb;pdb.set_trace()
         if _is_scalar_or_zero_d_array(arg) or isinstance(arg, tuple):
             out = self._get_columns_by_label(arg)
             if is_scalar(arg):
@@ -7573,6 +7577,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 for i in column_idx
             ]
 
+            # import pdb;pdb.set_trace()
             # Collect datatypes and cast columns as that type
             common_type = find_common_type(
                 [col.dtype for col in columns if col is not None]
@@ -7587,6 +7592,16 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 col.astype(common_type) if col is not None else all_nulls()
                 for col in columns
             )
+            if (
+                cudf.get_option("mode.pandas_compatible")
+                and common_type == "object"
+            ):
+                for col, hcol in zip(columns, homogenized):
+                    if is_mixed_with_object_dtype(col, hcol):
+                        raise TypeError(
+                            "Stacking a DataFrame with mixed object and "
+                            "non-object dtypes is not supported. "
+                        )
 
             with acquire_spill_lock():
                 interleaved_col = ColumnBase.from_pylibcudf(

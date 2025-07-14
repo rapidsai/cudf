@@ -6802,14 +6802,29 @@ def _append_new_row_inplace(col: ColumnBase, value: ScalarLike) -> None:
     """Append a scalar `value` to the end of `col` inplace.
     Cast to common type if possible
     """
-    val_col = as_column(value, dtype=col.dtype if value is None else None)
-    to_type = find_common_type([val_col.dtype, col.dtype])
+    # import pdb;pdb.set_trace()
+    # val_col = as_column(value, dtype=col.dtype if value is None else None)
     if (
-        cudf.get_option("mode.pandas_compatible")
-        and is_string_dtype(to_type)
-        and is_mixed_with_object_dtype(val_col, col)
+        cudf.utils.utils._is_null_host_scalar(value)
+        or np.isnan(value)
+        or value is None
     ):
-        raise MixedTypeError("Cannot append mixed types")
+        val_col = as_column([value], dtype=col.dtype)
+    else:
+        val_col = as_column([value])
+    # if (is_pandas_nullable_extension_dtype(col.dtype) or val_col.dtype.kind != "f") and val_col.can_cast_safely(col.dtype):
+    if val_col.can_cast_safely(col.dtype):
+        # If the value can be cast to the column dtype, do so
+        val_col = val_col.astype(col.dtype)
+        to_type = col.dtype
+    else:
+        to_type = find_common_type([val_col.dtype, col.dtype])
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and is_string_dtype(to_type)
+            and is_mixed_with_object_dtype(val_col, col)
+        ):
+            raise MixedTypeError("Cannot append mixed types")
     val_col = val_col.astype(to_type)
     old_col = col.astype(to_type)
     res_col = concat_columns([old_col, val_col])

@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from pandas.api import types as pd_types  # noqa: TID251
+from pandas.core.computation.common import result_type_many
 
 import pylibcudf as plc
 
@@ -226,8 +227,17 @@ def is_mixed_with_object_dtype(lhs, rhs):
     elif isinstance(rhs.dtype, cudf.CategoricalDtype):
         return is_mixed_with_object_dtype(lhs, rhs.dtype.categories)
 
-    return (lhs.dtype == "object" and rhs.dtype != "object") or (
+    res = (lhs.dtype == "object" and rhs.dtype != "object") or (
         rhs.dtype == "object" and lhs.dtype != "object"
+    )
+    if res:
+        return res
+    return (
+        cudf.api.types.is_string_dtype(lhs.dtype)
+        and not cudf.api.types.is_string_dtype(rhs.dtype)
+    ) or (
+        cudf.api.types.is_string_dtype(rhs.dtype)
+        and not cudf.api.types.is_string_dtype(lhs.dtype)
     )
 
 
@@ -328,8 +338,12 @@ def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
             "Finding a common type for `ListDtype` or `StructDtype` is currently "
             "not supported"
         )
+    # import pdb;pdb.set_trace()
+    try:
+        common_dtype = np.result_type(*dtypes)  # noqa: TID251
+    except TypeError:
+        common_dtype = result_type_many(*dtypes)
 
-    common_dtype = np.result_type(*dtypes)  # noqa: TID251
     if common_dtype == np.dtype(np.float16):
         return np.dtype(np.float32)
     return common_dtype
