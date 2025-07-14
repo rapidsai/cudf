@@ -554,6 +554,7 @@ class StringFunction(Expr):
                 children = plc_table.columns()
                 ref_column = children[0]
                 if (remainder := n - len(children)) > 0:
+                    # Reach expected number of splits by padding with nulls
                     children.extend(
                         plc.Column.all_null_like(ref_column, ref_column.size())
                         for _ in range(remainder + int(not is_split_n))
