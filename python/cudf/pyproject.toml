@@ -58,6 +58,7 @@ test = [
     "pytest-benchmark",
     "pytest-cases>=3.8.2",
     "pytest-cov",
+    "pytest-rerunfailures",
     "pytest-xdist",
     "scipy",
     "tzdata",
@@ -108,7 +109,8 @@ filterwarnings = [
     "ignore:FNV hashing is not implemented in Numba.*:UserWarning"
 ]
 markers = [
-    "spilling: mark benchmark a good candidate to run with `CUDF_SPILL=ON`"
+    "spilling: mark benchmark a good candidate to run with `CUDF_SPILL=ON`",
+    "serial: Mark a test as not being parallel-safe.",
 ]
 xfail_strict = true
 
