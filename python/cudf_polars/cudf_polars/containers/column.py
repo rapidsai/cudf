@@ -424,7 +424,7 @@ class Column:
     @functools.cached_property
     def nan_count(self) -> int:
         """Return the number of NaN values in the column."""
-        if plc.traits.is_floating_point(self.obj.type()):
+        if self.size > 0 and plc.traits.is_floating_point(self.obj.type()):
             return plc.reduce.reduce(
                 plc.unary.is_nan(self.obj),
                 plc.aggregation.sum(),
