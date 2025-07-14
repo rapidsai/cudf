@@ -1046,7 +1046,8 @@ cdef class Column:
         Notes
         -----
         The null count and null mask is taken from the first child column.
-        Use `Column.with_mask` to reset the null count and mask.
+        To set a different null count and null mask, use `Column.with_mask`
+        on the result.
         """
         if not isinstance(children, list):
             children = list(children)
