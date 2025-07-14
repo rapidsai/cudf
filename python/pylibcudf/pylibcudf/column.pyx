@@ -1058,6 +1058,8 @@ cdef class Column:
             isinstance(child, Column)
             and reference_child.size() == child.size()
             and reference_child.null_count() == child.null_count()
+            # We assume the null masks are equivalent but may be expensive to
+            # check: https://github.com/rapidsai/cudf/pull/19357#issuecomment-3071033448
             for child in children
         ):
             raise ValueError(
