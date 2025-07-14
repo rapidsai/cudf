@@ -1163,8 +1163,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param udf This function will be applied to every element in the vector
    * @param isPtx is the code of the function ptx? true or C/C++ false.
    */
-  public final ColumnVector transform(String udf, boolean isPtx) {
-    return new ColumnVector(transform(getNativeView(), udf, isPtx));
+  public final ColumnVector transform(String udf, UDFSourceType source_type) {
+    return new ColumnVector(transform(getNativeView(), udf, source_type.nativeId));
   }
 
   /**

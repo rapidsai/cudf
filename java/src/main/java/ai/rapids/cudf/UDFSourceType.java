@@ -13,19 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package ai.rapids.cudf;
 
-#pragma once
+/**
+ * The source type of a user-defined function (UDF) used in JIT compilation.
+ * CUDA: The UDF is a CUDA source-code string.
+ * PTX: The UDF is a PTX source-code string.
+ */
+public enum UDFSourceType {
+  CUDA(0),
+  PTX(1);
+  final int nativeId;
 
-#include <cudf/utilities/export.hpp>
-
-#include <cstdint>
-
-namespace CUDF_EXPORT cudf {
-
-/// @brief The source type of a user-defined function (UDF) used in JIT compilation.
-enum class udf_source_type : std::int8_t {
-  CUDA = 0,  ///< The UDF is a CUDA source-code string
-  PTX  = 1   ///< The UDF is a PTX source-code string
-};
-
-}  // namespace CUDF_EXPORT cudf
+  UDFSourceType(int nativeId) { this.nativeId = nativeId; }
+}

@@ -66,15 +66,25 @@ jitify2::ConfiguredKernel build_transform_kernel(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  auto const cuda_source =
-    (source_type == udf_source_type::PTX)
-      ? cudf::jit::parse_single_function_ptx(
+  auto const cuda_source = [&]() {
+    switch (source_type) {
+      case udf_source_type::PTX: {
+        return cudf::jit::parse_single_function_ptx(
           udf,
           "GENERIC_TRANSFORM_OP",
           cudf::jit::build_ptx_params(cudf::jit::column_type_names(output_columns),
                                       cudf::jit::column_type_names(input_columns),
-                                      has_user_data))
-      : cudf::jit::parse_single_function_cuda(udf, "GENERIC_TRANSFORM_OP");
+                                      has_user_data));
+      } break;
+      case udf_source_type::CUDA: {
+        return cudf::jit::parse_single_function_cuda(udf, "GENERIC_TRANSFORM_OP");
+      } break;
+
+      default: {
+        CUDF_UNREACHABLE();
+      }
+    }
+  }();
 
   return get_kernel(jitify2::reflection::Template(kernel_name)
                       .instantiate(cudf::jit::build_jit_template_params(

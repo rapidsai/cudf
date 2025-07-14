@@ -1505,15 +1505,17 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_containsVector(JNIEnv* en
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_transform(
-  JNIEnv* env, jobject j_object, jlong handle, jstring j_udf, jboolean j_is_ptx)
+  JNIEnv* env, jobject j_object, jlong handle, jstring j_udf, jint j_source_type)
 {
   try {
     cudf::jni::auto_set_device(env);
     cudf::column_view* column = reinterpret_cast<cudf::column_view*>(handle);
     cudf::jni::native_jstring n_j_udf(env, j_udf);
     std::string n_udf(n_j_udf.get());
-    return release_as_jlong(
-      cudf::transform({*column}, n_udf, cudf::data_type(cudf::type_id::INT32), j_is_ptx));
+    return release_as_jlong(cudf::transform({*column},
+                                            n_udf,
+                                            cudf::data_type(cudf::type_id::INT32),
+                                            static_cast<cudf::udf_source_type>(j_source_type)));
   }
   CATCH_STD(env, 0);
 }
