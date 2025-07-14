@@ -332,7 +332,7 @@ class StringFunction(Expr):
                 if width.value is None:
                     return Column(
                         plc.Column.from_scalar(
-                            plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING)),
+                            plc.Scalar.from_py(None, self.dtype.plc),
                             column.size,
                         ),
                         self.dtype,
