@@ -480,7 +480,7 @@ ascending()
 {
   std::array<char, 10> buf;
   auto elements = cudf::detail::make_counting_transform_iterator(0, [&buf](auto i) {
-    sprintf(buf.data(), "%09d", i);
+    snprintf(buf.data(), buf.size(), "%09d", i);
     return std::string(buf.data());
   });
   return cudf::test::strings_column_wrapper(elements, elements + num_ordered_rows);
@@ -492,7 +492,7 @@ descending()
 {
   std::array<char, 10> buf;
   auto elements = cudf::detail::make_counting_transform_iterator(0, [&buf](auto i) {
-    sprintf(buf.data(), "%09d", static_cast<short>(num_ordered_rows - i));
+    snprintf(buf.data(), buf.size(), "%09d", static_cast<short>(num_ordered_rows - i));
     return std::string(buf.data());
   });
   return cudf::test::strings_column_wrapper(elements, elements + num_ordered_rows);
@@ -504,7 +504,7 @@ unordered()
 {
   std::array<char, 10> buf;
   auto elements = cudf::detail::make_counting_transform_iterator(0, [&buf](auto i) {
-    sprintf(buf.data(), "%09d", (i % 2 == 0) ? i : (num_ordered_rows - i));
+    snprintf(buf.data(), buf.size(), "%09d", (i % 2 == 0) ? i : (num_ordered_rows - i));
     return std::string(buf.data());
   });
   return cudf::test::strings_column_wrapper(elements, elements + num_ordered_rows);

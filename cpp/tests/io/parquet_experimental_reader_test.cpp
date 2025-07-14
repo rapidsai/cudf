@@ -137,7 +137,7 @@ cudf::test::strings_column_wrapper constant_strings(cudf::size_type value)
   std::array<char, 5> buf;
   auto elements =
     thrust::make_transform_iterator(thrust::make_constant_iterator(value), [&buf](auto i) {
-      sprintf(buf.data(), "%04d", i);
+      snprintf(buf.data(), buf.size(), "%04d", i);
       return std::string(buf.data());
     });
   return cudf::test::strings_column_wrapper(elements, elements + num_ordered_rows);
