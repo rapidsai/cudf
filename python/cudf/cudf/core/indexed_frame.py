@@ -27,6 +27,7 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
+from cudf._lib import strings_udf
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     is_dict_like,
@@ -57,7 +58,6 @@ from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import _Resampler
 from cudf.core.udf.utils import (
     _get_input_args_from_frame,
-    _post_process_output_col,
     _return_arr_from_dtype,
 )
 from cudf.core.window import ExponentialMovingWindow, Rolling
@@ -3446,7 +3446,12 @@ class IndexedFrame(Frame):
         except Exception as e:
             raise RuntimeError("UDF kernel execution failed.") from e
 
-        col = _post_process_output_col(ans_col, retty)
+        if retty == CUDF_STRING_DTYPE:
+            col = ColumnBase.from_pylibcudf(
+                strings_udf.column_from_udf_string_array(ans_col)
+            )
+        else:
+            col = as_column(ans_col, retty)
 
         col.set_base_mask(ans_mask.as_mask())
         result = cudf.Series._from_column(col, index=self.index)
