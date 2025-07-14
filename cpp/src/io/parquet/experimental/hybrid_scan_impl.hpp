@@ -445,7 +445,7 @@ class hybrid_scan_reader_impl {
   void create_global_chunk_info(parquet_reader_options const& options);
 
   /**
-   * @brief Computes all of the passes we will perform over the file.
+   * @brief Computes all of the passes we will perform over the file
    */
   void compute_input_passes();
 
