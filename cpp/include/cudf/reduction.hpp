@@ -47,6 +47,7 @@ enum class scan_type : bool { INCLUSIVE, EXCLUSIVE };
  * types (e.g. timestamp or string).
  *
  * Any null values are skipped for the operation.
+ * If the reduction fails, the output scalar returns with `%is_valid()==false`.
  *
  * For empty or all-null input, the result is generally a null scalar except for specific
  * aggregations where the aggregation has a well-defined output.
@@ -56,7 +57,23 @@ enum class scan_type : bool { INCLUSIVE, EXCLUSIVE };
  * the `output_dtype` must match the `col.type()`. If the reduction type is `any` or
  * `all`, the `output_dtype` must be type BOOL8.
  *
- * If the reduction fails, the output scalar returns with `is_valid()==false`.
+ * | Aggregation | Output Type | Init Value | Empty Input | Comments |
+ * | :---------: | ----------- | ---------- | ----------- | -------- |
+ * | SUM/PRODUCT | output_dtype | yes | NA | Input accumulated into output_dtype variable |
+ * | SUM_OF_SQUARES | output_dtype | no | NA | Input accumulated into output_dtype variable |
+ * | MIN/MAX | col.type | yes | NA | Supports arithmetic, timestamp, duration, string |
+ * | ANY/ALL | BOOL8 | yes | True for ALL only | Checks for non-zero elements |
+ * | MEAN/VARIANCE/STD | FLOAT32/FLOAT64 | no | NA | output_dtype must be a float type |
+ * | MEDIAN/QUANTILE | FLOAT64 | no | NA |  |
+ * | NUNIQUE | output_dtype | no | 1 if all-nulls | May process null rows |
+ * | NTH_ELEMENT | col.type | no | NA |  |
+ * | BITWISE_AGG | col.type | no | NA | Supports only integral types |
+ * | HISTOGRAM/MERGE_HISTOGRAM | LIST of col.type | no | empty list |  |
+ * | COLLECT_LIST/COLLECT_SET | LIST of col.type | no | empty list |  |
+ * | TDIGEST/MERGE_TDIGEST | STRUCT | no | empty struct | tdigest scalar is returned |
+ * | HOST_UDF | output_dtype | yes | NA | Custom UDF could ignore output_dtype |
+ *
+ * The NA in the table indicates an output scalar with `%is_valid()==false`
  *
  * @throw cudf::logic_error if reduction is called for non-arithmetic output
  * type and operator other than `min` and `max`.
@@ -87,6 +104,9 @@ std::unique_ptr<scalar> reduce(
  * @brief  Computes the reduction of the values in all rows of a column with an initial value
  *
  * Only `sum`, `product`, `min`, `max`, `any`, and `all` reductions are supported.
+ *
+ * @see cudf::reduce(column_view const&,reduce_aggregation
+ * const&,data_type,rmm::cuda_stream_view,rmm::device_async_resource_ref) for more details
  *
  * @throw cudf::logic_error if reduction is not `sum`, `product`, `min`, `max`, `any`, or `all`
  * and `init` is specified.

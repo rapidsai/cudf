@@ -15,7 +15,6 @@
  */
 #pragma once
 
-#include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
@@ -49,6 +48,23 @@
 
 namespace cudf {
 namespace detail {
+
+__device__ inline bitmask_type get_mask_offset_word(bitmask_type const* __restrict__ source,
+                                                    size_type destination_word_index,
+                                                    size_type source_begin_bit,
+                                                    size_type source_end_bit)
+{
+  size_type source_word_index = destination_word_index + word_index(source_begin_bit);
+  bitmask_type curr_word      = source[source_word_index];
+  bitmask_type next_word      = 0;
+  if (word_index(source_end_bit - 1) >
+      word_index(source_begin_bit +
+                 destination_word_index * detail::size_in_bits<bitmask_type>())) {
+    next_word = source[source_word_index + 1];
+  }
+  return __funnelshift_r(curr_word, next_word, source_begin_bit);
+}
+
 /**
  * @brief Computes the merger of an array of bitmasks using a binary operator
  *
@@ -199,11 +215,13 @@ CUDF_KERNEL void segmented_offset_bitmask_binop(Binop op,
 
     // Handle the last word specially to mask out bits beyond the range
     if (destination_word_index == last_word_index) {
-      auto const num_bits_in_last_word = intra_word_index(last_bit_index);
-      destination_word &= set_least_significant_bits(num_bits_in_last_word + 1);
+      auto const num_bits_in_last_word = intra_word_index(last_bit_index) + 1;
+      if (num_bits_in_last_word < static_cast<size_type>(detail::size_in_bits<bitmask_type>())) {
+        destination_word &= set_least_significant_bits(num_bits_in_last_word);
+      }
 
       // Count nulls in the partial last word
-      thread_null_count += num_bits_in_last_word + 1 - cuda::std::popcount(destination_word);
+      thread_null_count += num_bits_in_last_word - cuda::std::popcount(destination_word);
     } else {
       // Count nulls in complete words
       thread_null_count += bitmask_type_size - cuda::std::popcount(destination_word);

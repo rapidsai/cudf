@@ -18,6 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/null_mask.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/join/sort_merge_join.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/sorting.hpp>
@@ -404,6 +405,7 @@ sort_merge_join::sort_merge_join(table_view const& right,
                                  null_equality compare_nulls,
                                  rmm::cuda_stream_view stream)
 {
+  cudf::scoped_range range{"sort_merge_join::sort_merge_join"};
   // Sanity checks
   CUDF_EXPECTS(right.num_columns() != 0,
                "Number of columns the keys table must be non-zero for a join");
@@ -523,6 +525,7 @@ sort_merge_join::inner_join(table_view const& left,
                             rmm::cuda_stream_view stream,
                             rmm::device_async_resource_ref mr)
 {
+  cudf::scoped_range range{"sort_merge_join::inner_join"};
   // Sanity checks
   CUDF_EXPECTS(left.num_columns() != 0,
                "Number of columns in left keys must be non-zero for a join");
@@ -561,6 +564,7 @@ sort_merge_join::match_context sort_merge_join::inner_join_match_context(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
+  cudf::scoped_range range{"sort_merge_join::inner_join_match_context"};
   // Sanity checks
   CUDF_EXPECTS(left.num_columns() != 0,
                "Number of columns in left keys must be non-zero for a join");
@@ -617,6 +621,7 @@ sort_merge_join::partitioned_inner_join(sort_merge_join::partition_context const
                                         rmm::cuda_stream_view stream,
                                         rmm::device_async_resource_ref mr)
 {
+  cudf::scoped_range range{"sort_merge_join::partitioned_inner_join"};
   auto const left_partition_start_idx = context.left_start_idx;
   auto const left_partition_end_idx   = context.left_end_idx;
   auto null_processed_table_start_idx = left_partition_start_idx;
@@ -666,6 +671,7 @@ sort_merge_inner_join(cudf::table_view const& left_keys,
                       rmm::cuda_stream_view stream,
                       rmm::device_async_resource_ref mr)
 {
+  cudf::scoped_range range{"sort_merge_inner_join"};
   cudf::sort_merge_join obj(right_keys, sorted::NO, compare_nulls, stream);
   return obj.inner_join(left_keys, sorted::NO, stream, mr);
 }
@@ -678,6 +684,7 @@ merge_inner_join(cudf::table_view const& left_keys,
                  rmm::cuda_stream_view stream,
                  rmm::device_async_resource_ref mr)
 {
+  cudf::scoped_range range{"merge_inner_join"};
   cudf::sort_merge_join obj(right_keys, sorted::YES, compare_nulls, stream);
   return obj.inner_join(left_keys, sorted::YES, stream, mr);
 }
