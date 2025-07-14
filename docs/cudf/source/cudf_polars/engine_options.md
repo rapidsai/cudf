@@ -46,9 +46,9 @@ engine = pl.GPUEngine(
 ```
 
 You can configure the default value for configuration options through
-environment variables with the prefix `CUDF_POLARS__STREAMING__{option_name}`.
+environment variables with the prefix `CUDF_POLARS__EXECUTOR__{option_name}`.
 For example, the environment variable
-`CUDF_POLARS__STREAMING__MAX_ROWS_PER_PARTITION` will set the default
+`CUDF_POLARS__EXECUTOR__MAX_ROWS_PER_PARTITION` will set the default
 `max_rows_per_partition` to use if it isn't overridden through
 `executor_options`.
 

@@ -239,7 +239,7 @@ class StreamingExecutor:
     Configuration for the cudf-polars streaming executor.
 
     These options can be configured via environment variables
-    with the prefix ``CUDF_POLARS__STREAMING__``.
+    with the prefix ``CUDF_POLARS__EXECUTOR__``.
 
     Parameters
     ----------
@@ -252,7 +252,7 @@ class StreamingExecutor:
         How to handle errors when the GPU engine fails to execute a query.
         ``StreamingFallbackMode.WARN`` by default.
 
-        This can be set using the ``CUDF_POLARS__STREAMING__FALLBACK_MODE``
+        This can be set using the ``CUDF_POLARS__EXECUTOR__FALLBACK_MODE``
         environment variable.
     max_rows_per_partition
         The maximum number of rows to process per partition. 1_000_000 by default.
@@ -274,7 +274,7 @@ class StreamingExecutor:
         This can be set via
 
         - keyword argument to ``polars.GPUEngine``
-        - the ``CUDF_POLARS__STREAMING__TARGET_PARTITION_SIZE`` environment variable
+        - the ``CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE`` environment variable
 
         By default, cudf-polars uses a target partition size that's a fraction
         of the device memory, where the fraction depends on the scheduler:
@@ -316,7 +316,7 @@ class StreamingExecutor:
     with the 'distributed' scheduler.
     """
 
-    _env_prefix = "CUDF_POLARS__STREAMING"
+    _env_prefix = "CUDF_POLARS__EXECUTOR"
 
     name: Literal["streaming"] = dataclasses.field(default="streaming", init=False)
     scheduler: Scheduler = dataclasses.field(
