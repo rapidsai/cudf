@@ -1110,6 +1110,7 @@ def test_series_setitem_loc(key, value):
     gsr = cudf.from_pandas(psr)
     psr.loc[key] = value
     gsr.loc[key] = value
+    # import pdb;pdb.set_trace()
     assert_eq(psr, gsr)
 
 

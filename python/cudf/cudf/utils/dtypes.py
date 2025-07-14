@@ -273,6 +273,7 @@ def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
         None if input is empty
         DtypeObj otherwise
     """
+    # import pdb;pdb.set_trace()
     if len(dtypes) == 0:  # type: ignore[arg-type]
         return None
 

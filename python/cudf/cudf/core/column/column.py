@@ -1805,7 +1805,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             result._dtype = dtype
         return result
 
-    def astype(self, dtype: DtypeObj, copy: bool = False) -> ColumnBase:
+    def astype(self, dtype: DtypeObj, copy: bool | None = False) -> ColumnBase:
         if self.dtype == dtype:
             result = self
         elif len(self) == 0:
@@ -1833,7 +1833,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 result = self.as_numerical_column(dtype)
 
         if copy and result is self:
-            return result.copy()
+            return result.copy(deep=copy)
+        elif copy is False and result is self:
+            return result  # .copy(deep=False)
         return result
 
     def as_categorical_column(
@@ -2810,6 +2812,7 @@ def as_column(
     * pandas.Categorical objects
     * range objects
     """
+    # import pdb;pdb.set_trace()
     if isinstance(arbitrary, (range, pd.RangeIndex, cudf.RangeIndex)):
         with acquire_spill_lock():
             column = ColumnBase.from_pylibcudf(

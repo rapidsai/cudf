@@ -106,6 +106,13 @@ def _match_join_keys(
         and is_dtype_obj_numeric(rtype)
         and not (ltype.kind == "m" or rtype.kind == "m")
     ):
+        # if is_integer_dtype(rtype) and is_float_dtype(ltype):
+        #     # if left is float and right is int, cast right to float
+        #     common_type = rtype
+        # elif is_integer_dtype(ltype) and is_float_dtype(rtype):
+        #     # if left is int and right is float, cast left to float
+        #     common_type = ltype
+        # else:
         common_type = (
             max(ltype, rtype)
             if ltype.kind == rtype.kind

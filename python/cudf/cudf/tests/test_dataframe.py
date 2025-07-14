@@ -6678,6 +6678,7 @@ def test_df_series_dataframe_astype_copy(copy):
     assert_eq(gsr, psr)
     actual[0] = 3
     expected[0] = 3
+    # import pdb;pdb.set_trace()
     assert_eq(gsr, psr)
 
 

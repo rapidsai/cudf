@@ -282,6 +282,7 @@ def test_series_setitem_upcasting(dtype, indices):
     # column dtype.
     new_value = np.float64(np.pi)
     col_ref = cr._column
+    # import pdb;pdb.set_trace()
     with expect_warning_if(dtype != np.float64):
         sr[indices] = new_value
     with expect_warning_if(dtype != np.float64):

@@ -460,6 +460,9 @@ class NumericalColumn(NumericalBaseColumn):
                 # but not the same type object.
                 self._dtype = dtype
                 return self
+        if self.dtype.kind == "f" and dtype.kind in "iu":  # type: ignore[union-attr]
+            # If casting from float to int, we need to convert nans to nulls
+            return self.nans_to_nulls().cast(dtype=dtype)  # type: ignore[return-value]
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
     def all(self, skipna: bool = True) -> bool:

@@ -4924,7 +4924,7 @@ class IndexedFrame(Frame):
     def astype(
         self,
         dtype: Dtype | dict[Hashable, Dtype],
-        copy: bool = False,
+        copy: bool | None = None,
         errors: Literal["raise", "ignore"] = "raise",
     ) -> Self:
         """Cast the object to the given dtype.
@@ -6806,14 +6806,14 @@ def _append_new_row_inplace(col: ColumnBase, value: ScalarLike) -> None:
     # val_col = as_column(value, dtype=col.dtype if value is None else None)
     if (
         cudf.utils.utils._is_null_host_scalar(value)
-        or np.isnan(value)
+        or value is np.nan
         or value is None
     ):
         val_col = as_column([value], dtype=col.dtype)
     else:
         val_col = as_column([value])
     # if (is_pandas_nullable_extension_dtype(col.dtype) or val_col.dtype.kind != "f") and val_col.can_cast_safely(col.dtype):
-    if val_col.can_cast_safely(col.dtype):
+    if val_col.dtype.kind != "f" and val_col.can_cast_safely(col.dtype):
         # If the value can be cast to the column dtype, do so
         val_col = val_col.astype(col.dtype)
         to_type = col.dtype

@@ -400,7 +400,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
     @_performance_tracking
     def astype(
-        self, dtype: dict[Hashable, DtypeObj], copy: bool = False
+        self, dtype: dict[Hashable, DtypeObj], copy: bool | None = None
     ) -> Self:
         casted = (
             col.astype(dtype.get(col_name, col.dtype), copy=copy)
