@@ -19,13 +19,15 @@ import pylibcudf as plc
 
 from cudf_polars.dsl.ir import IR, DataFrameScan, Scan, Sink, Union
 from cudf_polars.experimental.base import (
+    ColumnStat,
     ColumnStats,
     DataSourceInfo,
     PartitionInfo,
-    RowCount,
-    StorageSize,
-    UniqueCount,
-    UniqueFraction,
+    UniqueStats,
+    # RowCount,
+    # StorageSize,
+    # UniqueCount,
+    # UniqueFraction,
     get_key_name,
 )
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
@@ -618,12 +620,12 @@ class PqSourceInfo(DataSourceInfo):
         self._key_columns: set[str] = set()  # Used to fuse lazy row-group sampling
         # Helper attributes - Updated in _sample_metadata
         self._metadata_sampled: bool = False
-        self._row_count: RowCount = RowCount()
+        self._row_count: ColumnStat[int] = ColumnStat[int]()
         self._num_row_groups_per_file: tuple[int, ...] = ()
-        self._mean_size_per_file: dict[str, StorageSize] = {}
+        self._mean_size_per_file: dict[str, ColumnStat[int]] = {}
         self._all_columns: tuple[str, ...] = ()
         # Helper attributes - Updated in _sample_row_groups
-        self._unique_stats: dict[str, tuple[UniqueCount, UniqueFraction]] = {}
+        self._unique_stats: dict[str, UniqueStats] = {}
 
     def _sample_metadata(self) -> None:
         """Sample Parquet metadata."""
@@ -669,7 +671,7 @@ class PqSourceInfo(DataSourceInfo):
 
         self._all_columns = tuple(column_sizes_per_file)
         self._mean_size_per_file = {
-            name: StorageSize(value=int(statistics.mean(sizes)))
+            name: ColumnStat[int](value=int(statistics.mean(sizes)))
             for name, sizes in column_sizes_per_file.items()
         }
         self._num_row_groups_per_file = tuple(num_row_groups_per_sampled_file)
@@ -746,13 +748,13 @@ class PqSourceInfo(DataSourceInfo):
                 count = row_group_unique_count
             elif row_group_unique_count == row_group_num_rows:
                 count = self._row_count.value
-            self._unique_stats[name] = (
-                UniqueCount(value=count, exact=exact),
-                UniqueFraction(value=fraction, exact=exact),
+            self._unique_stats[name] = UniqueStats(
+                ColumnStat[int](value=count, exact=exact),
+                ColumnStat[float](value=fraction, exact=exact),
             )
 
     @property
-    def row_count(self) -> RowCount:
+    def row_count(self) -> ColumnStat[int]:
         """Data source row-count estimate."""
         self._sample_metadata()
         return self._row_count
@@ -764,20 +766,20 @@ class PqSourceInfo(DataSourceInfo):
             self._sample_row_groups()
             self._key_columns = set()
 
-    def unique_count(self, column: str) -> UniqueCount:
+    def unique_count(self, column: str) -> ColumnStat[int]:
         """Return unique-value count."""
         self._update_unique_stats(column)
-        return self._unique_stats.get(column, (UniqueCount(),))[0]
+        return self._unique_stats.get(column, UniqueStats()).count
 
-    def unique_fraction(self, column: str) -> UniqueFraction:
+    def unique_fraction(self, column: str) -> ColumnStat[float]:
         """Return unique-value fraction."""
         self._update_unique_stats(column)
-        return self._unique_stats.get(column, (UniqueFraction(),))[-1]
+        return self._unique_stats.get(column, UniqueStats()).fraction
 
-    def storage_size(self, column: str) -> StorageSize:
+    def storage_size(self, column: str) -> ColumnStat[int]:
         """Return the average column size for a single file."""
         self._sample_metadata()
-        return self._mean_size_per_file.get(column, StorageSize())
+        return self._mean_size_per_file.get(column, ColumnStat[int]())
 
     def add_unique_stats_column(self, column: str) -> None:
         """Add a column needing unique-value information."""
@@ -831,12 +833,12 @@ class DataFrameSourceInfo(DataSourceInfo):
     def __init__(self, df: Any):
         self._df = df
         self._key_columns: set[str] = set()
-        self._unique_stats: dict[str, tuple[UniqueCount, UniqueFraction]] = {}
+        self._unique_stats: dict[str, UniqueStats] = {}
 
     @functools.cached_property
-    def row_count(self) -> RowCount:
+    def row_count(self) -> ColumnStat[int]:
         """Data source row-count estimate."""
-        return RowCount(value=self._df.height(), exact=True)
+        return ColumnStat[int](value=self._df.height(), exact=True)
 
     def _update_unique_stats(self, column: str) -> None:
         if column not in self._unique_stats:
@@ -845,20 +847,20 @@ class DataFrameSourceInfo(DataSourceInfo):
                 self._df.get_column(column).approx_n_unique() if row_count else 0
             )
             unique_fraction = min((unique_count / row_count), 1.0) if row_count else 1.0
-            self._unique_stats[column] = (
-                UniqueCount(value=unique_count),
-                UniqueFraction(value=unique_fraction),
+            self._unique_stats[column] = UniqueStats(
+                ColumnStat[int](value=unique_count),
+                ColumnStat[float](value=unique_fraction),
             )
 
-    def unique_count(self, column: str) -> UniqueCount:
+    def unique_count(self, column: str) -> ColumnStat[int]:
         """Return unique-value count estimate."""
         self._update_unique_stats(column)
-        return self._unique_stats.get(column, (UniqueCount(),))[0]
+        return self._unique_stats.get(column, UniqueStats()).count
 
-    def unique_fraction(self, column: str) -> UniqueFraction:
+    def unique_fraction(self, column: str) -> ColumnStat[float]:
         """Return unique-value fraction estimate."""
         self._update_unique_stats(column)
-        return self._unique_stats.get(column, (UniqueFraction(),))[-1]
+        return self._unique_stats.get(column, UniqueStats()).fraction
 
 
 def _extract_dataframescan_stats(ir: DataFrameScan) -> dict[str, ColumnStats]:
