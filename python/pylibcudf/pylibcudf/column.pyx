@@ -1046,8 +1046,8 @@ cdef class Column:
         Notes
         -----
         The null count and null mask is taken from the first child column.
-        To set a different null count and null mask, use `Column.with_mask`
-        on the result.
+        Use `Column.with_mask` on the result of struct_from_children to reset
+        the null count and mask.
         """
         if not isinstance(children, list):
             children = list(children)
