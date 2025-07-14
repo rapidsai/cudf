@@ -875,8 +875,7 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
   CUDF_EXPECTS(pages.size() == page_mask.size(), "Page mask size mismatch");
 
   // Return early if page mask is empty or all pages are required
-  if (page_mask.empty() or
-      std::all_of(page_mask.begin(), page_mask.end(), [](auto const& v) { return v; })) {
+  if (page_mask.empty() or std::all_of(page_mask.begin(), page_mask.end(), std::identity{})) {
     return;
   }
 
