@@ -886,9 +886,9 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
   auto begin_bits = std::vector<cudf::size_type>{};
   auto end_bits   = std::vector<cudf::size_type>{};
 
-  thrust::for_each(
+  std::for_each(
     page_and_mask_begin, page_and_mask_begin + pages.size(), [&](auto const& page_and_mask_pair) {
-      // Return if the page is valid
+      // Return early if the page is valid
       if (thrust::get<1>(page_and_mask_pair)) { return; }
 
       auto const& page     = thrust::get<0>(page_and_mask_pair);
@@ -903,10 +903,7 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
         auto& out_buf = (*cols)[input_col.nesting[l_idx]];
         cols          = &out_buf.children;
         // Continue if the current column is a list column
-        if (out_buf.user_data &
-            cudf::io::parquet::detail::PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) {
-          continue;
-        }
+        if (out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) { continue; }
         // Add the nullmask and bit bounds to corresponding lists
         null_masks.emplace_back(out_buf.null_mask());
         begin_bits.emplace_back(start_row);
@@ -933,7 +930,7 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
   else {
     auto nullmask_iter = thrust::make_zip_iterator(
       thrust::make_tuple(null_masks.begin(), begin_bits.begin(), end_bits.begin()));
-    thrust::for_each(
+    std::for_each(
       nullmask_iter, nullmask_iter + null_masks.size(), [&](auto const& nullmask_tuple) {
         cudf::set_null_mask(thrust::get<0>(nullmask_tuple),
                             thrust::get<1>(nullmask_tuple),
