@@ -28,6 +28,4 @@ struct managed_udf_string {
   cudf::strings::udf::udf_string udf_str;
 };
 
-}  // namespace udf
-}  // namespace strings
-}  // namespace cudf
+}  // namespace cudf::strings::udf
