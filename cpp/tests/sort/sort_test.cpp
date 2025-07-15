@@ -1116,7 +1116,7 @@ TEST_F(SortDouble, InfinityAndNan)
 TYPED_TEST(Sort, TopK)
 {
   using T = TypeParam;
-  if (std::is_same_v<T, bool>) { GTEST_SKIP(); }
+  if constexpr (std::is_same_v<T, bool>) { GTEST_SKIP(); }
 
   auto itr   = thrust::counting_iterator<int32_t>(0);
   auto input = cudf::test::fixed_width_column_wrapper<T, int32_t>(
