@@ -1612,11 +1612,23 @@ def test_arrow_string_arrays():
 
     tm.assert_equal(cu_arr, pd_arr)
 
+    xpd_pa_np_storage_type = (
+        xpd.StringDtype("pyarrow_numpy")
+        if PANDAS_VERSION < version.parse("2.3.1")
+        else pd.StringDtype(storage="pyarrow", na_value=np.nan)
+    )
+
+    pd_pa_np_storage_type = (
+        pd.StringDtype("pyarrow_numpy")
+        if PANDAS_VERSION < version.parse("2.3.1")
+        else pd.StringDtype(storage="pyarrow", na_value=np.nan)
+    )
+
     cu_arr = xpd.core.arrays.string_arrow.ArrowStringArray._from_sequence(
-        cu_s, dtype=xpd.StringDtype(storage="pyarrow", na_value=np.nan)
+        cu_s, dtype=xpd_pa_np_storage_type
     )
     pd_arr = pd.core.arrays.string_arrow.ArrowStringArray._from_sequence(
-        pd_s, dtype=pd.StringDtype(storage="pyarrow", na_value=np.nan)
+        pd_s, dtype=pd_pa_np_storage_type
     )
 
     tm.assert_equal(cu_arr, pd_arr)
