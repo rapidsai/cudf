@@ -1294,7 +1294,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/arrays/test_datetimelike.py::test_searchsorted_datetimelike_with_listlike_invalid_dtype[arg1-values0]",
     "tests/arrays/test_datetimelike.py::test_searchsorted_datetimelike_with_listlike_invalid_dtype[arg1-values1]",
     "tests/arrays/test_datetimes.py::TestDatetimeArray::test_array_interface",
-    "tests/arrays/test_datetimes.py::TestDatetimeArray::test_astype_copies[datetime64[ns]-datetime64[ns]]",
     "tests/arrays/test_datetimes.py::TestDatetimeArray::test_astype_to_same",
     "tests/arrays/test_datetimes.py::TestDatetimeArray::test_shift_fill_value",
     "tests/arrays/test_datetimes.py::TestDatetimeArrayComparisons::test_cmp_dt64_arraylike_tznaive[eq]",
