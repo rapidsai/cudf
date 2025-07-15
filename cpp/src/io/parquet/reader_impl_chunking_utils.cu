@@ -28,7 +28,7 @@
 
 #include <rmm/exec_policy.hpp>
 
-#include <cub/device/device_radix_sort.cuh>
+#include <cub/device/device_merge_sort.cuh>
 #include <thrust/binary_search.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
@@ -286,27 +286,26 @@ adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
                        end_row_indices.end(),
                        [c_info] __device__(auto i) { return c_info[i].end_row_index; });
       auto tmp_bytes = std::size_t{0};
-      cub::DeviceRadixSort::SortPairs(nullptr,
-                                      tmp_bytes,
-                                      end_row_indices.begin(),
-                                      sorted_end_row_indices.end(),
-                                      indices.begin(),
-                                      sort_order.begin(),
-                                      c_info.size(),
-                                      0,
-                                      sizeof(size_t) * 8,
-                                      stream.value());
+      cub::DeviceMergeSort::SortPairsCopy(nullptr,
+                                          tmp_bytes,
+                                          end_row_indices.begin(),
+                                          indices.begin(),
+                                          sorted_end_row_indices.end(),
+                                          sort_order.begin(),
+                                          c_info.size(),
+                                          cuda::std::less<size_t>{},
+                                          stream.value());
+
       auto tmp_stg = rmm::device_buffer(tmp_bytes, stream, cudf::get_current_device_resource_ref());
-      cub::DeviceRadixSort::SortPairs(tmp_stg.data(),
-                                      tmp_bytes,
-                                      end_row_indices.begin(),
-                                      sorted_end_row_indices.end(),
-                                      indices.begin(),
-                                      sort_order.begin(),
-                                      c_info.size(),
-                                      0,
-                                      sizeof(size_t) * 8,
-                                      stream.value());
+      cub::DeviceMergeSort::SortPairsCopy(tmp_stg.data(),
+                                          tmp_bytes,
+                                          end_row_indices.begin(),
+                                          indices.begin(),
+                                          sorted_end_row_indices.end(),
+                                          sort_order.begin(),
+                                          c_info.size(),
+                                          cuda::std::less<size_t>{},
+                                          stream.value());
     }
 
     thrust::transform(rmm::exec_policy_nosync(stream),
