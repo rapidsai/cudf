@@ -511,7 +511,7 @@ def test_string_zfill(fill, input_strings):
         assert_collect_raises(
             q,
             polars_except=pl.exceptions.InvalidOperationError,
-            cudf_except=pl.exceptions.InvalidOperationError,
+            cudf_except=pl.exceptions.ComputeError,
         )
     else:
         assert_gpu_result_equal(q)
