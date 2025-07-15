@@ -433,17 +433,8 @@ class StringFunction(Expr):
                 column,
                 self._regex_program,
             )
-            ref_column = plc_table.columns()[0]
             return Column(
-                plc.Column(
-                    self.dtype.plc,
-                    ref_column.size(),
-                    None,
-                    ref_column.null_mask(),
-                    ref_column.null_count(),
-                    ref_column.offset(),
-                    plc_table.columns(),
-                ),
+                plc.Column.struct_from_children(plc_table.columns()),
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.Find:
@@ -497,19 +488,8 @@ class StringFunction(Expr):
                 .build()
             )
             plc_table_with_metadata = plc.io.json.read_json(options)
-            # TODO: Use factory function in https://github.com/rapidsai/cudf/issues/19339
-            # once implemented
-            ref_column = plc_table_with_metadata.columns[0]
             return Column(
-                plc.Column(
-                    self.dtype.plc,
-                    ref_column.size(),
-                    None,
-                    ref_column.null_mask(),
-                    ref_column.null_count(),
-                    ref_column.offset(),
-                    plc_table_with_metadata.columns,
-                ),
+                plc.Column.struct_from_children(plc_table_with_metadata.columns),
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.JsonPathMatch:
