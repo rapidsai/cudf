@@ -3,5 +3,5 @@
 import pylibcudf as plc
 
 
-def test_str_name():
-    assert str(plc.aggregation.any()) == "Aggregation(kind=Kind.ANY)"
+def test_repr_name():
+    assert repr(plc.aggregation.any()) == "<Aggregation(<Kind.ANY: 6>)>"
