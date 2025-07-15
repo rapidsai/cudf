@@ -2218,15 +2218,24 @@ def test_read_parquet_partitioned_filtered(
         assert got.dtypes["c"] == "int"
     assert_eq(expect, got)
 
-    # Filter on non-partitioned column
-    filters = [("a", "==", 10)]
-    got = cudf.read_parquet(read_path, filters=filters)
-    expect = pd.read_parquet(read_path, filters=filters)
 
-    # Filter on both kinds of columns
-    filters = [[("a", "==", 10)], [("c", "==", 1)]]
-    got = cudf.read_parquet(read_path, filters=filters)
-    expect = pd.read_parquet(read_path, filters=filters)
+@pytest.mark.parametrize(
+    "filters", [[("a", "==", 10)], [[("a", "==", 10)], [("c", "==", 1)]]]
+)
+def test_read_parquet_partitioned_filtered_other(tmpdir, filters):
+    rng = np.random.default_rng(2)
+    path = str(tmpdir)
+    size = 10
+    df = cudf.DataFrame(
+        {
+            "a": np.arange(0, stop=size, dtype="int64"),
+            "b": rng.choice(list("abcd"), size=size),
+            "c": rng.choice(np.arange(4), size=size),
+        }
+    )
+    df.to_parquet(path, partition_cols=["c", "b"])
+    got = cudf.read_parquet(path, filters=filters)
+    expect = pd.read_parquet(path, filters=filters)
 
     # Work-around for pandas bug:
     # https://github.com/pandas-dev/pandas/issues/53345
@@ -3864,9 +3873,9 @@ def test_parquet_chunked_reader_structs(
     assert_eq(expected, actual)
 
 
-@pytest.mark.parametrize("chunk_read_limit", [0, 240, 1024000000])
-@pytest.mark.parametrize("pass_read_limit", [0, 240, 1024000000])
-@pytest.mark.parametrize("num_rows", [4997, 9997, None])
+@pytest.mark.parametrize("chunk_read_limit", [0, 24, 10240000])
+@pytest.mark.parametrize("pass_read_limit", [0, 24, 10240000])
+@pytest.mark.parametrize("num_rows", [47, 97, None])
 @pytest.mark.parametrize(
     "str_encoding",
     [
@@ -3883,10 +3892,10 @@ def test_parquet_chunked_reader_string_decoders(
 ):
     df = pd.DataFrame(
         {
-            "i64": [1, 2, 3, None] * 10000,
-            "str": ["av", "qw", "asd", "xyz"] * 10000,
+            "i64": [1, 2, 3, None] * 100,
+            "str": ["av", "qw", "asd", "xyz"] * 100,
             "list": list(
-                [["ad", "cd"], ["asd", "fd"], None, ["asd", None]] * 10000
+                [["ad", "cd"], ["asd", "fd"], None, ["asd", None]] * 100
             ),
         }
     )
@@ -3894,7 +3903,7 @@ def test_parquet_chunked_reader_string_decoders(
     # Write 4 Parquet row groups with string column encoded
     df.to_parquet(
         buffer,
-        row_group_size=10000,
+        row_group_size=100,
         use_dictionary=False,
         column_encoding={"str": str_encoding},
     )
@@ -3921,29 +3930,29 @@ def test_parquet_chunked_reader_string_decoders(
     "nrows, skip_rows",
     [
         (0, 0),
-        (99, 1001),
-        (9898, 6001),
-        (99, 10101),
-        (1001, 16001),
-        (999, 19001),
+        (99, 101),
+        (988, 61),
+        (99, 1011),
+        (101, 1601),
+        (99, 1901),
     ],
 )
 @pytest.mark.parametrize(
     "row_group_size_rows, page_size_rows",
     [
-        (10000, 10000),  # 1 RG, 1 page per RG
-        (10000, 1000),  # 1 RG, multiple pages per RG
-        (1000, 1000),  # multiple RGs, 1 page per RG
-        (1000, 100),  # multiple RGs, multiple pages per RG
+        (1000, 1000),  # 1 RG, 1 page per RG
+        (1000, 100),  # 1 RG, multiple pages per RG
+        (100, 100),  # multiple RGs, 1 page per RG
+        (100, 10),  # multiple RGs, multiple pages per RG
     ],
 )
 @pytest.mark.parametrize(
     "chunk_read_limit, pass_read_limit",
     [
-        (1024, 5024),  # small chunk and pass read limits
-        (0, 5024),  # zero chunk and small pass read limit
-        (1024, 0),  # small chunk and zero pass read limit
-        (1024000, 1024000),  # large chunk and pass read limits
+        (256, 256),  # small chunk and pass read limits
+        (0, 1024),  # zero chunk and small pass read limit
+        (256, 0),  # small chunk and zero pass read limit
+        (256000, 256000),  # large chunk and pass read limits
     ],
 )
 def test_chunked_parquet_reader_nrows_skiprows(
@@ -3964,8 +3973,8 @@ def test_chunked_parquet_reader_nrows_skiprows(
                     [None, "wolf", "fox"],
                 ]
             )
-            * 5000,
-            "b": ["av", "qw", None, "xyz"] * 5000,
+            * 500,
+            "b": ["av", "qw", None, "xyz"] * 500,
         }
     )
     expected = df[skip_rows : skip_rows + nrows]
