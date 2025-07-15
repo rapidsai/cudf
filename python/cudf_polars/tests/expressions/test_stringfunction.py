@@ -551,6 +551,67 @@ def test_count_matches_literal_unsupported(ldf):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
+def test_strip_prefix(ldf):
+    q = ldf.select(pl.col("a").str.strip_prefix("A"))
+    assert_gpu_result_equal(q)
+
+
+def test_strip_suffix(ldf):
+    q = ldf.select(pl.col("a").str.strip_suffix("e"))
+    assert_gpu_result_equal(q)
+
+
+def test_strip_prefix_suffix_dupes():
+    ldf = pl.LazyFrame({"a": ["a", "aa", "ab", "bb", "b"]})
+
+    q = ldf.select(pl.col("a").str.strip_prefix("a"))
+    assert_gpu_result_equal(q)
+
+    q = ldf.select(pl.col("a").str.strip_suffix("a"))
+    assert_gpu_result_equal(q)
+
+    q = ldf.select(pl.col("a").str.strip_prefix("b"))
+    assert_gpu_result_equal(q)
+
+    q = ldf.select(pl.col("a").str.strip_suffix("b"))
+    assert_gpu_result_equal(q)
+
+
+@pytest.fixture
+def ldf_jsonlike():
+    return pl.LazyFrame(
+        {"a": ['{"a":"1"}', None, '{"a":"2"}', '{"a":"2.1"}', '{"a":"true"}']}
+    )
+
+
+def test_json_decode(ldf_jsonlike):
+    q = ldf_jsonlike.select(pl.col("a").str.json_decode(pl.Struct({"a": pl.String()})))
+    assert_gpu_result_equal(q)
+
+    q = ldf_jsonlike.select(pl.col("a").str.json_decode(None))
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+@pytest.mark.parametrize("dtype", [pl.Int64(), pl.Float64()])
+def test_json_decode_numeric_types(dtype):
+    ldf = pl.LazyFrame({"a": ['{"a": 1}', None, '{"a": 2}']})
+    q = ldf.select(pl.col("a").str.json_decode(pl.Struct({"a": dtype})))
+    assert_gpu_result_equal(q)
+
+
+def test_json_decode_nested():
+    ldf = pl.LazyFrame({"a": ['{"a": {"b": 1}}', None]})
+    q = ldf.select(
+        pl.col("a").str.json_decode(pl.Struct({"a": pl.Struct({"b": pl.Int64()})}))
+    )
+    assert_gpu_result_equal(q)
+
+
+def test_json_path_match(ldf_jsonlike):
+    q = ldf_jsonlike.select(pl.col("a").str.json_path_match("$.a"))
+    assert_gpu_result_equal(q)
+
+
 @pytest.fixture
 def ldf_find():
     return pl.LazyFrame(
@@ -596,12 +657,6 @@ def test_extract_group_index_0_unsupported(ldf_extract):
 
 def test_extract_groups(ldf_extract):
     q = ldf_extract.select(pl.col("a").str.extract_groups(r"(\S+) (\d+) (.+)"))
-    assert_gpu_result_equal(q)
-
-
-def test_json_path_match():
-    df = pl.LazyFrame({"a": ['{"a":"1"}', None, '{"a":2}', '{"a":2.1}', '{"a":true}']})
-    q = df.select(pl.col("a").str.json_path_match("$.a"))
     assert_gpu_result_equal(q)
 
 

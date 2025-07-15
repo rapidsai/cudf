@@ -21,19 +21,15 @@
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
-#include <cudf/utilities/traits.hpp>
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
-#include <cuda/std/climits>
 #include <cuda/std/cstddef>
-#include <cuda/std/limits>
-#include <cuda/std/type_traits>
-
-#include <cstddef>
 
 // clang-format off
-#include "transform/jit/operation-udf.hpp"
+// This header is an inlined header that defines the GENERIC_FILTER_OP function. It is placed here
+// so the symbols in the headers above can be used by it.
+#include <cudf/detail/operation-udf.hpp>
 // clang-format on
 
 namespace cudf {

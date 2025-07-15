@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import functools
+import io
 from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -27,6 +28,19 @@ if TYPE_CHECKING:
     from cudf_polars.containers import DataFrame, DataType
 
 __all__ = ["StringFunction"]
+
+JsonDecodeType = list[tuple[str, plc.DataType, "JsonDecodeType"]]
+
+
+def _dtypes_for_json_decode(dtype: DataType) -> JsonDecodeType:
+    """Get the dtypes for json decode."""
+    if dtype.id() == plc.TypeId.STRUCT:
+        return [
+            (field.name, child.plc, _dtypes_for_json_decode(child))
+            for field, child in zip(dtype.polars.fields, dtype.children, strict=True)
+        ]
+    else:
+        return []
 
 
 class StringFunction(Expr):
@@ -101,6 +115,7 @@ class StringFunction(Expr):
         Name.ExtractGroups,
         Name.Find,
         Name.Head,
+        Name.JsonDecode,
         Name.JsonPathMatch,
         Name.LenBytes,
         Name.LenChars,
@@ -113,6 +128,8 @@ class StringFunction(Expr):
         Name.StripChars,
         Name.StripCharsStart,
         Name.StripCharsEnd,
+        Name.StripPrefix,
+        Name.StripSuffix,
         Name.Uppercase,
         Name.Reverse,
         Name.Tail,
@@ -364,17 +381,8 @@ class StringFunction(Expr):
                 column,
                 self._regex_program,
             )
-            ref_column = plc_table.columns()[0]
             return Column(
-                plc.Column(
-                    self.dtype.plc,
-                    ref_column.size(),
-                    None,
-                    ref_column.null_mask(),
-                    ref_column.null_count(),
-                    ref_column.offset(),
-                    plc_table.columns(),
-                ),
+                plc.Column.struct_from_children(plc_table.columns()),
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.Find:
@@ -405,6 +413,33 @@ class StringFunction(Expr):
                 plc_column.with_mask(new_mask, null_count), self.dtype.plc
             )
             return Column(plc_column, dtype=self.dtype)
+        elif self.name is StringFunction.Name.JsonDecode:
+            plc_column = self.children[0].evaluate(df, context=context).obj
+            # Once https://github.com/rapidsai/cudf/issues/19338 is implemented,
+            # we can use do this conversion on device.
+            buff = io.StringIO(
+                plc.strings.combine.join_strings(
+                    plc_column,
+                    plc.Scalar.from_py("\n", plc_column.type()),
+                    plc.Scalar.from_py("NULL", plc_column.type()),
+                )
+                .to_scalar()
+                .to_py()
+            )
+            source = plc.io.types.SourceInfo([buff])
+            options = (
+                plc.io.json.JsonReaderOptions.builder(source)
+                .lines(val=True)
+                .dtypes(_dtypes_for_json_decode(self.dtype))
+                .compression(plc.io.types.CompressionType.NONE)
+                .recovery_mode(plc.io.types.JSONRecoveryMode.RECOVER_WITH_NULL)
+                .build()
+            )
+            plc_table_with_metadata = plc.io.json.read_json(options)
+            return Column(
+                plc.Column.struct_from_children(plc_table_with_metadata.columns),
+                dtype=self.dtype,
+            )
         elif self.name is StringFunction.Name.JsonPathMatch:
             (child, expr) = self.children
             column = child.evaluate(df, context=context).obj
@@ -458,6 +493,37 @@ class StringFunction(Expr):
                     column.obj,
                     plc.Scalar.from_py(start, plc.DataType(plc.TypeId.INT32)),
                     plc.Scalar.from_py(stop, plc.DataType(plc.TypeId.INT32)),
+                ),
+                dtype=self.dtype,
+            )
+        elif self.name in {
+            StringFunction.Name.StripPrefix,
+            StringFunction.Name.StripSuffix,
+        }:
+            child, expr = self.children
+            column = child.evaluate(df, context=context).obj
+            assert isinstance(expr, Literal)
+            target = plc.Scalar.from_py(expr.value, expr.dtype.plc)
+            if self.name == StringFunction.Name.StripPrefix:
+                find = plc.strings.find.starts_with
+                start = len(expr.value)
+                end: int | None = None
+            else:
+                find = plc.strings.find.ends_with
+                start = 0
+                end = -len(expr.value)
+
+            mask = find(column, target)
+            sliced = plc.strings.slice.slice_strings(
+                column,
+                plc.Scalar.from_py(start, plc.DataType(plc.TypeId.INT32)),
+                plc.Scalar.from_py(end, plc.DataType(plc.TypeId.INT32)),
+            )
+            return Column(
+                plc.copying.copy_if_else(
+                    sliced,
+                    column,
+                    mask,
                 ),
                 dtype=self.dtype,
             )

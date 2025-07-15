@@ -103,6 +103,8 @@ class StructFunction(Expr):
                 dtype=self.dtype,
             )
         elif self.name == StructFunction.Name.JsonEncode:
+            # Once https://github.com/rapidsai/cudf/issues/19338 is implemented,
+            # we can use do this conversion on host.
             buff = StringIO()
             target = plc.io.SinkInfo([buff])
             table = plc.Table(column.obj.children())
