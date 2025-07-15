@@ -166,7 +166,7 @@ def _partition_dataframe(
     """
     if df.num_rows == 0:
         # Fast path for empty DataFrame
-        return {i: df for i in range(count)}
+        return dict.fromkeys(range(count), df)
 
     # Hash the specified keys to calculate the output
     # partition for each row
