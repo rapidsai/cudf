@@ -541,6 +541,8 @@ class StringFunction(Expr):
                     )
                 if not is_split_n:
                     children = children[: n + 1]
+                # TODO: Use plc.Column.struct_from_children once it is generalized
+                # to handle columns that don't share the same null_mask/null_count
                 plc_column = plc.Column(
                     self.dtype.plc,
                     ref_column.size(),
