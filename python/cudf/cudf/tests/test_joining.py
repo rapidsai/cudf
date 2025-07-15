@@ -192,11 +192,7 @@ def test_dataframe_join_suffix():
     )
     # TODO: Retain result index name
     expect.index.name = None
-    assert_eq(got, expect)
-
-    got_sorted = got.sort_values(by=["b_left", "c", "b_right"], axis=0)
-    expect_sorted = expect.sort_values(by=["b_left", "c", "b_right"], axis=0)
-    assert_eq(got_sorted, expect_sorted)
+    assert_join_results_equal(expect, got, how="inner")
 
 
 def test_dataframe_join_cats():

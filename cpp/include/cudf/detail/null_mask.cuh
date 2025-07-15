@@ -215,11 +215,13 @@ CUDF_KERNEL void segmented_offset_bitmask_binop(Binop op,
 
     // Handle the last word specially to mask out bits beyond the range
     if (destination_word_index == last_word_index) {
-      auto const num_bits_in_last_word = intra_word_index(last_bit_index);
-      destination_word &= set_least_significant_bits(num_bits_in_last_word + 1);
+      auto const num_bits_in_last_word = intra_word_index(last_bit_index) + 1;
+      if (num_bits_in_last_word < static_cast<size_type>(detail::size_in_bits<bitmask_type>())) {
+        destination_word &= set_least_significant_bits(num_bits_in_last_word);
+      }
 
       // Count nulls in the partial last word
-      thread_null_count += num_bits_in_last_word + 1 - cuda::std::popcount(destination_word);
+      thread_null_count += num_bits_in_last_word - cuda::std::popcount(destination_word);
     } else {
       // Count nulls in complete words
       thread_null_count += bitmask_type_size - cuda::std::popcount(destination_word);

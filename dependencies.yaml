@@ -138,6 +138,7 @@ files:
       - depends_on_dask_cudf
       - depends_on_pylibcudf
       - depends_on_libcudf
+      - depends_on_cudf_polars
       - docs
       - py_version
   py_build_cudf:
@@ -707,7 +708,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - polars>=1.25,<1.32
+          - polars>=1.28,<1.32
     specific:
       - output_types: [requirements, pyproject]
         matrices:
@@ -773,7 +774,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - pytest<8
+          - pytest
           - pytest-cov
           - pytest-xdist
   test_python_cudf_common:
@@ -790,7 +791,7 @@ dependencies:
             packages:
               - *numba-cuda-dep
               - *numba-dep
-              - pandas==2.3.0
+              - pandas==2.3.1
           - matrix:
             packages:
       - output_types: conda
@@ -836,6 +837,7 @@ dependencies:
           - hypothesis>=6.131.7
           - pytest-benchmark
           - pytest-cases>=3.8.2
+          - pytest-rerunfailures
           - scipy
           - zstandard
       - output_types: conda
