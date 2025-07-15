@@ -598,7 +598,7 @@ class ParquetMetadata:
     """
 
     __slots__ = (
-        "all_columns",
+        "column_names",
         "max_file_samples",
         "mean_size_per_file",
         "num_row_groups_per_file",
@@ -617,7 +617,7 @@ class ParquetMetadata:
     """Number of row groups in each sampled file."""
     mean_size_per_file: dict[str, ColumnStat[int]]
     """Average column storage size in a single file."""
-    all_columns: tuple[str, ...]
+    column_names: tuple[str, ...]
     """All column names found it the dataset."""
     sample_paths: tuple[str, ...]
     """Sampled file paths."""
@@ -628,7 +628,7 @@ class ParquetMetadata:
         self.row_count = ColumnStat[int]()
         self.num_row_groups_per_file = ()
         self.mean_size_per_file = {}
-        self.all_columns = ()
+        self.column_names = ()
         stride = max(1, int(len(paths) / max_file_samples)) if max_file_samples else 1
         self.sample_paths = paths[: stride * max_file_samples : stride]
 
@@ -667,7 +667,7 @@ class ParquetMetadata:
             for name, uncompressed_sizes in sample_metadata.columnchunk_metadata().items()
         }
 
-        self.all_columns = tuple(column_sizes_per_file)
+        self.column_names = tuple(column_sizes_per_file)
         self.mean_size_per_file = {
             name: ColumnStat[int](value=int(statistics.mean(sizes)))
             for name, sizes in column_sizes_per_file.items()
@@ -706,7 +706,7 @@ class ParquetSourceInfo(DataSourceInfo):
 
     @functools.cached_property
     def metadata(self) -> ParquetMetadata:
-        """Return PArquet metadata."""
+        """Return Parquet metadata."""
         return ParquetMetadata(self.paths, self.max_file_samples)
 
     @property
@@ -721,12 +721,12 @@ class ParquetSourceInfo(DataSourceInfo):
             # No row-groups to sample from
             return
 
-        all_columns = self.metadata.all_columns
+        column_names = self.metadata.column_names
         if not (
-            key_columns := [key for key in self._key_columns if key in all_columns]
+            key_columns := [key for key in self._key_columns if key in column_names]
         ):  # pragma: no cover; should never get here
             # No key columns found in the file
-            raise ValueError(f"None of {self._key_columns} in {all_columns}")
+            raise ValueError(f"None of {self._key_columns} in {column_names}")
 
         sampled_file_count = len(sample_paths)
         num_row_groups_per_file = self.metadata.num_row_groups_per_file
@@ -786,7 +786,7 @@ class ParquetSourceInfo(DataSourceInfo):
             )
 
     def _update_unique_stats(self, column: str) -> None:
-        if column not in self._unique_stats and column in self.metadata.all_columns:
+        if column not in self._unique_stats and column in self.metadata.column_names:
             self.add_unique_stats_column(column)
             self._sample_row_groups()
             self._key_columns = set()
