@@ -107,8 +107,10 @@ std::unique_ptr<column> find_instance(strings_column_view const& input,
   auto d_strings = column_device_view::create(input.parent(), stream);
   auto d_results = results->mutable_view().data<size_type>();
 
-  constexpr int block_size = 256;
-  cudf::detail::grid_1d grid{input.size() * cudf::detail::warp_size, block_size};
+  constexpr thread_index_type block_size = 256;
+  constexpr thread_index_type warp_size  = cudf::detail::warp_size;
+  static_assert(block_size % warp_size == 0, "block size must be a multiple of warp size");
+  cudf::detail::grid_1d grid{input.size() * warp_size, block_size};
   find_instance_warp_parallel_fn<<<grid.num_blocks,
                                    grid.num_threads_per_block,
                                    0,
