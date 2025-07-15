@@ -864,6 +864,11 @@ TEST_F(StringsSplitTest, SplitPart)
   expected = cudf::test::strings_column_wrapper({"", "", "", "", "", ""},
                                                 {false, false, false, false, false, false});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
+
+  result   = cudf::strings::split_part(sv, cudf::string_scalar("-bé-"), 1);
+  expected = cudf::test::strings_column_wrapper({"", "", "ccc", "", "", ""},
+                                                {false, false, true, false, false, false});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
 }
 
 TEST_F(StringsSplitTest, SplitPartWhitespace)
@@ -1087,6 +1092,6 @@ TEST_F(StringsSplitTest, InvalidParameter)
                cudf::logic_error);
   EXPECT_THROW(cudf::strings::split_part(strings_view, cudf::string_scalar("", false), 0),
                std::invalid_argument);
-  EXPECT_THROW(cudf::strings::split_part(strings_view, cudf::string_scalar("", false), -1),
+  EXPECT_THROW(cudf::strings::split_part(strings_view, cudf::string_scalar(" "), -1),
                std::invalid_argument);
 }
