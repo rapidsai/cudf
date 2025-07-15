@@ -4540,7 +4540,7 @@ def test_parquet_reader_empty_compressed_page(datadir):
     assert_eq(cudf.read_parquet(fname), df)
 
 
-@pytest.fixture(params=[12345], scope="module")
+@pytest.fixture(params=[1234], scope="module")
 def my_pdf(request):
     return build_pdf(request, True)
 
