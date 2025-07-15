@@ -1,7 +1,23 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Config utilities."""
+"""
+Configuration utilities for the cudf-polars engine.
+
+Most users will not construct these objects directly. Instead, you'll pass
+keyword arguments to :class:`~polars.lazyframe.engine_config.GPUEngine`. The
+majority of the options are passed as `**kwargs` and collected into the
+configuration described below:
+
+.. code-block:: python
+
+   >>> import polars as pl
+   >>> engine = pl.GPUEngine(
+   ...     executor="streaming",
+   ...     executor_options={"fallback_mode": "raise"}
+   ... )
+
+"""
 
 from __future__ import annotations
 
@@ -12,17 +28,25 @@ import importlib.util
 import json
 import os
 import warnings
-from typing import TYPE_CHECKING, Literal, TypeVar
+from typing import TYPE_CHECKING, Literal, TypeVar, cast
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from typing_extensions import Self
 
-    import polars as pl
+    import polars.lazyframe.engine_config
 
 
-__all__ = ["ConfigOptions"]
+__all__ = [
+    "ConfigOptions",
+    "InMemoryExecutor",
+    "ParquetOptions",
+    "Scheduler",
+    "ShuffleMethod",
+    "StreamingExecutor",
+    "StreamingFallbackMode",
+]
 
 
 @functools.cache
@@ -58,8 +82,10 @@ class Scheduler(str, enum.Enum):
     """
     The scheduler to use for the streaming executor.
 
-    * ``Scheduler.SYNCHRONOUS`` : Use the synchronous scheduler.
-    * ``Scheduler.DISTRIBUTED`` : Use the distributed scheduler.
+    * ``Scheduler.SYNCHRONOUS`` : A zero-dependency, synchronous,
+      single-threaded scheduler.
+    * ``Scheduler.DISTRIBUTED`` : A Dask-based distributed scheduler.
+      Using this scheduler requires an active Dask cluster.
     """
 
     SYNCHRONOUS = "synchronous"
@@ -72,6 +98,10 @@ class ShuffleMethod(str, enum.Enum):
 
     * ``ShuffleMethod.TASKS`` : Use the task-based shuffler.
     * ``ShuffleMethod.RAPIDSMPF`` : Use the rapidsmpf scheduler.
+
+    With :class:`cudf_polars.utils.config.StreamingExecutor`, the default of ``None`` will attempt to use
+    ``ShuffleMethod.RAPIDSMPF``, but will fall back to ``ShuffleMethod.TASKS``
+    if rapidsmpf is not installed.
     """
 
     TASKS = "tasks"
@@ -101,7 +131,7 @@ class ParquetOptions:
     chunk_read_limit: int = 0
     pass_read_limit: int = 0
 
-    def __post_init__(self) -> None:
+    def __post_init__(self) -> None:  # noqa: D105
         if not isinstance(self.chunked, bool):
             raise TypeError("chunked must be a bool")
         if not isinstance(self.chunk_read_limit, int):
@@ -192,6 +222,22 @@ def target_partition_size_default() -> int:
     return from_env("STREAMING__TARGET_PARTITION_SIZE", int, 0)
 
 
+def streaming_fallback_mode_default() -> StreamingFallbackMode:
+    """The default factory for StreamingExecutor.fallback_mode."""
+    # We need the cast to avoid the error
+    #   Expression of type "type[StreamingFallbackMode] | StreamingFallbackMode"
+    #   is incompatible with return type "StreamingFallbackMode"
+
+    return cast(
+        StreamingFallbackMode,
+        from_env(
+            "STREAMING__FALLBACK_MODE",
+            StreamingFallbackMode,
+            StreamingFallbackMode.WARN,
+        ),
+    )
+
+
 @dataclasses.dataclass(frozen=True, eq=True)
 class StreamingExecutor:
     """
@@ -207,6 +253,9 @@ class StreamingExecutor:
     fallback_mode
         How to handle errors when the GPU engine fails to execute a query.
         ``StreamingFallbackMode.WARN`` by default.
+
+        This can be set using the ``CUDF_POLARS__STREAMING__FALLBACK_MODE``
+        environment variable.
     max_rows_per_partition
         The maximum number of rows to process per partition. 1_000_000 by default.
         When the number of rows exceeds this value, the query will be split into
@@ -271,7 +320,9 @@ class StreamingExecutor:
 
     name: Literal["streaming"] = dataclasses.field(default="streaming", init=False)
     scheduler: Scheduler = Scheduler.SYNCHRONOUS
-    fallback_mode: StreamingFallbackMode = StreamingFallbackMode.WARN
+    fallback_mode: StreamingFallbackMode = dataclasses.field(
+        default_factory=streaming_fallback_mode_default
+    )
     max_rows_per_partition: int = 1_000_000
     unique_fraction: dict[str, float] = dataclasses.field(default_factory=dict)
     target_partition_size: int = dataclasses.field(
@@ -283,7 +334,7 @@ class StreamingExecutor:
     rapidsmpf_spill: bool = False
     sink_to_directory: bool | None = None
 
-    def __post_init__(self) -> None:
+    def __post_init__(self) -> None:  # noqa: D105
         # Handle shuffle_method defaults for streaming executor
         if self.shuffle_method is None:
             if self.scheduler == "distributed" and rapidsmpf_available():
@@ -348,7 +399,7 @@ class StreamingExecutor:
         if not isinstance(self.sink_to_directory, bool):
             raise TypeError("sink_to_directory must be bool")
 
-    def __hash__(self) -> int:
+    def __hash__(self) -> int:  # noqa: D105
         # cardinality factory, a dict, isn't natively hashable. We'll dump it
         # to json and hash that.
         d = dataclasses.asdict(self)
@@ -383,10 +434,10 @@ class ConfigOptions:
         query. ``False`` by default.
     parquet_options
         Options controlling parquet file reading and writing. See
-        :class:`ParquetOptions` for more.
+        :class:`~cudf_polars.utils.config.ParquetOptions` for more.
     executor
-        The executor to use for the GPU engine. See :class:`StreamingExecutor`
-        and :class:`InMemoryExecutor` for more.
+        The executor to use for the GPU engine. See :class:`~cudf_polars.utils.config.StreamingExecutor`
+        and :class:`~cudf_polars.utils.config.InMemoryExecutor` for more.
     device
         The GPU used to run the query. If not provided, the
         query uses the current CUDA device.
@@ -395,18 +446,15 @@ class ConfigOptions:
     raise_on_fail: bool = False
     parquet_options: ParquetOptions = dataclasses.field(default_factory=ParquetOptions)
     executor: StreamingExecutor | InMemoryExecutor = dataclasses.field(
-        default_factory=InMemoryExecutor
+        default_factory=StreamingExecutor
     )
     device: int | None = None
 
     @classmethod
-    def from_polars_engine(cls, engine: pl.GPUEngine) -> Self:
-        """
-        Create a `ConfigOptions` object from a `pl.GPUEngine` object.
-
-        This creates our internal, typed, configuration object from the
-        user-provided `polars.GPUEngine` object.
-        """
+    def from_polars_engine(
+        cls, engine: polars.lazyframe.engine_config.GPUEngine
+    ) -> Self:
+        """Create a :class:`ConfigOptions` from a :class:`~polars.lazyframe.engine_config.GPUEngine`."""
         # these are the valid top-level keys in the engine.config that
         # the user passes as **kwargs to GPUEngine.
         valid_options = {
@@ -420,9 +468,9 @@ class ConfigOptions:
         if extra_options:
             raise TypeError(f"Unsupported executor_options: {extra_options}")
 
-        user_executor = engine.config.get("executor", "in-memory")
+        user_executor = engine.config.get("executor")
         if user_executor is None:
-            user_executor = "in-memory"
+            user_executor = "streaming"
         user_executor_options = engine.config.get("executor_options", {})
         user_parquet_options = engine.config.get("parquet_options", {})
         user_raise_on_fail = engine.config.get("raise_on_fail", False)
