@@ -128,6 +128,8 @@ class StringFunction(Expr):
         Name.StripChars,
         Name.StripCharsStart,
         Name.StripCharsEnd,
+        Name.StripPrefix,
+        Name.StripSuffix,
         Name.Uppercase,
         Name.Reverse,
         Name.Tail,
@@ -379,17 +381,8 @@ class StringFunction(Expr):
                 column,
                 self._regex_program,
             )
-            ref_column = plc_table.columns()[0]
             return Column(
-                plc.Column(
-                    self.dtype.plc,
-                    ref_column.size(),
-                    None,
-                    ref_column.null_mask(),
-                    ref_column.null_count(),
-                    ref_column.offset(),
-                    plc_table.columns(),
-                ),
+                plc.Column.struct_from_children(plc_table.columns()),
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.Find:
@@ -443,19 +436,8 @@ class StringFunction(Expr):
                 .build()
             )
             plc_table_with_metadata = plc.io.json.read_json(options)
-            # TODO: Use factory function in https://github.com/rapidsai/cudf/issues/19339
-            # once implemented
-            ref_column = plc_table_with_metadata.columns[0]
             return Column(
-                plc.Column(
-                    self.dtype.plc,
-                    ref_column.size(),
-                    None,
-                    ref_column.null_mask(),
-                    ref_column.null_count(),
-                    ref_column.offset(),
-                    plc_table_with_metadata.columns,
-                ),
+                plc.Column.struct_from_children(plc_table_with_metadata.columns),
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.JsonPathMatch:
@@ -511,6 +493,37 @@ class StringFunction(Expr):
                     column.obj,
                     plc.Scalar.from_py(start, plc.DataType(plc.TypeId.INT32)),
                     plc.Scalar.from_py(stop, plc.DataType(plc.TypeId.INT32)),
+                ),
+                dtype=self.dtype,
+            )
+        elif self.name in {
+            StringFunction.Name.StripPrefix,
+            StringFunction.Name.StripSuffix,
+        }:
+            child, expr = self.children
+            column = child.evaluate(df, context=context).obj
+            assert isinstance(expr, Literal)
+            target = plc.Scalar.from_py(expr.value, expr.dtype.plc)
+            if self.name == StringFunction.Name.StripPrefix:
+                find = plc.strings.find.starts_with
+                start = len(expr.value)
+                end: int | None = None
+            else:
+                find = plc.strings.find.ends_with
+                start = 0
+                end = -len(expr.value)
+
+            mask = find(column, target)
+            sliced = plc.strings.slice.slice_strings(
+                column,
+                plc.Scalar.from_py(start, plc.DataType(plc.TypeId.INT32)),
+                plc.Scalar.from_py(end, plc.DataType(plc.TypeId.INT32)),
+            )
+            return Column(
+                plc.copying.copy_if_else(
+                    sliced,
+                    column,
+                    mask,
                 ),
                 dtype=self.dtype,
             )
