@@ -123,11 +123,15 @@ class StringFunction(Expr):
         Name.Replace,
         Name.ReplaceMany,
         Name.Slice,
+        Name.SplitN,
+        Name.SplitExact,
         Name.Strptime,
         Name.StartsWith,
         Name.StripChars,
         Name.StripCharsStart,
         Name.StripCharsEnd,
+        Name.StripPrefix,
+        Name.StripSuffix,
         Name.Uppercase,
         Name.Reverse,
         Name.Tail,
@@ -238,6 +242,10 @@ class StringFunction(Expr):
                 raise NotImplementedError(
                     "Slice only supports literal start and stop values"
                 )
+        elif self.name is StringFunction.Name.SplitExact:
+            (_, inclusive) = self.options
+            if inclusive:
+                raise NotImplementedError(f"{inclusive=} is not supported for split")
         elif self.name is StringFunction.Name.Strptime:
             format, _, exact, cache = self.options
             if cache:
@@ -379,17 +387,8 @@ class StringFunction(Expr):
                 column,
                 self._regex_program,
             )
-            ref_column = plc_table.columns()[0]
             return Column(
-                plc.Column(
-                    self.dtype.plc,
-                    ref_column.size(),
-                    None,
-                    ref_column.null_mask(),
-                    ref_column.null_count(),
-                    ref_column.offset(),
-                    plc_table.columns(),
-                ),
+                plc.Column.struct_from_children(plc_table.columns()),
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.Find:
@@ -443,19 +442,8 @@ class StringFunction(Expr):
                 .build()
             )
             plc_table_with_metadata = plc.io.json.read_json(options)
-            # TODO: Use factory function in https://github.com/rapidsai/cudf/issues/19339
-            # once implemented
-            ref_column = plc_table_with_metadata.columns[0]
             return Column(
-                plc.Column(
-                    self.dtype.plc,
-                    ref_column.size(),
-                    None,
-                    ref_column.null_mask(),
-                    ref_column.null_count(),
-                    ref_column.offset(),
-                    plc_table_with_metadata.columns,
-                ),
+                plc.Column.struct_from_children(plc_table_with_metadata.columns),
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.JsonPathMatch:
@@ -511,6 +499,88 @@ class StringFunction(Expr):
                     column.obj,
                     plc.Scalar.from_py(start, plc.DataType(plc.TypeId.INT32)),
                     plc.Scalar.from_py(stop, plc.DataType(plc.TypeId.INT32)),
+                ),
+                dtype=self.dtype,
+            )
+        elif self.name in {
+            StringFunction.Name.SplitExact,
+            StringFunction.Name.SplitN,
+        }:
+            is_split_n = self.name is StringFunction.Name.SplitN
+            n = self.options[0]
+            child, expr = self.children
+            column = child.evaluate(df, context=context)
+            if n == 1 and self.name is StringFunction.Name.SplitN:
+                plc_column = plc.Column(
+                    self.dtype.plc,
+                    column.obj.size(),
+                    None,
+                    None,
+                    0,
+                    column.obj.offset(),
+                    [column.obj],
+                )
+            else:
+                assert isinstance(expr, Literal)
+                by = plc.Scalar.from_py(expr.value, expr.dtype.plc)
+                # See https://github.com/pola-rs/polars/issues/11640
+                # for SplitN vs SplitExact edge case behaviors
+                max_splits = n if is_split_n else 0
+                plc_table = plc.strings.split.split.split(
+                    column.obj,
+                    by,
+                    max_splits - 1,
+                )
+                children = plc_table.columns()
+                ref_column = children[0]
+                if (remainder := n - len(children)) > 0:
+                    # Reach expected number of splits by padding with nulls
+                    children.extend(
+                        plc.Column.all_null_like(ref_column, ref_column.size())
+                        for _ in range(remainder + int(not is_split_n))
+                    )
+                if not is_split_n:
+                    children = children[: n + 1]
+                # TODO: Use plc.Column.struct_from_children once it is generalized
+                # to handle columns that don't share the same null_mask/null_count
+                plc_column = plc.Column(
+                    self.dtype.plc,
+                    ref_column.size(),
+                    None,
+                    None,
+                    0,
+                    ref_column.offset(),
+                    children,
+                )
+            return Column(plc_column, dtype=self.dtype)
+        elif self.name in {
+            StringFunction.Name.StripPrefix,
+            StringFunction.Name.StripSuffix,
+        }:
+            child, expr = self.children
+            column = child.evaluate(df, context=context).obj
+            assert isinstance(expr, Literal)
+            target = plc.Scalar.from_py(expr.value, expr.dtype.plc)
+            if self.name == StringFunction.Name.StripPrefix:
+                find = plc.strings.find.starts_with
+                start = len(expr.value)
+                end: int | None = None
+            else:
+                find = plc.strings.find.ends_with
+                start = 0
+                end = -len(expr.value)
+
+            mask = find(column, target)
+            sliced = plc.strings.slice.slice_strings(
+                column,
+                plc.Scalar.from_py(start, plc.DataType(plc.TypeId.INT32)),
+                plc.Scalar.from_py(end, plc.DataType(plc.TypeId.INT32)),
+            )
+            return Column(
+                plc.copying.copy_if_else(
+                    sliced,
+                    column,
+                    mask,
                 ),
                 dtype=self.dtype,
             )
