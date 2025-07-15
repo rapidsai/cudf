@@ -368,9 +368,9 @@ std::unique_ptr<scalar> bitwise_reduction(bitwise_op bit_op,
                                           rmm::device_async_resource_ref mr);
 
 /**
- * @brief Computes quantile of elements in input column
+ * @brief Computes quantile value for the of elements in the input column
  *
- * @throw std::invalid_argument if input column type is not arithmetic type
+ * @throw std::invalid_argument if the input column type is not an arithmetic type
  *
  * @param col Input column to compute quantile
  * @param qvalue Quantile value

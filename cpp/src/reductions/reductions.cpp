@@ -102,13 +102,15 @@ std::unique_ptr<scalar> reduce_aggregate_impl(
     }
     case aggregation::TDIGEST: {
       CUDF_EXPECTS(output_dtype.id() == type_id::STRUCT,
-                   "Tdigest aggregations expect output type to be STRUCT");
+                   "Tdigest aggregations expect output type to be STRUCT",
+                   std::invalid_argument);
       auto td_agg = static_cast<cudf::detail::tdigest_aggregation const&>(agg);
       return tdigest::detail::reduce_tdigest(col, td_agg.max_centroids, stream, mr);
     }
     case aggregation::MERGE_TDIGEST: {
       CUDF_EXPECTS(output_dtype.id() == type_id::STRUCT,
-                   "Tdigest aggregations expect output type to be STRUCT");
+                   "Tdigest aggregations expect output type to be STRUCT",
+                   std::invalid_argument);
       auto td_agg = static_cast<cudf::detail::merge_tdigest_aggregation const&>(agg);
       return tdigest::detail::reduce_merge_tdigest(col, td_agg.max_centroids, stream, mr);
     }
@@ -116,14 +118,15 @@ std::unique_ptr<scalar> reduce_aggregate_impl(
       auto const& udf_base_ptr =
         dynamic_cast<cudf::detail::host_udf_aggregation const&>(agg).udf_ptr;
       auto const udf_ptr = dynamic_cast<reduce_host_udf const*>(udf_base_ptr.get());
-      CUDF_EXPECTS(udf_ptr != nullptr, "Invalid HOST_UDF instance for reduction.");
+      CUDF_EXPECTS(
+        udf_ptr != nullptr, "Invalid HOST_UDF instance for reduction.", std::invalid_argument);
       return (*udf_ptr)(col, output_dtype, init, stream, mr);
     }
     case aggregation::BITWISE_AGG: {
       auto const bitwise_agg = static_cast<cudf::detail::bitwise_aggregation const&>(agg);
       return bitwise_reduction(bitwise_agg.bit_op, col, stream, mr);
     }
-    default: CUDF_FAIL("Unsupported reduction operator");
+    default: CUDF_FAIL("Unsupported reduction operator", std::invalid_argument);
   }
 }
 
@@ -195,7 +198,8 @@ std::unique_ptr<scalar> reduce(column_view const& col,
                             agg.kind == aggregation::HOST_UDF)) {
     CUDF_FAIL(
       "Initial value is only supported for SUM, PRODUCT, MIN, MAX, ANY, ALL, and HOST_UDF "
-      "aggregation types");
+      "aggregation types",
+      std::invalid_argument);
   }
 
   // Returns default scalar if input column is empty or all null
