@@ -124,7 +124,7 @@ enum class mask_set_mode : bool { SAFE = true, UNSAFE = false };
  * @param[in]  number_of_mask_words The total number of 32-bit words in the null mask
  * @param[in]  group Cooperative group (1d grid or thread block)
  */
-template <typename ThreadGroup, mask_set_mode mode>
+template <typename ThreadGroup, mask_set_mode MODE>
 __device__ void set_null_mask_impl(bitmask_type* __restrict__ destination,
                                    size_type begin_bit,
                                    size_type end_bit,
@@ -147,7 +147,7 @@ __device__ void set_null_mask_impl(bitmask_type* __restrict__ destination,
       if (destination_word_index == last_word) {
         mask = mask & set_least_significant_bits(intra_word_index(end_bit));
       }
-      if constexpr (mode == mask_set_mode::SAFE) {
+      if constexpr (MODE == mask_set_mode::SAFE) {
         // Atomic ref to the destination word. Using thread block scope as this case is only
         // encountered when ThreadGroup = cg::thread_block
         auto destination_word_ref =
@@ -166,7 +166,7 @@ __device__ void set_null_mask_impl(bitmask_type* __restrict__ destination,
   }
 }
 
-template <mask_set_mode mode>
+template <mask_set_mode MODE>
 CUDF_KERNEL void set_null_masks_kernel(cudf::device_span<bitmask_type*> destinations,
                                        cudf::device_span<size_type const> begin_bits,
                                        cudf::device_span<size_type const> end_bits,
@@ -176,7 +176,7 @@ CUDF_KERNEL void set_null_masks_kernel(cudf::device_span<bitmask_type*> destinat
   auto const bitmask_idx = cg::this_grid().block_rank();
   // Return early if nothing to do
   if (begin_bits[bitmask_idx] == end_bits[bitmask_idx]) { return; }
-  set_null_mask_impl<cg::thread_block, mode>(destinations[bitmask_idx],
+  set_null_mask_impl<cg::thread_block, MODE>(destinations[bitmask_idx],
                                              begin_bits[bitmask_idx],
                                              end_bits[bitmask_idx],
                                              valids[bitmask_idx],
@@ -197,7 +197,7 @@ CUDF_KERNEL void set_null_mask_kernel(bitmask_type* destination,
 
 // Set pre-allocated null masks of given bit ranges [begin_bit, end_bit) to valids, if valid==true,
 // or null, otherwise;
-template <mask_set_mode mode>
+template <mask_set_mode MODE>
 void set_null_masks(cudf::host_span<bitmask_type*> bitmasks,
                     cudf::host_span<size_type const> begin_bits,
                     cudf::host_span<size_type const> end_bits,
@@ -260,7 +260,7 @@ void set_null_masks(cudf::host_span<bitmask_type*> bitmasks,
   // Cap block size to 1024 threads
   block_size = std::min<size_t>(block_size, 1024);
 
-  set_null_masks_kernel<mode><<<num_bitmasks, block_size, 0, stream.value()>>>(
+  set_null_masks_kernel<MODE><<<num_bitmasks, block_size, 0, stream.value()>>>(
     destinations, d_begin_bits, d_end_bits, d_valids, number_of_mask_words);
   CUDF_CHECK_CUDA(stream.value());
 }
