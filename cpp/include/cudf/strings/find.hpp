@@ -126,11 +126,18 @@ std::unique_ptr<column> find(
  * If the index-th target is not found within the input string, -1 is returned for that
  * row entry in the output column.
  *
+ * @code{.pseudo}
+ * Example:
+ * s = [ 'aaaaa', 'aabbccbbaa', 'bbcc', 'bbaagg' ]
+ * r = find_instance(s, 'aa', 1)
+ * r is [ 1, 8, -1, -1 ]
+ * @endcode
+ *
  * Any null input or target entries return corresponding null output column entries.
  *
  * @param input Strings for this operation
  * @param target UTF-8 encoded string to search for in each string
- * @param instance The instance of the target string to locate
+ * @param instance The instance of the target string to locate (0-based index)
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New integer column with character position values
