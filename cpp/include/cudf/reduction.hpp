@@ -65,7 +65,7 @@ enum class scan_type : bool { INCLUSIVE, EXCLUSIVE };
  * | ANY/ALL | BOOL8 | yes | True for ALL only | Checks for non-zero elements |
  * | MEAN/VARIANCE/STD | FLOAT32/FLOAT64 | no | NA | output_dtype must be a float type |
  * | MEDIAN/QUANTILE | FLOAT64 | no | NA |  |
- * | NUNIQUE | INT32 | no | 1 if all-nulls | May process null rows |
+ * | NUNIQUE | output_dtype | no | 1 if all-nulls | May process null rows |
  * | NTH_ELEMENT | col.type | no | NA |  |
  * | BITWISE_AGG | col.type | no | NA | Supports only integral types |
  * | HISTOGRAM/MERGE_HISTOGRAM | LIST of col.type | no | empty list |  |
