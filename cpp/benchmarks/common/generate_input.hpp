@@ -702,7 +702,7 @@ std::unique_ptr<cudf::table> create_sequence_table(
 std::unique_ptr<cudf::table> create_distinct_rows_table(
   std::vector<cudf::type_id> const& dtype_ids,
   row_count num_rows,
-  std::optional<double> null_probability = std::nullopt,
+  data_profile const& profile,
   unsigned seed                          = 1,
   rmm::cuda_stream_view stream           = cudf::get_default_stream());
 

@@ -198,13 +198,15 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> generate_i
   double selectivity,
   rmm::cuda_stream_view stream)
 {
-  double const null_probability = Nullable ? 0.3 : 0;
   // Construct build and probe tables
   // Unique table has build_table_numrows / multiplicity numroes
   auto unique_rows_build_table_numrows =
     static_cast<cudf::size_type>(build_table_numrows / multiplicity);
+
+  double const null_probability = Nullable ? 0.3 : 0;
+  auto const profile = data_profile{data_profile_builder().null_probability(null_probability)};
   auto unique_rows_build_table = create_distinct_rows_table(
-    key_types, row_count{unique_rows_build_table_numrows + 1}, null_probability);
+    key_types, row_count{unique_rows_build_table_numrows + 1}, profile, 1, stream);
 
   constexpr int block_size = 128;
 
