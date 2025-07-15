@@ -224,8 +224,8 @@ cdef class Aggregation:
         out.c_obj = move(agg)
         return out
 
-    def __str__(self):
-        return f"Aggregation(kind=Kind.{Kind(self.kind()).name})"
+    def __repr__(self):
+        return f"<Aggregation({self.kind()!r})>"
 
 
 cpdef Aggregation sum():
