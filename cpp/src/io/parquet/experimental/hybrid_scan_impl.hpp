@@ -367,14 +367,6 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
                                       RowMaskView row_mask);
 
   /**
-   * @brief Converts the page data and outputs to columns.
-   *
-   * @param skip_rows Minimum number of rows from start
-   * @param num_rows Number of rows to output
-   */
-  void decode_page_data(size_t skip_rows, size_t num_rows);
-
-  /**
    * @brief Read a chunk of data and return an output table.
    *
    * This function is called internally and expects all preprocessing steps have already been done.
