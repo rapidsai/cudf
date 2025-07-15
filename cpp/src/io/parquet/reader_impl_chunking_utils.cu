@@ -347,14 +347,12 @@ adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
                                 (int)c_info_sorted_2[i].key);
                        }
                      });
-
-    c_info_sorted =
-      make_device_uvector_async(c_info, stream, cudf::get_current_device_resource_ref());
-    thrust::sort(rmm::exec_policy_nosync(stream),
-                 c_info_sorted.begin(),
-                 c_info_sorted.end(),
-                 row_count_less{});
   }
+
+  c_info_sorted =
+    make_device_uvector_async(c_info, stream, cudf::get_current_device_resource_ref());
+  thrust::sort(
+    rmm::exec_policy_nosync(stream), c_info_sorted.begin(), c_info_sorted.end(), row_count_less{});
 
   // page keys grouped by split.
   rmm::device_uvector<int32_t> page_keys_by_split{c_info.size(), stream};
