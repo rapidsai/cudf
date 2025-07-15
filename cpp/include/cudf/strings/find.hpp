@@ -133,7 +133,8 @@ std::unique_ptr<column> find(
  * r is [ 1, 8, -1, -1 ]
  * @endcode
  *
- * Any null input or target entries return corresponding null output column entries.
+ * Any null input rows return corresponding null output column rows.
+ * This API produces the same output as `find()` when `instance == 0`.
  *
  * @param input Strings for this operation
  * @param target UTF-8 encoded string to search for in each string
