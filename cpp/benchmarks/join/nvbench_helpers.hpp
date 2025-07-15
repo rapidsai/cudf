@@ -26,24 +26,28 @@ enum class join_t { CONDITIONAL, MIXED, HASH, SORT_MERGE };
 
 // TODO: need to add list and struct
 enum class data_type : int32_t {
-  INT32           = static_cast<int32_t>(cudf::type_id::INT32),
-  INT64           = static_cast<int32_t>(cudf::type_id::INT64),
-  INTEGRAL        = static_cast<int32_t>(type_group_id::INTEGRAL),
-  INTEGRAL_SIGNED = static_cast<int32_t>(type_group_id::INTEGRAL_SIGNED),
-  FLOAT           = static_cast<int32_t>(type_group_id::FLOATING_POINT),
-  BOOL8           = static_cast<int32_t>(cudf::type_id::BOOL8),
-  DECIMAL         = static_cast<int32_t>(type_group_id::FIXED_POINT),
-  STRING          = static_cast<int32_t>(cudf::type_id::STRING),
-  LIST            = static_cast<int32_t>(cudf::type_id::LIST),
-  STRUCT          = static_cast<int32_t>(cudf::type_id::STRUCT)
+  INT32   = static_cast<int32_t>(cudf::type_id::INT32),
+  INT64   = static_cast<int32_t>(cudf::type_id::INT64),
+  FLOAT32 = static_cast<int32_t>(cudf::type_id::FLOAT32),
+  FLOAT64 = static_cast<int32_t>(cudf::type_id::FLOAT64),
+  STRING  = static_cast<int32_t>(cudf::type_id::STRING),
+  LIST    = static_cast<int32_t>(cudf::type_id::LIST),
+  STRUCT  = static_cast<int32_t>(cudf::type_id::STRUCT),
+
+  INTEGRAL       = static_cast<int32_t>(type_group_id::INTEGRAL),
+  FLOATING_POINT = static_cast<int32_t>(type_group_id::FLOATING_POINT),
+  NUMERIC        = static_cast<int32_t>(type_group_id::NUMERIC),
+  DECIMAL        = static_cast<int32_t>(type_group_id::FIXED_POINT),
+  COMPOUND       = static_cast<int32_t>(type_group_id::COMPOUND),
+  NESTED         = static_cast<int32_t>(type_group_id::NESTED)
 };
 
 NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
   cudf::null_equality,
   [](auto value) {
     switch (value) {
-      case cudf::null_equality::EQUAL: return "EQUAL";
-      case cudf::null_equality::UNEQUAL: return "UNEQUAL";
+      case cudf::null_equality::EQUAL: return "NULLS_EQUAL";
+      case cudf::null_equality::UNEQUAL: return "NULLS_UNEQUAL";
       default: return "Unknown";
     }
   },
@@ -66,14 +70,19 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
     switch (value) {
       case data_type::INT32: return "INT32";
       case data_type::INT64: return "INT64";
-      case data_type::INTEGRAL: return "INTEGRAL";
-      case data_type::INTEGRAL_SIGNED: return "INTEGRAL_SIGNED";
-      case data_type::FLOAT: return "FLOAT";
-      case data_type::BOOL8: return "BOOL8";
-      case data_type::DECIMAL: return "DECIMAL";
+      case data_type::FLOAT32: return "FLOAT32";
+      case data_type::FLOAT64: return "FLOAT64";
       case data_type::STRING: return "STRING";
       case data_type::LIST: return "LIST";
       case data_type::STRUCT: return "STRUCT";
+
+      case data_type::INTEGRAL: return "INTEGRAL";
+      case data_type::FLOATING_POINT: return "FLOATING_POINT";
+      case data_type::NUMERIC: return "NUMERIC";
+      case data_type::DECIMAL: return "DECIMAL";
+      case data_type::COMPOUND: return "COMPOUND";
+      case data_type::NESTED: return "NESTED";
+
       default: return "Unknown";
     }
   },

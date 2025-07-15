@@ -47,14 +47,13 @@
 using JOIN_ALGORITHM      = nvbench::enum_type_list<join_t::HASH, join_t::SORT_MERGE>;
 using JOIN_KEY_TYPE_RANGE = nvbench::type_list<nvbench::int32_t, nvbench::int64_t>;
 using JOIN_NULLABLE_RANGE = nvbench::enum_type_list<false, true>;
-using JOIN_DATATYPES      = nvbench::enum_type_list<data_type::INTEGRAL,
-                                                    data_type::INTEGRAL_SIGNED,
-                                                    data_type::FLOAT,
-                                                    data_type::INT32,
+using JOIN_DATATYPES      = nvbench::enum_type_list<data_type::INT32,
                                                     data_type::INT64,
+                                                    data_type::FLOAT32,
+                                                    data_type::FLOAT64,
+                                                    data_type::STRING,
                                                     data_type::LIST,
-                                                    data_type::STRUCT,
-                                                    data_type::STRING>;
+                                                    data_type::STRUCT>;
 using JOIN_NULL_EQUALITY =
   nvbench::enum_type_list<cudf::null_equality::EQUAL, cudf::null_equality::UNEQUAL>;
 
