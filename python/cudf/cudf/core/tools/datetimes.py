@@ -651,6 +651,12 @@ class DateOffset:
                 f" and {type(datetime_col).__name__}"
             )
         if not self._is_no_op:
+            tz = (
+                datetime_col.dtype.tz
+                if isinstance(datetime_col.dtype, pd.DatetimeTZDtype)
+                else None
+            )
+
             for unit, value in self._scalars.items():
                 value = -value if op == "__sub__" else value
                 if unit == "months":
@@ -663,6 +669,9 @@ class DateOffset:
                         )
                 else:
                     datetime_col += as_column(value, length=len(datetime_col))
+
+            if tz is not None:
+                datetime_col = datetime_col.tz_localize("UTC").tz_convert(tz)
 
         return datetime_col
 
