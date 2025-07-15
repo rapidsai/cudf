@@ -424,7 +424,7 @@ dependencies:
         packages:
           - c-compiler
           - cxx-compiler
-          - dlpack==1.*
+          - dlpack=1.*
           - zlib>=1.2.13
     specific:
       - output_types: conda
