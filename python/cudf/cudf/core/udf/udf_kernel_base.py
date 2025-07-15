@@ -18,9 +18,9 @@ from cudf.core.udf.utils import (
     _masked_array_type_from_col,
     _ptx_file,
     _supported_cols_from_frame,
+    compile_udf,
     precompiled as kernel_cache,
 )
-from cudf.utils import cudautils
 from cudf.utils._numba import _CUDFNumbaConfig
 from cudf.utils.performance_tracking import _performance_tracking
 
@@ -105,7 +105,7 @@ class ApplyKernelBase(ABC):
         # Get the return type. The PTX is also returned by compile_udf, but is not
         # needed here.
         with _CUDFNumbaConfig():
-            _, output_type = cudautils.compile_udf(self.func, compile_sig)
+            _, output_type = compile_udf(self.func, compile_sig)
         if isinstance(output_type, MaskedType):
             result = output_type.value_type
         else:

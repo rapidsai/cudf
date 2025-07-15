@@ -1119,6 +1119,14 @@ TEST_F(ReductionEmptyTest, empty_column)
   EXPECT_EQ(dynamic_cast<cudf::numeric_scalar<cudf::size_type>*>(result.get())->value(), 1);
 }
 
+TEST_F(ReductionEmptyTest, Errors)
+{
+  auto input     = cudf::test::fixed_width_column_wrapper<int32_t>({7, 8, 9});
+  auto agg       = cudf::make_nunique_aggregation<cudf::reduce_aggregation>();
+  auto bool_type = cudf::data_type{cudf::type_id::BOOL8};
+  EXPECT_THROW(cudf::reduce(input, *agg, bool_type), std::invalid_argument);
+}
+
 // ----------------------------------------------------------------------------
 
 struct ReductionParamTest : public ReductionTest<double>,
@@ -1512,39 +1520,53 @@ TYPED_TEST(ReductionTest, UniqueCount)
   std::vector<bool> host_bools({true, true, true, false, true, true, true, true});
   std::vector<T> v = convert_values<T>(int_values);
 
+  auto const output_type = cudf::data_type{cudf::type_to_id<cudf::size_type>()};
+
   // test without nulls
   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
   cudf::size_type expected_value = std::is_same_v<T, bool> ? 2 : 6;
-  EXPECT_EQ(
-    this
-      ->template reduction_test<cudf::size_type>(
-        col, *cudf::make_nunique_aggregation<reduce_aggregation>(cudf::null_policy::INCLUDE))
-      .first,
-    expected_value);
-  EXPECT_EQ(
-    this
-      ->template reduction_test<cudf::size_type>(
-        col, *cudf::make_nunique_aggregation<reduce_aggregation>(cudf::null_policy::EXCLUDE))
-      .first,
-    expected_value);
+  EXPECT_EQ(this
+              ->template reduction_test<cudf::size_type>(
+                col,
+                *cudf::make_nunique_aggregation<reduce_aggregation>(cudf::null_policy::INCLUDE),
+                output_type)
+              .first,
+            expected_value);
+  EXPECT_EQ(this
+              ->template reduction_test<cudf::size_type>(
+                col,
+                *cudf::make_nunique_aggregation<reduce_aggregation>(cudf::null_policy::EXCLUDE),
+                output_type)
+              .first,
+            expected_value);
 
   // test with nulls
   cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
   cudf::size_type expected_null_value0                = std::is_same_v<T, bool> ? 3 : 7;
   cudf::size_type expected_null_value1                = std::is_same_v<T, bool> ? 2 : 6;
 
-  EXPECT_EQ(
-    this
-      ->template reduction_test<cudf::size_type>(
-        col_nulls, *cudf::make_nunique_aggregation<reduce_aggregation>(cudf::null_policy::INCLUDE))
-      .first,
-    expected_null_value0);
-  EXPECT_EQ(
-    this
-      ->template reduction_test<cudf::size_type>(
-        col_nulls, *cudf::make_nunique_aggregation<reduce_aggregation>(cudf::null_policy::EXCLUDE))
-      .first,
-    expected_null_value1);
+  EXPECT_EQ(this
+              ->template reduction_test<cudf::size_type>(
+                col_nulls,
+                *cudf::make_nunique_aggregation<reduce_aggregation>(cudf::null_policy::INCLUDE),
+                output_type)
+              .first,
+            expected_null_value0);
+  EXPECT_EQ(this
+              ->template reduction_test<cudf::size_type>(
+                col_nulls,
+                *cudf::make_nunique_aggregation<reduce_aggregation>(cudf::null_policy::EXCLUDE),
+                output_type)
+              .first,
+            expected_null_value1);
+
+  EXPECT_EQ(this
+              ->template reduction_test<uint32_t>(
+                col_nulls,
+                *cudf::make_nunique_aggregation<reduce_aggregation>(cudf::null_policy::EXCLUDE),
+                cudf::data_type{cudf::type_to_id<uint32_t>()})
+              .first,
+            expected_null_value1);
 }
 
 template <typename T>
@@ -1922,14 +1944,14 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionNUnique)
   using decimalXX  = TypeParam;
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+  auto output_type = cudf::data_type{cudf::type_to_id<cudf::size_type>()};
 
   for (auto const i : {0, -1, -2, -3}) {
-    auto const scale    = scale_type{i};
-    auto const column   = fp_wrapper{{1, 1, 2, 2, 3, 3, 4, 4}, scale};
-    auto const out_type = static_cast<cudf::column_view>(column).type();
+    auto const scale  = scale_type{i};
+    auto const column = fp_wrapper{{1, 1, 2, 2, 3, 3, 4, 4}, scale};
 
     auto const result =
-      cudf::reduce(column, *cudf::make_nunique_aggregation<reduce_aggregation>(), out_type);
+      cudf::reduce(column, *cudf::make_nunique_aggregation<reduce_aggregation>(), output_type);
     auto const result_scalar = static_cast<cudf::scalar_type_t<cudf::size_type>*>(result.get());
 
     EXPECT_EQ(result_scalar->value(), 4);

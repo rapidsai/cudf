@@ -539,9 +539,9 @@ void decode_split_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
   }
 }
 
-void WriteFinalOffsets(host_span<size_type const> offsets,
-                       host_span<size_type* const> buff_addrs,
-                       rmm::cuda_stream_view stream)
+void write_final_offsets(host_span<size_type const> offsets,
+                         host_span<size_type* const> buff_addrs,
+                         rmm::cuda_stream_view stream)
 {
   // Copy offsets to device and create an iterator
   auto d_src_data = cudf::detail::make_device_uvector_async(
