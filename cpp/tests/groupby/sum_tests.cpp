@@ -370,32 +370,36 @@ TYPED_TEST(groupby_sum_ansi_test, null_keys_and_values)
   // Note: SUM_ANSI only works with hash groupby, not sort groupby
 }
 
-// Additional SUM_ANSI tests for int64_t specific scenarios
-struct sum_ansi_int64_test : public cudf::test::BaseFixture {};
-
-// Test SUM_ANSI with large int64_t values
-TEST_F(sum_ansi_int64_test, large_values)
+TYPED_TEST(groupby_sum_ansi_test, overflow_detection)
 {
-  using V = int64_t;
+  using V = TypeParam;
 
   cudf::test::fixed_width_column_wrapper<K> keys{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
-  cudf::test::fixed_width_column_wrapper<V> vals{100000000000L,
-                                                 200000000000L,
-                                                 300000000000L,
-                                                 400000000000L,
-                                                 500000000000L,
-                                                 600000000000L,
-                                                 700000000000L,
-                                                 800000000000L,
-                                                 900000000000L,
-                                                 1000000000000L};
+  // Mix of values that will cause overflow for some groups but not others
+  cudf::test::fixed_width_column_wrapper<V> vals{
+    9223372036854775800L,  // Close to INT64_MAX
+    100L,                  // Small value
+    200L,                  // Small value
+    20L,                   // Small value that will cause overflow when added to first
+    200L,                  // Small value
+    300L,                  // Small value
+    9223372036854775800L,  // Close to INT64_MAX
+    9223372036854775800L,  // Close to INT64_MAX
+    1L,                    // Small value
+    400L};                 // Small value
 
   cudf::test::fixed_width_column_wrapper<K> expect_keys{1, 2, 3};
 
   // Create expected struct column with sum and overflow children
-  auto sum_col =
-    cudf::test::fixed_width_column_wrapper<int64_t>{1200000000000L, 2300000000000L, 2000000000000L};
-  auto overflow_col = cudf::test::fixed_width_column_wrapper<bool>{false, false, false};
+  // Group 1: 9223372036854775800 + 20 + 9223372036854775800 = overflow
+  // Group 2: 100 + 200 + 300 + 400 = 1000 (no overflow)
+  // Group 3: 200 + 9223372036854775800 + 1 = overflow
+  auto sum_col = cudf::test::fixed_width_column_wrapper<int64_t>{
+    4L,                    // Overflow result for group 1
+    1000L,                 // Normal sum for group 2 (no overflow)
+    -9223372036854775615L  // Overflow result for group 3
+  };
+  auto overflow_col = cudf::test::fixed_width_column_wrapper<bool>{true, false, true};
   std::vector<std::unique_ptr<cudf::column>> children;
   children.push_back(sum_col.release());
   children.push_back(overflow_col.release());
