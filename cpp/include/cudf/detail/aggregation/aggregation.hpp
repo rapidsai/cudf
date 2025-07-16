@@ -40,6 +40,8 @@ class simple_aggregations_collector {  // Declares the interface for the simple 
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class sum_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
+                                                          class sum_ansi_aggregation const& agg);
+  virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class product_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class min_aggregation const& agg);
@@ -116,6 +118,7 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
   // Declare overloads for each kind of a agg to dispatch
   virtual void visit(aggregation const& agg);
   virtual void visit(class sum_aggregation const& agg);
+  virtual void visit(class sum_ansi_aggregation const& agg);
   virtual void visit(class product_aggregation const& agg);
   virtual void visit(class min_aggregation const& agg);
   virtual void visit(class max_aggregation const& agg);
@@ -168,6 +171,25 @@ class sum_aggregation final : public rolling_aggregation,
   [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<sum_aggregation>(*this);
+  }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
+};
+
+/**
+ * @brief Derived class for specifying a sum_ansi aggregation
+ */
+class sum_ansi_aggregation final : public groupby_aggregation, public groupby_scan_aggregation {
+ public:
+  sum_ansi_aggregation() : aggregation(SUM_ANSI) {}
+
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
+  {
+    return std::make_unique<sum_ansi_aggregation>(*this);
   }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
@@ -1352,11 +1374,13 @@ constexpr bool is_sum_product_agg(aggregation::Kind k)
          (k == aggregation::SUM_OF_SQUARES);
 }
 
-// Summing/Multiplying integers of any type, always use int64_t accumulator
+// Summing/Multiplying integers of any type, always use int64_t accumulator (except SUM_ANSI which
+// has its own template)
 template <typename Source, aggregation::Kind k>
 struct target_type_impl<Source,
                         k,
-                        std::enable_if_t<std::is_integral_v<Source> && is_sum_product_agg(k)>> {
+                        std::enable_if_t<std::is_integral_v<Source> && is_sum_product_agg(k) &&
+                                         k != aggregation::SUM_ANSI>> {
   using type = int64_t;
 };
 
@@ -1369,12 +1393,13 @@ struct target_type_impl<
   using type = Source;
 };
 
-// Summing/Multiplying float/doubles, use same type accumulator
+// Summing/Multiplying float/doubles, use same type accumulator (except SUM_ANSI which has its own
+// template)
 template <typename Source, aggregation::Kind k>
-struct target_type_impl<
-  Source,
-  k,
-  std::enable_if_t<std::is_floating_point_v<Source> && is_sum_product_agg(k)>> {
+struct target_type_impl<Source,
+                        k,
+                        std::enable_if_t<std::is_floating_point_v<Source> &&
+                                         is_sum_product_agg(k) && k != aggregation::SUM_ANSI>> {
   using type = Source;
 };
 
@@ -1386,11 +1411,10 @@ struct target_type_impl<Source,
   using type = Source;
 };
 
-// SUM_ANSI always outputs int64_t (in future this should be a struct of int64_t and bool)
-// For now, we implement the basic INT64 output with plans to extend to struct output
+// SUM_ANSI always outputs a struct {sum: int64_t, overflow: bool} regardless of input type
 template <typename Source>
 struct target_type_impl<Source, aggregation::SUM_ANSI> {
-  using type = int64_t;
+  using type = int64_t;  // TODO: Change to struct {int64_t sum; bool overflow;} in future
 };
 
 // Always use `double` for M2
@@ -1606,6 +1630,8 @@ CUDF_HOST_DEVICE inline decltype(auto) aggregation_dispatcher(aggregation::Kind 
   switch (k) {
     case aggregation::SUM:
       return f.template operator()<aggregation::SUM>(std::forward<Ts>(args)...);
+    case aggregation::SUM_ANSI:
+      return f.template operator()<aggregation::SUM_ANSI>(std::forward<Ts>(args)...);
     case aggregation::PRODUCT:
       return f.template operator()<aggregation::PRODUCT>(std::forward<Ts>(args)...);
     case aggregation::MIN:

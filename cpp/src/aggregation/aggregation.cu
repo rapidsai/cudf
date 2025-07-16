@@ -50,8 +50,8 @@ struct identity_initializer {
   static constexpr bool is_supported()
   {
     return cudf::is_fixed_width<T>() and
-           (k == aggregation::SUM or k == aggregation::MIN or k == aggregation::MAX or
-            k == aggregation::COUNT_VALID or k == aggregation::COUNT_ALL or
+           (k == aggregation::SUM or k == aggregation::SUM_ANSI or k == aggregation::MIN or
+            k == aggregation::MAX or k == aggregation::COUNT_VALID or k == aggregation::COUNT_ALL or
             k == aggregation::ARGMAX or k == aggregation::ARGMIN or
             k == aggregation::SUM_OF_SQUARES or k == aggregation::STD or
             k == aggregation::VARIANCE or

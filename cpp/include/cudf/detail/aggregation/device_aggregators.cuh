@@ -155,8 +155,9 @@ struct update_target_element<Source, aggregation::SUM> {
   }
 };
 
-template <int64_t Source>
-struct update_target_element<int64_t, aggregation::SUM_ANSI> {
+template <typename Source>
+  requires(cuda::std::is_same_v<Source, int64_t>)
+struct update_target_element<Source, aggregation::SUM_ANSI> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,

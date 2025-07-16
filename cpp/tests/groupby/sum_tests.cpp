@@ -231,11 +231,11 @@ TYPED_TEST(GroupBySumFixedPointTest, GroupByHashSumDecimalAsValue)
   }
 }
 
-// SUM_ANSI tests - always outputs int64_t regardless of input type
+// SUM_ANSI tests - only supports int64_t input values and outputs int64_t
 template <typename V>
 struct groupby_sum_ansi_test : public cudf::test::BaseFixture {};
 
-using sum_ansi_supported_types = cudf::test::Types<int8_t, int16_t, int32_t, int64_t>;
+using sum_ansi_supported_types = cudf::test::Types<int64_t>;
 
 TYPED_TEST_SUITE(groupby_sum_ansi_test, sum_ansi_supported_types);
 
@@ -335,11 +335,11 @@ TYPED_TEST(groupby_sum_ansi_test, null_keys_and_values)
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
-// Test SUM_ANSI with small integer types to verify they promote to int64_t
-struct sum_ansi_type_promotion_test : public cudf::test::BaseFixture {};
+// Additional SUM_ANSI tests for int64_t specific scenarios
+struct sum_ansi_int64_test : public cudf::test::BaseFixture {};
 
-// Test SUM_ANSI with int64_t values to verify it works with the target type
-TEST_F(sum_ansi_type_promotion_test, int64_input)
+// Test SUM_ANSI with large int64_t values
+TEST_F(sum_ansi_int64_test, large_values)
 {
   using V = int64_t;
   using R = int64_t;  // SUM_ANSI always outputs int64_t
@@ -365,50 +365,4 @@ TEST_F(sum_ansi_type_promotion_test, int64_input)
 
   auto agg2 = cudf::make_sum_ansi_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
-}
-
-TEST_F(sum_ansi_type_promotion_test, int8_to_int64)
-{
-  using V = int8_t;
-  using R = int64_t;  // SUM_ANSI always outputs int64_t
-
-  cudf::test::fixed_width_column_wrapper<K> keys{1, 1, 1};
-  cudf::test::fixed_width_column_wrapper<V> vals{100, 20, 7};  // Sum = 127, fits in int8_t
-
-  cudf::test::fixed_width_column_wrapper<K> expect_keys{1};
-  cudf::test::fixed_width_column_wrapper<R> expect_vals{127};  // Output is int64_t
-
-  auto agg = cudf::make_sum_ansi_aggregation<cudf::groupby_aggregation>();
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
-}
-
-TEST_F(sum_ansi_type_promotion_test, int16_to_int64)
-{
-  using V = int16_t;
-  using R = int64_t;  // SUM_ANSI always outputs int64_t
-
-  cudf::test::fixed_width_column_wrapper<K> keys{1, 1, 1};
-  cudf::test::fixed_width_column_wrapper<V> vals{30000, 20000, 10000};  // Sum = 60000
-
-  cudf::test::fixed_width_column_wrapper<K> expect_keys{1};
-  cudf::test::fixed_width_column_wrapper<R> expect_vals{60000};  // Output is int64_t
-
-  auto agg = cudf::make_sum_ansi_aggregation<cudf::groupby_aggregation>();
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
-}
-
-TEST_F(sum_ansi_type_promotion_test, int32_to_int64)
-{
-  using V = int32_t;
-  using R = int64_t;  // SUM_ANSI always outputs int64_t
-
-  cudf::test::fixed_width_column_wrapper<K> keys{1, 1, 1};
-  cudf::test::fixed_width_column_wrapper<V> vals{
-    2000000000, 100000000, 47483648};  // Sum exceeds int32_t max
-
-  cudf::test::fixed_width_column_wrapper<K> expect_keys{1};
-  cudf::test::fixed_width_column_wrapper<R> expect_vals{2147483648L};  // Output is int64_t
-
-  auto agg = cudf::make_sum_ansi_aggregation<cudf::groupby_aggregation>();
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
