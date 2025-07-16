@@ -112,7 +112,7 @@ T = TypeVar("T")
 
 
 def _make_default_factory(
-    key: str, converter: Callable[[str], T], default: T
+    key: str, converter: Callable[[str], T], *, default: T
 ) -> Callable[[], T]:
     def default_factory() -> T:
         v = os.environ.get(key)
@@ -321,44 +321,48 @@ class StreamingExecutor:
     name: Literal["streaming"] = dataclasses.field(default="streaming", init=False)
     scheduler: Scheduler = dataclasses.field(
         default_factory=_make_default_factory(
-            f"{_env_prefix}__SCHEDULER", Scheduler.__call__, Scheduler.SYNCHRONOUS
+            f"{_env_prefix}__SCHEDULER",
+            Scheduler.__call__,
+            default=Scheduler.SYNCHRONOUS,
         )
     )
     fallback_mode: StreamingFallbackMode = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__FALLBACK_MODE",
             StreamingFallbackMode.__call__,
-            StreamingFallbackMode.WARN,
+            default=StreamingFallbackMode.WARN,
         )
     )
     max_rows_per_partition: int = dataclasses.field(
         default_factory=_make_default_factory(
-            f"{_env_prefix}__MAX_ROWS_PER_PARTITION", int, 1_000_000
+            f"{_env_prefix}__MAX_ROWS_PER_PARTITION", int, default=1_000_000
         )
     )
     unique_fraction: dict[str, float] = dataclasses.field(
         default_factory=_make_default_factory(
-            f"{_env_prefix}__UNIQUE_FRACTION", json.loads, {}
+            f"{_env_prefix}__UNIQUE_FRACTION", json.loads, default={}
         )
     )
     target_partition_size: int = dataclasses.field(
         default_factory=_make_default_factory(
-            f"{_env_prefix}__TARGET_PARTITION_SIZE", int, 0
+            f"{_env_prefix}__TARGET_PARTITION_SIZE", int, default=0
         )
     )
     groupby_n_ary: int = dataclasses.field(
-        default_factory=_make_default_factory(f"{_env_prefix}__GROUPBY_N_ARY", int, 32)
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__GROUPBY_N_ARY", int, default=32
+        )
     )
     broadcast_join_limit: int = dataclasses.field(
         default_factory=_make_default_factory(
-            f"{_env_prefix}__BROADCAST_JOIN_LIMIT", int, 0
+            f"{_env_prefix}__BROADCAST_JOIN_LIMIT", int, default=0
         )
     )
     shuffle_method: ShuffleMethod = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__SHUFFLE_METHOD",
             ShuffleMethod.__call__,
-            ShuffleMethod.TASKS,
+            default=ShuffleMethod.TASKS,
         )
     )
     rapidsmpf_spill: bool = dataclasses.field(
@@ -368,7 +372,7 @@ class StreamingExecutor:
     )
     sink_to_directory: bool | None = dataclasses.field(
         default_factory=_make_default_factory(
-            f"{_env_prefix}__SINK_TO_DIRECTORY", _bool_converter, None
+            f"{_env_prefix}__SINK_TO_DIRECTORY", _bool_converter, default=None
         )
     )
 
