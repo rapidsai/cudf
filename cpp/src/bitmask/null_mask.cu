@@ -512,11 +512,6 @@ cudf::size_type count_unset_bits(bitmask_type const* bitmask,
                                  size_type stop,
                                  rmm::cuda_stream_view stream)
 {
-  if (bitmask == nullptr) {
-    CUDF_EXPECTS(start >= 0 and start <= stop, "Invalid bit range.");
-    return 0;
-  }
-
   auto const num_set_bits   = detail::count_set_bits(bitmask, start, stop, stream);
   auto const total_num_bits = (stop - start);
   return total_num_bits - num_set_bits;
@@ -542,6 +537,11 @@ cudf::size_type null_count(bitmask_type const* bitmask,
                            size_type stop,
                            rmm::cuda_stream_view stream)
 {
+  if (bitmask == nullptr) {
+    CUDF_EXPECTS(start >= 0 and start <= stop, "Invalid bit range.");
+    return 0;
+  }
+
   return detail::count_unset_bits(bitmask, start, stop, stream);
 }
 
