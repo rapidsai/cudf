@@ -168,8 +168,8 @@ cpdef DeviceBuffer join_strings_to_buffer(Column input, Scalar separator, Scalar
 
     Returns
     -------
-    Column
-        New column containing one string
+    DeviceBuffer
+        New RMM device buffer containing joined string
     """
     cdef unique_ptr[column] c_result
     cdef const string_scalar* c_separator = <const string_scalar*>(
