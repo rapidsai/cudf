@@ -1432,124 +1432,145 @@ def test_concat_decimal_series(ltype, rtype):
 
 
 @pytest.mark.parametrize(
-    "df1, df2, df3, expected",
+    "data1, dtype1, index1, data2, dtype2, index2, data3, dtype3, index3, expected_data, expected_dtype, expected_index",
     [
-        (
-            cudf.DataFrame(
-                {"val": [Decimal("42.5"), Decimal("8.7")]},
-                dtype=Decimal64Dtype(5, 2),
-            ),
-            cudf.DataFrame(
-                {"val": [Decimal("9.23"), Decimal("-67.49")]},
-                dtype=Decimal64Dtype(6, 4),
-            ),
-            cudf.DataFrame({"val": [8, -5]}, dtype="int32"),
-            cudf.DataFrame(
-                {
-                    "val": [
-                        Decimal("42.5"),
-                        Decimal("8.7"),
-                        Decimal("9.23"),
-                        Decimal("-67.49"),
-                        Decimal("8"),
-                        Decimal("-5"),
-                    ]
-                },
-                dtype=Decimal32Dtype(7, 4),
-                index=[0, 1, 0, 1, 0, 1],
-            ),
-        ),
-        (
-            cudf.DataFrame(
-                {"val": [Decimal("95.2"), Decimal("23.4")]},
-                dtype=Decimal64Dtype(5, 2),
-            ),
-            cudf.DataFrame({"val": [54, 509]}, dtype="uint16"),
-            cudf.DataFrame({"val": [24, -48]}, dtype="int32"),
-            cudf.DataFrame(
-                {
-                    "val": [
-                        Decimal("95.2"),
-                        Decimal("23.4"),
-                        Decimal("54"),
-                        Decimal("509"),
-                        Decimal("24"),
-                        Decimal("-48"),
-                    ]
-                },
-                dtype=Decimal32Dtype(5, 2),
-                index=[0, 1, 0, 1, 0, 1],
-            ),
-        ),
-        (
-            cudf.DataFrame(
-                {"val": [Decimal("36.56"), Decimal("-59.24")]},
-                dtype=Decimal64Dtype(9, 4),
-            ),
-            cudf.DataFrame({"val": [403.21, 45.13]}, dtype="float32"),
-            cudf.DataFrame({"val": [52.262, -49.25]}, dtype="float64"),
-            cudf.DataFrame(
-                {
-                    "val": [
-                        Decimal("36.56"),
-                        Decimal("-59.24"),
-                        Decimal("403.21"),
-                        Decimal("45.13"),
-                        Decimal("52.262"),
-                        Decimal("-49.25"),
-                    ]
-                },
-                dtype=Decimal32Dtype(9, 4),
-                index=[0, 1, 0, 1, 0, 1],
-            ),
-        ),
-        (
-            cudf.DataFrame(
-                {"val": [Decimal("9563.24"), Decimal("236.633")]},
-                dtype=Decimal64Dtype(9, 4),
-            ),
-            cudf.DataFrame({"val": [5393, -95832]}, dtype="int64"),
-            cudf.DataFrame({"val": [-29.234, -31.945]}, dtype="float64"),
-            cudf.DataFrame(
-                {
-                    "val": [
-                        Decimal("9563.24"),
-                        Decimal("236.633"),
-                        Decimal("5393"),
-                        Decimal("-95832"),
-                        Decimal("-29.234"),
-                        Decimal("-31.945"),
-                    ]
-                },
-                dtype=Decimal32Dtype(9, 4),
-                index=[0, 1, 0, 1, 0, 1],
-            ),
-        ),
-        (
-            cudf.DataFrame(
-                {"val": [Decimal("95633.24"), Decimal("236.633")]},
-                dtype=Decimal128Dtype(19, 4),
-            ),
-            cudf.DataFrame({"val": [5393, -95832]}, dtype="int64"),
-            cudf.DataFrame({"val": [-29.234, -31.945]}, dtype="float64"),
-            cudf.DataFrame(
-                {
-                    "val": [
-                        Decimal("95633.24"),
-                        Decimal("236.633"),
-                        Decimal("5393"),
-                        Decimal("-95832"),
-                        Decimal("-29.234"),
-                        Decimal("-31.945"),
-                    ]
-                },
-                dtype=Decimal128Dtype(19, 4),
-                index=[0, 1, 0, 1, 0, 1],
-            ),
-        ),
+        [
+            {"val": [Decimal("42.5"), Decimal("8.7")]},
+            Decimal64Dtype(5, 2),
+            None,
+            {"val": [Decimal("9.23"), Decimal("-67.49")]},
+            Decimal64Dtype(6, 4),
+            None,
+            {"val": [8, -5]},
+            "int32",
+            None,
+            {
+                "val": [
+                    Decimal("42.5"),
+                    Decimal("8.7"),
+                    Decimal("9.23"),
+                    Decimal("-67.49"),
+                    Decimal("8"),
+                    Decimal("-5"),
+                ]
+            },
+            Decimal32Dtype(7, 4),
+            [0, 1, 0, 1, 0, 1],
+        ],
+        [
+            {"val": [Decimal("95.2"), Decimal("23.4")]},
+            Decimal64Dtype(5, 2),
+            None,
+            {"val": [54, 509]},
+            "uint16",
+            None,
+            {"val": [24, -48]},
+            "int32",
+            None,
+            {
+                "val": [
+                    Decimal("95.2"),
+                    Decimal("23.4"),
+                    Decimal("54"),
+                    Decimal("509"),
+                    Decimal("24"),
+                    Decimal("-48"),
+                ]
+            },
+            Decimal32Dtype(5, 2),
+            [0, 1, 0, 1, 0, 1],
+        ],
+        [
+            {"val": [Decimal("36.56"), Decimal("-59.24")]},
+            Decimal64Dtype(9, 4),
+            None,
+            {"val": [403.21, 45.13]},
+            "float32",
+            None,
+            {"val": [52.262, -49.25]},
+            "float64",
+            None,
+            {
+                "val": [
+                    Decimal("36.56"),
+                    Decimal("-59.24"),
+                    Decimal("403.21"),
+                    Decimal("45.13"),
+                    Decimal("52.262"),
+                    Decimal("-49.25"),
+                ]
+            },
+            Decimal32Dtype(9, 4),
+            [0, 1, 0, 1, 0, 1],
+        ],
+        [
+            {"val": [Decimal("9563.24"), Decimal("236.633")]},
+            Decimal64Dtype(9, 4),
+            None,
+            {"val": [5393, -95832]},
+            "int64",
+            None,
+            {"val": [-29.234, -31.945]},
+            "float64",
+            None,
+            {
+                "val": [
+                    Decimal("9563.24"),
+                    Decimal("236.633"),
+                    Decimal("5393"),
+                    Decimal("-95832"),
+                    Decimal("-29.234"),
+                    Decimal("-31.945"),
+                ]
+            },
+            Decimal32Dtype(9, 4),
+            [0, 1, 0, 1, 0, 1],
+        ],
+        [
+            {"val": [Decimal("95633.24"), Decimal("236.633")]},
+            Decimal128Dtype(19, 4),
+            None,
+            {"val": [5393, -95832]},
+            "int64",
+            None,
+            {"val": [-29.234, -31.945]},
+            "float64",
+            None,
+            {
+                "val": [
+                    Decimal("95633.24"),
+                    Decimal("236.633"),
+                    Decimal("5393"),
+                    Decimal("-95832"),
+                    Decimal("-29.234"),
+                    Decimal("-31.945"),
+                ]
+            },
+            Decimal128Dtype(19, 4),
+            [0, 1, 0, 1, 0, 1],
+        ],
     ],
 )
-def test_concat_decimal_numeric_dataframe(df1, df2, df3, expected):
+def test_concat_decimal_numeric_dataframe(
+    data1,
+    dtype1,
+    index1,
+    data2,
+    dtype2,
+    index2,
+    data3,
+    dtype3,
+    index3,
+    expected_data,
+    expected_dtype,
+    expected_index,
+):
+    df1 = cudf.DataFrame(data1, dtype=dtype1, index=index1)
+    df2 = cudf.DataFrame(data2, dtype=dtype2, index=index2)
+    df3 = cudf.DataFrame(data3, dtype=dtype3, index=index3)
+    expected = cudf.DataFrame(
+        expected_data, dtype=expected_dtype, index=expected_index
+    )
     df = cudf.concat([df1, df2, df3])
     assert_eq(df, expected, check_index_type=True)
     assert_eq(df.val.dtype, expected.val.dtype)
