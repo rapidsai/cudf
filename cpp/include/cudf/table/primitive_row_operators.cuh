@@ -141,13 +141,9 @@ class row_equality_comparator {
 
     element_equality_comparator comparator;
     auto equal_elements = [&comparator, lhs_row_index, rhs_row_index](column_device_view const& l,
-                                                                     column_device_view const& r) {
-      return cudf::type_dispatcher<dispatch_primitive_type>(l.type(),
-                                                            comparator,
-                                                            l,
-                                                            r,
-                                                            lhs_row_index,
-                                                            rhs_row_index);
+                                                                      column_device_view const& r) {
+      return cudf::type_dispatcher<dispatch_primitive_type>(
+        l.type(), comparator, l, r, lhs_row_index, rhs_row_index);
     };
 
     return thrust::equal(thrust::seq, _lhs.begin(), _lhs.end(), _rhs.begin(), equal_elements);
@@ -273,7 +269,8 @@ class row_hasher {
           cudf::type_dispatcher<dispatch_primitive_type>(
             _table.column(i).type(), hasher, _seed, _table.column(i), row_index));
       } else {
-        hash = cudf::hashing::detail::hash_combine(hash, cuda::std::numeric_limits<hash_value_type>::max());
+        hash = cudf::hashing::detail::hash_combine(
+          hash, cuda::std::numeric_limits<hash_value_type>::max());
       }
     }
     return hash;
