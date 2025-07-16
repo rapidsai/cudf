@@ -15,6 +15,26 @@ from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
 
 
+@pytest.fixture(params=[True, False])
+def ignore_index(request):
+    return request.param
+
+
+@pytest.fixture(params=[True, False])
+def sort(request):
+    return request.param
+
+
+@pytest.fixture(params=["outer", "inner"])
+def join(request):
+    return request.param
+
+
+@pytest.fixture(params=[0, "index", 1, "columns"])
+def axis(request):
+    return request.param
+
+
 @contextmanager
 def _hide_concat_empty_dtype_warning():
     with warnings.catch_warnings():
@@ -216,7 +236,6 @@ def test_concat_columns(axis):
     assert_eq(expect, got, check_index_type=True)
 
 
-@pytest.mark.parametrize("axis", [0, 1])
 def test_concat_multiindex_dataframe(axis):
     gdf = cudf.DataFrame(
         {
@@ -623,7 +642,6 @@ def test_concat_series_dataframe_input_str(objs):
         ],
     ],
 )
-@pytest.mark.parametrize("ignore_index", [True, False])
 def test_concat_empty_dataframes(df, other, ignore_index):
     other_pd = [df, *other]
 
@@ -660,7 +678,6 @@ def test_concat_empty_dataframes(df, other, ignore_index):
         )
 
 
-@pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize("axis", [0, "index"])
 @pytest.mark.parametrize(
     "data",
@@ -680,7 +697,6 @@ def test_concat_empty_and_nonempty_series(ignore_index, data, axis):
     assert_eq(got, expect, check_index_type=True)
 
 
-@pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize("axis", [0, "index"])
 def test_concat_two_empty_series(ignore_index, axis):
     s1 = cudf.Series()
@@ -762,11 +778,8 @@ def test_concat_dataframe_with_multiindex(key2):
         ],
     ],
 )
-@pytest.mark.parametrize("ignore_index", [True, False])
-@pytest.mark.parametrize("sort", [True, False])
-@pytest.mark.parametrize("join", ["inner", "outer"])
-@pytest.mark.parametrize("axis", [0])
 def test_concat_join(objs, ignore_index, sort, join, axis):
+    axis = 0
     gpu_objs = [cudf.from_pandas(o) for o in objs]
 
     assert_eq(
@@ -834,12 +847,9 @@ def test_concat_join_axis_1_dup_error(objs):
         ],
     ],
 )
-@pytest.mark.parametrize("ignore_index", [True, False])
-@pytest.mark.parametrize("sort", [True, False])
-@pytest.mark.parametrize("join", ["inner", "outer"])
-@pytest.mark.parametrize("axis", [1])
 def test_concat_join_axis_1(objs, ignore_index, sort, join, axis):
     # no duplicate columns
+    axis = 1
     gpu_objs = [cudf.from_pandas(o) for o in objs]
     expected = pd.concat(
         objs, sort=sort, join=join, ignore_index=ignore_index, axis=axis
@@ -855,10 +865,6 @@ def test_concat_join_axis_1(objs, ignore_index, sort, join, axis):
     assert_eq(expected, actual, check_index_type=True)
 
 
-@pytest.mark.parametrize("ignore_index", [True, False])
-@pytest.mark.parametrize("sort", [True, False])
-@pytest.mark.parametrize("join", ["inner", "outer"])
-@pytest.mark.parametrize("axis", [1, 0])
 def test_concat_join_many_df_and_empty_df(ignore_index, sort, join, axis):
     # no duplicate columns
     pdf1 = pd.DataFrame(
@@ -899,10 +905,6 @@ def test_concat_join_many_df_and_empty_df(ignore_index, sort, join, axis):
         )
 
 
-@pytest.mark.parametrize("ignore_index", [True, False])
-@pytest.mark.parametrize("sort", [True, False])
-@pytest.mark.parametrize("join", ["inner", "outer"])
-@pytest.mark.parametrize("axis", [0, 1])
 def test_concat_join_one_df(ignore_index, sort, join, axis):
     pdf1 = pd.DataFrame(
         {
@@ -940,10 +942,6 @@ def test_concat_join_one_df(ignore_index, sort, join, axis):
         ),
     ],
 )
-@pytest.mark.parametrize("ignore_index", [True, False])
-@pytest.mark.parametrize("sort", [True, False])
-@pytest.mark.parametrize("join", ["inner", "outer"])
-@pytest.mark.parametrize("axis", [0, 1])
 def test_concat_join_no_overlapping_columns(
     pdf1, pdf2, ignore_index, sort, join, axis
 ):
@@ -968,10 +966,6 @@ def test_concat_join_no_overlapping_columns(
     assert_eq(expected, actual, check_index_type=True)
 
 
-@pytest.mark.parametrize("ignore_index", [False, True])
-@pytest.mark.parametrize("sort", [True, False])
-@pytest.mark.parametrize("join", ["inner", "outer"])
-@pytest.mark.parametrize("axis", [0, 1])
 def test_concat_join_no_overlapping_columns_many_and_empty(
     ignore_index, sort, join, axis
 ):
@@ -1055,10 +1049,6 @@ def test_concat_join_no_overlapping_columns_many_and_empty(
         ),
     ],
 )
-@pytest.mark.parametrize("ignore_index", [True, False])
-@pytest.mark.parametrize("sort", [False, True])
-@pytest.mark.parametrize("join", ["outer", "inner"])
-@pytest.mark.parametrize("axis", [0, 1])
 def test_concat_join_no_overlapping_columns_many_and_empty2(
     objs, ignore_index, sort, join, axis
 ):
@@ -1082,10 +1072,6 @@ def test_concat_join_no_overlapping_columns_many_and_empty2(
     assert_eq(expected, actual, check_index_type=False)
 
 
-@pytest.mark.parametrize("ignore_index", [True, False])
-@pytest.mark.parametrize("sort", [True, False])
-@pytest.mark.parametrize("join", ["inner", "outer"])
-@pytest.mark.parametrize("axis", [0, 1])
 def test_concat_join_no_overlapping_columns_empty_df_basic(
     ignore_index, sort, join, axis
 ):
@@ -1124,10 +1110,6 @@ def test_concat_join_no_overlapping_columns_empty_df_basic(
     )
 
 
-@pytest.mark.parametrize("ignore_index", [True, False])
-@pytest.mark.parametrize("sort", [True, False])
-@pytest.mark.parametrize("join", ["inner", "outer"])
-@pytest.mark.parametrize("axis", [0, 1])
 def test_concat_join_series(ignore_index, sort, join, axis):
     s1 = cudf.Series(["a", "b", "c"])
     s2 = cudf.Series(["a", "b"])
@@ -1146,7 +1128,7 @@ def test_concat_join_series(ignore_index, sort, join, axis):
         ignore_index=ignore_index,
         axis=axis,
     )
-    with expect_warning_if(axis == 1):
+    with expect_warning_if(axis in {1, "columns"}):
         actual = cudf.concat(
             [s1, s2, s3, s4],
             sort=sort,
@@ -1207,9 +1189,6 @@ def test_concat_join_series(ignore_index, sort, join, axis):
         ],
     ],
 )
-@pytest.mark.parametrize("ignore_index", [True, False])
-@pytest.mark.parametrize("sort", [True, False])
-@pytest.mark.parametrize("join", ["inner", "outer"])
 def test_concat_join_empty_dataframes(
     request, df, other, ignore_index, join, sort
 ):
@@ -1294,14 +1273,11 @@ def test_concat_join_empty_dataframes(
         ],
     ],
 )
-@pytest.mark.parametrize("ignore_index", [True, False])
-@pytest.mark.parametrize("sort", [True, False])
-@pytest.mark.parametrize("join", ["inner", "outer"])
-@pytest.mark.parametrize("axis", [1])
 def test_concat_join_empty_dataframes_axis_1(
     df, other, ignore_index, axis, join, sort
 ):
     # no duplicate columns
+    axis = 1
     other_pd = [df, *other]
     gdf = cudf.from_pandas(df)
     other_gd = [gdf] + [cudf.from_pandas(o) for o in other]
@@ -1362,7 +1338,6 @@ def test_concat_preserve_order():
     )
 
 
-@pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize("typ", [cudf.DataFrame, cudf.Series])
 def test_concat_single_object(ignore_index, typ):
     """Ensure that concat on a single object does not change it."""
@@ -1916,9 +1891,6 @@ def singleton_concat_obj(request, singleton_concat_index):
         return pd.Series([4, 5, 5, 6], index=singleton_concat_index)
 
 
-@pytest.mark.parametrize("axis", [0, 1, "columns", "index"])
-@pytest.mark.parametrize("sort", [False, True])
-@pytest.mark.parametrize("ignore_index", [False, True])
 def test_concat_singleton_sorting(
     axis, sort, ignore_index, singleton_concat_obj
 ):
