@@ -12,7 +12,7 @@ import pylibcudf as plc
 import rmm.mr
 from rmm.pylibrmm.stream import DEFAULT_STREAM
 
-from cudf_polars.containers import DataFrame, DataType
+from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.expr import Col
 from cudf_polars.dsl.ir import IR, Sort
 from cudf_polars.dsl.traversal import traversal
@@ -26,6 +26,7 @@ from cudf_polars.experimental.utils import _concat, _lower_ir_fallback
 if TYPE_CHECKING:
     from collections.abc import MutableMapping, Sequence
 
+    from cudf_polars.containers import DataType
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.typing import Schema
@@ -123,14 +124,13 @@ def _select_local_split_candidates(
     row_id = plc.Column.from_arrow(pa.array(candidates))
 
     res = plc.copying.gather(df.table, row_id, plc.copying.OutOfBoundsPolicy.DONT_CHECK)
-    part_id_plc_dtype = plc.types.DataType(plc.types.TypeId.UINT32)
+    part_id_dtype = plc.types.DataType(plc.types.TypeId.UINT32)
     part_id = plc.Column.from_scalar(
-        plc.Scalar.from_py(my_part_id, part_id_plc_dtype),
+        plc.Scalar.from_py(my_part_id, part_id_dtype),
         len(candidates),
     )
 
     name_gen = unique_names(df.column_names)
-    part_id_dtype = DataType(part_id_plc_dtype)
     return DataFrame.from_table(
         plc.Table([*res.columns(), part_id, row_id]),
         [*df.column_names, next(name_gen), next(name_gen)],
