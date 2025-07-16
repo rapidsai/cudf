@@ -21,6 +21,7 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/null_mask.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
@@ -96,7 +97,16 @@ cudf::table create_sparse_results_table(cudf::table_view const& flattened_values
             cudf::data_type{cudf::type_id::BOOL8}, col.size(), mask_flag, stream));
 
           // Create struct column with the children
-          return make_structs_column(col.size(), std::move(children), 0, {}, stream);
+          // For SUM_ANSI, make struct nullable if input has nulls (same as other aggregations)
+          if (nullable) {
+            // Start with ALL_NULL, results will be marked valid during aggregation
+            auto null_mask = cudf::create_null_mask(col.size(), cudf::mask_state::ALL_NULL, stream);
+            auto null_count = col.size();  // All null initially
+            return make_structs_column(
+              col.size(), std::move(children), null_count, std::move(null_mask), stream);
+          } else {
+            return make_structs_column(col.size(), std::move(children), 0, {}, stream);
+          }
         }
       } else {
         return make_fixed_width_column(
