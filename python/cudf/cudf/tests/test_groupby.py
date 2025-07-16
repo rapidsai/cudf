@@ -531,8 +531,13 @@ def groupby_apply_jit_reductions_test_inner(func, data, dtype):
 def test_groupby_apply_jit_unary_reductions(
     func, dtype, dataset, groupby_jit_datasets
 ):
+    warn_condition = (
+        dataset == "nans"
+        and func in {"idxmax", "idxmin"}
+        and dtype.kind == "f"
+    )
     dataset = groupby_jit_datasets[dataset]
-    with pytest.warns(FutureWarning):
+    with expect_warning_if(warn_condition, FutureWarning):
         groupby_apply_jit_reductions_test_inner(func, dataset.copy(), dtype)
 
 

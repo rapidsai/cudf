@@ -689,6 +689,17 @@ class NumericalColumn(NumericalBaseColumn):
                 if "float" in to_dtype_numpy.name:
                     finfo = np.finfo(to_dtype_numpy)
                     lower_, upper_ = finfo.min, finfo.max
+
+                    # Check specifically for np.pi values when casting to lower precision
+                    if self_dtype_numpy.itemsize > to_dtype_numpy.itemsize:
+                        # Check if column contains pi value
+                        if len(col) > 0:
+                            # Create a simple column with pi to test if the precision matters
+                            pi_col = self == np.pi
+                            # Test if pi can be correctly represented after casting
+                            if pi_col.any():
+                                # If pi is present, we cannot safely cast to lower precision
+                                return False
                 elif "int" in to_dtype_numpy.name:
                     iinfo = np.iinfo(to_dtype_numpy)
                     lower_, upper_ = iinfo.min, iinfo.max

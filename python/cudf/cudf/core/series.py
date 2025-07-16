@@ -202,7 +202,6 @@ class _SeriesIlocIndexer(_FrameIndexer):
                     or self._frame.dtype.kind != "b"
                     and tmp_value.dtype.kind == "b"
                 ):
-                    # import pdb;pdb.set_trace()
                     if not tmp_value.can_cast_safely(
                         self._frame.dtype
                     ) and is_pandas_nullable_extension_dtype(
