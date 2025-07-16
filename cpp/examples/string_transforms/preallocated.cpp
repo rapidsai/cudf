@@ -130,7 +130,7 @@ __device__ void e164_format(void* scratch,
     cudf::transform({country_code, area_code, phone_code, age, *min_visible_age, *size},
                     udf,
                     cudf::data_type{cudf::type_id::STRING},
-                    false,
+                    cudf::udf_source_type::CUDA,
                     scratch.data(),
                     stream,
                     mr);

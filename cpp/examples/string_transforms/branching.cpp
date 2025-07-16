@@ -152,7 +152,7 @@ __device__ void format_phone(void* scratch,
   auto result = cudf::transform({country_code, area_code, phone_number, *size},
                                 udf,
                                 cudf::data_type{cudf::type_id::STRING},
-                                false,
+                                cudf::udf_source_type::CUDA,
                                 scratch.data(),
                                 stream,
                                 mr);

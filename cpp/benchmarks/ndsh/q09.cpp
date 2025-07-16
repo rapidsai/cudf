@@ -159,7 +159,7 @@ struct q9_data {
   return cudf::transform({discount, extendedprice, supplycost, quantity},
                          udf,
                          cudf::data_type{cudf::type_id::FLOAT64},
-                         false,
+                         cudf::udf_source_type::CUDA,
                          std::nullopt,
                          stream,
                          mr);

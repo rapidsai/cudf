@@ -93,7 +93,7 @@ static void BM_transform_polynomials(nvbench::state& state)
     cudf::transform(inputs,
                     udf,
                     cudf::data_type{cudf::type_to_id<key_type>()},
-                    false,
+                    cudf::udf_source_type::CUDA,
                     std::nullopt,
                     launch.get_stream().get_stream());
   });
