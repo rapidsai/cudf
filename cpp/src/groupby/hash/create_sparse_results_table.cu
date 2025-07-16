@@ -57,41 +57,52 @@ cudf::table create_sparse_results_table(cudf::table_view const& flattened_values
 {
   // TODO single allocation - room for performance improvement
   std::vector<std::unique_ptr<cudf::column>> sparse_columns;
-  std::transform(flattened_values.begin(),
-                 flattened_values.end(),
-                 agg_kinds.begin(),
-                 std::back_inserter(sparse_columns),
-                 [stream](auto const& col, auto const& agg) {
-                   auto const nullable =
-                     (agg == cudf::aggregation::COUNT_VALID or agg == cudf::aggregation::COUNT_ALL)
-                       ? false
-                       : (col.has_nulls() or agg == cudf::aggregation::VARIANCE or
-                          agg == cudf::aggregation::STD);
-                   auto const mask_flag =
-                     (nullable) ? cudf::mask_state::ALL_NULL : cudf::mask_state::UNALLOCATED;
-                   auto const col_type = cudf::is_dictionary(col.type())
-                                           ? cudf::dictionary_column_view(col).keys().type()
-                                           : col.type();
+  std::transform(
+    flattened_values.begin(),
+    flattened_values.end(),
+    agg_kinds.begin(),
+    std::back_inserter(sparse_columns),
+    [stream](auto const& col, auto const& agg) {
+      auto const nullable =
+        (agg == cudf::aggregation::COUNT_VALID or agg == cudf::aggregation::COUNT_ALL)
+          ? false
+          : (col.has_nulls() or agg == cudf::aggregation::VARIANCE or
+             agg == cudf::aggregation::STD);
+      auto const mask_flag =
+        (nullable) ? cudf::mask_state::ALL_NULL : cudf::mask_state::UNALLOCATED;
+      auto const col_type = cudf::is_dictionary(col.type())
+                              ? cudf::dictionary_column_view(col).keys().type()
+                              : col.type();
 
-                   // Special handling for SUM_ANSI which needs a struct column
-                   if (agg == cudf::aggregation::SUM_ANSI) {
-                     std::vector<std::unique_ptr<cudf::column>> children;
+      // Special handling for SUM_ANSI which needs a struct column
+      if (agg == cudf::aggregation::SUM_ANSI) {
+        if (col.size() == 0) {
+          // For empty columns, create empty struct column manually
+          std::vector<std::unique_ptr<cudf::column>> children;
+          children.push_back(make_fixed_width_column(
+            cudf::data_type{cudf::type_id::INT64}, 0, cudf::mask_state::UNALLOCATED, stream));
+          children.push_back(make_fixed_width_column(
+            cudf::data_type{cudf::type_id::BOOL8}, 0, cudf::mask_state::UNALLOCATED, stream));
+          return make_structs_column(0, std::move(children), 0, {}, stream);
+        } else {
+          std::vector<std::unique_ptr<cudf::column>> children;
 
-                     // Create sum child column (int64_t)
-                     children.push_back(make_fixed_width_column(
-                       cudf::data_type{cudf::type_id::INT64}, col.size(), mask_flag, stream));
+          // Create sum child column (int64_t)
+          children.push_back(make_fixed_width_column(
+            cudf::data_type{cudf::type_id::INT64}, col.size(), mask_flag, stream));
 
-                     // Create overflow child column (bool)
-                     children.push_back(make_fixed_width_column(
-                       cudf::data_type{cudf::type_id::BOOL8}, col.size(), mask_flag, stream));
+          // Create overflow child column (bool)
+          children.push_back(make_fixed_width_column(
+            cudf::data_type{cudf::type_id::BOOL8}, col.size(), mask_flag, stream));
 
-                     // Create struct column with the children
-                     return make_structs_column(col.size(), std::move(children), 0, {}, stream);
-                   } else {
-                     return make_fixed_width_column(
-                       cudf::detail::target_type(col_type, agg), col.size(), mask_flag, stream);
-                   }
-                 });
+          // Create struct column with the children
+          return make_structs_column(col.size(), std::move(children), 0, {}, stream);
+        }
+      } else {
+        return make_fixed_width_column(
+          cudf::detail::target_type(col_type, agg), col.size(), mask_flag, stream);
+      }
+    });
   cudf::table sparse_table(std::move(sparse_columns));
   // If no direct aggregations, initialize the sparse table
   // only for the keys inserted in global hash set

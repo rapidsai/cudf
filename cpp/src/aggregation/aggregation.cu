@@ -49,13 +49,14 @@ struct identity_initializer {
   template <typename T, aggregation::Kind k>
   static constexpr bool is_supported()
   {
-    return cudf::is_fixed_width<T>() and
-           (k == aggregation::SUM or k == aggregation::SUM_ANSI or k == aggregation::MIN or
-            k == aggregation::MAX or k == aggregation::COUNT_VALID or k == aggregation::COUNT_ALL or
-            k == aggregation::ARGMAX or k == aggregation::ARGMIN or
-            k == aggregation::SUM_OF_SQUARES or k == aggregation::STD or
-            k == aggregation::VARIANCE or
-            (k == aggregation::PRODUCT and is_product_supported<T>()));
+    return (cudf::is_fixed_width<T>() and
+            (k == aggregation::SUM or k == aggregation::MIN or k == aggregation::MAX or
+             k == aggregation::COUNT_VALID or k == aggregation::COUNT_ALL or
+             k == aggregation::ARGMAX or k == aggregation::ARGMIN or
+             k == aggregation::SUM_OF_SQUARES or k == aggregation::STD or
+             k == aggregation::VARIANCE or
+             (k == aggregation::PRODUCT and is_product_supported<T>()))) or
+           (k == aggregation::SUM_ANSI and std::is_same_v<T, cudf::struct_view>);
   }
 
   template <typename T, aggregation::Kind k>
@@ -109,6 +110,9 @@ struct identity_initializer {
                    overflow_col.begin<bool>(),
                    overflow_col.end<bool>(),
                    false);
+    } else if constexpr (std::is_same_v<T, cudf::struct_view>) {
+      // This should only happen for SUM_ANSI, but handle it just in case
+      CUDF_FAIL("Struct columns are only supported for SUM_ANSI aggregation");
     } else {
       using DeviceType = device_storage_type_t<T>;
       thrust::fill(rmm::exec_policy_nosync(stream),
