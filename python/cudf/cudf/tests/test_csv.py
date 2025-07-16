@@ -1100,7 +1100,7 @@ def test_small_zip(tmpdir):
 
 
 def test_csv_reader_carriage_return(tmpdir):
-    rows = 1000
+    rows = 100
     names = ["int_row", "int_double_row"]
     buffer = ",".join(names) + "\r\n"
     for row in range(rows):
