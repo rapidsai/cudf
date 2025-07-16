@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 import warnings
 from contextlib import contextmanager
@@ -694,23 +694,13 @@ def test_concat_two_empty_series(ignore_index, axis):
 
 
 @pytest.mark.parametrize(
-    "df1,df2",
-    [
-        (
-            cudf.DataFrame({"k1": [0, 1], "k2": [2, 3], "v1": [4, 5]}),
-            cudf.DataFrame({"k1": [1, 0], "k2": [3, 2], "v2": [6, 7]}),
-        ),
-        (
-            cudf.DataFrame({"k1": [0, 1], "k2": [2, 3], "v1": [4, 5]}),
-            cudf.DataFrame({"k1": [0, 1], "k2": [3, 2], "v2": [6, 7]}),
-        ),
-    ],
+    "key2", [[0, 1], [1, 0]], ids=["matching", "different"]
 )
-def test_concat_dataframe_with_multiindex(df1, df2):
-    gdf1 = df1
+def test_concat_dataframe_with_multiindex(key2):
+    gdf1 = cudf.DataFrame({"k1": [0, 1], "k2": [2, 3], "v1": [4, 5]})
     gdf1 = gdf1.set_index(["k1", "k2"])
 
-    gdf2 = df2
+    gdf2 = cudf.DataFrame({"k1": key2, "k2": [3, 2], "v2": [6, 7]})
     gdf2 = gdf2.set_index(["k1", "k2"])
 
     pdf1 = gdf1.to_pandas()
@@ -1683,107 +1673,124 @@ def test_concat_decimal_numeric_series(s1, s2, s3, expected):
 
 
 @pytest.mark.parametrize(
-    "s1, s2, expected",
+    "data1, dtype1, index1, data2, dtype2, index2, expected_data, expected_dtype, expected_index",
     [
-        (
-            cudf.Series(
-                [Decimal("955.22"), Decimal("8.2")], dtype=Decimal64Dtype(5, 2)
-            ),
-            cudf.Series(["2007-06-12", "2006-03-14"], dtype="datetime64[s]"),
-            cudf.Series(
-                [
-                    "955.22",
-                    "8.20",
-                    "2007-06-12 00:00:00",
-                    "2006-03-14 00:00:00",
-                ],
-                index=[0, 1, 0, 1],
-            ),
-        ),
-        (
-            cudf.Series(
-                [Decimal("-52.44"), Decimal("365.22")],
-                dtype=Decimal64Dtype(5, 2),
-            ),
-            cudf.Series(
-                np.arange(
-                    "2005-02-01T12", "2005-02-01T15", dtype="datetime64[h]"
-                ).astype("datetime64[s]"),
-                dtype="datetime64[s]",
-            ),
-            cudf.Series(
-                [
-                    "-52.44",
-                    "365.22",
-                    "2005-02-01 12:00:00",
-                    "2005-02-01 13:00:00",
-                    "2005-02-01 14:00:00",
-                ],
-                index=[0, 1, 0, 1, 2],
-            ),
-        ),
-        (
-            cudf.Series(
-                [Decimal("753.0"), Decimal("94.22")],
-                dtype=Decimal64Dtype(5, 2),
-            ),
-            cudf.Series([np.timedelta64(111, "s"), np.timedelta64(509, "s")]),
-            cudf.Series(
-                ["753.00", "94.22", "0 days 00:01:51", "0 days 00:08:29"],
-                index=[0, 1, 0, 1],
-            ),
-        ),
-        (
-            cudf.Series(
-                [Decimal("753.0"), Decimal("94.22")],
-                dtype=Decimal64Dtype(5, 2),
-            ),
-            cudf.Series(
-                [np.timedelta64(940252, "s"), np.timedelta64(758385, "s")]
-            ),
-            cudf.Series(
-                ["753.00", "94.22", "10 days 21:10:52", "8 days 18:39:45"],
-                index=[0, 1, 0, 1],
-            ),
-        ),
+        [
+            [Decimal("955.22"), Decimal("8.2")],
+            Decimal64Dtype(5, 2),
+            None,
+            ["2007-06-12", "2006-03-14"],
+            "datetime64[s]",
+            None,
+            [
+                "955.22",
+                "8.20",
+                "2007-06-12 00:00:00",
+                "2006-03-14 00:00:00",
+            ],
+            None,
+            [0, 1, 0, 1],
+        ],
+        [
+            [Decimal("-52.44"), Decimal("365.22")],
+            Decimal64Dtype(5, 2),
+            None,
+            np.arange(
+                "2005-02-01T12", "2005-02-01T15", dtype="datetime64[h]"
+            ).astype("datetime64[s]"),
+            "datetime64[s]",
+            None,
+            [
+                "-52.44",
+                "365.22",
+                "2005-02-01 12:00:00",
+                "2005-02-01 13:00:00",
+                "2005-02-01 14:00:00",
+            ],
+            None,
+            [0, 1, 0, 1, 2],
+        ],
+        [
+            [Decimal("753.0"), Decimal("94.22")],
+            Decimal64Dtype(5, 2),
+            None,
+            [np.timedelta64(111, "s"), np.timedelta64(509, "s")],
+            None,
+            None,
+            [
+                "753.00",
+                "94.22",
+                "0 days 00:01:51",
+                "0 days 00:08:29",
+            ],
+            None,
+            [0, 1, 0, 1],
+        ],
+        [
+            [Decimal("753.0"), Decimal("94.22")],
+            Decimal64Dtype(5, 2),
+            None,
+            [np.timedelta64(940252, "s"), np.timedelta64(758385, "s")],
+            None,
+            None,
+            [
+                "753.00",
+                "94.22",
+                "10 days 21:10:52",
+                "8 days 18:39:45",
+            ],
+            None,
+            [0, 1, 0, 1],
+        ],
     ],
 )
-def test_concat_decimal_non_numeric(s1, s2, expected):
+def test_concat_decimal_non_numeric(
+    data1,
+    dtype1,
+    index1,
+    data2,
+    dtype2,
+    index2,
+    expected_data,
+    expected_dtype,
+    expected_index,
+):
+    s1 = cudf.Series(data1, dtype=dtype1, index=index1)
+    s2 = cudf.Series(data2, dtype=dtype2, index=index2)
+    expected = cudf.Series(
+        expected_data, dtype=expected_dtype, index=expected_index
+    )
+    s = cudf.concat([s1, s2])
+    assert_eq(s, expected, check_index_type=True)
+
+
+def test_concat_struct_column():
+    s1 = cudf.Series([{"a": 5}, {"c": "hello"}, {"b": 7}])
+    s2 = cudf.Series([{"a": 5, "c": "hello", "b": 7}])
+    expected = cudf.Series(
+        [
+            {"a": 5, "b": None, "c": None},
+            {"a": None, "b": None, "c": "hello"},
+            {"a": None, "b": 7, "c": None},
+            {"a": 5, "b": 7, "c": "hello"},
+        ],
+        index=[0, 1, 2, 0],
+    )
     s = cudf.concat([s1, s2])
     assert_eq(s, expected, check_index_type=True)
 
 
 @pytest.mark.parametrize(
-    "s1, s2, expected",
+    "frame1_cls, frame1_data, frame2_cls, frame2_data, expected_cls, expected_data",
     [
         (
-            cudf.Series([{"a": 5}, {"c": "hello"}, {"b": 7}]),
-            cudf.Series([{"a": 5, "c": "hello", "b": 7}]),
-            cudf.Series(
-                [
-                    {"a": 5, "b": None, "c": None},
-                    {"a": None, "b": None, "c": "hello"},
-                    {"a": None, "b": 7, "c": None},
-                    {"a": 5, "b": 7, "c": "hello"},
-                ],
-                index=[0, 1, 2, 0],
-            ),
-        )
-    ],
-)
-def test_concat_struct_column(s1, s2, expected):
-    s = cudf.concat([s1, s2])
-    assert_eq(s, expected, check_index_type=True)
-
-
-@pytest.mark.parametrize(
-    "frame1, frame2, expected",
-    [
-        (
-            cudf.Series([[{"b": 0}], [{"b": 1}], [{"b": 3}]]),
-            cudf.Series([[{"b": 10}], [{"b": 12}], None]),
-            cudf.Series(
-                [
+            cudf.Series,
+            {"data": [[{"b": 0}], [{"b": 1}], [{"b": 3}]]},
+            cudf.Series,
+            {"data": [[{"b": 10}], [{"b": 12}], None]},
+            cudf.Series,
+            {
+                "data": [
                     [{"b": 0}],
                     [{"b": 1}],
                     [{"b": 3}],
@@ -1791,14 +1798,17 @@ def test_concat_struct_column(s1, s2, expected):
                     [{"b": 12}],
                     None,
                 ],
-                index=[0, 1, 2, 0, 1, 2],
-            ),
+                "index": [0, 1, 2, 0, 1, 2],
+            },
         ),
         (
-            cudf.DataFrame({"a": [[{"b": 0}], [{"b": 1}], [{"b": 3}]]}),
-            cudf.DataFrame({"a": [[{"b": 10}], [{"b": 12}], None]}),
-            cudf.DataFrame(
-                {
+            cudf.DataFrame,
+            {"data": {"a": [[{"b": 0}], [{"b": 1}], [{"b": 3}]]}},
+            cudf.DataFrame,
+            {"data": {"a": [[{"b": 10}], [{"b": 12}], None]}},
+            cudf.DataFrame,
+            {
+                "data": {
                     "a": [
                         [{"b": 0}],
                         [{"b": 1}],
@@ -1808,12 +1818,22 @@ def test_concat_struct_column(s1, s2, expected):
                         None,
                     ]
                 },
-                index=[0, 1, 2, 0, 1, 2],
-            ),
+                "index": [0, 1, 2, 0, 1, 2],
+            },
         ),
     ],
 )
-def test_concat_list_column(frame1, frame2, expected):
+def test_concat_list_column(
+    frame1_cls,
+    frame1_data,
+    frame2_cls,
+    frame2_data,
+    expected_cls,
+    expected_data,
+):
+    frame1 = frame1_cls(**frame1_data)
+    frame2 = frame2_cls(**frame2_data)
+    expected = expected_cls(**expected_data)
     actual = cudf.concat([frame1, frame2])
     assert_eq(actual, expected, check_index_type=True)
 
@@ -2008,21 +2028,23 @@ def test_concat_dictionary(d, axis):
 
 
 @pytest.mark.parametrize(
-    "d",
+    "idx_cls, idx_data",
     [
-        {"first": cudf.Index([1, 2, 3])},
-        {
-            "first": cudf.MultiIndex(
-                levels=[[1, 2], ["blue", "red"]],
-                codes=[[0, 0, 1, 1], [1, 0, 1, 0]],
-            )
-        },
-        {"first": cudf.CategoricalIndex([1, 2, 3])},
+        [cudf.Index, {"data": [1, 2, 3]}],
+        [
+            cudf.MultiIndex,
+            {
+                "levels": [[1, 2], ["blue", "red"]],
+                "codes": [[0, 0, 1, 1], [1, 0, 1, 0]],
+            },
+        ],
+        [cudf.CategoricalIndex, {"data": [1, 2, 3]}],
     ],
 )
-def test_concat_dict_incorrect_type_index(d):
+def test_concat_dict_incorrect_type_index(idx_cls, idx_data):
+    idx = idx_cls(**idx_data)
     with pytest.raises(
         TypeError,
         match="cannot concatenate a dictionary containing indices",
     ):
-        cudf.concat(d, axis=1)
+        cudf.concat({"first": idx}, axis=1)
