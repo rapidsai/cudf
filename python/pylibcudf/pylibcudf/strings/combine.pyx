@@ -1,8 +1,8 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from pylibcudf.column cimport Column
-from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.column.column cimport column, column_contents
 from pylibcudf.libcudf.scalar.scalar cimport string_scalar
 from pylibcudf.libcudf.scalar.scalar_factories cimport (
     make_string_scalar as cpp_make_string_scalar,
@@ -16,6 +16,8 @@ from pylibcudf.libcudf.strings.combine import \
     output_if_empty_list as OutputIfEmptyList  # no-cython-lint
 from pylibcudf.libcudf.strings.combine import \
     separator_on_nulls as SeparatorOnNulls  # no-cython-lint
+
+from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 
 __all__ = [
     "OutputIfEmptyList",
@@ -148,6 +150,47 @@ cpdef Column join_strings(Column input, Scalar separator, Scalar narep):
 
     return Column.from_libcudf(move(c_result))
 
+cpdef DeviceBuffer join_strings_to_buffer(Column input, Scalar separator, Scalar narep):
+    """
+    Concatenates all strings in the column into one new string delimited
+    by an optional separator string.
+
+    Parameters
+    ----------
+    input : Column
+        List of strings columns to concatenate
+
+    separator : Scalar
+        Strings column that provides the separator for a given row
+
+    narep : Scalar
+        String to replace any null strings found.
+
+    Returns
+    -------
+    Column
+        New column containing one string
+    """
+    cdef unique_ptr[column] c_result
+    cdef const string_scalar* c_separator = <const string_scalar*>(
+        separator.c_obj.get()
+    )
+    cdef const string_scalar* c_narep = <const string_scalar*>(
+        narep.c_obj.get()
+    )
+    cdef column_contents contents
+
+    with nogil:
+        c_result = move(
+            cpp_combine.join_strings(
+                input.view(),
+                dereference(c_separator),
+                dereference(c_narep),
+            )
+        )
+        contents = c_result.get().release()
+
+    return DeviceBuffer.c_from_unique_ptr(move(contents.data))
 
 cpdef Column join_list_elements(
     Column lists_strings_column,

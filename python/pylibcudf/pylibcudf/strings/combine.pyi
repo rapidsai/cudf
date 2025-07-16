@@ -2,6 +2,8 @@
 
 from enum import IntEnum
 
+from rmm.pylibrmm.device_buffer import DeviceBuffer
+
 from pylibcudf.column import Column
 from pylibcudf.scalar import Scalar
 from pylibcudf.table import Table
@@ -24,6 +26,9 @@ def concatenate(
 def join_strings(
     input: Column, separator: Scalar, narep: Scalar
 ) -> Column: ...
+def join_strings_to_buffer(
+    input: Column, separator: Scalar, narep: Scalar
+) -> DeviceBuffer: ...
 def join_list_elements(
     lists_strings_column: Column,
     separator: Column | Scalar,
