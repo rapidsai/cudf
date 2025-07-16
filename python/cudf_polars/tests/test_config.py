@@ -325,7 +325,9 @@ def test_parquet_options_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
             ConfigOptions.from_polars_engine(engine)
 
 
-def test_config_option_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_config_option_from_env(
+    monkeypatch: pytest.MonkeyPatch, *, rapidsmpf_available: bool
+) -> None:
     with monkeypatch.context() as m:
         m.setenv("CUDF_POLARS__EXECUTOR__SCHEDULER", "distributed")
         m.setenv("CUDF_POLARS__EXECUTOR__FALLBACK_MODE", "silent")
@@ -334,9 +336,13 @@ def test_config_option_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         m.setenv("CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE", "100")
         m.setenv("CUDF_POLARS__EXECUTOR__GROUPBY_N_ARY", "43")
         m.setenv("CUDF_POLARS__EXECUTOR__BROADCAST_JOIN_LIMIT", "44")
-        m.setenv("CUDF_POLARS__EXECUTOR__SHUFFLE_METHOD", "rapidsmpf")
         m.setenv("CUDF_POLARS__EXECUTOR__RAPIDSMPF_SPILL", "1")
         m.setenv("CUDF_POLARS__EXECUTOR__SINK_TO_DIRECTORY", "1")
+
+        if rapidsmpf_available:
+            m.setenv("CUDF_POLARS__EXECUTOR__SHUFFLE_METHOD", "rapidsmpf")
+        else:
+            m.setenv("CUDF_POLARS__EXECUTOR__SHUFFLE_METHOD", "tasks")
 
         engine = pl.GPUEngine()
         config = ConfigOptions.from_polars_engine(engine)
@@ -348,9 +354,13 @@ def test_config_option_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         assert config.executor.target_partition_size == 100
         assert config.executor.groupby_n_ary == 43
         assert config.executor.broadcast_join_limit == 44
-        assert config.executor.shuffle_method == "rapidsmpf"
         assert config.executor.rapidsmpf_spill is True
         assert config.executor.sink_to_directory is True
+
+        if rapidsmpf_available:
+            assert config.executor.shuffle_method == "rapidsmpf"
+        else:
+            assert config.executor.shuffle_method == "tasks"
 
 
 def test_target_partition_from_env(

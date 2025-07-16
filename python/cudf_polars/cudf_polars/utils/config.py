@@ -548,7 +548,19 @@ class ConfigOptions:
                 executor = InMemoryExecutor(**user_executor_options)
             case "streaming":
                 user_executor_options = user_executor_options.copy()
-                user_executor_options.setdefault("shuffle_method", None)
+                # Handle the interaction between the default shuffle method, the
+                # scheduler, and whether rapidsmpf is available.
+                env_shuffle_method = os.environ.get(
+                    "CUDF_POLARS__EXECUTOR__SHUFFLE_METHOD", None
+                )
+                if env_shuffle_method is not None:
+                    shuffle_method_default = ShuffleMethod(env_shuffle_method)
+                else:
+                    shuffle_method_default = None
+
+                user_executor_options.setdefault(
+                    "shuffle_method", shuffle_method_default
+                )
                 executor = StreamingExecutor(**user_executor_options)
             case _:  # pragma: no cover; Unreachable
                 raise ValueError(f"Unsupported executor: {user_executor}")
