@@ -336,7 +336,7 @@ ConfigureTest(
   HYBRID_SCAN_TEST io/experimental/hybrid_scan_common.cpp
   io/experimental/hybrid_scan_filters_test.cpp io/parquet_common.cpp io/parquet_test.cpp
   GPUS 1
-  PERCENT 30
+  PERCENT 100
 )
 ConfigureTest(
   JSON_TEST io/json/json_test.cpp io/json/json_chunked_reader.cu
