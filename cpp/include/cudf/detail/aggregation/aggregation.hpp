@@ -1348,7 +1348,7 @@ struct target_type_impl<Source,
 
 constexpr bool is_sum_product_agg(aggregation::Kind k)
 {
-  return (k == aggregation::SUM) || (k == aggregation::PRODUCT) ||
+  return (k == aggregation::SUM) || (k == aggregation::SUM_ANSI) || (k == aggregation::PRODUCT) ||
          (k == aggregation::SUM_OF_SQUARES);
 }
 
@@ -1384,6 +1384,13 @@ struct target_type_impl<Source,
                         k,
                         std::enable_if_t<is_duration<Source>() && (k == aggregation::SUM)>> {
   using type = Source;
+};
+
+// SUM_ANSI always outputs int64_t (in future this should be a struct of int64_t and bool)
+// For now, we implement the basic INT64 output with plans to extend to struct output
+template <typename Source>
+struct target_type_impl<Source, aggregation::SUM_ANSI> {
+  using type = int64_t;
 };
 
 // Always use `double` for M2

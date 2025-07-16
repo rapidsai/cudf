@@ -78,6 +78,10 @@ struct corresponding_operator<aggregation::SUM> {
   using type = DeviceSum;
 };
 template <>
+struct corresponding_operator<aggregation::SUM_ANSI> {
+  using type = DeviceSum;
+};
+template <>
 struct corresponding_operator<aggregation::PRODUCT> {
   using type = DeviceProduct;
 };

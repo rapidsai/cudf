@@ -94,6 +94,7 @@ class aggregation {
    */
   enum Kind {
     SUM,              ///< sum reduction
+    SUM_ANSI,         ///< sum reduction with ANSI overflow semantics
     PRODUCT,          ///< product reduction
     MIN,              ///< min reduction
     MAX,              ///< max reduction
@@ -270,6 +271,11 @@ enum class ewm_history : int32_t { INFINITE, FINITE };
 /// @return A SUM aggregation object
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_sum_aggregation();
+
+/// Factory to create a SUM_ANSI aggregation
+/// @return A SUM_ANSI aggregation object
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_sum_ansi_aggregation();
 
 /// Factory to create a PRODUCT aggregation
 /// @return A PRODUCT aggregation object

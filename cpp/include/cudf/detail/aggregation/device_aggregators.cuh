@@ -25,6 +25,7 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/traits.cuh>
 
+#include <cuda/std/limits>
 #include <cuda/std/type_traits>
 
 namespace cudf::detail {
@@ -151,6 +152,29 @@ struct update_target_element<Source, aggregation::SUM> {
 
     cudf::detail::atomic_add(&target.element<DeviceTarget>(target_index),
                              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
+  }
+};
+
+template <int64_t Source>
+struct update_target_element<int64_t, aggregation::SUM_ANSI> {
+  __device__ void operator()(mutable_column_device_view target,
+                             size_type target_index,
+                             column_device_view source,
+                             size_type source_index) const noexcept
+  {
+    // For SUM_ANSI, target is a struct with sum value at child(0) and overflow flag at child(1)
+    auto sum_column      = target.child(0);
+    auto overflow_column = target.child(1);
+
+    auto source_value = source.element<Source>(source_index);
+    auto old_sum =
+      cudf::detail::atomic_add(&sum_column.element<int64_t>(target_index), source_value);
+
+    // Check for overflow: if old_sum and source_value have same sign but result has different sign
+    auto new_sum  = old_sum + source_value;
+    bool overflow = ((old_sum > 0 && source_value > 0 && new_sum < 0) ||
+                     (old_sum < 0 && source_value < 0 && new_sum > 0));
+    if (overflow) { overflow_column.element<bool>(target_index) = true; }
   }
 };
 
