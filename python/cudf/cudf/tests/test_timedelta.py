@@ -74,20 +74,6 @@ def timedelta_dtype(request):
     return request.param
 
 
-@pytest.mark.parametrize(
-    "data",
-    [
-        [1000000, 200000, 3000000],
-        [1000000, 200000, None],
-        [],
-        [None],
-        [None, None, None, None, None],
-        [12, 12, 22, 343, 4353534, 435342],
-        [0.3534, 12, 22, 343, 43.53534, 4353.42],
-        np.array([10, 20, 30, None, 100]),
-        cp.asarray([10, 20, 30, 100]),
-    ],
-)
 def test_timedelta_series_create(data, timedelta_dtype):
     if timedelta_dtype != "timedelta64[ns]":
         pytest.skip(
@@ -145,20 +131,6 @@ def test_timedelta_to_typecast(data, timedelta_dtype):
     assert_eq(psr.astype(timedelta_dtype), gsr.astype(timedelta_dtype))
 
 
-@pytest.mark.parametrize(
-    "data",
-    [
-        [1000000, 200000, 3000000],
-        [1000000, 200000, None],
-        [],
-        [None],
-        [None, None, None, None, None],
-        [12, 12, 22, 343, 4353534, 435342],
-        [0.3534, 12, 22, 343, 43.53534, 4353.42],
-        np.array([10, 20, 30, None, 100]),
-        cp.asarray([10, 20, 30, 100]),
-    ],
-)
 def test_timedelta_from_pandas(data, timedelta_dtype):
     psr = pd.Series(
         cp.asnumpy(data) if isinstance(data, cp.ndarray) else data,
@@ -516,29 +488,11 @@ def test_timedelta_series_mod_with_scalar_zero(reverse):
     assert_eq(expected, actual)
 
 
-@pytest.mark.parametrize(
-    "data",
-    [
-        [1000000, 200000, 3000000],
-        [1000000, 200000, None],
-        [],
-        [None],
-        [None, None, None, None, None],
-        [12, 12, 22, 343, 4353534, 435342],
-        np.array([10, 20, 30, None, 100]),
-        cp.asarray([10, 20, 30, 100]),
-        [1000000, 200000, 3000000],
-        [1000000, 200000, None],
-        [1],
-        [12, 11, 232, 223432411, 2343241, 234324, 23234],
-        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
-        [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
-        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
-    ],
-)
 @pytest.mark.parametrize("reduction_op", ["sum", "mean", "median", "quantile"])
-def test_timedelta_reduction_ops(data, timedelta_dtype, reduction_op):
-    gsr = cudf.Series(data, dtype=timedelta_dtype)
+def test_timedelta_reduction_ops(
+    data_non_overflow, timedelta_dtype, reduction_op
+):
+    gsr = cudf.Series(data_non_overflow, dtype=timedelta_dtype)
     psr = gsr.to_pandas()
 
     if len(psr) > 0 and psr.isnull().all() and reduction_op == "median":
@@ -548,7 +502,7 @@ def test_timedelta_reduction_ops(data, timedelta_dtype, reduction_op):
         with expect_warning_if(
             PANDAS_GE_230
             and reduction_op == "quantile"
-            and len(data) == 0
+            and len(data_non_overflow) == 0
             and timedelta_dtype != "timedelta64[ns]"
         ):
             expected = getattr(psr, reduction_op)()
@@ -844,141 +798,131 @@ def test_timedelta_fillna(data, timedelta_dtype, fill_value):
 
 
 @pytest.mark.parametrize(
-    "gsr,expected_series",
+    "sr_data, sr_dtype, exp_data, exp_dtype",
     [
-        (
-            cudf.Series([1, 2, 3], dtype="timedelta64[ns]"),
-            cudf.Series(
-                [
-                    "0 days 00:00:00.000000001",
-                    "0 days 00:00:00.000000002",
-                    "0 days 00:00:00.000000003",
-                ]
-            ),
-        ),
-        (
-            cudf.Series([1000000, 200000, 3000000], dtype="timedelta64[ms]"),
-            cudf.Series(
-                ["0 days 00:16:40", "0 days 00:03:20", "0 days 00:50:00"]
-            ),
-        ),
-        (
-            cudf.Series([1000000, 200000, 3000000], dtype="timedelta64[s]"),
-            cudf.Series(
-                ["11 days 13:46:40", "2 days 07:33:20", "34 days 17:20:00"]
-            ),
-        ),
-        (
-            cudf.Series(
-                [None, None, None, None, None], dtype="timedelta64[us]"
-            ),
-            cudf.Series([None, None, None, None, None], dtype="str"),
-        ),
-        (
-            cudf.Series(
-                [
-                    136457654,
-                    None,
-                    245345345,
-                    223432411,
-                    None,
-                    3634548734,
-                    23234,
-                ],
-                dtype="timedelta64[us]",
-            ),
-            cudf.Series(
-                [
-                    "0 days 00:02:16.457654",
-                    None,
-                    "0 days 00:04:05.345345",
-                    "0 days 00:03:43.432411",
-                    None,
-                    "0 days 01:00:34.548734",
-                    "0 days 00:00:00.023234",
-                ]
-            ),
-        ),
-        (
-            cudf.Series(
-                [
-                    136457654,
-                    None,
-                    245345345,
-                    223432411,
-                    None,
-                    3634548734,
-                    23234,
-                ],
-                dtype="timedelta64[ms]",
-            ),
-            cudf.Series(
-                [
-                    "1 days 13:54:17.654",
-                    None,
-                    "2 days 20:09:05.345",
-                    "2 days 14:03:52.411",
-                    None,
-                    "42 days 01:35:48.734",
-                    "0 days 00:00:23.234",
-                ]
-            ),
-        ),
-        (
-            cudf.Series(
-                [
-                    136457654,
-                    None,
-                    245345345,
-                    223432411,
-                    None,
-                    3634548734,
-                    23234,
-                ],
-                dtype="timedelta64[s]",
-            ),
-            cudf.Series(
-                [
-                    "1579 days 08:54:14",
-                    None,
-                    "2839 days 15:29:05",
-                    "2586 days 00:33:31",
-                    None,
-                    "42066 days 12:52:14",
-                    "0 days 06:27:14",
-                ]
-            ),
-        ),
-        (
-            cudf.Series(
-                [
-                    136457654,
-                    None,
-                    245345345,
-                    223432411,
-                    None,
-                    3634548734,
-                    23234,
-                ],
-                dtype="timedelta64[ns]",
-            ),
-            cudf.Series(
-                [
-                    "0 days 00:00:00.136457654",
-                    None,
-                    "0 days 00:00:00.245345345",
-                    "0 days 00:00:00.223432411",
-                    None,
-                    "0 days 00:00:03.634548734",
-                    "0 days 00:00:00.000023234",
-                ]
-            ),
-        ),
+        [
+            [1, 2, 3],
+            "timedelta64[ns]",
+            [
+                "0 days 00:00:00.000000001",
+                "0 days 00:00:00.000000002",
+                "0 days 00:00:00.000000003",
+            ],
+            None,
+        ],
+        [
+            [1000000, 200000, 3000000],
+            "timedelta64[ms]",
+            ["0 days 00:16:40", "0 days 00:03:20", "0 days 00:50:00"],
+            None,
+        ],
+        [
+            [1000000, 200000, 3000000],
+            "timedelta64[s]",
+            ["11 days 13:46:40", "2 days 07:33:20", "34 days 17:20:00"],
+            None,
+        ],
+        [
+            [None, None, None, None, None],
+            "timedelta64[us]",
+            [None, None, None, None, None],
+            "str",
+        ],
+        [
+            [
+                136457654,
+                None,
+                245345345,
+                223432411,
+                None,
+                3634548734,
+                23234,
+            ],
+            "timedelta64[us]",
+            [
+                "0 days 00:02:16.457654",
+                None,
+                "0 days 00:04:05.345345",
+                "0 days 00:03:43.432411",
+                None,
+                "0 days 01:00:34.548734",
+                "0 days 00:00:00.023234",
+            ],
+            None,
+        ],
+        [
+            [
+                136457654,
+                None,
+                245345345,
+                223432411,
+                None,
+                3634548734,
+                23234,
+            ],
+            "timedelta64[ms]",
+            [
+                "1 days 13:54:17.654",
+                None,
+                "2 days 20:09:05.345",
+                "2 days 14:03:52.411",
+                None,
+                "42 days 01:35:48.734",
+                "0 days 00:00:23.234",
+            ],
+            None,
+        ],
+        [
+            [
+                136457654,
+                None,
+                245345345,
+                223432411,
+                None,
+                3634548734,
+                23234,
+            ],
+            "timedelta64[s]",
+            [
+                "1579 days 08:54:14",
+                None,
+                "2839 days 15:29:05",
+                "2586 days 00:33:31",
+                None,
+                "42066 days 12:52:14",
+                "0 days 06:27:14",
+            ],
+            None,
+        ],
+        [
+            [
+                136457654,
+                None,
+                245345345,
+                223432411,
+                None,
+                3634548734,
+                23234,
+            ],
+            "timedelta64[ns]",
+            [
+                "0 days 00:00:00.136457654",
+                None,
+                "0 days 00:00:00.245345345",
+                "0 days 00:00:00.223432411",
+                None,
+                "0 days 00:00:03.634548734",
+                "0 days 00:00:00.000023234",
+            ],
+            None,
+        ],
     ],
 )
-def test_timedelta_str_roundtrip(gsr, expected_series):
+def test_timedelta_str_roundtrip(sr_data, sr_dtype, exp_data, exp_dtype):
+    gsr = cudf.Series(sr_data, dtype=sr_dtype)
     actual_series = gsr.astype("str")
 
+    expected_series = cudf.Series(exp_data, dtype=exp_dtype)
     assert_eq(expected_series, actual_series)
 
     assert_eq(gsr, actual_series.astype(gsr.dtype))
@@ -1208,9 +1152,9 @@ def test_create_TimedeltaIndex(timedelta_dtype, name):
     assert_eq(pdi, gdi)
 
 
-@pytest.mark.parametrize("data", [[43534, 43543, 37897, 2000]])
-@pytest.mark.parametrize("dtype", ["timedelta64[ns]"])
-def test_timedelta_constructor(data, dtype):
+def test_timedelta_constructor():
+    data = [43534, 43543, 37897, 2000]
+    dtype = "timedelta64[ns]"
     expected = pd.TimedeltaIndex(data=data, dtype=dtype)
     actual = cudf.TimedeltaIndex(data=data, dtype=dtype)
 
@@ -1238,8 +1182,6 @@ def test_timedelta_getitem_na():
     assert s[2] is cudf.NaT
 
 
-@pytest.mark.parametrize("data1", [[123, 456, None, 321, None]])
-@pytest.mark.parametrize("data2", [[123, 456, 789, None, None]])
 @pytest.mark.parametrize(
     "op",
     [
@@ -1251,11 +1193,15 @@ def test_timedelta_getitem_na():
         operator.ne,
     ],
 )
-def test_timedelta_series_cmpops_pandas_compatibility(data1, data2, op):
-    gsr1 = cudf.Series(data=data1, dtype="timedelta64[ns]")
+def test_timedelta_series_cmpops_pandas_compatibility(op):
+    gsr1 = cudf.Series(
+        data=[123, 456, None, 321, None], dtype="timedelta64[ns]"
+    )
     psr1 = gsr1.to_pandas()
 
-    gsr2 = cudf.Series(data=data2, dtype="timedelta64[ns]")
+    gsr2 = cudf.Series(
+        data=[123, 456, 789, None, None], dtype="timedelta64[ns]"
+    )
     psr2 = gsr2.to_pandas()
 
     expect = op(psr1, psr2)
@@ -1313,7 +1259,7 @@ def test_timedelta_series_total_seconds(data, timedelta_dtype):
     assert_eq(expected, actual)
 
 
-def test_timedelta_index_total_seconds(request, data, timedelta_dtype):
+def test_timedelta_index_total_seconds(data, timedelta_dtype):
     gi = cudf.Index(data, dtype=timedelta_dtype)
     pi = gi.to_pandas()
 
