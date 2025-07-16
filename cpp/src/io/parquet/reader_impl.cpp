@@ -914,17 +914,14 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
       }
     });
 
-  // Update the nullmask in bulk if there are more than 16 pages
-  constexpr auto min_nullmasks_for_bulk_update = 16;
+  // Min number of nullmasks to use bulk update
+  constexpr auto min_nullmasks_for_bulk_update = 32;
 
-  // Disabling bulk update to avoid unsafe bulk update until aliasing is handled
-  constexpr auto can_bulk_update = false;
-
-  // Bulk update the nullmasks if more than 16 pages.
-  if (can_bulk_update and null_masks.size() >= min_nullmasks_for_bulk_update) {
+  // Bulk update the nullmasks if possible
+  if (null_masks.size() >= min_nullmasks_for_bulk_update) {
     auto valids = cudf::detail::make_host_vector<bool>(null_masks.size(), _stream);
     std::fill(valids.begin(), valids.end(), false);
-    cudf::set_null_masks(null_masks, begin_bits, end_bits, valids, _stream);
+    cudf::set_null_masks_safe(null_masks, begin_bits, end_bits, valids, _stream);
   }
   // Otherwise, update the nullmasks in a loop
   else {
