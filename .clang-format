@@ -83,7 +83,7 @@ IncludeCategories:
     Priority:        4
   - Regex:           '^<(nvtext|cudf_kafka)' # other libcudf includes
     Priority:        5
-  - Regex:           '^<(cugraph|cuml|cuspatial|raft|kvikio)' # Other RAPIDS includes
+  - Regex:           '^<(cugraph|cuml|raft|kvikio)' # Other RAPIDS includes
     Priority:        6
   - Regex:           '^<rmm/' # RMM includes
     Priority:        7
