@@ -104,8 +104,8 @@ def default_memory_resource(
         ):
             raise ComputeError(
                 "GPU engine requested, but incorrect cudf-polars package installed. "
-                "If your system has a CUDA 11 driver, please uninstall `cudf-polars-cu12` "
-                "and install `cudf-polars-cu11`"
+                "If your system has a CUDA `x` driver, please uninstall `cudf-polars-cu12` "
+                "and install `cudf-polars-cu<x>` instead."
             ) from None
         else:
             raise
