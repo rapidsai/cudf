@@ -1378,10 +1378,8 @@ constexpr bool is_sum_product_agg(aggregation::Kind k)
 // Summing/Multiplying integers of any type, always use int64_t accumulator (except SUM_ANSI which
 // has its own template)
 template <typename Source, aggregation::Kind k>
-struct target_type_impl<Source,
-                        k,
-                        std::enable_if_t<std::is_integral_v<Source> && is_sum_product_agg(k) &&
-                                         k != aggregation::SUM_ANSI>> {
+  requires(std::is_integral_v<Source> && is_sum_product_agg(k) && k != aggregation::SUM_ANSI)
+struct target_type_impl<Source, k> {
   using type = int64_t;
 };
 
@@ -1397,10 +1395,8 @@ struct target_type_impl<
 // Summing/Multiplying float/doubles, use same type accumulator (except SUM_ANSI which has its own
 // template)
 template <typename Source, aggregation::Kind k>
-struct target_type_impl<Source,
-                        k,
-                        std::enable_if_t<std::is_floating_point_v<Source> &&
-                                         is_sum_product_agg(k) && k != aggregation::SUM_ANSI>> {
+  requires(std::is_floating_point_v<Source> && is_sum_product_agg(k) && k != aggregation::SUM_ANSI)
+struct target_type_impl<Source, k> {
   using type = Source;
 };
 
