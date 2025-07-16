@@ -130,7 +130,7 @@ def _bool_converter(v: str) -> bool:
     elif lowered in {"0", "false", "no", "n"}:
         return False
     else:
-        raise ValueError(f"Invalid boolean value: {v}")
+        raise ValueError(f"Invalid boolean value: '{v}'")
 
 
 @dataclasses.dataclass(frozen=True)

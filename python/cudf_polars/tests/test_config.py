@@ -318,6 +318,12 @@ def test_parquet_options_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         assert config.parquet_options.chunk_read_limit == 100
         assert config.parquet_options.pass_read_limit == 200
 
+    with monkeypatch.context() as m:
+        m.setenv("CUDF_POLARS__PARQUET_OPTIONS__CHUNKED", "foo")
+        engine = pl.GPUEngine()
+        with pytest.raises(ValueError, match="Invalid boolean value: 'foo'"):
+            ConfigOptions.from_polars_engine(engine)
+
 
 def test_config_option_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     with monkeypatch.context() as m:
