@@ -1161,7 +1161,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * processing and how the data is laid out.  This also only works on fixed
    * length types.
    * @param udf This function will be applied to every element in the vector
-   * @param isPtx is the code of the function ptx? true or C/C++ false.
+   * @param source_type the UDF source type
    */
   public final ColumnVector transform(String udf, UDFSourceType source_type) {
     return new ColumnVector(transform(getNativeView(), udf, source_type.nativeId));
@@ -4821,7 +4821,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   private static native long containsVector(long valuesHandle, long searchSpaceHandle) throws CudfException;
 
-  private static native long transform(long viewHandle, String udf, boolean isPtx);
+  private static native long transform(long viewHandle, String udf, int isPtx);
 
   private static native long clamper(long nativeView, long loScalarHandle, long loScalarReplaceHandle,
                                      long hiScalarHandle, long hiScalarReplaceHandle);
