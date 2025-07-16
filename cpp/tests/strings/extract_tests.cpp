@@ -347,7 +347,7 @@ TEST_F(StringsExtractTests, EmptyInput)
   auto prog    = cudf::strings::regex_program::create(pattern);
 
   auto rt = cudf::strings::extract(sv, *prog);
-  EXPECT_EQ(0, rt->num_columns());
+  EXPECT_EQ(1, rt->num_columns());
   EXPECT_EQ(0, rt->num_rows());
 
   auto rl = cudf::strings::extract_all_record(sv, *prog);
