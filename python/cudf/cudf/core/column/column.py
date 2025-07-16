@@ -1227,6 +1227,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         If ``value`` and ``self`` are of different types, ``value`` is coerced
         to ``self.dtype``. Assumes ``self`` and ``value`` are index-aligned.
         """
+        import pdb
+
+        pdb.set_trace()
         value_normalized = self._cast_setitem_value(value)
         if isinstance(key, slice):
             out: ColumnBase | None = self._scatter_by_slice(

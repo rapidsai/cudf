@@ -65,7 +65,9 @@ def assert_groupby_results_equal(
                 got = got.sort_values(by=by).reset_index(drop=True)
             else:
                 got = got.sort_values(by=by).reset_index(drop=True)
+    import pdb
 
+    pdb.set_trace()
     assert_eq(expect, got, **kwargs)
 
 
@@ -484,6 +486,7 @@ def run_groupby_apply_jit_test(data, func, keys, *args):
     cudf_jit_result = got_groupby_obj.apply(
         func, *args, engine="jit", include_groups=False
     )
+    # with pytest.warns(FutureWarning):
     pandas_result = expect_groupby_obj.apply(func, *args, include_groups=False)
     assert_groupby_results_equal(cudf_jit_result, pandas_result)
 
@@ -504,7 +507,8 @@ def groupby_apply_jit_reductions_test_inner(func, data, dtype):
     lcl = {}
     exec(funcstr, lcl)
     func = lcl["func"]
-
+    if dtype.kind in "iu":
+        data["val1"] = data["val1"].fillna(0)
     data["val1"] = data["val1"].astype(dtype)
     data["val2"] = data["val2"].astype(dtype)
 
@@ -529,7 +533,8 @@ def test_groupby_apply_jit_unary_reductions(
     func, dtype, dataset, groupby_jit_datasets
 ):
     dataset = groupby_jit_datasets[dataset]
-    groupby_apply_jit_reductions_test_inner(func, dataset, dtype)
+    with pytest.warns(FutureWarning):
+        groupby_apply_jit_reductions_test_inner(func, dataset.copy(), dtype)
 
 
 # test unary reductions for special values
