@@ -909,8 +909,8 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
         begin_bits.emplace_back(start_row);
         end_bits.emplace_back(end_row);
 
-        // Increment the null count
-        out_buf.null_count() += (end_row - start_row);
+        // Increment the null count by the number of rows in this page
+        out_buf.null_count() += page.num_rows;
       }
     });
 
