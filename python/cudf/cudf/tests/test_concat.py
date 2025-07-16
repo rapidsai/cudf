@@ -1556,118 +1556,135 @@ def test_concat_decimal_numeric_dataframe(df1, df2, df3, expected):
 
 
 @pytest.mark.parametrize(
-    "s1, s2, s3, expected",
+    "data1, dtype1, index1, data2, dtype2, index2, data3, dtype3, index3, expected_data, expected_dtype, expected_index",
     [
-        (
-            cudf.Series(
-                [Decimal("32.8"), Decimal("-87.7")], dtype=Decimal64Dtype(6, 2)
-            ),
-            cudf.Series(
-                [Decimal("101.243"), Decimal("-92.449")],
-                dtype=Decimal64Dtype(9, 6),
-            ),
-            cudf.Series([94, -22], dtype="int32"),
-            cudf.Series(
-                [
-                    Decimal("32.8"),
-                    Decimal("-87.7"),
-                    Decimal("101.243"),
-                    Decimal("-92.449"),
-                    Decimal("94"),
-                    Decimal("-22"),
-                ],
-                dtype=Decimal64Dtype(10, 6),
-                index=[0, 1, 0, 1, 0, 1],
-            ),
-        ),
-        (
-            cudf.Series(
-                [Decimal("7.2"), Decimal("122.1")], dtype=Decimal64Dtype(5, 2)
-            ),
-            cudf.Series([33, 984], dtype="uint32"),
-            cudf.Series([593, -702], dtype="int32"),
-            cudf.Series(
-                [
-                    Decimal("7.2"),
-                    Decimal("122.1"),
-                    Decimal("33"),
-                    Decimal("984"),
-                    Decimal("593"),
-                    Decimal("-702"),
-                ],
-                dtype=Decimal32Dtype(5, 2),
-                index=[0, 1, 0, 1, 0, 1],
-            ),
-        ),
-        (
-            cudf.Series(
-                [Decimal("982.94"), Decimal("-493.626")],
-                dtype=Decimal64Dtype(9, 4),
-            ),
-            cudf.Series([847.98, 254.442], dtype="float32"),
-            cudf.Series([5299.262, -2049.25], dtype="float64"),
-            cudf.Series(
-                [
-                    Decimal("982.94"),
-                    Decimal("-493.626"),
-                    Decimal("847.98"),
-                    Decimal("254.442"),
-                    Decimal("5299.262"),
-                    Decimal("-2049.25"),
-                ],
-                dtype=Decimal32Dtype(9, 4),
-                index=[0, 1, 0, 1, 0, 1],
-            ),
-        ),
-        (
-            cudf.Series(
-                [Decimal("492.204"), Decimal("-72824.455")],
-                dtype=Decimal64Dtype(9, 4),
-            ),
-            cudf.Series([8438, -27462], dtype="int64"),
-            cudf.Series([-40.292, 49202.953], dtype="float64"),
-            cudf.Series(
-                [
-                    Decimal("492.204"),
-                    Decimal("-72824.455"),
-                    Decimal("8438"),
-                    Decimal("-27462"),
-                    Decimal("-40.292"),
-                    Decimal("49202.953"),
-                ],
-                dtype=Decimal32Dtype(9, 4),
-                index=[0, 1, 0, 1, 0, 1],
-            ),
-        ),
-        (
-            cudf.Series(
-                [Decimal("492.204"), Decimal("-72824.455")],
-                dtype=Decimal64Dtype(10, 4),
-            ),
-            cudf.Series(
-                [Decimal("8438"), Decimal("-27462")],
-                dtype=Decimal32Dtype(9, 4),
-            ),
-            cudf.Series(
-                [Decimal("-40.292"), Decimal("49202.953")],
-                dtype=Decimal128Dtype(19, 4),
-            ),
-            cudf.Series(
-                [
-                    Decimal("492.204"),
-                    Decimal("-72824.455"),
-                    Decimal("8438"),
-                    Decimal("-27462"),
-                    Decimal("-40.292"),
-                    Decimal("49202.953"),
-                ],
-                dtype=Decimal128Dtype(19, 4),
-                index=[0, 1, 0, 1, 0, 1],
-            ),
-        ),
+        [
+            [Decimal("32.8"), Decimal("-87.7")],
+            Decimal64Dtype(6, 2),
+            None,
+            [Decimal("101.243"), Decimal("-92.449")],
+            Decimal64Dtype(9, 6),
+            None,
+            [94, -22],
+            "int32",
+            None,
+            [
+                Decimal("32.8"),
+                Decimal("-87.7"),
+                Decimal("101.243"),
+                Decimal("-92.449"),
+                Decimal("94"),
+                Decimal("-22"),
+            ],
+            Decimal64Dtype(10, 6),
+            [0, 1, 0, 1, 0, 1],
+        ],
+        [
+            [Decimal("7.2"), Decimal("122.1")],
+            Decimal64Dtype(5, 2),
+            None,
+            [33, 984],
+            "uint32",
+            None,
+            [593, -702],
+            "int32",
+            None,
+            [
+                Decimal("7.2"),
+                Decimal("122.1"),
+                Decimal("33"),
+                Decimal("984"),
+                Decimal("593"),
+                Decimal("-702"),
+            ],
+            Decimal32Dtype(5, 2),
+            [0, 1, 0, 1, 0, 1],
+        ],
+        [
+            [Decimal("982.94"), Decimal("-493.626")],
+            Decimal64Dtype(9, 4),
+            None,
+            [847.98, 254.442],
+            "float32",
+            None,
+            [5299.262, -2049.25],
+            "float64",
+            None,
+            [
+                Decimal("982.94"),
+                Decimal("-493.626"),
+                Decimal("847.98"),
+                Decimal("254.442"),
+                Decimal("5299.262"),
+                Decimal("-2049.25"),
+            ],
+            Decimal32Dtype(9, 4),
+            [0, 1, 0, 1, 0, 1],
+        ],
+        [
+            [Decimal("492.204"), Decimal("-72824.455")],
+            Decimal64Dtype(9, 4),
+            None,
+            [8438, -27462],
+            "int64",
+            None,
+            [-40.292, 49202.953],
+            "float64",
+            None,
+            [
+                Decimal("492.204"),
+                Decimal("-72824.455"),
+                Decimal("8438"),
+                Decimal("-27462"),
+                Decimal("-40.292"),
+                Decimal("49202.953"),
+            ],
+            Decimal32Dtype(9, 4),
+            [0, 1, 0, 1, 0, 1],
+        ],
+        [
+            [Decimal("492.204"), Decimal("-72824.455")],
+            Decimal64Dtype(10, 4),
+            None,
+            [Decimal("8438"), Decimal("-27462")],
+            Decimal32Dtype(9, 4),
+            None,
+            [Decimal("-40.292"), Decimal("49202.953")],
+            Decimal128Dtype(19, 4),
+            None,
+            [
+                Decimal("492.204"),
+                Decimal("-72824.455"),
+                Decimal("8438"),
+                Decimal("-27462"),
+                Decimal("-40.292"),
+                Decimal("49202.953"),
+            ],
+            Decimal128Dtype(19, 4),
+            [0, 1, 0, 1, 0, 1],
+        ],
     ],
 )
-def test_concat_decimal_numeric_series(s1, s2, s3, expected):
+def test_concat_decimal_numeric_series(
+    data1,
+    dtype1,
+    index1,
+    data2,
+    dtype2,
+    index2,
+    data3,
+    dtype3,
+    index3,
+    expected_data,
+    expected_dtype,
+    expected_index,
+):
+    s1 = cudf.Series(data1, dtype=dtype1, index=index1)
+    s2 = cudf.Series(data2, dtype=dtype2, index=index2)
+    s3 = cudf.Series(data3, dtype=dtype3, index=index3)
+    expected = cudf.Series(
+        expected_data, dtype=expected_dtype, index=expected_index
+    )
     s = cudf.concat([s1, s2, s3])
     assert_eq(s, expected, check_index_type=True)
 
