@@ -94,11 +94,28 @@ struct identity_initializer {
   void operator()(mutable_column_view const& col, rmm::cuda_stream_view stream)
     requires(is_supported<T, k>())
   {
-    using DeviceType = device_storage_type_t<T>;
-    thrust::fill(rmm::exec_policy(stream),
-                 col.begin<DeviceType>(),
-                 col.end<DeviceType>(),
-                 get_identity<DeviceType, k>());
+    if constexpr (k == aggregation::SUM_ANSI) {
+      // SUM_ANSI uses a struct with sum (int64_t) and overflow (bool) children
+      // Initialize sum child to 0 and overflow child to false
+      auto sum_col      = col.child(0);
+      auto overflow_col = col.child(1);
+
+      thrust::fill(rmm::exec_policy_nosync(stream),
+                   sum_col.begin<int64_t>(),
+                   sum_col.end<int64_t>(),
+                   int64_t{0});
+
+      thrust::fill(rmm::exec_policy_nosync(stream),
+                   overflow_col.begin<bool>(),
+                   overflow_col.end<bool>(),
+                   false);
+    } else {
+      using DeviceType = device_storage_type_t<T>;
+      thrust::fill(rmm::exec_policy_nosync(stream),
+                   col.begin<DeviceType>(),
+                   col.end<DeviceType>(),
+                   get_identity<DeviceType, k>());
+    }
   }
 
   template <typename T, aggregation::Kind k>

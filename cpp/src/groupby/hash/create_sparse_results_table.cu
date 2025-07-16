@@ -72,8 +72,25 @@ cudf::table create_sparse_results_table(cudf::table_view const& flattened_values
                    auto const col_type = cudf::is_dictionary(col.type())
                                            ? cudf::dictionary_column_view(col).keys().type()
                                            : col.type();
-                   return make_fixed_width_column(
-                     cudf::detail::target_type(col_type, agg), col.size(), mask_flag, stream);
+
+                   // Special handling for SUM_ANSI which needs a struct column
+                   if (agg == cudf::aggregation::SUM_ANSI) {
+                     std::vector<std::unique_ptr<cudf::column>> children;
+
+                     // Create sum child column (int64_t)
+                     children.push_back(make_fixed_width_column(
+                       cudf::data_type{cudf::type_id::INT64}, col.size(), mask_flag, stream));
+
+                     // Create overflow child column (bool)
+                     children.push_back(make_fixed_width_column(
+                       cudf::data_type{cudf::type_id::BOOL8}, col.size(), mask_flag, stream));
+
+                     // Create struct column with the children
+                     return make_structs_column(col.size(), std::move(children), 0, {}, stream);
+                   } else {
+                     return make_fixed_width_column(
+                       cudf::detail::target_type(col_type, agg), col.size(), mask_flag, stream);
+                   }
                  });
   cudf::table sparse_table(std::move(sparse_columns));
   // If no direct aggregations, initialize the sparse table

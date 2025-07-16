@@ -18,6 +18,7 @@
 
 #include <cudf/aggregation.hpp>
 #include <cudf/detail/utilities/assert.cuh>
+#include <cudf/structs/struct_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
@@ -1414,7 +1415,7 @@ struct target_type_impl<Source,
 // SUM_ANSI always outputs a struct {sum: int64_t, overflow: bool} regardless of input type
 template <typename Source>
 struct target_type_impl<Source, aggregation::SUM_ANSI> {
-  using type = int64_t;  // TODO: Change to struct {int64_t sum; bool overflow;} in future
+  using type = struct_view;  // SUM_ANSI outputs a struct with sum and overflow fields
 };
 
 // Always use `double` for M2
