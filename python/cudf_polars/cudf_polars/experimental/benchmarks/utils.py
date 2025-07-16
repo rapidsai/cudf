@@ -415,10 +415,17 @@ def _query_type(num_queries: int) -> Callable[[str | int], list[int]]:
     def parse(query: str | int) -> list[int]:
         if isinstance(query, int):
             return [query]
-        elif query == "all":
+        if query == "all":
             return list(range(1, num_queries + 1))
-        else:
-            return [int(q) for q in query.split(",")]
+
+        result: set[int] = set()
+        for part in query.split(","):
+            if "-" in part:
+                start, end = part.split("-")
+                result.update(range(int(start), int(end) + 1))
+            else:
+                result.add(int(part))
+        return sorted(result)
 
     return parse
 

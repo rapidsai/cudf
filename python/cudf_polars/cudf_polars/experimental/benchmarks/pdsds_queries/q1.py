@@ -19,25 +19,25 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """Query 1."""
     return """
     WITH customer_total_return
-        AS (SELECT sr_customer_sk     AS ctr_customer_sk,
+         AS (SELECT sr_customer_sk     AS ctr_customer_sk,
                     sr_store_sk        AS ctr_store_sk,
                     Sum(sr_return_amt) AS ctr_total_return
-            FROM   store_returns,
+             FROM   store_returns,
                     date_dim
-            WHERE  sr_returned_date_sk = d_date_sk
+             WHERE  sr_returned_date_sk = d_date_sk
                     AND d_year = 2001
-            GROUP  BY sr_customer_sk,
-                    sr_store_sk)
+             GROUP  BY sr_customer_sk,
+                       sr_store_sk)
     SELECT c_customer_id
     FROM   customer_total_return ctr1,
-        store,
-        customer
+           store,
+           customer
     WHERE  ctr1.ctr_total_return > (SELECT Avg(ctr_total_return) * 1.2
                                     FROM   customer_total_return ctr2
                                     WHERE  ctr1.ctr_store_sk = ctr2.ctr_store_sk)
-        AND s_store_sk = ctr1.ctr_store_sk
-        AND s_state = 'TN'
-        AND ctr1.ctr_customer_sk = c_customer_sk
+           AND s_store_sk = ctr1.ctr_store_sk
+           AND s_state = 'TN'
+           AND ctr1.ctr_customer_sk = c_customer_sk
     ORDER  BY c_customer_id
     LIMIT 100;
     """
@@ -51,7 +51,6 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
-
     # Step 1: Create customer_total_return CTE equivalent
     customer_total_return = (
         store_returns.join(
@@ -59,20 +58,18 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         )
         .filter(pl.col("d_year") == 2001)
         .group_by(["sr_customer_sk", "sr_store_sk"])
-        .agg(pl.col("sr_return_amt").sum().alias("ctr_total_return"))
-        .rename(
-            {
-                "sr_customer_sk": "ctr_customer_sk",
-                "sr_store_sk": "ctr_store_sk",
-            }
+        .agg(
+            [
+                pl.col("sr_customer_sk").first().alias("ctr_customer_sk"),
+                pl.col("sr_store_sk").first().alias("ctr_store_sk"),
+                pl.col("sr_return_amt").sum().alias("ctr_total_return"),
+            ]
         )
     )
-
     # Step 2: Calculate average return per store for the subquery
     store_avg_returns = customer_total_return.group_by("ctr_store_sk").agg(
         [(pl.col("ctr_total_return").mean() * 1.2).alias("avg_return_threshold")]
     )
-
     # Step 3: Join everything together and apply filters
     return (
         customer_total_return.join(
