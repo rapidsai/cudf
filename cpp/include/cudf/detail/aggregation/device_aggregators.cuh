@@ -167,15 +167,22 @@ struct update_target_element<Source, aggregation::SUM_ANSI> {
     auto sum_column      = target.child(0);
     auto overflow_column = target.child(1);
 
-    auto source_value = source.element<Source>(source_index);
-    auto old_sum =
+    // Mark child columns as valid when they will be updated
+    if (sum_column.is_null(target_index)) { sum_column.set_valid(target_index); }
+    if (overflow_column.is_null(target_index)) { overflow_column.set_valid(target_index); }
+
+    auto const source_value = source.element<Source>(source_index);
+    auto const old_sum =
       cudf::detail::atomic_add(&sum_column.element<int64_t>(target_index), source_value);
 
     // Check for overflow: if old_sum and source_value have same sign but result has different sign
-    auto new_sum  = old_sum + source_value;
-    bool overflow = ((old_sum > 0 && source_value > 0 && new_sum < 0) ||
-                     (old_sum < 0 && source_value < 0 && new_sum > 0));
-    if (overflow) { overflow_column.element<bool>(target_index) = true; }
+    auto const new_sum  = old_sum + source_value;
+    auto const overflow = ((old_sum > 0 && source_value > 0 && new_sum < 0) ||
+                           (old_sum < 0 && source_value < 0 && new_sum > 0));
+    if (overflow) {
+      // Atomically set overflow flag to true (use atomic_max since true > false)
+      cudf::detail::atomic_max(&overflow_column.element<bool>(target_index), true);
+    }
   }
 };
 
