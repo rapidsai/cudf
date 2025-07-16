@@ -659,12 +659,38 @@ if cudf.core._compat.PANDAS_GE_210:
         pd.core.arrays.string_arrow.ArrowStringArrayNumpySemantics,
         fast_to_slow=_Unusable(),
         slow_to_fast=_Unusable(),
+        additional_attributes={
+            "_pa_array": _FastSlowAttribute("_pa_array", private=True),
+        },
     )
+
+if cudf.core._compat.PANDAS_GE_230:
+    StringArrayNumpySemantics = make_final_proxy_type(
+        "StringArrayNumpySemantics",
+        _Unusable,
+        pd.core.arrays.string_.StringArrayNumpySemantics,
+        bases=(StringArray,),
+        fast_to_slow=_Unusable(),
+        slow_to_fast=_Unusable(),
+    )
+
 
 ArrowStringArray = make_final_proxy_type(
     "ArrowStringArray",
     _Unusable,
     pd.core.arrays.string_arrow.ArrowStringArray,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "_pa_array": _FastSlowAttribute("_pa_array", private=True),
+    },
+)
+
+
+StorageExtensionDtype = make_final_proxy_type(
+    "StorageExtensionDtype",
+    _Unusable,
+    pd.core.dtypes.base.StorageExtensionDtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
 )
@@ -1100,6 +1126,9 @@ register_proxy_func(pd.read_pickle)(
 )
 
 register_proxy_func(pd.to_pickle)(_FunctionProxy(_Unusable(), pd.to_pickle))
+register_proxy_func(pd.api.types.is_list_like)(  # noqa: TID251
+    _FunctionProxy(_Unusable(), pd.api.types.is_list_like)  # noqa: TID251
+)
 
 
 def _get_eval_locals_and_globals(level, local_dict=None, global_dict=None):
@@ -1848,6 +1877,9 @@ ArrowExtensionArray = make_final_proxy_type(
     pd.arrays.ArrowExtensionArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    additional_attributes={
+        "_pa_array": _FastSlowAttribute("_pa_array", private=True),
+    },
 )
 
 

@@ -12,7 +12,7 @@ import pylibcudf as plc
 import rmm.mr
 from rmm.pylibrmm.stream import DEFAULT_STREAM
 
-from cudf_polars.containers import DataFrame
+from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.dsl.expr import Col
 from cudf_polars.dsl.ir import IR, Sort
 from cudf_polars.dsl.traversal import traversal
@@ -123,15 +123,18 @@ def _select_local_split_candidates(
     row_id = plc.Column.from_arrow(pa.array(candidates))
 
     res = plc.copying.gather(df.table, row_id, plc.copying.OutOfBoundsPolicy.DONT_CHECK)
+    part_id_plc_dtype = plc.types.DataType(plc.types.TypeId.UINT32)
     part_id = plc.Column.from_scalar(
-        plc.Scalar.from_py(my_part_id, plc.types.DataType(plc.types.TypeId.UINT32)),
+        plc.Scalar.from_py(my_part_id, part_id_plc_dtype),
         len(candidates),
     )
 
     name_gen = unique_names(df.column_names)
+    part_id_dtype = DataType(part_id_plc_dtype)
     return DataFrame.from_table(
         plc.Table([*res.columns(), part_id, row_id]),
         [*df.column_names, next(name_gen), next(name_gen)],
+        [*df.dtypes, part_id_dtype, part_id_dtype],
     )
 
 
@@ -182,7 +185,9 @@ def _get_final_sort_boundaries(
     )
 
     return DataFrame.from_table(
-        sort_boundaries, sort_boundaries_candidates.column_names
+        sort_boundaries,
+        sort_boundaries_candidates.column_names,
+        sort_boundaries_candidates.dtypes,
     )
 
 
@@ -228,6 +233,7 @@ class SortedShuffleOptions(TypedDict):
     order: Sequence[plc.types.Order]
     null_order: Sequence[plc.types.NullOrder]
     column_names: Sequence[str]
+    column_dtypes: Sequence[DataType]
 
 
 # Experimental rapidsmpf shuffler integration
@@ -274,6 +280,7 @@ class RMPFIntegrationSortedShuffle:  # pragma: no cover
 
         shuffler.wait_on(partition_id)
         column_names = options["column_names"]
+        column_dtypes = options["column_dtypes"]
 
         # TODO: When sorting, this step should finalize with a merge (unless we
         # require stability, as cudf merge is not stable).
@@ -284,6 +291,7 @@ class RMPFIntegrationSortedShuffle:  # pragma: no cover
                 device_mr=rmm.mr.get_current_device_resource(),
             ),
             column_names,
+            column_dtypes,
         )
 
 
@@ -327,6 +335,7 @@ def _sort_partition_dataframe(
         i: DataFrame.from_table(
             split,
             df.column_names,
+            df.dtypes,
         )
         for i, split in enumerate(plc.copying.split(df.table, splits))
     }
@@ -496,6 +505,7 @@ def _(
         "order": ir.order,
         "null_order": ir.null_order,
         "column_names": list(ir.schema.keys()),
+        "column_dtypes": list(ir.schema.values()),
     }
 
     # Try using rapidsmpf shuffler if we have "simple" shuffle
