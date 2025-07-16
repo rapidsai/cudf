@@ -83,6 +83,23 @@ list(TRANSFORM CMAKE_CUDA_ARCHITECTURES REPLACE "-virtual" "")
 list(SORT CMAKE_CUDA_ARCHITECTURES)
 list(REMOVE_DUPLICATES CMAKE_CUDA_ARCHITECTURES)
 
+add_library(shim OBJECT shim.cu)
+set_target_properties(
+  shim
+  PROPERTIES CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES}"
+             CUDA_SEPARABLE_COMPILATION ON
+             CUDA_FATBIN_COMPILATION ON
+             POSITION_INDEPENDENT_CODE ON
+             INTERPROCEDURAL_OPTIMIZATION ON
+)
+
+target_compile_options(shim PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${SHIM_CUDA_FLAGS}>")
+target_link_libraries(shim PUBLIC cudf::cudf)
+target_include_directories(
+  shim PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/strings/include>"
+              "${NRT_INCLUDE_DIR}"
+)
+
 foreach(arch IN LISTS CMAKE_CUDA_ARCHITECTURES)
   set(tgt shim_${arch})
 
@@ -103,3 +120,10 @@ foreach(arch IN LISTS CMAKE_CUDA_ARCHITECTURES)
     RENAME ${tgt}.ptx
   )
 endforeach()
+
+install(
+  FILES $<TARGET_OBJECTS:shim>
+  DESTINATION cudf/core/udf/
+  RENAME shim.fatbin
+)
+
