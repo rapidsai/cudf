@@ -50,6 +50,7 @@ def assert_groupby_results_equal(
 ):
     # Because we don't sort by index by default in groupby,
     # sort expect and got by index before comparing.
+    # import pdb;pdb.set_trace()
     if sort:
         if as_index:
             expect = expect.sort_index()
@@ -65,9 +66,7 @@ def assert_groupby_results_equal(
                 got = got.sort_values(by=by).reset_index(drop=True)
             else:
                 got = got.sort_values(by=by).reset_index(drop=True)
-    import pdb
-
-    pdb.set_trace()
+    # import pdb;pdb.set_trace()
     assert_eq(expect, got, **kwargs)
 
 
@@ -483,6 +482,7 @@ def run_groupby_apply_jit_test(data, func, keys, *args):
     got_groupby_obj = data.groupby(keys)
 
     # compare cuDF jit to pandas
+    # import pdb;pdb.set_trace()
     cudf_jit_result = got_groupby_obj.apply(
         func, *args, engine="jit", include_groups=False
     )
@@ -497,7 +497,6 @@ def groupby_apply_jit_reductions_test_inner(func, data, dtype):
     # but the current kernel caching mechanism relies on pickle which
     # does not play nice with local functions. What's below uses
     # exec as a workaround to write the test functions dynamically
-
     funcstr = textwrap.dedent(
         f"""
         def func(df):
