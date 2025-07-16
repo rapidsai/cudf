@@ -15,6 +15,13 @@ from pylibcudf.io.types import CompressionType
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "common"))
 
+
+# This ensures that assertions from expressions like `left == right` in the
+# common/utils.py are rewritten so that we get nice tracebacks.
+# We need to register this before the module is imported.
+pytest.register_assert_rewrite("utils")
+
+
 from utils import (
     ALL_PA_TYPES,
     DEFAULT_PA_TYPES,
