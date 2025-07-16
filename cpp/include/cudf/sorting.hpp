@@ -347,6 +347,9 @@ std::unique_ptr<table> stable_segmented_sort_by_key(
 /**
  * @brief Computes the top k values of a column
  *
+ * This performs the equivalent of a sort and the slice of the resulting first k elements.
+ * However, the returned column may or may not necessarily be sorted.
+ *
  * @throw std::invalid_argument if k is greater than the number of rows in the column
  *
  * @param col Column to compute top k
@@ -366,6 +369,9 @@ std::unique_ptr<column> top_k(
 
 /**
  * @brief Computes the indices of the top k values of a column
+ *
+ * The indices will represent the top k elements but may or may not represent
+ * those elements as k sorted values.
  *
  * @throw std::invalid_argument if k is greater than the number of rows in the column
  *
