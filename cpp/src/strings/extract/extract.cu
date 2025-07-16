@@ -93,6 +93,8 @@ std::unique_ptr<table> extract(strings_column_view const& input,
                                rmm::cuda_stream_view stream,
                                rmm::device_async_resource_ref mr)
 {
+  if (input.is_empty()) { return std::make_unique<table>(); }
+
   // create device object from regex_program
   auto d_prog = regex_device_builder::create_prog_device(prog, stream);
 
@@ -161,6 +163,8 @@ std::unique_ptr<column> extract_single(strings_column_view const& input,
                                        rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr)
 {
+  if (input.is_empty()) { return make_empty_column(type_id::STRING); }
+
   // create device object from regex_program
   auto d_prog = regex_device_builder::create_prog_device(prog, stream);
 
