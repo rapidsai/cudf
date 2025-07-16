@@ -637,10 +637,16 @@ size_t compress_max_output_chunk_size(compression_type compression,
         capped_uncomp_bytes, nvcompBatchedSnappyCompressDefaultOpts, &max_comp_chunk_size);
       break;
     case compression_type::DEFLATE:
-    case compression_type::GZIP:  // HACK!
+    case compression_type::GZIP: {
+      // nvcompBatchedGzipCompressGetMaxOutputChunkSize is not yet available
       status = nvcompBatchedDeflateCompressGetMaxOutputChunkSize(
         capped_uncomp_bytes, nvcompBatchedDeflateCompressDefaultOpts, &max_comp_chunk_size);
+      if (compression == compression_type::GZIP) {
+        // GZIP adds 18 bytes for header and footer
+        max_comp_chunk_size += 18;
+      }
       break;
+    }
     case compression_type::ZSTD:
       status = nvcompBatchedZstdCompressGetMaxOutputChunkSize(
         capped_uncomp_bytes, nvcompBatchedZstdCompressDefaultOpts, &max_comp_chunk_size);
@@ -670,10 +676,16 @@ size_t compress_max_output_chunk_size(compression_type compression,
         capped_uncomp_bytes, nvcompBatchedSnappyDefaultOpts, &max_comp_chunk_size);
       break;
     case compression_type::DEFLATE:
-    case compression_type::GZIP:  // HACK!
+    case compression_type::GZIP: {
+      // nvcompBatchedGzipCompressGetMaxOutputChunkSize is not yet available
       status = nvcompBatchedDeflateCompressGetMaxOutputChunkSize(
         capped_uncomp_bytes, nvcompBatchedDeflateDefaultOpts, &max_comp_chunk_size);
+      if (compression == compression_type::GZIP) {
+        // GZIP adds 18 bytes for header and footer
+        max_comp_chunk_size += 18;
+      }
       break;
+    }
     case compression_type::ZSTD:
       status = nvcompBatchedZstdCompressGetMaxOutputChunkSize(
         capped_uncomp_bytes, nvcompBatchedZstdDefaultOpts, &max_comp_chunk_size);
