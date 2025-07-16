@@ -623,11 +623,11 @@ void batched_decompress(compression_type compression,
 // Wrapper for nvcompBatched<format>CompressGetMaxOutputChunkSize
 #if NVCOMP_VER_MAJOR >= 5
 size_t compress_max_output_chunk_size(compression_type compression,
-                                      uint32_t max_uncompressed_chunk_bytes)
+                                      size_t max_uncompressed_chunk_bytes)
 {
-  auto const capped_uncomp_bytes = std::min<size_t>(
-    compress_max_allowed_chunk_size(compression).value_or(max_uncompressed_chunk_bytes),
-    max_uncompressed_chunk_bytes);
+  auto const capped_uncomp_bytes =
+    std::min(compress_max_allowed_chunk_size(compression).value_or(max_uncompressed_chunk_bytes),
+             max_uncompressed_chunk_bytes);
 
   size_t max_comp_chunk_size = 0;
   nvcompStatus_t status      = nvcompStatus_t::nvcompSuccess;
@@ -662,11 +662,11 @@ size_t compress_max_output_chunk_size(compression_type compression,
 }
 #else
 size_t compress_max_output_chunk_size(compression_type compression,
-                                      uint32_t max_uncompressed_chunk_bytes)
+                                      size_t max_uncompressed_chunk_bytes)
 {
-  auto const capped_uncomp_bytes = std::min<size_t>(
-    compress_max_allowed_chunk_size(compression).value_or(max_uncompressed_chunk_bytes),
-    max_uncompressed_chunk_bytes);
+  auto const capped_uncomp_bytes =
+    std::min(compress_max_allowed_chunk_size(compression).value_or(max_uncompressed_chunk_bytes),
+             max_uncompressed_chunk_bytes);
 
   size_t max_comp_chunk_size = 0;
   nvcompStatus_t status      = nvcompStatus_t::nvcompSuccess;
