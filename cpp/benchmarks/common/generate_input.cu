@@ -812,13 +812,20 @@ std::unique_ptr<cudf::column> create_distinct_rows_column<cudf::struct_view>(
   std::vector<std::unique_ptr<cudf::column>> children;
   children.push_back(cudf::sequence(
     num_rows, *cudf::make_default_constructed_scalar(cudf::data_type{cudf::type_id::INT32})));
-  for (int lvl = dist_params.max_depth; lvl > 0; --lvl) {
+  for (int lvl = dist_params.max_depth; lvl > 1; --lvl) {
     std::vector<std::unique_ptr<cudf::column>> parents;
     parents.push_back(cudf::create_structs_hierarchy(
       num_rows, std::move(children), 0, rmm::device_buffer{}, stream));
     std::swap(parents, children);
   }
-  return std::move(children[0]);
+  auto const null_count = col->null_count();
+  auto col_contents     = col->release();
+  col_contents.children.push_back(std::move(children[0]));
+  return cudf::create_structs_hierarchy(num_rows,
+                                        std::move(col_contents.children),
+                                        null_count,
+                                        std::move(*col_contents.null_mask),
+                                        stream);
 }
 
 template <typename T>
@@ -925,7 +932,7 @@ std::unique_ptr<cudf::column> create_distinct_rows_column<cudf::list_view>(
                                                stream);
     std::swap(child_column, list_column);
   }
-  return child_column;
+  return cudf::lists::concatenate_rows(cudf::table_view({col->view(), child_column->view()}));
 }
 
 using columns_vector = std::vector<std::unique_ptr<cudf::column>>;
