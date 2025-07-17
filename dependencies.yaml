@@ -795,7 +795,7 @@ dependencies:
           - matrix: {dependencies: "oldest"}
             packages:
               - numba==0.59.1
-              - numba-cuda==0.16.0
+              - numba-cuda==0.15.2
               - pandas==2.0.*
           - matrix: {dependencies: "latest"}
             packages:
