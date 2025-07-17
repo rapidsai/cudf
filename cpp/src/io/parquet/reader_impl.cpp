@@ -914,10 +914,10 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
       }
     });
 
-  // Min number of nullmasks to use bulk update
+  // Min number of nullmasks to use bulk update optimally
   constexpr auto min_nullmasks_for_bulk_update = 32;
 
-  // Bulk update the nullmasks if possible
+  // Bulk update the nullmasks if optimal
   if (null_masks.size() >= min_nullmasks_for_bulk_update) {
     auto valids = cudf::detail::make_host_vector<bool>(null_masks.size(), _stream);
     std::fill(valids.begin(), valids.end(), false);
