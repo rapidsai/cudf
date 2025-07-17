@@ -206,7 +206,7 @@ ConfigureNVBench(SEARCH_NVBENCH search/contains_scalar.cpp search/contains_table
 # * sort benchmark --------------------------------------------------------------------------------
 ConfigureNVBench(
   SORT_NVBENCH sort/rank.cpp sort/rank_lists.cpp sort/rank_structs.cpp sort/segmented_sort.cpp
-  sort/sort.cpp sort/sort_lists.cpp sort/sort_strings.cpp sort/sort_structs.cpp
+  sort/sort.cpp sort/sort_lists.cpp sort/sort_strings.cpp sort/sort_structs.cpp sort/top_k.cpp
 )
 
 # ##################################################################################################
