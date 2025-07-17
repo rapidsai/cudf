@@ -70,7 +70,7 @@ size_t batched_decompress_temp_size(compression_type compression,
  * @param max_uncomp_chunk_size Size of the largest uncompressed chunk in the batch
  */
 [[nodiscard]] size_t compress_max_output_chunk_size(compression_type compression,
-                                                    uint32_t max_uncomp_chunk_size);
+                                                    size_t max_uncomp_chunk_size);
 
 /**
  * @brief Gets input and output alignment requirements for compression.
