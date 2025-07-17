@@ -25,13 +25,17 @@ target_compile_features(compute_checksum_jit PRIVATE cxx_std_20)
 target_compile_options(
   compute_checksum_jit PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
 )
-target_link_libraries(compute_checksum_jit PRIVATE cudf::cudf nvtx3::nvtx3-cpp)
+target_link_libraries(
+  compute_checksum_jit PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
+)
 install(TARGETS compute_checksum_jit DESTINATION bin/examples/libcudf)
 
 add_executable(extract_email_jit extract_email_jit.cpp)
 target_compile_features(extract_email_jit PRIVATE cxx_std_20)
 target_compile_options(extract_email_jit PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
-target_link_libraries(extract_email_jit PRIVATE cudf::cudf nvtx3::nvtx3-cpp)
+target_link_libraries(
+  extract_email_jit PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
+)
 install(TARGETS extract_email_jit DESTINATION bin/examples/libcudf)
 
 add_executable(extract_email_precompiled extract_email_precompiled.cpp)
