@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import functools
-import io
 from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -423,14 +422,10 @@ class StringFunction(Expr):
             plc_column = self.children[0].evaluate(df, context=context).obj
             # Once https://github.com/rapidsai/cudf/issues/19338 is implemented,
             # we can use do this conversion on device.
-            buff = io.StringIO(
-                plc.strings.combine.join_strings(
-                    plc_column,
-                    plc.Scalar.from_py("\n", plc_column.type()),
-                    plc.Scalar.from_py("NULL", plc_column.type()),
-                )
-                .to_scalar()
-                .to_py()
+            buff = plc.strings.combine.join_strings_to_buffer(
+                plc_column,
+                plc.Scalar.from_py("\n", plc_column.type()),
+                plc.Scalar.from_py("NULL", plc_column.type()),
             )
             source = plc.io.types.SourceInfo([buff])
             options = (
