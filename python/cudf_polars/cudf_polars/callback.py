@@ -24,6 +24,7 @@ from rmm._cuda import gpu
 
 from cudf_polars.dsl.tracing import CUDF_POLARS_NVTX_DOMAIN
 from cudf_polars.dsl.translate import Translator
+from cudf_polars.utils.config import _env_get_int
 from cudf_polars.utils.timer import Timer
 
 if TYPE_CHECKING:
@@ -45,13 +46,6 @@ _SUPPORTED_PREFETCHES = {
     "gather",
     "hash_join",
 }
-
-
-def _env_get_int(name: str, default: int) -> int:
-    try:
-        return int(os.getenv(name, default))
-    except (ValueError, TypeError):  # pragma: no cover
-        return default  # pragma: no cover
 
 
 @cache
