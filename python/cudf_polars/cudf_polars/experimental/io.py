@@ -416,13 +416,13 @@ def _sink_to_directory(
     schema: Schema,
     kind: str,
     path: str,
-    config_options: ConfigOptions,
+    parquet_options: ParquetOptions,
     options: dict[str, Any],
     df: DataFrame,
     ready: None,
 ) -> DataFrame:
     """Sink a partition to a new file."""
-    return Sink.do_evaluate(schema, kind, path, options, df)
+    return Sink.do_evaluate(schema, kind, path, parquet_options, options, df)
 
 
 def _sink_to_parquet_file(
@@ -554,6 +554,7 @@ def _directory_sink_graph(
             sink.schema,
             sink.kind,
             f"{sink.path}/part.{str(i).zfill(width)}.{suffix}",
+            sink.parquet_options,
             sink.options,
             (child_name, i),
             setup_name,
