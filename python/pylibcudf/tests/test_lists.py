@@ -194,6 +194,20 @@ def test_segmented_gather_out_of_bounds():
     assert result[1][0].as_py() == 10
 
 
+def test_segmented_gather_out_of_bounds_nullify():
+    source_column = plc.Column.from_arrow(pa.array([[], [10, None]]))
+    gather_map_list = plc.Column.from_arrow(
+        pa.array(
+            [[0, 1, -1], [0, 1, 2, -3]],
+        )
+    )
+    got = plc.lists.segmented_gather(
+        source_column, gather_map_list, plc.copying.OutOfBoundsPolicy.NULLIFY
+    )
+    expect = pa.array([[None, None, None], [10, None, None, None]])
+    assert_column_eq(expect, got)
+
+
 def test_extract_list_element_scalar(list_column):
     plc_column = plc.Column.from_arrow(pa.array(list_column))
 
