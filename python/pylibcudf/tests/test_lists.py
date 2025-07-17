@@ -166,10 +166,10 @@ def test_segmented_gather():
         pa.array([[10, 20], [], [30], [None, 50, 30, 20]])
     )
     gather_map_list = plc.Column.from_arrow(
-        pa.array([[1, 0, 1], [], [], [0, 1, 3]])
+        pa.array([[1, 0, 1], [], [], [0, 1, 3, -1]])
     )
     got = plc.lists.segmented_gather(source_column, gather_map_list)
-    expect = pa.array([[20, 10, 20], [], [], [None, 50, 20]])
+    expect = pa.array([[20, 10, 20], [], [], [None, 50, 20, 20]])
 
     assert_column_eq(expect, got)
 
@@ -178,7 +178,7 @@ def test_segmented_gather_out_of_bounds():
     source_column = plc.Column.from_arrow(pa.array([[], [10, 20]]))
     gather_map_list = plc.Column.from_arrow(
         pa.array(
-            [[0], [0, 2]],
+            [[0], [0, 2, -3]],
         )
     )
     got = plc.lists.segmented_gather(source_column, gather_map_list)
@@ -189,7 +189,7 @@ def test_segmented_gather_out_of_bounds():
     assert got.null_count() == 0
     assert got.size() == 2
     assert len(result[0]) == 1
-    assert len(result[1]) == 2
+    assert len(result[1]) == 3
     # this is the only indexer that isn't out of bounds.
     assert result[1][0].as_py() == 10
 
