@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/random.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
@@ -315,3 +316,5 @@ __device__ void filter(bool* out,
 }
 
 }  // namespace filters
+
+CUDF_TEST_PROGRAM_MAIN()
