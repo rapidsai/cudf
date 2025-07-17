@@ -265,17 +265,12 @@ adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
                         rmm::cuda_stream_view stream)
 {
   // sort by row count
-  rmm::device_uvector<cumulative_page_info> c_info_sorted(
-    c_info.size(), stream, cudf::get_current_device_resource_ref());
+  rmm::device_uvector<cumulative_page_info> c_info_sorted(c_info.size(), stream);
   {
-    rmm::device_uvector<size_t> end_row_indices(
-      c_info.size(), stream, cudf::get_current_device_resource_ref());
-    rmm::device_uvector<size_t> sorted_end_row_indices(
-      c_info.size(), stream, cudf::get_current_device_resource_ref());
-    rmm::device_uvector<size_t> indices(
-      c_info.size(), stream, cudf::get_current_device_resource_ref());
-    rmm::device_uvector<size_t> sort_order(
-      c_info.size(), stream, cudf::get_current_device_resource_ref());
+    rmm::device_uvector<size_t> end_row_indices(c_info.size(), stream);
+    rmm::device_uvector<size_t> sorted_end_row_indices(c_info.size(), stream);
+    rmm::device_uvector<size_t> indices(c_info.size(), stream);
+    rmm::device_uvector<size_t> sort_order(c_info.size(), stream);
 
     thrust::sequence(rmm::exec_policy_nosync(stream), indices.begin(), indices.end(), 0);
     thrust::transform(rmm::exec_policy_nosync(stream),
@@ -295,7 +290,7 @@ adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
                                     0,
                                     sizeof(size_t) * 8,
                                     stream.value());
-    auto tmp_stg = rmm::device_buffer(tmp_bytes, stream, cudf::get_current_device_resource_ref());
+    auto tmp_stg = rmm::device_buffer(tmp_bytes, stream);
     cub::DeviceRadixSort::SortPairs(tmp_stg.data(),
                                     tmp_bytes,
                                     end_row_indices.begin(),         // keys in
