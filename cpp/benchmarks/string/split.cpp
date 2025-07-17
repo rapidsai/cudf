@@ -53,9 +53,15 @@ static void bench_split(nvbench::state& state)
   } else if (stype == "record") {
     state.exec(nvbench::exec_tag::sync,
                [&](nvbench::launch& launch) { cudf::strings::split_record(input, target); });
-  } else {
+  } else if (stype == "record_ws") {
     state.exec(nvbench::exec_tag::sync,
                [&](nvbench::launch& launch) { cudf::strings::split_record(input); });
+  } else if (stype == "part") {
+    state.exec(nvbench::exec_tag::sync,
+               [&](nvbench::launch& launch) { cudf::strings::split_part(input, target); });
+  } else {
+    state.exec(nvbench::exec_tag::sync,
+               [&](nvbench::launch& launch) { cudf::strings::split_part(input); });
   }
 }
 
@@ -64,4 +70,4 @@ NVBENCH_BENCH(bench_split)
   .add_int64_axis("min_width", {0})
   .add_int64_axis("max_width", {32, 64, 128, 256})
   .add_int64_axis("num_rows", {32768, 262144, 2097152})
-  .add_string_axis("type", {"split", "split_ws", "record", "record_ws"});
+  .add_string_axis("type", {"split", "split_ws", "record", "record_ws", "part", "part_ws"});
