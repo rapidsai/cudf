@@ -11,7 +11,6 @@ from contextlib import AbstractContextManager, nullcontext
 from functools import singledispatch
 from typing import TYPE_CHECKING, Any
 
-import pyarrow as pa
 from typing_extensions import assert_never
 
 import polars as pl
@@ -29,7 +28,8 @@ from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.dsl.utils.replace import replace
 from cudf_polars.dsl.utils.rolling import rewrite_rolling
 from cudf_polars.typing import Schema
-from cudf_polars.utils import config, dtypes, sorting
+from cudf_polars.utils import config, sorting
+from cudf_polars.utils.versions import POLARS_VERSION_LT_131
 
 if TYPE_CHECKING:
     from polars import GPUEngine
@@ -90,7 +90,7 @@ class Translator:
         # IR is versioned with major.minor, minor is bumped for backwards
         # compatible changes (e.g. adding new nodes), major is bumped for
         # incompatible changes (e.g. renaming nodes).
-        if (version := self.visitor.version()) >= (7, 1):
+        if (version := self.visitor.version()) >= (8, 1):
             e = NotImplementedError(
                 f"No support for polars IR {version=}"
             )  # pragma: no cover; no such version for now.
@@ -226,6 +226,14 @@ def _(node: pl_ir.Scan, translator: Translator, schema: Schema) -> ir.IR:
     with_columns = file_options.with_columns
     row_index = file_options.row_index
     include_file_paths = file_options.include_file_paths
+    if not POLARS_VERSION_LT_131:
+        deletion_files = file_options.deletion_files  # pragma: no cover
+        if deletion_files:  # pragma: no cover
+            raise NotImplementedError(
+                "Iceberg format is not supported in cudf-polars. Furthermore, row-level deletions are not supported."
+            )  # pragma: no cover
+    config_options = translator.config_options
+    parquet_options = config_options.parquet_options
 
     pre_slice = file_options.n_rows
     if pre_slice is None:
@@ -239,7 +247,6 @@ def _(node: pl_ir.Scan, translator: Translator, schema: Schema) -> ir.IR:
         typ,
         reader_options,
         cloud_options,
-        translator.config_options,
         node.paths,
         with_columns,
         skip_rows,
@@ -249,6 +256,7 @@ def _(node: pl_ir.Scan, translator: Translator, schema: Schema) -> ir.IR:
         translate_named_expr(translator, n=node.predicate, schema=schema)
         if node.predicate is not None
         else None,
+        parquet_options,
     )
 
 
@@ -265,7 +273,6 @@ def _(node: pl_ir.DataFrameScan, translator: Translator, schema: Schema) -> ir.I
         schema,
         node.df,
         node.projection,
-        translator.config_options,
     )
 
 
@@ -298,9 +305,7 @@ def _(node: pl_ir.GroupBy, translator: Translator, schema: Schema) -> ir.IR:
             node.options, schema, keys, original_aggs, translator.config_options, inp
         )
     else:
-        return rewrite_groupby(
-            node, schema, keys, original_aggs, translator.config_options, inp
-        )
+        return rewrite_groupby(node, schema, keys, original_aggs, inp)
 
 
 @_translate_ir.register
@@ -335,7 +340,6 @@ def _(node: pl_ir.Join, translator: Translator, schema: Schema) -> ir.IR:
             left_on,
             right_on,
             node.options,
-            translator.config_options,
             inp_left,
             inp_right,
         )
@@ -587,7 +591,7 @@ def _(
             )
             if isinstance(chars, expr.Literal):
                 # We check for null first because we want to use the
-                # chars pyarrow type, but it is invalid to try and
+                # chars type, but it is invalid to try and
                 # produce a string scalar with a null dtype.
                 if chars.value is None:
                     # Polars uses None to mean "strip all whitespace"
@@ -651,7 +655,13 @@ def _(
         if name in needs_cast:
             return expr.Cast(dtype, result_expr)
         return result_expr
-
+    elif not POLARS_VERSION_LT_131 and isinstance(name, pl_expr.StructFunction):
+        return expr.StructFunction(
+            dtype,
+            expr.StructFunction.Name.from_polars(name),
+            options,
+            *(translator.translate_expr(n=n, schema=schema) for n in node.input),
+        )
     elif isinstance(name, str):
         children = (translator.translate_expr(n=n, schema=schema) for n in node.input)
         if name == "log":
@@ -740,16 +750,10 @@ def _(
     node: pl_expr.Literal, translator: Translator, dtype: DataType, schema: Schema
 ) -> expr.Expr:
     if isinstance(node.value, plrs.PySeries):
-        data = pl.Series._from_pyseries(node.value).to_arrow(
-            compat_level=dtypes.TO_ARROW_COMPAT_LEVEL
-        )
-        return expr.LiteralColumn(
-            dtype, data.cast(dtypes.downcast_arrow_lists(data.type))
-        )
+        return expr.LiteralColumn(dtype, pl.Series._from_pyseries(node.value))
     if dtype.id() == plc.TypeId.LIST:  # pragma: no cover
-        # TODO: Find an alternative to pa.infer_type
-        data = pa.array(node.value, type=pa.infer_type(node.value))
-        return expr.LiteralColumn(dtype, data)
+        # TODO: Remove once pylibcudf.Scalar supports lists
+        return expr.LiteralColumn(dtype, pl.Series(node.value))
     return expr.Literal(dtype, node.value)
 
 
@@ -846,7 +850,7 @@ def _(
         node.options,
         *(translator.translate_expr(n=n, schema=schema) for n in node.arguments),
     )
-    if value.name == "count" and value.dtype.id() != plc.TypeId.INT32:
+    if value.name in ("count", "n_unique") and value.dtype.id() != plc.TypeId.INT32:
         return expr.Cast(value.dtype, value)
     return value
 

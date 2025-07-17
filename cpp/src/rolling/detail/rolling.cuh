@@ -40,6 +40,7 @@
 #include <cudf/detail/unary.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/lists/detail/stream_compaction.hpp>

@@ -149,17 +149,18 @@ def test_basic_assert_series_equal(
 
 
 @pytest.mark.parametrize(
-    "other",
+    "other_data",
     [
-        as_column(["1", "2", "3"]),
-        as_column([[1], [2], [3]]),
-        as_column([{"a": 1}, {"a": 2}, {"a": 3}]),
+        ["1", "2", "3"],
+        [[1], [2], [3]],
+        [{"a": 1}, {"a": 2}, {"a": 3}],
     ],
 )
-def test_assert_column_equal_dtype_edge_cases(other):
+def test_assert_column_equal_dtype_edge_cases(other_data):
     # string series should be 100% different
     # even when the elements are the same
     base = as_column([1, 2, 3])
+    other = as_column(other_data)
 
     # for these dtypes, the diff should always be 100% regardless of the values
     with pytest.raises(

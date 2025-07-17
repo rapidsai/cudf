@@ -1,7 +1,9 @@
 # Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
+import datetime
 import decimal
 import operator
+import re
 import warnings
 from itertools import combinations_with_replacement, product
 
@@ -1042,6 +1044,10 @@ def test_vector_to_none_binops(dtype):
     assert_eq(expect, got)
 
 
+def is_timezone_aware_dtype(dtype: str) -> bool:
+    return bool(re.match(r"^datetime64\[ns, .+\]$", dtype))
+
+
 @pytest.mark.parametrize("n_periods", [0, 1, -1, 12, -12])
 @pytest.mark.parametrize(
     "frequency",
@@ -1063,6 +1069,7 @@ def test_vector_to_none_binops(dtype):
         ["datetime64[us]", "00.012345"],
         ["datetime64[ms]", "00.012"],
         ["datetime64[s]", "00"],
+        ["datetime64[ns, Asia/Kathmandu]", "00.012345678"],
     ],
 )
 @pytest.mark.parametrize("op", [operator.add, operator.sub])
@@ -1098,8 +1105,17 @@ def test_datetime_dateoffset_binaryop(
         f"2000-01-31 00:00:{components}",
         f"2000-02-29 00:00:{components}",
     ]
-    gsr = cudf.Series(date_col, dtype=dtype)
-    psr = gsr.to_pandas()
+    if is_timezone_aware_dtype(dtype):
+        # Construct naive datetime64[ns] Series
+        gsr = cudf.Series(date_col, dtype="datetime64[ns]")
+        psr = gsr.to_pandas()
+
+        # Convert to timezone-aware (both cudf and pandas)
+        gsr = gsr.dt.tz_localize("UTC").dt.tz_convert("Asia/Kathmandu")
+        psr = psr.dt.tz_localize("UTC").dt.tz_convert("Asia/Kathmandu")
+    else:
+        gsr = cudf.Series(date_col, dtype=dtype)
+        psr = gsr.to_pandas()
 
     kwargs = {frequency: n_periods}
 
@@ -1109,10 +1125,22 @@ def test_datetime_dateoffset_binaryop(
     expect = op(psr, poffset)
     got = op(gsr, goffset)
 
+    if is_timezone_aware_dtype(dtype):
+        assert isinstance(expect.dtype, pd.DatetimeTZDtype)
+        assert str(expect.dtype.tz) == str(got.dtype.tz)
+        expect = expect.dt.tz_convert("UTC")
+        got = got.dt.tz_convert("UTC")
+
     assert_eq(expect, got)
 
     expect = op(psr, -poffset)
     got = op(gsr, -goffset)
+
+    if is_timezone_aware_dtype(dtype):
+        assert isinstance(expect.dtype, pd.DatetimeTZDtype)
+        assert str(expect.dtype.tz) == str(got.dtype.tz)
+        expect = expect.dt.tz_convert("UTC")
+        got = got.dt.tz_convert("UTC")
 
     assert_eq(expect, got)
 
@@ -2673,4 +2701,13 @@ def test_eq_ne_non_comparable_types(
     if with_na:
         expected_data[0] = None
     expected = cudf.Series(expected_data)
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("op", _binops_compare)
+def test_binops_compare_stdlib_date_scalar(op):
+    dt = datetime.date(2020, 1, 1)
+    data = [dt]
+    result = op(cudf.Series(data), dt)
+    expected = op(pd.Series(data), dt)
     assert_eq(result, expected)
