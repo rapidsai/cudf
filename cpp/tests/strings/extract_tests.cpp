@@ -340,11 +340,10 @@ TEST_F(StringsExtractTests, Errors)
 
 TEST_F(StringsExtractTests, EmptyInput)
 {
-  auto input = cudf::test::strings_column_wrapper();
-  auto sv    = cudf::strings_column_view(input);
-
-  auto pattern = std::string("(\\w+)");
-  auto prog    = cudf::strings::regex_program::create(pattern);
+  auto const input   = cudf::test::strings_column_wrapper();
+  auto const sv      = cudf::strings_column_view(input);
+  auto const pattern = std::string("(\\w+)");
+  auto const prog    = cudf::strings::regex_program::create(pattern);
 
   auto rt = cudf::strings::extract(sv, *prog);
   EXPECT_EQ(1, rt->num_columns());
