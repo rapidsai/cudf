@@ -161,17 +161,37 @@ def test_reverse(list_column):
     assert_column_eq(expect, got)
 
 
-def test_segmented_gather(test_data):
-    list_column1, list_column2 = test_data[0]
-
-    plc_column1 = plc.Column.from_arrow(pa.array(list_column1))
-    plc_column2 = plc.Column.from_arrow(pa.array(list_column2))
-
-    got = plc.lists.segmented_gather(plc_column2, plc_column1)
-
-    expect = pa.array([[8, 9], [14], [0], [0, 0]])
+def test_segmented_gather():
+    source_column = plc.Column.from_arrow(
+        pa.array([[10, 20], [], [30], [40, 50, 30, 20]])
+    )
+    gather_map_list = plc.Column.from_arrow(
+        pa.array([[1, 0, 1], [], [], [0, 1, 3]])
+    )
+    got = plc.lists.segmented_gather(source_column, gather_map_list)
+    expect = pa.array([[20, 10, 20], [], [], [40, 50, 20]])
 
     assert_column_eq(expect, got)
+
+
+def test_segmented_gather_out_of_bounds():
+    source_column = plc.Column.from_arrow(pa.array([[], [10, 20]]))
+    gather_map_list = plc.Column.from_arrow(
+        pa.array(
+            [[0], [0, 2]],
+        )
+    )
+    got = plc.lists.segmented_gather(source_column, gather_map_list)
+    result = plc.interop.to_arrow(got)
+    # indexing past the interior lists is undefined behavior,
+    # so the only things we can check are the general shape of the output
+
+    assert got.null_count() == 0
+    assert got.size() == 2
+    assert len(result[0]) == 1
+    assert len(result[1]) == 2
+    # this is the only indexer that isn't out of bounds.
+    assert result[1][0].as_py() == 10
 
 
 def test_extract_list_element_scalar(list_column):
