@@ -157,13 +157,14 @@ class ParquetOptions:
         Maximum number of file footers to sample for metadata. This
         option is currently used by the streaming executor to gather
         datasource statistics before generating a physical plan. Set to
-        ``0`` to avoid metadata sampling.
+        0 to avoid metadata sampling. Default is 3.
     max_row_group_samples
         Maximum number of row-groups to sample for unique-value statistics.
         This option may be used by the streaming executor to optimize
-        the physical plan. Set to ``0`` to avoid row-group sampling. Note
-        that row-group sampling will also be skipped if ``max_footer_samples``
-        is set to ``0``.
+        the physical plan. Default is 1.
+
+        Set to 0 to avoid row-group sampling. Note that row-group sampling
+        will also be skipped if ``max_footer_samples`` is 0.
     """
 
     _env_prefix = "CUDF_POLARS__PARQUET_OPTIONS"
