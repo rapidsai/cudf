@@ -8,8 +8,6 @@ from pylibcudf.libcudf.strings.combine cimport (
 from pylibcudf.scalar cimport Scalar
 from pylibcudf.table cimport Table
 
-from rmm.pylibrmm.device_buffer cimport DeviceBuffer
-
 ctypedef fused ColumnOrScalar:
     Column
     Scalar
@@ -23,8 +21,6 @@ cpdef Column concatenate(
 )
 
 cpdef Column join_strings(Column input, Scalar separator, Scalar narep)
-
-cpdef DeviceBuffer join_strings_to_buffer(Column input, Scalar separator, Scalar narep)
 
 cpdef Column join_list_elements(
     Column source_strings,

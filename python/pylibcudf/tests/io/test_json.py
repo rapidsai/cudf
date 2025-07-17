@@ -375,6 +375,44 @@ def test_read_json_lines_recovery_mode(recovery_mode, source_or_sink):
         assert_table_and_meta_eq(exp, tbl_w_meta)
 
 
+def test_read_json_string_column():
+    # Test the string column overload specifically
+    # Create a string column with JSON strings
+    json_strings = [
+        '{"name": "Alice", "age": 30}',
+        '{"name": "Bob", "age": 25}',
+        '{"name": "Charlie", "age": 35}',
+    ]
+
+    # Create string column
+    string_col = plc.Column.from_arrow(pa.array(json_strings))
+
+    # Create separator and narep scalars
+    separator = plc.Scalar.from_arrow(pa.scalar("\n"))
+    narep = plc.Scalar.from_arrow(pa.scalar("null"))
+
+    # Create empty options (source will be ignored)
+    options = (
+        plc.io.json.JsonReaderOptions.builder(
+            plc.io.SourceInfo([io.StringIO("")])
+        )
+        .lines(True)
+        .build()
+    )
+
+    # Read JSON from string column
+    result = plc.io.json.read_json_from_string_column(
+        string_col, separator, narep, options
+    )
+
+    # Expected result
+    expected = pa.Table.from_arrays(
+        [["Alice", "Bob", "Charlie"], [30, 25, 35]], names=["name", "age"]
+    )
+
+    assert_table_and_meta_eq(expected, result)
+
+
 @pytest.mark.parametrize("num_buffers", [1, 2])
 @pytest.mark.parametrize("stream", [None, Stream()])
 def test_read_json_from_device_buffers(table_data, num_buffers, stream):
