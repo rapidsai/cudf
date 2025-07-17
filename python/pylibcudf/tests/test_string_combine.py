@@ -1,6 +1,5 @@
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
-import array
 
 import pyarrow as pa
 import pyarrow.compute as pc
@@ -69,19 +68,6 @@ def test_join_strings():
     )
     expect = pa.array(["abc"])
     assert_column_eq(expect, got)
-
-
-def test_join_strings_to_buffer():
-    pa_arr = pa.array(list("abc"))
-    sep = pa.scalar("")
-    got_db = plc.strings.combine.join_strings_to_buffer(
-        plc.Column.from_arrow(pa_arr),
-        plc.Scalar.from_arrow(sep),
-        plc.Scalar.from_arrow(pa.scalar("")),
-    )
-    got = got_db.copy_to_host()
-    expect = array.array("B", bytearray("abc", "utf-8"))
-    assert all(expect == got), "Buffers are not equal"
 
 
 def test_join_list_elements():
