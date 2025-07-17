@@ -92,12 +92,23 @@ rapids-logger "Run narwhals tests for cuDF Pandas"
 # test_maybe_convert_dtypes_pandas: https://github.com/rapidsai/cudf/issues/14149
 # test_log_dtype_pandas: cudf is promoting the type to float64
 # test_len_over_2369: It fails during fallback. The error is 'DataFrame' object has no attribute 'to_frame'
+# test_all_ignore_nulls, test_allh_kleene, and test_anyh_kleene: https://github.com/rapidsai/cudf/issues/19417
+# test_offset_by_date_pandas: https://github.com/rapidsai/cudf/issues/19418
+# test_select_boolean_cols and test_select_boolean_cols_multi_group_by: https://github.com/rapidsai/cudf/issues/19421
+# test_to_datetime_pd_preserves_pyarrow_backend_dtype: https://github.com/rapidsai/cudf/issues/19422
 TESTS_THAT_NEED_CUDF_FIX=" \
 test_is_finite_expr or \
 test_is_finite_series or \
 test_maybe_convert_dtypes_pandas or \
 test_log_dtype_pandas or \
 test_len_over_2369 \
+test_all_ignore_nulls \
+test_allh_kleene \
+test_anyh_kleene \
+test_offset_by_date_pandas \
+test_select_boolean_cols \
+test_select_boolean_cols_multi_group_by \
+test_to_datetime_pd_preserves_pyarrow_backend_dtype \
 "
 
 # test_array_dunder_with_copy: https://github.com/rapidsai/cudf/issues/18248#issuecomment-2719234741
