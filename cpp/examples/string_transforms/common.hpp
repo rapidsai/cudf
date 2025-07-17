@@ -18,6 +18,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/csv.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/strings/strings_column_view.hpp>
