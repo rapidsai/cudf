@@ -48,7 +48,6 @@ __all__ = [
     "ShuffleMethod",
     "StreamingExecutor",
     "StreamingFallbackMode",
-    "_env_get_int",
 ]
 
 
@@ -194,20 +193,20 @@ class ParquetOptions:
 
 def default_blocksize(scheduler: str) -> int:
     """Return the default blocksize."""
-    try:
-        pynvml.nvmlInit()
-        index = os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0]
-        if index and not index.isnumeric():  # pragma: no cover
-            # This means device_index is UUID.
-            # This works for both MIG and non-MIG device UUIDs.
-            handle = pynvml.nvmlDeviceGetHandleByUUID(str.encode(index))
-            if pynvml.nvmlDeviceIsMigDeviceHandle(handle):
-                # Additionally get parent device handle
-                # if the device itself is a MIG instance
-                handle = pynvml.nvmlDeviceGetDeviceHandleFromMigDeviceHandle(handle)
-        else:
-            handle = pynvml.nvmlDeviceGetHandleByIndex(int(index))
+    pynvml.nvmlInit()
+    index = os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0]
+    if index and not index.isnumeric():  # pragma: no cover
+        # This means device_index is UUID.
+        # This works for both MIG and non-MIG device UUIDs.
+        handle = pynvml.nvmlDeviceGetHandleByUUID(str.encode(index))
+        if pynvml.nvmlDeviceIsMigDeviceHandle(handle):
+            # Additionally get parent device handle
+            # if the device itself is a MIG instance
+            handle = pynvml.nvmlDeviceGetDeviceHandleFromMigDeviceHandle(handle)
+    else:
+        handle = pynvml.nvmlDeviceGetHandleByIndex(int(index))
 
+    try:
         device_size = pynvml.nvmlDeviceGetMemoryInfo(handle).total
         if (
             scheduler == "distributed"
@@ -225,7 +224,7 @@ def default_blocksize(scheduler: str) -> int:
         # Use lower and upper bounds of 1GB and 10GB
         return min(max(blocksize, 1_000_000_000), 10_000_000_000)
 
-    except pynvml.NVMLError:  # pragma: no cover
+    except pynvml.NVMLError_NotSupported:  # pragma: no cover
         # System doesn't have proper "GPU memory".
         # Fall back to a conservative 1GB default.
         return 1_000_000_000
