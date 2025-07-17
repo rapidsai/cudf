@@ -30,8 +30,6 @@ import os
 import warnings
 from typing import TYPE_CHECKING, Literal, TypeVar
 
-import pynvml
-
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -193,6 +191,8 @@ class ParquetOptions:
 
 def default_blocksize(scheduler: str) -> int:
     """Return the default blocksize."""
+    import pynvml
+
     pynvml.nvmlInit()
     index = os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0]
     if index and not index.isnumeric():  # pragma: no cover
