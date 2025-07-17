@@ -112,7 +112,8 @@ __device__ void e164_format(void* scratch,
   constexpr cudf::size_type maximum_size = 20;
   auto const num_rows                    = table.num_rows();
 
-  rmm::device_uvector<char> scratch(maximum_size * num_rows, stream, mr);
+  rmm::device_uvector<char> scratch(
+    static_cast<std::size_t>(maximum_size) * static_cast<std::size_t>(num_rows), stream, mr);
 
   // a column with size 1 is considered a scalar
   auto size = cudf::make_column_from_scalar(

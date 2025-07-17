@@ -85,7 +85,7 @@ void write_csv(cudf::table_view const& tbl_view,
 {
   auto sink_info = cudf::io::sink_info(file_path);
   auto builder   = cudf::io::csv_writer_options::builder(sink_info, tbl_view);
-  auto options   = builder.include_header(true).names(names).build();
+  auto options   = builder.include_header(true).names(names).rows_per_chunk(10000000).build();
   cudf::io::write_csv(options);
 }
 
@@ -139,13 +139,28 @@ int main(int argc, char const** argv)
 
   auto table_view = input->view();
 
+  std::chrono::duration<double> elapsed_cold{};
+
+  {
+    // warmup pass
+    stream.synchronize();
+    auto start_cold = std::chrono::steady_clock::now();
+    nvtxRangePush("transform cold");
+    auto [result_cold, input_indices_cold] = transform(table_view);
+    stream.synchronize();
+    nvtxRangePop();
+    elapsed_cold = std::chono::steady_clock::now() - start_cold;
+  }
+
   stream.synchronize();
 
-  auto start                   = std::chrono::steady_clock::now();
+  auto start = std::chrono::steady_clock::now();
+  nvtxRangePush("transform warm");
   auto [result, input_indices] = transform(table_view);
 
   // ensure transform operation completes and the wall-time is only for the transform computation
   stream.synchronize();
+  nvtxRangePop();
 
   std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - start;
 
@@ -172,6 +187,7 @@ int main(int argc, char const** argv)
                           [&](auto index) { return input->get_column(index).alloc_size(); });
 
   std::cout << "Memory Resource: " << memory_resource_name << "\n"
+            << "Warmup Time: " << elapsed_cold.count() << " seconds\n"
             << "Wall Time: " << elapsed.count() << " seconds\n"
             << "Input Table: " << table_view.num_rows() << " rows x " << table_view.num_columns()
             << " columns, " << input->alloc_size() << " bytes\n"
