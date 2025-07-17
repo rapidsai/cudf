@@ -402,7 +402,16 @@ def test_cardinality_factor_compat() -> None:
         )
 
 
-@pytest.mark.parametrize("option", ["chunked", "chunk_read_limit", "pass_read_limit"])
+@pytest.mark.parametrize(
+    "option",
+    [
+        "chunked",
+        "chunk_read_limit",
+        "pass_read_limit",
+        "max_footer_samples",
+        "max_row_group_samples",
+    ],
+)
 def test_validate_parquet_options(option: str) -> None:
     with pytest.raises(TypeError, match=f"{option} must be"):
         ConfigOptions.from_polars_engine(
