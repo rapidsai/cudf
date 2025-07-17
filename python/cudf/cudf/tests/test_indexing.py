@@ -1883,7 +1883,6 @@ def test_loc_repeated_index_label_issue_8693():
     assert_eq(expect, actual)
 
 
-@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/13268")
 @pytest.mark.parametrize(
     "indexer", [(..., 0), (0, ...)], ids=["row_ellipsis", "column_ellipsis"]
 )
@@ -2018,7 +2017,6 @@ def test_loc_unsorted_index_slice_lookup_keyerror_issue_12833():
         cdf.loc[1:5]
 
 
-@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/13379")
 @pytest.mark.parametrize("index", [range(5), list(range(5))])
 def test_loc_missing_label_keyerror_issue_13379(index):
     # https://github.com/rapidsai/cudf/issues/13379
@@ -2406,3 +2404,60 @@ def test_iloc_columns_with_cudf_object(obj):
     result = cudf.DataFrame(data).iloc[:, col_indexer]
     expected = pd.DataFrame(data).iloc[:, col_indexer.to_pandas()]
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("indexer", [[1], [0, 2]])
+def test_loc_integer_categorical_issue_13014(indexer):
+    # https://github.com/rapidsai/cudf/issues/13014
+    s = pd.Series([0, 1, 2])
+    index = pd.Categorical(indexer)
+    expect = s.loc[index]
+    c = cudf.from_pandas(s)
+    actual = c.loc[index]
+    assert_eq(expect, actual)
+
+
+@pytest.mark.parametrize("index_is_ordered", [False, True])
+@pytest.mark.parametrize("label_is_ordered", [False, True])
+def test_loc_categorical_ordering_mismatch_issue_13652(
+    index_is_ordered, label_is_ordered
+):
+    # https://github.com/rapidsai/cudf/issues/13652
+    s = cudf.Series(
+        [0, 2, 8, 4, 2],
+        index=cudf.CategoricalIndex(
+            [1, 2, 3, 4, 5],
+            categories=[1, 2, 3, 4, 5],
+            ordered=index_is_ordered,
+        ),
+    )
+    labels = cudf.CategoricalIndex(
+        [1, 4], categories=[1, 4], ordered=label_is_ordered
+    )
+    actual = s.loc[labels]
+    expect = s.to_pandas().loc[labels.to_pandas()]
+    assert_eq(actual, expect)
+
+
+def test_loc_categorical_no_integer_fallback_issue_13653():
+    # https://github.com/rapidsai/cudf/issues/13653
+    s = cudf.Series(
+        [1, 2], index=cudf.CategoricalIndex([3, 4], categories=[3, 4])
+    )
+    actual = s.loc[3]
+    expect = s.to_pandas().loc[3]
+    assert_eq(actual, expect)
+
+
+def test_loc_wrong_type_slice_datetimeindex():
+    ser_cudf = cudf.Series(
+        range(3), index=cudf.date_range("2020-01-01", periods=3, freq="D")
+    )
+    with pytest.raises(TypeError):
+        ser_cudf.loc[2:]
+
+    ser_pd = pd.Series(
+        range(3), index=pd.date_range("2020-01-01", periods=3, freq="D")
+    )
+    with pytest.raises(TypeError):
+        ser_pd.loc[2:]

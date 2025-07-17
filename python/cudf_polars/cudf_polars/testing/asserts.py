@@ -6,13 +6,14 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Literal
 
 import polars as pl
 from polars import GPUEngine
 from polars.testing.asserts import assert_frame_equal
 
 from cudf_polars.dsl.translate import Translator
+from cudf_polars.utils.config import ConfigOptions, StreamingFallbackMode
 
 if TYPE_CHECKING:
     from cudf_polars.typing import OptimizationArgs
@@ -29,6 +30,7 @@ __all__: list[str] = [
 # and `--scheduler` command-line arguments
 DEFAULT_EXECUTOR = "in-memory"
 DEFAULT_SCHEDULER = "synchronous"
+DEFAULT_BLOCKSIZE_MODE: Literal["small", "default"] = "default"
 
 
 def assert_gpu_result_equal(
@@ -46,6 +48,7 @@ def assert_gpu_result_equal(
     atol: float = 1e-08,
     categorical_as_str: bool = False,
     executor: str | None = None,
+    blocksize_mode: Literal["small", "default"] | None = None,
 ) -> None:
     """
     Assert that collection of a lazyframe on GPU produces correct results.
@@ -86,6 +89,12 @@ def assert_gpu_result_equal(
     executor
         The executor configuration to pass to `GPUEngine`. If not specified
         uses the module level `Executor` attribute.
+    blocksize_mode
+        The "mode" to use for choosing the blocksize for the streaming executor.
+        If not specified, uses the module level ``DEFAULT_BLOCKSIZE_MODE`` attribute.
+        Set to "small" to configure small values for ``max_rows_per_partition``
+        and ``target_partition_size``, which will typically cause many partitions
+        to be created while executing the query.
 
     Raises
     ------
@@ -94,16 +103,7 @@ def assert_gpu_result_equal(
     NotImplementedError
         If GPU collection failed in some way.
     """
-    if engine is None:
-        executor = executor or DEFAULT_EXECUTOR
-        engine = GPUEngine(
-            raise_on_fail=True,
-            executor=executor,
-            executor_options=(
-                {"scheduler": DEFAULT_SCHEDULER} if executor == "streaming" else {}
-            ),
-        )
-
+    engine = engine or get_default_engine(executor, blocksize_mode)
     final_polars_collect_kwargs, final_cudf_collect_kwargs = _process_kwargs(
         collect_kwargs, polars_collect_kwargs, cudf_collect_kwargs
     )
@@ -157,6 +157,55 @@ def assert_ir_translation_raises(q: pl.LazyFrame, *exceptions: type[Exception]) 
         return
     else:
         raise AssertionError(f"Translation DID NOT RAISE {exceptions}")
+
+
+def get_default_engine(
+    executor: str | None = None,
+    blocksize_mode: Literal["small", "default"] | None = None,
+) -> GPUEngine:
+    """
+    Get the default engine used for testing.
+
+    Parameters
+    ----------
+    executor
+        The executor configuration to pass to `GPUEngine`. If not specified
+        uses the module level `Executor` attribute.
+    blocksize_mode
+        The "mode" to use for choosing the blocksize for the streaming executor.
+        If not specified, uses the module level ``DEFAULT_BLOCKSIZE_MODE`` attribute.
+        Set to "small" to configure small values for ``max_rows_per_partition``
+        and ``target_partition_size``, which will typically cause many partitions
+        to be created while executing the query.
+
+    Returns
+    -------
+    engine
+        A polars GPUEngine configured with the default settings for tests.
+
+    See Also
+    --------
+    assert_gpu_result_equal
+    assert_sink_result_equal
+    """
+    executor_options: dict[str, Any] = {}
+    executor = executor or DEFAULT_EXECUTOR
+    if executor == "streaming":
+        executor_options["scheduler"] = DEFAULT_SCHEDULER
+
+        blocksize_mode = blocksize_mode or DEFAULT_BLOCKSIZE_MODE
+
+        if blocksize_mode == "small":  # pragma: no cover
+            executor_options["max_rows_per_partition"] = 4
+            executor_options["target_partition_size"] = 10
+            # We expect many tests to fall back, so silence the warnings
+            executor_options["fallback_mode"] = StreamingFallbackMode.SILENT
+
+    return GPUEngine(
+        raise_on_fail=True,
+        executor=executor,
+        executor_options=executor_options,
+    )
 
 
 def _process_kwargs(
@@ -277,6 +326,7 @@ def assert_sink_result_equal(
     read_kwargs: dict | None = None,
     write_kwargs: dict | None = None,
     executor: str | None = None,
+    blocksize_mode: Literal["small", "default"] | None = None,
 ) -> None:
     """
     Assert that writing a LazyFrame via sink produces the same output.
@@ -297,6 +347,12 @@ def assert_sink_result_equal(
     executor
         The executor configuration to pass to `GPUEngine`. If not specified
         uses the module level `Executor` attribute.
+    blocksize_mode
+        The "mode" to use for choosing the blocksize for the streaming executor.
+        If not specified, uses the module level ``DEFAULT_BLOCKSIZE_MODE`` attribute.
+        Set to "small" to configure small values for ``max_rows_per_partition``
+        and ``target_partition_size``, which will typically cause many partitions
+        to be created while executing the query.
 
     Raises
     ------
@@ -305,15 +361,7 @@ def assert_sink_result_equal(
     ValueError
         If the file extension is not one of the supported formats.
     """
-    if engine is None:
-        executor = executor or DEFAULT_EXECUTOR
-        engine = GPUEngine(
-            raise_on_fail=True,
-            executor=executor,
-            executor_options=(
-                {"scheduler": DEFAULT_SCHEDULER} if executor == "streaming" else {}
-            ),
-        )
+    engine = engine or get_default_engine(executor, blocksize_mode)
     path = Path(path)
     read_kwargs = read_kwargs or {}
     write_kwargs = write_kwargs or {}
@@ -330,7 +378,15 @@ def assert_sink_result_equal(
     sink_fn(gpu_path, engine=engine, **write_kwargs)
 
     expected = read_fn(cpu_path, **read_kwargs)
-    result = read_fn(gpu_path, **read_kwargs)
+    # the multi-partition executor might produce multiple files, one per partition.
+    if (
+        isinstance(engine, GPUEngine)
+        and ConfigOptions.from_polars_engine(engine).executor == "streaming"
+        and gpu_path.is_dir()
+    ):
+        result = read_fn(gpu_path.joinpath("*"), **read_kwargs)
+    else:
+        result = read_fn(gpu_path, **read_kwargs)
 
     assert_frame_equal(expected, result)
 

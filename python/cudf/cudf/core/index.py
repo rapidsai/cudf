@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import itertools
 import operator
 import warnings
@@ -1712,6 +1713,9 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
         if gather_map.dtype.kind not in "iu":
             gather_map = gather_map.astype(SIZE_TYPE_DTYPE)
 
+        # TODO: This call is purely to validate the bounds if
+        # check_bounds is True, require instead that the caller
+        # provides a GatherMap.
         GatherMap(gather_map, len(self), nullify=not check_bounds or nullify)
         return self._from_columns_like_self(
             [
@@ -3574,22 +3578,26 @@ class DatetimeIndex(Index):
             return pd.Timestamp(value)
         return value
 
+    def find_label_range(self, loc: slice) -> slice:
+        # For indexing, try to interpret slice arguments as datetime-convertible
+        if any(
+            not (val is None or isinstance(val, (str, datetime.datetime)))
+            for val in (loc.start, loc.stop)
+        ):
+            raise TypeError(
+                "Can only slice DatetimeIndex with a string or datetime objects"
+            )
+        new_slice = slice(
+            pd.to_datetime(loc.start) if loc.start is not None else None,
+            pd.to_datetime(loc.stop) if loc.stop is not None else None,
+            loc.step,
+        )
+        return super().find_label_range(new_slice)
+
     @_performance_tracking
     def copy(self, name=None, deep=False):
         idx_copy = super().copy(name=name, deep=deep)
         return idx_copy._copy_type_metadata(self)
-
-    def searchsorted(
-        self,
-        value,
-        side: Literal["left", "right"] = "left",
-        ascending: bool = True,
-        na_position: Literal["first", "last"] = "last",
-    ):
-        value = self.dtype.type(value)
-        return super().searchsorted(
-            value, side=side, ascending=ascending, na_position=na_position
-        )
 
     def as_unit(self, unit: str, round_ok: bool = True) -> Self:
         """

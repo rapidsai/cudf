@@ -21,7 +21,6 @@ from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
-import pyarrow as pa
 from typing_extensions import assert_never
 
 import polars as pl
@@ -38,7 +37,7 @@ from cudf_polars.dsl.tracing import nvtx_annotate_cudf_polars
 from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.dsl.utils.windows import range_window_bounds
 from cudf_polars.utils import dtypes
-from cudf_polars.utils.versions import POLARS_VERSION_LT_128
+from cudf_polars.utils.versions import POLARS_VERSION_LT_131
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Iterable, Sequence
@@ -49,7 +48,7 @@ if TYPE_CHECKING:
     from polars.polars import _expr_nodes as pl_expr
 
     from cudf_polars.typing import CSECache, ClosedInterval, Schema, Slice as Zlice
-    from cudf_polars.utils.config import ConfigOptions
+    from cudf_polars.utils.config import ParquetOptions
     from cudf_polars.utils.timer import Timer
 
 
@@ -217,9 +216,9 @@ class Scan(IR):
 
     __slots__ = (
         "cloud_options",
-        "config_options",
         "include_file_paths",
         "n_rows",
+        "parquet_options",
         "paths",
         "predicate",
         "reader_options",
@@ -233,7 +232,6 @@ class Scan(IR):
         "typ",
         "reader_options",
         "cloud_options",
-        "config_options",
         "paths",
         "with_columns",
         "skip_rows",
@@ -241,6 +239,7 @@ class Scan(IR):
         "row_index",
         "include_file_paths",
         "predicate",
+        "parquet_options",
     )
     typ: str
     """What type of file are we reading? Parquet, CSV, etc..."""
@@ -248,8 +247,6 @@ class Scan(IR):
     """Reader-specific options, as dictionary."""
     cloud_options: dict[str, Any] | None
     """Cloud-related authentication options, currently ignored."""
-    config_options: ConfigOptions
-    """GPU-specific configuration options"""
     paths: list[str]
     """List of paths to read from."""
     with_columns: list[str] | None
@@ -264,6 +261,8 @@ class Scan(IR):
     """Include the path of the source file(s) as a column with this name."""
     predicate: expr.NamedExpr | None
     """Mask to apply to the read dataframe."""
+    parquet_options: ParquetOptions
+    """Parquet-specific options."""
 
     PARQUET_DEFAULT_CHUNK_SIZE: int = 0  # unlimited
     PARQUET_DEFAULT_PASS_LIMIT: int = 16 * 1024**3  # 16GiB
@@ -274,7 +273,6 @@ class Scan(IR):
         typ: str,
         reader_options: dict[str, Any],
         cloud_options: dict[str, Any] | None,
-        config_options: ConfigOptions,
         paths: list[str],
         with_columns: list[str] | None,
         skip_rows: int,
@@ -282,12 +280,12 @@ class Scan(IR):
         row_index: tuple[str, int] | None,
         include_file_paths: str | None,
         predicate: expr.NamedExpr | None,
+        parquet_options: ParquetOptions,
     ):
         self.schema = schema
         self.typ = typ
         self.reader_options = reader_options
         self.cloud_options = cloud_options
-        self.config_options = config_options
         self.paths = paths
         self.with_columns = with_columns
         self.skip_rows = skip_rows
@@ -299,7 +297,6 @@ class Scan(IR):
             schema,
             typ,
             reader_options,
-            config_options,
             paths,
             with_columns,
             skip_rows,
@@ -307,8 +304,10 @@ class Scan(IR):
             row_index,
             include_file_paths,
             predicate,
+            parquet_options,
         )
         self.children = ()
+        self.parquet_options = parquet_options
         if self.typ not in ("csv", "parquet", "ndjson"):  # pragma: no cover
             # This line is unhittable ATM since IPC/Anonymous scan raise
             # on the polars side
@@ -319,12 +318,6 @@ class Scan(IR):
             # TODO: polars has this implemented for parquet,
             # maybe we can do this too?
             raise NotImplementedError("slice pushdown for negative slices")
-        if (
-            POLARS_VERSION_LT_128 and self.typ in {"csv"} and self.skip_rows != 0
-        ):  # pragma: no cover
-            # This comes from slice pushdown, but that
-            # optimization doesn't happen right now
-            raise NotImplementedError("skipping rows in CSV reader")
         if self.cloud_options is not None and any(
             self.cloud_options.get(k) is not None for k in ("aws", "azure", "gcp")
         ):
@@ -396,7 +389,6 @@ class Scan(IR):
             self.typ,
             json.dumps(self.reader_options),
             json.dumps(self.cloud_options),
-            self.config_options,
             tuple(self.paths),
             tuple(self.with_columns) if self.with_columns is not None else None,
             self.skip_rows,
@@ -404,6 +396,7 @@ class Scan(IR):
             self.row_index,
             self.include_file_paths,
             self.predicate,
+            self.parquet_options,
         )
 
     @staticmethod
@@ -416,9 +409,10 @@ class Scan(IR):
         Each path is repeated according to the number of rows read from it.
         """
         (filepaths,) = plc.filling.repeat(
-            # TODO: Remove call from_arrow when we support python list to Column
-            plc.Table([plc.interop.from_arrow(pa.array(map(str, paths)))]),
-            plc.interop.from_arrow(pa.array(rows_per_path, type=pa.int32())),
+            plc.Table([plc.Column.from_arrow(pl.Series(values=map(str, paths)))]),
+            plc.Column.from_arrow(
+                pl.Series(values=rows_per_path, dtype=pl.datatypes.Int32())
+            ),
         ).columns()
         dtype = DataType(pl.String())
         return df.with_columns([Column(filepaths, name=name, dtype=dtype)])
@@ -440,7 +434,6 @@ class Scan(IR):
         schema: Schema,
         typ: str,
         reader_options: dict[str, Any],
-        config_options: ConfigOptions,
         paths: list[str],
         with_columns: list[str] | None,
         skip_rows: int,
@@ -448,6 +441,7 @@ class Scan(IR):
         row_index: tuple[str, int] | None,
         include_file_paths: str | None,
         predicate: expr.NamedExpr | None,
+        parquet_options: ParquetOptions,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
         if typ == "csv":
@@ -505,9 +499,7 @@ class Scan(IR):
                 options = (
                     plc.io.csv.CsvReaderOptions.builder(plc.io.SourceInfo([path]))
                     .nrows(n_rows)
-                    .skiprows(
-                        skiprows if POLARS_VERSION_LT_128 else skiprows + skip_rows
-                    )  # pragma: no cover
+                    .skiprows(skiprows + skip_rows)
                     .lineterminator(str(eol))
                     .quotechar(str(quote))
                     .decimal(decimal)
@@ -519,9 +511,7 @@ class Scan(IR):
                 if column_names is not None:
                     options.set_names([str(name) for name in column_names])
                 else:
-                    if (
-                        not POLARS_VERSION_LT_128 and header > -1 and skip_rows > header
-                    ):  # pragma: no cover
+                    if header > -1 and skip_rows > header:  # pragma: no cover
                         # We need to read the header otherwise we would skip it
                         column_names = read_csv_header(path, str(sep))
                         options.set_names(column_names)
@@ -540,7 +530,7 @@ class Scan(IR):
                     n_rows -= tbl_w_meta.tbl.num_rows()
                     if n_rows <= 0:
                         break
-            tables, colnames = zip(
+            tables, (colnames, *_) = zip(
                 *(
                     (piece.tbl, piece.column_names(include_children=False))
                     for piece in pieces
@@ -549,7 +539,8 @@ class Scan(IR):
             )
             df = DataFrame.from_table(
                 plc.concatenate.concatenate(list(tables)),
-                colnames[0],
+                colnames,
+                [schema[colname] for colname in colnames],
             )
             if include_file_paths is not None:
                 df = Scan.add_file_paths(
@@ -574,11 +565,11 @@ class Scan(IR):
                 options.set_num_rows(n_rows)
             if skip_rows != 0:
                 options.set_skip_rows(skip_rows)
-            if config_options.parquet_options.chunked:
+            if parquet_options.chunked:
                 reader = plc.io.parquet.ChunkedParquetReader(
                     options,
-                    chunk_read_limit=config_options.parquet_options.chunk_read_limit,
-                    pass_read_limit=config_options.parquet_options.pass_read_limit,
+                    chunk_read_limit=parquet_options.chunk_read_limit,
+                    pass_read_limit=parquet_options.pass_read_limit,
                 )
                 chunk = reader.read_chunk()
                 tbl = chunk.tbl
@@ -597,6 +588,7 @@ class Scan(IR):
                 df = DataFrame.from_table(
                     plc.Table(concatenated_columns),
                     names=names,
+                    dtypes=[schema[name] for name in names],
                 )
                 if include_file_paths is not None:
                     df = Scan.add_file_paths(
@@ -604,10 +596,12 @@ class Scan(IR):
                     )
             else:
                 tbl_w_meta = plc.io.parquet.read_parquet(options)
+                # TODO: consider nested column names?
+                col_names = tbl_w_meta.column_names(include_children=False)
                 df = DataFrame.from_table(
                     tbl_w_meta.tbl,
-                    # TODO: consider nested column names?
-                    tbl_w_meta.column_names(include_children=False),
+                    col_names,
+                    [schema[name] for name in col_names],
                 )
                 if include_file_paths is not None:
                     df = Scan.add_file_paths(
@@ -630,8 +624,11 @@ class Scan(IR):
             )
             # TODO: I don't think cudf-polars supports nested types in general right now
             # (but when it does, we should pass child column names from nested columns in)
+            col_names = plc_tbl_w_meta.column_names(include_children=False)
             df = DataFrame.from_table(
-                plc_tbl_w_meta.tbl, plc_tbl_w_meta.column_names(include_children=False)
+                plc_tbl_w_meta.tbl,
+                col_names,
+                [schema[name] for name in col_names],
             )
             col_order = list(schema.keys())
             if row_index is not None:
@@ -671,12 +668,12 @@ class Scan(IR):
 class Sink(IR):
     """Sink a dataframe to a file."""
 
-    __slots__ = ("cloud_options", "config_options", "kind", "options", "path")
+    __slots__ = ("cloud_options", "kind", "options", "parquet_options", "path")
     _non_child = (
         "schema",
         "kind",
         "path",
-        "config_options",
+        "parquet_options",
         "options",
         "cloud_options",
     )
@@ -685,7 +682,7 @@ class Sink(IR):
     """The type of file to write to. Eg. Parquet, CSV, etc."""
     path: str
     """The path to write to"""
-    config_options: ConfigOptions
+    parquet_options: ParquetOptions
     """GPU-specific configuration options"""
     cloud_options: dict[str, Any] | None
     """Cloud-related authentication options, currently ignored."""
@@ -697,7 +694,7 @@ class Sink(IR):
         schema: Schema,
         kind: str,
         path: str,
-        config_options: ConfigOptions,
+        parquet_options: ParquetOptions,
         options: dict[str, Any],
         cloud_options: dict[str, Any],
         df: IR,
@@ -705,11 +702,11 @@ class Sink(IR):
         self.schema = schema
         self.kind = kind
         self.path = path
-        self.config_options = config_options
+        self.parquet_options = parquet_options
         self.options = options
         self.cloud_options = cloud_options
         self.children = (df,)
-        self._non_child_args = (schema, kind, path, config_options, options)
+        self._non_child_args = (schema, kind, path, parquet_options, options)
         if self.cloud_options is not None and any(
             self.cloud_options.get(k) is not None
             for k in ("config", "credential_provider")
@@ -802,10 +799,119 @@ class Sink(IR):
             schema_hash,
             self.kind,
             self.path,
-            self.config_options,
+            self.parquet_options,
             json.dumps(self.options),
             json.dumps(self.cloud_options),
         )  # pragma: no cover
+
+    @classmethod
+    def _write_csv(
+        cls, target: plc.io.SinkInfo, options: dict[str, Any], df: DataFrame
+    ) -> None:
+        """Write CSV data to a sink."""
+        serialize = options["serialize_options"]
+        options = (
+            plc.io.csv.CsvWriterOptions.builder(target, df.table)
+            .include_header(options["include_header"])
+            .names(df.column_names if options["include_header"] else [])
+            .na_rep(serialize["null"])
+            .line_terminator(serialize["line_terminator"])
+            .inter_column_delimiter(chr(serialize["separator"]))
+            .build()
+        )
+        plc.io.csv.write_csv(options)
+
+    @classmethod
+    def _write_json(cls, target: plc.io.SinkInfo, df: DataFrame) -> None:
+        """Write Json data to a sink."""
+        metadata = plc.io.TableWithMetadata(
+            df.table, [(col, []) for col in df.column_names]
+        )
+        options = (
+            plc.io.json.JsonWriterOptions.builder(target, df.table)
+            .lines(val=True)
+            .na_rep("null")
+            .include_nulls(val=True)
+            .metadata(metadata)
+            .utf8_escaped(val=False)
+            .build()
+        )
+        plc.io.json.write_json(options)
+
+    @staticmethod
+    def _make_parquet_metadata(df: DataFrame) -> plc.io.types.TableInputMetadata:
+        """Create TableInputMetadata and set column names."""
+        metadata = plc.io.types.TableInputMetadata(df.table)
+        for i, name in enumerate(df.column_names):
+            metadata.column_metadata[i].set_name(name)
+        return metadata
+
+    @staticmethod
+    def _apply_parquet_writer_options(
+        builder: plc.io.parquet.ChunkedParquetWriterOptionsBuilder
+        | plc.io.parquet.ParquetWriterOptionsBuilder,
+        options: dict[str, Any],
+    ) -> (
+        plc.io.parquet.ChunkedParquetWriterOptionsBuilder
+        | plc.io.parquet.ParquetWriterOptionsBuilder
+    ):
+        """Apply writer options to the builder."""
+        compression = options.get("compression")
+        if compression and compression != "Uncompressed":
+            compression_type = getattr(
+                plc.io.types.CompressionType, compression.upper()
+            )
+            builder = builder.compression(compression_type)
+
+        if options.get("data_page_size") is not None:
+            builder = builder.max_page_size_bytes(options["data_page_size"])
+
+        if options.get("row_group_size") is not None:
+            builder = builder.row_group_size_rows(options["row_group_size"])
+
+        return builder
+
+    @classmethod
+    def _write_parquet(
+        cls,
+        target: plc.io.SinkInfo,
+        parquet_options: ParquetOptions,
+        options: dict[str, Any],
+        df: DataFrame,
+    ) -> None:
+        metadata: plc.io.types.TableInputMetadata = cls._make_parquet_metadata(df)
+
+        builder: (
+            plc.io.parquet.ChunkedParquetWriterOptionsBuilder
+            | plc.io.parquet.ParquetWriterOptionsBuilder
+        )
+
+        if parquet_options.chunked and parquet_options.n_output_chunks != 1:
+            builder = plc.io.parquet.ChunkedParquetWriterOptions.builder(
+                target
+            ).metadata(metadata)
+            builder = cls._apply_parquet_writer_options(builder, options)
+            writer_options = builder.build()
+            writer = plc.io.parquet.ChunkedParquetWriter.from_options(writer_options)
+
+            # TODO: Can be based on a heuristic that estimates chunk size
+            # from the input table size and available GPU memory.
+            num_chunks = parquet_options.n_output_chunks
+            table_chunks = plc.copying.split(
+                df.table,
+                [i * df.table.num_rows() // num_chunks for i in range(1, num_chunks)],
+            )
+            for chunk in table_chunks:
+                writer.write(chunk)
+            writer.close([])
+
+        else:
+            builder = plc.io.parquet.ParquetWriterOptions.builder(
+                target, df.table
+            ).metadata(metadata)
+            builder = cls._apply_parquet_writer_options(builder, options)
+            writer_options = builder.build()
+            plc.io.parquet.write_parquet(writer_options)
 
     @classmethod
     @nvtx_annotate_cudf_polars(message="Sink")
@@ -814,7 +920,7 @@ class Sink(IR):
         schema: Schema,
         kind: str,
         path: str,
-        config_options: ConfigOptions,
+        parquet_options: ParquetOptions,
         options: dict[str, Any],
         df: DataFrame,
     ) -> DataFrame:
@@ -824,96 +930,11 @@ class Sink(IR):
         if options.get("mkdir", False):
             Path(path).parent.mkdir(parents=True, exist_ok=True)
         if kind == "Csv":
-            serialize = options["serialize_options"]
-            options = (
-                plc.io.csv.CsvWriterOptions.builder(target, df.table)
-                .include_header(options["include_header"])
-                .names(df.column_names if options["include_header"] else [])
-                .na_rep(serialize["null"])
-                .line_terminator(serialize["line_terminator"])
-                .inter_column_delimiter(chr(serialize["separator"]))
-                .build()
-            )
-            plc.io.csv.write_csv(options)
-
+            cls._write_csv(target, options, df)
         elif kind == "Parquet":
-            metadata = plc.io.types.TableInputMetadata(df.table)
-            for i, name in enumerate(df.column_names):
-                metadata.column_metadata[i].set_name(name)
-
-            compression = options["compression"]
-            compression_type = None
-            if compression != "Uncompressed":
-                compression_type = getattr(
-                    plc.io.types.CompressionType, compression.upper()
-                )
-
-            data_page_size = options.get("data_page_size")
-            row_group_size = options.get("row_group_size")
-
-            if (
-                config_options.parquet_options.chunked
-                and config_options.parquet_options.n_output_chunks != 1
-            ):
-                builder = plc.io.parquet.ChunkedParquetWriterOptions.builder(
-                    target
-                ).metadata(metadata)
-                if compression_type is not None:
-                    builder = builder.compression(compression_type)
-                if data_page_size is not None:
-                    builder = builder.max_page_size_bytes(data_page_size)
-                if row_group_size is not None:
-                    builder = builder.row_group_size_rows(row_group_size)
-
-                writer_options = builder.build()
-                writer = plc.io.parquet.ChunkedParquetWriter.from_options(
-                    writer_options
-                )
-                # TODO: Can be based on a heuristic that estimates chunk size
-                # from the input table size and available GPU memory.
-                num_chunks = config_options.parquet_options.n_output_chunks
-                table_chunks = plc.copying.split(
-                    df.table,
-                    [
-                        i * df.table.num_rows() // num_chunks
-                        for i in range(1, num_chunks)
-                    ],
-                )
-
-                for chunk in table_chunks:
-                    writer.write(chunk)
-
-                writer.close([])
-
-            else:
-                builder = plc.io.parquet.ParquetWriterOptions.builder(
-                    target, df.table
-                ).metadata(metadata)
-                if compression_type is not None:
-                    builder = builder.compression(compression_type)
-
-                writer_options = builder.build()
-                if data_page_size is not None:
-                    writer_options.set_max_page_size_bytes(data_page_size)
-                if row_group_size is not None:
-                    writer_options.set_row_group_size_rows(row_group_size)
-
-                plc.io.parquet.write_parquet(writer_options)
-
+            cls._write_parquet(target, parquet_options, options, df)
         elif kind == "Json":
-            metadata = plc.io.TableWithMetadata(
-                df.table, [(col, []) for col in df.column_names]
-            )
-            options = (
-                plc.io.json.JsonWriterOptions.builder(target, df.table)
-                .lines(val=True)
-                .na_rep("null")
-                .include_nulls(val=True)
-                .metadata(metadata)
-                .utf8_escaped(val=False)
-                .build()
-            )
-            plc.io.json.write_json(options)
+            cls._write_json(target, df)
 
         return DataFrame([])
 
@@ -988,26 +1009,22 @@ class DataFrameScan(IR):
     This typically arises from ``q.collect().lazy()``
     """
 
-    __slots__ = ("_id_for_hash", "config_options", "df", "projection")
-    _non_child = ("schema", "df", "projection", "config_options")
+    __slots__ = ("_id_for_hash", "df", "projection")
+    _non_child = ("schema", "df", "projection")
     df: Any
     """Polars internal PyDataFrame object."""
     projection: tuple[str, ...] | None
     """List of columns to project out."""
-    config_options: ConfigOptions
-    """GPU-specific configuration options"""
 
     def __init__(
         self,
         schema: Schema,
         df: Any,
         projection: Sequence[str] | None,
-        config_options: ConfigOptions,
     ):
         self.schema = schema
         self.df = df
         self.projection = tuple(projection) if projection is not None else None
-        self.config_options = config_options
         self._non_child_args = (
             schema,
             pl.DataFrame._from_pydf(df),
@@ -1030,7 +1047,6 @@ class DataFrameScan(IR):
             schema_hash,
             self._id_for_hash,
             self.projection,
-            self.config_options,
         )
 
     @classmethod
@@ -1075,8 +1091,7 @@ class Select(IR):
         self.children = (df,)
         self._non_child_args = (self.exprs, should_broadcast)
         if (
-            not POLARS_VERSION_LT_128
-            and Select._is_len_expr(self.exprs)
+            Select._is_len_expr(self.exprs)
             and isinstance(df, Scan)
             and df.typ != "parquet"
         ):  # pragma: no cover
@@ -1135,8 +1150,7 @@ class Select(IR):
             translation phase should fail earlier.
         """
         if (
-            not POLARS_VERSION_LT_128
-            and isinstance(self.children[0], Scan)
+            isinstance(self.children[0], Scan)
             and Select._is_len_expr(self.exprs)
             and self.children[0].typ == "parquet"
             and self.children[0].predicate is None
@@ -1345,7 +1359,6 @@ class GroupBy(IR):
 
     __slots__ = (
         "agg_requests",
-        "config_options",
         "keys",
         "maintain_order",
         "zlice",
@@ -1356,7 +1369,6 @@ class GroupBy(IR):
         "agg_requests",
         "maintain_order",
         "zlice",
-        "config_options",
     )
     keys: tuple[expr.NamedExpr, ...]
     """Grouping keys."""
@@ -1366,8 +1378,6 @@ class GroupBy(IR):
     """Preserve order in groupby."""
     zlice: Zlice | None
     """Optional slice to apply after grouping."""
-    config_options: ConfigOptions
-    """GPU-specific configuration options"""
 
     def __init__(
         self,
@@ -1376,25 +1386,25 @@ class GroupBy(IR):
         agg_requests: Sequence[expr.NamedExpr],
         maintain_order: bool,  # noqa: FBT001
         zlice: Zlice | None,
-        config_options: ConfigOptions,
         df: IR,
     ):
         self.schema = schema
         self.keys = tuple(keys)
-        if any(
-            isinstance(child, unary.UnaryFunction) and child.name == "value_counts"
-            for request in agg_requests
-            for child in request.value.children
-        ):
-            raise NotImplementedError(
-                "value_counts is not supported in groupby"
-            )  # pragma: no cover
+        for request in agg_requests:
+            expr = request.value
+            if isinstance(expr, unary.UnaryFunction) and expr.name == "value_counts":
+                raise NotImplementedError("value_counts is not supported in groupby")
+            if any(
+                isinstance(child, unary.UnaryFunction) and child.name == "value_counts"
+                for child in expr.children
+            ):
+                raise NotImplementedError("value_counts is not supported in groupby")
         self.agg_requests = tuple(agg_requests)
         self.maintain_order = maintain_order
         self.zlice = zlice
-        self.config_options = config_options
         self.children = (df,)
         self._non_child_args = (
+            schema,
             self.keys,
             self.agg_requests,
             maintain_order,
@@ -1405,6 +1415,7 @@ class GroupBy(IR):
     @nvtx_annotate_cudf_polars(message="GroupBy")
     def do_evaluate(
         cls,
+        schema: Schema,
         keys_in: Sequence[expr.NamedExpr],
         agg_requests: Sequence[expr.NamedExpr],
         maintain_order: bool,  # noqa: FBT001
@@ -1446,7 +1457,7 @@ class GroupBy(IR):
             names.append(name)
         group_keys, raw_tables = grouper.aggregate(requests)
         results = [
-            Column(column, name=name, dtype=request.value.dtype)
+            Column(column, name=name, dtype=schema[name])
             for name, column, request in zip(
                 names,
                 itertools.chain.from_iterable(t.columns() for t in raw_tables),
@@ -1586,12 +1597,14 @@ class ConditionalJoin(IR):
                 left.table, lg, plc.copying.OutOfBoundsPolicy.DONT_CHECK
             ),
             left.column_names,
+            left.dtypes,
         )
         right = DataFrame.from_table(
             plc.copying.gather(
                 right.table, rg, plc.copying.OutOfBoundsPolicy.DONT_CHECK
             ),
             right.column_names,
+            right.dtypes,
         )
         right = right.rename_columns(
             {
@@ -1607,8 +1620,8 @@ class ConditionalJoin(IR):
 class Join(IR):
     """A join of two dataframes."""
 
-    __slots__ = ("config_options", "left_on", "options", "right_on")
-    _non_child = ("schema", "left_on", "right_on", "options", "config_options")
+    __slots__ = ("left_on", "options", "right_on")
+    _non_child = ("schema", "left_on", "right_on", "options")
     left_on: tuple[expr.NamedExpr, ...]
     """List of expressions used as keys in the left frame."""
     right_on: tuple[expr.NamedExpr, ...]
@@ -1630,8 +1643,6 @@ class Join(IR):
     - coalesce: should key columns be coalesced (only makes sense for outer joins)
     - maintain_order: which DataFrame row order to preserve, if any
     """
-    config_options: ConfigOptions
-    """GPU-specific configuration options"""
 
     def __init__(
         self,
@@ -1639,7 +1650,6 @@ class Join(IR):
         left_on: Sequence[expr.NamedExpr],
         right_on: Sequence[expr.NamedExpr],
         options: Any,
-        config_options: ConfigOptions,
         left: IR,
         right: IR,
     ):
@@ -1647,7 +1657,6 @@ class Join(IR):
         self.left_on = tuple(left_on)
         self.right_on = tuple(right_on)
         self.options = options
-        self.config_options = config_options
         self.children = (left, right)
         self._non_child_args = (self.left_on, self.right_on, self.options)
         # TODO: Implement maintain_order
@@ -1803,7 +1812,7 @@ class Join(IR):
             # Semi join
             lg = join_fn(left_on.table, right_on.table, null_equality)
             table = plc.copying.gather(left.table, lg, left_policy)
-            result = DataFrame.from_table(table, left.column_names)
+            result = DataFrame.from_table(table, left.column_names, left.dtypes)
         else:
             if how == "Right":
                 # Right join is a left join with the tables swapped
@@ -1825,10 +1834,14 @@ class Join(IR):
                 else:
                     right = right.discard_columns(right_on.column_names_set)
             left = DataFrame.from_table(
-                plc.copying.gather(left.table, lg, left_policy), left.column_names
+                plc.copying.gather(left.table, lg, left_policy),
+                left.column_names,
+                left.dtypes,
             )
             right = DataFrame.from_table(
-                plc.copying.gather(right.table, rg, right_policy), right.column_names
+                plc.copying.gather(right.table, rg, right_policy),
+                right.column_names,
+                right.dtypes,
             )
             if coalesce and how == "Full":
                 left = left.with_columns(
@@ -2057,7 +2070,7 @@ class Sort(IR):
             list(order),
             list(null_order),
         )
-        result = DataFrame.from_table(table, df.column_names)
+        result = DataFrame.from_table(table, df.column_names, df.dtypes)
         first_key = sort_keys[0]
         name = by[0].name
         first_key_in_result = (
@@ -2077,10 +2090,10 @@ class Slice(IR):
     _non_child = ("schema", "offset", "length")
     offset: int
     """Start of the slice."""
-    length: int
+    length: int | None
     """Length of the slice."""
 
-    def __init__(self, schema: Schema, offset: int, length: int, df: IR):
+    def __init__(self, schema: Schema, offset: int, length: int | None, df: IR):
         self.schema = schema
         self.offset = offset
         self.length = length
@@ -2172,6 +2185,7 @@ class MergeSorted(IR):
                 [on_col_left.null_order, on_col_right.null_order],
             ),
             left.column_names,
+            left.dtypes,
         )
 
 
@@ -2215,13 +2229,15 @@ class MapFunction(IR):
                 # same sub-shapes
                 raise NotImplementedError("Explode with more than one column")
             self.options = (tuple(to_explode),)
-        elif self.name == "rename":
+        elif POLARS_VERSION_LT_131 and self.name == "rename":  # pragma: no cover
+            # As of 1.31, polars validates renaming in the IR
             old, new, strict = self.options
-            # TODO: perhaps polars should validate renaming in the IR?
             if len(new) != len(set(new)) or (
                 set(new) & (set(df.schema.keys()) - set(old))
             ):
-                raise NotImplementedError("Duplicate new names in rename.")
+                raise NotImplementedError(
+                    "Duplicate new names in rename."
+                )  # pragma: no cover
             self.options = (tuple(old), tuple(new), strict)
         elif self.name == "unpivot":
             indices, pivotees, variable_name, value_name = self.options
@@ -2283,7 +2299,7 @@ class MapFunction(IR):
             # No-op in our data model
             # Don't think this appears in a plan tree from python
             return df  # pragma: no cover
-        elif name == "rename":
+        elif POLARS_VERSION_LT_131 and name == "rename":  # pragma: no cover
             # final tag is "swapping" which is useful for the
             # optimiser (it blocks some pushdown operations)
             old, new, _ = options
@@ -2293,7 +2309,7 @@ class MapFunction(IR):
             index = df.column_names.index(to_explode)
             subset = df.column_names_set - {to_explode}
             return DataFrame.from_table(
-                plc.lists.explode_outer(df.table, index), df.column_names
+                plc.lists.explode_outer(df.table, index), df.column_names, df.dtypes
             ).sorted_like(df, subset=subset)
         elif name == "unpivot":
             (
@@ -2316,11 +2332,10 @@ class MapFunction(IR):
             (variable_column,) = plc.filling.repeat(
                 plc.Table(
                     [
-                        plc.interop.from_arrow(
-                            pa.array(
-                                pivotees,
-                                type=plc.interop.to_arrow(schema[variable_name].plc),
-                            ),
+                        plc.Column.from_arrow(
+                            pl.Series(
+                                values=pivotees, dtype=schema[variable_name].polars
+                            )
                         )
                     ]
                 ),
@@ -2382,6 +2397,7 @@ class Union(IR):
         return DataFrame.from_table(
             plc.concatenate.concatenate([df.table for df in dfs]),
             dfs[0].column_names,
+            dfs[0].dtypes,
         ).slice(zlice)
 
 
@@ -2456,6 +2472,7 @@ class HConcat(IR):
                     else DataFrame.from_table(
                         cls._extend_with_nulls(df.table, nrows=max_rows - df.num_rows),
                         df.column_names,
+                        df.dtypes,
                     )
                     for df in dfs
                 )
