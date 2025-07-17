@@ -383,7 +383,7 @@ def assert_sink_result_equal(
         isinstance(engine, GPUEngine)
         and ConfigOptions.from_polars_engine(engine).executor == "streaming"
         and gpu_path.is_dir()
-    ):
+    ):  # pragma: no cover
         result = read_fn(gpu_path.joinpath("*"), **read_kwargs)
     else:
         result = read_fn(gpu_path, **read_kwargs)
