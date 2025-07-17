@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,14 +32,10 @@ struct RoundTestsIntegerTypes : public cudf::test::BaseFixture {};
 template <typename T>
 struct RoundTestsFixedPointTypes : public cudf::test::BaseFixture {};
 
-template <typename T>
-struct RoundTestsFloatingPointTypes : public cudf::test::BaseFixture {};
-
 using IntegerTypes = cudf::test::Types<int16_t, int32_t, int64_t>;
 
 TYPED_TEST_SUITE(RoundTestsIntegerTypes, IntegerTypes);
 TYPED_TEST_SUITE(RoundTestsFixedPointTypes, cudf::test::FixedPointTypes);
-TYPED_TEST_SUITE(RoundTestsFloatingPointTypes, cudf::test::FloatingPointTypes);
 
 TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestHalfUpZero)
 {
@@ -52,7 +48,7 @@ TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestHalfUpZero)
     {1140, 1150, 1160, 1240, 1250, 1260, -1140, -1150, -1160, -1240, -1250, -1260}, scale_type{-2}};
   auto const expected =
     fp_wrapper{{11, 12, 12, 12, 13, 13, -11, -12, -12, -12, -13, -13}, scale_type{0}};
-  auto const result = cudf::round(input);
+  auto const result = cudf::round_decimal(input);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -66,7 +62,7 @@ TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestHalfUpZeroNoOp)
 
   auto const input = fp_wrapper{
     {1125, 1150, 1160, 1240, 1250, 1260, -1125, -1150, -1160, -1240, -1250, -1260}, scale_type{0}};
-  auto const result = cudf::round(input);
+  auto const result = cudf::round_decimal(input);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(input, result->view());
 }
@@ -81,7 +77,7 @@ TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestHalfUpZeroNullMask)
   auto const null_mask = std::vector<int>{1, 1, 0, 1};
   auto const input     = fp_wrapper{{1150, 1160, 1240, 1250}, null_mask.cbegin(), scale_type{-2}};
   auto const expected  = fp_wrapper{{12, 12, 1240, 13}, null_mask.cbegin(), scale_type{0}};
-  auto const result    = cudf::round(input);
+  auto const result    = cudf::round_decimal(input);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -97,7 +93,7 @@ TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestHalfEvenZero)
     {1140, 1150, 1160, 1240, 1250, 1260, -1140, -1150, -1160, -1240, -1250, -1260}, scale_type{-2}};
   auto const expected =
     fp_wrapper{{11, 12, 12, 12, 12, 13, -11, -12, -12, -12, -12, -13}, scale_type{0}};
-  auto const result = cudf::round(input, 0, cudf::rounding_method::HALF_EVEN);
+  auto const result = cudf::round_decimal(input, 0, cudf::rounding_method::HALF_EVEN);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -111,7 +107,7 @@ TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestHalfUp)
 
   auto const input    = fp_wrapper{{1140, 1150, 1160, -1140, -1150, -1160}, scale_type{-3}};
   auto const expected = fp_wrapper{{11, 12, 12, -11, -12, -12}, scale_type{-1}};
-  auto const result   = cudf::round(input, 1, cudf::rounding_method::HALF_UP);
+  auto const result   = cudf::round_decimal(input, 1, cudf::rounding_method::HALF_UP);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -125,7 +121,7 @@ TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestHalfUp2)
 
   auto const input    = fp_wrapper{{114, 115, 116, -114, -115, -116}, scale_type{-2}};
   auto const expected = fp_wrapper{{11, 12, 12, -11, -12, -12}, scale_type{-1}};
-  auto const result   = cudf::round(input, 1, cudf::rounding_method::HALF_UP);
+  auto const result   = cudf::round_decimal(input, 1, cudf::rounding_method::HALF_UP);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -139,7 +135,7 @@ TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestHalfUp3)
 
   auto const input    = fp_wrapper{{1, 2, 3, -1, -2, -3}, scale_type{1}};
   auto const expected = fp_wrapper{{100, 200, 300, -100, -200, -300}, scale_type{-1}};
-  auto const result   = cudf::round(input, 1, cudf::rounding_method::HALF_UP);
+  auto const result   = cudf::round_decimal(input, 1, cudf::rounding_method::HALF_UP);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -155,7 +151,7 @@ TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestHalfEven)
     {1140, 1150, 1160, 1240, 1250, 1260, -1140, -1150, -1160, -1240, -1250, -1260}, scale_type{-3}};
   auto const expected =
     fp_wrapper{{11, 12, 12, 12, 12, 13, -11, -12, -12, -12, -12, -13}, scale_type{-1}};
-  auto const result = cudf::round(input, 1, cudf::rounding_method::HALF_EVEN);
+  auto const result = cudf::round_decimal(input, 1, cudf::rounding_method::HALF_EVEN);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -171,7 +167,7 @@ TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestHalfEven2)
     fp_wrapper{{114, 115, 116, 124, 125, 126, -114, -115, -116, -124, -125, -126}, scale_type{-2}};
   auto const expected =
     fp_wrapper{{11, 12, 12, 12, 12, 13, -11, -12, -12, -12, -12, -13}, scale_type{-1}};
-  auto const result = cudf::round(input, 1, cudf::rounding_method::HALF_EVEN);
+  auto const result = cudf::round_decimal(input, 1, cudf::rounding_method::HALF_EVEN);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -185,7 +181,7 @@ TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestHalfEven3)
 
   auto const input    = fp_wrapper{{1, 2, 3, -1, -2, -3}, scale_type{1}};
   auto const expected = fp_wrapper{{100, 200, 300, -100, -200, -300}, scale_type{-1}};
-  auto const result   = cudf::round(input, 1, cudf::rounding_method::HALF_EVEN);
+  auto const result   = cudf::round_decimal(input, 1, cudf::rounding_method::HALF_EVEN);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -200,7 +196,7 @@ TYPED_TEST(RoundTestsFixedPointTypes, EmptyFixedPointTypeTest)
   auto const input         = fp_wrapper{{}, scale_type{1}};
   auto const expected      = fp_wrapper{{}, scale_type{-1}};
   auto const expected_type = cudf::data_type{cudf::type_to_id<decimalXX>(), scale_type{-1}};
-  auto const result        = cudf::round(input, 1, cudf::rounding_method::HALF_UP);
+  auto const result        = cudf::round_decimal(input, 1, cudf::rounding_method::HALF_UP);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
   EXPECT_EQ(result->view().type(), expected_type);
@@ -216,7 +212,7 @@ TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestNegHalfUp)
   auto const input =
     fp_wrapper{{14, 15, 16, 24, 25, 26, -14, -15, -16, -24, -25, -26}, scale_type{2}};
   auto const expected = fp_wrapper{{1, 2, 2, 2, 3, 3, -1, -2, -2, -2, -3, -3}, scale_type{3}};
-  auto const result   = cudf::round(input, -3, cudf::rounding_method::HALF_UP);
+  auto const result   = cudf::round_decimal(input, -3, cudf::rounding_method::HALF_UP);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -231,7 +227,7 @@ TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestNegHalfUp2)
   auto const input =
     fp_wrapper{{14, 15, 16, 24, 25, 26, -14, -15, -16, -24, -25, -26}, scale_type{3}};
   auto const expected = fp_wrapper{{1, 2, 2, 2, 3, 3, -1, -2, -2, -2, -3, -3}, scale_type{4}};
-  auto const result   = cudf::round(input, -4, cudf::rounding_method::HALF_UP);
+  auto const result   = cudf::round_decimal(input, -4, cudf::rounding_method::HALF_UP);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -245,7 +241,7 @@ TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestHalfNegUp3)
 
   auto const input    = fp_wrapper{{1, 2, 3, -1, -2, -3}, scale_type{2}};
   auto const expected = fp_wrapper{{10, 20, 30, -10, -20, -30}, scale_type{1}};
-  auto const result   = cudf::round(input, -1, cudf::rounding_method::HALF_UP);
+  auto const result   = cudf::round_decimal(input, -1, cudf::rounding_method::HALF_UP);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -260,7 +256,7 @@ TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestNegHalfEven)
   auto const input =
     fp_wrapper{{14, 15, 16, 24, 25, 26, -14, -15, -16, -24, -25, -26}, scale_type{2}};
   auto const expected = fp_wrapper{{1, 2, 2, 2, 2, 3, -1, -2, -2, -2, -2, -3}, scale_type{3}};
-  auto const result   = cudf::round(input, -3, cudf::rounding_method::HALF_EVEN);
+  auto const result   = cudf::round_decimal(input, -3, cudf::rounding_method::HALF_EVEN);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -275,7 +271,7 @@ TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestNegHalfEven2)
   auto const input =
     fp_wrapper{{14, 15, 16, 24, 25, 26, -14, -15, -16, -24, -25, -26}, scale_type{3}};
   auto const expected = fp_wrapper{{1, 2, 2, 2, 2, 3, -1, -2, -2, -2, -2, -3}, scale_type{4}};
-  auto const result   = cudf::round(input, -4, cudf::rounding_method::HALF_EVEN);
+  auto const result   = cudf::round_decimal(input, -4, cudf::rounding_method::HALF_EVEN);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -289,7 +285,7 @@ TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestHalfNegEven3)
 
   auto const input    = fp_wrapper{{1, 2, 3, -1, -2, -3}, scale_type{2}};
   auto const expected = fp_wrapper{{10, 20, 30, -10, -20, -30}, scale_type{1}};
-  auto const result   = cudf::round(input, -1, cudf::rounding_method::HALF_EVEN);
+  auto const result   = cudf::round_decimal(input, -1, cudf::rounding_method::HALF_EVEN);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -303,7 +299,7 @@ TYPED_TEST(RoundTestsFixedPointTypes, TestForBlog)
 
   auto const input    = fp_wrapper{{25649999}, scale_type{-5}};
   auto const expected = fp_wrapper{{256}, scale_type{0}};
-  auto const result   = cudf::round(input);
+  auto const result   = cudf::round_decimal(input);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -326,14 +322,15 @@ TYPED_TEST(RoundTestsFixedPointTypes, TestScaleMovementExceedingMaxPrecision)
   auto const input =
     fp_wrapper{{14, 15, 16, 24, 25, 26, -14, -15, -16, -24, -25, -26}, scale_type{1}};
   auto const expected = fp_wrapper{{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, scale_type{target_scale}};
-  auto const result   = cudf::round(input, -target_scale, cudf::rounding_method::HALF_UP);
+  auto const result   = cudf::round_decimal(input, -target_scale, cudf::rounding_method::HALF_UP);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 
   auto const input_even =
     fp_wrapper{{14, 15, 16, 24, 25, 26, -14, -15, -16, -24, -25, -26}, scale_type{1}};
   auto const expected_even =
     fp_wrapper{{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, scale_type{target_scale}};
-  auto const result_even = cudf::round(input, -target_scale, cudf::rounding_method::HALF_EVEN);
+  auto const result_even =
+    cudf::round_decimal(input, -target_scale, cudf::rounding_method::HALF_EVEN);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_even, result_even->view());
 
   const std::initializer_list<bool> validity = {
@@ -342,111 +339,9 @@ TYPED_TEST(RoundTestsFixedPointTypes, TestScaleMovementExceedingMaxPrecision)
     fp_wrapper{{14, 15, 16, 24, 25, 26, -14, -15, -16, -24, -25, -26}, validity, scale_type{1}};
   auto const expected_null =
     fp_wrapper{{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, validity, scale_type{target_scale}};
-  auto const result_null = cudf::round(input_null, -target_scale, cudf::rounding_method::HALF_UP);
+  auto const result_null =
+    cudf::round_decimal(input_null, -target_scale, cudf::rounding_method::HALF_UP);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_null, result_null->view());
-}
-
-TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestHalfUp0)
-{
-  using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
-
-  auto const input    = fw_wrapper{1.4, 1.5, 1.6};
-  auto const expected = fw_wrapper{1, 2, 2};
-  auto const result   = cudf::round(input);
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
-}
-
-TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestHalfUp1)
-{
-  using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
-
-  auto const input    = fw_wrapper{1.24, 1.25, 1.26};
-  auto const expected = fw_wrapper{1.2, 1.3, 1.3};
-  auto const result   = cudf::round(input, 1, cudf::rounding_method::HALF_UP);
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
-}
-
-TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestHalfEven0)
-{
-  using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
-
-  auto const input    = fw_wrapper{1.4, 1.5, 1.6, 2.4, 2.5, 2.6};
-  auto const expected = fw_wrapper{1, 2, 2, 2, 2, 3};
-  auto const result   = cudf::round(input, 0, cudf::rounding_method::HALF_EVEN);
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
-}
-
-TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestHalfEven1)
-{
-  using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
-
-  auto const input    = fw_wrapper{1.24, 1.25, 1.26, 1.34, 1.35, 1.36};
-  auto const expected = fw_wrapper{1.2, 1.2, 1.3, 1.3, 1.4, 1.4};
-  auto const result   = cudf::round(input, 1, cudf::rounding_method::HALF_EVEN);
-}
-
-TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestWithNullsHalfUp)
-{
-  using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
-
-  auto const input    = fw_wrapper{{1.24, 1.25, 1.26}, {1, 0, 1}};
-  auto const expected = fw_wrapper{{1.2, 1.3, 1.3}, {1, 0, 1}};
-  auto const result   = cudf::round(input, 1, cudf::rounding_method::HALF_UP);
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
-}
-
-TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestNegHalfUp1)
-{
-  using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
-
-  auto const input    = fw_wrapper{5, 12, 15, 135, 1454, 1455, 1456};
-  auto const expected = fw_wrapper{10, 10, 20, 140, 1450, 1460, 1460};
-  auto const result   = cudf::round(input, -1, cudf::rounding_method::HALF_UP);
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
-}
-
-TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestNegHalfEven1)
-{
-  using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
-
-  auto const input    = fw_wrapper{5, 12, 15, 135, 1454, 1455, 1456};
-  auto const expected = fw_wrapper{0, 10, 20, 140, 1450, 1460, 1460};
-  auto const result   = cudf::round(input, -1, cudf::rounding_method::HALF_EVEN);
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
-}
-
-TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestNegHalfUp2)
-{
-  using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
-
-  auto const input    = fw_wrapper{12, 135, 1454, 1455, 1500};
-  auto const expected = fw_wrapper{0, 100, 1500, 1500, 1500};
-  auto const result   = cudf::round(input, -2, cudf::rounding_method::HALF_UP);
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
-}
-
-TYPED_TEST(RoundTestsFloatingPointTypes, LargeFloatingPointHalfUp)
-{
-  using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
-
-  auto transform   = [](int i) -> float { return i % 2 == 0 ? i + 0.44 : i + 0.56; };
-  auto begin       = cudf::detail::make_counting_transform_iterator(0, transform);
-  auto const input = fw_wrapper(begin, begin + 2000);
-
-  auto transform2     = [](int i) { return i % 2 == 0 ? i + 0.4 : i + 0.6; };
-  auto begin2         = cudf::detail::make_counting_transform_iterator(0, transform2);
-  auto const expected = fw_wrapper(begin2, begin2 + 2000);
-
-  auto const result = cudf::round(input, 1, cudf::rounding_method::HALF_UP);
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
 TYPED_TEST(RoundTestsIntegerTypes, LargeIntegerHalfEven)
@@ -461,75 +356,7 @@ TYPED_TEST(RoundTestsIntegerTypes, LargeIntegerHalfEven)
   auto begin2         = cudf::detail::make_counting_transform_iterator(1, transform2);
   auto const expected = fw_wrapper(begin2, begin2 + 2000);
 
-  auto const result = cudf::round(input, -1, cudf::rounding_method::HALF_EVEN);
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
-}
-
-TYPED_TEST(RoundTestsFloatingPointTypes, SameSignificatDigitsHalfUp)
-{
-  using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
-
-  auto const input    = fw_wrapper{9.87654321};
-  auto const expected = fw_wrapper{9.88};
-  auto const result   = cudf::round(input, 2, cudf::rounding_method::HALF_UP);
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
-
-  auto const input2    = fw_wrapper{987.654321};
-  auto const expected2 = fw_wrapper{988};
-  auto const result2   = cudf::round(input2);
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, result2->view());
-
-  auto const input3    = fw_wrapper{987654.321};
-  auto const expected3 = fw_wrapper{988000};
-  auto const result3   = cudf::round(input3, -3, cudf::rounding_method::HALF_UP);
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected3, result3->view());
-
-  auto const input4    = fw_wrapper{9876543.21};
-  auto const expected4 = fw_wrapper{9880000};
-  auto const result4   = cudf::round(input4, -4, cudf::rounding_method::HALF_UP);
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected4, result4->view());
-
-  auto const input5    = fw_wrapper{0.0000987654321};
-  auto const expected5 = fw_wrapper{0.0000988};
-  auto const result5   = cudf::round(input5, 7, cudf::rounding_method::HALF_UP);
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected5, result5->view());
-}
-
-TEST_F(RoundTests, FloatMaxTestHalfUp)
-{
-  using fw_wrapper = cudf::test::fixed_width_column_wrapper<float>;
-
-  auto const input    = fw_wrapper{std::numeric_limits<float>::max()};  // 3.40282e+38
-  auto const expected = fw_wrapper{3.4e+38};
-  auto const result   = cudf::round(input, -37, cudf::rounding_method::HALF_UP);
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
-}
-
-TEST_F(RoundTests, DoubleMaxTestHalfUp)
-{
-  using fw_wrapper = cudf::test::fixed_width_column_wrapper<double>;
-
-  auto const input    = fw_wrapper{std::numeric_limits<double>::max() - 5e+306};  // 1.74769e+308
-  auto const expected = fw_wrapper{1.7e+308};
-  auto const result   = cudf::round(input, -307, cudf::rounding_method::HALF_UP);
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
-}
-
-TEST_F(RoundTests, AvoidOverFlowTestHalfUp)
-{
-  using fw_wrapper = cudf::test::fixed_width_column_wrapper<double>;
-
-  auto const input    = fw_wrapper{std::numeric_limits<double>::max()};
-  auto const expected = fw_wrapper{std::numeric_limits<double>::max()};
-  auto const result   = cudf::round(input, 2, cudf::rounding_method::HALF_UP);
+  auto const result = cudf::round_decimal(input, -1, cudf::rounding_method::HALF_EVEN);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -540,7 +367,7 @@ TYPED_TEST(RoundTestsIntegerTypes, SimpleIntegerTestNegHalfUp2)
 
   auto const input    = fw_wrapper{12, 135, 1454, 1455, 1500};
   auto const expected = fw_wrapper{0, 100, 1500, 1500, 1500};
-  auto const result   = cudf::round(input, -2, cudf::rounding_method::HALF_UP);
+  auto const result   = cudf::round_decimal(input, -2, cudf::rounding_method::HALF_UP);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -551,7 +378,7 @@ TYPED_TEST(RoundTestsIntegerTypes, SimpleIntegerTestNegHalfEven)
 
   auto const input    = fw_wrapper{12, 135, 1450, 1550, 1650};
   auto const expected = fw_wrapper{0, 100, 1400, 1600, 1600};
-  auto const result   = cudf::round(input, -2, cudf::rounding_method::HALF_EVEN);
+  auto const result   = cudf::round_decimal(input, -2, cudf::rounding_method::HALF_EVEN);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -562,7 +389,7 @@ TYPED_TEST(RoundTestsIntegerTypes, SimpleNegativeIntegerHalfUp)
 
   auto const input    = fw_wrapper{-12, -135, -1454, -1455, -1500, -140, -150, -160};
   auto const expected = fw_wrapper{0, -100, -1500, -1500, -1500, -100, -200, -200};
-  auto const result   = cudf::round(input, -2, cudf::rounding_method::HALF_UP);
+  auto const result   = cudf::round_decimal(input, -2, cudf::rounding_method::HALF_UP);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -573,7 +400,7 @@ TYPED_TEST(RoundTestsIntegerTypes, SimpleNegativeIntegerHalfEven)
 
   auto const input    = fw_wrapper{-12, -135, -145, -146, -1454, -1455, -1500};
   auto const expected = fw_wrapper{-10, -140, -140, -150, -1450, -1460, -1500};
-  auto const result   = cudf::round(input, -1, cudf::rounding_method::HALF_EVEN);
+  auto const result   = cudf::round_decimal(input, -1, cudf::rounding_method::HALF_EVEN);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -584,7 +411,7 @@ TEST_F(RoundTests, SimpleNegativeIntegerWithUnsignedNumbersHalfUp)
 
   auto const input    = fw_wrapper{12, 135, 1454, 1455, 1500, 140, 150, 160};
   auto const expected = fw_wrapper{0, 100, 1500, 1500, 1500, 100, 200, 200};
-  auto const result   = cudf::round(input, -2, cudf::rounding_method::HALF_UP);
+  auto const result   = cudf::round_decimal(input, -2, cudf::rounding_method::HALF_UP);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -595,7 +422,7 @@ TEST_F(RoundTests, SimpleNegativeInt8HalfEven)
 
   auto const input    = fw_wrapper{12, 35, 36, 15, 16, 24, 25, 26};
   auto const expected = fw_wrapper{10, 40, 40, 20, 20, 20, 20, 30};
-  auto const result   = cudf::round(input, -1, cudf::rounding_method::HALF_EVEN);
+  auto const result   = cudf::round_decimal(input, -1, cudf::rounding_method::HALF_EVEN);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -606,7 +433,7 @@ TEST_F(RoundTests, SimpleNegativeInt8HalfUp)
 
   auto const input    = fw_wrapper{12, 35, 36, 15, 16, 24, 25, 26};
   auto const expected = fw_wrapper{10, 40, 40, 20, 20, 20, 30, 30};
-  auto const result   = cudf::round(input, -1, cudf::rounding_method::HALF_UP);
+  auto const result   = cudf::round_decimal(input, -1, cudf::rounding_method::HALF_UP);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -617,7 +444,7 @@ TYPED_TEST(RoundTestsIntegerTypes, SimplePositiveIntegerHalfUp)
 
   auto const input    = fw_wrapper{-12, -135, -1454, -1455, -1500};
   auto const expected = fw_wrapper{-12, -135, -1454, -1455, -1500};
-  auto const result   = cudf::round(input, 2, cudf::rounding_method::HALF_UP);
+  auto const result   = cudf::round_decimal(input, 2, cudf::rounding_method::HALF_UP);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -630,22 +457,22 @@ TEST_F(RoundTests, Int64AtBoundaryHalfUp)
   auto const input = fw_wrapper{m};
 
   auto const expected = fw_wrapper{9223372036854775800};
-  auto const result   = cudf::round(input, -2, cudf::rounding_method::HALF_UP);
+  auto const result   = cudf::round_decimal(input, -2, cudf::rounding_method::HALF_UP);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 
   auto const expected2 = fw_wrapper{9223372036850000000};
-  auto const result2   = cudf::round(input, -7, cudf::rounding_method::HALF_UP);
+  auto const result2   = cudf::round_decimal(input, -7, cudf::rounding_method::HALF_UP);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, result2->view());
 
   auto const expected3 = fw_wrapper{9223372000000000000};
-  auto const result3   = cudf::round(input, -11, cudf::rounding_method::HALF_UP);
+  auto const result3   = cudf::round_decimal(input, -11, cudf::rounding_method::HALF_UP);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected3, result3->view());
 
-  auto const result4 = cudf::round(input, -12, cudf::rounding_method::HALF_UP);
+  auto const result4 = cudf::round_decimal(input, -12, cudf::rounding_method::HALF_UP);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected3, result4->view());
 
   auto const expected5 = fw_wrapper{9000000000000000000};
-  auto const result5   = cudf::round(input, -18, cudf::rounding_method::HALF_UP);
+  auto const result5   = cudf::round_decimal(input, -18, cudf::rounding_method::HALF_UP);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected5, result5->view());
 }
 
@@ -658,7 +485,7 @@ TEST_F(RoundTests, FixedPoint128HalfUp)
   {
     auto const input    = fp_wrapper{{-160714515306}, scale_type{-13}};
     auto const expected = fp_wrapper{{-16071451531}, scale_type{-12}};
-    auto const result   = cudf::round(input, 12, cudf::rounding_method::HALF_UP);
+    auto const result   = cudf::round_decimal(input, 12, cudf::rounding_method::HALF_UP);
 
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
   }
@@ -675,7 +502,7 @@ TEST_F(RoundTests, FixedPointAtBoundaryTestHalfUp)
   {
     auto const input    = fp_wrapper{{m}, scale_type{0}};
     auto const expected = fp_wrapper{{m / 100000}, scale_type{5}};
-    auto const result   = cudf::round(input, -5, cudf::rounding_method::HALF_UP);
+    auto const result   = cudf::round_decimal(input, -5, cudf::rounding_method::HALF_UP);
 
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
   }
@@ -683,7 +510,7 @@ TEST_F(RoundTests, FixedPointAtBoundaryTestHalfUp)
   {
     auto const input    = fp_wrapper{{m}, scale_type{0}};
     auto const expected = fp_wrapper{{m / 100000000000}, scale_type{11}};
-    auto const result   = cudf::round(input, -11, cudf::rounding_method::HALF_UP);
+    auto const result   = cudf::round_decimal(input, -11, cudf::rounding_method::HALF_UP);
 
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
   }
@@ -691,18 +518,20 @@ TEST_F(RoundTests, FixedPointAtBoundaryTestHalfUp)
   {
     auto const input    = fp_wrapper{{m}, scale_type{0}};
     auto const expected = fp_wrapper{{m / 1000000000000000}, scale_type{15}};
-    auto const result   = cudf::round(input, -15, cudf::rounding_method::HALF_UP);
+    auto const result   = cudf::round_decimal(input, -15, cudf::rounding_method::HALF_UP);
 
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
   }
 }
 
-TEST_F(RoundTests, BoolTestHalfUp)
+TEST_F(RoundTests, Errors)
 {
-  using fw_wrapper = cudf::test::fixed_width_column_wrapper<bool>;
-
-  auto const input = fw_wrapper{0, 1, 0};
-  EXPECT_THROW(cudf::round(input, -2, cudf::rounding_method::HALF_UP), cudf::logic_error);
+  auto const bools = cudf::test::fixed_width_column_wrapper<bool>{0, 1, 0};
+  EXPECT_THROW(cudf::round_decimal(bools, -2, cudf::rounding_method::HALF_UP),
+               std::invalid_argument);
+  auto const floats = cudf::test::fixed_width_column_wrapper<double>{0.0, 1.0, 10.0};
+  EXPECT_THROW(cudf::round_decimal(floats, -2, cudf::rounding_method::HALF_UP),
+               std::invalid_argument);
 }
 
 // Use __uint128_t for demonstration.
@@ -727,7 +556,7 @@ TEST_F(RoundTests, HalfEvenErrorsA)
     auto const input =
       fp_wrapper{{5000000000000000000000000000000000000_uint128_t}, scale_type{-37}};
     auto const expected = fp_wrapper{{0}, scale_type{0}};
-    auto const result   = cudf::round(input, 0, cudf::rounding_method::HALF_EVEN);
+    auto const result   = cudf::round_decimal(input, 0, cudf::rounding_method::HALF_EVEN);
 
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
   }
@@ -744,7 +573,7 @@ TEST_F(RoundTests, HalfEvenErrorsB)
     auto const input =
       fp_wrapper{{1250000000000000000000000000000000000_uint128_t}, scale_type{-37}};
     auto const expected = fp_wrapper{{12}, scale_type{-2}};
-    auto const result   = cudf::round(input, 2, cudf::rounding_method::HALF_EVEN);
+    auto const result   = cudf::round_decimal(input, 2, cudf::rounding_method::HALF_EVEN);
 
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
   }
@@ -761,7 +590,7 @@ TEST_F(RoundTests, HalfEvenErrorsC)
     auto const input =
       fp_wrapper{{0625000000000000000000000000000000000_uint128_t}, scale_type{-37}};
     auto const expected = fp_wrapper{{62}, scale_type{-3}};
-    auto const result   = cudf::round(input, 3, cudf::rounding_method::HALF_EVEN);
+    auto const result   = cudf::round_decimal(input, 3, cudf::rounding_method::HALF_EVEN);
 
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
   }
@@ -778,7 +607,7 @@ TEST_F(RoundTests, HalfUpErrorsA)
     auto const input =
       fp_wrapper{{2500000000000000000000000000000000000_uint128_t}, scale_type{-37}};
     auto const expected = fp_wrapper{{3}, scale_type{-1}};
-    auto const result   = cudf::round(input, 1, cudf::rounding_method::HALF_UP);
+    auto const result   = cudf::round_decimal(input, 1, cudf::rounding_method::HALF_UP);
 
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
   }
