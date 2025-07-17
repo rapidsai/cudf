@@ -163,13 +163,13 @@ def test_reverse(list_column):
 
 def test_segmented_gather():
     source_column = plc.Column.from_arrow(
-        pa.array([[10, 20], [], [30], [40, 50, 30, 20]])
+        pa.array([[10, 20], [], [30], [None, 50, 30, 20]])
     )
     gather_map_list = plc.Column.from_arrow(
         pa.array([[1, 0, 1], [], [], [0, 1, 3]])
     )
     got = plc.lists.segmented_gather(source_column, gather_map_list)
-    expect = pa.array([[20, 10, 20], [], [], [40, 50, 20]])
+    expect = pa.array([[20, 10, 20], [], [], [None, 50, 20]])
 
     assert_column_eq(expect, got)
 
