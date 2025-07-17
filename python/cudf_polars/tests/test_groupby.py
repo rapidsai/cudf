@@ -258,10 +258,48 @@ def test_groupby_maintain_order_random(nrows, nkeys, with_nulls):
             )
         )
     q = df.lazy().group_by(key_names, maintain_order=True).agg(pl.col("value").sum())
-    assert_gpu_result_equal(q)
+    # The streaming executor is too slow for large n_rows with blocksize_mode="small"
+    assert_gpu_result_equal(q, blocksize_mode="default" if nrows > 30 else None)
 
 
 def test_groupby_len_with_nulls():
     df = pl.DataFrame({"a": [1, 1, 1, 2], "b": [1, None, 2, 3]})
     q = df.lazy().group_by("a").agg(pl.col("b").len())
     assert_gpu_result_equal(q, check_row_order=False)
+
+
+@pytest.mark.parametrize("column", ["int", "string", "uint16_with_null"])
+def test_groupby_nunique(df: pl.LazyFrame, column):
+    q = df.group_by("key1").agg(pl.col(column).n_unique())
+
+    assert_gpu_result_equal(q, check_row_order=False)
+
+
+def test_groupby_null_count_raises(df: pl.LazyFrame):
+    q = df.group_by("key1").agg(pl.col("int") + pl.col("uint16_with_null").null_count())
+
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.col("int").all(),
+        pl.col("int").any(),
+        pl.col("int").is_duplicated(),
+        pl.col("int").is_first_distinct(),
+        pl.col("int").is_last_distinct(),
+        pl.col("int").is_unique(),
+    ],
+    ids=[
+        "all_horizontal",
+        "any_horizontal",
+        "is_duplicated",
+        "is_first_distinct",
+        "is_last_distinct",
+        "is_unique",
+    ],
+)
+def test_groupby_unsupported_non_pointwise_boolean_function(df: pl.LazyFrame, expr):
+    q = df.group_by("key1").agg(expr)
+    assert_ir_translation_raises(q, NotImplementedError)

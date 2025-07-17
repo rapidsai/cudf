@@ -372,8 +372,18 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             self._frame._data.insert(key[1], new_ser._column)
         else:
             if is_scalar(value):
-                for col in columns_df._column_names:
-                    self._frame[col].loc[key[0]] = value
+                try:
+                    if columns_df._num_columns:
+                        self._frame[
+                            columns_df._column_names[0]
+                        ].loc._loc_to_iloc(key[0])
+                    for col in columns_df._column_names:
+                        self._frame[col].loc[key[0]] = value
+                except KeyError:
+                    # TODO: There is a potential bug here if the inplace modifications
+                    # done above fail half-way we are left with a partially modified
+                    # frame. Need to handle this case better.
+                    self.append_new_row(key, value, columns_df=columns_df)
 
             elif isinstance(value, cudf.DataFrame):
                 if value.shape != self._frame.loc[key[0]].shape:
@@ -4705,7 +4715,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         ----------
         func : function
             Function to apply to each row.
-        axis : {0 or 'index', 1 or 'columns'}, default 0
+        axis : {0 or 'index', 1 or 'columns'}, default 1
             Axis along which the function is applied.
             - 0 or 'index': apply function to each column (not yet supported).
             - 1 or 'columns': apply function to each row.
@@ -5051,6 +5061,14 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         1    1    1    1  1.0 -2.0
         2    2    2    2  2.0 -4.0
         """
+        warnings.warn(
+            "DataFrame.apply_rows is deprecated and will be "
+            "removed in a future release. Please use `apply` "
+            "or use a custom numba kernel instead or refer "
+            "to the UDF guidelines for more information "
+            "https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html",
+            FutureWarning,
+        )
         for col in incols:
             current_col_dtype = self._data[col].dtype
             if current_col_dtype == CUDF_STRING_DTYPE or isinstance(

@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
-# TODO: remove need for this
+# TODO: Document BooleanFunction to remove noqa
 # ruff: noqa: D101
 """Boolean DSL nodes."""
 
@@ -17,7 +17,6 @@ from cudf_polars.dsl.expressions.base import (
     ExecutionContext,
     Expr,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_128
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -86,16 +85,6 @@ class BooleanFunction(Expr):
             BooleanFunction.Name.IsLastDistinct,
             BooleanFunction.Name.IsUnique,
         )
-        if (
-            POLARS_VERSION_LT_128
-            and self.name is BooleanFunction.Name.IsIn
-            and not all(
-                c.dtype.plc == self.children[0].dtype.plc for c in self.children
-            )
-        ):  # pragma: no cover
-            # TODO: If polars IR doesn't put the casts in, we need to
-            # mimic the supertype promotion rules.
-            raise NotImplementedError("IsIn doesn't support supertype casting")
 
     @staticmethod
     def _distinct(
@@ -290,9 +279,11 @@ class BooleanFunction(Expr):
             needles, haystack = columns
             if haystack.obj.type().id() == plc.TypeId.LIST:
                 # Unwrap values from the list column
+                # the type: ignore is safe because we know that the type ID is LIST,
+                # which always has an inner attribute.
                 haystack = Column(
                     haystack.obj.children()[1],
-                    dtype=DataType(haystack.dtype.polars.inner),
+                    dtype=DataType(haystack.dtype.polars.inner),  # type: ignore[attr-defined]
                 ).astype(needles.dtype)
             if haystack.size:
                 return Column(

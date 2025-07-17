@@ -534,6 +534,8 @@ add_library(
   src/io/parquet/experimental/hybrid_scan.cpp
   src/io/parquet/experimental/hybrid_scan_helpers.cpp
   src/io/parquet/experimental/hybrid_scan_impl.cpp
+  src/io/parquet/experimental/hybrid_scan_preprocess.cu
+  src/io/parquet/experimental/page_index_filter.cu
   src/io/parquet/page_data.cu
   src/io/parquet/chunk_dict.cu
   src/io/parquet/page_enc.cu
@@ -629,6 +631,7 @@ add_library(
   src/reductions/min.cu
   src/reductions/minmax.cu
   src/reductions/nth_element.cu
+  src/reductions/nunique.cu
   src/reductions/product.cu
   src/reductions/reductions.cpp
   src/reductions/scan/rank_scan.cu
@@ -672,20 +675,20 @@ add_library(
   src/rolling/range_window_bounds.cpp
   src/rolling/rolling.cpp
   src/round/round.cu
+  src/runtime/context.cpp
   src/scalar/scalar.cpp
   src/scalar/scalar_factories.cpp
   src/search/contains_column.cu
   src/search/contains_scalar.cu
   src/search/contains_table.cu
   src/search/search_ordered.cu
-  src/sort/faster_sort_column.cu
-  src/sort/faster_stable_sort_column.cu
   src/sort/is_sorted.cu
   src/sort/rank.cu
   src/sort/segmented_sort.cu
   src/sort/sort.cu
   src/sort/sort_column.cu
   src/sort/sort_radix.cu
+  src/sort/sorted_order_radix.cu
   src/sort/stable_segmented_sort.cu
   src/sort/stable_sort_column.cu
   src/sort/stable_sort.cu
@@ -695,6 +698,7 @@ add_library(
   src/stream_compaction/distinct_helpers.cu
   src/stream_compaction/drop_nans.cu
   src/stream_compaction/drop_nulls.cu
+  src/stream_compaction/filter/filter.cu
   src/stream_compaction/stable_distinct.cu
   src/stream_compaction/unique.cu
   src/stream_compaction/unique_count.cu
@@ -765,7 +769,7 @@ add_library(
   src/structs/scan/scan_inclusive.cu
   src/structs/structs_column_factories.cu
   src/structs/structs_column_view.cpp
-  src/structs/utilities.cpp
+  src/structs/utilities.cu
   src/table/primitive_row_operators.cu
   src/table/row_operators.cu
   src/table/table.cpp
@@ -810,6 +814,7 @@ add_library(
   src/utilities/cuda.cpp
   src/utilities/cuda_memcpy.cu
   src/utilities/default_stream.cpp
+  src/utilities/grid_1d.cu
   src/utilities/host_memory.cpp
   src/utilities/host_worker_pool.cpp
   src/utilities/linked_column.cpp

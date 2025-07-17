@@ -49,8 +49,10 @@ requirements:
   run:
     - python
     - pylibcudf =${{ version }}
-    - polars >=1.24,<1.31
+    - polars >=1.28,<1.32
     - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
+    - if: python == "3.10"
+      then: typing_extensions
   ignore_run_exports:
     by_name:
       - cuda-version
