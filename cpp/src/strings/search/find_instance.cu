@@ -68,16 +68,21 @@ CUDF_KERNEL void find_instance_warp_parallel_fn(column_device_view const d_strin
        itr += cudf::detail::warp_size) {
     size_type const is_char = !is_utf8_continuation_char(*itr);
     size_type const found   = is_char && (d_target.compare(itr, d_target.size_bytes()) == 0);
-    auto const found_count  = cg::reduce(warp, found, cg::plus<int>());
-    auto const found_scan   = cg::inclusive_scan(warp, found);
-    auto const chars_scan   = cg::exclusive_scan(warp, is_char);
-    auto const found_pos    = (found_scan + count) == (instance + 1) ? chars_scan : char_pos;
-    char_pos                = cg::reduce(warp, found_pos, cg::less<size_type>());
-    if (char_pos < max_pos) { break; }
-    count += found_count;
+    // count of threads that matched in this warp and produce an offset in each thread
+    auto const found_count = cg::reduce(warp, found, cg::plus<size_type>());
+    auto const found_scan  = cg::inclusive_scan(warp, found);
+    // handy character counter for threads in this warp
+    auto const chars_scan = cg::exclusive_scan(warp, is_char);
+    // activate the thread where we hit the desired find instance
+    auto const found_pos = (found_scan + count) == (instance + 1) ? chars_scan : char_pos;
+    // copy the position value for that thread into all warp threads
+    char_pos = cg::reduce(warp, found_pos, cg::less<size_type>());
+    if (char_pos < max_pos) { break; }  // all threads will stop
+    count += found_count;               // otherwise continue with the next set
     char_count += cg::reduce(warp, is_char, cg::plus<size_type>());
   }
 
+  // output the position if an instance match has been found
   if (lane_idx == 0) { d_results[str_idx] = char_pos == max_pos ? -1 : char_pos + char_count; }
 }
 
