@@ -150,7 +150,7 @@ int main(int argc, char const** argv)
     auto [result_cold, input_indices_cold] = transform(table_view);
     stream.synchronize();
     nvtxRangePop();
-    elapsed_cold = std::chono::steady_clock::now() - start_cold;
+    elapsed_cold = std::chrono::steady_clock::now() - start_cold;
   }
 
   stream.synchronize();
