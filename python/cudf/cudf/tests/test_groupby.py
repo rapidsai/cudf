@@ -542,7 +542,7 @@ def test_groupby_apply_jit_unary_reductions(
                     and dtype.kind == "f"
                 )
             ),
-            reason=("https://github.com/rapidsai/cudf/issues/19432"),
+            reason=("https://github.com/rapidsai/cudf/issues/14860"),
         )
     )
     warn_condition = (
