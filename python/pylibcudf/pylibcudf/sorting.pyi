@@ -65,6 +65,8 @@ def stable_sort(
 def top_k(
     col: Column,
     k: int,
-    sort_order: Order,
+    sort_order: Order = Order.DESCENDING,
 ) -> Column: ...
-def top_k_order(col: Column, k: int, sort_order: Order) -> Column: ...
+def top_k_order(
+    col: Column, k: int, sort_order: Order = Order.DESCENDING
+) -> Column: ...
