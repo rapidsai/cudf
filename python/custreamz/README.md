@@ -48,8 +48,8 @@ Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapids
 
 ### CUDA/GPU requirements
 
-* CUDA 11.0+
-* NVIDIA driver 450.80.02+
+* CUDA 12.0+
+* NVIDIA driver 525.60.13+
 * Volta architecture or better (Compute Capability >=7.0)
 
 ### Conda
