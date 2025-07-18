@@ -39,7 +39,24 @@ def cuda_gdb(request):
         return gdb
 
 
-def test_cudf_import_no_cuinit(cuda_gdb, monkeypatch):
+def cuinit_called(output: int) -> bool:
+    return output >= 0
+
+
+def cuinit_not_called(output: int) -> bool:
+    return output < 0
+
+
+@pytest.mark.parametrize(
+    "cudf_call, check_called",
+    [
+        ("import cudf", cuinit_not_called),
+        ("import cudf; cudf.Series([1])", cuinit_called),
+    ],
+)
+def test_rapids_no_initialize_cuinit(
+    cuda_gdb, monkeypatch, cudf_call, check_called
+):
     # When RAPIDS_NO_INITIALIZE is set, importing cudf should _not_
     # create a CUDA context (i.e. cuInit should not be called).
     # Intercepting the call to cuInit programmatically is tricky since
@@ -59,7 +76,7 @@ def test_cudf_import_no_cuinit(cuda_gdb, monkeypatch):
                 "--args",
                 sys.executable,
                 "-c",
-                "import cudf",
+                cudf_call,
             ],
             input=GDB_COMMANDS,
             capture_output=True,
@@ -74,35 +91,4 @@ def test_cudf_import_no_cuinit(cuda_gdb, monkeypatch):
     print("*** STDERR ***")  # noqa: T201
     print(output.stderr)  # noqa: T201
     assert output.returncode == 0
-    assert cuInit_called < 0
-
-
-def test_cudf_create_series_cuinit(cuda_gdb, monkeypatch):
-    # This tests that our gdb scripting correctly identifies cuInit
-    # when it definitely should have been called.
-    with monkeypatch.context() as m:
-        m.setenv("RAPIDS_NO_INITIALIZE", "1")
-        output = subprocess.run(
-            [
-                cuda_gdb,
-                "-x",
-                "-",
-                "--args",
-                sys.executable,
-                "-c",
-                "import cudf; cudf.Series([1])",
-            ],
-            input=GDB_COMMANDS,
-            capture_output=True,
-            text=True,
-            cwd="/",
-        )
-
-    cuInit_called = output.stdout.find("in cuInit ()")
-    print("Command output:\n")  # noqa: T201
-    print("*** STDOUT ***")  # noqa: T201
-    print(output.stdout)  # noqa: T201
-    print("*** STDERR ***")  # noqa: T201
-    print(output.stderr)  # noqa: T201
-    assert output.returncode == 0
-    assert cuInit_called >= 0
+    assert check_called(cuInit_called)
