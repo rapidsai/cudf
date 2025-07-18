@@ -15,8 +15,6 @@ import pytest
 from numba import cuda
 from numpy.testing import assert_array_equal
 
-import rmm
-
 import cudf
 from cudf import DataFrame, Series
 from cudf.api.extensions import no_default
@@ -1071,13 +1069,9 @@ def test_groupby_agg_decimal(num_groups, nelem_per_group, func):
     )
 
     expect_df = pdf.groupby("idx", sort=True).agg(func)
-    if rmm._cuda.gpu.runtimeGetVersion() < 11000:
-        with pytest.raises(RuntimeError):
-            got_df = gdf.groupby("idx", sort=True).agg(func)
-    else:
-        got_df = gdf.groupby("idx", sort=True).agg(func)
-        assert_eq(expect_df["x"], got_df["x"], check_dtype=False)
-        assert_eq(expect_df["y"], got_df["y"], check_dtype=False)
+    got_df = gdf.groupby("idx", sort=True).agg(func)
+    assert_eq(expect_df["x"], got_df["x"], check_dtype=False)
+    assert_eq(expect_df["y"], got_df["y"], check_dtype=False)
 
 
 @pytest.mark.parametrize(
