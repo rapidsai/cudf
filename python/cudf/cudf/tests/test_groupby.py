@@ -539,7 +539,7 @@ def test_groupby_apply_jit_unary_reductions(
                 or (
                     dataset == "nans"
                     and func in {"idxmax", "idxmin", "sum"}
-                    and str(dtype) in {"float32", "float64"}
+                    and dtype.kind == "f"
                 )
             ),
             reason=("https://github.com/rapidsai/cudf/issues/19432"),
