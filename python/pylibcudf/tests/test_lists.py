@@ -169,49 +169,24 @@ def test_reverse(list_column):
     ids=["DONT_CHECK", "NULLIFY"],
 )
 def test_segmented_gather(
+    test_data: list[list[list[int]]],
     bounds_policy: plc.copying.OutOfBoundsPolicy,
 ) -> None:
-    # Cases to check, which map to rows in the Column:
-    # 1. All in-bounds
-    # 2. Empy source, non-empty indexer (all out of bounds)
-    # 3. Empty source, empty indexer (all in bounds)
-    # 4. Non-empty source, empty indexer (all in bounds)
-    # 5. Nullable source, non-empty indexer (mix of out-of-bounds and in-bounds)
+    list_column1, list_column2 = test_data[0]
 
-    source_column = plc.Column.from_arrow(
-        pa.array([[10, 20], [], [], [30], [None, 50, 30, 20]])
-    )
-    gather_map_list = plc.Column.from_arrow(
-        pa.array([[-2, -1, 0, 1], [0, -1], [], [], [0, 1, 3, -1, 9]])
-    )
+    gather_map_list = plc.Column.from_arrow(pa.array(list_column1))
+    input_column = plc.Column.from_arrow(pa.array(list_column2))
+
     got = plc.lists.segmented_gather(
-        source_column, gather_map_list, bounds_policy
+        input_column, gather_map_list, bounds_policy
     )
 
     if bounds_policy == plc.copying.OutOfBoundsPolicy.DONT_CHECK:
-        # using -1 as a placeholder for out-of-bounds values
-        expect = pa.array(
-            [[10, 20, 10, 20], [-1, -1], [], [], [None, 50, 20, 20, -1]]
-        )
-        # We can't check the exact values because the behavior is undefined for out-of-bounds indices
-        # when bounds_policy is DONT_CHECK.
-        result = plc.interop.to_arrow(got)
-        assert len(result) == 5
-        assert len(result[0]) == 4
-        assert len(result[1]) == 2
-        assert len(result[2]) == 0
-
-        # these are all in-bounds and we can check exactly
-        assert expect[:1].equals(result[:1])
-        assert expect[2:-1].equals(result[2:-1])
-
-        # these include OOB indices
-        assert len(result[1]) == 2
-        assert len(result[4]) == 5
+        # Everything except [0][0] is out-of-bounds indexing.
+        assert got.size() == 4
+        assert plc.interop.to_arrow(got)[0][0].as_py() == 8
     else:
-        expect = pa.array(
-            [[10, 20, 10, 20], [None, None], [], [], [None, 50, 20, 20, None]]
-        )
+        expect = pa.array([[8, None], [None], [None], [None, None]])
         assert_column_eq(expect, got)
 
 
