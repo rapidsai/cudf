@@ -40,14 +40,13 @@ def test_null_series(nrows, dtype):
     else:
         ps = sr.to_pandas()
 
-    pd.options.display.max_rows = int(nrows)
-    psrepr = repr(ps).replace("NaN", "<NA>").replace("None", "<NA>")
-    if "UInt" in psrepr:
-        psrepr = psrepr.replace("UInt", "uint")
-    elif "Int" in psrepr:
-        psrepr = psrepr.replace("Int", "int")
-    assert psrepr.split() == repr(sr).split()
-    pd.reset_option("display.max_rows")
+    with pd.option_context("display.max_rows", int(nrows)):
+        psrepr = repr(ps).replace("NaN", "<NA>").replace("None", "<NA>")
+        if "UInt" in psrepr:
+            psrepr = psrepr.replace("UInt", "uint")
+        elif "Int" in psrepr:
+            psrepr = psrepr.replace("Int", "int")
+        assert psrepr.split() == repr(sr).split()
 
 
 dtype_categories = [
@@ -69,10 +68,9 @@ def test_null_dataframe(ncols):
         sr[rng.choice([False, True], size=size)] = None
         gdf[dtype] = sr
     pdf = gdf.to_pandas()
-    pd.options.display.max_columns = int(ncols)
-    pdf_repr = repr(pdf).replace("NaN", "<NA>").replace("None", "<NA>")
-    assert pdf_repr.split() == repr(gdf).split()
-    pd.reset_option("display.max_columns")
+    with pd.option_context("display.max_columns", int(ncols)):
+        pdf_repr = repr(pdf).replace("NaN", "<NA>").replace("None", "<NA>")
+        assert pdf_repr.split() == repr(gdf).split()
 
 
 @pytest.mark.parametrize("dtype", repr_categories)
@@ -82,9 +80,8 @@ def test_full_series(nrows, dtype):
     rng = np.random.default_rng(seed=0)
     ps = pd.Series(rng.integers(0, 100, size)).astype(dtype)
     sr = cudf.from_pandas(ps)
-    pd.options.display.max_rows = nrows
-    assert repr(ps) == repr(sr)
-    pd.reset_option("display.max_rows")
+    with pd.option_context("display.max_rows", nrows):
+        assert repr(ps) == repr(sr)
 
 
 @pytest.mark.parametrize("nrows", [5, 10, 15])
@@ -195,15 +192,12 @@ def test_MI():
         [0, 1, 2, 3, 0, 1, 2, 3, 0, 1],
         [0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
     ]
-    pd.options.display.max_rows = 999
-    pd.options.display.max_columns = 0
-    gdf = gdf.set_index(cudf.MultiIndex(levels=levels, codes=codes))
-    pdf = gdf.to_pandas()
-    assert repr(gdf) == repr(pdf)
-    assert repr(gdf.index) == repr(pdf.index)
-    assert repr(gdf.T) == repr(pdf.T)
-    pd.reset_option("display.max_rows")
-    pd.reset_option("display.max_columns")
+    with pd.option_context("display.max_rows", 999, "display.max_columns", 0):
+        gdf = gdf.set_index(cudf.MultiIndex(levels=levels, codes=codes))
+        pdf = gdf.to_pandas()
+        assert repr(gdf) == repr(pdf)
+        assert repr(gdf.index) == repr(pdf.index)
+        assert repr(gdf.T) == repr(pdf.T)
 
 
 @pytest.mark.parametrize("nrows", [0, 1, 3, 5, 10])
@@ -215,13 +209,12 @@ def test_groupby_MI(nrows, ncols):
     pdf = gdf.to_pandas()
     gdg = gdf.groupby(["a", "b"], sort=True).count()
     pdg = pdf.groupby(["a", "b"], sort=True).count()
-    pd.options.display.max_rows = nrows
-    pd.options.display.max_columns = ncols
-    assert repr(gdg) == repr(pdg)
-    assert repr(gdg.index) == repr(pdg.index)
-    assert repr(gdg.T) == repr(pdg.T)
-    pd.reset_option("display.max_rows")
-    pd.reset_option("display.max_columns")
+    with pd.option_context(
+        "display.max_rows", nrows, "display.max_columns", ncols
+    ):
+        assert repr(gdg) == repr(pdg)
+        assert repr(gdg.index) == repr(pdg.index)
+        assert repr(gdg.T) == repr(pdg.T)
 
 
 @pytest.mark.parametrize("dtype", utils.NUMERIC_TYPES)
@@ -277,19 +270,18 @@ def test_generic_index(length, dtype):
 @pytest.mark.parametrize("max_seq_items", [1, 10, 60, 10000, None])
 @pytest.mark.parametrize("max_rows", [1, 10, 60, 10000, None])
 def test_dataframe_sliced(gdf, slice, max_seq_items, max_rows):
-    pd.options.display.max_seq_items = max_seq_items
-    pd.options.display.max_rows = max_rows
-    pdf = gdf.to_pandas()
+    with pd.option_context(
+        "display.max_seq_items", max_seq_items, "display.max_rows", max_rows
+    ):
+        pdf = gdf.to_pandas()
 
-    sliced_gdf = gdf[slice]
-    sliced_pdf = pdf[slice]
+        sliced_gdf = gdf[slice]
+        sliced_pdf = pdf[slice]
 
-    expected_repr = repr(sliced_pdf).replace("None", "<NA>")
-    actual_repr = repr(sliced_gdf)
+        expected_repr = repr(sliced_pdf).replace("None", "<NA>")
+        actual_repr = repr(sliced_gdf)
 
-    assert expected_repr == actual_repr
-    pd.reset_option("display.max_rows")
-    pd.reset_option("display.max_seq_items")
+        assert expected_repr == actual_repr
 
 
 @pytest.mark.parametrize(
@@ -1111,11 +1103,10 @@ def test_timedelta_index_repr(index, expected_repr):
 )
 @pytest.mark.parametrize("max_seq_items", [None, 1, 2, 5, 10, 100])
 def test_multiindex_repr(pmi, max_seq_items):
-    pd.set_option("display.max_seq_items", max_seq_items)
-    gmi = cudf.from_pandas(pmi)
+    with pd.option_context("display.max_seq_items", max_seq_items):
+        gmi = cudf.from_pandas(pmi)
 
-    assert repr(gmi) == repr(pmi)
-    pd.reset_option("display.max_seq_items")
+        assert repr(gmi) == repr(pmi)
 
 
 @pytest.mark.parametrize(
