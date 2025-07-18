@@ -726,8 +726,8 @@ void build_string_dictionary_index(ColumnChunkDesc* chunks,
  * @param[in] stream CUDA stream to use
  * @return Bitwise OR of all page `kernel_mask` values
  */
-uint32_t GetAggregatedDecodeKernelMask(cudf::detail::hostdevice_span<PageInfo const> pages,
-                                       rmm::cuda_stream_view stream);
+uint32_t get_aggregated_decode_kernel_mask(cudf::detail::hostdevice_span<PageInfo const> pages,
+                                           rmm::cuda_stream_view stream);
 
 /**
  * @brief Compute page output size information.
