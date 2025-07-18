@@ -2,7 +2,6 @@
 
 import numpy as np
 import pyarrow as pa
-import pyarrow.compute as pc
 import pytest
 from utils import assert_column_eq
 
@@ -161,60 +160,59 @@ def test_reverse(list_column):
     assert_column_eq(expect, got)
 
 
-def test_segmented_gather():
+@pytest.mark.parametrize(
+    "bounds_policy",
+    [
+        plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+        plc.copying.OutOfBoundsPolicy.NULLIFY,
+    ],
+    ids=["DONT_CHECK", "NULLIFY"],
+)
+def test_segmented_gather(
+    bounds_policy: plc.copying.OutOfBoundsPolicy,
+) -> None:
+    # Cases to check, which map to rows in the Column:
+    # 1. All in-bounds
+    # 2. Empy source, non-empty indexer (all out of bounds)
+    # 3. Empty source, empty indexer (all in bounds)
+    # 4. Non-empty source, empty indexer (all in bounds)
+    # 5. Nullable source, non-empty indexer (mix of out-of-bounds and in-bounds)
+
     source_column = plc.Column.from_arrow(
-        pa.array([[10, 20], [], [30], [None, 50, 30, 20]])
+        pa.array([[10, 20], [], [], [30], [None, 50, 30, 20]])
     )
     gather_map_list = plc.Column.from_arrow(
-        pa.array([[1, 0, 1], [], [], [0, 1, 3, -1]])
-    )
-    got = plc.lists.segmented_gather(source_column, gather_map_list)
-    expect = pa.array([[20, 10, 20], [], [], [None, 50, 20, 20]])
-
-    assert_column_eq(expect, got)
-
-
-def test_segmented_gather_out_of_bounds():
-    source_column = plc.Column.from_arrow(pa.array([[], [10, 20]]))
-    gather_map_list = plc.Column.from_arrow(
-        pa.array(
-            [[0], [0, 2, -3]],
-        )
-    )
-    got = plc.lists.segmented_gather(source_column, gather_map_list)
-    result = plc.interop.to_arrow(got)
-    # indexing past the interior lists is undefined behavior,
-    # so the only things we can check are the general shape of the output
-
-    assert got.null_count() == 0
-    assert got.size() == 2
-    assert len(result[0]) == 1
-    assert len(result[1]) == 3
-    # this is the only indexer that isn't out of bounds.
-    assert result[1][0].as_py() == 10
-
-
-def test_segmented_gather_out_of_bounds_nullify():
-    source_column = plc.Column.from_arrow(pa.array([[], [10, None]]))
-    gather_map_list = plc.Column.from_arrow(
-        pa.array(
-            [[0, 1, -1], [0, 1, 2, -3]],
-        )
+        pa.array([[-2, -1, 0, 1], [0, -1], [], [], [0, 1, 3, -1, 9]])
     )
     got = plc.lists.segmented_gather(
-        source_column, gather_map_list, plc.copying.OutOfBoundsPolicy.NULLIFY
+        source_column, gather_map_list, bounds_policy
     )
-    expect = pa.array([[None, None, None], [10, None, None, None]])
-    assert_column_eq(expect, got)
 
+    if bounds_policy == plc.copying.OutOfBoundsPolicy.DONT_CHECK:
+        # using -1 as a placeholder for out-of-bounds values
+        expect = pa.array(
+            [[10, 20, 10, 20], [-1, -1], [], [], [None, 50, 20, 20, -1]]
+        )
+        # We can't check the exact values because the behavior is undefined for out-of-bounds indices
+        # when bounds_policy is DONT_CHECK.
+        result = plc.interop.to_arrow(got)
+        assert len(result) == 5
+        assert len(result[0]) == 4
+        assert len(result[1]) == 2
+        assert len(result[2]) == 0
 
-def test_extract_list_element_scalar(list_column):
-    plc_column = plc.Column.from_arrow(pa.array(list_column))
+        # these are all in-bounds and we can check exactly
+        assert expect[:1].equals(result[:1])
+        assert expect[2:-1].equals(result[2:-1])
 
-    got = plc.lists.extract_list_element(plc_column, 0)
-    expect = pc.list_element(list_column, 0)
-
-    assert_column_eq(expect, got)
+        # these include OOB indices
+        assert len(result[1]) == 2
+        assert len(result[4]) == 5
+    else:
+        expect = pa.array(
+            [[10, 20, 10, 20], [None, None], [], [], [None, 50, 20, 20, None]]
+        )
+        assert_column_eq(expect, got)
 
 
 def test_extract_list_element_column(list_column):
