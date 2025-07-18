@@ -59,13 +59,13 @@ std::pair<rmm::device_buffer, bitmask_type const*> build_row_bitmask(table_view 
 }
 
 // Explicit instantiations for non-nested types (HasNested=false)
-using experimental_hasher_adapter = hasher_adapter<
+using hasher_adapter_t = hasher_adapter<
   cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
                                                    nullate::DYNAMIC>,
   cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
                                                    nullate::DYNAMIC>>;
 
-template void dispatch_nan_comparator<false, experimental_hasher_adapter>(
+template void dispatch_nan_comparator<false, hasher_adapter_t>(
   table_view const& haystack,
   table_view const& needles,
   null_equality compare_nulls,
@@ -75,7 +75,7 @@ template void dispatch_nan_comparator<false, experimental_hasher_adapter>(
   bool has_any_nulls,
   cudf::experimental::row::equality::self_comparator self_equal,
   cudf::experimental::row::equality::two_table_comparator two_table_equal,
-  experimental_hasher_adapter const& d_hasher,
+  hasher_adapter_t const& d_hasher,
   rmm::device_uvector<bool>& contained,
   rmm::cuda_stream_view stream);
 
@@ -91,16 +91,15 @@ using nan_equal_two_table_comparator =
 using nan_equal_comparator_adapter =
   comparator_adapter<nan_equal_self_comparator, nan_equal_two_table_comparator>;
 
-template void perform_contains(
-  table_view const& haystack,
-  table_view const& needles,
-  bool haystack_has_nulls,
-  bool needles_has_nulls,
-  null_equality compare_nulls,
-  nan_equal_comparator_adapter const& d_equal,
-  cuco::linear_probing<1, experimental_hasher_adapter> const& probing_scheme,
-  rmm::device_uvector<bool>& contained,
-  rmm::cuda_stream_view stream);
+template void perform_contains(table_view const& haystack,
+                               table_view const& needles,
+                               bool haystack_has_nulls,
+                               bool needles_has_nulls,
+                               null_equality compare_nulls,
+                               nan_equal_comparator_adapter const& d_equal,
+                               cuco::linear_probing<1, hasher_adapter_t> const& probing_scheme,
+                               rmm::device_uvector<bool>& contained,
+                               rmm::cuda_stream_view stream);
 
 // For HasNested=false (non-nested columns) with nan_unequal_comparator
 using nan_unequal_self_comparator = cudf::experimental::row::equality::device_row_comparator<
@@ -114,15 +113,14 @@ using nan_unequal_two_table_comparator =
 using nan_unequal_comparator_adapter =
   comparator_adapter<nan_unequal_self_comparator, nan_unequal_two_table_comparator>;
 
-template void perform_contains(
-  table_view const& haystack,
-  table_view const& needles,
-  bool haystack_has_nulls,
-  bool needles_has_nulls,
-  null_equality compare_nulls,
-  nan_unequal_comparator_adapter const& d_equal,
-  cuco::linear_probing<1, experimental_hasher_adapter> const& probing_scheme,
-  rmm::device_uvector<bool>& contained,
-  rmm::cuda_stream_view stream);
+template void perform_contains(table_view const& haystack,
+                               table_view const& needles,
+                               bool haystack_has_nulls,
+                               bool needles_has_nulls,
+                               null_equality compare_nulls,
+                               nan_unequal_comparator_adapter const& d_equal,
+                               cuco::linear_probing<1, hasher_adapter_t> const& probing_scheme,
+                               rmm::device_uvector<bool>& contained,
+                               rmm::cuda_stream_view stream);
 
 }  // namespace cudf::detail
