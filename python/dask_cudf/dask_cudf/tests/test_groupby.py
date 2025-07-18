@@ -11,10 +11,8 @@ from dask.utils_test import hlg_layer
 import cudf
 from cudf.core._compat import (
     PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_GE_230,
     PANDAS_VERSION,
 )
-from cudf.testing import expect_warning_if
 
 import dask_cudf
 from dask_cudf._expr.groupby import OPTIMIZED_AGGS, _aggs_optimized
@@ -630,8 +628,7 @@ def test_groupby_agg_params(
 
     # Compute for easier multiindex handling
     gf = gr.compute()
-    with expect_warning_if(PANDAS_GE_230):
-        pf = pr.compute()
+    pf = pr.compute()
 
     # Reset index and sort by groupby columns
     if as_index:
