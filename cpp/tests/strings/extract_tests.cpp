@@ -338,6 +338,24 @@ TEST_F(StringsExtractTests, Errors)
   EXPECT_THROW(cudf::strings::extract_all_record(sv, *prog), cudf::logic_error);
 }
 
+TEST_F(StringsExtractTests, EmptyInput)
+{
+  auto const input   = cudf::test::strings_column_wrapper();
+  auto const sv      = cudf::strings_column_view(input);
+  auto const pattern = std::string("(\\w+)");
+  auto const prog    = cudf::strings::regex_program::create(pattern);
+
+  auto rt = cudf::strings::extract(sv, *prog);
+  EXPECT_EQ(1, rt->num_columns());
+  EXPECT_EQ(0, rt->num_rows());
+
+  auto rl = cudf::strings::extract_all_record(sv, *prog);
+  EXPECT_EQ(0, rl->size());
+
+  auto rs = cudf::strings::extract_single(sv, *prog, 1);
+  EXPECT_EQ(0, rs->size());
+}
+
 TEST_F(StringsExtractTests, MediumRegex)
 {
   // This results in 95 regex instructions and falls in the 'medium' range.
