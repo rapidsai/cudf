@@ -526,10 +526,35 @@ def groupby_apply_jit_reductions_test_inner(func, data, dtype):
     reason="Include groups missing on old versions of pandas",
 )
 def test_groupby_apply_jit_unary_reductions(
-    func, dtype, dataset, groupby_jit_datasets
+    request, func, dtype, dataset, groupby_jit_datasets
 ):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(
+                (
+                    dataset == "nans"
+                    and func in {"var", "std", "mean"}
+                    and str(dtype) in {"int64", "float32", "float64"}
+                )
+                or (
+                    dataset == "nans"
+                    and func in {"idxmax", "idxmin", "sum"}
+                    and str(dtype) in {"float32", "float64"}
+                )
+            ),
+            reason=("https://github.com/rapidsai/cudf/issues/19432"),
+        )
+    )
+    warn_condition = (
+        dataset == "nans"
+        and func in {"idxmax", "idxmin"}
+        and dtype.kind == "f"
+    )
     dataset = groupby_jit_datasets[dataset]
-    groupby_apply_jit_reductions_test_inner(func, dataset, dtype)
+    with expect_warning_if(warn_condition, FutureWarning):
+        groupby_apply_jit_reductions_test_inner(
+            func, dataset.copy(deep=True), dtype
+        )
 
 
 # test unary reductions for special values
