@@ -505,7 +505,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-        - &numba-cuda-dep numba-cuda>=0.15.2,<0.16.0a0
+        - &numba-cuda-dep numba-cuda>=0.14.0,<0.15.0a0
   pyarrow_run:
     common:
       - output_types: [conda]
@@ -701,7 +701,7 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
-              - &numba-cuda-cu12-dep numba-cuda[cu12]>=0.15.2,<0.16.0a0
+              - &numba-cuda-cu12-dep numba-cuda[cu12]>=0.14.0,<0.15.0a0
           - matrix: # Fallback for no matrix
             packages:
               - *numba-cuda-cu12-dep
@@ -801,7 +801,7 @@ dependencies:
           - matrix: {dependencies: "oldest"}
             packages:
               - numba==0.59.1
-              - numba-cuda==0.15.2
+              - numba-cuda==0.14.0
               - pandas==2.0.*
           - matrix: {dependencies: "latest"}
             packages:
