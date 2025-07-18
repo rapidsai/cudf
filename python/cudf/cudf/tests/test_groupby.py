@@ -532,16 +532,9 @@ def test_groupby_apply_jit_unary_reductions(
     request.applymarker(
         pytest.mark.xfail(
             condition=(
-                (
-                    dataset == "nans"
-                    and func in {"var", "std", "mean"}
-                    and str(dtype) in {"int64", "float32", "float64"}
-                )
-                or (
-                    dataset == "nans"
-                    and func in {"idxmax", "idxmin", "sum"}
-                    and dtype.kind == "f"
-                )
+                dataset == "nans"
+                and func in {"var", "std", "mean", "idxmax", "idxmin", "sum"}
+                and dtype.kind == "f"
             ),
             reason=("https://github.com/rapidsai/cudf/issues/14860"),
         )
