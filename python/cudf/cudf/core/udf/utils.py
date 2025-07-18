@@ -267,7 +267,7 @@ def _make_free_string_kernel():
 
         @cuda.jit(
             void(CPointer(managed_udf_string), int64),
-            link=["/raid/brmiller/mambaforge/envs/cudf_dev/lib/python3.13/site-packages/cudf/core/udf/shim_70.ptx"],
+            link=[UDF_SHIM_FILE],
             extensions=[str_view_arg_handler],
         )
         def free_managed_udf_string_array(ary, size):
