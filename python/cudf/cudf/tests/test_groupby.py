@@ -550,11 +550,9 @@ def test_groupby_apply_jit_unary_reductions(
         and func in {"idxmax", "idxmin"}
         and dtype.kind == "f"
     )
-    dataset = groupby_jit_datasets[dataset]
+    dataset = groupby_jit_datasets[dataset].copy(deep=True)
     with expect_warning_if(warn_condition, FutureWarning):
-        groupby_apply_jit_reductions_test_inner(
-            func, dataset.copy(deep=True), dtype
-        )
+        groupby_apply_jit_reductions_test_inner(func, dataset, dtype)
 
 
 # test unary reductions for special values
@@ -616,7 +614,7 @@ def groupby_apply_jit_idx_reductions_special_vals_inner(
 def test_groupby_apply_jit_reductions_special_vals(
     func, dtype, dataset, groupby_jit_datasets, special_val
 ):
-    dataset = groupby_jit_datasets[dataset]
+    dataset = groupby_jit_datasets[dataset].copy(deep=True)
     with expect_warning_if(
         func in {"var", "std"} and not np.isnan(special_val), RuntimeWarning
     ):
@@ -648,7 +646,7 @@ def test_groupby_apply_jit_reductions_special_vals(
 def test_groupby_apply_jit_idx_reductions_special_vals(
     func, dtype, dataset, groupby_jit_datasets, special_val
 ):
-    dataset = groupby_jit_datasets[dataset]
+    dataset = groupby_jit_datasets[dataset].copy(deep=True)
     groupby_apply_jit_idx_reductions_special_vals_inner(
         func, dataset, dtype, special_val
     )
@@ -698,7 +696,7 @@ def test_groupby_apply_jit_sum_integer_overflow(dtype):
     reason="Fails in older versions of pandas",
 )
 def test_groupby_apply_jit_correlation(dataset, groupby_jit_datasets, dtype):
-    dataset = groupby_jit_datasets[dataset]
+    dataset = groupby_jit_datasets[dataset].copy(deep=True)
 
     dataset["val1"] = dataset["val1"].astype(dtype)
     dataset["val2"] = dataset["val2"].astype(dtype)
