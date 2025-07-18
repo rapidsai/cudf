@@ -381,7 +381,7 @@ def assert_sink_result_equal(
     # the multi-partition executor might produce multiple files, one per partition.
     if (
         isinstance(engine, GPUEngine)
-        and ConfigOptions.from_polars_engine(engine).executor == "streaming"
+        and ConfigOptions.from_polars_engine(engine).executor.name == "streaming"
         and gpu_path.is_dir()
     ):  # pragma: no cover
         result = read_fn(gpu_path.joinpath("*"), **read_kwargs)
