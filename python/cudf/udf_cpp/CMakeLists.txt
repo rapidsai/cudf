@@ -96,34 +96,11 @@ set_target_properties(
 target_compile_options(shim PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${SHIM_CUDA_FLAGS}>")
 target_link_libraries(shim PUBLIC cudf::cudf)
 target_include_directories(
-  shim PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/strings/include>"
-              "${NRT_INCLUDE_DIR}"
+  shim PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/strings/include>" "${NRT_INCLUDE_DIR}"
 )
-
-foreach(arch IN LISTS CMAKE_CUDA_ARCHITECTURES)
-  set(tgt shim_${arch})
-
-  add_library(${tgt} OBJECT shim.cu)
-
-  set_target_properties(${tgt} PROPERTIES CUDA_ARCHITECTURES ${arch} CUDA_PTX_COMPILATION ON)
-
-  target_include_directories(
-    ${tgt} PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/strings/include>"
-                  "${NRT_INCLUDE_DIR}"
-  )
-  target_compile_options(${tgt} PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${SHIM_CUDA_FLAGS}>")
-  target_link_libraries(${tgt} PUBLIC cudf::cudf)
-
-  install(
-    FILES $<TARGET_OBJECTS:${tgt}>
-    DESTINATION cudf/core/udf/
-    RENAME ${tgt}.ptx
-  )
-endforeach()
 
 install(
   FILES $<TARGET_OBJECTS:shim>
   DESTINATION cudf/core/udf/
   RENAME shim.fatbin
 )
-
