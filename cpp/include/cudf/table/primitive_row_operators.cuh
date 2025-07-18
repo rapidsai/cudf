@@ -148,7 +148,7 @@ class row_equality_comparator {
    *
    * @param lhs_index The index of the first row to compare (in the lhs table)
    * @param rhs_index The index of the second row to compare (in the rhs table)
-   * @return true if both rows are equal, otherwise false
+   * @return Boolean indicating if both rows are equal
    */
   __device__ bool operator()(cudf::experimental::row::lhs_index_type lhs_index,
                              cudf::experimental::row::rhs_index_type rhs_index) const
