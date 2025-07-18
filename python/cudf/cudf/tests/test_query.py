@@ -235,3 +235,37 @@ def test_query_unsupported_dtypes():
     # but fails in cuDF
     with pytest.raises(TypeError):
         gdf.query(query)
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        [0, 1.0, 2.0, None, np.nan, None, 3, 5],
+        [0, 1.0, 2.0, None, 3, np.nan, None, 4],
+        [0, 1.0, 2.0, None, 3, np.nan, None, 4, None, 9],
+    ],
+)
+@pytest.mark.parametrize("nan_as_null", [True, False])
+@pytest.mark.parametrize(
+    "query",
+    [
+        "a == 3",
+        pytest.param(
+            "a != 3",
+            marks=pytest.mark.xfail(reason="incompatible with pandas"),
+        ),
+        "a < 3",
+        "a <= 3",
+        "a < 3",
+        "a >= 3",
+    ],
+)
+def test_query_mask(values, nan_as_null, query):
+    data = {"a": values}
+    pdf = pd.DataFrame(data)
+    gdf = cudf.DataFrame(data, nan_as_null=nan_as_null)
+
+    pdf_q_res = pdf.query(query)
+    gdf_q_res = gdf.query(query)
+
+    assert_eq(pdf_q_res, gdf_q_res)
