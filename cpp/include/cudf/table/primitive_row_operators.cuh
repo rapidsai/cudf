@@ -165,16 +165,6 @@ template <template <typename> class Hash>
 class element_hasher {
  public:
   /**
-   * @brief Constructs an element_hasher object.
-   *
-   * @param has_nulls Indicates whether to check for nulls
-   */
-  __device__ element_hasher(cudf::nullate::DYNAMIC const& has_nulls) noexcept
-    : _has_nulls(has_nulls)
-  {
-  }
-
-  /**
    * @brief Returns the hash value of the given element in the given column.
    *
    * @tparam T The type of the element to hash
@@ -184,7 +174,7 @@ class element_hasher {
    * @return The hash value of the given element
    */
   template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  __device__ hash_value_type operator()(hash_value_type const seed,
+  __device__ hash_value_type operator()(hash_value_type seed,
                                         column_device_view const& col,
                                         size_type row_index) const
   {
@@ -194,15 +184,11 @@ class element_hasher {
 
   // @cond
   template <typename T, CUDF_ENABLE_IF(not column_device_view::has_element_accessor<T>())>
-  __device__ hash_value_type operator()(hash_value_type const,
-                                        column_device_view const&,
-                                        size_type) const
+  __device__ hash_value_type operator()(hash_value_type, column_device_view const&, size_type) const
   {
     CUDF_UNREACHABLE("Unsupported type in hash.");
   }
   // @endcond
-
-  cudf::nullate::DYNAMIC const _has_nulls;  ///< Whether to check for nulls
 };
 
 /**
@@ -222,9 +208,9 @@ class row_hasher {
    * @param t A table_device_view to hash
    * @param seed A seed value to use for hashing
    */
-  row_hasher(cudf::nullate::DYNAMIC const& has_nulls,
-             table_device_view const t,
-             hash_value_type const seed = DEFAULT_HASH_SEED)
+  row_hasher(cudf::nullate::DYNAMIC has_nulls,
+             table_device_view t,
+             hash_value_type seed = DEFAULT_HASH_SEED)
     : _has_nulls{has_nulls}, _table{t}, _seed{seed}
   {
   }
@@ -238,7 +224,7 @@ class row_hasher {
    */
   row_hasher(cudf::nullate::DYNAMIC const& has_nulls,
              std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> t,
-             hash_value_type const seed = DEFAULT_HASH_SEED)
+             hash_value_type seed = DEFAULT_HASH_SEED)
     : _has_nulls{has_nulls}, _table{*t}, _seed{seed}
   {
   }
@@ -251,17 +237,14 @@ class row_hasher {
    */
   __device__ auto operator()(size_type row_index) const
   {
+    element_hasher<Hash> hasher;
     // avoid hash combine call if there is only one column
     auto hash = cuda::std::numeric_limits<hash_value_type>::max();
     if (!(_has_nulls && _table.column(0).is_null(row_index))) {
-      hash = cudf::type_dispatcher<dispatch_primitive_type>(_table.column(0).type(),
-                                                            element_hasher<Hash>{_has_nulls},
-                                                            _seed,
-                                                            _table.column(0),
-                                                            row_index);
+      hash = cudf::type_dispatcher<dispatch_primitive_type>(
+        _table.column(0).type(), hasher, _seed, _table.column(0), row_index);
     }
 
-    element_hasher<Hash> hasher{_has_nulls};
     for (size_type i = 1; i < _table.num_columns(); ++i) {
       if (!(_has_nulls && _table.column(i).is_null(row_index))) {
         hash = cudf::hashing::detail::hash_combine(
@@ -277,9 +260,9 @@ class row_hasher {
   }
 
  private:
-  cudf::nullate::DYNAMIC const _has_nulls;
-  table_device_view const _table;
-  hash_value_type const _seed;
+  cudf::nullate::DYNAMIC _has_nulls;
+  table_device_view _table;
+  hash_value_type _seed;
 };
 
 }  // namespace row::primitive
