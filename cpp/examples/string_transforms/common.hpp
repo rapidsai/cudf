@@ -141,7 +141,6 @@ int main(int argc, char const** argv)
   auto table_view = input->view();
 
   std::chrono::duration<double> elapsed_cold{};
-
   {
     // warmup pass
     stream.synchronize();
