@@ -458,7 +458,7 @@ dependencies:
       - output_types: conda
         packages:
           # Align nvcomp version with rapids-cmake
-          - nvcomp==4.2.0.11
+          - libnvcomp==4.2.0.11
     specific:
       - output_types: [requirements, pyproject]
         matrices:
