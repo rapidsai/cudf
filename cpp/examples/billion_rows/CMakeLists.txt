@@ -30,7 +30,7 @@ target_link_libraries(
               $<TARGET_OBJECTS:groupby_results>
 )
 target_compile_features(brc PRIVATE cxx_std_20)
-install(TARGETS brc DESTINATION bin/examples/libcudf)
+install(TARGETS brc DESTINATION bin/examples/libcudf/billion_rows)
 
 add_executable(brc_chunks brc_chunks.cpp)
 target_link_libraries(
@@ -38,7 +38,7 @@ target_link_libraries(
                      $<TARGET_OBJECTS:groupby_results>
 )
 target_compile_features(brc_chunks PRIVATE cxx_std_20)
-install(TARGETS brc_chunks DESTINATION bin/examples/libcudf)
+install(TARGETS brc_chunks DESTINATION bin/examples/libcudf/billion_rows)
 
 add_executable(brc_pipeline brc_pipeline.cpp)
 target_link_libraries(
@@ -46,4 +46,4 @@ target_link_libraries(
                        $<TARGET_OBJECTS:groupby_results>
 )
 target_compile_features(brc_pipeline PRIVATE cxx_std_20)
-install(TARGETS brc_pipeline DESTINATION bin/examples/libcudf)
+install(TARGETS brc_pipeline DESTINATION bin/examples/libcudf/billion_rows)

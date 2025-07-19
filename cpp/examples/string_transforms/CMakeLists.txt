@@ -24,37 +24,37 @@ add_executable(branching branching.cpp)
 target_compile_features(branching PRIVATE cxx_std_20)
 target_compile_options(branching PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
 target_link_libraries(branching PRIVATE cudf::cudf nvtx3::nvtx3-cpp)
-install(TARGETS branching DESTINATION bin/examples/libcudf)
+install(TARGETS branching DESTINATION bin/examples/libcudf/string_transformers)
 
 add_executable(branching_public branching_public.cpp)
 target_compile_features(branching_public PRIVATE cxx_std_20)
 target_compile_options(branching_public PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
 target_link_libraries(branching_public PRIVATE cudf::cudf nvtx3::nvtx3-cpp)
-install(TARGETS branching_public DESTINATION bin/examples/libcudf)
+install(TARGETS branching_public DESTINATION bin/examples/libcudf/string_transformers)
 
 add_executable(int_output int_output.cpp)
 target_compile_features(int_output PRIVATE cxx_std_20)
 target_compile_options(int_output PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
 target_link_libraries(int_output PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>)
-install(TARGETS int_output DESTINATION bin/examples/libcudf)
+install(TARGETS int_output DESTINATION bin/examples/libcudf/string_transformers)
 
 add_executable(output output.cpp)
 target_compile_features(output PRIVATE cxx_std_20)
 target_compile_options(output PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
 target_link_libraries(output PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>)
-install(TARGETS output DESTINATION bin/examples/libcudf)
+install(TARGETS output DESTINATION bin/examples/libcudf/string_transformers)
 
 add_executable(output_public output_public.cpp)
 target_compile_features(output_public PRIVATE cxx_std_20)
 target_compile_options(output_public PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
 target_link_libraries(output_public PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>)
-install(TARGETS output_public DESTINATION bin/examples/libcudf)
+install(TARGETS output_public DESTINATION bin/examples/libcudf/string_transformers)
 
 add_executable(preallocated preallocated.cpp)
 target_compile_features(preallocated PRIVATE cxx_std_20)
 target_compile_options(preallocated PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
 target_link_libraries(preallocated PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>)
-install(TARGETS preallocated DESTINATION bin/examples/libcudf)
+install(TARGETS preallocated DESTINATION bin/examples/libcudf/string_transformers)
 
 add_executable(preallocated_public preallocated_public.cpp)
 target_compile_features(preallocated_public PRIVATE cxx_std_20)
@@ -62,6 +62,6 @@ target_compile_options(preallocated_public PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:$
 target_link_libraries(
   preallocated_public PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
 )
-install(TARGETS preallocated_public DESTINATION bin/examples/libcudf)
+install(TARGETS preallocated_public DESTINATION bin/examples/libcudf/string_transformers)
 
-install(FILES ${CMAKE_CURRENT_LIST_DIR}/info.csv DESTINATION bin/examples/libcudf)
+install(FILES ${CMAKE_CURRENT_LIST_DIR}/info.csv DESTINATION bin/examples/libcudf/string_transformers)
