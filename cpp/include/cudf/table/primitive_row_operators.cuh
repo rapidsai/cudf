@@ -178,8 +178,7 @@ class element_hasher {
                                         column_device_view const& col,
                                         size_type row_index) const
   {
-    auto const& element = col.element<T>(row_index);
-    return Hash<T>{seed}(element);
+    return Hash<T>{seed}(col.element<T>(row_index));
   }
 
   // @cond
