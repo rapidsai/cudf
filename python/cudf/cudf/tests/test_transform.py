@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 
 import numpy as np
@@ -7,14 +7,12 @@ import pytest
 from cudf import Series
 from cudf.testing._utils import NUMERIC_TYPES
 
-supported_types = NUMERIC_TYPES
-
 
 def _generic_function(a):
     return a**3
 
 
-@pytest.mark.parametrize("dtype", supported_types)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES)
 @pytest.mark.parametrize(
     "udf,testfunc",
     [
