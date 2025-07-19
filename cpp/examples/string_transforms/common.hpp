@@ -86,7 +86,7 @@ void write_csv(cudf::table_view const& tbl_view,
 {
   auto sink_info = cudf::io::sink_info(file_path);
   auto builder   = cudf::io::csv_writer_options::builder(sink_info, tbl_view);
-  auto options   = builder.include_header(true).names(names).rows_per_chunk(10000000).build();
+  auto options   = builder.include_header(true).names(names).rows_per_chunk(10'000'000).build();
   cudf::io::write_csv(options);
 }
 
