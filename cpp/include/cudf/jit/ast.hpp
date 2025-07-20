@@ -72,6 +72,8 @@ struct target_info {
   // [ ] run lto-ir benchmarks
 
   // [ ] accessors would either have to be static or dynamic (RDC with context args: types count, inputs, outputs)
+
+  // [ ] support multi-output in transforms and filters
 };
 
 struct node {
