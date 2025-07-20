@@ -70,6 +70,8 @@ struct target_info {
   // [ ] cache becomes easy to manage
 
   // [ ] run lto-ir benchmarks
+
+  // [ ] accessors would either have to be static or dynamic (RDC with context args: types count, inputs, outputs)
 };
 
 struct node {
