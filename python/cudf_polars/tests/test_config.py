@@ -301,6 +301,8 @@ def test_parquet_options_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         m.setenv("CUDF_POLARS__PARQUET_OPTIONS__CHUNKED", "0")
         m.setenv("CUDF_POLARS__PARQUET_OPTIONS__CHUNK_READ_LIMIT", "100")
         m.setenv("CUDF_POLARS__PARQUET_OPTIONS__PASS_READ_LIMIT", "200")
+        m.setenv("CUDF_POLARS__PARQUET_OPTIONS__MAX_FOOTER_SAMPLES", "0")
+        m.setenv("CUDF_POLARS__PARQUET_OPTIONS__MAX_ROW_GROUP_SAMPLES", "0")
 
         # Test default
         engine = pl.GPUEngine()
@@ -308,6 +310,8 @@ def test_parquet_options_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         assert config.parquet_options.chunked is False
         assert config.parquet_options.chunk_read_limit == 100
         assert config.parquet_options.pass_read_limit == 200
+        assert config.parquet_options.max_footer_samples == 0
+        assert config.parquet_options.max_row_group_samples == 0
 
     with monkeypatch.context() as m:
         m.setenv("CUDF_POLARS__PARQUET_OPTIONS__CHUNKED", "foo")
@@ -393,7 +397,16 @@ def test_cardinality_factor_compat() -> None:
         )
 
 
-@pytest.mark.parametrize("option", ["chunked", "chunk_read_limit", "pass_read_limit"])
+@pytest.mark.parametrize(
+    "option",
+    [
+        "chunked",
+        "chunk_read_limit",
+        "pass_read_limit",
+        "max_footer_samples",
+        "max_row_group_samples",
+    ],
+)
 def test_validate_parquet_options(option: str) -> None:
     with pytest.raises(TypeError, match=f"{option} must be"):
         ConfigOptions.from_polars_engine(

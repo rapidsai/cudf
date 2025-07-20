@@ -160,6 +160,18 @@ class ParquetOptions:
     pass_read_limit
         Limit on the amount of memory used for reading and decompressing data
         or 0 if there is no limit.
+    max_footer_samples
+        Maximum number of file footers to sample for metadata. This
+        option is currently used by the streaming executor to gather
+        datasource statistics before generating a physical plan. Set to
+        0 to avoid metadata sampling. Default is 3.
+    max_row_group_samples
+        Maximum number of row-groups to sample for unique-value statistics.
+        This option may be used by the streaming executor to optimize
+        the physical plan. Default is 1.
+
+        Set to 0 to avoid row-group sampling. Note that row-group sampling
+        will also be skipped if ``max_footer_samples`` is 0.
     """
 
     _env_prefix = "CUDF_POLARS__PARQUET_OPTIONS"
@@ -179,6 +191,16 @@ class ParquetOptions:
             f"{_env_prefix}__PASS_READ_LIMIT", int, default=0
         )
     )
+    max_footer_samples: int = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__MAX_FOOTER_SAMPLES", int, default=3
+        )
+    )
+    max_row_group_samples: int = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__MAX_ROW_GROUP_SAMPLES", int, default=1
+        )
+    )
 
     def __post_init__(self) -> None:  # noqa: D105
         if not isinstance(self.chunked, bool):
@@ -187,6 +209,10 @@ class ParquetOptions:
             raise TypeError("chunk_read_limit must be an int")
         if not isinstance(self.pass_read_limit, int):
             raise TypeError("pass_read_limit must be an int")
+        if not isinstance(self.max_footer_samples, int):
+            raise TypeError("max_footer_samples must be an int")
+        if not isinstance(self.max_row_group_samples, int):
+            raise TypeError("max_row_group_samples must be an int")
 
 
 def default_blocksize(scheduler: str) -> int:
