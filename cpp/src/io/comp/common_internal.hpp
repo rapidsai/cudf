@@ -24,6 +24,8 @@
 
 namespace cudf::io::detail {
 
+enum class host_engine_state : uint8_t { ON, OFF, AUTO, HYBRID };
+
 /**
  * @brief GZIP header flags
  * See https://tools.ietf.org/html/rfc1952
@@ -71,6 +73,27 @@ struct sorted_codec_parameters {
 sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const> inputs,
                                    device_span<device_span<uint8_t> const> outputs,
                                    rmm::cuda_stream_view stream);
+
+/**
+ * @brief Finds the split index for input data based on the specified thresholds and target ratio.
+ *
+ * This function determines the index at which to split the input data for processing, using
+ * the provided thresholds and target ratio. Inputs before the split index will be processed
+ * using the host engine, while those after will be processed using the device engine.
+ *
+ * @param inputs A device span of input data to be split
+ * @param host_state The state of the host-side engine used for processing
+ * @param auto_mode_threshold The threshold value used to determine the split in automatic mode
+ * @param hybrid_mode_target_ratio The target ratio used to determine the split in hybrid mode
+ * @param stream The CUDA stream to be used for asynchronous execution
+ *
+ * @return The index at which the input data should be split.
+ */
+[[nodiscard]] size_t find_split_index(device_span<device_span<uint8_t const> const> inputs,
+                                      host_engine_state host_state,
+                                      size_t auto_mode_threshold,
+                                      size_t hybrid_mode_target_ratio,
+                                      rmm::cuda_stream_view stream);
 
 /**
  * @brief Copies results back to their original positions using the ordering map
