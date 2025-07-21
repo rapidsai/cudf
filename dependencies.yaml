@@ -17,7 +17,7 @@ files:
       - depends_on_cupy
       - depends_on_libkvikio
       - depends_on_librmm
-      - depends_on_nvcomp
+      - depends_on_libnvcomp
       - depends_on_rapids_logger
       - depends_on_rmm
       - develop
@@ -214,7 +214,7 @@ files:
       # TODO(nvcomp): when `nvcomp` supports Python 3.13 and we de-vendor `nvcomp` from `kvikio`
       # this dependency should be restored
       # https://github.com/rapidsai/build-planning/issues/171
-      # - depends_on_nvcomp
+      # - depends_on_libnvcomp
       - depends_on_rapids_logger
   py_build_pylibcudf:
     output: pyproject
@@ -453,12 +453,12 @@ dependencies:
         packages:
           - flatbuffers==24.3.25
           - librdkafka>=2.8.0,<2.9.0a0
-  depends_on_nvcomp:
+  depends_on_libnvcomp:
     common:
       - output_types: conda
         packages:
           # Align nvcomp version with rapids-cmake
-          - libnvcomp==4.2.0.11
+          - libnvcomp-dev==4.2.0.11
     specific:
       - output_types: [requirements, pyproject]
         matrices:
