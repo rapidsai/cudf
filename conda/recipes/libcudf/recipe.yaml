@@ -72,7 +72,7 @@ cache:
         then:
           - libcufile-dev
       - cuda-version =${{ cuda_version }}
-      - libnvcomp-dev ${{ libnvcomp_version }}
+      - libnvcomp-dev ${{ nvcomp_version }}
       - dlpack ${{ dlpack_version }}
       - librdkafka ${{ librdkafka_version }}
       - flatbuffers =${{ flatbuffers_version }}
