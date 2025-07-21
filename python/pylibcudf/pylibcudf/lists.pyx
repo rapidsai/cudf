@@ -296,8 +296,12 @@ cpdef Column segmented_gather(
         Can be ``DONT_CHECK`` or ``NULLIFY``. Selects whether or not to nullify
         the output list row's element, when the gather index falls outside the range
         ``[-n, n)``, where ``n`` is the number of elements in list row corresponding
-        to the gather-map row. When ``bounds_policy`` is ``DONT_CHECK``, the output
-        for out-of-bounds indices is undefined.
+        to the gather-map row.
+
+        When ``bounds_policy`` is ``DONT_CHECK``, it's the caller's responsibility to
+        ensure that the indices in ``gather_map_list`` are in-bounds for the lists in
+        ``input`` before calling this function. The behavior with out-of-bounds indices
+        and ``DONT_CHECK`` is undefined and maybe produce invalid results or crash.
 
     Returns
     -------
