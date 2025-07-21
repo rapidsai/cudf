@@ -354,6 +354,8 @@ TEST_F(StringsFindTest, AllEmpty)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected8);
   results = cudf::strings::ends_with(strings_view, targets_view);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected8);
+  results = cudf::strings::find_instance(strings_view, cudf::string_scalar("e"), 0);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected32);
 }
 
 TEST_F(StringsFindTest, AllNull)
@@ -394,6 +396,8 @@ TEST_F(StringsFindTest, AllNull)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected8);
   results = cudf::strings::ends_with(strings_view, targets_view);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected8);
+  results = cudf::strings::find_instance(strings_view, cudf::string_scalar("e"), 0);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected32);
 }
 
 TEST_F(StringsFindTest, ErrorCheck)
@@ -412,6 +416,11 @@ TEST_F(StringsFindTest, ErrorCheck)
                cudf::logic_error);
   EXPECT_THROW(cudf::strings::find(strings_view, targets_view), cudf::logic_error);
   EXPECT_THROW(cudf::strings::find(strings_view, strings_view, -1), cudf::logic_error);
+
+  auto invalid_str = cudf::string_scalar("", false);
+  auto valid_str   = cudf::string_scalar("1");
+  EXPECT_THROW(cudf::strings::find_instance(strings_view, invalid_str, 0), std::invalid_argument);
+  EXPECT_THROW(cudf::strings::find_instance(strings_view, valid_str, -1), std::invalid_argument);
 }
 
 class FindParmsTest : public StringsFindTest,
@@ -469,3 +478,82 @@ TEST_P(FindParmsTest, Find)
 INSTANTIATE_TEST_CASE_P(StringsFindTest,
                         FindParmsTest,
                         testing::ValuesIn(std::array<cudf::size_type, 4>{0, 1, 2, 3}));
+
+TEST_F(StringsFindTest, FindInstance)
+{
+  auto validity = cudf::test::iterators::null_at(4);
+  auto input    = cudf::test::strings_column_wrapper(
+    {"thésé", "yellellellellellellellellellellellellellello", "eeeee", "", "", "ééééé"}, validity);
+  auto sv = cudf::strings_column_view(input);
+
+  using find_col = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
+  auto none      = find_col({-1, -1, -1, -1, -1, -1}, validity);
+
+  auto just_e     = cudf::string_scalar("e");
+  auto expect_col = cudf::strings::find(sv, just_e);
+  auto results    = cudf::strings::find_instance(sv, just_e, 0);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, *expect_col);
+  auto expected = find_col({-1, 4, 1, -1, -1, -1}, validity);
+  results       = cudf::strings::find_instance(sv, just_e, 1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  expected = find_col({-1, 7, 2, -1, -1, -1}, validity);
+  results  = cudf::strings::find_instance(sv, just_e, 2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  expected = find_col({-1, 10, 3, -1, -1, -1}, validity);
+  results  = cudf::strings::find_instance(sv, just_e, 3);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  expected = find_col({-1, 13, 4, -1, -1, -1}, validity);
+  results  = cudf::strings::find_instance(sv, just_e, 4);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  auto fancy_e = cudf::string_scalar("é");
+  expect_col   = cudf::strings::find(sv, fancy_e);
+  results      = cudf::strings::find_instance(sv, fancy_e, 0);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, *expect_col);
+  expected = find_col({4, -1, -1, -1, -1, 1}, validity);
+  results  = cudf::strings::find_instance(sv, fancy_e, 1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  expected = find_col({-1, -1, -1, -1, -1, 2}, validity);
+  results  = cudf::strings::find_instance(sv, fancy_e, 2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  expected = find_col({-1, -1, -1, -1, -1, 4}, validity);
+  results  = cudf::strings::find_instance(sv, fancy_e, 4);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  results = cudf::strings::find_instance(sv, fancy_e, 5);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, none);
+
+  auto target = cudf::string_scalar("elle");
+  expect_col  = cudf::strings::find(sv, target);
+  results     = cudf::strings::find_instance(sv, target, 0);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, *expect_col);
+  expected = find_col({-1, 4, -1, -1, -1, -1}, validity);
+  results  = cudf::strings::find_instance(sv, target, 1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  expected = find_col({-1, 7, -1, -1, -1, -1}, validity);
+  results  = cudf::strings::find_instance(sv, target, 2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  expected = find_col({-1, 31, -1, -1, -1, -1}, validity);
+  results  = cudf::strings::find_instance(sv, target, 10);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  expected = find_col({-1, 34, -1, -1, -1, -1}, validity);
+  results  = cudf::strings::find_instance(sv, target, 11);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  results = cudf::strings::find_instance(sv, target, 14);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, none);
+
+  auto fancy_es = cudf::string_scalar("éé");
+  expect_col    = cudf::strings::find(sv, fancy_es);
+  results       = cudf::strings::find_instance(sv, fancy_es, 0);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, *expect_col);
+  expected = find_col({-1, -1, -1, -1, -1, 1}, validity);
+  results  = cudf::strings::find_instance(sv, fancy_es, 1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  expected = find_col({-1, -1, -1, -1, -1, 2}, validity);
+  results  = cudf::strings::find_instance(sv, fancy_es, 2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  expected = find_col({-1, -1, -1, -1, -1, 3}, validity);
+  results  = cudf::strings::find_instance(sv, fancy_es, 3);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  results = cudf::strings::find_instance(sv, fancy_es, 4);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, none);
+}

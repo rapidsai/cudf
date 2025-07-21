@@ -166,7 +166,12 @@ def run_validate(options: Sequence[str] | None = None) -> None:
         if run_config.executor == "cpu":
             test_result = polars_query.collect(new_streaming=True)
         else:
-            test_result = polars_query.collect(engine=engine)
+            try:
+                test_result = polars_query.collect(engine=engine)
+            except Exception as e:
+                failures.append(q_id)
+                print(f"❌ Query {q_id} failed validation: GPU execution failed.\n{e}")
+                continue
 
         try:
             assert_frame_equal(
