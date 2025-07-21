@@ -11,6 +11,7 @@ import polars as pl
 
 from cudf_polars import Translator
 from cudf_polars.experimental.parallel import lower_ir_graph
+from cudf_polars.experimental.statistics import collect_base_stats
 from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
 from cudf_polars.utils.config import ConfigOptions
 
@@ -62,9 +63,7 @@ def test_dataframescan_concat(df):
     assert_gpu_result_equal(df2, engine=engine)
 
 
-def test_source_statistics(df):
-    from cudf_polars.experimental.io import _extract_dataframescan_stats
-
+def test_collect_base_stats(df):
     row_count = df.collect().height
     engine = pl.GPUEngine(
         raise_on_fail=True,
@@ -75,7 +74,8 @@ def test_source_statistics(df):
         },
     )
     ir = Translator(df._ldf.visit(), engine).translate_ir()
-    column_stats = _extract_dataframescan_stats(ir)
+    stats = collect_base_stats(ir, ConfigOptions.from_polars_engine(engine))
+    column_stats = stats.column_stats[ir]
 
     # Source info is the same for all columns
     source_info = column_stats["x"].source_info

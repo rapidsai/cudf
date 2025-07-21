@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from collections.abc import Generator, Iterator
 
     from cudf_polars.dsl.expr import NamedExpr
+    from cudf_polars.dsl.ir import IR
     from cudf_polars.dsl.nodebase import Node
 
 
@@ -151,3 +152,13 @@ class ColumnStats:
         self.source_info = source_info or DataSourceInfo()
         self.source_name = source_name or name
         self.unique_stats = unique_stats or UniqueStats()
+
+
+class StatsCollector:
+    """Column statistics collector."""
+
+    __slots__ = ("column_stats", "row_count")
+
+    def __init__(self) -> None:
+        self.row_count: dict[IR, ColumnStat[int]] = {}
+        self.column_stats: dict[IR, dict[str, ColumnStats]] = {}
