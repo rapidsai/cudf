@@ -498,7 +498,7 @@ def parse_args(
         choices=["synchronous", "distributed"],
         help=textwrap.dedent("""\
             Scheduler type to use with the 'streaming' executor.
-                - synchronous : Run locally single-process
+                - synchronous : Run locally in a single process
                 - distributed : Use Dask for multi-GPU execution"""),
     )
     parser.add_argument(
