@@ -4547,9 +4547,6 @@ def my_pdf(request):
 
 @pytest.mark.parametrize("compression", ["brotli", "gzip", "snappy", "zstd"])
 def test_parquet_decompression(set_decomp_env_vars, my_pdf, compression):
-    if compression == "snappy":
-        pytest.skip("Skipping because of a known issue on CUDA 11.8")
-
     # PANDAS returns category objects whereas cuDF returns hashes
     expect = my_pdf.drop(columns=["col_category"])
 
