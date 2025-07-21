@@ -558,10 +558,9 @@ struct create_distinct_rows_col_fn {
   template <typename T>
   std::unique_ptr<cudf::column> operator()(data_profile const& profile,
                                            thrust::minstd_rand& engine,
-                                           cudf::size_type num_rows,
-                                           rmm::cuda_stream_view stream)
+                                           cudf::size_type num_rows)
   {
-    return create_distinct_rows_column<T>(profile, engine, num_rows, stream);
+    return create_distinct_rows_column<T>(profile, engine, num_rows);
   }
 };
 
@@ -641,8 +640,7 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
 template <typename T>
 std::unique_ptr<cudf::column> create_distinct_rows_column(data_profile const& profile,
                                                           thrust::minstd_rand& engine,
-                                                          cudf::size_type num_rows,
-                                                          rmm::cuda_stream_view stream)
+                                                          cudf::size_type num_rows)
 {
   using DeviceType = cudf::device_storage_type_t<T>;
 
@@ -657,7 +655,7 @@ std::unique_ptr<cudf::column> create_distinct_rows_column(data_profile const& pr
       return cudf::data_type{cudf::type_to_id<T>()};
   }();
 
-  auto init = cudf::make_default_constructed_scalar(dtype, stream);
+  auto init = cudf::make_default_constructed_scalar(dtype);
   auto col  = cudf::sequence(num_rows, *init);
 
   rmm::device_uvector<bool> null_mask(0, cudf::get_default_stream());
@@ -705,10 +703,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(data_profi
 
 template <>
 std::unique_ptr<cudf::column> create_distinct_rows_column<cudf::string_view>(
-  data_profile const& profile,
-  thrust::minstd_rand& engine,
-  cudf::size_type num_rows,
-  rmm::cuda_stream_view stream)
+  data_profile const& profile, thrust::minstd_rand& engine, cudf::size_type num_rows)
 {
   auto col     = create_random_column<cudf::string_view>(profile, engine, num_rows);
   auto int_col = cudf::sequence(
@@ -727,10 +722,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::dictionary32>(data_prof
 
 template <>
 std::unique_ptr<cudf::column> create_distinct_rows_column<cudf::dictionary32>(
-  data_profile const& profile,
-  thrust::minstd_rand& engine,
-  cudf::size_type num_rows,
-  rmm::cuda_stream_view stream)
+  data_profile const& profile, thrust::minstd_rand& engine, cudf::size_type num_rows)
 {
   CUDF_FAIL("not implemented yet");
 }
@@ -802,10 +794,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::struct_view>(data_profi
 
 template <>
 std::unique_ptr<cudf::column> create_distinct_rows_column<cudf::struct_view>(
-  data_profile const& profile,
-  thrust::minstd_rand& engine,
-  cudf::size_type num_rows,
-  rmm::cuda_stream_view stream)
+  data_profile const& profile, thrust::minstd_rand& engine, cudf::size_type num_rows)
 {
   auto const dist_params = profile.get_distribution_params<cudf::struct_view>();
   auto col               = create_random_column<cudf::struct_view>(profile, engine, num_rows);
@@ -814,18 +803,15 @@ std::unique_ptr<cudf::column> create_distinct_rows_column<cudf::struct_view>(
     num_rows, *cudf::make_default_constructed_scalar(cudf::data_type{cudf::type_id::INT32})));
   for (int lvl = dist_params.max_depth; lvl > 1; --lvl) {
     std::vector<std::unique_ptr<cudf::column>> parents;
-    parents.push_back(cudf::create_structs_hierarchy(
-      num_rows, std::move(children), 0, rmm::device_buffer{}, stream));
+    parents.push_back(
+      cudf::create_structs_hierarchy(num_rows, std::move(children), 0, rmm::device_buffer{}));
     std::swap(parents, children);
   }
   auto const null_count = col->null_count();
   auto col_contents     = col->release();
   col_contents.children.push_back(std::move(children[0]));
-  return cudf::create_structs_hierarchy(num_rows,
-                                        std::move(col_contents.children),
-                                        null_count,
-                                        std::move(*col_contents.null_mask),
-                                        stream);
+  return cudf::create_structs_hierarchy(
+    num_rows, std::move(col_contents.children), null_count, std::move(*col_contents.null_mask));
 }
 
 template <typename T>
@@ -906,10 +892,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
 
 template <>
 std::unique_ptr<cudf::column> create_distinct_rows_column<cudf::list_view>(
-  data_profile const& profile,
-  thrust::minstd_rand& engine,
-  cudf::size_type num_rows,
-  rmm::cuda_stream_view stream)
+  data_profile const& profile, thrust::minstd_rand& engine, cudf::size_type num_rows)
 {
   auto const dist_params = profile.get_distribution_params<cudf::list_view>();
   auto col               = create_random_column<cudf::list_view>(profile, engine, num_rows);
@@ -917,19 +900,15 @@ std::unique_ptr<cudf::column> create_distinct_rows_column<cudf::list_view>(
     num_rows, *cudf::make_default_constructed_scalar(cudf::data_type{cudf::type_id::INT32}));
   for (int lvl = dist_params.max_depth; lvl > 0; --lvl) {
     auto offsets = cudf::detail::make_zeroed_device_uvector_async<cudf::size_type>(
-      num_rows + 1, stream, cudf::get_current_device_resource_ref());
-    thrust::sequence(rmm::exec_policy_nosync(stream), offsets.begin(), offsets.end());
+      num_rows + 1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+    thrust::sequence(rmm::exec_policy(cudf::get_default_stream()), offsets.begin(), offsets.end());
     auto offsets_column = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::INT32},
                                                          num_rows + 1,
                                                          offsets.release(),
                                                          rmm::device_buffer{},
                                                          0);
-    auto list_column    = cudf::make_lists_column(num_rows,
-                                               std::move(offsets_column),
-                                               std::move(child_column),
-                                               0,
-                                               rmm::device_buffer{},
-                                               stream);
+    auto list_column    = cudf::make_lists_column(
+      num_rows, std::move(offsets_column), std::move(child_column), 0, rmm::device_buffer{});
     std::swap(child_column, list_column);
   }
   return cudf::lists::concatenate_rows(cudf::table_view({col->view(), child_column->view()}));
@@ -1043,23 +1022,17 @@ std::unique_ptr<cudf::column> create_random_column(cudf::type_id dtype_id,
 std::unique_ptr<cudf::column> create_distinct_rows_column(cudf::type_id dtype_id,
                                                           row_count num_rows,
                                                           data_profile const& profile,
-                                                          unsigned seed,
-                                                          rmm::cuda_stream_view stream)
+                                                          unsigned seed)
 {
   auto seed_engine = deterministic_engine(seed);
-  return cudf::type_dispatcher(cudf::data_type(dtype_id),
-                               create_distinct_rows_col_fn{},
-                               profile,
-                               seed_engine,
-                               num_rows.count,
-                               stream);
+  return cudf::type_dispatcher(
+    cudf::data_type(dtype_id), create_distinct_rows_col_fn{}, profile, seed_engine, num_rows.count);
 }
 
 std::unique_ptr<cudf::table> create_distinct_rows_table(std::vector<cudf::type_id> const& dtype_ids,
                                                         row_count num_rows,
                                                         data_profile const& profile,
-                                                        unsigned seed,
-                                                        rmm::cuda_stream_view stream)
+                                                        unsigned seed)
 {
   auto seed_engine = deterministic_engine(seed);
   thrust::uniform_int_distribution<unsigned> seed_dist;
@@ -1067,7 +1040,7 @@ std::unique_ptr<cudf::table> create_distinct_rows_table(std::vector<cudf::type_i
   columns_vector output_columns;
   std::transform(
     dtype_ids.begin(), dtype_ids.end(), std::back_inserter(output_columns), [&](auto tid) mutable {
-      return create_distinct_rows_column(tid, num_rows, profile, seed_dist(seed_engine), stream);
+      return create_distinct_rows_column(tid, num_rows, profile, seed_dist(seed_engine));
     });
   return std::make_unique<cudf::table>(std::move(output_columns));
 }

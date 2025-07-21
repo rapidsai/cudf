@@ -224,10 +224,9 @@ void BM_join_with_datatype(state_type& state,
     return;
   }
 
-  auto const num_keys             = key_types.size();
-  auto stream                     = cudf::get_default_stream();
-  auto [build_table, probe_table] = generate_input_tables<Nullable>(
-    key_types, right_size, left_size, multiplicity, selectivity, stream);
+  auto const num_keys = key_types.size();
+  auto [build_table, probe_table] =
+    generate_input_tables<Nullable>(key_types, right_size, left_size, multiplicity, selectivity);
 
   auto const join_input_size =
     estimate_size(build_table->view()) + estimate_size(probe_table->view());
