@@ -1693,7 +1693,7 @@ def test_change_index_name(index):
         assert df.index.name == name
 
 
-@pytest.mark.flaky(reruns=5)
+@pytest.mark.flaky(reruns=5, delay=4)
 def test_notebook_slow_repr():
     notebook_filename = (
         os.path.dirname(os.path.abspath(__file__))
