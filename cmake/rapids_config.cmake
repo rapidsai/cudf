@@ -12,6 +12,8 @@
 # the License.
 # =============================================================================
 file(READ "${CMAKE_CURRENT_LIST_DIR}/../VERSION" _rapids_version)
+# Use STRINGS to trim whitespace/newlines
+file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/../RAPIDS_BRANCH" _rapids_branch)
 if(_rapids_version MATCHES [[^([0-9][0-9])\.([0-9][0-9])\.([0-9][0-9])]])
   set(RAPIDS_VERSION_MAJOR "${CMAKE_MATCH_1}")
   set(RAPIDS_VERSION_MINOR "${CMAKE_MATCH_2}")
@@ -27,4 +29,8 @@ else()
 endif()
 
 set(rapids-cmake-version "${RAPIDS_VERSION_MAJOR_MINOR}")
+if(NOT _rapids_branch)
+  message(FATAL_ERROR "Could not determine branch name to use for checking out rapids-cmake. The file "${CMAKE_CURRENT_LIST_DIR}/../RAPIDS_BRANCH" is missing.")
+endif()
+set(rapids-cmake-branch "${_rapids_branch}")
 include("${CMAKE_CURRENT_LIST_DIR}/RAPIDS.cmake")

@@ -19,8 +19,10 @@ cmake_minimum_required(VERSION 3.30.4 FATAL_ERROR)
 
 # Allow users to control which version is used
 if(NOT rapids-cmake-version OR NOT rapids-cmake-version MATCHES [[^([0-9][0-9])\.([0-9][0-9])$]])
+ Use STRINGS to trim whitespace/newlines
+file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/../RAPIDS_BRANCH" _rapids_branch)
   message(
-    FATAL_ERROR "The CMake variable rapids-cmake-version must be defined in the format MAJOR.MINOR."
+    FATAL_ERROR "The CMake variable `rapids-cmake-branch` or `rapids-cmake-version` must be defined"
   )
 endif()
 
@@ -33,7 +35,7 @@ endif()
 # Allow users to control which branch is fetched
 if(NOT rapids-cmake-branch)
   # Define a default branch if the user doesn't set one
-  set(rapids-cmake-branch "branch-${rapids-cmake-version}")
+  set(rapids-cmake-branch "release/${rapids-cmake-version}")
 endif()
 
 # Allow users to control the exact URL passed to FetchContent
