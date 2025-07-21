@@ -435,12 +435,12 @@ def _(
 
     # Check sort keys
     if not all(
-        expr.is_pointwise for expr in traversal([e.value for e in ir.by])
+        isinstance(expr, Col) for expr in traversal([e.value for e in ir.by])
     ):  # pragma: no cover
         return _lower_ir_fallback(
             ir,
             rec,
-            msg="sort does not support multiple partitions for non-pointwise `by` keys.",
+            msg="sort currently only supports column names as `by` keys.",
         )
 
     # Extract child partitioning
