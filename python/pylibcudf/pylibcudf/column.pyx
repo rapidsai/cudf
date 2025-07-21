@@ -1028,6 +1028,55 @@ cdef class Column:
 
         return Column.from_array_interface(ArrayInterfaceWrapper(iface))
 
+    @classmethod
+    def struct_from_children(cls, children: Iterable[Column]):
+        """
+        Create a struct Column from a list of child columns.
+
+        Parameters
+        ----------
+        children : Iterable[Column]
+            A list of child columns.
+
+        Returns
+        -------
+        Column
+            A struct Column with the provided the child columns.
+
+        Notes
+        -----
+        The null count and null mask is taken from the first child column.
+        Use `Column.with_mask` on the result of struct_from_children to reset
+        the null count and mask.
+        """
+        if not isinstance(children, list):
+            children = list(children)
+        if len(children) == 0:
+            raise ValueError("Must provide at least one child column")
+        reference_child = children[0]
+        if not all(
+            isinstance(child, Column)
+            and reference_child.size() == child.size()
+            and reference_child.null_count() == child.null_count()
+            # We assume the null masks are equivalent but may be expensive to
+            # check: https://github.com/rapidsai/cudf/pull/19357#issuecomment-3071033448
+            for child in children
+        ):
+            raise ValueError(
+                "All child columns must be of type Column and have the same size "
+                "and null count."
+            )
+
+        return cls(
+            DataType(type_id.STRUCT),
+            reference_child.size(),
+            None,
+            reference_child.null_mask(),
+            reference_child.null_count(),
+            0,
+            children,
+        )
+
     cpdef DataType type(self):
         """The type of data in the column."""
         return self._data_type

@@ -33,10 +33,13 @@ from cudf.core.index import (
     ensure_index,
 )
 from cudf.core.join._join_helpers import _match_join_keys
+from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     is_column_like,
+    is_dtype_obj_numeric,
+    is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import (
@@ -138,6 +141,9 @@ class MultiIndex(Index):
                )
     """
 
+    _levels: list[cudf.Index] | None
+    _codes: list[column.ColumnBase] | None
+
     @_performance_tracking
     def __init__(
         self,
@@ -149,7 +155,12 @@ class MultiIndex(Index):
         copy=False,
         name=None,
         verify_integrity=True,
-    ):
+        nan_as_null=no_default,
+    ) -> None:
+        if nan_as_null is no_default:
+            nan_as_null = (
+                False if cudf.get_option("mode.pandas_compatible") else None
+            )
         if isinstance(levels, (pd.MultiIndex, MultiIndex)):
             # TODO: Figure out why cudf.Index(pd.MultiIndex(...)) goes through here twice
             # Somehow due to from_pandas calling cls?
@@ -172,14 +183,14 @@ class MultiIndex(Index):
                 f"as codes ({len(codes)})."
             )
 
-        new_levels = []
+        new_levels: list[cudf.Index] = []
         for level in levels:
             new_level = ensure_index(level)
             if copy and new_level is level:
                 new_level = new_level.copy(deep=True)
             new_levels.append(new_level)
 
-        new_codes = []
+        new_codes: list[column.ColumnBase] = []
         for code in codes:
             if not (is_list_like(code) or is_column_like(code)):
                 raise TypeError("Each code must be list-like")
@@ -188,7 +199,7 @@ class MultiIndex(Index):
                 new_code = new_code.copy(deep=True)
             new_codes.append(new_code)
 
-        source_data = {}
+        source_data: dict[Hashable, column.ColumnBase] = {}
         for i, (code, level) in enumerate(zip(new_codes, new_levels)):
             if len(code):
                 lo, hi = code.minmax()
@@ -200,11 +211,29 @@ class MultiIndex(Index):
                     # Now we can gather and insert null automatically
                     code[code == -1] = np.iinfo(SIZE_TYPE_DTYPE).min
             result_col = level._column.take(code, nullify=True)
+            if (
+                cudf.get_option("mode.pandas_compatible")
+                and nan_as_null is False
+                and not is_dtype_obj_numeric(result_col.dtype)
+                and not is_pandas_nullable_extension_dtype(level.dtype)
+                and result_col.has_nulls(include_nan=False)
+            ):
+                raise MixedTypeError(
+                    "MultiIndex levels cannot have mixed types when `mode.pandas_compatible` is True and `nan_as_null` is False."
+                )
+            if (
+                cudf.get_option("mode.pandas_compatible")
+                and not is_dtype_obj_numeric(result_col.dtype)
+                and result_col.has_nulls(include_nan=False)
+                and nan_as_null is False
+                and not is_pandas_nullable_extension_dtype(level.dtype)
+            ):
+                result_col = result_col.fillna(np.nan)
             source_data[i] = result_col._with_type_metadata(level.dtype)
 
         Frame.__init__(self, ColumnAccessor(source_data))
-        self._levels: None | list[cudf.Index] = new_levels
-        self._codes: None | list[column.ColumnBase] = new_codes
+        self._levels = new_levels
+        self._codes = new_codes
         self._name = None
         self.names = names
 
@@ -396,8 +425,8 @@ class MultiIndex(Index):
     def _simple_new(
         cls,
         data: ColumnAccessor,
-        levels: None | list[cudf.Index],
-        codes: None | list[column.ColumnBase],
+        levels: list[cudf.Index] | None,
+        codes: list[column.ColumnBase] | None,
         names: pd.core.indexes.frozen.FrozenList,
         name: Any = None,
     ) -> Self:
@@ -483,13 +512,13 @@ class MultiIndex(Index):
         else:
             names = self.names
         if self._levels is not None:
-            levels: None | list[cudf.Index] = [
+            levels: list[cudf.Index] | None = [
                 idx.copy(deep=deep) for idx in self._levels
             ]
         else:
             levels = self._levels
         if self._codes is not None:
-            codes: None | list[column.ColumnBase] = [
+            codes: list[column.ColumnBase] | None = [
                 code.copy(deep=deep) for code in self._codes
             ]
         else:
@@ -1497,6 +1526,7 @@ class MultiIndex(Index):
             names_from_arrays.append(getattr(array, "name", None))
         if names is None:
             names = names_from_arrays
+
         return cls(
             codes=codes, levels=levels, sortorder=sortorder, names=names
         )
@@ -1687,7 +1717,10 @@ class MultiIndex(Index):
             for level in multiindex.levels
         ]
         return cls(
-            levels=levels, codes=multiindex.codes, names=multiindex.names
+            levels=levels,
+            codes=multiindex.codes,
+            names=multiindex.names,
+            nan_as_null=nan_as_null,
         )
 
     @cached_property  # type: ignore
@@ -1930,7 +1963,9 @@ class MultiIndex(Index):
             return self._return_get_indexer_result(result.values)
         try:
             target = cudf.MultiIndex.from_tuples(target)
-        except TypeError:
+        except TypeError as e:
+            if isinstance(e, MixedTypeError):
+                raise e
             return self._return_get_indexer_result(result.values)
 
         join_keys = [

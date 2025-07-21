@@ -291,3 +291,12 @@ def test_bug_in_current_and_maybe_future_versions(...):
 ```
 
 If pandas makes a bugfix release and fixes this, then we'll see it in CI immediately, patch it, and bump `PANDAS_CURRENT_SUPPORTED_VERSION` which also usually happens during pandas upgrades.
+
+### Parallelization
+
+The majority of our tests are run in parallel using
+[pytest-xdist](https://pytest-xdist.readthedocs.io/en/stable/). If a test needs
+to be run serially, say because it requires a large fraction of the GPU memory
+of our test node, mark with with `@pytest.mark.serial`. Tests marked with
+`@serial` will be excluded from the main `pytest` run with `-m not serial` and
+run subsequentlly with `-m serial`.

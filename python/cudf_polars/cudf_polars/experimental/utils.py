@@ -15,7 +15,7 @@ from cudf_polars.dsl.ir import Union
 from cudf_polars.experimental.base import PartitionInfo
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping
+    from collections.abc import MutableMapping, Sequence
 
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import Expr
@@ -98,3 +98,15 @@ def _leaf_column_names(expr: Expr) -> tuple[str, ...]:
         return (expr.name,)
     else:
         return ()
+
+
+def _get_unique_fractions(
+    column_names: Sequence[str],
+    user_unique_fractions: dict[str, float],
+) -> dict[str, float]:
+    """Return unique-fraction statistics subset."""
+    return {
+        c: max(min(f, 1.0), 0.00001)
+        for c, f in user_unique_fractions.items()
+        if c in column_names
+    }

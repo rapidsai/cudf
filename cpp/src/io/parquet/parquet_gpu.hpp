@@ -726,8 +726,8 @@ void build_string_dictionary_index(ColumnChunkDesc* chunks,
  * @param[in] stream CUDA stream to use
  * @return Bitwise OR of all page `kernel_mask` values
  */
-uint32_t GetAggregatedDecodeKernelMask(cudf::detail::hostdevice_span<PageInfo const> pages,
-                                       rmm::cuda_stream_view stream);
+uint32_t get_aggregated_decode_kernel_mask(cudf::detail::hostdevice_span<PageInfo const> pages,
+                                           rmm::cuda_stream_view stream);
 
 /**
  * @brief Compute page output size information.
@@ -844,9 +844,9 @@ void decode_split_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
  * @param buff_addrs Host span of corresponding output col buffer end addresses
  * @param stream CUDA stream to use
  */
-void WriteFinalOffsets(host_span<size_type const> offsets,
-                       host_span<size_type* const> buff_addrs,
-                       rmm::cuda_stream_view stream);
+void write_final_offsets(host_span<size_type const> offsets,
+                         host_span<size_type* const> buff_addrs,
+                         rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for reading the DELTA_BINARY_PACKED column data stored in the pages

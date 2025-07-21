@@ -23,12 +23,12 @@ dependencies = [
     "cupy-cuda12x>=12.0.0",
     "fsspec>=0.6.0",
     "libcudf==25.8.*,>=0.0.0a0",
-    "numba-cuda>=0.14.0,<0.15.0a0",
+    "numba-cuda[cu12]>=0.14.0,<0.15.0a0",
     "numba>=0.59.1,<0.62.0a0",
     "numpy>=1.23,<3.0a0",
     "nvtx>=0.2.1",
     "packaging",
-    "pandas>=2.0,<2.2.4dev0",
+    "pandas>=2.0,<2.4.0dev0",
     "pyarrow>=14.0.0,<20.0.0a0,!=17.0.0; platform_machine=='aarch64'",
     "pyarrow>=14.0.0,<20.0.0a0; platform_machine=='x86_64'",
     "pylibcudf==25.8.*,>=0.0.0a0",
@@ -55,11 +55,12 @@ test = [
     "fastavro>=0.22.9",
     "hypothesis>=6.131.7",
     "msgpack",
+    "pytest",
     "pytest-benchmark",
     "pytest-cases>=3.8.2",
     "pytest-cov",
+    "pytest-rerunfailures",
     "pytest-xdist",
-    "pytest<8",
     "scipy",
     "tzdata",
     "zstandard",
@@ -109,7 +110,8 @@ filterwarnings = [
     "ignore:FNV hashing is not implemented in Numba.*:UserWarning"
 ]
 markers = [
-    "spilling: mark benchmark a good candidate to run with `CUDF_SPILL=ON`"
+    "spilling: mark benchmark a good candidate to run with `CUDF_SPILL=ON`",
+    "serial: Mark a test as not being parallel-safe.",
 ]
 xfail_strict = true
 
