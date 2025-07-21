@@ -160,6 +160,11 @@ def test_reverse(list_column):
     assert_column_eq(expect, got)
 
 
+@pytest.fixture
+def segmented_gather_input_data() -> list[list[str | None]]:
+    return [["a", "b"], ["c"], [], ["d", None, "e"]]
+
+
 @pytest.mark.parametrize(
     "bounds_policy",
     [
@@ -168,26 +173,38 @@ def test_reverse(list_column):
     ],
     ids=["DONT_CHECK", "NULLIFY"],
 )
-def test_segmented_gather(
-    test_data: list[list[list[int]]],
+def test_segmented_gather_in_bounds(
+    segmented_gather_input_data: list[list[str | None]],
     bounds_policy: plc.copying.OutOfBoundsPolicy,
 ) -> None:
-    list_column1, list_column2 = test_data[0]
-
-    gather_map_list = plc.Column.from_arrow(pa.array(list_column1))
-    input_column = plc.Column.from_arrow(pa.array(list_column2))
-
+    input_column = plc.Column.from_arrow(pa.array(segmented_gather_input_data))
+    # these are all in-bounds for input_column.
+    gather_map_list = plc.Column.from_arrow(
+        pa.array([[0, 0], [0], [], [1, 2]])
+    )
     got = plc.lists.segmented_gather(
-        input_column, gather_map_list, bounds_policy
+        input_column, gather_map_list, bounds_policy=bounds_policy
     )
 
-    if bounds_policy == plc.copying.OutOfBoundsPolicy.DONT_CHECK:
-        # Everything except [0][0] is out-of-bounds indexing.
-        assert got.size() == 4
-        assert plc.interop.to_arrow(got)[0][0].as_py() == 8
-    else:
-        expect = pa.array([[8, None], [None], [None], [None, None]])
-        assert_column_eq(expect, got)
+    expect = pa.array([["a", "a"], ["c"], [], [None, "e"]])
+
+    assert_column_eq(expect, got)
+
+
+def test_segmented_gather_out_of_bounds(
+    segmented_gather_input_data: list[list[str | None]],
+) -> None:
+    input_column = plc.Column.from_arrow(pa.array(segmented_gather_input_data))
+    gather_map_list = plc.Column.from_arrow(
+        pa.array([[0, 1], [2], [], [-5, 1, 2]])
+    )
+    got = plc.lists.segmented_gather(
+        input_column, gather_map_list, plc.copying.OutOfBoundsPolicy.NULLIFY
+    )
+
+    expect = pa.array([["a", "b"], [None], [], [None, None, "e"]])
+
+    assert_column_eq(expect, got)
 
 
 def test_extract_list_element_column(list_column):
