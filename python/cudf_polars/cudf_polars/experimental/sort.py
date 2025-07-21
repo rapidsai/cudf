@@ -6,8 +6,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, TypedDict
 
-import pyarrow as pa
-
 import pylibcudf as plc
 import rmm.mr
 from rmm.pylibrmm.stream import DEFAULT_STREAM
@@ -121,7 +119,7 @@ def _select_local_split_candidates(
     """
     df = df.select(by)
     candidates = [i * df.num_rows // num_partitions for i in range(num_partitions)]
-    row_id = plc.Column.from_arrow(pa.array(candidates))
+    row_id = plc.Column.from_iterable_of_py(candidates)
 
     res = plc.copying.gather(df.table, row_id, plc.copying.OutOfBoundsPolicy.DONT_CHECK)
     part_id_dtype = plc.types.DataType(plc.types.TypeId.UINT32)
@@ -171,13 +169,11 @@ def _get_final_sort_boundaries(
         column_order + [plc.types.Order.ASCENDING] * 2,
         null_order + [plc.types.NullOrder.AFTER] * 2,
     )
-    selected_candidates = plc.Column.from_arrow(
-        pa.array(
-            [
-                i * sorted_candidates.num_rows() // num_partitions
-                for i in range(1, num_partitions)
-            ]
-        )
+    selected_candidates = plc.Column.from_iterable_of_py(
+        [
+            i * sorted_candidates.num_rows() // num_partitions
+            for i in range(1, num_partitions)
+        ]
     )
     # Get the actual values at which we will split the data
     sort_boundaries = plc.copying.gather(
