@@ -409,7 +409,7 @@ enum class host_engine_state : uint8_t { ON, OFF, AUTO, HYBRID };
     auto const h_inputs    = cudf::detail::make_host_vector(inputs, stream);
     size_t total_host_size = 0;
     size_t total_host_to_single_device_thread_ratio =
-      getenv_or("LIBCUDF_HOST_COMPRESSION_RATIO", default_host_compression_ratio);
+      getenv_or("LIBCUDF_HOST_COMPRESSION_RATIO", default_host_device_compression_work_ratio);
     for (size_t i = 0; i < h_inputs.size(); ++i) {
       if (total_host_size >= total_host_to_single_device_thread_ratio * h_inputs[i].size()) {
         return i;

@@ -42,10 +42,10 @@ constexpr size_t default_host_compression_auto_threshold = 128;
 constexpr size_t default_host_decompression_auto_threshold = 128;
 // Estimated ratio between total CPU decompression throughput and decompression throughput of a
 // single GPU block; higher values lead to more host decompression in HYBRID mode
-constexpr double default_host_decompression_ratio = 100;
+constexpr double default_host_device_decompression_work_ratio = 100;
 // Estimated ratio between total CPU compression throughput and compression throughput of a
 // single GPU block; higher values lead to more host compression in HYBRID mode
-constexpr double default_host_compression_ratio = 100;
+constexpr double default_host_device_compression_work_ratio = 100;
 
 [[nodiscard]] std::optional<nvcomp::compression_type> to_nvcomp_compression(
   compression_type compression);
