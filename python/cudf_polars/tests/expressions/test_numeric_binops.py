@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -111,5 +111,15 @@ def test_binop_with_scalar(left_scalar, right_scalar):
     lop = pl.lit(2) if left_scalar else pl.col("a")
     rop = pl.lit(6) if right_scalar else pl.col("b")
     q = df.select(lop / rop)
+
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("divisor", [1, 2])
+def test_true_div_boolean_column(divisor, rtype):
+    divisor = pl.lit(divisor, dtype=rtype)
+    df = pl.LazyFrame({"a": [True, False]})
+
+    q = df.select(pl.col("a") / divisor)
 
     assert_gpu_result_equal(q)
