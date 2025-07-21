@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -36,7 +36,7 @@ def test_1d_gpu():
         50  # Approximately, how many data points might be found in a pattern
     )
     all_gpu_devices = [
-        device.id for device in cuda.list_devices()
+        int(device.id) for device in cuda.list_devices()
     ]  # Get a list of all available GPU devices
 
     return stumpy.gpu_stump(

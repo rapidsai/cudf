@@ -32,6 +32,7 @@ try:
     from cudf_polars.experimental.explain import explain_query
     from cudf_polars.experimental.parallel import evaluate_streaming
     from cudf_polars.testing.asserts import assert_gpu_result_equal
+    from cudf_polars.utils.config import ConfigOptions
 
     CUDF_POLARS_AVAILABLE = True
 except ImportError:
@@ -224,9 +225,14 @@ class RunConfig:
             rapidsmpf_spill=args.rapidsmpf_spill,
         )
 
-    def serialize(self) -> dict:
+    def serialize(self, engine: pl.GPUEngine | None) -> dict:
         """Serialize the run config to a dictionary."""
-        return dataclasses.asdict(self)
+        result = dataclasses.asdict(self)
+
+        if engine is not None:
+            config_options = ConfigOptions.from_polars_engine(engine)
+            result["config_options"] = dataclasses.asdict(config_options)
+        return result
 
     def summarize(self) -> None:
         """Print a summary of the results."""
@@ -409,10 +415,17 @@ def _query_type(num_queries: int) -> Callable[[str | int], list[int]]:
     def parse(query: str | int) -> list[int]:
         if isinstance(query, int):
             return [query]
-        elif query == "all":
+        if query == "all":
             return list(range(1, num_queries + 1))
-        else:
-            return [int(q) for q in query.split(",")]
+
+        result: set[int] = set()
+        for part in query.split(","):
+            if "-" in part:
+                start, end = part.split("-")
+                result.update(range(int(start), int(end) + 1))
+            else:
+                result.add(int(part))
+        return sorted(result)
 
     return parse
 
@@ -498,8 +511,8 @@ def parse_args(
         "--protocol",
         default="ucx",
         type=str,
-        choices=["ucx", "ucxx"],
-        help="Communication protocol to use for Dask: ucx (UCX-Py) or ucxx)",
+        choices=["ucx-old", "ucx"],
+        help="Communication protocol to use for Dask: ucx (uses ucxx) or ucx-old (uses ucx-py)",
     )
     parser.add_argument(
         "--shuffle",
@@ -672,5 +685,5 @@ def run_polars(
             )
         else:
             print("All validated queries passed.")
-    args.output.write(json.dumps(run_config.serialize()))
+    args.output.write(json.dumps(run_config.serialize(engine=engine)))
     args.output.write("\n")

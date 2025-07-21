@@ -16,9 +16,7 @@
 
 #pragma once
 
-#include "io/utilities/hostdevice_span.hpp"
 #include "reader_impl_chunking.hpp"
-#include "reader_impl_helpers.hpp"
 
 #include <cudf/types.hpp>
 
@@ -26,9 +24,7 @@
 
 #include <cuda/functional>
 
-#include <bitset>
 #include <future>
-#include <map>
 #include <vector>
 
 namespace cudf::io::parquet::detail {
@@ -138,7 +134,10 @@ std::string encoding_to_string(Encoding encoding);
 /**
  * @brief Decode the page information for a given pass.
  *
- * @param pass_intermediate_data The struct containing pass information
+ * @param pass The struct containing pass information
+ * @param unsorted_pages Device span of page information to decode
+ * @param has_page_index Boolean indicating if the page index is available
+ * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void decode_page_headers(pass_intermediate_data& pass,
                          device_span<PageInfo> unsorted_pages,

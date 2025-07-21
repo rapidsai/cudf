@@ -1,0 +1,4 @@
+# Configuration file for Python coverage tests
+[run]
+disable_warnings = module-not-measured
+                   no-data-collected

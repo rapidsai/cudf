@@ -16,6 +16,7 @@
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -51,6 +52,103 @@ device_data_reference::device_data_reference(device_data_reference_type referenc
     data_index(data_index),
     table_source(table_reference::LEFT)
 {
+}
+
+bool device_data_reference::operator==(device_data_reference const& rhs) const
+{
+  return std::tie(data_index, data_type, reference_type, table_source) ==
+         std::tie(rhs.data_index, rhs.data_type, rhs.reference_type, rhs.table_source);
+}
+
+expression_parser::expression_parser(
+  expression const& expr,
+  cudf::table_view const& left,
+  std::optional<std::reference_wrapper<cudf::table_view const>> right,
+  bool has_nulls,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+  : _left{left},
+    _right{right},
+    _expression_count{0},
+    _intermediate_counter{},
+    _has_nulls(has_nulls),
+    _has_complex_type{false}
+{
+  expr.accept(*this);
+  _has_complex_type =
+    std::any_of(_data_references.begin(), _data_references.end(), [&](auto const& ref) {
+      return ast::detail::is_complex_type(ref.data_type.id());
+    });
+
+  move_to_device(stream, mr);
+}
+
+expression_parser::expression_parser(expression const& expr,
+                                     cudf::table_view const& table,
+                                     bool has_nulls,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
+  : expression_parser(expr, table, {}, has_nulls, stream, mr)
+{
+}
+
+void expression_parser::move_to_device(rmm::cuda_stream_view stream,
+                                       rmm::device_async_resource_ref mr)
+{
+  std::vector<cudf::size_type> sizes;
+  std::vector<void const*> data_pointers;
+  // use a minimum of 4-byte alignment
+  cudf::size_type buffer_alignment = 4;
+
+  extract_size_and_pointer(_data_references, sizes, data_pointers, buffer_alignment);
+  extract_size_and_pointer(_literals, sizes, data_pointers, buffer_alignment);
+  extract_size_and_pointer(_operators, sizes, data_pointers, buffer_alignment);
+  extract_size_and_pointer(_operator_arities, sizes, data_pointers, buffer_alignment);
+  extract_size_and_pointer(_operator_source_indices, sizes, data_pointers, buffer_alignment);
+
+  // Create device buffer
+  auto buffer_offsets = std::vector<cudf::size_type>(sizes.size());
+  thrust::exclusive_scan(sizes.cbegin(),
+                         sizes.cend(),
+                         buffer_offsets.begin(),
+                         cudf::size_type{0},
+                         [buffer_alignment](auto a, auto b) {
+                           // align each component of the AST program
+                           return cudf::util::round_up_safe(a + b, buffer_alignment);
+                         });
+
+  auto const buffer_size = buffer_offsets.empty() ? 0 : (buffer_offsets.back() + sizes.back());
+  auto host_data_buffer  = std::vector<char>(buffer_size);
+
+  for (unsigned int i = 0; i < data_pointers.size(); ++i) {
+    std::memcpy(host_data_buffer.data() + buffer_offsets[i], data_pointers[i], sizes[i]);
+  }
+
+  _device_data_buffer = rmm::device_buffer(host_data_buffer.data(), buffer_size, stream, mr);
+  stream.synchronize();
+
+  // Create device pointers to components of plan
+  auto device_data_buffer_ptr            = static_cast<char const*>(_device_data_buffer.data());
+  device_expression_data.data_references = device_span<detail::device_data_reference const>(
+    reinterpret_cast<detail::device_data_reference const*>(device_data_buffer_ptr +
+                                                           buffer_offsets[0]),
+    _data_references.size());
+  device_expression_data.literals = device_span<generic_scalar_device_view const>(
+    reinterpret_cast<generic_scalar_device_view const*>(device_data_buffer_ptr + buffer_offsets[1]),
+    _literals.size());
+  device_expression_data.operators = device_span<ast_operator const>(
+    reinterpret_cast<ast_operator const*>(device_data_buffer_ptr + buffer_offsets[2]),
+    _operators.size());
+  device_expression_data.operator_arities = device_span<cudf::size_type const>(
+    reinterpret_cast<cudf::size_type const*>(device_data_buffer_ptr + buffer_offsets[3]),
+    _operators.size());
+  device_expression_data.operator_source_indices = device_span<cudf::size_type const>(
+    reinterpret_cast<cudf::size_type const*>(device_data_buffer_ptr + buffer_offsets[4]),
+    _operator_source_indices.size());
+  device_expression_data.num_intermediates = _intermediate_counter.get_max_used();
+  shmem_per_thread                         = static_cast<int>(
+    (_has_nulls ? sizeof(IntermediateDataType<true>) : sizeof(IntermediateDataType<false>)) *
+    device_expression_data.num_intermediates);
 }
 
 cudf::size_type expression_parser::intermediate_counter::take()
