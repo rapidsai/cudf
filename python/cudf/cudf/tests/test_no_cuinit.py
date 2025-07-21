@@ -39,23 +39,15 @@ def cuda_gdb(request):
         return gdb
 
 
-def cuinit_called(output: int) -> bool:
-    return output >= 0
-
-
-def cuinit_not_called(output: int) -> bool:
-    return output < 0
-
-
 @pytest.mark.parametrize(
-    "cudf_call, check_called",
+    "cudf_call, should_be_initialized",
     [
-        ("import cudf", cuinit_not_called),
-        ("import cudf; cudf.Series([1])", cuinit_called),
+        ("import cudf", False),
+        ("import cudf; cudf.Series([1])", True),
     ],
 )
 def test_rapids_no_initialize_cuinit(
-    cuda_gdb, monkeypatch, cudf_call, check_called
+    cuda_gdb, monkeypatch, cudf_call, should_be_initialized
 ):
     # When RAPIDS_NO_INITIALIZE is set, importing cudf should _not_
     # create a CUDA context (i.e. cuInit should not be called).
@@ -84,11 +76,10 @@ def test_rapids_no_initialize_cuinit(
             cwd="/",
         )
 
-    cuInit_called = output.stdout.find("in cuInit ()")
     print("Command output:\n")  # noqa: T201
     print("*** STDOUT ***")  # noqa: T201
     print(output.stdout)  # noqa: T201
     print("*** STDERR ***")  # noqa: T201
     print(output.stderr)  # noqa: T201
     assert output.returncode == 0
-    assert check_called(cuInit_called)
+    assert ("in cuInit ()" in output.stdout) == should_be_initialized
