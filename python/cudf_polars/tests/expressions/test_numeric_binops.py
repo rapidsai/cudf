@@ -91,8 +91,8 @@ def test_binop_with_scalar(left_scalar, right_scalar):
 
 
 @pytest.mark.parametrize("zero", [0, pl.lit(0)])
-def test_floor_div_binop_by_zero(zero):
-    df = pl.LazyFrame({"a": [1, 2, 3]})
+def test_floor_div_binop_by_zero(zero, ltype):
+    df = pl.LazyFrame({"a": [1, 0, 3]}, schema={"a": ltype})
 
     q = df.select(pl.col("a") // zero)
 
