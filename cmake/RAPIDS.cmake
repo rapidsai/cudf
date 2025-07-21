@@ -72,7 +72,8 @@ if(rapids-cmake-fetch-via-git)
   FetchContent_Declare(
     rapids-cmake
     GIT_REPOSITORY "${rapids-cmake-url}"
-    GIT_TAG "${rapids-cmake-value-to-clone}")
+    GIT_TAG "${rapids-cmake-value-to-clone}"
+  )
 else()
   string(APPEND rapids-cmake-url "${rapids-cmake-value-to-clone}")
   FetchContent_Declare(rapids-cmake URL "${rapids-cmake-url}")
