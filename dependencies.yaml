@@ -459,24 +459,6 @@ dependencies:
         packages:
           # Align nvcomp version with rapids-cmake
           - libnvcomp-dev==4.2.0.11
-    specific:
-      - output_types: [requirements, pyproject]
-        matrices:
-          - matrix:
-              cuda: "12.*"
-              use_cuda_wheels: "true"
-            packages:
-              - nvidia-nvcomp-cu12==4.2.0.11
-          # if use_cuda_wheels=false is provided, do not add dependencies on any CUDA wheels
-          # (e.g. for DLFW and pip devcontainers)
-          - matrix:
-              use_cuda_wheels: "false"
-            packages:
-          # if no matching matrix selectors passed, list the unsuffixed packages
-          # (just as a source of documentation, as this populates pyproject.toml in source control)
-          - matrix:
-            packages:
-              - nvidia-nvcomp==4.2.0.11
   rapids_build_skbuild:
     common:
       - output_types: [conda, requirements, pyproject]
