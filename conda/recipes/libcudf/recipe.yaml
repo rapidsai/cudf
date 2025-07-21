@@ -72,7 +72,7 @@ cache:
         then:
           - libcufile-dev
       - cuda-version =${{ cuda_version }}
-      - libnvcomp ${{ nvcomp_version }}
+      - libnvcomp-dev ${{ nvcomp_version }}
       - dlpack ${{ dlpack_version }}
       - librdkafka ${{ librdkafka_version }}
       - flatbuffers =${{ flatbuffers_version }}
@@ -106,7 +106,7 @@ outputs:
         - cuda-version =${{ cuda_version }}
         - libkvikio =${{ minor_version }}
         - librmm =${{ minor_version }}
-        - libnvcomp ${{ nvcomp_version }}
+        - libnvcomp-dev ${{ nvcomp_version }}
         - rapids-logger =0.1
         - zlib ${{ zlib_version }}
         - cuda-cudart-dev
@@ -116,7 +116,6 @@ outputs:
         - if: linux and x86_64
           then:
             - libcufile
-        - libnvcomp ${{ nvcomp_version }}
         - librmm =${{ minor_version }}
         - libkvikio =${{ minor_version }}
         - dlpack ${{ dlpack_version }}
@@ -136,7 +135,6 @@ outputs:
           - librdkafka
           - libzlib
           - librmm
-          - libnvcomp
     tests:
       - script:
         - test -f $PREFIX/include/cudf/column/column.hpp
