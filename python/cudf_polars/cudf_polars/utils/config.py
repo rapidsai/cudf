@@ -145,7 +145,7 @@ class ParquetOptions:
 def default_blocksize(scheduler: str) -> int:
     """Return the default blocksize."""
     device_size = get_total_device_memory()
-    if device_size is None:
+    if device_size is None:  # pragma: no cover
         # System doesn't have proper "GPU memory".
         # Fall back to a conservative 1GB default.
         return 1_000_000_000
