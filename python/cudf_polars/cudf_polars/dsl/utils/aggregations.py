@@ -157,6 +157,10 @@ def decompose_single_agg(
             )
     if isinstance(agg, expr.Ternary):
         raise NotImplementedError("Ternary inside groupby")
+    if not agg.is_pointwise and isinstance(agg, expr.BooleanFunction):
+        raise NotImplementedError(
+            f"Non pointwise boolean function {agg.name!r} not supported in groupby or rolling context"
+        )
     if agg.is_pointwise:
         aggs, posts = _decompose_aggs(
             (expr.NamedExpr(next(name_generator), child) for child in agg.children),
