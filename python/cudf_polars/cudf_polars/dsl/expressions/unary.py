@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import pylibcudf as plc
 
@@ -349,7 +349,7 @@ class UnaryFunction(Expr):
             return Column(
                 plc.sorting.top_k(
                     column.obj,
-                    k.obj.to_scalar().to_py(),
+                    cast(Literal, self.children[1]).value,
                     plc.types.Order.ASCENDING
                     if reverse
                     else plc.types.Order.DESCENDING,
