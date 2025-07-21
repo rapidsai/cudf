@@ -28,11 +28,12 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cub/device/device_radix_sort.cuh>
 #include <thrust/binary_search.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/logical.h>
-#include <thrust/sort.h>
+#include <thrust/sequence.h>
 #include <thrust/transform_scan.h>
 #include <thrust/unique.h>
 
@@ -264,10 +265,49 @@ adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
                         rmm::cuda_stream_view stream)
 {
   // sort by row count
-  rmm::device_uvector<cumulative_page_info> c_info_sorted =
-    make_device_uvector_async(c_info, stream, cudf::get_current_device_resource_ref());
-  thrust::sort(
-    rmm::exec_policy_nosync(stream), c_info_sorted.begin(), c_info_sorted.end(), row_count_less{});
+  rmm::device_uvector<cumulative_page_info> c_info_sorted(c_info.size(), stream);
+  {
+    rmm::device_uvector<size_t> end_row_indices(c_info.size(), stream);
+    rmm::device_uvector<size_t> sorted_end_row_indices(c_info.size(), stream);
+    rmm::device_uvector<size_t> indices(c_info.size(), stream);
+    rmm::device_uvector<size_t> sort_order(c_info.size(), stream);
+
+    thrust::sequence(rmm::exec_policy_nosync(stream), indices.begin(), indices.end(), 0);
+    thrust::transform(rmm::exec_policy_nosync(stream),
+                      c_info.begin(),
+                      c_info.end(),
+                      end_row_indices.begin(),
+                      [] __device__(auto const& c) { return c.end_row_index; });
+
+    auto tmp_bytes = std::size_t{0};
+    cub::DeviceRadixSort::SortPairs(nullptr,
+                                    tmp_bytes,
+                                    end_row_indices.begin(),         // keys in
+                                    sorted_end_row_indices.begin(),  // sorted keys out
+                                    indices.begin(),                 // values in
+                                    sort_order.begin(),              // sorted values out
+                                    c_info.size(),
+                                    0,
+                                    sizeof(size_t) * 8,
+                                    stream.value());
+    auto tmp_stg = rmm::device_buffer(tmp_bytes, stream);
+    cub::DeviceRadixSort::SortPairs(tmp_stg.data(),
+                                    tmp_bytes,
+                                    end_row_indices.begin(),         // keys in
+                                    sorted_end_row_indices.begin(),  // sorted keys out
+                                    indices.begin(),                 // values in
+                                    sort_order.begin(),              // sorted values out
+                                    c_info.size(),
+                                    0,
+                                    sizeof(size_t) * 8,
+                                    stream.value());
+
+    thrust::transform(rmm::exec_policy_nosync(stream),
+                      sort_order.begin(),
+                      sort_order.end(),
+                      c_info_sorted.begin(),
+                      [c_info] __device__(std::size_t i) { return c_info[i]; });
+  }
 
   // page keys grouped by split.
   rmm::device_uvector<int32_t> page_keys_by_split{c_info.size(), stream};
