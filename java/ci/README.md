@@ -34,7 +34,7 @@ nvidia-docker run -it cudf-build:12.9.1-devel-rocky8 bash
 You can download the cuDF repo in the docker container or you can mount it into the container.
 Here I choose to download again in the container.
 ```bash
-git clone --recursive https://github.com/rapidsai/cudf.git -b branch-25.08
+git clone --recursive https://github.com/rapidsai/cudf.git -b branch-25.10
 ```
 
 ### Build cuDF jar with devtoolset
@@ -47,4 +47,4 @@ scl enable gcc-toolset-11 "java/ci/build-in-docker.sh"
 
 ### The output
 
-You can find the cuDF jar in java/target/ like cudf-25.08.0-SNAPSHOT-cuda12.jar.
+You can find the cuDF jar in java/target/ like cudf-25.10.0-SNAPSHOT-cuda12.jar.
