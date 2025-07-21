@@ -1048,7 +1048,7 @@ cdef class Column:
 
         if not plc_is_fixed_width(self.type()) and self.type().id() != type_id.STRING:
             raise NotImplementedError(
-                f"Only fixed-width and string columns are supported"
+                "Only fixed-width and string columns are supported"
             )
 
         cdef column_view cv = self.view()
@@ -1060,7 +1060,6 @@ cdef class Column:
             result.append(Scalar.from_libcudf(move(s)).to_py())
 
         return result
-
 
     @classmethod
     def struct_from_children(cls, children: Iterable[Column]):

@@ -225,14 +225,18 @@ def test_from_nested_list_of_large_strings(dummy_large_string_type):
         [1.23, 4.56, 7.89],
         [True, False, True],
         ["foo", "bar", "baz"],
-    ]
+    ],
 )
 def test_to_pylist(expect):
     got = plc.Column.from_iterable_of_py(expect).to_pylist()
     assert expect == got
 
 
-
 def test_to_pylist_unsupported():
-    with pytest.raises(NotImplementedError, match="Only fixed-width and string columns are supported"):
-        plc.Column.from_iterable_of_py([[1, 2], [3, 4]], dtype=plc.DataType(plc.TypeId.INT32)).to_pylist()
+    with pytest.raises(
+        NotImplementedError,
+        match="Only fixed-width and string columns are supported",
+    ):
+        plc.Column.from_iterable_of_py(
+            [[1, 2], [3, 4]], dtype=plc.DataType(plc.TypeId.INT32)
+        ).to_pylist()
