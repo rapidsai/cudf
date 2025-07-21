@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import functools
-import io
 from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -421,21 +420,11 @@ class StringFunction(Expr):
             return Column(plc_column, dtype=self.dtype)
         elif self.name is StringFunction.Name.JsonDecode:
             plc_column = self.children[0].evaluate(df, context=context).obj
-            options = (
-                plc.io.json.JsonReaderOptions.builder(
-                    plc.io.types.SourceInfo([io.StringIO("")])
-                )
-                .lines(val=True)
-                .dtypes(_dtypes_for_json_decode(self.dtype))
-                .compression(plc.io.types.CompressionType.NONE)
-                .recovery_mode(plc.io.types.JSONRecoveryMode.RECOVER_WITH_NULL)
-                .build()
-            )
             plc_table_with_metadata = plc.io.json.read_json_from_string_column(
                 plc_column,
                 plc.Scalar.from_py("\n", plc_column.type()),
                 plc.Scalar.from_py("NULL", plc_column.type()),
-                options,
+                _dtypes_for_json_decode(self.dtype),
             )
             return Column(
                 plc.Column.struct_from_children(plc_table_with_metadata.columns),

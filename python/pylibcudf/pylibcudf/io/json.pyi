@@ -77,7 +77,9 @@ def read_json_from_string_column(
     input: Column,
     separator: Scalar,
     narep: Scalar,
-    options: JsonReaderOptions,
+    dtypes: list,
+    compression: CompressionType,
+    recovery_mode: JSONRecoveryMode,
     stream: Stream = None,
 ) -> TableWithMetadata: ...
 

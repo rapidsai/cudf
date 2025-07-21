@@ -84,7 +84,9 @@ cpdef TableWithMetadata read_json_from_string_column(
     Column input,
     Scalar separator,
     Scalar narep,
-    JsonReaderOptions options,
+    list dtypes = *,
+    compression_type compression = *,
+    json_recovery_mode_t recovery_mode = *,
     Stream stream = *)
 
 cdef class JsonWriterOptions:

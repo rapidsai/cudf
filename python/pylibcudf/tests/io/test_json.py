@@ -391,18 +391,9 @@ def test_read_json_string_column():
     separator = plc.Scalar.from_arrow(pa.scalar("\n"))
     narep = plc.Scalar.from_arrow(pa.scalar("null"))
 
-    # Create empty options (source will be ignored)
-    options = (
-        plc.io.json.JsonReaderOptions.builder(
-            plc.io.SourceInfo([io.StringIO("")])
-        )
-        .lines(True)
-        .build()
-    )
-
     # Read JSON from string column
     result = plc.io.json.read_json_from_string_column(
-        string_col, separator, narep, options
+        string_col, separator, narep
     )
 
     # Expected result

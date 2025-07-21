@@ -783,15 +783,15 @@ cpdef TableWithMetadata read_json_from_string_column(
     Column input,
     Scalar separator,
     Scalar narep,
-    JsonReaderOptions options,
+    list dtypes = None,
+    compression_type compression = compression_type.NONE,
+    json_recovery_mode_t recovery_mode = json_recovery_mode_t.RECOVER_WITH_NULL,
     Stream stream = None
 ):
     """
     Read from JSON format.
 
-    The source to read from is a string column, and any reader-specific
-    behavior is encapsulated in the `options` object.
-    Any SourceInfo option passed in the `options` object is ignored.
+    The source to read from is a string column.
 
     For details, see :cpp:func:`read_json`.
 
@@ -803,8 +803,12 @@ cpdef TableWithMetadata read_json_from_string_column(
         String scalar used to join the input strings
     narep: Scalar
         String scalar used to replace null values during join
-    options: JsonReaderOptions
-        Settings for controlling reading behavior
+    dtypes: List
+        Set data types for columns to be read.
+    compression: compression_type
+        Set compression type of the string column contents
+    recovery_mode: json_recovery_mode_t
+        Set recovery option for corrupted JSON input in string column
     stream: Stream
         CUDA stream used for device memory operations and kernel launches
 
@@ -840,15 +844,20 @@ cpdef TableWithMetadata read_json_from_string_column(
             [DeviceBuffer.c_from_unique_ptr(move(c_contents.data))])
 
     # Create new options using the joined string as source
-    cdef JsonReaderOptions new_options = (
+    cdef JsonReaderOptions options = (
         JsonReaderOptions.builder(joined_source)
-        .lines(True)  # Assume lines format for joined strings
+        .lines(True)
+        .compression(compression)
+        .recovery_mode(recovery_mode)
         .build()
     )
 
+    if dtypes is not None and len(dtypes) > 0:
+        options.set_dtypes(dtypes)
+
     # Read JSON from the joined string
     with nogil:
-        c_result = move(cpp_read_json(new_options.c_obj, s.view()))
+        c_result = move(cpp_read_json(options.c_obj, s.view()))
 
     return TableWithMetadata.from_libcudf(c_result, s)
 
