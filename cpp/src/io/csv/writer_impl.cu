@@ -412,7 +412,7 @@ void write_csv(data_sink* out_sink,
   // write header: column names separated by delimiter:
   // (even for tables with no rows)
   //
-  cudf::scoped_range range("io::csv::write_csv");
+  CUDF_FUNC_RANGE();
 
   write_chunked_begin(
     out_sink, table, user_column_names, options, stream, cudf::get_current_device_resource_ref());
