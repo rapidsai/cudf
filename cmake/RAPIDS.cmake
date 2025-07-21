@@ -18,9 +18,7 @@
 cmake_minimum_required(VERSION 3.30.4 FATAL_ERROR)
 
 # Allow users to control which version is used
-if(NOT rapids-cmake-version OR NOT rapids-cmake-version MATCHES [[^([0-9][0-9])\.([0-9][0-9])$]])
- Use STRINGS to trim whitespace/newlines
-file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/../RAPIDS_BRANCH" _rapids_branch)
+if(NOT rapids-cmake-branch OR NOT rapids-cmake-version)
   message(
     FATAL_ERROR "The CMake variable `rapids-cmake-branch` or `rapids-cmake-version` must be defined"
   )
@@ -74,8 +72,7 @@ if(rapids-cmake-fetch-via-git)
   FetchContent_Declare(
     rapids-cmake
     GIT_REPOSITORY "${rapids-cmake-url}"
-    GIT_TAG "${rapids-cmake-value-to-clone}"
-  )
+    GIT_TAG "${rapids-cmake-value-to-clone}")
 else()
   string(APPEND rapids-cmake-url "${rapids-cmake-value-to-clone}")
   FetchContent_Declare(rapids-cmake URL "${rapids-cmake-url}")
