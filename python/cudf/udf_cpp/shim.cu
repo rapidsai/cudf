@@ -70,7 +70,7 @@ __device__ NRT_MemInfo* make_meminfo_for_new_udf_string(udf_string* udf_str)
     return &(mi_and_str->mi);
   } else {
     __trap();
-    return nullptr;  // Unreachable but added to avoid compiler warnings
+    return nullptr;
   }
 }
 

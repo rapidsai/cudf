@@ -72,7 +72,7 @@ target_link_libraries(cudf_strings_udf PUBLIC cudf::cudf)
 install(TARGETS cudf_strings_udf DESTINATION ./cudf/_lib/)
 
 # Create the shim library for each architecture.
-set(SHIM_CUDA_FLAGS --expt-relaxed-constexpr -rdc=true --expt-extended-lambda)
+set(SHIM_CUDA_FLAGS --expt-relaxed-constexpr -rdc=true)
 
 # always build a default PTX file in case RAPIDS_NO_INITIALIZE is set and the device cc can't be
 # safely queried through a context
