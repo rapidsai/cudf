@@ -105,6 +105,7 @@ from cudf.utils.dtypes import (
     is_column_like,
     is_dtype_obj_numeric,
     is_mixed_with_object_dtype,
+    is_pandas_nullable_extension_dtype,
     min_signed_type,
 )
 from cudf.utils.ioutils import (
@@ -6955,6 +6956,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         prepared, mask, common_dtype = self._prepare_for_rowwise_op(
             method, skipna, numeric_only
         )
+
         for col in prepared._column_names:
             if prepared._data[col].nullable:
                 prepared._data[col] = (
@@ -6974,14 +6976,19 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             method = _cupy_nan_methods_map[method]
 
         result = getattr(cupy, method)(arr, axis=1, **kwargs)
-
+        # import pdb;pdb.set_trace()
         if result.ndim == 1:
             type_coerced_methods = {
                 "count",
                 "min",
+                "nanmin",
                 "max",
+                "nanmax",
                 "sum",
+                "nansum",
                 "prod",
+                "nanprod",
+                "product",
                 "cummin",
                 "cummax",
                 "cumsum",
@@ -6993,6 +7000,40 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 or (common_dtype is not None and common_dtype.kind == "M")
                 else None
             )
+            # import pdb;pdb.set_trace()
+            if (
+                cudf.get_option("mode.pandas_compatible")
+                and result_dtype is None
+                and is_pandas_nullable_extension_dtype(common_dtype)
+            ):
+                if (
+                    method
+                    in {
+                        "kurt",
+                        "kurtosis",
+                        "mean",
+                        "nanmean",
+                        "median",
+                        "sem",
+                        "skew",
+                        "std",
+                        "nanstd",
+                        "var",
+                        "nanvar",
+                    }
+                    and common_dtype.kind not in "f"
+                ):
+                    result_dtype = get_dtype_of_same_kind(
+                        common_dtype, np.dtype(np.float64)
+                    )
+                else:
+                    result_dtype = get_dtype_of_same_kind(
+                        common_dtype, result.dtype
+                    )
+            if result_dtype.kind == "b" and result.dtype.kind != "b":
+                result_dtype = get_dtype_of_same_kind(
+                    common_dtype, result.dtype
+                )
             result = as_column(result, dtype=result_dtype)
             if mask is not None:
                 result = result.set_mask(mask._column.as_mask())

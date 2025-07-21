@@ -684,7 +684,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 raise ValueError(f"Unsupported mode: {mode}")
         else:
             obj = None
-        return cuda.as_cuda_array(obj).view(self.dtype)
+        if cudf.get_option("mode.pandas_compatible"):
+            return cuda.as_cuda_array(obj).view(
+                getattr(self.dtype, "numpy_dtype", self.dtype)
+            )
+        else:
+            return cuda.as_cuda_array(obj).view(self.dtype)
 
     def mask_array_view(
         self, *, mode: Literal["write", "read"] = "write"
@@ -793,7 +798,20 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         """
         if len(self) == 0:
             return np.array([], dtype=self.dtype)
-
+        # import pdb;pdb.set_trace()
+        if cudf.get_option(
+            "mode.pandas_compatible"
+        ) and is_pandas_nullable_extension_dtype(self.dtype):
+            if self.dtype.kind in "iuf":
+                with acquire_spill_lock():
+                    res = self.data_array_view(mode="read").copy_to_host()
+                if self.has_nulls():
+                    res = np.where(
+                        self.isnull().values_host,
+                        np.nan,
+                        res,
+                    )
+                return res
         if self.has_nulls():
             raise ValueError("Column must have no nulls.")
 

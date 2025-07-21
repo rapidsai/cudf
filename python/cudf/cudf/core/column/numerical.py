@@ -452,7 +452,16 @@ class NumericalColumn(NumericalBaseColumn):
     def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
         if dtype == self.dtype:
             return self
+
         if cudf.get_option("mode.pandas_compatible"):
+            if (
+                not is_pandas_nullable_extension_dtype(self.dtype)
+                and is_pandas_nullable_extension_dtype(dtype)
+                and dtype.kind == "f"  # type: ignore[union-attr]
+            ):
+                res = self.nans_to_nulls().cast(dtype=dtype)  # type: ignore[return-value]
+                res._dtype = dtype
+                return res  # type: ignore[return-value]
             if dtype_to_pylibcudf_type(dtype) == dtype_to_pylibcudf_type(
                 self.dtype
             ):

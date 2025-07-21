@@ -112,6 +112,7 @@ test_pandas_object_series \
 
 # test_dtypes: With cudf.pandas loaded, to_pandas() preserves Arrow dtypes like list and struct, so pandas
 # columns aren't object anymore. The test expects object, causing a mismatch.
+# test_to_numpy[pandas]: Narwhals expects this test to fail, passes for cudf.pandas.
 TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_PANDAS=" \
 test_dtypes \
 "
