@@ -400,7 +400,7 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
   }
 
   /**
-   * @brief Returns reference to element at the specified index.
+   * @brief Returns a copy of the element at the specified index
    *
    * If the element at the specified index is NULL, i.e.,
    * `is_null(element_index) == true`, then any attempt to use the result will
@@ -414,7 +414,7 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
    *
    * @tparam T The element type
    * @param element_index Position of the desired element
-   * @return reference to the element at the specified index
+   * @return The element at the specified index
    */
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   [[nodiscard]] __device__ T element(size_type element_index) const noexcept

@@ -1,7 +1,6 @@
 # Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 import string
-from itertools import product
 
 import numpy as np
 import pandas as pd
@@ -18,21 +17,31 @@ from cudf.testing._utils import (
     expect_warning_if,
 )
 
-sort_nelem_args = [2, 257]
-sort_dtype_args = [
-    np.int32,
-    np.int64,
-    np.uint32,
-    np.uint64,
-    np.float32,
-    np.float64,
-]
-sort_slice_args = [slice(1, None), slice(None, -1), slice(1, -1)]
+
+@pytest.fixture(params=[2, 257])
+def nelem(request):
+    return request.param
 
 
-@pytest.mark.parametrize(
-    "nelem,dtype", list(product(sort_nelem_args, sort_dtype_args))
+@pytest.fixture(
+    params=[
+        np.int32,
+        np.int64,
+        np.uint32,
+        np.uint64,
+        np.float32,
+        np.float64,
+    ]
 )
+def dtype(request):
+    return request.param
+
+
+@pytest.fixture(params=[slice(1, None), slice(None, -1), slice(1, -1)])
+def sliceobj(request):
+    return request.param
+
+
 def test_dataframe_sort_values(nelem, dtype):
     rng = np.random.default_rng(seed=0)
     df = DataFrame()
@@ -89,9 +98,7 @@ def test_series_sort_values_ignore_index(ignore_index):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize(
-    "nelem,sliceobj", list(product([10, 100], sort_slice_args))
-)
+@pytest.mark.parametrize("nelem", [10, 100])
 def test_dataframe_sort_values_sliced(nelem, sliceobj):
     rng = np.random.default_rng(seed=0)
     df = pd.DataFrame()
@@ -103,10 +110,7 @@ def test_dataframe_sort_values_sliced(nelem, sliceobj):
     assert (got.to_pandas() == expect).all()
 
 
-@pytest.mark.parametrize(
-    "nelem,dtype,asc",
-    list(product(sort_nelem_args, sort_dtype_args, [True, False])),
-)
+@pytest.mark.parametrize("asc", [True, False])
 def test_series_argsort(nelem, dtype, asc):
     rng = np.random.default_rng(seed=0)
     sr = Series((100 * rng.random(nelem)).astype(dtype))
@@ -120,9 +124,7 @@ def test_series_argsort(nelem, dtype, asc):
     np.testing.assert_array_equal(expected, res.to_numpy())
 
 
-@pytest.mark.parametrize(
-    "nelem,asc", list(product(sort_nelem_args, [True, False]))
-)
+@pytest.mark.parametrize("asc", [True, False])
 def test_series_sort_index(nelem, asc):
     rng = np.random.default_rng(seed=0)
     sr = Series(100 * rng.random(nelem))
@@ -184,9 +186,7 @@ def test_dataframe_nlargest_nsmallest(nelem, n, op, columns):
     assert_eq(getattr(df, op)(n, columns), getattr(pdf, op)(n, columns))
 
 
-@pytest.mark.parametrize(
-    "counts,sliceobj", list(product([(10, 5), (100, 10)], sort_slice_args))
-)
+@pytest.mark.parametrize("counts", [(10, 5), (100, 10)])
 def test_dataframe_nlargest_sliced(counts, sliceobj):
     nelem, n = counts
     rng = np.random.default_rng(seed=0)
@@ -200,9 +200,7 @@ def test_dataframe_nlargest_sliced(counts, sliceobj):
     assert (got.to_pandas() == expect).all().all()
 
 
-@pytest.mark.parametrize(
-    "counts,sliceobj", list(product([(10, 5), (100, 10)], sort_slice_args))
-)
+@pytest.mark.parametrize("counts", [(10, 5), (100, 10)])
 def test_dataframe_nsmallest_sliced(counts, sliceobj):
     nelem, n = counts
     rng = np.random.default_rng(seed=0)
@@ -280,13 +278,13 @@ def test_dataframe_multi_column_nulls(
     )
 
 
-@pytest.mark.parametrize(
-    "ascending", list(product((True, False), (True, False)))
-)
+@pytest.mark.parametrize("ascending1", [True, False])
+@pytest.mark.parametrize("ascending2", [True, False])
 @pytest.mark.parametrize("na_position", ["first", "last"])
 def test_dataframe_multi_column_nulls_multiple_ascending(
-    ascending, na_position
+    ascending1, ascending2, na_position
 ):
+    ascending = (ascending1, ascending2)
     pdf = pd.DataFrame(
         {"a": [3, 1, None, 2, 2, None, 1], "b": [1, 2, 3, 4, 5, 6, 7]}
     )
@@ -384,9 +382,6 @@ def test_dataframe_scatter_by_map(map_size, nelem, keep):
             isinstance(frame.index, type(df2.index))
 
 
-@pytest.mark.parametrize(
-    "nelem,dtype", list(product(sort_nelem_args, sort_dtype_args))
-)
 @pytest.mark.parametrize(
     "kind", ["quicksort", "mergesort", "heapsort", "stable"]
 )

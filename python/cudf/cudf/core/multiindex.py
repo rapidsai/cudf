@@ -33,10 +33,13 @@ from cudf.core.index import (
     ensure_index,
 )
 from cudf.core.join._join_helpers import _match_join_keys
+from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     is_column_like,
+    is_dtype_obj_numeric,
+    is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import (
@@ -152,7 +155,12 @@ class MultiIndex(Index):
         copy=False,
         name=None,
         verify_integrity=True,
+        nan_as_null=no_default,
     ) -> None:
+        if nan_as_null is no_default:
+            nan_as_null = (
+                False if cudf.get_option("mode.pandas_compatible") else None
+            )
         if isinstance(levels, (pd.MultiIndex, MultiIndex)):
             # TODO: Figure out why cudf.Index(pd.MultiIndex(...)) goes through here twice
             # Somehow due to from_pandas calling cls?
@@ -203,6 +211,24 @@ class MultiIndex(Index):
                     # Now we can gather and insert null automatically
                     code[code == -1] = np.iinfo(SIZE_TYPE_DTYPE).min
             result_col = level._column.take(code, nullify=True)
+            if (
+                cudf.get_option("mode.pandas_compatible")
+                and nan_as_null is False
+                and not is_dtype_obj_numeric(result_col.dtype)
+                and not is_pandas_nullable_extension_dtype(level.dtype)
+                and result_col.has_nulls(include_nan=False)
+            ):
+                raise MixedTypeError(
+                    "MultiIndex levels cannot have mixed types when `mode.pandas_compatible` is True and `nan_as_null` is False."
+                )
+            if (
+                cudf.get_option("mode.pandas_compatible")
+                and not is_dtype_obj_numeric(result_col.dtype)
+                and result_col.has_nulls(include_nan=False)
+                and nan_as_null is False
+                and not is_pandas_nullable_extension_dtype(level.dtype)
+            ):
+                result_col = result_col.fillna(np.nan)
             source_data[i] = result_col._with_type_metadata(level.dtype)
 
         Frame.__init__(self, ColumnAccessor(source_data))
@@ -1500,6 +1526,7 @@ class MultiIndex(Index):
             names_from_arrays.append(getattr(array, "name", None))
         if names is None:
             names = names_from_arrays
+
         return cls(
             codes=codes, levels=levels, sortorder=sortorder, names=names
         )
@@ -1690,7 +1717,10 @@ class MultiIndex(Index):
             for level in multiindex.levels
         ]
         return cls(
-            levels=levels, codes=multiindex.codes, names=multiindex.names
+            levels=levels,
+            codes=multiindex.codes,
+            names=multiindex.names,
+            nan_as_null=nan_as_null,
         )
 
     @cached_property  # type: ignore
@@ -1933,7 +1963,9 @@ class MultiIndex(Index):
             return self._return_get_indexer_result(result.values)
         try:
             target = cudf.MultiIndex.from_tuples(target)
-        except TypeError:
+        except TypeError as e:
+            if isinstance(e, MixedTypeError):
+                raise e
             return self._return_get_indexer_result(result.values)
 
         join_keys = [

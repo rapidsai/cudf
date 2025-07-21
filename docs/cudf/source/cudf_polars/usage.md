@@ -1,12 +1,12 @@
 # Usage
 
-`cudf-polars` enables GPU acceleration for Polars' LazyFrame API by executing logical plans with cuDF and pylibcudf. It requires minimal code changes and works by specifying a GPU execution engine during collection or profiling.
+`cudf-polars` enables GPU acceleration for Polars' LazyFrame API by executing logical plans with cuDF and pylibcudf. It requires minimal code changes and works by specifying a GPU engine during execution.
 
 For a high-level overview of GPU support in Polars, see the [Polars GPU support guide](https://docs.pola.rs/user-guide/gpu-support/).
 
 ## Getting Started
 
-Use `cudf-polars` by calling `.collect(engine="gpu")` or `.profile(engine="gpu")` on a LazyFrame:
+Use `cudf-polars` by calling `.collect(engine="gpu")` or `.sink_<method>(engine="gpu")` on a LazyFrame:
 
 ```python
 import polars as pl
@@ -30,12 +30,17 @@ With `raise_on_fail=True`, the query will raise an exception if it cannot be run
 
 ## GPU Profiling
 
-You can profile your code by passing `engine="gpu"` or `engine=pl.GPUEngine(...)`
+The `streaming` executor does not support profiling query execution through the `LazyFrame.profile` method. With the default `synchronous` scheduler for the `streaming` executor, we recommend using [NVIDIA NSight Systems](https://developer.nvidia.com/nsight-systems) to profile your queries.
+cudf-polars includes [nvtx](https://nvidia.github.io/NVTX/) annotations to help you understand where time is being spent.
+
+With the `distributed` scheduler for the `streaming` executor, we recommend using Dask's [built-in diagnostics](https://docs.dask.org/en/stable/diagnostics-distributed.html).
+
+Finally, the `"in-memory"` *does* support [`LazyFrame.profile`](https://docs.pola.rs/api/python/stable/reference/lazyframe/api/polars.LazyFrame.profile.html).
 
 ```python
 import polars as pl
 q = pl.scan_parquet("ny-taxi/2024/*.parquet").filter(pl.col("total_amount") > 15.0)
-profile = q.profile(engine="gpu")
+profile = q.profile(engine=pl.GPUEngine(executor="in-memory"))
 ```
 
 The result is a tuple containing 2 materialized DataFrames - the first with the query result and the second with profiling information of each node that is executed.

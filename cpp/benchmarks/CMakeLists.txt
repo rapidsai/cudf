@@ -206,7 +206,7 @@ ConfigureNVBench(SEARCH_NVBENCH search/contains_scalar.cpp search/contains_table
 # * sort benchmark --------------------------------------------------------------------------------
 ConfigureNVBench(
   SORT_NVBENCH sort/rank.cpp sort/rank_lists.cpp sort/rank_structs.cpp sort/segmented_sort.cpp
-  sort/sort.cpp sort/sort_lists.cpp sort/sort_strings.cpp sort/sort_structs.cpp
+  sort/sort.cpp sort/sort_lists.cpp sort/sort_strings.cpp sort/sort_structs.cpp sort/top_k.cpp
 )
 
 # ##################################################################################################
@@ -307,6 +307,13 @@ ConfigureNVBench(
 )
 
 # ##################################################################################################
+# * parquet experimental reader benchmark
+# ----------------------------------------------------------------------
+ConfigureNVBench(
+  PARQUET_EXPERIMENTAL_READER_NVBENCH io/parquet/experimental/parquet_dictionary_page_filter.cpp
+)
+
+# ##################################################################################################
 # * parquet multithread reader benchmark
 # ----------------------------------------------------------------------
 ConfigureNVBench(PARQUET_MULTITHREAD_READER_NVBENCH io/parquet/parquet_reader_multithread.cpp)
@@ -385,6 +392,7 @@ ConfigureNVBench(
   string/factory.cpp
   string/filter.cpp
   string/find.cpp
+  string/find_instance.cpp
   string/find_multiple.cpp
   string/join_strings.cpp
   string/lengths.cpp

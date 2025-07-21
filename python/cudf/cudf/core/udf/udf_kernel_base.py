@@ -14,13 +14,13 @@ from cudf.core.udf.masked_typing import MaskedType
 from cudf.core.udf.nrt_utils import CaptureNRTUsage, nrt_enabled
 from cudf.core.udf.strings_typing import str_view_arg_handler
 from cudf.core.udf.utils import (
+    UDF_SHIM_FILE,
     _generate_cache_key,
     _masked_array_type_from_col,
-    _ptx_file,
     _supported_cols_from_frame,
+    compile_udf,
     precompiled as kernel_cache,
 )
-from cudf.utils import cudautils
 from cudf.utils._numba import _CUDFNumbaConfig
 from cudf.utils.performance_tracking import _performance_tracking
 
@@ -105,7 +105,7 @@ class ApplyKernelBase(ABC):
         # Get the return type. The PTX is also returned by compile_udf, but is not
         # needed here.
         with _CUDFNumbaConfig():
-            _, output_type = cudautils.compile_udf(self.func, compile_sig)
+            _, output_type = compile_udf(self.func, compile_sig)
         if isinstance(output_type, MaskedType):
             result = output_type.value_type
         else:
@@ -157,7 +157,9 @@ class ApplyKernelBase(ABC):
         ctx = nrt_enabled() if nrt else nullcontext()
         with ctx:
             kernel = cuda.jit(
-                self.sig, link=[_ptx_file()], extensions=[str_view_arg_handler]
+                self.sig,
+                link=[UDF_SHIM_FILE],
+                extensions=[str_view_arg_handler],
             )(_kernel)
         return kernel
 

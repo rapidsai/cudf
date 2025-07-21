@@ -655,7 +655,13 @@ def _(
         if name in needs_cast:
             return expr.Cast(dtype, result_expr)
         return result_expr
-
+    elif not POLARS_VERSION_LT_131 and isinstance(name, pl_expr.StructFunction):
+        return expr.StructFunction(
+            dtype,
+            expr.StructFunction.Name.from_polars(name),
+            options,
+            *(translator.translate_expr(n=n, schema=schema) for n in node.input),
+        )
     elif isinstance(name, str):
         children = (translator.translate_expr(n=n, schema=schema) for n in node.input)
         if name == "log":

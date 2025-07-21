@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import textwrap
 import time
 import warnings
 from functools import cache, partial
@@ -23,6 +24,7 @@ from rmm._cuda import gpu
 
 from cudf_polars.dsl.tracing import CUDF_POLARS_NVTX_DOMAIN
 from cudf_polars.dsl.translate import Translator
+from cudf_polars.utils.config import _env_get_int
 from cudf_polars.utils.timer import Timer
 
 if TYPE_CHECKING:
@@ -44,13 +46,6 @@ _SUPPORTED_PREFETCHES = {
     "gather",
     "hash_join",
 }
-
-
-def _env_get_int(name: str, default: int) -> int:
-    try:
-        return int(os.getenv(name, default))
-    except (ValueError, TypeError):  # pragma: no cover
-        return default  # pragma: no cover
 
 
 @cache
@@ -103,8 +98,7 @@ def default_memory_resource(
         ):
             raise ComputeError(
                 "GPU engine requested, but incorrect cudf-polars package installed. "
-                "If your system has a CUDA 11 driver, please uninstall `cudf-polars-cu12` "
-                "and install `cudf-polars-cu11`"
+                "cudf-polars requires CUDA 12.0+ to installed."
             ) from None
         else:
             raise
@@ -236,6 +230,16 @@ def _callback(
                 return df, timer.timings
         elif config_options.executor.name == "streaming":
             from cudf_polars.experimental.parallel import evaluate_streaming
+
+            if timer is not None:
+                msg = textwrap.dedent("""\
+                    LazyFrame.profile() is not supported with the streaming executor.
+                    To profile execution with the streaming executor, use:
+
+                    - NVIDIA NSight Systems with the 'streaming' scheduler.
+                    - Dask's built-in profiling tools with the 'distributed' scheduler.
+                    """)
+                raise NotImplementedError(msg)
 
             return evaluate_streaming(ir, config_options).to_polars()
         assert_never(f"Unknown executor '{config_options.executor}'")
