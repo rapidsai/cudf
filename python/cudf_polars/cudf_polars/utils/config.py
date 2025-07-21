@@ -51,8 +51,6 @@ def get_total_device_memory() -> int | None:
     except pynvml.NVMLError_NotSupported:  # pragma: no cover
         # System doesn't have proper "GPU memory".
         return None
-    except Exception:  # pragma: no cover
-        return None
 
 
 @functools.cache
