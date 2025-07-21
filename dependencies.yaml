@@ -211,8 +211,8 @@ files:
     includes:
       - depends_on_libkvikio
       - depends_on_librmm
-      # TODO(nvcomp): when `nvcomp` supports Python 3.13 and we de-vendor `nvcomp` from `kvikio`
-      # this dependency should be restored
+      # TODO: restore runtime dependency when we no longer vendor nvcomp
+      # (when nvcomp ships C++ wheels)
       # https://github.com/rapidsai/build-planning/issues/171
       # - depends_on_libnvcomp
       - depends_on_rapids_logger
