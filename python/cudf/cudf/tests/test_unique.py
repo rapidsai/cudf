@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import cupy as cp
 import numpy as np
@@ -11,20 +11,20 @@ from cudf.testing import assert_eq
 
 @pytest.fixture
 def df():
-    df = cudf.DataFrame()
     rng = np.random.default_rng(seed=0)
-
     arr = rng.integers(2, size=10, dtype=np.int64)
-    df["foo"] = arr
-    df["bar"] = cudf.Series([pd.Timestamp(x) for x in arr])
-
-    return df
+    return pd.DataFrame(
+        {
+            "foo": arr,
+            "bar": [pd.Timestamp(x) for x in arr],
+        }
+    )
 
 
 @pytest.fixture(params=["foo", "bar"])
 def series_test_vals(request, df):
-    actual = cudf.unique(df[request.param])
-    expected = pd.unique(df[request.param].to_pandas())
+    actual = cudf.unique(cudf.Series.from_pandas(df[request.param]))
+    expected = pd.unique(df[request.param])
     return actual, expected
 
 
@@ -47,6 +47,7 @@ def test_unique_series_obj(series_test_vals):
 )
 @pytest.mark.parametrize("col", ["foo", "bar"])
 def test_unique_index_obj(index, col, df):
+    df = cudf.DataFrame.from_pandas(df)
     if index[0] == cudf.MultiIndex:
         df.index = cudf.MultiIndex.from_arrays([df[col], df[col]])
     else:
@@ -71,7 +72,7 @@ def test_unique_index_obj(index, col, df):
 
 
 def test_unique_cupy_ndarray(df):
-    arr = np.asarray(df["foo"].to_pandas())
+    arr = np.asarray(df["foo"])
     garr = cp.asarray(df["foo"])
 
     expected = pd.unique(arr)
@@ -106,10 +107,10 @@ def test_unique_fails_value_error(df):
         ValueError,
         match="Must pass cudf.Series, cudf.Index, or cupy.ndarray object",
     ):
-        cudf.unique(df)
+        cudf.unique(cudf.DataFrame.from_pandas(df))
 
 
-def test_unique_fails_not_implemented_error(df):
+def test_unique_fails_not_implemented_error():
     with cudf.option_context("mode.pandas_compatible", True):
         with pytest.raises(
             NotImplementedError, match="cudf.Categorical is not implemented"
