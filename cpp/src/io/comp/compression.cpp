@@ -445,7 +445,8 @@ void compress(compression_type compression,
   if (inputs.empty()) { return; }
 
   // sort inputs by size, largest first
-  auto const [sorted_inputs, sorted_outputs, order] = sort_tasks(inputs, outputs, stream);
+  auto const [sorted_inputs, sorted_outputs, order] =
+    sort_tasks(inputs, outputs, stream, cudf::get_current_device_resource_ref());
   auto inputs_view  = device_span<device_span<uint8_t const> const>(sorted_inputs);
   auto outputs_view = device_span<device_span<uint8_t> const>(sorted_outputs);
 

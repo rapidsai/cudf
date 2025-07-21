@@ -1232,10 +1232,11 @@ void gpu_copy_uncompressed_blocks(device_span<device_span<uint8_t const> const> 
 
 sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const> inputs,
                                    device_span<device_span<uint8_t> const> outputs,
-                                   rmm::cuda_stream_view stream)
+                                   rmm::cuda_stream_view stream,
+                                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  rmm::device_uvector<std::size_t> order(inputs.size(), stream);
+  rmm::device_uvector<std::size_t> order(inputs.size(), stream, mr);
   thrust::sequence(rmm::exec_policy_nosync(stream), order.begin(), order.end());
   thrust::sort(rmm::exec_policy_nosync(stream),
                order.begin(),
@@ -1244,14 +1245,14 @@ sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const>
                  return inputs[a].size() > inputs[b].size();
                });
 
-  auto sorted_inputs = rmm::device_uvector<device_span<uint8_t const>>(inputs.size(), stream);
+  auto sorted_inputs = rmm::device_uvector<device_span<uint8_t const>>(inputs.size(), stream, mr);
   thrust::gather(rmm::exec_policy_nosync(stream),
                  order.begin(),
                  order.end(),
                  inputs.begin(),
                  sorted_inputs.begin());
 
-  auto sorted_outputs = rmm::device_uvector<device_span<uint8_t>>(outputs.size(), stream);
+  auto sorted_outputs = rmm::device_uvector<device_span<uint8_t>>(outputs.size(), stream, mr);
   thrust::gather(rmm::exec_policy_nosync(stream),
                  order.begin(),
                  order.end(),

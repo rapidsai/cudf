@@ -68,11 +68,13 @@ struct sorted_codec_parameters {
  * @param inputs Device spans of input data to be sorted
  * @param outputs Device spans of output buffers corresponding to inputs
  * @param stream CUDA stream for asynchronous execution
+ * @param mr Memory resource to use for allocations of results
  * @return sorted_codec_parameters containing sorted inputs, outputs, and original ordering
  */
 sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const> inputs,
                                    device_span<device_span<uint8_t> const> outputs,
-                                   rmm::cuda_stream_view stream);
+                                   rmm::cuda_stream_view stream,
+                                   rmm::device_async_resource_ref mr);
 
 /**
  * @brief Finds the split index for input data based on the specified thresholds and target ratio.
