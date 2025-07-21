@@ -600,8 +600,6 @@ void host_decompress(compression_type compression,
   cudf::detail::cuda_memcpy<codec_exec_result>(results, h_results, stream);
 }
 
-enum class host_engine_state : uint8_t { ON, OFF, AUTO, HYBRID };
-
 [[nodiscard]] host_engine_state get_host_engine_state(compression_type compression)
 {
   auto const has_host_support   = is_host_decompression_supported(compression);
@@ -739,38 +737,6 @@ std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t 
   CUDF_FAIL("Unsupported compressed stream type");
 }
 
-[[nodiscard]] size_t find_split_index(device_span<device_span<uint8_t const> const> inputs,
-                                      host_engine_state host_state,
-                                      rmm::cuda_stream_view stream)
-{
-  CUDF_FUNC_RANGE();
-  if (host_state == host_engine_state::OFF or inputs.empty()) { return 0; }
-  if (host_state == host_engine_state::ON) { return inputs.size(); }
-
-  if (host_state == host_engine_state::AUTO) {
-    auto const threshold =
-      getenv_or("LIBCUDF_HOST_DECOMPRESSION_THRESHOLD", default_host_decompression_auto_threshold);
-    return inputs.size() < threshold ? inputs.size() : 0;
-  }
-
-  if (host_state == host_engine_state::HYBRID) {
-    auto const h_inputs    = cudf::detail::make_host_vector(inputs, stream);
-    size_t total_host_size = 0;
-    size_t total_host_to_single_device_thread_ratio =
-      getenv_or("LIBCUDF_HOST_DECOMPRESSION_RATIO", default_host_device_decompression_work_ratio);
-    for (size_t i = 0; i < h_inputs.size(); ++i) {
-      if (total_host_size >= total_host_to_single_device_thread_ratio * h_inputs[i].size()) {
-        return i;
-      }
-      total_host_size += h_inputs[i].size();
-    }
-    return inputs.size();  // No split
-  }
-
-  CUDF_FAIL("Invalid host engine state for decompression: " +
-            std::to_string(static_cast<uint8_t>(host_state)));
-}
-
 void decompress(compression_type compression,
                 device_span<device_span<uint8_t const> const> inputs,
                 device_span<device_span<uint8_t> const> outputs,
@@ -792,7 +758,12 @@ void decompress(compression_type compression,
     results, stream, cudf::get_current_device_resource_ref());
   auto results_view = device_span<codec_exec_result>(tmp_results);
 
-  auto const split_idx = find_split_index(inputs_view, get_host_engine_state(compression), stream);
+  auto const split_idx = find_split_index(
+    inputs_view,
+    get_host_engine_state(compression),
+    getenv_or("LIBCUDF_HOST_DECOMPRESSION_THRESHOLD", default_host_decompression_auto_threshold),
+    getenv_or("LIBCUDF_HOST_DECOMPRESSION_RATIO", default_host_device_decompression_work_ratio),
+    stream);
 
   auto const streams = cudf::detail::fork_streams(stream, 2);
   detail::device_decompress(compression,
