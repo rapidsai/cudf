@@ -57,8 +57,9 @@ the required properties and backs any new string that is created on the device.
 
 ## Data structures
 The core concept is a ``ManagedUDFString`` numba extension type that fulfills the
-requirements to be reference counted by NRT. It is composed of a ``cudf::udf_string``
-that owns its data and a pointer to a ``MemInfo`` that owns that string.
+requirements to be reference counted by NRT. It is composed of a struct that owns
+the string data and a pointer to a ``MemInfo`` object, which the NRT API uses for
+reference counting.
 
 ```python
 @register_model(ManagedUDFString)
@@ -80,8 +81,7 @@ class managed_udf_string_model(models.StructModel):
 ```
 
 The actual NRT APIs for adjusting the reference count of an object expect to operate
-on a small struct called a ``MemInfo`` that _leads_ to the true object and also holds
-the reference count:
+on this ``MemInfo`` object itself rather than the instance:
 
 ```c++
 extern "C"
@@ -100,21 +100,37 @@ the UDF is associated with a separate instance of this ``MemInfo`` struct. An IN
 DECREF on the instance in numba's intermediate representation formed during compilation
 will resolve to an increase or decrease of the `refct` of the ``MemInfo`` associated
 with that instance. The NRT_decref implementation calls the ``dtor`` on the ``data`` if
-the ``refct`` is found to be zero.
+the ``refct`` is found to be zero:
 
-The implementation of operations such as ``concat`` that return a reference counted type
-is also responsible for constructing and initializing a new ``MemInfo`` associated with
-the new instance.
+
+```c++
+extern "C" __device__ void NRT_decref(NRT_MemInfo* mi)
+{
+  if (mi != NULL) {
+    mi->refct--;
+    if (mi->refct == 0) { NRT_MemInfo_call_dtor(mi); }
+  }
+}
+```
 
 ## NRT Requirements
 
-1. The datamodel must return ``True`` for the method ``has_nrt_meminfo()``
-2. The datamodel must implement a method ``get_nrt_meminfo`` which produces a pointer
-  to a `MemInfo`, a small struct that will be operated on
+For a type to participate in Numba's reference counting correctly, the following must be
+true:
 
-``ManagedUDFString`` fulfills (2) by tying the MemInfo and the object it tracks
-together in a single managed type that simply returns its own ``.meminfo`` member when
-queried.
+1. The datamodel for the type needs to report that it has a meminfo. This is done by
+   returning `True` from `has_nrt_meminfo`.
+2. The datamodel must expose the location of the meminfo for that instance to numba's
+   lowering phase. This means implementing `get_nrt_meminfo()` such that it returns the
+   meminfo in a predictable location in heap memory.
+3. Operators or functions that return the type must initialize the meminfo and place it
+   at the location numba will report it exists at through (2). This is done in the lowering
+   for the operations we support, such as `concat`.
+
+``ManagedUDFString`` fulfills (2) by tying the MemInfo and the string instance that it owns
+together into a parent struct. This allows (2) to be implemented by just returning its own
+`.meminfo` member, effectively relating the meminfo location to `self` via an offset.
+Lowering for operations like `concat` populate this member before returning.
 
 
 ### cuDF string data structures
@@ -182,7 +198,7 @@ The cuDF implementations for Managed UDF Strings is required to provide:
   destructors.
 - Numba shim functions to adapt calls to C++ code for use in Numba code and
   Numba extensions are also required.
-- Conversion from String UDF data back into cudf C++ column format.
+- Conversion from String UDF data to and from `cudf::column`.
 
 Use of C++ code for string functionality is not a hard requirement for
 implementing string support in a Numba extension - it is instead a pragmatic
@@ -190,14 +206,6 @@ requirement that the Python and C++ sides of cuDF share a single implementation
 for string operations, instead of trying to keep two separately-maintained
 implementations in sync.
 
-cuDF generally does not need to provide any implementation to support reference
-counting operations during the lifetime of a managed object after its
-construction. Because the standard ``NRT_MemInfo`` data structure is used in
-conjunction with Numba's built-in lowerings and NRT library, it automatically
-emits code to manage reference counts during "normal" Python code execution
-including assignments, scoping, function calls, etc. Another way to view this is
-that the cuDF code is really providing the implementation and details at the
-lifetime boundaries, the beginning and ending, of Managed UDF Strings.
 
 The majority of the complexity in the implementation comes from two areas:
 
@@ -221,7 +229,7 @@ def my_udf(str1, str2):
     return result
 ```
 
-- Numba identifies `str1 + str2` as returning a `ManagedUDFString`
+- Typing phase identifies `str1 + str2` as returning a `ManagedUDFString`
 - Lowering phase begins for the `+` operator
 
 **1.2 Stack Allocation**
@@ -230,7 +238,7 @@ managed_ptr = builder.alloca(
     context.data_model_manager[managed_udf_string].get_value_type()
 )
 ```
-- Allocates stack space for the complete `ManagedUDFString` struct
+- Allocates stack space for the complete `ManagedUDFString` instance
 - At this point, both fields are uninitialized
 
 **1.3 Member Pointer Extraction**
@@ -272,7 +280,11 @@ extern "C" __device__ int concat_shim(void** out_meminfo,
 }
 ```
 
-**2.3 MemInfo Creation Detail**
+In the above, critically the final string is constructed through placement
+new which relieves the compiler of the responsibility for cleaning up the
+`cudf::udf_string` created there.
+
+**2.3 MemInfo Creation Details**
 ```c++
 __device__ NRT_MemInfo* make_meminfo_for_new_udf_string(udf_string* udf_str) {
     struct mi_str_allocation {
@@ -296,6 +308,10 @@ __device__ NRT_MemInfo* make_meminfo_for_new_udf_string(udf_string* udf_str) {
 }
 ```
 
+`mi_str_allocation` is similar in structure to `ManagedUDFString` however they
+are distinct entities. Note that the allocation is sized for a full `MemInfo`
+struct as its first member rather than a pointer.
+
 #### Phase 3: Object Assembly and Return
 
 **3.1 Final Assembly**
@@ -314,41 +330,60 @@ return managed._getvalue()
 #### Phase 4: Runtime Usage and Reference Management
 
 **4.1 Assignment Operations**
+
+Within the broader kernel being launched, the result of the overall UDF is
+assigned:
+
 ```python
-# When user does: another_var = result
+result = my_udf(input_string)
 ```
-- Numba detects assignment to reference-counted type
+
+At this point, `result` is a fully initialized `ManagedUDFString`:
+
+- Numba detects assignment of reference counted return value
 - Automatically inserts `NRT_incref(managed.meminfo)`
 - `heap_allocation->mi.refct` becomes 2
-- Both `result` and `another_var` point to same MemInfo
+- passed_udf exits, causing an `NRT_decref(managed.meminfo)`.
 
-**4.2 Scope Changes**
-```python
-# When result goes out of scope or function returns
-```
-- Numba automatically inserts `NRT_decref(managed.meminfo)`
-- `heap_allocation->mi.refct` decrements to 1
-- Object remains alive because refct > 0
+**4.2 Setitem into the final array**
 
-**4.3 Function Calls**
-```python
-# When passing to another function: some_func(result)
+The final line of the containing kernel sets the result into the output
+array:
+
 ```
-- Numba may insert temporary incref/decref pairs
-- Ensures object stays alive during parameter passing
-- Reference count fluctuates but returns to stable state
+output_string_ary[tid] = result
+```
+
+- Adds an incref, bumping the refcount back up to 2.
+
 
 #### Phase 5: Destruction Sequence
 
 **5.1 Final Reference Release**
-```python
-# When last reference goes out of scope
-```
-- Numba inserts final `NRT_decref(managed.meminfo)`
-- `heap_allocation->mi.refct` becomes 0
-- NRT automatically calls `mi.dtor(mi.data, mi.size, mi.dtor_info)`
+
+The kernel being launched is ultimately overall a `void` function. Any
+variables contained locally therein will be decref'd at function's exit,
+like any other function.
+
+- `result` variable decref'd, but still referred to by the output array
+- `heap_allocation->mi.refct` becomes 1
+
 
 **5.2 Destructor Execution**
+
+The function `column_from_managed_udf_string_array` creates a `cudf::column`
+from the output buffer containing the strings. cuDF launches a freeing kernel
+that decrefs all the result strings one last time:
+
+```python
+        def free_managed_udf_string_array(ary, size):
+            gid = cuda.grid(1)
+            if gid < size:
+                NRT_decref(ary[gid])
+```
+
+- `NRT_MemInfo_call_dtor` invokes the destructor for the object
+
 ```c++
 __device__ void udf_str_dtor(void* udf_str, size_t size, void* dtor_info) {
     auto ptr = reinterpret_cast<udf_string*>(udf_str);
@@ -356,11 +391,14 @@ __device__ void udf_str_dtor(void* udf_str, size_t size, void* dtor_info) {
 }
 ```
 
-The destructor is called with `udf_str` pointing directly to the heap-allocated `udf_string`. The C++ destructor automatically frees the GPU memory containing the actual string data. The NRT system handles freeing the co-allocated MemInfo block separately.
+- A `MemInfo` dies after invoking its destructor - the NRT API ensures that
+once this is done, the originally `NRT_Allocat`ed pointer is freed. This has
+the effect of freeing the entire `mi_str_allocation`.
 
 
 **5.3 Final Memory State**
-- **GPU String Memory**: Freed (the actual "helloworld" data)
-- **Heap MemInfo Block**: Freed (the 64-byte management structure)
+- **GPU String Memory**: Freed
+- **Heap MemInfo Block**: Freed
 - **Stack**: Original `ManagedUDFString` becomes invalid/out-of-scope
 - **Reference Count**: N/A (object destroyed)
+- **cuDF** A `cudf::column` of string type containing the result of the UDF
