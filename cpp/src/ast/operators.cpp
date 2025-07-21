@@ -274,7 +274,7 @@ cudf::size_type ast_operator_arity(ast_operator op)
 
 std::string_view ast_operator_string(ast_operator op)
 {
-#define CUDF_AST_OP_STR(op) case ast_operator::op return "cudf::ast::ast_operator::" #op
+#define CUDF_AST_OP_STR(op) case ast_operator::op return #op
 
   switch (op) {
     CUDF_AST_OP_STR(ADD);
