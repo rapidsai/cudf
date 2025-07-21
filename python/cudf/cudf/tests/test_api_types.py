@@ -1109,4 +1109,3 @@ def test_pandas_agreement_scalar(obj):
 
 
 # TODO: Add test of interval.
-# TODO: Add test of Scalar.

@@ -445,7 +445,7 @@ std::optional<size_t> compress_max_allowed_chunk_size(compression_type compressi
   return nvcomp::compress_required_alignment(*nvcomp_type);
 }
 
-[[nodiscard]] size_t max_compressed_size(compression_type compression, uint32_t uncompressed_size)
+[[nodiscard]] size_t max_compressed_size(compression_type compression, size_t uncompressed_size)
 {
   if (compression == compression_type::NONE) { return uncompressed_size; }
 

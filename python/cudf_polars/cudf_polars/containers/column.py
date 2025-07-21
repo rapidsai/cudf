@@ -6,10 +6,10 @@
 from __future__ import annotations
 
 import functools
-import inspect
 from typing import TYPE_CHECKING
 
 import polars as pl
+import polars.datatypes.convert
 from polars.exceptions import InvalidOperationError
 
 import pylibcudf as plc
@@ -45,10 +45,13 @@ def _dtype_short_repr_to_dtype(dtype_str: str) -> pl.DataType:
     if dtype_str.startswith("list["):
         stripped = dtype_str.removeprefix("list[").removesuffix("]")
         return pl.List(_dtype_short_repr_to_dtype(stripped))
-    pl_type = pl.datatypes.convert.dtype_short_repr_to_dtype(dtype_str)
+    pl_type = polars.datatypes.convert.dtype_short_repr_to_dtype(dtype_str)
     if pl_type is None:
         raise ValueError(f"{dtype_str} was not able to be parsed by Polars.")
-    return pl_type() if inspect.isclass(pl_type) else pl_type
+    if isinstance(pl_type, polars.datatypes.DataTypeClass):
+        return pl_type()
+    else:
+        return pl_type
 
 
 class Column:
@@ -421,7 +424,7 @@ class Column:
     @functools.cached_property
     def nan_count(self) -> int:
         """Return the number of NaN values in the column."""
-        if plc.traits.is_floating_point(self.obj.type()):
+        if self.size > 0 and plc.traits.is_floating_point(self.obj.type()):
             return plc.reduce.reduce(
                 plc.unary.is_nan(self.obj),
                 plc.aggregation.sum(),

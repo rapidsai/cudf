@@ -744,16 +744,18 @@ if np is not None:
         return slr
 
 
-if pa is not None:
-    def _from_arrow(obj: pa.Scalar, dtype: DataType | None = None) -> Scalar:
-        if isinstance(obj.type, pa.ListType) and obj.as_py() is None:
-            # pyarrow doesn't correctly handle None values for list types, so
-            # we have to create this one manually.
-            # https://github.com/apache/arrow/issues/40319
-            pa_array = pa.array([None], type=obj.type)
-        else:
-            pa_array = pa.array([obj])
-        return Column.from_arrow(pa_array, dtype=dtype).to_scalar()
-else:
-    def _from_arrow(obj: pa.Scalar, dtype: DataType | None = None) -> Scalar:
-        raise pa_err
+def _from_arrow(obj: pa.Scalar, dtype: DataType | None = None) -> Scalar:
+    if pa_err is not None:
+        raise RuntimeError(
+            "pyarrow was not found on your system. Please "
+            "pip install pylibcudf with the [pyarrow] extra for a "
+            "compatible pyarrow version."
+        ) from pa_err
+    if isinstance(obj.type, pa.ListType) and obj.as_py() is None:
+        # pyarrow doesn't correctly handle None values for list types, so
+        # we have to create this one manually.
+        # https://github.com/apache/arrow/issues/40319
+        pa_array = pa.array([None], type=obj.type)
+    else:
+        pa_array = pa.array([obj])
+    return Column.from_arrow(pa_array, dtype=dtype).to_scalar()

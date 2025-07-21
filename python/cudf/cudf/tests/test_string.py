@@ -3,7 +3,7 @@
 import json
 import re
 import urllib.parse
-from contextlib import ExitStack as does_not_raise
+from contextlib import nullcontext as does_not_raise
 from decimal import Decimal
 from sys import getsizeof
 
@@ -29,19 +29,6 @@ from cudf.testing._utils import (
 )
 from cudf.utils import dtypes as dtypeutils
 
-data_list = [
-    ["AbC", "de", "FGHI", "j", "kLm"],
-    ["nOPq", None, "RsT", None, "uVw"],
-    [None, None, None, None, None],
-]
-
-data_id_list = ["no_nulls", "some_nulls", "all_nulls"]
-
-idx_list = [None, [10, 11, 12, 13, 14]]
-
-idx_id_list = ["None_index", "Set_index"]
-rng = np.random.default_rng(seed=0)
-
 
 def raise_builder(flags, exceptions):
     if any(flags):
@@ -50,12 +37,21 @@ def raise_builder(flags, exceptions):
         return does_not_raise()
 
 
-@pytest.fixture(params=data_list, ids=data_id_list)
+@pytest.fixture(
+    params=[
+        ["AbC", "de", "FGHI", "j", "kLm"],
+        ["nOPq", None, "RsT", None, "uVw"],
+        [None, None, None, None, None],
+    ],
+    ids=["no_nulls", "some_nulls", "all_nulls"],
+)
 def data(request):
     return request.param
 
 
-@pytest.fixture(params=idx_list, ids=idx_id_list)
+@pytest.fixture(
+    params=[None, [10, 11, 12, 13, 14]], ids=["None_index", "Set_index"]
+)
 def index(request):
     return request.param
 
@@ -825,8 +821,11 @@ def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na, na_raise):
 
     with expectation:
         with expect_warning_if(
-            na in (None, ""),
-            match="Passing a string to `na` is deprecated and will raise in a future version",
+            na == "" or (na is None and not (flags_raise or na_raise)),
+            match=(
+                "Allowing a non-bool 'na' in obj.str.contains is deprecated "
+                "and will raise in a future version."
+            ),
         ):
             expect = ps.str.contains(pat, flags=flags, na=na, regex=regex)
             got = gs.str.contains(pat, flags=flags, na=na, regex=regex)
@@ -1349,31 +1348,41 @@ def test_string_insert():
         gs.str.insert(0, ["+"])
 
 
-_string_char_types_data = [
-    ["abc", "xyz", "a", "ab", "123", "097"],
-    ["abcdefghij", "0123456789", "9876543210", None, "accénted", ""],
-    ["koala", "fox", "chameleon"],
-    [
-        "1234567890",
-        "de",
-        "1.75",
-        "-34",
-        "+9.8",
-        "7¼",
-        "x³",
-        "2³",
-        "12⅝",
-        "",
-        "\t\r\n ",
-    ],
-    ["one", "one1", "1", ""],
-    ["A B", "1.5", "3,000"],
-    ["23", "³", "⅕", ""],
-    [" ", "\t\r\n ", ""],
-    ["leopard", "Golden Eagle", "SNAKE", ""],
-    [r"¯\_(ツ)_/¯", "(╯°□°)╯︵ ┻━┻", "┬─┬ノ( º _ ºノ)"],
-    ["a1", "A1", "a!", "A!", "!1", "aA"],
-]
+@pytest.fixture(
+    params=[
+        ["abc", "xyz", "a", "ab", "123", "097"],
+        ["abcdefghij", "0123456789", "9876543210", None, "accénted", ""],
+        ["koala", "fox", "chameleon"],
+        [
+            "1234567890",
+            "de",
+            "1.75",
+            "-34",
+            "+9.8",
+            "7¼",
+            "x³",
+            "2³",
+            "12⅝",
+            "",
+            "\t\r\n ",
+        ],
+        ["one", "one1", "1", ""],
+        ["A B", "1.5", "3,000"],
+        ["23", "³", "⅕", ""],
+        [" ", "\t\r\n ", ""],
+        ["leopard", "Golden Eagle", "SNAKE", ""],
+        [r"¯\_(ツ)_/¯", "(╯°□°)╯︵ ┻━┻", "┬─┬ノ( º _ ºノ)"],
+        ["a1", "A1", "a!", "A!", "!1", "aA"],
+        [
+            None,
+            "The quick bRoWn fox juMps over the laze DOG",
+            '123nr98nv9rev!$#INF4390v03n1243<>?}{:-"',
+            "accénted",
+        ],
+    ]
+)
+def data_char_types(request):
+    return request.param
 
 
 @pytest.mark.parametrize(
@@ -1388,10 +1397,9 @@ _string_char_types_data = [
         "islower",
     ],
 )
-@pytest.mark.parametrize("data", _string_char_types_data)
-def test_string_char_types(type_op, data):
-    gs = cudf.Series(data)
-    ps = pd.Series(data)
+def test_string_char_types(type_op, data_char_types):
+    gs = cudf.Series(data_char_types)
+    ps = pd.Series(data_char_types)
 
     assert_eq(getattr(gs.str, type_op)(), getattr(ps.str, type_op)())
 
@@ -1447,21 +1455,9 @@ def test_string_filter_alphanum():
 @pytest.mark.parametrize(
     "case_op", ["title", "capitalize", "lower", "upper", "swapcase"]
 )
-@pytest.mark.parametrize(
-    "data",
-    [
-        *_string_char_types_data,
-        [
-            None,
-            "The quick bRoWn fox juMps over the laze DOG",
-            '123nr98nv9rev!$#INF4390v03n1243<>?}{:-"',
-            "accénted",
-        ],
-    ],
-)
-def test_string_char_case(case_op, data):
-    gs = cudf.Series(data)
-    ps = pd.Series(data)
+def test_string_char_case(case_op, data_char_types):
+    gs = cudf.Series(data_char_types)
+    ps = pd.Series(data_char_types)
 
     s = gs.str
     a = getattr(s, case_op)
@@ -3403,69 +3399,65 @@ def test_str_join_lists_error():
     "sr,sep,string_na_rep,sep_na_rep,expected",
     [
         (
-            cudf.Series([["a", "a"], ["b"], ["c"]]),
+            [["a", "a"], ["b"], ["c"]],
             "-",
             None,
             None,
-            cudf.Series(["a-a", "b", "c"]),
+            ["a-a", "b", "c"],
         ),
         (
-            cudf.Series([["a", "b"], [None], [None, "hello", None, "world"]]),
+            [["a", "b"], [None], [None, "hello", None, "world"]],
             "__",
             "=",
             None,
-            cudf.Series(["a__b", None, "=__hello__=__world"]),
+            ["a__b", None, "=__hello__=__world"],
         ),
         (
-            cudf.Series(
-                [
-                    ["a", None, "b"],
-                    [None],
-                    [None, "hello", None, "world"],
-                    None,
-                ]
-            ),
+            [
+                ["a", None, "b"],
+                [None],
+                [None, "hello", None, "world"],
+                None,
+            ],
             ["-", "_", "**", "!"],
             None,
             None,
-            cudf.Series(["a--b", None, "**hello****world", None]),
+            ["a--b", None, "**hello****world", None],
         ),
         (
-            cudf.Series(
-                [
-                    ["a", None, "b"],
-                    [None],
-                    [None, "hello", None, "world"],
-                    None,
-                ]
-            ),
+            [
+                ["a", None, "b"],
+                [None],
+                [None, "hello", None, "world"],
+                None,
+            ],
             ["-", "_", "**", None],
             "rep_str",
             "sep_str",
-            cudf.Series(
-                ["a-rep_str-b", None, "rep_str**hello**rep_str**world", None]
-            ),
+            ["a-rep_str-b", None, "rep_str**hello**rep_str**world", None],
         ),
         (
-            cudf.Series([[None, "a"], [None], None]),
+            [[None, "a"], [None], None],
             ["-", "_", None],
             "rep_str",
             None,
-            cudf.Series(["rep_str-a", None, None]),
+            ["rep_str-a", None, None],
         ),
         (
-            cudf.Series([[None, "a"], [None], None]),
+            [[None, "a"], [None], None],
             ["-", "_", None],
             None,
             "sep_str",
-            cudf.Series(["-a", None, None]),
+            ["-a", None, None],
         ),
     ],
 )
 def test_str_join_lists(sr, sep, string_na_rep, sep_na_rep, expected):
+    sr = cudf.Series(sr)
     actual = sr.str.join(
         sep=sep, string_na_rep=string_na_rep, sep_na_rep=sep_na_rep
     )
+    expected = cudf.Series(expected)
     assert_eq(actual, expected)
 
 
