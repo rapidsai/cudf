@@ -92,7 +92,7 @@ namespace {
                          page_indices.begin(),
                          page_indices.end(),
                          page_indices.begin(),
-                         thrust::maximum<cudf::size_type>());
+                         cuda::maximum<cudf::size_type>());
   return page_indices;
 }
 
