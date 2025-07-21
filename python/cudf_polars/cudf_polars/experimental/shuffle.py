@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import operator
-from typing import TYPE_CHECKING, Any, Concatenate, TypedDict
+from typing import TYPE_CHECKING, Any, Concatenate, TypeVar, TypedDict
 
 import pylibcudf as plc
 import rmm.mr
@@ -203,7 +203,11 @@ def _hash_partition_dataframe(
     }
 
 
-def _simple_shuffle_graph[OPT_T](
+# When dropping Python 3.10, can use _simple_shuffle_graph[OPT_T](...)
+OPT_T = TypeVar("OPT_T")
+
+
+def _simple_shuffle_graph(
     name_in: str,
     name_out: str,
     count_in: int,
