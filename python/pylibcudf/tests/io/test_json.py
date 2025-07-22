@@ -385,23 +385,23 @@ def test_read_json_string_column():
     ]
 
     # Create string column
-    string_col = plc.Column.from_arrow(pa.array(json_strings))
+    string_col = plc.Column.from_iterable_of_py(json_strings)
 
     # Create separator and narep scalars
-    separator = plc.Scalar.from_arrow(pa.scalar("\n"))
-    narep = plc.Scalar.from_arrow(pa.scalar("null"))
+    separator = plc.Scalar.from_py("\n")
+    narep = plc.Scalar.from_py("null")
 
     # Read JSON from string column
-    result = plc.io.json.read_json_from_string_column(
+    got = plc.io.json.read_json_from_string_column(
         string_col, separator, narep
     )
 
     # Expected result
-    expected = pa.Table.from_arrays(
+    expect = pa.Table.from_arrays(
         [["Alice", "Bob", "Charlie"], [30, 25, 35]], names=["name", "age"]
     )
 
-    assert_table_and_meta_eq(expected, result)
+    assert_table_and_meta_eq(expect, got)
 
 
 @pytest.mark.parametrize("num_buffers", [1, 2])

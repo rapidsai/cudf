@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# Copyright (c) 2024, NVIDIA CORPORATION.
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from pylibcudf.column cimport Column
@@ -147,6 +147,7 @@ cpdef Column join_strings(Column input, Scalar separator, Scalar narep):
         )
 
     return Column.from_libcudf(move(c_result))
+
 
 cpdef Column join_list_elements(
     Column lists_strings_column,

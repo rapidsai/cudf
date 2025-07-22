@@ -422,8 +422,8 @@ class StringFunction(Expr):
             plc_column = self.children[0].evaluate(df, context=context).obj
             plc_table_with_metadata = plc.io.json.read_json_from_string_column(
                 plc_column,
-                plc.Scalar.from_py("\n", plc_column.type()),
-                plc.Scalar.from_py("NULL", plc_column.type()),
+                plc.Scalar.from_py("\n"),
+                plc.Scalar.from_py("NULL"),
                 _dtypes_for_json_decode(self.dtype),
             )
             return Column(

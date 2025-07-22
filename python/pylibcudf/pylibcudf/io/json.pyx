@@ -789,11 +789,12 @@ cpdef TableWithMetadata read_json_from_string_column(
     Stream stream = None
 ):
     """
-    Read from JSON format.
+    Joins a column of JSON strings into a device buffer and reads it into
+    a table using the JSON reader.
 
-    The source to read from is a string column.
+    The source to read from is a string column of JSON records.
 
-    For details, see :cpp:func:`read_json`.
+    For details, see :cpp:func:`join_strings` and :cpp:func:`read_json`.
 
     Parameters
     ----------
