@@ -115,9 +115,8 @@ def test_binop_with_scalar(left_scalar, right_scalar):
     assert_gpu_result_equal(q)
 
 
-@pytest.mark.parametrize("divisor", [1, 2])
-def test_true_div_boolean_column(divisor, rtype):
-    divisor = pl.lit(divisor, dtype=rtype)
+@pytest.mark.parametrize("divisor", [1, 2.0])
+def test_true_div_boolean_column(divisor):
     df = pl.LazyFrame({"a": [True, False]})
 
     q = df.select(pl.col("a") / divisor)
