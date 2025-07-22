@@ -673,7 +673,7 @@ dependencies:
           - typing_extensions>=4.0.0
       - output_types: [conda]
         packages:
-          - &numba-cuda-dep numba-cuda>=0.16.0,<0.17.0a0
+          - &numba-cuda-dep numba-cuda>=0.14.0,<0.15.0a0
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -686,11 +686,16 @@ dependencies:
             packages: &run_cudf_packages_all_cu12
               - cuda-python>=12.6.2,<13.0a0
           - {matrix: null, packages: *run_cudf_packages_all_cu12}
+      - output_types: conda
+        matrices:
+          - matrix: {cuda: "12.*"}
+            packages:
+              - &pynvjitlink_unsuffixed pynvjitlink>=0.0.0a0
       - output_types: [requirements, pyproject]
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
-              - &numba-cuda-cu12-dep numba-cuda[cu12]>=0.16.0,<0.17.0a0
+              - &numba-cuda-cu12-dep numba-cuda[cu12]>=0.14.0,<0.15.0a0
           - matrix: # Fallback for no matrix
             packages:
               - *numba-cuda-cu12-dep
@@ -700,13 +705,20 @@ dependencies:
               cuda: "12.*"
               cuda_suffixed: "true"
             packages:
+              - pynvjitlink-cu12>=0.0.0a0
               - nvidia-cuda-nvcc-cu12
               - nvidia-cuda-nvrtc-cu12
-          - {matrix: null, packages: []}
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "false"
+            packages: &run_cudf_cu12_unsuffixed
+              - *pynvjitlink_unsuffixed
+          - {matrix: null, packages: *run_cudf_cu12_unsuffixed}
   run_cudf_polars:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
+          - nvidia-ml-py
           - polars>=1.28,<1.32
     specific:
       - output_types: [requirements, pyproject]
@@ -784,11 +796,10 @@ dependencies:
           - matrix: {dependencies: "oldest"}
             packages:
               - numba==0.59.1
-              - numba-cuda==0.16.0
+              - numba-cuda==0.14.0
               - pandas==2.0.*
           - matrix: {dependencies: "latest"}
             packages:
-              - *numba-dep
               - pandas==2.3.1
           - matrix:
             packages:
@@ -835,7 +846,6 @@ dependencies:
           - hypothesis>=6.131.7
           - pytest-benchmark
           - pytest-cases>=3.8.2
-          - pytest-rerunfailures
           - scipy
           - zstandard
       - output_types: conda
