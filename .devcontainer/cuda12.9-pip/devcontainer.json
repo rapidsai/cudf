@@ -5,7 +5,7 @@
     "args": {
       "CUDA": "12.9",
       "PYTHON_PACKAGE_MANAGER": "pip",
-      "BASE": "rapidsai/devcontainers:25.08-cpp-cuda12.9-ubuntu22.04"
+      "BASE": "rapidsai/devcontainers:25.08-cpp-cuda12.9"
     }
   },
   "runArgs": [
