@@ -1,11 +1,14 @@
 name: pr
+
 on:
   push:
     branches:
       - "pull-request/[0-9]+"
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
 jobs:
   # Please keep pr-builder as the top job here
   pr-builder:
@@ -379,6 +382,7 @@ jobs:
     needs: changed-files
     uses: ./.github/workflows/spark-rapids-jni.yaml
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_java
+
   telemetry-summarize:
     # This job must use a self-hosted runner to record telemetry traces.
     runs-on: linux-amd64-cpu4
