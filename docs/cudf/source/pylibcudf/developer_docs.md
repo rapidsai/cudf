@@ -225,6 +225,23 @@ from pylibcudf.libcudf.copying import \
     out_of_bounds_policy as OutOfBoundsPolicy  # no-cython-lint
 ```
 
+### Enum string representations
+
+By default, Cython's `cpdef enum class` generates a valid Python `Enum` type for
+each C++ enum. However, the default `__str__` implementation for these enums is not
+very informative. It simply returns the underlying value (e.g., `11` instead of `<type_id.BOOL8: 11>`).
+
+To improve developer experience, we manually set `__str__ = __repr__` for all public
+enums exposed through `pylibcudf`. This ensures that printing an enum from Python yields
+a human-readable and meaningful name like:
+
+```python
+>>> from pylibcudf.types import TypeId
+>>> print(TypeId.INT32)
+<type_id.INT32>
+```
+
+
 ### Handling overloaded functions in libcudf
 As a C++ library, libcudf makes extensive use of function overloading.
 For example, both of the following functions exist in libcudf:
