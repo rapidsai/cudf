@@ -1,4 +1,3 @@
-
 /*
  * Copyright (c) 2025, NVIDIA CORPORATION.
  *
@@ -93,7 +92,8 @@ void hybrid_scan_reader_impl::setup_next_pass(std::vector<rmm::device_buffer> co
                                               parquet_reader_options const& options)
 {
   auto const num_passes = _file_itm_data.num_passes();
-  CUDF_EXPECTS(num_passes == 1, "");
+  CUDF_EXPECTS(num_passes == 1,
+               "The hybrid scan reader currently only supports single-pass read mode");
 
   // always create the pass struct, even if we end up with no work.
   // this will also cause the previous pass information to be deleted
