@@ -5,9 +5,7 @@ import gzip
 import os
 import re
 import shutil
-from collections import OrderedDict
 from io import BytesIO, StringIO
-from pathlib import Path
 
 import cupy as cp
 import numpy as np
@@ -25,41 +23,36 @@ from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
 
 
-def make_numeric_dataframe(nrows, dtype):
-    df = pd.DataFrame()
-    df["col1"] = np.arange(nrows, dtype=dtype)
-    df["col2"] = np.arange(1, 1 + nrows, dtype=dtype)
-    return df
+@pytest.fixture
+def numeric_dataframe():
+    return pd.DataFrame(
+        {"col1": [1, 2, 3], "col2": [4, 5, 6]},
+    )
 
 
-def make_datetime_dataframe(include_non_standard=False):
-    df = pd.DataFrame()
-    df["col1"] = np.array(
-        [
-            "31/10/2010",
-            "05/03/2001",
-            "20/10/1994",
-            "18/10/1990",
-            "1/1/1970",
-            "2016-04-30T01:02:03.000",
-            "2038-01-19 03:14:07",
-        ]
-    )
-    df["col2"] = np.array(
-        [
-            "18/04/1995",
-            "14 / 07 / 1994",
-            "07/06/2006",
-            "16/09/2005",
-            "2/2/1970",
-            "2007-4-30 1:6:40.000PM",
-            "2038-01-19 03:14:08",
-        ]
-    )
-    if include_non_standard:
-        # Last column contains non-standard date formats
-        df["col3"] = np.array(
-            [
+@pytest.fixture
+def datetime_dataframe():
+    return pd.DataFrame(
+        {
+            "col1": [
+                "31/10/2010",
+                "05/03/2001",
+                "20/10/1994",
+                "18/10/1990",
+                "1/1/1970",
+                "2016-04-30T01:02:03.000",
+                "2038-01-19 03:14:07",
+            ],
+            "col2": [
+                "18/04/1995",
+                "14 / 07 / 1994",
+                "07/06/2006",
+                "16/09/2005",
+                "2/2/1970",
+                "2007-4-30 1:6:40.000PM",
+                "2038-01-19 03:14:08",
+            ],
+            "col3": [
                 "1 Jan",
                 "2 January 1994",
                 "Feb 2002",
@@ -67,38 +60,33 @@ def make_datetime_dataframe(include_non_standard=False):
                 "1-1-1996",
                 "15-May-2009",
                 "21-Dec-3262",
-            ]
-        )
-    return df
-
-
-def make_numpy_mixed_dataframe():
-    df = pd.DataFrame()
-    df["Integer"] = np.array([2345, 11987, 9027, 9027])
-    df["Date"] = np.array(
-        ["18/04/1995", "14/07/1994", "07/06/2006", "16/09/2005"]
+            ],
+        }
     )
-    df["Float"] = np.array([9.001, 8.343, 6, 2.781])
-    df["Integer2"] = np.array([2345, 106, 2088, 789277])
-    df["Category"] = np.array(["M", "F", "F", "F"])
-    df["String"] = np.array(["Alpha", "Beta", "Gamma", "Delta"])
-    df["Boolean"] = np.array([True, False, True, False])
-    return df
 
 
 @pytest.fixture
 def pd_mixed_dataframe():
-    return make_numpy_mixed_dataframe()
+    return pd.DataFrame(
+        {
+            "Integer": [2345, 11987, 9027, 9027],
+            "Date": ["18/04/1995", "14/07/1994", "07/06/2006", "16/09/2005"],
+            "Float": [9.001, 8.343, 6, 2.781],
+            "Integer2": [2345, 106, 2088, 789277],
+            "Category": ["M", "F", "F", "F"],
+            "String": ["Alpha", "Beta", "Gamma", "Delta"],
+            "Boolean": [True, False, True, False],
+        }
+    )
 
 
 @pytest.fixture
-def cudf_mixed_dataframe():
-    return cudf.from_pandas(make_numpy_mixed_dataframe())
+def cudf_mixed_dataframe(pd_mixed_dataframe):
+    return cudf.from_pandas(pd_mixed_dataframe)
 
 
-def make_all_numeric_dataframe():
-    df = pd.DataFrame()
-
+@pytest.fixture
+def gdf_np_dtypes():
     gdf_dtypes = [
         "float",
         "float32",
@@ -134,29 +122,17 @@ def make_all_numeric_dataframe():
         np.uint32,
         np.uint64,
     ]
-
-    for i in range(len(gdf_dtypes)):
-        df[gdf_dtypes[i]] = np.arange(10, dtype=np_dtypes[i])
-
-    return (
-        df,
-        OrderedDict(zip(gdf_dtypes, gdf_dtypes)),
-        OrderedDict(zip(gdf_dtypes, np_dtypes)),
-    )
+    return dict(zip(gdf_dtypes, np_dtypes))
 
 
-def make_all_numeric_extremes_dataframe():
-    # integers 0,+1,-1,min,max
-    # float 0.0, -0.0,+1,-1,min,max, nan, esp, espneg, tiny, [-ve values]
-    df, gdf_dtypes, pdf_dtypes = make_all_numeric_dataframe()
-    df = pd.DataFrame()
-
-    for gdf_dtype in gdf_dtypes:
-        np_type = pdf_dtypes[gdf_dtype]
+@pytest.fixture
+def numeric_extremes_dataframe(gdf_np_dtypes):
+    data = {}
+    for typ, np_type in gdf_np_dtypes.items():
         if np.dtype(np_type).kind in "iu":
             itype = np.iinfo(np_type)
             extremes = [0, +1, -1, itype.min, itype.max]
-            df[gdf_dtype] = np.array(extremes * 4).astype(np_type)[:20]
+            data[typ] = np.array(extremes * 4).astype(np_type)[:20]
         else:
             ftype = np.finfo(np_type)
             extremes = [
@@ -177,47 +153,8 @@ def make_all_numeric_extremes_dataframe():
                 -ftype.epsneg,
                 -ftype.tiny,
             ]
-            df[gdf_dtype] = np.array(extremes * 4, dtype=np_type)[:20]
-    return (
-        df,
-        gdf_dtypes,
-        pdf_dtypes,
-    )
-
-
-@pytest.fixture
-def pandas_extreme_numeric_dataframe():
-    return make_all_numeric_extremes_dataframe()[0]
-
-
-@pytest.fixture
-def cudf_extreme_numeric_dataframe(pandas_extreme_numeric_dataframe):
-    return cudf.from_pandas(pandas_extreme_numeric_dataframe)
-
-
-@pytest.fixture
-def path_or_buf(tmpdir):
-    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_path_or_buf.csv")
-    df = make_numeric_dataframe(10, np.int32)
-
-    df.to_csv(fname, index=False, header=False)
-    buffer = df.to_csv(index=False, header=False)
-
-    def _make_path_or_buf(src):
-        if src == "filepath":
-            return str(fname)
-        if src == "pathobj":
-            return fname
-        if src == "bytes_io":
-            return BytesIO(buffer.encode())
-        if src == "string_io":
-            return StringIO(buffer)
-        if src == "url":
-            return Path(fname).as_uri()
-
-        raise ValueError("Invalid source type")
-
-    yield _make_path_or_buf
+            data[typ] = np.array(extremes * 4, dtype=np_type)[:20]
+    return pd.DataFrame(data)
 
 
 dtypes = [np.float64, np.float32, np.int64, np.int32, np.uint64, np.uint32]
@@ -226,11 +163,10 @@ nelem = [5, 25, 100]
 
 
 @pytest.mark.parametrize("dtype", dtypes)
-@pytest.mark.parametrize("nelem", nelem)
-def test_csv_reader_numeric_data(dtype, nelem, tmpdir):
-    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file1.csv")
+def test_csv_reader_numeric_data(dtype, numeric_dataframe, tmp_path):
+    fname = tmp_path / "tmp_csvreader_file1.csv"
 
-    df = make_numeric_dataframe(nelem, dtype)
+    df = numeric_dataframe.astype(dtype)
     df.to_csv(fname, index=False, header=False)
 
     dtypes = [df[k].dtype for k in df.columns]
@@ -241,8 +177,8 @@ def test_csv_reader_numeric_data(dtype, nelem, tmpdir):
 
 
 @pytest.mark.parametrize("parse_dates", [["date2"], [0], ["date1", 1, "bad"]])
-def test_csv_reader_datetime(parse_dates):
-    df = make_datetime_dataframe(include_non_standard=True)
+def test_csv_reader_datetime(datetime_dataframe, parse_dates):
+    df = datetime_dataframe
     buffer = df.to_csv(index=False, header=False)
 
     gdf = read_csv(
@@ -318,8 +254,8 @@ def test_csv_reader_mixed_data_delimiter_sep(
 
 
 @pytest.mark.parametrize("use_list", [False, True])
-def test_csv_reader_dtype_list(use_list):
-    df = make_numeric_dataframe(10, dtype=np.float32)
+def test_csv_reader_dtype_list(numeric_dataframe, use_list):
+    df = numeric_dataframe.astype(np.float32)
     buffer = df.to_csv(index=False, header=False)
 
     # PANDAS doesn't list but cudf does (treated as implied ordered dict)
@@ -335,31 +271,34 @@ def test_csv_reader_dtype_list(use_list):
 
 
 @pytest.mark.parametrize("use_names", [False, True])
-def test_csv_reader_dtype_dict(use_names):
+def test_csv_reader_dtype_dict(use_names, gdf_np_dtypes):
     # Save with the column header if not explicitly specifying a list of names
-    df, gdf_dtypes, pdf_dtypes = make_all_numeric_dataframe()
-    buffer = df.to_csv(index=False, header=(not use_names))
+    df = pd.DataFrame(
+        {
+            typ: np.zeros(3, dtype=np_type)
+            for typ, np_type in gdf_np_dtypes.items()
+        }
+    )
+    buffer = df.to_csv(index=False, header=not use_names)
     dtypes = df.dtypes.to_dict()
-    gdf_names = list(gdf_dtypes.keys()) if use_names else None
-    pdf_names = list(pdf_dtypes.keys()) if use_names else None
-    gdf = read_csv(StringIO(buffer), dtype=dtypes, names=gdf_names)
-    pdf = pd.read_csv(StringIO(buffer), dtype=dtypes, names=pdf_names)
+    names = list(gdf_np_dtypes.keys()) if use_names else None
+    gdf = read_csv(StringIO(buffer), dtype=dtypes, names=names)
+    pdf = pd.read_csv(StringIO(buffer), dtype=dtypes, names=names)
 
     assert_eq(gdf, pdf)
 
 
 @pytest.mark.filterwarnings("ignore:invalid value encountered in cast")
 @pytest.mark.parametrize("use_names", [True, False])
-def test_csv_reader_dtype_extremes(use_names):
+def test_csv_reader_dtype_extremes(use_names, numeric_extremes_dataframe):
     # Save with the column header if not explicitly specifying a list of names
-    df, gdf_dtypes, pdf_dtypes = make_all_numeric_extremes_dataframe()
-    buffer = df.to_csv(index=False, header=(not use_names))
+    df = numeric_extremes_dataframe
+    buffer = df.to_csv(index=False, header=not use_names)
     dtypes = df.dtypes.to_dict()
-    gdf_names = list(gdf_dtypes.keys()) if use_names else None
-    pdf_names = list(pdf_dtypes.keys()) if use_names else None
+    names = df.columns.to_list() if use_names else None
 
-    gdf = read_csv(StringIO(buffer), dtype=dtypes, names=gdf_names)
-    pdf = pd.read_csv(StringIO(buffer), dtype=dtypes, names=pdf_names)
+    gdf = read_csv(StringIO(buffer), dtype=dtypes, names=names)
+    pdf = pd.read_csv(StringIO(buffer), dtype=dtypes, names=names)
 
     assert_eq(gdf, pdf)
 
@@ -1073,12 +1012,50 @@ def test_csv_reader_filenotfound(tmpdir):
         read_csv(str(dname))
 
 
+@pytest.fixture
+def path_or_buf(tmp_path):
+    fname = tmp_path / "tmp_csvreader_path_or_buf.csv"
+    df = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, dtype=np.int32)
+
+    def _make_path_or_buf(src):
+        if src == "filepath":
+            df.to_csv(fname, index=False, header=False)
+            return str(fname)
+        if src == "pathobj":
+            df.to_csv(fname, index=False, header=False)
+            return fname
+        if src == "bytes_io":
+            buffer = df.to_csv(index=False, header=False)
+            return BytesIO(buffer.encode())
+        if src == "string_io":
+            buffer = df.to_csv(index=False, header=False)
+            return StringIO(buffer)
+        if src == "url":
+            df.to_csv(fname, index=False, header=False)
+            return fname.as_uri()
+
+        raise ValueError("Invalid source type")
+
+    return _make_path_or_buf
+
+
 @pytest.mark.parametrize(
-    "src", ["filepath", "pathobj", "bytes_io", "string_io", "url"]
+    "src",
+    [
+        lambda path: str(path),
+        lambda path: path,
+        lambda path: BytesIO(path.read_bytes()),
+        lambda path: StringIO(path.read_text()),
+        lambda path: path.as_uri(),
+    ],
+    ids=["filepath", "pathlib.Path", "ByteIO", "StringIO", "url"],
 )
-def test_csv_reader_filepath_or_buffer(tmpdir, path_or_buf, src):
-    expect = pd.read_csv(path_or_buf("filepath"))
-    got = cudf.read_csv(path_or_buf(src))
+def test_csv_reader_filepath_or_buffer(tmp_path, path_or_buf, src):
+    df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, dtype=np.int32)
+    csv_path = tmp_path / "tmp.csv"
+    df.to_csv(csv_path, index=False, header=False)
+    expect = pd.read_csv(csv_path)
+    got = cudf.read_csv(src(csv_path))
 
     assert_eq(expect, got)
 
@@ -1652,12 +1629,11 @@ def test_csv_writer_buffer(tmpdir):
 
 
 @pytest.mark.parametrize("dtype", dtypes)
-@pytest.mark.parametrize("nelem", nelem)
-def test_csv_writer_numeric_data(dtype, nelem, tmpdir):
+def test_csv_writer_numeric_data(dtype, numeric_dataframe, tmpdir):
     pdf_df_fname = tmpdir.join("pdf_df_1.csv")
     gdf_df_fname = tmpdir.join("gdf_df_1.csv")
 
-    df = make_numeric_dataframe(nelem, dtype)
+    df = numeric_dataframe.astype(dtype)
     gdf = cudf.from_pandas(df)
     df.to_csv(path_or_buf=pdf_df_fname, index=False, lineterminator="\n")
     gdf.to_csv(path_or_buf=gdf_df_fname, index=False)
@@ -1670,11 +1646,11 @@ def test_csv_writer_numeric_data(dtype, nelem, tmpdir):
     assert_eq(expect, got)
 
 
-def test_csv_writer_datetime_data(tmpdir):
+def test_csv_writer_datetime_data(datetime_dataframe, tmpdir):
     pdf_df_fname = tmpdir.join("pdf_df_2.csv")
     gdf_df_fname = tmpdir.join("gdf_df_2.csv")
 
-    df = make_datetime_dataframe()
+    df = datetime_dataframe
     gdf = cudf.from_pandas(df)
     df.to_csv(path_or_buf=pdf_df_fname, index=False, lineterminator="\n")
     gdf.to_csv(path_or_buf=gdf_df_fname, index=False)
@@ -1786,10 +1762,10 @@ def test_csv_writer_multiindex(tmpdir):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("chunksize", [None, 9, 1000])
+@pytest.mark.parametrize("chunksize", [None, 2, 1000])
 @pytest.mark.parametrize("dtype", dtypes)
-def test_csv_writer_chunksize(chunksize, dtype):
-    cu_df = cudf.from_pandas(make_numeric_dataframe(100, dtype))
+def test_csv_writer_chunksize(chunksize, numeric_dataframe, dtype):
+    cu_df = cudf.from_pandas(numeric_dataframe.astype(dtype))
 
     buffer = BytesIO()
     cu_df.to_csv(buffer, chunksize=chunksize, index=False)
@@ -2190,12 +2166,12 @@ def test_default_integer_bitwidth_partial(
 
 @pytest.mark.filterwarnings("ignore:invalid value encountered in cast")
 def test_default_integer_bitwidth_extremes(
-    cudf_extreme_numeric_dataframe, default_integer_bitwidth
+    numeric_extremes_dataframe, default_integer_bitwidth
 ):
     # Test that integer columns in csv are _inferred_ as user specified
     # bitwidth
     buf = BytesIO()
-    cudf_extreme_numeric_dataframe.to_csv(buf)
+    cudf.DataFrame.from_pandas(numeric_extremes_dataframe).to_csv(buf)
     buf.seek(0)
     read = cudf.read_csv(buf)
 
