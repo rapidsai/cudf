@@ -200,7 +200,7 @@ class NumericalColumn(NumericalBaseColumn):
             return super().__invert__()
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
-        # import pdb;pdb.set_trace()
+        import pdb;pdb.set_trace()
         int_float_dtype_mapping = {
             np.int8: np.float32,
             np.int16: np.float32,
@@ -310,18 +310,19 @@ class NumericalColumn(NumericalBaseColumn):
         ):
             op = "INT_POW"
 
+        lhs_dtype, rhs_dtype = (other_cudf_dtype, self.dtype) if reflect else (self.dtype, other_cudf_dtype)
         lhs, rhs = (other, self) if reflect else (self, other)
         if out_dtype.kind == "f" and is_pandas_nullable_extension_dtype(
             out_dtype
         ):
             if (
-                not is_pandas_nullable_extension_dtype(lhs.dtype)
-                and lhs.dtype.kind == "f"
+                not is_pandas_nullable_extension_dtype(lhs_dtype)
+                and lhs_dtype.kind == "f" and isinstance(lhs, NumericalColumn)
             ):
                 lhs = lhs.nans_to_nulls()
             if (
-                not is_pandas_nullable_extension_dtype(rhs.dtype)
-                and rhs.dtype.kind == "f"
+                not is_pandas_nullable_extension_dtype(rhs_dtype)
+                and rhs_dtype.kind == "f" and isinstance(rhs, NumericalColumn)
             ):
                 rhs = rhs.nans_to_nulls()
         if isinstance(lhs, pa.Scalar):
@@ -329,7 +330,10 @@ class NumericalColumn(NumericalBaseColumn):
         elif isinstance(rhs, pa.Scalar):
             rhs = pa_scalar_to_plc_scalar(rhs)
         res = binaryop.binaryop(lhs, rhs, op, out_dtype)
-
+        if is_pandas_nullable_extension_dtype(out_dtype) and out_dtype.kind == "f":
+            # If the output dtype is a pandas nullable extension type,
+            # we need to ensure that the result is a NumericalColumn.
+            res = res.nans_to_nulls()
         if op in {"__mod__", "__floordiv__"} and tmp_dtype.kind == "b":
             res = res.astype(
                 get_dtype_of_same_kind(out_dtype, np.dtype(np.int8))
@@ -383,7 +387,11 @@ class NumericalColumn(NumericalBaseColumn):
             #   => np.int64
             # np.promote_types(np.asarray([0], dtype=np.int64).dtype, np.uint8)
             #   => np.int64
-            common_dtype = np.result_type(self.dtype, other)  # noqa: TID251
+            import pdb;pdb.set_trace()
+            if is_pandas_nullable_extension_dtype(self.dtype):
+                common_dtype = get_dtype_of_same_kind(self.dtype, np.result_type(self.dtype.numpy_dtype, other))
+            else:
+                common_dtype = np.result_type(self.dtype, other)  # noqa: TID251
             if common_dtype.kind in {"b", "i", "u", "f"}:
                 if self.dtype.kind == "b" and not isinstance(other, bool):
                     common_dtype = min_signed_type(other)

@@ -2831,7 +2831,7 @@ def as_column(
     * pandas.Categorical objects
     * range objects
     """
-    # import pdb;pdb.set_trace()
+    import pdb;pdb.set_trace()
     if isinstance(arbitrary, (range, pd.RangeIndex, cudf.RangeIndex)):
         with acquire_spill_lock():
             column = ColumnBase.from_pylibcudf(

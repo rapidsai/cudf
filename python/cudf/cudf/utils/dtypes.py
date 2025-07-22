@@ -789,6 +789,11 @@ SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES = {
     np.dtype("timedelta64[us]"): plc.types.TypeId.DURATION_MICROSECONDS,
     np.dtype("timedelta64[ns]"): plc.types.TypeId.DURATION_NANOSECONDS,
 }
+# from cudf.options import get_option
+# if get_option("mode.pandas_compatible"):
+#     SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[np.dtype("str")] = plc.types.TypeId.STRING
+# else:
+#     SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[np.dtype("object")] = plc.types.TypeId.STRING
 PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES = {
     plc_type: np_type
     for np_type, plc_type in SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES.items()

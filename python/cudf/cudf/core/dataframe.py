@@ -131,6 +131,7 @@ _cupy_nan_methods_map = {
     "mean": "nanmean",
     "std": "nanstd",
     "var": "nanvar",
+    "median": "nanmedian",
 }
 
 
@@ -6974,7 +6975,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         if skipna is not False and method in _cupy_nan_methods_map:
             method = _cupy_nan_methods_map[method]
-
+        # import pdb;pdb.set_trace()
+        # if method in {"any", "all"} and arr.dtype.kind == "f":
+        #     if skipna:
+        #         arr[cupy.isnan(arr)] = 0
+        #     else:
+        #         arr[cupy.isnan(arr)] = 1
         result = getattr(cupy, method)(arr, axis=1, **kwargs)
         # import pdb;pdb.set_trace()
         if result.ndim == 1:
@@ -7014,6 +7020,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                         "mean",
                         "nanmean",
                         "median",
+                        "nanmedian",
                         "sem",
                         "skew",
                         "std",
