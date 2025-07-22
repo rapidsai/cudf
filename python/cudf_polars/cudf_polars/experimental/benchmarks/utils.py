@@ -162,6 +162,7 @@ class RunConfig:
     shuffle: str | None = None
     broadcast_join_limit: int | None = None
     blocksize: int | None = None
+    max_rows_per_partition: int | None = None
     threads: int
     iterations: int
     timestamp: str = dataclasses.field(
@@ -223,6 +224,7 @@ class RunConfig:
             rapidsmpf_oom_protection=args.rapidsmpf_oom_protection,
             spill_device=args.spill_device,
             rapidsmpf_spill=args.rapidsmpf_spill,
+            max_rows_per_partition=args.max_rows_per_partition,
         )
 
     def serialize(self, engine: pl.GPUEngine | None) -> dict:
@@ -265,6 +267,12 @@ class RunConfig:
                     f"mean time: {statistics.mean(record.duration for record in records):0.4f}"
                 )
                 print("=======================================")
+        total_mean_time = sum(
+            statistics.mean(record.duration for record in records)
+            for records in self.records.values()
+            if records
+        )
+        print(f"Total mean time across all queries: {total_mean_time:.4f} seconds")
 
 
 def get_data(path: str | Path, table_name: str, suffix: str = "") -> pl.LazyFrame:
@@ -280,6 +288,8 @@ def get_executor_options(
 
     if run_config.blocksize:
         executor_options["target_partition_size"] = run_config.blocksize
+    if run_config.max_rows_per_partition:
+        executor_options["max_rows_per_partition"] = run_config.max_rows_per_partition
     if run_config.shuffle:
         executor_options["shuffle_method"] = run_config.shuffle
     if run_config.broadcast_join_limit:
@@ -493,7 +503,13 @@ def parse_args(
         "--blocksize",
         default=None,
         type=int,
-        help="Approx. partition size.",
+        help="Target partition size, in bytes, for IO tasks.",
+    )
+    parser.add_argument(
+        "--max-rows-per-partition",
+        default=None,
+        type=int,
+        help="The maximum number of rows to process per partition.",
     )
     parser.add_argument(
         "--iterations",
