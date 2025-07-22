@@ -3,6 +3,7 @@
 from enum import IntEnum
 
 from pylibcudf.column import Column
+from pylibcudf.copying import OutOfBoundsPolicy
 from pylibcudf.scalar import Scalar
 from pylibcudf.table import Table
 from pylibcudf.types import NanEquality, NullEquality, NullOrder, Order
@@ -28,7 +29,11 @@ def index_of(
     find_option: DuplicateFindOption,
 ) -> Column: ...
 def reverse(input: Column) -> Column: ...
-def segmented_gather(input: Column, gather_map_list: Column) -> Column: ...
+def segmented_gather(
+    input: Column,
+    gather_map_list: Column,
+    bounds_policy: OutOfBoundsPolicy = OutOfBoundsPolicy.DONT_CHECK,
+) -> Column: ...
 def extract_list_element(input: Column, index: Column | int) -> Column: ...
 def count_elements(input: Column) -> Column: ...
 def sequences(
