@@ -119,6 +119,8 @@ class StringFunction(Expr):
         Name.LenBytes,
         Name.LenChars,
         Name.Lowercase,
+        Name.PadEnd,
+        Name.PadStart,
         Name.Replace,
         Name.ReplaceMany,
         Name.Slice,
@@ -715,6 +717,24 @@ class StringFunction(Expr):
             column, target, repl = columns
             return Column(
                 plc.strings.replace.replace_multiple(column.obj, target.obj, repl.obj),
+                dtype=self.dtype,
+            )
+        elif self.name is StringFunction.Name.PadStart:
+            (column,) = columns
+            width, char = self.options
+            return Column(
+                plc.strings.padding.pad(
+                    column.obj, width, plc.strings.SideType.LEFT, char
+                ),
+                dtype=self.dtype,
+            )
+        elif self.name is StringFunction.Name.PadEnd:
+            (column,) = columns
+            width, char = self.options
+            return Column(
+                plc.strings.padding.pad(
+                    column.obj, width, plc.strings.SideType.RIGHT, char
+                ),
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.Reverse:
