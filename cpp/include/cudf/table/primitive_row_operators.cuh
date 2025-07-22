@@ -21,13 +21,16 @@
 #include <cudf/hashing/detail/hash_functions.cuh>
 #include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
-#include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/table/table_view.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
+#include <thrust/equal.h>
+
+#include <memory>
 
 namespace CUDF_EXPORT cudf {
 
