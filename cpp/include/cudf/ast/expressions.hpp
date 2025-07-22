@@ -498,14 +498,7 @@ class operation : public expression {
 
   [[nodiscard]] bool may_evaluate_null(table_view const& left,
                                        table_view const& right,
-                                       rmm::cuda_stream_view stream) const override
-  {
-    return std::any_of(operands.cbegin(),
-                       operands.cend(),
-                       [&left, &right, &stream](std::reference_wrapper<expression const> subexpr) {
-                         return subexpr.get().may_evaluate_null(left, right, stream);
-                       });
-  };
+                                       rmm::cuda_stream_view stream) const override;
 
  private:
   ast_operator op;

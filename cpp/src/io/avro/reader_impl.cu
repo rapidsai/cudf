@@ -16,12 +16,13 @@
 
 #include "avro.hpp"
 #include "avro_gpu.hpp"
+#include "io/comp/decompression.hpp"
 #include "io/comp/gpuinflate.hpp"
-#include "io/comp/io_uncomp.hpp"
 #include "io/utilities/column_buffer.hpp"
 #include "io/utilities/hostdevice_vector.hpp"
 
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/datasource.hpp>
@@ -195,11 +196,11 @@ rmm::device_buffer decompress_data(datasource& source,
     auto inflate_out =
       cudf::detail::hostdevice_vector<device_span<uint8_t>>(meta.block_list.size(), stream);
     auto inflate_stats =
-      cudf::detail::hostdevice_vector<compression_result>(meta.block_list.size(), stream);
+      cudf::detail::hostdevice_vector<codec_exec_result>(meta.block_list.size(), stream);
     thrust::fill(rmm::exec_policy(stream),
                  inflate_stats.d_begin(),
                  inflate_stats.d_end(),
-                 compression_result{0, compression_status::FAILURE});
+                 codec_exec_result{0, codec_status::FAILURE});
 
     // Guess an initial maximum uncompressed block size. We estimate the compression factor is two
     // and round up to the next multiple of 4096 bytes.
@@ -239,7 +240,7 @@ rmm::device_buffer decompress_data(datasource& source,
                        [](auto const& inf_out, auto const& inf_stats) {
                          // If error status is OUTPUT_OVERFLOW, the `bytes_written` field
                          // actually contains the uncompressed data size
-                         return inf_stats.status == compression_status::OUTPUT_OVERFLOW
+                         return inf_stats.status == codec_status::OUTPUT_OVERFLOW
                                   ? std::max(inf_out.size(), inf_stats.bytes_written)
                                   : inf_out.size();
                        });
@@ -309,11 +310,11 @@ rmm::device_buffer decompress_data(datasource& source,
                        return device_span<uint8_t>{data + off[i], size[i]};
                      });
 
-    rmm::device_uvector<compression_result> decomp_results(num_blocks, stream);
+    rmm::device_uvector<codec_exec_result> decomp_results(num_blocks, stream);
     thrust::fill(rmm::exec_policy_nosync(stream),
                  decomp_results.begin(),
                  decomp_results.end(),
-                 compression_result{0, compression_status::FAILURE});
+                 codec_exec_result{0, codec_status::FAILURE});
 
     decompress(compression_type::SNAPPY,
                compressed_blocks,
@@ -328,7 +329,7 @@ rmm::device_buffer decompress_data(datasource& source,
                                decomp_results.begin(),
                                [] __device__(auto const& size, auto const& result) {
                                  return size == result.bytes_written and
-                                        result.status == compression_status::SUCCESS;
+                                        result.status == codec_status::SUCCESS;
                                }),
                  "Error during Snappy decompression");
 
@@ -583,6 +584,8 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
       }
     }
   }
+
+  out_columns = cudf::structs::detail::enforce_null_consistency(std::move(out_columns), stream, mr);
 
   // Return column names
   metadata_out.schema_info.reserve(selected_columns.size());

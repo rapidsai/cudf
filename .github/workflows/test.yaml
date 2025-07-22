@@ -4,18 +4,23 @@ on:
   workflow_dispatch:
     inputs:
       branch:
+        description: |
+          Git branch the workflow run targets.
+          Required even when 'sha' is provided because it is also used for organizing artifacts.
         required: true
         type: string
       date:
+        description: "Date (YYYY-MM-DD) this run is for. Used to organize artifacts produced by nightly builds"
         required: true
         type: string
       sha:
+        description: "Full git commit SHA to check out"
         required: true
         type: string
       build_type:
+        description: "One of: [branch, nightly, pull-request]"
         type: string
         default: nightly
-
 jobs:
   conda-cpp-checks:
     secrets: inherit
@@ -25,7 +30,6 @@ jobs:
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
-      enable_check_symbols: true
   conda-cpp-tests:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-tests.yaml@branch-25.08
@@ -45,7 +49,7 @@ jobs:
       sha: ${{ inputs.sha }}
       node_type: "gpu-l4-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci-conda:latest"
+      container_image: "rapidsai/ci-conda:25.08-latest"
       script: "ci/test_cpp_memcheck.sh"
   cpp-linters:
     secrets: inherit
@@ -86,7 +90,7 @@ jobs:
       sha: ${{ inputs.sha }}
       node_type: "gpu-l4-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci-conda:latest"
+      container_image: "rapidsai/ci-conda:25.08-latest"
       script: "ci/test_java.sh"
   conda-notebook-tests:
     secrets: inherit
@@ -98,7 +102,7 @@ jobs:
       sha: ${{ inputs.sha }}
       node_type: "gpu-l4-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci-conda:latest"
+      container_image: "rapidsai/ci-conda:25.08-latest"
       script: "ci/test_notebooks.sh"
   wheel-tests-cudf:
     secrets: inherit
@@ -166,5 +170,5 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       node_type: "gpu-l4-latest-1"
-      container_image: "rapidsai/ci-conda:latest"
+      container_image: "rapidsai/ci-conda:25.08-latest"
       script: ci/test_narwhals.sh

@@ -16,7 +16,7 @@
 #pragma once
 
 #include <cudf/ast/detail/expression_parser.hpp>
-#include <cudf/ast/detail/operators.hpp>
+#include <cudf/ast/detail/operators.cuh>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -33,12 +33,6 @@
 #include <cuda/std/utility>
 
 namespace cudf::ast::detail {
-
-CUDF_HOST_DEVICE constexpr bool is_complex_type(cudf::type_id type)
-{
-  return type == cudf::type_id::DECIMAL32 || type == cudf::type_id::DECIMAL64 ||
-         type == cudf::type_id::DECIMAL128 || type == cudf::type_id::STRING;
-}
 
 /**
  * @brief Maps void for string and decimal types
