@@ -8,18 +8,14 @@ from __future__ import annotations
 import itertools
 from typing import TYPE_CHECKING
 
-from cudf_polars.dsl import expr
 from cudf_polars.dsl.ir import (
     IR,
     DataFrameScan,
     Distinct,
     GroupBy,
     HConcat,
-    HStack,
     Join,
     Scan,
-    Select,
-    Union,
 )
 from cudf_polars.dsl.traversal import post_traversal
 from cudf_polars.experimental.base import (
@@ -82,7 +78,7 @@ def _default_extract_base_stats(
             name: child_column_stats.get(name, ColumnStats(name=name))
             for name in ir.schema
         }
-    else:  # pragma: no cover
+    else:
         # Multi-child nodes loose all information by default.
         return {name: ColumnStats(name=name) for name in ir.schema}
 
@@ -142,59 +138,21 @@ def _(
     _update_unique_stats_columns(
         child_column_stats, [n.name for n in ir.keys], config_options
     )
-
-    return {
-        n.name: child_column_stats.get(n.name, ColumnStats(name=n.name))
-        for n in ir.keys
-    } | {n.name: ColumnStats(name=n.name) for n in ir.agg_requests}
-
-
-@extract_base_stats.register(HStack)
-def _(
-    ir: HStack, stats: StatsCollector, config_options: ConfigOptions
-) -> dict[str, ColumnStats]:
-    (child,) = ir.children
-    child_column_stats = stats.column_stats.get(child, {})
-    new_cols = {
-        n.name: child_column_stats.get(n.value.name, ColumnStats(name=n.name))
-        if isinstance(n.value, expr.Col)
-        else ColumnStats(name=n.name)
-        for n in ir.columns
-    }
-    return child_column_stats | new_cols
-
-
-@extract_base_stats.register(Select)
-def _(
-    ir: Select, stats: StatsCollector, config_options: ConfigOptions
-) -> dict[str, ColumnStats]:
-    (child,) = ir.children
-    child_column_stats = stats.column_stats.get(child, {})
-    return {
-        n.name: child_column_stats.get(n.value.name, ColumnStats(name=n.name))
-        if isinstance(n.value, expr.Col)
-        else ColumnStats(name=n.name)
-        for n in ir.exprs
-    }
+    return _default_extract_base_stats(ir, stats, config_options)
 
 
 @extract_base_stats.register(HConcat)
 def _(
     ir: HConcat, stats: StatsCollector, config_options: ConfigOptions
 ) -> dict[str, ColumnStats]:
-    return dict(
+    child_column_stats = dict(
         itertools.chain.from_iterable(
             stats.column_stats.get(c, {}).items() for c in ir.children
         )
     )
-
-
-@extract_base_stats.register(Union)
-def _(
-    ir: Union, stats: StatsCollector, config_options: ConfigOptions
-) -> dict[str, ColumnStats]:
-    # TODO: We can preserve matching source statistics
-    return {name: ColumnStats(name=name) for name in ir.schema}
+    return {
+        name: child_column_stats.get(name, ColumnStats(name=name)) for name in ir.schema
+    }
 
 
 @extract_base_stats.register(Scan)
