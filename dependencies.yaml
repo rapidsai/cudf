@@ -724,6 +724,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
+          - nvidia-ml-py
           - polars>=1.28,<1.32
     specific:
       - output_types: [requirements, pyproject]
@@ -736,7 +737,6 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - rapids-dask-dependency==25.8.*,>=0.0.0a0
-          - nvidia-ml-py
   run_dask_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
