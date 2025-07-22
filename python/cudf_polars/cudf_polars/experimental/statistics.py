@@ -11,17 +11,14 @@ from typing import TYPE_CHECKING
 from cudf_polars.dsl import expr
 from cudf_polars.dsl.ir import (
     IR,
-    Cache,
     DataFrameScan,
     Distinct,
     GroupBy,
     HConcat,
     HStack,
     Join,
-    Projection,
     Scan,
     Select,
-    Sort,
     Union,
 )
 from cudf_polars.dsl.traversal import post_traversal
@@ -73,6 +70,7 @@ def _update_unique_stats_columns(
             source_stats.add_unique_stats_column(column_stats.source_name or name)
 
 
+@extract_base_stats.register(IR)
 def _default_extract_base_stats(
     ir: IR, stats: StatsCollector, config_options: ConfigOptions
 ) -> dict[str, ColumnStats]:
@@ -87,9 +85,6 @@ def _default_extract_base_stats(
     else:  # pragma: no cover
         # Multi-child nodes loose all information by default.
         return {name: ColumnStats(name=name) for name in ir.schema}
-
-
-extract_base_stats.register(IR, _default_extract_base_stats)
 
 
 @extract_base_stats.register(Distinct)
@@ -194,21 +189,6 @@ def _(
 ) -> dict[str, ColumnStats]:
     # TODO: We can preserve matching source statistics
     return {name: ColumnStats(name=name) for name in ir.schema}
-
-
-def _extract_base_stats_preserve(
-    ir: IR, stats: StatsCollector, config_options: ConfigOptions
-) -> dict[str, ColumnStats]:
-    (child,) = ir.children
-    child_column_stats = stats.column_stats.get(child, {})
-    return {
-        name: child_column_stats.get(name, ColumnStats(name=name)) for name in ir.schema
-    }
-
-
-extract_base_stats.register(Cache, _extract_base_stats_preserve)
-extract_base_stats.register(Projection, _extract_base_stats_preserve)
-extract_base_stats.register(Sort, _extract_base_stats_preserve)
 
 
 @extract_base_stats.register(Scan)
