@@ -19,6 +19,7 @@
 #include <cudf/join/conditional_join.hpp>
 
 auto const CONDITIONAL_JOIN_SIZE_RANGE = std::vector<nvbench::int64_t>{1000, 100'000};
+auto const num_keys                    = 1;
 
 template <bool Nullable, cudf::null_equality NullEquality, data_type DataType>
 void nvbench_conditional_inner_join(nvbench::state& state,
@@ -26,8 +27,7 @@ void nvbench_conditional_inner_join(nvbench::state& state,
                                                        nvbench::enum_type<NullEquality>,
                                                        nvbench::enum_type<DataType>>)
 {
-  auto const num_keys = state.get_int64("num_keys");
-  auto dtypes         = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
+  auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
 
   auto join = [](cudf::table_view const& left,
                  cudf::table_view const& right,
@@ -45,8 +45,7 @@ void nvbench_conditional_left_join(nvbench::state& state,
                                                       nvbench::enum_type<NullEquality>,
                                                       nvbench::enum_type<DataType>>)
 {
-  auto const num_keys = state.get_int64("num_keys");
-  auto dtypes         = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
+  auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
 
   auto join = [](cudf::table_view const& left,
                  cudf::table_view const& right,
@@ -59,17 +58,19 @@ void nvbench_conditional_left_join(nvbench::state& state,
 }
 
 NVBENCH_BENCH_TYPES(nvbench_conditional_inner_join,
-                    NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE, JOIN_NULL_EQUALITY, JOIN_DATATYPES))
+                    NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
+                                      DEFAULT_JOIN_NULL_EQUALITY,
+                                      DEFAULT_JOIN_DATATYPES))
   .set_name("conditional_inner_join")
   .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
-  .add_int64_axis("num_keys", nvbench::range(1, 5, 1))
   .add_int64_axis("left_size", CONDITIONAL_JOIN_SIZE_RANGE)
   .add_int64_axis("right_size", CONDITIONAL_JOIN_SIZE_RANGE);
 
 NVBENCH_BENCH_TYPES(nvbench_conditional_left_join,
-                    NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE, JOIN_NULL_EQUALITY, JOIN_DATATYPES))
+                    NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
+                                      DEFAULT_JOIN_NULL_EQUALITY,
+                                      DEFAULT_JOIN_DATATYPES))
   .set_name("conditional_left_join")
   .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
-  .add_int64_axis("num_keys", nvbench::range(1, 5, 1))
   .add_int64_axis("left_size", CONDITIONAL_JOIN_SIZE_RANGE)
   .add_int64_axis("right_size", CONDITIONAL_JOIN_SIZE_RANGE);

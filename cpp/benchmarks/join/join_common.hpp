@@ -44,18 +44,22 @@
 
 #include <vector>
 
-using JOIN_ALGORITHM      = nvbench::enum_type_list<join_t::HASH, join_t::SORT_MERGE>;
-using JOIN_NULLABLE_RANGE = nvbench::enum_type_list<false, true>;
-using JOIN_DATATYPES      = nvbench::enum_type_list<data_type::INT32,
-                                                    data_type::INT64,
-                                                    data_type::FLOAT32,
-                                                    data_type::FLOAT64,
-                                                    data_type::STRING,
-                                                    data_type::LIST,
-                                                    data_type::STRUCT>;
+auto const JOIN_SIZE_RANGE = std::vector<nvbench::int64_t>{1000, 100'000, 10'000'000};
+using JOIN_NULLABLE_RANGE  = nvbench::enum_type_list<false, true>;
+
+using JOIN_ALGORITHM = nvbench::enum_type_list<join_t::HASH, join_t::SORT_MERGE>;
+using JOIN_DATATYPES = nvbench::enum_type_list<data_type::INT32,
+                                               data_type::INT64,
+                                               data_type::FLOAT32,
+                                               data_type::FLOAT64,
+                                               data_type::STRING,
+                                               data_type::LIST,
+                                               data_type::STRUCT>;
 using JOIN_NULL_EQUALITY =
   nvbench::enum_type_list<cudf::null_equality::EQUAL, cudf::null_equality::UNEQUAL>;
-auto const JOIN_SIZE_RANGE = std::vector<nvbench::int64_t>{1000, 100'000, 10'000'000};
+
+using DEFAULT_JOIN_DATATYPES     = nvbench::enum_type_list<data_type::INT32>;
+using DEFAULT_JOIN_NULL_EQUALITY = nvbench::enum_type_list<cudf::null_equality::UNEQUAL>;
 
 template <bool Nullable,
           join_t join_type                  = join_t::HASH,

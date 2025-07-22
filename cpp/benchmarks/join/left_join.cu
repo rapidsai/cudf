@@ -18,14 +18,15 @@
 
 #include <cudf/join/join.hpp>
 
+auto const num_keys = 1;
+
 template <bool Nullable, cudf::null_equality NullEquality, data_type DataType>
 void nvbench_left_anti_join(nvbench::state& state,
                             nvbench::type_list<nvbench::enum_type<Nullable>,
                                                nvbench::enum_type<NullEquality>,
                                                nvbench::enum_type<DataType>>)
 {
-  auto const num_keys = state.get_int64("num_keys");
-  auto dtypes         = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
+  auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
 
   auto join = [](cudf::table_view const& left,
                  cudf::table_view const& right,
@@ -42,8 +43,7 @@ void nvbench_left_semi_join(nvbench::state& state,
                                                nvbench::enum_type<NullEquality>,
                                                nvbench::enum_type<DataType>>)
 {
-  auto const num_keys = state.get_int64("num_keys");
-  auto dtypes         = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
+  auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
 
   auto join = [](cudf::table_view const& left,
                  cudf::table_view const& right,
@@ -54,17 +54,19 @@ void nvbench_left_semi_join(nvbench::state& state,
 }
 
 NVBENCH_BENCH_TYPES(nvbench_left_anti_join,
-                    NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE, JOIN_NULL_EQUALITY, JOIN_DATATYPES))
+                    NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
+                                      DEFAULT_JOIN_NULL_EQUALITY,
+                                      DEFAULT_JOIN_DATATYPES))
   .set_name("left_anti_join")
   .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
-  .add_int64_axis("num_keys", nvbench::range(1, 5, 1))
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
   .add_int64_axis("right_size", JOIN_SIZE_RANGE);
 
 NVBENCH_BENCH_TYPES(nvbench_left_semi_join,
-                    NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE, JOIN_NULL_EQUALITY, JOIN_DATATYPES))
+                    NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
+                                      DEFAULT_JOIN_NULL_EQUALITY,
+                                      DEFAULT_JOIN_DATATYPES))
   .set_name("left_semi_join")
   .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
-  .add_int64_axis("num_keys", nvbench::range(1, 5, 1))
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
   .add_int64_axis("right_size", JOIN_SIZE_RANGE);
