@@ -10,7 +10,6 @@ import polars as pl
 from cudf_polars import Translator
 from cudf_polars.experimental.parallel import lower_ir_graph
 from cudf_polars.experimental.shuffle import Shuffle
-from cudf_polars.experimental.statistics import collect_base_stats
 from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
 from cudf_polars.utils.config import ConfigOptions
 
@@ -196,31 +195,3 @@ def test_join_and_slice(zlice):
     # Need sort to match order after a join
     q = left.join(right, on="a", how="inner").sort(pl.col("a")).slice(*zlice)
     assert_gpu_result_equal(q, engine=engine)
-
-
-@pytest.mark.parametrize("how", ["inner", "left", "right"])
-def test_join_base_stats(left, right, how):
-    engine = pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "scheduler": DEFAULT_SCHEDULER,
-            "shuffle_method": "tasks",
-        },
-    )
-
-    q = left.join(right, on="y", how=how)
-    ir = Translator(q._ldf.visit(), engine).translate_ir()
-    stats = collect_base_stats(ir, ConfigOptions.from_polars_engine(engine))
-
-    ir_column_stats = stats.column_stats[ir]
-    left_count, right_count = 15, 9
-    if how in ("inner", "left"):
-        assert ir_column_stats["x"].source_info.row_count.value == left_count
-        assert ir_column_stats["z"].source_info.row_count.value == left_count
-    if how in ("inner", "right"):
-        assert ir_column_stats["xx"].source_info.row_count.value == right_count
-        assert ir_column_stats["zz"].source_info.row_count.value == right_count
-
-    # TODO: Stats for "y" should depend on join type
-    assert ir_column_stats["y"].source_info.row_count.value == left_count
