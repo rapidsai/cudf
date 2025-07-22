@@ -84,7 +84,7 @@ def _default_extract_base_stats(
             name: child_column_stats.get(name, ColumnStats(name=name))
             for name in ir.schema
         }
-    else:
+    else:  # pragma: no cover
         # Multi-child nodes loose all information by default.
         return {name: ColumnStats(name=name) for name in ir.schema}
 
