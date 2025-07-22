@@ -1,10 +1,9 @@
 # String UDF memory management
 
-Some functions used on strings inside UDFs create new strings; these include
-functions like ``concat()``, ``replace()``, and various others. For a CUDA thread
+Inside UDFs, some string methods like ``concat()`` and ``replace()`` produce new strings. For a CUDA thread
 to create a new string, it must dynamically allocate memory on the device to hold
 the string's data. The cleanup of this memory by the thread later on must preserve
-python's semantics, for example when the variable corresponding to the new string
+Python's semantics, for example when the variable corresponding to the new string
 goes out of scope. To accomplish this in cuDF, UDF memory management (allocation
 and freeing of the underlying data) is handled transparently for the user, via a
 reference counting mechanism. Along with the code generated from the functions and
@@ -15,11 +14,11 @@ allocating types such strings generally as one would in python:
 
 ```python
 def udf(string):
-if len(string) > 2:
-  result = string.upper() # new allocation
-else:
-  result = string + string # new allocation
-return result + 'abc'
+  if len(string) > 2:
+    result = string.upper() # new allocation
+  else:
+    result = string + string # new allocation
+  return result + 'abc'
 ```
 
 
@@ -31,20 +30,19 @@ code](https://numba.readthedocs.io/en/stable/developer/numba-runtime.html#memory
 This runtime library (NRT or Numba Runtime) provides implementations for operators
 that increase and decrease a variable's reference count (INCREF/DECREF), and numba
 analyzes the passed UDF to determine where the calls targeting these implementations
-should go and what objects they should operate on. Below are some  examples of situations
+should go and what objects they should operate on. Below are some examples of situations
 where numba-cuda would detect a reference counting operation needs to be applied to
 an object:
 
 - **The creation of a new object**: During object creation, memory is allocated
 and a structure to track the memory is created and initialized.
-- **When new references are created:** For example during assignments, the
-reference count of the assigned object is incremented.
-- **When references are destroyed:** For example when an object goes out of
+- **When new references are created**: For example during assignments, the
+reference count of the assigned-from object is incremented.
+- **When references are destroyed**: For example when an object goes out of
 scope, or when an object holding a reference is destroyed. During these
 events, the reference count of the tracked object is decremented. If the
-reference count of an object falls to zero, its destructor will be invoked via
-the Numba Runtime.
-- **When an intermediate variable is no longer needed** For example when creating
+reference count of an object falls to zero, the Numba Runtime will invoke its destructor.
+- **When an intermediate variable is no longer needed**: For example when creating
 a new variable for inspection then disposing of it, as in `string.upper() == 'A'`
 
 
@@ -135,16 +133,15 @@ Lowering for operations like `concat` populate this member before returning.
 
 ### cuDF string data structures
 
-On the C++ side, strings are represented using the ``cudf::string_view`` class,
-and the ``cudf::strings::udf::udf_string`` class. The ``string_view`` class does
-not own the underlying string data; the ``udf_string`` does own the underlying
-string data. The ``cudf::string_view`` class inherits from libcudf, where it is
-useful for computng read-only functions of a single string, for a single thread,
-such as finding it's length. However ``cudf::udf_string`` is udf specific and is
-the type that implements algorithms that create new strings for a single thread,
-such as ``concat``. In classic libcudf, this object is not needed, and operations
-like ``concat`` are implemented in a whole column sense, eliminating the need for
-this abstraction.
+On the C++ side, libcudf permits storing entire columns of strings. The
+``cudf::string_view`` class is a non-owning view of a string --- usually a
+single row in a libcudf column --- that provides a convenient abstraction
+over working with individual strings in device code, for example in custom
+kernels. cuDF Python introduces the ``cudf::strings::udf::udf_string`` class,
+an owning container around a single string. This class is used by the numba UDF
+code to create new strings in device code. All libcudf string functions are made
+available in cuDF Python UDFs by constructing ``cudf::string_view`` instances
+that view the strings owned by ``udf_string`` instances.
 
 The cuDF extensions to Numba generate code to manipulate instances of these
 classes, so we outline the members of these classes to aid in understanding
@@ -166,12 +163,12 @@ class string_view {
 
 ```c++
 class udf_string {
-// A pointer to the underlying string data
-char* m_data{};
-// The length of the string data in bytes
-cudf::size_type m_bytes{};
-// The size of the underlying allocation in bytes
-cudf::size_type m_capacity{};
+  // A pointer to the underlying string data
+  char* m_data{};
+  // The length of the string data in bytes
+  cudf::size_type m_bytes{};
+  // The size of the underlying allocation in bytes
+  cudf::size_type m_capacity{};
 };
 ```
 
@@ -186,24 +183,16 @@ Python-side Managed UDF String object.
 
 The cuDF implementations for Managed UDF Strings is required to provide:
 
-- Typing and lowering for Managed UDF String operations.
-- The typing has no special properties; it is similar to any other typing
-  implementation in a Numba extension.
-- The lowering is required to ensure that ``NRT_MemInfo`` objects for each
-  managed object are created and initialized correctly.
-- C++ implementations of string functions:
-- Some of these are provided by cuDF / libcudf's C++ string functionality
-- Other functions are provided by the ``strings_udf`` C++ library in cuDF
-  Python. These help with the allocation of data and implement the required
-  destructors.
+- Typing and lowering for Managed UDF String operations. The typing has no special properties; it is similar to any other typing implementation in a Numba extension. The lowering is required to ensure that ``NRT_MemInfo`` objects for each managed object are created and initialized correctly.
+- C++ implementations of string functions, some of which use libcudf's C++ string functionality. Other functions are provided by the ``strings_udf`` C++ library in cuDF Python. These help with the allocation of data and implement the required destructors.
 - Numba shim functions to adapt calls to C++ code for use in Numba code and
   Numba extensions are also required.
 - Conversion from String UDF data to and from `cudf::column`.
 
 Use of C++ code for string functionality is not a hard requirement for
 implementing string support in a Numba extension - it is instead a pragmatic
-requirement that the Python and C++ sides of cuDF share a single implementation
-for string operations, instead of trying to keep two separately-maintained
+choice so that the Python and C++ sides of cuDF can share a single implementation
+for string operations instead of trying to keep two separately-maintained
 implementations in sync.
 
 
@@ -219,7 +208,7 @@ returns strings.
 
 Let's trace the complete lifecycle of a string created by `result = str1 + str2` in a UDF:
 
-#### Phase 1: Compilation
+### Phase 1: Compilation
 
 **1.1 Numba Analysis**
 ```python
@@ -247,7 +236,7 @@ udf_str_ptr = builder.gep(managed_ptr, [ir.IntType(32)(0), ir.IntType(32)(1)])
 ```
 - Gets pointer to the `udf_string` member within the allocated struct
 
-#### Phase 2: String Creation via Shim Function
+### Phase 2: String Creation via Shim Function
 
 **2.1 Shim Function Call**
 ```python
@@ -308,11 +297,10 @@ __device__ NRT_MemInfo* make_meminfo_for_new_udf_string(udf_string* udf_str) {
 }
 ```
 
-`mi_str_allocation` is similar in structure to `ManagedUDFString` however they
-are distinct entities. Note that the allocation is sized for a full `MemInfo`
-struct as its first member rather than a pointer.
+`mi_str_allocation` is similar in structure to `ManagedUDFString` but has
+a `MemInfo` struct value as its first member rather than a pointer.
 
-#### Phase 3: Object Assembly and Return
+### Phase 3: Object Assembly and Return
 
 **3.1 Final Assembly**
 ```python
@@ -327,7 +315,7 @@ return managed._getvalue()
 - **GPU Memory**: String data owned by heap-allocated udf_string
 - **Reference Count**: 1 (object just created)
 
-#### Phase 4: Runtime Usage and Reference Management
+### Phase 4: Runtime Usage and Reference Management
 
 **4.1 Assignment Operations**
 
@@ -357,7 +345,7 @@ output_string_ary[tid] = result
 - Adds an incref, bumping the refcount back up to 2.
 
 
-#### Phase 5: Destruction Sequence
+### Phase 5: Destruction Sequence
 
 **5.1 Final Reference Release**
 
