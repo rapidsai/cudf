@@ -15,12 +15,15 @@
  */
 
 #include <benchmarks/join/join_common.hpp>
+#include <benchmarks/join/nvbench_helpers.hpp>
 
 #include <cudf/join/mixed_join.hpp>
 
-template <typename Key, bool Nullable>
+template <bool Nullable, cudf::null_equality NullEquality, data_type DataType>
 void nvbench_mixed_inner_join(nvbench::state& state,
-                              nvbench::type_list<Key, nvbench::enum_type<Nullable>>)
+                              nvbench::type_list<nvbench::enum_type<Nullable>,
+                                                 nvbench::enum_type<NullEquality>,
+                                                 nvbench::enum_type<DataType>>)
 {
   auto join = [](cudf::table_view const& left_equality_input,
                  cudf::table_view const& right_equality_input,
@@ -36,12 +39,22 @@ void nvbench_mixed_inner_join(nvbench::state& state,
                                   compare_nulls);
   };
 
-  BM_join<Key, Nullable, join_t::MIXED>(state, join);
+  auto const num_keys = state.get_int64("num_keys");
+  if (num_keys < 2) {
+    state.skip(
+      "We need at least two join keys: at least one key for equality, and at least one key for "
+      "conditional");
+    return;
+  }
+  auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
+  BM_join<Nullable, join_t::MIXED, NullEquality>(state, dtypes, join);
 }
 
-template <typename Key, bool Nullable>
+template <bool Nullable, cudf::null_equality NullEquality, data_type DataType>
 void nvbench_mixed_left_join(nvbench::state& state,
-                             nvbench::type_list<Key, nvbench::enum_type<Nullable>>)
+                             nvbench::type_list<nvbench::enum_type<Nullable>,
+                                                nvbench::enum_type<NullEquality>,
+                                                nvbench::enum_type<DataType>>)
 {
   auto join = [](cudf::table_view const& left_equality_input,
                  cudf::table_view const& right_equality_input,
@@ -57,12 +70,22 @@ void nvbench_mixed_left_join(nvbench::state& state,
                                  compare_nulls);
   };
 
-  BM_join<Key, Nullable, join_t::MIXED>(state, join);
+  auto const num_keys = state.get_int64("num_keys");
+  if (num_keys < 2) {
+    state.skip(
+      "We need at least two join keys: at least one key for equality, and at least one key for "
+      "conditional");
+    return;
+  }
+  auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
+  BM_join<Nullable, join_t::MIXED, NullEquality>(state, dtypes, join);
 }
 
-template <typename Key, bool Nullable>
+template <bool Nullable, cudf::null_equality NullEquality, data_type DataType>
 void nvbench_mixed_full_join(nvbench::state& state,
-                             nvbench::type_list<Key, nvbench::enum_type<Nullable>>)
+                             nvbench::type_list<nvbench::enum_type<Nullable>,
+                                                nvbench::enum_type<NullEquality>,
+                                                nvbench::enum_type<DataType>>)
 {
   auto join = [](cudf::table_view const& left_equality_input,
                  cudf::table_view const& right_equality_input,
@@ -78,12 +101,22 @@ void nvbench_mixed_full_join(nvbench::state& state,
                                  compare_nulls);
   };
 
-  BM_join<Key, Nullable, join_t::MIXED>(state, join);
+  auto const num_keys = state.get_int64("num_keys");
+  if (num_keys < 2) {
+    state.skip(
+      "We need at least two join keys: at least one key for equality, and at least one key for "
+      "conditional");
+    return;
+  }
+  auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
+  BM_join<Nullable, join_t::MIXED, NullEquality>(state, dtypes, join);
 }
 
-template <typename Key, bool Nullable>
+template <bool Nullable, cudf::null_equality NullEquality, data_type DataType>
 void nvbench_mixed_left_semi_join(nvbench::state& state,
-                                  nvbench::type_list<Key, nvbench::enum_type<Nullable>>)
+                                  nvbench::type_list<nvbench::enum_type<Nullable>,
+                                                     nvbench::enum_type<NullEquality>,
+                                                     nvbench::enum_type<DataType>>)
 {
   auto join = [](cudf::table_view const& left_equality_input,
                  cudf::table_view const& right_equality_input,
@@ -99,12 +132,22 @@ void nvbench_mixed_left_semi_join(nvbench::state& state,
                                       compare_nulls);
   };
 
-  BM_join<Key, Nullable, join_t::MIXED>(state, join);
+  auto const num_keys = state.get_int64("num_keys");
+  if (num_keys < 2) {
+    state.skip(
+      "We need at least two join keys: at least one key for equality, and at least one key for "
+      "conditional");
+    return;
+  }
+  auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
+  BM_join<Nullable, join_t::MIXED, NullEquality>(state, dtypes, join);
 }
 
-template <typename Key, bool Nullable>
+template <bool Nullable, cudf::null_equality NullEquality, data_type DataType>
 void nvbench_mixed_left_anti_join(nvbench::state& state,
-                                  nvbench::type_list<Key, nvbench::enum_type<Nullable>>)
+                                  nvbench::type_list<nvbench::enum_type<Nullable>,
+                                                     nvbench::enum_type<NullEquality>,
+                                                     nvbench::enum_type<DataType>>)
 {
   auto join = [](cudf::table_view const& left_equality_input,
                  cudf::table_view const& right_equality_input,
@@ -120,40 +163,53 @@ void nvbench_mixed_left_anti_join(nvbench::state& state,
                                       compare_nulls);
   };
 
-  BM_join<Key, Nullable, join_t::MIXED>(state, join);
+  auto const num_keys = state.get_int64("num_keys");
+  if (num_keys < 2) {
+    state.skip(
+      "We need at least two join keys: at least one key for equality, and at least one key for "
+      "conditional");
+    return;
+  }
+  auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
+  BM_join<Nullable, join_t::MIXED, NullEquality>(state, dtypes, join);
 }
 
 NVBENCH_BENCH_TYPES(nvbench_mixed_inner_join,
-                    NVBENCH_TYPE_AXES(JOIN_KEY_TYPE_RANGE, JOIN_NULLABLE_RANGE))
+                    NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE, JOIN_NULL_EQUALITY, JOIN_DATATYPES))
   .set_name("mixed_inner_join")
-  .set_type_axes_names({"Key", "Nullable"})
+  .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
+  .add_int64_axis("num_keys", nvbench::range(2, 5, 1))
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
   .add_int64_axis("right_size", JOIN_SIZE_RANGE);
 
 NVBENCH_BENCH_TYPES(nvbench_mixed_left_join,
-                    NVBENCH_TYPE_AXES(JOIN_KEY_TYPE_RANGE, JOIN_NULLABLE_RANGE))
+                    NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE, JOIN_NULL_EQUALITY, JOIN_DATATYPES))
   .set_name("mixed_left_join")
-  .set_type_axes_names({"Key", "Nullable"})
+  .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
+  .add_int64_axis("num_keys", nvbench::range(2, 5, 1))
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
   .add_int64_axis("right_size", JOIN_SIZE_RANGE);
 
 NVBENCH_BENCH_TYPES(nvbench_mixed_full_join,
-                    NVBENCH_TYPE_AXES(JOIN_KEY_TYPE_RANGE, JOIN_NULLABLE_RANGE))
+                    NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE, JOIN_NULL_EQUALITY, JOIN_DATATYPES))
   .set_name("mixed_full_join")
-  .set_type_axes_names({"Key", "Nullable"})
+  .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
+  .add_int64_axis("num_keys", nvbench::range(2, 5, 1))
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
   .add_int64_axis("right_size", JOIN_SIZE_RANGE);
 
 NVBENCH_BENCH_TYPES(nvbench_mixed_left_semi_join,
-                    NVBENCH_TYPE_AXES(JOIN_KEY_TYPE_RANGE, JOIN_NULLABLE_RANGE))
+                    NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE, JOIN_NULL_EQUALITY, JOIN_DATATYPES))
   .set_name("mixed_left_semi_join")
-  .set_type_axes_names({"Key", "Nullable"})
+  .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
+  .add_int64_axis("num_keys", nvbench::range(2, 5, 1))
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
   .add_int64_axis("right_size", JOIN_SIZE_RANGE);
 
 NVBENCH_BENCH_TYPES(nvbench_mixed_left_anti_join,
-                    NVBENCH_TYPE_AXES(JOIN_KEY_TYPE_RANGE, JOIN_NULLABLE_RANGE))
+                    NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE, JOIN_NULL_EQUALITY, JOIN_DATATYPES))
   .set_name("mixed_left_anti_join")
-  .set_type_axes_names({"Key", "Nullable"})
+  .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
+  .add_int64_axis("num_keys", nvbench::range(2, 5, 1))
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
   .add_int64_axis("right_size", JOIN_SIZE_RANGE);

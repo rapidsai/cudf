@@ -45,7 +45,6 @@
 #include <vector>
 
 using JOIN_ALGORITHM      = nvbench::enum_type_list<join_t::HASH, join_t::SORT_MERGE>;
-using JOIN_KEY_TYPE_RANGE = nvbench::type_list<nvbench::int32_t, nvbench::int64_t>;
 using JOIN_NULLABLE_RANGE = nvbench::enum_type_list<false, true>;
 using JOIN_DATATYPES      = nvbench::enum_type_list<data_type::INT32,
                                                     data_type::INT64,
@@ -56,7 +55,6 @@ using JOIN_DATATYPES      = nvbench::enum_type_list<data_type::INT32,
                                                     data_type::STRUCT>;
 using JOIN_NULL_EQUALITY =
   nvbench::enum_type_list<cudf::null_equality::EQUAL, cudf::null_equality::UNEQUAL>;
-
 auto const JOIN_SIZE_RANGE = std::vector<nvbench::int64_t>{1000, 100'000, 10'000'000};
 
 struct null75_generator {
@@ -210,11 +208,11 @@ template <bool Nullable,
           cudf::null_equality compare_nulls = cudf::null_equality::UNEQUAL,
           typename state_type,
           typename Join>
-void BM_join_with_datatype(state_type& state,
-                           std::vector<cudf::type_id>& key_types,
-                           Join JoinFunc,
-                           int multiplicity   = 1,
-                           double selectivity = 0.3)
+void BM_join(state_type& state,
+             std::vector<cudf::type_id>& key_types,
+             Join JoinFunc,
+             int multiplicity   = 1,
+             double selectivity = 0.3)
 {
   auto const right_size = static_cast<size_t>(state.get_int64("right_size"));
   auto const left_size  = static_cast<size_t>(state.get_int64("left_size"));
@@ -224,12 +222,14 @@ void BM_join_with_datatype(state_type& state,
     return;
   }
 
-  auto const num_keys = key_types.size();
-  auto [build_table, probe_table] =
-    generate_input_tables<Nullable>(key_types, right_size, left_size, multiplicity, selectivity);
+  auto const num_keys             = key_types.size();
+  auto const num_payload_cols     = 2;
+  auto [build_table, probe_table] = generate_input_tables<Nullable>(
+    key_types, right_size, left_size, num_payload_cols, multiplicity, selectivity);
+  auto const probe_view = probe_table->view();
+  auto const build_view = build_table->view();
 
-  auto const join_input_size =
-    estimate_size(build_table->view()) + estimate_size(probe_table->view());
+  auto const join_input_size = estimate_size(build_view) + estimate_size(probe_view);
 
   // Setup join parameters and result table
   std::vector<cudf::size_type> columns_to_join(num_keys);
@@ -240,8 +240,41 @@ void BM_join_with_datatype(state_type& state,
     state.add_element_count(join_input_size, "join_input_size");  // number of bytes
     state.template add_global_memory_reads<nvbench::int8_t>(join_input_size);
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-      auto result = JoinFunc(probe_table->view().select(columns_to_join),
-                             build_table->view().select(columns_to_join),
+      auto result = JoinFunc(
+        probe_view.select(columns_to_join), build_view.select(columns_to_join), compare_nulls);
+    });
+    set_throughputs(state);
+  }
+  if constexpr (join_type == join_t::CONDITIONAL) {
+    auto const col_ref_left_0  = cudf::ast::column_reference(0);
+    auto const col_ref_right_0 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
+    auto left_zero_eq_right_zero =
+      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref_left_0, col_ref_right_0);
+    state.add_element_count(join_input_size, "join_input_size");  // number of bytes
+    state.template add_global_memory_reads<nvbench::int8_t>(join_input_size);
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      auto result = JoinFunc(probe_view, build_view, left_zero_eq_right_zero, compare_nulls);
+      ;
+    });
+    set_throughputs(state);
+  }
+  if constexpr (join_type == join_t::MIXED) {
+    auto const col_ref_left_0  = cudf::ast::column_reference(0);
+    auto const col_ref_right_0 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
+    auto left_zero_eq_right_zero =
+      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref_left_0, col_ref_right_0);
+    state.add_element_count(join_input_size, "join_input_size");  // number of bytes
+    state.template add_global_memory_reads<nvbench::int8_t>(join_input_size);
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      auto result = JoinFunc(probe_view.select(std::vector<cudf::size_type>(
+                               columns_to_join.begin(), columns_to_join.begin() + num_keys / 2)),
+                             build_view.select(std::vector<cudf::size_type>(
+                               columns_to_join.begin(), columns_to_join.begin() + num_keys / 2)),
+                             probe_view.select(std::vector<cudf::size_type>(
+                               columns_to_join.begin() + num_keys / 2, columns_to_join.end())),
+                             build_view.select(std::vector<cudf::size_type>(
+                               columns_to_join.begin() + num_keys / 2, columns_to_join.end())),
+                             left_zero_eq_right_zero,
                              compare_nulls);
     });
     set_throughputs(state);

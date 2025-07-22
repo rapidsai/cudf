@@ -59,6 +59,8 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
     switch (value) {
       case join_t::HASH: return "HASH";
       case join_t::SORT_MERGE: return "SORT_MERGE";
+      case join_t::CONDITIONAL: return "CONDITIONAL";
+      case join_t::MIXED: return "MIXED";
       default: return "Unknown";
     }
   },
