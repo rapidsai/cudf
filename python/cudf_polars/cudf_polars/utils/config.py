@@ -10,7 +10,7 @@ import enum
 import json
 import os
 from typing import TYPE_CHECKING, Literal
-from cudf_polars.utils.config import _env_get_int
+
 if TYPE_CHECKING:
     from typing_extensions import Self
 
@@ -26,6 +26,13 @@ __all__ = [
     "StreamingExecutor",
     "StreamingFallbackMode",
 ]
+
+
+def _env_get_int(name: str, default: int) -> int:
+    try:
+        return int(os.getenv(name, default))
+    except (ValueError, TypeError):  # pragma: no cover
+        return default  # pragma: no cover
 
 
 def get_total_device_memory() -> int | None:
@@ -51,15 +58,6 @@ def get_total_device_memory() -> int | None:
     except pynvml.NVMLError_NotSupported:  # pragma: no cover
         # System doesn't have proper "GPU memory".
         return None
-
-
-@functools.cache
-def rapidsmpf_available() -> bool:  # pragma: no cover
-    """Query whether rapidsmpf is available as a shuffle method."""
-    try:
-        return importlib.util.find_spec("rapidsmpf.integrations.dask") is not None
-    except (ImportError, ValueError):
-        return False
 
 
 # TODO: Use enum.StrEnum when we drop Python 3.10
@@ -133,7 +131,7 @@ class ParquetOptions:
     chunk_read_limit: int = 0
     pass_read_limit: int = 0
 
-    def __post_init__(self) -> None:
+    def __post_init__(self) -> None:  # noqa: D105
         if not isinstance(self.chunked, bool):
             raise TypeError("chunked must be a bool")
         if not isinstance(self.chunk_read_limit, int):
@@ -227,7 +225,7 @@ class StreamingExecutor:
     shuffle_method: ShuffleMethod | None = None
     rapidsmpf_spill: bool = False
 
-    def __post_init__(self) -> None:
+    def __post_init__(self) -> None:  # noqa: D105
         if self.scheduler == "synchronous" and self.shuffle_method == "rapidsmpf":
             raise ValueError(
                 "rapidsmpf shuffle method is not supported for synchronous scheduler"
@@ -268,7 +266,7 @@ class StreamingExecutor:
         if not isinstance(self.rapidsmpf_spill, bool):
             raise TypeError("rapidsmpf_spill must be bool")
 
-    def __hash__(self) -> int:
+    def __hash__(self) -> int:  # noqa: D105
         # cardinality factory, a dict, isn't natively hashable. We'll dump it
         # to json and hash that.
         d = dataclasses.asdict(self)

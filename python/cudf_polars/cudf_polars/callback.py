@@ -47,13 +47,6 @@ _SUPPORTED_PREFETCHES = {
 }
 
 
-def _env_get_int(name: str, default: int) -> int:
-    try:
-        return int(os.getenv(name, default))
-    except (ValueError, TypeError):  # pragma: no cover
-        return default  # pragma: no cover
-
-
 @cache
 def default_memory_resource(
     device: int,
