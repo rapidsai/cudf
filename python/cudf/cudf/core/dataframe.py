@@ -7030,7 +7030,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     result_dtype = get_dtype_of_same_kind(
                         common_dtype, result.dtype
                     )
-            if result_dtype.kind == "b" and result.dtype.kind != "b":
+            if (
+                result_dtype is not None
+                and result_dtype.kind == "b"
+                and result.dtype.kind != "b"
+            ):
                 result_dtype = get_dtype_of_same_kind(
                     common_dtype, result.dtype
                 )
