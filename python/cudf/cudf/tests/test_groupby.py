@@ -820,6 +820,18 @@ def test_groupby_apply_jit_basic(func, groupby_jit_data_small):
     run_groupby_apply_jit_test(groupby_jit_data_small, func, ["key1", "key2"])
 
 
+def f1(df, k):
+    return df["val1"].max() + df["val2"].min() + k
+
+
+def f2(df, k, L):
+    return df["val1"].sum() - df["val2"].var() + (k / L)
+
+
+def f3(df, k, L, m):
+    return ((k * df["val1"].mean()) + (L * df["val2"].std())) / m
+
+
 @pytest.mark.parametrize(
     "func,args", [(f1, (42,)), (f2, (42, 119)), (f3, (42, 119, 212.1))]
 )
@@ -2837,7 +2849,7 @@ def test_groupby_diff_row_mixed_numerics(shift_perc, direction):
     )
 
 
-def test_groupby_diff_row_zero_shift(nelem):
+def test_groupby_diff_row_zero_shift():
     nelem = 20
     t = rand_dataframe(
         dtypes_meta=[
@@ -2873,7 +2885,7 @@ def test_groupby_diff_row_zero_shift(nelem):
     PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
     reason="warning not present in older pandas versions",
 )
-def test_groupby_fillna_multi_value(nelem):
+def test_groupby_fillna_multi_value():
     nelem = 20
     t = rand_dataframe(
         dtypes_meta=[
@@ -2922,7 +2934,7 @@ def test_groupby_fillna_multi_value(nelem):
     PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
     reason="warning not present in older pandas versions",
 )
-def test_groupby_fillna_multi_value_df(nelem):
+def test_groupby_fillna_multi_value_df():
     nelem = 20
     t = rand_dataframe(
         dtypes_meta=[
