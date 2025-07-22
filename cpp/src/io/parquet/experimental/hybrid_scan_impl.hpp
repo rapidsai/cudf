@@ -250,13 +250,6 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
     cudf::host_span<std::vector<size_type> const> row_group_indices) const;
 
   /**
-   * @brief Invalidate output buffer nullmask for rows spanned by the pruned pages
-   *
-   * @param page_mask Boolean vector indicating if a page needs to be decoded or is pruned
-   */
-  void update_output_nullmasks_for_pruned_pages(cudf::host_span<bool const> page_mask);
-
-  /**
    * @brief Perform the necessary data preprocessing for parsing file later on
    *
    * Only ever called once for filter and payload columns. This function prepares the input row
