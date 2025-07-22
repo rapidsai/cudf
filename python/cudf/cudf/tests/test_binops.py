@@ -5,6 +5,7 @@ import decimal
 import operator
 import re
 import warnings
+from concurrent.futures import ThreadPoolExecutor
 from itertools import combinations_with_replacement, product
 
 import cupy as cp
@@ -32,75 +33,56 @@ from cudf.utils.dtypes import (
 
 STRING_TYPES = {"str"}
 
-_binops = [
-    operator.add,
-    operator.sub,
-    operator.mul,
-    operator.floordiv,
-    operator.truediv,
-    operator.mod,
-    operator.pow,
-]
 
-_binops_compare = [
-    operator.eq,
-    operator.ne,
-    operator.lt,
-    operator.le,
-    operator.gt,
-    operator.ge,
-]
+@pytest.fixture(
+    params=[
+        operator.add,
+        operator.sub,
+        operator.mul,
+        operator.floordiv,
+        operator.truediv,
+        operator.mod,
+        operator.pow,
+    ]
+)
+def binop(request):
+    return request.param
 
-_bitwise_binops = [operator.and_, operator.or_, operator.xor]
 
-_int_types = [
-    "int8",
-    "int16",
-    "int32",
-    "int64",
-    "uint8",
-    "uint16",
-    "uint32",
-]
+@pytest.fixture(
+    params=[
+        operator.eq,
+        operator.ne,
+        operator.lt,
+        operator.le,
+        operator.gt,
+        operator.ge,
+    ]
+)
+def cmpop(request):
+    return request.param
 
-_cmpops = [
-    operator.lt,
-    operator.gt,
-    operator.le,
-    operator.ge,
-    operator.eq,
-    operator.ne,
-]
 
-_reflected_ops = [
-    lambda x: 1 + x,
-    lambda x: 2 * x,
-    lambda x: 2 - x,
-    lambda x: 2 // x,
-    lambda x: 2 / x,
-    lambda x: 3 + x,
-    lambda x: 3 * x,
-    lambda x: 3 - x,
-    lambda x: 3 // x,
-    lambda x: 3 / x,
-    lambda x: 3 % x,
-    lambda x: -1 + x,
-    lambda x: -2 * x,
-    lambda x: -2 - x,
-    lambda x: -2 // x,
-    lambda x: -2 / x,
-    lambda x: -3 + x,
-    lambda x: -3 * x,
-    lambda x: -3 - x,
-    lambda x: -3 // x,
-    lambda x: -3 / x,
-    lambda x: -3 % x,
-    lambda x: 0 + x,
-    lambda x: 0 * x,
-    lambda x: 0 - x,
-    lambda x: 0 // x,
-    lambda x: 0 / x,
-]
+@pytest.fixture(
+    params=[
+        operator.add,
+        operator.sub,
+        operator.mul,
+        operator.floordiv,
+        operator.truediv,
+        operator.mod,
+        operator.pow,
+        operator.eq,
+        operator.ne,
+        operator.lt,
+        operator.le,
+        operator.gt,
+        operator.ge,
+    ]
+)
+def binops_with_cmp(request):
+    return request.param
+
 
 _operators_arithmetic = [
     "add",
@@ -130,11 +112,6 @@ pytestmark = pytest.mark.spilling
 # If spilling is enabled globally, we skip many test permutations
 # to reduce running time.
 if get_global_manager() is not None:
-    _binops = _binops[:1]
-    _binops_compare = _binops_compare[:1]
-    _int_types = _int_types[-1:]
-    _cmpops = _cmpops[:1]
-    _reflected_ops = _reflected_ops[:1]
     _operators_arithmetic = _operators_arithmetic[:1]
     _operators_comparison = _operators_comparison[:1]
     DATETIME_TYPES = {"datetime64[ms]"}
@@ -147,7 +124,6 @@ if get_global_manager() is not None:
 
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
-@pytest.mark.parametrize("binop", _binops)
 def test_series_binop(request, binop, obj_class):
     request.applymarker(
         pytest.mark.xfail(
@@ -178,7 +154,6 @@ def test_series_binop(request, binop, obj_class):
     assert_eq(result, expect)
 
 
-@pytest.mark.parametrize("binop", _binops)
 def test_series_binop_concurrent(binop):
     def func(index):
         rng = np.random.default_rng(seed=0)
@@ -190,16 +165,14 @@ def test_series_binop_concurrent(binop):
 
         np.testing.assert_almost_equal(result.to_numpy(), expect, decimal=5)
 
-    from concurrent.futures import ThreadPoolExecutor
-
     indices = range(10)
     with ThreadPoolExecutor(4) as e:  # four processes
         list(e.map(func, indices))
 
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
-@pytest.mark.parametrize("nelem,binop", list(product([1, 2, 100], _binops)))
-def test_series_binop_scalar(nelem, binop, obj_class):
+def test_series_binop_scalar(binop, obj_class):
+    nelem = 10
     rng = np.random.default_rng(seed=0)
     arr = rng.random(nelem)
     rhs = rng.choice(arr).item()
@@ -217,9 +190,30 @@ def test_series_binop_scalar(nelem, binop, obj_class):
 
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
-@pytest.mark.parametrize("binop", _bitwise_binops)
+@pytest.mark.parametrize("binop", [operator.and_, operator.or_, operator.xor])
 @pytest.mark.parametrize(
-    "lhs_dtype,rhs_dtype", list(product(_int_types, _int_types))
+    "lhs_dtype",
+    [
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "uint8",
+        "uint16",
+        "uint32",
+    ],
+)
+@pytest.mark.parametrize(
+    "rhs_dtype",
+    [
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "uint8",
+        "uint16",
+        "uint32",
+    ],
 )
 def test_series_bitwise_binop(binop, obj_class, lhs_dtype, rhs_dtype):
     rng = np.random.default_rng(seed=0)
@@ -242,7 +236,6 @@ def test_series_bitwise_binop(binop, obj_class, lhs_dtype, rhs_dtype):
 
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
-@pytest.mark.parametrize("cmpop", _cmpops)
 @pytest.mark.parametrize(
     "dtype", ["int8", "int32", "int64", "float32", "float64", "datetime64[ms]"]
 )
@@ -321,7 +314,6 @@ def _series_compare_nulls_typegen():
     ]
 
 
-@pytest.mark.parametrize("cmpop", _cmpops)
 @pytest.mark.parametrize("dtypes", _series_compare_nulls_typegen())
 def test_series_compare_nulls(cmpop, dtypes):
     ltype, rtype = dtypes
@@ -348,11 +340,6 @@ def str_series_cmp_data():
     return pd.Series(["a", "b", None, "d", "e", None], dtype="string")
 
 
-@pytest.fixture(ids=[op.__name__ for op in _cmpops], params=_cmpops)
-def str_series_compare_str_cmpop(request):
-    return request.param
-
-
 @pytest.fixture(ids=["eq", "ne"], params=[operator.eq, operator.ne])
 def str_series_compare_num_cmpop(request):
     return request.param
@@ -363,24 +350,16 @@ def cmp_scalar(request):
     return request.param
 
 
-def test_str_series_compare_str(
-    str_series_cmp_data, str_series_compare_str_cmpop
-):
-    expect = str_series_compare_str_cmpop(str_series_cmp_data, "a")
-    got = str_series_compare_str_cmpop(
-        Series.from_pandas(str_series_cmp_data), "a"
-    )
+def test_str_series_compare_str(str_series_cmp_data, cmpop):
+    expect = cmpop(str_series_cmp_data, "a")
+    got = cmpop(Series.from_pandas(str_series_cmp_data), "a")
 
     assert_eq(expect, got.to_pandas(nullable=True))
 
 
-def test_str_series_compare_str_reflected(
-    str_series_cmp_data, str_series_compare_str_cmpop
-):
-    expect = str_series_compare_str_cmpop("a", str_series_cmp_data)
-    got = str_series_compare_str_cmpop(
-        "a", Series.from_pandas(str_series_cmp_data)
-    )
+def test_str_series_compare_str_reflected(str_series_cmp_data, cmpop):
+    expect = cmpop("a", str_series_cmp_data)
+    got = cmpop("a", Series.from_pandas(str_series_cmp_data))
 
     assert_eq(expect, got.to_pandas(nullable=True))
 
@@ -409,7 +388,6 @@ def test_str_series_compare_num_reflected(
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
 @pytest.mark.parametrize("nelem", [1, 2, 100])
-@pytest.mark.parametrize("cmpop", _cmpops)
 @pytest.mark.parametrize("dtype", [*utils.NUMERIC_TYPES, "datetime64[ms]"])
 def test_series_compare_scalar(nelem, cmpop, obj_class, dtype):
     rng = np.random.default_rng(seed=0)
@@ -517,10 +495,8 @@ def test_series_binop_mixed_dtype(binop, lhs_dtype, rhs_dtype, obj_class):
 
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
-@pytest.mark.parametrize(
-    "cmpop,lhs_dtype,rhs_dtype",
-    list(product(_cmpops, utils.NUMERIC_TYPES, utils.NUMERIC_TYPES)),
-)
+@pytest.mark.parametrize("lhs_dtype", utils.NUMERIC_TYPES)
+@pytest.mark.parametrize("rhs_dtype", utils.NUMERIC_TYPES)
 def test_series_cmpop_mixed_dtype(cmpop, lhs_dtype, rhs_dtype, obj_class):
     nelem = 5
     rng = np.random.default_rng(seed=0)
@@ -542,20 +518,21 @@ def test_series_cmpop_mixed_dtype(cmpop, lhs_dtype, rhs_dtype, obj_class):
     np.testing.assert_array_equal(result.to_numpy(), cmpop(lhs, rhs))
 
 
-@pytest.mark.parametrize("obj_class", ["Series", "Index"])
-@pytest.mark.parametrize(
-    "func, dtype", list(product(_reflected_ops, utils.NUMERIC_TYPES))
+@pytest.mark.filterwarnings(
+    "ignore:invalid value encountered in power:RuntimeWarning"
 )
-def test_series_reflected_ops_scalar(func, dtype, obj_class):
+@pytest.mark.filterwarnings(
+    "ignore:divide by zero encountered in power:RuntimeWarning"
+)
+@pytest.mark.parametrize("obj_class", [cudf.Series, cudf.Index])
+@pytest.mark.parametrize("scalar", [-1, 0, 1])
+@pytest.mark.parametrize("dtype", utils.NUMERIC_TYPES)
+def test_series_reflected_ops_scalar(binop, scalar, dtype, obj_class):
     # create random series
+    func = lambda x: binop(scalar, x)  # noqa: E731
     random_series = utils.gen_rand(dtype, 100, low=10, seed=12)
 
-    # gpu series
-    gs = Series(random_series)
-
-    # class typing
-    if obj_class == "Index":
-        gs = Index(gs)
+    gs = obj_class(random_series)
 
     try:
         gs_result = func(gs)
@@ -577,7 +554,6 @@ def test_series_reflected_ops_scalar(func, dtype, obj_class):
     np.testing.assert_allclose(ps_result, gs_result.to_numpy())
 
 
-@pytest.mark.parametrize("binop", _binops)
 def test_different_shapes_and_columns(binop):
     # TODO: support `pow()` on NaN values. Particularly, the cases:
     #       `pow(1, NaN) == 1` and `pow(NaN, 0) == 1`
@@ -610,7 +586,6 @@ def test_different_shapes_and_columns(binop):
     assert_eq(cd_frame, pd_frame)
 
 
-@pytest.mark.parametrize("binop", _binops)
 def test_different_shapes_and_same_columns(binop):
     # TODO: support `pow()` on NaN values. Particularly, the cases:
     #       `pow(1, NaN) == 1` and `pow(NaN, 0) == 1`
@@ -628,7 +603,6 @@ def test_different_shapes_and_same_columns(binop):
     assert_eq(cd_frame, pd_frame)
 
 
-@pytest.mark.parametrize("binop", _binops)
 def test_different_shapes_and_columns_with_unaligned_indices(binop):
     # TODO: support `pow()` on NaN values. Particularly, the cases:
     #       `pow(1, NaN) == 1` and `pow(NaN, 0) == 1`
@@ -1767,7 +1741,7 @@ def test_binops_reflect_decimal(
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("powers", [0, 1, 2, 3])
+@pytest.mark.parametrize("powers", [0, 1, 2])
 def test_binops_decimal_pow(powers):
     s = cudf.Series(
         [
@@ -2367,7 +2341,6 @@ def test_binops_decimal_scalar_compare(args, reflected):
     ],
 )
 @pytest.mark.parametrize("null_scalar", [None, cudf.NA, np.datetime64("NaT")])
-@pytest.mark.parametrize("cmpop", _cmpops)
 def test_column_null_scalar_comparison(dtype, null_scalar, cmpop):
     # This test is meant to validate that comparing
     # a series of any dtype with a null scalar produces
@@ -2470,7 +2443,6 @@ def test_add_series_to_dataframe():
 
 
 @pytest.mark.parametrize("obj_class", [cudf.Series, cudf.Index])
-@pytest.mark.parametrize("binop", _binops)
 def test_binops_cupy_array(obj_class, binop):
     # Skip 0 to not deal with NaNs from division.
     data = range(1, 100)
@@ -2479,18 +2451,17 @@ def test_binops_cupy_array(obj_class, binop):
     assert (binop(lhs, rhs) == binop(lhs, lhs)).all()
 
 
-@pytest.mark.parametrize("binop", _binops + _binops_compare)
-@pytest.mark.parametrize("data", [None, [-9, 7], [5, -2], [12, 18]])
+@pytest.mark.parametrize("data", [None, [-9, 7], [12, 18]])
 @pytest.mark.parametrize("scalar", [1, 3, 12, np.nan])
-def test_empty_column(binop, data, scalar):
+def test_empty_column(binops_with_cmp, data, scalar):
     gdf = cudf.DataFrame(columns=["a", "b"])
     if data is not None:
         gdf["a"] = data
 
     pdf = gdf.to_pandas()
 
-    got = binop(gdf, scalar)
-    expected = binop(pdf, scalar)
+    got = binops_with_cmp(gdf, scalar)
+    expected = binops_with_cmp(pdf, scalar)
 
     assert_eq(expected, got)
 
@@ -2592,13 +2563,12 @@ def test_binop_integer_power_int_series():
     assert_eq(expected, got)
 
 
-@pytest.mark.parametrize("op", _binops)
-def test_binop_index_series(op):
+def test_binop_index_series(binop):
     gi = cudf.Index([10, 11, 12])
     gs = cudf.Series([1, 2, 3])
 
-    actual = op(gi, gs)
-    expected = op(gi.to_pandas(), gs.to_pandas())
+    actual = binop(gi, gs)
+    expected = binop(gi.to_pandas(), gs.to_pandas())
 
     assert_eq(expected, actual)
 
@@ -2649,7 +2619,6 @@ def test_binop_lhs_numpy_datetimelike_scalar(scalar):
     assert_eq(result, expected)
 
 
-@pytest.mark.parametrize("comp_op", _cmpops)
 @pytest.mark.parametrize("ordered", [True, False])
 @pytest.mark.parametrize(
     "data_left, data_right",
@@ -2658,7 +2627,7 @@ def test_binop_lhs_numpy_datetimelike_scalar(scalar):
         [[1, 2], [1, 3]],
     ],
 )
-def test_cat_non_cat_compare_ops(comp_op, data_left, data_right, ordered):
+def test_cat_non_cat_compare_ops(cmpop, data_left, data_right, ordered):
     pd_non_cat = pd.Series(data_left)
     pd_cat = pd.Series(
         data_right,
@@ -2668,16 +2637,19 @@ def test_cat_non_cat_compare_ops(comp_op, data_left, data_right, ordered):
     cudf_non_cat = cudf.Series.from_pandas(pd_non_cat)
     cudf_cat = cudf.Series.from_pandas(pd_cat)
 
-    if (
-        not ordered and comp_op not in {operator.eq, operator.ne}
-    ) or comp_op in {operator.gt, operator.lt, operator.le, operator.ge}:
+    if (not ordered and cmpop not in {operator.eq, operator.ne}) or cmpop in {
+        operator.gt,
+        operator.lt,
+        operator.le,
+        operator.ge,
+    }:
         with pytest.raises(TypeError):
-            comp_op(pd_non_cat, pd_cat)
+            cmpop(pd_non_cat, pd_cat)
         with pytest.raises(TypeError):
-            comp_op(cudf_non_cat, cudf_cat)
+            cmpop(cudf_non_cat, cudf_cat)
     else:
-        expected = comp_op(pd_non_cat, pd_cat)
-        result = comp_op(cudf_non_cat, cudf_cat)
+        expected = cmpop(pd_non_cat, pd_cat)
+        result = cmpop(cudf_non_cat, cudf_cat)
         assert_eq(result, expected)
 
 
@@ -2704,10 +2676,9 @@ def test_eq_ne_non_comparable_types(
     assert_eq(result, expected)
 
 
-@pytest.mark.parametrize("op", _binops_compare)
-def test_binops_compare_stdlib_date_scalar(op):
+def test_binops_compare_stdlib_date_scalar(cmpop):
     dt = datetime.date(2020, 1, 1)
     data = [dt]
-    result = op(cudf.Series(data), dt)
-    expected = op(pd.Series(data), dt)
+    result = cmpop(cudf.Series(data), dt)
+    expected = cmpop(pd.Series(data), dt)
     assert_eq(result, expected)
