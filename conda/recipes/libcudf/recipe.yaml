@@ -118,6 +118,11 @@ outputs:
             - libcufile
         - librmm =${{ minor_version }}
         - libkvikio =${{ minor_version }}
+        # We export a run dependency on libnvcomp-dev because libcudf requires
+        # libnvcomp headers if used by another package at build time. This can
+        # be refactored once we have -dev packages for RAPIDS libraries.
+        # See https://github.com/rapidsai/build-planning/issues/46
+        - libnvcomp-dev ${{ nvcomp_version }}
         - dlpack ${{ dlpack_version }}
         - rapids-logger =0.1
       run_exports:
