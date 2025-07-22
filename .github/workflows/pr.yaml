@@ -316,9 +316,11 @@ jobs:
     needs: telemetry-setup
     uses: rapidsai/shared-workflows/.github/workflows/build-in-devcontainer.yaml@branch-25.08
     with:
-      node_type: "cpu16"
+      node_type: "cpu32"
       arch: '["amd64"]'
       cuda: '["12.9"]'
+      env: |
+        CONDA_ENV_CREATE_QUIET=1
       build_command: |
         sccache -z;
         build-all -DBUILD_BENCHMARKS=ON --verbose;
