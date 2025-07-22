@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -698,11 +698,6 @@ std::unique_ptr<cudf::table> create_sequence_table(
   row_count num_rows,
   std::optional<double> null_probability = std::nullopt,
   unsigned seed                          = 1);
-
-std::unique_ptr<cudf::table> create_distinct_rows_table(std::vector<cudf::type_id> const& dtype_ids,
-                                                        row_count num_rows,
-                                                        data_profile const& profile,
-                                                        unsigned seed = 1);
 
 /**
  * @brief Repeats the input data types cyclically to fill a vector of @ref num_cols

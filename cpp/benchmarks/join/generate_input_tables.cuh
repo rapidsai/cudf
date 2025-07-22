@@ -203,9 +203,10 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> generate_i
     static_cast<cudf::size_type>(build_table_numrows / multiplicity);
 
   double const null_probability = Nullable ? 0.3 : 0;
-  auto const profile = data_profile{data_profile_builder().null_probability(null_probability)};
-  auto unique_rows_build_table = create_distinct_rows_table(
-    key_types, row_count{unique_rows_build_table_numrows + 1}, profile, 1);
+  auto const profile =
+    data_profile{data_profile_builder().null_probability(null_probability).cardinality(0)};
+  auto unique_rows_build_table =
+    create_random_table(key_types, row_count{unique_rows_build_table_numrows + 1}, profile, 1);
 
   constexpr int block_size = 128;
 

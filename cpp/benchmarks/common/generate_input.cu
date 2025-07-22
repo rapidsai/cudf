@@ -549,18 +549,9 @@ struct create_rand_col_fn {
                                            thrust::minstd_rand& engine,
                                            cudf::size_type num_rows)
   {
+    if (profile.get_cardinality() == 0 || profile.get_cardinality() >= num_rows)
+      return create_distinct_rows_column<T>(profile, engine, num_rows);
     return create_random_column<T>(profile, engine, num_rows);
-  }
-};
-
-struct create_distinct_rows_col_fn {
- public:
-  template <typename T>
-  std::unique_ptr<cudf::column> operator()(data_profile const& profile,
-                                           thrust::minstd_rand& engine,
-                                           cudf::size_type num_rows)
-  {
-    return create_distinct_rows_column<T>(profile, engine, num_rows);
   }
 };
 
@@ -1022,32 +1013,6 @@ std::unique_ptr<cudf::column> create_random_column(cudf::type_id dtype_id,
   auto engine = deterministic_engine(seed);
   return cudf::type_dispatcher(
     cudf::data_type(dtype_id), create_rand_col_fn{}, profile, engine, num_rows.count);
-}
-
-std::unique_ptr<cudf::column> create_distinct_rows_column(cudf::type_id dtype_id,
-                                                          row_count num_rows,
-                                                          data_profile const& profile,
-                                                          unsigned seed)
-{
-  auto seed_engine = deterministic_engine(seed);
-  return cudf::type_dispatcher(
-    cudf::data_type(dtype_id), create_distinct_rows_col_fn{}, profile, seed_engine, num_rows.count);
-}
-
-std::unique_ptr<cudf::table> create_distinct_rows_table(std::vector<cudf::type_id> const& dtype_ids,
-                                                        row_count num_rows,
-                                                        data_profile const& profile,
-                                                        unsigned seed)
-{
-  auto seed_engine = deterministic_engine(seed);
-  thrust::uniform_int_distribution<unsigned> seed_dist;
-
-  columns_vector output_columns;
-  std::transform(
-    dtype_ids.begin(), dtype_ids.end(), std::back_inserter(output_columns), [&](auto tid) mutable {
-      return create_distinct_rows_column(tid, num_rows, profile, seed_dist(seed_engine));
-    });
-  return std::make_unique<cudf::table>(std::move(output_columns));
 }
 
 std::unique_ptr<cudf::table> create_sequence_table(std::vector<cudf::type_id> const& dtype_ids,
