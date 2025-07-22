@@ -19,10 +19,12 @@
 
 namespace cudf::strings::udf {
 
-/*
-`meminfo` is a MemInfo struct from numba-cuda
-https://github.com/NVIDIA/numba-cuda/blob/main/numba_cuda/numba/cuda/memory_management/nrt.cuh
-*/
+/**
+ * @brief Container for a udf_string and its NRT memory information
+ *
+ * `meminfo` is a MemInfo struct from numba-cuda, see:
+ * https://github.com/NVIDIA/numba-cuda/blob/main/numba_cuda/numba/cuda/memory_management/nrt.cuh
+ */
 struct managed_udf_string {
   void* meminfo;
   cudf::strings::udf::udf_string udf_str;

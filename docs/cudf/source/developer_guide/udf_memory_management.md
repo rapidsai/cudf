@@ -1,16 +1,20 @@
 # String UDF memory management
 
-Inside UDFs, some string methods like ``concat()`` and ``replace()`` produce new strings. For a CUDA thread
-to create a new string, it must dynamically allocate memory on the device to hold
-the string's data. The cleanup of this memory by the thread later on must preserve
-Python's semantics, for example when the variable corresponding to the new string
-goes out of scope. To accomplish this in cuDF, UDF memory management (allocation
-and freeing of the underlying data) is handled transparently for the user, via a
-reference counting mechanism. Along with the code generated from the functions and
-operations within the passed UDF, numba-cuda will automatically weave the necessary
-reference counting operations into the final device function that each thread will
-ultimately run. This allows the programmer to pass a UDF that may utilize memory
-allocating types such strings generally as one would in python:
+Inside UDFs, some string methods like ``concat()`` and ``replace()`` produce new
+strings.  For a CUDA thread to create a new string, it must dynamically allocate
+memory on the device to hold the string's data. The cleanup of this memory by the
+thread later on must preserve Python's semantics, for example when the variable
+corresponding to the new string goes out of scope. To accomplish this in cuDF, UDF
+memory management (allocation and freeing of the underlying data) is handled
+transparently for the user, via a reference counting mechanism. This reference
+counting implementation is distinct from the one in python and has its own interface
+and requirements,
+
+Along with the code generated from the functions and operations within the passed UDF,
+numba-cuda will automatically weave the necessary reference counting operations into
+the final device function that each thread will ultimately run. This allows the
+programmer to pass a UDF that may utilize memory allocating types such strings
+generally as one would in python:
 
 ```python
 def udf(string):
@@ -50,16 +54,22 @@ Numba does not reference count every variable, as only variables with an associa
 heap memory allocation need to be tracked. Numba determines if this is true for a
 variable during compilation by querying the properties of the datamodel underlying
 the variable's type. We provide a string type ``ManagedUDFString`` that implements
-the required properties and backs any new string that is created on the device.
+the required properties and backs any new string that is created on the device. Its
+datamodel is defined under the data structures section below and is registered to
+the extension type as shown.
 
 
 ## Data structures
 The core concept is a ``ManagedUDFString`` numba extension type that fulfills the
-requirements to be reference counted by NRT. It is composed of a struct that owns
-the string data and a pointer to a ``MemInfo`` object, which the NRT API uses for
-reference counting.
+requirements to be reference counted by NRT. It is composed of a `cudf::udf_string`
+that owns the string data and a pointer to a ``MemInfo`` object, which the NRT API
+uses for reference counting.
 
 ```python
+
+from cudf.core.udf.strings_typing import ManagedUDFString
+from numba.cuda.descriptor import cuda_target
+
 @register_model(ManagedUDFString)
 class managed_udf_string_model(models.StructModel):
   _members = (("meminfo", types.voidptr), ("udf_string", udf_string))
@@ -72,7 +82,7 @@ class managed_udf_string_model(models.StructModel):
 
   def get_nrt_meminfo(self, builder, value):
       # effectively returns self.meminfo in IR form
-      udf_str_and_meminfo = cgutils.create_struct_proxy(managed_udf_string)(
+      udf_str_and_meminfo = numba.core.cgutils.create_struct_proxy(ManagedUDFString())(
           cuda_target.target_context, builder, value=value
       )
       return udf_str_and_meminfo.meminfo
@@ -145,8 +155,8 @@ that view the strings owned by ``udf_string`` instances.
 
 The cuDF extensions to Numba generate code to manipulate instances of these
 classes, so we outline the members of these classes to aid in understanding
-them. These classes also have various methods; consult the cuDF C++ Developer
-Documentation for further details of these structures.
+them. These classes also have various methods; consult the [cuDF C++ Developer
+Documentation for further details of these structures.](https://docs.rapids.ai/api/libcudf/stable/developer_guide)
 
 ```c++
 class string_view {
@@ -364,10 +374,10 @@ from the output buffer containing the strings. cuDF launches a freeing kernel
 that decrefs all the result strings one last time:
 
 ```python
-        def free_managed_udf_string_array(ary, size):
-            gid = cuda.grid(1)
-            if gid < size:
-                NRT_decref(ary[gid])
+def free_managed_udf_string_array(ary, size):
+    gid = cuda.grid(1)
+    if gid < size:
+        NRT_decref(ary[gid])
 ```
 
 - `NRT_MemInfo_call_dtor` invokes the destructor for the object

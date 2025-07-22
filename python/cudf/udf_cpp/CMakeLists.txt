@@ -26,7 +26,7 @@ rapids_find_package(
   INSTALL_EXPORT_SET udf-exports
 )
 
-# The below in inspired by legate dataframe
+# The below is inspired by legate dataframe
 execute_process(
   COMMAND "python" -c
           "from numba.cuda.memory_management.nrt import get_include; print(get_include())"

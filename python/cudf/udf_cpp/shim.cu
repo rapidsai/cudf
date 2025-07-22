@@ -50,6 +50,7 @@ __device__ void udf_str_dtor(void* udf_str, size_t size, void* dtor_info)
 
 __device__ NRT_MemInfo* make_meminfo_for_new_udf_string(udf_string* udf_str)
 {
+  // only used in the context of this function
   struct mi_str_allocation {
     NRT_MemInfo mi;
     udf_string st;
@@ -67,7 +68,7 @@ __device__ NRT_MemInfo* make_meminfo_for_new_udf_string(udf_string* udf_str)
     // copy the udf_string to the allocated heap space
     udf_string* in_str_ptr = reinterpret_cast<udf_string*>(udf_str);
     memcpy(st_ptr, in_str_ptr, sizeof(udf_string));
-    return &(mi_and_str->mi);
+    return mi_ptr;
   } else {
     __trap();
     return nullptr;
