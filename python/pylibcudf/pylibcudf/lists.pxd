@@ -1,9 +1,10 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from pylibcudf.libcudf.types cimport (
     nan_equality, null_equality, null_order, order, size_type
 )
+from pylibcudf.libcudf.copying cimport out_of_bounds_policy
 from pylibcudf.libcudf.lists.combine cimport concatenate_null_policy
 from pylibcudf.libcudf.lists.contains cimport duplicate_find_option
 
@@ -33,7 +34,7 @@ cpdef Column index_of(Column, ColumnOrScalar, duplicate_find_option)
 
 cpdef Column reverse(Column)
 
-cpdef Column segmented_gather(Column, Column)
+cpdef Column segmented_gather(Column, Column, out_of_bounds_policy bounds_policy=*)
 
 cpdef Column extract_list_element(Column, ColumnOrSizeType)
 

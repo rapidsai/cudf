@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any, cast
 
 import cupy as cp
 import numpy as np
-import pandas as pd
 import pyarrow as pa
 from typing_extensions import Self
 
@@ -25,10 +24,12 @@ from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
+    dtype_to_pylibcudf_type,
     find_common_type,
+    get_dtype_of_same_kind,
+    get_dtype_of_same_type,
     min_signed_type,
     min_unsigned_type,
-    np_dtypes_to_pandas_dtypes,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import _is_null_host_scalar, is_na_like
@@ -75,9 +76,15 @@ class NumericalColumn(NumericalBaseColumn):
         null_count: int | None = None,
         children: tuple = (),
     ):
-        if not (isinstance(dtype, np.dtype) and dtype.kind in "iufb"):
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and dtype.kind not in "iufb"
+        ) or (
+            not cudf.get_option("mode.pandas_compatible")
+            and not (isinstance(dtype, np.dtype) and dtype.kind in "iufb")
+        ):
             raise ValueError(
-                "dtype must be a floating, integer or boolean numpy dtype."
+                f"dtype must be a floating, integer or boolean dtype. Got: {dtype}"
             )
 
         if data.size % dtype.itemsize:
@@ -217,7 +224,7 @@ class NumericalColumn(NumericalBaseColumn):
             "__eq__",
             "__ne__",
         }:
-            out_dtype = np.dtype(np.bool_)
+            out_dtype = get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
 
             # If `other` is a Python integer and it is out-of-bounds
             # promotion could fail but we can trivially define the result
@@ -239,7 +246,7 @@ class NumericalColumn(NumericalBaseColumn):
                     op = "__lt__"
 
         elif op in {"NULL_EQUALS", "NULL_NOT_EQUALS"}:
-            out_dtype = np.dtype(np.bool_)
+            out_dtype = get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
 
         reflect, op = self._check_reflected_op(op)
         if (other := self._normalize_binop_operand(other)) is NotImplemented:
@@ -260,7 +267,9 @@ class NumericalColumn(NumericalBaseColumn):
                     (isinstance(tmp, NumericalColumn) and 0 in tmp)
                     or (isinstance(tmp, pa.Scalar) and tmp.as_py() == 0)
                 ):
-                    out_dtype = np.dtype(np.float64)
+                    out_dtype = get_dtype_of_same_kind(
+                        out_dtype, np.dtype(np.float64)
+                    )
 
         if op in {"__and__", "__or__", "__xor__"}:
             if self.dtype.kind == "f" or other_cudf_dtype.kind == "f":
@@ -270,7 +279,9 @@ class NumericalColumn(NumericalBaseColumn):
                     f"{other_cudf_dtype.type.__name__}"
                 )
             if self.dtype.kind == "b" or other_cudf_dtype.kind == "b":
-                out_dtype = np.dtype(np.bool_)
+                out_dtype = get_dtype_of_same_kind(
+                    out_dtype, np.dtype(np.bool_)
+                )
 
         elif (
             op == "__pow__"
@@ -348,7 +359,7 @@ class NumericalColumn(NumericalBaseColumn):
         )
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
-    def as_string_column(self) -> StringColumn:
+    def as_string_column(self, dtype) -> StringColumn:
         if len(self) == 0:
             return cast(
                 cudf.core.column.StringColumn,
@@ -396,6 +407,14 @@ class NumericalColumn(NumericalBaseColumn):
     def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
         if dtype == self.dtype:
             return self
+        if cudf.get_option("mode.pandas_compatible"):
+            if dtype_to_pylibcudf_type(dtype) == dtype_to_pylibcudf_type(
+                self.dtype
+            ):
+                # Short-circuit the cast if the dtypes are equivalent
+                # but not the same type object.
+                self._dtype = dtype
+                return self
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
     def all(self, skipna: bool = True) -> bool:
@@ -584,19 +603,26 @@ class NumericalColumn(NumericalBaseColumn):
         Returns true if all the values in self can be
         safely cast to dtype
         """
-        if self.dtype.kind == to_dtype.kind:
-            if self.dtype <= to_dtype:
+        # Convert potential pandas extension dtypes to numpy dtypes
+        # For example, convert Int32Dtype to np.dtype('int32')
+        self_dtype_numpy = (
+            np.dtype(self.dtype.numpy_dtype)
+            if hasattr(self.dtype, "numpy_dtype")
+            else self.dtype
+        )
+        to_dtype_numpy = (
+            np.dtype(to_dtype.numpy_dtype)
+            if hasattr(to_dtype, "numpy_dtype")
+            else to_dtype
+        )
+
+        if self_dtype_numpy.kind == to_dtype_numpy.kind:
+            # Check if self dtype can be safely cast to to_dtype
+            # For same kinds, we can compare the sizes
+            if self_dtype_numpy <= to_dtype_numpy:
                 return True
             else:
-                # Kinds are the same but to_dtype is smaller
-                if "float" in to_dtype.name:
-                    finfo = np.finfo(to_dtype)
-                    lower_, upper_ = finfo.min, finfo.max
-                elif "int" in to_dtype.name:
-                    iinfo = np.iinfo(to_dtype)
-                    lower_, upper_ = iinfo.min, iinfo.max
-
-                if self.dtype.kind == "f":
+                if self_dtype_numpy.kind == "f":
                     # Exclude 'np.inf', '-np.inf'
                     not_inf = (self != np.inf) & (self != -np.inf)
                     col = self.apply_boolean_mask(not_inf)
@@ -610,27 +636,37 @@ class NumericalColumn(NumericalBaseColumn):
                     # Column contains only infs
                     return True
 
+                # Kinds are the same but to_dtype is smaller
+                if "float" in to_dtype_numpy.name:
+                    finfo = np.finfo(to_dtype_numpy)
+                    lower_, upper_ = finfo.min, finfo.max
+                elif "int" in to_dtype_numpy.name:
+                    iinfo = np.iinfo(to_dtype_numpy)
+                    lower_, upper_ = iinfo.min, iinfo.max
+
                 return (min_ >= lower_) and (col.max() < upper_)
 
         # want to cast int to uint
-        elif self.dtype.kind == "i" and to_dtype.kind == "u":
-            i_max_ = np.iinfo(self.dtype).max
-            u_max_ = np.iinfo(to_dtype).max
+        elif self_dtype_numpy.kind == "i" and to_dtype_numpy.kind == "u":
+            i_max_ = np.iinfo(self_dtype_numpy).max
+            u_max_ = np.iinfo(to_dtype_numpy).max
 
             return (self.min() >= 0) and (
                 (i_max_ <= u_max_) or (self.max() < u_max_)
             )
 
         # want to cast uint to int
-        elif self.dtype.kind == "u" and to_dtype.kind == "i":
-            u_max_ = np.iinfo(self.dtype).max
-            i_max_ = np.iinfo(to_dtype).max
+        elif self_dtype_numpy.kind == "u" and to_dtype_numpy.kind == "i":
+            u_max_ = np.iinfo(self_dtype_numpy).max
+            i_max_ = np.iinfo(to_dtype_numpy).max
 
             return (u_max_ <= i_max_) or (self.max() < i_max_)
 
         # want to cast int to float
-        elif self.dtype.kind in {"i", "u"} and to_dtype.kind == "f":
-            info = np.finfo(to_dtype)
+        elif (
+            self_dtype_numpy.kind in {"i", "u"} and to_dtype_numpy.kind == "f"
+        ):
+            info = np.finfo(to_dtype_numpy)
             biggest_exact_int = 2 ** (info.nmant + 1)
             if (self.min() >= -biggest_exact_int) and (
                 self.max() <= biggest_exact_int
@@ -643,10 +679,13 @@ class NumericalColumn(NumericalBaseColumn):
                 ).all()
 
         # want to cast float to int:
-        elif self.dtype.kind == "f" and to_dtype.kind in {"i", "u"}:
+        elif self_dtype_numpy.kind == "f" and to_dtype_numpy.kind in {
+            "i",
+            "u",
+        }:
             if self.nan_count > 0:
                 return False
-            iinfo = np.iinfo(to_dtype)
+            iinfo = np.iinfo(to_dtype_numpy)
             min_, max_ = iinfo.min, iinfo.max
 
             # best we can do is hope to catch it here and avoid compare
@@ -660,7 +699,10 @@ class NumericalColumn(NumericalBaseColumn):
 
         return False
 
-    def _with_type_metadata(self: Self, dtype: Dtype) -> ColumnBase:
+    def _with_type_metadata(
+        self: Self,
+        dtype: Dtype,
+    ) -> ColumnBase:
         if isinstance(dtype, CategoricalDtype):
             codes = cudf.core.column.categorical.as_unsigned_codes(
                 len(dtype.categories), self
@@ -674,44 +716,24 @@ class NumericalColumn(NumericalBaseColumn):
                 null_count=self.null_count,
                 children=(codes,),
             )
+        if cudf.get_option("mode.pandas_compatible"):
+            self._dtype = get_dtype_of_same_type(dtype, self.dtype)
         return self
-
-    def to_pandas(
-        self,
-        *,
-        nullable: bool = False,
-        arrow_type: bool = False,
-    ) -> pd.Index:
-        if arrow_type and nullable:
-            return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
-        elif arrow_type:
-            return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
-        elif (
-            nullable
-            and (
-                pandas_nullable_dtype := np_dtypes_to_pandas_dtypes.get(
-                    self.dtype
-                )
-            )
-            is not None
-        ):
-            arrow_array = self.to_arrow()
-            pandas_array = pandas_nullable_dtype.__from_arrow__(arrow_array)  # type: ignore[attr-defined]
-            return pd.Index(pandas_array, copy=False)
-        elif self.dtype.kind in set("iuf") and not self.has_nulls():
-            return pd.Index(self.values_host, copy=False)
-        else:
-            return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
 
     def _reduction_result_dtype(self, reduction_op: str) -> Dtype:
         if reduction_op in {"sum", "product"}:
             if self.dtype.kind == "f":
                 return self.dtype
+            elif self.dtype.kind == "u":
+                return np.dtype("uint64")
             return np.dtype("int64")
         elif reduction_op == "sum_of_squares":
             return find_common_type((self.dtype, np.dtype(np.uint64)))
         elif reduction_op in {"var", "std", "mean"}:
-            return np.dtype("float64")
+            if self.dtype.kind == "f":
+                return self.dtype
+            else:
+                return np.dtype("float64")
 
         return super()._reduction_result_dtype(reduction_op)
 

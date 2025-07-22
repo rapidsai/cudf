@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import functools
 import warnings
 from typing import TYPE_CHECKING, Any
@@ -166,6 +167,10 @@ class TemporalBaseColumn(ColumnBase):
                         other = other.astype(
                             np.dtype(f"{other.dtype.kind}8[{to_unit}]")
                         )
+            elif isinstance(other, datetime.date) and not isinstance(
+                other, datetime.datetime
+            ):
+                other = datetime.datetime(other.year, other.month, other.day)
             scalar = pa.scalar(other)
             if pa.types.is_timestamp(scalar.type):
                 if scalar.type.tz is not None:
@@ -218,6 +223,12 @@ class TemporalBaseColumn(ColumnBase):
             raise ValueError(
                 f"{arrow_type=} and {nullable=} cannot both be set."
             )
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and isinstance(self.dtype, pd.ArrowDtype)
+        ) or arrow_type:
+            return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
+
         elif nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
         pa_array = self.to_arrow()

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import itertools
-import sys
 from collections.abc import (
     Callable,
     Hashable,
@@ -21,6 +20,8 @@ import pandas as pd
 import cudf
 from cudf.api.types import infer_dtype, is_scalar
 from cudf.core import column
+from cudf.errors import MixedTypeError
+from cudf.utils.dtypes import is_mixed_with_object_dtype
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -196,18 +197,8 @@ class ColumnAccessor(MutableMapping):
         verify : bool, optional
             Whether to verify column length and type.
         """
-        if sys.version_info.major >= 3 and sys.version_info.minor >= 10:
-            data = zip(self.names, columns, strict=True)  # type: ignore[call-overload]
-        else:
-            columns = list(columns)
-            if len(columns) != len(self.names):
-                raise ValueError(
-                    f"The number of columns ({len(columns)}) must match "
-                    f"the number of existing column labels ({len(self.names)})."
-                )
-            data = zip(self.names, columns)
         return type(self)(
-            data=dict(data),
+            data=dict(zip(self.names, columns, strict=True)),
             multiindex=self.multiindex,
             level_names=self.level_names,
             rangeindex=self.rangeindex,
@@ -368,6 +359,24 @@ class ColumnAccessor(MutableMapping):
         elif old_ncols > 0 and len(value) != self.nrows:
             raise ValueError("All columns must be of equal length")
 
+        if cudf.get_option("mode.pandas_compatible"):
+            try:
+                pd_idx1 = pd.Index(
+                    [*list(self.names), name], dtype=self.label_dtype
+                )
+                pd_idx2 = pd.Index([*list(self.names), name])
+                if (
+                    pd_idx1.dtype != pd_idx2.dtype
+                    and is_mixed_with_object_dtype(pd_idx1, pd_idx2)
+                    and pd_idx1.inferred_type != pd_idx2.inferred_type
+                ):
+                    raise MixedTypeError(
+                        "Cannot insert column with mixed types when label_dtype is set"
+                    )
+            except Exception as e:
+                raise e
+        else:
+            self.label_dtype = None
         # TODO: we should move all insert logic here
         if loc == old_ncols:
             self._data[name] = value
@@ -377,7 +386,6 @@ class ColumnAccessor(MutableMapping):
             self._data = dict(zip(new_keys, new_values))
         self._clear_cache(old_ncols, old_ncols + 1)
         # The type(name) may no longer match the prior label_dtype
-        self.label_dtype = None
 
     def copy(self, deep: bool = False) -> Self:
         """
@@ -440,7 +448,7 @@ class ColumnAccessor(MutableMapping):
         elif isinstance(index, int):
             return (self.names[index],)
         elif (bn := len(index)) > 0 and all(map(_is_bool, index)):  # type: ignore[arg-type]
-            if bn != (n := len(self.names)):
+            if bn != (n := len(self)):
                 raise IndexError(
                     f"Boolean mask has wrong length: {bn} not {n}"
                 )
@@ -555,7 +563,7 @@ class ColumnAccessor(MutableMapping):
     def _select_by_label_list_like(self, key: tuple) -> Self:
         # Special-casing for boolean mask
         if (bn := len(key)) > 0 and all(map(_is_bool, key)):
-            if bn != (n := len(self.names)):
+            if bn != (n := len(self)):
                 raise IndexError(
                     f"Boolean mask has wrong length: {bn} not {n}"
                 )
@@ -605,7 +613,7 @@ class ColumnAccessor(MutableMapping):
     def _select_by_label_slice(self, key: slice) -> Self:
         start, stop = key.start, key.stop
 
-        if len(self.names) == 0:
+        if len(self) == 0:
             # https://github.com/rapidsai/cudf/issues/18376
             # Any slice is valid when we have no columns
             return self._from_columns_like_self([], verify=False)
@@ -625,7 +633,7 @@ class ColumnAccessor(MutableMapping):
                 break
         for idx, name in enumerate(reversed(self.names)):
             if _keys_equal(name, stop):
-                stop_idx = len(self.names) - idx
+                stop_idx = len(self) - idx
                 break
         keys = self.names[start_idx:stop_idx]
         return type(self)(

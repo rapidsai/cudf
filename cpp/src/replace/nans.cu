@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,12 +40,12 @@ namespace {
 
 struct replace_nans_functor {
   template <typename T, typename Replacement>
-  std::enable_if_t<std::is_floating_point_v<T>, std::unique_ptr<column>> operator()(
-    column_view const& input,
-    Replacement const& replacement,
-    bool replacement_nullable,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr)
+  std::unique_ptr<column> operator()(column_view const& input,
+                                     Replacement const& replacement,
+                                     bool replacement_nullable,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
+    requires(std::is_floating_point_v<T>)
   {
     CUDF_EXPECTS(input.type() == replacement.type(),
                  "Input and replacement must be of the same type");
@@ -74,7 +74,8 @@ struct replace_nans_functor {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<!std::is_floating_point_v<T>, std::unique_ptr<column>> operator()(Args&&...)
+  std::unique_ptr<column> operator()(Args&&...)
+    requires(!std::is_floating_point_v<T>)
   {
     CUDF_FAIL("NAN is not supported in a Non-floating point type column");
   }
@@ -150,10 +151,11 @@ struct normalize_nans_and_zeros_lambda {
  */
 struct normalize_nans_and_zeros_kernel_forwarder {
   // floats and doubles. what we really care about.
-  template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
+  template <typename T>
   void operator()(cudf::column_device_view in,
                   cudf::mutable_column_device_view out,
                   rmm::cuda_stream_view stream)
+    requires(std::is_floating_point_v<T>)
   {
     thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator(0),
@@ -164,7 +166,8 @@ struct normalize_nans_and_zeros_kernel_forwarder {
 
   // if we get in here for anything but a float or double, that's a problem.
   template <typename T, typename... Args>
-  std::enable_if_t<not std::is_floating_point_v<T>, void> operator()(Args&&...)
+  void operator()(Args&&...)
+    requires(not std::is_floating_point_v<T>)
   {
     CUDF_FAIL("Unexpected non floating-point type.");
   }

@@ -36,23 +36,36 @@ def cudf_from_avro_util(schema: dict, records: list) -> cudf.DataFrame:
     return cudf.read_avro(buffer)
 
 
-avro_type_params = [
-    ("boolean", "bool"),
-    ("int", "int32"),
-    ("long", "int64"),
-    ("float", "float32"),
-    ("double", "float64"),
-    ("bytes", "str"),
-    ("string", "str"),
-]
+@pytest.fixture(
+    params=[
+        ("boolean", "bool"),
+        ("int", "int32"),
+        ("long", "int64"),
+        ("float", "float32"),
+        ("double", "float64"),
+        ("bytes", "str"),
+        ("string", "str"),
+    ]
+)
+def avro_type_params(request):
+    return request.param
 
 
-@pytest.mark.parametrize("avro_type, expected_dtype", avro_type_params)
+@pytest.fixture(params=[True, False])
+def nullable(request):
+    return request.param
+
+
+@pytest.fixture(params=[True, False])
+def prepend_null(request):
+    return request.param
+
+
 @pytest.mark.parametrize("namespace", [None, "root_ns"])
-@pytest.mark.parametrize("nullable", [True, False])
 def test_can_detect_dtype_from_avro_type(
-    avro_type, expected_dtype, namespace, nullable
+    avro_type_params, namespace, nullable
 ):
+    avro_type, expected_dtype = avro_type_params
     avro_type = avro_type if not nullable else ["null", avro_type]
 
     schema = fastavro.parse_schema(
@@ -73,12 +86,11 @@ def test_can_detect_dtype_from_avro_type(
     assert_eq(expected, actual)
 
 
-@pytest.mark.parametrize("avro_type, expected_dtype", avro_type_params)
 @pytest.mark.parametrize("namespace", [None, "root_ns"])
-@pytest.mark.parametrize("nullable", [True, False])
 def test_can_detect_dtype_from_avro_type_nested(
-    avro_type, expected_dtype, namespace, nullable
+    avro_type_params, namespace, nullable
 ):
+    avro_type, expected_dtype = avro_type_params
     avro_type = avro_type if not nullable else ["null", avro_type]
 
     schema_leaf = {
@@ -146,8 +158,8 @@ def test_can_parse_single_value(avro_type, cudf_type, avro_val, cudf_val):
     assert_eq(expected, actual)
 
 
-@pytest.mark.parametrize("avro_type, cudf_type", avro_type_params)
-def test_can_parse_single_null(avro_type, cudf_type):
+def test_can_parse_single_null(avro_type_params):
+    avro_type, expected_dtype = avro_type_params
     schema_root = {
         "name": "root",
         "type": "record",
@@ -159,14 +171,14 @@ def test_can_parse_single_null(avro_type, cudf_type):
     actual = cudf_from_avro_util(schema_root, records)
 
     expected = cudf.DataFrame(
-        {"prop": cudf.Series(data=[None], dtype=cudf_type)}
+        {"prop": cudf.Series(data=[None], dtype=expected_dtype)}
     )
 
     assert_eq(expected, actual)
 
 
-@pytest.mark.parametrize("avro_type, cudf_type", avro_type_params)
-def test_can_parse_no_data(avro_type, cudf_type):
+def test_can_parse_no_data(avro_type_params):
+    avro_type, expected_dtype = avro_type_params
     schema_root = {
         "name": "root",
         "type": "record",
@@ -177,7 +189,9 @@ def test_can_parse_no_data(avro_type, cudf_type):
 
     actual = cudf_from_avro_util(schema_root, records)
 
-    expected = cudf.DataFrame({"prop": cudf.Series(data=[], dtype=cudf_type)})
+    expected = cudf.DataFrame(
+        {"prop": cudf.Series(data=[], dtype=expected_dtype)}
+    )
 
     assert_eq(expected, actual)
 
@@ -185,8 +199,8 @@ def test_can_parse_no_data(avro_type, cudf_type):
 @pytest.mark.xfail(
     reason="cudf avro reader is unable to parse zero-field metadata."
 )
-@pytest.mark.parametrize("avro_type, cudf_type", avro_type_params)
-def test_can_parse_no_fields(avro_type, cudf_type):
+def test_can_parse_no_fields(avro_type_params):
+    avro_type, expected_dtype = avro_type_params
     schema_root = {
         "name": "root",
         "type": "record",
@@ -251,26 +265,15 @@ def test_avro_decompression(set_decomp_env_vars, rows, codec):
     assert_eq(expected_df, got_df)
 
 
-avro_logical_type_params = [
-    # (avro logical type, avro primitive type, cudf expected dtype)
-    ("date", "int", "datetime64[s]"),
-]
-
-
-@pytest.mark.parametrize(
-    "logical_type, primitive_type, expected_dtype", avro_logical_type_params
-)
 @pytest.mark.parametrize("namespace", [None, "root_ns"])
-@pytest.mark.parametrize("nullable", [True, False])
-@pytest.mark.parametrize("prepend_null", [True, False])
 def test_can_detect_dtypes_from_avro_logical_type(
-    logical_type,
-    primitive_type,
-    expected_dtype,
     namespace,
     nullable,
     prepend_null,
 ):
+    logical_type = "date"
+    primitive_type = "int"
+    expected_dtype = "datetime64[s]"
     avro_type = [{"logicalType": logical_type, "type": primitive_type}]
     if nullable:
         if prepend_null:
@@ -303,8 +306,6 @@ def get_days_from_epoch(date: datetime.date | None) -> int | None:
 
 
 @pytest.mark.parametrize("namespace", [None, "root_ns"])
-@pytest.mark.parametrize("nullable", [True, False])
-@pytest.mark.parametrize("prepend_null", [True, False])
 @pytest.mark.skipif(
     PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
     reason="Fails in older versions of pandas (datetime(9999, ...) too large)",
@@ -540,10 +541,10 @@ def multiblock_testname_ids(param):
         (1024, 1024, 31, 32),
         (1024, 1024, 32, 31),
         (1024, 1024, 31, 33),
-        (16384, 16384, 0, 31),
-        (16384, 16384, 0, 32),
-        (16384, 16384, 0, 33),
-        (16384, 16384, 0, 16384),
+        (2048, 2048, 0, 31),
+        (2048, 2048, 0, 32),
+        (2048, 2048, 0, 33),
+        (2048, 2048, 0, 2048),
     ],
 )
 def total_rows_and_num_rows_and_skip_rows_and_rows_per_block(request):

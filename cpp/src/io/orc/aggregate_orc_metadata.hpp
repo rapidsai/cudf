@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -91,7 +91,7 @@ class aggregate_orc_metadata {
    */
   [[nodiscard]] std::string const& column_name(int const source_idx, int const column_id) const
   {
-    CUDF_EXPECTS(source_idx <= static_cast<int>(per_file_metadata.size()),
+    CUDF_EXPECTS(std::cmp_less_equal(source_idx, per_file_metadata.size()),
                  "Out of range source_idx provided");
     return per_file_metadata[source_idx].column_name(column_id);
   }
@@ -103,7 +103,7 @@ class aggregate_orc_metadata {
    */
   [[nodiscard]] std::string const& column_path(int const source_idx, int const column_id) const
   {
-    CUDF_EXPECTS(source_idx <= static_cast<int>(per_file_metadata.size()),
+    CUDF_EXPECTS(std::cmp_less_equal(source_idx, per_file_metadata.size()),
                  "Out of range source_idx provided");
     return per_file_metadata[source_idx].column_path(column_id);
   }
