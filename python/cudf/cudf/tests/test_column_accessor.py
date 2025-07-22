@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 
 import pandas as pd
@@ -8,25 +8,6 @@ import cudf
 from cudf.core.column import as_column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.testing import assert_eq
-
-simple_test_data = [
-    {},
-    {"a": as_column([])},
-    {"a": as_column([1])},
-    {"a": as_column(["a"])},
-    {"a": as_column([1, 2, 3]), "b": as_column(["a", "b", "c"])},
-]
-
-mi_test_data = [
-    {("a", "b"): as_column([1, 2, 4]), ("a", "c"): as_column([2, 3, 4])},
-    {("a", "b"): as_column([1, 2, 3]), ("a", ""): as_column([2, 3, 4])},
-    {("a", "b"): as_column([1, 2, 4]), ("c", "d"): as_column([2, 3, 4])},
-    {
-        ("a", "b"): as_column([1, 2, 3]),
-        ("a", "c"): as_column([2, 3, 4]),
-        ("b", ""): as_column([4, 5, 6]),
-    },
-]
 
 
 def check_ca_equal(lhs, rhs):
@@ -39,19 +20,17 @@ def check_ca_equal(lhs, rhs):
         assert_eq(lhs[l_key], rhs[r_key])
 
 
-@pytest.fixture(params=simple_test_data)
+@pytest.fixture(
+    params=[
+        {},
+        {"a": []},
+        {"a": [1]},
+        {"a": ["a"]},
+        {"a": [1, 2, 3], "b": ["a", "b", "c"]},
+    ]
+)
 def simple_data(request):
-    return request.param
-
-
-@pytest.fixture(params=mi_test_data)
-def mi_data(request):
-    return request.param
-
-
-@pytest.fixture(params=simple_test_data + mi_test_data)
-def all_data(request):
-    return request.param
+    return {key: as_column(data) for key, data in request.param.items()}
 
 
 def test_to_pandas_simple(simple_data):
@@ -72,7 +51,17 @@ def test_to_pandas_simple(simple_data):
     )
 
 
-def test_to_pandas_multiindex(mi_data):
+@pytest.mark.parametrize(
+    "keys",
+    [
+        [("a", "b"), ("a", "c")],
+        [("a", "b"), ("c", "d")],
+        [("a", "b"), ("a", ""), ("b", "")],
+        [("a", "b"), ("a", "c"), ("b", "")],
+    ],
+)
+def test_to_pandas_multiindex(keys):
+    mi_data = {key: as_column([1, 2, 4]) for key in keys}
     ca = ColumnAccessor(mi_data, multiindex=True)
     assert_eq(
         ca.to_pandas_index,
