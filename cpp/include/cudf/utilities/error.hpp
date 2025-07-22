@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include <cudf/detail/utilities/stacktrace.hpp>
 #include <cudf/utilities/export.hpp>
 
 #include <cuda.h>
@@ -34,47 +33,25 @@ namespace CUDF_EXPORT cudf {
  */
 
 /**
- * @brief The struct to store the current stacktrace upon its construction.
- */
-struct stacktrace_recorder {
-  stacktrace_recorder()
-    // Exclude the current stackframe, as it is this constructor.
-    : _stacktrace{cudf::detail::get_stacktrace(cudf::detail::capture_last_stackframe::NO)}
-  {
-  }
-
- public:
-  /**
-   * @brief Get the stored stacktrace captured during object construction.
-   *
-   * @return The pointer to a null-terminated string storing the output stacktrace
-   */
-  [[nodiscard]] char const* stacktrace() const { return _stacktrace.c_str(); }
-
- protected:
-  std::string const _stacktrace;  //!< The whole stacktrace stored as one string.
-};
-
-/**
  * @brief Exception thrown when logical precondition is violated.
  *
  * This exception should not be thrown directly and is instead thrown by the
  * CUDF_EXPECTS macro.
  */
-struct logic_error : public std::logic_error, public stacktrace_recorder {
+struct logic_error : std::logic_error {
   /**
    * @brief Constructs a logic_error with the error message.
    *
    * @param message Message to be associated with the exception
    */
-  logic_error(char const* const message) : std::logic_error(message) {}
+  explicit logic_error(char const* const message) : std::logic_error(message) {}
 
   /**
    * @brief Construct a new logic error object with error message
    *
    * @param message Message to be associated with the exception
    */
-  logic_error(std::string const& message) : std::logic_error(message) {}
+  explicit logic_error(std::string const& message) : std::logic_error(message) {}
 
   // TODO Add an error code member? This would be useful for translating an
   // exception to an error code in a pure-C API
@@ -89,19 +66,18 @@ struct logic_error : public std::logic_error, public stacktrace_recorder {
  * @brief Exception thrown when a CUDA error is encountered.
  *
  */
-struct cuda_error : public std::runtime_error, public stacktrace_recorder {
+struct cuda_error : std::runtime_error {
   /**
    * @brief Construct a new cuda error object with error message and code.
    *
    * @param message Error message
    * @param error CUDA error code
    */
-  cuda_error(std::string const& message, cudaError_t const& error)
+  explicit cuda_error(std::string const& message, cudaError_t const& error)
     : std::runtime_error(message), _cudaError(error)
   {
   }
 
- public:
   /**
    * @brief Returns the CUDA error code associated with the exception.
    *
@@ -113,7 +89,7 @@ struct cuda_error : public std::runtime_error, public stacktrace_recorder {
   cudaError_t _cudaError;  //!< CUDA error code
 };
 
-struct fatal_cuda_error : public cuda_error {
+struct fatal_cuda_error : cuda_error {
   using cuda_error::cuda_error;  // Inherit constructors
 };
 
@@ -124,20 +100,20 @@ struct fatal_cuda_error : public cuda_error {
  * unsupported data_type. This exception should not be thrown directly and is
  * instead thrown by the CUDF_EXPECTS or CUDF_FAIL macros.
  */
-struct data_type_error : public std::invalid_argument, public stacktrace_recorder {
+struct data_type_error : std::invalid_argument {
   /**
    * @brief Constructs a data_type_error with the error message.
    *
    * @param message Message to be associated with the exception
    */
-  data_type_error(char const* const message) : std::invalid_argument(message) {}
+  explicit data_type_error(char const* const message) : std::invalid_argument(message) {}
 
   /**
    * @brief Construct a new data_type_error object with error message
    *
    * @param message Message to be associated with the exception
    */
-  data_type_error(std::string const& message) : std::invalid_argument(message) {}
+  explicit data_type_error(std::string const& message) : std::invalid_argument(message) {}
 };
 /** @} */
 

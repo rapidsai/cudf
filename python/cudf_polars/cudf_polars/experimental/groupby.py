@@ -8,17 +8,20 @@ import itertools
 import math
 from typing import TYPE_CHECKING
 
+import polars as pl
+
 import pylibcudf as plc
 
+from cudf_polars.containers import DataType
 from cudf_polars.dsl.expr import Agg, BinOp, Col, Len, NamedExpr
-from cudf_polars.dsl.ir import GroupBy, Select
+from cudf_polars.dsl.ir import GroupBy, Select, Slice
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.dispatch import lower_ir_node
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import Shuffle
-from cudf_polars.experimental.utils import _lower_ir_fallback
+from cudf_polars.experimental.utils import _get_unique_fractions, _lower_ir_fallback
 
 if TYPE_CHECKING:
     from collections.abc import Generator, MutableMapping
@@ -33,8 +36,8 @@ _GB_AGG_SUPPORTED = ("sum", "count", "mean", "min", "max", "n_unique")
 
 
 def combine(
-    *decompositions: tuple[NamedExpr, list[NamedExpr], list[NamedExpr]],
-) -> tuple[list[NamedExpr], list[NamedExpr], list[NamedExpr]]:
+    *decompositions: tuple[NamedExpr, list[NamedExpr], list[NamedExpr], bool],
+) -> tuple[list[NamedExpr], list[NamedExpr], list[NamedExpr], bool]:
     """
     Combine multiple groupby-aggregation decompositions.
 
@@ -48,19 +51,22 @@ def combine(
     Unified groupby-aggregation decomposition.
     """
     if len(decompositions) == 0:
-        return [], [], []
-    selections, aggregations, reductions = zip(*decompositions, strict=True)
+        return [], [], [], False
+    selections, aggregations, reductions, need_preshuffles = zip(
+        *decompositions, strict=True
+    )
     assert all(isinstance(ne, NamedExpr) for ne in selections)
     return (
         list(selections),
         list(itertools.chain.from_iterable(aggregations)),
         list(itertools.chain.from_iterable(reductions)),
+        any(need_preshuffles),
     )
 
 
 def decompose(
     name: str, expr: Expr, *, names: Generator[str, None, None]
-) -> tuple[NamedExpr, list[NamedExpr], list[NamedExpr]]:
+) -> tuple[NamedExpr, list[NamedExpr], list[NamedExpr], bool]:
     """
     Decompose a groupby-aggregation expression.
 
@@ -81,6 +87,8 @@ def decompose(
         The initial aggregation expressions.
     list[NamedExpr]
         The reduction expressions.
+    bool
+        Whether we need to pre-shuffle on the group_by keys.
     """
     dtype = expr.dtype
 
@@ -88,7 +96,7 @@ def decompose(
         selection = NamedExpr(name, Col(dtype, name))
         aggregation = [NamedExpr(name, expr)]
         reduction = [NamedExpr(name, Agg(dtype, "sum", None, Col(dtype, name)))]
-        return selection, aggregation, reduction
+        return selection, aggregation, reduction, False
     if isinstance(expr, Agg):
         if expr.name in ("sum", "count", "min", "max", "n_unique"):
             if expr.name in ("sum", "count", "n_unique"):
@@ -98,22 +106,26 @@ def decompose(
             selection = NamedExpr(name, Col(dtype, name))
             aggregation = [NamedExpr(name, expr)]
             reduction = [NamedExpr(name, Agg(dtype, aggfunc, None, Col(dtype, name)))]
-            return selection, aggregation, reduction
+            return selection, aggregation, reduction, expr.name == "n_unique"
         elif expr.name == "mean":
             (child,) = expr.children
-            (sum, count), aggregations, reductions = combine(
+            (sum, count), aggregations, reductions, need_preshuffle = combine(
                 decompose(
                     f"{next(names)}__mean_sum",
                     Agg(dtype, "sum", None, child),
                     names=names,
                 ),
-                decompose(f"{next(names)}__mean_count", Len(dtype), names=names),
+                decompose(
+                    f"{next(names)}__mean_count",
+                    Agg(DataType(pl.Int32()), "count", False, child),  # noqa: FBT003
+                    names=names,
+                ),
             )
             selection = NamedExpr(
                 name,
                 BinOp(dtype, plc.binaryop.BinaryOperator.DIV, sum.value, count.value),
             )
-            return selection, aggregations, reductions
+            return selection, aggregations, reductions, need_preshuffle
         else:
             raise NotImplementedError(
                 "group_by does not support multiple partitions "
@@ -131,6 +143,25 @@ def decompose(
 def _(
     ir: GroupBy, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    # Pull slice operations out of the GroupBy before lowering
+    if ir.zlice is not None:
+        offset, length = ir.zlice
+        if length is None:  # pragma: no cover
+            return _lower_ir_fallback(
+                ir,
+                rec,
+                msg="This slice not supported for multiple partitions.",
+            )
+        new_join = GroupBy(
+            ir.schema,
+            ir.keys,
+            ir.agg_requests,
+            ir.maintain_order,
+            None,
+            *ir.children,
+        )
+        return rec(Slice(ir.schema, offset, length, new_join))
+
     # Extract child partitioning
     child, partition_info = rec(ir.children[0])
 
@@ -155,32 +186,25 @@ def _(
     groupby_key_columns = [ne.name for ne in ir.keys]
     shuffled = partition_info[child].partitioned_on == ir.keys
 
-    assert ir.config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'generate_ir_tasks'"
+    config_options = rec.state["config_options"]
+    assert config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'lower_ir_node'"
     )
 
-    cardinality_factor = {
-        c: min(f, 1.0)
-        for c, f in ir.config_options.executor.cardinality_factor.items()
-        if c in groupby_key_columns
-    }
-    if cardinality_factor:
-        # The `cardinality_factor` dictionary can be used
-        # to specify a mapping between column names and
-        # cardinality "factors". Each factor estimates the
-        # fractional number of unique values in the column.
-        # Each value should be in the range (0, 1].
-        child_count = partition_info[child].count
-        post_aggregation_count = max(
-            int(max(cardinality_factor.values()) * child_count),
-            1,
-        )
+    child_count = partition_info[child].count
+    if unique_fraction_dict := _get_unique_fractions(
+        groupby_key_columns,
+        config_options.executor.unique_fraction,
+    ):
+        # Use unique_fraction to determine output partitioning
+        unique_fraction = max(unique_fraction_dict.values())
+        post_aggregation_count = max(int(unique_fraction * child_count), 1)
 
     new_node: IR
     name_generator = unique_names(ir.schema.keys())
     # Decompose the aggregation requests into three distinct phases
     try:
-        selection_exprs, piecewise_exprs, reduction_exprs = combine(
+        selection_exprs, piecewise_exprs, reduction_exprs, need_preshuffle = combine(
             *(
                 decompose(agg.name, agg.value, names=name_generator)
                 for agg in ir.agg_requests
@@ -197,6 +221,20 @@ def _(
             ir, rec, msg="Failed to decompose groupby aggs for multiple partitions."
         )
 
+    # Preshuffle ir.child if needed
+    if need_preshuffle:
+        child = Shuffle(
+            child.schema,
+            ir.keys,
+            config_options.executor.shuffle_method,
+            child,
+        )
+        partition_info[child] = PartitionInfo(
+            count=child_count,
+            partitioned_on=ir.keys,
+        )
+        shuffled = True
+
     # Partition-wise groupby operation
     pwise_schema = {k.name: k.value.dtype for k in ir.keys} | {
         k.name: k.value.dtype for k in piecewise_exprs
@@ -207,15 +245,15 @@ def _(
         piecewise_exprs,
         ir.maintain_order,
         None,
-        ir.config_options,
         child,
     )
     child_count = partition_info[child].count
     partition_info[gb_pwise] = PartitionInfo(count=child_count)
+    grouped_keys = tuple(NamedExpr(k.name, Col(k.value.dtype, k.name)) for k in ir.keys)
 
     # Reduction
     gb_inter: GroupBy | Repartition | Shuffle
-    reduction_schema = {k.name: k.value.dtype for k in ir.keys} | {
+    reduction_schema = {k.name: k.value.dtype for k in grouped_keys} | {
         k.name: k.value.dtype for k in reduction_exprs
     }
     if not shuffled and post_aggregation_count > 1:
@@ -229,18 +267,18 @@ def _(
 
         gb_inter = Shuffle(
             gb_pwise.schema,
-            ir.keys,
-            ir.config_options,
+            grouped_keys,
+            config_options.executor.shuffle_method,
             gb_pwise,
         )
         partition_info[gb_inter] = PartitionInfo(count=post_aggregation_count)
     else:
         # N-ary tree reduction
-        assert ir.config_options.executor.name == "streaming", (
+        assert config_options.executor.name == "streaming", (
             "'in-memory' executor not supported in 'generate_ir_tasks'"
         )
 
-        n_ary = ir.config_options.executor.groupby_n_ary
+        n_ary = config_options.executor.groupby_n_ary
         count = child_count
         gb_inter = gb_pwise
         while count > post_aggregation_count:
@@ -250,11 +288,10 @@ def _(
             if count > post_aggregation_count:
                 gb_inter = GroupBy(
                     reduction_schema,
-                    ir.keys,
+                    grouped_keys,
                     reduction_exprs,
                     ir.maintain_order,
                     None,
-                    ir.config_options,
                     gb_inter,
                 )
                 partition_info[gb_inter] = PartitionInfo(count=count)
@@ -262,11 +299,10 @@ def _(
     # Final aggregation
     gb_reduce = GroupBy(
         reduction_schema,
-        ir.keys,
+        grouped_keys,
         reduction_exprs,
         ir.maintain_order,
         ir.zlice,
-        ir.config_options,
         gb_inter,
     )
     partition_info[gb_reduce] = PartitionInfo(count=post_aggregation_count)
@@ -275,7 +311,7 @@ def _(
     new_node = Select(
         ir.schema,
         [
-            *(NamedExpr(k.name, Col(k.value.dtype, k.name)) for k in ir.keys),
+            *(NamedExpr(k.name, Col(k.value.dtype, k.name)) for k in grouped_keys),
             *selection_exprs,
         ],
         False,  # noqa: FBT003
@@ -283,6 +319,6 @@ def _(
     )
     partition_info[new_node] = PartitionInfo(
         count=post_aggregation_count,
-        partitioned_on=ir.keys,
+        partitioned_on=grouped_keys,
     )
     return new_node, partition_info

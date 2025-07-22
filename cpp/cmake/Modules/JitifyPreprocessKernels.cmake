@@ -44,7 +44,7 @@ function(jit_preprocess_files)
       COMMAND
         "${CMAKE_COMMAND}" -E env LD_LIBRARY_PATH=${CUDAToolkit_LIBRARY_DIR}
         $<TARGET_FILE:jitify_preprocess> ${ARG_FILE} -o
-        ${CUDF_GENERATED_INCLUDE_DIR}/include/jit_preprocessed_files -i -std=c++17
+        ${CUDF_GENERATED_INCLUDE_DIR}/include/jit_preprocessed_files -i -std=c++20
         -remove-unused-globals -D_FILE_OFFSET_BITS=64 -D__CUDACC_RTC__ -DCUDF_RUNTIME_JIT
         -I${CUDF_SOURCE_DIR}/include -I${CUDF_SOURCE_DIR}/src ${includes}
         --no-preinclude-workarounds --no-replace-pragma-once
@@ -62,8 +62,8 @@ if(NOT (EXISTS "${CUDF_GENERATED_INCLUDE_DIR}/include"))
 endif()
 
 jit_preprocess_files(
-  SOURCE_DIRECTORY ${CUDF_SOURCE_DIR}/src FILES binaryop/jit/kernel.cu transform/jit/kernel.cu
-  rolling/jit/kernel.cu
+  SOURCE_DIRECTORY ${CUDF_SOURCE_DIR}/src FILES binaryop/jit/kernel.cu rolling/jit/kernel.cu
+  stream_compaction/filter/jit/kernel.cu transform/jit/kernel.cu
 )
 
 add_custom_target(

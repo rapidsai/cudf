@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -304,25 +304,27 @@ TEST_F(StringsDatetimeTest, ToTimestampSingleDigits)
 
 TEST_F(StringsDatetimeTest, IsTimestamp)
 {
-  cudf::test::strings_column_wrapper strings{"2020-10-07 13:02:03 1PM +0130",
-                                             "2020:10:07 01-02-03 1AM +0130",
-                                             "2020-10-7 11:02:03 11AM -1025",
-                                             "2020-13-07 01:02:03 1AM +0000",
-                                             "2020-10-32 01:32:03 1AM +0000",
-                                             "2020-10-07 25:02:03 1AM +0000",
-                                             "2020-10-07 01:62:03 1AM +0000",
-                                             "2020-10-07 01:02:63 1AM +0000",
-                                             "2020-02-29 01:32:03 1AM +0000",
-                                             "2020-02-30 01:32:03 01AM +0000",
-                                             "2020-00-31 01:32:03 1AM +0000",
-                                             "2020-02-00 02:32:03 2AM +0000",
-                                             "2022-08-24 02:32:60 2AM +0000",
-                                             "2020-2-9 9:12:13 9AM +1111"};
-  auto strings_view = cudf::strings_column_view(strings);
-  auto results      = cudf::strings::is_timestamp(strings_view, "%Y-%m-%d %H:%M:%S %I%p %z");
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
-    *results,
-    cudf::test::fixed_width_column_wrapper<bool>{1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1});
+  auto const input   = cudf::test::strings_column_wrapper{"2020-10-07 13:02:03 1PM +0130",
+                                                        "2020:10:07 01-02-03 1AM +0130",
+                                                        "2020-10-7 11:02:03 11AM -1025",
+                                                        "2020-13-07 01:02:03 1AM +0000",
+                                                        "2020-10-32 01:32:03 1AM +0000",
+                                                        "2020-10-07 25:02:03 1AM +0000",
+                                                        "2020-10-07 01:62:03 1AM +0000",
+                                                        "2020-10-07 01:02:63 1AM +0000",
+                                                        "2020-02-29 01:32:03 1AM +0000",
+                                                        "2020-02-30 01:32:03 01AM +0000",
+                                                        "2020-00-31 01:32:03 1AM +0000",
+                                                        "2020-02-00 02:32:03 2AM +0000",
+                                                        "2022-08-24 02:32:60 2AM +0000",
+                                                        "2020-2-9 9:12:13 9AM +1111",
+                                                        "9999-08-24 02:32:06 2AM +0000",
+                                                        "20220-08-24 02:32:06 2AM +0000"};
+  auto const sv      = cudf::strings_column_view(input);
+  auto const results = cudf::strings::is_timestamp(sv, "%Y-%m-%d %H:%M:%S %I%p %z");
+  auto const expected =
+    cudf::test::fixed_width_column_wrapper<bool>{1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsDatetimeTest, FromTimestamp)

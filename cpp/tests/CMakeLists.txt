@@ -50,11 +50,11 @@ function(ConfigureTest CMAKE_TEST_NAME)
     ${CMAKE_TEST_NAME}
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gtests>"
                INSTALL_RPATH "\$ORIGIN/../../../lib"
-               CXX_STANDARD 17
+               CXX_STANDARD 20
                CXX_STANDARD_REQUIRED ON
                # For std:: support of __int128_t. Can be removed once using cuda::std
                CXX_EXTENSIONS ON
-               CUDA_STANDARD 17
+               CUDA_STANDARD 20
                CUDA_STANDARD_REQUIRED ON
   )
 
@@ -269,7 +269,7 @@ ConfigureTest(
 )
 
 # ##################################################################################################
-# * unary transform tests -------------------------------------------------------------------------
+# * transform tests -------------------------------------------------------------------------
 ConfigureTest(
   TRANSFORM_TEST
   transform/integration/unary_transform_test.cpp
@@ -280,6 +280,10 @@ ConfigureTest(
   transform/segmented_row_bit_count_test.cu
   transform/one_hot_encode_tests.cpp
 )
+
+# ##################################################################################################
+# * filter tests -------------------------------------------------------------------------
+ConfigureTest(FILTER_TEST filter/filter_test.cpp)
 
 # ##################################################################################################
 # * interop tests -------------------------------------------------------------------------
@@ -319,7 +323,6 @@ ConfigureTest(
   io/parquet_bloom_filter_test.cu
   io/parquet_chunked_reader_test.cu
   io/parquet_chunked_writer_test.cpp
-  io/parquet_experimental_reader_test.cpp
   io/parquet_common.cpp
   io/parquet_misc_test.cpp
   io/parquet_reader_test.cpp
@@ -328,6 +331,10 @@ ConfigureTest(
   io/parquet_writer_test.cpp
   GPUS 1
   PERCENT 30
+)
+ConfigureTest(
+  HYBRID_SCAN_TEST io/experimental/hybrid_scan_common.cpp
+  io/experimental/hybrid_scan_filters_test.cpp io/parquet_common.cpp io/parquet_test.cpp
 )
 ConfigureTest(
   JSON_TEST io/json/json_test.cpp io/json/json_chunked_reader.cu

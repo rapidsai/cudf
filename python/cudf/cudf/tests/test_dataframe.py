@@ -2315,6 +2315,7 @@ def test_dataframe_transpose(nulls, num_cols, num_rows, dtype):
 
     expect = pdf.transpose()
     nullable = dtype not in DATETIME_TYPES
+
     assert_eq(expect, got_function.to_pandas(nullable=nullable))
     assert_eq(expect, got_property.to_pandas(nullable=nullable))
 
@@ -5850,7 +5851,7 @@ def test_df_sr_binop_col_order(gsr, op):
 def test_memory_usage(deep, index, set_index):
     # Testing numerical/datetime by comparing with pandas
     # (string and categorical columns will be different)
-    rows = int(100)
+    rows = 100
     df = pd.DataFrame(
         {
             "A": np.arange(rows, dtype="int64"),
@@ -5884,7 +5885,7 @@ def test_memory_usage(deep, index, set_index):
 
 @pytest_xfail
 def test_memory_usage_string():
-    rows = int(100)
+    rows = 100
     rng = np.random.default_rng(seed=0)
     df = pd.DataFrame(
         {
@@ -5911,7 +5912,7 @@ def test_memory_usage_string():
 
 
 def test_memory_usage_cat():
-    rows = int(100)
+    rows = 100
     rng = np.random.default_rng(seed=0)
     df = pd.DataFrame(
         {
@@ -7189,12 +7190,6 @@ def test_dataframe_info_null_counts():
     df.info(buf=buffer, null_counts=True)
     actual_string = buffer.getvalue()
     assert str_cmp == actual_string
-
-
-def test_is_close_deprecation():
-    ser = cudf.Series([1])
-    with pytest.warns(FutureWarning):
-        cudf.isclose(ser, ser)
 
 
 @pytest.mark.parametrize(

@@ -24,6 +24,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/transform.hpp>
@@ -48,9 +49,7 @@ std::unique_ptr<column> compute_column(table_view const& table,
 
   auto const parser = ast::detail::expression_parser{expr, table, has_nulls, stream, mr};
 
-  auto const has_complex_type = std::any_of(table.begin(), table.end(), [&](auto const& col) {
-    return ast::detail::is_complex_type(col.type().id());
-  });
+  auto const has_complex_type = parser.has_complex_type();
 
   auto const output_column_mask_state =
     has_nulls ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED;

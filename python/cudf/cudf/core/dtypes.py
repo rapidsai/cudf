@@ -39,6 +39,8 @@ if TYPE_CHECKING:
 
     from cudf._typing import Dtype, DtypeObj
     from cudf.core.buffer import Buffer
+    from cudf.core.column.column import ColumnBase
+    from cudf.core.index import Index
 
 
 def dtype(arbitrary: Any) -> DtypeObj:
@@ -83,10 +85,18 @@ def dtype(arbitrary: Any) -> DtypeObj:
     #  Return the corresponding NumPy/cuDF type.
     pd_dtype = pd.api.types.pandas_dtype(arbitrary)  # noqa: TID251
     if is_pandas_nullable_extension_dtype(pd_dtype):
+        if isinstance(pd_dtype, pd.ArrowDtype):
+            arrow_type = pd_dtype.pyarrow_dtype
+            if (
+                arrow_type == pa.date32()
+                or arrow_type == pa.binary()
+                or isinstance(arrow_type, pa.DictionaryType)
+            ):
+                raise NotImplementedError(
+                    f"cuDF does not yet support {pd_dtype}"
+                )
         if cudf.get_option("mode.pandas_compatible"):
-            raise NotImplementedError(
-                "Nullable types not supported in pandas compatibility mode"
-            )
+            return pd_dtype
         elif isinstance(pd_dtype, pd.StringDtype):
             return CUDF_STRING_DTYPE
         else:
@@ -190,7 +200,7 @@ class CategoricalDtype(_BaseDtype):
         self._ordered = ordered
 
     @property
-    def categories(self) -> cudf.Index:
+    def categories(self) -> Index:
         """
         An ``Index`` containing the unique categories allowed.
 
@@ -267,9 +277,7 @@ class CategoricalDtype(_BaseDtype):
             categories = self._categories.to_pandas()
         return pd.CategoricalDtype(categories=categories, ordered=self.ordered)
 
-    def _init_categories(
-        self, categories: Any
-    ) -> cudf.core.column.ColumnBase | None:
+    def _init_categories(self, categories: Any) -> ColumnBase | None:
         if categories is None:
             return categories
         if len(categories) == 0 and not isinstance(
@@ -577,7 +585,10 @@ class StructDtype(_BaseDtype):
     name = "struct"
 
     def __init__(self, fields: dict[str, Dtype]) -> None:
-        self._fields = {k: cudf.dtype(v) for k, v in fields.items()}
+        with cudf.option_context("mode.pandas_compatible", False):
+            # We need to temporarily disable pandas compatibility mode
+            # because `cudf.dtype("object")` raises an error.
+            self._fields = {k: cudf.dtype(v) for k, v in fields.items()}
 
     @property
     def fields(self) -> dict[str, DtypeObj]:
@@ -720,6 +731,17 @@ class StructDtype(_BaseDtype):
             else:
                 new_result[new_field] = result_value
         return new_result
+
+    @classmethod
+    def from_struct_dtype(cls, obj) -> Self:
+        if isinstance(obj, StructDtype):
+            return obj
+        elif isinstance(obj, pa.StructType):
+            return cls.from_arrow(obj)
+        elif isinstance(obj, pd.ArrowDtype):
+            return cls.from_arrow(obj.pyarrow_dtype)
+        else:
+            raise TypeError(f"Cannot convert {type(obj)} to StructDtype")
 
 
 decimal_dtype_template = textwrap.dedent(
@@ -992,6 +1014,13 @@ class IntervalDtype(StructDtype):
         )
 
     def to_pandas(self) -> pd.IntervalDtype:
+        if cudf.get_option("mode.pandas_compatible"):
+            return pd.IntervalDtype(
+                subtype=self.subtype.numpy_dtype  # type: ignore
+                if is_pandas_nullable_extension_dtype(self.subtype)
+                else self.subtype,
+                closed=self.closed,
+            )
         return pd.IntervalDtype(subtype=self.subtype, closed=self.closed)
 
     def __eq__(self, other) -> bool:
@@ -1122,6 +1151,10 @@ def is_list_dtype(obj):
         or obj is cudf.core.column.ListColumn
         or (isinstance(obj, str) and obj == ListDtype.name)
         or (hasattr(obj, "dtype") and isinstance(obj.dtype, ListDtype))
+        or (
+            isinstance(obj, pd.ArrowDtype)
+            and pa.types.is_list(obj.pyarrow_dtype)
+        )
     )
 
 
@@ -1148,6 +1181,10 @@ def is_struct_dtype(obj):
         or obj is StructDtype
         or (isinstance(obj, str) and obj == StructDtype.name)
         or (hasattr(obj, "dtype") and isinstance(obj.dtype, StructDtype))
+        or (
+            isinstance(obj, pd.ArrowDtype)
+            and pa.types.is_struct(obj.pyarrow_dtype)
+        )
     )
 
 
@@ -1188,6 +1225,10 @@ def _is_interval_dtype(obj):
                 getattr(obj, "dtype", None),
                 (pd.IntervalDtype, IntervalDtype),
             )
+        )
+        or (
+            isinstance(obj, pd.ArrowDtype)
+            and pa.types.is_interval(obj.pyarrow_dtype)
         )
     )
 
@@ -1237,4 +1278,8 @@ def is_decimal128_dtype(obj):
         or obj is Decimal128Dtype
         or (isinstance(obj, str) and obj == Decimal128Dtype.name)
         or (hasattr(obj, "dtype") and is_decimal128_dtype(obj.dtype))
+        or (
+            isinstance(obj, pd.ArrowDtype)
+            and pa.types.is_decimal128(obj.pyarrow_dtype)
+        )
     )

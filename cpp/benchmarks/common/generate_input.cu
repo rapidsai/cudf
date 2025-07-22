@@ -24,6 +24,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/filling.hpp>
 #include <cudf/null_mask.hpp>
@@ -204,7 +205,7 @@ double non_fixed_width_size<cudf::struct_view>(data_profile const& profile)
     std::accumulate(dist_params.leaf_types.cbegin(),
                     dist_params.leaf_types.cend(),
                     0ul,
-                    [&](auto& sum, auto type_id) {
+                    [&](auto sum, auto type_id) {
                       return sum + avg_element_size(profile, cudf::data_type{type_id});
                     });
 
