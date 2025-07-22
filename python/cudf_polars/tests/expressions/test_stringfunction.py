@@ -256,32 +256,32 @@ def test_split_exact_inclusive_unsupported(ldf_split):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
-@pytest.fixture
-def to_datetime_data():
-    return pl.LazyFrame(
-        {
-            "a": [
-                "2021-01-01",
-                "2021-01-02",
-                "abcd",
-            ]
-        }
-    )
-
-
 @pytest.mark.parametrize("cache", [True, False], ids=lambda cache: f"{cache=}")
 @pytest.mark.parametrize("strict", [True, False], ids=lambda strict: f"{strict=}")
 @pytest.mark.parametrize("exact", [True, False], ids=lambda exact: f"{exact=}")
 @pytest.mark.parametrize("format", ["%Y-%m-%d", None], ids=lambda format: f"{format=}")
-def test_to_datetime(to_datetime_data, cache, strict, format, exact):
-    q = to_datetime_data.select(
+@pytest.mark.parametrize(
+    "values, has_invalid_row",
+    [
+        (["2024-01-01", "2023-12-31", None], False),
+        (["2024-01-01", "foo", None], True),
+    ],
+    ids=["valid", "invalid"],
+)
+def test_to_datetime(values, has_invalid_row, cache, strict, format, exact):
+    df = pl.DataFrame({"a": values})
+    q = df.lazy().select(
         pl.col("a").str.strptime(
-            pl.Datetime("ns"), format=format, cache=cache, strict=strict, exact=exact
+            pl.Datetime("ns"),
+            format=format,
+            cache=cache,
+            strict=strict,
+            exact=exact,
         )
     )
     if cache or format is None or not exact:
         assert_ir_translation_raises(q, NotImplementedError)
-    elif strict:
+    elif strict and has_invalid_row:
         assert_collect_raises(
             q,
             polars_except=pl.exceptions.InvalidOperationError,
