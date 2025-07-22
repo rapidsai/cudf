@@ -26,6 +26,13 @@
 #include <vector>
 
 namespace CUDF_EXPORT cudf {
+
+namespace row_ir {
+
+struct node;
+struct ast_converter;
+}  // namespace row_ir
+
 namespace ast {
 /**
  * @addtogroup expressions
@@ -86,6 +93,8 @@ struct expression {
   [[nodiscard]] virtual bool may_evaluate_null(table_view const& left,
                                                table_view const& right,
                                                rmm::cuda_stream_view stream) const = 0;
+
+  [[nodiscard]] virtual std::unique_ptr<row_ir::node> accept(row_ir::ast_converter& converter) const = 0;
 
   virtual ~expression() {}
 };
@@ -346,6 +355,8 @@ class literal : public expression {
     return scalar.is_valid(stream);
   }
 
+  [[nodiscard]] std::unique_ptr<row_ir::node> accept(row_ir::ast_converter& converter) const override;
+
  private:
   cudf::scalar const& scalar;
   generic_scalar_device_view const value;
@@ -434,6 +445,8 @@ class column_reference : public expression {
     return (table_source == table_reference::LEFT ? left : right).column(column_index).has_nulls();
   }
 
+  [[nodiscard]] std::unique_ptr<row_ir::node> accept(row_ir::ast_converter& converter) const override;
+
  private:
   cudf::size_type column_index;
   table_reference table_source;
@@ -500,6 +513,8 @@ class operation : public expression {
                                        table_view const& right,
                                        rmm::cuda_stream_view stream) const override;
 
+  [[nodiscard]] std::unique_ptr<row_ir::node> accept(row_ir::ast_converter& converter) const override;
+
  private:
   ast_operator op;
   std::vector<std::reference_wrapper<expression const>> operands;
@@ -542,6 +557,8 @@ class column_name_reference : public expression {
   {
     return true;
   }
+
+  [[nodiscard]] std::unique_ptr<row_ir::node> accept(row_ir::ast_converter& converter) const override;
 
  private:
   std::string column_name;

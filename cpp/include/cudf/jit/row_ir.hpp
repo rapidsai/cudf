@@ -17,6 +17,7 @@
 #pragma once
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
+#include <cudf/io/types.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 
@@ -30,38 +31,55 @@ namespace row_ir {
 
 enum class target { CUDA = 0 };
 
-struct context;
+struct instance_context;
 
 struct var_info {
   std::string id = {};
-  type_id type   = type_id::EMPTY;
+  data_type type = data_type{type_id::EMPTY};
   bool nullable  = false;
+};
+
+struct untyped_var_info {
+  std::string id = {};
 };
 
 struct instance_info {
   std::span<var_info const> inputs;
-  std::span<var_info const> outputs;
+  std::span<untyped_var_info const> outputs;
 };
 
 struct target_info {
-  target target          = target::CUDA;
-  instance_info instance = {};
+  target id = target::CUDA;
 };
 
-struct context {
+struct instance_context {
+ private:
+  uint32_t num_tmp_vars_  = 0;
+  std::string tmp_prefix_ = "tmp_";
+
+ public:
+  instance_context()                                   = default;
+  instance_context(instance_context const&)            = default;
+  instance_context& operator=(instance_context const&) = default;
+  instance_context(instance_context&&)                 = default;
+  instance_context& operator=(instance_context&&)      = default;
+  ~instance_context()                                  = default;
+
   std::string make_tmp_id();
 };
 
 struct node {
   virtual std::string_view get_id() = 0;
 
-  virtual type_id get_type() = 0;
+  virtual data_type get_type() = 0;
 
-  virtual bool get_null_aware() = 0;
+  virtual bool get_nullable() = 0;
 
-  virtual void instantiate(context& ctx, instance_info const& info) = 0;
+  virtual void instantiate(instance_context& ctx, instance_info const& info) = 0;
 
-  virtual std::string generate_code(context& ctx, target_info const& info) = 0;
+  virtual std::string generate_code(instance_context& ctx,
+                                    target_info const& info,
+                                    instance_info const& instance) = 0;
 
   virtual ~node() = 0;
 };
@@ -72,11 +90,11 @@ struct get_input final : node {
  private:
   std::string id_;
   uint32_t input_;
-  type_id type_;
-  bool null_aware_;
+  data_type type_;
+  bool nullable_;
 
  public:
-  get_input(uint32_t input, bool null_aware);
+  get_input(uint32_t input);
 
   get_input(get_input const&) = delete;
 
@@ -90,13 +108,15 @@ struct get_input final : node {
 
   std::string_view get_id() override;
 
-  type_id get_type() override;
+  data_type get_type() override;
 
-  bool get_null_aware() override;
+  bool get_nullable() override;
 
-  void instantiate(context& ctx, instance_info const& info) override;
+  void instantiate(instance_context& ctx, instance_info const& info) override;
 
-  std::string generate_code(context& ctx, target_info const& info) override;
+  std::string generate_code(instance_context& ctx,
+                            target_info const& info,
+                            instance_info const& instance) override;
 };
 
 struct set_output final : node {
@@ -104,8 +124,8 @@ struct set_output final : node {
   std::string id_;
   uint32_t output_;
   std::unique_ptr<node> source_;
-  type_id type_;
-  bool null_aware_;
+  data_type type_;
+  bool nullable_;
   std::string output_id_;
 
  public:
@@ -123,13 +143,15 @@ struct set_output final : node {
 
   std::string_view get_id() override;
 
-  type_id get_type() override;
+  data_type get_type() override;
 
-  bool get_null_aware() override;
+  bool get_nullable() override;
 
-  void instantiate(context& ctx, instance_info const& info) override;
+  void instantiate(instance_context& ctx, instance_info const& info) override;
 
-  std::string generate_code(context& ctx, target_info const& info) override;
+  std::string generate_code(instance_context& ctx,
+                            target_info const& info,
+                            instance_info const& instance) override;
 };
 
 struct operation final : node {
@@ -137,8 +159,8 @@ struct operation final : node {
   std::string id_;
   opcode op_;
   std::vector<std::unique_ptr<node>> operands_;
-  type_id type_;
-  bool null_aware_;
+  data_type type_;
+  bool nullable_;
 
  public:
   operation(opcode op, std::vector<std::unique_ptr<node>> operands);
@@ -155,62 +177,124 @@ struct operation final : node {
 
   std::string_view get_id() override;
 
-  type_id get_type() override;
+  data_type get_type() override;
 
-  bool get_null_aware() override;
+  bool get_nullable() override;
 
-  void instantiate(context& ctx, instance_info const& info) override;
+  void instantiate(instance_context& ctx, instance_info const& info) override;
 
-  std::string generate_code(context& ctx, target_info const& info) override;
+  std::string generate_code(instance_context& ctx,
+                            target_info const& info,
+                            instance_info const& instance) override;
 };
 
-/*
-struct get_input;
-struct set_output;
-
-struct input {
-  std::string_view id_;
-  get_input* dst_;
+struct ast_column_input_ref {
+  uint32_t table  = 0;
+  uint32_t column = 0;
 };
 
-struct output {
-  std::string_view id_;
-  set_output* src_;
+struct ast_named_column_input_ref {
+  std::string name = {};
 };
 
-   std::vector<input> inputs_;
-    std::vector<output> outputs_;
-    std::vector<node*> nodes_;
-    */
+struct ast_scalar_input_ref {
+  std::reference_wrapper<cudf::scalar const> scalar;
+  cudf::ast::generic_scalar_device_view const value;
+};
 
-// [ ] starts from input to output
-// [ ] what will the first one be? how to link?
-// [ ] nullability
-// [ ] scalar or column
-// [ ] run validation pass to check that operators are supported
-// [ ] check that the lhs and rhs types are supported
-// [ ] check that the outputs are correct
-// [ ] support structs
-// [ ] separate to external function that will use the IR and use building blocks provided here
+using ast_input_ref =
+  std::variant<ast_column_input_ref, ast_named_column_input_ref, ast_scalar_input_ref>;
 
-struct code_generator {
+struct named_table_view {
+  table_view table;
+  std::map<std::string, uint32_t> column_names;
+};
+
+struct ast_converter {
+ private:
+  std::vector<ast_input_ref> input_refs_;      // the input refs for the AST
+  std::vector<var_info> input_vars_;           // the input variables for the IR
+  std::vector<untyped_var_info> output_vars_;  // the output variables for the IR
+  std::unique_ptr<set_output> output_ir_;      // the output IR node
+
+ public:
+  ast_converter()                                = default;
+  ast_converter(ast_converter const&)            = delete;
+  ast_converter& operator=(ast_converter const&) = delete;
+  ast_converter(ast_converter&&)                 = default;
+  ast_converter& operator=(ast_converter&&)      = default;
+  ~ast_converter()                               = default;
+
+ private:
+  friend class ast::literal;
+  friend class ast::column_reference;
+  friend class ast::operation;
+  friend class ast::column_name_reference;
+
+  std::unique_ptr<row_ir::node> visit(cudf::ast::literal const& expr);
+
+  std::unique_ptr<row_ir::node> visit(cudf::ast::column_reference const& expr);
+
+  std::unique_ptr<row_ir::node> visit(cudf::ast::operation const& expr);
+
+  std::unique_ptr<row_ir::node> visit(cudf::ast::column_name_reference const& expr);
+
+  [[nodiscard]] std::span<ast_input_ref const> get_input_refs() const;
+
+  // add an AST input/input_reference and return its reference index
+  uint32_t add_ast_input_ref(ast_input_ref in);
+
+  template <typename Fn, typename... Args>
+  decltype(auto) dispatch_input_ref(ast_input_ref const& in, Fn&& fn, Args&&... args)
+  {
+    if (std::holds_alternative<ast_column_input_ref>(in)) {
+      return fn(std::get<ast_column_input_ref>(in), std::forward<Args>(args)...);
+    } else if (std::holds_alternative<ast_named_column_input_ref>(in)) {
+      return fn(std::get<ast_named_column_input_ref>(in), std::forward<Args>(args)...);
+    } else if (std::holds_alternative<ast_scalar_input_ref>(in)) {
+      return fn(std::get<ast_scalar_input_ref>(in), std::forward<Args>(args)...);
+    } else {
+      CUDF_FAIL("Unsupported input type");
+    }
+  }
+
+  void add_input_var(ast_column_input_ref const& in,
+                     bool null_aware,
+                     named_table_view const& left_table,
+                     named_table_view const& right_table);
+
+  void add_input_var(ast_named_column_input_ref const& in,
+                     bool null_aware,
+                     named_table_view const& left_table,
+                     named_table_view const& right_table);
+
+  void add_input_var(ast_scalar_input_ref const& in,
+                     bool null_aware,
+                     named_table_view const& left_table,
+                     named_table_view const& right_table);
+
+  void add_output_var( );
+
+ public:
+  // [ ] starts from input to output
+  // [ ] what will the first one be? how to link?
+  // [ ] nullability
+  // [ ] scalar or column
+  // [ ] run validation pass to check that operators are supported
+  // [ ] check that the lhs and rhs types are supported
+  // [ ] check that the outputs are correct
+  // [ ] separate to external function that will use the IR and use building blocks provided here
   // [ ] remap kernel arguments to ir inputs
   // [ ] generate code from AST
   // [ ] collect outputs
   // steps: generate, instantiate, instantiate inputs and outputs with ids types, null and indices,
   // validate, generate code
-
-  void transform(ast::expression const& output_expression,
-                 bool null_aware,
-                 table_view const& table,
-                 rmm::cuda_stream_view stream,
-                 rmm::device_async_resource_ref mr);
-
-  void filter(ast::expression const& output_expression,
-              bool null_aware,
-              table_view const& table,
-              rmm::cuda_stream_view stream,
-              rmm::device_async_resource_ref mr);
+  // [ ] how to map for transform and filter
+  void exec(target target,
+            cudf::ast::expression const& expr,
+            bool null_aware,
+            named_table_view const& left_table,
+            named_table_view const& right_table);
 };
 
 }  // namespace row_ir

@@ -17,6 +17,7 @@
 #include <cudf/ast/detail/expression_transformer.hpp>
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
+#include <cudf/jit/row_ir.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -94,6 +95,27 @@ auto column_name_reference::accept(detail::expression_transformer& visitor) cons
 {
   return visitor.visit(*this);
 }
+
+std::unique_ptr<row_ir::node> literal::accept(row_ir::ast_converter& converter) const
+{
+  return converter.visit(*this);
+}
+
+std::unique_ptr<row_ir::node> column_reference::accept(row_ir::ast_converter& converter) const
+{
+  return converter.visit(*this);
+}
+
+std::unique_ptr<row_ir::node> operation::accept(row_ir::ast_converter& converter) const
+{
+  return converter.visit(*this);
+}
+
+std::unique_ptr<row_ir::node> column_name_reference::accept(row_ir::ast_converter& converter) const
+{
+  return converter.visit(*this);
+}
+
 }  // namespace ast
 
 }  // namespace cudf
