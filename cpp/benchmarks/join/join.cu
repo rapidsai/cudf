@@ -71,7 +71,9 @@ void nvbench_full_join(nvbench::state& state,
 }
 
 NVBENCH_BENCH_TYPES(nvbench_inner_join,
-                    NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE, JOIN_NULL_EQUALITY, JOIN_DATATYPES))
+                    NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
+                                      DEFAULT_JOIN_NULL_EQUALITY,
+                                      JOIN_DATATYPES))
   .set_name("inner_join")
   .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
   .add_int64_axis("num_keys", nvbench::range(1, 5, 1))
@@ -79,7 +81,9 @@ NVBENCH_BENCH_TYPES(nvbench_inner_join,
   .add_int64_axis("right_size", JOIN_SIZE_RANGE);
 
 NVBENCH_BENCH_TYPES(nvbench_left_join,
-                    NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE, JOIN_NULL_EQUALITY, JOIN_DATATYPES))
+                    NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
+                                      DEFAULT_JOIN_NULL_EQUALITY,
+                                      JOIN_DATATYPES))
   .set_name("left_join")
   .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
   .add_int64_axis("num_keys", nvbench::range(1, 5, 1))
@@ -87,7 +91,9 @@ NVBENCH_BENCH_TYPES(nvbench_left_join,
   .add_int64_axis("right_size", JOIN_SIZE_RANGE);
 
 NVBENCH_BENCH_TYPES(nvbench_full_join,
-                    NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE, JOIN_NULL_EQUALITY, JOIN_DATATYPES))
+                    NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
+                                      DEFAULT_JOIN_NULL_EQUALITY,
+                                      JOIN_DATATYPES))
   .set_name("full_join")
   .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
   .add_int64_axis("num_keys", nvbench::range(1, 5, 1))
