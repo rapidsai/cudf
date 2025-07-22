@@ -88,15 +88,15 @@ def test_split_scan_predicate(tmp_path, df, mask):
 
 @pytest.mark.parametrize("n_files", [1, 3])
 @pytest.mark.parametrize("row_group_size", [None, 10_000])
-@pytest.mark.parametrize("max_file_samples", [3, 0])
-@pytest.mark.parametrize("max_rg_samples", [1, 0])
+@pytest.mark.parametrize("max_footer_samples", [3, 0])
+@pytest.mark.parametrize("max_row_group_samples", [1, 0])
 def test_source_statistics(
     tmp_path,
     df,
     n_files,
     row_group_size,
-    max_file_samples,
-    max_rg_samples,
+    max_footer_samples,
+    max_row_group_samples,
 ):
     from cudf_polars.experimental.io import (
         _clear_source_info_cache,
@@ -119,26 +119,26 @@ def test_source_statistics(
             "target_partition_size": 10_000,
             "scheduler": DEFAULT_SCHEDULER,
         },
+        parquet_options={
+            "max_footer_samples": max_footer_samples,
+            "max_row_group_samples": max_row_group_samples,
+        },
     )
     ir = Translator(q._ldf.visit(), engine).translate_ir()
-    column_stats = _extract_scan_stats(
-        ir,
-        max_file_samples=max_file_samples,
-        max_rg_samples=max_rg_samples,
-    )
+    column_stats = _extract_scan_stats(ir, ConfigOptions.from_polars_engine(engine))
 
     # Source info is the same for all columns
     source_info = column_stats["x"].source_info
     assert source_info is column_stats["y"].source_info
     assert source_info is column_stats["z"].source_info
-    if max_file_samples:
+    if max_footer_samples:
         assert source_info.row_count.value == df.height
         assert source_info.row_count.exact
     else:
         assert source_info.row_count.value is None
 
     # Storage stats should be available
-    if max_file_samples:
+    if max_footer_samples:
         assert source_info.storage_size("x").value > 0
         assert source_info.storage_size("y").value > 0
     else:
@@ -153,7 +153,7 @@ def test_source_statistics(
     # source._unique_stats should be empty
     assert set(source_info._unique_stats) == set()
 
-    if max_file_samples and max_rg_samples:
+    if max_footer_samples and max_row_group_samples:
         assert source_info.unique_stats("x").count.value == df.height
         assert source_info.unique_stats("x").fraction.value == 1.0
     else:
@@ -161,13 +161,13 @@ def test_source_statistics(
         assert source_info.unique_stats("x").fraction.value is None
 
     # source_info._unique_stats should only contain 'x'
-    if max_file_samples and max_rg_samples:
+    if max_footer_samples and max_row_group_samples:
         assert set(source_info._unique_stats) == {"x"}
     else:
         assert set(source_info._unique_stats) == set()
 
     # Check add_unique_stats_column behavior
-    if max_file_samples and max_rg_samples:
+    if max_footer_samples and max_row_group_samples:
         # Can add a "bad"/missing key column
         source_info.add_unique_stats_column("foo")
         assert set(source_info._unique_stats) == {"x"}
@@ -198,7 +198,7 @@ def test_source_statistics_csv(tmp_path, df):
         },
     )
     ir = Translator(q._ldf.visit(), engine).translate_ir()
-    column_stats = _extract_scan_stats(ir)
+    column_stats = _extract_scan_stats(ir, ConfigOptions.from_polars_engine(engine))
 
     # Source info should be empty for CSV
     source_info = column_stats["x"].source_info
