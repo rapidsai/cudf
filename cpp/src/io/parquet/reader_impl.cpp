@@ -70,7 +70,7 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
     });
 
   // figure out which kernels to run
-  auto const kernel_mask = GetAggregatedDecodeKernelMask(subpass.pages, _stream);
+  auto const kernel_mask = get_aggregated_decode_kernel_mask(subpass.pages, _stream);
 
   // Check to see if there are any string columns present. If so, then we need to get size info
   // for each string page. This size info will be used to pre-allocate memory for the column,
@@ -909,22 +909,19 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
         begin_bits.emplace_back(start_row);
         end_bits.emplace_back(end_row);
 
-        // Increment the null count
-        out_buf.null_count() += (end_row - start_row);
+        // Increment the null count by the number of rows in this page
+        out_buf.null_count() += page.num_rows;
       }
     });
 
-  // Update the nullmask in bulk if there are more than 16 pages
-  constexpr auto min_nullmasks_for_bulk_update = 16;
+  // Min number of nullmasks to use bulk update optimally
+  constexpr auto min_nullmasks_for_bulk_update = 32;
 
-  // Disabling bulk update to avoid unsafe bulk update until aliasing is handled
-  constexpr auto can_bulk_update = false;
-
-  // Bulk update the nullmasks if more than 16 pages.
-  if (can_bulk_update and null_masks.size() >= min_nullmasks_for_bulk_update) {
+  // Bulk update the nullmasks if optimal
+  if (null_masks.size() >= min_nullmasks_for_bulk_update) {
     auto valids = cudf::detail::make_host_vector<bool>(null_masks.size(), _stream);
     std::fill(valids.begin(), valids.end(), false);
-    cudf::set_null_masks(null_masks, begin_bits, end_bits, valids, _stream);
+    cudf::set_null_masks_safe(null_masks, begin_bits, end_bits, valids, _stream);
   }
   // Otherwise, update the nullmasks in a loop
   else {
