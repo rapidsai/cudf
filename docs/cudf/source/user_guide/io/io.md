@@ -90,7 +90,7 @@ IO operations.  GDS enables a direct data path for direct memory access
 (DMA) transfers between GPU memory and storage, which avoids a bounce
 buffer through the CPU. The SDK is available for download
 [here](https://developer.nvidia.com/gpudirect-storage). GDS is also
-included in CUDA Toolkit 11.4 and higher.
+included in CUDA Toolkit.
 
 Use of GDS in cuDF is controlled by KvikIO's environment variable `KVIKIO_COMPAT_MODE`. It has
 3 options (case-insensitive):

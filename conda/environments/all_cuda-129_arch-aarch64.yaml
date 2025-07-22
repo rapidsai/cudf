@@ -54,11 +54,12 @@ dependencies:
 - nbsphinx
 - ninja
 - notebook
-- numba-cuda>=0.16.0,<0.17.0a0
+- numba-cuda>=0.14.0,<0.15.0a0
 - numba>=0.59.1,<0.62.0a0
 - numpy>=1.23,<3.0a0
 - numpydoc
 - nvcomp==4.2.0.11
+- nvidia-ml-py
 - nvtx>=0.2.1
 - openpyxl
 - packaging
@@ -69,6 +70,7 @@ dependencies:
 - pre-commit
 - pyarrow>=14.0.0,<20.0.0a0
 - pydata-sphinx-theme>=0.15.4
+- pynvjitlink>=0.0.0a0
 - pynvml>=12.0.0,<13.0.0a0
 - pytest
 - pytest-benchmark
