@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 import cupy as cp
 import pytest
@@ -11,18 +11,21 @@ arr_len = 10
 
 
 @pytest.mark.parametrize(
-    "data",
+    "data, expect_success",
     [
-        (cp.zeros(arr_len), True),
-        (cp.zeros((1, arr_len)), True),
-        (cp.zeros((1, arr_len, 1)), True),
-        (cp.zeros((arr_len, arr_len)), True),
-        (cp.zeros((arr_len, arr_len)).reshape(arr_len * arr_len), True),
-        (cp.zeros((arr_len, arr_len))[:, 0], False),
+        (lambda: cp.zeros(arr_len), True),
+        (lambda: cp.zeros((1, arr_len)), True),
+        (lambda: cp.zeros((1, arr_len, 1)), True),
+        (lambda: cp.zeros((arr_len, arr_len)), True),
+        (
+            lambda: cp.zeros((arr_len, arr_len)).reshape(arr_len * arr_len),
+            True,
+        ),
+        (lambda: cp.zeros((arr_len, arr_len))[:, 0], False),
     ],
 )
-def test_buffer_from_cuda_iface_contiguous(data):
-    data, expect_success = data
+def test_buffer_from_cuda_iface_contiguous(data, expect_success):
+    data = data()
     if expect_success:
         as_buffer(data.view("|u1"))
     else:
@@ -33,14 +36,15 @@ def test_buffer_from_cuda_iface_contiguous(data):
 @pytest.mark.parametrize(
     "data",
     [
-        cp.arange(arr_len),
-        cp.arange(arr_len).reshape(1, arr_len),
-        cp.arange(arr_len).reshape(1, arr_len, 1),
-        cp.arange(arr_len**2).reshape(arr_len, arr_len),
+        lambda: cp.arange(arr_len),
+        lambda: cp.arange(arr_len).reshape(1, arr_len),
+        lambda: cp.arange(arr_len).reshape(1, arr_len, 1),
+        lambda: cp.arange(arr_len**2).reshape(arr_len, arr_len),
     ],
 )
 @pytest.mark.parametrize("dtype", ["uint8", "int8", "float32", "int32"])
 def test_buffer_from_cuda_iface_dtype(data, dtype):
+    data = data()
     data = data.astype(dtype)
     buf = as_buffer(data)
     got = cp.array(buf).reshape(-1).view("uint8")
