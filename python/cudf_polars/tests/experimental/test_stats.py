@@ -287,13 +287,13 @@ def test_base_stats_join(how):
     left_count, right_count = 15, 9
     if how in ("inner", "left"):
         assert ir_column_stats["x"].source_info.row_count.value == left_count
+        assert ir_column_stats["y"].source_info.row_count.value == left_count
         assert ir_column_stats["z"].source_info.row_count.value == left_count
     if how in ("inner", "right"):
         assert ir_column_stats["xx"].source_info.row_count.value == right_count
         assert ir_column_stats["zz"].source_info.row_count.value == right_count
-
-    # TODO: Stats for "y" should depend on join type
-    assert ir_column_stats["y"].source_info.row_count.value == left_count
+    if how == "right":
+        assert ir_column_stats["y"].source_info.row_count.value == right_count
 
 
 def test_base_stats_union():

@@ -91,6 +91,8 @@ def _default_extract_base_stats(
 def _(
     ir: Distinct, stats: StatsCollector, config_options: ConfigOptions
 ) -> dict[str, ColumnStats]:
+    # Use default extract_base_stats after updating
+    # the known unique-stats columns.
     (child,) = ir.children
     child_column_stats = stats.column_stats.get(child, {})
     key_names = ir.subset or ir.schema
@@ -103,26 +105,30 @@ def _(
     ir: Join, stats: StatsCollector, config_options: ConfigOptions
 ) -> dict[str, ColumnStats]:
     left, right = ir.children
-    left_column_stats = stats.column_stats.get(left, {})
-    right_column_stats = stats.column_stats.get(right, {})
-    kstats = {
-        n.name: left_column_stats.get(n.name, ColumnStats(name=n.name))
-        for n in ir.left_on
-    }
-    jstats = {
-        name: left_column_stats.get(name, ColumnStats(name=name))
-        for name in left.schema
-        if name not in kstats
-    }
+    how = ir.options[0]
     suffix = ir.options[3]
-    jstats |= {
-        name if name not in jstats else f"{name}{suffix}": right_column_stats.get(
-            name, ColumnStats(name=name)
-        )
-        for name in right.schema
-        if name not in kstats
-    }
-    return kstats | jstats
+    primary, other = (right, left) if how == "Right" else (left, right)
+    primary_child_stats = stats.column_stats.get(primary, {})
+    other_child_stats = stats.column_stats.get(other, {})
+
+    # Build output column statistics
+    column_stats: dict[str, ColumnStats] = {}
+    for name in ir.schema:
+        if name in primary.schema:
+            # "Primary" child stats take preference.
+            column_stats[name] = primary_child_stats.get(name, ColumnStats(name=name))
+        elif name in other.schema:
+            # "Other" column stats apply to everything else.
+            column_stats[name] = other_child_stats.get(name, ColumnStats(name=name))
+        else:
+            # If the column name was not in either child table,
+            # a suffix was probably added to a column in "other".
+            _name = name.removesuffix(suffix)
+            column_stats[name] = other_child_stats.get(
+                _name, ColumnStats(name=name)
+            ).rename(name)
+
+    return column_stats
 
 
 @extract_base_stats.register(GroupBy)

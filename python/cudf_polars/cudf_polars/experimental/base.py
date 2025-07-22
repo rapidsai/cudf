@@ -153,6 +153,27 @@ class ColumnStats:
         self.source_name = source_name or name
         self.unique_stats = unique_stats or UniqueStats()
 
+    def rename(self, name: str) -> ColumnStats:
+        """
+        Rename a ColumnStats object.
+
+        Parameters
+        ----------
+        name
+            The new column name. All other attributes will
+            be preserved.
+
+        Returns
+        -------
+        A new renamed ColumnStats object.
+        """
+        return ColumnStats(
+            name,
+            source_info=self.source_info,
+            source_name=self.source_name,
+            unique_stats=self.unique_stats,
+        )
+
 
 class StatsCollector:
     """Column statistics collector."""
