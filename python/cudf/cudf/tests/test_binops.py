@@ -84,26 +84,63 @@ def binops_with_cmp(request):
     return request.param
 
 
-_operators_arithmetic = [
-    "add",
-    "radd",
-    "sub",
-    "rsub",
-    "mul",
-    "rmul",
-    "mod",
-    "rmod",
-    "pow",
-    "rpow",
-    "div",
-    "divide",
-    "floordiv",
-    "rfloordiv",
-    "truediv",
-    "rtruediv",
-]
+@pytest.fixture(
+    params=[
+        "add",
+        "radd",
+        "sub",
+        "rsub",
+        "mul",
+        "rmul",
+        "mod",
+        "rmod",
+        "pow",
+        "rpow",
+        "div",
+        "divide",
+        "floordiv",
+        "rfloordiv",
+        "truediv",
+        "rtruediv",
+    ]
+)
+def binop_arithmetic_func(request):
+    return request.param
 
-_operators_comparison = ["eq", "ne", "lt", "le", "gt", "ge"]
+
+@pytest.fixture(params=["eq", "ne", "lt", "le", "gt", "ge"])
+def binop_comparison_func(request):
+    return request.param
+
+
+@pytest.fixture(
+    params=[
+        "add",
+        "radd",
+        "sub",
+        "rsub",
+        "mul",
+        "rmul",
+        "mod",
+        "rmod",
+        "pow",
+        "rpow",
+        "div",
+        "divide",
+        "floordiv",
+        "rfloordiv",
+        "truediv",
+        "rtruediv",
+        "eq",
+        "ne",
+        "lt",
+        "le",
+        "gt",
+        "ge",
+    ]
+)
+def binop_func(request):
+    return request.param
 
 
 pytest_xfail = pytest.mark.xfail
@@ -112,8 +149,6 @@ pytestmark = pytest.mark.spilling
 # If spilling is enabled globally, we skip many test permutations
 # to reduce running time.
 if get_global_manager() is not None:
-    _operators_arithmetic = _operators_arithmetic[:1]
-    _operators_comparison = _operators_comparison[:1]
     DATETIME_TYPES = {"datetime64[ms]"}
     NUMERIC_TYPES = {"float32"}
     FLOAT_TYPES = {"float64"}
@@ -679,11 +714,12 @@ def test_boolean_scalar_binop(op):
     assert_eq(op(psr, False), op(gsr, False))
 
 
-@pytest.mark.parametrize("func", _operators_arithmetic)
 @pytest.mark.parametrize("has_nulls", [True, False])
 @pytest.mark.parametrize("fill_value", [None, 27])
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
-def test_operator_func_between_series(dtype, func, has_nulls, fill_value):
+def test_operator_func_between_series(
+    dtype, binop_arithmetic_func, has_nulls, fill_value
+):
     count = 1000
     gdf_series_a = utils.gen_rand_series(
         dtype, count, has_nulls=has_nulls, stride=10000
@@ -694,21 +730,22 @@ def test_operator_func_between_series(dtype, func, has_nulls, fill_value):
     pdf_series_a = gdf_series_a.to_pandas()
     pdf_series_b = gdf_series_b.to_pandas()
 
-    gdf_result = getattr(gdf_series_a, func)(
+    gdf_result = getattr(gdf_series_a, binop_arithmetic_func)(
         gdf_series_b, fill_value=fill_value
     )
-    pdf_result = getattr(pdf_series_a, func)(
+    pdf_result = getattr(pdf_series_a, binop_arithmetic_func)(
         pdf_series_b, fill_value=fill_value
     )
 
     assert_eq(pdf_result, gdf_result)
 
 
-@pytest.mark.parametrize("func", _operators_arithmetic)
 @pytest.mark.parametrize("has_nulls", [True, False])
 @pytest.mark.parametrize("fill_value", [None, 27])
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
-def test_operator_func_series_and_scalar(dtype, func, has_nulls, fill_value):
+def test_operator_func_series_and_scalar(
+    dtype, binop_arithmetic_func, has_nulls, fill_value
+):
     count = 1000
     scalar = 59
     gdf_series = utils.gen_rand_series(
@@ -716,11 +753,11 @@ def test_operator_func_series_and_scalar(dtype, func, has_nulls, fill_value):
     )
     pdf_series = gdf_series.to_pandas()
 
-    gdf_series_result = getattr(gdf_series, func)(
+    gdf_series_result = getattr(gdf_series, binop_arithmetic_func)(
         scalar,
         fill_value=fill_value,
     )
-    pdf_series_result = getattr(pdf_series, func)(
+    pdf_series_result = getattr(pdf_series, binop_arithmetic_func)(
         scalar,
         fill_value=fill_value,
     )
@@ -734,10 +771,9 @@ _permu_values = [0, 1, None, np.nan]
 @pytest.mark.parametrize("fill_value", _permu_values)
 @pytest.mark.parametrize("scalar_a", _permu_values)
 @pytest.mark.parametrize("scalar_b", _permu_values)
-@pytest.mark.parametrize("func", _operators_comparison)
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
 def test_operator_func_between_series_logical(
-    dtype, func, scalar_a, scalar_b, fill_value
+    dtype, binop_comparison_func, scalar_a, scalar_b, fill_value
 ):
     gdf_series_a = Series([scalar_a], nan_as_null=False).astype(dtype)
     gdf_series_b = Series([scalar_b], nan_as_null=False).astype(dtype)
@@ -745,10 +781,10 @@ def test_operator_func_between_series_logical(
     pdf_series_a = gdf_series_a.to_pandas(nullable=True)
     pdf_series_b = gdf_series_b.to_pandas(nullable=True)
 
-    gdf_series_result = getattr(gdf_series_a, func)(
+    gdf_series_result = getattr(gdf_series_a, binop_comparison_func)(
         gdf_series_b, fill_value=fill_value
     )
-    pdf_series_result = getattr(pdf_series_a, func)(
+    pdf_series_result = getattr(pdf_series_a, binop_comparison_func)(
         pdf_series_b, fill_value=fill_value
     )
     expect = pdf_series_result
@@ -770,19 +806,23 @@ def test_operator_func_between_series_logical(
 
 
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
-@pytest.mark.parametrize("func", _operators_comparison)
 @pytest.mark.parametrize("has_nulls", [True, False])
 @pytest.mark.parametrize("scalar", [-59.0, np.nan, 0, 59.0])
 @pytest.mark.parametrize("fill_value", [None, 1.0])
 def test_operator_func_series_and_scalar_logical(
-    request, dtype, func, has_nulls, scalar, fill_value
+    request, dtype, binop_comparison_func, has_nulls, scalar, fill_value
 ):
     request.applymarker(
         pytest.mark.xfail(
             PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION
             and fill_value == 1.0
             and scalar is np.nan
-            and (has_nulls or (not has_nulls and func not in {"eq", "ne"})),
+            and (
+                has_nulls
+                or (
+                    not has_nulls and binop_comparison_func not in {"eq", "ne"}
+                )
+            ),
             reason="https://github.com/pandas-dev/pandas/issues/57447",
         )
     )
@@ -791,11 +831,11 @@ def test_operator_func_series_and_scalar_logical(
     else:
         gdf_series = cudf.Series([-1.0, 0, 10.5, 1.1], dtype=dtype)
     pdf_series = gdf_series.to_pandas(nullable=True)
-    gdf_series_result = getattr(gdf_series, func)(
+    gdf_series_result = getattr(gdf_series, binop_comparison_func)(
         scalar,
         fill_value=fill_value,
     )
-    pdf_series_result = getattr(pdf_series, func)(
+    pdf_series_result = getattr(pdf_series, binop_comparison_func)(
         scalar, fill_value=fill_value
     )
 
@@ -805,11 +845,12 @@ def test_operator_func_series_and_scalar_logical(
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("func", _operators_arithmetic)
 @pytest.mark.parametrize("nulls", _nulls)
 @pytest.mark.parametrize("fill_value", [None, 27])
 @pytest.mark.parametrize("other", ["df", "scalar"])
-def test_operator_func_dataframe(func, nulls, fill_value, other):
+def test_operator_func_dataframe(
+    binop_arithmetic_func, nulls, fill_value, other
+):
     num_rows = 100
     num_cols = 3
 
@@ -836,16 +877,17 @@ def test_operator_func_dataframe(func, nulls, fill_value, other):
     gdf1 = cudf.DataFrame.from_pandas(pdf1)
     gdf2 = cudf.DataFrame.from_pandas(pdf2) if other == "df" else 59.0
 
-    got = getattr(gdf1, func)(gdf2, fill_value=fill_value)
-    expect = getattr(pdf1, func)(pdf2, fill_value=fill_value)[list(got._data)]
+    got = getattr(gdf1, binop_arithmetic_func)(gdf2, fill_value=fill_value)
+    expect = getattr(pdf1, binop_arithmetic_func)(pdf2, fill_value=fill_value)[
+        list(got._data)
+    ]
 
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("func", _operators_comparison)
 @pytest.mark.parametrize("nulls", _nulls)
 @pytest.mark.parametrize("other", ["df", "scalar"])
-def test_logical_operator_func_dataframe(func, nulls, other):
+def test_logical_operator_func_dataframe(binop_comparison_func, nulls, other):
     num_rows = 100
     num_cols = 3
 
@@ -876,37 +918,26 @@ def test_logical_operator_func_dataframe(func, nulls, other):
         else 59.0
     )
 
-    got = getattr(gdf1, func)(gdf2)
-    expect = getattr(pdf1, func)(pdf2)[list(got._data)]
+    got = getattr(gdf1, binop_comparison_func)(gdf2)
+    expect = getattr(pdf1, binop_comparison_func)(pdf2)[list(got._data)]
 
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize(
-    "func",
-    [op for op in _operators_arithmetic if op not in {"rmod", "rfloordiv"}]
-    + _operators_comparison
-    + [
-        pytest.param(
-            "rmod",
-            marks=pytest.mark.xfail(
-                reason="https://github.com/rapidsai/cudf/issues/12162"
-            ),
-        ),
-        pytest.param(
-            "rfloordiv",
-            marks=pytest.mark.xfail(
-                reason="https://github.com/rapidsai/cudf/issues/12162"
-            ),
-        ),
-    ],
-)
 @pytest.mark.parametrize("rhs", [0, 1, 2, 128])
-def test_binop_bool_uint(func, rhs):
+def test_binop_bool_uint(request, binop_func, rhs):
+    if binop_func in {"rmod", "rfloordiv"}:
+        request.applymarker(
+            pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/12162"
+            ),
+        )
     psr = pd.Series([True, False, False])
     gsr = cudf.from_pandas(psr)
     assert_eq(
-        getattr(psr, func)(rhs), getattr(gsr, func)(rhs), check_dtype=False
+        getattr(psr, binop_func)(rhs),
+        getattr(gsr, binop_func)(rhs),
+        check_dtype=False,
     )
 
 
@@ -1287,14 +1318,13 @@ def test_binops_with_lhs_numpy_scalar(frame, dtype):
         "timedelta64[s]",
     ],
 )
-@pytest.mark.parametrize("op", _operators_comparison)
-def test_binops_with_NA_consistent(dtype, op):
+def test_binops_with_NA_consistent(dtype, binop_comparison_func):
     data = [1, 2, 3]
     sr = cudf.Series(data, dtype=dtype)
 
-    result = getattr(sr, op)(cudf.NA)
+    result = getattr(sr, binop_comparison_func)(cudf.NA)
     if dtype in NUMERIC_TYPES:
-        if op == "ne":
+        if binop_comparison_func == "ne":
             expect_all = True
         else:
             expect_all = False
