@@ -407,34 +407,19 @@ def test_column_view_string_slice(slc):
     assert_eq(expect, got)
 
 
+@pytest.mark.parametrize("box", [cp.asarray, np.asarray])
 @pytest.mark.parametrize(
-    "data,expected",
+    "data",
     [
-        (
-            np.array([1, 2, 3, 4, 5], dtype="uint8"),
-            cudf.core.column.as_column(
-                [1, 2, 3, 4, 5], dtype=np.dtype(np.uint8)
-            ),
-        ),
-        (
-            cp.array([1, 2, 3, 4, 5], dtype="uint8"),
-            cudf.core.column.as_column(
-                [1, 2, 3, 4, 5], dtype=np.dtype(np.uint8)
-            ),
-        ),
-        (
-            cp.array([], dtype="uint8"),
-            cudf.core.column.column_empty(0, dtype=np.dtype(np.uint8)),
-        ),
-        (
-            cp.array([255], dtype="uint8"),
-            cudf.core.column.as_column([255], dtype=np.dtype(np.uint8)),
-        ),
+        np.array([1, 2, 3, 4, 5], dtype="uint8"),
+        np.array([], dtype="uint8"),
+        np.array([255], dtype="uint8"),
     ],
 )
-def test_as_column_buffer(data, expected):
+def test_as_column_buffer(box, data):
+    expected = cudf.core.column.as_column(data)
     actual_column = cudf.core.column.as_column(
-        cudf.core.buffer.as_buffer(data), dtype=data.dtype
+        cudf.core.buffer.as_buffer(box(data)), dtype=data.dtype
     )
     assert_eq(
         cudf.Series._from_column(actual_column),
