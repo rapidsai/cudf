@@ -681,6 +681,9 @@ add_library(
   src/search/contains_column.cu
   src/search/contains_scalar.cu
   src/search/contains_table.cu
+  src/search/contains_table_impl.cu
+  src/search/contains_table_impl_primitive.cu
+  src/search/contains_table_impl_nested.cu
   src/search/search_ordered.cu
   src/sort/is_sorted.cu
   src/sort/rank.cu
@@ -692,6 +695,7 @@ add_library(
   src/sort/stable_segmented_sort.cu
   src/sort/stable_sort_column.cu
   src/sort/stable_sort.cu
+  src/sort/top_k.cu
   src/stream_compaction/apply_boolean_mask.cu
   src/stream_compaction/distinct.cu
   src/stream_compaction/distinct_count.cu
@@ -752,10 +756,12 @@ add_library(
   src/strings/search/contains_multiple.cu
   src/strings/search/findall.cu
   src/strings/search/find.cu
+  src/strings/search/find_instance.cu
   src/strings/search/find_multiple.cu
   src/strings/slice.cu
   src/strings/split/partition.cu
   src/strings/split/split.cu
+  src/strings/split/split_part.cu
   src/strings/split/split_re.cu
   src/strings/split/split_record.cu
   src/strings/strings_column_factories.cu
