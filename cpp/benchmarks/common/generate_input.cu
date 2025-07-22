@@ -668,7 +668,8 @@ std::unique_ptr<cudf::column> create_distinct_rows_column(data_profile const& pr
                            cudf::get_current_device_resource_ref());
 
   col->set_null_mask(std::move(result_bitmask), null_count);
-  return col;
+
+  return std::move(cudf::sample(cudf::table_view({col->view()}), num_rows)->release()[0]);
 }
 
 /**
@@ -709,7 +710,8 @@ std::unique_ptr<cudf::column> create_distinct_rows_column<cudf::string_view>(
   auto int_col = cudf::sequence(
     num_rows, *cudf::make_default_constructed_scalar(cudf::data_type{cudf::type_id::INT32}));
   auto int2strcol = cudf::strings::from_integers(int_col->view());
-  return cudf::strings::concatenate(cudf::table_view({col->view(), int2strcol->view()}));
+  auto concat_col = cudf::strings::concatenate(cudf::table_view({col->view(), int2strcol->view()}));
+  return std::move(cudf::sample(cudf::table_view({concat_col->view()}), num_rows)->release()[0]);
 }
 
 template <>
@@ -810,8 +812,9 @@ std::unique_ptr<cudf::column> create_distinct_rows_column<cudf::struct_view>(
   auto const null_count = col->null_count();
   auto col_contents     = col->release();
   col_contents.children.push_back(std::move(children[0]));
-  return cudf::create_structs_hierarchy(
+  auto structs_col = cudf::create_structs_hierarchy(
     num_rows, std::move(col_contents.children), null_count, std::move(*col_contents.null_mask));
+  return std::move(cudf::sample(cudf::table_view({structs_col->view()}), num_rows)->release()[0]);
 }
 
 template <typename T>
@@ -911,7 +914,9 @@ std::unique_ptr<cudf::column> create_distinct_rows_column<cudf::list_view>(
       num_rows, std::move(offsets_column), std::move(child_column), 0, rmm::device_buffer{});
     std::swap(child_column, list_column);
   }
-  return cudf::lists::concatenate_rows(cudf::table_view({col->view(), child_column->view()}));
+  auto lists_col =
+    cudf::lists::concatenate_rows(cudf::table_view({col->view(), child_column->view()}));
+  return std::move(cudf::sample(cudf::table_view({lists_col->view()}), num_rows)->release()[0]);
 }
 
 using columns_vector = std::vector<std::unique_ptr<cudf::column>>;
