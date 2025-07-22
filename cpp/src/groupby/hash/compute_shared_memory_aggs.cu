@@ -23,6 +23,7 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/cuda.hpp>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>

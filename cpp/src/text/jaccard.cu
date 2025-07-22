@@ -21,6 +21,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
@@ -266,15 +267,9 @@ CUDF_KERNEL void substring_hash_kernel(cudf::column_device_view const d_strings,
                                        int64_t const* d_output_offsets,
                                        uint32_t* d_results)
 {
-  auto const idx = cudf::detail::grid_1d::global_thread_id();
-  if (idx >= (static_cast<cudf::thread_index_type>(d_strings.size()) * cudf::detail::warp_size)) {
-    return;
-  }
-
-  auto const str_idx  = idx / cudf::detail::warp_size;
-  auto const lane_idx = idx % cudf::detail::warp_size;
-
-  if (d_strings.is_null(str_idx)) { return; }
+  auto const idx     = cudf::detail::grid_1d::global_thread_id();
+  auto const str_idx = idx / cudf::detail::warp_size;
+  if (str_idx >= d_strings.size() or d_strings.is_null(str_idx)) { return; }
   auto const d_str = d_strings.element<cudf::string_view>(str_idx);
   if (d_str.empty()) { return; }
 
@@ -283,6 +278,10 @@ CUDF_KERNEL void substring_hash_kernel(cudf::column_device_view const d_strings,
   auto const hasher     = cudf::hashing::detail::MurmurHash3_x86_32<cudf::string_view>{0};
   auto const end        = d_str.data() + d_str.size_bytes();
   auto const warp_count = (d_str.size_bytes() / cudf::detail::warp_size) + 1;
+
+  namespace cg        = cooperative_groups;
+  auto const warp     = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
+  auto const lane_idx = warp.thread_rank();
 
   auto d_hashes = d_results + d_output_offsets[str_idx];
   auto itr      = d_str.data() + lane_idx;
@@ -297,7 +296,7 @@ CUDF_KERNEL void substring_hash_kernel(cudf::column_device_view const d_strings,
       if ((left == 0) || (itr == d_str.data())) { hash = hasher(cudf::string_view(itr, bytes)); }
     }
     hvs[threadIdx.x] = hash;  // store hash into shared memory
-    __syncwarp();
+    warp.sync();
     if (lane_idx == 0) {
       // copy valid hash values for this warp into d_hashes
       auto const hashes     = &hvs[threadIdx.x];
@@ -305,7 +304,7 @@ CUDF_KERNEL void substring_hash_kernel(cudf::column_device_view const d_strings,
       d_hashes =
         thrust::copy_if(thrust::seq, hashes, hashes_end, d_hashes, [](auto h) { return h != 0; });
     }
-    __syncwarp();
+    warp.sync();
     itr += cudf::detail::warp_size;
   }
 }

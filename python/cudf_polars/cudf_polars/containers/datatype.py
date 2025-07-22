@@ -62,8 +62,6 @@ def _from_polars(dtype: pl.DataType) -> plc.DataType:
     elif isinstance(dtype, pl.Time):
         raise NotImplementedError("Time of day dtype not implemented")
     elif isinstance(dtype, pl.Datetime):
-        if dtype.time_zone is not None:
-            raise NotImplementedError("Time zone support")
         if dtype.time_unit == "ms":
             return plc.DataType(plc.TypeId.TIMESTAMP_MILLISECONDS)
         elif dtype.time_unit == "us":
@@ -90,6 +88,11 @@ def _from_polars(dtype: pl.DataType) -> plc.DataType:
         # Recurse to catch unsupported inner types
         _ = _from_polars(dtype.inner)
         return plc.DataType(plc.TypeId.LIST)
+    elif isinstance(dtype, pl.Struct):
+        # Recurse to catch unsupported field types
+        for field in dtype.fields:
+            _ = _from_polars(field.dtype)
+        return plc.DataType(plc.TypeId.STRUCT)
     else:
         raise NotImplementedError(f"{dtype=} conversion not supported")
 
@@ -107,6 +110,15 @@ class DataType:
     def id(self) -> plc.TypeId:
         """The pylibcudf.TypeId of this DataType."""
         return self.plc.id()
+
+    @property
+    def children(self) -> list[DataType]:
+        """The children types of this DataType."""
+        if self.plc.id() == plc.TypeId.STRUCT:
+            return [DataType(field.dtype) for field in self.polars.fields]
+        elif self.plc.id() == plc.TypeId.LIST:
+            return [DataType(self.polars.inner)]
+        return []
 
     def __eq__(self, other: object) -> bool:
         """Equality of DataTypes."""

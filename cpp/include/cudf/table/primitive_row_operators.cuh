@@ -30,6 +30,18 @@
 #include <cuda/std/type_traits>
 
 namespace CUDF_EXPORT cudf {
+
+/**
+ * @brief Checks if a table is compatible with primitive row operations
+ *
+ * A table is compatible with primitive row operations if it contains exactly one column
+ * and that column contains only numeric data types.
+ *
+ * @param table The table to check for compatibility
+ * @return Boolean indicating if the table is compatible with primitive row operations
+ */
+bool is_primitive_row_op_compatible(cudf::table_view const& table);
+
 namespace row::primitive {
 
 /**
@@ -131,6 +143,19 @@ class row_equality_comparator {
                                                           rhs_row_index);
   }
 
+  /**
+   * @brief Compares the specified rows for equality.
+   *
+   * @param lhs_index The index of the first row to compare (in the lhs table)
+   * @param rhs_index The index of the second row to compare (in the rhs table)
+   * @return Boolean indicating if both rows are equal
+   */
+  __device__ bool operator()(cudf::experimental::row::lhs_index_type lhs_index,
+                             cudf::experimental::row::rhs_index_type rhs_index) const
+  {
+    return (*this)(static_cast<size_type>(lhs_index), static_cast<size_type>(rhs_index));
+  }
+
  private:
   cudf::nullate::DYNAMIC _has_nulls;
   table_device_view _lhs;
@@ -177,7 +202,7 @@ class element_hasher {
  *
  * @tparam Hash Hash functor to use for hashing elements.
  */
-template <template <typename> class Hash>
+template <template <typename> class Hash = cudf::hashing::detail::default_hash>
 class row_hasher {
  public:
   row_hasher() = delete;
@@ -189,7 +214,9 @@ class row_hasher {
    * @param t A table_device_view to hash
    * @param seed A seed value to use for hashing
    */
-  row_hasher(cudf::nullate::DYNAMIC const& has_nulls, table_device_view t, hash_value_type seed)
+  row_hasher(cudf::nullate::DYNAMIC const& has_nulls,
+             table_device_view t,
+             hash_value_type seed = DEFAULT_HASH_SEED)
     : _has_nulls{has_nulls}, _table{t}, _seed{seed}
   {
   }
@@ -203,7 +230,7 @@ class row_hasher {
    */
   row_hasher(cudf::nullate::DYNAMIC const& has_nulls,
              std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> t,
-             hash_value_type seed)
+             hash_value_type seed = DEFAULT_HASH_SEED)
     : _has_nulls{has_nulls}, _table{*t}, _seed{seed}
   {
   }

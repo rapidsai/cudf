@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import textwrap
 import time
 import warnings
 from functools import cache, partial
@@ -97,8 +98,7 @@ def default_memory_resource(
         ):
             raise ComputeError(
                 "GPU engine requested, but incorrect cudf-polars package installed. "
-                "If your system has a CUDA 11 driver, please uninstall `cudf-polars-cu12` "
-                "and install `cudf-polars-cu11`"
+                "cudf-polars requires CUDA 12.0+ to installed."
             ) from None
         else:
             raise
@@ -234,6 +234,16 @@ def _callback(
                 return df, timer.timings
         elif config_options.executor.name == "streaming":
             from cudf_polars.experimental.parallel import evaluate_streaming
+
+            if timer is not None:
+                msg = textwrap.dedent("""\
+                    LazyFrame.profile() is not supported with the streaming executor.
+                    To profile execution with the streaming executor, use:
+
+                    - NVIDIA NSight Systems with the 'streaming' scheduler.
+                    - Dask's built-in profiling tools with the 'distributed' scheduler.
+                    """)
+                raise NotImplementedError(msg)
 
             return evaluate_streaming(ir, config_options).to_polars()
         assert_never(f"Unknown executor '{config_options.executor}'")

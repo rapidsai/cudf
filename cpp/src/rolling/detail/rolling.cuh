@@ -40,6 +40,7 @@
 #include <cudf/detail/unary.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/lists/detail/stream_compaction.hpp>
@@ -498,13 +499,17 @@ struct DeviceRollingLead {
     return cudf::is_fixed_width<T>();
   }
 
-  template <typename T = InputType, std::enable_if_t<is_supported<T>()>* = nullptr>
-  DeviceRollingLead(size_type _row_offset) : row_offset(_row_offset)
+  template <typename T = InputType>
+  DeviceRollingLead(size_type _row_offset)
+    requires(is_supported<T>())
+    : row_offset(_row_offset)
   {
   }
 
-  template <typename T = InputType, std::enable_if_t<!is_supported<T>()>* = nullptr>
-  DeviceRollingLead(size_type _row_offset) : row_offset(_row_offset)
+  template <typename T = InputType>
+  DeviceRollingLead(size_type _row_offset)
+    requires(!is_supported<T>())
+    : row_offset(_row_offset)
   {
     CUDF_FAIL("Invalid aggregation/type pair");
   }
@@ -554,13 +559,17 @@ struct DeviceRollingLag {
     return cudf::is_fixed_width<T>();
   }
 
-  template <typename T = InputType, std::enable_if_t<is_supported<T>()>* = nullptr>
-  DeviceRollingLag(size_type _row_offset) : row_offset(_row_offset)
+  template <typename T = InputType>
+  DeviceRollingLag(size_type _row_offset)
+    requires(is_supported<T>())
+    : row_offset(_row_offset)
   {
   }
 
-  template <typename T = InputType, std::enable_if_t<!is_supported<T>()>* = nullptr>
-  DeviceRollingLag(size_type _row_offset) : row_offset(_row_offset)
+  template <typename T = InputType>
+  DeviceRollingLag(size_type _row_offset)
+    requires(!is_supported<T>())
+    : row_offset(_row_offset)
   {
     CUDF_FAIL("Invalid aggregation/type pair");
   }
@@ -1081,16 +1090,15 @@ struct rolling_window_launcher {
   template <aggregation::Kind op,
             typename PrecedingWindowIterator,
             typename FollowingWindowIterator>
-  std::enable_if_t<corresponding_rolling_operator<InputType, op>::type::is_supported(),
-                   std::unique_ptr<column>>
-  operator()(column_view const& input,
-             column_view const& default_outputs,
-             PrecedingWindowIterator preceding_window_begin,
-             FollowingWindowIterator following_window_begin,
-             int min_periods,
-             [[maybe_unused]] rolling_aggregation const& agg,
-             rmm::cuda_stream_view stream,
-             rmm::device_async_resource_ref mr)
+  std::unique_ptr<column> operator()(column_view const& input,
+                                     column_view const& default_outputs,
+                                     PrecedingWindowIterator preceding_window_begin,
+                                     FollowingWindowIterator following_window_begin,
+                                     int min_periods,
+                                     [[maybe_unused]] rolling_aggregation const& agg,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
+    requires(corresponding_rolling_operator<InputType, op>::type::is_supported())
   {
     auto const do_rolling = [&](auto const& device_op) {
       auto output = make_fixed_width_column(
@@ -1150,16 +1158,15 @@ struct rolling_window_launcher {
   template <aggregation::Kind op,
             typename PrecedingWindowIterator,
             typename FollowingWindowIterator>
-  std::enable_if_t<!corresponding_rolling_operator<InputType, op>::type::is_supported(),
-                   std::unique_ptr<column>>
-  operator()(column_view const&,
-             column_view const&,
-             PrecedingWindowIterator,
-             FollowingWindowIterator,
-             int,
-             rolling_aggregation const&,
-             rmm::cuda_stream_view,
-             rmm::device_async_resource_ref)
+  std::unique_ptr<column> operator()(column_view const&,
+                                     column_view const&,
+                                     PrecedingWindowIterator,
+                                     FollowingWindowIterator,
+                                     int,
+                                     rolling_aggregation const&,
+                                     rmm::cuda_stream_view,
+                                     rmm::device_async_resource_ref)
+    requires(!corresponding_rolling_operator<InputType, op>::type::is_supported())
   {
     CUDF_FAIL("Invalid aggregation type/pair");
   }
@@ -1279,7 +1286,7 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
   cudf::jit::get_program_cache(*rolling_jit_kernel_cu_jit)
     .get_kernel(
       kernel_name, {}, {{"rolling/jit/operation-udf.hpp", cuda_source}}, {"-arch=sm_."})  //
-    ->configure_1d_max_occupancy(0, 0, 0, stream.value())                                 //
+    ->configure_1d_max_occupancy(0, 0, nullptr, stream.value())                           //
     ->launch(input.size(),
              cudf::jit::get_data_ptr(input),
              input.null_mask(),

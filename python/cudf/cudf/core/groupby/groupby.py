@@ -243,7 +243,7 @@ def _is_row_of(chunk, obj):
     return (
         isinstance(chunk, Series)
         and isinstance(obj, DataFrame)
-        and len(chunk.index) == len(obj._column_names)
+        and len(chunk) == obj._num_columns
         and (chunk.index.to_pandas() == pd.Index(obj._column_names)).all()
     )
 
@@ -3401,7 +3401,7 @@ class SeriesGroupBy(GroupBy):
         )
 
         # downcast the result to a Series:
-        if len(result._data):
+        if result._num_columns:
             if result.shape[1] == 1 and not is_list_like(func):
                 return result.iloc[:, 0]
 

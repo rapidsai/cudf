@@ -10,7 +10,7 @@ import pytest
 import polars as pl
 
 from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
-from cudf_polars.utils.versions import POLARS_VERSION_LT_128, POLARS_VERSION_LT_130
+from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 
 @pytest.fixture(scope="module")
@@ -113,14 +113,15 @@ def test_select_with_cse_no_agg(df, engine):
     assert_gpu_result_equal(query, engine=engine)
 
 
-def test_select_parquet_fast_count(request, tmp_path, df, engine):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=POLARS_VERSION_LT_128,
-            reason="not supported by cudf-polars until polars>=1.28",
-        )
-    )
+def test_select_parquet_fast_count(tmp_path, df, engine):
     file = tmp_path / "data.parquet"
     df.collect().write_parquet(file)
     q = pl.scan_parquet(file).select(pl.len())
+    assert_gpu_result_equal(q, engine=engine)
+
+
+def test_select_literal(engine):
+    # See: https://github.com/rapidsai/cudf/issues/19147
+    ldf = pl.LazyFrame({"a": list(range(10))})
+    q = ldf.select(pl.lit(2).pow(pl.lit(-3, dtype=pl.Float32)))
     assert_gpu_result_equal(q, engine=engine)

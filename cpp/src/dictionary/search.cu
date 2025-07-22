@@ -39,18 +39,18 @@ namespace detail {
 namespace {
 
 struct dispatch_scalar_index {
-  template <typename IndexType, std::enable_if_t<is_index_type<IndexType>()>* = nullptr>
+  template <typename IndexType>
   std::unique_ptr<scalar> operator()(size_type index,
                                      bool is_valid,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
+    requires(is_index_type<IndexType>())
   {
     return std::make_unique<numeric_scalar<IndexType>>(index, is_valid, stream, mr);
   }
-  template <typename IndexType,
-            typename... Args,
-            std::enable_if_t<not is_index_type<IndexType>()>* = nullptr>
+  template <typename IndexType, typename... Args>
   std::unique_ptr<scalar> operator()(Args&&...)
+    requires(not is_index_type<IndexType>())
   {
     CUDF_FAIL("indices must be an integral type");
   }
@@ -65,14 +65,13 @@ struct dispatch_scalar_index {
  * If the key is not found, the resulting scalar has `is_valid()=false`.
  */
 struct find_index_fn {
-  template <typename Element,
-            std::enable_if_t<not std::is_same_v<Element, dictionary32> and
-                             not std::is_same_v<Element, list_view> and
-                             not std::is_same_v<Element, struct_view>>* = nullptr>
+  template <typename Element>
   std::unique_ptr<scalar> operator()(dictionary_column_view const& input,
                                      scalar const& key,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr) const
+    requires(not std::is_same_v<Element, dictionary32> and
+             not std::is_same_v<Element, list_view> and not std::is_same_v<Element, struct_view>)
   {
     if (!key.is_valid(stream)) {
       return type_dispatcher(input.indices().type(), dispatch_scalar_index{}, 0, false, stream, mr);
@@ -94,14 +93,13 @@ struct find_index_fn {
                            mr);
   }
 
-  template <
-    typename Element,
-    std::enable_if_t<std::is_same_v<Element, dictionary32> or std::is_same_v<Element, list_view> or
-                     std::is_same_v<Element, struct_view>>* = nullptr>
+  template <typename Element>
   std::unique_ptr<scalar> operator()(dictionary_column_view const&,
                                      scalar const&,
                                      rmm::cuda_stream_view,
                                      rmm::device_async_resource_ref) const
+    requires(std::is_same_v<Element, dictionary32> or std::is_same_v<Element, list_view> or
+             std::is_same_v<Element, struct_view>)
   {
     CUDF_FAIL(
       "dictionary, list_view, and struct_view columns cannot be the keys column of a dictionary");
@@ -109,14 +107,13 @@ struct find_index_fn {
 };
 
 struct find_insert_index_fn {
-  template <typename Element,
-            std::enable_if_t<not std::is_same_v<Element, dictionary32> and
-                             not std::is_same_v<Element, list_view> and
-                             not std::is_same_v<Element, struct_view>>* = nullptr>
+  template <typename Element>
   std::unique_ptr<scalar> operator()(dictionary_column_view const& input,
                                      scalar const& key,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr) const
+    requires(not std::is_same_v<Element, dictionary32> and
+             not std::is_same_v<Element, list_view> and not std::is_same_v<Element, struct_view>)
   {
     if (!key.is_valid(stream)) {
       return type_dispatcher(input.indices().type(), dispatch_scalar_index{}, 0, false, stream, mr);
@@ -138,14 +135,13 @@ struct find_insert_index_fn {
                            mr);
   }
 
-  template <
-    typename Element,
-    std::enable_if_t<std::is_same_v<Element, dictionary32> or std::is_same_v<Element, list_view> or
-                     std::is_same_v<Element, struct_view>>* = nullptr>
+  template <typename Element>
   std::unique_ptr<scalar> operator()(dictionary_column_view const&,
                                      scalar const&,
                                      rmm::cuda_stream_view,
                                      rmm::device_async_resource_ref) const
+    requires(std::is_same_v<Element, dictionary32> or std::is_same_v<Element, list_view> or
+             std::is_same_v<Element, struct_view>)
   {
     CUDF_FAIL("dictionary, list_view, and struct_view columns cannot be the keys for a dictionary");
   }

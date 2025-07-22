@@ -1,7 +1,7 @@
 #!/bin/bash
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
-set -eou pipefail
+set -euo pipefail
 
 source rapids-init-pip
 
@@ -45,8 +45,9 @@ trap set_exitcode ERR
 set +e
 
 ./ci/run_cudf_polars_pytests.sh \
-       --cov cudf_polars \
+       --cov=cudf_polars \
        --cov-fail-under=100 \
+       --cov-report=term-missing:skip-covered \
        --cov-config=./pyproject.toml \
        --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars.xml"
 

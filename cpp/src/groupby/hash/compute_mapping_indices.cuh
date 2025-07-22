@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/cuda.hpp>
+#include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -106,15 +108,15 @@ CUDF_KERNEL void mapping_indices_kernel(cudf::size_type num_input_rows,
   __shared__ cudf::size_type shared_set_indices[GROUPBY_SHM_MAX_ELEMENTS];
 
   // Shared set initialization
-  __shared__ cuco::bucket<cudf::size_type, GROUPBY_BUCKET_SIZE> buckets[bucket_extent.value()];
+  __shared__ cudf::size_type slots[valid_extent.value()];
 
   auto raw_set = cuco::static_set_ref{
     cuco::empty_key<cudf::size_type>{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
     global_set.key_eq(),
     probing_scheme_t{global_set.hash_function()},
     cuco::thread_scope_block,
-    cuco::bucket_storage_ref<cudf::size_type, GROUPBY_BUCKET_SIZE, decltype(bucket_extent)>{
-      bucket_extent, buckets}};
+    cuco::bucket_storage_ref<cudf::size_type, GROUPBY_BUCKET_SIZE, decltype(valid_extent)>{
+      valid_extent, slots}};
   auto shared_set = raw_set.rebind_operators(cuco::insert_and_find);
 
   auto const block = cooperative_groups::this_thread_block();
