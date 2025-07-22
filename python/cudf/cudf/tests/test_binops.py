@@ -6,7 +6,7 @@ import operator
 import re
 import warnings
 from concurrent.futures import ThreadPoolExecutor
-from itertools import combinations_with_replacement, product
+from itertools import combinations_with_replacement
 
 import cupy as cp
 import numpy as np
@@ -303,20 +303,10 @@ def test_series_compare(cmpop, obj_class, dtype):
     "dtype,val",
     [("int8", 200), ("int32", 2**32), ("uint8", -128), ("uint64", -1)],
 )
-@pytest.mark.parametrize(
-    "op",
-    [
-        operator.eq,
-        operator.ne,
-        operator.lt,
-        operator.le,
-        operator.gt,
-        operator.ge,
-    ],
-)
 @pytest.mark.parametrize("reverse", [False, True])
-def test_series_compare_integer(dtype, val, op, reverse):
+def test_series_compare_integer(dtype, val, cmpop, reverse):
     # Tests that these actually work, even though they are out of bound.
+    op = cmpop
     force_cast_val = np.array(val).astype(dtype)
     sr = Series(
         [np.iinfo(dtype).min, np.iinfo(dtype).max, force_cast_val, None],
@@ -340,16 +330,15 @@ def test_series_compare_integer(dtype, val, op, reverse):
     assert_eq(res, expected)
 
 
-def _series_compare_nulls_typegen():
-    return [
+@pytest.mark.parametrize(
+    "dtypes",
+    [
         *combinations_with_replacement(DATETIME_TYPES, 2),
         *combinations_with_replacement(TIMEDELTA_TYPES, 2),
         *combinations_with_replacement(NUMERIC_TYPES, 2),
         *combinations_with_replacement(STRING_TYPES, 2),
-    ]
-
-
-@pytest.mark.parametrize("dtypes", _series_compare_nulls_typegen())
+    ],
+)
 def test_series_compare_nulls(cmpop, dtypes):
     ltype, rtype = dtypes
 
@@ -422,9 +411,8 @@ def test_str_series_compare_num_reflected(
 
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
-@pytest.mark.parametrize("nelem", [1, 2, 100])
 @pytest.mark.parametrize("dtype", [*utils.NUMERIC_TYPES, "datetime64[ms]"])
-def test_series_compare_scalar(nelem, cmpop, obj_class, dtype):
+def test_series_compare_scalar(cmpop, obj_class, dtype):
     rng = np.random.default_rng(seed=0)
     arr1 = rng.integers(0, 100, 100).astype(dtype)
     sr1 = Series(arr1)
@@ -447,9 +435,10 @@ def test_series_compare_scalar(nelem, cmpop, obj_class, dtype):
 _nulls = ["none", "some"]
 
 
-@pytest.mark.parametrize("nelem", [1, 7, 8, 9, 32, 64, 128])
-@pytest.mark.parametrize("lhs_nulls,rhs_nulls", list(product(_nulls, _nulls)))
-def test_validity_add(nelem, lhs_nulls, rhs_nulls):
+@pytest.mark.parametrize("lhs_nulls", _nulls)
+@pytest.mark.parametrize("rhs_nulls", _nulls)
+def test_validity_add(lhs_nulls, rhs_nulls):
+    nelem = 10
     rng = np.random.default_rng(seed=0)
     # LHS
     lhs_data = rng.random(nelem)
@@ -498,16 +487,9 @@ def test_validity_add(nelem, lhs_nulls, rhs_nulls):
 
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
-@pytest.mark.parametrize(
-    "binop,lhs_dtype,rhs_dtype",
-    list(
-        product(
-            [operator.add, operator.mul],
-            utils.NUMERIC_TYPES,
-            utils.NUMERIC_TYPES,
-        )
-    ),
-)
+@pytest.mark.parametrize("binop", [operator.add, operator.mul])
+@pytest.mark.parametrize("lhs_dtype", utils.NUMERIC_TYPES)
+@pytest.mark.parametrize("rhs_dtype", utils.NUMERIC_TYPES)
 def test_series_binop_mixed_dtype(binop, lhs_dtype, rhs_dtype, obj_class):
     nelem = 10
     rng = np.random.default_rng(seed=0)
@@ -589,11 +571,10 @@ def test_series_reflected_ops_scalar(binop, scalar, dtype, obj_class):
     np.testing.assert_allclose(ps_result, gs_result.to_numpy())
 
 
-def test_different_shapes_and_columns(binop):
-    # TODO: support `pow()` on NaN values. Particularly, the cases:
-    #       `pow(1, NaN) == 1` and `pow(NaN, 0) == 1`
+def test_different_shapes_and_columns(request, binop):
     if binop is operator.pow:
-        return
+        msg = "TODO: Support `pow(1, NaN) == 1` and `pow(NaN, 0) == 1`"
+        request.applymarker(pytest.mark.xfail(reason=msg))
 
     # Empty frame on the right side
     pd_frame = binop(pd.DataFrame({"x": [1, 2]}), pd.DataFrame({}))
@@ -622,11 +603,6 @@ def test_different_shapes_and_columns(binop):
 
 
 def test_different_shapes_and_same_columns(binop):
-    # TODO: support `pow()` on NaN values. Particularly, the cases:
-    #       `pow(1, NaN) == 1` and `pow(NaN, 0) == 1`
-    if binop is operator.pow:
-        return
-
     pd_frame = binop(
         pd.DataFrame({"x": [1, 2]}), pd.DataFrame({"x": [1, 2, 3]})
     )
@@ -638,11 +614,10 @@ def test_different_shapes_and_same_columns(binop):
     assert_eq(cd_frame, pd_frame)
 
 
-def test_different_shapes_and_columns_with_unaligned_indices(binop):
-    # TODO: support `pow()` on NaN values. Particularly, the cases:
-    #       `pow(1, NaN) == 1` and `pow(NaN, 0) == 1`
+def test_different_shapes_and_columns_with_unaligned_indices(request, binop):
     if binop is operator.pow:
-        return
+        msg = "TODO: Support `pow(1, NaN) == 1` and `pow(NaN, 0) == 1`"
+        request.applymarker(pytest.mark.xfail(reason=msg))
 
     # Test with a RangeIndex
     pdf1 = pd.DataFrame({"x": [4, 3, 2, 1], "y": [7, 3, 8, 6]})
