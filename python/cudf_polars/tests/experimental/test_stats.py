@@ -29,8 +29,8 @@ def df():
 
 
 def test_base_stats_dataframescan(df):
+    row_count = df.height
     q = pl.LazyFrame(df)
-    row_count = q.collect().height
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
@@ -294,3 +294,60 @@ def test_base_stats_join(how):
 
     # TODO: Stats for "y" should depend on join type
     assert ir_column_stats["y"].source_info.row_count.value == left_count
+
+
+def test_base_stats_union():
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "scheduler": DEFAULT_SCHEDULER,
+            "shuffle_method": "tasks",
+        },
+    )
+    left = pl.LazyFrame(
+        {
+            "x": range(15),
+            "y": [1, 2, 3] * 5,
+            "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 3,
+        }
+    )
+    right = pl.LazyFrame(
+        {
+            "x": range(9),
+            "y": [2, 4, 3] * 3,
+            "z": [1.0, 2.0, 3.0] * 3,
+        }
+    )
+
+    q = pl.concat([left, right])
+    ir = Translator(q._ldf.visit(), engine).translate_ir()
+    stats = collect_base_stats(ir, ConfigOptions.from_polars_engine(engine))
+    column_stats = stats.column_stats[ir]
+
+    # We currently lose source info after a Union.
+    # TODO: We can be "smarter" here.
+    source_info = column_stats["x"].source_info
+    assert source_info.row_count.value is None
+
+
+def test_base_stats_distinct(df):
+    row_count = df.height
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "scheduler": DEFAULT_SCHEDULER,
+            "shuffle_method": "tasks",
+        },
+    )
+    q = pl.LazyFrame(df).unique(subset=["y"])
+    ir = Translator(q._ldf.visit(), engine).translate_ir()
+    stats = collect_base_stats(ir, ConfigOptions.from_polars_engine(engine))
+    column_stats = stats.column_stats[ir]
+
+    # We currently lose source info after a Union.
+    # TODO: We can be "smarter" here.
+    source_info = column_stats["y"].source_info
+    assert source_info.row_count.value == row_count
+    assert source_info.row_count.exact
