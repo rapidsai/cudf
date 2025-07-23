@@ -297,4 +297,11 @@ def all_supported_types_as_str(request):
 
 @pytest.fixture(params=[True, False])
 def dropna(request):
+    """Param for `dropna` argument"""
+    return request.param
+
+
+@pytest.fixture(params=[True, False, None])
+def nan_as_null(request):
+    """Param for `nan_as_null` argument"""
     return request.param

@@ -21,7 +21,6 @@ from cudf.testing import assert_eq
     ],
 )
 @pytest.mark.parametrize("decimals", [-3, -1, 0, 1, 12, np.int8(1)])
-@pytest.mark.parametrize("nan_as_null", [True, False])
 def test_series_round(arr, decimals, nan_as_null):
     pser = pd.Series(arr)
     ser = cudf.Series(arr, nan_as_null=nan_as_null)
