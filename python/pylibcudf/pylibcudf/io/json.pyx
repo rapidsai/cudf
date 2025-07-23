@@ -808,7 +808,7 @@ cpdef TableWithMetadata read_json_from_string_column(
         Set data types for columns to be read.
     compression: CompressionType
         Set compression type of the string column contents
-    recovery_mode: json_recovery_mode_t
+    recovery_mode: JSONRecoveryMode
         Set recovery option for corrupted JSON input in string column
     stream: Stream
         CUDA stream used for device memory operations and kernel launches
