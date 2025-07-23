@@ -293,3 +293,8 @@ def all_supported_types_as_str(request):
     - "bool"
     """
     return request.param
+
+
+@pytest.fixture(params=[True, False])
+def dropna(request):
+    return request.param
