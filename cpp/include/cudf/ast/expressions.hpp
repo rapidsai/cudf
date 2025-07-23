@@ -94,7 +94,8 @@ struct expression {
                                                table_view const& right,
                                                rmm::cuda_stream_view stream) const = 0;
 
-  [[nodiscard]] virtual std::unique_ptr<row_ir::node> accept(row_ir::ast_converter& converter) const = 0;
+  [[nodiscard]] virtual std::unique_ptr<row_ir::node> accept(
+    row_ir::ast_converter& converter) const = 0;
 
   virtual ~expression() {}
 };
@@ -327,6 +328,13 @@ class literal : public expression {
   [[nodiscard]] generic_scalar_device_view get_value() const { return value; }
 
   /**
+   * @brief Get the scalar.
+   *
+   * @return The scalar object
+   */
+  [[nodiscard]] cudf::scalar const& get_scalar() const { return scalar; }
+
+  /**
    * @copydoc expression::accept
    */
   cudf::size_type accept(detail::expression_parser& visitor) const override;
@@ -355,7 +363,8 @@ class literal : public expression {
     return scalar.is_valid(stream);
   }
 
-  [[nodiscard]] std::unique_ptr<row_ir::node> accept(row_ir::ast_converter& converter) const override;
+  [[nodiscard]] std::unique_ptr<row_ir::node> accept(
+    row_ir::ast_converter& converter) const override;
 
  private:
   cudf::scalar const& scalar;
@@ -445,7 +454,8 @@ class column_reference : public expression {
     return (table_source == table_reference::LEFT ? left : right).column(column_index).has_nulls();
   }
 
-  [[nodiscard]] std::unique_ptr<row_ir::node> accept(row_ir::ast_converter& converter) const override;
+  [[nodiscard]] std::unique_ptr<row_ir::node> accept(
+    row_ir::ast_converter& converter) const override;
 
  private:
   cudf::size_type column_index;
@@ -513,7 +523,8 @@ class operation : public expression {
                                        table_view const& right,
                                        rmm::cuda_stream_view stream) const override;
 
-  [[nodiscard]] std::unique_ptr<row_ir::node> accept(row_ir::ast_converter& converter) const override;
+  [[nodiscard]] std::unique_ptr<row_ir::node> accept(
+    row_ir::ast_converter& converter) const override;
 
  private:
   ast_operator op;
@@ -558,7 +569,8 @@ class column_name_reference : public expression {
     return true;
   }
 
-  [[nodiscard]] std::unique_ptr<row_ir::node> accept(row_ir::ast_converter& converter) const override;
+  [[nodiscard]] std::unique_ptr<row_ir::node> accept(
+    row_ir::ast_converter& converter) const override;
 
  private:
   std::string column_name;
