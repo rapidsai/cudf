@@ -3,7 +3,6 @@ import datetime
 import decimal
 import hashlib
 import operator
-import re
 from collections import OrderedDict, defaultdict
 
 import cupy as cp
@@ -74,84 +73,6 @@ def test_series_error_equality(sr1, sr2, op):
     gsr2 = cudf.from_pandas(sr2)
 
     assert_exceptions_equal(op, op, ([sr1, sr2],), ([gsr1, gsr2],))
-
-
-@pytest.mark.parametrize(
-    "pd_data",
-    [pd.Series([1, 2, 3]), pd.Series([10, 11, 12], index=[1, 2, 3])],
-)
-@pytest.mark.parametrize(
-    "other",
-    [
-        pd.Series([4, 5, 6]),
-        pd.Series([4, 5, 6, 7, 8]),
-        pd.Series([4, np.nan, 6]),
-        [4, np.nan, 6],
-        {1: 9},
-    ],
-)
-def test_series_update(pd_data, other):
-    data = cudf.Series.from_pandas(pd_data)
-    gs = data.copy(deep=True)
-    if isinstance(other, pd.Series):
-        other = cudf.Series.from_pandas(other, nan_as_null=False)
-        g_other = other.copy(deep=True)
-        p_other = g_other.to_pandas()
-    else:
-        g_other = other
-        p_other = other
-
-    ps = gs.to_pandas()
-
-    ps.update(p_other)
-    gs.update(g_other)
-    assert_eq(gs, ps)
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        [1, None, 11, 2.0, np.nan],
-        [np.nan],
-        [None, None, None],
-        [np.nan, 1, 10, 393.32, np.nan],
-    ],
-)
-@pytest.mark.parametrize("nan_as_null", [True, False])
-@pytest.mark.parametrize("fill_value", [1.2, 332, np.nan])
-def test_fillna_with_nan(data, nan_as_null, fill_value):
-    gs = cudf.Series(data, dtype="float64", nan_as_null=nan_as_null)
-    ps = gs.to_pandas()
-
-    expected = ps.fillna(fill_value)
-    actual = gs.fillna(fill_value)
-
-    assert_eq(expected, actual)
-
-
-def test_fillna_categorical_with_non_categorical_raises():
-    ser = cudf.Series([1, None], dtype="category")
-    with pytest.raises(TypeError):
-        ser.fillna(cudf.Series([1, 2]))
-
-
-def test_fillna_categorical_with_different_categories_raises():
-    ser = cudf.Series([1, None], dtype="category")
-    with pytest.raises(TypeError):
-        ser.fillna(cudf.Series([1, 2]), dtype="category")
-
-
-def test_series_mask_mixed_dtypes_error():
-    s = cudf.Series(["a", "b", "c"])
-    with pytest.raises(
-        TypeError,
-        match=re.escape(
-            "cudf does not support mixed types, please type-cast "
-            "the column of dataframe/series and other "
-            "to same dtypes."
-        ),
-    ):
-        s.where([True, False, True], [1, 2, 3])
 
 
 @pytest.mark.parametrize(
@@ -1725,12 +1646,6 @@ def test_from_pandas_object_dtype_passed_dtype(klass):
     result = klass(pd.Series([True, False], dtype=object), dtype="int8")
     expected = klass(pa.array([1, 0], type=pa.int8()))
     assert_eq(result, expected)
-
-
-def test_series_where_mixed_bool_dtype():
-    s = cudf.Series([True, False, True])
-    with pytest.raises(TypeError):
-        s.where(~s, 10)
 
 
 def test_series_setitem_mixed_bool_dtype():
