@@ -117,7 +117,6 @@ def test_series_value_counts_bins_dropna(bins, dropna):
     assert_eq(expected.sort_index(), got.sort_index(), check_dtype=True)
 
 
-@pytest.mark.parametrize("ascending", [True, False])
 def test_series_value_counts_optional_arguments(ascending, dropna, normalize):
     psr = pd.Series([1.0, 2.0, 2.0, 3.0, 3.0, 3.0, None])
     gsr = cudf.from_pandas(psr)

@@ -311,3 +311,15 @@ def nan_as_null(request):
 def inplace(request):
     """Param for `inplace` argument"""
     return request.param
+
+
+@pytest.fixture(params=[True, False])
+def ignore_index(request):
+    """Param for `ignore_index` argument"""
+    return request.param
+
+
+@pytest.fixture(params=[True, False])
+def ascending(request):
+    """Param for `ascending` argument"""
+    return request.param

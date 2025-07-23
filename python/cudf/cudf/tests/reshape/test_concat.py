@@ -8,12 +8,6 @@ import cudf
 from cudf.testing import assert_eq
 
 
-@pytest.fixture(params=[True, False])
-def ignore_index(request):
-    """Argument for concat"""
-    return request.param
-
-
 @pytest.mark.parametrize(
     "data",
     [

@@ -11,7 +11,6 @@ from cudf.testing import assert_eq
     "data",
     [[[1, 2, 3], None, [4], [], [5, 6]], [1, 2, 3, 4, 5]],
 )
-@pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize(
     "p_index",
     [

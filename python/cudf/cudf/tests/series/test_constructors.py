@@ -131,3 +131,23 @@ def test_nested_series_from_sequence_data(data, klass):
     )
     expected = cudf.Series(data)
     assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        lambda: cp.ones(5, dtype=cp.float16),
+        lambda: np.ones(5, dtype="float16"),
+        lambda: pd.Series([0.1, 1.2, 3.3], dtype="float16"),
+        pytest.param(
+            lambda: pa.array(np.ones(5, dtype="float16")),
+            marks=pytest.mark.xfail(
+                reason="https://issues.apache.org/jira/browse/ARROW-13762"
+            ),
+        ),
+    ],
+)
+def test_series_raises_float16(data):
+    data = data()
+    with pytest.raises(TypeError):
+        cudf.Series(data)

@@ -1,6 +1,5 @@
 # Copyright (c) 2020-2025, NVIDIA CORPORATION.
 import decimal
-import hashlib
 import operator
 from collections import OrderedDict, defaultdict
 
@@ -72,106 +71,6 @@ def test_series_error_equality(sr1, sr2, op):
     gsr2 = cudf.from_pandas(sr2)
 
     assert_exceptions_equal(op, op, ([sr1, sr2],), ([gsr1, gsr2],))
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        cp.ones(5, dtype=cp.float16),
-        np.ones(5, dtype="float16"),
-        pd.Series([0.1, 1.2, 3.3], dtype="float16"),
-        pytest.param(
-            pa.array(np.ones(5, dtype="float16")),
-            marks=pytest.mark.xfail(
-                reason="https://issues.apache.org/jira/browse/ARROW-13762"
-            ),
-        ),
-    ],
-)
-def test_series_raises_float16(data):
-    with pytest.raises(TypeError):
-        cudf.Series(data)
-
-
-@pytest.mark.parametrize(
-    "index",
-    [
-        pd.RangeIndex(0, 3, 1),
-        [3.0, 1.0, np.nan],
-        ["a", "z", None],
-        pd.RangeIndex(4, -1, -2),
-    ],
-)
-@pytest.mark.parametrize("axis", [0, "index"])
-@pytest.mark.parametrize("ascending", [True, False])
-@pytest.mark.parametrize("ignore_index", [True, False])
-@pytest.mark.parametrize("inplace", [True, False])
-@pytest.mark.parametrize("na_position", ["first", "last"])
-def test_series_sort_index(
-    index, axis, ascending, inplace, ignore_index, na_position
-):
-    ps = pd.Series([10, 3, 12], index=index)
-    gs = cudf.from_pandas(ps)
-
-    expected = ps.sort_index(
-        axis=axis,
-        ascending=ascending,
-        ignore_index=ignore_index,
-        inplace=inplace,
-        na_position=na_position,
-    )
-    got = gs.sort_index(
-        axis=axis,
-        ascending=ascending,
-        ignore_index=ignore_index,
-        inplace=inplace,
-        na_position=na_position,
-    )
-
-    if inplace is True:
-        assert_eq(ps, gs, check_index_type=True)
-    else:
-        assert_eq(expected, got, check_index_type=True)
-
-
-@pytest.mark.parametrize(
-    "method", ["md5", "sha1", "sha224", "sha256", "sha384", "sha512"]
-)
-def test_series_hash_values(method):
-    inputs = cudf.Series(
-        [
-            "",
-            "0",
-            "A 56 character string to test message padding algorithm.",
-            "A 63 character string to test message padding algorithm, again.",
-            "A 64 character string to test message padding algorithm, again!!",
-            (
-                "A very long (greater than 128 bytes/char string) to execute "
-                "a multi hash-step data point in the hash function being "
-                "tested. This string needed to be longer."
-            ),
-            "All work and no play makes Jack a dull boy",
-            "!\"#$%&'()*+,-./0123456789:;<=>?@[\\]^_`{|}~",
-            "\x00\x00\x00\x10\x00\x00\x00\x00",
-            "\x00\x00\x00\x00",
-        ]
-    )
-
-    def hashlib_compute_digest(data):
-        hasher = getattr(hashlib, method)()
-        hasher.update(data.encode("utf-8"))
-        return hasher.hexdigest()
-
-    hashlib_validation = inputs.to_pandas().apply(hashlib_compute_digest)
-    validation_results = cudf.Series(hashlib_validation)
-    hash_values = inputs.hash_values(method=method)
-    assert_eq(hash_values, validation_results)
-
-
-def test_series_hash_values_invalid_method():
-    inputs = cudf.Series(["", "0"])
-    with pytest.raises(ValueError):
-        inputs.hash_values(method="invalid_method")
 
 
 def test_set_index_unequal_length():
