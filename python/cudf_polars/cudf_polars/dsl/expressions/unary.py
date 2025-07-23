@@ -16,7 +16,7 @@ from cudf_polars.utils import dtypes
 from cudf_polars.utils.versions import POLARS_VERSION_LT_129
 
 if TYPE_CHECKING:
-    from cudf_polars.containers import DataFrame, DataType
+    from cudf_polars.containers import DataFrame
 
 __all__ = ["Cast", "Len", "UnaryFunction"]
 
@@ -316,12 +316,14 @@ class UnaryFunction(Expr):
             else:
                 evaluated = self.children[1].evaluate(df, context=context)
                 arg = evaluated.obj_scalar if evaluated.is_scalar else evaluated.obj
-            if isinstance(arg, plc.Scalar) and column.dtype.plc != arg.type() and dtypes.can_cast(
+            if isinstance(arg, plc.Scalar) and dtypes.can_cast(
                 column.dtype.plc, arg.type()
             ):  # pragma: no cover
-                arg = plc.unary.cast(
-                    plc.Column.from_scalar(arg, 1), column.dtype.plc
-                ).to_scalar()
+                arg = (
+                    Column(plc.Column.from_scalar(arg, 1), dtype=DataType(arg.type()))
+                    .astype(column.dtype)
+                    .obj.to_scalar()
+                )
             return Column(plc.replace.replace_nulls(column.obj, arg), dtype=self.dtype)
         elif self.name == "as_struct":
             children = [
@@ -373,16 +375,9 @@ class UnaryFunction(Expr):
                 and plc.traits.is_integral(col_type)
                 and plc.types.size_of(col_type) <= 4
             ):
-                plc_col = plc.unary.cast(
-                    plc_col, plc.DataType(plc.TypeId.INT64)
-                )
-            elif (
-                self.name == "cum_sum"
-                and column.dtype.plc.id() == plc.TypeId.BOOL8
-            ):
-                plc_col = plc.unary.cast(
-                    plc_col, plc.DataType(plc.TypeId.UINT32)
-                )
+                plc_col = plc.unary.cast(plc_col, plc.DataType(plc.TypeId.INT64))
+            elif self.name == "cum_sum" and column.dtype.plc.id() == plc.TypeId.BOOL8:
+                plc_col = plc.unary.cast(plc_col, plc.DataType(plc.TypeId.UINT32))
             if self.name == "cum_sum":
                 agg = plc.aggregation.sum()
             elif self.name == "cum_prod":
