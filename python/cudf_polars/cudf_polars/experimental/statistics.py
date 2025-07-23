@@ -104,6 +104,14 @@ def _(
 def _(
     ir: Join, stats: StatsCollector, config_options: ConfigOptions
 ) -> dict[str, ColumnStats]:
+    # Copy column statistics from both the left and right children.
+    # Special cases to consider:
+    #   - If a column name appears in both sides of the join,
+    #     we take it from the "primary" column (right for "Right"
+    #     joins, left for all other joins).
+    #   - If a column name doesn't appear in either child, it
+    #     corresponds to a non-"primary" column with a suffix.
+
     left, right = ir.children
     how = ir.options[0]
     suffix = ir.options[3]
@@ -116,21 +124,15 @@ def _(
     for name in ir.schema:
         if name in primary.schema:
             # "Primary" child stats take preference.
-            column_stats[name] = primary_child_stats.get(
-                name, ColumnStats(name=name)
-            ).copy()
+            column_stats[name] = primary_child_stats[name].copy()
         elif name in other.schema:
             # "Other" column stats apply to everything else.
-            column_stats[name] = other_child_stats.get(
-                name, ColumnStats(name=name)
-            ).copy()
+            column_stats[name] = other_child_stats[name].copy()
         else:
             # If the column name was not in either child table,
-            # a suffix was probably added to a column in "other".
+            # a suffix was added to a column in "other".
             _name = name.removesuffix(suffix)
-            column_stats[name] = other_child_stats.get(
-                _name, ColumnStats(name=name)
-            ).copy(name=name)
+            column_stats[name] = other_child_stats[_name].copy(name=name)
 
     return column_stats
 

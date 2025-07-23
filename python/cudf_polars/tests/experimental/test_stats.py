@@ -276,7 +276,7 @@ def test_base_stats_join(how):
         {
             "xx": range(9),
             "y": [2, 4, 3] * 3,
-            "zz": [1, 2, 3] * 3,
+            "z": [1, 2, 3] * 3,
         }
     )
     q = left.join(right, on="y", how=how)
@@ -285,15 +285,20 @@ def test_base_stats_join(how):
 
     ir_column_stats = stats.column_stats[ir]
     left_count, right_count = 15, 9
-    if how in ("inner", "left"):
+    if how == "left":
         assert ir_column_stats["x"].source_info.row_count.value == left_count
         assert ir_column_stats["y"].source_info.row_count.value == left_count
         assert ir_column_stats["z"].source_info.row_count.value == left_count
-    if how in ("inner", "right"):
+    if how == "inner":
+        assert ir_column_stats["x"].source_info.row_count.value == left_count
+        assert ir_column_stats["y"].source_info.row_count.value == left_count
+        assert ir_column_stats["z"].source_info.row_count.value == left_count
         assert ir_column_stats["xx"].source_info.row_count.value == right_count
-        assert ir_column_stats["zz"].source_info.row_count.value == right_count
+        assert ir_column_stats["z_right"].source_info.row_count.value == right_count
     if how == "right":
+        assert ir_column_stats["xx"].source_info.row_count.value == right_count
         assert ir_column_stats["y"].source_info.row_count.value == right_count
+        assert ir_column_stats["z"].source_info.row_count.value == right_count
 
 
 def test_base_stats_distinct(df):
