@@ -114,7 +114,7 @@ function buildAll {
 }
 
 function buildLibCudfJniInDocker {
-    local cudaVersion="11.8.0"
+    local cudaVersion="12.9.1"
     local imageName="cudf-build:${cudaVersion}-devel-rocky8"
     local CMAKE_GENERATOR="${CMAKE_GENERATOR:-Ninja}"
     local workspaceDir="/rapids"
