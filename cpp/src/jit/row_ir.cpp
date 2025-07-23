@@ -24,10 +24,11 @@ namespace cudf {
 
 namespace row_ir {
 
-std::string cuda_type(data_type type, bool nullable)
+std::string cuda_type(type_info type)
 {
-  auto non_null_type = type_to_name(type);
-  auto type_str = nullable ? std::format("cuda::std::optional<{}>", non_null_type) : non_null_type;
+  auto non_null_type_str = type_to_name(type.type);
+  auto type_str =
+    type.nullable ? std::format("cuda::std::optional<{}>", non_null_type_str) : non_null_type_str;
   return type_str;
 }
 
@@ -36,20 +37,17 @@ std::string instance_context::make_tmp_id()
   return std::format("{}{}", tmp_prefix_, num_tmp_vars_++);
 }
 
-get_input::get_input(int32_t input) : id_(), input_(input), type_(type_id::EMPTY), nullable_() {}
+get_input::get_input(int32_t input) : id_(), input_(input), type_() {}
 
 std::string_view get_input::get_id() { return id_; }
 
-data_type get_input::get_type() { return type_; }
-
-bool get_input::get_nullable() { return nullable_; }
+type_info get_input::get_type() { return type_; }
 
 void get_input::instantiate(instance_context& ctx, instance_info const& info)
 {
   id_               = ctx.make_tmp_id();
   auto const& input = info.inputs[input_];
   type_             = input.type;
-  nullable_         = input.nullable;
 }
 
 std::string get_input::generate_code(instance_context& ctx,
@@ -58,34 +56,25 @@ std::string get_input::generate_code(instance_context& ctx,
 {
   switch (info.id) {
     case target::CUDA: {
-      return std::format(
-        "{} {} = {};", cuda_type(type_, nullable_), id_, instance.inputs[input_].id);
+      return std::format("{} {} = {};", cuda_type(type_), id_, instance.inputs[input_].id);
     }
     default: CUDF_FAIL("Unsupported target: " + std::to_string(static_cast<int>(info.id)));
   }
 }
 
 set_output::set_output(int32_t output, std::unique_ptr<node> source)
-  : id_(),
-    output_(output),
-    source_(std::move(source)),
-    type_(type_id::EMPTY),
-    nullable_(false),
-    output_id_()
+  : id_(), output_(output), source_(std::move(source)), type_(), output_id_()
 {
 }
 
 std::string_view set_output::get_id() { return id_; }
 
-data_type set_output::get_type() { return type_; }
-
-bool set_output::get_nullable() { return nullable_; }
+type_info set_output::get_type() { return type_; }
 
 void set_output::instantiate(instance_context& ctx, instance_info const& info)
 {
   id_        = ctx.make_tmp_id();
   type_      = source_->get_type();
-  nullable_  = source_->get_nullable();
   output_id_ = info.outputs[output_].id;
 }
 
@@ -102,7 +91,7 @@ std::string set_output::generate_code(instance_context& ctx,
 }
 
 operation::operation(opcode op, std::vector<std::unique_ptr<node>> operands)
-  : id_(), op_(op), operands_(std::move(operands)), type_(type_id::EMPTY), nullable_(false)
+  : id_(), op_(op), operands_(std::move(operands)), type_()
 {
   CUDF_EXPECTS(operands.size() == ast::detail::ast_operator_arity(op),
                "Invalid number of arguments for operator.");
@@ -111,9 +100,7 @@ operation::operation(opcode op, std::vector<std::unique_ptr<node>> operands)
 
 std::string_view operation::get_id() { return id_; }
 
-data_type operation::get_type() { return type_; }
-
-bool operation::get_nullable() { return nullable_; }
+type_info operation::get_type() { return type_; }
 
 void operation::instantiate(instance_context& ctx, instance_info const& info)
 {
@@ -124,14 +111,13 @@ void operation::instantiate(instance_context& ctx, instance_info const& info)
   id_ = ctx.make_tmp_id();
   std::vector<data_type> operand_types;
   auto nullable = std::any_of(
-    operands_.begin(), operands_.end(), [](auto const& arg) { return arg->get_nullable(); });
+    operands_.begin(), operands_.end(), [](auto const& arg) { return arg->get_type().nullable; });
 
   for (auto& arg : operands_) {
-    operand_types.emplace_back(arg->get_type());
+    operand_types.emplace_back(arg->get_type().type);
   }
 
-  type_     = ast::detail::ast_operator_return_type(op_, operand_types);
-  nullable_ = nullable;
+  type_ = type_info{ast::detail::ast_operator_return_type(op_, operand_types), nullable};
 }
 
 std::string operation::generate_code(instance_context& ctx,
@@ -149,24 +135,21 @@ std::string operation::generate_code(instance_context& ctx,
     switch (info.id) {
       case target::CUDA: {
         auto first_operand = operands_[0]->get_id();
-        auto operands_str =
-          (operands_.size() == 1)
-            ? std::format("{}", first_operand)
-            : std::format("{}, {}",
-                          first_operand,
-                          std::accumulate(operands_.begin() + 1,
-                                          operands_.end(),
-                                          std::string{},
-                                          [](std::string_view a, auto& node) {
-                                            return std::format("{}, {}", a, node->get_id());
-                                          }));
+        auto operands_str  = (operands_.size() == 1)
+                               ? std::string{first_operand}
+                               : std::accumulate(operands_.begin() + 1,
+                                                operands_.end(),
+                                                std::string{first_operand},
+                                                [](auto const& a, auto& node) {
+                                                  return std::format("{}, {}", a, node->get_id());
+                                                });
 
         auto cuda =
           std::format("{} {} = cudf::ast::operator_functor<cudf::ast::ast_operator::{}, {}>({});",
-                      cuda_type(type_, nullable_),
+                      cuda_type(type_),
                       id_,
                       ast::detail::ast_operator_string(op_),
-                      nullable_,
+                      type_.nullable,
                       operands_str);
         return cuda;
       }
@@ -224,7 +207,7 @@ void ast_converter::add_input_var(ast_column_input_spec const& in,
   // TODO: mangle column name to make debugging easier
   auto id   = std::format("in_{}", input_vars_.size());
   auto type = args.table.column(in.column).type();
-  input_vars_.emplace_back(std::move(id), type, nullable);
+  input_vars_.emplace_back(std::move(id), type_info{type, nullable});
 }
 
 void ast_converter::add_input_var(ast_named_column_input_spec const& in,
@@ -244,7 +227,7 @@ void ast_converter::add_input_var(ast_scalar_input_spec const& in,
 {
   auto id   = std::format("in_{}", input_vars_.size());
   auto type = in.scalar.get().type();
-  input_vars_.emplace_back(std::move(id), type, nullable);
+  input_vars_.emplace_back(std::move(id), type_info{type, nullable});
 }
 
 void ast_converter::add_output_var()
@@ -295,6 +278,29 @@ column_view get_column_view(ast_scalar_input_spec const& spec, ast_args const& a
   return spec.broadcast_column->view();
 }
 
+bool map_copy_mask(ast_column_input_spec const& spec,
+                   ast_args const&,
+                   std::vector<bool> const& copy_mask)
+{
+  CUDF_EXPECTS(spec.table == ast::table_reference::LEFT, "Table reference must be LEFT");
+  return copy_mask[spec.column];
+}
+
+bool map_copy_mask(ast_named_column_input_spec const& spec,
+                   ast_args const& args,
+                   std::vector<bool> const& copy_mask)
+{
+  auto column_index_iter = args.table_column_names.find(spec.name);
+  CUDF_EXPECTS(column_index_iter != args.table_column_names.end(),
+               "Column name not found in table.");
+  return copy_mask[column_index_iter->second];
+}
+
+bool map_copy_mask(ast_scalar_input_spec const&, ast_args const&, std::vector<bool> const&)
+{
+  return false;  // AST Scalars do not have a copy mask
+}
+
 void ast_converter::generate_code(target target_id,
                                   ast::expression const& expr,
                                   bool null_aware,
@@ -333,16 +339,15 @@ void ast_converter::generate_code(target target_id,
     case target::CUDA: {
       {
         auto output_decl = [&](size_t i) {
-          auto const& var      = output_vars_[i];
-          auto const& ir       = output_irs_[i];
-          auto output_type     = ir->get_type();
-          auto output_nullable = ir->get_nullable();
-          return std::format("{} * {}", cuda_type(output_type, output_nullable), var.id);
+          auto const& var  = output_vars_[i];
+          auto const& ir   = output_irs_[i];
+          auto output_type = ir->get_type();
+          return std::format("{} * {}", cuda_type(output_type), var.id);
         };
 
         auto input_decl = [&](size_t i) {
           auto const& var = input_vars_[i];
-          return std::format("{} {}", cuda_type(var.type, var.nullable), var.id);
+          return std::format("{} {}", cuda_type(var.type), var.id);
         };
 
         std::vector<std::string> params_decls;
@@ -355,17 +360,18 @@ void ast_converter::generate_code(target target_id,
           params_decls.push_back(output_decl(i));
         }
 
-        auto params_decl =
-          (params_decls.size() == 1)
-            ? params_decls[0]
-            : std::format("{} , {}",
-                          params_decls[0],
-                          std::accumulate(params_decls.begin() + 1,
-                                          params_decls.end(),
-                                          params_decls[0],
-                                          [](std::string_view a, std::string_view b) {
-                                            return std::format("{}, {}", a, b);
-                                          }));
+        std::string params_decl;
+
+        if (params_decls.empty()) {
+        } else if (params_decls.size() == 1) {
+          params_decl = params_decls[0];
+        } else {
+          params_decl = std::accumulate(
+            params_decls.begin() + 1,
+            params_decls.end(),
+            params_decls[0],
+            [](auto const& a, auto const& b) { return std::format("{}, {}", a, b); });
+        }
 
         code_ = std::format(
           R"***(
@@ -383,6 +389,9 @@ return;
     default: CUDF_FAIL("Unsupported target: " + std::to_string(static_cast<int>(target.id)));
   }
 }
+
+// Due to the AST expression tree structure, we can't generate the IR without the target
+// tables
 
 transform_result ast_converter::compute_column(target target_id,
                                                ast::expression const& expr,
@@ -410,11 +419,13 @@ transform_result ast_converter::compute_column(target target_id,
 
   auto output_column_type = output_irs_[0]->get_type();
 
+  transform_result transform{
+    transform_args{std::move(columns), std::move(code_), output_column_type.type, false},
+    std::move(scalar_columns)};
+
   clear();
 
-  return transform_result{
-    transform_args{std::move(columns), std::move(code_), output_column_type, false},
-    std::move(scalar_columns)};
+  return transform;
 }
 
 filter_result ast_converter::filter(target target_id,
@@ -428,36 +439,43 @@ filter_result ast_converter::filter(target target_id,
   clear();
   generate_code(target_id, expr, null_aware, args, stream, resource_ref);
 
-  CUDF_EXPECTS(output_irs_[0]->get_type() == data_type{type_id::BOOL8},
+  CUDF_EXPECTS(output_irs_[0]->get_type().type == data_type{type_id::BOOL8},
                "Filter expression must return a boolean type.");
+  CUDF_EXPECTS(!output_irs_[0]->get_type().nullable,
+               "Filter expression must return a non-nullable boolean type.");
 
   std::vector<column_view> columns;
   std::vector<std::unique_ptr<column>> scalar_columns;
-  std::optional<std::vector<bool>> copy_mask = std::nullopt;
+  std::vector<bool> copy_mask;
 
   for (auto& input : input_specs_) {
     auto column_view =
       dispatch_input_spec(input, [](auto&... args) { return get_column_view(args...); }, args);
     columns.push_back(column_view);
 
+    // move the scalar broadcast column so the user can make it live long enough
+    // to be used in the filter result.
     if (std::holds_alternative<ast_scalar_input_spec>(input)) {
       auto& scalar_input = std::get<ast_scalar_input_spec>(input);
       scalar_columns.push_back(std::move(scalar_input.broadcast_column));
     }
 
+    // if the table_copy_mask is provided, we need to extract the copy mask for each input
     if (table_copy_mask.has_value()) {
-      // remap to the input vars
-      // copy_mask = is_column && copy_mask@input_var.index :
+      copy_mask.push_back(dispatch_input_spec(
+        input, [](auto&... args) { return map_copy_mask(args...); }, args, *table_copy_mask));
+    } else {
+      copy_mask.push_back(true);
     }
   }
 
-  clear();
-
-  // [ ] fix
-
-  return filter_result{
+  filter_result filter{
     filter_args{std::move(columns), std::move(code_), false, std::nullopt, copy_mask},
     std::move(scalar_columns)};
+
+  clear();
+
+  return filter;
 }
 
 }  // namespace row_ir

@@ -29,54 +29,95 @@ namespace CUDF_EXPORT cudf {
 /// @brief CUDF's IR for row-wise columnar operations
 namespace row_ir {
 
-enum class target { CUDA = 0 };
+/// @brief The target for which the IR is generated.
+enum class target {
+  CUDA = 0  /// < CUDA C++
+};
 
-struct instance_context;
+/// @brief The type information of the variable used in the IR.
+struct type_info {
+  data_type type = data_type{type_id::EMPTY};  ///< The data type of the variable
+  bool nullable  = false;                      ///< Whether the variable is nullable
+};
 
+/// @brief The information about the variable used in the IR.
 struct var_info {
-  std::string id = {};
-  data_type type = data_type{type_id::EMPTY};
-  bool nullable  = false;
+  std::string id = {};  ///< The variable identifier
+  type_info type = {};  ///< The type information of the variable
 };
 
+/// @brief The information about the variable used in the IR without type information. The type
+/// information is auto-deduced from an IR node.
 struct untyped_var_info {
-  std::string id = {};
+  std::string id = {};  ///< The variable identifier
 };
 
+/// @brief The information needed to instantiate the IR nodes
 struct instance_info {
-  std::span<var_info const> inputs;
-  std::span<untyped_var_info const> outputs;
+  std::span<var_info const> inputs;           ///< The input variables
+  std::span<untyped_var_info const> outputs;  ///< The output variables
 };
 
+/// @brief The information about the target for which the IR is generated.
 struct target_info {
-  target id = target::CUDA;
+  target id = target::CUDA;  ///< The target identifier
 };
 
+/// @brief The context within which the IR is instantiated.
+/// This context is used to generate temporary variable identifiers and any state setup needed for
+/// the IR instantiation.
 struct instance_context {
  private:
-  int32_t num_tmp_vars_   = 0;
-  std::string tmp_prefix_ = "tmp_";
+  int32_t num_tmp_vars_   = 0;       ///< The number of temporary variables generated
+  std::string tmp_prefix_ = "tmp_";  ///< The prefix for temporary variable identifiers
 
  public:
-  instance_context()                                   = default;
-  instance_context(instance_context const&)            = default;
-  instance_context& operator=(instance_context const&) = default;
-  instance_context(instance_context&&)                 = default;
-  instance_context& operator=(instance_context&&)      = default;
-  ~instance_context()                                  = default;
+  /// @brief Default constructor
+  instance_context() = default;
 
+  instance_context(instance_context const&) = delete;
+
+  instance_context& operator=(instance_context const&) = delete;
+
+  /// @brief Move constructor
+  instance_context(instance_context&&) = default;
+
+  /// @brief Move assignment operator
+  /// @return A reference to this instance
+  instance_context& operator=(instance_context&&) = default;
+
+  /// @brief Destructor
+  ~instance_context() = default;
+
+  /// @brief Generate a globally unique temporary variable identifier
+  /// @return A unique temporary variable identifier
   std::string make_tmp_id();
 };
 
+/// @brief The base class for all IR nodes.
+/// This class defines the interface for IR nodes, which can be instantiated and generate code.
+/// Each IR node represents a specific operation or value in the IR.
+/// They each represent a single-static-assignment (SSA) variable in the program IR.
 struct node {
+  /// @brief Get the identifier of the IR node
+  /// @return The identifier of the IR node
   virtual std::string_view get_id() = 0;
 
-  virtual data_type get_type() = 0;
+  /// @brief Get the type info of the IR node
+  /// @return The type information of the IR node
+  virtual type_info get_type() = 0;
 
-  virtual bool get_nullable() = 0;
-
+  /// @brief Instantiate the IR node with the given context and instance information, setting up any
+  /// necessary state and preprocessing needed for code generation.
+  /// @param ctx The context within which the IR is instantiated
+  /// @param info The instance information
   virtual void instantiate(instance_context& ctx, instance_info const& info) = 0;
 
+  /// @brief Generate the code for the IR node based on the instance context and target information.
+  /// @param ctx The context within which the IR is instantiated
+  /// @param info The target information
+  /// @param instance The instance information
+  /// @return The generated code for the IR node
   virtual std::string generate_code(instance_context& ctx,
                                     target_info const& info,
                                     instance_info const& instance) = 0;
@@ -84,174 +125,227 @@ struct node {
   virtual ~node() = 0;
 };
 
+/// @brief The operation code used in the IR nodes.
 using opcode = ast::ast_operator;
 
+/// @brief An IR node that retrieves an input variable by its index.
+/// This node is used to access input variables in the IR.
 struct get_input final : node {
  private:
-  std::string id_;
-  int32_t input_;
-  data_type type_;
-  bool nullable_;
+  std::string id_;  ///< The identifier of the IR node
+  int32_t input_;   ///< The index of the input variable
+  type_info type_;  ///< The type information of the IR node
 
  public:
+  /// @brief Construct a new get_input IR node
+  /// @param input The index of the input variable
   get_input(int32_t input);
 
   get_input(get_input const&) = delete;
 
   get_input& operator=(get_input const&) = delete;
 
+  /// @brief Move constructor
   get_input(get_input&&) = default;
 
+  /// @brief Move assignment operator
+  /// @return A reference to this instance
   get_input& operator=(get_input&&) = default;
 
+  /// @brief Destructor
   ~get_input() override = default;
 
+  /// @copydoc node::get_id
   std::string_view get_id() override;
 
-  data_type get_type() override;
+  /// @copydoc node::get_type
+  type_info get_type() override;
 
-  bool get_nullable() override;
-
+  /// @copydoc node::instantiate
   void instantiate(instance_context& ctx, instance_info const& info) override;
 
+  /// @copydoc node::generate_code
   std::string generate_code(instance_context& ctx,
                             target_info const& info,
                             instance_info const& instance) override;
 };
 
+/// @brief An IR node that sets the output variable to the value of a source IR node.
 struct set_output final : node {
  private:
-  std::string id_;
-  int32_t output_;
-  std::unique_ptr<node> source_;
-  data_type type_;
-  bool nullable_;
-  std::string output_id_;
+  std::string id_;                ///< The identifier of the IR node
+  int32_t output_;                ///< The index of the output variable
+  std::unique_ptr<node> source_;  ///< The source IR node from which the value is taken
+  type_info type_;                ///< The type information of the IR node
+  std::string output_id_;         ///< The identifier of the output variable
 
  public:
+  /// @brief Construct a new set_output IR node
+  /// @param output The index of the output variable
+  /// @param source The source IR node from which the value is taken
   set_output(int32_t output, std::unique_ptr<node> source);
 
   set_output(set_output const&) = delete;
 
   set_output& operator=(set_output const&) = delete;
 
+  /// @brief Move constructor
   set_output(set_output&&) = default;
 
+  /// @brief Move assignment operator
+  /// @return A reference to this instance
   set_output& operator=(set_output&&) = default;
 
+  /// @brief Destructor
   ~set_output() override = default;
 
+  /// @copydoc node::get_id
   std::string_view get_id() override;
 
-  data_type get_type() override;
+  /// @copydoc node::get_type
+  type_info get_type() override;
 
-  bool get_nullable() override;
-
+  /// @copydoc node::instantiate
   void instantiate(instance_context& ctx, instance_info const& info) override;
 
+  /// @copydoc node::generate_code
   std::string generate_code(instance_context& ctx,
                             target_info const& info,
                             instance_info const& instance) override;
 };
 
+/// @brief An IR node that represents an operation with zero or more operands.
 struct operation final : node {
  private:
-  std::string id_;
-  opcode op_;
-  std::vector<std::unique_ptr<node>> operands_;
-  data_type type_;
-  bool nullable_;
+  std::string id_;                               ///< The identifier of the IR node
+  opcode op_;                                    ///< The operation code
+  std::vector<std::unique_ptr<node>> operands_;  ///< The operands of the operation
+  type_info type_;                               ///< The type information of the IR node
 
  public:
+  /// @brief Construct a new operation IR node
+  /// @param op The operation code
+  /// @param operands The operands of the operation
   operation(opcode op, std::vector<std::unique_ptr<node>> operands);
 
   operation(operation const&) = delete;
 
   operation& operator=(operation const&) = delete;
 
+  /// @brief Move constructor
   operation(operation&&) = default;
 
+  /// @brief Move assignment operator
+  /// @return A reference to this instance
   operation& operator=(operation&&) = default;
 
+  /// @brief Destructor
   ~operation() override = default;
 
+  /// @copydoc node::get_id
   std::string_view get_id() override;
 
-  data_type get_type() override;
+  /// @copydoc node::get_type
+  type_info get_type() override;
 
-  bool get_nullable() override;
-
+  /// @copydoc node::instantiate
   void instantiate(instance_context& ctx, instance_info const& info) override;
 
+  /// @copydoc node::generate_code
   std::string generate_code(instance_context& ctx,
                             target_info const& info,
                             instance_info const& instance) override;
 };
 
+/// @brief A specification of an input column to the AST
 struct ast_column_input_spec {
-  ast::table_reference table = {};
-  int32_t column             = 0;
+  ast::table_reference table = {};  ///< The table reference (LEFT or RIGHT)
+  int32_t column             = 0;   ///< The column index in the referenced table
 };
 
+/// @brief A specification of an input column to the AST with a name
+/// This is used to refer to columns by their names in the table metadata.
 struct ast_named_column_input_spec {
-  std::string name = {};
+  std::string name = {};  ///< The name of the column in the table metadata
 };
 
+/// @brief A specification of an input scalar to the AST
 struct ast_scalar_input_spec {
-  std::reference_wrapper<scalar const> scalar;
-  ast::generic_scalar_device_view value;
-  std::unique_ptr<column> broadcast_column = nullptr;
+  std::reference_wrapper<scalar const> scalar;  ///< The scalar value
+  ast::generic_scalar_device_view value;        ///< The device view of the scalar value
+  std::unique_ptr<column> broadcast_column =
+    nullptr;  ///< The broadcasted column, a column of size 1
 };
 
+/// @brief A type-erased input specification for the AST
 using ast_input_spec =
   std::variant<ast_column_input_spec, ast_named_column_input_spec, ast_scalar_input_spec>;
 
+/// @brief The arguments needed to invoke a `cudf::transform`
 struct transform_args {
-  std::vector<column_view> columns = {};
-  std::string transform_udf        = {};
-  data_type output_type            = data_type{type_id::EMPTY};
-  bool is_ptx                      = false;
-  std::optional<void*> user_data   = std::nullopt;
+  std::vector<column_view> columns = {};  ///< The input columns to the transform
+  std::string transform_udf        = {};  ///< The user-defined function to apply
+  data_type output_type          = data_type{type_id::EMPTY};  ///< The output type of the transform
+  bool is_ptx                    = false;         ///< Whether the transform is a PTX kernel
+  std::optional<void*> user_data = std::nullopt;  ///< User data to pass to the transform
 };
 
+/// @brief The result of converting an AST `compute_column` expression to a `cudf::transform`
 struct transform_result {
-  transform_args args                                 = {};
-  std::vector<std::unique_ptr<column>> scalar_columns = {};
+  transform_args args = {};  ///< The arguments needed to invoke the transform
+  std::vector<std::unique_ptr<column>> scalar_columns =
+    {};  ///< The scalar columns created during the expression conversion
 };
 
+/// @brief The arguments needed to invoke a `cudf::filter`
 struct filter_args {
-  std::vector<column_view> columns           = {};
-  std::string predicate_udf                  = {};
-  bool is_ptx                                = false;
-  std::optional<void*> user_data             = std::nullopt;
-  std::optional<std::vector<bool>> copy_mask = std::nullopt;
+  std::vector<column_view> columns = {};     ///< The input columns to the filter
+  std::string predicate_udf        = {};     ///< The user-defined function to apply as a predicate
+  bool is_ptx                      = false;  ///< Whether the filter is a PTX device function
+  std::optional<void*> user_data   = std::nullopt;  ///< User data to pass to the filter
+  std::optional<std::vector<bool>> copy_mask =
+    std::nullopt;  ///< Optional copy mask to apply to the filter
 };
 
+/// @brief The result of converting a `filter` expression to a `cudf::filter`
 struct filter_result {
-  filter_args args                                    = {};
-  std::vector<std::unique_ptr<column>> scalar_columns = {};
+  filter_args args = {};  ///< The arguments needed to invoke the filter
+  std::vector<std::unique_ptr<column>> scalar_columns =
+    {};  ///< The scalar columns created during the expression conversion
 };
 
+/// @brief The AST input column arguments used to resolve the column expressions
 struct ast_args {
-  table_view table                                  = {};
-  std::map<std::string, int32_t> table_column_names = {};
+  table_view table = {};  ///< The table view containing the columns
+  std::map<std::string, int32_t> table_column_names =
+    {};  ///< The mapping of column names to their indices in the table
 };
 
+/// @brief A converter that converts AST expressions to IR nodes and CUDA UDFs.
 struct ast_converter {
  private:
-  std::vector<ast_input_spec> input_specs_;              // the input refs for the AST
-  std::vector<var_info> input_vars_;                     // the input variables for the IR
-  std::vector<untyped_var_info> output_vars_;            // the output variables for the IR
-  std::vector<std::unique_ptr<set_output>> output_irs_;  // the output IR nodes
-  std::string code_;                                     // the generated code for the IR
+  std::vector<ast_input_spec> input_specs_;              ///< The input specs for the AST
+  std::vector<var_info> input_vars_;                     ///< The input variables for the IR
+  std::vector<untyped_var_info> output_vars_;            ///< The output variables for the IR
+  std::vector<std::unique_ptr<set_output>> output_irs_;  ///< The output IR nodes
+  std::string code_;                                     ///< The generated code for the IR
 
  public:
-  ast_converter()                                = default;
+  /// @brief Default constructor
+  ast_converter() = default;
+
   ast_converter(ast_converter const&)            = delete;
   ast_converter& operator=(ast_converter const&) = delete;
-  ast_converter(ast_converter&&)                 = default;
-  ast_converter& operator=(ast_converter&&)      = default;
-  ~ast_converter()                               = default;
+
+  /// @brief Move constructor
+  ast_converter(ast_converter&&) = default;
+
+  /// @brief Move assignment operator
+  /// @return A reference to this instance
+  ast_converter& operator=(ast_converter&&) = default;
+
+  /// @brief Destructor
+  ~ast_converter() = default;
 
  private:
   friend class ast::literal;
@@ -290,8 +384,14 @@ struct ast_converter {
                      rmm::device_async_resource_ref const& resource_ref);
 
  public:
-  // Due to the AST expression tree structure, we can't generate the IR without the target
-  // tables
+  /// @brief Convert an AST `compute_column` expression to a `cudf::transform`
+  /// @param target The target for which the IR is generated
+  /// @param expr The AST expression to convert
+  /// @param null_aware Whether to use null-aware operators
+  /// @param args The arguments needed to resolve the AST expression
+  /// @param stream The CUDA stream to use for device memory operations and kernel launches
+  /// @param resource_ref The device async resource reference for the operation
+  /// @return The result of the conversion, containing the transform arguments and scalar columns
   transform_result compute_column(target target,
                                   ast::expression const& expr,
                                   bool null_aware,
@@ -299,6 +399,15 @@ struct ast_converter {
                                   rmm::cuda_stream_view stream,
                                   rmm::device_async_resource_ref const& resource_ref);
 
+  /// @brief Convert an AST `filter` expression to a `cudf::filter`
+  /// @param target The target for which the IR is generated
+  /// @param expr The AST expression to convert
+  /// @param null_aware Whether to use null-aware operators
+  /// @param args The arguments needed to resolve the AST expression
+  /// @param table_copy_mask Optional copy mask to apply to the filter
+  /// @param stream The CUDA stream to use for device memory operations and kernel launches
+  /// @param resource_ref The device async resource reference for the operation
+  /// @return The result of the conversion, containing the filter arguments and scalar columns
   filter_result filter(target target,
                        ast::expression const& expr,
                        bool null_aware,
