@@ -151,3 +151,14 @@ def test_series_raises_float16(data):
     data = data()
     with pytest.raises(TypeError):
         cudf.Series(data)
+
+
+@pytest.mark.parametrize(
+    "data", [[True, False, None, True, False], [None, None], []]
+)
+@pytest.mark.parametrize("bool_dtype", ["bool", "boolean", pd.BooleanDtype()])
+def test_nullable_bool_dtype_series(data, bool_dtype):
+    psr = pd.Series(data, dtype=pd.BooleanDtype())
+    gsr = cudf.Series(data, dtype=bool_dtype)
+
+    assert_eq(psr, gsr.to_pandas(nullable=True))

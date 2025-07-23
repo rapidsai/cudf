@@ -51,3 +51,9 @@ def test_series_size(data):
     gsr = cudf.Series(data)
 
     assert_eq(psr.size, gsr.size)
+
+
+def test_set_index_unequal_length():
+    s = cudf.Series(dtype="float64")
+    with pytest.raises(ValueError):
+        s.index = [1, 2, 3]
