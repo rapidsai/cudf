@@ -194,3 +194,49 @@ def set_decomp_env_vars(monkeypatch, request):
         for key, value in env_vars.items():
             m.setenv(key, value)
         yield
+
+
+signed_integer_types = ["int8", "int16", "int32", "int64"]
+unsigned_integer_types = ["uint8", "uint16", "uint32", "uint64"]
+float_types = ["float32", "float64"]
+
+
+@pytest.fixture(params=signed_integer_types + unsigned_integer_types)
+def integer_types_as_str(request):
+    """
+    - "int8", "int16", "int32", "int64"
+    - "uint8", "uint16", "uint32", "uint64"
+    """
+    return request.param
+
+
+@pytest.fixture(
+    params=signed_integer_types + unsigned_integer_types + float_types
+)
+def numeric_types_as_str(request):
+    """
+    - "int8", "int16", "int32", "int64"
+    - "uint8", "uint16", "uint32", "uint64"
+    - "float32", "float64"
+    """
+    return request.param
+
+
+@pytest.fixture(
+    params=[
+        "min",
+        "max",
+        "sum",
+        "product",
+        "quantile",
+        "all",
+        "any",
+        "std",
+        "var",
+        "median",
+        "kurtosis",
+        "skew",
+    ]
+)
+def reduction_methods(request):
+    return request.param
