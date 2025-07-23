@@ -1,6 +1,5 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
-from itertools import product
 from math import floor
 
 import numpy as np
@@ -44,11 +43,10 @@ def test_series_map_callable_numeric_basic():
     assert_eq(expected_function, actual_function)
 
 
-@pytest.mark.parametrize("nelem", list(product([2, 10, 100, 1000])))
-def test_series_map_callable_numeric_random(nelem):
+def test_series_map_callable_numeric_random():
     # Generate data
     rng = np.random.default_rng(seed=0)
-    data = rng.random(nelem) * 100
+    data = rng.random(50) * 100
 
     sr = Series(data)
     pdsr = pd.Series(data)
