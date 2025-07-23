@@ -18,6 +18,7 @@
 
 #include "cudf/io/text/byte_range_info.hpp"
 #include "hybrid_scan_helpers.hpp"
+#include "io/parquet/reader_impl_chunking_utils.cuh"
 
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/transform.hpp>
@@ -225,8 +226,59 @@ hybrid_scan_reader_impl::filter_row_groups_with_dictionary_pages(
 
   select_columns(read_mode::FILTER_COLUMNS, options);
 
-  return _metadata->filter_row_groups_with_dictionary_pages(
-    {}, {}, row_group_indices, {}, {}, {}, options.get_filter().value(), stream);
+  table_metadata metadata;
+  populate_metadata(metadata);
+  auto expr_conv = named_to_reference_converter(options.get_filter(), metadata);
+  CUDF_EXPECTS(expr_conv.get_converted_expr().has_value(),
+               "Columns names in filter expression must be convertible to index references");
+  auto output_dtypes = get_output_types(_output_buffers_template);
+
+  // Collect literal and operator pairs for each input column with an (in)equality predicate
+  auto const [literals, operators] =
+    dictionary_literals_collector{expr_conv.get_converted_expr().value().get(),
+                                  static_cast<cudf::size_type>(output_dtypes.size())}
+      .get_literals_and_operators();
+
+  // Return all row groups if no dictionary page filtering is needed
+  if (literals.empty() or std::all_of(literals.begin(), literals.end(), [](auto& col_literals) {
+        return col_literals.empty();
+      })) {
+    return std::vector<std::vector<size_type>>(row_group_indices.begin(), row_group_indices.end());
+  }
+
+  // Collect schema indices of input columns with a non-empty (in)equality literal/operator vector
+  std::vector<cudf::size_type> dictionary_col_schemas;
+  thrust::copy_if(thrust::host,
+                  _output_column_schemas.begin(),
+                  _output_column_schemas.end(),
+                  literals.begin(),
+                  std::back_inserter(dictionary_col_schemas),
+                  [](auto& dict_literals) { return not dict_literals.empty(); });
+
+  // Prepare column chunks and dictionary page headers filtering
+  auto [has_compressed_data, chunks, pages] = prepare_dictionaries(
+    row_group_indices, dictionary_page_data, dictionary_col_schemas, options, stream);
+
+  // Decompress dictionary pages if needed and store uncompressed buffers here
+  auto const mr                          = cudf::get_current_device_resource_ref();
+  auto decompressed_dictionary_page_data = std::optional<rmm::device_buffer>{};
+  if (has_compressed_data) {
+    // Use the `decompress_page_data` utility to decompress dictionary pages (passed as pass_pages)
+    decompressed_dictionary_page_data =
+      std::get<0>(parquet::detail::decompress_page_data(chunks, pages, {}, {}, stream, mr));
+    pages.host_to_device_async(stream);
+  }
+
+  // Filter row groups using dictionary pages
+  return _metadata->filter_row_groups_with_dictionary_pages(chunks,
+                                                            pages,
+                                                            row_group_indices,
+                                                            literals,
+                                                            operators,
+                                                            output_dtypes,
+                                                            dictionary_col_schemas,
+                                                            expr_conv.get_converted_expr().value(),
+                                                            stream);
 }
 
 std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_with_bloom_filters(
@@ -262,7 +314,29 @@ hybrid_scan_reader_impl::filter_data_pages_with_stats(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  return {};
+  CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
+  CUDF_EXPECTS(options.get_filter().has_value(), "Encountered empty converted filter expression");
+
+  select_columns(read_mode::FILTER_COLUMNS, options);
+
+  table_metadata metadata;
+  populate_metadata(metadata);
+  auto expr_conv = named_to_reference_converter(options.get_filter(), metadata);
+  CUDF_EXPECTS(expr_conv.get_converted_expr().has_value(),
+               "Columns names in filter expression must be convertible to index references");
+  auto output_dtypes = get_output_types(_output_buffers_template);
+
+  auto row_mask = _metadata->filter_data_pages_with_stats(row_group_indices,
+                                                          output_dtypes,
+                                                          _output_column_schemas,
+                                                          expr_conv.get_converted_expr().value(),
+                                                          stream,
+                                                          mr);
+
+  auto data_page_mask = _metadata->compute_data_page_mask(
+    row_mask->view(), row_group_indices, output_dtypes, _output_column_schemas, stream);
+
+  return {std::move(row_mask), std::move(data_page_mask)};
 }
 
 std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>

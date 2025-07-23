@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,7 +47,7 @@ template <typename Source, aggregation::Kind k>
 using underlying_source_t =
   cuda::std::conditional_t<uses_underlying_type<k>(), cudf::device_storage_type_t<Source>, Source>;
 
-template <typename Source, aggregation::Kind k, typename Enable = void>
+template <typename Source, aggregation::Kind k>
 struct update_target_element {
   __device__ void operator()(mutable_column_device_view,
                              size_type,
@@ -59,11 +59,9 @@ struct update_target_element {
 };
 
 template <typename Source>
-struct update_target_element<
-  Source,
-  aggregation::MIN,
-  cuda::std::enable_if_t<is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
-                         !is_fixed_point<Source>()>> {
+  requires(is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
+           !is_fixed_point<Source>())
+struct update_target_element<Source, aggregation::MIN> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -72,17 +70,12 @@ struct update_target_element<
     using Target = target_type_t<Source, aggregation::MIN>;
     cudf::detail::atomic_min(&target.element<Target>(target_index),
                              static_cast<Target>(source.element<Source>(source_index)));
-
-    if (target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
 
 template <typename Source>
-struct update_target_element<
-  Source,
-  aggregation::MIN,
-  cuda::std::enable_if_t<is_fixed_point<Source>() &&
-                         cudf::has_atomic_support<device_storage_type_t<Source>>()>> {
+  requires(is_fixed_point<Source>() && cudf::has_atomic_support<device_storage_type_t<Source>>())
+struct update_target_element<Source, aggregation::MIN> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -94,17 +87,13 @@ struct update_target_element<
 
     cudf::detail::atomic_min(&target.element<DeviceTarget>(target_index),
                              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
-
-    if (target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
 
 template <typename Source>
-struct update_target_element<
-  Source,
-  aggregation::MAX,
-  cuda::std::enable_if_t<is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
-                         !is_fixed_point<Source>()>> {
+  requires(is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
+           !is_fixed_point<Source>())
+struct update_target_element<Source, aggregation::MAX> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -113,17 +102,12 @@ struct update_target_element<
     using Target = target_type_t<Source, aggregation::MAX>;
     cudf::detail::atomic_max(&target.element<Target>(target_index),
                              static_cast<Target>(source.element<Source>(source_index)));
-
-    if (target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
 
 template <typename Source>
-struct update_target_element<
-  Source,
-  aggregation::MAX,
-  cuda::std::enable_if_t<is_fixed_point<Source>() &&
-                         cudf::has_atomic_support<device_storage_type_t<Source>>()>> {
+  requires(is_fixed_point<Source>() && cudf::has_atomic_support<device_storage_type_t<Source>>())
+struct update_target_element<Source, aggregation::MAX> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -135,17 +119,13 @@ struct update_target_element<
 
     cudf::detail::atomic_max(&target.element<DeviceTarget>(target_index),
                              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
-
-    if (target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
 
 template <typename Source>
-struct update_target_element<
-  Source,
-  aggregation::SUM,
-  cuda::std::enable_if_t<cudf::is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
-                         !cudf::is_fixed_point<Source>() && !cudf::is_timestamp<Source>()>> {
+  requires(cudf::is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
+           !cudf::is_fixed_point<Source>() && !cudf::is_timestamp<Source>())
+struct update_target_element<Source, aggregation::SUM> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -154,17 +134,12 @@ struct update_target_element<
     using Target = target_type_t<Source, aggregation::SUM>;
     cudf::detail::atomic_add(&target.element<Target>(target_index),
                              static_cast<Target>(source.element<Source>(source_index)));
-
-    if (target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
 
 template <typename Source>
-struct update_target_element<
-  Source,
-  aggregation::SUM,
-  cuda::std::enable_if_t<is_fixed_point<Source>() &&
-                         cudf::has_atomic_support<device_storage_type_t<Source>>()>> {
+  requires(is_fixed_point<Source>() && cudf::has_atomic_support<device_storage_type_t<Source>>())
+struct update_target_element<Source, aggregation::SUM> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -176,8 +151,6 @@ struct update_target_element<
 
     cudf::detail::atomic_add(&target.element<DeviceTarget>(target_index),
                              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
-
-    if (target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
 
@@ -190,23 +163,21 @@ struct update_target_element<
  *
  */
 struct update_target_from_dictionary {
-  template <typename Source,
-            aggregation::Kind k,
-            cuda::std::enable_if_t<!is_dictionary<Source>()>* = nullptr>
+  template <typename Source, aggregation::Kind k>
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
                              size_type source_index) const noexcept
+    requires(!is_dictionary<Source>())
   {
     update_target_element<Source, k>{}(target, target_index, source, source_index);
   }
-  template <typename Source,
-            aggregation::Kind k,
-            cuda::std::enable_if_t<is_dictionary<Source>()>* = nullptr>
+  template <typename Source, aggregation::Kind k>
   __device__ void operator()(mutable_column_device_view,
                              size_type,
                              column_device_view,
                              size_type) const noexcept
+    requires(is_dictionary<Source>())
   {
   }
 };
@@ -223,11 +194,9 @@ struct update_target_from_dictionary {
  * `update_target_element( target, target_index, source.keys(), source.indices()[source_index] )`
  */
 template <aggregation::Kind k>
-struct update_target_element<
-  dictionary32,
-  k,
-  cuda::std::enable_if_t<not(k == aggregation::ARGMIN or k == aggregation::ARGMAX or
-                             k == aggregation::COUNT_VALID or k == aggregation::COUNT_ALL)>> {
+  requires(not(k == aggregation::ARGMIN or k == aggregation::ARGMAX or
+               k == aggregation::COUNT_VALID or k == aggregation::COUNT_ALL))
+struct update_target_element<dictionary32, k> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -245,9 +214,8 @@ struct update_target_element<
 };
 
 template <typename Source>
-struct update_target_element<Source,
-                             aggregation::SUM_OF_SQUARES,
-                             cuda::std::enable_if_t<is_product_supported<Source>()>> {
+  requires(is_product_supported<Source>())
+struct update_target_element<Source, aggregation::SUM_OF_SQUARES> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -256,14 +224,12 @@ struct update_target_element<Source,
     using Target = target_type_t<Source, aggregation::SUM_OF_SQUARES>;
     auto value   = static_cast<Target>(source.element<Source>(source_index));
     cudf::detail::atomic_add(&target.element<Target>(target_index), value * value);
-    if (target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
 
 template <typename Source>
-struct update_target_element<Source,
-                             aggregation::PRODUCT,
-                             cuda::std::enable_if_t<is_product_supported<Source>()>> {
+  requires(is_product_supported<Source>())
+struct update_target_element<Source, aggregation::PRODUCT> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -272,15 +238,12 @@ struct update_target_element<Source,
     using Target = target_type_t<Source, aggregation::PRODUCT>;
     cudf::detail::atomic_mul(&target.element<Target>(target_index),
                              static_cast<Target>(source.element<Source>(source_index)));
-    if (target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
 
 template <typename Source>
-struct update_target_element<
-  Source,
-  aggregation::COUNT_VALID,
-  cuda::std::enable_if_t<is_valid_aggregation<Source, aggregation::COUNT_VALID>()>> {
+  requires(is_valid_aggregation<Source, aggregation::COUNT_VALID>())
+struct update_target_element<Source, aggregation::COUNT_VALID> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -288,16 +251,12 @@ struct update_target_element<
   {
     using Target = target_type_t<Source, aggregation::COUNT_VALID>;
     cudf::detail::atomic_add(&target.element<Target>(target_index), Target{1});
-
-    // It is assumed the output for COUNT_VALID is initialized to be all valid
   }
 };
 
 template <typename Source>
-struct update_target_element<
-  Source,
-  aggregation::COUNT_ALL,
-  cuda::std::enable_if_t<is_valid_aggregation<Source, aggregation::COUNT_ALL>()>> {
+  requires(is_valid_aggregation<Source, aggregation::COUNT_ALL>())
+struct update_target_element<Source, aggregation::COUNT_ALL> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -305,17 +264,13 @@ struct update_target_element<
   {
     using Target = target_type_t<Source, aggregation::COUNT_ALL>;
     cudf::detail::atomic_add(&target.element<Target>(target_index), Target{1});
-
-    // It is assumed the output for COUNT_ALL is initialized to be all valid
   }
 };
 
 template <typename Source>
-struct update_target_element<
-  Source,
-  aggregation::ARGMAX,
-  cuda::std::enable_if_t<is_valid_aggregation<Source, aggregation::ARGMAX>() and
-                         cudf::is_relationally_comparable<Source, Source>()>> {
+  requires(is_valid_aggregation<Source, aggregation::ARGMAX>() &&
+           cudf::is_relationally_comparable<Source, Source>())
+struct update_target_element<Source, aggregation::ARGMAX> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -329,17 +284,13 @@ struct update_target_element<
         old = cudf::detail::atomic_cas(&target.element<Target>(target_index), old, source_index);
       }
     }
-
-    if (target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
 
 template <typename Source>
-struct update_target_element<
-  Source,
-  aggregation::ARGMIN,
-  cuda::std::enable_if_t<is_valid_aggregation<Source, aggregation::ARGMIN>() and
-                         cudf::is_relationally_comparable<Source, Source>()>> {
+  requires(is_valid_aggregation<Source, aggregation::ARGMIN>() &&
+           cudf::is_relationally_comparable<Source, Source>())
+struct update_target_element<Source, aggregation::ARGMIN> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -353,8 +304,6 @@ struct update_target_element<
         old = cudf::detail::atomic_cas(&target.element<Target>(target_index), old, source_index);
       }
     }
-
-    if (target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
 
@@ -373,6 +322,12 @@ struct elementwise_aggregator {
     if constexpr (k != cudf::aggregation::COUNT_ALL) {
       if (source.is_null(source_index)) { return; }
     }
+
+    // The output for COUNT_VALID and COUNT_ALL is initialized to be all valid
+    if constexpr (!(k == cudf::aggregation::COUNT_VALID or k == cudf::aggregation::COUNT_ALL)) {
+      if (target.is_null(target_index)) { target.set_valid(target_index); }
+    }
+
     update_target_element<Source, k>{}(target, target_index, source, source_index);
   }
 };

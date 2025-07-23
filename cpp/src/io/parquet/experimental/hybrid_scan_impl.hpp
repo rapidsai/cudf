@@ -41,6 +41,8 @@
 
 namespace cudf::io::parquet::experimental::detail {
 
+using cudf::io::parquet::detail::ColumnChunkDesc;
+using cudf::io::parquet::detail::PageInfo;
 using text::byte_range_info;
 
 /**
@@ -251,6 +253,28 @@ class hybrid_scan_reader_impl {
                     parquet_reader_options const& options);
 
   /**
+   * @brief Prepare dictionaries for dictionary page filtering
+   *
+   * @param row_group_indices The row groups to read
+   * @param dictionary_page_data Device buffers containing dictionary page data
+   * @param dictionary_col_schemas Schema indices of output columns with (in)equality predicate
+   * @param options Parquet reader options
+   * @param stream CUDA stream
+   *
+   * @return A tuple of a boolean indicating if any of the chunks have compressed data, a host
+   * device vector of column chunk descriptors, and a host device vector of decoded dictionary page
+   * headers
+   */
+  std::tuple<bool,
+             cudf::detail::hostdevice_vector<ColumnChunkDesc>,
+             cudf::detail::hostdevice_vector<PageInfo>>
+  prepare_dictionaries(cudf::host_span<std::vector<size_type> const> row_group_indices,
+                       cudf::host_span<rmm::device_buffer> dictionary_page_data,
+                       cudf::host_span<int const> dictionary_col_schemas,
+                       parquet_reader_options const& options,
+                       rmm::cuda_stream_view stream);
+
+  /**
    * @brief Prepares the select input row groups and associated chunk information
    *
    * @param row_group_indices Row group indices to read
@@ -421,7 +445,7 @@ class hybrid_scan_reader_impl {
   void create_global_chunk_info(parquet_reader_options const& options);
 
   /**
-   * @brief Computes all of the passes we will perform over the file.
+   * @brief Computes all of the passes we will perform over the file
    */
   void compute_input_passes();
 

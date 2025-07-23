@@ -107,7 +107,7 @@ class alignas(16) column_device_view : public column_device_view_core {
   }
 
   /**
-   * @brief Returns reference to element at the specified index.
+   * @brief Returns a copy of the element at the specified index
    *
    * If the element at the specified index is NULL, i.e.,
    * `is_null(element_index) == true`, then any attempt to use the result will
@@ -121,7 +121,7 @@ class alignas(16) column_device_view : public column_device_view_core {
    *
    * @tparam T The element type
    * @param element_index Position of the desired element
-   * @return reference to the element at the specified index
+   * @return The element at the specified index
    */
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   [[nodiscard]] __device__ T element(size_type element_index) const noexcept
@@ -977,14 +977,16 @@ struct pair_rep_accessor {
   }
 
  private:
-  template <typename R, std::enable_if_t<std::is_same_v<R, rep_type>, void>* = nullptr>
+  template <typename R>
   [[nodiscard]] __device__ inline auto get_rep(cudf::size_type i) const
+    requires(std::is_same_v<R, rep_type>)
   {
     return col.element<R>(i);
   }
 
-  template <typename R, std::enable_if_t<not std::is_same_v<R, rep_type>, void>* = nullptr>
+  template <typename R>
   [[nodiscard]] __device__ inline auto get_rep(cudf::size_type i) const
+    requires(not std::is_same_v<R, rep_type>)
   {
     return col.element<R>(i).value();
   }

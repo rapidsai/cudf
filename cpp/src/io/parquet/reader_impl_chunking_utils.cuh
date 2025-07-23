@@ -18,19 +18,21 @@
 
 #include "compact_protocol_reader.hpp"
 #include "cudf/types.hpp"
-#include "io/comp/io_uncomp.hpp"
+#include "io/comp/decompression.hpp"
 #include "reader_impl_chunking.hpp"
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/functional>
 #include <thrust/binary_search.h>
 
 namespace cudf::io::parquet::detail {
 
-using cudf::io::detail::compression_result;
-using cudf::io::detail::compression_status;
+using cudf::io::detail::codec_exec_result;
+using cudf::io::detail::codec_status;
 using cudf::io::detail::decompression_info;
 
 // Forward declarations
@@ -189,7 +191,10 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
  * @param chunks List of column chunk descriptors
  * @param pass_pages List of page information for the pass
  * @param subpass_pages List of page information for the subpass
+ * @param subpass_page_mask Boolean page mask indicating which subpass pages to decompress. Empty
+ * span indicates all pages should be decompressed
  * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate buffers
  *
  * @return A pair of device buffers containing the decompressed data for dictionary and
  * non-dictionary pages, respectively.
@@ -198,7 +203,9 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   host_span<ColumnChunkDesc const> chunks,
   host_span<PageInfo> pass_pages,
   host_span<PageInfo> subpass_pages,
-  rmm::cuda_stream_view stream);
+  host_span<bool const> subpass_page_mask,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
 
 /**
  * @brief Detect malformed parquet input data
@@ -304,17 +311,6 @@ struct cumulative_page_sum {
 };
 
 /**
- * @brief Functor which compares cumulative_page_info structs by end_row_index.
- */
-struct row_count_less {
-  __device__ inline bool operator()(cumulative_page_info const& a,
-                                    cumulative_page_info const& b) const
-  {
-    return a.end_row_index < b.end_row_index;
-  }
-};
-
-/**
  * @brief Functor which returns the compressed data size for a chunk
  */
 struct get_chunk_compressed_size {
@@ -353,7 +349,8 @@ struct codec_stats {
 
   void add_pages(host_span<ColumnChunkDesc const> chunks,
                  host_span<PageInfo> pages,
-                 page_selection selection);
+                 page_selection selection,
+                 host_span<bool const> page_mask);
 };
 
 /**
@@ -538,7 +535,7 @@ struct page_total_size {
   {
     // sum sizes for each input column at this row
     size_t sum = 0;
-    for (int idx = 0; idx < num_keys; idx++) {
+    for (auto idx = 0; std::cmp_less(idx, num_keys); idx++) {
       auto const start = key_offsets[idx];
       auto const end   = key_offsets[idx + 1];
       auto iter        = cudf::detail::make_counting_transform_iterator(

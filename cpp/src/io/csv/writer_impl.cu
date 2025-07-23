@@ -27,6 +27,7 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/fill.hpp>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/detail/csv.hpp>
@@ -142,8 +143,8 @@ struct column_to_strings_fn {
   // bools:
   //
   template <typename column_type>
-  std::enable_if_t<std::is_same_v<column_type, bool>, std::unique_ptr<column>> operator()(
-    column_view const& column) const
+  std::unique_ptr<column> operator()(column_view const& column) const
+    requires(std::is_same_v<column_type, bool>)
   {
     string_scalar true_string{options_.get_true_value(), true, stream_};
     string_scalar false_string{options_.get_false_value(), true, stream_};
@@ -153,8 +154,8 @@ struct column_to_strings_fn {
   // strings:
   //
   template <typename column_type>
-  std::enable_if_t<std::is_same_v<column_type, cudf::string_view>, std::unique_ptr<column>>
-  operator()(column_view const& column_v) const
+  std::unique_ptr<column> operator()(column_view const& column_v) const
+    requires(std::is_same_v<column_type, cudf::string_view>)
   {
     if (options_.get_quoting() == cudf::io::quote_style::NONE) {
       return std::make_unique<column>(column_v, stream_, mr_);
@@ -178,9 +179,8 @@ struct column_to_strings_fn {
   // ints:
   //
   template <typename column_type>
-  std::enable_if_t<std::is_integral_v<column_type> && !std::is_same_v<column_type, bool>,
-                   std::unique_ptr<column>>
-  operator()(column_view const& column) const
+  std::unique_ptr<column> operator()(column_view const& column) const
+    requires(std::is_integral_v<column_type> && !std::is_same_v<column_type, bool>)
   {
     return cudf::strings::detail::from_integers(column, stream_, mr_);
   }
@@ -188,8 +188,8 @@ struct column_to_strings_fn {
   // floats:
   //
   template <typename column_type>
-  std::enable_if_t<std::is_floating_point_v<column_type>, std::unique_ptr<column>> operator()(
-    column_view const& column) const
+  std::unique_ptr<column> operator()(column_view const& column) const
+    requires(std::is_floating_point_v<column_type>)
   {
     return cudf::strings::detail::from_floats(column, stream_, mr_);
   }
@@ -197,8 +197,8 @@ struct column_to_strings_fn {
   // fixed point:
   //
   template <typename column_type>
-  std::enable_if_t<cudf::is_fixed_point<column_type>(), std::unique_ptr<column>> operator()(
-    column_view const& column) const
+  std::unique_ptr<column> operator()(column_view const& column) const
+    requires(cudf::is_fixed_point<column_type>())
   {
     return cudf::strings::detail::from_fixed_point(column, stream_, mr_);
   }
@@ -206,8 +206,8 @@ struct column_to_strings_fn {
   // timestamps:
   //
   template <typename column_type>
-  std::enable_if_t<cudf::is_timestamp<column_type>(), std::unique_ptr<column>> operator()(
-    column_view const& column) const
+  std::unique_ptr<column> operator()(column_view const& column) const
+    requires(cudf::is_timestamp<column_type>())
   {
     std::string format = [&]() {
       if (std::is_same_v<cudf::timestamp_s, column_type>) {
@@ -244,8 +244,8 @@ struct column_to_strings_fn {
   }
 
   template <typename column_type>
-  std::enable_if_t<cudf::is_duration<column_type>(), std::unique_ptr<column>> operator()(
-    column_view const& column) const
+  std::unique_ptr<column> operator()(column_view const& column) const
+    requires(cudf::is_duration<column_type>())
   {
     return cudf::io::detail::csv::pandas_format_durations(column, stream_, mr_);
   }
@@ -253,9 +253,8 @@ struct column_to_strings_fn {
   // unsupported type of column:
   //
   template <typename column_type>
-  std::enable_if_t<!cudf::io::detail::is_convertible_to_string_column<column_type>(),
-                   std::unique_ptr<column>>
-  operator()(column_view const&) const
+  std::unique_ptr<column> operator()(column_view const&) const
+    requires(!cudf::io::detail::is_convertible_to_string_column<column_type>())
   {
     CUDF_FAIL("Unsupported column type.");
   }
@@ -413,6 +412,8 @@ void write_csv(data_sink* out_sink,
   // write header: column names separated by delimiter:
   // (even for tables with no rows)
   //
+  CUDF_FUNC_RANGE();
+
   write_chunked_begin(
     out_sink, table, user_column_names, options, stream, cudf::get_current_device_resource_ref());
 
