@@ -62,7 +62,8 @@ class PDSDSQueriesMeta(type):
         if valid_query(name):
             q_num = int(name[1:])
             module: ModuleType = importlib.import_module(
-                f"cudf_polars.experimental.benchmarks.pdsds_queries.q{q_num}"
+                # f"cudf_polars.experimental.benchmarks.pdsds_queries.q{q_num}"
+                f"cudf_polars.experimental.benchmarks.pdsds_queries_no_decimals.q{q_num}"
             )
             return getattr(module, cls.q_impl)
         raise AttributeError(f"{name} is not a valid query name")
@@ -166,12 +167,12 @@ def run_validate(options: Sequence[str] | None = None) -> None:
         if run_config.executor == "cpu":
             test_result = polars_query.collect(new_streaming=True)
         else:
-            try:
-                test_result = polars_query.collect(engine=engine)
-            except Exception as e:
-                failures.append(q_id)
-                print(f"❌ Query {q_id} failed validation: GPU execution failed.\n{e}")
-                continue
+            # try:
+            test_result = polars_query.collect(engine=engine)
+            # except Exception as e:
+            #     failures.append(q_id)
+            #     print(f"❌ Query {q_id} failed validation: GPU execution failed.\n{e}")
+            #     continue
 
         try:
             assert_frame_equal(
