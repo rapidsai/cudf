@@ -94,7 +94,7 @@ std::string set_output::generate_code(instance_context& ctx,
 operation::operation(opcode op, std::vector<std::unique_ptr<node>> operands)
   : id_(), op_(op), operands_(std::move(operands)), type_()
 {
-  CUDF_EXPECTS(operands.size() == ast::detail::ast_operator_arity(op),
+  CUDF_EXPECTS(static_cast<size_type>(operands.size()) == ast::detail::ast_operator_arity(op),
                "Invalid number of arguments for operator.");
   CUDF_EXPECTS(operands.size() > 0, "Operator must have at least one operand");
 }
@@ -227,7 +227,7 @@ void ast_converter::add_input_var(ast_scalar_input_spec const& in,
                                   [[maybe_unused]] ast_args const& args)
 {
   auto id   = std::format("in_{}", input_vars_.size());
-  auto type = in.scalar.get().type();
+  auto type = in.ref.get().type();
   input_vars_.emplace_back(std::move(id), type_info{type, nullable});
 }
 

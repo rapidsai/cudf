@@ -17,7 +17,7 @@
 #include <cudf/ast/detail/expression_transformer.hpp>
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
-#include <cudf/jit/row_ir.hpp>
+#include "jit/row_ir.hpp"
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 

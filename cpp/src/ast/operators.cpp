@@ -274,7 +274,8 @@ cudf::size_type ast_operator_arity(ast_operator op)
 
 std::string_view ast_operator_string(ast_operator op)
 {
-#define CUDF_AST_OP_STR(op) case ast_operator::op return #op
+#define CUDF_AST_OP_STR(op) \
+  case ast_operator::op: return #op
 
   switch (op) {
     CUDF_AST_OP_STR(ADD);
@@ -327,6 +328,7 @@ std::string_view ast_operator_string(ast_operator op)
     CUDF_AST_OP_STR(CAST_TO_INT64);
     CUDF_AST_OP_STR(CAST_TO_UINT64);
     CUDF_AST_OP_STR(CAST_TO_FLOAT64);
+    default: CUDF_FAIL("Unrecognized operator type.");
   }
 
 #undef CUDF_AST_OP_STR

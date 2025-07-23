@@ -271,8 +271,8 @@ struct ast_named_column_input_spec {
 
 /// @brief A specification of an input scalar to the AST
 struct ast_scalar_input_spec {
-  std::reference_wrapper<scalar const> scalar;  ///< The scalar value
-  ast::generic_scalar_device_view value;        ///< The device view of the scalar value
+  std::reference_wrapper<scalar const> ref;  ///< The scalar value
+  ast::generic_scalar_device_view view;      ///< The device view of the scalar value
   std::unique_ptr<column> broadcast_column =
     nullptr;  ///< The broadcasted column, a column of size 1
 };
