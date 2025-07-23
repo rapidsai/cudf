@@ -33,6 +33,10 @@ namespace CUDF_EXPORT cudf {
  * @brief Column APIs for filtering rows
  */
 
+namespace ast {
+class expression;
+}
+
 /**
  * @brief Filters a table to remove null elements with threshold count.
  *
@@ -460,6 +464,13 @@ std::vector<std::unique_ptr<column>> filter(
   std::string const& predicate_udf,
   bool is_ptx,
   std::optional<void*> user_data             = std::nullopt,
+  std::optional<std::vector<bool>> copy_mask = std::nullopt,
+  rmm::cuda_stream_view stream               = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr          = cudf::get_current_device_resource_ref());
+
+std::vector<std::unique_ptr<column>> filter_jit(
+  table_view const& table,
+  ast::expression const& expr,
   std::optional<std::vector<bool>> copy_mask = std::nullopt,
   rmm::cuda_stream_view stream               = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr          = cudf::get_current_device_resource_ref());

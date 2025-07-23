@@ -348,4 +348,12 @@ std::vector<std::unique_ptr<column>> filter(std::vector<column_view> const& colu
   return detail::filter(columns, predicate_udf, is_ptx, user_data, copy_mask, stream, mr);
 }
 
+std::vector<std::unique_ptr<column>> filter_jit(table_view const& table,
+                                                ast::expression const& expr,
+                                                std::optional<std::vector<bool>> copy_mask,
+                                                rmm::cuda_stream_view stream,
+                                                rmm::device_async_resource_ref mr)
+{
+}
+
 }  // namespace cudf

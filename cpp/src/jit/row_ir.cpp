@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
+#include "jit/row_ir.hpp"
+
 #include <cudf/column/column_factories.hpp>
-#include <cudf/jit/row_ir.hpp>
 
 #include <algorithm>
 #include <numeric>

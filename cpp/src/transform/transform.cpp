@@ -332,4 +332,11 @@ std::unique_ptr<column> transform(std::vector<column_view> const& inputs,
   return detail::transform(inputs, udf, output_type, is_ptx, user_data, stream, mr);
 }
 
+std::unique_ptr<column> compute_column_jit(table_view const& table,
+                                           ast::expression const& expr,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr)
+{
+}
+
 }  // namespace cudf
