@@ -174,14 +174,14 @@ uint32_t ast_converter::add_ast_input_ref(ast_input_ref in)
   return id;
 }
 
-std::unique_ptr<row_ir::node> ast_converter::visit(cudf::ast::literal const& expr)
+std::unique_ptr<row_ir::node> ast_converter::add_ir_node(cudf::ast::literal const& expr)
 {
   // fix scalar views
   //   add_input(scalar_input{expr.get_value(), expr.get_value()});
   //   return std::make_unique<row_ir::get_input>(expr.get_value(), expr.is_nullable());
 }
 
-std::unique_ptr<row_ir::node> ast_converter::visit(cudf::ast::column_reference const& expr)
+std::unique_ptr<row_ir::node> ast_converter::add_ir_node(cudf::ast::column_reference const& expr)
 {
   auto index =
     add_ast_input_ref(ast_column_input_ref{static_cast<uint32_t>(expr.get_table_source()),
@@ -189,7 +189,7 @@ std::unique_ptr<row_ir::node> ast_converter::visit(cudf::ast::column_reference c
   return std::make_unique<row_ir::get_input>(index);
 }
 
-std::unique_ptr<row_ir::node> ast_converter::visit(cudf::ast::operation const& expr)
+std::unique_ptr<row_ir::node> ast_converter::add_ir_node(cudf::ast::operation const& expr)
 {
   std::vector<std::unique_ptr<row_ir::node>> operands;
   for (auto const& operand : expr.get_operands()) {
@@ -198,7 +198,8 @@ std::unique_ptr<row_ir::node> ast_converter::visit(cudf::ast::operation const& e
   return std::make_unique<row_ir::operation>(expr.get_operator(), std::move(operands));
 }
 
-std::unique_ptr<row_ir::node> ast_converter::visit(cudf::ast::column_name_reference const& expr)
+std::unique_ptr<row_ir::node> ast_converter::add_ir_node(
+  cudf::ast::column_name_reference const& expr)
 {
   auto index = add_ast_input_ref(ast_named_column_input_ref{expr.get_column_name()});
   return std::make_unique<row_ir::get_input>(index);
@@ -241,11 +242,25 @@ void ast_converter::add_output_var()
   output_vars_.emplace_back(std::move(id));
 }
 
-void ast_converter::exec(target target_id,
-                         cudf::ast::expression const& expr,
-                         bool null_aware,
-                         named_table_view const& left_table,
-                         named_table_view const& right_table)
+template <typename Fn, typename... Args>
+decltype(auto) dispatch_input_ref(ast_input_ref const& in, Fn&& fn, Args&&... args)
+{
+  if (std::holds_alternative<ast_column_input_ref>(in)) {
+    return fn(std::get<ast_column_input_ref>(in), std::forward<Args>(args)...);
+  } else if (std::holds_alternative<ast_named_column_input_ref>(in)) {
+    return fn(std::get<ast_named_column_input_ref>(in), std::forward<Args>(args)...);
+  } else if (std::holds_alternative<ast_scalar_input_ref>(in)) {
+    return fn(std::get<ast_scalar_input_ref>(in), std::forward<Args>(args)...);
+  } else {
+    CUDF_FAIL("Unsupported input type");
+  }
+}
+
+transform_result ast_converter::as_transform(target target_id,
+                                             cudf::ast::expression const& expr,
+                                             bool null_aware,
+                                             named_table_view const& left_table,
+                                             named_table_view const& right_table)
 {
   input_refs_.clear();
   input_vars_.clear();

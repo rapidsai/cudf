@@ -210,6 +210,32 @@ struct named_table_view {
   std::map<std::string, uint32_t> column_names;
 };
 
+struct transform_args {
+  std::vector<cudf::column_view> columns = {};
+  std::string transform_udf              = {};
+  cudf::data_type output_type            = cudf::data_type{cudf::type_id::EMPTY};
+  bool is_ptx                            = false;
+  std::optional<void*> user_data         = std::nullopt;
+};
+
+struct transform_result {
+  transform_args args                      = {};
+  std::vector<cudf::column> scalar_columns = {};
+};
+
+struct filter_args {
+  std::vector<cudf::column_view> columns     = {};
+  std::string predicate_udf                  = {};
+  bool is_ptx                                = false;
+  std::optional<void*> user_data             = std::nullopt;
+  std::optional<std::vector<bool>> copy_mask = std::nullopt;
+};
+
+struct filter_result {
+  filter_args args                         = {};
+  std::vector<cudf::column> scalar_columns = {};
+};
+
 struct ast_converter {
  private:
   std::vector<ast_input_ref> input_refs_;      // the input refs for the AST
@@ -231,32 +257,18 @@ struct ast_converter {
   friend class ast::operation;
   friend class ast::column_name_reference;
 
-  std::unique_ptr<row_ir::node> visit(cudf::ast::literal const& expr);
+  std::unique_ptr<row_ir::node> add_ir_node(cudf::ast::literal const& expr);
 
-  std::unique_ptr<row_ir::node> visit(cudf::ast::column_reference const& expr);
+  std::unique_ptr<row_ir::node> add_ir_node(cudf::ast::column_reference const& expr);
 
-  std::unique_ptr<row_ir::node> visit(cudf::ast::operation const& expr);
+  std::unique_ptr<row_ir::node> add_ir_node(cudf::ast::operation const& expr);
 
-  std::unique_ptr<row_ir::node> visit(cudf::ast::column_name_reference const& expr);
+  std::unique_ptr<row_ir::node> add_ir_node(cudf::ast::column_name_reference const& expr);
 
   [[nodiscard]] std::span<ast_input_ref const> get_input_refs() const;
 
   // add an AST input/input_reference and return its reference index
   uint32_t add_ast_input_ref(ast_input_ref in);
-
-  template <typename Fn, typename... Args>
-  decltype(auto) dispatch_input_ref(ast_input_ref const& in, Fn&& fn, Args&&... args)
-  {
-    if (std::holds_alternative<ast_column_input_ref>(in)) {
-      return fn(std::get<ast_column_input_ref>(in), std::forward<Args>(args)...);
-    } else if (std::holds_alternative<ast_named_column_input_ref>(in)) {
-      return fn(std::get<ast_named_column_input_ref>(in), std::forward<Args>(args)...);
-    } else if (std::holds_alternative<ast_scalar_input_ref>(in)) {
-      return fn(std::get<ast_scalar_input_ref>(in), std::forward<Args>(args)...);
-    } else {
-      CUDF_FAIL("Unsupported input type");
-    }
-  }
 
   void add_input_var(ast_column_input_ref const& in,
                      bool null_aware,
@@ -273,7 +285,7 @@ struct ast_converter {
                      named_table_view const& left_table,
                      named_table_view const& right_table);
 
-  void add_output_var( );
+  void add_output_var();
 
  public:
   // [ ] starts from input to output
@@ -290,11 +302,21 @@ struct ast_converter {
   // steps: generate, instantiate, instantiate inputs and outputs with ids types, null and indices,
   // validate, generate code
   // [ ] how to map for transform and filter
-  void exec(target target,
-            cudf::ast::expression const& expr,
-            bool null_aware,
-            named_table_view const& left_table,
-            named_table_view const& right_table);
+
+  transform_result as_transform(target target,
+                                cudf::ast::expression const& expr,
+                                bool null_aware,
+                                named_table_view const& left_table,
+                                named_table_view const& right_table);
+
+  filter_result as_filter(
+    target target,
+    cudf::ast::expression const& expr,
+    bool null_aware,
+    named_table_view const& left_table,
+    named_table_view const& right_table,
+    std::optional<std::vector<bool>> const& left_table_copy_mask  = std::nullopt,
+    std::optional<std::vector<bool>> const& right_table_copy_mask = std::nullopt);
 };
 
 }  // namespace row_ir
