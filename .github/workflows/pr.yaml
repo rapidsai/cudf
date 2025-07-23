@@ -364,9 +364,9 @@ jobs:
     needs: pandas-tests
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.08
     with:
-        node_type: "cpu4"
-        build_type: pull-request
-        script: "ci/cudf_pandas_scripts/pandas-tests/diff.sh"
+      node_type: "cpu4"
+      build_type: pull-request
+      script: "ci/cudf_pandas_scripts/pandas-tests/diff.sh"
   narwhals-tests:
     needs: [conda-python-build, changed-files]
     secrets: inherit
@@ -394,3 +394,5 @@ jobs:
     steps:
       - name: Telemetry summarize
         uses: rapidsai/shared-actions/telemetry-dispatch-summarize@main
+    env:
+      GH_TOKEN: ${{ github.token }}

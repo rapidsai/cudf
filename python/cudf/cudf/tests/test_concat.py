@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 import warnings
 from contextlib import contextmanager
@@ -13,6 +13,26 @@ from cudf.core._compat import PANDAS_GE_220
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
+
+
+@pytest.fixture(params=[True, False])
+def ignore_index(request):
+    return request.param
+
+
+@pytest.fixture(params=[True, False])
+def sort(request):
+    return request.param
+
+
+@pytest.fixture(params=["outer", "inner"])
+def join(request):
+    return request.param
+
+
+@pytest.fixture(params=[0, "index", 1, "columns"])
+def axis(request):
+    return request.param
 
 
 @contextmanager
@@ -216,7 +236,6 @@ def test_concat_columns(axis):
     assert_eq(expect, got, check_index_type=True)
 
 
-@pytest.mark.parametrize("axis", [0, 1])
 def test_concat_multiindex_dataframe(axis):
     gdf = cudf.DataFrame(
         {
@@ -623,7 +642,6 @@ def test_concat_series_dataframe_input_str(objs):
         ],
     ],
 )
-@pytest.mark.parametrize("ignore_index", [True, False])
 def test_concat_empty_dataframes(df, other, ignore_index):
     other_pd = [df, *other]
 
@@ -660,7 +678,6 @@ def test_concat_empty_dataframes(df, other, ignore_index):
         )
 
 
-@pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize("axis", [0, "index"])
 @pytest.mark.parametrize(
     "data",
@@ -680,7 +697,6 @@ def test_concat_empty_and_nonempty_series(ignore_index, data, axis):
     assert_eq(got, expect, check_index_type=True)
 
 
-@pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize("axis", [0, "index"])
 def test_concat_two_empty_series(ignore_index, axis):
     s1 = cudf.Series()
@@ -694,23 +710,13 @@ def test_concat_two_empty_series(ignore_index, axis):
 
 
 @pytest.mark.parametrize(
-    "df1,df2",
-    [
-        (
-            cudf.DataFrame({"k1": [0, 1], "k2": [2, 3], "v1": [4, 5]}),
-            cudf.DataFrame({"k1": [1, 0], "k2": [3, 2], "v2": [6, 7]}),
-        ),
-        (
-            cudf.DataFrame({"k1": [0, 1], "k2": [2, 3], "v1": [4, 5]}),
-            cudf.DataFrame({"k1": [0, 1], "k2": [3, 2], "v2": [6, 7]}),
-        ),
-    ],
+    "key2", [[0, 1], [1, 0]], ids=["matching", "different"]
 )
-def test_concat_dataframe_with_multiindex(df1, df2):
-    gdf1 = df1
+def test_concat_dataframe_with_multiindex(key2):
+    gdf1 = cudf.DataFrame({"k1": [0, 1], "k2": [2, 3], "v1": [4, 5]})
     gdf1 = gdf1.set_index(["k1", "k2"])
 
-    gdf2 = df2
+    gdf2 = cudf.DataFrame({"k1": key2, "k2": [3, 2], "v2": [6, 7]})
     gdf2 = gdf2.set_index(["k1", "k2"])
 
     pdf1 = gdf1.to_pandas()
@@ -772,11 +778,8 @@ def test_concat_dataframe_with_multiindex(df1, df2):
         ],
     ],
 )
-@pytest.mark.parametrize("ignore_index", [True, False])
-@pytest.mark.parametrize("sort", [True, False])
-@pytest.mark.parametrize("join", ["inner", "outer"])
-@pytest.mark.parametrize("axis", [0])
 def test_concat_join(objs, ignore_index, sort, join, axis):
+    axis = 0
     gpu_objs = [cudf.from_pandas(o) for o in objs]
 
     assert_eq(
@@ -844,12 +847,9 @@ def test_concat_join_axis_1_dup_error(objs):
         ],
     ],
 )
-@pytest.mark.parametrize("ignore_index", [True, False])
-@pytest.mark.parametrize("sort", [True, False])
-@pytest.mark.parametrize("join", ["inner", "outer"])
-@pytest.mark.parametrize("axis", [1])
 def test_concat_join_axis_1(objs, ignore_index, sort, join, axis):
     # no duplicate columns
+    axis = 1
     gpu_objs = [cudf.from_pandas(o) for o in objs]
     expected = pd.concat(
         objs, sort=sort, join=join, ignore_index=ignore_index, axis=axis
@@ -865,10 +865,6 @@ def test_concat_join_axis_1(objs, ignore_index, sort, join, axis):
     assert_eq(expected, actual, check_index_type=True)
 
 
-@pytest.mark.parametrize("ignore_index", [True, False])
-@pytest.mark.parametrize("sort", [True, False])
-@pytest.mark.parametrize("join", ["inner", "outer"])
-@pytest.mark.parametrize("axis", [1, 0])
 def test_concat_join_many_df_and_empty_df(ignore_index, sort, join, axis):
     # no duplicate columns
     pdf1 = pd.DataFrame(
@@ -909,10 +905,6 @@ def test_concat_join_many_df_and_empty_df(ignore_index, sort, join, axis):
         )
 
 
-@pytest.mark.parametrize("ignore_index", [True, False])
-@pytest.mark.parametrize("sort", [True, False])
-@pytest.mark.parametrize("join", ["inner", "outer"])
-@pytest.mark.parametrize("axis", [0, 1])
 def test_concat_join_one_df(ignore_index, sort, join, axis):
     pdf1 = pd.DataFrame(
         {
@@ -950,10 +942,6 @@ def test_concat_join_one_df(ignore_index, sort, join, axis):
         ),
     ],
 )
-@pytest.mark.parametrize("ignore_index", [True, False])
-@pytest.mark.parametrize("sort", [True, False])
-@pytest.mark.parametrize("join", ["inner", "outer"])
-@pytest.mark.parametrize("axis", [0, 1])
 def test_concat_join_no_overlapping_columns(
     pdf1, pdf2, ignore_index, sort, join, axis
 ):
@@ -978,10 +966,6 @@ def test_concat_join_no_overlapping_columns(
     assert_eq(expected, actual, check_index_type=True)
 
 
-@pytest.mark.parametrize("ignore_index", [False, True])
-@pytest.mark.parametrize("sort", [True, False])
-@pytest.mark.parametrize("join", ["inner", "outer"])
-@pytest.mark.parametrize("axis", [0, 1])
 def test_concat_join_no_overlapping_columns_many_and_empty(
     ignore_index, sort, join, axis
 ):
@@ -1065,10 +1049,6 @@ def test_concat_join_no_overlapping_columns_many_and_empty(
         ),
     ],
 )
-@pytest.mark.parametrize("ignore_index", [True, False])
-@pytest.mark.parametrize("sort", [False, True])
-@pytest.mark.parametrize("join", ["outer", "inner"])
-@pytest.mark.parametrize("axis", [0, 1])
 def test_concat_join_no_overlapping_columns_many_and_empty2(
     objs, ignore_index, sort, join, axis
 ):
@@ -1092,10 +1072,6 @@ def test_concat_join_no_overlapping_columns_many_and_empty2(
     assert_eq(expected, actual, check_index_type=False)
 
 
-@pytest.mark.parametrize("ignore_index", [True, False])
-@pytest.mark.parametrize("sort", [True, False])
-@pytest.mark.parametrize("join", ["inner", "outer"])
-@pytest.mark.parametrize("axis", [0, 1])
 def test_concat_join_no_overlapping_columns_empty_df_basic(
     ignore_index, sort, join, axis
 ):
@@ -1134,10 +1110,6 @@ def test_concat_join_no_overlapping_columns_empty_df_basic(
     )
 
 
-@pytest.mark.parametrize("ignore_index", [True, False])
-@pytest.mark.parametrize("sort", [True, False])
-@pytest.mark.parametrize("join", ["inner", "outer"])
-@pytest.mark.parametrize("axis", [0, 1])
 def test_concat_join_series(ignore_index, sort, join, axis):
     s1 = cudf.Series(["a", "b", "c"])
     s2 = cudf.Series(["a", "b"])
@@ -1156,7 +1128,7 @@ def test_concat_join_series(ignore_index, sort, join, axis):
         ignore_index=ignore_index,
         axis=axis,
     )
-    with expect_warning_if(axis == 1):
+    with expect_warning_if(axis in {1, "columns"}):
         actual = cudf.concat(
             [s1, s2, s3, s4],
             sort=sort,
@@ -1217,9 +1189,6 @@ def test_concat_join_series(ignore_index, sort, join, axis):
         ],
     ],
 )
-@pytest.mark.parametrize("ignore_index", [True, False])
-@pytest.mark.parametrize("sort", [True, False])
-@pytest.mark.parametrize("join", ["inner", "outer"])
 def test_concat_join_empty_dataframes(
     request, df, other, ignore_index, join, sort
 ):
@@ -1304,14 +1273,11 @@ def test_concat_join_empty_dataframes(
         ],
     ],
 )
-@pytest.mark.parametrize("ignore_index", [True, False])
-@pytest.mark.parametrize("sort", [True, False])
-@pytest.mark.parametrize("join", ["inner", "outer"])
-@pytest.mark.parametrize("axis", [1])
 def test_concat_join_empty_dataframes_axis_1(
     df, other, ignore_index, axis, join, sort
 ):
     # no duplicate columns
+    axis = 1
     other_pd = [df, *other]
     gdf = cudf.from_pandas(df)
     other_gd = [gdf] + [cudf.from_pandas(o) for o in other]
@@ -1372,7 +1338,6 @@ def test_concat_preserve_order():
     )
 
 
-@pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize("typ", [cudf.DataFrame, cudf.Series])
 def test_concat_single_object(ignore_index, typ):
     """Ensure that concat on a single object does not change it."""
@@ -1442,348 +1407,403 @@ def test_concat_decimal_series(ltype, rtype):
 
 
 @pytest.mark.parametrize(
-    "df1, df2, df3, expected",
+    "data1, dtype1, index1, data2, dtype2, index2, data3, dtype3, index3, expected_data, expected_dtype, expected_index",
     [
-        (
-            cudf.DataFrame(
-                {"val": [Decimal("42.5"), Decimal("8.7")]},
-                dtype=Decimal64Dtype(5, 2),
-            ),
-            cudf.DataFrame(
-                {"val": [Decimal("9.23"), Decimal("-67.49")]},
-                dtype=Decimal64Dtype(6, 4),
-            ),
-            cudf.DataFrame({"val": [8, -5]}, dtype="int32"),
-            cudf.DataFrame(
-                {
-                    "val": [
-                        Decimal("42.5"),
-                        Decimal("8.7"),
-                        Decimal("9.23"),
-                        Decimal("-67.49"),
-                        Decimal("8"),
-                        Decimal("-5"),
-                    ]
-                },
-                dtype=Decimal32Dtype(7, 4),
-                index=[0, 1, 0, 1, 0, 1],
-            ),
-        ),
-        (
-            cudf.DataFrame(
-                {"val": [Decimal("95.2"), Decimal("23.4")]},
-                dtype=Decimal64Dtype(5, 2),
-            ),
-            cudf.DataFrame({"val": [54, 509]}, dtype="uint16"),
-            cudf.DataFrame({"val": [24, -48]}, dtype="int32"),
-            cudf.DataFrame(
-                {
-                    "val": [
-                        Decimal("95.2"),
-                        Decimal("23.4"),
-                        Decimal("54"),
-                        Decimal("509"),
-                        Decimal("24"),
-                        Decimal("-48"),
-                    ]
-                },
-                dtype=Decimal32Dtype(5, 2),
-                index=[0, 1, 0, 1, 0, 1],
-            ),
-        ),
-        (
-            cudf.DataFrame(
-                {"val": [Decimal("36.56"), Decimal("-59.24")]},
-                dtype=Decimal64Dtype(9, 4),
-            ),
-            cudf.DataFrame({"val": [403.21, 45.13]}, dtype="float32"),
-            cudf.DataFrame({"val": [52.262, -49.25]}, dtype="float64"),
-            cudf.DataFrame(
-                {
-                    "val": [
-                        Decimal("36.56"),
-                        Decimal("-59.24"),
-                        Decimal("403.21"),
-                        Decimal("45.13"),
-                        Decimal("52.262"),
-                        Decimal("-49.25"),
-                    ]
-                },
-                dtype=Decimal32Dtype(9, 4),
-                index=[0, 1, 0, 1, 0, 1],
-            ),
-        ),
-        (
-            cudf.DataFrame(
-                {"val": [Decimal("9563.24"), Decimal("236.633")]},
-                dtype=Decimal64Dtype(9, 4),
-            ),
-            cudf.DataFrame({"val": [5393, -95832]}, dtype="int64"),
-            cudf.DataFrame({"val": [-29.234, -31.945]}, dtype="float64"),
-            cudf.DataFrame(
-                {
-                    "val": [
-                        Decimal("9563.24"),
-                        Decimal("236.633"),
-                        Decimal("5393"),
-                        Decimal("-95832"),
-                        Decimal("-29.234"),
-                        Decimal("-31.945"),
-                    ]
-                },
-                dtype=Decimal32Dtype(9, 4),
-                index=[0, 1, 0, 1, 0, 1],
-            ),
-        ),
-        (
-            cudf.DataFrame(
-                {"val": [Decimal("95633.24"), Decimal("236.633")]},
-                dtype=Decimal128Dtype(19, 4),
-            ),
-            cudf.DataFrame({"val": [5393, -95832]}, dtype="int64"),
-            cudf.DataFrame({"val": [-29.234, -31.945]}, dtype="float64"),
-            cudf.DataFrame(
-                {
-                    "val": [
-                        Decimal("95633.24"),
-                        Decimal("236.633"),
-                        Decimal("5393"),
-                        Decimal("-95832"),
-                        Decimal("-29.234"),
-                        Decimal("-31.945"),
-                    ]
-                },
-                dtype=Decimal128Dtype(19, 4),
-                index=[0, 1, 0, 1, 0, 1],
-            ),
-        ),
+        [
+            {"val": [Decimal("42.5"), Decimal("8.7")]},
+            Decimal64Dtype(5, 2),
+            None,
+            {"val": [Decimal("9.23"), Decimal("-67.49")]},
+            Decimal64Dtype(6, 4),
+            None,
+            {"val": [8, -5]},
+            "int32",
+            None,
+            {
+                "val": [
+                    Decimal("42.5"),
+                    Decimal("8.7"),
+                    Decimal("9.23"),
+                    Decimal("-67.49"),
+                    Decimal("8"),
+                    Decimal("-5"),
+                ]
+            },
+            Decimal32Dtype(7, 4),
+            [0, 1, 0, 1, 0, 1],
+        ],
+        [
+            {"val": [Decimal("95.2"), Decimal("23.4")]},
+            Decimal64Dtype(5, 2),
+            None,
+            {"val": [54, 509]},
+            "uint16",
+            None,
+            {"val": [24, -48]},
+            "int32",
+            None,
+            {
+                "val": [
+                    Decimal("95.2"),
+                    Decimal("23.4"),
+                    Decimal("54"),
+                    Decimal("509"),
+                    Decimal("24"),
+                    Decimal("-48"),
+                ]
+            },
+            Decimal32Dtype(5, 2),
+            [0, 1, 0, 1, 0, 1],
+        ],
+        [
+            {"val": [Decimal("36.56"), Decimal("-59.24")]},
+            Decimal64Dtype(9, 4),
+            None,
+            {"val": [403.21, 45.13]},
+            "float32",
+            None,
+            {"val": [52.262, -49.25]},
+            "float64",
+            None,
+            {
+                "val": [
+                    Decimal("36.56"),
+                    Decimal("-59.24"),
+                    Decimal("403.21"),
+                    Decimal("45.13"),
+                    Decimal("52.262"),
+                    Decimal("-49.25"),
+                ]
+            },
+            Decimal32Dtype(9, 4),
+            [0, 1, 0, 1, 0, 1],
+        ],
+        [
+            {"val": [Decimal("9563.24"), Decimal("236.633")]},
+            Decimal64Dtype(9, 4),
+            None,
+            {"val": [5393, -95832]},
+            "int64",
+            None,
+            {"val": [-29.234, -31.945]},
+            "float64",
+            None,
+            {
+                "val": [
+                    Decimal("9563.24"),
+                    Decimal("236.633"),
+                    Decimal("5393"),
+                    Decimal("-95832"),
+                    Decimal("-29.234"),
+                    Decimal("-31.945"),
+                ]
+            },
+            Decimal32Dtype(9, 4),
+            [0, 1, 0, 1, 0, 1],
+        ],
+        [
+            {"val": [Decimal("95633.24"), Decimal("236.633")]},
+            Decimal128Dtype(19, 4),
+            None,
+            {"val": [5393, -95832]},
+            "int64",
+            None,
+            {"val": [-29.234, -31.945]},
+            "float64",
+            None,
+            {
+                "val": [
+                    Decimal("95633.24"),
+                    Decimal("236.633"),
+                    Decimal("5393"),
+                    Decimal("-95832"),
+                    Decimal("-29.234"),
+                    Decimal("-31.945"),
+                ]
+            },
+            Decimal128Dtype(19, 4),
+            [0, 1, 0, 1, 0, 1],
+        ],
     ],
 )
-def test_concat_decimal_numeric_dataframe(df1, df2, df3, expected):
+def test_concat_decimal_numeric_dataframe(
+    data1,
+    dtype1,
+    index1,
+    data2,
+    dtype2,
+    index2,
+    data3,
+    dtype3,
+    index3,
+    expected_data,
+    expected_dtype,
+    expected_index,
+):
+    df1 = cudf.DataFrame(data1, dtype=dtype1, index=index1)
+    df2 = cudf.DataFrame(data2, dtype=dtype2, index=index2)
+    df3 = cudf.DataFrame(data3, dtype=dtype3, index=index3)
+    expected = cudf.DataFrame(
+        expected_data, dtype=expected_dtype, index=expected_index
+    )
     df = cudf.concat([df1, df2, df3])
     assert_eq(df, expected, check_index_type=True)
     assert_eq(df.val.dtype, expected.val.dtype)
 
 
 @pytest.mark.parametrize(
-    "s1, s2, s3, expected",
+    "data1, dtype1, index1, data2, dtype2, index2, data3, dtype3, index3, expected_data, expected_dtype, expected_index",
     [
-        (
-            cudf.Series(
-                [Decimal("32.8"), Decimal("-87.7")], dtype=Decimal64Dtype(6, 2)
-            ),
-            cudf.Series(
-                [Decimal("101.243"), Decimal("-92.449")],
-                dtype=Decimal64Dtype(9, 6),
-            ),
-            cudf.Series([94, -22], dtype="int32"),
-            cudf.Series(
-                [
-                    Decimal("32.8"),
-                    Decimal("-87.7"),
-                    Decimal("101.243"),
-                    Decimal("-92.449"),
-                    Decimal("94"),
-                    Decimal("-22"),
-                ],
-                dtype=Decimal64Dtype(10, 6),
-                index=[0, 1, 0, 1, 0, 1],
-            ),
-        ),
-        (
-            cudf.Series(
-                [Decimal("7.2"), Decimal("122.1")], dtype=Decimal64Dtype(5, 2)
-            ),
-            cudf.Series([33, 984], dtype="uint32"),
-            cudf.Series([593, -702], dtype="int32"),
-            cudf.Series(
-                [
-                    Decimal("7.2"),
-                    Decimal("122.1"),
-                    Decimal("33"),
-                    Decimal("984"),
-                    Decimal("593"),
-                    Decimal("-702"),
-                ],
-                dtype=Decimal32Dtype(5, 2),
-                index=[0, 1, 0, 1, 0, 1],
-            ),
-        ),
-        (
-            cudf.Series(
-                [Decimal("982.94"), Decimal("-493.626")],
-                dtype=Decimal64Dtype(9, 4),
-            ),
-            cudf.Series([847.98, 254.442], dtype="float32"),
-            cudf.Series([5299.262, -2049.25], dtype="float64"),
-            cudf.Series(
-                [
-                    Decimal("982.94"),
-                    Decimal("-493.626"),
-                    Decimal("847.98"),
-                    Decimal("254.442"),
-                    Decimal("5299.262"),
-                    Decimal("-2049.25"),
-                ],
-                dtype=Decimal32Dtype(9, 4),
-                index=[0, 1, 0, 1, 0, 1],
-            ),
-        ),
-        (
-            cudf.Series(
-                [Decimal("492.204"), Decimal("-72824.455")],
-                dtype=Decimal64Dtype(9, 4),
-            ),
-            cudf.Series([8438, -27462], dtype="int64"),
-            cudf.Series([-40.292, 49202.953], dtype="float64"),
-            cudf.Series(
-                [
-                    Decimal("492.204"),
-                    Decimal("-72824.455"),
-                    Decimal("8438"),
-                    Decimal("-27462"),
-                    Decimal("-40.292"),
-                    Decimal("49202.953"),
-                ],
-                dtype=Decimal32Dtype(9, 4),
-                index=[0, 1, 0, 1, 0, 1],
-            ),
-        ),
-        (
-            cudf.Series(
-                [Decimal("492.204"), Decimal("-72824.455")],
-                dtype=Decimal64Dtype(10, 4),
-            ),
-            cudf.Series(
-                [Decimal("8438"), Decimal("-27462")],
-                dtype=Decimal32Dtype(9, 4),
-            ),
-            cudf.Series(
-                [Decimal("-40.292"), Decimal("49202.953")],
-                dtype=Decimal128Dtype(19, 4),
-            ),
-            cudf.Series(
-                [
-                    Decimal("492.204"),
-                    Decimal("-72824.455"),
-                    Decimal("8438"),
-                    Decimal("-27462"),
-                    Decimal("-40.292"),
-                    Decimal("49202.953"),
-                ],
-                dtype=Decimal128Dtype(19, 4),
-                index=[0, 1, 0, 1, 0, 1],
-            ),
-        ),
+        [
+            [Decimal("32.8"), Decimal("-87.7")],
+            Decimal64Dtype(6, 2),
+            None,
+            [Decimal("101.243"), Decimal("-92.449")],
+            Decimal64Dtype(9, 6),
+            None,
+            [94, -22],
+            "int32",
+            None,
+            [
+                Decimal("32.8"),
+                Decimal("-87.7"),
+                Decimal("101.243"),
+                Decimal("-92.449"),
+                Decimal("94"),
+                Decimal("-22"),
+            ],
+            Decimal64Dtype(10, 6),
+            [0, 1, 0, 1, 0, 1],
+        ],
+        [
+            [Decimal("7.2"), Decimal("122.1")],
+            Decimal64Dtype(5, 2),
+            None,
+            [33, 984],
+            "uint32",
+            None,
+            [593, -702],
+            "int32",
+            None,
+            [
+                Decimal("7.2"),
+                Decimal("122.1"),
+                Decimal("33"),
+                Decimal("984"),
+                Decimal("593"),
+                Decimal("-702"),
+            ],
+            Decimal32Dtype(5, 2),
+            [0, 1, 0, 1, 0, 1],
+        ],
+        [
+            [Decimal("982.94"), Decimal("-493.626")],
+            Decimal64Dtype(9, 4),
+            None,
+            [847.98, 254.442],
+            "float32",
+            None,
+            [5299.262, -2049.25],
+            "float64",
+            None,
+            [
+                Decimal("982.94"),
+                Decimal("-493.626"),
+                Decimal("847.98"),
+                Decimal("254.442"),
+                Decimal("5299.262"),
+                Decimal("-2049.25"),
+            ],
+            Decimal32Dtype(9, 4),
+            [0, 1, 0, 1, 0, 1],
+        ],
+        [
+            [Decimal("492.204"), Decimal("-72824.455")],
+            Decimal64Dtype(9, 4),
+            None,
+            [8438, -27462],
+            "int64",
+            None,
+            [-40.292, 49202.953],
+            "float64",
+            None,
+            [
+                Decimal("492.204"),
+                Decimal("-72824.455"),
+                Decimal("8438"),
+                Decimal("-27462"),
+                Decimal("-40.292"),
+                Decimal("49202.953"),
+            ],
+            Decimal32Dtype(9, 4),
+            [0, 1, 0, 1, 0, 1],
+        ],
+        [
+            [Decimal("492.204"), Decimal("-72824.455")],
+            Decimal64Dtype(10, 4),
+            None,
+            [Decimal("8438"), Decimal("-27462")],
+            Decimal32Dtype(9, 4),
+            None,
+            [Decimal("-40.292"), Decimal("49202.953")],
+            Decimal128Dtype(19, 4),
+            None,
+            [
+                Decimal("492.204"),
+                Decimal("-72824.455"),
+                Decimal("8438"),
+                Decimal("-27462"),
+                Decimal("-40.292"),
+                Decimal("49202.953"),
+            ],
+            Decimal128Dtype(19, 4),
+            [0, 1, 0, 1, 0, 1],
+        ],
     ],
 )
-def test_concat_decimal_numeric_series(s1, s2, s3, expected):
+def test_concat_decimal_numeric_series(
+    data1,
+    dtype1,
+    index1,
+    data2,
+    dtype2,
+    index2,
+    data3,
+    dtype3,
+    index3,
+    expected_data,
+    expected_dtype,
+    expected_index,
+):
+    s1 = cudf.Series(data1, dtype=dtype1, index=index1)
+    s2 = cudf.Series(data2, dtype=dtype2, index=index2)
+    s3 = cudf.Series(data3, dtype=dtype3, index=index3)
+    expected = cudf.Series(
+        expected_data, dtype=expected_dtype, index=expected_index
+    )
     s = cudf.concat([s1, s2, s3])
     assert_eq(s, expected, check_index_type=True)
 
 
 @pytest.mark.parametrize(
-    "s1, s2, expected",
+    "data1, dtype1, index1, data2, dtype2, index2, expected_data, expected_dtype, expected_index",
     [
-        (
-            cudf.Series(
-                [Decimal("955.22"), Decimal("8.2")], dtype=Decimal64Dtype(5, 2)
-            ),
-            cudf.Series(["2007-06-12", "2006-03-14"], dtype="datetime64[s]"),
-            cudf.Series(
-                [
-                    "955.22",
-                    "8.20",
-                    "2007-06-12 00:00:00",
-                    "2006-03-14 00:00:00",
-                ],
-                index=[0, 1, 0, 1],
-            ),
-        ),
-        (
-            cudf.Series(
-                [Decimal("-52.44"), Decimal("365.22")],
-                dtype=Decimal64Dtype(5, 2),
-            ),
-            cudf.Series(
-                np.arange(
-                    "2005-02-01T12", "2005-02-01T15", dtype="datetime64[h]"
-                ).astype("datetime64[s]"),
-                dtype="datetime64[s]",
-            ),
-            cudf.Series(
-                [
-                    "-52.44",
-                    "365.22",
-                    "2005-02-01 12:00:00",
-                    "2005-02-01 13:00:00",
-                    "2005-02-01 14:00:00",
-                ],
-                index=[0, 1, 0, 1, 2],
-            ),
-        ),
-        (
-            cudf.Series(
-                [Decimal("753.0"), Decimal("94.22")],
-                dtype=Decimal64Dtype(5, 2),
-            ),
-            cudf.Series([np.timedelta64(111, "s"), np.timedelta64(509, "s")]),
-            cudf.Series(
-                ["753.00", "94.22", "0 days 00:01:51", "0 days 00:08:29"],
-                index=[0, 1, 0, 1],
-            ),
-        ),
-        (
-            cudf.Series(
-                [Decimal("753.0"), Decimal("94.22")],
-                dtype=Decimal64Dtype(5, 2),
-            ),
-            cudf.Series(
-                [np.timedelta64(940252, "s"), np.timedelta64(758385, "s")]
-            ),
-            cudf.Series(
-                ["753.00", "94.22", "10 days 21:10:52", "8 days 18:39:45"],
-                index=[0, 1, 0, 1],
-            ),
-        ),
+        [
+            [Decimal("955.22"), Decimal("8.2")],
+            Decimal64Dtype(5, 2),
+            None,
+            ["2007-06-12", "2006-03-14"],
+            "datetime64[s]",
+            None,
+            [
+                "955.22",
+                "8.20",
+                "2007-06-12 00:00:00",
+                "2006-03-14 00:00:00",
+            ],
+            None,
+            [0, 1, 0, 1],
+        ],
+        [
+            [Decimal("-52.44"), Decimal("365.22")],
+            Decimal64Dtype(5, 2),
+            None,
+            np.arange(
+                "2005-02-01T12", "2005-02-01T15", dtype="datetime64[h]"
+            ).astype("datetime64[s]"),
+            "datetime64[s]",
+            None,
+            [
+                "-52.44",
+                "365.22",
+                "2005-02-01 12:00:00",
+                "2005-02-01 13:00:00",
+                "2005-02-01 14:00:00",
+            ],
+            None,
+            [0, 1, 0, 1, 2],
+        ],
+        [
+            [Decimal("753.0"), Decimal("94.22")],
+            Decimal64Dtype(5, 2),
+            None,
+            [np.timedelta64(111, "s"), np.timedelta64(509, "s")],
+            None,
+            None,
+            [
+                "753.00",
+                "94.22",
+                "0 days 00:01:51",
+                "0 days 00:08:29",
+            ],
+            None,
+            [0, 1, 0, 1],
+        ],
+        [
+            [Decimal("753.0"), Decimal("94.22")],
+            Decimal64Dtype(5, 2),
+            None,
+            [np.timedelta64(940252, "s"), np.timedelta64(758385, "s")],
+            None,
+            None,
+            [
+                "753.00",
+                "94.22",
+                "10 days 21:10:52",
+                "8 days 18:39:45",
+            ],
+            None,
+            [0, 1, 0, 1],
+        ],
     ],
 )
-def test_concat_decimal_non_numeric(s1, s2, expected):
+def test_concat_decimal_non_numeric(
+    data1,
+    dtype1,
+    index1,
+    data2,
+    dtype2,
+    index2,
+    expected_data,
+    expected_dtype,
+    expected_index,
+):
+    s1 = cudf.Series(data1, dtype=dtype1, index=index1)
+    s2 = cudf.Series(data2, dtype=dtype2, index=index2)
+    expected = cudf.Series(
+        expected_data, dtype=expected_dtype, index=expected_index
+    )
+    s = cudf.concat([s1, s2])
+    assert_eq(s, expected, check_index_type=True)
+
+
+def test_concat_struct_column():
+    s1 = cudf.Series([{"a": 5}, {"c": "hello"}, {"b": 7}])
+    s2 = cudf.Series([{"a": 5, "c": "hello", "b": 7}])
+    expected = cudf.Series(
+        [
+            {"a": 5, "b": None, "c": None},
+            {"a": None, "b": None, "c": "hello"},
+            {"a": None, "b": 7, "c": None},
+            {"a": 5, "b": 7, "c": "hello"},
+        ],
+        index=[0, 1, 2, 0],
+    )
     s = cudf.concat([s1, s2])
     assert_eq(s, expected, check_index_type=True)
 
 
 @pytest.mark.parametrize(
-    "s1, s2, expected",
+    "frame1_cls, frame1_data, frame2_cls, frame2_data, expected_cls, expected_data",
     [
         (
-            cudf.Series([{"a": 5}, {"c": "hello"}, {"b": 7}]),
-            cudf.Series([{"a": 5, "c": "hello", "b": 7}]),
-            cudf.Series(
-                [
-                    {"a": 5, "b": None, "c": None},
-                    {"a": None, "b": None, "c": "hello"},
-                    {"a": None, "b": 7, "c": None},
-                    {"a": 5, "b": 7, "c": "hello"},
-                ],
-                index=[0, 1, 2, 0],
-            ),
-        )
-    ],
-)
-def test_concat_struct_column(s1, s2, expected):
-    s = cudf.concat([s1, s2])
-    assert_eq(s, expected, check_index_type=True)
-
-
-@pytest.mark.parametrize(
-    "frame1, frame2, expected",
-    [
-        (
-            cudf.Series([[{"b": 0}], [{"b": 1}], [{"b": 3}]]),
-            cudf.Series([[{"b": 10}], [{"b": 12}], None]),
-            cudf.Series(
-                [
+            cudf.Series,
+            {"data": [[{"b": 0}], [{"b": 1}], [{"b": 3}]]},
+            cudf.Series,
+            {"data": [[{"b": 10}], [{"b": 12}], None]},
+            cudf.Series,
+            {
+                "data": [
                     [{"b": 0}],
                     [{"b": 1}],
                     [{"b": 3}],
@@ -1791,14 +1811,17 @@ def test_concat_struct_column(s1, s2, expected):
                     [{"b": 12}],
                     None,
                 ],
-                index=[0, 1, 2, 0, 1, 2],
-            ),
+                "index": [0, 1, 2, 0, 1, 2],
+            },
         ),
         (
-            cudf.DataFrame({"a": [[{"b": 0}], [{"b": 1}], [{"b": 3}]]}),
-            cudf.DataFrame({"a": [[{"b": 10}], [{"b": 12}], None]}),
-            cudf.DataFrame(
-                {
+            cudf.DataFrame,
+            {"data": {"a": [[{"b": 0}], [{"b": 1}], [{"b": 3}]]}},
+            cudf.DataFrame,
+            {"data": {"a": [[{"b": 10}], [{"b": 12}], None]}},
+            cudf.DataFrame,
+            {
+                "data": {
                     "a": [
                         [{"b": 0}],
                         [{"b": 1}],
@@ -1808,12 +1831,22 @@ def test_concat_struct_column(s1, s2, expected):
                         None,
                     ]
                 },
-                index=[0, 1, 2, 0, 1, 2],
-            ),
+                "index": [0, 1, 2, 0, 1, 2],
+            },
         ),
     ],
 )
-def test_concat_list_column(frame1, frame2, expected):
+def test_concat_list_column(
+    frame1_cls,
+    frame1_data,
+    frame2_cls,
+    frame2_data,
+    expected_cls,
+    expected_data,
+):
+    frame1 = frame1_cls(**frame1_data)
+    frame2 = frame2_cls(**frame2_data)
+    expected = expected_cls(**expected_data)
     actual = cudf.concat([frame1, frame2])
     assert_eq(actual, expected, check_index_type=True)
 
@@ -1858,9 +1891,6 @@ def singleton_concat_obj(request, singleton_concat_index):
         return pd.Series([4, 5, 5, 6], index=singleton_concat_index)
 
 
-@pytest.mark.parametrize("axis", [0, 1, "columns", "index"])
-@pytest.mark.parametrize("sort", [False, True])
-@pytest.mark.parametrize("ignore_index", [False, True])
 def test_concat_singleton_sorting(
     axis, sort, ignore_index, singleton_concat_obj
 ):
@@ -2008,21 +2038,23 @@ def test_concat_dictionary(d, axis):
 
 
 @pytest.mark.parametrize(
-    "d",
+    "idx_cls, idx_data",
     [
-        {"first": cudf.Index([1, 2, 3])},
-        {
-            "first": cudf.MultiIndex(
-                levels=[[1, 2], ["blue", "red"]],
-                codes=[[0, 0, 1, 1], [1, 0, 1, 0]],
-            )
-        },
-        {"first": cudf.CategoricalIndex([1, 2, 3])},
+        [cudf.Index, {"data": [1, 2, 3]}],
+        [
+            cudf.MultiIndex,
+            {
+                "levels": [[1, 2], ["blue", "red"]],
+                "codes": [[0, 0, 1, 1], [1, 0, 1, 0]],
+            },
+        ],
+        [cudf.CategoricalIndex, {"data": [1, 2, 3]}],
     ],
 )
-def test_concat_dict_incorrect_type_index(d):
+def test_concat_dict_incorrect_type_index(idx_cls, idx_data):
+    idx = idx_cls(**idx_data)
     with pytest.raises(
         TypeError,
         match="cannot concatenate a dictionary containing indices",
     ):
-        cudf.concat(d, axis=1)
+        cudf.concat({"first": idx}, axis=1)

@@ -49,6 +49,38 @@ __all__ = [
 ]
 
 
+def _env_get_int(name: str, default: int) -> int:
+    try:
+        return int(os.getenv(name, default))
+    except (ValueError, TypeError):  # pragma: no cover
+        return default  # pragma: no cover
+
+
+def get_total_device_memory() -> int | None:
+    """Return the total memory of the current device."""
+    import pynvml
+
+    try:
+        pynvml.nvmlInit()
+        index = os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0]
+        if index and not index.isnumeric():  # pragma: no cover
+            # This means device_index is UUID.
+            # This works for both MIG and non-MIG device UUIDs.
+            handle = pynvml.nvmlDeviceGetHandleByUUID(str.encode(index))
+            if pynvml.nvmlDeviceIsMigDeviceHandle(handle):
+                # Additionally get parent device handle
+                # if the device itself is a MIG instance
+                handle = pynvml.nvmlDeviceGetDeviceHandleFromMigDeviceHandle(handle)
+        else:
+            handle = pynvml.nvmlDeviceGetHandleByIndex(int(index))
+
+        return pynvml.nvmlDeviceGetMemoryInfo(handle).total
+
+    except pynvml.NVMLError_NotSupported:  # pragma: no cover
+        # System doesn't have proper "GPU memory".
+        return None
+
+
 @functools.cache
 def rapidsmpf_available() -> bool:  # pragma: no cover
     """Query whether rapidsmpf is available as a shuffle method."""
@@ -153,6 +185,18 @@ class ParquetOptions:
     pass_read_limit
         Limit on the amount of memory used for reading and decompressing data
         or 0 if there is no limit.
+    max_footer_samples
+        Maximum number of file footers to sample for metadata. This
+        option is currently used by the streaming executor to gather
+        datasource statistics before generating a physical plan. Set to
+        0 to avoid metadata sampling. Default is 3.
+    max_row_group_samples
+        Maximum number of row-groups to sample for unique-value statistics.
+        This option may be used by the streaming executor to optimize
+        the physical plan. Default is 1.
+
+        Set to 0 to avoid row-group sampling. Note that row-group sampling
+        will also be skipped if ``max_footer_samples`` is 0.
     """
 
     _env_prefix = "CUDF_POLARS__PARQUET_OPTIONS"
@@ -172,6 +216,16 @@ class ParquetOptions:
             f"{_env_prefix}__PASS_READ_LIMIT", int, default=0
         )
     )
+    max_footer_samples: int = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__MAX_FOOTER_SAMPLES", int, default=3
+        )
+    )
+    max_row_group_samples: int = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__MAX_ROW_GROUP_SAMPLES", int, default=1
+        )
+    )
 
     def __post_init__(self) -> None:  # noqa: D105
         if not isinstance(self.chunked, bool):
@@ -180,57 +234,35 @@ class ParquetOptions:
             raise TypeError("chunk_read_limit must be an int")
         if not isinstance(self.pass_read_limit, int):
             raise TypeError("pass_read_limit must be an int")
+        if not isinstance(self.max_footer_samples, int):
+            raise TypeError("max_footer_samples must be an int")
+        if not isinstance(self.max_row_group_samples, int):
+            raise TypeError("max_row_group_samples must be an int")
 
 
 def default_blocksize(scheduler: str) -> int:
     """Return the default blocksize."""
-    try:
-        # Use PyNVML to find the worker device size.
-        import pynvml
-    except (ImportError, ValueError) as err:  # pragma: no cover
-        # Fall back to a conservative 12GiB default
-        warnings.warn(
-            "Failed to query the device size with NVML. Please "
-            "set 'target_partition_size' to a literal byte size to "
-            f"silence this warning. Original error: {err}",
-            stacklevel=1,
-        )
-        device_size = 12 * 1024**3
-    else:
-        try:
-            pynvml.nvmlInit()
-            index = os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0]
-            if index and not index.isnumeric():  # pragma: no cover
-                # This means device_index is UUID.
-                # This works for both MIG and non-MIG device UUIDs.
-                handle = pynvml.nvmlDeviceGetHandleByUUID(str.encode(index))
-                if pynvml.nvmlDeviceIsMigDeviceHandle(handle):
-                    # Additionally get parent device handle
-                    # if the device itself is a MIG instance
-                    handle = pynvml.nvmlDeviceGetDeviceHandleFromMigDeviceHandle(handle)
-            else:
-                handle = pynvml.nvmlDeviceGetHandleByIndex(int(index))
+    device_size = get_total_device_memory()
+    if device_size is None:  # pragma: no cover
+        # System doesn't have proper "GPU memory".
+        # Fall back to a conservative 1GB default.
+        return 1_000_000_000
 
-            device_size = pynvml.nvmlDeviceGetMemoryInfo(handle).total
-        except pynvml.NVMLError as err:  # pragma: no cover
-            warnings.warn(
-                "Failed to query the device size with NVML. Please "
-                "set 'target_partition_size' to a literal byte size to "
-                f"silence this warning. Original error: {err}",
-                stacklevel=1,
-            )
-            device_size = 12 * 1024**3
-
-    if scheduler == "distributed":
+    if (
+        scheduler == "distributed"
+        or _env_get_int("POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY", default=1) == 0
+    ):
         # Distributed execution requires a conservative
-        # blocksize for now.
+        # blocksize for now. We are also more conservative
+        # when UVM is disabled.
         blocksize = int(device_size * 0.025)
     else:
         # Single-GPU execution can lean on UVM to
         # support a much larger blocksize.
         blocksize = int(device_size * 0.0625)
 
-    return max(blocksize, 256_000_000)
+    # Use lower and upper bounds of 1GB and 10GB
+    return min(max(blocksize, 1_000_000_000), 10_000_000_000)
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
