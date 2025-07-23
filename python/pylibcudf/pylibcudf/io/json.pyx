@@ -806,7 +806,7 @@ cpdef TableWithMetadata read_json_from_string_column(
         String scalar used to replace null values during join
     dtypes: List
         Set data types for columns to be read.
-    compression: compression_type
+    compression: CompressionType
         Set compression type of the string column contents
     recovery_mode: json_recovery_mode_t
         Set recovery option for corrupted JSON input in string column
