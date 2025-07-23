@@ -4,9 +4,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.testing import (
-    assert_index_equal,
-)
+from cudf.testing import assert_index_equal
 
 
 @pytest.fixture(params=["equiv", True, False])

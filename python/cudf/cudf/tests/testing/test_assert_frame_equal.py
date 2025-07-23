@@ -5,9 +5,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.testing import (
-    assert_frame_equal,
-)
+from cudf.testing import assert_frame_equal
 
 
 @pytest.fixture(params=[True, False])

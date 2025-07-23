@@ -4,13 +4,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.testing import (
-    assert_series_equal,
-)
-from cudf.testing._utils import (
-    NUMERIC_TYPES,
-    OTHER_TYPES,
-)
+from cudf.testing import assert_series_equal
 
 
 def test_series_different_type_cases(
@@ -74,19 +68,16 @@ def test_datetime_like_compaibility(rdata, check_datetimelike_compat):
 @pytest.mark.parametrize("rname", ["a", "b"])
 @pytest.mark.parametrize("check_category_order", [True, False])
 @pytest.mark.parametrize("check_categorical", [True, False])
-@pytest.mark.parametrize(
-    "dtype", NUMERIC_TYPES + OTHER_TYPES + ["datetime64[ns]"]
-)
 def test_basic_assert_series_equal(
     rdata,
     rname,
     check_names,
     check_category_order,
     check_categorical,
-    dtype,
+    all_supported_types_as_str,
 ):
-    p_left = pd.Series([1, 2, 3], name="a", dtype=dtype)
-    p_right = pd.Series(rdata, name=rname, dtype=dtype)
+    p_left = pd.Series([1, 2, 3], name="a", dtype=all_supported_types_as_str)
+    p_right = pd.Series(rdata, name=rname, dtype=all_supported_types_as_str)
 
     left = cudf.from_pandas(p_left)
     right = cudf.from_pandas(p_right)
