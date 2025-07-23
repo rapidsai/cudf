@@ -2383,10 +2383,10 @@ def test_equality_ops_index_mismatch(binop_comparison_func):
 @pytest.mark.parametrize(
     "dtype",
     itertools.chain(
-        NUMERIC_TYPES,
-        DATETIME_TYPES,
-        TIMEDELTA_TYPES,
-        STRING_TYPES,
+        list(NUMERIC_TYPES),
+        list(DATETIME_TYPES),
+        list(TIMEDELTA_TYPES),
+        list(STRING_TYPES),
         ["category"],
     ),
 )
