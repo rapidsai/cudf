@@ -24,7 +24,6 @@
 
 enum class join_t { CONDITIONAL, MIXED, HASH, SORT_MERGE };
 
-// TODO: need to add list and struct
 enum class data_type : int32_t {
   INT32   = static_cast<int32_t>(cudf::type_id::INT32),
   INT64   = static_cast<int32_t>(cudf::type_id::INT64),

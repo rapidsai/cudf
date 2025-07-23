@@ -549,8 +549,9 @@ struct create_rand_col_fn {
                                            thrust::minstd_rand& engine,
                                            cudf::size_type num_rows)
   {
-    if (profile.get_cardinality() == 0 || profile.get_cardinality() >= num_rows)
+    if (profile.get_cardinality() == 0 || profile.get_cardinality() >= num_rows) {
       return create_distinct_rows_column<T>(profile, engine, num_rows);
+    }
     return create_random_column<T>(profile, engine, num_rows);
   }
 };
@@ -893,15 +894,9 @@ std::unique_ptr<cudf::column> create_distinct_rows_column<cudf::list_view>(
   auto child_column      = cudf::sequence(
     num_rows, *cudf::make_default_constructed_scalar(cudf::data_type{cudf::type_id::INT32}));
   for (int lvl = dist_params.max_depth; lvl > 0; --lvl) {
-    auto offsets = cudf::detail::make_zeroed_device_uvector_async<cudf::size_type>(
-      num_rows + 1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
-    thrust::sequence(rmm::exec_policy(cudf::get_default_stream()), offsets.begin(), offsets.end());
-    auto offsets_column = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::INT32},
-                                                         num_rows + 1,
-                                                         offsets.release(),
-                                                         rmm::device_buffer{},
-                                                         0);
-    auto list_column    = cudf::make_lists_column(
+    auto offsets_column = cudf::sequence(
+      num_rows + 1, *cudf::make_default_constructed_scalar(cudf::data_type{cudf::type_id::INT32}));
+    auto list_column = cudf::make_lists_column(
       num_rows, std::move(offsets_column), std::move(child_column), 0, rmm::device_buffer{});
     std::swap(child_column, list_column);
   }
