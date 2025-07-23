@@ -692,13 +692,14 @@ class StringFunction(Expr):
             )
         elif self.name is StringFunction.Name.Strptime:
             # TODO: ignores ambiguous
-            format, strict, exact, cache = self.options
+            format, strict, _, _ = self.options
             col = self.children[0].evaluate(df, context=context)
 
             is_timestamps = plc.strings.convert.convert_datetime.is_timestamp(
                 col.obj, format
             )
 
+            plc_col = col.obj
             if strict:
                 if not plc.reduce.reduce(
                     is_timestamps,
@@ -710,16 +711,17 @@ class StringFunction(Expr):
                 not_timestamps = plc.unary.unary_operation(
                     is_timestamps, plc.unary.UnaryOperator.NOT
                 )
-                null = plc.Scalar.from_py(None, col.obj.type())
-                res = plc.copying.boolean_mask_scatter(
-                    [null], plc.Table([col.obj]), not_timestamps
-                )
-                return Column(
-                    plc.strings.convert.convert_datetime.to_timestamps(
-                        res.columns()[0], self.dtype.plc, format
-                    ),
-                    dtype=self.dtype,
-                )
+                null = plc.Scalar.from_py(None, plc_col.type())
+                plc_col = plc.copying.boolean_mask_scatter(
+                    [null], plc.Table([plc_col]), not_timestamps
+                ).columns()[0]
+
+            return Column(
+                plc.strings.convert.convert_datetime.to_timestamps(
+                    plc_col, self.dtype.plc, format
+                ),
+                dtype=self.dtype,
+            )
         elif self.name is StringFunction.Name.Replace:
             column, target, repl = columns
             n, _ = self.options
