@@ -312,7 +312,7 @@ std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_w
     stream);
 }
 
-std::pair<std::unique_ptr<cudf::column>, std::vector<thrust::host_vector<bool>>>
+std::pair<std::unique_ptr<cudf::column>, std::vector<std::vector<bool>>>
 hybrid_scan_reader_impl::filter_data_pages_with_stats(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options,
@@ -420,7 +420,7 @@ hybrid_scan_reader_impl::payload_column_chunks_byte_ranges(
 }
 
 table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns(
-  cudf::host_span<thrust::host_vector<bool> const> data_page_mask,
+  cudf::host_span<std::vector<bool> const> data_page_mask,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   std::vector<rmm::device_buffer> column_chunk_buffers,
   cudf::mutable_column_view row_mask,
@@ -521,7 +521,7 @@ void hybrid_scan_reader_impl::initialize_options(
 void hybrid_scan_reader_impl::prepare_data(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   std::vector<rmm::device_buffer> column_chunk_buffers,
-  cudf::host_span<thrust::host_vector<bool> const> data_page_mask,
+  cudf::host_span<std::vector<bool> const> data_page_mask,
   parquet_reader_options const& options)
 {
   // if we have not preprocessed at the whole-file level, do that now
@@ -683,8 +683,7 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
   }
 }
 
-void hybrid_scan_reader_impl::set_page_mask(
-  cudf::host_span<thrust::host_vector<bool> const> data_page_mask)
+void hybrid_scan_reader_impl::set_page_mask(cudf::host_span<std::vector<bool> const> data_page_mask)
 {
   auto const& pass   = _pass_itm_data;
   auto const& chunks = pass->chunks;
