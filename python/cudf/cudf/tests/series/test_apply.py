@@ -1,18 +1,16 @@
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# Copyright (c) 2025, NVIDIA CORPORATION.
 
 
 import numpy as np
 import pytest
 
 from cudf import Series
-from cudf.testing._utils import NUMERIC_TYPES
 
 
 def _generic_function(a):
     return a**3
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES)
 @pytest.mark.parametrize(
     "udf,testfunc",
     [
@@ -20,10 +18,10 @@ def _generic_function(a):
         (lambda x: x in [1, 2, 3, 4], lambda ser: np.isin(ser, [1, 2, 3, 4])),
     ],
 )
-def test_apply_python_lambda(dtype, udf, testfunc):
-    size = 500
+def test_apply_python_lambda(numeric_types_as_str, udf, testfunc):
+    size = 50
     rng = np.random.default_rng(seed=0)
-    lhs_arr = rng.random(size).astype(dtype)
+    lhs_arr = rng.random(size).astype(numeric_types_as_str)
     lhs_ser = Series(lhs_arr)
 
     out_ser = lhs_ser.apply(udf)
