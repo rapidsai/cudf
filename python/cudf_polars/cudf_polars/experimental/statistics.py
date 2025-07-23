@@ -40,6 +40,10 @@ def collect_base_stats(root: IR, config_options: ConfigOptions) -> StatsCollecto
         Root IR node for collecting base datasource statistics.
     config_options
         GPUEngine configuration options.
+
+    Returns
+    -------
+    A new StatsCollector object with populated datasource statistics.
     """
     stats: StatsCollector = StatsCollector()
     for node in post_traversal([root]):
@@ -75,7 +79,7 @@ def _default_extract_base_stats(
         (child,) = ir.children
         child_column_stats = stats.column_stats.get(child, {})
         return {
-            name: child_column_stats.get(name, ColumnStats(name=name))
+            name: child_column_stats.get(name, ColumnStats(name=name)).copy()
             for name in ir.schema
         }
     else:
@@ -112,17 +116,21 @@ def _(
     for name in ir.schema:
         if name in primary.schema:
             # "Primary" child stats take preference.
-            column_stats[name] = primary_child_stats.get(name, ColumnStats(name=name))
+            column_stats[name] = primary_child_stats.get(
+                name, ColumnStats(name=name)
+            ).copy()
         elif name in other.schema:
             # "Other" column stats apply to everything else.
-            column_stats[name] = other_child_stats.get(name, ColumnStats(name=name))
+            column_stats[name] = other_child_stats.get(
+                name, ColumnStats(name=name)
+            ).copy()
         else:
             # If the column name was not in either child table,
             # a suffix was probably added to a column in "other".
             _name = name.removesuffix(suffix)
             column_stats[name] = other_child_stats.get(
                 _name, ColumnStats(name=name)
-            ).rename(name)
+            ).copy(name=name)
 
     return column_stats
 
@@ -151,7 +159,8 @@ def _(
         )
     )
     return {
-        name: child_column_stats.get(name, ColumnStats(name=name)) for name in ir.schema
+        name: child_column_stats.get(name, ColumnStats(name=name)).copy()
+        for name in ir.schema
     }
 
 

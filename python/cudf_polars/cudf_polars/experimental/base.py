@@ -153,9 +153,9 @@ class ColumnStats:
         self.source_name = source_name or name
         self.unique_stats = unique_stats or UniqueStats()
 
-    def rename(self, name: str) -> ColumnStats:
+    def copy(self, *, name: str | None = None) -> ColumnStats:
         """
-        Rename a ColumnStats object.
+        Copy a ColumnStats object.
 
         Parameters
         ----------
@@ -165,13 +165,19 @@ class ColumnStats:
 
         Returns
         -------
-        A new renamed ColumnStats object.
+        A new ColumnStats object.
+
+        Notes
+        -----
+        This API preserves the original DataSourceInfo reference.
         """
         return ColumnStats(
-            name,
+            name=name or self.name,
+            # Want to reference the same DataSourceInfo
             source_info=self.source_info,
             source_name=self.source_name,
-            unique_stats=self.unique_stats,
+            # Want a copy of the UniqueStats so we can mutate in place
+            unique_stats=dataclasses.replace(self.unique_stats),
         )
 
 
