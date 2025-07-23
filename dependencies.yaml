@@ -157,6 +157,7 @@ files:
     includes:
       - build_base
       - build_python_common
+      - build_python_cudf
       - depends_on_pylibcudf
       - depends_on_libcudf
       - depends_on_librmm
@@ -500,6 +501,11 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cython>=3.0.3
+  build_python_cudf:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+        - &numba-cuda-dep numba-cuda>=0.14.0,<0.15.0a0
   pyarrow_run:
     common:
       - output_types: [conda]
@@ -673,7 +679,7 @@ dependencies:
           - typing_extensions>=4.0.0
       - output_types: [conda]
         packages:
-          - &numba-cuda-dep numba-cuda>=0.14.0,<0.15.0a0
+          - *numba-cuda-dep
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file

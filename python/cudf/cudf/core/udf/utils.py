@@ -15,16 +15,19 @@ from numba import cuda, typeof
 from numba.core.datamodel import default_manager, models
 from numba.core.extending import register_model
 from numba.np import numpy_support
-from numba.types import CPointer, Record, Tuple
+from numba.types import CPointer, Record, Tuple, int64, void
 
 import rmm
 
 from cudf._lib import strings_udf
 from cudf.core.buffer import as_buffer
 from cudf.core.udf.masked_typing import MaskedType
+from cudf.core.udf.nrt_utils import nrt_enabled
 from cudf.core.udf.strings_typing import (
+    NRT_decref,
+    managed_udf_string,
+    str_view_arg_handler,
     string_view,
-    udf_string,
 )
 from cudf.utils.dtypes import (
     BOOL_TYPES,
@@ -252,8 +255,27 @@ def _get_input_args_from_frame(fr: IndexedFrame) -> list:
 
 def _return_arr_from_dtype(dtype, size):
     if dtype == CUDF_STRING_DTYPE:
-        return rmm.DeviceBuffer(size=size * _get_extensionty_size(udf_string))
+        return rmm.DeviceBuffer(
+            size=size * _get_extensionty_size(managed_udf_string)
+        )
     return cp.empty(size, dtype=dtype)
+
+
+@functools.cache
+def _make_free_string_kernel():
+    with nrt_enabled():
+
+        @cuda.jit(
+            void(CPointer(managed_udf_string), int64),
+            link=[UDF_SHIM_FILE],
+            extensions=[str_view_arg_handler],
+        )
+        def free_managed_udf_string_array(ary, size):
+            gid = cuda.grid(1)
+            if gid < size:
+                NRT_decref(ary[gid])
+
+    return free_managed_udf_string_array
 
 
 # The only supported data layout in NVVM.
