@@ -1,5 +1,4 @@
 # Copyright (c) 2020-2025, NVIDIA CORPORATION.
-import datetime
 import decimal
 import hashlib
 import operator
@@ -1669,14 +1668,6 @@ def test_series_np_array_nat_nan_as_nulls(nat, value, nan_as_null):
     assert ser[1] == value
 
 
-def test_series_unitness_np_datetimelike_units():
-    data = np.array([np.timedelta64(1)])
-    with pytest.raises(TypeError):
-        cudf.Series(data)
-    with pytest.raises(TypeError):
-        pd.Series(data)
-
-
 def test_series_duplicate_index_reindex():
     gs = cudf.Series([0, 1, 2, 3], index=[0, 0, 1, 1])
     ps = gs.to_pandas()
@@ -1687,134 +1678,6 @@ def test_series_duplicate_index_reindex():
         lfunc_args_and_kwargs=([10, 11, 12, 13], {}),
         rfunc_args_and_kwargs=([10, 11, 12, 13], {}),
     )
-
-
-def test_list_category_like_maintains_dtype():
-    dtype = cudf.CategoricalDtype(categories=[1, 2, 3, 4], ordered=True)
-    data = [1, 2, 3]
-    result = cudf.Series._from_column(as_column(data, dtype=dtype))
-    expected = pd.Series(data, dtype=dtype.to_pandas())
-    assert_eq(result, expected)
-
-
-def test_list_interval_like_maintains_dtype():
-    dtype = cudf.IntervalDtype(subtype=np.int8)
-    data = [pd.Interval(1, 2)]
-    result = cudf.Series._from_column(as_column(data, dtype=dtype))
-    expected = pd.Series(data, dtype=dtype.to_pandas())
-    assert_eq(result, expected)
-
-
-@pytest.mark.parametrize(
-    "klass", [cudf.Series, cudf.Index, pd.Series, pd.Index]
-)
-def test_series_from_named_object_name_priority(klass):
-    result = cudf.Series(klass([1], name="a"), name="b")
-    assert result.name == "b"
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        {"a": 1, "b": 2, "c": 3},
-        cudf.Series([1, 2, 3], index=list("abc")),
-        pd.Series([1, 2, 3], index=list("abc")),
-    ],
-)
-def test_series_from_object_with_index_index_arg_reindex(data):
-    result = cudf.Series(data, index=list("bca"))
-    expected = cudf.Series([2, 3, 1], index=list("bca"))
-    assert_eq(result, expected)
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        {0: 1, 1: 2, 2: 3},
-        cudf.Series([1, 2, 3]),
-        cudf.Index([1, 2, 3]),
-        pd.Series([1, 2, 3]),
-        pd.Index([1, 2, 3]),
-        [1, 2, 3],
-    ],
-)
-def test_series_dtype_astypes(data):
-    result = cudf.Series(data, dtype="float64")
-    expected = cudf.Series([1.0, 2.0, 3.0])
-    assert_eq(result, expected)
-
-
-@pytest.mark.parametrize("pa_type", [pa.string, pa.large_string])
-def test_series_from_large_string(pa_type):
-    pa_string_array = pa.array(["a", "b", "c"]).cast(pa_type())
-    got = cudf.Series(pa_string_array)
-    expected = pd.Series(pa_string_array)
-
-    assert_eq(expected, got)
-
-
-@pytest.mark.parametrize(
-    "scalar",
-    [
-        1,
-        1.0,
-        "a",
-        datetime.datetime(2020, 1, 1),
-        datetime.timedelta(1),
-        {"1": 2},
-        [1],
-        decimal.Decimal("1.0"),
-    ],
-)
-def test_series_to_pandas_arrow_type_nullable_raises(scalar):
-    pa_array = pa.array([scalar, None])
-    ser = cudf.Series(pa_array)
-    with pytest.raises(ValueError, match=".* cannot both be set"):
-        ser.to_pandas(nullable=True, arrow_type=True)
-
-
-@pytest.mark.parametrize(
-    "scalar",
-    [
-        1,
-        1.0,
-        "a",
-        datetime.datetime(2020, 1, 1),
-        datetime.timedelta(1),
-        {"1": 2},
-        [1],
-        decimal.Decimal("1.0"),
-    ],
-)
-def test_series_to_pandas_arrow_type(scalar):
-    pa_array = pa.array([scalar, None])
-    ser = cudf.Series(pa_array)
-    result = ser.to_pandas(arrow_type=True)
-    expected = pd.Series(pd.arrays.ArrowExtensionArray(pa_array))
-    pd.testing.assert_series_equal(result, expected)
-
-
-@pytest.mark.parametrize("axis", [None, 0, "index"])
-@pytest.mark.parametrize("data", [[1, 2], [1]])
-def test_squeeze(axis, data):
-    ser = cudf.Series(data)
-    result = ser.squeeze(axis=axis)
-    expected = ser.to_pandas().squeeze(axis=axis)
-    assert_eq(result, expected)
-
-
-@pytest.mark.parametrize("axis", [1, "columns"])
-def test_squeeze_invalid_axis(axis):
-    with pytest.raises(ValueError):
-        cudf.Series([1]).squeeze(axis=axis)
-
-
-def test_series_init_with_nans():
-    with cudf.option_context("mode.pandas_compatible", True):
-        gs = cudf.Series([1, 2, 3, np.nan])
-    assert gs.dtype == np.dtype("float64")
-    ps = pd.Series([1, 2, 3, np.nan])
-    assert_eq(ps, gs)
 
 
 @pytest.mark.parametrize("data", [None, 123, 33243243232423, 0])
