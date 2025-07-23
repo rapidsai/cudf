@@ -305,3 +305,9 @@ def dropna(request):
 def nan_as_null(request):
     """Param for `nan_as_null` argument"""
     return request.param
+
+
+@pytest.fixture(params=[True, False])
+def inplace(request):
+    """Param for `inplace` argument"""
+    return request.param

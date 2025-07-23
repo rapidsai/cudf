@@ -1,4 +1,5 @@
 # Copyright (c) 2023-2025, NVIDIA CORPORATION.
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -112,3 +113,21 @@ def test_series_init_with_nans():
     assert gs.dtype == np.dtype("float64")
     ps = pd.Series([1, 2, 3, np.nan])
     assert_eq(ps, gs)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [[1, 2, 3], [10, 20]],
+        [[1.0, 2.0, 3.0], None, [10.0, 20.0, np.nan]],
+        [[5, 6], None, [1]],
+        [None, None, None, None, None, [10, 20]],
+    ],
+)
+@pytest.mark.parametrize("klass", [cudf.Series, list, cp.array])
+def test_nested_series_from_sequence_data(data, klass):
+    actual = cudf.Series(
+        [klass(val) if val is not None else val for val in data]
+    )
+    expected = cudf.Series(data)
+    assert_eq(actual, expected)
