@@ -816,7 +816,7 @@ cpdef TableWithMetadata read_json_from_string_column(
     Returns
     -------
     TableWithMetadata
-        The Table and its corresponding metadata (column names) that were read in.
+        The Table and its corresponding metadata (column names)
     """
     cdef const string_scalar* c_separator = <const string_scalar*>(
         separator.c_obj.get()
