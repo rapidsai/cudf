@@ -360,6 +360,15 @@ class NumericalColumn(NumericalBaseColumn):
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
     def as_string_column(self, dtype) -> StringColumn:
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and isinstance(dtype, np.dtype)
+            and dtype.kind == "O"
+        ):
+            raise ValueError(
+                "Cannot convert numerical column to string column "
+                "when dtype is not a pandas nullable extension type."
+            )
         if len(self) == 0:
             return cast(
                 cudf.core.column.StringColumn,

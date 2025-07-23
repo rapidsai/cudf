@@ -7412,6 +7412,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
              weight  kg    3.0
         dtype: float64
         """
+        # import pdb;pdb.set_trace()
         if future_stack:
             if dropna is not no_default:
                 raise ValueError(

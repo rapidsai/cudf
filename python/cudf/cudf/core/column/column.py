@@ -1806,6 +1806,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return result
 
     def astype(self, dtype: DtypeObj, copy: bool = False) -> ColumnBase:
+        # import pdb;pdb.set_trace()
         if self.dtype == dtype:
             result = self
         elif len(self) == 0:
@@ -1827,7 +1828,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 result = self.as_datetime_column(dtype)
             elif dtype.kind == "m":
                 result = self.as_timedelta_column(dtype)
-            elif dtype.kind == "O":
+            elif dtype.kind in {"O", "U"}:
                 result = self.as_string_column(dtype)
             else:
                 result = self.as_numerical_column(dtype)
@@ -1839,6 +1840,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def as_categorical_column(
         self, dtype: CategoricalDtype
     ) -> CategoricalColumn:
+        # import pdb;pdb.set_trace()
         ordered = dtype.ordered
 
         # Re-label self w.r.t. the provided categories
@@ -2642,6 +2644,7 @@ def build_column(
         )
     elif (
         dtype == CUDF_STRING_DTYPE
+        or dtype.kind == "U"
         or isinstance(dtype, pd.StringDtype)
         or (isinstance(dtype, pd.ArrowDtype) and dtype.kind == "U")
     ):
@@ -2799,6 +2802,7 @@ def as_column(
     * pandas.Categorical objects
     * range objects
     """
+    # import pdb;pdb.set_trace()
     if isinstance(arbitrary, (range, pd.RangeIndex, cudf.RangeIndex)):
         with acquire_spill_lock():
             column = ColumnBase.from_pylibcudf(
@@ -2900,12 +2904,24 @@ def as_column(
                 ):
                     # Conversion to arrow converts IntervalDtype to StructDtype
                     dtype = CategoricalDtype.from_pandas(arbitrary.dtype)
-            return as_column(
+            result = as_column(
                 pa.array(arbitrary, from_pandas=True),
                 nan_as_null=nan_as_null,
                 dtype=dtype,
                 length=length,
             )
+            if (
+                cudf.get_option("mode.pandas_compatible")
+                and is_pandas_nullable_extension_dtype(
+                    arbitrary.dtype.categories.dtype
+                )
+                and dtype is None
+            ):
+                # Store pandas extension dtype directly in the column's dtype property
+                result = result._with_type_metadata(
+                    CategoricalDtype.from_pandas(arbitrary.dtype)
+                )
+            return result
         elif is_pandas_nullable_extension_dtype(arbitrary.dtype):
             if (
                 isinstance(arbitrary.dtype, pd.ArrowDtype)

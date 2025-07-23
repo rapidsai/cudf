@@ -106,6 +106,7 @@ class StringColumn(ColumnBase):
         if (
             not cudf.get_option("mode.pandas_compatible")
             and dtype != CUDF_STRING_DTYPE
+            and dtype.kind != "U"
         ) or (
             cudf.get_option("mode.pandas_compatible")
             and not is_dtype_obj_string(dtype)
@@ -411,13 +412,19 @@ class StringColumn(ColumnBase):
         return result  # type: ignore[return-value]
 
     def as_string_column(self, dtype) -> StringColumn:
+        # import pdb;pdb.set_trace()
+        col = self
         if dtype != self.dtype:
             if isinstance(dtype, pd.StringDtype) or (
                 isinstance(dtype, pd.ArrowDtype)
                 and pa.string() == dtype.pyarrow_dtype
             ):
-                self._dtype = dtype
-        return self
+                col = self.copy(deep=True)
+                col._dtype = dtype
+            elif isinstance(dtype, np.dtype) and dtype.kind in {"U", "O"}:
+                col = self.copy(deep=True)
+                col._dtype = CUDF_STRING_DTYPE
+        return col
 
     @property
     def values_host(self) -> np.ndarray:
