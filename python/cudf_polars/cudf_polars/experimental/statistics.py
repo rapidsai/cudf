@@ -22,7 +22,7 @@ from cudf_polars.experimental.base import (
     ColumnStats,
     StatsCollector,
 )
-from cudf_polars.experimental.dispatch import extract_base_stats
+from cudf_polars.experimental.dispatch import collect_source_stats
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -47,7 +47,7 @@ def collect_base_stats(root: IR, config_options: ConfigOptions) -> StatsCollecto
     """
     stats: StatsCollector = StatsCollector()
     for node in post_traversal([root]):
-        stats.column_stats[node] = extract_base_stats(node, stats, config_options)
+        stats.column_stats[node] = collect_source_stats(node, stats, config_options)
     return stats
 
 
@@ -70,11 +70,11 @@ def _update_unique_stats_columns(
             source_stats.add_unique_stats_column(column_stats.source_name or name)
 
 
-@extract_base_stats.register(IR)
-def _default_extract_base_stats(
+@collect_source_stats.register(IR)
+def _default_collect_source_stats(
     ir: IR, stats: StatsCollector, config_options: ConfigOptions
 ) -> dict[str, ColumnStats]:
-    # Default `extract_base_stats` implementation.
+    # Default `collect_source_stats` implementation.
     if len(ir.children) == 1:
         (child,) = ir.children
         child_column_stats = stats.column_stats.get(child, {})
@@ -87,20 +87,20 @@ def _default_extract_base_stats(
         return {name: ColumnStats(name=name) for name in ir.schema}
 
 
-@extract_base_stats.register(Distinct)
+@collect_source_stats.register(Distinct)
 def _(
     ir: Distinct, stats: StatsCollector, config_options: ConfigOptions
 ) -> dict[str, ColumnStats]:
-    # Use default extract_base_stats after updating
+    # Use default collect_source_stats after updating
     # the known unique-stats columns.
     (child,) = ir.children
     child_column_stats = stats.column_stats.get(child, {})
     key_names = ir.subset or ir.schema
     _update_unique_stats_columns(child_column_stats, list(key_names), config_options)
-    return _default_extract_base_stats(ir, stats, config_options)
+    return _default_collect_source_stats(ir, stats, config_options)
 
 
-@extract_base_stats.register(Join)
+@collect_source_stats.register(Join)
 def _(
     ir: Join, stats: StatsCollector, config_options: ConfigOptions
 ) -> dict[str, ColumnStats]:
@@ -135,7 +135,7 @@ def _(
     return column_stats
 
 
-@extract_base_stats.register(GroupBy)
+@collect_source_stats.register(GroupBy)
 def _(
     ir: GroupBy, stats: StatsCollector, config_options: ConfigOptions
 ) -> dict[str, ColumnStats]:
@@ -146,10 +146,10 @@ def _(
     _update_unique_stats_columns(
         child_column_stats, [n.name for n in ir.keys], config_options
     )
-    return _default_extract_base_stats(ir, stats, config_options)
+    return _default_collect_source_stats(ir, stats, config_options)
 
 
-@extract_base_stats.register(HConcat)
+@collect_source_stats.register(HConcat)
 def _(
     ir: HConcat, stats: StatsCollector, config_options: ConfigOptions
 ) -> dict[str, ColumnStats]:
@@ -164,7 +164,7 @@ def _(
     }
 
 
-@extract_base_stats.register(Scan)
+@collect_source_stats.register(Scan)
 def _(
     ir: Scan, stats: StatsCollector, config_options: ConfigOptions
 ) -> dict[str, ColumnStats]:
@@ -173,7 +173,7 @@ def _(
     return _extract_scan_stats(ir, config_options)
 
 
-@extract_base_stats.register(DataFrameScan)
+@collect_source_stats.register(DataFrameScan)
 def _(
     ir: DataFrameScan, stats: StatsCollector, config_options: ConfigOptions
 ) -> dict[str, ColumnStats]:

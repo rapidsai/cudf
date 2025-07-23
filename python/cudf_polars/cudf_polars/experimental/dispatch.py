@@ -100,11 +100,11 @@ def generate_ir_tasks(
 
 
 @singledispatch
-def extract_base_stats(
+def collect_source_stats(
     ir: IR, stats: StatsCollector, config_options: ConfigOptions
 ) -> dict[str, ColumnStats]:
     """
-    Extract "base" datasource statistics for an IR node.
+    Collect datasource statistics for an IR node.
 
     Parameters
     ----------

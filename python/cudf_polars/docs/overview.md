@@ -446,11 +446,11 @@ logic yet.
 
 The top-level API for sampling base datasource statistics is
 `cudf_polars.experimental.statistics.collect_base_stats`. This
-function calls into the `extract_base_stats` single-dispatch function
-to collect a `dict[str, ColumnStats]` mapping for each IR node
-in the logical plan.
+function calls into the `collect_source_stats` single-dispatch
+function to collect a `dict[str, ColumnStats]` mapping for each
+IR node in the logical plan.
 
-The IR-specific logic for each `extract_base_stats` dispatch is
+The IR-specific logic for each `collect_source_stats` dispatch is
 relatively simple, because the only goal is to collect and propagate
 the underlying `DataSourceInfo` reference for each column. This
 means that `Scan` and `DataFrameScan` are the only IR classes
