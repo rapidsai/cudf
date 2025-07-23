@@ -41,6 +41,7 @@ dependencies:
 - jupyter_client
 - libcurand-dev
 - libkvikio==25.8.*,>=0.0.0a0
+- libnvcomp-dev==4.2.0.11
 - librdkafka>=2.8.0,<2.9.0a0
 - librmm==25.8.*,>=0.0.0a0
 - make
@@ -58,7 +59,6 @@ dependencies:
 - numba>=0.59.1,<0.62.0a0
 - numpy>=1.23,<3.0a0
 - numpydoc
-- nvcomp==4.2.0.11
 - nvidia-ml-py
 - nvtx>=0.2.1
 - openpyxl
