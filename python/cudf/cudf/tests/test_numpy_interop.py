@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 import numpy as np
 import pytest
@@ -78,18 +78,19 @@ def test_numpy_non_contiguious():
 @pytest.mark.parametrize(
     "data",
     [
-        Series([1, 2, 3, -12, 12, 44]),
-        Series([1, 2, 3, -12, 12, 44], dtype="str"),
-        Series([1, 2, 3, -12, 12, 44]).index,
-        DataFrame({"a": [1, 2, 3, -1234], "b": [0.1, 0.2222, 0.4, -3.14]}),
-        DataFrame(
+        lambda: Series([1, 2, 3, -12, 12, 44]),
+        lambda: Series([1, 2, 3, -12, 12, 44], dtype="str"),
+        lambda: DataFrame(
             {"a": [1, 2, 3, -1234], "b": [0.1, 0.2222, 0.4, -3.14]}
-        ).index,
+        ),
     ],
 )
 @pytest.mark.parametrize("dtype", [None, "float", "int", "str"])
 def test_series_dataframe__array__(data, dtype):
-    gs = data
+    gs = data()
 
     with pytest.raises(TypeError):
         gs.__array__(dtype=dtype)
+
+    with pytest.raises(TypeError):
+        gs.index.__array__(dtype=dtype)
