@@ -122,7 +122,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
   /**
    * @copydoc cudf::io::experimental::hybrid_scan::filter_data_pages_with_stats
    */
-  [[nodiscard]] std::pair<std::unique_ptr<cudf::column>, std::vector<thrust::host_vector<bool>>>
+  [[nodiscard]] std::pair<std::unique_ptr<cudf::column>, std::vector<std::vector<bool>>>
   filter_data_pages_with_stats(cudf::host_span<std::vector<size_type> const> row_group_indices,
                                parquet_reader_options const& options,
                                rmm::cuda_stream_view stream,
@@ -144,7 +144,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    * @copydoc cudf::io::experimental::hybrid_scan::materialize_filter_columns
    */
   [[nodiscard]] table_with_metadata materialize_filter_columns(
-    cudf::host_span<thrust::host_vector<bool> const> data_page_pask,
+    cudf::host_span<std::vector<bool> const> data_page_pask,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     std::vector<rmm::device_buffer> column_chunk_buffers,
     cudf::mutable_column_view row_mask,
@@ -221,7 +221,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    *
    * @param data_page_mask Input data page mask from page-pruning step
    */
-  void set_page_mask(cudf::host_span<thrust::host_vector<bool> const> data_page_mask);
+  void set_page_mask(cudf::host_span<std::vector<bool> const> data_page_mask);
 
   /**
    * @brief Fill a BOOL8 row mask column with the specified value
@@ -262,7 +262,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    */
   void prepare_data(cudf::host_span<std::vector<size_type> const> row_group_indices,
                     std::vector<rmm::device_buffer> column_chunk_buffers,
-                    cudf::host_span<thrust::host_vector<bool> const> data_page_mask,
+                    cudf::host_span<std::vector<bool> const> data_page_mask,
                     parquet_reader_options const& options);
 
   /**
@@ -304,7 +304,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    * @param options Parquet reader options
    */
   void handle_chunking(std::vector<rmm::device_buffer> column_chunk_buffers,
-                       cudf::host_span<thrust::host_vector<bool> const> data_page_mask,
+                       cudf::host_span<std::vector<bool> const> data_page_mask,
                        parquet_reader_options const& options);
 
   /**

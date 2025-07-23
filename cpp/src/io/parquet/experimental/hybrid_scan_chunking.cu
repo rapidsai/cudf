@@ -43,7 +43,7 @@ using parquet::detail::pass_intermediate_data;
 
 void hybrid_scan_reader_impl::handle_chunking(
   std::vector<rmm::device_buffer> column_chunk_buffers,
-  cudf::host_span<thrust::host_vector<bool> const> data_page_mask,
+  cudf::host_span<std::vector<bool> const> data_page_mask,
   parquet_reader_options const& options)
 {
   // if this is our first time in here, setup the first pass.
