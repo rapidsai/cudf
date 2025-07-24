@@ -141,6 +141,18 @@ if(USE_GDS)
   endif()
 endif()
 
+# Set RMM logging level
+set(RMM_LOGGING_LEVEL
+    "INFO"
+    CACHE STRING "Choose the logging level."
+)
+set_property(
+  CACHE RMM_LOGGING_LEVEL PROPERTY STRINGS "TRACE" "DEBUG" "INFO" "WARN" "ERROR" "CRITICAL" "OFF"
+)
+message(VERBOSE "CUDF_JNI: RMM_LOGGING_LEVEL = '${RMM_LOGGING_LEVEL}'.")
+
+add_compile_definitions("RMM_LOG_ACTIVE_LEVEL=RAPIDS_LOGGER_LOG_LEVEL_${RMM_LOGGING_LEVEL}")
+
 # ##################################################################################################
 # * library targets -------------------------------------------------------------------------------
 
