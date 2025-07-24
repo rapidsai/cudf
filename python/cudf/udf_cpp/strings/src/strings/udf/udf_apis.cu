@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/strings/udf/managed_udf_string.cuh>
 #include <cudf/strings/udf/udf_apis.hpp>
 #include <cudf/strings/udf/udf_string.cuh>
 #include <cudf/strings/utilities.hpp>
@@ -31,7 +32,9 @@
 namespace cudf {
 namespace strings {
 namespace udf {
+
 namespace detail {
+
 namespace {
 
 /**
@@ -39,11 +42,13 @@ namespace {
  *
  * No string data is copied.
  */
-struct udf_string_to_string_view_transform_fn {
-  __device__ cudf::string_view operator()(cudf::strings::udf::udf_string const& dstr)
+struct managed_udf_string_to_string_view_transform_fn {
+  __device__ cudf::string_view operator()(
+    cudf::strings::udf::managed_udf_string const& managed_dstr)
   {
-    return dstr.data() == nullptr ? cudf::string_view{}
-                                  : cudf::string_view{dstr.data(), dstr.size_bytes()};
+    return managed_dstr.udf_str.data() == nullptr
+             ? cudf::string_view{}
+             : cudf::string_view{managed_dstr.udf_str.data(), managed_dstr.udf_str.size_bytes()};
   }
 };
 
@@ -64,38 +69,24 @@ std::unique_ptr<rmm::device_buffer> to_string_view_array(cudf::column_view const
 }
 
 /**
- * @copydoc column_from_udf_string_array
+ * @copydoc column_from_managed_udf_string_array
  *
  * @param stream CUDA stream used for allocating/copying device memory and launching kernels
  */
-std::unique_ptr<cudf::column> column_from_udf_string_array(udf_string* d_strings,
-                                                           cudf::size_type size,
-                                                           rmm::cuda_stream_view stream)
+std::unique_ptr<cudf::column> column_from_managed_udf_string_array(
+  managed_udf_string* managed_strings, cudf::size_type size, rmm::cuda_stream_view stream)
 {
   // create string_views of the udf_strings
   auto indices = rmm::device_uvector<cudf::string_view>(size, stream);
   thrust::transform(rmm::exec_policy(stream),
-                    d_strings,
-                    d_strings + size,
+                    managed_strings,
+                    managed_strings + size,
                     indices.data(),
-                    udf_string_to_string_view_transform_fn{});
+                    managed_udf_string_to_string_view_transform_fn{});
 
-  return cudf::make_strings_column(indices, cudf::string_view(nullptr, 0), stream);
-}
-
-/**
- * @copydoc free_udf_string_array
- *
- * @param stream CUDA stream used for allocating/copying device memory and launching kernels
- */
-void free_udf_string_array(cudf::strings::udf::udf_string* d_strings,
-                           cudf::size_type size,
-                           rmm::cuda_stream_view stream)
-{
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator(0),
-                     size,
-                     [d_strings] __device__(auto idx) { d_strings[idx].clear(); });
+  auto result = cudf::make_strings_column(indices, cudf::string_view(nullptr, 0), stream);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace detail
@@ -109,15 +100,11 @@ std::unique_ptr<rmm::device_buffer> to_string_view_array(cudf::column_view const
   return detail::to_string_view_array(input, cudf::get_default_stream());
 }
 
-std::unique_ptr<cudf::column> column_from_udf_string_array(udf_string* d_strings,
-                                                           cudf::size_type size)
+std::unique_ptr<cudf::column> column_from_managed_udf_string_array(
+  managed_udf_string* managed_strings, cudf::size_type size)
 {
-  return detail::column_from_udf_string_array(d_strings, size, cudf::get_default_stream());
-}
-
-void free_udf_string_array(udf_string* d_strings, cudf::size_type size)
-{
-  detail::free_udf_string_array(d_strings, size, cudf::get_default_stream());
+  return detail::column_from_managed_udf_string_array(
+    managed_strings, size, cudf::get_default_stream());
 }
 
 }  // namespace udf

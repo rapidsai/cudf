@@ -4,7 +4,6 @@ import math
 
 import numba
 import pyarrow as pa
-import pytest
 from numba import cuda
 from utils import assert_column_eq, assert_table_eq
 
@@ -84,9 +83,6 @@ def test_transform_udf():
     @cuda.jit(device=True)
     def op(a, b, c):
         return (a + b) * c
-
-    if not plc.jit.is_runtime_jit_supported():
-        pytest.skip("Skipping tests that require runtime JIT support")
 
     ptx, _ = cuda.compile_ptx_for_current_device(
         op, (numba.float64, numba.float64, numba.float64), device=True
