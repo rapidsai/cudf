@@ -45,55 +45,6 @@ def test_unhandled_dtype_conversion_raises(pltype):
         _ = DataType(pltype)
 
 
-@pytest.mark.parametrize(
-    "plc_dtype, polars_dtype",
-    [
-        (plc.DataType(plc.TypeId.BOOL8), pl.Boolean()),
-        (plc.DataType(plc.TypeId.INT8), pl.Int8()),
-        (plc.DataType(plc.TypeId.INT16), pl.Int16()),
-        (plc.DataType(plc.TypeId.INT32), pl.Int32()),
-        (plc.DataType(plc.TypeId.INT64), pl.Int64()),
-        (plc.DataType(plc.TypeId.UINT8), pl.UInt8()),
-        (plc.DataType(plc.TypeId.UINT16), pl.UInt16()),
-        (plc.DataType(plc.TypeId.UINT32), pl.UInt32()),
-        (plc.DataType(plc.TypeId.UINT64), pl.UInt64()),
-        (plc.DataType(plc.TypeId.FLOAT32), pl.Float32()),
-        (plc.DataType(plc.TypeId.FLOAT64), pl.Float64()),
-        (plc.DataType(plc.TypeId.TIMESTAMP_DAYS), pl.Date()),
-        (plc.DataType(plc.TypeId.EMPTY), pl.Null()),
-        (plc.DataType(plc.TypeId.STRING), pl.String()),
-        (plc.DataType(plc.TypeId.TIMESTAMP_MILLISECONDS), pl.Datetime("ms")),
-        (plc.DataType(plc.TypeId.TIMESTAMP_MICROSECONDS), pl.Datetime("us")),
-        (plc.DataType(plc.TypeId.TIMESTAMP_NANOSECONDS), pl.Datetime("ns")),
-        (plc.DataType(plc.TypeId.DURATION_MILLISECONDS), pl.Duration("ms")),
-        (plc.DataType(plc.TypeId.DURATION_MICROSECONDS), pl.Duration("us")),
-        (plc.DataType(plc.TypeId.DURATION_NANOSECONDS), pl.Duration("ns")),
-    ],
-    ids=lambda d: f"{d!r}",
-)
-def test_plc_to_polars_dtype(plc_dtype, polars_dtype):
-    dtype = DataType(plc_dtype)
-    assert dtype.polars == polars_dtype
-    assert dtype.plc == plc_dtype
-
-
-@pytest.mark.parametrize(
-    "plc_dtype",
-    [
-        plc.DataType(plc.TypeId.LIST),
-        plc.DataType(plc.TypeId.STRUCT),
-        plc.DataType(plc.TypeId.DICTIONARY32),
-        plc.DataType(plc.TypeId.DECIMAL32),
-        plc.DataType(plc.TypeId.DECIMAL64),
-        plc.DataType(plc.TypeId.DECIMAL128),
-    ],
-    ids=lambda d: f"{d.id().name}",
-)
-def test_unhandled_plc_dtype_conversion_raises(plc_dtype):
-    with pytest.raises(NotImplementedError):
-        _ = DataType(plc_dtype)
-
-
 def test_is_order_preserving_cast():
     assert is_order_preserving_cast(INT8, INT8)  # Same type
     assert is_order_preserving_cast(INT8, INT16)  # Smaller type

@@ -9,14 +9,14 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 import pylibcudf as plc
 
-from cudf_polars.containers import Column, DataType
+from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal
 from cudf_polars.utils import dtypes
 from cudf_polars.utils.versions import POLARS_VERSION_LT_129
 
 if TYPE_CHECKING:
-    from cudf_polars.containers import DataFrame
+    from cudf_polars.containers import DataFrame, DataType
 
 __all__ = ["Cast", "Len", "UnaryFunction"]
 
@@ -309,18 +309,17 @@ class UnaryFunction(Expr):
             column = self.children[0].evaluate(df, context=context)
             if column.null_count == 0:
                 return column
-            if isinstance(self.children[1], Literal):
-                arg = plc.Scalar.from_py(
-                    self.children[1].value, self.children[1].dtype.plc
-                )
+            fill_value = self.children[1]
+            if isinstance(fill_value, Literal):
+                arg = plc.Scalar.from_py(fill_value.value, fill_value.dtype.plc)
             else:
-                evaluated = self.children[1].evaluate(df, context=context)
+                evaluated = fill_value.evaluate(df, context=context)
                 arg = evaluated.obj_scalar if evaluated.is_scalar else evaluated.obj
             if isinstance(arg, plc.Scalar) and dtypes.can_cast(
                 column.dtype.plc, arg.type()
             ):  # pragma: no cover
                 arg = (
-                    Column(plc.Column.from_scalar(arg, 1), dtype=DataType(arg.type()))
+                    Column(plc.Column.from_scalar(arg, 1), dtype=fill_value.dtype)
                     .astype(column.dtype)
                     .obj.to_scalar()
                 )
