@@ -32,12 +32,14 @@ namespace detail {
  * @param schema Arrow schema includes the column type
  * @param input Column data, nulls, offset
  * @param mask Mask to apply to the output column
+ * @param null_count Number of nulls in mask
  * @param stream CUDA stream used for device memory operations
  * @param mr Device memory resource to use for all device memory allocations
  */
 std::unique_ptr<column> string_column_from_arrow_host(ArrowSchemaView* schema,
                                                       ArrowArray const* input,
                                                       std::unique_ptr<rmm::device_buffer>&& mask,
+                                                      size_type null_count,
                                                       rmm::cuda_stream_view stream,
                                                       rmm::device_async_resource_ref mr);
 
@@ -63,6 +65,22 @@ std::unique_ptr<column> get_column_copy(ArrowSchemaView* schema,
                                         bool skip_mask,
                                         rmm::cuda_stream_view stream,
                                         rmm::device_async_resource_ref mr);
+
+/**
+ * @brief Create offsets column for list or strings column
+ *
+ *
+ * @param schema Arrow schema includes the column type
+ * @param input Column data, nulls, offset
+ * @param stream CUDA stream used for device memory operations
+ * @param mr Device memory resource to use for all device memory allocations
+ * @return Column plus offset and size bounds for copying data column
+ */
+std::tuple<std::unique_ptr<column>, int64_t, int64_t> get_offsets_column(
+  ArrowSchemaView* schema,
+  ArrowArray const* input,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
 
 }  // namespace detail
 }  // namespace cudf

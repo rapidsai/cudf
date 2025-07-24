@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/debug_utilities.hpp>
 #include <cudf_test/nanoarrow_utils.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
@@ -363,7 +364,7 @@ TYPED_TEST(FromArrowHostDeviceTestDecimalsTest, FixedPointTableNulls)
 
     // converting arrow host memory to cudf table gives us the expected table
     auto got_cudf_table = cudf::from_arrow_host(input_schema.get(), &input);
-    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got_cudf_table->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, got_cudf_table->view());
 
     // converting to a cudf table with a single struct column gives us the expected
     // result column
@@ -421,7 +422,7 @@ TYPED_TEST(FromArrowHostDeviceTestDecimalsTest, FixedPointTableLargeNulls)
 
     // converting arrow host memory to cudf table gives us the expected table
     auto got_cudf_table = cudf::from_arrow_host(input_schema.get(), &input);
-    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got_cudf_table->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, got_cudf_table->view());
 
     // converting to a cudf table with a single struct column gives us the expected
     // result column
@@ -430,7 +431,7 @@ TYPED_TEST(FromArrowHostDeviceTestDecimalsTest, FixedPointTableLargeNulls)
     auto got_cudf_col_view = got_cudf_col->view();
     cudf::table_view from_struct{std::vector<cudf::column_view>(got_cudf_col_view.child_begin(),
                                                                 got_cudf_col_view.child_end())};
-    CUDF_TEST_EXPECT_TABLES_EQUAL(got_cudf_table->view(), from_struct);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(got_cudf_table->view(), from_struct);
   }
 }
 
@@ -499,7 +500,7 @@ TEST_F(FromArrowHostDeviceTest, NestedList)
 
   // converting from arrow host memory to cudf gives us the expected table
   auto got_cudf_table = cudf::from_arrow_host(input_schema.get(), &input);
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table_view, got_cudf_table->view());
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_table_view, got_cudf_table->view());
 
   // converting to a single column cudf table gives us the expected struct column
   auto got_cudf_col = cudf::from_arrow_host_column(input_schema.get(), &input);
@@ -663,7 +664,7 @@ TEST_F(FromArrowHostDeviceTest, StructColumn)
 
   // test we get the expected cudf::table from the arrow host memory data
   auto got_cudf_table = cudf::from_arrow_host(input_schema.get(), &input);
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table_view, got_cudf_table->view());
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_table_view, got_cudf_table->view());
 
   // test we get the expected cudf struct column
   auto got_cudf_col = cudf::from_arrow_host_column(input_schema.get(), &input);
@@ -851,6 +852,11 @@ TEST_P(FromArrowHostDeviceTestSlice, SliceTest)
   input.device_type = ARROW_DEVICE_CPU;
 
   auto got_cudf_table = cudf::from_arrow_host(schema.get(), &input);
+
+  // set offset for calling from_arrow_host_column so main
+  // struct column is sliced which will be enforced on all its child columns
+  input.array.offset = start;
+
   if (got_cudf_table->num_rows() == 0 and sliced_cudf_table.num_rows() == 0) {
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_cudf_table.view(), got_cudf_table->view());
 
@@ -861,14 +867,14 @@ TEST_P(FromArrowHostDeviceTestSlice, SliceTest)
                                                                 got_cudf_col_view.child_end())};
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(got_cudf_table->view(), from_struct);
   } else {
-    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_cudf_table.view(), got_cudf_table->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_cudf_table.view(), got_cudf_table->view());
 
     auto got_cudf_col = cudf::from_arrow_host_column(schema.get(), &input);
     EXPECT_EQ(got_cudf_col->type(), cudf::data_type{cudf::type_id::STRUCT});
     auto got_cudf_col_view = got_cudf_col->view();
     cudf::table_view from_struct{std::vector<cudf::column_view>(got_cudf_col_view.child_begin(),
                                                                 got_cudf_col_view.child_end())};
-    CUDF_TEST_EXPECT_TABLES_EQUAL(got_cudf_table->view(), from_struct);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(got_cudf_table->view(), from_struct);
   }
 }
 
