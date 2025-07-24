@@ -87,135 +87,6 @@ def test_set_bool_error(dtype, bool_scalar):
     )
 
 
-@pytest.mark.parametrize(
-    "data",
-    [
-        [1, 2, 3],
-        pytest.param(
-            [np.nan, 10, 15, 16],
-            marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/49818"
-            ),
-        ),
-        [np.nan, None, 10, 20],
-        ["ab", "zx", "pq"],
-        ["ab", "zx", None, "pq"],
-        [],
-    ],
-)
-def test_series_hasnans(data):
-    gs = cudf.Series(data, nan_as_null=False)
-    ps = gs.to_pandas(nullable=True)
-
-    # Check type to avoid mixing Python bool and NumPy bool
-    assert isinstance(gs.hasnans, bool)
-    assert gs.hasnans == ps.hasnans
-
-
-@pytest.mark.parametrize(
-    "data,index",
-    [
-        ([1, 2, 3], [10, 11, 12]),
-        ([1, 2, 3, 1, 1, 2, 3, 2], [10, 20, 23, 24, 25, 26, 27, 28]),
-        ([1, None, 2, None, 3, None, 3, 1], [5, 6, 7, 8, 9, 10, 11, 12]),
-        ([np.nan, 1.0, np.nan, 5.4, 5.4, 1.0], ["a", "b", "c", "d", "e", "f"]),
-        (
-            ["lama", "cow", "lama", None, "beetle", "lama", None, None],
-            [1, 4, 10, 11, 2, 100, 200, 400],
-        ),
-    ],
-)
-@pytest.mark.parametrize("keep", ["first", "last", False])
-@pytest.mark.parametrize("name", [None, "a"])
-def test_series_duplicated(data, index, keep, name):
-    gs = cudf.Series(data, index=index, name=name)
-    ps = gs.to_pandas()
-
-    assert_eq(gs.duplicated(keep=keep), ps.duplicated(keep=keep))
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        [1, 2, 3, 4],
-        [10, 20, None, None],
-    ],
-)
-@pytest.mark.parametrize("copy", [True, False])
-def test_series_copy(data, copy):
-    psr = pd.Series(data)
-    gsr = cudf.from_pandas(psr)
-
-    new_psr = pd.Series(psr, copy=copy)
-    new_gsr = cudf.Series(gsr, copy=copy)
-
-    new_psr.iloc[0] = 999
-    new_gsr.iloc[0] = 999
-
-    assert_eq(psr, gsr)
-    assert_eq(new_psr, new_gsr)
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        {"a": 1, "b": 2, "c": 24, "d": 1010},
-        {"a": 1},
-    ],
-)
-@pytest.mark.parametrize(
-    "index", [None, ["b", "c"], ["d", "a", "c", "b"], ["a"]]
-)
-def test_series_init_dict_with_index(data, index):
-    pandas_series = pd.Series(data, index=index)
-    cudf_series = cudf.Series(data, index=index)
-
-    assert_eq(pandas_series, cudf_series)
-
-
-@pytest.mark.parametrize("data", ["abc", None, 1, 3.7])
-@pytest.mark.parametrize(
-    "index", [None, ["b", "c"], ["d", "a", "c", "b"], ["a"]]
-)
-def test_series_init_scalar_with_index(data, index):
-    pandas_series = pd.Series(data, index=index)
-    cudf_series = cudf.Series(data, index=index)
-
-    assert_eq(
-        pandas_series,
-        cudf_series,
-        check_index_type=data is not None or index is not None,
-        check_dtype=data is not None,
-    )
-
-
-def test_series_init_error():
-    assert_exceptions_equal(
-        lfunc=pd.Series,
-        rfunc=cudf.Series,
-        lfunc_args_and_kwargs=([], {"data": [11], "index": [10, 11]}),
-        rfunc_args_and_kwargs=([], {"data": [11], "index": [10, 11]}),
-    )
-
-
-def test_series_init_from_series_and_index():
-    ser = cudf.Series([4, 7, -5, 3], index=["d", "b", "a", "c"])
-    result = cudf.Series(ser, index=list("abcd"))
-    expected = cudf.Series([-5, 7, 3, 4], index=list("abcd"))
-    assert_eq(result, expected)
-
-
-@pytest.mark.parametrize(
-    "dtype", ["datetime64[ns]", "timedelta64[ns]", "object", "str"]
-)
-def test_series_mixed_dtype_error(dtype):
-    ps = pd.concat([pd.Series([1, 2, 3], dtype=dtype), pd.Series([10, 11])])
-    with pytest.raises(TypeError):
-        cudf.Series(ps)
-    with pytest.raises(TypeError):
-        cudf.Series(ps.array)
-
-
 @pytest.mark.parametrize("data", [[True, False, None], [10, 200, 300]])
 @pytest.mark.parametrize("index", [None, [10, 20, 30]])
 def test_series_contains(data, index):
@@ -226,26 +97,6 @@ def test_series_contains(data, index):
     assert_eq(10 in ps, 10 in gs)
     assert_eq(True in ps, True in gs)
     assert_eq(False in ps, False in gs)
-
-
-def test_series_from_pandas_sparse():
-    pser = pd.Series(range(2), dtype=pd.SparseDtype(np.int64, 0))
-    with pytest.raises(NotImplementedError):
-        cudf.Series(pser)
-
-
-def test_series_constructor_unbounded_sequence():
-    class A:
-        def __getitem__(self, key):
-            return 1
-
-    with pytest.raises(TypeError):
-        cudf.Series(A())
-
-
-def test_series_constructor_error_mixed_type():
-    with pytest.raises(MixedTypeError):
-        cudf.Series(["abc", np.nan, "123"], nan_as_null=False)
 
 
 def test_series_typecast_to_object_error():
@@ -308,34 +159,6 @@ def test_rename_index_not_supported(index):
         ser.rename(index=index)
 
 
-@pytest.mark.parametrize(
-    "data",
-    [
-        [1.2234242333234, 323432.3243423, np.nan],
-        pd.Series([34224, 324324, 324342], dtype="datetime64[ns]"),
-        pd.Series([224.242, None, 2424.234324], dtype="category"),
-        [
-            decimal.Decimal("342.3243234234242"),
-            decimal.Decimal("89.32432497687622"),
-            None,
-        ],
-    ],
-)
-@pytest.mark.parametrize("digits", [0, 1, 3, 4, 10])
-def test_series_round_builtin(data, digits):
-    ps = pd.Series(data)
-    gs = cudf.from_pandas(ps, nan_as_null=False)
-
-    # TODO: Remove `to_frame` workaround
-    # after following issue is fixed:
-    # https://github.com/pandas-dev/pandas/issues/55114
-    expected = round(ps.to_frame(), digits)[0]
-    expected.name = None
-    actual = round(gs, digits)
-
-    assert_eq(expected, actual)
-
-
 def test_series_empty_dtype():
     expected = pd.Series([])
     actual = cudf.Series([])
@@ -379,33 +202,6 @@ def test_series_string_setitem():
     ps[3] = "NaN"
 
     assert_eq(gs, ps)
-
-
-def test_multi_dim_series_error():
-    arr = cp.array([(1, 2), (3, 4)])
-    with pytest.raises(ValueError):
-        cudf.Series(arr)
-
-
-def test_bool_series_mixed_dtype_error():
-    ps = pd.Series([True, False, None])
-    all_bool_ps = pd.Series([True, False, True], dtype="object")
-    # ps now has `object` dtype, which
-    # isn't supported by `cudf`.
-    with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(TypeError):
-            cudf.Series(ps)
-        with pytest.raises(TypeError):
-            cudf.from_pandas(ps)
-        with pytest.raises(TypeError):
-            cudf.Series(ps, dtype=bool)
-        expected = cudf.Series(all_bool_ps, dtype=bool)
-        assert_eq(expected, all_bool_ps.astype(bool))
-    nan_bools_mix = pd.Series([True, False, True, np.nan], dtype="object")
-    gs = cudf.Series(nan_bools_mix, nan_as_null=True)
-    assert_eq(gs.to_pandas(nullable=True), nan_bools_mix.astype("boolean"))
-    with pytest.raises(TypeError):
-        cudf.Series(nan_bools_mix, nan_as_null=False)
 
 
 @pytest.mark.parametrize(
@@ -569,33 +365,6 @@ def test_series_to_frame_none_name(base_name):
     result = cudf.Series(range(1), name=base_name).to_frame(name=None)
     expected = pd.Series(range(1), name=base_name).to_frame(name=None)
     assert_eq(result, expected)
-
-
-@pytest.mark.parametrize("klass", [cudf.Index, cudf.Series])
-@pytest.mark.parametrize(
-    "data", [pa.array([float("nan")]), pa.chunked_array([[float("nan")]])]
-)
-def test_nan_as_null_from_arrow_objects(klass, data):
-    result = klass(data, nan_as_null=True)
-    expected = klass(pa.array([None], type=pa.float64()))
-    assert_eq(result, expected)
-
-
-@pytest.mark.parametrize("reso", ["M", "ps"])
-@pytest.mark.parametrize("typ", ["M", "m"])
-def test_series_invalid_reso_dtype(reso, typ):
-    with pytest.raises(TypeError):
-        cudf.Series([], dtype=f"{typ}8[{reso}]")
-
-
-def test_series_categorical_missing_value_count():
-    ps = pd.Series(pd.Categorical(list("abcccb"), categories=list("cabd")))
-    gs = cudf.from_pandas(ps)
-
-    expected = ps.value_counts()
-    actual = gs.value_counts()
-
-    assert_eq(expected, actual, check_dtype=False)
 
 
 def test_series_error_nan_mixed_types():

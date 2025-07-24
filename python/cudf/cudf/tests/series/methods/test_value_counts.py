@@ -134,3 +134,13 @@ def test_series_value_counts_optional_arguments(ascending, dropna, normalize):
         got.reset_index(drop=True),
         check_dtype=True,
     )
+
+
+def test_series_categorical_missing_value_count():
+    ps = pd.Series(pd.Categorical(list("abcccb"), categories=list("cabd")))
+    gs = cudf.from_pandas(ps)
+
+    expected = ps.value_counts()
+    actual = gs.value_counts()
+
+    assert_eq(expected, actual, check_dtype=False)
