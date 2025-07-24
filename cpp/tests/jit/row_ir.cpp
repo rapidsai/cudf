@@ -18,6 +18,8 @@
 
 #include <cudf_test/testing_main.hpp>
 
+#include <cudf/column/column_factories.hpp>
+
 #include <algorithm>
 #include <cctype>
 
@@ -293,3 +295,60 @@ TEST_F(RowIRCudaCodeGenTest, VectorLengthOperation)
     EXPECT_EQ(null_code, expected_null_code);
   }
 }
+
+TEST_F(RowIRCudaCodeGenTest, AstConversionColumn)
+{
+  row_ir::ast_converter converter;
+
+  ast::tree ast_tree;
+  auto fourty_two          = cudf::numeric_scalar(42);
+  auto& column_ref         = ast_tree.push(ast::column_reference{0, ast::table_reference::LEFT});
+  auto& fourty_two_literal = ast_tree.push(ast::literal{fourty_two});
+  auto& add_op =
+    ast_tree.push(ast::operation{ast::ast_operator::ADD, fourty_two_literal, column_ref});
+
+  auto column =
+    cudf::make_numeric_column(data_type{type_id::INT32}, 2000, cudf::mask_state::UNALLOCATED);
+
+  row_ir::ast_args args{.table = cudf::table_view{{column->view()}}, .table_column_names = {}};
+
+  auto transform_args = converter.compute_column(row_ir::target::CUDA,
+                                                 add_op,
+                                                 false,
+                                                 args,
+                                                 rmm::cuda_stream_view{},
+                                                 cudf::get_current_device_resource_ref());
+
+  EXPECT_EQ(transform_args.scalar_columns.size(), 1);
+  EXPECT_EQ(transform_args.scalar_columns[0]->view().size(), 1);
+  EXPECT_FALSE(transform_args.args.is_ptx);
+  EXPECT_EQ(transform_args.args.output_type, data_type{type_id::INT32});
+  EXPECT_EQ(transform_args.args.columns.size(), 2);
+
+  /// Scalar column should be represented as a column of size 1
+  EXPECT_EQ(transform_args.args.columns[0].size(), 1);
+  EXPECT_EQ(transform_args.args.columns[0].type(), data_type{type_id::INT32});
+  EXPECT_EQ(transform_args.args.columns[0].null_count(), 0);
+
+  /// The input column should be the second column in the transform args
+  EXPECT_EQ(transform_args.args.columns[1].size(), column->size());
+  EXPECT_EQ(transform_args.args.columns[1].type(), column->type());
+  EXPECT_EQ(transform_args.args.columns[1].null_count(), column->null_count());
+
+  auto expected_udf = R"***(
+__device__ void transform(int32_t * out_0, int32_t in_0, int32_t in_1)
+{
+int32_t tmp_0 = in_0;
+int32_t tmp_1 = in_1;
+int32_t tmp_2 = cudf::ast::operator_functor<cudf::ast::ast_operator::ADD, false>(tmp_0, tmp_1);
+int32_t tmp_3 = tmp_2;
+*out_0 = tmp_3;
+
+return;
+}
+)***";
+
+  EXPECT_EQ(transform_args.args.transform_udf, expected_udf);
+}
+
+TEST_F(RowIRCudaCodeGenTest, AstConversionScalar) {}

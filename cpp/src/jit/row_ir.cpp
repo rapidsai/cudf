@@ -38,9 +38,7 @@ std::string instance_context::make_tmp_id()
   return std::format("{}{}", tmp_prefix_, num_tmp_vars_++);
 }
 
-void instance_context::reset(){
-  num_tmp_vars_ = 0;
-}
+void instance_context::reset() { num_tmp_vars_ = 0; }
 
 get_input::get_input(int32_t input) : id_(), input_(input), type_() {}
 
@@ -374,12 +372,12 @@ void ast_converter::generate_code(target target_id,
 
         std::vector<std::string> params_decls;
 
-        for (size_t i = 0; i < input_vars_.size(); ++i) {
-          params_decls.push_back(input_decl(i));
-        }
-
         for (size_t i = 0; i < output_vars_.size(); ++i) {
           params_decls.push_back(output_decl(i));
+        }
+
+        for (size_t i = 0; i < input_vars_.size(); ++i) {
+          params_decls.push_back(input_decl(i));
         }
 
         std::string params_decl;
