@@ -1,5 +1,4 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
-import operator
 
 import numpy as np
 import pandas as pd
@@ -10,55 +9,6 @@ from cudf.testing import assert_eq
 from cudf.testing._utils import (
     assert_exceptions_equal,
 )
-
-
-@pytest.fixture(
-    params=[
-        pd.Series([0, 1, 2, np.nan, 4, None, 6]),
-        pd.Series(
-            [0, 1, 2, np.nan, 4, None, 6],
-            index=["q", "w", "e", "r", "t", "y", "u"],
-            name="a",
-        ),
-        pd.Series([0, 1, 2, 3, 4]),
-        pd.Series(["a", "b", "u", "h", "d"]),
-        pd.Series([None, None, np.nan, None, np.inf, -np.inf]),
-        pd.Series([], dtype="float64"),
-        pd.Series(
-            [pd.NaT, pd.Timestamp("1939-05-27"), pd.Timestamp("1940-04-25")]
-        ),
-        pd.Series([np.nan]),
-        pd.Series([None]),
-        pd.Series(["a", "b", "", "c", None, "e"]),
-    ]
-)
-def ps(request):
-    return request.param
-
-
-@pytest.mark.parametrize(
-    "sr1", [pd.Series([10, 11, 12], index=["a", "b", "z"]), pd.Series(["a"])]
-)
-@pytest.mark.parametrize(
-    "sr2",
-    [pd.Series([], dtype="float64"), pd.Series(["a", "a", "c", "z", "A"])],
-)
-@pytest.mark.parametrize(
-    "op",
-    [
-        operator.eq,
-        operator.ne,
-        operator.lt,
-        operator.gt,
-        operator.le,
-        operator.ge,
-    ],
-)
-def test_series_error_equality(sr1, sr2, op):
-    gsr1 = cudf.from_pandas(sr1)
-    gsr2 = cudf.from_pandas(sr2)
-
-    assert_exceptions_equal(op, op, ([sr1, sr2],), ([gsr1, gsr2],))
 
 
 def test_fill_new_category():
