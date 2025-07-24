@@ -72,7 +72,7 @@ cache:
         then:
           - libcufile-dev
       - cuda-version =${{ cuda_version }}
-      - nvcomp ${{ nvcomp_version }}
+      - libnvcomp-dev ${{ nvcomp_version }}
       - dlpack ${{ dlpack_version }}
       - librdkafka ${{ librdkafka_version }}
       - flatbuffers =${{ flatbuffers_version }}
@@ -106,7 +106,7 @@ outputs:
         - cuda-version =${{ cuda_version }}
         - libkvikio =${{ minor_version }}
         - librmm =${{ minor_version }}
-        - nvcomp ${{ nvcomp_version }}
+        - libnvcomp-dev ${{ nvcomp_version }}
         - rapids-logger =0.1
         - zlib ${{ zlib_version }}
         - cuda-cudart-dev
@@ -116,9 +116,13 @@ outputs:
         - if: linux and x86_64
           then:
             - libcufile
-        - nvcomp ${{ nvcomp_version }}
         - librmm =${{ minor_version }}
         - libkvikio =${{ minor_version }}
+        # We export a run dependency on libnvcomp-dev because libcudf requires
+        # libnvcomp headers if used by another package at build time. This can
+        # be refactored once we have -dev packages for RAPIDS libraries.
+        # See https://github.com/rapidsai/build-planning/issues/46
+        - libnvcomp-dev ${{ nvcomp_version }}
         - dlpack ${{ dlpack_version }}
         - rapids-logger =0.1
       run_exports:
@@ -136,7 +140,6 @@ outputs:
           - librdkafka
           - libzlib
           - librmm
-          - nvcomp
     tests:
       - script:
         - test -f $PREFIX/include/cudf/column/column.hpp
@@ -178,7 +181,7 @@ outputs:
           - librdkafka
           - librmm
           - libzlib
-          - nvcomp
+          - libnvcomp
     tests:
       - script:
         - test -f $PREFIX/lib/libcudf_kafka.so
@@ -247,7 +250,7 @@ outputs:
           - librdkafka
           - librmm
           - libzlib
-          - nvcomp
+          - libnvcomp
     about:
       homepage: ${{ load_from_file("python/libcudf/pyproject.toml").project.urls.Homepage }}
       license: ${{ load_from_file("python/libcudf/pyproject.toml").project.license.text }}
@@ -296,7 +299,7 @@ outputs:
           - librdkafka
           - librmm
           - libzlib
-          - nvcomp
+          - libnvcomp
     about:
       homepage: ${{ load_from_file("python/libcudf/pyproject.toml").project.urls.Homepage }}
       license: ${{ load_from_file("python/libcudf/pyproject.toml").project.license.text }}

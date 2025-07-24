@@ -139,16 +139,6 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
                            type_id timestamp_type_id);
 
   /**
-   * @brief Filters and reduces down to a selection of row groups
-   *
-   * @param row_group_indices Lists of row groups to read, one per source
-   *
-   * @return A tuple of total number of rows to read and list of row group info
-   */
-  [[nodiscard]] std::tuple<size_type, std::vector<row_group_info>> select_row_groups(
-    host_span<std::vector<size_type> const> row_group_indices);
-
-  /**
    * @brief Filter the row groups with statistics based on predicate filter
    *
    * @param row_group_indices Input row groups indices
@@ -282,7 +272,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @return A vector of boolean vectors indicating which data pages need to be decoded to produce
    *         the output table based on the input row mask, one per input column
    */
-  [[nodiscard]] std::vector<thrust::host_vector<bool>> compute_data_page_mask(
+  [[nodiscard]] std::vector<std::vector<bool>> compute_data_page_mask(
     cudf::column_view row_mask,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     cudf::host_span<cudf::data_type const> output_dtypes,

@@ -47,6 +47,7 @@ requirements:
     - setuptools
     - cuda-version =${{ cuda_version }}
   run:
+    - nvidia-ml-py
     - python
     - pylibcudf =${{ version }}
     - polars >=1.28,<1.32
