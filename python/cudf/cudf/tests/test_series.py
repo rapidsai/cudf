@@ -74,97 +74,6 @@ def test_series_error_equality(sr1, sr2, op):
 
 @pytest.mark.parametrize(
     "data",
-    [1, 3, 5, 7, 7],
-)
-def test_series_nunique(data):
-    cd_s = cudf.Series(data)
-    pd_s = cd_s.to_pandas()
-
-    actual = cd_s.nunique()
-    expected = pd_s.nunique()
-
-    assert_eq(expected, actual)
-
-
-@pytest.mark.parametrize(
-    "data",
-    [1, 3, 5, 7, 7],
-)
-def test_series_nunique_index(data):
-    cd_s = cudf.Series(data)
-    pd_s = cd_s.to_pandas()
-
-    actual = cd_s.index.nunique()
-    expected = pd_s.index.nunique()
-
-    assert_eq(expected, actual)
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        [],
-        [1, 2, 3, 4],
-        ["a", "b", "c"],
-        [1.2, 2.2, 4.5],
-        [np.nan, np.nan],
-        [None, None, None],
-    ],
-)
-def test_axes(data):
-    csr = cudf.Series(data)
-    psr = csr.to_pandas()
-
-    expected = psr.axes
-    actual = csr.axes
-
-    for e, a in zip(expected, actual):
-        assert_eq(e, a)
-
-
-def test_series_truncate():
-    csr = cudf.Series([1, 2, 3, 4])
-    psr = csr.to_pandas()
-
-    assert_eq(csr.truncate(), psr.truncate())
-    assert_eq(csr.truncate(1, 2), psr.truncate(1, 2))
-    assert_eq(csr.truncate(before=1, after=2), psr.truncate(before=1, after=2))
-
-
-def test_series_truncate_errors():
-    csr = cudf.Series([1, 2, 3, 4])
-    with pytest.raises(ValueError):
-        csr.truncate(axis=1)
-    with pytest.raises(ValueError):
-        csr.truncate(copy=False)
-
-    csr.index = [3, 2, 1, 6]
-    psr = csr.to_pandas()
-    assert_exceptions_equal(
-        lfunc=csr.truncate,
-        rfunc=psr.truncate,
-    )
-
-
-def test_series_truncate_datetimeindex():
-    dates = cudf.date_range(
-        "2021-01-01 23:45:00", "2021-01-02 23:46:00", freq="s"
-    )
-    csr = cudf.Series(range(len(dates)), index=dates)
-    psr = csr.to_pandas()
-
-    assert_eq(
-        csr.truncate(
-            before="2021-01-01 23:45:18", after="2021-01-01 23:45:27"
-        ),
-        psr.truncate(
-            before="2021-01-01 23:45:18", after="2021-01-01 23:45:27"
-        ),
-    )
-
-
-@pytest.mark.parametrize(
-    "data",
     [
         [],
         [0, 12, 14],
@@ -1135,55 +1044,11 @@ def test_series_duplicate_index_reindex():
     )
 
 
-@pytest.mark.parametrize("data", [None, 123, 33243243232423, 0])
-def test_timestamp_series_init(data):
-    scalar = pd.Timestamp(data)
-    expected = pd.Series([scalar])
-    actual = cudf.Series([scalar])
-
-    assert_eq(expected, actual)
-
-    expected = pd.Series(scalar)
-    actual = cudf.Series(scalar)
-
-    assert_eq(expected, actual)
-
-
-@pytest.mark.parametrize("data", [None, 123, 33243243232423, 0])
-def test_timedelta_series_init(data):
-    scalar = pd.Timedelta(data)
-    expected = pd.Series([scalar])
-    actual = cudf.Series([scalar])
-
-    assert_eq(expected, actual)
-
-    expected = pd.Series(scalar)
-    actual = cudf.Series(scalar)
-
-    assert_eq(expected, actual)
-
-
-def test_series_from_series_index_no_shallow_copy():
-    ser1 = cudf.Series(range(3), index=list("abc"))
-    ser2 = cudf.Series(ser1)
-    assert ser1.index is ser2.index
-
-
 @pytest.mark.parametrize("value", [1, 1.1])
 def test_nans_to_nulls_noop_copies_column(value):
     ser1 = cudf.Series([value])
     ser2 = ser1.nans_to_nulls()
     assert ser1._column is not ser2._column
-
-
-@pytest.mark.parametrize("dropna", [False, True])
-def test_nunique_all_null(dropna):
-    data = [None, None]
-    pd_ser = pd.Series(data)
-    cudf_ser = cudf.Series(data)
-    result = pd_ser.nunique(dropna=dropna)
-    expected = cudf_ser.nunique(dropna=dropna)
-    assert result == expected
 
 
 @pytest.mark.parametrize(

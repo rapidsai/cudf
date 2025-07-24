@@ -1,6 +1,7 @@
 # Copyright (c) 2023-2025, NVIDIA CORPORATION.
 import re
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -57,3 +58,25 @@ def test_set_index_unequal_length():
     s = cudf.Series(dtype="float64")
     with pytest.raises(ValueError):
         s.index = [1, 2, 3]
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [],
+        [1, 2, 3, 4],
+        ["a", "b", "c"],
+        [1.2, 2.2, 4.5],
+        [np.nan, np.nan],
+        [None, None, None],
+    ],
+)
+def test_axes(data):
+    csr = cudf.Series(data)
+    psr = csr.to_pandas()
+
+    expected = psr.axes
+    actual = csr.axes
+
+    for e, a in zip(expected, actual, strict=True):
+        assert_eq(e, a)

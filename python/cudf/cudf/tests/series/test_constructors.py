@@ -162,3 +162,24 @@ def test_nullable_bool_dtype_series(data, bool_dtype):
     gsr = cudf.Series(data, dtype=bool_dtype)
 
     assert_eq(psr, gsr.to_pandas(nullable=True))
+
+
+@pytest.mark.parametrize("data", [None, 123, 33243243232423, 0])
+@pytest.mark.parametrize("klass", [pd.Timestamp, pd.Timedelta])
+def test_temporal_scalar_series_init(data, klass):
+    scalar = klass(data)
+    expected = pd.Series([scalar])
+    actual = cudf.Series([scalar])
+
+    assert_eq(expected, actual)
+
+    expected = pd.Series(scalar)
+    actual = cudf.Series(scalar)
+
+    assert_eq(expected, actual)
+
+
+def test_series_from_series_index_no_shallow_copy():
+    ser1 = cudf.Series(range(3), index=list("abc"))
+    ser2 = cudf.Series(ser1)
+    assert ser1.index is ser2.index
