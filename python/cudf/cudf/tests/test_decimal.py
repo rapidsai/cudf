@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 import decimal
 from decimal import Decimal
@@ -6,7 +6,6 @@ from decimal import Decimal
 import numpy as np
 import pyarrow as pa
 import pytest
-from packaging import version
 
 import cudf
 from cudf.core.column import Decimal32Column, Decimal64Column, NumericalColumn
@@ -16,41 +15,36 @@ from cudf.testing._utils import (
     FLOAT_TYPES,
     INTEGER_TYPES,
     SIGNED_TYPES,
-    _decimal_series,
     expect_warning_if,
 )
 
-data_ = [
-    [Decimal("1.1"), Decimal("2.2"), Decimal("3.3"), Decimal("4.4")],
-    [Decimal("-1.1"), Decimal("2.2"), Decimal("3.3"), Decimal("4.4")],
-    [1],
-    [-1],
-    [1, 2, 3, 4],
-    [42, 17, 41],
-    [1, 2, None, 4],
-    [None, None, None],
-    [],
-]
-typ_ = [
-    pa.decimal128(precision=4, scale=2),
-    pa.decimal128(precision=5, scale=3),
-    pa.decimal128(precision=6, scale=4),
-]
 
-
-@pytest.mark.parametrize("data_", data_)
-@pytest.mark.parametrize("typ_", typ_)
-def test_round_trip_decimal64_column(data_, typ_):
+@pytest.mark.parametrize(
+    "data_",
+    [
+        [Decimal("1.1"), Decimal("2.2"), Decimal("3.3"), Decimal("4.4")],
+        [Decimal("-1.1"), Decimal("2.2"), Decimal("3.3"), Decimal("4.4")],
+        [1],
+        [-1],
+        [1, 2, 3, 4],
+        [42, 17, 41],
+        [1, 2, None, 4],
+        [None, None, None],
+        [],
+    ],
+)
+@pytest.mark.parametrize(
+    "typ_",
+    [
+        pa.decimal128(precision=4, scale=2),
+        pa.decimal128(precision=5, scale=3),
+        pa.decimal128(precision=6, scale=4),
+    ],
+)
+@pytest.mark.parametrize("col", [Decimal32Column, Decimal64Column])
+def test_round_trip_decimal_column(data_, typ_, col):
     pa_arr = pa.array(data_, type=typ_)
-    col_64 = Decimal64Column.from_arrow(pa_arr)
-    assert pa_arr.equals(col_64.to_arrow())
-
-
-@pytest.mark.parametrize("data_", data_)
-@pytest.mark.parametrize("typ_", typ_)
-def test_round_trip_decimal32_column(data_, typ_):
-    pa_arr = pa.array(data_, type=typ_)
-    col_32 = Decimal32Column.from_arrow(pa_arr)
+    col_32 = col.from_arrow(pa_arr)
     assert pa_arr.equals(col_32.to_arrow())
 
 
@@ -68,36 +62,29 @@ def test_from_arrow_max_precision_decimal32():
         )
 
 
-@pytest.mark.parametrize(
-    "data",
-    [
-        cudf.Series(
-            [
-                14.12302,
-                97938.2,
-                np.nan,
-                0.0,
-                -8.302014,
-                np.nan,
-                94.31304,
-                -112.2314,
-                0.3333333,
-                np.nan,
-            ]
-        ),
-    ],
-)
 @pytest.mark.parametrize("from_dtype", FLOAT_TYPES)
 @pytest.mark.parametrize(
     "to_dtype",
     [Decimal64Dtype(7, 2), Decimal64Dtype(11, 4), Decimal64Dtype(18, 9)],
 )
-def test_typecast_from_float_to_decimal(request, data, from_dtype, to_dtype):
+def test_typecast_from_float_to_decimal(request, from_dtype, to_dtype):
+    data = cudf.Series(
+        [
+            14.12302,
+            97938.2,
+            np.nan,
+            0.0,
+            -8.302014,
+            np.nan,
+            94.31304,
+            -112.2314,
+            0.3333333,
+            np.nan,
+        ]
+    )
     request.applymarker(
         pytest.mark.xfail(
-            condition=version.parse(pa.__version__) >= version.parse("13.0.0")
-            and from_dtype == np.dtype("float32")
-            and to_dtype.precision > 12,
+            from_dtype == np.dtype("float32") and to_dtype.precision > 12,
             reason="https://github.com/rapidsai/cudf/issues/14169",
         )
     )
@@ -113,32 +100,27 @@ def test_typecast_from_float_to_decimal(request, data, from_dtype, to_dtype):
     assert_eq(got, expected)
 
 
-@pytest.mark.parametrize(
-    "data",
-    [
-        cudf.Series(
-            [
-                14.12302,
-                38.2,
-                np.nan,
-                0.0,
-                -8.302014,
-                np.nan,
-                94.31304,
-                np.nan,
-                -112.2314,
-                0.3333333,
-                np.nan,
-            ]
-        ),
-    ],
-)
 @pytest.mark.parametrize("from_dtype", INTEGER_TYPES)
 @pytest.mark.parametrize(
     "to_dtype",
     [Decimal64Dtype(9, 3), Decimal64Dtype(11, 4), Decimal64Dtype(18, 9)],
 )
-def test_typecast_from_int_to_decimal(data, from_dtype, to_dtype):
+def test_typecast_from_int_to_decimal(from_dtype, to_dtype):
+    data = cudf.Series(
+        [
+            14.12302,
+            38.2,
+            np.nan,
+            0.0,
+            -8.302014,
+            np.nan,
+            94.31304,
+            np.nan,
+            -112.2314,
+            0.3333333,
+            np.nan,
+        ]
+    )
     got = data.astype(from_dtype)
 
     pa_arr = (
@@ -153,25 +135,6 @@ def test_typecast_from_int_to_decimal(data, from_dtype, to_dtype):
     assert_eq(got, expected)
 
 
-@pytest.mark.parametrize(
-    "data",
-    [
-        cudf.Series(
-            [
-                14.12309,
-                2.343942,
-                np.nan,
-                0.0,
-                -8.302082,
-                np.nan,
-                94.31308,
-                -112.2364,
-                -8.029972,
-                np.nan,
-            ]
-        ),
-    ],
-)
 @pytest.mark.parametrize(
     "from_dtype",
     [
@@ -194,7 +157,21 @@ def test_typecast_from_int_to_decimal(data, from_dtype, to_dtype):
         Decimal32Dtype(5, 3),
     ],
 )
-def test_typecast_to_from_decimal(data, from_dtype, to_dtype):
+def test_typecast_to_from_decimal(from_dtype, to_dtype):
+    data = cudf.Series(
+        [
+            14.12309,
+            2.343942,
+            np.nan,
+            0.0,
+            -8.302082,
+            np.nan,
+            94.31308,
+            -112.2364,
+            -8.029972,
+            np.nan,
+        ]
+    )
     if from_dtype.scale > to_dtype.MAX_PRECISION:
         pytest.skip(
             "This is supposed to overflow because the representation value in "
@@ -217,30 +194,25 @@ def test_typecast_to_from_decimal(data, from_dtype, to_dtype):
 
 
 @pytest.mark.parametrize(
-    "data",
-    [
-        cudf.Series(
-            [
-                14.12309,
-                2.343942,
-                np.nan,
-                0.0,
-                -8.302082,
-                np.nan,
-                94.31308,
-                -112.2364,
-                -8.029972,
-                np.nan,
-            ]
-        ),
-    ],
-)
-@pytest.mark.parametrize(
     "from_dtype",
     [Decimal64Dtype(7, 2), Decimal64Dtype(11, 4), Decimal64Dtype(17, 10)],
 )
 @pytest.mark.parametrize("to_dtype", SIGNED_TYPES)
-def test_typecast_from_decimal(data, from_dtype, to_dtype):
+def test_typecast_from_decimal(from_dtype, to_dtype):
+    data = cudf.Series(
+        [
+            14.12309,
+            2.343942,
+            np.nan,
+            0.0,
+            -8.302082,
+            np.nan,
+            94.31308,
+            -112.2364,
+            -8.029972,
+            np.nan,
+        ]
+    )
     got = data.astype(from_dtype)
     pa_arr = got.to_arrow().cast(to_dtype, safe=False)
 
@@ -252,7 +224,7 @@ def test_typecast_from_decimal(data, from_dtype, to_dtype):
 
 
 @pytest.mark.parametrize(
-    "args",
+    "data, dtype, item, to, expect",
     [
         # scatter to a single index
         (
@@ -281,21 +253,21 @@ def test_typecast_from_decimal(data, from_dtype, to_dtype):
             ["1", "2", "3"],
             Decimal64Dtype(1, 0),
             Decimal(5),
-            cudf.Series([True, False, True]),
+            [True, False, True],
             ["5", "2", "5"],
         ),
         (
             ["1.5", "2.5", "3.5"],
             Decimal64Dtype(2, 1),
             Decimal("5.5"),
-            cudf.Series([True, True, True]),
+            [True, True, True],
             ["5.5", "5.5", "5.5"],
         ),
         (
             ["1.0042", "2.0042", "3.0042"],
             Decimal64Dtype(5, 4),
             Decimal("5.0042"),
-            cudf.Series([False, False, True]),
+            [False, False, True],
             ["1.0042", "2.0042", "5.0042"],
         ),
         # We will allow assigning a decimal with less precision
@@ -320,16 +292,15 @@ def test_typecast_from_decimal(data, from_dtype, to_dtype):
         (["1", "2", "3"], Decimal64Dtype(1, 0), 50, 1, pa.lib.ArrowInvalid),
     ],
 )
-def test_series_setitem_decimal(args):
-    data, dtype, item, to, expect = args
-    data = _decimal_series(data, dtype)
+def test_series_setitem_decimal(data, dtype, item, to, expect):
+    data = cudf.Series([Decimal(x) for x in data], dtype=dtype)
 
     if expect is pa.lib.ArrowInvalid:
         with pytest.raises(expect):
             data[to] = item
         return
     else:
-        expect = _decimal_series(expect, dtype)
+        expect = cudf.Series([Decimal(x) for x in expect], dtype=dtype)
         data[to] = item
         assert_eq(data, expect)
 
@@ -347,37 +318,29 @@ def test_series_construction_with_nulls(input_obj):
 @pytest.mark.parametrize(
     "data",
     [
-        {
-            "a": _decimal_series(
-                ["1", "2", "3"], dtype=cudf.Decimal64Dtype(1, 0)
-            )
-        },
-        {
-            "a": _decimal_series(
-                ["1", "2", "3"], dtype=cudf.Decimal64Dtype(1, 0)
-            ),
-            "b": _decimal_series(
-                ["1.0", "2.0", "3.0"], dtype=cudf.Decimal64Dtype(2, 1)
-            ),
-            "c": _decimal_series(
-                ["10.1", "20.2", "30.3"], dtype=cudf.Decimal64Dtype(3, 1)
-            ),
-        },
-        {
-            "a": _decimal_series(
-                ["1", None, "3"], dtype=cudf.Decimal64Dtype(1, 0)
-            ),
-            "b": _decimal_series(
-                ["1.0", "2.0", None], dtype=cudf.Decimal64Dtype(2, 1)
-            ),
-            "c": _decimal_series(
-                [None, "20.2", "30.3"], dtype=cudf.Decimal64Dtype(3, 1)
-            ),
-        },
+        [(["1", "2", "3"], cudf.Decimal64Dtype(1, 0))],
+        [
+            (["1", "2", "3"], cudf.Decimal64Dtype(1, 0)),
+            (["1.0", "2.0", "3.0"], cudf.Decimal64Dtype(2, 1)),
+            (["10.1", "20.2", "30.3"], cudf.Decimal64Dtype(3, 1)),
+        ],
+        [
+            (["1", None, "3"], cudf.Decimal64Dtype(1, 0)),
+            (["1.0", "2.0", None], cudf.Decimal64Dtype(2, 1)),
+            ([None, "20.2", "30.3"], cudf.Decimal64Dtype(3, 1)),
+        ],
     ],
 )
 def test_serialize_decimal_columns(data):
-    df = cudf.DataFrame(data)
+    df = cudf.DataFrame(
+        {
+            str(i): cudf.Series(
+                [Decimal(x) if x is not None else x for x in values],
+                dtype=dtype,
+            )
+            for i, (values, dtype) in enumerate(data)
+        }
+    )
     recreated = df.__class__.deserialize(*df.serialize())
     assert_eq(recreated, df)
 

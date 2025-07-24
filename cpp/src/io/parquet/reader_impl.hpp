@@ -303,6 +303,13 @@ class reader_impl {
   void decode_page_data(read_mode mode, size_t skip_rows, size_t num_rows);
 
   /**
+   * @brief Invalidate output buffer nullmask for rows spanned by the pruned pages
+   *
+   * @param page_mask Boolean vector indicating if a page needs to be decoded or is pruned
+   */
+  void update_output_nullmasks_for_pruned_pages(cudf::host_span<bool const> page_mask);
+
+  /**
    * @brief Creates file-wide parquet chunk information.
    *
    * Creates information about all chunks in the file, storing it in
@@ -387,7 +394,7 @@ class reader_impl {
     int64_t const skip_rows;
     std::optional<int64_t> num_rows;
     std::vector<std::vector<size_type>> row_group_indices;
-  } const _options;
+  } _options;
 
   // name to reference converter to extract AST output filter
   named_to_reference_converter _expr_conv{std::nullopt, table_metadata{}};

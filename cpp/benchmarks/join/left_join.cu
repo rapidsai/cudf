@@ -18,41 +18,55 @@
 
 #include <cudf/join/join.hpp>
 
-template <typename Key, bool Nullable>
+auto const num_keys = 1;
+
+template <bool Nullable, cudf::null_equality NullEquality, data_type DataType>
 void nvbench_left_anti_join(nvbench::state& state,
-                            nvbench::type_list<Key, nvbench::enum_type<Nullable>>)
+                            nvbench::type_list<nvbench::enum_type<Nullable>,
+                                               nvbench::enum_type<NullEquality>,
+                                               nvbench::enum_type<DataType>>)
 {
+  auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
+
   auto join = [](cudf::table_view const& left,
                  cudf::table_view const& right,
                  cudf::null_equality compare_nulls) {
     return cudf::left_anti_join(left, right, compare_nulls);
   };
 
-  BM_join<Key, Nullable>(state, join);
+  BM_join<Nullable, join_t::HASH, NullEquality>(state, dtypes, join);
 }
 
-template <typename Key, bool Nullable>
+template <bool Nullable, cudf::null_equality NullEquality, data_type DataType>
 void nvbench_left_semi_join(nvbench::state& state,
-                            nvbench::type_list<Key, nvbench::enum_type<Nullable>>)
+                            nvbench::type_list<nvbench::enum_type<Nullable>,
+                                               nvbench::enum_type<NullEquality>,
+                                               nvbench::enum_type<DataType>>)
 {
+  auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
+
   auto join = [](cudf::table_view const& left,
                  cudf::table_view const& right,
                  cudf::null_equality compare_nulls) {
     return cudf::left_semi_join(left, right, compare_nulls);
   };
-  BM_join<Key, Nullable>(state, join);
+  BM_join<Nullable, join_t::HASH, NullEquality>(state, dtypes, join);
 }
 
 NVBENCH_BENCH_TYPES(nvbench_left_anti_join,
-                    NVBENCH_TYPE_AXES(JOIN_KEY_TYPE_RANGE, JOIN_NULLABLE_RANGE))
+                    NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
+                                      DEFAULT_JOIN_NULL_EQUALITY,
+                                      DEFAULT_JOIN_DATATYPES))
   .set_name("left_anti_join")
-  .set_type_axes_names({"Key", "Nullable"})
+  .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
   .add_int64_axis("right_size", JOIN_SIZE_RANGE);
 
 NVBENCH_BENCH_TYPES(nvbench_left_semi_join,
-                    NVBENCH_TYPE_AXES(JOIN_KEY_TYPE_RANGE, JOIN_NULLABLE_RANGE))
+                    NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
+                                      DEFAULT_JOIN_NULL_EQUALITY,
+                                      DEFAULT_JOIN_DATATYPES))
   .set_name("left_semi_join")
-  .set_type_axes_names({"Key", "Nullable"})
+  .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
   .add_int64_axis("right_size", JOIN_SIZE_RANGE);

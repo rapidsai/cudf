@@ -428,14 +428,15 @@ def test_serialize_sliced_string():
 @pytest.mark.parametrize(
     "columns",
     [
-        cudf.RangeIndex(2),
-        cudf.Index([1, 2], dtype="int8"),
-        cudf.MultiIndex(
+        lambda: cudf.RangeIndex(2),
+        lambda: cudf.Index([1, 2], dtype="int8"),
+        lambda: cudf.MultiIndex(
             levels=[["a", "b"], [1, 2]], codes=[[0, 1], [0, 1]], names=["a", 0]
         ),
     ],
+    ids=["RangeIndex", "Index", "MultiIndex"],
 )
 def test_serialize_column_types_preserved(columns):
-    expected = cudf.DataFrame([[10, 11]], columns=columns)
+    expected = cudf.DataFrame([[10, 11]], columns=columns())
     result = cudf.DataFrame.deserialize(*expected.serialize())
     assert_eq(result, expected)

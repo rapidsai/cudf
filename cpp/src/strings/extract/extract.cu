@@ -104,7 +104,9 @@ std::unique_ptr<table> extract(strings_column_view const& input,
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
 
-  launch_for_each_kernel(extract_fn{*d_strings, d_indices}, *d_prog, input.size(), stream);
+  if (!input.is_empty()) {
+    launch_for_each_kernel(extract_fn{*d_strings, d_indices}, *d_prog, input.size(), stream);
+  }
 
   // build a result column for each group
   std::vector<std::unique_ptr<column>> results(groups);
@@ -161,6 +163,8 @@ std::unique_ptr<column> extract_single(strings_column_view const& input,
                                        rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr)
 {
+  if (input.is_empty()) { return make_empty_column(type_id::STRING); }
+
   // create device object from regex_program
   auto d_prog = regex_device_builder::create_prog_device(prog, stream);
 

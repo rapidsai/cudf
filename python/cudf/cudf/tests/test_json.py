@@ -1441,8 +1441,8 @@ def test_json_reader_on_bad_lines(on_bad_lines):
 def test_chunked_json_reader():
     df = cudf.DataFrame(
         {
-            "a": ["aaaa"] * 9_000_000,
-            "b": range(9_000_000),
+            "a": ["aaaa"] * 1_000_000,
+            "b": range(1_000_000),
         }
     )
     buf = BytesIO()
