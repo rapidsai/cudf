@@ -13,7 +13,7 @@ def exact(request):
     return request.param
 
 
-def test_range_index_and_int_index_eqaulity(
+def test_range_index_and_int_index_equality(
     signed_integer_types_as_str, exact
 ):
     pidx1 = pd.RangeIndex(0, stop=5, step=1)
