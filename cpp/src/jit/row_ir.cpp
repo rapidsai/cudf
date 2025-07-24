@@ -38,6 +38,10 @@ std::string instance_context::make_tmp_id()
   return std::format("{}{}", tmp_prefix_, num_tmp_vars_++);
 }
 
+void instance_context::reset(){
+  num_tmp_vars_ = 0;
+}
+
 get_input::get_input(int32_t input) : id_(), input_(input), type_() {}
 
 std::string_view get_input::get_id() { return id_; }
@@ -72,8 +76,11 @@ std::string_view set_output::get_id() { return id_; }
 
 type_info set_output::get_type() { return type_; }
 
+node& set_output::get_source() { return *source_; }
+
 void set_output::instantiate(instance_context& ctx, instance_info const& info)
 {
+  source_->instantiate(ctx, info);
   id_        = ctx.make_tmp_id();
   type_      = source_->get_type();
   output_id_ = info.outputs[output_].id;
@@ -85,7 +92,17 @@ std::string set_output::generate_code(instance_context& ctx,
 {
   switch (info.id) {
     case target::CUDA: {
-      return std::format("*{} = {};", output_id_, source_->get_id());
+      auto source_code = source_->generate_code(ctx, info, instance);
+      return std::format(
+        "{}\n"
+        "{} {} = {};\n"
+        "*{} = {};",
+        source_code,
+        cuda_type(this->get_type()),
+        id_,
+        source_->get_id(),
+        output_id_,
+        id_);
     }
     default: CUDF_FAIL("Unsupported target: " + std::to_string(static_cast<int>(info.id)));
   }
@@ -94,14 +111,18 @@ std::string set_output::generate_code(instance_context& ctx,
 operation::operation(opcode op, std::vector<std::unique_ptr<node>> operands)
   : id_(), op_(op), operands_(std::move(operands)), type_()
 {
-  CUDF_EXPECTS(static_cast<size_type>(operands.size()) == ast::detail::ast_operator_arity(op),
+  CUDF_EXPECTS(static_cast<size_type>(operands_.size()) == ast::detail::ast_operator_arity(op),
                "Invalid number of arguments for operator.");
-  CUDF_EXPECTS(operands.size() > 0, "Operator must have at least one operand");
+  CUDF_EXPECTS(operands_.size() > 0, "Operator must have at least one operand");
 }
 
 std::string_view operation::get_id() { return id_; }
 
 type_info operation::get_type() { return type_; }
+
+opcode operation::get_opcode() const { return op_; }
+
+std::span<std::unique_ptr<node> const> operation::get_operands() const { return operands_; }
 
 void operation::instantiate(instance_context& ctx, instance_info const& info)
 {

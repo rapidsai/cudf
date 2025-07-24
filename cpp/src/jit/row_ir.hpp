@@ -92,6 +92,9 @@ struct instance_context {
   /// @brief Generate a globally unique temporary variable identifier
   /// @return A unique temporary variable identifier
   std::string make_tmp_id();
+
+
+  void reset() ;
 };
 
 /// @brief The base class for all IR nodes.
@@ -122,7 +125,7 @@ struct node {
                                     target_info const& info,
                                     instance_info const& instance) = 0;
 
-  virtual ~node() = 0;
+  virtual ~node() = default;
 };
 
 /// @brief The operation code used in the IR nodes.
@@ -205,6 +208,9 @@ struct set_output final : node {
   /// @copydoc node::get_type
   type_info get_type() override;
 
+  /// @brief Get the source IR node from which the value is taken
+  node& get_source();
+
   /// @copydoc node::instantiate
   void instantiate(instance_context& ctx, instance_info const& info) override;
 
@@ -247,6 +253,14 @@ struct operation final : node {
 
   /// @copydoc node::get_type
   type_info get_type() override;
+
+  /// @brief Get the operation code of the operation
+  /// @return The operation code of the operation
+  [[nodiscard]] opcode get_opcode() const;
+
+  /// @brief Get the operands of the operation
+  /// @return A span of unique pointers to the operands of the operation
+  [[nodiscard]] std::span<std::unique_ptr<node> const> get_operands() const;
 
   /// @copydoc node::instantiate
   void instantiate(instance_context& ctx, instance_info const& info) override;
