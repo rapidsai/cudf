@@ -9,6 +9,30 @@ import cudf
 from cudf.testing import assert_eq
 
 
+@pytest.fixture(
+    params=[
+        pd.Series([0, 1, 2, np.nan, 4, None, 6]),
+        pd.Series(
+            [0, 1, 2, np.nan, 4, None, 6],
+            index=["q", "w", "e", "r", "t", "y", "u"],
+            name="a",
+        ),
+        pd.Series([0, 1, 2, 3, 4]),
+        pd.Series(["a", "b", "u", "h", "d"]),
+        pd.Series([None, None, np.nan, None, np.inf, -np.inf]),
+        pd.Series([], dtype="float64"),
+        pd.Series(
+            [pd.NaT, pd.Timestamp("1939-05-27"), pd.Timestamp("1940-04-25")]
+        ),
+        pd.Series([np.nan]),
+        pd.Series([None]),
+        pd.Series(["a", "b", "", "c", None, "e"]),
+    ]
+)
+def ps(request):
+    return request.param
+
+
 def test_series_iter_error():
     gs = cudf.Series([1, 2, 3])
 
@@ -105,3 +129,15 @@ def test_series_hasnans(data):
     # Check type to avoid mixing Python bool and NumPy bool
     assert isinstance(gs.hasnans, bool)
     assert gs.hasnans == ps.hasnans
+
+
+def test_dtype_dtypes_equal():
+    ser = cudf.Series([0])
+    assert ser.dtype is ser.dtypes
+    assert ser.dtypes is ser.to_pandas().dtypes
+
+
+def test_roundtrip_series_plc_column(ps):
+    expect = cudf.Series(ps)
+    actual = cudf.Series.from_pylibcudf(*expect.to_pylibcudf())
+    assert_eq(expect, actual)

@@ -365,3 +365,73 @@ def test_nan_as_null_from_arrow_objects(klass, data):
 def test_series_invalid_reso_dtype(reso, typ):
     with pytest.raises(TypeError):
         cudf.Series([], dtype=f"{typ}8[{reso}]")
+
+
+@pytest.mark.parametrize("base_name", [None, "a"])
+def test_series_to_frame_none_name(base_name):
+    result = cudf.Series(range(1), name=base_name).to_frame(name=None)
+    expected = pd.Series(range(1), name=base_name).to_frame(name=None)
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("klass", [cudf.Series, cudf.Index])
+@pytest.mark.parametrize(
+    "data",
+    [
+        pa.array([1, None], type=pa.int64()),
+        pa.chunked_array([[1, None]], type=pa.int64()),
+    ],
+)
+def test_from_arrow_array_dtype(klass, data):
+    obj = klass(data, dtype="int8")
+    assert obj.dtype == np.dtype("int8")
+
+
+@pytest.mark.parametrize(
+    "nat, value",
+    [
+        [np.datetime64("nat", "ns"), np.datetime64("2020-01-01", "ns")],
+        [np.timedelta64("nat", "ns"), np.timedelta64(1, "ns")],
+    ],
+)
+@pytest.mark.parametrize("nan_as_null", [True, False])
+def test_series_np_array_nat_nan_as_nulls(nat, value, nan_as_null):
+    expected = np.array([nat, value])
+    ser = cudf.Series(expected, nan_as_null=nan_as_null)
+    assert ser[0] is pd.NaT
+    assert ser[1] == value
+
+
+def test_null_like_to_nan_pandas_compat():
+    with cudf.option_context("mode.pandas_compatible", True):
+        ser = cudf.Series([1, 2, np.nan, 10, None])
+        pser = pd.Series([1, 2, np.nan, 10, None])
+
+        assert pser.dtype == ser.dtype
+        assert_eq(ser, pser)
+
+
+def test_non_strings_dtype_object_pandas_compat_raises():
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(ValueError):
+            cudf.Series([1], dtype=object)
+
+
+@pytest.mark.parametrize("arr", [np.array, cp.array, pd.Series])
+def test_construct_nonnative_array(arr):
+    data = [1, 2, 3.5, 4]
+    dtype = np.dtype("f4")
+    native = arr(data, dtype=dtype)
+    nonnative = arr(data, dtype=dtype.newbyteorder())
+    result = cudf.Series(nonnative)
+    expected = cudf.Series(native)
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("nan_as_null", [True, False])
+def test_construct_all_pd_NA_with_dtype(nan_as_null):
+    result = cudf.Series(
+        [pd.NA, pd.NA], dtype=np.dtype(np.float64), nan_as_null=nan_as_null
+    )
+    expected = cudf.Series(pa.array([None, None], type=pa.float64()))
+    assert_eq(result, expected)
