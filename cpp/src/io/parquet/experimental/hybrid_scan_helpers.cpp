@@ -243,7 +243,7 @@ aggregate_reader_metadata::select_payload_columns(
     // payload columns
     if (filter_columns_set.count(curr_path) == 0) {
       valid_payload_columns.push_back(curr_path);
-      // Add all children as well
+      // TODO: Check if this is needed. Add all children as well
       for (auto const& child_idx : schema_elem.children_idx) {
         add_column_path(curr_path + ".", child_idx);
       }

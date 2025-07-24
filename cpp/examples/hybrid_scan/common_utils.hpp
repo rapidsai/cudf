@@ -59,11 +59,3 @@ cudf::ast::operation create_filter_expression(std::string const& column_name,
  */
 std::unique_ptr<cudf::table> combine_tables(std::unique_ptr<cudf::table> filter_table,
                                             std::unique_ptr<cudf::table> payload_table);
-
-/**
- * @brief Check if two tables are identical, throw an error otherwise
- *
- * @param lhs_table View to lhs table
- * @param rhs_table View to rhs table
- */
-void check_tables_equal(cudf::table_view const& lhs_table, cudf::table_view const& rhs_table);

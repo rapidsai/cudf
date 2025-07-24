@@ -35,7 +35,7 @@
 /**
  * @brief Available IO source types
  */
-enum class io_source_type { FILEPATH, HOST_BUFFER, PINNED_BUFFER, DEVICE_BUFFER };
+enum class io_source_type { HOST_BUFFER, PINNED_BUFFER };
 
 /**
  * @brief Get io source type from the string keyword argument
@@ -90,6 +90,8 @@ class io_source {
   // Get the internal source info
   [[nodiscard]] cudf::io::source_info get_source_info() const { return source_info; }
 
+  [[nodiscard]] io_source_type get_source_type() const { return io_type; }
+
   // Get the internal buffer span
   [[nodiscard]] cudf::host_span<uint8_t const> get_buffer_span() const;
 
@@ -101,5 +103,4 @@ class io_source {
   io_source_type io_type;
   std::vector<char> h_buffer;
   pinned_vector<char> pinned_buffer;
-  rmm::device_uvector<std::byte> d_buffer;
 };

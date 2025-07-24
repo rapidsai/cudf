@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
+#include "../utilities/table_utils.hpp"
 #include "../utilities/timer.hpp"
 #include "common_utils.hpp"
-#include "io_source.hpp"
 
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/types.hpp>
@@ -170,7 +170,7 @@ int main(int argc, char const** argv)
   timer.print_elapsed_millis();
 
   // Check for validity
-  check_tables_equal(input->view(), transcoded_input->view());
+  cudf::examples::check_tables_equal(input->view(), transcoded_input->view());
 
   return 0;
 }

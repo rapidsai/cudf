@@ -64,14 +64,6 @@ std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_
 [[nodiscard]] bool get_boolean(std::string input);
 
 /**
- * @brief Check if two tables are identical, throw an error otherwise
- *
- * @param lhs_table View to lhs table
- * @param rhs_table View to rhs table
- */
-void check_tables_equal(cudf::table_view const& lhs_table, cudf::table_view const& rhs_table);
-
-/**
  * @brief Concatenate a vector of tables and return the resultant table
  *
  * @param tables Vector of tables to concatenate
