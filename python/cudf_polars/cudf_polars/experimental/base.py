@@ -125,7 +125,9 @@ class ColumnStats:
     ----------
     name
         Column name.
-    source
+    children
+        Child ColumnStats objects.
+    source_info
         Datasource information.
     source_name
         Source-column name.
@@ -133,9 +135,10 @@ class ColumnStats:
         Unique-value statistics.
     """
 
-    __slots__ = ("name", "source_info", "source_name", "unique_stats")
+    __slots__ = ("children", "name", "source_info", "source_name", "unique_stats")
 
     name: str
+    children: tuple[ColumnStats, ...]
     source_info: DataSourceInfo
     source_name: str
     unique_stats: UniqueStats
@@ -144,24 +147,29 @@ class ColumnStats:
         self,
         name: str,
         *,
+        children: tuple[ColumnStats, ...] = (),
         source_info: DataSourceInfo | None = None,
         source_name: str | None = None,
         unique_stats: UniqueStats | None = None,
     ) -> None:
         self.name = name
+        self.children = children
         self.source_info = source_info or DataSourceInfo()
         self.source_name = source_name or name
         self.unique_stats = unique_stats or UniqueStats()
 
-    def copy(self, *, name: str | None = None) -> ColumnStats:
+    def new_parent(
+        self,
+        *,
+        name: str | None = None,
+    ) -> ColumnStats:
         """
-        Copy a ColumnStats object.
+        Initialize a new parent ColumnStats object.
 
         Parameters
         ----------
         name
-            The new column name. All other attributes will
-            be preserved.
+            The new column name.
 
         Returns
         -------
@@ -173,11 +181,12 @@ class ColumnStats:
         """
         return ColumnStats(
             name=name or self.name,
+            children=(self,),
             # Want to reference the same DataSourceInfo
             source_info=self.source_info,
             source_name=self.source_name,
-            # Want a copy of the UniqueStats so we can mutate in place
-            unique_stats=dataclasses.replace(self.unique_stats),
+            # Want fresh UniqueStats so we can mutate in place
+            unique_stats=UniqueStats(),
         )
 
 

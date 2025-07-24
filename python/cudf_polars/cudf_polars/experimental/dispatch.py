@@ -14,7 +14,11 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl import ir
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.experimental.base import ColumnStats, PartitionInfo, StatsCollector
+    from cudf_polars.experimental.base import (
+        ColumnStats,
+        PartitionInfo,
+        StatsCollector,
+    )
     from cudf_polars.utils.config import ConfigOptions
 
 
@@ -100,11 +104,11 @@ def generate_ir_tasks(
 
 
 @singledispatch
-def collect_source_stats(
+def initialize_column_stats(
     ir: IR, stats: StatsCollector, config_options: ConfigOptions
 ) -> dict[str, ColumnStats]:
     """
-    Collect datasource statistics for an IR node.
+    Initialize column statistics for an IR node.
 
     Parameters
     ----------
@@ -124,7 +128,7 @@ def collect_source_stats(
     -----
     Base column stats correspond to ``ColumnStats`` objects **without**
     populated ``unique_stats`` information. The purpose of this function
-    is to propagate ``DataSourceInfo`` references for each column of
-    each IR node.
+    is to propagate ``DataSourceInfo`` references and set ``children``
+    attributes for each column of each IR node.
     """
     raise AssertionError(f"Unhandled type {type(ir)}")  # pragma: no cover
