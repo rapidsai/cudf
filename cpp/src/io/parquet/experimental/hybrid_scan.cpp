@@ -123,7 +123,7 @@ std::vector<cudf::size_type> hybrid_scan_reader::filter_row_groups_with_bloom_fi
     .front();
 }
 
-std::pair<std::unique_ptr<cudf::column>, std::vector<thrust::host_vector<bool>>>
+std::pair<std::unique_ptr<cudf::column>, std::vector<std::vector<bool>>>
 hybrid_scan_reader::filter_data_pages_with_stats(cudf::host_span<size_type const> row_group_indices,
                                                  parquet_reader_options const& options,
                                                  rmm::cuda_stream_view stream,
@@ -148,7 +148,7 @@ hybrid_scan_reader::filter_column_chunks_byte_ranges(
 }
 
 table_with_metadata hybrid_scan_reader::materialize_filter_columns(
-  cudf::host_span<thrust::host_vector<bool> const> data_page_mask,
+  cudf::host_span<std::vector<bool> const> data_page_mask,
   cudf::host_span<size_type const> row_group_indices,
   std::vector<rmm::device_buffer> column_chunk_buffers,
   cudf::mutable_column_view row_mask,
