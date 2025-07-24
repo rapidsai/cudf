@@ -3,13 +3,7 @@
 
 set -euo pipefail
 
-#source rapids-configure-sccache
-export CMAKE_CUDA_COMPILER_LAUNCHER=sccache
-export CMAKE_CXX_COMPILER_LAUNCHER=sccache
-export CMAKE_C_COMPILER_LAUNCHER=sccache
-export PARALLEL_LEVEL=${PARALLEL_LEVEL:-$(nproc --all --ignore=2)}
-export SCCACHE_DIR="/repo/sccache_cache"
-export SCCACHE_IDLE_TIMEOUT=10000000
+source rapids-configure-sccache
 
 source rapids-date-string
 
