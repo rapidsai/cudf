@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from pylibcudf.column cimport Column
 from pylibcudf.libcudf.strings.combine cimport (
@@ -21,7 +21,6 @@ cpdef Column concatenate(
 )
 
 cpdef Column join_strings(Column input, Scalar separator, Scalar narep)
-
 
 cpdef Column join_list_elements(
     Column source_strings,
