@@ -193,7 +193,8 @@ class memory_mapped_source : public kvikio_source<kvikio::MmapHandle> {
       if (max_size_estimate == 0 || (offset + max_size_estimate) > file_size) {
         max_size_estimate = file_size - offset;
       }
-      _kvikio_handle = kvikio::MmapHandle(filepath, "r", max_size_estimate, offset);
+      _kvikio_handle =
+        kvikio::MmapHandle(filepath, "r", std::nullopt, 0, kvikio::FileHandle::m644, MAP_SHARED);
     }
   }
 };
