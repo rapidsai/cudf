@@ -49,6 +49,38 @@ __all__ = [
 ]
 
 
+def _env_get_int(name: str, default: int) -> int:
+    try:
+        return int(os.getenv(name, default))
+    except (ValueError, TypeError):  # pragma: no cover
+        return default  # pragma: no cover
+
+
+def get_total_device_memory() -> int | None:
+    """Return the total memory of the current device."""
+    import pynvml
+
+    try:
+        pynvml.nvmlInit()
+        index = os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0]
+        if index and not index.isnumeric():  # pragma: no cover
+            # This means device_index is UUID.
+            # This works for both MIG and non-MIG device UUIDs.
+            handle = pynvml.nvmlDeviceGetHandleByUUID(str.encode(index))
+            if pynvml.nvmlDeviceIsMigDeviceHandle(handle):
+                # Additionally get parent device handle
+                # if the device itself is a MIG instance
+                handle = pynvml.nvmlDeviceGetDeviceHandleFromMigDeviceHandle(handle)
+        else:
+            handle = pynvml.nvmlDeviceGetHandleByIndex(int(index))
+
+        return pynvml.nvmlDeviceGetMemoryInfo(handle).total
+
+    except pynvml.NVMLError_NotSupported:  # pragma: no cover
+        # System doesn't have proper "GPU memory".
+        return None
+
+
 @functools.cache
 def rapidsmpf_available() -> bool:  # pragma: no cover
     """Query whether rapidsmpf is available as a shuffle method."""
@@ -59,13 +91,6 @@ def rapidsmpf_available() -> bool:  # pragma: no cover
 
 
 # TODO: Use enum.StrEnum when we drop Python 3.10
-
-
-def _env_get_int(name: str, default: int) -> int:
-    try:
-        return int(os.getenv(name, default))
-    except (ValueError, TypeError):  # pragma: no cover
-        return default  # pragma: no cover
 
 
 class StreamingFallbackMode(str, enum.Enum):
@@ -217,43 +242,27 @@ class ParquetOptions:
 
 def default_blocksize(scheduler: str) -> int:
     """Return the default blocksize."""
-    import pynvml
-
-    pynvml.nvmlInit()
-    index = os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0]
-    if index and not index.isnumeric():  # pragma: no cover
-        # This means device_index is UUID.
-        # This works for both MIG and non-MIG device UUIDs.
-        handle = pynvml.nvmlDeviceGetHandleByUUID(str.encode(index))
-        if pynvml.nvmlDeviceIsMigDeviceHandle(handle):
-            # Additionally get parent device handle
-            # if the device itself is a MIG instance
-            handle = pynvml.nvmlDeviceGetDeviceHandleFromMigDeviceHandle(handle)
-    else:
-        handle = pynvml.nvmlDeviceGetHandleByIndex(int(index))
-
-    try:
-        device_size = pynvml.nvmlDeviceGetMemoryInfo(handle).total
-        if (
-            scheduler == "distributed"
-            or _env_get_int("POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY", default=1) == 0
-        ):
-            # Distributed execution requires a conservative
-            # blocksize for now. We are also more conservative
-            # when UVM is disabled.
-            blocksize = int(device_size * 0.025)
-        else:
-            # Single-GPU execution can lean on UVM to
-            # support a much larger blocksize.
-            blocksize = int(device_size * 0.0625)
-
-        # Use lower and upper bounds of 1GB and 10GB
-        return min(max(blocksize, 1_000_000_000), 10_000_000_000)
-
-    except pynvml.NVMLError_NotSupported:  # pragma: no cover
+    device_size = get_total_device_memory()
+    if device_size is None:  # pragma: no cover
         # System doesn't have proper "GPU memory".
         # Fall back to a conservative 1GB default.
         return 1_000_000_000
+
+    if (
+        scheduler == "distributed"
+        or _env_get_int("POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY", default=1) == 0
+    ):
+        # Distributed execution requires a conservative
+        # blocksize for now. We are also more conservative
+        # when UVM is disabled.
+        blocksize = int(device_size * 0.025)
+    else:
+        # Single-GPU execution can lean on UVM to
+        # support a much larger blocksize.
+        blocksize = int(device_size * 0.0625)
+
+    # Use lower and upper bounds of 1GB and 10GB
+    return min(max(blocksize, 1_000_000_000), 10_000_000_000)
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
