@@ -93,8 +93,7 @@ struct instance_context {
   /// @return A unique temporary variable identifier
   std::string make_tmp_id();
 
-
-  void reset() ;
+  void reset();
 };
 
 /// @brief The base class for all IR nodes.
@@ -228,11 +227,33 @@ struct operation final : node {
   std::vector<std::unique_ptr<node>> operands_;  ///< The operands of the operation
   type_info type_;                               ///< The type information of the IR node
 
+  operation(opcode op, std::unique_ptr<node>* move_begin, std::unique_ptr<node>* move_end);
+
  public:
+  template <typename... T>
+    requires(std::is_base_of_v<node, T> && ...)  ///< Ensure that all types are derived from node
+  static std::array<std::unique_ptr<node>, sizeof...(T)> operands(T&&... args)
+  {
+    return {std::make_unique<T>(std::forward<T>(args))...};
+  }
+
+  template <typename... T>
+    requires(std::is_base_of_v<node, T> && ...)  ///< Ensure that all types are derived from node
+  static std::array<std::unique_ptr<node>, sizeof...(T)> operands(std::unique_ptr<T>&&... args)
+  {
+    return {std::move(args)...};
+  }
+
   /// @brief Construct a new operation IR node
   /// @param op The operation code
   /// @param operands The operands of the operation
   operation(opcode op, std::vector<std::unique_ptr<node>> operands);
+
+  template <size_t N>
+  operation(opcode op, std::array<std::unique_ptr<node>, N> operands)
+    : operation{op, operands.data(), operands.data() + N}
+  {
+  }
 
   operation(operation const&) = delete;
 

@@ -106,12 +106,18 @@ std::string set_output::generate_code(instance_context& ctx,
   }
 }
 
-operation::operation(opcode op, std::vector<std::unique_ptr<node>> operands)
-  : id_(), op_(op), operands_(std::move(operands)), type_()
+operation::operation(opcode op, std::unique_ptr<node>* move_begin, std::unique_ptr<node>* move_end)
+  : id_(), op_(op), operands_(), type_()
 {
+  std::move(move_begin, move_end, std::back_inserter(operands_));
   CUDF_EXPECTS(static_cast<size_type>(operands_.size()) == ast::detail::ast_operator_arity(op),
                "Invalid number of arguments for operator.");
   CUDF_EXPECTS(operands_.size() > 0, "Operator must have at least one operand");
+}
+
+operation::operation(opcode op, std::vector<std::unique_ptr<node>> operands)
+  : operation(op, operands.data(), operands.data() + operands.size())
+{
 }
 
 std::string_view operation::get_id() { return id_; }

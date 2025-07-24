@@ -16,9 +16,13 @@
 
 #include "jit/row_ir.hpp"
 
+#include "cudf_test/column_wrapper.hpp"
+
 #include <cudf_test/testing_main.hpp>
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/iterator.cuh>
+#include <cudf/transform.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -111,9 +115,8 @@ TEST_F(RowIRCudaCodeGenTest, UnaryOperation)
 
   {
     row_ir::instance_context ctx{};
-    std::vector<std::unique_ptr<row_ir::node>> args;
-    args.emplace_back(std::make_unique<row_ir::get_input>(0));
-    row_ir::operation op{row_ir::opcode::IDENTITY, std::move(args)};
+    row_ir::operation op{row_ir::opcode::IDENTITY,
+                         row_ir::operation::operands(row_ir::get_input(0))};
     op.instantiate(ctx, info);
     auto code = op.generate_code(ctx, target_info, info);
 
@@ -129,9 +132,8 @@ TEST_F(RowIRCudaCodeGenTest, UnaryOperation)
   {
     row_ir::instance_context ctx{};
 
-    std::vector<std::unique_ptr<row_ir::node>> args;
-    args.emplace_back(std::make_unique<row_ir::get_input>(1));
-    row_ir::operation op{row_ir::opcode::IDENTITY, std::move(args)};
+    row_ir::operation op{row_ir::opcode::IDENTITY,
+                         row_ir::operation::operands(row_ir::get_input(1))};
     op.instantiate(ctx, info);
     auto null_code = op.generate_code(ctx, target_info, info);
 
@@ -157,10 +159,8 @@ TEST_F(RowIRCudaCodeGenTest, BinaryOperation)
 
   {
     row_ir::instance_context ctx{};
-    std::vector<std::unique_ptr<row_ir::node>> args;
-    args.emplace_back(std::make_unique<row_ir::get_input>(0));
-    args.emplace_back(std::make_unique<row_ir::get_input>(0));
-    row_ir::operation op{row_ir::opcode::ADD, std::move(args)};
+    row_ir::operation op{row_ir::opcode::ADD,
+                         row_ir::operation::operands(row_ir::get_input(0), row_ir::get_input(0))};
     op.instantiate(ctx, info);
     auto code = op.generate_code(ctx, target_info, info);
 
@@ -176,10 +176,8 @@ TEST_F(RowIRCudaCodeGenTest, BinaryOperation)
 
   {
     row_ir::instance_context ctx{};
-    std::vector<std::unique_ptr<row_ir::node>> args;
-    args.emplace_back(std::make_unique<row_ir::get_input>(1));
-    args.emplace_back(std::make_unique<row_ir::get_input>(1));
-    row_ir::operation op{row_ir::opcode::ADD, std::move(args)};
+    row_ir::operation op{row_ir::opcode::ADD,
+                         row_ir::operation::operands(row_ir::get_input(1), row_ir::get_input(1))};
     op.instantiate(ctx, info);
     auto null_code = op.generate_code(ctx, target_info, info);
 
@@ -212,32 +210,21 @@ TEST_F(RowIRCudaCodeGenTest, VectorLengthOperation)
     // This function generates the IR for the vector length operation:
     // length(v) = sqrt(x^2 + y^2)
     // where v = (x, y) is a 2D vector.
-    std::vector<std::unique_ptr<row_ir::node>> square0_args;
-    square0_args.push_back(std::make_unique<row_ir::get_input>(input0));
-    square0_args.push_back(std::make_unique<row_ir::get_input>(input0));
+    auto x2 = std::make_unique<row_ir::operation>(
+      row_ir::opcode::MUL,
+      row_ir::operation::operands(row_ir::get_input(input0), row_ir::get_input(input0)));
 
-    auto square0 =
-      std::make_unique<row_ir::operation>(row_ir::opcode::MUL, std::move(square0_args));
+    auto y2 = std::make_unique<row_ir::operation>(
+      row_ir::opcode::MUL,
+      row_ir::operation::operands(row_ir::get_input(input1), row_ir::get_input(input1)));
 
-    std::vector<std::unique_ptr<row_ir::node>> square1_args;
-    square1_args.push_back(std::make_unique<row_ir::get_input>(input1));
-    square1_args.push_back(std::make_unique<row_ir::get_input>(input1));
+    auto sum = std::make_unique<row_ir::operation>(
+      row_ir::opcode::ADD, row_ir::operation::operands(std::move(x2), std::move(y2)));
 
-    auto square1 =
-      std::make_unique<row_ir::operation>(row_ir::opcode::MUL, std::move(square1_args));
+    auto length = std::make_unique<row_ir::operation>(row_ir::opcode::SQRT,
+                                                      row_ir::operation::operands(std::move(sum)));
 
-    std::vector<std::unique_ptr<row_ir::node>> add_args;
-    add_args.push_back(std::move(square0));
-    add_args.push_back(std::move(square1));
-
-    auto add = std::make_unique<row_ir::operation>(row_ir::opcode::ADD, std::move(add_args));
-
-    std::vector<std::unique_ptr<row_ir::node>> sqrt_args;
-    sqrt_args.push_back(std::move(add));
-
-    auto sqrt = std::make_unique<row_ir::operation>(row_ir::opcode::SQRT, std::move(sqrt_args));
-
-    return std::make_unique<row_ir::set_output>(output, std::move(sqrt));
+    return std::make_unique<row_ir::set_output>(output, std::move(length));
   };
 
   {
@@ -296,7 +283,7 @@ TEST_F(RowIRCudaCodeGenTest, VectorLengthOperation)
   }
 }
 
-TEST_F(RowIRCudaCodeGenTest, AstConversionColumn)
+TEST_F(RowIRCudaCodeGenTest, AstConversionBasic)
 {
   row_ir::ast_converter converter;
 
@@ -308,7 +295,11 @@ TEST_F(RowIRCudaCodeGenTest, AstConversionColumn)
     ast_tree.push(ast::operation{ast::ast_operator::ADD, fourty_two_literal, column_ref});
 
   auto column =
-    cudf::make_numeric_column(data_type{type_id::INT32}, 2000, cudf::mask_state::UNALLOCATED);
+    cudf::make_numeric_column(data_type{type_id::INT32}, 2000, cudf::mask_state::ALL_VALID);
+
+  auto expected_iter = detail::make_counting_transform_iterator(0, [](auto i) { return i + 42; });
+  auto expected =
+    cudf::test::fixed_width_column_wrapper<int32_t>(expected_iter, expected_iter + 2000);
 
   row_ir::ast_args args{.table = cudf::table_view{{column->view()}}, .table_column_names = {}};
 
@@ -349,6 +340,12 @@ return;
 )***";
 
   EXPECT_EQ(transform_args.args.transform_udf, expected_udf);
-}
 
-TEST_F(RowIRCudaCodeGenTest, AstConversionScalar) {}
+  auto result = cudf::transform(transform_args.args.columns,
+                                transform_args.args.transform_udf,
+                                transform_args.args.output_type,
+                                transform_args.args.is_ptx,
+                                transform_args.args.user_data);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
