@@ -5,6 +5,7 @@ import pytest
 
 import cudf
 from cudf.testing import assert_series_equal
+from cudf.testing._utils import assert_asserters_equal
 
 
 def test_series_different_type_cases(
@@ -18,23 +19,16 @@ def test_series_different_type_cases(
     sr1 = cudf.from_pandas(psr1)
     sr2 = cudf.from_pandas(psr2)
 
-    kind = None
-    try:
-        pd.testing.assert_series_equal(
-            psr1, psr2, check_exact=check_exact, check_dtype=check_dtype
-        )
-    except BaseException as e:
-        kind = type(e)
-
-    if kind is not None:
-        with pytest.raises(kind):
-            assert_series_equal(
-                sr1, sr2, check_exact=check_exact, check_dtype=check_dtype
-            )
-    else:
-        assert_series_equal(
-            sr1, sr2, check_exact=check_exact, check_dtype=check_dtype
-        )
+    assert_asserters_equal(
+        pd.testing.assert_series_equal,
+        assert_series_equal,
+        psr1,
+        psr2,
+        sr1,
+        sr2,
+        check_exact=check_exact,
+        check_dtype=check_dtype,
+    )
 
 
 @pytest.mark.parametrize("rdata", [3, 4], ids=["same", "different"])
@@ -45,23 +39,15 @@ def test_datetime_like_compaibility(rdata, check_datetimelike_compat):
     sr1 = cudf.from_pandas(psr1)
     sr2 = cudf.from_pandas(psr2)
 
-    kind = None
-    try:
-        pd.testing.assert_series_equal(
-            psr1, psr2, check_datetimelike_compat=check_datetimelike_compat
-        )
-    except BaseException as e:
-        kind = type(e)
-
-    if kind is not None:
-        with pytest.raises(kind):
-            assert_series_equal(
-                sr1, sr2, check_datetimelike_compat=check_datetimelike_compat
-            )
-    else:
-        assert_series_equal(
-            sr1, sr2, check_datetimelike_compat=check_datetimelike_compat
-        )
+    assert_asserters_equal(
+        pd.testing.assert_series_equal,
+        assert_series_equal,
+        psr1,
+        psr2,
+        sr1,
+        sr2,
+        check_datetimelike_compat=check_datetimelike_compat,
+    )
 
 
 @pytest.mark.parametrize("rdata", [[1, 2, 5], [1, 2, 6], [1, 2, 5, 6]])
@@ -82,32 +68,14 @@ def test_basic_assert_series_equal(
     left = cudf.from_pandas(p_left)
     right = cudf.from_pandas(p_right)
 
-    kind = None
-    try:
-        pd.testing.assert_series_equal(
-            p_left,
-            p_right,
-            check_names=check_names,
-            check_categorical=check_categorical,
-            check_category_order=check_category_order,
-        )
-    except BaseException as e:
-        kind = type(e)
-
-    if kind is not None:
-        with pytest.raises(kind):
-            assert_series_equal(
-                left,
-                right,
-                check_names=check_names,
-                check_categorical=check_categorical,
-                check_category_order=check_category_order,
-            )
-    else:
-        assert_series_equal(
-            left,
-            right,
-            check_names=check_names,
-            check_categorical=check_categorical,
-            check_category_order=check_category_order,
-        )
+    assert_asserters_equal(
+        pd.testing.assert_series_equal,
+        assert_series_equal,
+        p_left,
+        p_right,
+        left,
+        right,
+        check_names=check_names,
+        check_categorical=check_categorical,
+        check_category_order=check_category_order,
+    )

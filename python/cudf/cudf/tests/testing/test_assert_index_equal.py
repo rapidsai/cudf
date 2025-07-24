@@ -5,6 +5,7 @@ import pytest
 
 import cudf
 from cudf.testing import assert_index_equal
+from cudf.testing._utils import assert_asserters_equal
 
 
 @pytest.fixture(params=["equiv", True, False])
@@ -21,17 +22,15 @@ def test_range_index_and_int_index_equality(
     idx1 = cudf.from_pandas(pidx1)
     idx2 = cudf.Index([0, 1, 2, 3, 4], dtype=signed_integer_types_as_str)
 
-    kind = None
-    try:
-        pd.testing.assert_index_equal(pidx1, pidx2, exact=exact)
-    except BaseException as e:
-        kind = type(e)
-
-    if kind is not None:
-        with pytest.raises(kind):
-            assert_index_equal(idx1, idx2, exact=exact)
-    else:
-        assert_index_equal(idx1, idx2, exact=exact)
+    assert_asserters_equal(
+        pd.testing.assert_index_equal,
+        assert_index_equal,
+        pidx1,
+        pidx2,
+        idx1,
+        idx2,
+        exact=exact,
+    )
 
 
 @pytest.mark.parametrize("rdata", [3, 4], ids=["same", "different"])
@@ -46,17 +45,14 @@ def test_multiindex_equal(rdata):
     idx1 = cudf.from_pandas(pidx1)
     idx2 = cudf.from_pandas(pidx2)
 
-    kind = None
-    try:
-        pd.testing.assert_index_equal(pidx1, pidx2)
-    except BaseException as e:
-        kind = type(e)
-
-    if kind is not None:
-        with pytest.raises(kind):
-            assert_index_equal(idx1, idx2)
-    else:
-        assert_index_equal(idx1, idx2)
+    assert_asserters_equal(
+        pd.testing.assert_index_equal,
+        assert_index_equal,
+        pidx1,
+        pidx2,
+        idx1,
+        idx2,
+    )
 
 
 @pytest.mark.parametrize("rdata", [[1, 2, 5], [1, 2, 6], [1, 2, 5, 6]])
@@ -76,41 +72,14 @@ def test_basic_assert_index_equal(
     left = cudf.from_pandas(p_left)
     right = cudf.from_pandas(p_right)
 
-    kind = None
-    try:
-        pd.testing.assert_index_equal(
-            p_left,
-            p_right,
-            exact=exact,
-            check_names=check_names,
-            check_categorical=check_categorical,
-        )
-    except BaseException as e:
-        kind = type(e)
-        msg = str(e)
-
-    if kind is not None:
-        if (kind is TypeError) and (
-            msg
-            == (
-                "Categoricals can only be compared "
-                "if 'categories' are the same."
-            )
-        ):
-            kind = AssertionError
-        with pytest.raises(kind):
-            assert_index_equal(
-                left,
-                right,
-                exact=exact,
-                check_names=check_names,
-                check_categorical=check_categorical,
-            )
-    else:
-        assert_index_equal(
-            left,
-            right,
-            exact=exact,
-            check_names=check_names,
-            check_categorical=check_categorical,
-        )
+    assert_asserters_equal(
+        pd.testing.assert_index_equal,
+        assert_index_equal,
+        p_left,
+        p_right,
+        left,
+        right,
+        exact=exact,
+        check_names=check_names,
+        check_categorical=check_categorical,
+    )

@@ -6,6 +6,7 @@ import pytest
 
 import cudf
 from cudf.testing import assert_frame_equal
+from cudf.testing._utils import assert_asserters_equal
 
 
 @pytest.fixture(params=[True, False])
@@ -46,35 +47,15 @@ def test_basic_assert_frame_equal(
     left = cudf.from_pandas(p_left)
     right = cudf.from_pandas(p_right)
 
-    kind = None
-    try:
-        pd.testing.assert_frame_equal(
-            p_left,
-            p_right,
-            check_exact=check_exact,
-            check_dtype=check_dtype,
-            check_names=check_names,
-            check_like=check_like,
-        )
-    except BaseException as e:
-        kind = type(e)
-
-    if kind is not None:
-        with pytest.raises(kind):
-            assert_frame_equal(
-                left,
-                right,
-                check_exact=check_exact,
-                check_dtype=check_dtype,
-                check_names=check_names,
-                check_like=check_like,
-            )
-    else:
-        assert_frame_equal(
-            left,
-            right,
-            check_exact=check_exact,
-            check_dtype=check_dtype,
-            check_names=check_names,
-            check_like=check_like,
-        )
+    assert_asserters_equal(
+        pd.testing.assert_frame_equal,
+        assert_frame_equal,
+        p_left,
+        p_right,
+        left,
+        right,
+        check_exact=check_exact,
+        check_dtype=check_dtype,
+        check_names=check_names,
+        check_like=check_like,
+    )
