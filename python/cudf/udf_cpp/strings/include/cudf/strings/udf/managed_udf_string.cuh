@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * Copyright (c) 2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,15 +15,19 @@
  */
 
 #pragma once
-#include <cudf/utilities/export.hpp>
+#include <cudf/strings/udf/udf_string.hpp>
 
-namespace CUDF_EXPORT cudf {
+namespace cudf::strings::udf {
 
 /**
- * @brief Returns true/false depending on whether Runtime JIT operations are supported
+ * @brief Container for a udf_string and its NRT memory information
  *
- * @return true if runtime JIT is supported, false otherwise.
+ * `meminfo` is a MemInfo struct from numba-cuda, see:
+ * https://github.com/NVIDIA/numba-cuda/blob/main/numba_cuda/numba/cuda/memory_management/nrt.cuh
  */
-bool is_runtime_jit_supported();
+struct managed_udf_string {
+  void* meminfo;
+  cudf::strings::udf::udf_string udf_str;
+};
 
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf::strings::udf
