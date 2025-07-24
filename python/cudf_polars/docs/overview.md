@@ -8,7 +8,7 @@ You will need:
    preferred configuration. Or else, use
    [rustup](https://www.rust-lang.org/tools/install)
 2. A [cudf development
-   environment](https://github.com/rapidsai/cudf/blob/branch-25.08/CONTRIBUTING.md#setting-up-your-build-environment).
+   environment](https://github.com/rapidsai/cudf/blob/branch-25.10/CONTRIBUTING.md#setting-up-your-build-environment).
    The combined devcontainer works, or whatever your favourite approach is.
 
 :::{note}
@@ -278,9 +278,14 @@ function `rewrite` with type `Expr -> (Expr -> T) -> T`:
 
 ```python
 from cudf_polars.typing import GenericTransformer
+from typing import TypedDict
+
+class State(TypedDict):
+    ...
+
 
 @singledispatch
-def rewrite(e: Expr, rec: GenericTransformer[Expr, T]) -> T:
+def rewrite(e: Expr, rec: GenericTransformer[Expr, T, State]) -> T:
     ...
 ```
 
@@ -302,9 +307,10 @@ two utilities in `traversal.py`:
 These both implement the `GenericTransformer` protocol, and can be
 wrapped around a transformation function like `rewrite` to provide a
 function `Expr -> T`. They also allow us to attach arbitrary
-*immutable* state to our visitor by passing a `state` dictionary. This
-dictionary can then be inspected by the concrete transformation
-function. `make_recursive` is very simple, and provides no caching of
+*immutable* state to our visitor by passing a `state` dictionary. The
+`state` dictionary should be given as some `TypedDict` so that the
+transformation function knows which fields are available.
+`make_recursive` is very simple, and provides no caching of
 intermediate results (so any DAGs that are visited will be viewed as
 trees). `CachingVisitor` provides the same interface, but maintains a
 cache of intermediate results, and reuses them if the same expression
@@ -331,7 +337,7 @@ from cudf_polars.dsl.traversal import (
     CachingVisitor, make_recursive, reuse_if_unchanged
 )
 from cudf_polars.dsl.expr import Col, Expr
-from cudf_polars.typing import ExprTransformer
+from cudf_polars.dsl.to_ast import ExprTransformer
 
 
 @singledispatch
@@ -363,11 +369,17 @@ accidentally sent in an object of the incorrect type.
 Finally we tie everything together with a public function:
 
 ```python
+from typing import TypedDict
+
+class State(TypedDict):
+    mapping: Mapping[str, str]
+
+
 def rename(e: Expr, mapping: Mapping[str, str]) -> Expr:
     """Rename column references in an expression."""
-    mapper = CachingVisitor(_rename, state={"mapping": mapping})
+    mapper = CachingVisitor(_rename, state=State(mapping=mapping))
     # or
-    # mapper = make_recursive(_rename, state={"mapping": mapping})
+    # mapper = make_recursive(_rename, state=State(mapping=mapping))
     return mapper(e)
 ```
 
@@ -488,3 +500,22 @@ To centralize validation and keep things well-typed internally, we model our
 additional configuration as a set of dataclasses defined in
 `cudf_polars/utils/config.py`. To transition from user-provided options to our
 (validated) internal options, use `ConfigOptions.from_polars_engine`.
+
+# Profiling
+
+You can profile `cudf_polars` using NVIDIA NSight Systems. Each `.collect()` or
+`.sink()` call has two top-level ranges under the `cudf_polars` domain:
+
+1. `ConvertIR`: measures the time spent converting the polars query plan to
+   cudf-polars' IR.
+2. `ExecuteIR`: measures the time spent executing the cudf-polars IR.
+
+The majority of time should be spent in the `ExecuteIR` range. Within
+`ExecuteIR`, each individual IR node's `do_evaluate` method is wrapped in
+another `nvtx` range (e.g. `Scan.do_evaluate`, `GroupBy.do_evaluate`, etc.).
+These provide a higher-level grouping over the lower-level libcudf calls (e.g.
+`read_chunk`, `aggregate`).
+
+Finally, if using [rapidsmpf](https://docs.rapids.ai/api/rapidsmpf/nightly/)
+for shuffling, the methods inserting and extracting partitions to shuffle are
+annotated with nvtx ranges.

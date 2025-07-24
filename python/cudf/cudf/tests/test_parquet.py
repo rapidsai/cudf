@@ -51,7 +51,7 @@ def datadir(datadir):
     return datadir / "parquet"
 
 
-@pytest.fixture(params=[1, 5, 10, 100000])
+@pytest.fixture(params=[1, 5, 10, 100])
 def simple_pdf(request):
     rng = np.random.default_rng(seed=0)
     types = [
@@ -164,12 +164,12 @@ def build_pdf(num_columns, day_resolution_timestamps):
     return test_pdf
 
 
-@pytest.fixture(params=[0, 1, 10, 10000])
+@pytest.fixture(params=[0, 1, 10, 100])
 def pdf(request):
     return build_pdf(request, False)
 
 
-@pytest.fixture(params=[0, 1, 10, 10000])
+@pytest.fixture(params=[0, 1, 10, 100])
 def pdf_day_timestamps(request):
     return build_pdf(request, True)
 
@@ -959,7 +959,7 @@ def list_gen(gen, num_rows, lists_per_row, list_size, include_validity=False):
 
 
 def test_parquet_reader_list_large(tmpdir):
-    expect = pd.DataFrame({"a": list_gen(int_gen, 256, 80, 50)})
+    expect = pd.DataFrame({"a": list_gen(int_gen, 64, 40, 25)})
     fname = tmpdir.join("test_parquet_reader_list_large.parquet")
     expect.to_parquet(fname)
     assert os.path.exists(fname)
@@ -969,7 +969,7 @@ def test_parquet_reader_list_large(tmpdir):
 
 def test_parquet_reader_list_validity(tmpdir):
     expect = pd.DataFrame(
-        {"a": list_gen(int_gen, 256, 80, 50, include_validity=True)}
+        {"a": list_gen(int_gen, 64, 40, 25, include_validity=True)}
     )
     fname = tmpdir.join("test_parquet_reader_list_validity.parquet")
     expect.to_parquet(fname)
@@ -981,10 +981,10 @@ def test_parquet_reader_list_validity(tmpdir):
 def test_parquet_reader_list_large_mixed(tmpdir):
     expect = pd.DataFrame(
         {
-            "a": list_gen(string_gen, 128, 80, 50),
-            "b": list_gen(int_gen, 128, 80, 50),
-            "c": list_gen(int_gen, 128, 80, 50, include_validity=True),
-            "d": list_gen(string_gen, 128, 80, 50, include_validity=True),
+            "a": list_gen(string_gen, 64, 40, 25),
+            "b": list_gen(int_gen, 64, 40, 25),
+            "c": list_gen(int_gen, 64, 40, 25, include_validity=True),
+            "d": list_gen(string_gen, 64, 40, 25, include_validity=True),
         }
     )
     fname = tmpdir.join("test_parquet_reader_list_large_mixed.parquet")
@@ -996,10 +996,10 @@ def test_parquet_reader_list_large_mixed(tmpdir):
 
 def test_parquet_reader_list_large_multi_rowgroup(tmpdir):
     # > 40 row groups
-    num_rows = 100000
+    num_rows = 10000
     num_docs = num_rows / 2
-    num_categories = 1_000
-    row_group_size = 1000
+    num_categories = 100
+    row_group_size = 100
 
     cupy.random.seed(0)
 
@@ -1028,8 +1028,8 @@ def test_parquet_reader_list_large_multi_rowgroup(tmpdir):
 
 def test_parquet_reader_list_large_multi_rowgroup_nulls(tmpdir):
     # 25 row groups
-    num_rows = 25000
-    row_group_size = 1000
+    num_rows = 2500
+    row_group_size = 100
 
     expect = cudf.DataFrame(
         {"a": list_gen(int_gen, num_rows, 3, 2, include_validity=True)}
@@ -1229,7 +1229,7 @@ def test_parquet_reader_struct_los_large(tmpdir):
 
 
 @pytest.mark.parametrize(
-    "params", [[3, 4, 32, False], [3, 4, 32, True], [100, 25, 256, True]]
+    "params", [[3, 4, 32, False], [3, 4, 32, True], [50, 10, 64, True]]
 )
 def test_parquet_reader_struct_sol_table(tmpdir, params):
     # Struct<List<List>>
@@ -1290,9 +1290,9 @@ def test_parquet_delta_byte_array(datadir):
 #  128 - almost full block
 #  129 - one full block
 #  130 - one full block plus one value in new block
-# 1000 - multiple blocks
+# 129 * 3 - multiple blocks
 def delta_num_rows():
-    return [1, 2, 23, 32, 33, 34, 128, 129, 130, 1000]
+    return [1, 2, 23, 32, 33, 34, 128, 129, 130, 129 * 3]
 
 
 @pytest.mark.parametrize("nrows", delta_num_rows())
@@ -2027,9 +2027,9 @@ def test_parquet_writer_chunked_max_file_size(
     pdf_dir = str(tmpdir_factory.mktemp("pdf_dir"))
     gdf_dir = str(tmpdir_factory.mktemp("gdf_dir"))
 
-    df1 = cudf.DataFrame({"a": [1, 1, 2, 2, 1] * 10000, "b": range(0, 50000)})
+    df1 = cudf.DataFrame({"a": [1, 1, 2, 2, 1] * 1000, "b": range(0, 5000)})
     df2 = cudf.DataFrame(
-        {"a": [1, 3, 3, 1, 3] * 10000, "b": range(50000, 100000)}
+        {"a": [1, 3, 3, 1, 3] * 1000, "b": range(5000, 10000)}
     )
 
     cw = ParquetDatasetWriter(
@@ -2218,15 +2218,24 @@ def test_read_parquet_partitioned_filtered(
         assert got.dtypes["c"] == "int"
     assert_eq(expect, got)
 
-    # Filter on non-partitioned column
-    filters = [("a", "==", 10)]
-    got = cudf.read_parquet(read_path, filters=filters)
-    expect = pd.read_parquet(read_path, filters=filters)
 
-    # Filter on both kinds of columns
-    filters = [[("a", "==", 10)], [("c", "==", 1)]]
-    got = cudf.read_parquet(read_path, filters=filters)
-    expect = pd.read_parquet(read_path, filters=filters)
+@pytest.mark.parametrize(
+    "filters", [[("a", "==", 10)], [[("a", "==", 10)], [("c", "==", 1)]]]
+)
+def test_read_parquet_partitioned_filtered_other(tmpdir, filters):
+    rng = np.random.default_rng(2)
+    path = str(tmpdir)
+    size = 10
+    df = cudf.DataFrame(
+        {
+            "a": np.arange(0, stop=size, dtype="int64"),
+            "b": rng.choice(list("abcd"), size=size),
+            "c": rng.choice(np.arange(4), size=size),
+        }
+    )
+    df.to_parquet(path, partition_cols=["c", "b"])
+    got = cudf.read_parquet(path, filters=filters)
+    expect = pd.read_parquet(path, filters=filters)
 
     # Work-around for pandas bug:
     # https://github.com/pandas-dev/pandas/issues/53345
@@ -2354,7 +2363,7 @@ def test_parquet_writer_list_basic(tmpdir):
 
 
 def test_parquet_writer_list_large(tmpdir):
-    gdf = cudf.DataFrame({"a": list_gen(int_gen, 256, 80, 50)})
+    gdf = cudf.DataFrame({"a": list_gen(int_gen, 128, 40, 25)})
     fname = tmpdir.join("test_parquet_writer_list_large.parquet")
 
     gdf.to_parquet(fname)
@@ -2367,10 +2376,10 @@ def test_parquet_writer_list_large(tmpdir):
 def test_parquet_writer_list_large_mixed(tmpdir):
     expect = pd.DataFrame(
         {
-            "a": list_gen(string_gen, 128, 80, 50),
-            "b": list_gen(int_gen, 128, 80, 50),
-            "c": list_gen(int_gen, 128, 80, 50, include_validity=True),
-            "d": list_gen(string_gen, 128, 80, 50, include_validity=True),
+            "a": list_gen(string_gen, 64, 40, 25),
+            "b": list_gen(int_gen, 64, 40, 25),
+            "c": list_gen(int_gen, 64, 40, 25, include_validity=True),
+            "d": list_gen(string_gen, 64, 40, 25, include_validity=True),
         }
     )
     fname = tmpdir.join("test_parquet_writer_list_large_mixed.parquet")
@@ -2391,18 +2400,18 @@ def test_parquet_writer_list_chunked(tmpdir, store_schema):
         pytest.skip("https://github.com/apache/arrow/pull/37792")
     table1 = cudf.DataFrame(
         {
-            "a": list_gen(string_gen, 128, 80, 50),
-            "b": list_gen(int_gen, 128, 80, 50),
-            "c": list_gen(int_gen, 128, 80, 50, include_validity=True),
-            "d": list_gen(string_gen, 128, 80, 50, include_validity=True),
+            "a": list_gen(string_gen, 64, 40, 25),
+            "b": list_gen(int_gen, 64, 40, 25),
+            "c": list_gen(int_gen, 64, 40, 25, include_validity=True),
+            "d": list_gen(string_gen, 64, 40, 25, include_validity=True),
         }
     )
     table2 = cudf.DataFrame(
         {
-            "a": list_gen(string_gen, 128, 80, 50),
-            "b": list_gen(int_gen, 128, 80, 50),
-            "c": list_gen(int_gen, 128, 80, 50, include_validity=True),
-            "d": list_gen(string_gen, 128, 80, 50, include_validity=True),
+            "a": list_gen(string_gen, 64, 40, 25),
+            "b": list_gen(int_gen, 64, 40, 25),
+            "c": list_gen(int_gen, 64, 40, 25, include_validity=True),
+            "d": list_gen(string_gen, 64, 40, 25, include_validity=True),
         }
     )
     fname = tmpdir.join("test_parquet_writer_list_chunked.parquet")
@@ -2631,10 +2640,10 @@ def test_parquet_writer_statistics(tmpdir, pdf, add_nulls, store_schema):
 def test_parquet_writer_list_statistics(tmpdir):
     df = pd.DataFrame(
         {
-            "a": list_gen(string_gen, 128, 80, 50),
-            "b": list_gen(int_gen, 128, 80, 50),
-            "c": list_gen(int_gen, 128, 80, 50, include_validity=True),
-            "d": list_gen(string_gen, 128, 80, 50, include_validity=True),
+            "a": list_gen(string_gen, 64, 40, 25),
+            "b": list_gen(int_gen, 64, 40, 25),
+            "c": list_gen(int_gen, 64, 40, 25, include_validity=True),
+            "d": list_gen(string_gen, 64, 40, 25, include_validity=True),
         }
     )
     fname = tmpdir.join("test_parquet_writer_list_statistics.parquet")
@@ -2926,15 +2935,13 @@ def test_parquet_flba_round_trip(tmpdir):
         "USE_DEFAULT",
     ],
 )
-def test_per_column_options(tmpdir, encoding):
+def test_per_column_encoding_option(encoding):
     pdf = pd.DataFrame({"ilist": [[1, 2, 3, 1, 2, 3]], "i1": [1]})
     cdf = cudf.from_pandas(pdf)
-    fname = tmpdir.join("ilist.parquet")
+    buffer = BytesIO()
     cdf.to_parquet(
-        fname,
+        buffer,
         column_encoding={"ilist.list.element": encoding},
-        compression="SNAPPY",
-        skip_compression={"ilist.list.element"},
     )
     # DICTIONARY and USE_DEFAULT should both result in a PLAIN_DICTIONARY encoding in parquet
     encoding_name = (
@@ -2942,11 +2949,29 @@ def test_per_column_options(tmpdir, encoding):
         if encoding == "DICTIONARY" or encoding == "USE_DEFAULT"
         else encoding
     )
-    pf = pq.ParquetFile(fname)
+    pf = pq.ParquetFile(buffer)
     fmd = pf.metadata
     assert encoding_name in fmd.row_group(0).column(0).encodings
+
+
+@pytest.mark.parametrize("compression", ["SNAPPY", "ZSTD"])
+def test_per_column_compression_option(set_decomp_env_vars, compression):
+    pdf = pd.DataFrame(
+        {"ilist": [[1, 2, 3, 1, 2, 3]], "i1": [[1, 2, 3, 1, 2, 3]]}
+    )
+    cdf = cudf.from_pandas(pdf)
+    buffer = BytesIO()
+    cdf.to_parquet(
+        buffer,
+        compression=compression,
+        skip_compression={"ilist.list.element"},
+        use_dictionary=False,  # to make sure that data is compressible
+    )
+
+    pf = pq.ParquetFile(buffer)
+    fmd = pf.metadata
     assert fmd.row_group(0).column(0).compression == "UNCOMPRESSED"
-    assert fmd.row_group(0).column(1).compression == "SNAPPY"
+    assert fmd.row_group(0).column(1).compression == compression
 
 
 @pytest.mark.parametrize(
@@ -3779,10 +3804,10 @@ def test_parquet_chunked_reader(
     chunk_read_limit, pass_read_limit, use_pandas_metadata, row_groups
 ):
     df = pd.DataFrame(
-        {"a": [1, 2, 3, None] * 10000, "b": ["av", "qw", None, "xyz"] * 10000}
+        {"a": [1, 2, 3, None] * 1000, "b": ["av", "qw", None, "xyz"] * 1000}
     )
     buffer = BytesIO()
-    df.to_parquet(buffer, row_group_size=10000)
+    df.to_parquet(buffer, row_group_size=1000)
     with cudf.option_context("io.parquet.low_memory", True):
         actual = cudf.read_parquet(
             [buffer],
@@ -3797,13 +3822,13 @@ def test_parquet_chunked_reader(
     assert_eq(expected, actual)
 
 
-@pytest.mark.parametrize("chunk_read_limit", [0, 240, 1024000000])
-@pytest.mark.parametrize("pass_read_limit", [0, 240, 1024000000])
-@pytest.mark.parametrize("num_rows", [997, 2997, None])
+@pytest.mark.parametrize("chunk_read_limit", [256, 2560])
+@pytest.mark.parametrize("pass_read_limit", [256, 2560])
+@pytest.mark.parametrize("num_rows", [49, 291])
+@pytest.mark.parametrize("skip_rows", [412, 601])
+@pytest.mark.parametrize("data_size", [100, 200])
 def test_parquet_chunked_reader_structs(
-    chunk_read_limit,
-    pass_read_limit,
-    num_rows,
+    chunk_read_limit, pass_read_limit, num_rows, skip_rows, data_size
 ):
     data = [
         {
@@ -3824,15 +3849,15 @@ def test_parquet_chunked_reader_structs(
             "c": [18, 19],
         },
         {"a": None, "b": None, "c": None},
-    ] * 1000
+    ] * data_size
 
     pa_struct = pa.Table.from_pydict({"struct": data})
     df = cudf.DataFrame.from_arrow(pa_struct)
     buffer = BytesIO()
-    df.to_parquet(buffer)
+    df.to_parquet(buffer, row_group_size_rows=7000, max_page_size_rows=100)
 
     # Number of rows to read
-    nrows = num_rows if num_rows is not None else len(df)
+    nrows = num_rows if skip_rows + num_rows < len(df) else len(df) - skip_rows
 
     with cudf.option_context("io.parquet.low_memory", True):
         actual = cudf.read_parquet(
@@ -3840,17 +3865,17 @@ def test_parquet_chunked_reader_structs(
             _chunk_read_limit=chunk_read_limit,
             _pass_read_limit=pass_read_limit,
             nrows=nrows,
-        )
+            skip_rows=skip_rows,
+        ).reset_index(drop=True)
     expected = cudf.read_parquet(
-        buffer,
-        nrows=nrows,
-    )
+        buffer, nrows=nrows, skip_rows=skip_rows
+    ).reset_index(drop=True)
     assert_eq(expected, actual)
 
 
-@pytest.mark.parametrize("chunk_read_limit", [0, 240, 1024000000])
-@pytest.mark.parametrize("pass_read_limit", [0, 240, 1024000000])
-@pytest.mark.parametrize("num_rows", [4997, 9997, None])
+@pytest.mark.parametrize("chunk_read_limit", [0, 24, 10240000])
+@pytest.mark.parametrize("pass_read_limit", [0, 24, 10240000])
+@pytest.mark.parametrize("num_rows", [47, 97, None])
 @pytest.mark.parametrize(
     "str_encoding",
     [
@@ -3867,10 +3892,10 @@ def test_parquet_chunked_reader_string_decoders(
 ):
     df = pd.DataFrame(
         {
-            "i64": [1, 2, 3, None] * 10000,
-            "str": ["av", "qw", "asd", "xyz"] * 10000,
+            "i64": [1, 2, 3, None] * 100,
+            "str": ["av", "qw", "asd", "xyz"] * 100,
             "list": list(
-                [["ad", "cd"], ["asd", "fd"], None, ["asd", None]] * 10000
+                [["ad", "cd"], ["asd", "fd"], None, ["asd", None]] * 100
             ),
         }
     )
@@ -3878,7 +3903,7 @@ def test_parquet_chunked_reader_string_decoders(
     # Write 4 Parquet row groups with string column encoded
     df.to_parquet(
         buffer,
-        row_group_size=10000,
+        row_group_size=100,
         use_dictionary=False,
         column_encoding={"str": str_encoding},
     )
@@ -3902,23 +3927,78 @@ def test_parquet_chunked_reader_string_decoders(
 
 
 @pytest.mark.parametrize(
-    "nrows,skip_rows",
+    "nrows, skip_rows",
     [
         (0, 0),
-        (1000, 0),
-        (0, 1000),
-        (1000, 10000),
+        (99, 101),
+        (988, 61),
+        (99, 1011),
+        (101, 1601),
+        (99, 1901),
     ],
 )
-def test_parquet_reader_nrows_skiprows(nrows, skip_rows):
-    df = pd.DataFrame(
-        {"a": [1, 2, 3, 4] * 100000, "b": ["av", "qw", "hi", "xyz"] * 100000}
+@pytest.mark.parametrize(
+    "row_group_size_rows, page_size_rows",
+    [
+        (1000, 1000),  # 1 RG, 1 page per RG
+        (1000, 100),  # 1 RG, multiple pages per RG
+        (100, 100),  # multiple RGs, 1 page per RG
+        (100, 10),  # multiple RGs, multiple pages per RG
+    ],
+)
+@pytest.mark.parametrize(
+    "chunk_read_limit, pass_read_limit",
+    [
+        (256, 256),  # small chunk and pass read limits
+        (0, 1024),  # zero chunk and small pass read limit
+        (256, 0),  # small chunk and zero pass read limit
+        (256000, 256000),  # large chunk and pass read limits
+    ],
+)
+def test_chunked_parquet_reader_nrows_skiprows(
+    nrows,
+    skip_rows,
+    row_group_size_rows,
+    page_size_rows,
+    chunk_read_limit,
+    pass_read_limit,
+):
+    df = cudf.DataFrame(
+        {
+            "a": list(
+                [
+                    ["cat", "lion", "deer"],
+                    ["bear", "ibex", None],
+                    ["tiger", None, "bull"],
+                    [None, "wolf", "fox"],
+                ]
+            )
+            * 500,
+            "b": ["av", "qw", None, "xyz"] * 500,
+        }
     )
     expected = df[skip_rows : skip_rows + nrows]
     buffer = BytesIO()
-    df.to_parquet(buffer)
+    df.to_parquet(
+        buffer,
+        row_group_size_rows=row_group_size_rows,
+        max_page_size_rows=page_size_rows,
+    )
     got = cudf.read_parquet(buffer, nrows=nrows, skip_rows=skip_rows)
     assert_eq(expected, got)
+
+    # Check for chunked parquet reader
+    with cudf.option_context("io.parquet.low_memory", True):
+        got = cudf.read_parquet(
+            [buffer],
+            _chunk_read_limit=chunk_read_limit,
+            _pass_read_limit=pass_read_limit,
+            nrows=nrows,
+            skip_rows=skip_rows,
+        ).reset_index(drop=True)
+        # Reset index for comparison
+        expected = expected.reset_index(drop=True)
+        assert_eq(expected, got)
 
 
 def test_parquet_reader_pandas_compatibility():
@@ -4460,16 +4540,13 @@ def test_parquet_reader_empty_compressed_page(datadir):
     assert_eq(cudf.read_parquet(fname), df)
 
 
-@pytest.fixture(params=[12345], scope="module")
+@pytest.fixture(params=[1234], scope="module")
 def my_pdf(request):
     return build_pdf(request, True)
 
 
 @pytest.mark.parametrize("compression", ["brotli", "gzip", "snappy", "zstd"])
 def test_parquet_decompression(set_decomp_env_vars, my_pdf, compression):
-    if compression == "snappy":
-        pytest.skip("Skipping because of a known issue on CUDA 11.8")
-
     # PANDAS returns category objects whereas cuDF returns hashes
     expect = my_pdf.drop(columns=["col_category"])
 

@@ -203,7 +203,7 @@ class aggregate_reader_metadata {
    * @param rg_info Struct used to summarize metadata for a single row group
    * @param chunk_start_row Global index of first row in the row group
    */
-  void column_info_for_row_group(row_group_info& rg_info, size_type chunk_start_row) const;
+  void column_info_for_row_group(row_group_info& rg_info, size_t chunk_start_row) const;
 
   /**
    * @brief Returns the required alignment for bloom filter buffers
@@ -243,6 +243,24 @@ class aggregate_reader_metadata {
   [[nodiscard]] std::vector<Type> get_parquet_types(
     host_span<std::vector<size_type> const> row_group_indices,
     host_span<int const> column_schemas) const;
+
+  /**
+   * @brief Filters the row groups using row bounds (`skip_rows` and `num_rows`)
+   *
+   * @param rows_to_skip Number of rows to skip
+   * @param rows_to_read Number of rows to read
+   *
+   * @return A tuple of number of rows to skip from the first surviving row group's row offset,
+   * a vector of surviving row group indices, and two vectors of effective (trimmed) row counts and
+   * offsets across surviving row group indices respectively
+   */
+  [[nodiscard]] std::tuple<int64_t,
+                           std::vector<std::vector<size_type>>,
+                           std::vector<std::vector<size_t>>,
+                           std::vector<std::vector<size_t>>>
+  apply_row_bounds_filter(cudf::host_span<std::vector<size_type> const> input_row_group_indices,
+                          int64_t rows_to_skip,
+                          int64_t rows_to_read) const;
 
   /**
    * @brief Filters the row groups using stats filter
@@ -386,7 +404,7 @@ class aggregate_reader_metadata {
   [[nodiscard]] auto const& get_schema(int schema_idx, int pfm_idx = 0) const
   {
     CUDF_EXPECTS(
-      schema_idx >= 0 and pfm_idx >= 0 and pfm_idx < static_cast<int>(per_file_metadata.size()),
+      schema_idx >= 0 and pfm_idx >= 0 and std::cmp_less(pfm_idx, per_file_metadata.size()),
       "Parquet reader encountered an invalid schema_idx or pfm_idx",
       std::out_of_range);
     return per_file_metadata[pfm_idx].schema[schema_idx];
@@ -482,7 +500,7 @@ class aggregate_reader_metadata {
    *         struct containing the number of row groups surviving each predicate pushdown filter
    */
   [[nodiscard]] std::tuple<int64_t,
-                           size_type,
+                           size_t,
                            std::vector<row_group_info>,
                            std::vector<size_t>,
                            size_type,
@@ -490,7 +508,7 @@ class aggregate_reader_metadata {
   select_row_groups(host_span<std::unique_ptr<datasource> const> sources,
                     host_span<std::vector<size_type> const> row_group_indices,
                     int64_t row_start,
-                    std::optional<size_type> const& row_count,
+                    std::optional<int64_t> const& row_count,
                     host_span<data_type const> output_dtypes,
                     host_span<int const> output_column_schemas,
                     std::optional<std::reference_wrapper<ast::expression const>> filter,

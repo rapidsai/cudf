@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import functools
 import os
-from typing import TYPE_CHECKING, Any
+from pickle import dumps
+from typing import TYPE_CHECKING
 
 import cachetools
 import cupy as cp
@@ -12,33 +13,31 @@ import numpy as np
 from cuda.bindings import runtime
 from numba import cuda, typeof
 from numba.core.datamodel import default_manager, models
-from numba.core.errors import TypingError
 from numba.core.extending import register_model
 from numba.np import numpy_support
-from numba.types import CPointer, Poison, Record, Tuple, boolean, int64, void
+from numba.types import CPointer, Record, Tuple, int64, void
 
 import rmm
 
 from cudf._lib import strings_udf
-from cudf.api.types import is_scalar
-from cudf.core.column.column import ColumnBase, as_column
-from cudf.core.dtypes import dtype
+from cudf.core.buffer import as_buffer
 from cudf.core.udf.masked_typing import MaskedType
+from cudf.core.udf.nrt_utils import nrt_enabled
 from cudf.core.udf.strings_typing import (
+    NRT_decref,
+    managed_udf_string,
     str_view_arg_handler,
     string_view,
-    udf_string,
 )
-from cudf.utils import cudautils
-from cudf.utils._numba import _CUDFNumbaConfig, _get_ptx_file
 from cudf.utils.dtypes import (
     BOOL_TYPES,
+    CUDF_STRING_DTYPE,
     DATETIME_TYPES,
     NUMERIC_TYPES,
+    SIZE_TYPE_DTYPE,
     STRING_TYPES,
     TIMEDELTA_TYPES,
 )
-from cudf.utils.performance_tracking import _performance_tracking
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -50,9 +49,7 @@ if TYPE_CHECKING:
 
 # Maximum size of a string column is 2 GiB
 _STRINGS_UDF_DEFAULT_HEAP_SIZE = os.environ.get("STRINGS_UDF_HEAP_SIZE", 2**31)
-_heap_size = 0
-_cudf_str_dtype = dtype(str)
-
+_HEAP_SIZE = 0
 
 JIT_SUPPORTED_TYPES = (
     NUMERIC_TYPES
@@ -61,71 +58,21 @@ JIT_SUPPORTED_TYPES = (
     | TIMEDELTA_TYPES
     | STRING_TYPES
 )
-libcudf_bitmask_type = numpy_support.from_dtype(np.dtype("int32"))
-MASK_BITSIZE = np.dtype("int32").itemsize * 8
+LIBCUDF_BITMASK_TYPE = numpy_support.from_dtype(SIZE_TYPE_DTYPE)
+MASK_BITSIZE = SIZE_TYPE_DTYPE.itemsize * 8
 
 precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
-launch_arg_getters: dict[Any, Any] = {}
+
+# This cache is keyed on the (signature, code, closure variables) of UDFs, so
+# it can hit for distinct functions that are similar. The lru_cache wrapping
+# compile_udf misses for these similar functions, but doesn't need to serialize
+# closure variables to check for a hit.
+_udf_code_cache: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
 
 
-@functools.cache
-def _ptx_file():
-    return _get_ptx_file(
-        os.path.join(
-            os.path.dirname(strings_udf.__file__), "..", "core", "udf"
-        ),
-        "shim_",
-    )
-
-
-@_performance_tracking
-def _get_udf_return_type(argty, func: Callable, args=()):
-    """
-    Get the return type of a masked UDF for a given set of argument dtypes. It
-    is assumed that the function consumes a dictionary whose keys are strings
-    and whose values are of MaskedType. Initially assume that the UDF may be
-    written to utilize any field in the row - including those containing an
-    unsupported dtype. If an unsupported dtype is actually used in the function
-    the compilation should fail at `compile_udf`. If compilation succeeds, one
-    can infer that the function does not use any of the columns of unsupported
-    dtype - meaning we can drop them going forward and the UDF will still end
-    up getting fed rows containing all the fields it actually needs to use to
-    compute the answer for that row.
-    """
-
-    # present a row containing all fields to the UDF and try and compile
-    compile_sig = (argty, *(typeof(arg) for arg in args))
-
-    # Get the return type. The PTX is also returned by compile_udf, but is not
-    # needed here.
-    with _CUDFNumbaConfig():
-        ptx, output_type = cudautils.compile_udf(func, compile_sig)
-
-    if not isinstance(output_type, MaskedType):
-        numba_output_type = numpy_support.from_dtype(np.dtype(output_type))
-    else:
-        numba_output_type = output_type
-
-    result = (
-        numba_output_type
-        if not isinstance(numba_output_type, MaskedType)
-        else numba_output_type.value_type
-    )
-    result = result if result.is_internal else result.return_type
-
-    # _get_udf_return_type will throw a TypingError if the user tries to use
-    # a field in the row containing an unsupported dtype, except in the
-    # edge case where all the function does is return that element:
-
-    # def f(row):
-    #    return row[<bad dtype key>]
-    # In this case numba is happy to return MaskedType(<bad dtype key>)
-    # because it relies on not finding overloaded operators for types to raise
-    # the exception, so we have to explicitly check for that case.
-    if isinstance(result, Poison):
-        raise TypingError(str(result))
-
-    return result
+UDF_SHIM_FILE = os.path.join(
+    os.path.dirname(strings_udf.__file__), "..", "core", "udf", "shim.fatbin"
+)
 
 
 def _all_dtypes_from_frame(frame, supported_types=JIT_SUPPORTED_TYPES):
@@ -159,7 +106,7 @@ def _masked_array_type_from_col(col):
     array of bools representing a mask.
     """
 
-    if col.dtype == _cudf_str_dtype:
+    if col.dtype == CUDF_STRING_DTYPE:
         col_type = CPointer(string_view)
     else:
         nb_scalar_ty = numpy_support.from_dtype(col.dtype)
@@ -168,31 +115,7 @@ def _masked_array_type_from_col(col):
     if col.mask is None:
         return col_type
     else:
-        return Tuple((col_type, libcudf_bitmask_type[::1]))
-
-
-def _construct_signature(frame, return_type, args):
-    """
-    Build the signature of numba types that will be used to
-    actually JIT the kernel itself later, accounting for types
-    and offsets. Skips columns with unsupported dtypes.
-    """
-    if not return_type.is_internal:
-        return_type = CPointer(return_type)
-    else:
-        return_type = return_type[::1]
-    # Tuple of arrays, first the output data array, then the mask
-    return_type = Tuple((return_type, boolean[::1]))
-    offsets = []
-    sig = [return_type, int64]
-    for col in _supported_cols_from_frame(frame).values():
-        sig.append(_masked_array_type_from_col(col))
-        offsets.append(int64)
-
-    # return_type, size, data, masks, offsets, extra args
-    sig = void(*(sig + offsets + [typeof(arg) for arg in args]))
-
-    return sig
+        return Tuple((col_type, LIBCUDF_BITMASK_TYPE[::1]))
 
 
 class Row(Record):
@@ -221,6 +144,76 @@ def _mask_get(mask, pos):
     return (mask[pos // MASK_BITSIZE] >> (pos % MASK_BITSIZE)) & 1
 
 
+def make_cache_key(udf, sig):
+    """
+    Build a cache key for a user defined function. Used to avoid
+    recompiling the same function for the same set of types
+    """
+    codebytes = udf.__code__.co_code
+    constants = udf.__code__.co_consts
+    names = udf.__code__.co_names
+
+    if udf.__closure__ is not None:
+        cvars = tuple(x.cell_contents for x in udf.__closure__)
+        cvarbytes = dumps(cvars)
+    else:
+        cvarbytes = b""
+
+    return names, constants, codebytes, cvarbytes, sig
+
+
+def compile_udf(udf, type_signature):
+    """Compile ``udf`` with `numba`
+
+    Compile a python callable function ``udf`` with
+    `numba.cuda.compile_ptx_for_current_device(device=True)` using
+    ``type_signature`` into CUDA PTX together with the generated output type.
+
+    The output is expected to be passed to the PTX parser in `libcudf`
+    to generate a CUDA device function to be inlined into CUDA kernels,
+    compiled at runtime and launched.
+
+    Parameters
+    ----------
+    udf:
+      a python callable function
+
+    type_signature:
+      a tuple that specifies types of each of the input parameters of ``udf``.
+      The types should be one in `numba.types` and could be converted from
+      numpy types with `numba.numpy_support.from_dtype(...)`.
+
+    Returns
+    -------
+    ptx_code:
+      The compiled CUDA PTX
+
+    output_type:
+      An numpy type
+
+    """
+    key = make_cache_key(udf, type_signature)
+    res = _udf_code_cache.get(key)
+    if res:
+        return res
+
+    # We haven't compiled a function like this before, so need to fall back to
+    # compilation with Numba
+    ptx_code, return_type = cuda.compile_ptx_for_current_device(
+        udf, type_signature, device=True
+    )
+    if not isinstance(return_type, MaskedType):
+        output_type = numpy_support.as_dtype(return_type).type
+    else:
+        output_type = return_type
+
+    # Populate the cache for this function
+    res = (ptx_code, output_type)
+    _udf_code_cache[key] = res
+
+    return res
+
+
 def _generate_cache_key(frame, func: Callable, args, suffix="__APPLY_UDF"):
     """Create a cache key that uniquely identifies a compilation.
 
@@ -231,9 +224,7 @@ def _generate_cache_key(frame, func: Callable, args, suffix="__APPLY_UDF"):
     """
     scalar_argtypes = tuple(typeof(arg) for arg in args)
     return (
-        *cudautils.make_cache_key(
-            func, tuple(_all_dtypes_from_frame(frame).values())
-        ),
+        make_cache_key(func, tuple(_all_dtypes_from_frame(frame).values())),
         *(col.mask is None for col in frame._columns),
         *frame._column_names,
         scalar_argtypes,
@@ -241,72 +232,11 @@ def _generate_cache_key(frame, func: Callable, args, suffix="__APPLY_UDF"):
     )
 
 
-@_performance_tracking
-def _compile_or_get(
-    frame, func, args, kernel_getter=None, suffix="__APPLY_UDF"
-):
-    """
-    Return a compiled kernel in terms of MaskedTypes that launches a
-    kernel equivalent of `f` for the dtypes of `df`. The kernel uses
-    a thread for each row and calls `f` using that rows data / mask
-    to produce an output value and output validity for each row.
-
-    If the UDF has already been compiled for this requested dtypes,
-    a cached version will be returned instead of running compilation.
-
-    CUDA kernels are void and do not return values. Thus, we need to
-    preallocate a column of the correct dtype and pass it in as one of
-    the kernel arguments. This creates a chicken-and-egg problem where
-    we need the column type to compile the kernel, but normally we would
-    be getting that type FROM compiling the kernel (and letting numba
-    determine it as a return value). As a workaround, we compile the UDF
-    itself outside the final kernel to invoke a full typing pass, which
-    unfortunately is difficult to do without running full compilation.
-    we then obtain the return type from that separate compilation and
-    use it to allocate an output column of the right dtype.
-    """
-    if not all(is_scalar(arg) for arg in args):
-        raise TypeError("only scalar valued args are supported by apply")
-
-    # check to see if we already compiled this function
-    cache_key = _generate_cache_key(frame, func, args, suffix=suffix)
-    if precompiled.get(cache_key) is not None:
-        kernel, masked_or_scalar = precompiled[cache_key]
-        return kernel, masked_or_scalar
-
-    # precompile the user udf to get the right return type.
-    # could be a MaskedType or a scalar type.
-
-    kernel, scalar_return_type = kernel_getter(frame, func, args)
-    np_return_type = (
-        numpy_support.as_dtype(scalar_return_type)
-        if scalar_return_type.is_internal
-        else scalar_return_type.np_dtype
-    )
-
-    precompiled[cache_key] = (kernel, np_return_type)
-
-    return kernel, np_return_type
-
-
-def _get_kernel(kernel_string, globals_, sig, func):
-    """Template kernel compilation helper function."""
-    f_ = cuda.jit(device=True)(func)
-    globals_["f_"] = f_
-    exec(kernel_string, globals_)
-    _kernel = globals_["_kernel"]
-    kernel = cuda.jit(
-        sig, link=[_ptx_file()], extensions=[str_view_arg_handler]
-    )(_kernel)
-
-    return kernel
-
-
 def _get_input_args_from_frame(fr: IndexedFrame) -> list:
     args: list[Buffer | tuple[Buffer, Buffer]] = []
     offsets = []
     for col in _supported_cols_from_frame(fr).values():
-        if col.dtype == _cudf_str_dtype:
+        if col.dtype == CUDF_STRING_DTYPE:
             data = column_to_string_view_array_init_heap(
                 col.to_pylibcudf(mode="read")
             )
@@ -324,17 +254,28 @@ def _get_input_args_from_frame(fr: IndexedFrame) -> list:
 
 
 def _return_arr_from_dtype(dtype, size):
-    if dtype == _cudf_str_dtype:
-        return rmm.DeviceBuffer(size=size * _get_extensionty_size(udf_string))
+    if dtype == CUDF_STRING_DTYPE:
+        return rmm.DeviceBuffer(
+            size=size * _get_extensionty_size(managed_udf_string)
+        )
     return cp.empty(size, dtype=dtype)
 
 
-def _post_process_output_col(col, retty):
-    if retty == _cudf_str_dtype:
-        return ColumnBase.from_pylibcudf(
-            strings_udf.column_from_udf_string_array(col)
+@functools.cache
+def _make_free_string_kernel():
+    with nrt_enabled():
+
+        @cuda.jit(
+            void(CPointer(managed_udf_string), int64),
+            link=[UDF_SHIM_FILE],
+            extensions=[str_view_arg_handler],
         )
-    return as_column(col, retty)
+        def free_managed_udf_string_array(ary, size):
+            gid = cuda.grid(1)
+            if gid < size:
+                NRT_decref(ary[gid])
+
+    return free_managed_udf_string_array
 
 
 # The only supported data layout in NVVM.
@@ -377,22 +318,24 @@ def set_malloc_heap_size(size=None):
     """
     Heap size control for strings_udf, size in bytes.
     """
-    global _heap_size
+    global _HEAP_SIZE
     if size is None:
         size = _STRINGS_UDF_DEFAULT_HEAP_SIZE
-    if size != _heap_size:
+    if size != _HEAP_SIZE:
         (ret,) = runtime.cudaDeviceSetLimit(
             runtime.cudaLimit.cudaLimitMallocHeapSize, size
         )
         if ret.value != 0:
             raise RuntimeError("Unable to set cudaMalloc heap size")
 
-        _heap_size = size
+        _HEAP_SIZE = size
 
 
 def column_to_string_view_array_init_heap(col: plc.Column) -> Buffer:
     # lazily allocate heap only when a string needs to be returned
-    return strings_udf.column_to_string_view_array(col)
+    return as_buffer(
+        strings_udf.column_to_string_view_array(col), exposed=True
+    )
 
 
 class UDFError(RuntimeError):

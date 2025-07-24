@@ -29,8 +29,8 @@ from cudf.testing._utils import (
 )
 
 
-def _series_na_data():
-    return [
+@pytest.fixture(
+    params=[
         pd.Series([0, 1, 2, np.nan, 4, None, 6]),
         pd.Series(
             [0, 1, 2, np.nan, 4, None, 6],
@@ -48,6 +48,9 @@ def _series_na_data():
         pd.Series([None]),
         pd.Series(["a", "b", "", "c", None, "e"]),
     ]
+)
+def ps(request):
+    return request.param
 
 
 @pytest.mark.parametrize(
@@ -756,17 +759,18 @@ def test_series_round_half_up():
 
 
 @pytest.mark.parametrize(
-    "series",
+    "series_data",
     [
-        cudf.Series([1.0, None, np.nan, 4.0], nan_as_null=False),
-        cudf.Series([1.24430, None, np.nan, 4.423530], nan_as_null=False),
-        cudf.Series([1.24430, np.nan, 4.423530], nan_as_null=False),
-        cudf.Series([-1.24430, np.nan, -4.423530], nan_as_null=False),
-        cudf.Series(np.repeat(np.nan, 100)),
+        [1.0, None, np.nan, 4.0],
+        [1.24430, None, np.nan, 4.423530],
+        [1.24430, np.nan, 4.423530],
+        [-1.24430, np.nan, -4.423530],
+        np.repeat(np.nan, 100),
     ],
 )
 @pytest.mark.parametrize("decimal", [0, 1, 2, 3])
-def test_round_nan_as_null_false(series, decimal):
+def test_round_nan_as_null_false(series_data, decimal):
+    series = cudf.Series(series_data, nan_as_null=False)
     pser = series.to_pandas()
     result = series.round(decimal)
     expected = pser.round(decimal)
@@ -836,7 +840,6 @@ def test_series_round_decimal(
     assert_eq(result_half_even, expected_ser_half_even)
 
 
-@pytest.mark.parametrize("ps", _series_na_data())
 @pytest.mark.parametrize("nan_as_null", [True, False, None])
 def test_series_isnull_isna(ps, nan_as_null):
     nan_contains = ps.apply(lambda x: isinstance(x, float) and np.isnan(x))
@@ -852,7 +855,6 @@ def test_series_isnull_isna(ps, nan_as_null):
         assert_eq(ps.isna(), gs.isna())
 
 
-@pytest.mark.parametrize("ps", _series_na_data())
 @pytest.mark.parametrize("nan_as_null", [True, False, None])
 def test_series_notnull_notna(ps, nan_as_null):
     nan_contains = ps.apply(lambda x: isinstance(x, float) and np.isnan(x))
@@ -911,43 +913,44 @@ def test_series_memory_usage():
 
 
 @pytest.mark.parametrize(
-    "sr,expected_psr",
+    "sr_data,expected_psr",
     [
         (
-            cudf.Series([1, 2, None, 3], dtype="uint8"),
+            pa.array([1, 2, None, 3], type=pa.uint8()),
             pd.Series([1, 2, None, 3], dtype=pd.UInt8Dtype()),
         ),
         (
-            cudf.Series([23, None, None, 32], dtype="uint16"),
+            pa.array([23, None, None, 32], type=pa.uint16()),
             pd.Series([23, None, None, 32], dtype=pd.UInt16Dtype()),
         ),
         (
-            cudf.Series([None, 123, None, 1], dtype="uint32"),
+            pa.array([None, 123, None, 1], type=pa.uint32()),
             pd.Series([None, 123, None, 1], dtype=pd.UInt32Dtype()),
         ),
         (
-            cudf.Series([234, 2323, 23432, None, None, 224], dtype="uint64"),
+            pa.array([234, 2323, 23432, None, None, 224], type=pa.uint64()),
             pd.Series(
                 [234, 2323, 23432, None, None, 224], dtype=pd.UInt64Dtype()
             ),
         ),
         (
-            cudf.Series([-10, 1, None, -1, None, 3], dtype="int8"),
+            pa.array([-10, 1, None, -1, None, 3], type=pa.int8()),
             pd.Series([-10, 1, None, -1, None, 3], dtype=pd.Int8Dtype()),
         ),
         (
-            cudf.Series([111, None, 222, None, 13], dtype="int16"),
+            pa.array([111, None, 222, None, 13], type=pa.int16()),
             pd.Series([111, None, 222, None, 13], dtype=pd.Int16Dtype()),
         ),
         (
-            cudf.Series([11, None, 22, 33, None, 2, None, 3], dtype="int32"),
+            pa.array([11, None, 22, 33, None, 2, None, 3], type=pa.int32()),
             pd.Series(
                 [11, None, 22, 33, None, 2, None, 3], dtype=pd.Int32Dtype()
             ),
         ),
         (
-            cudf.Series(
-                [32431, None, None, 32322, 0, 10, -32324, None], dtype="int64"
+            pa.array(
+                [32431, None, None, 32322, 0, 10, -32324, None],
+                type=pa.int64(),
             ),
             pd.Series(
                 [32431, None, None, 32322, 0, 10, -32324, None],
@@ -955,9 +958,9 @@ def test_series_memory_usage():
             ),
         ),
         (
-            cudf.Series(
+            pa.array(
                 [True, None, False, None, False, True, True, False],
-                dtype="bool_",
+                type=pa.bool_(),
             ),
             pd.Series(
                 [True, None, False, None, False, True, True, False],
@@ -965,7 +968,7 @@ def test_series_memory_usage():
             ),
         ),
         (
-            cudf.Series(
+            pa.array(
                 [
                     "abc",
                     "a",
@@ -976,7 +979,7 @@ def test_series_memory_usage():
                     None,
                     "rapids ai",
                 ],
-                dtype="object",
+                type=pa.string(),
             ),
             pd.Series(
                 [
@@ -993,9 +996,9 @@ def test_series_memory_usage():
             ),
         ),
         (
-            cudf.Series(
+            pa.array(
                 [1, 2, None, 10.2, None],
-                dtype="float32",
+                type=pa.float32(),
             ),
             pd.Series(
                 [1, 2, None, 10.2, None],
@@ -1004,7 +1007,8 @@ def test_series_memory_usage():
         ),
     ],
 )
-def test_series_to_pandas_nullable_dtypes(sr, expected_psr):
+def test_series_to_pandas_nullable_dtypes(sr_data, expected_psr):
+    sr = cudf.Series(sr_data)
     actual_psr = sr.to_pandas(nullable=True)
 
     assert_eq(actual_psr, expected_psr)
@@ -1066,22 +1070,24 @@ def test_series_pipe_error():
 
 
 @pytest.mark.parametrize(
-    "data",
-    [cudf.Series([1, 2, 3]), cudf.Series([10, 11, 12], index=[1, 2, 3])],
+    "pd_data",
+    [pd.Series([1, 2, 3]), pd.Series([10, 11, 12], index=[1, 2, 3])],
 )
 @pytest.mark.parametrize(
     "other",
     [
-        cudf.Series([4, 5, 6]),
-        cudf.Series([4, 5, 6, 7, 8]),
-        cudf.Series([4, np.nan, 6], nan_as_null=False),
+        pd.Series([4, 5, 6]),
+        pd.Series([4, 5, 6, 7, 8]),
+        pd.Series([4, np.nan, 6]),
         [4, np.nan, 6],
         {1: 9},
     ],
 )
-def test_series_update(data, other):
+def test_series_update(pd_data, other):
+    data = cudf.Series.from_pandas(pd_data)
     gs = data.copy(deep=True)
-    if isinstance(other, cudf.Series):
+    if isinstance(other, pd.Series):
+        other = cudf.Series.from_pandas(other, nan_as_null=False)
         g_other = other.copy(deep=True)
         p_other = g_other.to_pandas()
     else:
@@ -1344,28 +1350,20 @@ def test_explode(data, ignore_index, p_index):
 
 
 @pytest.mark.parametrize(
-    "data, expected",
+    "data",
     [
-        (
-            [cudf.Series([1, 2, 3]), cudf.Series([10, 20])],
-            cudf.Series([[1, 2, 3], [10, 20]]),
-        ),
-        (
-            [cudf.Series([1, 2, 3]), None, cudf.Series([10, 20, np.nan])],
-            cudf.Series([[1, 2, 3], None, [10, 20, np.nan]]),
-        ),
-        (
-            [cp.array([5, 6]), cudf.NA, cp.array([1])],
-            cudf.Series([[5, 6], None, [1]]),
-        ),
-        (
-            [None, None, None, None, None, cudf.Series([10, 20])],
-            cudf.Series([None, None, None, None, None, [10, 20]]),
-        ),
+        [[1, 2, 3], [10, 20]],
+        [[1.0, 2.0, 3.0], None, [10.0, 20.0, np.nan]],
+        [[5, 6], None, [1]],
+        [None, None, None, None, None, [10, 20]],
     ],
 )
-def test_nested_series_from_sequence_data(data, expected):
-    actual = cudf.Series(data)
+@pytest.mark.parametrize("klass", [cudf.Series, list, cp.array])
+def test_nested_series_from_sequence_data(data, klass):
+    actual = cudf.Series(
+        [klass(val) if val is not None else val for val in data]
+    )
+    expected = cudf.Series(data)
     assert_eq(actual, expected)
 
 
@@ -1648,14 +1646,15 @@ def test_series_add_suffix():
 
 
 @pytest.mark.parametrize(
-    "cudf_series",
+    "data",
     [
-        cudf.Series([0.25, 0.5, 0.2, -0.05]),
-        cudf.Series([0, 1, 2, np.nan, 4, cudf.NA, 6]),
+        [0.25, 0.5, 0.2, -0.05],
+        [0, 1, 2, np.nan, 4, cudf.NA, 6],
     ],
 )
 @pytest.mark.parametrize("lag", [1, 2, 3, 4])
-def test_autocorr(cudf_series, lag):
+def test_autocorr(data, lag):
+    cudf_series = cudf.Series(data)
     psr = cudf_series.to_pandas()
 
     cudf_corr = cudf_series.autocorr(lag=lag)
@@ -1822,10 +1821,10 @@ def test_isin_numeric(data, values):
     assert_eq(got, expected)
 
 
-@pytest.mark.xfail(raises=TypeError)
 def test_fill_new_category():
     gs = cudf.Series(pd.Categorical(["a", "b", "c"]))
-    gs[0:1] = "d"
+    with pytest.raises(TypeError):
+        gs[0:1] = "d"
 
 
 @pytest.mark.skipif(
@@ -1892,9 +1891,9 @@ def test_isin_datetime(data, values):
     "data",
     [
         [],
-        pd.Series(["this", "is", None, "a", "test"]),
-        pd.Series(["test", "this", "test", "is", None, "test", "a", "test"]),
-        pd.Series(["0", "12", "14"]),
+        ["this", "is", None, "a", "test"],
+        ["test", "this", "test", "is", None, "test", "a", "test"],
+        ["0", "12", "14"],
     ],
 )
 @pytest.mark.parametrize(
@@ -1971,14 +1970,8 @@ def test_diff(dtype, period, data_empty):
         assert_eq(diffed_outcome, expected_outcome)
 
 
-@pytest.mark.parametrize(
-    "data",
-    [
-        ["a", "b", "c", "d", "e"],
-    ],
-)
-def test_diff_unsupported_dtypes(data):
-    gs = cudf.Series(data)
+def test_diff_unsupported_dtypes():
+    gs = cudf.Series(["a", "b", "c", "d", "e"])
     with pytest.raises(
         TypeError,
         match=r"unsupported operand type\(s\)",
@@ -2496,16 +2489,16 @@ def test_series_arrow_numeric_types_roundtrip(pandas_type):
     pdf = ps.to_frame()
 
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(ps)
+        gs = cudf.from_pandas(ps)
+        assert_eq(ps, gs)
 
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(pi)
+        gi = cudf.from_pandas(pi)
+        assert_eq(pi, gi)
 
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(pdf)
+        gdf = cudf.from_pandas(pdf)
+        assert_eq(pdf, gdf)
 
 
 @pytest.mark.parametrize(
@@ -2517,16 +2510,16 @@ def test_series_arrow_bool_types_roundtrip(pandas_type):
     pdf = ps.to_frame()
 
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(ps)
+        gs = cudf.from_pandas(ps)
+        assert_eq(ps, gs)
 
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(pi)
+        gi = cudf.from_pandas(pi)
+        assert_eq(pi, gi)
 
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(pdf)
+        gdf = cudf.from_pandas(pdf)
+        assert_eq(pdf, gdf)
 
 
 @pytest.mark.parametrize(
@@ -2538,16 +2531,16 @@ def test_series_arrow_string_types_roundtrip(pandas_type):
     pdf = ps.to_frame()
 
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(ps)
+        gs = cudf.from_pandas(ps)
+        assert_eq(ps, gs)
 
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(pi)
+        gi = cudf.from_pandas(pi)
+        assert_eq(pi, gi)
 
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(pdf)
+        gdf = cudf.from_pandas(pdf)
+        assert_eq(pdf, gdf)
 
 
 def test_series_arrow_category_types_roundtrip():
@@ -2585,12 +2578,12 @@ def test_series_arrow_decimal_types_roundtrip(pa_type):
     pdf = ps.to_frame()
 
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(ps)
+        gs = cudf.from_pandas(ps)
+        assert_eq(ps, gs)
 
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(pdf)
+        gdf = cudf.from_pandas(pdf)
+        assert_eq(pdf, gdf)
 
 
 def test_series_arrow_struct_types_roundtrip():
@@ -2601,28 +2594,24 @@ def test_series_arrow_struct_types_roundtrip():
     pdf = ps.to_frame()
 
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(ps)
+        gs = cudf.from_pandas(ps)
+        assert_eq(ps, gs)
 
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(pdf)
+        gdf = cudf.from_pandas(pdf)
+        assert_eq(pdf, gdf)
 
 
 def test_series_arrow_list_types_roundtrip():
     ps = pd.Series([[1], [2], [4]], dtype=pd.ArrowDtype(pa.list_(pa.int64())))
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(ps)
+        gs = cudf.from_pandas(ps)
+        assert_eq(ps, gs)
     pdf = ps.to_frame()
 
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(ps)
-
-    with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(pdf)
+        gdf = cudf.from_pandas(pdf)
+        assert_eq(pdf, gdf)
 
 
 @pytest.mark.parametrize("base_name", [None, "a"])
@@ -2706,8 +2695,9 @@ def test_series_error_nan_non_float_dtypes():
 def test_astype_pandas_nullable_pandas_compat(dtype, klass, kind):
     ser = klass([1, 2, 3])
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            ser.astype(kind(dtype))
+        actual = ser.astype(kind(dtype))
+        expected = klass([1, 2, 3], dtype=kind(dtype))
+        assert_eq(actual, expected)
 
 
 @pytest.mark.parametrize("klass", [cudf.Series, cudf.Index])
@@ -3010,7 +3000,6 @@ def test_null_like_to_nan_pandas_compat():
         assert_eq(ser, pser)
 
 
-@pytest.mark.parametrize("ps", _series_na_data())
 def test_roundtrip_series_plc_column(ps):
     expect = cudf.Series(ps)
     actual = cudf.Series.from_pylibcudf(*expect.to_pylibcudf())
@@ -3105,31 +3094,6 @@ def test_series_to_cupy(dtype, has_nulls, use_na_value):
     }.get(dtype, 0)
     expected = cp.asarray(sr.fillna(na_value)) if has_nulls else cp.asarray(sr)
     assert_eq(sr.to_cupy(na_value=na_value), expected)
-
-
-def test_nullmask_deprecation():
-    ser = cudf.Series([1, 2, 3, None])
-    with pytest.warns(FutureWarning):
-        ser.nullmask
-
-
-def test_nullable_deprecation():
-    ser = cudf.Series([1, 2, 3])
-    with pytest.warns(FutureWarning):
-        ser.nullable
-
-
-def test_from_masked_array_deprecation():
-    data = cudf.Series([10, 11, 12, 13, 14])
-    mask = cudf.Series([1, 2, 3, None, 4, None])._column.mask
-    with pytest.warns(FutureWarning):
-        cudf.Series.from_masked_array(data, mask)
-
-
-def test_from_categorical_deprecation():
-    pd_cat = pd.Categorical(pd.Series(["a", "b", "c", "a"], dtype="category"))
-    with pytest.warns(FutureWarning):
-        cudf.Series.from_categorical(pd_cat)
 
 
 def test_to_dense_array():

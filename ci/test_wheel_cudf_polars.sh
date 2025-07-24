@@ -1,7 +1,9 @@
 #!/bin/bash
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
-set -eou pipefail
+set -euo pipefail
+
+source rapids-init-pip
 
 rapids-logger "Download wheels"
 
@@ -17,10 +19,16 @@ rapids-logger "Installing cudf_polars and its dependencies"
 # generate constraints (possibly pinning to oldest support versions of dependencies)
 rapids-generate-pip-constraints py_test_cudf_polars ./constraints.txt
 
-# echo to expand wildcard before adding `[test,experimental]` requires for pip
+# notes:
+#
+#   * echo to expand wildcard before adding `[test,experimental]` requires for pip
+#   * need to provide --constraint="${PIP_CONSTRAINT}" because that environment variable is
+#     ignored if any other --constraint are passed via the CLI
+#
 rapids-pip-retry install \
     -v \
     --constraint ./constraints.txt \
+    --constraint "${PIP_CONSTRAINT}" \
     "$(echo "${CUDF_POLARS_WHEELHOUSE}"/cudf_polars_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test,experimental]" \
     "$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
     "$(echo "${PYLIBCUDF_WHEELHOUSE}"/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)"
@@ -37,8 +45,9 @@ trap set_exitcode ERR
 set +e
 
 ./ci/run_cudf_polars_pytests.sh \
-       --cov cudf_polars \
+       --cov=cudf_polars \
        --cov-fail-under=100 \
+       --cov-report=term-missing:skip-covered \
        --cov-config=./pyproject.toml \
        --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars.xml"
 

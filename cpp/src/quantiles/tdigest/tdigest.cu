@@ -22,6 +22,7 @@
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/functional.hpp>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/quantiles.hpp>
@@ -108,7 +109,7 @@ CUDF_KERNEL void compute_percentiles_kernel(device_span<size_type const> tdigest
     double const weighted_q = percentage * total_weight;
     if (weighted_q <= 1) {
       return *min_val;
-    } else if (weighted_q >= total_weight - 1) {
+    } else if (weighted_q > total_weight - 1) {
       return *max_val;
     }
 
@@ -134,7 +135,7 @@ CUDF_KERNEL void compute_percentiles_kernel(device_span<size_type const> tdigest
     double const diff = weighted_q + c.weight / 2 - cumulative_weight[centroid_index];
 
     // if we're completely within a centroid of weight 1, just return that.
-    if (c.weight == 1 && std::abs(diff) < 0.5) { return c.mean; }
+    if (c.weight == 1 && std::abs(diff) <= 0.5) { return c.mean; }
 
     // otherwise, interpolate between two centroids.
 
