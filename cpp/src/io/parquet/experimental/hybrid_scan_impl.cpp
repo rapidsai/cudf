@@ -344,13 +344,13 @@ hybrid_scan_reader_impl::filter_data_pages_with_stats(
   auto row_mask =
     _extended_metadata->filter_data_pages_with_stats(row_group_indices,
                                                      output_dtypes,
-                                                     _output_column_schemas,
+                                                     _input_columns,
                                                      expr_conv.get_converted_expr().value(),
                                                      stream,
                                                      mr);
 
   auto data_page_mask = _extended_metadata->compute_data_page_mask(
-    row_mask->view(), row_group_indices, output_dtypes, _output_column_schemas, stream);
+    row_mask->view(), row_group_indices, output_dtypes, _input_columns, stream);
 
   return {std::move(row_mask), std::move(data_page_mask)};
 }
@@ -491,7 +491,7 @@ table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns(
   auto output_dtypes = get_output_types(_output_buffers_template);
 
   auto data_page_mask = _extended_metadata->compute_data_page_mask(
-    row_mask, row_group_indices, output_dtypes, _output_column_schemas, stream);
+    row_mask, row_group_indices, output_dtypes, _input_columns, stream);
 
   prepare_data(row_group_indices, std::move(column_chunk_buffers), data_page_mask, options);
 
@@ -576,8 +576,7 @@ table_with_metadata hybrid_scan_reader_impl::read_chunk_internal(
   // Copy number of total input row groups and number of surviving row groups from predicate
   // pushdown.
   out_metadata.num_input_row_groups = _file_itm_data.num_input_row_groups;
-  // Copy the number surviving row groups from each predicate pushdown only if the filter has
-  // value.
+  // Copy the number surviving row groups from each predicate pushdown only if the filter has value
   if (_expr_conv.get_converted_expr().has_value()) {
     out_metadata.num_row_groups_after_stats_filter =
       _file_itm_data.surviving_row_groups.after_stats_filter;
@@ -587,6 +586,13 @@ table_with_metadata hybrid_scan_reader_impl::read_chunk_internal(
 
   // no work to do (this can happen on the first pass if we have no rows to read)
   if (!has_more_work()) {
+    // Check if number of rows per source should be included in output metadata.
+    if (include_output_num_rows_per_source()) {
+      // Empty dataframe case: Simply initialize to a list of zeros
+      out_metadata.num_rows_per_source =
+        std::vector<size_t>(_file_itm_data.num_rows_per_source.size(), 0);
+    }
+
     // Finalize output
     return finalize_output(read_columns_mode, out_metadata, out_columns, row_mask);
   }
@@ -606,7 +612,7 @@ table_with_metadata hybrid_scan_reader_impl::read_chunk_internal(
     auto metadata           = _reader_column_schema.has_value()
                                 ? std::make_optional<reader_column_schema>((*_reader_column_schema)[i])
                                 : std::nullopt;
-    auto const& schema      = _metadata->get_schema(_output_column_schemas[i]);
+    auto const& schema      = _extended_metadata->get_schema(_output_column_schemas[i]);
     auto const logical_type = schema.logical_type.value_or(LogicalType{});
     // FIXED_LEN_BYTE_ARRAY never read as string.
     // TODO: if we ever decide that the default reader behavior is to treat unannotated BINARY as

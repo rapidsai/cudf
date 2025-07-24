@@ -464,7 +464,7 @@ int main(int argc, char const** argv)
 
   // Check for validity
   // FIXME:For lists, this will fail on column types mismatch. The data would still be intact.
-  // cudf::examples::check_tables_equal(table_next_gen_reader->view(), table_legacy_reader->view());
+  cudf::examples::check_tables_equal(table_next_gen_reader->view(), table_legacy_reader->view());
 
   return 0;
 }
