@@ -435,3 +435,16 @@ def test_construct_all_pd_NA_with_dtype(nan_as_null):
     )
     expected = cudf.Series(pa.array([None, None], type=pa.float64()))
     assert_eq(result, expected)
+
+
+def test_series_empty_dtype():
+    expected = pd.Series([])
+    actual = cudf.Series([])
+    assert_eq(expected, actual, check_dtype=True)
+
+
+@pytest.mark.parametrize("data", [None, {}, []])
+def test_series_empty_index_rangeindex(data):
+    expected = cudf.RangeIndex(0)
+    result = cudf.Series(data).index
+    assert_eq(result, expected)
