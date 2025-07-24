@@ -160,11 +160,10 @@ cdef class Aggregation:
         return dereference(self.c_obj).kind
 
     cdef void _unsupported_agg_error(self, str alg):
-        # Te functions calling this all use a dynamic cast between aggregation types,
+        # The functions calling this all use a dynamic cast between aggregation types,
         # and the cast returning a null pointer is how we capture whether or not
         # libcudf supports a given aggregation for a particular algorithm.
-        agg_repr = str(self.kind()).split(".")[1].title()
-        raise TypeError(f"{agg_repr} aggregations are not supported by {alg}")
+        raise NotImplementedError(f"{self} aggregations are not supported by {alg}")
 
     cdef unique_ptr[groupby_aggregation] clone_underlying_as_groupby(self) except *:
         """Make a copy of the aggregation that can be used in a groupby."""
@@ -224,6 +223,9 @@ cdef class Aggregation:
         cdef Aggregation out = Aggregation.__new__(Aggregation)
         out.c_obj = move(agg)
         return out
+
+    def __repr__(self):
+        return f"<Aggregation({self.kind()!r})>"
 
 
 cpdef Aggregation sum():

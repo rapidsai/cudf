@@ -197,7 +197,7 @@ jobs:
       build_type: pull-request
       node_type: "gpu-l4-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci-conda:latest"
+      container_image: "rapidsai/ci-conda:25.10-latest"
       script: "ci/test_java.sh"
   conda-notebook-tests:
     needs: [conda-python-build, changed-files]
@@ -208,7 +208,7 @@ jobs:
       build_type: pull-request
       node_type: "gpu-l4-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci-conda:latest"
+      container_image: "rapidsai/ci-conda:25.10-latest"
       script: "ci/test_notebooks.sh"
   docs-build:
     needs: conda-python-build
@@ -218,7 +218,7 @@ jobs:
       build_type: pull-request
       node_type: "gpu-l4-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci-conda:latest"
+      container_image: "rapidsai/ci-conda:25.10-latest"
       script: "ci/build_docs.sh"
   wheel-build-libcudf:
     needs: checks
@@ -364,9 +364,9 @@ jobs:
     needs: pandas-tests
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.10
     with:
-        node_type: "cpu4"
-        build_type: pull-request
-        script: "ci/cudf_pandas_scripts/pandas-tests/diff.sh"
+      node_type: "cpu4"
+      build_type: pull-request
+      script: "ci/cudf_pandas_scripts/pandas-tests/diff.sh"
   narwhals-tests:
     needs: [conda-python-build, changed-files]
     secrets: inherit
@@ -378,7 +378,7 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       node_type: "gpu-l4-latest-1"
-      container_image: "rapidsai/ci-conda:latest"
+      container_image: "rapidsai/ci-conda:25.10-latest"
       script: ci/test_narwhals.sh
   spark-rapids-jni:
     needs: changed-files
@@ -394,3 +394,5 @@ jobs:
     steps:
       - name: Telemetry summarize
         uses: rapidsai/shared-actions/telemetry-dispatch-summarize@main
+    env:
+      GH_TOKEN: ${{ github.token }}
