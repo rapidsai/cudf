@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# Copyright (c) 2025, NVIDIA CORPORATION.
 import decimal
 import operator
 from collections import OrderedDict, defaultdict
@@ -10,16 +10,12 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.column.column import as_column
 from cudf.errors import MixedTypeError
 from cudf.testing import assert_eq
 from cudf.testing._utils import (
-    NUMERIC_TYPES,
     SERIES_OR_INDEX_NAMES,
     assert_exceptions_equal,
-    expect_warning_if,
-    gen_rand,
 )
 
 
@@ -72,250 +68,10 @@ def test_series_error_equality(sr1, sr2, op):
     assert_exceptions_equal(op, op, ([sr1, sr2],), ([gsr1, gsr2],))
 
 
-@pytest.mark.parametrize(
-    "data",
-    [
-        [],
-        [0, 12, 14],
-        [0, 14, 12, 12, 3, 10, 12, 14],
-        np.random.default_rng(seed=0).integers(-100, 100, 200),
-        pd.Series([0.0, 1.0, None, 10.0]),
-        [None, None, None, None],
-        [np.nan, None, -1, 2, 3],
-        [1, 2],
-    ],
-)
-@pytest.mark.parametrize(
-    "values",
-    [
-        np.random.default_rng(seed=0).integers(-100, 100, 10),
-        [],
-        [np.nan, None, -1, 2, 3],
-        [1.0, 12.0, None, None, 120],
-        [0.1, 12.1, 14.1],
-        [0, 14, 12, 12, 3, 10, 12, 14, None],
-        [None, None, None],
-        ["0", "12", "14"],
-        ["0", "12", "14", "a"],
-        [1.0, 2.5],
-    ],
-)
-def test_isin_numeric(data, values):
-    rng = np.random.default_rng(seed=0)
-    index = rng.integers(0, 100, len(data))
-    psr = pd.Series(data, index=index)
-    gsr = cudf.Series.from_pandas(psr, nan_as_null=False)
-
-    expected = psr.isin(values)
-    got = gsr.isin(values)
-
-    assert_eq(got, expected)
-
-
 def test_fill_new_category():
     gs = cudf.Series(pd.Categorical(["a", "b", "c"]))
     with pytest.raises(TypeError):
         gs[0:1] = "d"
-
-
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Warning newly introduced in pandas-2.2.0",
-)
-@pytest.mark.parametrize(
-    "data",
-    [
-        [],
-        pd.Series(
-            ["2018-01-01", "2019-04-03", None, "2019-12-30"],
-            dtype="datetime64[ns]",
-        ),
-        pd.Series(
-            [
-                "2018-01-01",
-                "2019-04-03",
-                None,
-                "2019-12-30",
-                "2018-01-01",
-                "2018-01-01",
-            ],
-            dtype="datetime64[ns]",
-        ),
-    ],
-)
-@pytest.mark.parametrize(
-    "values",
-    [
-        [],
-        [1514764800000000000, 1577664000000000000],
-        [
-            1514764800000000000,
-            1577664000000000000,
-            1577664000000000000,
-            1577664000000000000,
-            1514764800000000000,
-        ],
-        ["2019-04-03", "2019-12-30", "2012-01-01"],
-        [
-            "2012-01-01",
-            "2012-01-01",
-            "2012-01-01",
-            "2019-04-03",
-            "2019-12-30",
-            "2012-01-01",
-        ],
-    ],
-)
-def test_isin_datetime(data, values):
-    psr = pd.Series(data)
-    gsr = cudf.Series.from_pandas(psr)
-
-    is_len_str = isinstance(next(iter(values), None), str) and len(data)
-    with expect_warning_if(is_len_str):
-        got = gsr.isin(values)
-    with expect_warning_if(is_len_str):
-        expected = psr.isin(values)
-    assert_eq(got, expected)
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        [],
-        ["this", "is", None, "a", "test"],
-        ["test", "this", "test", "is", None, "test", "a", "test"],
-        ["0", "12", "14"],
-    ],
-)
-@pytest.mark.parametrize(
-    "values",
-    [
-        [],
-        ["this", "is"],
-        [None, None, None],
-        ["12", "14", "19"],
-        [12, 14, 19],
-        ["is", "this", "is", "this", "is"],
-    ],
-)
-def test_isin_string(data, values):
-    psr = pd.Series(data)
-    gsr = cudf.Series.from_pandas(psr)
-
-    got = gsr.isin(values)
-    expected = psr.isin(values)
-    assert_eq(got, expected)
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        [],
-        pd.Series(["a", "b", "c", "c", "c", "d", "e"], dtype="category"),
-        pd.Series(["a", "b", None, "c", "d", "e"], dtype="category"),
-        pd.Series([0, 3, 10, 12], dtype="category"),
-        pd.Series([0, 3, 10, 12, 0, 10, 3, 0, 0, 3, 3], dtype="category"),
-    ],
-)
-@pytest.mark.parametrize(
-    "values",
-    [
-        [],
-        ["a", "b", None, "f", "words"],
-        ["0", "12", None, "14"],
-        [0, 10, 12, None, 39, 40, 1000],
-        [0, 0, 0, 0, 3, 3, 3, None, 1, 2, 3],
-    ],
-)
-def test_isin_categorical(data, values):
-    psr = pd.Series(data)
-    gsr = cudf.Series.from_pandas(psr)
-
-    got = gsr.isin(values)
-    expected = psr.isin(values)
-    assert_eq(got, expected)
-
-
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES)
-@pytest.mark.parametrize("period", [-1, -5, -10, -20, 0, 1, 5, 10, 20])
-@pytest.mark.parametrize("data_empty", [False, True])
-def test_diff(dtype, period, data_empty):
-    if data_empty:
-        data = None
-    else:
-        if dtype == np.int8:
-            # to keep data in range
-            data = gen_rand(dtype, 100000, low=-2, high=2)
-        else:
-            data = gen_rand(dtype, 100000)
-
-    gs = cudf.Series(data, dtype=dtype)
-    ps = pd.Series(data, dtype=dtype)
-
-    expected_outcome = ps.diff(period)
-    diffed_outcome = gs.diff(period).astype(expected_outcome.dtype)
-
-    if data_empty:
-        assert_eq(diffed_outcome, expected_outcome, check_index_type=False)
-    else:
-        assert_eq(diffed_outcome, expected_outcome)
-
-
-def test_diff_unsupported_dtypes():
-    gs = cudf.Series(["a", "b", "c", "d", "e"])
-    with pytest.raises(
-        TypeError,
-        match=r"unsupported operand type\(s\)",
-    ):
-        gs.diff()
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        pd.date_range("2020-01-01", "2020-01-06", freq="D"),
-        [True, True, True, False, True, True],
-        [1.0, 2.0, 3.5, 4.0, 5.0, -1.7],
-        [1, 2, 3, 3, 4, 5],
-        [np.nan, None, None, np.nan, np.nan, None],
-    ],
-)
-def test_diff_many_dtypes(data):
-    ps = pd.Series(data)
-    gs = cudf.from_pandas(ps)
-    assert_eq(ps.diff(), gs.diff())
-    assert_eq(ps.diff(periods=2), gs.diff(periods=2))
-
-
-@pytest.mark.parametrize("num_rows", [1, 100])
-@pytest.mark.parametrize("num_bins", [1, 10])
-@pytest.mark.parametrize("right", [True, False])
-@pytest.mark.parametrize("dtype", [*NUMERIC_TYPES, "bool"])
-@pytest.mark.parametrize("series_bins", [True, False])
-def test_series_digitize(num_rows, num_bins, right, dtype, series_bins):
-    rng = np.random.default_rng(seed=0)
-    data = rng.integers(0, 100, num_rows).astype(dtype)
-    bins = np.unique(np.sort(rng.integers(2, 95, num_bins).astype(dtype)))
-    s = cudf.Series(data)
-    if series_bins:
-        s_bins = cudf.Series(bins)
-        indices = s.digitize(s_bins, right)
-    else:
-        indices = s.digitize(bins, right)
-    np.testing.assert_array_equal(
-        np.digitize(data, bins, right), indices.to_numpy()
-    )
-
-
-def test_series_digitize_invalid_bins():
-    rng = np.random.default_rng(seed=0)
-    s = cudf.Series(rng.integers(0, 30, 80), dtype="int32")
-    bins = cudf.Series([2, None, None, 50, 90], dtype="int32")
-
-    with pytest.raises(
-        ValueError, match="`bins` cannot contain null entries."
-    ):
-        _ = s.digitize(bins)
 
 
 @pytest.mark.parametrize(

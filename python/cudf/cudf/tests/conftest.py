@@ -246,6 +246,22 @@ def numeric_types_as_str(request):
     return request.param
 
 
+@pytest.fixture(
+    params=signed_integer_types
+    + unsigned_integer_types
+    + float_types
+    + bool_types
+)
+def numeric_and_bool_types_as_str(request):
+    """
+    - "int8", "int16", "int32", "int64"
+    - "uint8", "uint16", "uint32", "uint64"
+    - "float32", "float64"
+    - "bool"
+    """
+    return request.param
+
+
 @pytest.fixture(params=datetime_types)
 def datetime_types_as_str(request):
     """
