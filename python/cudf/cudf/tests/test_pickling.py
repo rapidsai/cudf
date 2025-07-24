@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 import pickle
 
@@ -13,7 +13,16 @@ from cudf.testing import assert_eq
 pytestmark = pytest.mark.spilling
 
 
-def check_serialization(df):
+@pytest.mark.parametrize(
+    "keys",
+    [
+        np.arange(5, dtype=np.float64),
+        pd.Categorical(["a", "a", "a", "b", "a", "b", "a", "b", "a", "c"]),
+    ],
+)
+def test_pickle_dataframe(keys):
+    rng = np.random.default_rng(seed=0)
+    df = DataFrame({"keys": keys, "vals": rng.random(len(keys))})
     # basic
     assert_frame_picklable(df)
     # sliced
@@ -37,28 +46,6 @@ def assert_frame_picklable(df):
     serialbytes = pickle.dumps(df)
     loaded = pickle.loads(serialbytes)
     assert_eq(loaded, df)
-
-
-def test_pickle_dataframe_numeric():
-    rng = np.random.default_rng(seed=0)
-    df = DataFrame()
-    nelem = 10
-    df["keys"] = np.arange(nelem, dtype=np.float64)
-    df["vals"] = rng.random(nelem)
-
-    check_serialization(df)
-
-
-def test_pickle_dataframe_categorical():
-    rng = np.random.default_rng(seed=0)
-
-    df = DataFrame()
-    df["keys"] = pd.Categorical(
-        ["a", "a", "a", "b", "a", "b", "a", "b", "a", "c"]
-    )
-    df["vals"] = rng.random(len(df))
-
-    check_serialization(df)
 
 
 def test_memory_usage_dataframe():
