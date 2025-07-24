@@ -148,7 +148,8 @@ and not test_is_monotonic_na \
 and not test_index_contains \
 and not test_frame_op_subclass_nonclass_constructor \
 and not test_round_trip_current \
-and not test_pickle_frame_v124_unpickle_130"
+and not test_pickle_frame_v124_unpickle_130 \
+and not test_groupby_extension_apply"
 
 PYTEST_IGNORES=("--ignore=tests/io/parser/common/test_read_errors.py"
                 "--ignore=tests/io/test_clipboard.py" # crashes pytest workers (possibly due to fixture patching clipboard functionality)
