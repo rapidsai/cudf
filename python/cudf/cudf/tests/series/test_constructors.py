@@ -183,3 +183,37 @@ def test_series_from_series_index_no_shallow_copy():
     ser1 = cudf.Series(range(3), index=list("abc"))
     ser2 = cudf.Series(ser1)
     assert ser1.index is ser2.index
+
+
+def test_int8_int16_construction():
+    s = cudf.Series([np.int8(8), np.int16(128)])
+    assert s.dtype == np.dtype("i2")
+
+
+@pytest.mark.parametrize(
+    "data", [[0, 1, 2, 3, 4], range(5), [np.int8(8), np.int16(128)]]
+)
+def test_default_integer_bitwidth_construction(default_integer_bitwidth, data):
+    s = cudf.Series(data)
+    assert s.dtype == np.dtype(f"i{default_integer_bitwidth // 8}")
+
+
+@pytest.mark.parametrize("data", [[1.5, 2.5, 4.5], [1000, 2000, 4000, 3.14]])
+def test_default_float_bitwidth_construction(default_float_bitwidth, data):
+    s = cudf.Series(data)
+    assert s.dtype == np.dtype(f"f{default_float_bitwidth // 8}")
+
+
+def test_series_ordered_dedup():
+    # part of https://github.com/rapidsai/cudf/issues/11486
+    rng = np.random.default_rng(seed=0)
+    sr = cudf.Series(rng.integers(0, 100, 1000))
+    # pandas unique() preserves order
+    expect = pd.Series(sr.to_pandas().unique())
+    got = cudf.Series._from_column(sr._column.unique())
+    assert_eq(expect.values, got.values)
+
+
+def test_int64_equality():
+    s = cudf.Series(np.asarray([2**63 - 10, 2**63 - 100], dtype=np.int64))
+    assert (s != np.int64(2**63 - 1)).all()

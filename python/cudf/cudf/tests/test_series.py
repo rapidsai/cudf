@@ -1,7 +1,6 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
 import decimal
 import operator
-from collections import OrderedDict, defaultdict
 
 import cupy as cp
 import numpy as np
@@ -74,86 +73,6 @@ def test_fill_new_category():
         gs[0:1] = "d"
 
 
-@pytest.mark.parametrize(
-    "data,left,right",
-    [
-        ([0, 1, 2, 3, 4, 5, 10], 0, 5),
-        ([0, 1, 2, 3, 4, 5, 10], 10, 1),
-        ([0, 1, 2, 3, 4, 5], [0, 10, 11] * 2, [1, 2, 5] * 2),
-        (["a", "few", "set", "of", "strings", "xyz", "abc"], "banana", "few"),
-        (["a", "few", "set", "of", "strings", "xyz", "abc"], "phone", "hello"),
-        (
-            ["a", "few", "set", "of", "strings", "xyz", "abc"],
-            ["a", "hello", "rapids", "ai", "world", "chars", "strs"],
-            ["yes", "no", "hi", "bye", "test", "pass", "fail"],
-        ),
-        ([0, 1, 2, np.nan, 4, np.nan, 10], 10, 1),
-    ],
-)
-@pytest.mark.parametrize("inclusive", ["both", "neither", "left", "right"])
-def test_series_between(data, left, right, inclusive):
-    ps = pd.Series(data)
-    gs = cudf.from_pandas(ps, nan_as_null=False)
-
-    expected = ps.between(left, right, inclusive=inclusive)
-    actual = gs.between(left, right, inclusive=inclusive)
-
-    assert_eq(expected, actual)
-
-
-@pytest.mark.parametrize(
-    "data,left,right",
-    [
-        ([0, 1, 2, None, 4, 5, 10], 0, 5),
-        ([0, 1, 2, 3, None, 5, 10], 10, 1),
-        ([None, 1, 2, 3, 4, None], [0, 10, 11] * 2, [1, 2, 5] * 2),
-        (
-            ["a", "few", "set", None, "strings", "xyz", "abc"],
-            ["a", "hello", "rapids", "ai", "world", "chars", "strs"],
-            ["yes", "no", "hi", "bye", "test", "pass", "fail"],
-        ),
-    ],
-)
-@pytest.mark.parametrize("inclusive", ["both", "neither", "left", "right"])
-def test_series_between_with_null(data, left, right, inclusive):
-    gs = cudf.Series(data)
-    ps = gs.to_pandas(nullable=True)
-
-    expected = ps.between(left, right, inclusive=inclusive)
-    actual = gs.between(left, right, inclusive=inclusive)
-
-    assert_eq(expected, actual.to_pandas(nullable=True))
-
-
-def test_default_construction():
-    s = cudf.Series([np.int8(8), np.int16(128)])
-    assert s.dtype == np.dtype("i2")
-
-
-@pytest.mark.parametrize(
-    "data", [[0, 1, 2, 3, 4], range(5), [np.int8(8), np.int16(128)]]
-)
-def test_default_integer_bitwidth_construction(default_integer_bitwidth, data):
-    s = cudf.Series(data)
-    assert s.dtype == np.dtype(f"i{default_integer_bitwidth // 8}")
-
-
-@pytest.mark.parametrize("data", [[1.5, 2.5, 4.5], [1000, 2000, 4000, 3.14]])
-def test_default_float_bitwidth_construction(default_float_bitwidth, data):
-    s = cudf.Series(data)
-    assert s.dtype == np.dtype(f"f{default_float_bitwidth // 8}")
-
-
-def test_series_ordered_dedup():
-    # part of https://github.com/rapidsai/cudf/issues/11486
-    rng = np.random.default_rng(seed=0)
-    sr = cudf.Series(rng.integers(0, 100, 1000))
-    # pandas unique() preserves order
-    expect = pd.Series(sr.to_pandas().unique())
-    got = cudf.Series._from_column(sr._column.unique())
-    assert_eq(expect.values, got.values)
-
-
 @pytest.mark.parametrize("dtype", ["int64", "float64"])
 @pytest.mark.parametrize("bool_scalar", [True, False])
 def test_set_bool_error(dtype, bool_scalar):
@@ -166,22 +85,6 @@ def test_set_bool_error(dtype, bool_scalar):
         lfunc_args_and_kwargs=([bool_scalar],),
         rfunc_args_and_kwargs=([bool_scalar],),
     )
-
-
-def test_int64_equality():
-    s = cudf.Series(np.asarray([2**63 - 10, 2**63 - 100], dtype=np.int64))
-    assert (s != np.int64(2**63 - 1)).all()
-
-
-@pytest.mark.parametrize("into", [dict, OrderedDict, defaultdict(list)])
-def test_series_to_dict(into):
-    gs = cudf.Series(["ab", "de", "zx"], index=[10, 20, 100])
-    ps = gs.to_pandas()
-
-    actual = gs.to_dict(into=into)
-    expected = ps.to_dict(into=into)
-
-    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize(
