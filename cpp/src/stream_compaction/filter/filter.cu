@@ -354,6 +354,7 @@ std::vector<std::unique_ptr<column>> filter_jit(table_view const& table,
                                                 rmm::cuda_stream_view stream,
                                                 rmm::device_async_resource_ref mr)
 {
+  return{};
 }
 
 }  // namespace cudf

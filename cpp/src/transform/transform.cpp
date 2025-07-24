@@ -337,6 +337,7 @@ std::unique_ptr<column> compute_column_jit(table_view const& table,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
 {
+  return nullptr;
 }
 
 }  // namespace cudf
