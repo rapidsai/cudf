@@ -819,19 +819,19 @@ def test_empty_boolean_mask(dtype):
     ],
 )
 @pytest.mark.parametrize(
-    "mask",
+    "mask_vals",
     [
         [True, True, True, True],
         [False, False, False, False],
         [True, False, True, False],
         [True, False, False, True],
-        np.array([True, False, True, False]),
-        pd.Series([True, False, True, False]),
-        cudf.Series([True, False, True, False]),
     ],
 )
+@pytest.mark.parametrize(
+    "mask_class", [list, np.array, pd.Series, cudf.Series]
+)
 @pytest.mark.parametrize("nulls", ["one", "some", "all", "none"])
-def test_series_apply_boolean_mask(data, mask, nulls):
+def test_series_apply_boolean_mask(data, mask_vals, mask_class, nulls):
     rng = np.random.default_rng(seed=0)
     psr = pd.Series(data)
 
@@ -853,6 +853,7 @@ def test_series_apply_boolean_mask(data, mask, nulls):
     if psr.dtype == "object" and nulls == "all":
         gsr = cudf.Series([None, None, None, None], dtype="object")
 
+    mask = mask_class(mask_vals)
     if isinstance(mask, cudf.Series):
         expect = psr[mask.to_pandas()]
     else:
@@ -872,11 +873,6 @@ def test_dataframe_apply_boolean_mask():
     )
     gdf = cudf.DataFrame.from_pandas(pdf)
     assert_eq(pdf[[True, False, True, False]], gdf[[True, False, True, False]])
-
-
-"""
-This test compares cudf and Pandas DataFrame boolean indexing.
-"""
 
 
 @pytest.mark.parametrize(
@@ -1146,6 +1142,8 @@ def test_series_setitem_loc_numeric_index(key, value):
 )
 def test_dataframe_setitem_iloc(key, value, pdf_gdf):
     pdf, gdf = pdf_gdf
+    pdf = pdf.copy()
+    gdf = gdf.copy()
     pdf.iloc[key] = value
     gdf.iloc[key] = value
     assert_eq(pdf, gdf)
@@ -1172,6 +1170,8 @@ def test_dataframe_setitem_iloc(key, value, pdf_gdf):
 )
 def test_dataframe_setitem_loc(key, value, pdf_gdf):
     pdf, gdf = pdf_gdf
+    pdf = pdf.copy()
+    gdf = gdf.copy()
     pdf.loc[key] = value
     gdf.loc[key] = value
     assert_eq(pdf, gdf)
@@ -1202,6 +1202,8 @@ def test_dataframe_setitem_loc_empty_df(key, value):
 )
 def test_dataframe_setitem_iloc_multiindex(key, value, pdf_gdf_multi):
     pdf, gdf = pdf_gdf_multi
+    pdf = pdf.copy()
+    gdf = gdf.copy()
 
     pdf.iloc[key] = value
     gdf.iloc[key] = value
@@ -1386,8 +1388,8 @@ def test_dataframe_sliced(gdf_kwargs, slice):
 @pytest.mark.parametrize(
     "gdf",
     [
-        cudf.DataFrame({"a": range(10000)}),
-        cudf.DataFrame(
+        lambda: cudf.DataFrame({"a": range(10000)}),
+        lambda: cudf.DataFrame(
             {
                 "a": range(10000),
                 "b": range(10000),
@@ -1397,21 +1399,23 @@ def test_dataframe_sliced(gdf_kwargs, slice):
                 "f": range(10000),
             }
         ),
-        cudf.DataFrame({"a": range(20), "b": range(20)}),
-        cudf.DataFrame(
+        lambda: cudf.DataFrame({"a": range(20), "b": range(20)}),
+        lambda: cudf.DataFrame(
             {
                 "a": range(20),
                 "b": range(20),
                 "c": ["abc", "def", "xyz", "def", "pqr"] * 4,
             }
         ),
-        cudf.DataFrame(index=[1, 2, 3]),
-        cudf.DataFrame(index=range(10000)),
-        cudf.DataFrame(columns=["a", "b", "c", "d"]),
-        cudf.DataFrame(columns=["a"], index=range(10000)),
-        cudf.DataFrame(columns=["a", "col2", "...col n"], index=range(10000)),
-        cudf.DataFrame(index=cudf.Series(range(10000)).astype("str")),
-        cudf.DataFrame(
+        lambda: cudf.DataFrame(index=[1, 2, 3]),
+        lambda: cudf.DataFrame(index=range(10000)),
+        lambda: cudf.DataFrame(columns=["a", "b", "c", "d"]),
+        lambda: cudf.DataFrame(columns=["a"], index=range(10000)),
+        lambda: cudf.DataFrame(
+            columns=["a", "col2", "...col n"], index=range(10000)
+        ),
+        lambda: cudf.DataFrame(index=cudf.Series(range(10000)).astype("str")),
+        lambda: cudf.DataFrame(
             columns=["a", "b", "c", "d"],
             index=cudf.Series(range(10000)).astype("str"),
         ),
@@ -1422,6 +1426,7 @@ def test_dataframe_sliced(gdf_kwargs, slice):
     [slice(6), slice(1), slice(7), slice(1, 3)],
 )
 def test_dataframe_iloc_index(gdf, slice):
+    gdf = gdf()
     pdf = gdf.to_pandas()
 
     actual = gdf.iloc[:, slice]
@@ -1595,26 +1600,11 @@ def test_dataframe_iloc_inplace_update(key, value):
     assert_eq(expected, actual)
 
 
-@pytest.mark.parametrize(
-    "loc_key",
-    [([0, 2], ["x", "y"])],
-)
-@pytest.mark.parametrize(
-    "iloc_key",
-    [[0, 2]],
-)
-@pytest.mark.parametrize(
-    ("data, index"),
-    [
-        (
-            {"x": [10, 20], "y": [30, 40]},
-            [0, 2],
-        )
-    ],
-)
-def test_dataframe_loc_iloc_inplace_update_with_RHS_dataframe(
-    loc_key, iloc_key, data, index
-):
+def test_dataframe_loc_iloc_inplace_update_with_RHS_dataframe():
+    loc_key = ([0, 2], ["x", "y"])
+    iloc_key = [0, 2]
+    data = {"x": [10, 20], "y": [30, 40]}
+    index = [0, 2]
     gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
     pdf = gdf.to_pandas()
 
@@ -1691,16 +1681,18 @@ def test_dataframe_iloc_inplace_update_shape_mismatch_RHS_df():
 
 
 @pytest.mark.parametrize(
-    "array,is_error",
+    "end, second_dim, is_error",
     [
-        (cupy.arange(20, 40).reshape(-1, 2), False),
-        (cupy.arange(20, 50).reshape(-1, 3), True),
-        (np.arange(20, 40).reshape(-1, 2), False),
-        (np.arange(20, 30).reshape(-1, 1), False),
-        (cupy.arange(20, 30).reshape(-1, 1), False),
+        (40, 2, False),
+        (50, 3, True),
+        (30, 1, False),
     ],
 )
-def test_dataframe_indexing_setitem_np_cp_array(array, is_error):
+@pytest.mark.parametrize("mod", [cupy, np])
+def test_dataframe_indexing_setitem_np_cp_array(
+    end, second_dim, is_error, mod
+):
+    array = mod.arange(20, end).reshape(-1, second_dim)
     gdf = cudf.DataFrame({"a": range(10), "b": range(10)})
     pdf = gdf.to_pandas()
     if not is_error:
@@ -2311,12 +2303,11 @@ def test_loc_datetime_monotonic_with_ts(data, scalar):
     assert_eq(actual, expected)
 
 
-@pytest.mark.parametrize("data", [[15, 14, 3, 10, 1]])
 @pytest.mark.parametrize("scalar", [1, 10, 15, 14, 0, 2])
-def test_loc_datetime_random_with_ts(data, scalar):
+def test_loc_datetime_random_with_ts(scalar):
     gdf = cudf.DataFrame(
         {"a": [1, 1, 1, 2, 2], "b": [1, 2, 3, 4, 5]},
-        index=cudf.Index(data, dtype="datetime64[ns]"),
+        index=cudf.Index([15, 14, 3, 10, 1], dtype="datetime64[ns]"),
     )
     pdf = gdf.to_pandas()
 
