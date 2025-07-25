@@ -484,7 +484,7 @@ CUDF_HOST_DEVICE constexpr inline bool is_duration()
  *
  * @tparam T The type to check
  */
-template<typename T>
+template <typename T>
 concept Duration = is_duration<T>();
 
 /**
