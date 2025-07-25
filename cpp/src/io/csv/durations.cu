@@ -172,11 +172,10 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
  * The template function declaration ensures only duration types are used.
  */
 struct dispatch_from_durations_fn {
-  template <typename T>
+  template <cudf::Duration T>
   std::unique_ptr<column> operator()(column_view const& durations,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr) const
-    requires(cudf::is_duration<T>())
   {
     size_type strings_count = durations.size();
     auto column             = column_device_view::create(durations, stream);
@@ -211,10 +210,10 @@ struct dispatch_from_durations_fn {
 
   // non-duration types throw an exception
   template <typename T>
+    requires(not cudf::Duration<T>)
   std::unique_ptr<column> operator()(column_view const&,
                                      rmm::cuda_stream_view,
                                      rmm::device_async_resource_ref) const
-    requires(not cudf::is_duration<T>())
   {
     CUDF_FAIL("Values for from_durations function must be a duration type.");
   }

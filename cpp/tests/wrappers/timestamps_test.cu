@@ -64,7 +64,7 @@ struct compare_chrono_elements_to_primitive_representation {
     return primitive == timestamp.time_since_epoch().count();
   }
 
-  template <typename T = ChronoT, std::enable_if_t<cudf::is_duration<T>()>* = nullptr>
+  template <cudf::Duration T = ChronoT>
   __host__ __device__ bool operator()(const int32_t element_index)
   {
     using Primitive = typename ChronoT::rep;

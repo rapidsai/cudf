@@ -36,8 +36,8 @@ struct rep_type_impl<T, std::enable_if_t<cudf::is_timestamp<T>()>> {
   using type = typename T::duration::rep;
 };
 
-template <typename T>
-struct rep_type_impl<T, std::enable_if_t<cudf::is_duration<T>()>> {
+template <cudf::Duration T>
+struct rep_type_impl<T> {
   using type = typename T::rep;
 };
 

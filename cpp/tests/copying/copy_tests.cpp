@@ -381,9 +381,8 @@ struct create_chrono_scalar {
     return cudf::timestamp_scalar<T>(std::forward<Args>(args)...);
   }
 
-  template <typename ChronoT = T, typename... Args>
+  template <cudf::Duration ChronoT = T, typename... Args>
   cudf::duration_scalar<ChronoT> operator()(Args&&... args) const
-    requires(cudf::is_duration_t<ChronoT>::type::value)
   {
     return cudf::duration_scalar<T>(std::forward<Args>(args)...);
   }

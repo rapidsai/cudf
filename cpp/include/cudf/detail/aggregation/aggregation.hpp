@@ -1379,10 +1379,8 @@ struct target_type_impl<
 };
 
 // Summing duration types, use same type accumulator
-template <typename Source, aggregation::Kind k>
-struct target_type_impl<Source,
-                        k,
-                        std::enable_if_t<is_duration<Source>() && (k == aggregation::SUM)>> {
+template <Duration Source, aggregation::Kind k>
+struct target_type_impl<Source, k, std::enable_if_t<k == aggregation::SUM>> {
   using type = Source;
 };
 

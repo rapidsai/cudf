@@ -480,6 +480,14 @@ CUDF_HOST_DEVICE constexpr inline bool is_duration()
 }
 
 /**
+ * @brief Concept for duration types.
+ *
+ * @tparam T The type to check
+ */
+template<typename T>
+concept Duration = is_duration<T>();
+
+/**
  * @brief Indicates whether `type` is a duration `data_type`.
  *
  * "Duration" types are int32_t or int64_t tick counts representing a time interval.

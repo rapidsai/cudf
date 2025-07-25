@@ -315,9 +315,8 @@ struct column_view_printer {
   }
 
   // Print the tick counts with the units
-  template <typename Element>
+  template <cudf::Duration Element>
   void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
-    requires(is_duration<Element>())
   {
     auto h_data = cudf::test::to_host<Element>(col);
 

@@ -449,23 +449,23 @@ std::enable_if_t<cudf::is_timestamp<T>(), cudf::test::fixed_width_column_wrapper
 
 // ----- duration
 
-template <typename T>
-std::enable_if_t<cudf::is_duration<T>(), cudf::test::fixed_width_column_wrapper<T>> ascending()
+template <cudf::Duration T>
+cudf::test::fixed_width_column_wrapper<T> ascending()
 {
   auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return T(i); });
   return cudf::test::fixed_width_column_wrapper<T>(elements, elements + num_ordered_rows);
 }
 
-template <typename T>
-std::enable_if_t<cudf::is_duration<T>(), cudf::test::fixed_width_column_wrapper<T>> descending()
+template <cudf::Duration T>
+cudf::test::fixed_width_column_wrapper<T> descending()
 {
   auto elements = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return T(num_ordered_rows - i); });
   return cudf::test::fixed_width_column_wrapper<T>(elements, elements + num_ordered_rows);
 }
 
-template <typename T>
-std::enable_if_t<cudf::is_duration<T>(), cudf::test::fixed_width_column_wrapper<T>> unordered()
+template <cudf::Duration T>
+cudf::test::fixed_width_column_wrapper<T> unordered()
 {
   auto elements = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return T(i % 2 ? i : num_ordered_rows - i); });

@@ -649,9 +649,8 @@ struct column_to_strings_fn {
       mr_);
   }
 
-  template <typename column_type>
+  template <Duration column_type>
   std::unique_ptr<column> operator()(column_view const& column) const
-    requires(cudf::is_duration<column_type>())
   {
     auto duration_string = cudf::io::detail::csv::pandas_format_durations(column, stream_, mr_);
     auto quotes =

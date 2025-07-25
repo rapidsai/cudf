@@ -58,37 +58,36 @@ struct unary_cast {
     return TargetT{cuda::std::chrono::floor<TargetT::duration>(element.time_since_epoch())};
   }
 
-  template <typename SourceT, typename TargetT = _TargetT>
+  template <cudf::Duration SourceT, cudf::Duration TargetT = _TargetT>
   __device__ inline TargetT operator()(SourceT const element)
-    requires(cudf::is_duration<SourceT>() && cudf::is_duration<TargetT>())
   {
     return TargetT{cuda::std::chrono::floor<TargetT>(element)};
   }
 
-  template <typename SourceT, typename TargetT = _TargetT>
+  template <typename SourceT, cudf::Duration TargetT = _TargetT>
+    requires(cudf::is_numeric<SourceT>())
   __device__ inline TargetT operator()(SourceT const element)
-    requires(cudf::is_numeric<SourceT>() && cudf::is_duration<TargetT>())
   {
     return TargetT{static_cast<typename TargetT::rep>(element)};
   }
 
-  template <typename SourceT, typename TargetT = _TargetT>
+  template <typename SourceT, cudf::Duration TargetT = _TargetT>
+    requires(cudf::is_timestamp<SourceT>())
   __device__ inline TargetT operator()(SourceT const element)
-    requires(cudf::is_timestamp<SourceT>() && cudf::is_duration<TargetT>())
   {
     return TargetT{cuda::std::chrono::floor<TargetT>(element.time_since_epoch())};
   }
 
-  template <typename SourceT, typename TargetT = _TargetT>
+  template <cudf::Duration SourceT, typename TargetT = _TargetT>
+    requires(cudf::is_numeric<TargetT>())
   __device__ inline TargetT operator()(SourceT const element)
-    requires(cudf::is_duration<SourceT>() && cudf::is_numeric<TargetT>())
   {
     return static_cast<TargetT>(element.count());
   }
 
-  template <typename SourceT, typename TargetT = _TargetT>
+  template <cudf::Duration SourceT, typename TargetT = _TargetT>
+    requires(cudf::is_timestamp<TargetT>())
   __device__ inline TargetT operator()(SourceT const element)
-    requires(cudf::is_duration<SourceT>() && cudf::is_timestamp<TargetT>())
   {
     return TargetT{cuda::std::chrono::floor<TargetT::duration>(element)};
   }

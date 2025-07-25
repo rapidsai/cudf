@@ -104,7 +104,7 @@ std::pair<int64_t, int64_t> default_range()
  *
  * If a geometric distribution is used, it will bias towards short duration values.
  */
-template <typename T, std::enable_if_t<cudf::is_duration<T>()>* = nullptr>
+template <cudf::Duration T>
 std::pair<int64_t, int64_t> default_range()
 {
   using cuda::std::chrono::duration_cast;

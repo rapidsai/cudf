@@ -73,23 +73,22 @@ template <typename TypeOut, typename TypeLhs, typename TypeRhs>
 struct Mul {
   template <typename OutT = TypeOut>
   TypeOut operator()(TypeLhs lhs, TypeRhs rhs) const
-    requires(!cudf::is_duration_t<OutT>::value)
+    requires(not cudf::is_duration<OutT>())
   {
     using TypeCommon = std::common_type_t<TypeOut, TypeLhs, TypeRhs>;
     return static_cast<TypeOut>(static_cast<TypeCommon>(lhs) * static_cast<TypeCommon>(rhs));
   }
 
-  template <typename OutT = TypeOut>
+  template <Duration OutT = TypeOut>
   TypeOut operator()(TypeLhs x, TypeRhs y) const
-    requires(cudf::is_duration_t<OutT>::value)
   {
     return DurationProduct<TypeOut>(x, y);
   }
 
   template <typename OutT, typename LhsT, typename RhsT>
   [[nodiscard]] OutT DurationProduct(LhsT x, RhsT y) const
-    requires((cudf::is_duration_t<LhsT>::value && std::is_integral_v<RhsT>) ||
-             (cudf::is_duration_t<RhsT>::value && std::is_integral_v<LhsT>))
+    requires((cudf::is_duration<LhsT>() && std::is_integral_v<RhsT>) ||
+             (cudf::is_duration<RhsT>() && std::is_integral_v<LhsT>))
   {
     return x * y;
   }
@@ -99,15 +98,14 @@ template <typename TypeOut, typename TypeLhs, typename TypeRhs>
 struct Div {
   template <typename LhsT = TypeLhs>
   TypeOut operator()(TypeLhs lhs, TypeRhs rhs)
-    requires(!cudf::is_duration_t<LhsT>::value)
+    requires(not cudf::is_duration<LhsT>())
   {
     using TypeCommon = std::common_type_t<TypeOut, TypeLhs, TypeRhs>;
     return static_cast<TypeOut>(static_cast<TypeCommon>(lhs) / static_cast<TypeCommon>(rhs));
   }
 
-  template <typename LhsT = TypeLhs>
+  template <Duration LhsT = TypeLhs>
   TypeOut operator()(TypeLhs x, TypeRhs y) const
-    requires(cudf::is_duration_t<LhsT>::value)
   {
     return DurationDivide<TypeOut>(x, y);
   }
@@ -192,9 +190,8 @@ struct Mod {
   }
 
   // Mod with duration types - duration % (integral or a duration) = duration
-  template <typename LhsT = TypeLhs, typename OutT = TypeOut>
+  template <Duration LhsT = TypeLhs, Duration OutT = TypeOut>
   TypeOut operator()(TypeLhs lhs, TypeRhs rhs)
-    requires(cudf::is_duration_t<LhsT>::value && cudf::is_duration_t<OutT>::value)
   {
     return lhs % rhs;
   }

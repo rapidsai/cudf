@@ -232,14 +232,14 @@ std::enable_if_t<cudf::is_timestamp<T>(), cudf::test::fixed_width_column_wrapper
 
 // ----- duration
 
-template <typename T>
-std::enable_if_t<cudf::is_duration<T>(), cudf::test::fixed_width_column_wrapper<T>> ascending();
+template <cudf::Duration T>
+cudf::test::fixed_width_column_wrapper<T> ascending();
 
-template <typename T>
-std::enable_if_t<cudf::is_duration<T>(), cudf::test::fixed_width_column_wrapper<T>> descending();
+template <cudf::Duration T>
+cudf::test::fixed_width_column_wrapper<T> descending();
 
-template <typename T>
-std::enable_if_t<cudf::is_duration<T>(), cudf::test::fixed_width_column_wrapper<T>> unordered();
+template <cudf::Duration T>
+cudf::test::fixed_width_column_wrapper<T> unordered();
 
 // ----- string_view
 

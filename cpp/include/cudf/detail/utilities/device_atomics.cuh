@@ -431,9 +431,8 @@ T __forceinline__ __device__ genericAtomicOperation(T* address, T const& update_
 }
 
 // specialization for cudf::detail::duration types
-template <typename T, typename BinaryOp>
+template <Duration T, typename BinaryOp>
 T __forceinline__ __device__ genericAtomicOperation(T* address, T const& update_value, BinaryOp op)
-  requires(cudf::is_duration<T>())
 {
   using R = typename T::rep;
   // Unwrap the input duration to its underlying duration value representation.

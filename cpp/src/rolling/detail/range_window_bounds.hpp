@@ -96,7 +96,7 @@ RepT range_comparable_value_impl(scalar const& range_scalar,
   return val;
 }
 
-template <typename RangeT, typename RepT, CUDF_ENABLE_IF(cudf::is_duration<RangeT>())>
+template <cudf::Duration RangeT, typename RepT>
 RepT range_comparable_value_impl(scalar const& range_scalar,
                                  bool,
                                  data_type const&,

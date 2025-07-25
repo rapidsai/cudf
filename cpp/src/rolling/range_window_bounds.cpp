@@ -39,7 +39,7 @@ struct range_scalar_constructor {
       "Only durations, fixed-point, and non-boolean numeric range types are allowed.");
   }
 
-  template <typename T, CUDF_ENABLE_IF(cudf::is_duration<T>())>
+  template <cudf::Duration T>
   std::unique_ptr<scalar> operator()(scalar const& range_scalar_,
                                      rmm::cuda_stream_view stream) const
   {

@@ -53,9 +53,8 @@ auto create_scalar_search_key(typename T::rep const& value)
   return search_key;
 }
 
-template <typename T>
+template <cudf::Duration T>
 auto create_scalar_search_key(typename T::rep const& value)
-  requires(cudf::is_duration<T>())
 {
   auto search_key = cudf::make_duration_scalar(cudf::data_type{cudf::type_to_id<T>()});
   search_key->set_valid_async(true);
@@ -87,9 +86,8 @@ auto create_null_search_key()
   return search_key;
 }
 
-template <typename T>
+template <cudf::Duration T>
 auto create_null_search_key()
-  requires(cudf::is_duration<T>())
 {
   auto search_key = cudf::make_duration_scalar(cudf::data_type{cudf::type_to_id<T>()});
   search_key->set_valid_async(false);
