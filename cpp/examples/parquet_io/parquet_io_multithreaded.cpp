@@ -16,6 +16,7 @@
 
 #include "../utilities/table_utils.hpp"
 #include "../utilities/timer.hpp"
+#include "common_utils.hpp"
 #include "io_source.hpp"
 
 #include <cudf/concatenate.hpp>
@@ -321,11 +322,12 @@ std::vector<io_source> extract_input_sources(std::string const& paths,
   std::vector<io_source> input_sources;
   input_sources.reserve(parquet_files.size());
   // Transform input files to the specified io sources
-  std::transform(
-    parquet_files.begin(),
-    parquet_files.end(),
-    std::back_inserter(input_sources),
-    [&](auto const& file_name) { return io_source{file_name, io_source_type, stream}; });
+  std::transform(parquet_files.begin(),
+                 parquet_files.end(),
+                 std::back_inserter(input_sources),
+                 [&](auto const& file_name) {
+                   return io_source{file_name, io_source_type, stream};
+                 });
   stream.synchronize();
   return input_sources;
 }
