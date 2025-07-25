@@ -490,8 +490,10 @@ table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns(
 
   auto output_dtypes = get_output_types(_output_buffers_template);
 
-  auto data_page_mask = _extended_metadata->compute_data_page_mask(
-    row_mask, row_group_indices, output_dtypes, _output_column_schemas, stream);
+  // auto data_page_mask = _extended_metadata->compute_data_page_mask(
+  //   row_mask, row_group_indices, output_dtypes, _output_column_schemas, stream);
+  std::cout << "WARN: Page pruning not being used in payload column materialization" << std::endl;
+  auto data_page_mask = std::vector<std::vector<bool>>{};
 
   prepare_data(row_group_indices, std::move(column_chunk_buffers), data_page_mask, options);
 
