@@ -20,7 +20,6 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/detail/copy.hpp>
 #include <cudf/detail/interop.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -54,6 +53,7 @@ namespace detail {
 
 namespace {
 
+// 64-bit version of get_mask_word
 __device__ inline bitmask_type get_mask_word(bitmask_type const* __restrict__ source,
                                              int64_t destination_word_index,
                                              int64_t source_begin_bit,
@@ -68,6 +68,15 @@ __device__ inline bitmask_type get_mask_word(bitmask_type const* __restrict__ so
   return __funnelshift_r(curr_word, next_word, shift);
 }
 
+/**
+ * @brief Copy a shifted bitmask in device memory
+ *
+ * @param destination The destination bitmask.
+ * @param source The source bitmask.
+ * @param source_begin_bit The beginning bit of the source bitmask.
+ * @param source_end_bit The end bit of the source bitmask.
+ * @param number_of_mask_words The number of mask words.
+ */
 CUDF_KERNEL void copy_shifted_bitmask(bitmask_type* __restrict__ destination,
                                       bitmask_type const* __restrict__ source,
                                       int64_t source_begin_bit,
