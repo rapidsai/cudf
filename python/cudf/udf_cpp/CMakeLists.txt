@@ -26,12 +26,28 @@ rapids_find_package(
   INSTALL_EXPORT_SET udf-exports
 )
 
+# The below is inspired by legate dataframe
+execute_process(
+  COMMAND "python" -c
+          "from numba.cuda.memory_management.nrt import get_include; print(get_include())"
+  OUTPUT_VARIABLE NRT_INCLUDE_DIR
+  ERROR_VARIABLE NRT_ERROR
+  RESULT_VARIABLE NRT_RESULT
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+if(${NRT_RESULT})
+  message(
+    FATAL_ERROR "Error while trying to obtain numba cuda runtime include directory:\n${NRT_ERROR}"
+  )
+endif()
+
 include(${rapids-cmake-dir}/cpm/cccl.cmake)
 rapids_cpm_cccl(BUILD_EXPORT_SET udf-exports INSTALL_EXPORT_SET udf-exports)
 
 add_library(cudf_strings_udf SHARED strings/src/strings/udf/udf_apis.cu)
 target_include_directories(
   cudf_strings_udf PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/strings/include>"
+                          "${NRT_INCLUDE_DIR}"
 )
 
 set_target_properties(
@@ -67,22 +83,24 @@ list(TRANSFORM CMAKE_CUDA_ARCHITECTURES REPLACE "-virtual" "")
 list(SORT CMAKE_CUDA_ARCHITECTURES)
 list(REMOVE_DUPLICATES CMAKE_CUDA_ARCHITECTURES)
 
-foreach(arch IN LISTS CMAKE_CUDA_ARCHITECTURES)
-  set(tgt shim_${arch})
+add_library(shim OBJECT shim.cu)
+set_target_properties(
+  shim
+  PROPERTIES CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES}"
+             CUDA_SEPARABLE_COMPILATION ON
+             CUDA_FATBIN_COMPILATION ON
+             POSITION_INDEPENDENT_CODE ON
+             INTERPROCEDURAL_OPTIMIZATION ON
+)
 
-  add_library(${tgt} OBJECT shim.cu)
+target_compile_options(shim PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${SHIM_CUDA_FLAGS}>")
+target_link_libraries(shim PUBLIC cudf::cudf)
+target_include_directories(
+  shim PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/strings/include>" "${NRT_INCLUDE_DIR}"
+)
 
-  set_target_properties(${tgt} PROPERTIES CUDA_ARCHITECTURES ${arch} CUDA_PTX_COMPILATION ON)
-
-  target_include_directories(
-    ${tgt} PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/strings/include>"
-  )
-  target_compile_options(${tgt} PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${SHIM_CUDA_FLAGS}>")
-  target_link_libraries(${tgt} PUBLIC cudf::cudf)
-
-  install(
-    FILES $<TARGET_OBJECTS:${tgt}>
-    DESTINATION cudf/core/udf/
-    RENAME ${tgt}.ptx
-  )
-endforeach()
+install(
+  FILES $<TARGET_OBJECTS:shim>
+  DESTINATION cudf/core/udf/
+  RENAME shim.fatbin
+)

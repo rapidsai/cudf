@@ -311,17 +311,6 @@ struct cumulative_page_sum {
 };
 
 /**
- * @brief Functor which compares cumulative_page_info structs by end_row_index.
- */
-struct row_count_less {
-  __device__ inline bool operator()(cumulative_page_info const& a,
-                                    cumulative_page_info const& b) const
-  {
-    return a.end_row_index < b.end_row_index;
-  }
-};
-
-/**
  * @brief Functor which returns the compressed data size for a chunk
  */
 struct get_chunk_compressed_size {

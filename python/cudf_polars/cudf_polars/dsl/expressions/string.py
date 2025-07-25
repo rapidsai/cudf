@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import functools
-import io
 from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -120,9 +119,13 @@ class StringFunction(Expr):
         Name.LenBytes,
         Name.LenChars,
         Name.Lowercase,
+        Name.PadEnd,
+        Name.PadStart,
         Name.Replace,
         Name.ReplaceMany,
         Name.Slice,
+        Name.SplitN,
+        Name.SplitExact,
         Name.Strptime,
         Name.StartsWith,
         Name.StripChars,
@@ -240,6 +243,10 @@ class StringFunction(Expr):
                 raise NotImplementedError(
                     "Slice only supports literal start and stop values"
                 )
+        elif self.name is StringFunction.Name.SplitExact:
+            (_, inclusive) = self.options
+            if inclusive:
+                raise NotImplementedError(f"{inclusive=} is not supported for split")
         elif self.name is StringFunction.Name.Strptime:
             format, _, exact, cache = self.options
             if cache:
@@ -415,27 +422,12 @@ class StringFunction(Expr):
             return Column(plc_column, dtype=self.dtype)
         elif self.name is StringFunction.Name.JsonDecode:
             plc_column = self.children[0].evaluate(df, context=context).obj
-            # Once https://github.com/rapidsai/cudf/issues/19338 is implemented,
-            # we can use do this conversion on device.
-            buff = io.StringIO(
-                plc.strings.combine.join_strings(
-                    plc_column,
-                    plc.Scalar.from_py("\n", plc_column.type()),
-                    plc.Scalar.from_py("NULL", plc_column.type()),
-                )
-                .to_scalar()
-                .to_py()
+            plc_table_with_metadata = plc.io.json.read_json_from_string_column(
+                plc_column,
+                plc.Scalar.from_py("\n"),
+                plc.Scalar.from_py("NULL"),
+                _dtypes_for_json_decode(self.dtype),
             )
-            source = plc.io.types.SourceInfo([buff])
-            options = (
-                plc.io.json.JsonReaderOptions.builder(source)
-                .lines(val=True)
-                .dtypes(_dtypes_for_json_decode(self.dtype))
-                .compression(plc.io.types.CompressionType.NONE)
-                .recovery_mode(plc.io.types.JSONRecoveryMode.RECOVER_WITH_NULL)
-                .build()
-            )
-            plc_table_with_metadata = plc.io.json.read_json(options)
             return Column(
                 plc.Column.struct_from_children(plc_table_with_metadata.columns),
                 dtype=self.dtype,
@@ -496,6 +488,57 @@ class StringFunction(Expr):
                 ),
                 dtype=self.dtype,
             )
+        elif self.name in {
+            StringFunction.Name.SplitExact,
+            StringFunction.Name.SplitN,
+        }:
+            is_split_n = self.name is StringFunction.Name.SplitN
+            n = self.options[0]
+            child, expr = self.children
+            column = child.evaluate(df, context=context)
+            if n == 1 and self.name is StringFunction.Name.SplitN:
+                plc_column = plc.Column(
+                    self.dtype.plc,
+                    column.obj.size(),
+                    None,
+                    None,
+                    0,
+                    column.obj.offset(),
+                    [column.obj],
+                )
+            else:
+                assert isinstance(expr, Literal)
+                by = plc.Scalar.from_py(expr.value, expr.dtype.plc)
+                # See https://github.com/pola-rs/polars/issues/11640
+                # for SplitN vs SplitExact edge case behaviors
+                max_splits = n if is_split_n else 0
+                plc_table = plc.strings.split.split.split(
+                    column.obj,
+                    by,
+                    max_splits - 1,
+                )
+                children = plc_table.columns()
+                ref_column = children[0]
+                if (remainder := n - len(children)) > 0:
+                    # Reach expected number of splits by padding with nulls
+                    children.extend(
+                        plc.Column.all_null_like(ref_column, ref_column.size())
+                        for _ in range(remainder + int(not is_split_n))
+                    )
+                if not is_split_n:
+                    children = children[: n + 1]
+                # TODO: Use plc.Column.struct_from_children once it is generalized
+                # to handle columns that don't share the same null_mask/null_count
+                plc_column = plc.Column(
+                    self.dtype.plc,
+                    ref_column.size(),
+                    None,
+                    None,
+                    0,
+                    ref_column.offset(),
+                    children,
+                )
+            return Column(plc_column, dtype=self.dtype)
         elif self.name in {
             StringFunction.Name.StripPrefix,
             StringFunction.Name.StripSuffix,
@@ -674,6 +717,24 @@ class StringFunction(Expr):
             column, target, repl = columns
             return Column(
                 plc.strings.replace.replace_multiple(column.obj, target.obj, repl.obj),
+                dtype=self.dtype,
+            )
+        elif self.name is StringFunction.Name.PadStart:
+            (column,) = columns
+            width, char = self.options
+            return Column(
+                plc.strings.padding.pad(
+                    column.obj, width, plc.strings.SideType.LEFT, char
+                ),
+                dtype=self.dtype,
+            )
+        elif self.name is StringFunction.Name.PadEnd:
+            (column,) = columns
+            width, char = self.options
+            return Column(
+                plc.strings.padding.pad(
+                    column.obj, width, plc.strings.SideType.RIGHT, char
+                ),
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.Reverse:
