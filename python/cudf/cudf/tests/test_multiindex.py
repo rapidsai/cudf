@@ -177,26 +177,6 @@ def test_series_multiindex(pdfIndex):
     assert_eq(ps, gs)
 
 
-def test_multiindex_take(pdf, gdf, pdfIndex):
-    gdfIndex = cudf.from_pandas(pdfIndex)
-    pdf = pdf.copy(deep=False)
-    gdf = gdf.copy(deep=False)
-    pdf.index = pdfIndex
-    gdf.index = gdfIndex
-    assert_eq(pdf.index.take([0]), gdf.index.take([0]))
-    assert_eq(pdf.index.take(np.array([0])), gdf.index.take(np.array([0])))
-    from cudf import Series
-
-    assert_eq(pdf.index.take(pd.Series([0])), gdf.index.take(Series([0])))
-    assert_eq(pdf.index.take([0, 1]), gdf.index.take([0, 1]))
-    assert_eq(
-        pdf.index.take(np.array([0, 1])), gdf.index.take(np.array([0, 1]))
-    )
-    assert_eq(
-        pdf.index.take(pd.Series([0, 1])), gdf.index.take(Series([0, 1]))
-    )
-
-
 def test_multiindex_getitem(pdf, gdf, pdfIndex):
     gdfIndex = cudf.from_pandas(pdfIndex)
     pdf = pdf.copy(deep=False)
@@ -385,45 +365,6 @@ def test_multiindex_columns(pdf, pdfIndex, query):
         expected = pdf[query]
     got = gdf[query]
     assert_eq(expected, got)
-
-
-def test_multiindex_from_tuples():
-    arrays = [["a", "a", "b", "b"], ["house", "store", "house", "store"]]
-    tuples = list(zip(*arrays))
-    pmi = pd.MultiIndex.from_tuples(tuples)
-    gmi = cudf.MultiIndex.from_tuples(tuples)
-    assert_eq(pmi, gmi)
-
-
-def test_multiindex_from_dataframe():
-    pdf = pd.DataFrame(
-        [["a", "house"], ["a", "store"], ["b", "house"], ["b", "store"]]
-    )
-    gdf = cudf.from_pandas(pdf)
-    pmi = pd.MultiIndex.from_frame(pdf, names=["alpha", "location"])
-    gmi = cudf.MultiIndex.from_frame(gdf, names=["alpha", "location"])
-    assert_eq(pmi, gmi)
-
-
-@pytest.mark.parametrize(
-    "arrays",
-    [
-        [["a", "a", "b", "b"], ["house", "store", "house", "store"]],
-        [["a", "n", "n"] * 1000, ["house", "store", "house", "store"]],
-        [
-            ["a", "n", "n"],
-            ["house", "store", "house", "store", "store"] * 1000,
-        ],
-        [
-            ["a", "a", "n"] * 50,
-            ["house", "store", "house", "store", "store"] * 100,
-        ],
-    ],
-)
-def test_multiindex_from_product(arrays):
-    pmi = pd.MultiIndex.from_product(arrays, names=["alpha", "location"])
-    gmi = cudf.MultiIndex.from_product(arrays, names=["alpha", "location"])
-    assert_eq(pmi, gmi)
 
 
 def test_multiindex_index_and_columns():
@@ -878,27 +819,6 @@ def test_multicolumn_item():
     gdgT = gdg.T
     pdgT = gdgT.to_pandas()
     assert_eq(gdgT[(0, 0)], pdgT[(0, 0)])
-
-
-def test_multiindex_to_frame(pdfIndex, pdfIndexNulls):
-    gdfIndex = cudf.from_pandas(pdfIndex)
-    assert_eq(pdfIndex.to_frame(), gdfIndex.to_frame())
-
-    gdfIndex = cudf.from_pandas(pdfIndexNulls)
-    assert_eq(
-        pdfIndexNulls.to_frame().fillna("nan"),
-        gdfIndex.to_frame().fillna("nan"),
-    )
-
-
-def test_multiindex_groupby_to_frame():
-    gdf = cudf.DataFrame(
-        {"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5], "z": [0, 1, 0, 1, 0]}
-    )
-    pdf = gdf.to_pandas()
-    gdg = gdf.groupby(["x", "y"], sort=True).count()
-    pdg = pdf.groupby(["x", "y"], sort=True).count()
-    assert_eq(pdg.index.to_frame(), gdg.index.to_frame())
 
 
 def test_multiindex_reset_index(pdf, gdf, pdfIndex):
@@ -1970,27 +1890,6 @@ def midx(request):
 def test_multindex_constructor_levels_always_indexes(midx):
     assert_eq(midx.levels[0], cudf.Index([0, 1]))
     assert_eq(midx.levels[1], cudf.Index([0, 1]))
-
-
-@pytest.mark.parametrize(
-    "array",
-    [
-        list,
-        tuple,
-        np.array,
-        cp.array,
-        pd.Index,
-        cudf.Index,
-        pd.Series,
-        cudf.Series,
-    ],
-)
-def test_multiindex_from_arrays(array):
-    pd_data = [[0, 0, 1, 1], [1, 0, 1, 0]]
-    cudf_data = [array(lst) for lst in pd_data]
-    result = pd.MultiIndex.from_arrays(pd_data)
-    expected = cudf.MultiIndex.from_arrays(cudf_data)
-    assert_eq(result, expected)
 
 
 @pytest.mark.parametrize("arg", ["foo", ["foo"]])

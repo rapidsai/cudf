@@ -33,9 +33,9 @@ def test_multiindex_take():
     gdfIndex = cudf.from_pandas(pdfIndex)
     assert_eq(pdfIndex.take([0]), gdfIndex.take([0]))
     assert_eq(pdfIndex.take(np.array([0])), gdfIndex.take(np.array([0])))
-    from cudf import Series
-
-    assert_eq(pdfIndex.take(pd.Series([0])), gdfIndex.take(Series([0])))
+    assert_eq(pdfIndex.take(pd.Series([0])), gdfIndex.take(cudf.Series([0])))
     assert_eq(pdfIndex.take([0, 1]), gdfIndex.take([0, 1]))
     assert_eq(pdfIndex.take(np.array([0, 1])), gdfIndex.take(np.array([0, 1])))
-    assert_eq(pdfIndex.take(pd.Series([0, 1])), gdfIndex.take(Series([0, 1])))
+    assert_eq(
+        pdfIndex.take(pd.Series([0, 1])), gdfIndex.take(cudf.Series([0, 1]))
+    )

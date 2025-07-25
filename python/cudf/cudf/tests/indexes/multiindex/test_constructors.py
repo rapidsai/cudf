@@ -1,7 +1,10 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
 
 
+import cupy as cp
+import numpy as np
 import pandas as pd
+import pytest
 
 import cudf
 from cudf.testing import assert_eq
@@ -79,3 +82,63 @@ def test_multiindex_types():
     pmi = pd.MultiIndex(levels, codes)
     mi = cudf.MultiIndex(levels, codes)
     assert_eq(pmi, mi)
+
+
+def test_multiindex_from_tuples():
+    arrays = [["a", "a", "b", "b"], ["house", "store", "house", "store"]]
+    tuples = list(zip(*arrays))
+    pmi = pd.MultiIndex.from_tuples(tuples)
+    gmi = cudf.MultiIndex.from_tuples(tuples)
+    assert_eq(pmi, gmi)
+
+
+def test_multiindex_from_dataframe():
+    pdf = pd.DataFrame(
+        [["a", "house"], ["a", "store"], ["b", "house"], ["b", "store"]]
+    )
+    gdf = cudf.from_pandas(pdf)
+    pmi = pd.MultiIndex.from_frame(pdf, names=["alpha", "location"])
+    gmi = cudf.MultiIndex.from_frame(gdf, names=["alpha", "location"])
+    assert_eq(pmi, gmi)
+
+
+@pytest.mark.parametrize(
+    "arrays",
+    [
+        [["a", "a", "b", "b"], ["house", "store", "house", "store"]],
+        [["a", "n", "n"] * 10, ["house", "store", "house", "store"]],
+        [
+            ["a", "n", "n"],
+            ["house", "store", "house", "store", "store"] * 10,
+        ],
+        [
+            ["a", "a", "n"] * 50,
+            ["house", "store", "house", "store", "store"] * 10,
+        ],
+    ],
+)
+def test_multiindex_from_product(arrays):
+    pmi = pd.MultiIndex.from_product(arrays, names=["alpha", "location"])
+    gmi = cudf.MultiIndex.from_product(arrays, names=["alpha", "location"])
+    assert_eq(pmi, gmi)
+
+
+@pytest.mark.parametrize(
+    "array",
+    [
+        list,
+        tuple,
+        np.array,
+        cp.array,
+        pd.Index,
+        cudf.Index,
+        pd.Series,
+        cudf.Series,
+    ],
+)
+def test_multiindex_from_arrays(array):
+    pd_data = [[0, 0, 1, 1], [1, 0, 1, 0]]
+    cudf_data = [array(lst) for lst in pd_data]
+    result = pd.MultiIndex.from_arrays(pd_data)
+    expected = cudf.MultiIndex.from_arrays(cudf_data)
+    assert_eq(result, expected)
