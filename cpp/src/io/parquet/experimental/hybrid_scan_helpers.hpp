@@ -252,7 +252,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
   [[nodiscard]] std::unique_ptr<cudf::column> filter_data_pages_with_stats(
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     cudf::host_span<cudf::data_type const> output_dtypes,
-    cudf::host_span<parquet::detail::input_column_info const> input_columns,
+    cudf::host_span<cudf::size_type const> output_column_schemas,
     std::reference_wrapper<ast::expression const> filter,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const;
@@ -276,7 +276,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
     cudf::column_view row_mask,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     cudf::host_span<cudf::data_type const> output_dtypes,
-    cudf::host_span<parquet::detail::input_column_info const> input_columns,
+    cudf::host_span<cudf::size_type const> output_column_schemas,
     rmm::cuda_stream_view stream) const;
 };
 

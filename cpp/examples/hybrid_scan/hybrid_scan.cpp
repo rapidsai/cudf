@@ -47,6 +47,47 @@
 namespace {
 
 /**
+ * @brief Read parquet input using the legacy parquet reader from io source
+ *
+ * @param io_source io source to read
+ * @return cudf::io::table_with_metadata
+ */
+cudf::io::table_with_metadata read_parquet(io_source const& io_source,
+                                           cudf::ast::operation const& filter_expression,
+                                           rmm::cuda_stream_view stream)
+{
+  auto source_info = io_source.get_source_info();
+  auto options =
+    cudf::io::parquet_reader_options::builder(source_info).filter(filter_expression).build();
+  return cudf::io::read_parquet(options);
+}
+
+/**
+ * @brief Write parquet output to file
+ *
+ * @param input table to write
+ * @param metadata metadata of input table read by parquet reader
+ * @param filepath path to output parquet file
+ */
+void write_parquet(cudf::table_view input,
+                   cudf::io::table_metadata const& metadata,
+                   std::string const& filepath,
+                   rmm::cuda_stream_view stream)
+{
+  // Write the data for inspection
+  auto sink_info      = cudf::io::sink_info(filepath);
+  auto table_metadata = cudf::io::table_input_metadata(metadata);
+  auto options        = cudf::io::parquet_writer_options::builder(sink_info, input)
+                   .metadata(table_metadata)
+                   .compression(cudf::io::compression_type::AUTO)
+                   .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
+                   .build();
+
+  // write parquet data
+  cudf::io::write_parquet(options, stream);
+}
+
+/**
  * @brief Enum to represent the available parquet filters
  */
 enum class parquet_filter_type : uint8_t {
@@ -140,22 +181,14 @@ std::vector<rmm::device_buffer> fetch_byte_ranges(
 /**
  * @brief Read parquet file with the next-gen parquet reader
  *
- * @param buffer Buffer containing the parquet file
+ * @param io_source io source to read
  * @param filter_expression Filter expression
- * @param num_filter_columns Number of filter columns
- * @param payload_column_names List of paths of select payload column names, if any
+ * @param filters Set of parquet filters to apply
  * @param stream CUDA stream for hybrid scan reader
  * @param mr Device memory resource
  *
  * @return Tuple of filter table, payload table, filter metadata, payload metadata, and the final
  *         row validity column
- */
-
-/**
- * @brief Read parquet input using the next-gen parquet reader from io source
- *
- * @param io_source io source to read
- * @return cudf::io::table_with_metadata
  */
 auto hybrid_scan(io_source const& io_source,
                  cudf::ast::operation const& filter_expression,
@@ -288,7 +321,7 @@ auto hybrid_scan(io_source const& io_source,
 
   // Materialize the table with only the filter columns
   auto filter_table = reader
-                        ->materialize_filter_columns({},
+                        ->materialize_filter_columns(data_page_mask,
                                                      current_row_group_indices,
                                                      std::move(filter_column_chunk_buffers),
                                                      row_mask->mutable_view(),
@@ -317,42 +350,6 @@ auto hybrid_scan(io_source const& io_source,
 
   return std::make_tuple(combine_tables(std::move(filter_table), std::move(payload_table)),
                          std::move(row_mask));
-}
-
-/**
- * @brief Read parquet input using the legacy parquet reader from io source
- *
- * @param io_source io source to read
- * @return cudf::io::table_with_metadata
- */
-cudf::io::table_with_metadata read_parquet(io_source const& io_source,
-                                           cudf::ast::operation const& filter_expression,
-                                           rmm::cuda_stream_view stream)
-{
-  auto source_info = io_source.get_source_info();
-  auto options =
-    cudf::io::parquet_reader_options::builder(source_info).filter(filter_expression).build();
-  return cudf::io::read_parquet(options);
-}
-
-/**
- * @brief Write parquet output to file
- *
- * @param input table to write
- * @param metadata metadata of input table read by parquet reader
- * @param filepath path to output parquet file
- */
-void write_parquet(cudf::table_view input, std::string filepath)
-{
-  // Write the data for inspection
-  auto sink_info = cudf::io::sink_info(filepath);
-  auto options   = cudf::io::parquet_writer_options::builder(sink_info, input)
-                   .compression(cudf::io::compression_type::AUTO)
-                   .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
-                   .build();
-
-  // write parquet data
-  cudf::io::write_parquet(options);
 }
 
 /**
@@ -459,8 +456,8 @@ int main(int argc, char const** argv)
   timer.print_elapsed_millis();
 
   std::cout << "Writing " << output_filepath << "...\n";
-  write_parquet(table_next_gen_reader->view(), "next_gen_" + output_filepath);
-  write_parquet(table_legacy_reader->view(), "legacy_" + output_filepath);
+  write_parquet(table_legacy_reader->view(), metadata, "legacy_" + output_filepath, stream);
+  write_parquet(table_next_gen_reader->view(), metadata, "next_gen_" + output_filepath, stream);
 
   // Check for validity
   // FIXME:For lists, this will fail on column types mismatch. The data would still be intact.
