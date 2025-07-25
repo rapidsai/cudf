@@ -17,7 +17,6 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/debug_utilities.hpp>
 #include <cudf_test/nanoarrow_utils.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
@@ -852,10 +851,6 @@ TEST_P(FromArrowHostDeviceTestSlice, SliceTest)
   input.device_type = ARROW_DEVICE_CPU;
 
   auto got_cudf_table = cudf::from_arrow_host(schema.get(), &input);
-
-  // set offset for calling from_arrow_host_column so main
-  // struct column is sliced which will be enforced on all its child columns
-  input.array.offset = start;
 
   if (got_cudf_table->num_rows() == 0 and sliced_cudf_table.num_rows() == 0) {
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_cudf_table.view(), got_cudf_table->view());

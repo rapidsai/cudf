@@ -335,13 +335,13 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<cudf::struct_v
                  [this, input](ArrowArray const* child, ArrowSchema const* child_schema) {
                    ArrowSchemaView view;
                    NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&view, child_schema, nullptr));
-                   auto type = arrow_to_cudf_type(&view);
+                   auto child_type = arrow_to_cudf_type(&view);
 
                    ArrowArray child_array(*child);
-                   child_array.offset = input->offset;
-                   child_array.length = input->length;
+                   child_array.offset += input->offset;
+                   child_array.length = std::min(input->length, child_array.length);
 
-                   return get_column_copy(&view, &child_array, type, false, stream, mr);
+                   return get_column_copy(&view, &child_array, child_type, false, stream, mr);
                  });
 
   // auto [out_mask, null_count] = get_mask_buffer(input);
@@ -366,19 +366,20 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<cudf::list_vie
 
   CUDF_EXPECTS(
     input->length + 1 <= static_cast<std::int64_t>(std::numeric_limits<cudf::size_type>::max()),
-    "Total number of rows in Arrow column exceeds the column size limit.",
+    "number of rows in Arrow column exceeds the column size limit.",
     std::overflow_error);
 
   auto [offsets_column, offset, length] = get_offsets_column(schema, input, stream, mr);
 
   NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&view, schema->schema->children[0], nullptr));
-  auto child_type   = arrow_to_cudf_type(&view);
-  auto child        = input->children[0];
-  child->offset     = offset;
-  child->length     = length;
-  auto child_column = get_column_copy(&view, child, child_type, skip_mask, stream, mr);
+  auto child_type = arrow_to_cudf_type(&view);
 
-  // auto [out_mask, null_count] = get_mask_buffer(input);
+  ArrowArray child_array(*input->children[0]);
+  child_array.offset += offset;
+  child_array.length = std::min(length, child_array.length);
+
+  auto child_column = get_column_copy(&view, &child_array, child_type, skip_mask, stream, mr);
+
   auto [out_mask, null_count] =
     !skip_mask ? get_mask_buffer(input)
                : std::pair{std::make_unique<rmm::device_buffer>(0, stream, mr), 0};
