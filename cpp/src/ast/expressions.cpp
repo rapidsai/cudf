@@ -13,11 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "jit/row_ir.hpp"
+
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/detail/expression_transformer.hpp>
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
-#include "jit/row_ir.hpp"
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 

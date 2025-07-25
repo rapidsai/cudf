@@ -170,13 +170,13 @@ std::string operation::generate_code(instance_context& ctx,
                                                   return std::format("{}, {}", a, node->get_id());
                                                 });
 
-        auto cuda =
-          std::format("{} {} = cudf::ast::operator_functor<cudf::ast::ast_operator::{}, {}>({});",
-                      cuda_type(type_),
-                      id_,
-                      ast::detail::ast_operator_string(op_),
-                      type_.nullable,
-                      operands_str);
+        auto cuda = std::format(
+          "{} {} = cudf::ast::detail::operator_functor<cudf::ast::ast_operator::{}, {}>{{}}({});",
+          cuda_type(type_),
+          id_,
+          ast::detail::ast_operator_string(op_),
+          type_.nullable,
+          operands_str);
         return cuda;
       }
       default: CUDF_FAIL("Unsupported target: " + std::to_string(static_cast<int>(info.id)));

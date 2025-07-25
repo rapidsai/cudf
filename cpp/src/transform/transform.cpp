@@ -17,6 +17,7 @@
 #include "jit/cache.hpp"
 #include "jit/helpers.hpp"
 #include "jit/parser.hpp"
+#include "jit/row_ir.hpp"
 #include "jit/span.cuh"
 #include "jit/util.hpp"
 
@@ -329,7 +330,19 @@ std::unique_ptr<column> compute_column_jit(table_view const& table,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
 {
-  return nullptr;
+  row_ir::ast_converter converter;
+  row_ir::ast_args args{.table = table, .table_column_names = {}};
+  // [ ] get column names
+  auto transform_args =
+    converter.compute_column(row_ir::target::CUDA, expr, false, args, stream, mr);
+
+  return cudf::transform(transform_args.args.columns,
+                         transform_args.args.transform_udf,
+                         transform_args.args.output_type,
+                         transform_args.args.is_ptx,
+                         transform_args.args.user_data,
+                         stream,
+                         mr);
 }
 
 }  // namespace cudf

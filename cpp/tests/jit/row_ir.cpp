@@ -18,6 +18,7 @@
 
 #include "cudf_test/column_wrapper.hpp"
 
+#include <cudf_test/debug_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 
 #include <cudf/column/column_factories.hpp>
@@ -123,8 +124,8 @@ TEST_F(RowIRCudaCodeGenTest, UnaryOperation)
     auto expected_code =
       "int32_t tmp_0 = in_0;\n"
       "int32_t tmp_1 = "
-      "cudf::ast::operator_functor<cudf::ast::ast_operator::IDENTITY, "
-      "false>(tmp_0);";
+      "cudf::ast::detail::operator_functor<cudf::ast::ast_operator::IDENTITY, "
+      "false>{}(tmp_0);";
 
     EXPECT_EQ(code, expected_code);
   }
@@ -140,7 +141,7 @@ TEST_F(RowIRCudaCodeGenTest, UnaryOperation)
     auto expected_null_code =
       "cuda::std::optional<int32_t> tmp_0 = in_1;\n"
       "cuda::std::optional<int32_t> tmp_1 = "
-      "cudf::ast::operator_functor<cudf::ast::ast_operator::IDENTITY, true>(tmp_0);";
+      "cudf::ast::detail::operator_functor<cudf::ast::ast_operator::IDENTITY, true>{}(tmp_0);";
 
     EXPECT_EQ(null_code, expected_null_code);
   }
@@ -168,8 +169,8 @@ TEST_F(RowIRCudaCodeGenTest, BinaryOperation)
       "int32_t tmp_0 = in_0;\n"
       "int32_t tmp_1 = in_0;\n"
       "int32_t tmp_2 = "
-      "cudf::ast::operator_functor<cudf::ast::ast_operator::ADD, "
-      "false>(tmp_0, tmp_1);";
+      "cudf::ast::detail::operator_functor<cudf::ast::ast_operator::ADD, "
+      "false>{}(tmp_0, tmp_1);";
 
     EXPECT_EQ(code, expected_code);
   }
@@ -185,7 +186,7 @@ TEST_F(RowIRCudaCodeGenTest, BinaryOperation)
       "cuda::std::optional<int32_t> tmp_0 = in_1;\n"
       "cuda::std::optional<int32_t> tmp_1 = in_1;\n"
       "cuda::std::optional<int32_t> tmp_2 = "
-      "cudf::ast::operator_functor<cudf::ast::ast_operator::ADD, true>(tmp_0, tmp_1);";
+      "cudf::ast::detail::operator_functor<cudf::ast::ast_operator::ADD, true>{}(tmp_0, tmp_1);";
 
     EXPECT_EQ(null_code, expected_null_code);
   }
@@ -239,16 +240,16 @@ TEST_F(RowIRCudaCodeGenTest, VectorLengthOperation)
       "double tmp_0 = in_0;\n"
       "double tmp_1 = in_0;\n"
       "double tmp_2 = "
-      "cudf::ast::operator_functor<cudf::ast::ast_operator::MUL, false>(tmp_0, tmp_1);\n"
+      "cudf::ast::detail::operator_functor<cudf::ast::ast_operator::MUL, false>{}(tmp_0, tmp_1);\n"
       "double tmp_3 = in_1;\n"
       "double tmp_4 = in_1;\n"
       "double tmp_5 = "
-      "cudf::ast::operator_functor<cudf::ast::ast_operator::MUL, false>(tmp_3, "
+      "cudf::ast::detail::operator_functor<cudf::ast::ast_operator::MUL, false>{}(tmp_3, "
       "tmp_4);\n"
       "double tmp_6 = "
-      "cudf::ast::operator_functor<cudf::ast::ast_operator::ADD, false>(tmp_2, tmp_5);\n"
+      "cudf::ast::detail::operator_functor<cudf::ast::ast_operator::ADD, false>{}(tmp_2, tmp_5);\n"
       "double tmp_7 = "
-      "cudf::ast::operator_functor<cudf::ast::ast_operator::SQRT, false>(tmp_6);\n"
+      "cudf::ast::detail::operator_functor<cudf::ast::ast_operator::SQRT, false>{}(tmp_6);\n"
       "double tmp_8 = tmp_7;\n"
       "*out_0 = tmp_8;";
 
@@ -267,15 +268,15 @@ TEST_F(RowIRCudaCodeGenTest, VectorLengthOperation)
       "cuda::std::optional<double> tmp_0 = in_2;\n"
       "cuda::std::optional<double> tmp_1 = in_2;\n"
       "cuda::std::optional<double> tmp_2 = "
-      "cudf::ast::operator_functor<cudf::ast::ast_operator::MUL, true>(tmp_0, tmp_1);\n"
+      "cudf::ast::detail::operator_functor<cudf::ast::ast_operator::MUL, true>{}(tmp_0, tmp_1);\n"
       "cuda::std::optional<double> tmp_3 = in_3;\n"
       "cuda::std::optional<double> tmp_4 = in_3;\n"
       "cuda::std::optional<double> tmp_5 = "
-      "cudf::ast::operator_functor<cudf::ast::ast_operator::MUL, true>(tmp_3, tmp_4);\n"
+      "cudf::ast::detail::operator_functor<cudf::ast::ast_operator::MUL, true>{}(tmp_3, tmp_4);\n"
       "cuda::std::optional<double> tmp_6 = "
-      "cudf::ast::operator_functor<cudf::ast::ast_operator::ADD, true>(tmp_2, tmp_5);\n"
+      "cudf::ast::detail::operator_functor<cudf::ast::ast_operator::ADD, true>{}(tmp_2, tmp_5);\n"
       "cuda::std::optional<double> tmp_7 = "
-      "cudf::ast::operator_functor<cudf::ast::ast_operator::SQRT, true>(tmp_6);\n"
+      "cudf::ast::detail::operator_functor<cudf::ast::ast_operator::SQRT, true>{}(tmp_6);\n"
       "cuda::std::optional<double> tmp_8 = tmp_7;\n"
       "*out_1 = tmp_8;";
 
@@ -294,12 +295,11 @@ TEST_F(RowIRCudaCodeGenTest, AstConversionBasic)
   auto& add_op =
     ast_tree.push(ast::operation{ast::ast_operator::ADD, fourty_two_literal, column_ref});
 
-  auto column =
-    cudf::make_numeric_column(data_type{type_id::INT32}, 2000, cudf::mask_state::ALL_VALID);
+  auto column = cudf::test::fixed_width_column_wrapper<int32_t>({69, 69, 69, 69, 69, 69}).release();
 
-  auto expected_iter = detail::make_counting_transform_iterator(0, [](auto i) { return i + 42; });
+  auto expected_iter = detail::make_counting_transform_iterator(0, [](auto i) { return 69 + 42; });
   auto expected =
-    cudf::test::fixed_width_column_wrapper<int32_t>(expected_iter, expected_iter + 2000);
+    cudf::test::fixed_width_column_wrapper<int32_t>(expected_iter, expected_iter + column->size());
 
   row_ir::ast_args args{.table = cudf::table_view{{column->view()}}, .table_column_names = {}};
 
@@ -331,7 +331,7 @@ __device__ void transform(int32_t * out_0, int32_t in_0, int32_t in_1)
 {
 int32_t tmp_0 = in_0;
 int32_t tmp_1 = in_1;
-int32_t tmp_2 = cudf::ast::operator_functor<cudf::ast::ast_operator::ADD, false>(tmp_0, tmp_1);
+int32_t tmp_2 = cudf::ast::detail::operator_functor<cudf::ast::ast_operator::ADD, false>{}(tmp_0, tmp_1);
 int32_t tmp_3 = tmp_2;
 *out_0 = tmp_3;
 
@@ -349,3 +349,5 @@ return;
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
+
+CUDF_TEST_PROGRAM_MAIN()

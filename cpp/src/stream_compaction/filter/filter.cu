@@ -17,6 +17,7 @@
 #include "jit/cache.hpp"
 #include "jit/helpers.hpp"
 #include "jit/parser.hpp"
+#include "jit/row_ir.hpp"
 #include "jit/span.cuh"
 
 #include <cudf/column/column.hpp>
@@ -346,7 +347,19 @@ std::vector<std::unique_ptr<column>> filter_jit(table_view const& table,
                                                 rmm::cuda_stream_view stream,
                                                 rmm::device_async_resource_ref mr)
 {
-  return{};
+  row_ir::ast_converter converter;
+  row_ir::ast_args args{.table = table, .table_column_names = {}};
+  // [ ] get column names
+  auto filter_args =
+    converter.filter(row_ir::target::CUDA, expr, false, args, copy_mask, stream, mr);
+
+  return cudf::filter(filter_args.args.columns,
+                      filter_args.args.predicate_udf,
+                      filter_args.args.is_ptx,
+                      filter_args.args.user_data,
+                      filter_args.args.copy_mask,
+                      stream,
+                      mr);
 }
 
 }  // namespace cudf
