@@ -1,6 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
-
-from itertools import product
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -11,18 +9,17 @@ from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing import assert_eq
 from cudf.testing._utils import INTEGER_TYPES, NUMERIC_TYPES, gen_rand
 
-params_sizes = [0, 1, 2, 5]
+
+@pytest.fixture(params=NUMERIC_TYPES)
+def dtype(request):
+    return request.param
 
 
-def _gen_params():
-    for t, n in product(NUMERIC_TYPES, params_sizes):
-        if (t == np.int8 or t == np.int16) and n > 20:
-            # to keep data in range
-            continue
-        yield t, n
+@pytest.fixture(params=[0, 1, 5])
+def nelem(request):
+    return request.param
 
 
-@pytest.mark.parametrize("dtype,nelem", list(_gen_params()))
 def test_cumsum(dtype, nelem):
     if dtype == np.int8:
         # to keep data in range
@@ -86,7 +83,6 @@ def test_cumsum_decimal(dtype):
     assert_eq(got, expected)
 
 
-@pytest.mark.parametrize("dtype,nelem", list(_gen_params()))
 def test_cummin(dtype, nelem):
     if dtype == np.int8:
         # to keep data in range
@@ -149,7 +145,6 @@ def test_cummin_decimal(dtype):
     assert_eq(got, expected)
 
 
-@pytest.mark.parametrize("dtype,nelem", list(_gen_params()))
 def test_cummax(dtype, nelem):
     if dtype == np.int8:
         # to keep data in range
@@ -212,7 +207,6 @@ def test_cummax_decimal(dtype):
     assert_eq(got, expected)
 
 
-@pytest.mark.parametrize("dtype,nelem", list(_gen_params()))
 def test_cumprod(dtype, nelem):
     if dtype == np.int8:
         # to keep data in range
