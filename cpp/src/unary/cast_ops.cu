@@ -58,34 +58,34 @@ struct unary_cast {
     return TargetT{cuda::std::chrono::floor<TargetT::duration>(element.time_since_epoch())};
   }
 
-  template <cudf::Duration SourceT, cudf::Duration TargetT = _TargetT>
+  template <Duration SourceT, Duration TargetT = _TargetT>
   __device__ inline TargetT operator()(SourceT const element)
   {
     return TargetT{cuda::std::chrono::floor<TargetT>(element)};
   }
 
-  template <typename SourceT, cudf::Duration TargetT = _TargetT>
+  template <typename SourceT, Duration TargetT = _TargetT>
     requires(cudf::is_numeric<SourceT>())
   __device__ inline TargetT operator()(SourceT const element)
   {
     return TargetT{static_cast<typename TargetT::rep>(element)};
   }
 
-  template <typename SourceT, cudf::Duration TargetT = _TargetT>
+  template <typename SourceT, Duration TargetT = _TargetT>
     requires(cudf::is_timestamp<SourceT>())
   __device__ inline TargetT operator()(SourceT const element)
   {
     return TargetT{cuda::std::chrono::floor<TargetT>(element.time_since_epoch())};
   }
 
-  template <cudf::Duration SourceT, typename TargetT = _TargetT>
+  template <Duration SourceT, typename TargetT = _TargetT>
     requires(cudf::is_numeric<TargetT>())
   __device__ inline TargetT operator()(SourceT const element)
   {
     return static_cast<TargetT>(element.count());
   }
 
-  template <cudf::Duration SourceT, typename TargetT = _TargetT>
+  template <Duration SourceT, typename TargetT = _TargetT>
     requires(cudf::is_timestamp<TargetT>())
   __device__ inline TargetT operator()(SourceT const element)
   {

@@ -394,7 +394,7 @@ struct from_durations_fn {
  * The template function declaration ensures only duration types are used.
  */
 struct dispatch_from_durations_fn {
-  template <cudf::Duration T>
+  template <Duration T>
   std::unique_ptr<column> operator()(column_view const& durations,
                                      std::string_view format,
                                      rmm::cuda_stream_view stream,
@@ -427,7 +427,7 @@ struct dispatch_from_durations_fn {
 
   // non-duration types throw an exception
   template <typename T, typename... Args>
-    requires(not cudf::Duration<T>)
+    requires(not Duration<T>)
   std::unique_ptr<column> operator()(Args&&...) const
   {
     CUDF_FAIL("Values for from_durations function must be a duration type.");
@@ -649,7 +649,7 @@ struct parse_duration {
  * The template function declaration ensures only duration types are used.
  */
 struct dispatch_to_durations_fn {
-  template <cudf::Duration T>
+  template <Duration T>
   void operator()(column_device_view const& d_strings,
                   std::string_view format,
                   mutable_column_view& results_view,
@@ -666,7 +666,7 @@ struct dispatch_to_durations_fn {
                       pfn);
   }
   template <typename T>
-    requires(not cudf::Duration<T>)
+    requires(not Duration<T>)
   void operator()(column_device_view const&,
                   std::string_view,
                   mutable_column_view&,

@@ -172,7 +172,7 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
  * The template function declaration ensures only duration types are used.
  */
 struct dispatch_from_durations_fn {
-  template <cudf::Duration T>
+  template <Duration T>
   std::unique_ptr<column> operator()(column_view const& durations,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr) const
@@ -210,7 +210,7 @@ struct dispatch_from_durations_fn {
 
   // non-duration types throw an exception
   template <typename T>
-    requires(not cudf::Duration<T>)
+    requires(not Duration<T>)
   std::unique_ptr<column> operator()(column_view const&,
                                      rmm::cuda_stream_view,
                                      rmm::device_async_resource_ref) const

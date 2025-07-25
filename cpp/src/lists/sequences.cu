@@ -53,13 +53,13 @@ struct tabulator {
   size_type const* const offsets;
 
   template <typename U>
-    requires(not cudf::Duration<U>)
+    requires(not Duration<U>)
   static T __device__ multiply(U x, size_type times)
   {
     return x * static_cast<T>(times);
   }
 
-  template <cudf::Duration U>
+  template <Duration U>
   static T __device__ multiply(U x, size_type times)
   {
     return T{x.count() * times};
