@@ -178,3 +178,37 @@ def test_multiindex_values_host():
     pmidx = midx.to_pandas()
 
     assert_eq(midx.values_host, pmidx.values)
+
+
+@pytest.mark.parametrize(
+    "pdi",
+    [
+        pd.MultiIndex(
+            levels=[[], [], []],
+            codes=[[], [], []],
+            names=["one", "two", "three"],
+        ),
+        pd.MultiIndex.from_tuples([(1, 2), (3, 4)]),
+    ],
+)
+def test_multiindex_empty(pdi):
+    gdi = cudf.from_pandas(pdi)
+
+    assert_eq(pdi.empty, gdi.empty)
+
+
+@pytest.mark.parametrize(
+    "pdi",
+    [
+        pd.MultiIndex(
+            levels=[[], [], []],
+            codes=[[], [], []],
+            names=["one", "two", "three"],
+        ),
+        pd.MultiIndex.from_tuples([(1, 2), (3, 4)]),
+    ],
+)
+def test_multiindex_size(pdi):
+    gdi = cudf.from_pandas(pdi)
+
+    assert_eq(pdi.size, gdi.size)
