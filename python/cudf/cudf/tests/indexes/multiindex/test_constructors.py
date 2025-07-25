@@ -142,3 +142,9 @@ def test_multiindex_from_arrays(array):
     result = pd.MultiIndex.from_arrays(pd_data)
     expected = cudf.MultiIndex.from_arrays(cudf_data)
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("arg", ["foo", ["foo"]])
+def test_multiindex_from_arrays_wrong_arg(arg):
+    with pytest.raises(TypeError):
+        cudf.MultiIndex.from_arrays(arg)

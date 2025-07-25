@@ -1,6 +1,5 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
 
-import datetime
 import itertools
 import operator
 import pickle
@@ -12,7 +11,6 @@ from io import BytesIO
 import cupy as cp
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 import pytest
 
 import cudf
@@ -1864,72 +1862,6 @@ def test_multiindex_eq_other_multiindex():
     assert_eq(result, expected)
 
 
-@pytest.fixture(
-    params=[
-        "from_product",
-        "from_tuples",
-        "from_arrays",
-        "init",
-    ]
-)
-def midx(request):
-    if request.param == "from_product":
-        return cudf.MultiIndex.from_product([[0, 1], [1, 0]])
-    elif request.param == "from_tuples":
-        return cudf.MultiIndex.from_tuples([(0, 1), (0, 0), (1, 1), (1, 0)])
-    elif request.param == "from_arrays":
-        return cudf.MultiIndex.from_arrays([[0, 0, 1, 1], [1, 0, 1, 0]])
-    elif request.param == "init":
-        return cudf.MultiIndex(
-            levels=[[0, 1], [0, 1]], codes=[[0, 0, 1, 1], [1, 0, 1, 0]]
-        )
-    else:
-        raise NotImplementedError(f"{request.param} not implemented")
-
-
-def test_multindex_constructor_levels_always_indexes(midx):
-    assert_eq(midx.levels[0], cudf.Index([0, 1]))
-    assert_eq(midx.levels[1], cudf.Index([0, 1]))
-
-
-@pytest.mark.parametrize("arg", ["foo", ["foo"]])
-def test_multiindex_from_arrays_wrong_arg(arg):
-    with pytest.raises(TypeError):
-        cudf.MultiIndex.from_arrays(arg)
-
-
-@pytest.mark.parametrize(
-    "scalar",
-    [
-        1,
-        1.0,
-        "a",
-        datetime.datetime(2020, 1, 1),
-        datetime.timedelta(1),
-        pd.Interval(1, 2),
-    ],
-)
-def test_index_to_pandas_arrow_type_nullable_raises(scalar):
-    pa_array = [scalar, None]
-    midx = cudf.MultiIndex(levels=[pa_array], codes=[[0]])
-    with pytest.raises(ValueError):
-        midx.to_pandas(nullable=True, arrow_type=True)
-
-
-@pytest.mark.parametrize(
-    "scalar",
-    [1, 1.0, "a", datetime.datetime(2020, 1, 1), datetime.timedelta(1)],
-)
-def test_index_to_pandas_arrow_type(scalar):
-    pa_array = pa.array([scalar, None])
-    midx = cudf.MultiIndex(levels=[pa_array], codes=[[0]])
-    result = midx.to_pandas(arrow_type=True)
-    expected = pd.MultiIndex(
-        levels=[pd.arrays.ArrowExtensionArray(pa_array)], codes=[[0]]
-    )
-    pd.testing.assert_index_equal(result, expected)
-
-
 def test_multi_index_contains_hashable():
     gidx = cudf.MultiIndex.from_tuples(zip(["foo", "bar", "baz"], [1, 2, 3]))
     pidx = gidx.to_pandas()
@@ -1942,17 +1874,6 @@ def test_multi_index_contains_hashable():
     )
 
 
-@pytest.mark.parametrize("array", [[1, 2], [1, None], [None, None]])
-@pytest.mark.parametrize("dropna", [True, False])
-def test_nunique(array, dropna):
-    arrays = [array, [3, 4]]
-    gidx = cudf.MultiIndex.from_arrays(arrays)
-    pidx = pd.MultiIndex.from_arrays(arrays)
-    result = gidx.nunique(dropna=dropna)
-    expected = pidx.nunique(dropna=dropna)
-    assert result == expected
-
-
 def test_bool_raises():
     assert_exceptions_equal(
         lfunc=bool,
@@ -1960,15 +1881,6 @@ def test_bool_raises():
         lfunc_args_and_kwargs=[[cudf.MultiIndex.from_arrays([range(1)])]],
         rfunc_args_and_kwargs=[[pd.MultiIndex.from_arrays([range(1)])]],
     )
-
-
-def test_unique_level():
-    pd_mi = pd.MultiIndex.from_arrays([[1, 1, 2], [3, 3, 2]])
-    cudf_mi = cudf.MultiIndex.from_pandas(pd_mi)
-
-    result = pd_mi.unique(level=1)
-    expected = cudf_mi.unique(level=1)
-    assert_eq(result, expected)
 
 
 @pytest.mark.parametrize(
