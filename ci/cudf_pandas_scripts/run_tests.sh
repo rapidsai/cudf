@@ -116,6 +116,7 @@ python -m pytest -p cudf.pandas \
 # More details: https://github.com/rapidsai/cudf/pull/16930#issuecomment-2707873968
 python -m pytest -p cudf.pandas \
     --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
+    --numprocesses=0 \
     -k "profiler" \
     ./python/cudf/cudf_pandas_tests/
 
@@ -144,6 +145,7 @@ for version in "${versions[@]}"; do
 
     python -m pytest -p cudf.pandas \
         --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
+        --numprocesses=0 \
         -k "profiler" \
         ./python/cudf/cudf_pandas_tests/
 done
