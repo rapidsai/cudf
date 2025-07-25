@@ -242,8 +242,8 @@ aggregate_reader_metadata::select_payload_columns(
                                                               int schema_idx) {
     auto const& schema_elem     = get_schema(schema_idx);
     std::string const curr_path = path_till_now + schema_elem.name;
-    // If the current path is not a filter column, then add it and its children to the list of valid
-    // payload columns
+    // Add the current path to the list of valid payload columns if it is not a filter column
+    // TODO: Add children when AST filter expressions start supporting nested struct columns
     if (filter_columns_set.count(curr_path) == 0) { valid_payload_columns.push_back(curr_path); }
   };
 
