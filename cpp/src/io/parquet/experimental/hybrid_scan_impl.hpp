@@ -365,13 +365,15 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    * This function is called internally and expects all preprocessing steps have already been done.
    *
    * @tparam RowMaskView View type of the row mask column
+   * @param[in] mode Read mode indicating if we are reading all at once or chunk by chunk
    * @param[in] read_columns_mode Read mode indicating if we are reading filter or payload columns
    * @param[in,out] row_mask Boolean column indicating which rows need to be read after page-pruning
    *                         for filter columns, or after materialize step for payload columns
    * @return The output table along with columns' metadata
    */
   template <typename RowMaskView>
-  table_with_metadata read_chunk_internal(read_columns_mode read_columns_mode,
+  table_with_metadata read_chunk_internal(read_mode mode,
+                                          read_columns_mode read_columns_mode,
                                           RowMaskView row_mask);
 
  private:

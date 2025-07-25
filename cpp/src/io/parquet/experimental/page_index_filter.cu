@@ -28,6 +28,7 @@
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/types.hpp>
+#include <cudf/logger.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
@@ -702,8 +703,12 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask
 
   auto const has_page_index =
     compute_has_page_index(per_file_metadata, row_group_indices, output_column_schemas);
-  CUDF_EXPECTS(has_page_index,
-               "Data page mask computation requires the Parquet page index for all output columns");
+
+  // TODO: Don't use page pruning in case of lists and structs until we support them
+  if (not has_page_index) {
+    CUDF_LOG_WARN("Encountered missing Parquet page index for one or more output columns");
+    return {};  // An empty data page mask indicates all pages are required
+  }
 
   // Compute page row counts, offsets, and column chunk page offsets for each column
   std::vector<cudf::detail::host_vector<size_type>> page_row_counts;
