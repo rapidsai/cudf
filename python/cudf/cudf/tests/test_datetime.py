@@ -6,7 +6,6 @@ import operator
 import cupy as cp
 import numpy as np
 import pandas as pd
-import pandas._testing as tm
 import pyarrow as pa
 import pytest
 
@@ -18,7 +17,6 @@ from cudf.core._compat import (
     PANDAS_GE_230,
     PANDAS_VERSION,
 )
-from cudf.core.index import DatetimeIndex
 from cudf.testing import assert_eq
 from cudf.testing._utils import (
     DATETIME_TYPES,
@@ -162,11 +160,6 @@ def test_dt_series(data, field):
     base = getattr(pd_data.dt, field)
     test = getattr(gdf_data.dt, field)
     assert_eq(base, test, check_dtype=False)
-
-
-def test_dt_index(data, field):
-    gdf_data = DatetimeIndex(data)
-    assert_eq(getattr(gdf_data, field), getattr(data, field), exact=False)
 
 
 def test_setitem_datetime():
@@ -1140,29 +1133,6 @@ def test_isocalendar_series(data):
     assert_eq(expect, got, check_dtype=False)
 
 
-@pytest.mark.parametrize(
-    "data",
-    [
-        [],
-        [None, None],
-        [
-            "2020-05-31 08:00:00",
-            "1999-12-31 18:40:00",
-            "2000-12-31 04:00:00",
-        ],
-        ["2100-03-14 07:30:00"],
-    ],
-)
-def test_isocalendar_index(data):
-    ps = pd.DatetimeIndex(data, dtype="datetime64[ns]")
-    gs = cudf.from_pandas(ps)
-
-    expect = ps.isocalendar()
-    got = gs.isocalendar()
-
-    assert_eq(expect, got, check_dtype=False)
-
-
 @pytest.mark.parametrize("dtype", DATETIME_TYPES)
 def test_days_in_months(dtype):
     nrows = 1000
@@ -1767,57 +1737,6 @@ def test_day_month_name_locale_not_implemented(meth, klass):
         getattr(obj, meth)(locale="pt_BR.utf8")
 
 
-@pytest.mark.parametrize(
-    "attr",
-    [
-        "is_month_start",
-        "is_month_end",
-        "is_quarter_end",
-        "is_quarter_start",
-        "is_year_end",
-        "is_year_start",
-        "days_in_month",
-        "timetz",
-        "time",
-        "date",
-    ],
-)
-def test_dti_datetime_attributes(attr):
-    data = [
-        "2020-01-01",
-        "2020-01-31",
-        "2020-03-01",
-        "2020-03-31",
-        "2020-03-31",
-        "2020-12-31",
-        None,
-    ]
-    pd_dti = pd.DatetimeIndex(data, name="foo")
-    cudf_dti = cudf.from_pandas(pd_dti)
-
-    result = getattr(cudf_dti, attr)
-    expected = getattr(pd_dti, attr)
-    if isinstance(result, np.ndarray):
-        # numpy doesn't assert object arrays with NaT correctly
-        tm.assert_numpy_array_equal(result, expected)
-    else:
-        assert_eq(result, expected)
-
-
-@pytest.mark.parametrize("attr", ["freq", "unit"])
-def test_dti_properties(attr):
-    pd_dti = pd.DatetimeIndex(
-        ["2020-01-01", "2020-01-02"], dtype="datetime64[ns]"
-    )
-    cudf_dti = cudf.DatetimeIndex(
-        ["2020-01-01", "2020-01-02"], dtype="datetime64[ns]"
-    )
-
-    result = getattr(cudf_dti, attr)
-    expected = getattr(pd_dti, attr)
-    assert result == expected
-
-
 def test_dti_asi8():
     pd_dti = pd.DatetimeIndex(["2020-01-01", "2020-12-31"], name="foo")
     cudf_dti = cudf.from_pandas(pd_dti)
@@ -1838,34 +1757,3 @@ def test_dti_reduction(method, kwargs):
     result = getattr(cudf_dti, method)(**kwargs)
     expected = getattr(pd_dti, method)(**kwargs)
     assert result == expected
-
-
-@pytest.mark.parametrize(
-    "method, kwargs",
-    [
-        ["to_pydatetime", {}],
-        ["to_period", {"freq": "D"}],
-        ["strftime", {"date_format": "%Y-%m-%d"}],
-    ],
-)
-def test_dti_methods(method, kwargs):
-    pd_dti = pd.DatetimeIndex(["2020-01-01", "2020-12-31"], name="foo")
-    cudf_dti = cudf.from_pandas(pd_dti)
-
-    result = getattr(cudf_dti, method)(**kwargs)
-    expected = getattr(pd_dti, method)(**kwargs)
-    assert_eq(result, expected)
-
-
-def test_writable_numpy_array():
-    gi = cudf.Index([1, 2, 3], dtype="datetime64[ns]")
-    expected_flags = pd.Index(
-        [1, 2, 3], dtype="datetime64[ns]"
-    )._data._ndarray.flags
-
-    actual_flags = gi.to_pandas()._data._ndarray.flags
-    assert expected_flags.c_contiguous == actual_flags.c_contiguous
-    assert expected_flags.f_contiguous == actual_flags.f_contiguous
-    assert expected_flags.writeable == actual_flags.writeable
-    assert expected_flags.aligned == actual_flags.aligned
-    assert expected_flags.writebackifcopy == actual_flags.writebackifcopy
