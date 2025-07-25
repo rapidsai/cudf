@@ -135,25 +135,24 @@ std::tuple<std::unique_ptr<column>, int64_t, int64_t> get_offsets_column(
   CUDF_EXPECTS(schema->type == NANOARROW_TYPE_LARGE_LIST, "Unknown offsets parent type");
 
   // For large lists, convert 64-bit offsets to 32-bit on host with bounds checking
-  int64_t const* large_offsets =
-    reinterpret_cast<int64_t const*>(input->buffers[fixed_width_data_buffer_idx]) + input->offset;
 
   constexpr auto max_offset = static_cast<int64_t>(std::numeric_limits<int32_t>::max());
-  CUDF_EXPECTS(large_offsets[input->length] <= max_offset,
-               "Large list offsets exceed 32-bit integer bounds",
-               std::overflow_error);
 
   auto int32_offsets = std::vector<int32_t>(input->length + 1);
-  auto const offset  = static_cast<int64_t const*>(offsets_buffer)[input->offset];
-  auto const length =
-    static_cast<int64_t const*>(offsets_buffer)[input->offset + input->length] - offset;
-  std::transform(large_offsets,
-                 large_offsets + int32_offsets.size(),
+  auto int64_offsets = static_cast<int64_t const*>(offsets_buffer);
+  auto const offset  = int64_offsets[input->offset];
+  auto const length  = int64_offsets[input->offset + input->length] - offset;
+
+  CUDF_EXPECTS(
+    length <= max_offset, "large list offsets exceed 32-bit integer bounds", std::overflow_error);
+
+  std::transform(int64_offsets + input->offset,
+                 int64_offsets + input->offset + input->length + 1,
                  int32_offsets.begin(),
                  [offset](int64_t o) { return static_cast<int32_t>(o - offset); });
 
-  offsets_buffers[1] = int32_offsets.data();
-
+  offsets_buffers[fixed_width_data_buffer_idx] = int32_offsets.data();
+  offsets_array.offset                         = 0;  // already accounted for by the above transform
   auto result =
     get_column_copy(schema, &offsets_array, data_type(type_id::INT32), true, stream, mr);
   return std::tuple{std::move(result), offset, length};
@@ -344,7 +343,6 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<cudf::struct_v
                    return get_column_copy(&view, &child_array, child_type, false, stream, mr);
                  });
 
-  // auto [out_mask, null_count] = get_mask_buffer(input);
   auto [out_mask, null_count] =
     !skip_mask ? get_mask_buffer(input)
                : std::pair{std::make_unique<rmm::device_buffer>(0, stream, mr), 0};
