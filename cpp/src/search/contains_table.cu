@@ -30,10 +30,6 @@
 
 namespace cudf::detail {
 
-namespace {
-
-}  // namespace
-
 rmm::device_uvector<bool> contains(table_view const& haystack,
                                    table_view const& needles,
                                    null_equality compare_nulls,
