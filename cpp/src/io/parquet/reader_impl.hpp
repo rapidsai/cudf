@@ -171,6 +171,8 @@ class reader::impl {
    */
   void setup_next_subpass(read_mode mode);
 
+  void preprocess_chunk_strings(row_range const& read_info);
+
   /**
    * @brief Read a chunk of data and return an output table.
    *

@@ -585,6 +585,74 @@ void reader::impl::populate_metadata(table_metadata& out_metadata)
                                      out_metadata.per_file_user_data[0].end()};
 }
 
+void reader::impl::preprocess_chunk_strings(row_range const& read_info)
+{
+  auto& pass    = *_pass_itm_data;
+  auto& subpass = *pass.subpass;
+
+  if(!(subpass.kernel_mask & STRINGS_MASK)){
+    return;
+  }
+  
+  // we may need to (re)compute string sizes.
+  // string sizes were computed in the page preprocess step for the subpass if we are doing an output chunked read, but contains the size for all strings,
+  // not necessarily just the rows that may have been selected for an output chunk.
+  bool full_string_sizes_computed = _output_chunk_read_limit > 0;
+  bool const need_string_size_recompute =  (!full_string_sizes_computed) ||
+                                           ((subpass.skip_rows != read_info.skip_rows) || (subpass.num_rows != read_info.num_rows));
+  
+  ComputePageStringBounds(subpass.pages,
+                          pass.chunks,
+                          read_info.skip_rows,
+                          read_info.num_rows,
+                          pass.level_type_size,
+                          _stream);
+  
+  if(need_string_size_recompute){
+    ComputePageStringSizesPass1(subpass.pages,
+                                pass.chunks,
+                                read_info.skip_rows,
+                                read_info.num_rows,
+                                subpass.kernel_mask,
+                                _stream,
+                                false);
+  }
+
+  /*
+  {
+    auto h_pages = cudf::detail::make_std_vector(subpass.pages, _stream);
+    for(size_t idx=0; idx<h_pages.size(); idx++){
+      auto const& p = h_pages[idx];
+      if(BitAnd(p.kernel_mask, STRINGS_MASK)){
+        printf("P(%lu): %lu (%d %d)\n", idx, (size_t)p.str_bytes, (int)p.start_val, (int)p.end_val);
+      }
+    }
+  }
+  */
+
+  // 
+  ComputePageStringSizesPass2(subpass.pages,
+                              pass.chunks,
+                              subpass.delta_temp_buf,
+                              read_info.skip_rows,
+                              read_info.num_rows,
+                              pass.level_type_size,
+                              subpass.kernel_mask,
+                              _stream);
+
+  /*    
+    {
+      auto h_pages = cudf::detail::make_std_vector(subpass.pages, _stream);
+      for(size_t idx=0; idx<h_pages.size(); idx++){
+        auto const& p = h_pages[idx];
+        if(BitAnd(p.kernel_mask, STRINGS_MASK)){
+          printf("P(%lu): %lu\n", idx, (size_t)p.str_bytes);
+        }
+      }
+    }
+    */
+}
+
 table_with_metadata reader::impl::read_chunk_internal(read_mode mode)
 {
   CUDF_FUNC_RANGE();
@@ -624,6 +692,9 @@ table_with_metadata reader::impl::read_chunk_internal(read_mode mode)
   auto& pass            = *_pass_itm_data;
   auto& subpass         = *pass.subpass;
   auto const& read_info = subpass.output_chunk_read_info[subpass.current_output_chunk];
+
+  // preprocess strings
+  preprocess_chunk_strings(read_info);
 
   // Allocate memory buffers for the output columns.
   allocate_columns(mode, read_info.skip_rows, read_info.num_rows);
