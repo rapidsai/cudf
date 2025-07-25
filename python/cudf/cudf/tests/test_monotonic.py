@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 """
 Tests related to is_unique, is_monotonic_increasing &
@@ -12,7 +12,6 @@ import pytest
 import cudf
 from cudf import Index, MultiIndex, Series
 from cudf.core.index import CategoricalIndex, DatetimeIndex, RangeIndex
-from cudf.testing import assert_eq
 
 
 @pytest.mark.parametrize("testrange", [(10, 20, 1), (0, -10, -1), (5, 5, 1)])
@@ -299,22 +298,20 @@ def test_get_slice_bound_missing_str(label, side):
     assert got == expect
 
 
-testdata = [
-    (
-        Series(["2018-01-01", "2019-01-31", None], dtype="datetime64[ms]"),
-        False,
-    ),
-    (Series([1, 2, 3, None]), False),
-    (Series([None, 1, 2, 3]), False),
-    (Series(["a", "b", "c", None]), False),
-    (Series([None, "a", "b", "c"]), False),
-]
-
-
-@pytest.mark.parametrize("data, expected", testdata)
-def test_is_monotonic_always_falls_for_null(data, expected):
-    assert_eq(expected, data.is_monotonic_increasing)
-    assert_eq(expected, data.is_monotonic_decreasing)
+@pytest.mark.parametrize(
+    "data",
+    [
+        [pd.Timestamp("2018-01-01"), pd.Timestamp("2019-01-31"), None],
+        [1, 2, 3, None],
+        [None, 1, 2, 3],
+        ["a", "b", "c", None],
+        [None, "a", "b", "c"],
+    ],
+)
+def test_is_monotonic_always_falls_for_null(data):
+    ser = Series(data)
+    assert ser.is_monotonic_increasing is False
+    assert ser.is_monotonic_decreasing is False
 
 
 @pytest.mark.parametrize("box", [Series, Index])
