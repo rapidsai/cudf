@@ -70,14 +70,14 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
   auto const offsets_buffer_size  = compute_shmem_offsets_size(flattened_values.num_columns()) * 2;
   auto const data_buffer_size     = available_shmem_size - offsets_buffer_size;
 
-  // Check if any aggregation is SUM_ANSI, which should always use global memory
-  auto const has_sum_ansi =
+  // Check if any aggregation is SUM_WITH_OVERFLOW, which should always use global memory
+  auto const has_sum_with_overflow =
     std::any_of(agg_kinds.begin(), agg_kinds.end(), [](aggregation::Kind k) {
-      return k == aggregation::SUM_ANSI;
+      return k == aggregation::SUM_WITH_OVERFLOW;
     });
 
   auto const is_shared_memory_compatible =
-    !has_sum_ansi &&
+    !has_sum_with_overflow &&
     std::all_of(
       requests.begin(), requests.end(), [&](cudf::groupby::aggregation_request const& request) {
         if (cudf::is_dictionary(request.values.type())) { return false; }
@@ -90,7 +90,8 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
 
   // Performs naive global memory aggregations when the workload is not compatible with shared
   // memory, such as when aggregating dictionary columns, when there is insufficient dynamic
-  // shared memory for shared memory aggregations, or when SUM_ANSI aggregations are present.
+  // shared memory for shared memory aggregations, or when SUM_WITH_OVERFLOW aggregations are
+  // present.
   if (!is_shared_memory_compatible) {
     return compute_global_memory_aggs(num_rows,
                                       skip_rows_with_nulls,

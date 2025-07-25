@@ -124,8 +124,8 @@ struct empty_column_constructor {
     }
     if constexpr (k == aggregation::Kind::MERGE_HISTOGRAM) { return empty_like(values); }
 
-    if constexpr (k == aggregation::Kind::SUM_ANSI) {
-      // SUM_ANSI returns a struct with sum (int64_t) and overflow (bool) children
+    if constexpr (k == aggregation::Kind::SUM_WITH_OVERFLOW) {
+      // SUM_WITH_OVERFLOW returns a struct with sum (int64_t) and overflow (bool) children
       std::vector<std::unique_ptr<cudf::column>> children;
       children.push_back(make_empty_column(cudf::data_type{cudf::type_id::INT64}));
       children.push_back(make_empty_column(cudf::data_type{cudf::type_id::BOOL8}));

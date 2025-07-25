@@ -157,13 +157,14 @@ struct update_target_element<Source, aggregation::SUM> {
 
 template <typename Source>
   requires(cuda::std::is_same_v<Source, int64_t>)
-struct update_target_element<Source, aggregation::SUM_ANSI> {
+struct update_target_element<Source, aggregation::SUM_WITH_OVERFLOW> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
                              size_type source_index) const noexcept
   {
-    // For SUM_ANSI, target is a struct with sum value at child(0) and overflow flag at child(1)
+    // For SUM_WITH_OVERFLOW, target is a struct with sum value at child(0) and overflow flag at
+    // child(1)
     auto sum_column      = target.child(0);
     auto overflow_column = target.child(1);
 

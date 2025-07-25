@@ -42,7 +42,7 @@ std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
 }
 
 std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, sum_ansi_aggregation const& agg)
+  data_type col_type, sum_with_overflow_aggregation const& agg)
 {
   return visit(col_type, static_cast<aggregation const&>(agg));
 }
@@ -264,7 +264,7 @@ void aggregation_finalizer::visit(sum_aggregation const& agg)
   visit(static_cast<aggregation const&>(agg));
 }
 
-void aggregation_finalizer::visit(sum_ansi_aggregation const& agg)
+void aggregation_finalizer::visit(sum_with_overflow_aggregation const& agg)
 {
   visit(static_cast<aggregation const&>(agg));
 }
@@ -469,17 +469,17 @@ template CUDF_EXPORT std::unique_ptr<scan_aggregation> make_sum_aggregation<scan
 template CUDF_EXPORT std::unique_ptr<segmented_reduce_aggregation>
 make_sum_aggregation<segmented_reduce_aggregation>();
 
-/// Factory to create a SUM_ANSI aggregation
+/// Factory to create a SUM_WITH_OVERFLOW aggregation
 template <typename Base>
-std::unique_ptr<Base> make_sum_ansi_aggregation()
+std::unique_ptr<Base> make_sum_with_overflow_aggregation()
 {
-  return std::make_unique<detail::sum_ansi_aggregation>();
+  return std::make_unique<detail::sum_with_overflow_aggregation>();
 }
-template CUDF_EXPORT std::unique_ptr<aggregation> make_sum_ansi_aggregation<aggregation>();
+template CUDF_EXPORT std::unique_ptr<aggregation> make_sum_with_overflow_aggregation<aggregation>();
 template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
-make_sum_ansi_aggregation<groupby_aggregation>();
+make_sum_with_overflow_aggregation<groupby_aggregation>();
 template CUDF_EXPORT std::unique_ptr<groupby_scan_aggregation>
-make_sum_ansi_aggregation<groupby_scan_aggregation>();
+make_sum_with_overflow_aggregation<groupby_scan_aggregation>();
 
 /// Factory to create a PRODUCT aggregation
 template <typename Base>

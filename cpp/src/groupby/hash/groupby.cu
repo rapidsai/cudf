@@ -45,7 +45,7 @@ namespace {
  * implementation.
  */
 constexpr std::array<aggregation::Kind, 13> hash_aggregations{aggregation::SUM,
-                                                              aggregation::SUM_ANSI,
+                                                              aggregation::SUM_WITH_OVERFLOW,
                                                               aggregation::PRODUCT,
                                                               aggregation::MIN,
                                                               aggregation::MAX,

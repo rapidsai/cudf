@@ -75,8 +75,8 @@ cudf::table create_sparse_results_table(cudf::table_view const& flattened_values
                               ? cudf::dictionary_column_view(col).keys().type()
                               : col.type();
 
-      // Special handling for SUM_ANSI which needs a struct column
-      if (agg == cudf::aggregation::SUM_ANSI) {
+      // Special handling for SUM_WITH_OVERFLOW which needs a struct column
+      if (agg == cudf::aggregation::SUM_WITH_OVERFLOW) {
         if (col.size() == 0) {
           // For empty columns, create empty struct column manually
           std::vector<std::unique_ptr<cudf::column>> children;
@@ -97,7 +97,8 @@ cudf::table create_sparse_results_table(cudf::table_view const& flattened_values
             cudf::data_type{cudf::type_id::BOOL8}, col.size(), mask_flag, stream));
 
           // Create struct column with the children
-          // For SUM_ANSI, make struct nullable if input has nulls (same as other aggregations)
+          // For SUM_WITH_OVERFLOW, make struct nullable if input has nulls (same as other
+          // aggregations)
           if (nullable) {
             // Start with ALL_NULL, results will be marked valid during aggregation
             auto null_mask = cudf::create_null_mask(col.size(), cudf::mask_state::ALL_NULL, stream);
