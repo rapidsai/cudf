@@ -18,6 +18,7 @@
 
 #include "error.hpp"
 
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/transform.hpp>
@@ -34,21 +35,10 @@
 
 namespace cudf::io::parquet::detail {
 
-namespace {
-// Tests the passed in logical type for a FIXED_LENGTH_BYTE_ARRAY column to see if it should
-// be treated as a string. Currently the only logical type that has special handling is DECIMAL.
-// Other valid types in the future would be UUID (still treated as string) and FLOAT16 (which
-// for now would also be treated as a string).
-inline bool is_treat_fixed_length_as_string(std::optional<LogicalType> const& logical_type)
-{
-  if (!logical_type.has_value()) { return true; }
-  return logical_type->type != LogicalType::DECIMAL;
-}
-
-}  // namespace
-
 void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_rows)
 {
+  CUDF_FUNC_RANGE();
+
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
 
@@ -56,10 +46,6 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
   auto& page_nesting_decode = subpass.page_nesting_decode_info;
 
   auto const level_type_size = pass.level_type_size;
-
-  // temporary space for DELTA_BYTE_ARRAY decoding. this only needs to live until
-  // gpu::DecodeDeltaByteArray returns.
-  rmm::device_uvector<uint8_t> delta_temp_buf(0, _stream);
 
   // Should not reach here if there is no page data.
   CUDF_EXPECTS(subpass.pages.size() > 0, "There are no pages to decode");
@@ -69,37 +55,17 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
       return cursum + _metadata->get_output_nesting_depth(chunk.src_col_schema);
     });
 
-  // figure out which kernels to run
-  auto const kernel_mask = GetAggregatedDecodeKernelMask(subpass.pages, _stream);
+  auto const kernel_mask = subpass.kernel_mask;
+  auto const has_strings = (kernel_mask & STRINGS_MASK) != 0;
 
   // Check to see if there are any string columns present. If so, then we need to get size info
   // for each string page. This size info will be used to pre-allocate memory for the column,
   // allowing the page decoder to write string data directly to the column buffer, rather than
   // doing a gather operation later on.
   // TODO: This step is somewhat redundant if size info has already been calculated (nested schema,
-  // chunked reader).
-  auto const has_strings = (kernel_mask & STRINGS_MASK) != 0;
+  // chunked reader).  
   auto col_string_sizes  = cudf::detail::make_host_vector<size_t>(_input_columns.size(), _stream);
   if (has_strings) {
-    // need to compute pages bounds/sizes if we lack page indexes or are using custom bounds
-    // TODO: we could probably dummy up size stats for FLBA data since we know the width
-    auto const has_flba =
-      std::any_of(pass.chunks.begin(), pass.chunks.end(), [](auto const& chunk) {
-        return chunk.physical_type == Type::FIXED_LEN_BYTE_ARRAY and
-               is_treat_fixed_length_as_string(chunk.logical_type);
-      });
-
-    if (!_has_page_index || uses_custom_row_bounds(mode) || has_flba) {
-      ComputePageStringSizes(subpass.pages,
-                             pass.chunks,
-                             delta_temp_buf,
-                             skip_rows,
-                             num_rows,
-                             level_type_size,
-                             kernel_mask,
-                             _stream);
-    }
-
     // Compute column string sizes (using page string offsets) for this output table chunk
     col_string_sizes = calculate_page_string_offsets();
 
@@ -430,6 +396,9 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
   // synchronize the streams
   cudf::detail::join_streams(streams, _stream);
 
+  // the delta_temp_buf in the subpass struct can be freed now
+  subpass.delta_temp_buf.release();
+
   subpass.pages.device_to_host_async(_stream);
   page_nesting.device_to_host_async(_stream);
   page_nesting_decode.device_to_host_async(_stream);
@@ -618,8 +587,10 @@ void reader::impl::populate_metadata(table_metadata& out_metadata)
 
 table_with_metadata reader::impl::read_chunk_internal(read_mode mode)
 {
+  CUDF_FUNC_RANGE();
+
   // If `_output_metadata` has been constructed, just copy it over.
-  auto out_metadata = _output_metadata ? table_metadata{*_output_metadata} : table_metadata{};
+  auto out_metadata = _output_metadata ? table_metadata{*_output_metadata} : table_metadata{};  
   out_metadata.schema_info.resize(_output_buffers.size());
 
   // output cudf columns as determined by the top level schema

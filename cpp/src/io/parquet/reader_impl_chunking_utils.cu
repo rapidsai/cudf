@@ -449,7 +449,7 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
     // Use an empty span as pass page mask as we don't want to filter out dictionary pages
     codec.add_pages(chunks, pass_pages, codec_stats::page_selection::DICT_PAGES, {});
     total_pass_decomp_size += codec.total_decomp_size;
-  }
+  }  
 
   // Total number of pages to decompress, including both pass and subpass pages
   size_t num_comp_pages    = 0;
@@ -461,6 +461,8 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
     total_decomp_size += codec.total_decomp_size;
     num_comp_pages += codec.num_pages;
   }
+
+  printf("Total decomp size : %lu\n", total_decomp_size);
 
   // Dispatch batches of pages to decompress for each codec.
   // Buffer needs to be padded, required by `gpuDecodePageData`.

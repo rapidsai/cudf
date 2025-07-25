@@ -41,6 +41,19 @@
 
 namespace cudf::io::parquet::detail {
 
+namespace {
+// Tests the passed in logical type for a FIXED_LENGTH_BYTE_ARRAY column to see if it should
+// be treated as a string. Currently the only logical type that has special handling is DECIMAL.
+// Other valid types in the future would be UUID (still treated as string) and FLOAT16 (which
+// for now would also be treated as a string).
+inline bool is_treat_fixed_length_as_string(std::optional<LogicalType> const& logical_type)
+{
+  if (!logical_type.has_value()) { return true; }
+  return logical_type->type != LogicalType::DECIMAL;
+}
+
+}  // namespace
+
 void reader::impl::build_string_dict_indices()
 {
   CUDF_FUNC_RANGE();
@@ -490,8 +503,13 @@ void reader::impl::generate_list_column_row_counts(is_estimate_row_counts is_est
 
 void reader::impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_limit)
 {
+  CUDF_FUNC_RANGE();
+
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
+
+  // figure out which kernels to run
+  subpass.kernel_mask = GetAggregatedDecodeKernelMask(subpass.pages, _stream);
 
   // iterate over all input columns and determine if they contain lists.
   // TODO: we could do this once at the file level instead of every time we get in here. the set of
@@ -518,7 +536,7 @@ void reader::impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_li
   // in some cases we will need to do further preprocessing of pages.
   // - if we have lists, the num_rows field in PageInfo will be incorrect coming out of the file
   // - if we are doing a chunked read, we need to compute the size of all string data
-  if (has_lists || chunk_read_limit > 0) {
+  if (has_lists/* || chunk_read_limit > 0*/) {
     // computes:
     // PageNestingInfo::num_rows for each page. the true number of rows (taking repetition into
     // account), not just the number of values. PageNestingInfo::size for each level of nesting, for
@@ -533,10 +551,58 @@ void reader::impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_li
                        0,  // 0-max size_t. process all possible rows
                        std::numeric_limits<size_t>::max(),
                        true,                  // compute num_rows
-                       chunk_read_limit > 0,  // compute string sizes
+                       false, // chunk_read_limit > 0,  // compute string sizes
                        _pass_itm_data->level_type_size,
                        _stream);
   }
+  
+  /*
+  {
+      auto h_pages = cudf::detail::make_std_vector(subpass.pages, _stream);
+      for(size_t idx=0; idx<h_pages.size(); idx++){
+        auto const& p = h_pages[idx];
+        if(BitAnd(p.kernel_mask, STRINGS_MASK)){
+          printf("P(%lu): %lu\n", idx, (size_t)p.str_bytes);
+        }
+      }
+    }*/
+
+
+  // compute string sizes if necessary. if we are doing input chunking, we need to know
+  // the sizes of all strings so we can properly compute chunk boundaries.  
+  // need to compute pages bounds/sizes if we lack page indexes or are using custom bounds
+  // TODO: we could probably dummy up size stats for FLBA data since we know the width
+  auto const has_flba =
+    std::any_of(pass.chunks.begin(), pass.chunks.end(), [](auto const& chunk) {
+      return chunk.physical_type == Type::FIXED_LEN_BYTE_ARRAY and
+              is_treat_fixed_length_as_string(chunk.logical_type);
+    });
+  bool full_string_sizes_computed = _has_page_index;
+  if((chunk_read_limit > 0) && (subpass.kernel_mask & STRINGS_MASK)){
+    // if we have the page index, str_bytes will already be computed
+    if (!_has_page_index/* || uses_custom_row_bounds(mode) || has_flba*/) {
+      ComputePageStringSizesPass1(subpass.pages,
+                                  pass.chunks,
+                                  pass.skip_rows,
+                                  pass.num_rows,
+                                  subpass.kernel_mask,
+                                  _stream,
+                                  true);
+      full_string_sizes_computed = true;
+    }
+  }
+  
+  /*
+  {
+      auto h_pages = cudf::detail::make_std_vector(subpass.pages, _stream);
+      for(size_t idx=0; idx<h_pages.size(); idx++){
+        auto const& p = h_pages[idx];
+        if(BitAnd(p.kernel_mask, STRINGS_MASK)){
+          printf("P(%lu): %lu\n", idx, (size_t)p.str_bytes);
+        }
+      }
+    }*/
+
 
   auto iter = thrust::make_counting_iterator(0);
 
@@ -623,12 +689,70 @@ void reader::impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_li
   CUDF_EXPECTS(max_row > subpass.skip_rows, "Unexpected short subpass", std::underflow_error);
   subpass.num_rows = max_row - subpass.skip_rows;
 
+  // string processing.
+  if(subpass.kernel_mask & STRINGS_MASK){
+    // we may need to recompute string sizes.
+    bool const need_string_size_recompute =  (!full_string_sizes_computed) ||
+                                             ((subpass.skip_rows != pass.skip_rows) || (subpass.num_rows != pass.num_rows));    
+    
+    ComputePageStringBounds(subpass.pages,
+                            pass.chunks,
+                            subpass.skip_rows,
+                            subpass.num_rows,
+                            pass.level_type_size,
+                            _stream);
+    
+    if(need_string_size_recompute){
+      ComputePageStringSizesPass1(subpass.pages,
+                                  pass.chunks,
+                                  subpass.skip_rows,
+                                  subpass.num_rows,
+                                  subpass.kernel_mask,
+                                  _stream,
+                                  false);
+    }
+        
+    {
+      auto h_pages = cudf::detail::make_std_vector(subpass.pages, _stream);
+      for(size_t idx=0; idx<h_pages.size(); idx++){
+        auto const& p = h_pages[idx];
+        if(BitAnd(p.kernel_mask, STRINGS_MASK)){
+          printf("P(%lu): %lu (%d %d)\n", idx, (size_t)p.str_bytes, (int)p.start_val, (int)p.end_val);
+        }
+      }
+    }
+
+    // 
+    ComputePageStringSizesPass2(subpass.pages,
+                                pass.chunks,
+                                subpass.delta_temp_buf,
+                                subpass.skip_rows,
+                                subpass.num_rows,
+                                pass.level_type_size,
+                                subpass.kernel_mask,
+                                _stream);
+
+  /*    
+    {
+      auto h_pages = cudf::detail::make_std_vector(subpass.pages, _stream);
+      for(size_t idx=0; idx<h_pages.size(); idx++){
+        auto const& p = h_pages[idx];
+        if(BitAnd(p.kernel_mask, STRINGS_MASK)){
+          printf("P(%lu): %lu\n", idx, (size_t)p.str_bytes);
+        }
+      }
+    }
+    */
+  }  
+
   // now split up the output into chunks as necessary
   compute_output_chunks_for_subpass();
 }
 
 void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_rows)
 {
+  CUDF_FUNC_RANGE();
+
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
 
@@ -811,11 +935,17 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
     }
   }
 
-  cudf::detail::batched_memset<cuda::std::byte>(
-    memset_bufs, static_cast<cuda::std::byte>(0), _stream);
-  // Need to set null mask bufs to all high bits
-  cudf::detail::batched_memset<cudf::bitmask_type>(
-    nullmask_bufs, std::numeric_limits<cudf::bitmask_type>::max(), _stream);
+  {
+    cudf::scoped_range r("batched memset");
+
+    cudf::detail::batched_memset<cuda::std::byte>(
+      memset_bufs, static_cast<cuda::std::byte>(0), _stream);
+    // Need to set null mask bufs to all high bits
+    cudf::detail::batched_memset<cudf::bitmask_type>(
+      nullmask_bufs, std::numeric_limits<cudf::bitmask_type>::max(), _stream);
+
+    _stream.synchronize();
+  }
 }
 
 cudf::detail::host_vector<size_t> reader::impl::calculate_page_string_offsets()
