@@ -148,3 +148,21 @@ def test_multiindex_from_arrays(array):
 def test_multiindex_from_arrays_wrong_arg(arg):
     with pytest.raises(TypeError):
         cudf.MultiIndex.from_arrays(arg)
+
+
+@pytest.mark.parametrize(
+    "idx", [pd.Index, pd.CategoricalIndex, pd.DatetimeIndex, pd.TimedeltaIndex]
+)
+def test_from_arrays_infer_names(idx):
+    arrays = [idx([1], name="foo"), idx([2], name="bar")]
+    expected = pd.MultiIndex.from_arrays(arrays)
+    result = cudf.MultiIndex.from_arrays(arrays)
+    assert_eq(result, expected)
+
+
+def test_multiindex_dtype_error():
+    midx = cudf.MultiIndex.from_tuples([(10, 12), (8, 9), (3, 4)])
+    with pytest.raises(TypeError):
+        cudf.Index(midx, dtype="int64")
+    with pytest.raises(TypeError):
+        cudf.Index(midx.to_pandas(), dtype="int64")
