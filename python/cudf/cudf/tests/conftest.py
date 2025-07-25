@@ -234,6 +234,14 @@ def integer_types_as_str(request):
     return request.param
 
 
+@pytest.fixture(params=float_types)
+def float_types_as_str(request):
+    """
+    - "float32", "float64"
+    """
+    return request.param
+
+
 @pytest.fixture(
     params=signed_integer_types + unsigned_integer_types + float_types
 )
@@ -242,6 +250,47 @@ def numeric_types_as_str(request):
     - "int8", "int16", "int32", "int64"
     - "uint8", "uint16", "uint32", "uint64"
     - "float32", "float64"
+    """
+    return request.param
+
+
+@pytest.fixture(
+    params=signed_integer_types
+    + unsigned_integer_types
+    + float_types
+    + bool_types
+)
+def numeric_and_bool_types_as_str(request):
+    """
+    - "int8", "int16", "int32", "int64"
+    - "uint8", "uint16", "uint32", "uint64"
+    - "float32", "float64"
+    - "bool"
+    """
+    return request.param
+
+
+@pytest.fixture(params=datetime_types)
+def datetime_types_as_str(request):
+    """
+    - "datetime64[ns]", "datetime64[us]", "datetime64[ms]", "datetime64[s]"
+    """
+    return request.param
+
+
+@pytest.fixture(params=timedelta_types)
+def timedelta_types_as_str(request):
+    """
+    - "timedelta64[ns]", "timedelta64[us]", "timedelta64[ms]", "timedelta64[s]"
+    """
+    return request.param
+
+
+@pytest.fixture(params=datetime_types + timedelta_types)
+def temporal_types_as_str(request):
+    """
+    - "datetime64[ns]", "datetime64[us]", "datetime64[ms]", "datetime64[s]"
+    - "timedelta64[ns]", "timedelta64[us]", "timedelta64[ms]", "timedelta64[s]"
     """
     return request.param
 
