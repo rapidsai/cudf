@@ -681,9 +681,6 @@ add_library(
   src/search/contains_column.cu
   src/search/contains_scalar.cu
   src/search/contains_table.cu
-  src/search/contains_table_impl.cu
-  src/search/contains_table_impl_primitive.cu
-  src/search/contains_table_impl_nested.cu
   src/search/search_ordered.cu
   src/sort/is_sorted.cu
   src/sort/rank.cu
