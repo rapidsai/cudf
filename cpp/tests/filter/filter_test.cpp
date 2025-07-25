@@ -17,23 +17,16 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/random.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
-#include <cudf/jit/runtime_support.hpp>
 #include <cudf/stream_compaction.hpp>
 
 namespace filters {
 
 struct FilterTestFixture : public cudf::test::BaseFixture {
  protected:
-  void SetUp() override
-  {
-    if (!cudf::is_runtime_jit_supported()) {
-      GTEST_SKIP() << "Skipping tests that require runtime JIT support";
-    }
-  }
-
   static constexpr char const* udf =
     R"***(
     template<typename T>
@@ -131,21 +124,6 @@ TEST_F(FilterTestFixture, StringNoAssertions)
 }
 
 struct FilterAssertsTest : public FilterTestFixture {};
-
-TEST_F(FilterAssertsTest, RuntimeSupport)
-{
-  auto a           = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-  std::string cuda = R"***(
-__device__ void is_even(bool* out, int32_t a) { *out = (a % 2 == 0); }
-  )***";
-
-  if (!cudf::is_runtime_jit_supported()) {
-    EXPECT_THROW(cudf::filter({a}, cuda, false, std::nullopt, std::vector{true}),
-                 cudf::logic_error);
-  } else {
-    EXPECT_NO_THROW(cudf::filter({a}, cuda, false, std::nullopt, std::vector{true}););
-  }
-}
 
 TEST_F(FilterAssertsTest, CopyMask)
 {
@@ -315,3 +293,5 @@ __device__ void filter(bool* out,
 }
 
 }  // namespace filters
+
+CUDF_TEST_PROGRAM_MAIN()

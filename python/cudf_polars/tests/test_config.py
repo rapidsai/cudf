@@ -282,13 +282,80 @@ def test_validate_max_rows_per_partition(option: str) -> None:
         )
 
 
-def test_target_partition_size_warns(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_executor_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     with monkeypatch.context() as m:
-        m.setitem(sys.modules, "pynvml", None)
-        engine = pl.GPUEngine(executor="streaming")
+        m.setenv("CUDF_POLARS__EXECUTOR", "in-memory")
+        engine = pl.GPUEngine()
+        config = ConfigOptions.from_polars_engine(engine)
+        assert config.executor.name == "in-memory"
 
-        with pytest.warns(UserWarning, match="Failed to query"):
+    with monkeypatch.context() as m:
+        m.setenv("CUDF_POLARS__EXECUTOR", "invalid")
+        engine = pl.GPUEngine()
+        with pytest.raises(ValueError, match="Unknown executor 'invalid'"):
             ConfigOptions.from_polars_engine(engine)
+
+
+def test_parquet_options_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    with monkeypatch.context() as m:
+        m.setenv("CUDF_POLARS__PARQUET_OPTIONS__CHUNKED", "0")
+        m.setenv("CUDF_POLARS__PARQUET_OPTIONS__CHUNK_READ_LIMIT", "100")
+        m.setenv("CUDF_POLARS__PARQUET_OPTIONS__PASS_READ_LIMIT", "200")
+        m.setenv("CUDF_POLARS__PARQUET_OPTIONS__MAX_FOOTER_SAMPLES", "0")
+        m.setenv("CUDF_POLARS__PARQUET_OPTIONS__MAX_ROW_GROUP_SAMPLES", "0")
+
+        # Test default
+        engine = pl.GPUEngine()
+        config = ConfigOptions.from_polars_engine(engine)
+        assert config.parquet_options.chunked is False
+        assert config.parquet_options.chunk_read_limit == 100
+        assert config.parquet_options.pass_read_limit == 200
+        assert config.parquet_options.max_footer_samples == 0
+        assert config.parquet_options.max_row_group_samples == 0
+
+    with monkeypatch.context() as m:
+        m.setenv("CUDF_POLARS__PARQUET_OPTIONS__CHUNKED", "foo")
+        engine = pl.GPUEngine()
+        with pytest.raises(ValueError, match="Invalid boolean value: 'foo'"):
+            ConfigOptions.from_polars_engine(engine)
+
+
+def test_config_option_from_env(
+    monkeypatch: pytest.MonkeyPatch, *, rapidsmpf_available: bool
+) -> None:
+    with monkeypatch.context() as m:
+        m.setenv("CUDF_POLARS__EXECUTOR__SCHEDULER", "distributed")
+        m.setenv("CUDF_POLARS__EXECUTOR__FALLBACK_MODE", "silent")
+        m.setenv("CUDF_POLARS__EXECUTOR__MAX_ROWS_PER_PARTITION", "42")
+        m.setenv("CUDF_POLARS__EXECUTOR__UNIQUE_FRACTION", '{"a": 0.5}')
+        m.setenv("CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE", "100")
+        m.setenv("CUDF_POLARS__EXECUTOR__GROUPBY_N_ARY", "43")
+        m.setenv("CUDF_POLARS__EXECUTOR__BROADCAST_JOIN_LIMIT", "44")
+        m.setenv("CUDF_POLARS__EXECUTOR__RAPIDSMPF_SPILL", "1")
+        m.setenv("CUDF_POLARS__EXECUTOR__SINK_TO_DIRECTORY", "1")
+
+        if rapidsmpf_available:
+            m.setenv("CUDF_POLARS__EXECUTOR__SHUFFLE_METHOD", "rapidsmpf")
+        else:
+            m.setenv("CUDF_POLARS__EXECUTOR__SHUFFLE_METHOD", "tasks")
+
+        engine = pl.GPUEngine()
+        config = ConfigOptions.from_polars_engine(engine)
+        assert config.executor.name == "streaming"
+        assert config.executor.scheduler == "distributed"
+        assert config.executor.fallback_mode == "silent"
+        assert config.executor.max_rows_per_partition == 42
+        assert config.executor.unique_fraction == {"a": 0.5}
+        assert config.executor.target_partition_size == 100
+        assert config.executor.groupby_n_ary == 43
+        assert config.executor.broadcast_join_limit == 44
+        assert config.executor.rapidsmpf_spill is True
+        assert config.executor.sink_to_directory is True
+
+        if rapidsmpf_available:
+            assert config.executor.shuffle_method == "rapidsmpf"
+        else:
+            assert config.executor.shuffle_method == "tasks"
 
 
 def test_target_partition_from_env(
@@ -296,7 +363,7 @@ def test_target_partition_from_env(
 ) -> None:
     with monkeypatch.context() as m:
         m.setitem(sys.modules, "pynvml", None)
-        m.setenv("CUDF_POLARS__STREAMING__TARGET_PARTITION_SIZE", "100")
+        m.setenv("CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE", "100")
 
         engine = pl.GPUEngine(executor="streaming")
         ConfigOptions.from_polars_engine(engine)  # no warning
@@ -305,14 +372,14 @@ def test_target_partition_from_env(
 
 def test_fallback_mode_default(monkeypatch: pytest.MonkeyPatch) -> None:
     with monkeypatch.context() as m:
-        m.setenv("CUDF_POLARS__STREAMING__FALLBACK_MODE", "silent")
+        m.setenv("CUDF_POLARS__EXECUTOR__FALLBACK_MODE", "silent")
         engine = pl.GPUEngine(executor="streaming")
         config = ConfigOptions.from_polars_engine(engine)
         assert config.executor.name == "streaming"
         assert config.executor.fallback_mode == "silent"
 
     with monkeypatch.context() as m:
-        m.setenv("CUDF_POLARS__STREAMING__FALLBACK_MODE", "foo")
+        m.setenv("CUDF_POLARS__EXECUTOR__FALLBACK_MODE", "foo")
         engine = pl.GPUEngine(executor="streaming")
         with pytest.raises(
             ValueError, match="'foo' is not a valid StreamingFallbackMode"
@@ -330,7 +397,16 @@ def test_cardinality_factor_compat() -> None:
         )
 
 
-@pytest.mark.parametrize("option", ["chunked", "chunk_read_limit", "pass_read_limit"])
+@pytest.mark.parametrize(
+    "option",
+    [
+        "chunked",
+        "chunk_read_limit",
+        "pass_read_limit",
+        "max_footer_samples",
+        "max_row_group_samples",
+    ],
+)
 def test_validate_parquet_options(option: str) -> None:
     with pytest.raises(TypeError, match=f"{option} must be"):
         ConfigOptions.from_polars_engine(

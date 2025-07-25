@@ -17,14 +17,15 @@ compute-sanitizer --tool memcheck strings/custom_optimized strings/names.csv
 compute-sanitizer --tool memcheck strings/custom_prealloc strings/names.csv
 compute-sanitizer --tool memcheck strings/custom_with_malloc strings/names.csv
 
+
 cd string_transformers
-compute-sanitizer --tool memcheck branching_public info.csv output.csv
-compute-sanitizer --tool memcheck branching info.csv output.csv
-compute-sanitizer --tool memcheck int_output info.csv output.csv
-compute-sanitizer --tool memcheck output_public info.csv output.csv
-compute-sanitizer --tool memcheck output info.csv output.csv
-compute-sanitizer --tool memcheck preallocated_public info.csv output.csv
-compute-sanitizer --tool memcheck preallocated info.csv output.csv
+compute-sanitizer --tool memcheck compute_checksum_jit info.csv output.csv
+compute-sanitizer --tool memcheck extract_email_jit info.csv output.csv
+compute-sanitizer --tool memcheck extract_email_precompiled info.csv output.csv
+compute-sanitizer --tool memcheck format_phone_jit info.csv output.csv
+compute-sanitizer --tool memcheck format_phone_precompiled info.csv output.csv
+compute-sanitizer --tool memcheck localize_phone_jit info.csv output.csv
+compute-sanitizer --tool memcheck localize_phone_precompiled info.csv output.csv
 cd ..
 
 cd parquet_io
