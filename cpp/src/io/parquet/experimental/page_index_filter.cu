@@ -198,11 +198,11 @@ namespace {
 [[nodiscard]] bool compute_has_page_index(
   cudf::host_span<metadata_base const> file_metadatas,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
-  cudf::host_span<cudf::size_type const> output_column_schemas)
+  cudf::host_span<size_type const> output_column_schemas)
 {
   // For all output columns, check all parquet data sources
   return std::all_of(
-    output_column_schemas.begin(), output_column_schemas.end(), [&](auto const& schema_idx) {
+    output_column_schemas.begin(), output_column_schemas.end(), [&](auto const schema_idx) {
       // For all parquet data sources
       return std::all_of(
         thrust::counting_iterator<size_t>(0),
@@ -223,6 +223,22 @@ namespace {
         });
     });
 }
+/**
+ * @brief Construct a vector of all required data pages from the page row counts
+ */
+[[nodiscard]] auto all_required_data_pages(
+  cudf::host_span<cudf::detail::host_vector<size_type> const> page_row_counts)
+{
+  std::vector<std::vector<bool>> all_required_data_pages;
+  all_required_data_pages.reserve(page_row_counts.size());
+  std::transform(
+    page_row_counts.begin(),
+    page_row_counts.end(),
+    std::back_inserter(all_required_data_pages),
+    [&](auto const& col_page_counts) { return std::vector<bool>(col_page_counts.size(), true); });
+
+  return all_required_data_pages;
+};
 
 /**
  * @brief Converts page-level statistics of a column to 2 device columns - min, max values. Each
@@ -682,28 +698,17 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask
   CUDF_EXPECTS(row_mask.type().id() == cudf::type_id::BOOL8,
                "Input row bitmask should be of type BOOL8");
 
-  // Return if all rows are required or all are invalid.
-  if (row_mask.null_count() == row_mask.size() or thrust::all_of(rmm::exec_policy(stream),
-                                                                 row_mask.begin<bool>(),
-                                                                 row_mask.end<bool>(),
-                                                                 cuda::std::identity{})) {
-    return {};  // Return an empty data page mask which is interpreted as all pages are required
-  }
-
   auto const total_rows  = row_mask.size();
   auto const num_columns = output_dtypes.size();
 
   auto const has_page_index =
     compute_has_page_index(per_file_metadata, row_group_indices, output_column_schemas);
 
+  // TODO: Don't use page pruning in case of lists and structs until we support them
   if (not has_page_index) {
-    CUDF_LOG_WARN("Encountered missing page index for one or more column schemas");
-    return {};  // Return an empty data page mask which is interpreted as all pages are required
+    CUDF_LOG_WARN("Encountered missing Parquet page index for one or more output columns");
+    return {};  // An empty data page mask indicates all pages are required
   }
-
-  // CUDF_EXPECTS(has_page_index,
-  //              "Encountered missing page index for one or more column schemas",
-  //              std::invalid_argument);
 
   // Compute page row counts, offsets, and column chunk page offsets for each column
   std::vector<cudf::detail::host_vector<size_type>> page_row_counts;
@@ -753,6 +758,14 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask
   CUDF_EXPECTS(page_row_offsets.back().back() == total_rows,
                "Mismatch in total rows in input row mask and row groups",
                std::invalid_argument);
+
+  // Return if all rows are required or all are invalid.
+  if (row_mask.null_count() == row_mask.size() or thrust::all_of(rmm::exec_policy(stream),
+                                                                 row_mask.begin<bool>(),
+                                                                 row_mask.end<bool>(),
+                                                                 cuda::std::identity{})) {
+    return all_required_data_pages(page_row_counts);
+  }
 
   auto const mr = cudf::get_current_device_resource_ref();
 
@@ -821,8 +834,6 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask
           return valid_pages;
         }));
     });
-
-  cudf::detail::join_streams(streams, stream);
 
   // Collect results from all tasks
   std::transform(data_page_mask_tasks.begin(),

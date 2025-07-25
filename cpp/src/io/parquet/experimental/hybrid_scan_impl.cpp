@@ -169,6 +169,8 @@ std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_w
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
+
   CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
   CUDF_EXPECTS(options.get_filter().has_value(), "Encountered empty converted filter expression");
 
@@ -359,6 +361,8 @@ std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
 hybrid_scan_reader_impl::get_input_column_chunk_byte_ranges(
   cudf::host_span<std::vector<size_type> const> row_group_indices) const
 {
+  CUDF_FUNC_RANGE();
+
   // Descriptors for all the chunks that make up the selected columns
   auto const num_input_columns = _input_columns.size();
   auto const num_row_groups =
@@ -413,8 +417,6 @@ hybrid_scan_reader_impl::filter_column_chunks_byte_ranges(
   CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
   CUDF_EXPECTS(options.get_filter().has_value(), "Encountered empty converted filter expression");
 
-  CUDF_FUNC_RANGE();
-
   select_columns(read_columns_mode::FILTER_COLUMNS, options);
   return get_input_column_chunk_byte_ranges(row_group_indices);
 }
@@ -426,8 +428,6 @@ hybrid_scan_reader_impl::payload_column_chunks_byte_ranges(
 {
   CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
   CUDF_EXPECTS(options.get_filter().has_value(), "Encountered empty converted filter expression");
-
-  CUDF_FUNC_RANGE();
 
   select_columns(read_columns_mode::PAYLOAD_COLUMNS, options);
   return get_input_column_chunk_byte_ranges(row_group_indices);
@@ -544,8 +544,6 @@ void hybrid_scan_reader_impl::prepare_data(
   cudf::host_span<std::vector<bool> const> data_page_mask,
   parquet_reader_options const& options)
 {
-  CUDF_FUNC_RANGE();
-
   // if we have not preprocessed at the whole-file level, do that now
   if (not _file_preprocessed) {
     // setup file level information
