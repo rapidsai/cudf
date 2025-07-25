@@ -1824,6 +1824,28 @@ TEST_F(SearchTest, multi_contains_empty_input_set_string)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
+TEST_F(SearchTest, multi_contains_primitive_nan_unequal_bug)
+{
+  auto nan_val = std::numeric_limits<float>::quiet_NaN();
+
+  fixed_width_column_wrapper<float> haystack{1.0f, nan_val, 3.0f};
+  fixed_width_column_wrapper<float> needles{nan_val};
+
+  auto result = cudf::detail::contains(cudf::table_view{{haystack}},
+                                       cudf::table_view{{needles}},
+                                       cudf::null_equality::EQUAL,
+                                       cudf::nan_equality::UNEQUAL,
+                                       cudf::get_default_stream(),
+                                       cudf::get_current_device_resource_ref());
+
+  thrust::host_vector<bool> result_host(result.size());
+  CUDF_CUDA_TRY(cudaMemcpy(
+    result_host.data(), result.data(), result.size() * sizeof(bool), cudaMemcpyDeviceToHost));
+
+  // With nan_equality::UNEQUAL, NaN should not match NaN
+  EXPECT_FALSE(result_host[0]);
+}
+
 template <typename T>
 struct FixedPointTestAllReps : public cudf::test::BaseFixture {};
 
@@ -1875,29 +1897,6 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointUpperBound)
                                   {cudf::null_order::BEFORE});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
-}
-
-// Test for NaN handling bug in primitive row operator code path
-TEST_F(SearchTest, multi_contains_primitive_nan_unequal_bug)
-{
-  auto nan_val = std::numeric_limits<float>::quiet_NaN();
-
-  fixed_width_column_wrapper<float> haystack{1.0f, nan_val, 3.0f};
-  fixed_width_column_wrapper<float> needles{nan_val};
-
-  auto result = cudf::detail::contains(cudf::table_view{{haystack}},
-                                       cudf::table_view{{needles}},
-                                       cudf::null_equality::EQUAL,
-                                       cudf::nan_equality::UNEQUAL,
-                                       cudf::get_default_stream(),
-                                       cudf::get_current_device_resource_ref());
-
-  thrust::host_vector<bool> result_host(result.size());
-  CUDF_CUDA_TRY(cudaMemcpy(
-    result_host.data(), result.data(), result.size() * sizeof(bool), cudaMemcpyDeviceToHost));
-
-  // With nan_equality::UNEQUAL, NaN should not match NaN
-  EXPECT_FALSE(result_host[0]);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
