@@ -834,13 +834,6 @@ def test_multiindex_index_single_row():
     assert_eq(pdf.loc[("b", 3)], gdf.loc[("b", 3)])
 
 
-def test_multiindex_empty_slice_pandas_compatibility():
-    expected = pd.MultiIndex.from_tuples([("a", "b")])[:0]
-    with cudf.option_context("mode.pandas_compatible", True):
-        actual = cudf.from_pandas(expected)
-    assert_eq(expected, actual, exact=False)
-
-
 @pytest.mark.parametrize(
     "levels",
     itertools.chain.from_iterable(
