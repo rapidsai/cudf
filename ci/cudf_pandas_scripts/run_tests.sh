@@ -139,6 +139,9 @@ for version in "${versions[@]}"; do
         --cov-report=term \
         ./python/cudf/cudf_pandas_tests/
 
+    # NOTE: We don't currently run serial tests (only 1 as of 2025-07-25)
+    # with multiple versions of pandas.
+
     python -m pytest -p cudf.pandas \
         --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
         -k "profiler" \
