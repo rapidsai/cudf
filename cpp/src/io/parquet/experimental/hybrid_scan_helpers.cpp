@@ -91,10 +91,10 @@ aggregate_reader_metadata::aggregate_reader_metadata(cudf::host_span<uint8_t con
   num_row_groups    = calc_num_row_groups();
 
   // Force all leaf columns to be nullable
-  // auto& schema = per_file_metadata.front().schema;
-  // std::for_each(schema.begin(), schema.end(), [](auto& col) {
-  //   if (col.type != Type::UNDEFINED) { col.repetition_type = FieldRepetitionType::OPTIONAL; }
-  // });
+  auto& schema = per_file_metadata.front().schema;
+  std::for_each(schema.begin(), schema.end(), [](auto& col) {
+    if (col.type != Type::UNDEFINED) { col.repetition_type = FieldRepetitionType::OPTIONAL; }
+  });
 
   // Collect and apply arrow:schema from Parquet's key value metadata section
   if (use_arrow_schema) {
