@@ -20,28 +20,36 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
-#include <cuco/extent.cuh>
 #include <cuco/bucket_storage.cuh>
+#include <cuco/extent.cuh>
 
 #include <algorithm>
 
 namespace cudf {
 namespace detail {
 namespace {
-  auto compute_bucket_storage_size(cudf::table_view tbl, double load_factor) {
-    return std::max({static_cast<cudf::size_type>(cuco::make_valid_extent<left_join::primitive_probing_scheme, left_join::storage_type, cudf::size_type>(tbl.num_rows(), load_factor)),
-                     static_cast<cudf::size_type>(cuco::make_valid_extent<left_join::nested_probing_scheme, left_join::storage_type, cudf::size_type>(tbl.num_rows(), load_factor)),
-                     static_cast<cudf::size_type>(cuco::make_valid_extent<left_join::simple_probing_scheme, left_join::storage_type, cudf::size_type>(tbl.num_rows(), load_factor))});
-  }
+auto compute_bucket_storage_size(cudf::table_view tbl, double load_factor)
+{
+  return std::max({static_cast<cudf::size_type>(
+                     cuco::make_valid_extent<left_join::primitive_probing_scheme,
+                                             left_join::storage_type,
+                                             cudf::size_type>(tbl.num_rows(), load_factor)),
+                   static_cast<cudf::size_type>(
+                     cuco::make_valid_extent<left_join::nested_probing_scheme,
+                                             left_join::storage_type,
+                                             cudf::size_type>(tbl.num_rows(), load_factor)),
+                   static_cast<cudf::size_type>(
+                     cuco::make_valid_extent<left_join::simple_probing_scheme,
+                                             left_join::storage_type,
+                                             cudf::size_type>(tbl.num_rows(), load_factor))});
 }
-
+}  // namespace
 
 left_join::left_join(cudf::table_view const& build,
                      null_equality compare_nulls,
                      rmm::cuda_stream_view stream)
   // If we cannot know beforehand about null existence then let's assume that there are nulls.
-  : left_join(
-      build, compare_nulls, cudf::detail::CUCO_DESIRED_LOAD_FACTOR, stream)
+  : left_join(build, compare_nulls, cudf::detail::CUCO_DESIRED_LOAD_FACTOR, stream)
 {
 }
 
@@ -59,6 +67,5 @@ left_join::left_join(cudf::table_view const& build,
 {
 }
 
-
-} // namespace detail
-} // namespace cudf
+}  // namespace detail
+}  // namespace cudf
