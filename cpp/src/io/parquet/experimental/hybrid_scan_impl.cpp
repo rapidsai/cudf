@@ -344,13 +344,13 @@ hybrid_scan_reader_impl::filter_data_pages_with_stats(
   auto row_mask =
     _extended_metadata->filter_data_pages_with_stats(row_group_indices,
                                                      output_dtypes,
-                                                     _input_columns,
+                                                     _output_column_schemas,
                                                      expr_conv.get_converted_expr().value(),
                                                      stream,
                                                      mr);
 
   auto data_page_mask = _extended_metadata->compute_data_page_mask(
-    row_mask->view(), row_group_indices, output_dtypes, _input_columns, stream);
+    row_mask->view(), row_group_indices, output_dtypes, _output_column_schemas, stream);
 
   return {std::move(row_mask), std::move(data_page_mask)};
 }
@@ -491,7 +491,7 @@ table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns(
   auto output_dtypes = get_output_types(_output_buffers_template);
 
   auto data_page_mask = _extended_metadata->compute_data_page_mask(
-    row_mask, row_group_indices, output_dtypes, _input_columns, stream);
+    row_mask, row_group_indices, output_dtypes, _output_column_schemas, stream);
 
   prepare_data(row_group_indices, std::move(column_chunk_buffers), data_page_mask, options);
 
@@ -522,9 +522,6 @@ void hybrid_scan_reader_impl::initialize_options(
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
-  // CUDA stream to use for internal operations
-  _stream = stream;
-
   // Strings may be returned as either string or categorical columns
   _strings_to_categorical = options.is_enabled_convert_strings_to_categories();
 
@@ -536,6 +533,9 @@ void hybrid_scan_reader_impl::initialize_options(
   _reader_column_schema = options.get_column_schema();
 
   _num_sources = row_group_indices.size();
+
+  // CUDA stream to use for internal operations
+  _stream = stream;
 }
 
 void hybrid_scan_reader_impl::prepare_data(
