@@ -25,6 +25,11 @@
 
 namespace CUDF_EXPORT cudf {
 
+enum class null_aware : uint8_t {
+  NO  = 0,  ///< The transform function is not null-aware
+  YES = 1   ///< The transform function is null-aware
+};
+
 /**
  * @addtogroup transformation_transform
  * @{
@@ -66,6 +71,7 @@ std::unique_ptr<column> transform(
   std::string const& transform_udf,
   data_type output_type,
   bool is_ptx,
+  null_aware null_aware = null_aware::NO,
   std::optional<void*> user_data    = std::nullopt,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
