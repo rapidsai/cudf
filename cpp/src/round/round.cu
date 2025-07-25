@@ -41,15 +41,6 @@ namespace cudf {
 namespace detail {
 namespace {  // anonymous
 
-inline float __device__ generic_round(float f) { return roundf(f); }
-inline double __device__ generic_round(double d) { return ::round(d); }
-
-inline float __device__ generic_round_half_even(float f) { return rintf(f); }
-inline double __device__ generic_round_half_even(double d) { return rint(d); }
-
-inline float __device__ generic_modf(float a, float* b) { return modff(a, b); }
-inline double __device__ generic_modf(double a, double* b) { return modf(a, b); }
-
 template <typename T>
 T __device__ generic_abs(T value)
   requires(cuda::std::is_signed_v<T>)
@@ -305,40 +296,6 @@ std::unique_ptr<column> round_with(column_view const& input,
   return result;
 }
 
-struct round_type_dispatcher {
-  template <typename T, typename... Args>
-  std::unique_ptr<column> operator()(Args&&...)
-    requires(not is_supported_round_type<T>())
-  {
-    CUDF_FAIL("Type not support for cudf::round");
-  }
-
-  template <typename T>
-  std::unique_ptr<column> operator()(column_view const& input,
-                                     int32_t decimal_places,
-                                     cudf::rounding_method method,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
-    requires(is_supported_round_type<T>())
-  {
-    // clang-format off
-    switch (method) {
-      case cudf::rounding_method::HALF_UP:
-        if      (is_fixed_point<T>()) return round_with<T, half_up_fixed_point>(input, decimal_places, stream, mr);
-        else if (decimal_places == 0) return round_with<T, half_up_zero       >(input, decimal_places, stream, mr);
-        else if (decimal_places >  0) return round_with<T, half_up_positive   >(input, decimal_places, stream, mr);
-        else                          return round_with<T, half_up_negative   >(input, decimal_places, stream, mr);
-      case cudf::rounding_method::HALF_EVEN:
-        if      (is_fixed_point<T>()) return round_with<T, half_even_fixed_point>(input, decimal_places, stream, mr);
-        else if (decimal_places == 0) return round_with<T, half_even_zero       >(input, decimal_places, stream, mr);
-        else if (decimal_places >  0) return round_with<T, half_even_positive   >(input, decimal_places, stream, mr);
-        else                          return round_with<T, half_even_negative   >(input, decimal_places, stream, mr);
-      default: CUDF_FAIL("Undefined rounding method");
-    }
-    // clang-format on
-  }
-};
-
 struct round_dispatch_fn {
   template <typename T>
   static constexpr bool is_supported()
@@ -381,27 +338,6 @@ struct round_dispatch_fn {
 
 }  // anonymous namespace
 
-std::unique_ptr<column> round(column_view const& input,
-                              int32_t decimal_places,
-                              cudf::rounding_method method,
-                              rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr)
-{
-  CUDF_EXPECTS(cudf::is_numeric(input.type()) || cudf::is_fixed_point(input.type()),
-               "Only integral/floating point/fixed point currently supported.");
-
-  if (input.is_empty()) {
-    if (is_fixed_point(input.type())) {
-      auto const type = data_type{input.type().id(), numeric::scale_type{-decimal_places}};
-      return make_empty_column(type);
-    }
-    return empty_like(input);
-  }
-
-  return type_dispatcher(
-    input.type(), round_type_dispatcher{}, input, decimal_places, method, stream, mr);
-}
-
 std::unique_ptr<column> round_decimal(column_view const& input,
                                       int32_t decimal_places,
                                       cudf::rounding_method method,
@@ -425,16 +361,6 @@ std::unique_ptr<column> round_decimal(column_view const& input,
 }
 
 }  // namespace detail
-
-std::unique_ptr<column> round(column_view const& input,
-                              int32_t decimal_places,
-                              rounding_method method,
-                              rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::round(input, decimal_places, method, stream, mr);
-}
 
 std::unique_ptr<column> round_decimal(column_view const& input,
                                       int32_t decimal_places,
