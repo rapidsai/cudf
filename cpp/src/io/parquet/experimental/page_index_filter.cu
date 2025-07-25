@@ -704,7 +704,12 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask
   auto const has_page_index =
     compute_has_page_index(per_file_metadata, row_group_indices, output_column_schemas);
 
-  if (not has_page_index) { return std::vector<std::vector<bool>>{}; }
+  if (not has_page_index) {
+    CUDF_LOG_WARN("Data page mask not computed as page index for some columns was not found");
+    return std::vector<std::vector<bool>>{};
+  }
+
+  // MH: FIXME: This is a temporary fix to allow the reader to work without page index.
   // CUDF_EXPECTS(has_page_index,
   //              "Data page mask computation requires the Parquet page index for all output
   //              columns");
