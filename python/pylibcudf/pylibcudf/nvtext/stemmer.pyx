@@ -12,7 +12,7 @@ from pylibcudf.libcudf.nvtext.stemmer cimport (
 )
 from pylibcudf.libcudf.types cimport size_type
 
-from pylibcudf.libcudf.nvtext.stemmer import letter_type as LetterType
+from pylibcudf.libcudf.nvtext.stemmer import letter_type as LetterType # no-cython-lint
 
 __all__ = ["is_letter", "porter_stemmer_measure", "LetterType"]
 
