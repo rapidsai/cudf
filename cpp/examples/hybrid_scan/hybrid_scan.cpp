@@ -305,7 +305,7 @@ auto hybrid_scan(io_source const& io_source,
       reader->filter_data_pages_with_stats(current_row_group_indices, options, stream, mr);
     timer.print_elapsed_millis();
   } else {
-    std::cout << "SKIP: Row group filtering with data pages...\n\n";
+    std::cout << "SKIP: Page filtering with page index stats...\n\n";
     auto num_rows = reader->total_rows_in_row_groups(current_row_group_indices);
     row_mask      = cudf::make_numeric_column(
       cudf::data_type{cudf::type_id::BOOL8}, num_rows, rmm::device_buffer{}, 0, stream, mr);
