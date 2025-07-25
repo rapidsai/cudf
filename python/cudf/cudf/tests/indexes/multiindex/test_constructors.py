@@ -166,3 +166,18 @@ def test_multiindex_dtype_error():
         cudf.Index(midx, dtype="int64")
     with pytest.raises(TypeError):
         cudf.Index(midx.to_pandas(), dtype="int64")
+
+
+def test_multiindex_duplicate_names():
+    gi = cudf.MultiIndex(
+        levels=[["a", "b"], ["b", "a"]],
+        codes=[[0, 0], [0, 1]],
+        names=["a", "a"],
+    )
+    pi = pd.MultiIndex(
+        levels=[["a", "b"], ["b", "a"]],
+        codes=[[0, 0], [0, 1]],
+        names=["a", "a"],
+    )
+
+    assert_eq(gi, pi)

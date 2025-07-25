@@ -79,3 +79,55 @@ def test_multiindex_set_names_validation(bad):
     mi = cudf.MultiIndex.from_tuples([(0, 0), (0, 1), (1, 0), (1, 1)])
     with pytest.raises(ValueError):
         mi.names = bad
+
+
+def test_multiindex_levels():
+    gidx = cudf.MultiIndex.from_product(
+        [range(3), ["one", "two"]], names=["first", "second"]
+    )
+    pidx = gidx.to_pandas()
+
+    assert_eq(gidx.levels[0], pidx.levels[0])
+    assert_eq(gidx.levels[1], pidx.levels[1])
+
+
+@pytest.mark.parametrize(
+    "pidx",
+    [
+        pd.MultiIndex.from_arrays(
+            [[1, 1, 2, 2], ["Red", "Blue", "Red", "Blue"]]
+        ),
+        pd.MultiIndex.from_arrays(
+            [[1, 2, 3, 4], [5, 6, 7, 10], [11, 12, 12, 13]],
+            names=["a", "b", "c"],
+        ),
+        pd.MultiIndex.from_arrays(
+            [[1.0, 2, 3, 4], [5, 6, 7.8, 10], [11, 12, 12, 13]],
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "func",
+    [
+        "is_numeric",
+        "is_boolean",
+        "is_integer",
+        "is_floating",
+        "is_object",
+        "is_categorical",
+        "is_interval",
+    ],
+)
+def test_multiindex_type_methods(pidx, func):
+    gidx = cudf.from_pandas(pidx)
+
+    with pytest.warns(FutureWarning):
+        expected = getattr(pidx, func)()
+
+    with pytest.warns(FutureWarning):
+        actual = getattr(gidx, func)()
+
+    if func == "is_object":
+        assert_eq(False, actual)
+    else:
+        assert_eq(expected, actual)
