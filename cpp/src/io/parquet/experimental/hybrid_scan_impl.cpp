@@ -488,7 +488,6 @@ void hybrid_scan_reader_impl::reset_internal_state()
   _pass_itm_data.reset();
   _pass_page_mask.clear();
   _subpass_page_mask.clear();
-  _subpass_page_mask.clear();
   _output_metadata.reset();
   _options.timestamp_type = cudf::data_type{};
   _options.num_rows       = std::nullopt;
