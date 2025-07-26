@@ -26,11 +26,6 @@
 
 #include <cuco/bucket_storage.cuh>
 #include <cuco/extent.cuh>
-#include <cuda/std/functional>
-
-#include <cstddef>
-#include <memory>
-#include <optional>
 
 // Forward declaration
 namespace cudf::experimental::row::equality {
@@ -45,8 +40,10 @@ using cudf::experimental::row::rhs_index_type;
 
 struct left_join {
  public:
+  using key = rhs_index_type;
+
   using storage_type =
-    cuco::bucket_storage<cuco::pair<hash_value_type, rhs_index_type>,
+    cuco::bucket_storage<key,
                          1,  /// fixing bucket size to be 1 i.e each thread handles one slot
                          cuco::extent<cudf::size_type>,
                          cudf::detail::cuco_allocator<char>>;
@@ -55,10 +52,15 @@ struct left_join {
   using primitive_row_hasher =
     cudf::row::primitive::row_hasher<cudf::hashing::detail::default_hash>;
   using primitive_probing_scheme = cuco::linear_probing<1, primitive_row_hasher>;
+  using primitive_row_comparator = cudf::row::primitive::row_equality_comparator;
 
   using row_hasher            = cudf::experimental::row::hash::row_hasher;
   using nested_probing_scheme = cuco::linear_probing<4, row_hasher>;
   using simple_probing_scheme = cuco::linear_probing<1, row_hasher>;
+  using row_comparator = cudf::experimental::row::equality::device_row_comparator<
+    true,
+    cudf::nullate::DYNAMIC,
+    cudf::experimental::row::equality::nan_equal_physical_equality_comparator>;
 
   left_join()                            = delete;
   ~left_join()                           = default;

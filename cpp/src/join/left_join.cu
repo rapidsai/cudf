@@ -14,20 +14,30 @@
  * limitations under the License.
  */
 
+#include "join_common_utils.cuh" 
+
 #include <cudf/detail/cuco_helpers.hpp>
+#include <cudf/detail/join/join.hpp>
 #include <cudf/detail/join/left_join.cuh>
+#include <cudf/detail/null_mask.hpp>
+#include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
 #include <cuco/bucket_storage.cuh>
+#include <cuco/detail/open_addressing/kernels.cuh>
 #include <cuco/extent.cuh>
+#include <cuco/static_set_ref.cuh>
+#include <cuco/types.cuh>
 
 #include <algorithm>
+#include <limits>
 
 namespace cudf {
 namespace detail {
 namespace {
+
 auto compute_bucket_storage_size(cudf::table_view tbl, double load_factor)
 {
   return std::max({static_cast<cudf::size_type>(
@@ -43,6 +53,38 @@ auto compute_bucket_storage_size(cudf::table_view tbl, double load_factor)
                                              left_join::storage_type,
                                              cudf::size_type>(tbl.num_rows(), load_factor))});
 }
+
+/**
+ * @brief Build a row bitmask for the input table.
+ *
+ * The output bitmask will have invalid bits corresponding to the input rows having nulls (at
+ * any nested level) and vice versa.
+ *
+ * @param input The input table
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return A pair of pointer to the output bitmask and the buffer containing the bitmask
+ */
+std::pair<rmm::device_buffer, bitmask_type const*> build_row_bitmask(table_view const& input,
+                                                                     rmm::cuda_stream_view stream)
+{
+  auto const nullable_columns = get_nullable_columns(input);
+  CUDF_EXPECTS(nullable_columns.size() > 0,
+               "The input table has nulls thus it should have nullable columns.");
+
+  // If there are more than one nullable column, we compute `bitmask_and` of their null masks.
+  // Otherwise, we have only one nullable column and can use its null mask directly.
+  if (nullable_columns.size() > 1) {
+    auto row_bitmask =
+      cudf::detail::bitmask_and(
+        table_view{nullable_columns}, stream, cudf::get_current_device_resource_ref())
+        .first;
+    auto const row_bitmask_ptr = static_cast<bitmask_type const*>(row_bitmask.data());
+    return std::pair(std::move(row_bitmask), row_bitmask_ptr);
+  }
+
+  return std::pair(rmm::device_buffer{0, stream}, nullable_columns.front().null_mask());
+}
+
 }  // namespace
 
 left_join::left_join(cudf::table_view const& build,
@@ -65,6 +107,125 @@ left_join::left_join(cudf::table_view const& build,
     _bucket_storage{cuco::extent<cudf::size_type>{compute_bucket_storage_size(build, load_factor)},
                     cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream.value()}}
 {
+  auto const build_has_nulls = has_nested_nulls(_build);
+  auto empty_sentinel_key = cuco::empty_key{rhs_index_type{-1}};
+  _bucket_storage.initialize(empty_sentinel_key);
+
+  if (cudf::is_primitive_row_op_compatible(_build)) {
+    auto const d_build_hasher =
+      primitive_row_hasher{nullate::DYNAMIC{build_has_nulls}, _preprocessed_build};
+    auto const d_build_comparator = cudf::row::primitive::row_equality_comparator{
+      nullate::DYNAMIC{build_has_nulls}, _preprocessed_build, _preprocessed_build, compare_nulls};
+
+    cuco::static_set_ref<key, cuda::thread_scope_device, primitive_row_comparator, primitive_probing_scheme, storage_type_ref> set_ref{
+      empty_sentinel_key, 
+      d_build_comparator, 
+      primitive_probing_scheme{d_build_hasher}, 
+      cuda::thread_scope_device{}, 
+      _bucket_storage.ref()};
+      
+    // Build hash table by inserting all rows from build table
+    auto const build_iter = cudf::detail::make_counting_transform_iterator(
+      size_type{0}, cuda::proclaim_return_type<rhs_index_type>([] __device__(auto idx) {
+        return rhs_index_type{idx};
+      }));
+
+    auto const grid_size = cuco::detail::grid_size(_build.num_rows(), primitive_probing_scheme::cg_size);
+
+    if (build_has_nulls && compare_nulls == null_equality::UNEQUAL) {
+      auto const bitmask_buffer_and_ptr = build_row_bitmask(build, stream);
+      auto const row_bitmask_ptr        = bitmask_buffer_and_ptr.second;
+
+      // If the haystack table has nulls but they are compared unequal, don't insert them.
+      // Otherwise, it was known to cause performance issue:
+      // - https://github.com/rapidsai/cudf/pull/6943
+      // - https://github.com/rapidsai/cudf/pull/8277
+      cuco::detail::open_addressing_ns::insert_if_n<primitive_probing_scheme::cg_size, cuco::detail::default_block_size()>
+        <<<grid_size, cuco::detail::default_block_size(), 0, stream.value()>>>(
+          build_iter, _build.num_rows(), thrust::counting_iterator<size_type>{0}, row_is_valid{row_bitmask_ptr}, set_ref);
+    }
+    else {
+      cuco::detail::open_addressing_ns::insert_if_n<primitive_probing_scheme::cg_size, cuco::detail::default_block_size()>
+        <<<grid_size, cuco::detail::default_block_size(), 0, stream.value()>>>(
+          build_iter, _build.num_rows(), thrust::constant_iterator<bool>{true}, cuda::std::identity{}, set_ref);
+    }    
+  } 
+  else {
+    auto const build_has_nested_columns = cudf::has_nested_columns(_build);
+
+    auto const d_build_hasher = row_hasher{_preprocessed_build};
+    auto const d_build_comparator = cudf::experimental::row::equality::self_comparator{_preprocessed_build};
+
+    if(build_has_nested_columns) {
+      auto d_build_nan_comparator = d_build_comparator.equal_to<true>(
+        nullate::DYNAMIC{build_has_nulls}, compare_nulls, cudf::experimental::row::equality::nan_equal_physical_equality_comparator{});
+      cuco::static_set_ref<key, cuda::thread_scope_device, row_comparator, nested_probing_scheme, storage_type_ref> set_ref{
+        empty_sentinel_key, 
+        d_build_nan_comparator, 
+        nested_probing_scheme{d_build_hasher}, 
+        cuda::thread_scope_device{}, 
+        _bucket_storage.ref()};
+      // Build hash table by inserting all rows from build table
+      auto const build_iter = cudf::detail::make_counting_transform_iterator(
+        size_type{0}, cuda::proclaim_return_type<rhs_index_type>([] __device__(auto idx) {
+          return rhs_index_type{idx};
+        }));
+
+      auto const grid_size = cuco::detail::grid_size(_build.num_rows(), primitive_probing_scheme::cg_size);
+
+      if (build_has_nulls && compare_nulls == null_equality::UNEQUAL) {
+        auto const bitmask_buffer_and_ptr = build_row_bitmask(build, stream);
+        auto const row_bitmask_ptr        = bitmask_buffer_and_ptr.second;
+
+        // If the haystack table has nulls but they are compared unequal, don't insert them.
+        // Otherwise, it was known to cause performance issue:
+        // - https://github.com/rapidsai/cudf/pull/6943
+        // - https://github.com/rapidsai/cudf/pull/8277
+        cuco::detail::open_addressing_ns::insert_if_n<primitive_probing_scheme::cg_size, cuco::detail::default_block_size()>
+          <<<grid_size, cuco::detail::default_block_size(), 0, stream.value()>>>(
+            build_iter, _build.num_rows(), thrust::counting_iterator<size_type>{0}, row_is_valid{row_bitmask_ptr}, set_ref);
+      }
+      else {
+        cuco::detail::open_addressing_ns::insert_if_n<primitive_probing_scheme::cg_size, cuco::detail::default_block_size()>
+          <<<grid_size, cuco::detail::default_block_size(), 0, stream.value()>>>(
+            build_iter, _build.num_rows(), thrust::constant_iterator<bool>{true}, cuda::std::identity{}, set_ref);
+      }    
+    }
+
+    auto d_build_nan_comparator = d_build_comparator.equal_to<false>(
+      nullate::DYNAMIC{build_has_nulls}, compare_nulls, cudf::experimental::row::equality::nan_equal_physical_equality_comparator{});
+    cuco::static_set_ref<key, cuda::thread_scope_device, row_comparator, simple_probing_scheme, storage_type_ref> set_ref{
+      empty_sentinel_key, 
+      d_build_nan_comparator, 
+      nested_probing_scheme{d_build_hasher}, 
+      cuda::thread_scope_device{}, 
+      _bucket_storage.ref()};
+    // Build hash table by inserting all rows from build table
+    auto const build_iter = cudf::detail::make_counting_transform_iterator(
+      size_type{0}, cuda::proclaim_return_type<rhs_index_type>([] __device__(auto idx) {
+        return rhs_index_type{idx};
+      }));
+
+    auto const grid_size = cuco::detail::grid_size(_build.num_rows(), primitive_probing_scheme::cg_size);
+
+    if (build_has_nulls && compare_nulls == null_equality::UNEQUAL) {
+      auto const bitmask_buffer_and_ptr = build_row_bitmask(build, stream);
+      auto const row_bitmask_ptr        = bitmask_buffer_and_ptr.second;
+
+      // If the haystack table has nulls but they are compared unequal, don't insert them.
+      // Otherwise, it was known to cause performance issue:
+      // - https://github.com/rapidsai/cudf/pull/6943
+      // - https://github.com/rapidsai/cudf/pull/8277
+      cuco::detail::open_addressing_ns::insert_if_n<primitive_probing_scheme::cg_size, cuco::detail::default_block_size()>
+        <<<grid_size, cuco::detail::default_block_size(), 0, stream.value()>>>(
+          build_iter, _build.num_rows(), thrust::counting_iterator<size_type>{0}, row_is_valid{row_bitmask_ptr}, set_ref);
+    }
+    else {
+      cuco::detail::open_addressing_ns::insert_if_n<primitive_probing_scheme::cg_size, cuco::detail::default_block_size()>
+        <<<grid_size, cuco::detail::default_block_size(), 0, stream.value()>>>(
+          build_iter, _build.num_rows(), thrust::constant_iterator<bool>{true}, cuda::std::identity{}, set_ref);
+    }    
+  }
 }
 
 }  // namespace detail
