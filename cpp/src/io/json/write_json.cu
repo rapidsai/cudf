@@ -620,9 +620,8 @@ struct column_to_strings_fn {
   }
 
   // timestamps:
-  template <typename column_type>
+  template <Timestamp column_type>
   std::unique_ptr<column> operator()(column_view const& column) const
-    requires(cudf::is_timestamp<column_type>())
   {
     std::string format = [&]() {
       if (std::is_same_v<cudf::timestamp_s, column_type>) {

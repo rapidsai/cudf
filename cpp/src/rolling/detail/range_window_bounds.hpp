@@ -56,8 +56,8 @@ struct range_type_impl<
   using rep_type = ColumnType;
 };
 
-template <typename TimestampType>
-struct range_type_impl<TimestampType, std::enable_if_t<cudf::is_timestamp<TimestampType>(), void>> {
+template <Timestamp TimestampType>
+struct range_type_impl<TimestampType, void> {
   using type     = typename TimestampType::duration;
   using rep_type = typename type::rep;
 };

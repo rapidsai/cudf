@@ -418,9 +418,8 @@ T __forceinline__ __device__ genericAtomicOperation(T* address, T const& update_
 }
 
 // specialization for cudf::detail::timestamp types
-template <typename T, typename BinaryOp>
+template <Timestamp T, typename BinaryOp>
 T __forceinline__ __device__ genericAtomicOperation(T* address, T const& update_value, BinaryOp op)
-  requires(cudf::is_timestamp<T>())
 {
   using R = typename T::rep;
   // Unwrap the input timestamp to its underlying duration value representation.

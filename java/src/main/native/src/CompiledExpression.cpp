@@ -241,7 +241,7 @@ struct make_literal {
   }
 
   /** Construct an AST literal from a timestamp value */
-  template <typename T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
+  template <cudf::Timestamp T>
   cudf::ast::literal& operator()(cudf::data_type dtype,
                                  bool is_valid,
                                  cudf::jni::ast::compiled_expr& compiled_expr,

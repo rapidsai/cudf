@@ -205,11 +205,10 @@ struct column_view_printer {
     }
   }
 
-  template <typename Element>
+  template <cudf::Timestamp Element>
   void operator()(cudf::column_view const& col,
                   std::vector<std::string>& out,
                   std::string const& indent)
-    requires(is_timestamp<Element>())
   {
     //  For timestamps, convert timestamp column to column of strings, then
     //  call string version

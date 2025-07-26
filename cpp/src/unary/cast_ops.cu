@@ -48,9 +48,8 @@ struct unary_cast {
     return static_cast<TargetT>(element);
   }
 
-  template <typename SourceT, typename TargetT = _TargetT>
+  template <Timestamp SourceT, Timestamp TargetT = _TargetT>
   __device__ inline TargetT operator()(SourceT const element)
-    requires(cudf::is_timestamp<SourceT>() && cudf::is_timestamp<TargetT>())
   {
     // Convert source tick counts into target tick counts without blindly truncating them
     // by dividing the respective duration time periods (which may not work for time before
@@ -71,8 +70,7 @@ struct unary_cast {
     return TargetT{static_cast<typename TargetT::rep>(element)};
   }
 
-  template <typename SourceT, Duration TargetT = _TargetT>
-    requires(cudf::is_timestamp<SourceT>())
+  template <Timestamp SourceT, Duration TargetT = _TargetT>
   __device__ inline TargetT operator()(SourceT const element)
   {
     return TargetT{cuda::std::chrono::floor<TargetT>(element.time_since_epoch())};
@@ -85,8 +83,7 @@ struct unary_cast {
     return static_cast<TargetT>(element.count());
   }
 
-  template <Duration SourceT, typename TargetT = _TargetT>
-    requires(cudf::is_timestamp<TargetT>())
+  template <Duration SourceT, Timestamp TargetT = _TargetT>
   __device__ inline TargetT operator()(SourceT const element)
   {
     return TargetT{cuda::std::chrono::floor<TargetT::duration>(element)};

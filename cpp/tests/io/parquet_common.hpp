@@ -219,16 +219,16 @@ template <typename T>
 std::enable_if_t<cudf::is_fixed_point<T>(), cudf::test::fixed_width_column_wrapper<T>> unordered();
 
 // ----- chrono types
-// ----- timstamp
+// ----- timestamp
 
-template <typename T>
-std::enable_if_t<cudf::is_timestamp<T>(), cudf::test::fixed_width_column_wrapper<T>> ascending();
+template <cudf::Timestamp T>
+cudf::test::fixed_width_column_wrapper<T> ascending();
 
-template <typename T>
-std::enable_if_t<cudf::is_timestamp<T>(), cudf::test::fixed_width_column_wrapper<T>> descending();
+template <cudf::Timestamp T>
+cudf::test::fixed_width_column_wrapper<T> descending();
 
-template <typename T>
-std::enable_if_t<cudf::is_timestamp<T>(), cudf::test::fixed_width_column_wrapper<T>> unordered();
+template <cudf::Timestamp T>
+cudf::test::fixed_width_column_wrapper<T> unordered();
 
 // ----- duration
 

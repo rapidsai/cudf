@@ -102,7 +102,7 @@ cudf::test::fixed_width_column_wrapper<T> descending_low_cardinality()
  * @tparam T Timestamp type
  * @return Column wrapper
  */
-template <typename T, CUDF_ENABLE_IF(cudf::is_timestamp<T>())>
+template <cudf::Timestamp T>
 cudf::test::fixed_width_column_wrapper<T> descending_low_cardinality()
 {
   auto elements = cudf::detail::make_counting_transform_iterator(

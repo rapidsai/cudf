@@ -43,9 +43,8 @@ auto create_scalar_search_key(std::string const& value)
   return cudf::make_string_scalar(value);
 }
 
-template <typename T>
+template <cudf::Timestamp T>
 auto create_scalar_search_key(typename T::rep const& value)
-  requires(cudf::is_timestamp<T>())
 {
   auto search_key = cudf::make_timestamp_scalar(cudf::data_type{cudf::type_to_id<T>()});
   search_key->set_valid_async(true);
@@ -77,9 +76,8 @@ auto create_null_search_key()
   return search_key;
 }
 
-template <typename T>
+template <cudf::Timestamp T>
 auto create_null_search_key()
-  requires(cudf::is_timestamp<T>())
 {
   auto search_key = cudf::make_timestamp_scalar(cudf::data_type{cudf::type_to_id<T>()});
   search_key->set_valid_async(false);

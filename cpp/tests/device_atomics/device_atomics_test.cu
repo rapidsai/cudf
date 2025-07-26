@@ -97,13 +97,14 @@ CUDF_KERNEL void gpu_atomicCAS_test(T* result, T* data, size_t size)
 }
 
 template <typename T>
-std::enable_if_t<!cudf::is_timestamp<T>(), T> accumulate(cudf::host_span<T const> xs)
+requires (not cudf::Timestamp<T>)
+T accumulate(cudf::host_span<T const> xs)
 {
   return std::accumulate(xs.begin(), xs.end(), T{0});
 }
 
-template <typename T>
-std::enable_if_t<cudf::is_timestamp<T>(), T> accumulate(cudf::host_span<T const> xs)
+template <cudf::Timestamp T>
+T accumulate(cudf::host_span<T const> xs)
 {
   auto ys = std::vector<typename T::rep>(xs.size());
   std::transform(

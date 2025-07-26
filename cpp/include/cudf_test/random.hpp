@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -149,7 +149,8 @@ class UniformRandomGenerator {
    *
    * @return generated random number
    */
-  template <typename TL = T, std::enable_if_t<!cudf::is_timestamp<TL>()>* = nullptr>
+  template <typename TL = T>
+  requires(not Timestamp<TL>)
   T generate()
   {
     return T{dist(rng)};
@@ -159,7 +160,7 @@ class UniformRandomGenerator {
    * @brief Returns the next random number.
    * @return generated random number
    */
-  template <typename TL = T, std::enable_if_t<cudf::is_timestamp<TL>()>* = nullptr>
+  template <Timestamp TL = T>
   T generate()
   {
     return T{typename T::duration{dist(rng)}};

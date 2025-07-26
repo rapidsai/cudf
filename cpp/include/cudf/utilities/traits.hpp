@@ -429,6 +429,14 @@ CUDF_HOST_DEVICE constexpr inline bool is_timestamp()
 }
 
 /**
+ * @brief Concept for timestamp types.
+ *
+ * @tparam T The type to check
+ */
+template <typename T>
+concept Timestamp = is_timestamp<T>();
+
+/**
  * @brief Indicates whether `type` is a timestamp `data_type`.
  *
  * "Timestamp" types are int32_t or int64_t durations since the unix epoch.

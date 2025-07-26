@@ -91,7 +91,7 @@ distribution_id default_distribution_id()
  * The 2020 timestamp is used as a lower bound to bias the geometric distribution to recent
  * timestamps.
  */
-template <typename T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
+template <cudf::Timestamp T>
 std::pair<int64_t, int64_t> default_range()
 {
   using cuda::std::chrono::duration_cast;

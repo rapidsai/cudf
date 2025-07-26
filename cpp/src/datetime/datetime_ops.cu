@@ -126,30 +126,30 @@ struct RoundingDispatcher {
   {
   }
 
-  template <typename Timestamp>
-  __device__ inline Timestamp operator()(Timestamp const ts) const
+  template <typename T>
+  __device__ inline T operator()(T const ts) const
   {
     switch (component) {
       case rounding_frequency::DAY:
-        return time_point_cast<typename Timestamp::duration>(
+        return time_point_cast<typename T::duration>(
           RoundFunctor<duration_D>{}(round_kind, ts));
       case rounding_frequency::HOUR:
-        return time_point_cast<typename Timestamp::duration>(
+        return time_point_cast<typename T::duration>(
           RoundFunctor<duration_h>{}(round_kind, ts));
       case rounding_frequency::MINUTE:
-        return time_point_cast<typename Timestamp::duration>(
+        return time_point_cast<typename T::duration>(
           RoundFunctor<duration_m>{}(round_kind, ts));
       case rounding_frequency::SECOND:
-        return time_point_cast<typename Timestamp::duration>(
+        return time_point_cast<typename T::duration>(
           RoundFunctor<duration_s>{}(round_kind, ts));
       case rounding_frequency::MILLISECOND:
-        return time_point_cast<typename Timestamp::duration>(
+        return time_point_cast<typename T::duration>(
           RoundFunctor<duration_ms>{}(round_kind, ts));
       case rounding_frequency::MICROSECOND:
-        return time_point_cast<typename Timestamp::duration>(
+        return time_point_cast<typename T::duration>(
           RoundFunctor<duration_us>{}(round_kind, ts));
       case rounding_frequency::NANOSECOND:
-        return time_point_cast<typename Timestamp::duration>(
+        return time_point_cast<typename T::duration>(
           RoundFunctor<duration_ns>{}(round_kind, ts));
       default: CUDF_UNREACHABLE("Unsupported datetime rounding resolution.");
     }
@@ -165,8 +165,8 @@ static __device__ int16_t const days_until_month[2][13] = {
 // Round up the date to the last day of the month and return the
 // date only (without the time component)
 struct extract_last_day_of_month {
-  template <typename Timestamp>
-  __device__ inline timestamp_D operator()(Timestamp const ts) const
+  template <typename T>
+  __device__ inline timestamp_D operator()(T const ts) const
   {
     using namespace cuda::std::chrono;
     year_month_day const ymd(floor<days>(ts));
@@ -179,8 +179,8 @@ struct extract_last_day_of_month {
 // A similar operator to `extract_last_day_of_month`, except this returns
 // an integer while the other returns a timestamp.
 struct days_in_month_op {
-  template <typename Timestamp>
-  __device__ inline int16_t operator()(Timestamp const ts) const
+  template <typename T>
+  __device__ inline int16_t operator()(T const ts) const
   {
     using namespace cuda::std::chrono;
     auto const date = year_month_day(floor<days>(ts));
@@ -191,8 +191,8 @@ struct days_in_month_op {
 
 // Extract the day number of the year present in the timestamp
 struct extract_day_num_of_year {
-  template <typename Timestamp>
-  __device__ inline int16_t operator()(Timestamp const ts) const
+  template <typename T>
+  __device__ inline int16_t operator()(T const ts) const
   {
     using namespace cuda::std::chrono;
 
@@ -207,8 +207,8 @@ struct extract_day_num_of_year {
 
 // Extract the quarter to which the timestamp belongs to
 struct extract_quarter_op {
-  template <typename Timestamp>
-  __device__ inline int16_t operator()(Timestamp const ts) const
+  template <typename T>
+  __device__ inline int16_t operator()(T const ts) const
   {
     using namespace cuda::std::chrono;
 
@@ -224,8 +224,8 @@ struct extract_quarter_op {
 
 // Returns true if the year is a leap year
 struct is_leap_year_op {
-  template <typename Timestamp>
-  __device__ inline bool operator()(Timestamp const ts) const
+  template <typename T>
+  __device__ inline bool operator()(T const ts) const
   {
     using namespace cuda::std::chrono;
     auto const days_since_epoch = floor<days>(ts);
@@ -236,16 +236,15 @@ struct is_leap_year_op {
 
 // Specific function for applying ceil/floor/round date ops
 struct dispatch_round {
-  template <typename Timestamp>
+  template <Timestamp T>
   std::unique_ptr<cudf::column> operator()(rounding_function round_kind,
                                            rounding_frequency component,
                                            cudf::column_view const& column,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr) const
-    requires(cudf::is_timestamp<Timestamp>())
   {
     auto size            = column.size();
-    auto output_col_type = data_type{cudf::type_to_id<Timestamp>()};
+    auto output_col_type = data_type{cudf::type_to_id<T>()};
 
     // Return an empty column if source column is empty
     if (size == 0) return make_empty_column(output_col_type);
@@ -258,9 +257,9 @@ struct dispatch_round {
                                           mr);
 
     thrust::transform(rmm::exec_policy(stream),
-                      column.begin<Timestamp>(),
-                      column.end<Timestamp>(),
-                      output->mutable_view().begin<Timestamp>(),
+                      column.begin<T>(),
+                      column.end<T>(),
+                      output->mutable_view().begin<T>(),
                       RoundingDispatcher{round_kind, component});
 
     output->set_null_count(column.null_count());
@@ -268,9 +267,9 @@ struct dispatch_round {
     return output;
   }
 
-  template <typename Timestamp, typename... Args>
+  template <typename T, typename... Args>
+  requires(not cudf::Timestamp<T>)
   std::unique_ptr<cudf::column> operator()(Args&&...)
-    requires(!cudf::is_timestamp<Timestamp>())
   {
     CUDF_FAIL("Must be cudf::timestamp");
   }
@@ -291,13 +290,12 @@ struct launch_functor {
     CUDF_FAIL("Cannot extract datetime component from non-timestamp column.");
   }
 
-  template <typename Timestamp>
+  template <Timestamp T>
   void operator()(rmm::cuda_stream_view stream) const
-    requires(cudf::is_timestamp_t<Timestamp>::value)
   {
     thrust::transform(rmm::exec_policy(stream),
-                      input.begin<Timestamp>(),
-                      input.end<Timestamp>(),
+                      input.begin<T>(),
+                      input.end<T>(),
                       output.begin<OutputColT>(),
                       TransformFunctor{});
   }
@@ -338,12 +336,11 @@ struct add_calendrical_months_functor {
     CUDF_FAIL("Cannot extract datetime component from non-timestamp column.");
   }
 
-  template <typename Timestamp, typename MonthIterator>
+  template <Timestamp T, typename MonthIterator>
   std::unique_ptr<column> operator()(column_view timestamp_column,
                                      MonthIterator months_begin,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr) const
-    requires(cudf::is_timestamp_t<Timestamp>::value)
   {
     auto size            = timestamp_column.size();
     auto output_col_type = timestamp_column.type();
@@ -359,10 +356,10 @@ struct add_calendrical_months_functor {
     auto output_mview = output->mutable_view();
 
     thrust::transform(rmm::exec_policy(stream),
-                      timestamp_column.begin<Timestamp>(),
-                      timestamp_column.end<Timestamp>(),
+                      timestamp_column.begin<T>(),
+                      timestamp_column.end<T>(),
                       months_begin,
-                      output->mutable_view().begin<Timestamp>(),
+                      output->mutable_view().begin<T>(),
                       [] __device__(auto& timestamp, auto& months) {
                         return add_calendrical_months_with_scale_back(
                           timestamp, cuda::std::chrono::months{months});

@@ -48,9 +48,8 @@ struct rolling_store_output_functor<_T, true> {
   }
 
   // SFINAE for timestamp types
-  template <typename T = _T>
+  template <cudf::Timestamp T = _T>
   CUDF_HOST_DEVICE inline void operator()(T& out, T& val, size_type count)
-    requires(cudf::is_timestamp<T>())
   {
     if (count > 0) { out = static_cast<T>(val.time_since_epoch() / count); }
   }

@@ -423,24 +423,24 @@ std::enable_if_t<cudf::is_fixed_point<T>(), cudf::test::fixed_width_column_wrapp
 // ----- chrono types
 // ----- timstamp
 
-template <typename T>
-std::enable_if_t<cudf::is_timestamp<T>(), cudf::test::fixed_width_column_wrapper<T>> ascending()
+template <cudf::Timestamp T>
+cudf::test::fixed_width_column_wrapper<T> ascending()
 {
   auto elements = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return T(typename T::duration(i)); });
   return cudf::test::fixed_width_column_wrapper<T>(elements, elements + num_ordered_rows);
 }
 
-template <typename T>
-std::enable_if_t<cudf::is_timestamp<T>(), cudf::test::fixed_width_column_wrapper<T>> descending()
+template <cudf::Timestamp T>
+cudf::test::fixed_width_column_wrapper<T> descending()
 {
   auto elements = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return T(typename T::duration(num_ordered_rows - i)); });
   return cudf::test::fixed_width_column_wrapper<T>(elements, elements + num_ordered_rows);
 }
 
-template <typename T>
-std::enable_if_t<cudf::is_timestamp<T>(), cudf::test::fixed_width_column_wrapper<T>> unordered()
+template <cudf::Timestamp T>
+cudf::test::fixed_width_column_wrapper<T> unordered()
 {
   auto elements = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return T(typename T::duration(i % 2 ? i : num_ordered_rows - i)); });

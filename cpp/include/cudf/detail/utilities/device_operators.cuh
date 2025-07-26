@@ -61,22 +61,21 @@ CUDF_HOST_DEVICE inline auto max(LHS const& lhs, RHS const& rhs)
  */
 struct DeviceSum {
   template <typename T>
+  requires(not Timestamp<T>)
   CUDF_HOST_DEVICE inline auto operator()(T const& lhs, T const& rhs) -> decltype(lhs + rhs)
-    requires(!cudf::is_timestamp<T>())
   {
     return lhs + rhs;
   }
 
-  template <typename T>
+  template <Timestamp T>
   CUDF_HOST_DEVICE static constexpr T identity()
-    requires(cudf::is_timestamp<T>())
   {
     return T{typename T::duration{0}};
   }
 
   template <typename T>
+  requires(not Timestamp<T> &&  not cudf::is_fixed_point<T>())
   CUDF_HOST_DEVICE static constexpr T identity()
-    requires(!cudf::is_timestamp<T>() && !cudf::is_fixed_point<T>())
   {
     return T{0};
   }
@@ -98,16 +97,15 @@ struct DeviceSum {
  * @brief `count` operator - used in rolling windows
  */
 struct DeviceCount {
-  template <typename T>
+  template <Timestamp T>
   CUDF_HOST_DEVICE inline T operator()(T const& lhs, T const& rhs)
-    requires(cudf::is_timestamp<T>())
   {
     return T{DeviceCount{}(lhs.time_since_epoch(), rhs.time_since_epoch())};
   }
 
   template <typename T>
+  requires(not Timestamp<T>)
   CUDF_HOST_DEVICE inline T operator()(T const&, T const& rhs)
-    requires(!cudf::is_timestamp<T>())
   {
     return rhs + T{1};
   }
@@ -222,8 +220,8 @@ struct DeviceMax {
  */
 struct DeviceProduct {
   template <typename T>
+  requires(not Timestamp<T>)
   CUDF_HOST_DEVICE inline auto operator()(T const& lhs, T const& rhs) -> decltype(lhs * rhs)
-    requires(!cudf::is_timestamp<T>())
   {
     return lhs * rhs;
   }

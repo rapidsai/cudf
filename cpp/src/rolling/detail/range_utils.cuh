@@ -238,7 +238,7 @@ struct saturating {
     }
   }
 
-  template <typename T, CUDF_ENABLE_IF(cudf::is_timestamp<T>())>
+  template <cudf::Timestamp T>
   [[nodiscard]] __host__ __device__ constexpr inline cuda::std::pair<T, bool> operator()(
     T x, typename T::duration y) const noexcept
   {
@@ -587,7 +587,7 @@ struct range_window_clamper {
            cudf::is_fixed_point<OrderbyT>();
   }
 
-  template <typename OrderbyT, CUDF_ENABLE_IF(cudf::is_timestamp<OrderbyT>())>
+  template <Timestamp OrderbyT>
   [[nodiscard]] std::unique_ptr<column> operator()(
     column_view const& orderby,
     direction direction,
