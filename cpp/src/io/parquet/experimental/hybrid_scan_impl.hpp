@@ -217,11 +217,11 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
                           rmm::cuda_stream_view stream);
 
   /**
-   * @brief Set the mask for pages
+   * @brief Set the page mask for the pass pages
    *
    * @param data_page_mask Input data page mask from page-pruning step
    */
-  void set_page_mask(cudf::host_span<std::vector<bool> const> data_page_mask);
+  void set_pass_page_mask(cudf::host_span<std::vector<bool> const> data_page_mask);
 
   /**
    * @brief Fill a BOOL8 row mask column with the specified value
