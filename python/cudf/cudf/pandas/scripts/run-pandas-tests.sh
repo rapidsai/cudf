@@ -148,19 +148,14 @@ and not test_is_monotonic_na \
 and not test_index_contains \
 and not test_frame_op_subclass_nonclass_constructor \
 and not test_round_trip_current \
-and not test_pickle_frame_v124_unpickle_130 \
-and not test_groupby_extension_apply \
-and not test_groupby_extension_no_sort \
-and not test_groupby_agg_extension \
-and not test_observed_codes_remap"
+and not test_pickle_frame_v124_unpickle_130"
 
 PYTEST_IGNORES=("--ignore=tests/io/parser/common/test_read_errors.py"
-                "--ignore=tests/extension/test_interval.py"
                 "--ignore=tests/io/test_clipboard.py" # crashes pytest workers (possibly due to fixture patching clipboard functionality)
 )
 
 
-PANDAS_CI="1" python -m pytest -p cudf.pandas \
+PANDAS_CI="1" timeout 90m python -m pytest -p cudf.pandas \
     --import-mode=importlib \
     -k "$TEST_THAT_NEED_MOTO_SERVER and $TEST_THAT_CRASH_PYTEST_WORKERS and $TEST_THAT_NEED_REASON_TO_SKIP and $TEST_THAT_USE_STRING_DTYPE_GROUPBY and $TEST_THAT_USE_WEAKREFS" \
     "${PYTEST_IGNORES[@]}" \
