@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import functools
-import io
 from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -423,27 +422,12 @@ class StringFunction(Expr):
             return Column(plc_column, dtype=self.dtype)
         elif self.name is StringFunction.Name.JsonDecode:
             plc_column = self.children[0].evaluate(df, context=context).obj
-            # Once https://github.com/rapidsai/cudf/issues/19338 is implemented,
-            # we can use do this conversion on device.
-            buff = io.StringIO(
-                plc.strings.combine.join_strings(
-                    plc_column,
-                    plc.Scalar.from_py("\n", plc_column.type()),
-                    plc.Scalar.from_py("NULL", plc_column.type()),
-                )
-                .to_scalar()
-                .to_py()
+            plc_table_with_metadata = plc.io.json.read_json_from_string_column(
+                plc_column,
+                plc.Scalar.from_py("\n"),
+                plc.Scalar.from_py("NULL"),
+                _dtypes_for_json_decode(self.dtype),
             )
-            source = plc.io.types.SourceInfo([buff])
-            options = (
-                plc.io.json.JsonReaderOptions.builder(source)
-                .lines(val=True)
-                .dtypes(_dtypes_for_json_decode(self.dtype))
-                .compression(plc.io.types.CompressionType.NONE)
-                .recovery_mode(plc.io.types.JSONRecoveryMode.RECOVER_WITH_NULL)
-                .build()
-            )
-            plc_table_with_metadata = plc.io.json.read_json(options)
             return Column(
                 plc.Column.struct_from_children(plc_table_with_metadata.columns),
                 dtype=self.dtype,
