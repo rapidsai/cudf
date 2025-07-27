@@ -2810,7 +2810,7 @@ def as_column(
     * pandas.Categorical objects
     * range objects
     """
-
+    # import pdb;pdb.set_trace()
     if isinstance(arbitrary, (range, pd.RangeIndex, cudf.RangeIndex)):
         with acquire_spill_lock():
             column = ColumnBase.from_pylibcudf(
@@ -3113,12 +3113,22 @@ def as_column(
 
         if arbitrary.dtype.kind in "OSU":
             if pd.isna(arbitrary).any():
-                arbitrary = pa.array(arbitrary)
+                new_array = pa.array(arbitrary)
             else:
                 # Let pandas potentially infer object type
                 # e.g. np.array([pd.Timestamp(...)], dtype=object) -> datetime64
-                arbitrary = pd.Series(arbitrary)
-            return as_column(arbitrary, dtype=dtype, nan_as_null=nan_as_null)
+                new_array = pd.Series(arbitrary)
+            res = as_column(new_array, dtype=dtype, nan_as_null=nan_as_null)
+            if (
+                cudf.get_option("mode.pandas_compatible")
+                and res.dtype.kind == "f"
+                and arbitrary.dtype.kind == "O"
+            ):
+                raise MixedTypeError(
+                    "Cannot create column with mixed types, "
+                    "pandas Series with object dtype cannot be converted to cudf Series with float dtype."
+                )
+            return res
         elif arbitrary.dtype.kind in "biuf":
             from_pandas = nan_as_null is None or nan_as_null
             if not arbitrary.dtype.isnative:
