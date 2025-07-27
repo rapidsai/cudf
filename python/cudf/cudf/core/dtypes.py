@@ -250,7 +250,6 @@ class CategoricalDtype(_BaseDtype):
         >>> cudf_dtype
         CategoricalDtype(categories=['b', 'a'], ordered=True, categories_dtype=object)
         """
-        # import pdb;pdb.set_trace()
         return CategoricalDtype(
             categories=dtype.categories, ordered=dtype.ordered
         )
@@ -981,6 +980,13 @@ class IntervalDtype(StructDtype):
             dtypes = {}
         else:
             self._subtype = cudf.dtype(subtype)
+            if isinstance(
+                self._subtype, cudf.CategoricalDtype
+            ) or cudf.utils.dtypes.is_dtype_obj_string(self._subtype):
+                raise TypeError(
+                    "category, object, and string subtypes are not supported "
+                    "for IntervalDtype"
+                )
             dtypes = {"left": self._subtype, "right": self._subtype}
         super().__init__(dtypes)
 

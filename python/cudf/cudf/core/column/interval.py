@@ -34,6 +34,12 @@ class IntervalColumn(StructColumn):
             raise ValueError(
                 "children must be a tuple of two columns (left edges, right edges)."
             )
+        # if cudf.get_option("mode.pandas_compatible"):
+        #     if any(col.has_nulls() for col in children):
+        #         children = tuple(col.astype(cudf.dtype("float64")) for col in children)
+        #         dtype = IntervalDtype(
+        #             cudf.dtype("float64"), dtype.closed,
+        #         )
         super().__init__(
             data=data,
             size=size,
@@ -177,6 +183,11 @@ class IntervalColumn(StructColumn):
 
     def as_interval_column(self, dtype: IntervalDtype) -> Self:  # type: ignore[override]
         if isinstance(dtype, IntervalDtype):
+            if (
+                cudf.get_option("mode.pandas_compatible")
+                and self.dtype != dtype
+            ):
+                raise NotImplementedError("type-casting is not implemented.")
             return IntervalColumn(  # type: ignore[return-value]
                 data=None,
                 size=self.size,

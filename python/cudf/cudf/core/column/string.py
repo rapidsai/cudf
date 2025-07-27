@@ -112,6 +112,12 @@ class StringColumn(ColumnBase):
             and not is_dtype_obj_string(dtype)
         ):
             raise ValueError(f"dtype must be {CUDF_STRING_DTYPE}")
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and isinstance(dtype, np.dtype)
+            and dtype.kind == "U"
+        ):
+            dtype = CUDF_STRING_DTYPE
         if len(children) > 1:
             raise ValueError("StringColumn must have at most 1 offset column.")
 
@@ -412,7 +418,6 @@ class StringColumn(ColumnBase):
         return result  # type: ignore[return-value]
 
     def as_string_column(self, dtype) -> StringColumn:
-        # import pdb;pdb.set_trace()
         col = self
         if dtype != self.dtype:
             if isinstance(dtype, pd.StringDtype) or (

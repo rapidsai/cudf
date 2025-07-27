@@ -154,8 +154,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         "min",
     }
 
-    _PANDAS_NA_VALUE = pd.NA
-
     def __init__(
         self,
         data: None | Buffer,
@@ -180,6 +178,18 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         self.set_base_children(children)
         self.set_base_data(data)
         self.set_base_mask(mask)
+
+    @property
+    def _PANDAS_NA_VALUE(self):
+        """Return appropriate NA value based on dtype."""
+        if cudf.get_option("mode.pandas_compatible"):
+            # In pandas compatibility mode, return pd.NA for all dtypes
+            if is_pandas_nullable_extension_dtype(self.dtype):
+                return pd.NA
+            else:
+                return None
+        else:
+            return pd.NA
 
     @property
     def base_size(self) -> int:
@@ -741,7 +751,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         * null (other types)= str(pd.NA)
         """
         if self.has_nulls():
-            return self.astype(CUDF_STRING_DTYPE).fillna(
+            return self.astype(np.dtype("str")).fillna(
                 str(self._PANDAS_NA_VALUE)
             )
         return self
@@ -1806,7 +1816,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return result
 
     def astype(self, dtype: DtypeObj, copy: bool = False) -> ColumnBase:
-        # import pdb;pdb.set_trace()
         if self.dtype == dtype:
             result = self
         elif len(self) == 0:
@@ -1840,7 +1849,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def as_categorical_column(
         self, dtype: CategoricalDtype
     ) -> CategoricalColumn:
-        # import pdb;pdb.set_trace()
         ordered = dtype.ordered
 
         # Re-label self w.r.t. the provided categories
@@ -2802,7 +2810,7 @@ def as_column(
     * pandas.Categorical objects
     * range objects
     """
-    # import pdb;pdb.set_trace()
+
     if isinstance(arbitrary, (range, pd.RangeIndex, cudf.RangeIndex)):
         with acquire_spill_lock():
             column = ColumnBase.from_pylibcudf(
@@ -2912,6 +2920,7 @@ def as_column(
             )
             if (
                 cudf.get_option("mode.pandas_compatible")
+                and isinstance(arbitrary.dtype, pd.CategoricalDtype)
                 and is_pandas_nullable_extension_dtype(
                     arbitrary.dtype.categories.dtype
                 )

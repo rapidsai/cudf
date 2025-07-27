@@ -280,6 +280,7 @@ DataFrame = make_final_proxy_type(
         "_constructor_sliced": _FastSlowAttribute("_constructor_sliced"),
         "_accessors": set(),
         "_ipython_canary_method_should_not_exist_": ignore_ipython_canary_check,
+        "dtypes": _FastSlowAttribute("dtypes", private=True),
     },
 )
 
@@ -305,6 +306,13 @@ def _Series_dtype(self):
     return _maybe_wrap_result(self._fsproxy_wrapped.dtype, None)
 
 
+_SeriesLocIndexer = make_intermediate_proxy_type(
+    "_SeriesLocIndexer",
+    cudf.core.series._SeriesLocIndexer,
+    pd.core.indexing._LocIndexer,
+)
+
+
 Series = make_final_proxy_type(
     "Series",
     cudf.Series,
@@ -322,6 +330,7 @@ Series = make_final_proxy_type(
         "str": _AccessorAttr(StringMethods),
         "list": _AccessorAttr(ListMethods),
         "struct": _AccessorAttr(StructAccessor),
+        # "loc": _AccessorAttr(_SeriesLocIndexer),
         "cat": _AccessorAttr(_CategoricalAccessor),
         "_constructor": _FastSlowAttribute("_constructor"),
         "_constructor_expanddim": _FastSlowAttribute("_constructor_expanddim"),
@@ -948,11 +957,6 @@ _DataFrameIlocIndexer = make_intermediate_proxy_type(
     pd.core.indexing._iLocIndexer,
 )
 
-_SeriesLocIndexer = make_intermediate_proxy_type(
-    "_SeriesLocIndexer",
-    cudf.core.series._SeriesLocIndexer,
-    pd.core.indexing._LocIndexer,
-)
 
 _DataFrameLocIndexer = make_intermediate_proxy_type(
     "_DataFrameLocIndexer",

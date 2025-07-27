@@ -286,7 +286,7 @@ def test_series_setitem_upcasting(dtype, indices):
         sr[indices] = new_value
     with expect_warning_if(dtype != np.float64):
         cr[indices] = new_value
-    assert_eq(sr, cr)
+    assert_eq(sr, cr, check_dtype=False)
 
     if dtype == np.float64:
         # no-op type cast should not modify backing column

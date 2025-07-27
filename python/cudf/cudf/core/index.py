@@ -800,7 +800,6 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
                     (2, 'Green')],
                    )
         """
-        # import pdb;pdb.set_trace()
         if not isinstance(other, Index):
             other = Index(other, name=getattr(other, "name", self.name))
 
@@ -919,7 +918,7 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
                     (1, 'Blue')],
                 )
         """
-        # import pdb;pdb.set_trace()
+
         if not isinstance(other, Index):
             other = Index(
                 other,
@@ -1881,6 +1880,8 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
             result = _concat_range_index(non_empties)
         else:
             data = concat_columns([o._column for o in non_empties])
+            if cls is IntervalIndex:
+                data = data._with_type_metadata(non_empties[0]._column.dtype)
             result = Index._from_column(data)
 
         names = {obj.name for obj in objs}
@@ -5241,6 +5242,12 @@ class IntervalIndex(Index):
         IntervalIndex([(0, 1], (1, 2], (2, 3]], dtype='interval[int64, right]')
         """
         breaks = as_column(breaks, dtype=dtype)
+        if (
+            len(breaks) == 0
+            and dtype is None
+            and breaks.dtype == CUDF_STRING_DTYPE
+        ):
+            breaks = breaks.astype(np.dtype(np.int64))
         if copy:
             breaks = breaks.copy()
         left_col = breaks.slice(0, len(breaks) - 1)

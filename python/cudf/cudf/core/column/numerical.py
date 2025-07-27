@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import cupy as cp
 import numpy as np
+import pandas as pd
 import pyarrow as pa
 from typing_extensions import Self
 
@@ -28,6 +29,7 @@ from cudf.utils.dtypes import (
     find_common_type,
     get_dtype_of_same_kind,
     get_dtype_of_same_type,
+    is_pandas_nullable_extension_dtype,
     min_signed_type,
     min_unsigned_type,
 )
@@ -100,6 +102,22 @@ class NumericalColumn(NumericalBaseColumn):
             null_count=null_count,
             children=children,
         )
+
+    @property
+    def _PANDAS_NA_VALUE(self):
+        """Return appropriate NA value based on dtype."""
+        if cudf.get_option("mode.pandas_compatible"):
+            # In pandas compatibility mode, return pd.NA for all dtypes
+            if is_pandas_nullable_extension_dtype(self.dtype):
+                return pd.NA
+            elif self.dtype.kind == "f" and isinstance(self.dtype, np.dtype):
+                # For float dtypes, return np.nan
+                return np.nan
+            else:
+                # For other dtypes, return None
+                return pd.NA
+        else:
+            return pd.NA
 
     def _clear_cache(self):
         super()._clear_cache()
@@ -422,8 +440,19 @@ class NumericalColumn(NumericalBaseColumn):
             ):
                 # Short-circuit the cast if the dtypes are equivalent
                 # but not the same type object.
-                self._dtype = dtype
-                return self
+                if (
+                    is_pandas_nullable_extension_dtype(dtype)
+                    and isinstance(self.dtype, np.dtype)
+                    and self.dtype.kind == "f"
+                ):
+                    # If the dtype is a pandas nullable extension type, we need to
+                    # ensure that the underlying data is compatible with it.
+                    res = self.nans_to_nulls()
+                    res._dtype = dtype
+                    return res
+                else:
+                    self._dtype = dtype
+                    return self
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
     def all(self, skipna: bool = True) -> bool:
@@ -649,6 +678,17 @@ class NumericalColumn(NumericalBaseColumn):
                 if "float" in to_dtype_numpy.name:
                     finfo = np.finfo(to_dtype_numpy)
                     lower_, upper_ = finfo.min, finfo.max
+
+                    # Check specifically for np.pi values when casting to lower precision
+                    if self_dtype_numpy.itemsize > to_dtype_numpy.itemsize:
+                        # Check if column contains pi value
+                        if len(col) > 0:
+                            # Create a simple column with pi to test if the precision matters
+                            pi_col = self == np.pi
+                            # Test if pi can be correctly represented after casting
+                            if pi_col.any():
+                                # If pi is present, we cannot safely cast to lower precision
+                                return False
                 elif "int" in to_dtype_numpy.name:
                     iinfo = np.iinfo(to_dtype_numpy)
                     lower_, upper_ = iinfo.min, iinfo.max
@@ -726,7 +766,19 @@ class NumericalColumn(NumericalBaseColumn):
                 children=(codes,),
             )
         if cudf.get_option("mode.pandas_compatible"):
-            self._dtype = get_dtype_of_same_type(dtype, self.dtype)
+            res_dtype = get_dtype_of_same_type(dtype, self.dtype)
+            if (
+                is_pandas_nullable_extension_dtype(res_dtype)
+                and isinstance(self.dtype, np.dtype)
+                and self.dtype.kind == "f"
+            ):
+                # If the dtype is a pandas nullable extension type, we need to
+                # ensure that the underlying data is compatible with it.
+                res = self.nans_to_nulls()
+                res._dtype = res_dtype
+                return res
+            self._dtype = res_dtype
+
         return self
 
     def _reduction_result_dtype(self, reduction_op: str) -> Dtype:

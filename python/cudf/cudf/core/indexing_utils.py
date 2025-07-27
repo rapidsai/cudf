@@ -9,12 +9,17 @@ import numpy as np
 
 import pylibcudf as plc
 
-from cudf.api.types import _is_scalar_or_zero_d_array, is_integer
+from cudf.api.types import (
+    _is_scalar_or_zero_d_array,
+    is_bool_dtype,
+    is_integer,
+)
 from cudf.core.column.column import as_column
 from cudf.core.copy_types import BooleanMask, GatherMap
-from cudf.core.dtypes import CategoricalDtype
+from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 from cudf.core.index import Index
 from cudf.core.multiindex import MultiIndex
+from cudf.core.series import Series
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -22,7 +27,6 @@ if TYPE_CHECKING:
     from cudf.core.column.column import ColumnBase
     from cudf.core.column_accessor import ColumnAccessor
     from cudf.core.dataframe import DataFrame
-    from cudf.core.series import Series
 
 
 class EmptyIndexer:
@@ -92,6 +96,24 @@ def expand_key(key: Any, frame: DataFrame | Series) -> tuple[Any, ...]:
     into a supported indexing type.
     """
     dim = len(frame.shape)
+    if (
+        isinstance(key, bool)
+        or (isinstance(key, Series) and is_bool_dtype(key.dtype))
+    ) and not (
+        is_bool_dtype(frame.index.dtype)
+        or frame.index.dtype.name == "boolean"
+        or isinstance(frame.index, MultiIndex)
+        and is_bool_dtype(frame.index.get_level_values(0).dtype)
+    ):
+        raise KeyError(
+            f"{key}: boolean label can not be used without a boolean index"
+        )
+
+    if isinstance(key, slice) and (
+        isinstance(key.start, bool) or isinstance(key.stop, bool)
+    ):
+        raise TypeError(f"{key}: boolean values can not be used in a slice")
+
     if isinstance(key, tuple):
         # Key potentially indexes rows and columns, slice-expand to
         # shape of frame
@@ -459,7 +481,7 @@ def ordered_find(needles: ColumnBase, haystack: ColumnBase) -> GatherMap:
     # Pre-process to match dtypes
     needle_kind = needles.dtype.kind
     haystack_kind = haystack.dtype.kind
-    if haystack_kind == "O":
+    if haystack_kind == "O" and not isinstance(haystack.dtype, IntervalDtype):
         try:
             needles = needles.astype(haystack.dtype)
         except ValueError:
