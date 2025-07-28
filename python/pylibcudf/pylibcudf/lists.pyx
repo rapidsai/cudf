@@ -677,3 +677,6 @@ cpdef Column distinct(Column input, null_equality nulls_equal, nan_equality nans
             nans_equal,
         )
     return Column.from_libcudf(move(c_result))
+
+ConcatenateNullPolicy.__str__ = ConcatenateNullPolicy.__repr__
+DuplicateFindOption.__str__ = DuplicateFindOption.__repr__
