@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import pylibcudf as plc
 
@@ -111,6 +111,7 @@ class UnaryFunction(Expr):
             "unique",
             "value_counts",
             "null_count",
+            "top_k",
         }
     )
     _supported_cum_aggs = frozenset(
@@ -140,6 +141,7 @@ class UnaryFunction(Expr):
             "cum_sum",
             "drop_nulls",
             "unique",
+            "top_k",
         )
 
         if self.name not in UnaryFunction._supported_fns:
@@ -336,6 +338,21 @@ class UnaryFunction(Expr):
                     null_count=0,
                     offset=0,
                     children=children,
+                ),
+                dtype=self.dtype,
+            )
+        elif self.name == "top_k":
+            (column, k) = (
+                child.evaluate(df, context=context) for child in self.children
+            )
+            (reverse,) = self.options
+            return Column(
+                plc.sorting.top_k(
+                    column.obj,
+                    cast(Literal, self.children[1]).value,
+                    plc.types.Order.ASCENDING
+                    if reverse
+                    else plc.types.Order.DESCENDING,
                 ),
                 dtype=self.dtype,
             )

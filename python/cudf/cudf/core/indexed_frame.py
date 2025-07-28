@@ -58,6 +58,7 @@ from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import _Resampler
 from cudf.core.udf.utils import (
     _get_input_args_from_frame,
+    _make_free_string_kernel,
     _return_arr_from_dtype,
 )
 from cudf.core.window import ExponentialMovingWindow, Rolling
@@ -3448,8 +3449,11 @@ class IndexedFrame(Frame):
 
         if retty == CUDF_STRING_DTYPE:
             col = ColumnBase.from_pylibcudf(
-                strings_udf.column_from_udf_string_array(ans_col)
+                strings_udf.column_from_managed_udf_string_array(ans_col)
             )
+            free_kernel = _make_free_string_kernel()
+            with _CUDFNumbaConfig():
+                free_kernel.forall(len(col))(ans_col, len(col))
         else:
             col = as_column(ans_col, retty)
 

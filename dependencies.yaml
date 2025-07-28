@@ -17,7 +17,7 @@ files:
       - depends_on_cupy
       - depends_on_libkvikio
       - depends_on_librmm
-      - depends_on_nvcomp
+      - depends_on_libnvcomp
       - depends_on_rapids_logger
       - depends_on_rmm
       - develop
@@ -157,6 +157,7 @@ files:
     includes:
       - build_base
       - build_python_common
+      - build_python_cudf
       - depends_on_pylibcudf
       - depends_on_libcudf
       - depends_on_librmm
@@ -211,10 +212,10 @@ files:
     includes:
       - depends_on_libkvikio
       - depends_on_librmm
-      # TODO(nvcomp): when `nvcomp` supports Python 3.13 and we de-vendor `nvcomp` from `kvikio`
-      # this dependency should be restored
+      # TODO: restore runtime dependency when we no longer vendor nvcomp
+      # (when nvcomp ships C++ wheels)
       # https://github.com/rapidsai/build-planning/issues/171
-      # - depends_on_nvcomp
+      # - depends_on_libnvcomp
       - depends_on_rapids_logger
   py_build_pylibcudf:
     output: pyproject
@@ -433,13 +434,13 @@ dependencies:
               arch: x86_64
               cuda: "12.*"
             packages:
-              - gcc_linux-64=13.*
+              - gcc_linux-64=14.*
               - sysroot_linux-64==2.28
           - matrix:
               arch: aarch64
               cuda: "12.*"
             packages:
-              - gcc_linux-aarch64=13.*
+              - gcc_linux-aarch64=14.*
               - sysroot_linux-aarch64==2.28
       - output_types: conda
         matrices:
@@ -453,30 +454,12 @@ dependencies:
         packages:
           - flatbuffers==24.3.25
           - librdkafka>=2.8.0,<2.9.0a0
-  depends_on_nvcomp:
+  depends_on_libnvcomp:
     common:
       - output_types: conda
         packages:
           # Align nvcomp version with rapids-cmake
-          - nvcomp==4.2.0.11
-    specific:
-      - output_types: [requirements, pyproject]
-        matrices:
-          - matrix:
-              cuda: "12.*"
-              use_cuda_wheels: "true"
-            packages:
-              - nvidia-nvcomp-cu12==4.2.0.11
-          # if use_cuda_wheels=false is provided, do not add dependencies on any CUDA wheels
-          # (e.g. for DLFW and pip devcontainers)
-          - matrix:
-              use_cuda_wheels: "false"
-            packages:
-          # if no matching matrix selectors passed, list the unsuffixed packages
-          # (just as a source of documentation, as this populates pyproject.toml in source control)
-          - matrix:
-            packages:
-              - nvidia-nvcomp==4.2.0.11
+          - libnvcomp-dev==4.2.0.11
   rapids_build_skbuild:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -500,6 +483,11 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cython>=3.0.3
+  build_python_cudf:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+        - &numba-cuda-dep numba-cuda>=0.14.0,<0.15.0a0
   pyarrow_run:
     common:
       - output_types: [conda]
@@ -673,7 +661,7 @@ dependencies:
           - typing_extensions>=4.0.0
       - output_types: [conda]
         packages:
-          - &numba-cuda-dep numba-cuda>=0.14.0,<0.15.0a0
+          - *numba-cuda-dep
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -846,7 +834,6 @@ dependencies:
           - hypothesis>=6.131.7
           - pytest-benchmark
           - pytest-cases>=3.8.2
-          - pytest-rerunfailures
           - scipy
           - zstandard
       - output_types: conda
