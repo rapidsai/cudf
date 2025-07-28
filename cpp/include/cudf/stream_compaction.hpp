@@ -219,6 +219,42 @@ std::unique_ptr<table> apply_boolean_mask(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
+ * @brief Filters `input` using a specified range [begin, end) of `boolean_mask` of boolean values
+ * as a mask.
+ *
+ * Given an input `table_view` and a mask `column_view`, an element `i` from
+ * each column_view of the `input` is copied to the corresponding output column
+ * if the corresponding element `begin + i` in the mask is non-null and `true`.
+ * This operation is stable: the input order is preserved.
+ *
+ * @note if @p input.num_rows() is zero, there is no error, and an empty table
+ * is returned.
+ *
+ * @throws cudf::logic_error if `input.num_rows() != (end - begin)`.
+ * @throws cudf::logic_error if `begin` or `end` are negative.
+ * @throws cudf::logic_error if `begin` is greater than `end`.
+ * @throws cudf::logic_error if `end` is greater than `boolean_mask.size()`.
+ * @throws cudf::logic_error if `boolean_mask` is not `type_id::BOOL8` type.
+ *
+ * @param[in] input The input table_view to filter
+ * @param[in] boolean_mask A nullable column_view of type type_id::BOOL8 used
+ * as a mask to filter the `input`.
+ * @param[in] begin The starting index of the boolean mask to filter the `input`.
+ * @param[in] end The ending index of the boolean mask to filter the `input`.
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
+ * @param[in] mr Device memory resource used to allocate the returned table's device memory
+ * @return Table containing copy of all rows of @p input passing
+ * the filter defined by @p boolean_mask.
+ */
+std::unique_ptr<table> apply_boolean_mask(
+  table_view const& input,
+  column_view const& boolean_mask,
+  cudf::size_type begin,
+  cudf::size_type end,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
  * @brief Choices for drop_duplicates API for retainment of duplicate rows
  */
 enum class duplicate_keep_option {

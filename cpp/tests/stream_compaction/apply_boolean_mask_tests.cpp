@@ -371,4 +371,46 @@ TEST_F(ApplyBooleanMask, StructOfListsFiltering)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(filtered_lists_column, expected_structs_column);
 }
 
+TEST_F(ApplyBooleanMask, RangedBooleanMask)
+{
+  cudf::test::fixed_width_column_wrapper<int16_t> col1{{true, false, true, false, true, false},
+                                                       {1, 1, 0, 1, 1, 0}};
+  cudf::test::fixed_width_column_wrapper<int32_t> col2{{10, 40, 70, 5, 2, 10}, {1, 1, 0, 1, 1, 0}};
+  cudf::test::fixed_width_column_wrapper<double> col3{{10, 40, 70, 5, 2, 10}, {1, 1, 0, 1, 1, 0}};
+  cudf::table_view input{{col1, col2, col3}};
+  cudf::test::fixed_width_column_wrapper<bool> boolean_mask{
+    {true, false, true, false, true, false, true, false}, {1, 0, 0, 1, 1, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<int16_t> col1_expected{{true, true}, {0, 1}};
+  cudf::test::fixed_width_column_wrapper<int32_t> col2_expected{{70, 2}, {0, 1}};
+  cudf::test::fixed_width_column_wrapper<double> col3_expected{{70, 2}, {0, 1}};
+  cudf::table_view expected{{col1_expected, col2_expected, col3_expected}};
+
+  auto constexpr begin = 2;
+  auto got = cudf::apply_boolean_mask(input, boolean_mask, begin, begin + input.num_rows());
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got->view());
+}
+
+TEST_F(ApplyBooleanMask, InvalidBooleanMaskRange)
+{
+  cudf::test::fixed_width_column_wrapper<int16_t> col1{{true, false, true, false, true, false},
+                                                       {1, 1, 0, 1, 1, 0}};
+  cudf::test::fixed_width_column_wrapper<int32_t> col2{{10, 40, 70, 5, 2, 10}, {1, 1, 0, 1, 1, 0}};
+  cudf::test::fixed_width_column_wrapper<double> col3{{10, 40, 70, 5, 2, 10}, {1, 1, 0, 1, 1, 0}};
+  cudf::table_view input{{col1, col2, col3}};
+  cudf::test::fixed_width_column_wrapper<bool> boolean_mask{
+    {true, false, true, false, true, false, true, false}};
+
+  EXPECT_THROW(
+    cudf::apply_boolean_mask(input, boolean_mask, input.num_rows() / 2, input.num_rows()),
+    cudf::logic_error);
+  EXPECT_THROW(cudf::apply_boolean_mask(input, boolean_mask, 0, input.num_rows() / 2),
+               cudf::logic_error);
+  EXPECT_THROW(
+    cudf::apply_boolean_mask(input, boolean_mask, input.num_rows(), 2 * input.num_rows()),
+    cudf::logic_error);
+  EXPECT_THROW(cudf::apply_boolean_mask(input, boolean_mask, -1, input.num_rows() - 1),
+               cudf::logic_error);
+}
+
 CUDF_TEST_PROGRAM_MAIN()
