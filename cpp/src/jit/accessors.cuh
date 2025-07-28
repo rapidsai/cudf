@@ -21,6 +21,7 @@
 #include <cudf/types.hpp>
 
 #include <cuda/std/cstddef>
+#include <cuda/std/optional>
 
 #include <cstddef>
 
@@ -61,6 +62,32 @@ struct column_accessor {
   {
     return inputs[index].is_null(row);
   }
+
+  static __device__ cuda::std::optional<T> nullable_element(
+    cudf::mutable_column_device_view_core const* outputs, cudf::size_type row)
+  {
+    if (is_null(outputs, row)) { return cuda::std::nullopt; }
+    return outputs[index].element<T>(row);
+  }
+
+  static __device__ cuda::std::optional<T> nullable_element(
+    cudf::column_device_view_core const* inputs, cudf::size_type row)
+  {
+    if (is_null(inputs, row)) { return cuda::std::nullopt; }
+    return inputs[index].element<T>(row);
+  }
+
+  static __device__ void assign_nullable(cudf::mutable_column_device_view_core const* outputs,
+                                         cudf::size_type row,
+                                         cuda::std::optional<T> value)
+  {
+    if (value.has_value()) {
+      outputs[index].assign<T>(row, *value);
+      outputs[index].set_valid(row);
+    } else {
+      outputs[index].set_null(row);
+    }
+  }
 };
 
 template <typename T, int32_t Index>
@@ -85,6 +112,25 @@ struct span_accessor {
                                  cudf::size_type row)
   {
     return inputs[index].is_null(row);
+  }
+
+  static __device__ cuda::std::optional<T> nullable_element(
+    cudf::jit::device_optional_span<T> const* outputs, cudf::size_type row)
+  {
+    if (is_null(outputs, row)) { return cuda::std::nullopt; }
+    return outputs[index].element(row);
+  }
+
+  static __device__ void assign_nullable(cudf::jit::device_optional_span<T> const* outputs,
+                                         cudf::size_type row,
+                                         cuda::std::optional<T> value)
+  {
+    if (value.has_value()) {
+      outputs[index].element(row) = *value;
+      outputs[index].set_valid(row);
+    } else {
+      outputs[index].set_null(row);
+    }
   }
 };
 
@@ -121,6 +167,18 @@ struct scalar_accessor {
                                  cudf::size_type)
   {
     return Accessor::is_null(inputs, 0);
+  }
+
+  static __device__ decltype(auto) nullable_element(
+    cudf::mutable_column_device_view_core const* outputs, cudf::size_type)
+  {
+    return Accessor::nullable_element(outputs, 0);
+  }
+
+  static __device__ decltype(auto) nullable_element(cudf::column_device_view_core const* inputs,
+                                                    cudf::size_type)
+  {
+    return Accessor::nullable_element(inputs, 0);
   }
 };
 

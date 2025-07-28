@@ -23,6 +23,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/null_mask.hpp>
@@ -54,6 +55,7 @@ jitify2::ConfiguredKernel build_transform_kernel(
   std::vector<mutable_column_view> const& output_columns,
   std::vector<column_view> const& input_columns,
   bool has_user_data,
+  null_aware is_null_aware,
   std::string const& udf,
   bool is_ptx,
   rmm::cuda_stream_view stream,
@@ -71,6 +73,7 @@ jitify2::ConfiguredKernel build_transform_kernel(
   return get_kernel(jitify2::reflection::Template(kernel_name)
                       .instantiate(cudf::jit::build_jit_template_params(
                         has_user_data,
+                        is_null_aware,
                         {},
                         cudf::jit::column_type_names(output_columns),
                         cudf::jit::reflect_input_columns(base_column_size, input_columns))),
@@ -83,6 +86,7 @@ jitify2::ConfiguredKernel build_span_kernel(std::string const& kernel_name,
                                             std::vector<std::string> const& span_outputs,
                                             std::vector<column_view> const& input_columns,
                                             bool has_user_data,
+                                            null_aware is_null_aware,
                                             std::string const& udf,
                                             bool is_ptx,
                                             rmm::cuda_stream_view stream,
@@ -99,6 +103,7 @@ jitify2::ConfiguredKernel build_span_kernel(std::string const& kernel_name,
   return get_kernel(jitify2::reflection::Template(kernel_name)
                       .instantiate(cudf::jit::build_jit_template_params(
                         has_user_data,
+                        is_null_aware,
                         span_outputs,
                         {},
                         cudf::jit::reflect_input_columns(base_column_size, input_columns))),
@@ -188,69 +193,145 @@ std::unique_ptr<column> transform_operation(column_view base_column,
                                             std::vector<column_view> const& inputs,
                                             std::string const& udf,
                                             bool is_ptx,
-                                            null_aware null_aware,
+                                            null_aware is_null_aware,
                                             std::optional<void*> user_data,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr)
 {
-  auto [null_mask, null_count] = make_transform_null_mask(base_column, inputs, stream, mr);
+  if (is_null_aware == null_aware::NO) {
+    auto [null_mask, null_count] = make_transform_null_mask(base_column, inputs, stream, mr);
 
-  auto output = make_fixed_width_column(
-    output_type, base_column.size(), std::move(null_mask), null_count, stream, mr);
+    auto output = make_fixed_width_column(
+      output_type, base_column.size(), std::move(null_mask), null_count, stream, mr);
 
-  auto kernel = build_transform_kernel(is_fixed_point(output_type)
-                                         ? "cudf::transformation::jit::fixed_point_kernel"
-                                         : "cudf::transformation::jit::kernel",
-                                       base_column.size(),
-                                       {*output},
-                                       inputs,
-                                       user_data.has_value(),
-                                       udf,
-                                       is_ptx,
-                                       stream,
-                                       mr);
+    auto kernel = build_transform_kernel(is_fixed_point(output_type)
+                                           ? "cudf::transformation::jit::fixed_point_kernel"
+                                           : "cudf::transformation::jit::kernel",
+                                         base_column.size(),
+                                         {*output},
+                                         inputs,
+                                         user_data.has_value(),
+                                         is_null_aware,
+                                         udf,
+                                         is_ptx,
+                                         stream,
+                                         mr);
 
-  launch_column_output_kernel(kernel, {*output}, inputs, user_data, stream, mr);
+    launch_column_output_kernel(kernel, {*output}, inputs, user_data, stream, mr);
+    return output;
+  } else {
+    auto null_mask = create_null_mask(base_column.size(), mask_state::UNINITIALIZED, stream, mr);
+    auto output    = make_fixed_width_column(
+      output_type,
+      base_column.size(),
+      std::move(null_mask),
+      base_column
+        .size(),  // we initially assume all rows are null, even though the bitmask is uninitialized
+      stream,
+      mr);
 
-  return output;
+    auto kernel = build_transform_kernel(is_fixed_point(output_type)
+                                           ? "cudf::transformation::jit::fixed_point_kernel"
+                                           : "cudf::transformation::jit::kernel",
+                                         base_column.size(),
+                                         {*output},
+                                         inputs,
+                                         user_data.has_value(),
+                                         is_null_aware,
+                                         udf,
+                                         is_ptx,
+                                         stream,
+                                         mr);
+
+    launch_column_output_kernel(kernel, {*output}, inputs, user_data, stream, mr);
+
+    auto null_count =
+      cudf::detail::null_count(output->view().null_mask(), 0, output->size(), stream);
+
+    output->set_null_count(null_count);
+
+    return output;
+  }
 }
 
 std::unique_ptr<column> string_view_operation(column_view base_column,
                                               std::vector<column_view> const& inputs,
                                               std::string const& udf,
                                               bool is_ptx,
-                                              null_aware null_aware,
+                                              null_aware is_null_aware,
                                               std::optional<void*> user_data,
                                               rmm::cuda_stream_view stream,
                                               rmm::device_async_resource_ref mr)
 {
-  auto [null_mask, null_count] = make_transform_null_mask(base_column, inputs, stream, mr);
+  if (is_null_aware == null_aware::NO) {
+    auto [null_mask, null_count] = make_transform_null_mask(base_column, inputs, stream, mr);
 
-  auto kernel = build_span_kernel("cudf::transformation::jit::span_kernel",
-                                  base_column.size(),
-                                  {"cudf::string_view"},
-                                  inputs,
-                                  user_data.has_value(),
-                                  udf,
-                                  is_ptx,
-                                  stream,
-                                  mr);
+    auto kernel = build_span_kernel("cudf::transformation::jit::span_kernel",
+                                    base_column.size(),
+                                    {"cudf::string_view"},
+                                    inputs,
+                                    user_data.has_value(),
+                                    is_null_aware,
+                                    udf,
+                                    is_ptx,
+                                    stream,
+                                    mr);
 
-  rmm::device_uvector<string_view> string_views(base_column.size(), stream, mr);
+    rmm::device_uvector<string_view> string_views(base_column.size(), stream, mr);
 
-  launch_span_kernel<string_view>(kernel,
-                                  string_views,
-                                  static_cast<bitmask_type*>(null_mask.data()),
-                                  inputs,
-                                  user_data,
-                                  stream,
-                                  mr);
+    launch_span_kernel<string_view>(kernel,
+                                    string_views,
+                                    static_cast<bitmask_type*>(null_mask.data()),
+                                    inputs,
+                                    user_data,
+                                    stream,
+                                    mr);
 
-  auto output = make_strings_column(string_views, string_view{}, stream, mr);
+    auto output = make_strings_column(string_views, string_view{}, stream, mr);
 
-  output->set_null_mask(std::move(null_mask), null_count);
+    output->set_null_mask(std::move(null_mask), null_count);
 
-  return output;
+    return output;
+
+  } else {
+    auto null_mask = create_null_mask(base_column.size(), mask_state::UNINITIALIZED, stream, mr);
+
+    auto kernel = build_span_kernel("cudf::transformation::jit::span_kernel",
+                                    base_column.size(),
+                                    {"cudf::string_view"},
+                                    inputs,
+                                    user_data.has_value(),
+                                    is_null_aware,
+                                    udf,
+                                    is_ptx,
+                                    stream,
+                                    mr);
+
+    rmm::device_uvector<string_view> string_views(base_column.size(), stream, mr);
+
+    launch_span_kernel<string_view>(kernel,
+                                    string_views,
+                                    static_cast<bitmask_type*>(null_mask.data()),
+                                    inputs,
+                                    user_data,
+                                    stream,
+                                    mr);
+
+    auto output = make_strings_column(string_views, string_view{}, stream, mr);
+
+    output->set_null_mask(
+      std::move(null_mask),
+      base_column
+        .size()  // we initially assume all rows are null, even though the bitmask is uninitialized
+    );
+
+    auto null_count =
+      cudf::detail::null_count(output->view().null_mask(), 0, output->size(), stream);
+
+    output->set_null_count(null_count);
+
+    return output;
+  }
 }
 
 void perform_checks(column_view base_column,

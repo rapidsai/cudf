@@ -234,6 +234,12 @@ enum class type_id : int32_t {
   NUM_TYPE_IDS  ///< Total number of type ids
 };
 
+/// @brief Indicates whether a function is null-aware or not.
+enum class null_aware : uint8_t {
+  NO  = 0,  ///< The function is not null-aware
+  YES = 1   ///< The function is null-aware
+};
+
 /**
  * @brief Indicator for the logical data type of an element in a column.
  *

@@ -25,11 +25,6 @@
 
 namespace CUDF_EXPORT cudf {
 
-enum class null_aware : uint8_t {
-  NO  = 0,  ///< The transform function is not null-aware
-  YES = 1   ///< The transform function is null-aware
-};
-
 /**
  * @addtogroup transformation_transform
  * @{

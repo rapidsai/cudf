@@ -56,31 +56,49 @@ struct AssertsTest : public RuntimeSupportTest {};
 
 TEST_F(AssertsTest, TypeSupport)
 {
-  EXPECT_NO_THROW(
-    cudf::transform({a, b, t}, udf, cudf::data_type{cudf::type_id::FLOAT32}, false, std::nullopt));
+  EXPECT_NO_THROW(cudf::transform({a, b, t},
+                                  udf,
+                                  cudf::data_type{cudf::type_id::FLOAT32},
+                                  false,
+                                  cudf::null_aware::NO,
+                                  std::nullopt));
 
-  EXPECT_THROW(
-    cudf::transform({a, b, t}, udf, cudf::data_type{cudf::type_id::STRUCT}, false, std::nullopt),
-    std::invalid_argument);
+  EXPECT_THROW(cudf::transform({a, b, t},
+                               udf,
+                               cudf::data_type{cudf::type_id::STRUCT},
+                               false,
+                               cudf::null_aware::NO,
+                               std::nullopt),
+               std::invalid_argument);
 
-  EXPECT_THROW(
-    cudf::transform(
-      {struct_col, t}, udf, cudf::data_type{cudf::type_id::FLOAT32}, false, std::nullopt),
-    std::invalid_argument);
+  EXPECT_THROW(cudf::transform({struct_col, t},
+                               udf,
+                               cudf::data_type{cudf::type_id::FLOAT32},
+                               false,
+                               cudf::null_aware::NO,
+                               std::nullopt),
+               std::invalid_argument);
 }
 
 TEST_F(AssertsTest, UnequalRowCount)
 {
-  EXPECT_THROW(
-    cudf::transform(
-      {a, b, bad_col}, udf, cudf::data_type{cudf::type_id::FLOAT32}, false, std::nullopt),
-    std::invalid_argument);
+  EXPECT_THROW(cudf::transform({a, b, bad_col},
+                               udf,
+                               cudf::data_type{cudf::type_id::FLOAT32},
+                               false,
+                               cudf::null_aware::NO,
+                               std::nullopt),
+               std::invalid_argument);
 }
 
 TEST_F(AssertsTest, NullSupport)
 {
-  EXPECT_NO_THROW(cudf::transform(
-    {a, b_nulls, t}, udf, cudf::data_type{cudf::type_id::FLOAT32}, false, std::nullopt));
+  EXPECT_NO_THROW(cudf::transform({a, b_nulls, t},
+                                  udf,
+                                  cudf::data_type{cudf::type_id::FLOAT32},
+                                  false,
+                                  cudf::null_aware::NO,
+                                  std::nullopt));
 }
 
 struct UnaryOperationIntegrationTest : public cudf::test::BaseFixture {};
@@ -590,6 +608,7 @@ __device__ void transform(void* user_data, cudf::size_type row,
                                 cuda,
                                 cudf::data_type(cudf::type_id::STRING),
                                 false,
+                                cudf::null_aware::NO,
                                 scratch.data());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
@@ -780,5 +799,11 @@ TEST_F(NullTest, ColumnNulls_And_ScalarNull)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*ptx_result, *expected);
 }
+
+struct NullAwareTransformTest : public cudf::test::BaseFixture {
+ protected:
+};
+
+TEST_F(NullAwareTransformTest, ColumnNulls_And_ScalarNull) {}
 
 }  // namespace transformation
