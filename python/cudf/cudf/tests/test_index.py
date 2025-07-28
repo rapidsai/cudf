@@ -2450,7 +2450,10 @@ def test_intersection_index_error(idx1, idx2, sort, pandas_compatible):
         idx2 = cudf.from_pandas(idx2) if isinstance(idx2, pd.Index) else idx2
 
         if pandas_compatible:
-            with pytest.raises(ValueError):
+            with pytest.raises(
+                ValueError,
+                match="Cannot convert numerical column to string column when dtype is an object dtype in pandas compatibility mode.",
+            ):
                 idx1.intersection(idx2, sort=sort)
         else:
             actual = idx1.intersection(idx2, sort=sort)

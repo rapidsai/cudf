@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, TypeAlias
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias
 
 import numpy as np
 
@@ -11,7 +11,6 @@ import pylibcudf as plc
 
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
-    is_bool_dtype,
     is_integer,
 )
 from cudf.core.column.column import as_column
