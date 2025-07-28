@@ -330,6 +330,50 @@ def assert_column_memory_ne(lhs: ColumnBase, rhs: ColumnBase):
     raise AssertionError("lhs and rhs holds the same memory.")
 
 
+def assert_asserters_equal(
+    pandas_asserter,
+    cudf_asserter,
+    pandas_left,
+    pandas_right,
+    cudf_left,
+    cudf_right,
+    *args,
+    **kwargs,
+):
+    """
+    Assert that a pandas and cudf asserter have equivalent behavior.
+
+    Parameters
+    ----------
+    pandas_asserter : callable
+        A pandas asserter function.
+    cudf_asserter : callable
+        A cudf asserter function.
+    pandas_left : object
+        A pandas object as the left argument to the pandas asserter.
+    pandas_right : object
+        A pandas object as the right argument to the pandas asserter.
+    cudf_left : object
+        A cudf object as the left argument to the cudf asserter.
+    cudf_right : object
+        A cudf object as the right argument to the pandas asserter.
+    *args : tuple
+        Additional arguments to pass to both asserters.
+    **kwargs : dict
+        Additional keyword arguments to both asserters.
+    """
+    # TypeError is raised (erroneously from pandas) when comparing
+    # categorical indices with different categories.
+    exceptions = (AssertionError, TypeError)
+    try:
+        pandas_asserter(pandas_left, pandas_right, *args, **kwargs)
+    except exceptions:
+        with pytest.raises(exceptions):
+            cudf_asserter(cudf_left, cudf_right, *args, **kwargs)
+    else:
+        cudf_asserter(cudf_left, cudf_right, *args, **kwargs)
+
+
 parametrize_numeric_dtypes_pairwise = pytest.mark.parametrize(
     "left_dtype,right_dtype",
     list(itertools.combinations_with_replacement(NUMERIC_TYPES, 2)),
