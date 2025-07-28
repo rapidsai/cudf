@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any, cast
 
 import cupy as cp
 import numpy as np
-import pandas as pd
 import pyarrow as pa
 from typing_extensions import Self
 
@@ -102,20 +101,6 @@ class NumericalColumn(NumericalBaseColumn):
             null_count=null_count,
             children=children,
         )
-
-    @property
-    def _PANDAS_NA_VALUE(self):
-        """Return appropriate NA value based on dtype."""
-        if cudf.get_option("mode.pandas_compatible"):
-            if self.dtype.kind == "f" and not is_pandas_nullable_extension_dtype(self.dtype):
-                # For float dtypes, return np.nan
-                return np.nan
-            else:
-                # In pandas compatibility mode, return pd.NA for all
-                # nullable extension dtypes
-                return pd.NA
-        else:
-            return pd.NA
 
     def _clear_cache(self):
         super()._clear_cache()

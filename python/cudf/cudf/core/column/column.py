@@ -187,10 +187,17 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             # nullable extension dtypes
             if is_pandas_nullable_extension_dtype(self.dtype):
                 return self.dtype.na_value
-            else:
+            elif (
+                self.dtype.kind == "f"
+                and not is_pandas_nullable_extension_dtype(self.dtype)
+            ):
+                # For float dtypes, return np.nan
+                return np.nan
+            elif cudf.api.types.is_string_dtype(self.dtype):
+                # numpy string dtype case, may be moved
+                # to `StringColumn` later
                 return None
-        else:
-            return pd.NA
+        return pd.NA
 
     @property
     def base_size(self) -> int:
