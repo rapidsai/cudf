@@ -263,10 +263,15 @@ def _(
     # Try using rapidsmpf shuffler if we have "simple" shuffle
     # keys, and the "shuffle_method" config is set to "rapidsmpf"
     _keys: list[Col]
-    if shuffle_method == "rapidsmpf" and len(
+    if shuffle_method in ("rapidsmpf", "rapidsmpf-single") and len(
         _keys := [ne.value for ne in ir.keys if isinstance(ne.value, Col)]
     ) == len(ir.keys):  # pragma: no cover
-        from rapidsmpf.integrations.dask import rapidsmpf_shuffle_graph
+        if shuffle_method == "rapidsmpf-single":
+            from rapidsmpf.integrations.single import (
+                single_rapidsmpf_shuffle_graph as rapidsmpf_shuffle_graph,
+            )
+        else:
+            from rapidsmpf.integrations.dask import rapidsmpf_shuffle_graph
 
         shuffle_on = [k.name for k in _keys]
 

@@ -82,8 +82,17 @@ def get_total_device_memory() -> int | None:
 
 
 @functools.cache
-def rapidsmpf_available() -> bool:  # pragma: no cover
-    """Query whether rapidsmpf is available as a shuffle method."""
+def rapidsmpf_single_available() -> bool:  # pragma: no cover
+    """Query whether rapidsmpf is available as a single-process shuffle method."""
+    try:
+        return importlib.util.find_spec("rapidsmpf.integrations.single") is not None
+    except (ImportError, ValueError):
+        return False
+
+
+@functools.cache
+def rapidsmpf_distributed_available() -> bool:  # pragma: no cover
+    """Query whether rapidsmpf is available as a distributed shuffle method."""
     try:
         return importlib.util.find_spec("rapidsmpf.integrations.dask") is not None
     except (ImportError, ValueError):
@@ -129,15 +138,21 @@ class ShuffleMethod(str, enum.Enum):
     The method to use for shuffling data between workers with the streaming executor.
 
     * ``ShuffleMethod.TASKS`` : Use the task-based shuffler.
-    * ``ShuffleMethod.RAPIDSMPF`` : Use the rapidsmpf scheduler.
+    * ``ShuffleMethod.RAPIDSMPF`` : Use the rapidsmpf shuffler.
+    * ``ShuffleMethod._RAPIDSMPF_SINGLE`` : Use the single-process rapidsmpf shuffler.
 
-    With :class:`cudf_polars.utils.config.StreamingExecutor`, the default of ``None`` will attempt to use
-    ``ShuffleMethod.RAPIDSMPF``, but will fall back to ``ShuffleMethod.TASKS``
-    if rapidsmpf is not installed.
+    With :class:`cudf_polars.utils.config.StreamingExecutor`, the default of ``None``
+    will attempt to use ``ShuffleMethod.RAPIDSMPF`` for the distributed scheduler,
+    but will fall back to ``ShuffleMethod.TASKS`` if rapidsmpf is not installed.
+
+    The user should **not** specify ``ShuffleMethod._RAPIDSMPF_SINGLE`` directly.
+    A setting of ``ShuffleMethod.RAPIDSMPF`` will be converted to the single-process
+    shuffler automatically when the 'synchronous' scheduler is active.
     """
 
     TASKS = "tasks"
     RAPIDSMPF = "rapidsmpf"
+    _RAPIDSMPF_SINGLE = "rapidsmpf-single"
 
 
 T = TypeVar("T")
@@ -411,24 +426,32 @@ class StreamingExecutor:
     def __post_init__(self) -> None:  # noqa: D105
         # Handle shuffle_method defaults for streaming executor
         if self.shuffle_method is None:
-            if self.scheduler == "distributed" and rapidsmpf_available():
+            if self.scheduler == "distributed" and rapidsmpf_distributed_available():
                 # For distributed scheduler, prefer rapidsmpf if available
                 object.__setattr__(self, "shuffle_method", "rapidsmpf")
             else:
+                # Otherwise, use task-based shuffle for now.
+                # TODO: Evaluate single-process shuffle by default.
                 object.__setattr__(self, "shuffle_method", "tasks")
-        else:
+        elif self.shuffle_method == "rapidsmpf-single":
+            # The user should NOT specify "rapidsmpf-single" directly.
+            raise ValueError("rapidsmpf-single is not a supported shuffle method.")
+        elif self.shuffle_method == "rapidsmpf":
+            # Check that we have rapidsmpf installed
             if (
                 self.scheduler == "distributed"
-                and self.shuffle_method == "rapidsmpf"
-                and not rapidsmpf_available()
+                and not rapidsmpf_distributed_available()
             ):
                 raise ValueError(
-                    "rapidsmpf shuffle method requested, but rapidsmpf is not installed"
+                    "rapidsmpf shuffle method requested, but rapidsmpf.integrations.dask is not installed."
                 )
-        if self.scheduler == "synchronous" and self.shuffle_method == "rapidsmpf":
-            raise ValueError(
-                "rapidsmpf shuffle method is not supported for synchronous scheduler"
-            )
+            elif self.scheduler == "synchronous" and not rapidsmpf_single_available():
+                raise ValueError(
+                    "rapidsmpf shuffle method requested, but rapidsmpf is not installed."
+                )
+            # Select "rapidsmpf-single" for the synchronous
+            if self.scheduler == "synchronous":
+                object.__setattr__(self, "shuffle_method", "rapidsmpf-single")
 
         # frozen dataclass, so use object.__setattr__
         object.__setattr__(
