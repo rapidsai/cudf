@@ -87,9 +87,8 @@ if(TARGET conda_env)
 endif()
 
 set_target_properties(
-  cudf_kafka
-  PROPERTIES BUILD_RPATH "\$ORIGIN"
-             INSTALL_RPATH "\$ORIGIN" # set target compile options
+  cudf_kafka PROPERTIES BUILD_RPATH "\$ORIGIN" INSTALL_RPATH 
+                                               "\$ORIGIN" # set target compile options
 )
 
 add_library(cudf_kafka::cudf_kafka ALIAS cudf_kafka)
