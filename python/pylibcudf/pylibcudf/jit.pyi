@@ -2,8 +2,6 @@
 
 from enum import IntEnum
 
-
-
 class UDFSourceType(IntEnum):
     CUDA = ...
     PTX = ...
