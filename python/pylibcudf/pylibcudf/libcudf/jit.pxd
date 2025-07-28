@@ -1,3 +1,4 @@
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from libc.stdint cimport int8_t
 
 cdef extern from "cudf/jit/udf.hpp" namespace "cudf" nogil:
