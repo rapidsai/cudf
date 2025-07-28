@@ -129,26 +129,6 @@ TEST_F(FilterTestFixture, StringNoAssertions)
 
 struct FilterAssertsTest : public FilterTestFixture {};
 
-<<<<<<< HEAD
-TEST_F(FilterAssertsTest, RuntimeSupport)
-{
-  auto a           = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-  std::string cuda = R"***(
-__device__ void is_even(bool* out, int32_t a) { *out = (a % 2 == 0); }
-  )***";
-
-  if (!cudf::is_runtime_jit_supported()) {
-    EXPECT_THROW(
-      cudf::filter({a}, cuda, cudf::udf_source_type::CUDA, std::nullopt, std::vector{true}),
-      cudf::logic_error);
-  } else {
-    EXPECT_NO_THROW(
-      cudf::filter({a}, cuda, cudf::udf_source_type::CUDA, std::nullopt, std::vector{true}););
-  }
-}
-
-=======
->>>>>>> upstream/branch-25.10
 TEST_F(FilterAssertsTest, CopyMask)
 {
   auto a           = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};

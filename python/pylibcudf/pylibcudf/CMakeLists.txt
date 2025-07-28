@@ -29,6 +29,7 @@ set(cython_sources
     hashing.pyx
     interop.pyx
     _interop_helpers.pyx
+    jit.pyx
     join.pyx
     json.pyx
     labeling.pyx
