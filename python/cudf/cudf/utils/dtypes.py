@@ -349,19 +349,6 @@ def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
     return common_dtype
 
 
-# def _dtype_pandas_compatible(dtype):
-#     """
-#     A utility function, that returns `str` instead of `object`
-#     dtype when pandas compatibility mode is enabled.
-#     """
-#     if (
-#         cudf.get_option("mode.pandas_compatible")
-#         and dtype == CUDF_STRING_DTYPE
-#     ):
-#         return "str"
-#     return dtype
-
-
 def _maybe_convert_to_default_type(dtype: DtypeObj) -> DtypeObj:
     """Convert `dtype` to default if specified by user.
 

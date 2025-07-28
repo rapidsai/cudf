@@ -107,14 +107,12 @@ class NumericalColumn(NumericalBaseColumn):
     def _PANDAS_NA_VALUE(self):
         """Return appropriate NA value based on dtype."""
         if cudf.get_option("mode.pandas_compatible"):
-            # In pandas compatibility mode, return pd.NA for all dtypes
-            if is_pandas_nullable_extension_dtype(self.dtype):
-                return pd.NA
-            elif self.dtype.kind == "f" and isinstance(self.dtype, np.dtype):
+            if self.dtype.kind == "f" and isinstance(self.dtype, np.dtype):
                 # For float dtypes, return np.nan
                 return np.nan
             else:
-                # For other dtypes, return None
+                # In pandas compatibility mode, return pd.NA for all
+                # nullable extension dtypes
                 return pd.NA
         else:
             return pd.NA
@@ -385,7 +383,7 @@ class NumericalColumn(NumericalBaseColumn):
         ):
             raise ValueError(
                 "Cannot convert numerical column to string column "
-                "when dtype is not a pandas nullable extension type."
+                "when dtype is an object dtype in pandas compatibility mode."
             )
         if len(self) == 0:
             return cast(
@@ -446,7 +444,7 @@ class NumericalColumn(NumericalBaseColumn):
                     and self.dtype.kind == "f"
                 ):
                     # If the dtype is a pandas nullable extension type, we need to
-                    # ensure that the underlying data is compatible with it.
+                    # float column doesn't have any NaNs.
                     res = self.nans_to_nulls()
                     res._dtype = dtype
                     return res
@@ -773,7 +771,7 @@ class NumericalColumn(NumericalBaseColumn):
                 and self.dtype.kind == "f"
             ):
                 # If the dtype is a pandas nullable extension type, we need to
-                # ensure that the underlying data is compatible with it.
+                # float column doesn't have any NaNs.
                 res = self.nans_to_nulls()
                 res._dtype = res_dtype
                 return res

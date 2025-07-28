@@ -183,7 +183,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def _PANDAS_NA_VALUE(self):
         """Return appropriate NA value based on dtype."""
         if cudf.get_option("mode.pandas_compatible"):
-            # In pandas compatibility mode, return pd.NA for all dtypes
+            # In pandas compatibility mode, return pd.NA for all
+            # nullable extension dtypes
             if is_pandas_nullable_extension_dtype(self.dtype):
                 return pd.NA
             else:
@@ -2810,7 +2811,6 @@ def as_column(
     * pandas.Categorical objects
     * range objects
     """
-    # import pdb;pdb.set_trace()
     if isinstance(arbitrary, (range, pd.RangeIndex, cudf.RangeIndex)):
         with acquire_spill_lock():
             column = ColumnBase.from_pylibcudf(
