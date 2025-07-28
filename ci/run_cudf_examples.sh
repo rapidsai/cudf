@@ -18,7 +18,7 @@ compute-sanitizer --tool memcheck strings/custom_prealloc strings/names.csv
 compute-sanitizer --tool memcheck strings/custom_with_malloc strings/names.csv
 
 
-cd string_transformers
+cd string_transformers || exit
 compute-sanitizer --tool memcheck compute_checksum_jit info.csv output.csv
 compute-sanitizer --tool memcheck extract_email_jit info.csv output.csv
 compute-sanitizer --tool memcheck extract_email_precompiled info.csv output.csv
@@ -28,7 +28,7 @@ compute-sanitizer --tool memcheck localize_phone_jit info.csv output.csv
 compute-sanitizer --tool memcheck localize_phone_precompiled info.csv output.csv
 cd ..
 
-cd parquet_io
+cd parquet_io || exit
 compute-sanitizer --tool memcheck parquet_io example.parquet
 compute-sanitizer --tool memcheck parquet_io example.parquet output.parquet DELTA_BINARY_PACKED ZSTD TRUE
 
