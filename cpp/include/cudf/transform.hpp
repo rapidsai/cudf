@@ -66,7 +66,7 @@ std::unique_ptr<column> transform(
   std::string const& transform_udf,
   data_type output_type,
   bool is_ptx,
-  null_aware null_aware = null_aware::NO,
+  null_aware is_null_aware = null_aware::NO,
   std::optional<void*> user_data    = std::nullopt,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());

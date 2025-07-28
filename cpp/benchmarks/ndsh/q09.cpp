@@ -160,6 +160,7 @@ struct q9_data {
                          udf,
                          cudf::data_type{cudf::type_id::FLOAT64},
                          false,
+                         cudf::null_aware::NO,
                          std::nullopt,
                          stream,
                          mr);

@@ -800,10 +800,46 @@ TEST_F(NullTest, ColumnNulls_And_ScalarNull)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*ptx_result, *expected);
 }
 
-struct NullAwareTransformTest : public cudf::test::BaseFixture {
- protected:
+TEST_F(NullTest, NullProject)
+{
+  auto udf = R"***(
+__device__ inline void null_lerp(
+       cuda::std::optional<float>* output,
+       cuda::std::optional<float> low,
+       cuda::std::optional<float> high,
+       cuda::std::optional<float> t
+)
+{
+auto lerp = [] (auto l, auto h, auto t) {
+return l - t * l + t * h;
 };
+  *output =  low.has_value() && high.has_value() && t.has_value()
+    ? cuda::std::optional(lerp(*low, *high, *t))
+    : cuda::std::optional(0.0F);
+}
+)***";
 
-TEST_F(NullAwareTransformTest, ColumnNulls_And_ScalarNull) {}
+  auto low =
+    cudf::test::fixed_width_column_wrapper<float>(low_host.begin(), low_host.end(), fourth())
+      .release();
+  auto high =
+    cudf::test::fixed_width_column_wrapper<float>(high_host.begin(), high_host.end(), fifth())
+      .release();
+  auto t = cudf::test::fixed_width_column_wrapper<float>(t_host.begin(), t_host.end()).release();
+
+  auto expected_iter = cudf::detail::make_counting_transform_iterator(
+    0, [&](auto i) { return ((i % 5) == 0) && ((i % 4) == 0) ? expected_host[i] : 0.0F; });
+
+  auto expected = cudf::test::fixed_width_column_wrapper<float>(
+                    expected_iter,
+                    expected_iter + low_host.size(),
+                    thrust::make_constant_iterator([]() { return true; }))
+                    .release();
+
+  auto cuda_result = cudf::transform(
+    {*low, *high, *t}, udf, cudf::data_type(cudf::type_id::FLOAT32), false, cudf::null_aware::YES);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cuda_result, *expected);
+}
 
 }  // namespace transformation

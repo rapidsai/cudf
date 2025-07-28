@@ -459,7 +459,7 @@ std::vector<std::unique_ptr<column>> filter(
   std::vector<column_view> const& columns,
   std::string const& predicate_udf,
   bool is_ptx,
-  null_aware null_aware                      = null_aware::NO,
+  null_aware is_null_aware                      = null_aware::NO,
   std::optional<void*> user_data             = std::nullopt,
   std::optional<std::vector<bool>> copy_mask = std::nullopt,
   rmm::cuda_stream_view stream               = cudf::get_default_stream(),

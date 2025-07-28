@@ -36,7 +36,7 @@ namespace cudf {
 namespace filtering {
 namespace jit {
 
-template <bool has_user_data, null_aware is_null_aware, typename Out, typename... In>
+template <bool has_user_data, bool is_null_aware, typename Out, typename... In>
 CUDF_KERNEL void kernel(cudf::jit::device_optional_span<typename Out::type> const* outputs,
                         cudf::column_device_view_core const* inputs,
                         void* user_data)
@@ -53,7 +53,7 @@ CUDF_KERNEL void kernel(cudf::jit::device_optional_span<typename Out::type> cons
   for (auto i = start; i < size; i += stride) {
     bool applies = false;
 
-    if constexpr (is_null_aware == null_aware::NO) {
+    if constexpr (!is_null_aware) {
       auto const any_null = (false || ... || In::is_null(inputs, i));
 
       if (!any_null) {
