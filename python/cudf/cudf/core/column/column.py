@@ -2933,6 +2933,8 @@ def as_column(
                 and dtype is None
             ):
                 # Store pandas extension dtype directly in the column's dtype property
+                # TODO: Move this to near isinstance(arbitrary.dtype.categories.dtype, pd.IntervalDtype)
+                # check above, for which merge should be working fully with pandas nullable extension dtypes.
                 result = result._with_type_metadata(
                     CategoricalDtype.from_pandas(arbitrary.dtype)
                 )
