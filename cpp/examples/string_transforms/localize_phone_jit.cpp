@@ -138,8 +138,9 @@ __device__ void format_phone(void* scratch,
   constexpr cudf::size_type MAX_ENTRY_LENGTH = 24;  // Enough space for "(123) 123-4567" or "n/a"
 
   auto const num_rows = table.num_rows();
-  rmm::device_uvector<char> scratch(
-    MAX_ENTRY_LENGTH * num_rows, stream, mr);  // allocate scratch space for the outputs
+  rmm::device_uvector<char> scratch(MAX_ENTRY_LENGTH * static_cast<std::size_t>(num_rows),
+                                    stream,
+                                    mr);  // allocate scratch space for the outputs
 
   auto size = cudf::make_column_from_scalar(
     cudf::numeric_scalar<int32_t>(MAX_ENTRY_LENGTH, true, stream, mr), 1, stream, mr);

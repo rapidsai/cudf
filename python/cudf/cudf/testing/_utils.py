@@ -21,8 +21,14 @@ import pylibcudf as plc
 
 import cudf
 from cudf.core.column.column import as_column
-from cudf.core.udf.strings_lowering import cast_string_view_to_udf_string
-from cudf.core.udf.strings_typing import StringView, string_view, udf_string
+from cudf.core.udf.strings_lowering import (
+    cast_string_view_to_managed_udf_string,
+)
+from cudf.core.udf.strings_typing import (
+    StringView,
+    managed_udf_string,
+    string_view,
+)
 from cudf.utils import dtypes as dtypeutils
 from cudf.utils.temporal import unit_to_nanoseconds_conversion
 
@@ -324,6 +330,50 @@ def assert_column_memory_ne(lhs: ColumnBase, rhs: ColumnBase):
     raise AssertionError("lhs and rhs holds the same memory.")
 
 
+def assert_asserters_equal(
+    pandas_asserter,
+    cudf_asserter,
+    pandas_left,
+    pandas_right,
+    cudf_left,
+    cudf_right,
+    *args,
+    **kwargs,
+):
+    """
+    Assert that a pandas and cudf asserter have equivalent behavior.
+
+    Parameters
+    ----------
+    pandas_asserter : callable
+        A pandas asserter function.
+    cudf_asserter : callable
+        A cudf asserter function.
+    pandas_left : object
+        A pandas object as the left argument to the pandas asserter.
+    pandas_right : object
+        A pandas object as the right argument to the pandas asserter.
+    cudf_left : object
+        A cudf object as the left argument to the cudf asserter.
+    cudf_right : object
+        A cudf object as the right argument to the pandas asserter.
+    *args : tuple
+        Additional arguments to pass to both asserters.
+    **kwargs : dict
+        Additional keyword arguments to both asserters.
+    """
+    # TypeError is raised (erroneously from pandas) when comparing
+    # categorical indices with different categories.
+    exceptions = (AssertionError, TypeError)
+    try:
+        pandas_asserter(pandas_left, pandas_right, *args, **kwargs)
+    except exceptions:
+        with pytest.raises(exceptions):
+            cudf_asserter(cudf_left, cudf_right, *args, **kwargs)
+    else:
+        cudf_asserter(cudf_left, cudf_right, *args, **kwargs)
+
+
 parametrize_numeric_dtypes_pairwise = pytest.mark.parametrize(
     "left_dtype,right_dtype",
     list(itertools.combinations_with_replacement(NUMERIC_TYPES, 2)),
@@ -343,9 +393,9 @@ def expect_warning_if(condition, warning=FutureWarning, *args, **kwargs):
         yield
 
 
-def sv_to_udf_str(sv):
+def sv_to_managed_udf_str(sv):
     """
-    Cast a string_view object to a udf_string object
+    Cast a string_view object to a managed_udf_string object
 
     This placeholder function never runs in python
     It exists only for numba to have something to replace
@@ -362,16 +412,16 @@ def sv_to_udf_str(sv):
     pass
 
 
-@cuda_decl_registry.register_global(sv_to_udf_str)
+@cuda_decl_registry.register_global(sv_to_managed_udf_str)
 class StringViewToUDFStringDecl(AbstractTemplate):
     def generic(self, args, kws):
         if isinstance(args[0], StringView) and len(args) == 1:
-            return nb_signature(udf_string, string_view)
+            return nb_signature(managed_udf_string, string_view)
 
 
-@cuda_lower(sv_to_udf_str, string_view)
+@cuda_lower(sv_to_managed_udf_str, string_view)
 def sv_to_udf_str_testing_lowering(context, builder, sig, args):
-    return cast_string_view_to_udf_string(
+    return cast_string_view_to_managed_udf_string(
         context, builder, sig.args[0], sig.return_type, args[0]
     )
 
