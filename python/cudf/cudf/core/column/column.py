@@ -1839,6 +1839,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             elif dtype.kind == "m":
                 result = self.as_timedelta_column(dtype)
             elif dtype.kind in {"O", "U"}:
+                if (
+                    cudf.get_option("mode.pandas_compatible")
+                    and isinstance(dtype, pd.ArrowDtype)
+                    and not cudf.api.types.is_string_dtype(dtype)
+                ):
+                    raise TypeError(f"Unsupported dtype for astype: {dtype}")
                 result = self.as_string_column(dtype)
             else:
                 result = self.as_numerical_column(dtype)

@@ -376,6 +376,7 @@ class NumericalColumn(NumericalBaseColumn):
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
     def as_string_column(self, dtype) -> StringColumn:
+        col = self
         if (
             cudf.get_option("mode.pandas_compatible")
             and isinstance(dtype, np.dtype)
@@ -399,13 +400,22 @@ class NumericalColumn(NumericalBaseColumn):
         elif self.dtype.kind in {"i", "u"}:
             conv_func = plc.strings.convert.convert_integers.from_integers
         elif self.dtype.kind == "f":
+            if cudf.get_option(
+                "mode.pandas_compatible"
+            ) and is_pandas_nullable_extension_dtype(dtype):
+                # In pandas compatibility mode, we convert nans to nulls
+                col = self.nans_to_nulls()
             conv_func = plc.strings.convert.convert_floats.from_floats
         else:
             raise ValueError(f"No string conversion from type {self.dtype}")
 
         with acquire_spill_lock():
-            return type(self).from_pylibcudf(  # type: ignore[return-value]
-                conv_func(self.to_pylibcudf(mode="read"))
+            return (
+                type(self)
+                .from_pylibcudf(  # type: ignore[return-value]
+                    conv_func(col.to_pylibcudf(mode="read"))
+                )
+                ._with_type_metadata(dtype)
             )
 
     def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:

@@ -298,11 +298,6 @@ def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
                 for x in dtypes
             ]
             return find_common_type(non_cat_dtypes)
-            # TODO: Should this be an error case (mixing categorical with other
-            # dtypes) or should this return object? Unclear if we have enough
-            # information to decide right now, may have to come back to this as
-            # usage of find_common_type increases.
-            # return CUDF_STRING_DTYPE
 
     # Aggregate same types
     dtypes = set(dtypes)
