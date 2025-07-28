@@ -69,7 +69,9 @@ IndexingSpec: TypeAlias = (
 
 
 # Helpers for code-sharing between loc and iloc paths
-def expand_key(key: Any, frame: DataFrame | Series) -> tuple[Any, ...]:
+def expand_key(
+    key: Any, frame: DataFrame | Series, method_type: str
+) -> tuple[Any, ...]:
     """Slice-expand key to match dimension of the frame being indexed.
 
     Parameters
@@ -98,7 +100,17 @@ def expand_key(key: Any, frame: DataFrame | Series) -> tuple[Any, ...]:
     dim = len(frame.shape)
     if (
         isinstance(key, bool)
-        or (isinstance(key, Series) and is_bool_dtype(key.dtype))
+        or (
+            isinstance(key, Series)
+            and is_bool_dtype(key.dtype)
+            and method_type == "loc"
+            and len(key) != len(frame)
+        )
+        or (
+            isinstance(key, Series)
+            and is_bool_dtype(key.dtype)
+            and method_type == "iloc"
+        )
     ) and not (
         is_bool_dtype(frame.index.dtype)
         or frame.index.dtype.name == "boolean"
@@ -233,7 +245,7 @@ def destructure_iloc_key(
     IndexError
         If there are too many indexers, or any individual indexer is a tuple.
     """
-    indexers = expand_key(key, frame)
+    indexers = expand_key(key, frame, "iloc")
     if any(isinstance(k, tuple) for k in indexers):
         raise IndexError(
             "Too many indexers: can't have nested tuples in iloc indexing"
@@ -392,7 +404,7 @@ def destructure_loc_key(
     IndexError
         If there are too many indexers.
     """
-    return expand_key(key, frame)
+    return expand_key(key, frame, "loc")
 
 
 def destructure_dataframe_loc_indexer(

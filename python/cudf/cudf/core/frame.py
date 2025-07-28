@@ -1457,11 +1457,11 @@ class Frame(BinaryOperand, Scannable, Serializable):
             values = [*values._columns]
         if len(values) != self._num_columns:
             raise ValueError("Mismatch number of columns to search for.")
-        if cudf.get_option("mode.pandas_comptible"):
+        if cudf.get_option("mode.pandas_compatible"):
             if any(
                 col.has_nulls()
                 and is_pandas_nullable_extension_dtype(col.dtype)
-                for col in values
+                for col in self._columns
             ):
                 raise ValueError(
                     "searchsorted requires array to be sorted, which is impossible "
@@ -1495,6 +1495,8 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 na_position=itertools.repeat(na_position, times=len(sources)),
             )
         )
+        if cudf.get_option("mode.pandas_compatible"):
+            outcol = outcol.astype(np.dtype("int64"))
 
         # Return result as cupy array if the values is non-scalar
         # If values is scalar, result is expected to be scalar.
