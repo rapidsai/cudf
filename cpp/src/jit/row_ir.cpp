@@ -337,6 +337,20 @@ void ast_converter::generate_code(target target_id,
   auto output_expr_ir = expr.accept(*this);
   output_irs_.emplace_back(std::make_unique<row_ir::set_output>(0, std::move(output_expr_ir)));
 
+  bool uses_input_table =
+    std::any_of(input_specs_.begin(), input_specs_.end(), [](auto const& spec) {
+      return std::holds_alternative<ast_column_input_spec>(spec) ||
+             std::holds_alternative<ast_named_column_input_spec>(spec);
+    });
+
+  if (!uses_input_table && args.table.num_columns() > 0) {
+    // this means none of the inputs tables to the IR are actually used in the expression. In order
+    // to still run the transform-equivalent operation of AST, we need to add one of the table's
+    // columns as an unused input. This is done because the output size of a transform is determined
+    // by the largest input column.
+    input_specs_.emplace_back(ast_column_input_spec{ast::table_reference::LEFT, 0});
+  }
+
   // resolve the flattened input references into IR input variables
   for (auto const& input : input_specs_) {
     dispatch_input_spec(input, [this](auto&... args) { add_input_var(args...); }, null_aware, args);

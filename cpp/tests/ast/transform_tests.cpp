@@ -45,6 +45,8 @@ constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_leve
 template <typename T>
 struct TransformTest : public cudf::test::BaseFixture {};
 
+struct ComputeColumnTest : public cudf::test::BaseFixture {};
+
 struct executor_ast {
   static std::unique_ptr<cudf::column> compute_column(
     cudf::table_view const& table,
@@ -499,12 +501,11 @@ TYPED_TEST(TransformTest, MultiLevelTreeComparator)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 }
 
-TYPED_TEST(TransformTest, MultiTypeOperationFailure)
+TEST_F(ComputeColumnTest, MultiTypeOperationFailure)
 {
-  using Executor = TypeParam;
-  auto c_0       = column_wrapper<int32_t>{3, 20, 1, 50};
-  auto c_1       = column_wrapper<double>{0.15, 0.77, 4.2, 21.3};
-  auto table     = cudf::table_view{{c_0, c_1}};
+  auto c_0   = column_wrapper<int32_t>{3, 20, 1, 50};
+  auto c_1   = column_wrapper<double>{0.15, 0.77, 4.2, 21.3};
+  auto table = cudf::table_view{{c_0, c_1}};
 
   auto col_ref_0 = cudf::ast::column_reference(0);
   auto col_ref_1 = cudf::ast::column_reference(1);
@@ -515,8 +516,8 @@ TYPED_TEST(TransformTest, MultiTypeOperationFailure)
     cudf::ast::operation(cudf::ast::ast_operator::ADD, col_ref_1, col_ref_0);
 
   // Operations on different types are not allowed
-  EXPECT_THROW(Executor::compute_column(table, expression_0_plus_1), cudf::logic_error);
-  EXPECT_THROW(Executor::compute_column(table, expression_1_plus_0), cudf::logic_error);
+  EXPECT_THROW(cudf::compute_column(table, expression_0_plus_1), cudf::logic_error);
+  EXPECT_THROW(cudf::compute_column(table, expression_1_plus_0), cudf::logic_error);
 }
 
 TYPED_TEST(TransformTest, LiteralComparison)
