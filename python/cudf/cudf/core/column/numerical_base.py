@@ -171,12 +171,6 @@ class NumericalBaseColumn(ColumnBase, Scannable):
                 result = type(self).from_pylibcudf(plc_column)  # type: ignore[assignment]
         if return_scalar:
             scalar_result = result.element_indexing(0)
-            if cudf.get_option("mode.pandas_compatible") and scalar_result in {
-                None,
-                NA,
-                np.nan,
-            }:
-                return _get_nan_for_dtype(self.dtype)
             if interpolation in {"lower", "higher", "nearest"}:
                 try:
                     new_scalar = self.dtype.type(scalar_result)
