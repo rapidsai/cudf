@@ -120,7 +120,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
         if cudf.get_option("mode.pandas_compatible"):
             if isinstance(dtype, np.dtype) and dtype.kind == "O":
                 raise TypeError(
-                    f"cannot astype a decimal from {self.dtype} to {dtype}"
+                    f"can not cast a decimal from {self.dtype} to {dtype}"
                 )
         if len(self) > 0:
             with acquire_spill_lock():

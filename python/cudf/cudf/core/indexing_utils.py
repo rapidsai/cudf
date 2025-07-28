@@ -70,7 +70,7 @@ IndexingSpec: TypeAlias = (
 
 # Helpers for code-sharing between loc and iloc paths
 def expand_key(
-    key: Any, frame: DataFrame | Series, method_type: str
+    key: Any, frame: DataFrame | Series, method_type: Literal["iloc", "loc"]
 ) -> tuple[Any, ...]:
     """Slice-expand key to match dimension of the frame being indexed.
 
@@ -102,20 +102,19 @@ def expand_key(
         isinstance(key, bool)
         or (
             isinstance(key, Series)
-            and is_bool_dtype(key.dtype)
+            and key.dtype.kind == "b"
             and method_type == "loc"
             and len(key) != len(frame)
         )
         or (
             isinstance(key, Series)
-            and is_bool_dtype(key.dtype)
+            and key.dtype.kind == "b"
             and method_type == "iloc"
         )
     ) and not (
-        is_bool_dtype(frame.index.dtype)
-        or frame.index.dtype.name == "boolean"
+        frame.index.dtype.kind == "b"
         or isinstance(frame.index, MultiIndex)
-        and is_bool_dtype(frame.index.get_level_values(0).dtype)
+        and frame.index.get_level_values(0).dtype.kind == "b"
     ):
         raise KeyError(
             f"{key}: boolean label can not be used without a boolean index"

@@ -186,7 +186,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             # In pandas compatibility mode, return pd.NA for all
             # nullable extension dtypes
             if is_pandas_nullable_extension_dtype(self.dtype):
-                return pd.NA
+                return self.dtype.na_value
             else:
                 return None
         else:
