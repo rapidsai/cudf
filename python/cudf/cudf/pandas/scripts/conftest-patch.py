@@ -88,6 +88,21 @@ def pytest_unconfigure(config):
 
 # TODO: Pass these tests with cudf.pandas enabled.
 NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
+    "tests/arrays/categorical/test_analytics.py::TestCategoricalAnalytics::test_searchsorted[False]",
+    "tests/arrays/categorical/test_analytics.py::TestCategoricalAnalytics::test_searchsorted[None]",
+    "tests/arrays/categorical/test_analytics.py::TestCategoricalAnalytics::test_searchsorted[True]",
+    "tests/arrays/test_datetimelike.py::test_searchsorted_datetimelike_with_listlike_invalid_dtype[arg0-values1]",
+    "tests/extension/test_categorical.py::TestCategorical::test_searchsorted[True]",
+    "tests/indexes/numeric/test_indexing.py::TestGetIndexer::test_get_indexer_nearest_decreasing[backfill-expected1]",
+    "tests/indexes/numeric/test_indexing.py::TestGetIndexer::test_get_indexer_nearest_decreasing[nearest-expected2]",
+    "tests/indexes/numeric/test_indexing.py::TestGetIndexer::test_get_indexer_nearest_decreasing[pad-expected0]",
+    "tests/indexes/numeric/test_indexing.py::TestGetIndexer::test_get_indexer_nearest_error",
+    "tests/indexes/numeric/test_indexing.py::TestGetIndexer::test_get_indexer_with_method_numeric_vs_bool[backfill]",
+    "tests/indexes/numeric/test_indexing.py::TestGetIndexer::test_get_indexer_with_method_numeric_vs_bool[nearest]",
+    "tests/indexes/numeric/test_indexing.py::TestGetIndexer::test_get_indexer_with_method_numeric_vs_bool[pad]",
+    "tests/indexes/ranges/test_indexing.py::TestGetIndexer::test_get_indexer_limit",
+    "tests/indexes/timedeltas/test_searchsorted.py::TestSearchSorted::test_searchsorted_invalid_argument_dtype[arg0]",
+    "tests/indexing/test_loc.py::TestLocBaseIndependent::test_loc_setitem_frame_with_inverted_slice",
     "tests/api/test_api.py::test_pandas_array_alias",
     "tests/apply/test_frame_apply.py::test_agg_transform[axis='columns']",
     "tests/apply/test_frame_apply.py::test_agg_transform[axis='index']",
@@ -9101,7 +9116,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/indexing/test_iat.py::test_iat_setitem_item_cache_cleared[iat]",
     "tests/indexing/test_iat.py::test_iat_setitem_item_cache_cleared[iloc]",
     "tests/indexing/test_iloc.py::TestILocErrors::test_iloc_getitem_setitem_fancy_exceptions",
-    "tests/indexing/test_iloc.py::TestILocSeries::test_iloc",
     "tests/indexing/test_iloc.py::TestILocSeries::test_iloc_nullable_int64_size_1_nan",
     "tests/indexing/test_iloc.py::TestiLocBaseIndependent::test_identity_slice_returns_new_object",
     "tests/indexing/test_iloc.py::TestiLocBaseIndependent::test_iloc_getitem_doc_issue",
@@ -15231,7 +15245,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     r"tests/util/test_assert_frame_equal.py::test_frame_equal_index_dtype_mismatch[True-df11-df21-MultiIndex level \\[0\\] are different]",
     r"tests/util/test_assert_series_equal.py::test_series_equal_index_dtype[True-s11-s21-MultiIndex level \\[0\\] are different]",
 }
-
 NODEIDS_THAT_XPASS_WITH_CUDF_PANDAS = {
     "tests/io/json/test_readlines.py::test_readjson_unicode[pyarrow]",
     "tests/series/methods/test_info.py::test_info_memory_usage_deep_pypy",
