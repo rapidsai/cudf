@@ -12,8 +12,6 @@ from pylibcudf.libcudf.nvtext.stemmer cimport (
 )
 from pylibcudf.libcudf.types cimport size_type
 
-from pylibcudf.libcudf.nvtext.stemmer import letter_type as LetterType # no-cython-lint
-
 __all__ = ["is_letter", "porter_stemmer_measure", "LetterType"]
 
 cpdef Column is_letter(
@@ -77,5 +75,3 @@ cpdef Column porter_stemmer_measure(Column input):
         c_result = cpp_porter_stemmer_measure(input.view())
 
     return Column.from_libcudf(move(c_result))
-
-LetterType.__str__ = LetterType.__repr__
