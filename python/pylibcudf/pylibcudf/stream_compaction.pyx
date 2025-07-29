@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -327,3 +327,5 @@ cpdef size_type distinct_count(
     return cpp_stream_compaction.distinct_count(
         source.view(), null_handling, nan_handling
     )
+
+DuplicateKeepOption.__str__ = DuplicateKeepOption.__repr__
