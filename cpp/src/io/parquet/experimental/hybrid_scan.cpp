@@ -192,4 +192,62 @@ table_with_metadata hybrid_scan_reader::materialize_payload_columns(
     input_row_group_indices, std::move(column_chunk_buffers), row_mask, options, stream);
 }
 
+void hybrid_scan_reader::setup_chunking_for_filter_columns(
+  std::size_t chunk_read_limit,
+  std::size_t pass_read_limit,
+  cudf::host_span<size_type const> row_group_indices,
+  cudf::host_span<std::vector<bool> const> page_mask,
+  std::vector<rmm::device_buffer> column_chunk_buffers,
+  parquet_reader_options const& options,
+  rmm::cuda_stream_view stream) const
+{
+  // Temporary vector with row group indices from the first source
+  auto const input_row_group_indices =
+    std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
+
+  return _impl->setup_chunking_for_filter_columns(chunk_read_limit,
+                                                  pass_read_limit,
+                                                  input_row_group_indices,
+                                                  page_mask,
+                                                  std::move(column_chunk_buffers),
+                                                  options,
+                                                  stream);
+}
+
+table_with_metadata hybrid_scan_reader::materialize_payload_columns_chunk(
+  cudf::column_view row_mask, rmm::cuda_stream_view stream) const
+{
+  return _impl->materialize_payload_columns_chunk(row_mask, stream);
+}
+
+void hybrid_scan_reader::setup_chunking_for_payload_columns(
+  std::size_t chunk_read_limit,
+  std::size_t pass_read_limit,
+  cudf::host_span<size_type const> row_group_indices,
+  cudf::column_view row_mask,
+  std::vector<rmm::device_buffer> column_chunk_buffers,
+  parquet_reader_options const& options,
+  rmm::cuda_stream_view stream) const
+{
+  // Temporary vector with row group indices from the first source
+  auto const input_row_group_indices =
+    std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
+
+  return _impl->setup_chunking_for_payload_columns(chunk_read_limit,
+                                                   pass_read_limit,
+                                                   input_row_group_indices,
+                                                   row_mask,
+                                                   std::move(column_chunk_buffers),
+                                                   options,
+                                                   stream);
+}
+
+table_with_metadata hybrid_scan_reader::materialize_filter_columns_chunk(
+  cudf::mutable_column_view row_mask, rmm::cuda_stream_view stream) const
+{
+  return _impl->materialize_filter_columns_chunk(row_mask, stream);
+}
+
+bool hybrid_scan_reader::has_next_table_chunk() const { return _impl->has_next_table_chunk(); }
+
 }  // namespace cudf::io::parquet::experimental
