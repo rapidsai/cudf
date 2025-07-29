@@ -276,33 +276,40 @@ auto chunked_hybrid_scan(
 
   EXPECT_EQ(data_page_mask.size(), num_filter_columns);
 
-  // Get column chunk byte ranges from the reader and fetch device buffers
-  auto const filter_column_chunk_byte_ranges =
-    reader->filter_column_chunks_byte_ranges(current_row_group_indices, options);
-  auto filter_column_chunk_buffers =
-    fetch_byte_ranges(file_buffer_span, filter_column_chunk_byte_ranges, stream, mr);
-
-  // Setup chunking for filter columns and materialize the columns
-  reader->setup_chunking_for_filter_columns(1024,
-                                            1024,
-                                            current_row_group_indices,
-                                            data_page_mask,
-                                            std::move(filter_column_chunk_buffers),
-                                            options,
-                                            stream);
+  // Helper to split the materialization of filter columns into chunks
   auto tables          = std::vector<std::unique_ptr<cudf::table>>{};
   auto filter_metadata = cudf::io::table_metadata{};
-  while (reader->has_next_table_chunk()) {
-    auto chunk = reader->materialize_filter_columns_chunk(row_mask->mutable_view(), stream);
-    tables.push_back(std::move(chunk.tbl));
-    filter_metadata = std::move(chunk.metadata);
-  }
+  auto const materialize_filter_columns =
+    [&](cudf::host_span<cudf::size_type const> row_group_indices) {
+      // Get column chunk byte ranges from the reader and fetch device buffers
+      auto const filter_column_chunk_byte_ranges =
+        reader->filter_column_chunks_byte_ranges(row_group_indices, options);
+      auto filter_column_chunk_buffers =
+        fetch_byte_ranges(file_buffer_span, filter_column_chunk_byte_ranges, stream, mr);
+
+      // Setup chunking for filter columns and materialize the columns
+      reader->setup_chunking_for_filter_columns(
+        1024, 1024, row_group_indices, {}, std::move(filter_column_chunk_buffers), options, stream);
+      while (reader->has_next_table_chunk()) {
+        auto chunk = reader->materialize_filter_columns_chunk(row_mask->mutable_view(), stream);
+        tables.push_back(std::move(chunk.tbl));
+        filter_metadata = std::move(chunk.metadata);
+      }
+    };
+
+  auto const row_group_split = current_row_group_indices.size() / 2;
+  CUDF_EXPECTS(row_group_split > 0, "At least 2 row groups needed to split the read");
+  materialize_filter_columns(
+    cudf::host_span<cudf::size_type const>{current_row_group_indices.begin(), row_group_split});
+  materialize_filter_columns(
+    cudf::host_span<cudf::size_type const>{current_row_group_indices.begin() + row_group_split,
+                                           current_row_group_indices.size() - row_group_split});
+
   auto filter_table = concatenate_tables(std::move(tables), stream);
 
+  // Helper to split the materialization of payload columns into chunks
   tables.clear();
   auto payload_metadata = cudf::io::table_metadata{};
-
-  // Helper to split the materialization of payload columns into chunks
   auto const materialize_payload_columns =
     [&](cudf::host_span<cudf::size_type const> row_group_indices) {
       // Get column chunk byte ranges from the reader and fetch device buffers
@@ -326,8 +333,6 @@ auto chunked_hybrid_scan(
       }
     };
 
-  auto const row_group_split = current_row_group_indices.size() / 2;
-  CUDF_EXPECTS(row_group_split > 0, "At least 2 row groups needed to split the read");
   materialize_payload_columns(
     cudf::host_span<cudf::size_type const>{current_row_group_indices.begin(), row_group_split});
   materialize_payload_columns(
