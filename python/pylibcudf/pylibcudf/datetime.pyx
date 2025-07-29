@@ -299,3 +299,6 @@ cpdef Column days_in_month(Column input):
     with nogil:
         result = cpp_days_in_month(input.view())
     return Column.from_libcudf(move(result))
+
+DatetimeComponent.__str__ = DatetimeComponent.__repr__
+RoundingFrequency.__str__ = RoundingFrequency.__repr__
