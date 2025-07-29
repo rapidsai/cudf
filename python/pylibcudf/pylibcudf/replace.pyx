@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 
 from cython.operator import dereference
@@ -200,3 +200,5 @@ cpdef Column normalize_nans_and_zeros(Column source_column, bool inplace=False):
 
     if not inplace:
         return Column.from_libcudf(move(c_result))
+
+ReplacePolicy.__str__ = ReplacePolicy.__repr__
