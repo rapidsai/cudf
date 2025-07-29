@@ -673,13 +673,21 @@ void reader_impl::set_subpass_page_mask()
   auto const& pass    = _pass_itm_data;
   auto const& subpass = pass->subpass;
 
+  // Create a host vector to store the subpass page mask
   _subpass_page_mask = cudf::detail::make_host_vector<bool>(subpass->pages.size(), _stream);
 
-  if (_pass_page_mask.empty() or subpass->single_subpass) {
+  // Fill with all true if no pass level page mask is available
+  if (_pass_page_mask.empty()) {
     std::fill(_subpass_page_mask.begin(), _subpass_page_mask.end(), true);
     return;
   }
 
+  // If this is the only subpass, move the pass level page mask data as is
+  if (subpass->single_subpass) {
+    std::move(_pass_page_mask.begin(), _pass_page_mask.end(), _subpass_page_mask.begin());
+  }
+
+  // Use the pass page index mask to gather the subpass page mask from the pass level page mask
   auto const host_page_src_index = cudf::detail::make_host_vector(subpass->page_src_index, _stream);
   thrust::gather(thrust::seq,
                  host_page_src_index.begin(),
