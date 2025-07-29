@@ -78,7 +78,7 @@ def test_dataframe_scatter_by_map(map_size, nelem, keep):
     _check_scatter_by_map(multiindex_result, df2["b"])
     if keep:
         for frame in multiindex_result:
-            isinstance(frame.index, type(df2.index))
+            assert isinstance(frame.index, type(df2.index))
 
 
 @pytest.mark.parametrize("ids", [[-1, 0, 1, 0], [0, 2, 3, 0]])
