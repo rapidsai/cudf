@@ -137,6 +137,9 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
     _is_filter_columns_selected  = false;
   }
 
+  // Reset the rows processed so far
+  _rows_processed_so_far = 0;
+
   CUDF_EXPECTS(_input_columns.size() > 0 and _output_buffers.size() > 0, "No columns selected");
 
   // Clear the output buffers templates
@@ -342,7 +345,7 @@ hybrid_scan_reader_impl::filter_data_pages_with_stats(
                                                      mr);
 
   auto data_page_mask = _extended_metadata->compute_data_page_mask(
-    row_mask->view(), row_group_indices, output_dtypes, _output_column_schemas, stream);
+    row_mask->view(), row_group_indices, output_dtypes, _output_column_schemas, 0, stream);
 
   return {std::move(row_mask), std::move(data_page_mask)};
 }
@@ -475,8 +478,12 @@ table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns(
 
   auto output_dtypes = get_output_types(_output_buffers_template);
 
-  auto data_page_mask = _extended_metadata->compute_data_page_mask(
-    row_mask, row_group_indices, output_dtypes, _output_column_schemas, stream);
+  auto data_page_mask = _extended_metadata->compute_data_page_mask(row_mask,
+                                                                   row_group_indices,
+                                                                   output_dtypes,
+                                                                   _output_column_schemas,
+                                                                   _rows_processed_so_far,
+                                                                   stream);
 
   prepare_data(
     read_mode::READ_ALL, row_group_indices, std::move(column_chunk_buffers), data_page_mask);
@@ -556,8 +563,12 @@ void hybrid_scan_reader_impl::setup_chunking_for_payload_columns(
 
   auto output_dtypes = get_output_types(_output_buffers_template);
 
-  auto data_page_mask = _extended_metadata->compute_data_page_mask(
-    row_mask, row_group_indices, output_dtypes, _output_column_schemas, stream);
+  auto data_page_mask = _extended_metadata->compute_data_page_mask(row_mask,
+                                                                   row_group_indices,
+                                                                   output_dtypes,
+                                                                   _output_column_schemas,
+                                                                   _rows_processed_so_far,
+                                                                   stream);
 
   prepare_data(
     read_mode::CHUNKED_READ, row_group_indices, std::move(column_chunk_buffers), data_page_mask);
@@ -609,7 +620,6 @@ void hybrid_scan_reader_impl::reset_internal_state()
   _input_pass_read_limit   = 0;
   _output_chunk_read_limit = 0;
   _strings_to_categorical  = false;
-  _rows_processed_so_far   = 0;
 }
 
 void hybrid_scan_reader_impl::initialize_options(

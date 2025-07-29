@@ -218,11 +218,11 @@ auto hybrid_scan(std::vector<char>& buffer,
     reader->payload_column_chunks_byte_ranges(current_row_group_indices, options);
 
   // Fetch column chunk device buffers from the input buffer
-  [[maybe_unused]] auto payload_column_chunk_buffers =
+  auto payload_column_chunk_buffers =
     fetch_byte_ranges(file_buffer_span, payload_column_chunk_byte_ranges, stream, mr);
 
   // Materialize the table with only the payload columns
-  [[maybe_unused]] auto [payload_table, payload_metadata] =
+  auto [payload_table, payload_metadata] =
     reader->materialize_payload_columns(current_row_group_indices,
                                         std::move(payload_column_chunk_buffers),
                                         row_mask->view(),
@@ -299,27 +299,41 @@ auto chunked_hybrid_scan(
   }
   auto filter_table = concatenate_tables(std::move(tables), stream);
 
-  // Get column chunk byte ranges from the reader and fetch device buffers
-  auto const payload_column_chunk_byte_ranges =
-    reader->payload_column_chunks_byte_ranges(current_row_group_indices, options);
-  auto payload_column_chunk_buffers =
-    fetch_byte_ranges(file_buffer_span, payload_column_chunk_byte_ranges, stream, mr);
-
-  // Setup chunking for payload columns and materialize the table
-  reader->setup_chunking_for_payload_columns(1024,
-                                             1024,
-                                             current_row_group_indices,
-                                             row_mask->view(),
-                                             std::move(payload_column_chunk_buffers),
-                                             options,
-                                             stream);
-  tables                = std::vector<std::unique_ptr<cudf::table>>{};
+  tables.clear();
   auto payload_metadata = cudf::io::table_metadata{};
-  while (reader->has_next_table_chunk()) {
-    auto chunk = reader->materialize_payload_columns_chunk(row_mask->view(), stream);
-    tables.push_back(std::move(chunk.tbl));
-    payload_metadata = std::move(chunk.metadata);
-  }
+
+  // Helper to split the materialization of payload columns into chunks
+  auto const materialize_payload_columns =
+    [&](cudf::host_span<cudf::size_type const> row_group_indices) {
+      // Get column chunk byte ranges from the reader and fetch device buffers
+      auto const payload_column_chunk_byte_ranges =
+        reader->payload_column_chunks_byte_ranges(row_group_indices, options);
+      auto payload_column_chunk_buffers =
+        fetch_byte_ranges(file_buffer_span, payload_column_chunk_byte_ranges, stream, mr);
+
+      // Setup chunking for payload columns and materialize the table
+      reader->setup_chunking_for_payload_columns(1024,
+                                                 1024,
+                                                 row_group_indices,
+                                                 row_mask->view(),
+                                                 std::move(payload_column_chunk_buffers),
+                                                 options,
+                                                 stream);
+      while (reader->has_next_table_chunk()) {
+        auto chunk = reader->materialize_payload_columns_chunk(row_mask->view(), stream);
+        tables.push_back(std::move(chunk.tbl));
+        payload_metadata = std::move(chunk.metadata);
+      }
+    };
+
+  auto const row_group_split = current_row_group_indices.size() / 2;
+  CUDF_EXPECTS(row_group_split > 0, "At least 2 row groups needed to split the read");
+  materialize_payload_columns(
+    cudf::host_span<cudf::size_type const>{current_row_group_indices.begin(), row_group_split});
+  materialize_payload_columns(
+    cudf::host_span<cudf::size_type const>{current_row_group_indices.begin() + row_group_split,
+                                           current_row_group_indices.size() - row_group_split});
+
   auto payload_table = concatenate_tables(std::move(tables), stream);
 
   // Return the filter table and metadata, payload table and metadata, and the final row mask

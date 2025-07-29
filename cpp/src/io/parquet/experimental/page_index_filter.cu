@@ -692,12 +692,12 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   cudf::host_span<cudf::data_type const> output_dtypes,
   cudf::host_span<cudf::size_type const> output_column_schemas,
+  cudf::size_type row_mask_offset,
   rmm::cuda_stream_view stream) const
 {
   CUDF_EXPECTS(row_mask.type().id() == cudf::type_id::BOOL8,
                "Input row bitmask should be of type BOOL8");
 
-  auto const total_rows  = row_mask.size();
   auto const num_columns = output_dtypes.size();
 
   auto const has_page_index =
@@ -750,15 +750,18 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask
                   });
   }
 
-  CUDF_EXPECTS(page_row_offsets.back().back() == total_rows,
+  auto const total_rows = page_row_offsets.back().back();
+
+  CUDF_EXPECTS(row_mask_offset + total_rows <= row_mask.size(),
                "Mismatch in total rows in input row mask and row groups",
                std::invalid_argument);
 
   // Return if all rows are required or all are invalid.
-  if (row_mask.null_count() == row_mask.size() or thrust::all_of(rmm::exec_policy(stream),
-                                                                 row_mask.begin<bool>(),
-                                                                 row_mask.end<bool>(),
-                                                                 cuda::std::identity{})) {
+  if (row_mask.null_count(row_mask_offset, row_mask_offset + total_rows) == total_rows or
+      thrust::all_of(rmm::exec_policy(stream),
+                     row_mask.begin<bool>() + row_mask_offset,
+                     row_mask.begin<bool>() + row_mask_offset + total_rows,
+                     cuda::std::identity{})) {
     return all_required_data_pages(page_row_counts);
   }
 
@@ -794,13 +797,15 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask
           rmm::device_uvector<size_type> select_page_indices(total_rows, streams[col_idx], mr);
 
           // Copy page indices with at least one required row
-          auto const filtered_pages_end_iter = thrust::copy_if(
-            rmm::exec_policy_nosync(streams[col_idx]),
-            page_indices.begin(),
-            page_indices.end(),
-            thrust::counting_iterator<size_type>(0),
-            select_page_indices.begin(),
-            is_row_required_fn{row_mask.nullable(), row_mask.null_mask(), row_mask.data<bool>()});
+          auto const filtered_pages_end_iter =
+            thrust::copy_if(rmm::exec_policy_nosync(streams[col_idx]),
+                            page_indices.begin(),
+                            page_indices.end(),
+                            thrust::counting_iterator<size_type>(0),
+                            select_page_indices.begin(),
+                            is_row_required_fn{row_mask.nullable(),
+                                               row_mask.null_mask() + row_mask_offset,
+                                               row_mask.data<bool>() + row_mask_offset});
 
           // Remove duplicate page indices across (presorted) rows
           auto const filtered_uniq_page_end_iter =
