@@ -522,7 +522,7 @@ std::optional<std::string> is_compression_disabled_impl(compression_type compres
                                                         feature_status_parameters params)
 {
   switch (compression) {
-    case compression_type::DEFLATE: 
+    case compression_type::DEFLATE:
     case compression_type::LZ4:
     case compression_type::SNAPPY:
     case compression_type::ZSTD:
