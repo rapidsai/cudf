@@ -10,10 +10,10 @@ from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
 
 
-@pytest.mark.parametrize("df", [pd.DataFrame({"a": [1, 2, 3]})])
 @pytest.mark.parametrize("arg", [[True, False, True], [True, True, True]])
 @pytest.mark.parametrize("value", [0, -1])
-def test_dataframe_setitem_bool_mask_scaler(df, arg, value):
+def test_dataframe_setitem_bool_mask_scaler(arg, value):
+    df = pd.DataFrame({"a": [1, 2, 3]})
     gdf = cudf.from_pandas(df)
 
     df[arg] = value
@@ -50,8 +50,6 @@ def test_dataframe_setitem_columns(df, arg, value):
     assert_eq(df, gdf, check_dtype=False)
 
 
-@pytest.mark.parametrize("df", [pd.DataFrame({"a": [1, 2, 3]})])
-@pytest.mark.parametrize("arg", [["b", "c"]])
 @pytest.mark.parametrize(
     "value",
     [
@@ -66,7 +64,9 @@ def test_dataframe_setitem_columns(df, arg, value):
         np.timedelta64(34234324234324234, "ns"),
     ],
 )
-def test_dataframe_setitem_new_columns(df, arg, value):
+def test_dataframe_setitem_new_columns(value):
+    df = pd.DataFrame({"a": [1, 2, 3]})
+    arg = ["b", "c"]
     gdf = cudf.from_pandas(df)
     cudf_replace_value = value
 
@@ -92,11 +92,11 @@ def test_series_setitem_index():
     assert_eq(df, gdf, check_dtype=False)
 
 
-@pytest.mark.parametrize("psr", [pd.Series([1, 2, 3], index=["a", "b", "c"])])
 @pytest.mark.parametrize(
     "arg", ["b", ["a", "c"], slice(1, 2, 1), [True, False, True]]
 )
-def test_series_set_item(psr, arg):
+def test_series_set_item(arg):
+    psr = pd.Series([1, 2, 3], index=["a", "b", "c"])
     gsr = cudf.from_pandas(psr)
 
     psr[arg] = 11
@@ -135,14 +135,15 @@ def test_setitem_dataframe_series_inplace(index):
 
 
 @pytest.mark.parametrize(
-    "replace_data",
+    "klass",
     [
-        [100, 200, 300, 400, 500],
-        cudf.Series([100, 200, 300, 400, 500]),
-        cudf.Series([100, 200, 300, 400, 500], index=[2, 3, 4, 5, 6]),
+        list,
+        cudf.Series,
+        lambda x: cudf.Series(x, index=[2, 3, 4, 5, 6]),
     ],
 )
-def test_series_set_equal_length_object_by_mask(replace_data):
+def test_series_set_equal_length_object_by_mask(klass):
+    replace_data = klass([100, 200, 300, 400, 500])
     psr = pd.Series([1, 2, 3, 4, 5], dtype="Int64")
     gsr = cudf.from_pandas(psr)
 

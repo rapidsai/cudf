@@ -1546,6 +1546,8 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 na_position=itertools.repeat(na_position, times=len(sources)),
             )
         )
+        if cudf.get_option("mode.pandas_compatible"):
+            outcol = outcol.astype(np.dtype("int64"))
 
         # Return result as cupy array if the values is non-scalar
         # If values is scalar, result is expected to be scalar.

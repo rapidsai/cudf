@@ -19,45 +19,35 @@ from cudf.testing._utils import (
 )
 from cudf.utils.dtypes import find_common_type
 
-_JOIN_TYPES = (
-    "left",
-    "inner",
-    "outer",
-    "right",
-    "leftanti",
-    "leftsemi",
-    "cross",
+
+@pytest.fixture(
+    params=(
+        "left",
+        "inner",
+        "outer",
+        "right",
+        "leftanti",
+        "leftsemi",
+        "cross",
+    )
 )
+def how(request):
+    return request.param
 
 
-def make_params():
-    rng = np.random.default_rng(seed=0)
+rng = np.random.default_rng(seed=0)
 
-    hows = _JOIN_TYPES
 
-    # Test specific cases (1)
-    aa = [0, 0, 4, 5, 5]
-    bb = [0, 0, 2, 3, 5]
-    for how in hows:
-        yield (aa, bb, how)
-
-    # Test specific cases (2)
-    aa = [0, 0, 1, 2, 3]
-    bb = [0, 1, 2, 2, 3]
-    for how in hows:
-        yield (aa, bb, how)
-
-    # Test large random integer inputs
-    aa = rng.integers(0, 50, 100)
-    bb = rng.integers(0, 50, 100)
-    for how in hows:
-        yield (aa, bb, how)
-
-    # Test floating point inputs
-    aa = rng.random(50)
-    bb = rng.random(50)
-    for how in hows:
-        yield (aa, bb, how)
+@pytest.fixture(
+    params=[
+        [[0, 0, 4, 5, 5], [0, 0, 2, 3, 5]],
+        [[0, 0, 1, 2, 3], [0, 1, 2, 2, 3]],
+        [rng.integers(0, 50, 100), rng.integers(0, 50, 100)],
+        [rng.random(50), rng.random(50)],
+    ]
+)
+def aa_bb(request):
+    return request.param
 
 
 def pd_odd_joins(left, right, join_type):
@@ -68,8 +58,6 @@ def pd_odd_joins(left, right, join_type):
 
 
 def assert_join_results_equal(expect, got, how, **kwargs):
-    if how not in _JOIN_TYPES:
-        raise ValueError(f"Unrecognized join type {how}")
     if how == "right":
         got = got[expect.columns]
 
@@ -98,11 +86,14 @@ def assert_join_results_equal(expect, got, how, **kwargs):
         raise ValueError(f"Not a join result: {type(expect).__name__}")
 
 
-@pytest.mark.parametrize("aa,bb,how", make_params())
-def test_dataframe_join_how(aa, bb, how):
-    df = cudf.DataFrame()
-    df["a"] = aa
-    df["b"] = bb
+def test_dataframe_join_how(aa_bb, how):
+    aa, bb = aa_bb
+    df = cudf.DataFrame(
+        {
+            "a": aa,
+            "b": bb,
+        }
+    )
 
     def work_pandas(df, how):
         df1 = df.set_index("a")
@@ -149,21 +140,19 @@ def test_dataframe_join_how(aa, bb, how):
         #     _sorted_check_series(expect['b'], expect['a'], got['b'],
         #                          got['a'])
         else:
+            magic = 0xDEADBEAF
             for c in expecto.columns:
-                _check_series(expecto[c].fillna(-1), goto[c].fillna(-1))
+                expect = expecto[c].fillna(-1)
+                got = goto[c].fillna(-1)
 
-
-def _check_series(expect, got):
-    magic = 0xDEADBEAF
-
-    direct_equal = np.all(expect.values == got.to_numpy())
-    nanfilled_equal = np.all(
-        expect.fillna(magic).values == got.fillna(magic).to_numpy()
-    )
-    msg = "direct_equal={}, nanfilled_equal={}".format(
-        direct_equal, nanfilled_equal
-    )
-    assert direct_equal or nanfilled_equal, msg
+                direct_equal = np.all(expect.values == got.to_numpy())
+                nanfilled_equal = np.all(
+                    expect.fillna(magic).values == got.fillna(magic).to_numpy()
+                )
+                msg = "direct_equal={}, nanfilled_equal={}".format(
+                    direct_equal, nanfilled_equal
+                )
+                assert direct_equal or nanfilled_equal, msg
 
 
 @pytest.mark.skipif(
@@ -610,10 +599,8 @@ def test_indicator():
     gdf = cudf.DataFrame({"x": [1, 2, 1]})
     gdf.merge(gdf, indicator=False)
 
-    with pytest.raises(NotImplementedError) as info:
+    with pytest.raises(NotImplementedError, match=".*indicator=False.*"):
         gdf.merge(gdf, indicator=True)
-
-    assert "indicator=False" in str(info.value)
 
 
 def test_merge_suffixes():
@@ -1787,15 +1774,15 @@ def test_typecast_on_join_indexes_matching_categorical():
 @pytest.mark.parametrize(
     "lhs",
     [
-        cudf.Series([1, 2, 3], name="a"),
-        cudf.DataFrame({"a": [2, 3, 4], "c": [4, 5, 6]}),
+        lambda: cudf.Series([1, 2, 3], name="a"),
+        lambda: cudf.DataFrame({"a": [2, 3, 4], "c": [4, 5, 6]}),
     ],
 )
 @pytest.mark.parametrize(
     "rhs",
     [
-        cudf.Series([1, 2, 3], name="b"),
-        cudf.DataFrame({"b": [2, 3, 4], "c": [4, 5, 6]}),
+        lambda: cudf.Series([1, 2, 3], name="b"),
+        lambda: cudf.DataFrame({"b": [2, 3, 4], "c": [4, 5, 6]}),
     ],
 )
 @pytest.mark.parametrize(
@@ -1816,6 +1803,8 @@ def test_series_dataframe_mixed_merging(lhs, rhs, how, kwargs):
     ):
         pytest.skip("Index joins not compatible with leftsemi and leftanti")
 
+    lhs = lhs()
+    rhs = rhs()
     check_lhs = lhs.copy()
     check_rhs = rhs.copy()
     if isinstance(lhs, cudf.Series):
