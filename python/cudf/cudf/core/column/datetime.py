@@ -480,6 +480,10 @@ class DatetimeColumn(TemporalBaseColumn):
             self.dtype.name, "%Y-%m-%d %H:%M:%S"
         )
         if cudf.get_option("mode.pandas_compatible"):
+            if isinstance(dtype, np.dtype) and dtype.kind == "O":
+                raise TypeError(
+                    f"Cannot astype a datetimelike from {self.dtype} to {dtype}"
+                )
             if format.endswith("f"):
                 sub_second_res_len = 3
             else:

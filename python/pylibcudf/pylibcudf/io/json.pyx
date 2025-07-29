@@ -34,6 +34,8 @@ from pylibcudf.libcudf.io.types cimport (
     table_with_metadata,
 )
 
+from pylibcudf.libcudf.io.json import json_recovery_mode_t as JsonRecoveryModeType  # no-cython-lint
+
 from pylibcudf.libcudf.types cimport data_type, size_type
 from pylibcudf.libcudf.column.column cimport column, column_contents
 
@@ -1087,3 +1089,5 @@ cpdef bool is_supported_write_json(DataType type):
     For details, see :cpp:func:`is_supported_write_json`.
     """
     return cpp_is_supported_write_json(type.c_obj)
+
+JsonRecoveryModeType.__str__ = JsonRecoveryModeType.__repr__
