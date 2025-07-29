@@ -139,3 +139,14 @@ def test_sink_csv_nested_data(tmp_path):
         pl.exceptions.ComputeError, match="CSV format does not support nested data"
     ):
         lf.sink_csv(path, engine=pl.GPUEngine())
+
+
+def test_chunked_sink_empty_table_to_parquet(tmp_path):
+    assert_sink_result_equal(
+        pl.LazyFrame(),
+        tmp_path / "out.parquet",
+        engine=pl.GPUEngine(
+            raise_on_fail=True,
+            parquet_options={"chunked": True, "n_output_chunks": 2},
+        ),
+    )

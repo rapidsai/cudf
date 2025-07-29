@@ -863,11 +863,11 @@ class Sink(IR):
             )
             builder = builder.compression(compression_type)
 
-        if options.get("data_page_size") is not None:
-            builder = builder.max_page_size_bytes(options["data_page_size"])
+        if (data_page_size := options.get("data_page_size")) is not None:
+            builder = builder.max_page_size_bytes(data_page_size)
 
-        if options.get("row_group_size") is not None:
-            builder = builder.row_group_size_rows(options["row_group_size"])
+        if (row_group_size := options.get("row_group_size")) is not None:
+            builder = builder.row_group_size_rows(row_group_size)
 
         return builder
 
@@ -886,7 +886,11 @@ class Sink(IR):
             | plc.io.parquet.ParquetWriterOptionsBuilder
         )
 
-        if parquet_options.chunked and parquet_options.n_output_chunks != 1:
+        if (
+            parquet_options.chunked
+            and parquet_options.n_output_chunks != 1
+            and df.table.num_rows() != 0
+        ):
             builder = plc.io.parquet.ChunkedParquetWriterOptions.builder(
                 target
             ).metadata(metadata)
