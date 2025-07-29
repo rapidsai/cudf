@@ -303,3 +303,11 @@ def test_groupby_null_count_raises(df: pl.LazyFrame):
 def test_groupby_unsupported_non_pointwise_boolean_function(df: pl.LazyFrame, expr):
     q = df.group_by("key1").agg(expr)
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_groupby_mean_type_promotion(df: pl.LazyFrame) -> None:
+    df = df.with_columns(pl.col("float").cast(pl.Float32))
+
+    q = df.group_by("key1").agg(pl.col("float").mean())
+
+    assert_gpu_result_equal(q, check_row_order=False)

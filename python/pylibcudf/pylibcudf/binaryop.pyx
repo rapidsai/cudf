@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from cython.operator import dereference
 
@@ -114,3 +114,5 @@ cpdef bool is_supported_operation(
         rhs.c_obj,
         op
     )
+
+BinaryOperator.__str__ = BinaryOperator.__repr__
