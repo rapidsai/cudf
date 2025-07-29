@@ -302,7 +302,7 @@ class ListColumn(ColumnBase):
         if cudf.get_option("mode.pandas_compatible"):
             if isinstance(dtype, np.dtype) and dtype.kind == "O":
                 raise TypeError(
-                    f"can not cast a list from {self.dtype} to {dtype}"
+                    f"Cannot cast a list from {self.dtype} to {dtype}"
                 )
         lc = self._transform_leaves(lambda col: col.as_string_column(dtype))
 
