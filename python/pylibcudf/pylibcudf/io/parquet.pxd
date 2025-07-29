@@ -152,6 +152,10 @@ cdef class ParquetWriterOptionsBuilder:
 
     cpdef ParquetWriterOptionsBuilder write_arrow_schema(self, bool enabled)
 
+    cpdef ParquetWriterOptionsBuilder row_group_size_rows(self, size_type val)
+
+    cpdef ParquetWriterOptionsBuilder max_page_size_bytes(self, size_t val)
+
     cpdef ParquetWriterOptions build(self)
 
 cpdef memoryview write_parquet(ParquetWriterOptions options, Stream stream = *)

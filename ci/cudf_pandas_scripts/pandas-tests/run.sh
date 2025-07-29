@@ -36,6 +36,7 @@ mkdir -p "${RAPIDS_TESTS_DIR}"
 bash python/cudf/cudf/pandas/scripts/run-pandas-tests.sh \
   --numprocesses 5 \
   --tb=line \
+  -vv \
   --disable-warnings \
   -m "not slow and not single_cpu and not db and not network" \
   --max-worker-restart=3 \
