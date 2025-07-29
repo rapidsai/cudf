@@ -112,8 +112,7 @@ def test_dataframe_multi_column_nulls(
     by = list(string.ascii_lowercase[:num_cols])
     pdf = pd.DataFrame()
 
-    for i in range(3):
-        colname = string.ascii_lowercase[i]
+    for colname in string.ascii_lowercase[:3]:
         data = rng.integers(0, 26, num_rows).astype(float_types_as_str)
         if nulls == "some":
             idx = np.array([], dtype="int64")
