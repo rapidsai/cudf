@@ -459,12 +459,20 @@ class Merge:
             multiindex_columns = (
                 self.lhs._data.multiindex and self.rhs._data.multiindex
             )
+            rangeindex_columns = (
+                self.lhs._data.rangeindex and self.rhs._data.rangeindex
+            )
         elif self.lhs._data:
             multiindex_columns = self.lhs._data.multiindex
+            rangeindex_columns = self.lhs._data.rangeindex
         elif self.rhs._data:
             multiindex_columns = self.rhs._data.multiindex
+            rangeindex_columns = self.rhs._data.rangeindex
         else:
             multiindex_columns = False
+            rangeindex_columns = (
+                self.lhs._data.rangeindex and self.rhs._data.rangeindex
+            )
 
         index: Index | None
         if self._using_right_index:
@@ -479,7 +487,9 @@ class Merge:
         # Construct result from data and index:
         return (
             left_result._data.__class__(
-                data=data, multiindex=multiindex_columns
+                data=data,
+                multiindex=multiindex_columns,
+                rangeindex=rangeindex_columns,
             ),
             index,
         )

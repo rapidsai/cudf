@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 from cython.operator import dereference
 
@@ -29,6 +29,8 @@ from pylibcudf.libcudf.copying import \
     mask_allocation_policy as MaskAllocationPolicy  # no-cython-lint
 from pylibcudf.libcudf.copying import \
     out_of_bounds_policy as OutOfBoundsPolicy  # no-cython-lint
+from pylibcudf.libcudf.copying import \
+    sample_with_replacement as SampleWithReplacement  # no-cython-lint
 
 from .column cimport Column
 from .scalar cimport Scalar
@@ -39,6 +41,7 @@ from .utils cimport _as_vector
 __all__ = [
     "MaskAllocationPolicy",
     "OutOfBoundsPolicy",
+    "SampleWithReplacement",
     "allocate_like",
     "boolean_mask_scatter",
     "copy_if_else",
@@ -589,3 +592,7 @@ cpdef Scalar get_element(Column input_column, size_type index):
         c_output = cpp_copying.get_element(input_column.view(), index)
 
     return Scalar.from_libcudf(move(c_output))
+
+OutOfBoundsPolicy.__str__ = OutOfBoundsPolicy.__repr__
+MaskAllocationPolicy.__str__ = MaskAllocationPolicy.__repr__
+SampleWithReplacement.__str__ = SampleWithReplacement.__repr__
