@@ -70,7 +70,7 @@ def test_dataframe_scatter_by_map(map_size, nelem, keep):
     _check_scatter_by_map(generic_result, df2["b"])
     if keep:
         for frame in generic_result:
-            isinstance(frame.index, type(df2.index))
+            assert isinstance(frame.index, type(df2.index))
 
     # Test MultiIndex
     df2 = df.set_index(["a", "c"])
