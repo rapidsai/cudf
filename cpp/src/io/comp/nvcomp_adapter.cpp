@@ -522,13 +522,7 @@ std::optional<std::string> is_compression_disabled_impl(compression_type compres
                                                         feature_status_parameters params)
 {
   switch (compression) {
-    case compression_type::DEFLATE: {
-      if (not params.are_all_integrations_enabled) {
-        return "DEFLATE compression is experimental, you can enable it through "
-               "`LIBCUDF_NVCOMP_POLICY` environment variable.";
-      }
-      return std::nullopt;
-    }
+    case compression_type::DEFLATE: 
     case compression_type::LZ4:
     case compression_type::SNAPPY:
     case compression_type::ZSTD:
@@ -544,7 +538,6 @@ std::optional<std::string> is_decompression_disabled_impl(compression_type compr
                                                           feature_status_parameters params)
 {
   switch (compression) {
-    case compression_type::DEFLATE:
     case compression_type::GZIP: {
       if (not params.are_all_integrations_enabled) {
         return "DEFLATE decompression is experimental, you can enable it through "
@@ -552,6 +545,7 @@ std::optional<std::string> is_decompression_disabled_impl(compression_type compr
       }
       return std::nullopt;
     }
+    case compression_type::DEFLATE:
     case compression_type::LZ4:
     case compression_type::SNAPPY:
     case compression_type::ZSTD: {
