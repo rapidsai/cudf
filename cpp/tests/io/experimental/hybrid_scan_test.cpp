@@ -362,3 +362,74 @@ TEST_F(HybridScanTest, PruneDataPagesOnlyAndScanAllColumns)
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->select({1, 2}), read_payload_table->view());
   }
 }
+
+TEST_F(HybridScanTest, MaterializeListPayloadColumn)
+{
+  srand(0xc0ffee);
+  using T = uint32_t;
+
+  std::vector<char> parquet_buffer;
+  {
+    auto constexpr num_rows = num_ordered_rows;
+    auto col0               = testdata::ascending<T>();
+    auto col1               = testdata::descending<T>();
+    auto col2               = testdata::ascending<cudf::string_view>();
+    auto bools_iter =
+      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+    auto bools_col =
+      cudf::test::fixed_width_column_wrapper<bool>(bools_iter, bools_iter + num_rows);
+    auto offsets_iter = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
+    auto offsets_col =
+      cudf::test::fixed_width_column_wrapper<int32_t>(offsets_iter, offsets_iter + num_rows + 1);
+    auto col3 = cudf::make_lists_column(
+      num_rows, offsets_col.release(), bools_col.release(), 0, rmm::device_buffer{});
+
+    auto table = cudf::table_view{{col0, col1, col2, *col3}};
+    cudf::io::table_input_metadata expected_metadata(table);
+    expected_metadata.column_metadata[0].set_name("col0");
+    expected_metadata.column_metadata[1].set_name("col1");
+    expected_metadata.column_metadata[2].set_name("col2");
+    expected_metadata.column_metadata[3].set_name("col3");
+
+    cudf::io::parquet_writer_options out_opts =
+      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&parquet_buffer}, table)
+        .metadata(std::move(expected_metadata))
+        .row_group_size_rows(page_size_for_ordered_tests)
+        .max_page_size_rows(page_size_for_ordered_tests / 5)
+        .compression(cudf::io::compression_type::AUTO)
+        .dictionary_policy(cudf::io::dictionary_policy::ALWAYS)
+        .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN);
+    cudf::io::write_parquet(out_opts);
+  }
+
+  // Filtering AST - table[0] < 100
+  auto constexpr num_filter_columns = 1;
+  auto literal_value                = cudf::numeric_scalar<uint32_t>(100);
+  auto literal                      = cudf::ast::literal(literal_value);
+  auto col_ref_0                    = cudf::ast::column_name_reference("col0");
+  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+
+  auto stream     = cudf::get_default_stream();
+  auto mr         = cudf::get_current_device_resource_ref();
+  auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
+    cudf::get_current_device_resource(), bloom_filter_alignment);
+
+  // Read parquet using the hybrid scan reader
+  auto [read_filter_table, read_payload_table, read_filter_meta, read_payload_meta, row_mask] =
+    hybrid_scan(parquet_buffer, filter_expression, num_filter_columns, {}, stream, mr, aligned_mr);
+
+  CUDF_EXPECTS(read_filter_table->num_rows() == read_payload_table->num_rows(),
+               "Filter and payload tables should have the same number of rows");
+
+  // Check equivalence (equal without checking nullability) with the parquet file read with the
+  // original reader
+  {
+    cudf::io::parquet_reader_options const options =
+      cudf::io::parquet_reader_options::builder(
+        cudf::io::source_info(cudf::host_span<char>(parquet_buffer.data(), parquet_buffer.size())))
+        .filter(filter_expression);
+    auto [expected_tbl, expected_meta] = cudf::io::read_parquet(options, stream);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}), read_filter_table->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({1, 2, 3}), read_payload_table->view());
+  }
+}
