@@ -54,18 +54,19 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
-    # Subquery 1: Get d_month_seq for year=1998, month=7
-    target_month_seq = (
+
+    # Subquery 1: d_month_seq values for July 1998
+    target_month_seq_table = (
         date_dim.filter((pl.col("d_year") == 1998) & (pl.col("d_moy") == 7))
         .select("d_month_seq")
         .unique()
-        .collect()
-        .get_column("d_month_seq")[0]  # Get the single value
     )
+
     # Subquery 2: Calculate average price per category
     avg_price_per_category = item.group_by("i_category").agg(
         pl.col("i_current_price").mean().alias("avg_price")
     )
+
     # Main query
     return (
         customer_address.join(
@@ -75,7 +76,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .join(item, left_on="ss_item_sk", right_on="i_item_sk")
         .join(avg_price_per_category, on="i_category")
-        .filter(pl.col("d_month_seq") == target_month_seq)
+        .join(target_month_seq_table, on="d_month_seq", how="semi")
         .filter(pl.col("i_current_price") > 1.2 * pl.col("avg_price"))
         .group_by("ca_state")
         .agg(pl.len().alias("cnt"))

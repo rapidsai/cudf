@@ -99,55 +99,39 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         (81, 100, 23982),
     ]
 
-    # Calculate each bucket value
-    bucket_values = []
-
-    for _, (min_qty, max_qty, threshold) in enumerate(buckets, 1):
-        # Count records in this quantity range
-        count = (
-            store_sales.filter(
-                pl.col("ss_quantity").is_between(min_qty, max_qty, closed="both")
-            )
-            .select(pl.len())
-            .collect()
-            .item()
+    # Calculate each bucket summary
+    bucket_stats = []
+    for i, (min_qty, max_qty, _) in enumerate(buckets, 1):
+        # Compute count, avg(ss_ext_list_price), avg(ss_net_profit) for each quantity range
+        stats = store_sales.filter(
+            pl.col("ss_quantity").is_between(min_qty, max_qty, closed="both")
+        ).select(
+            [
+                pl.len().alias(f"count_{i}"),
+                pl.col("ss_ext_list_price").mean().alias(f"avg_price_{i}"),
+                pl.col("ss_net_profit").mean().alias(f"avg_profit_{i}"),
+            ]
         )
+        bucket_stats.append(stats)
 
-        # Choose aggregation based on count vs threshold
-        if count > threshold:
-            # Use average list price
-            value = (
-                store_sales.filter(
-                    pl.col("ss_quantity").is_between(min_qty, max_qty, closed="both")
-                )
-                .select(pl.col("ss_ext_list_price").mean())
-                .collect()
-                .item()
-            )
-        else:
-            # Use average net profit
-            value = (
-                store_sales.filter(
-                    pl.col("ss_quantity").is_between(min_qty, max_qty, closed="both")
-                )
-                .select(pl.col("ss_net_profit").mean())
-                .collect()
-                .item()
-            )
+    # Combine all bucket summaries into one row
+    combined_stats = pl.concat(bucket_stats, how="horizontal")
 
-        bucket_values.append(value)
+    # Select appropriate value per bucket based on count threshold
+    bucket_values = []
+    for i, (_, _, threshold) in enumerate(buckets, 1):
+        bucket = (
+            pl.when(pl.col(f"count_{i}") > threshold)
+            .then(pl.col(f"avg_price_{i}"))
+            .otherwise(pl.col(f"avg_profit_{i}"))
+            .alias(f"bucket{i}")
+        )
+        bucket_values.append(bucket)
 
     # Create result DataFrame with one row (using reason table as in SQL)
     return (
         reason.filter(pl.col("r_reason_sk") == 1)
-        .select(
-            [
-                pl.lit(bucket_values[0]).alias("bucket1"),
-                pl.lit(bucket_values[1]).alias("bucket2"),
-                pl.lit(bucket_values[2]).alias("bucket3"),
-                pl.lit(bucket_values[3]).alias("bucket4"),
-                pl.lit(bucket_values[4]).alias("bucket5"),
-            ]
-        )
+        .join(combined_stats, how="cross")
+        .select(bucket_values)
         .limit(1)
     )
