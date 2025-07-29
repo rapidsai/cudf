@@ -416,12 +416,13 @@ def _sink_to_directory(
     schema: Schema,
     kind: str,
     path: str,
+    parquet_options: ParquetOptions,
     options: dict[str, Any],
     df: DataFrame,
     ready: None,
 ) -> DataFrame:
     """Sink a partition to a new file."""
-    return Sink.do_evaluate(schema, kind, path, options, df)
+    return Sink.do_evaluate(schema, kind, path, parquet_options, options, df)
 
 
 def _sink_to_parquet_file(
@@ -434,23 +435,11 @@ def _sink_to_parquet_file(
     """Sink a partition to an open Parquet file."""
     # Set up a new chunked Parquet writer if necessary.
     if writer is None:
-        metadata = plc.io.types.TableInputMetadata(df.table)
-        for i, name in enumerate(df.column_names):
-            metadata.column_metadata[i].set_name(name)
-
+        metadata = Sink._make_parquet_metadata(df)
         sink = plc.io.types.SinkInfo([path])
-        builder = plc.io.parquet.ChunkedParquetWriterOptions.builder(sink)
-        compression = options["compression"]
-        if compression != "Uncompressed":
-            builder.compression(
-                getattr(plc.io.types.CompressionType, compression.upper())
-            )
-
-        if options["data_page_size"] is not None:
-            builder.max_page_size_bytes(options["data_page_size"])
-        if options["row_group_size"] is not None:
-            builder.row_group_size_rows(options["row_group_size"])
-
+        builder = Sink._apply_parquet_writer_options(
+            plc.io.parquet.ChunkedParquetWriterOptions.builder(sink), options
+        )
         writer_options = builder.metadata(metadata).build()
         writer = plc.io.parquet.ChunkedParquetWriter.from_options(writer_options)
 
@@ -565,6 +554,7 @@ def _directory_sink_graph(
             sink.schema,
             sink.kind,
             f"{sink.path}/part.{str(i).zfill(width)}.{suffix}",
+            sink.parquet_options,
             sink.options,
             (child_name, i),
             setup_name,
