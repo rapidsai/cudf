@@ -381,7 +381,7 @@ TEST_F(HybridScanTest, MaterializeListPayloadColumn)
       cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
     auto bools_col =
       cudf::test::fixed_width_column_wrapper<bool>(bools_iter, bools_iter + num_rows);
-    auto offsets_iter = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
+    auto offsets_iter = thrust::counting_iterator<int32_t>(0);
     auto offsets_col =
       cudf::test::fixed_width_column_wrapper<int32_t>(offsets_iter, offsets_iter + num_rows + 1);
     auto col2 = cudf::make_lists_column(
