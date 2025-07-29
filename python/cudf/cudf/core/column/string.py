@@ -424,9 +424,13 @@ class StringColumn(ColumnBase):
                 isinstance(dtype, pd.ArrowDtype)
                 and pa.string() == dtype.pyarrow_dtype
             ):
+                # TODO: Drop the deep copies on astype's copy keyword
+                # default value is fixed in `25.10`
                 col = self.copy(deep=True)
                 col._dtype = dtype
             elif isinstance(dtype, np.dtype) and dtype.kind in {"U", "O"}:
+                # TODO: Drop the deep copies on astype's copy keyword
+                # default value is fixed in `25.10`
                 col = self.copy(deep=True)
                 col._dtype = CUDF_STRING_DTYPE
         return col
