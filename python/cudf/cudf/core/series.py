@@ -40,7 +40,7 @@ from cudf.core.column import (
 )
 from cudf.core.column.column import concat_columns
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.dtypes import CategoricalDtype
+from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 from cudf.core.groupby.groupby import SeriesGroupBy, groupby_doc_template
 from cudf.core.index import (
     DatetimeIndex,
@@ -65,6 +65,7 @@ from cudf.utils.dtypes import (
     find_common_type,
     is_dtype_obj_numeric,
     is_mixed_with_object_dtype,
+    is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _EQUALITY_OPS, _is_same_name
@@ -174,10 +175,20 @@ class _SeriesIlocIndexer(_FrameIndexer):
 
     @_performance_tracking
     def __getitem__(self, arg):
-        indexing_spec = indexing_utils.parse_row_iloc_indexer(
-            indexing_utils.destructure_series_iloc_indexer(arg, self._frame),
-            len(self._frame),
-        )
+        try:
+            indexing_spec = indexing_utils.parse_row_iloc_indexer(
+                indexing_utils.destructure_series_iloc_indexer(
+                    arg, self._frame
+                ),
+                len(self._frame),
+            )
+        except KeyError as err:
+            if (
+                cudf.get_option("mode.pandas_compatible")
+                and "boolean label can not be used without a boolean index"
+                in str(err)
+            ):
+                raise ValueError(str(err)) from err
         return self._frame._getitem_preprocessed(indexing_spec)
 
     @_performance_tracking
@@ -195,11 +206,18 @@ class _SeriesIlocIndexer(_FrameIndexer):
             # larger data type mimicking pandas
             if not (value is None or value is cudf.NA or value is np.nan):
                 tmp_value = as_column(value)
-                if tmp_value.dtype.kind in "uifb" and not (
-                    self._frame.dtype.kind == "b"
-                    and tmp_value.dtype.kind != "b"
-                    or self._frame.dtype.kind != "b"
-                    and tmp_value.dtype.kind == "b"
+                if (
+                    not tmp_value.can_cast_safely(self._frame.dtype)
+                    and not is_pandas_nullable_extension_dtype(
+                        self._frame.dtype
+                    )
+                    and tmp_value.dtype.kind in "uifb"
+                    and not (
+                        self._frame.dtype.kind == "b"
+                        and tmp_value.dtype.kind != "b"
+                        or self._frame.dtype.kind != "b"
+                        and tmp_value.dtype.kind == "b"
+                    )
                 ):
                     to_dtype = find_common_type(
                         (tmp_value.dtype, self._frame.dtype)
@@ -294,6 +312,12 @@ class _SeriesLocIndexer(_FrameIndexer):
             arg = arg[0]
         if _is_scalar_or_zero_d_array(arg):
             index_dtype = self._frame.index.dtype
+            if isinstance(index_dtype, cudf.IntervalDtype) and not isinstance(
+                arg, pd.Interval
+            ):
+                raise NotImplementedError(
+                    "Interval indexing is not supported."
+                )
             if not is_dtype_obj_numeric(
                 index_dtype, include_decimal=False
             ) and not (
@@ -1246,6 +1270,7 @@ class Series(SingleColumnFrame, IndexedFrame):
                 and self.index.dtype.categories.dtype.kind in {"i", "u", "f"}
             )
             or self.index.dtype.kind in {"i", "u", "f"}
+            or isinstance(self.index.dtype, IntervalDtype)
         ):
             # Do not remove until pandas 3.0 support is added.
             assert PANDAS_LT_300, (
@@ -1941,6 +1966,15 @@ class Series(SingleColumnFrame, IndexedFrame):
         copy: bool = False,
         errors: Literal["raise", "ignore"] = "raise",
     ) -> Self:
+        if cudf.get_option("mode.pandas_compatible"):
+            if inspect.isclass(dtype) and issubclass(
+                dtype, pd.api.extensions.ExtensionDtype
+            ):
+                msg = (
+                    f"Expected an instance of {dtype.__name__}, "
+                    "but got the class instead. Try instantiating 'dtype'."
+                )
+                raise TypeError(msg)
         if is_dict_like(dtype):
             if len(dtype) > 1 or self.name not in dtype:
                 raise KeyError(
@@ -3170,6 +3204,11 @@ class Series(SingleColumnFrame, IndexedFrame):
         exclude=None,
     ):
         """{docstring}"""
+        if cudf.get_option("mode.pandas_compatible"):
+            raise NotImplementedError(
+                "cudf.Series.describe is not implemented in "
+                "pandas compatibility mode."
+            )
 
         if percentiles is not None:
             if not all(0 <= x <= 1 for x in percentiles):
