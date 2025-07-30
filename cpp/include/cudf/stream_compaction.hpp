@@ -33,7 +33,6 @@ namespace CUDF_EXPORT cudf {
  * @brief Column APIs for filtering rows
  */
 
-
 /**
  * @brief Filters a table to remove null elements with threshold count.
  *
