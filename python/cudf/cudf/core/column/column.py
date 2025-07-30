@@ -3171,7 +3171,7 @@ def as_column(
             is_nat = np.isnat(arbitrary)
             mask = None
             if is_nat.any():
-                if nan_as_null is None or nan_as_null:
+                if nan_as_null is not False:
                     # Convert NaT to NA, which pyarrow does by default
                     return as_column(
                         pa.array(arbitrary),
@@ -3180,16 +3180,25 @@ def as_column(
                     )
                 # Consider NaT as NA in the mask
                 # but maintain NaT as a value
-                mask = as_column(~is_nat).as_mask()
-            buffer = as_buffer(arbitrary.view("|u1"))
-            col = build_column(
-                data=buffer,
-                mask=mask,
-                dtype=arbitrary.dtype,
-            )
-            if dtype:
-                col = col.astype(dtype)
-            return col
+                mask = plc.Column.from_array_interface(~is_nat)
+                # mask = as_column(~is_nat).as_mask()
+            plc_column = plc.Column.from_array_interface(arbitrary)
+            if mask is not None:
+                plc_column = plc_column.with_mask(
+                    *plc.transform.bools_to_mask(mask)
+                )
+            column = ColumnBase.from_pylibcudf(plc_column)
+            if dtype is not None:
+                column = column.astype(dtype)
+            # buffer = as_buffer(arbitrary.view("|u1"))
+            # col = build_column(
+            #     data=buffer,
+            #     mask=mask,
+            #     dtype=arbitrary.dtype,
+            # )
+            # if dtype:
+            #     col = col.astype(dtype)
+            return column
         else:
             raise NotImplementedError(f"{arbitrary.dtype} not supported")
     elif (view := as_memoryview(arbitrary)) is not None:
