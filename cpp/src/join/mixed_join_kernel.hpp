@@ -52,9 +52,6 @@ namespace detail {
  * @param[out] join_output_r The right result of the join operation
  * @param[in] device_expression_data Container of device data required to evaluate the desired
  * expression.
- * @param[in] join_result_offsets The starting indices in join_output[l|r]
- * where the matches for each row begin. Equivalent to a prefix sum of
- * matches_per_row.
  * @param[in] swap_tables If true, the kernel was launched with one thread per right row and
  * the kernel needs to internally loop over left rows. Otherwise, loop over right rows.
  */
@@ -66,11 +63,10 @@ void launch_mixed_join(table_device_view left_table,
                        row_hash const hash_probe,
                        row_equality const equality_probe,
                        join_kind const join_type,
-                       cudf::detail::mixed_multimap_type::device_view hash_table_view,
+                       cudf::detail::mixed_join_hash_table_ref_t const& hash_table_ref,
                        size_type* join_output_l,
                        size_type* join_output_r,
                        cudf::ast::detail::expression_device_view device_expression_data,
-                       cudf::size_type const* join_result_offsets,
                        bool const swap_tables,
                        detail::grid_1d const config,
                        int64_t shmem_size_per_block,

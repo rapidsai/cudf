@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,11 +28,10 @@ template void launch_mixed_join<false>(
   row_hash const hash_probe,
   row_equality const equality_probe,
   join_kind const join_type,
-  cudf::detail::mixed_multimap_type::device_view hash_table_view,
+  cudf::detail::mixed_join_hash_table_ref_t const& hash_table_ref,
   size_type* join_output_l,
   size_type* join_output_r,
   cudf::ast::detail::expression_device_view device_expression_data,
-  cudf::size_type const* join_result_offsets,
   bool const swap_tables,
   detail::grid_1d const config,
   int64_t shmem_size_per_block,

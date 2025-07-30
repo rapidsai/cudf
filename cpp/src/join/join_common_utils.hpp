@@ -20,7 +20,7 @@
 #include <cudf/hashing.hpp>
 #include <cudf/table/table_view.hpp>
 
-#include <cuco/static_multimap.cuh>
+#include <cuco/static_multiset.cuh>
 #include <cuda/atomic>
 
 namespace cudf::detail {
@@ -31,15 +31,47 @@ using pair_type = cuco::pair<hash_value_type, size_type>;
 
 using hash_type = cuco::murmurhash3_32<hash_value_type>;
 
-// Multimap type used for mixed joins. TODO: This is a temporary alias used
-// until the mixed joins are converted to using CGs properly. Right now it's
-// using a cooperative group of size 1.
+// Comparator that always returns false to ensure all values are inserted (like hash_join)
+struct mixed_join_always_not_equal {
+  __device__ constexpr bool operator()(cuco::pair<hash_value_type, size_type> const&,
+                                       cuco::pair<hash_value_type, size_type> const&) const noexcept
+  {
+    // multiset always insert
+    return false;
+  }
+};
+
+struct mixed_join_hasher1 {
+  __device__ constexpr hash_value_type operator()(
+    cuco::pair<hash_value_type, size_type> const& key) const noexcept
+  {
+    return key.first;
+  }
+};
+
+struct mixed_join_hasher2 {
+  mixed_join_hasher2(hash_value_type seed) : _hash{seed} {}
+
+  __device__ constexpr hash_value_type operator()(
+    cuco::pair<hash_value_type, size_type> const& key) const noexcept
+  {
+    return _hash(key.first);
+  }
+
+ private:
+  hash_type _hash;
+};
+
+// Multimap type used for mixed joins, now using cuco::static_multiset like hash_join
 using mixed_multimap_type =
-  cuco::static_multimap<hash_value_type,
-                        size_type,
+  cuco::static_multiset<cuco::pair<hash_value_type, size_type>,
+                        cuco::extent<std::size_t>,
                         cuda::thread_scope_device,
+                        mixed_join_always_not_equal,
+                        cuco::double_hashing<1, mixed_join_hasher1, mixed_join_hasher2>,
                         cudf::detail::cuco_allocator<char>,
-                        cuco::legacy::double_hashing<1, hash_type, hash_type>>;
+                        cuco::storage<2>>;
+using mixed_join_hash_table_ref_t = mixed_multimap_type::ref_type<>;
 
 bool is_trivial_join(table_view const& left, table_view const& right, join_kind join_type);
 }  // namespace cudf::detail

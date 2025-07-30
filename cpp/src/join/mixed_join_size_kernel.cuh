@@ -29,14 +29,10 @@
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <cooperative_groups.h>
-#include <cub/cub.cuh>
-#include <thrust/iterator/discard_iterator.h>
+#include <thrust/reduce.h>
 
 namespace cudf {
 namespace detail {
-namespace cg = cooperative_groups;
-
 template <int block_size, bool has_nulls>
 CUDF_KERNEL void __launch_bounds__(block_size)
   compute_mixed_join_output_size(table_device_view left_table,
@@ -46,10 +42,9 @@ CUDF_KERNEL void __launch_bounds__(block_size)
                                  row_hash const hash_probe,
                                  row_equality const equality_probe,
                                  join_kind const join_type,
-                                 cudf::detail::mixed_multimap_type::device_view hash_table_view,
+                                 cudf::detail::mixed_join_hash_table_ref_t hash_table_ref,
                                  ast::detail::expression_device_view device_expression_data,
                                  bool const swap_tables,
-                                 std::size_t* output_size,
                                  cudf::device_span<cudf::size_type> matches_per_row)
 {
   // The (required) extern storage of the shared memory array leads to
@@ -62,7 +57,6 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   auto thread_intermediate_storage =
     intermediate_storage + (threadIdx.x * device_expression_data.num_intermediates);
 
-  std::size_t thread_counter{0};
   auto const start_idx                 = cudf::detail::grid_1d::global_thread_id();
   auto const stride                    = cudf::detail::grid_1d::grid_stride();
   cudf::size_type const left_num_rows  = left_table.num_rows();
@@ -72,36 +66,24 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
     left_table, right_table, device_expression_data);
 
-  auto const empty_key_sentinel = hash_table_view.get_empty_key_sentinel();
-  make_pair_function pair_func{hash_probe, empty_key_sentinel};
+  auto const pair = pair_fn{hash_probe};
 
   // Figure out the number of elements for this key.
-  cg::thread_block_tile<1> this_thread = cg::this_thread();
   // TODO: Address asymmetry in operator.
   auto count_equality = pair_expression_equality<has_nulls>{
     evaluator, thread_intermediate_storage, swap_tables, equality_probe};
+  auto count_ref = hash_table_ref.rebind_operator(cuco::count_tag{}).rebind_key_eq(count_equality);
 
   for (auto outer_row_index = start_idx; outer_row_index < outer_num_rows;
        outer_row_index += stride) {
-    auto query_pair = pair_func(outer_row_index);
+    auto query_pair  = pair(outer_row_index);
+    auto const count = count_ref.count(query_pair);
     if (join_type == join_kind::LEFT_JOIN || join_type == join_kind::FULL_JOIN) {
-      matches_per_row[outer_row_index] =
-        hash_table_view.pair_count_outer(this_thread, query_pair, count_equality);
+      // Non-matching rows are counted as 1 match for the outer joins
+      matches_per_row[outer_row_index] = count == 0 ? 1 : count;
     } else {
-      matches_per_row[outer_row_index] =
-        hash_table_view.pair_count(this_thread, query_pair, count_equality);
+      matches_per_row[outer_row_index] = count;
     }
-    thread_counter += matches_per_row[outer_row_index];
-  }
-
-  using BlockReduce = cub::BlockReduce<cudf::size_type, block_size>;
-  __shared__ typename BlockReduce::TempStorage temp_storage;
-  std::size_t block_counter = BlockReduce(temp_storage).Sum(thread_counter);
-
-  // Add block counter to global counter
-  if (threadIdx.x == 0) {
-    cuda::atomic_ref<std::size_t, cuda::thread_scope_device> ref{*output_size};
-    ref.fetch_add(block_counter, cuda::std::memory_order_relaxed);
   }
 }
 
@@ -114,7 +96,7 @@ std::size_t launch_compute_mixed_join_output_size(
   row_hash const hash_probe,
   row_equality const equality_probe,
   join_kind const join_type,
-  cudf::detail::mixed_multimap_type::device_view hash_table_view,
+  cudf::detail::mixed_join_hash_table_ref_t hash_table_ref,
   ast::detail::expression_device_view device_expression_data,
   bool const swap_tables,
   cudf::device_span<cudf::size_type> matches_per_row,
@@ -123,9 +105,6 @@ std::size_t launch_compute_mixed_join_output_size(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  // Allocate storage for the counter used to get the size of the join output
-  cudf::detail::device_scalar<std::size_t> size(0, stream, mr);
-
   compute_mixed_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, has_nulls>
     <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
       left_table,
@@ -135,12 +114,12 @@ std::size_t launch_compute_mixed_join_output_size(
       hash_probe,
       equality_probe,
       join_type,
-      hash_table_view,
+      hash_table_ref,
       device_expression_data,
       swap_tables,
-      size.data(),
       matches_per_row);
-  return size.value(stream);
+  return thrust::reduce(
+    rmm::exec_policy_nosync(stream), matches_per_row.begin(), matches_per_row.end());
 }
 
 }  // namespace detail

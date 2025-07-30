@@ -129,13 +129,18 @@ mixed_join(
   auto probe_view = table_device_view::create(probe, stream);
   auto build_view = table_device_view::create(build, stream);
 
-  // Don't use multimap_type because we want a CG size of 1.
+  // Use static_multiset with CG size of 1 for mixed joins.
   mixed_multimap_type hash_table{
-    compute_hash_table_size(build.num_rows()),
-    cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
-    cuco::empty_value{cudf::detail::JoinNoneValue},
-    stream.value(),
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream}};
+    cuco::extent{static_cast<std::size_t>(build.num_rows())},
+    cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
+    cuco::empty_key{
+      cuco::pair{std::numeric_limits<hash_value_type>::max(), cudf::detail::JoinNoneValue}},
+    {},
+    {},
+    {},
+    {},
+    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
+    stream.value()};
 
   // TODO: To add support for nested columns we will need to flatten in many
   // places. However, this probably isn't worth adding any time soon since we
@@ -151,7 +156,7 @@ mixed_join(
                         compare_nulls,
                         static_cast<bitmask_type const*>(row_bitmask.data()),
                         stream);
-  auto hash_table_view = hash_table.get_device_view();
+  auto hash_table_ref = hash_table.ref();
 
   auto left_conditional_view  = table_device_view::create(left_conditional, stream);
   auto right_conditional_view = table_device_view::create(right_conditional, stream);
@@ -198,7 +203,7 @@ mixed_join(
                                                               hash_probe,
                                                               equality_probe,
                                                               kernel_join_type,
-                                                              hash_table_view,
+                                                              hash_table_ref,
                                                               parser.device_expression_data,
                                                               swap_tables,
                                                               mutable_matches_per_row_span,
@@ -214,7 +219,7 @@ mixed_join(
                                                                hash_probe,
                                                                equality_probe,
                                                                kernel_join_type,
-                                                               hash_table_view,
+                                                               hash_table_ref,
                                                                parser.device_expression_data,
                                                                swap_tables,
                                                                mutable_matches_per_row_span,
@@ -236,14 +241,6 @@ mixed_join(
                      std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
   }
 
-  // Given the number of matches per row, we need to compute the offsets for insertion.
-  auto join_result_offsets =
-    rmm::device_uvector<size_type>{static_cast<std::size_t>(outer_num_rows), stream, mr};
-  thrust::exclusive_scan(rmm::exec_policy{stream},
-                         matches_per_row_span.begin(),
-                         matches_per_row_span.end(),
-                         join_result_offsets.begin());
-
   auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
   auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
 
@@ -258,11 +255,10 @@ mixed_join(
                             hash_probe,
                             equality_probe,
                             kernel_join_type,
-                            hash_table_view,
+                            hash_table_ref,
                             join_output_l,
                             join_output_r,
                             parser.device_expression_data,
-                            join_result_offsets.data(),
                             swap_tables,
                             config,
                             shmem_size_per_block,
@@ -275,11 +271,10 @@ mixed_join(
                              hash_probe,
                              equality_probe,
                              kernel_join_type,
-                             hash_table_view,
+                             hash_table_ref,
                              join_output_l,
                              join_output_r,
                              parser.device_expression_data,
-                             join_result_offsets.data(),
                              swap_tables,
                              config,
                              shmem_size_per_block,
@@ -396,13 +391,18 @@ compute_mixed_join_output_size(table_view const& left_equality,
   auto probe_view = table_device_view::create(probe, stream);
   auto build_view = table_device_view::create(build, stream);
 
-  // Don't use multimap_type because we want a CG size of 1.
+  // Use static_multiset with CG size of 1 for mixed joins.
   mixed_multimap_type hash_table{
-    compute_hash_table_size(build.num_rows()),
-    cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
-    cuco::empty_value{cudf::detail::JoinNoneValue},
-    stream.value(),
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream}};
+    cuco::extent{build.num_rows()},
+    cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
+    cuco::empty_key{
+      cuco::pair{std::numeric_limits<hash_value_type>::max(), cudf::detail::JoinNoneValue}},
+    {},
+    {},
+    {},
+    {},
+    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
+    stream.value()};
 
   // TODO: To add support for nested columns we will need to flatten in many
   // places. However, this probably isn't worth adding any time soon since we
@@ -418,7 +418,7 @@ compute_mixed_join_output_size(table_view const& left_equality,
                         compare_nulls,
                         static_cast<bitmask_type const*>(row_bitmask.data()),
                         stream);
-  auto hash_table_view = hash_table.get_device_view();
+  auto hash_table_ref = hash_table.ref();
 
   auto left_conditional_view  = table_device_view::create(left_conditional, stream);
   auto right_conditional_view = table_device_view::create(right_conditional, stream);
@@ -438,40 +438,41 @@ compute_mixed_join_output_size(table_view const& left_equality,
 
   // Determine number of output rows without actually building the output to simply
   // find what the size of the output will be.
-  std::size_t size = 0;
-  if (has_nulls) {
-    size = launch_compute_mixed_join_output_size<true>(*left_conditional_view,
-                                                       *right_conditional_view,
-                                                       *probe_view,
-                                                       *build_view,
-                                                       hash_probe,
-                                                       equality_probe,
-                                                       join_type,
-                                                       hash_table_view,
-                                                       parser.device_expression_data,
-                                                       swap_tables,
-                                                       matches_per_row_span,
-                                                       config,
-                                                       shmem_size_per_block,
-                                                       stream,
-                                                       mr);
-  } else {
-    size = launch_compute_mixed_join_output_size<false>(*left_conditional_view,
-                                                        *right_conditional_view,
-                                                        *probe_view,
-                                                        *build_view,
-                                                        hash_probe,
-                                                        equality_probe,
-                                                        join_type,
-                                                        hash_table_view,
-                                                        parser.device_expression_data,
-                                                        swap_tables,
-                                                        matches_per_row_span,
-                                                        config,
-                                                        shmem_size_per_block,
-                                                        stream,
-                                                        mr);
-  }
+  std::size_t const size = [&]() {
+    if (has_nulls) {
+      return launch_compute_mixed_join_output_size<true>(*left_conditional_view,
+                                                         *right_conditional_view,
+                                                         *probe_view,
+                                                         *build_view,
+                                                         hash_probe,
+                                                         equality_probe,
+                                                         join_type,
+                                                         hash_table_ref,
+                                                         parser.device_expression_data,
+                                                         swap_tables,
+                                                         matches_per_row_span,
+                                                         config,
+                                                         shmem_size_per_block,
+                                                         stream,
+                                                         mr);
+    } else {
+      return launch_compute_mixed_join_output_size<false>(*left_conditional_view,
+                                                          *right_conditional_view,
+                                                          *probe_view,
+                                                          *build_view,
+                                                          hash_probe,
+                                                          equality_probe,
+                                                          join_type,
+                                                          hash_table_ref,
+                                                          parser.device_expression_data,
+                                                          swap_tables,
+                                                          matches_per_row_span,
+                                                          config,
+                                                          shmem_size_per_block,
+                                                          stream,
+                                                          mr);
+    }
+  }();
 
   return {size, std::move(matches_per_row)};
 }

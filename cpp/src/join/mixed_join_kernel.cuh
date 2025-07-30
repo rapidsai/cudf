@@ -29,14 +29,16 @@
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <cooperative_groups.h>
-#include <cub/cub.cuh>
-#include <thrust/iterator/discard_iterator.h>
-
 namespace cudf {
 namespace detail {
 
-namespace cg = cooperative_groups;
+struct output_fn {
+  __device__ constexpr cudf::size_type operator()(
+    cuco::pair<hash_value_type, cudf::size_type> const& slot) const
+  {
+    return slot.second;
+  }
+};
 
 template <cudf::size_type block_size, bool has_nulls>
 CUDF_KERNEL void __launch_bounds__(block_size)
@@ -47,11 +49,11 @@ CUDF_KERNEL void __launch_bounds__(block_size)
              row_hash const hash_probe,
              row_equality const equality_probe,
              join_kind const join_type,
-             cudf::detail::mixed_multimap_type::device_view hash_table_view,
-             size_type* join_output_l,
-             size_type* join_output_r,
+             cudf::detail::mixed_join_hash_table_ref_t const& hash_table_ref,
+             thrust::transform_output_iterator<output_fn, size_type*> join_output_l,
+             thrust::transform_output_iterator<output_fn, size_type*> join_output_r,
+             cuda::atomic<std::size_t, cuda::thread_scope_device>* size,
              cudf::ast::detail::expression_device_view device_expression_data,
-             cudf::size_type const* join_result_offsets,
              bool const swap_tables)
 {
   // Normally the casting of a shared memory array is used to create multiple
@@ -68,45 +70,39 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   cudf::size_type const right_num_rows = right_table.num_rows();
   auto const outer_num_rows            = (swap_tables ? right_num_rows : left_num_rows);
 
-  cudf::size_type outer_row_index = threadIdx.x + blockIdx.x * block_size;
+  cudf::size_type const outer_row_index = threadIdx.x + blockIdx.x * block_size;
 
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
     left_table, right_table, device_expression_data);
+  auto equality = pair_expression_equality<has_nulls>{
+    evaluator, thread_intermediate_storage, swap_tables, equality_probe};
+  auto retrieve_ref = hash_table_ref.rebind_operator(cuco::retrieve_tag{}).rebind_key_eq(equality);
 
-  auto const empty_key_sentinel = hash_table_view.get_empty_key_sentinel();
-  make_pair_function pair_func{hash_probe, empty_key_sentinel};
+  auto const pair_iter = thrust::make_counting_transform_iterator(0, pair_fn{hash_probe});
 
-  if (outer_row_index < outer_num_rows) {
-    // Figure out the number of elements for this key.
-    cg::thread_block_tile<1> this_thread = cg::this_thread();
-    // Figure out the number of elements for this key.
-    auto query_pair = pair_func(outer_row_index);
-    auto equality   = pair_expression_equality<has_nulls>{
-      evaluator, thread_intermediate_storage, swap_tables, equality_probe};
+  namespace cg = cooperative_groups;
 
-    auto probe_key_begin       = thrust::make_discard_iterator();
-    auto probe_value_begin     = swap_tables ? join_output_r + join_result_offsets[outer_row_index]
-                                             : join_output_l + join_result_offsets[outer_row_index];
-    auto contained_key_begin   = thrust::make_discard_iterator();
-    auto contained_value_begin = swap_tables ? join_output_l + join_result_offsets[outer_row_index]
-                                             : join_output_r + join_result_offsets[outer_row_index];
+  auto const block = cg::this_thread_block();
 
+  auto const block_begin_offset = block.group_index().x * block_size;
+  auto const block_end_offset   = min(
+    outer_num_rows, static_cast<cudf::detail::thread_index_type>(block_begin_offset + block_size));
+
+  if (block_begin_offset < block_end_offset) {
     if (join_type == join_kind::LEFT_JOIN || join_type == join_kind::FULL_JOIN) {
-      hash_table_view.pair_retrieve_outer(this_thread,
-                                          query_pair,
-                                          probe_key_begin,
-                                          probe_value_begin,
-                                          contained_key_begin,
-                                          contained_value_begin,
-                                          equality);
+      retrieve_ref.retrieve_outer(block,
+                                  pair_iter + block_begin_offset,
+                                  pair_iter + block_end_offset,
+                                  join_output_l,
+                                  join_output_r,
+                                  size);
     } else {
-      hash_table_view.pair_retrieve(this_thread,
-                                    query_pair,
-                                    probe_key_begin,
-                                    probe_value_begin,
-                                    contained_key_begin,
-                                    contained_value_begin,
-                                    equality);
+      retrieve_ref.retrieve(block,
+                            pair_iter + block_begin_offset,
+                            pair_iter + block_end_offset,
+                            join_output_l,
+                            join_output_r,
+                            size);
     }
   }
 }
@@ -119,16 +115,17 @@ void launch_mixed_join(table_device_view left_table,
                        row_hash const hash_probe,
                        row_equality const equality_probe,
                        join_kind const join_type,
-                       cudf::detail::mixed_multimap_type::device_view hash_table_view,
+                       cudf::detail::mixed_join_hash_table_ref_t const& hash_table_ref,
                        size_type* join_output_l,
                        size_type* join_output_r,
                        cudf::ast::detail::expression_device_view device_expression_data,
-                       cudf::size_type const* join_result_offsets,
                        bool const swap_tables,
                        detail::grid_1d const config,
                        int64_t shmem_size_per_block,
                        rmm::cuda_stream_view stream)
 {
+  cudf::detail::device_scalar<cuda::atomic<std::size_t, cuda::thread_scope_device>> size(0, stream);
+
   mixed_join<DEFAULT_JOIN_BLOCK_SIZE, has_nulls>
     <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
       left_table,
@@ -137,12 +134,11 @@ void launch_mixed_join(table_device_view left_table,
       build,
       hash_probe,
       equality_probe,
-      join_type,
-      hash_table_view,
-      join_output_l,
-      join_output_r,
+      join_type hash_table_ref,
+      thrust::make_transform_output_iterator(join_output_l, output_fn{}),
+      thrust::make_transform_output_iterator(join_output_r, output_fn{}),
+      size.data(),
       device_expression_data,
-      join_result_offsets,
       swap_tables);
 }
 
