@@ -15,7 +15,7 @@
  */
 #pragma once
 
-#include <cudf/ast/detail/ast_operator.cuh>
+#include <cudf/ast/ast_operator.cuh>
 #include <cudf/ast/detail/possibly_null.cuh>
 #include <cudf/fixed_point/conv.hpp>
 #include <cudf/types.hpp>

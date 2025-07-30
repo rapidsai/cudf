@@ -15,7 +15,7 @@
  */
 #pragma once
 
-#include <cudf/ast/detail/ast_operator.cuh>
+#include <cudf/ast/ast_operator.cuh>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/table/table_view.hpp>

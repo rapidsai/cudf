@@ -15,7 +15,7 @@
  */
 #pragma once
 
-#include <cudf/ast/detail/ast_operator.cuh>
+#include <cudf/ast/ast_operator.cuh>
 #include <cudf/ast/detail/operator_functor.cuh>
 #include <cudf/ast/detail/possibly_null.cuh>
 #include <cudf/ast/expressions.hpp>
