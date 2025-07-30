@@ -238,6 +238,7 @@ cdef class Operation(Expression):
         You should only pass this if the input expression is a binary operation.
     """
     def __cinit__(self, ast_operator op, Expression left, Expression right=None):
+        self.op = op
         self.left = left
         self.right = right
         if right is None:
@@ -262,6 +263,7 @@ cdef class ColumnNameReference(Expression):
         (provided when the expression is evaluated).
     """
     def __cinit__(self, str name):
+        self.name = name
         self.c_obj = <expression_ptr> \
             move(make_unique[libcudf_exp.column_name_reference](
                 <string>(name.encode("utf-8"))

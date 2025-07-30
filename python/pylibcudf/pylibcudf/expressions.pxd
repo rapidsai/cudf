@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from pylibcudf.libcudf.expressions cimport (
@@ -15,7 +15,7 @@ cdef class Expression:
 
 cdef class Literal(Expression):
     # Hold on to input scalar so it doesn't get gc'ed
-    cdef Scalar scalar
+    cdef public Scalar scalar
 
 cdef class ColumnReference(Expression):
     pass
@@ -23,8 +23,9 @@ cdef class ColumnReference(Expression):
 cdef class Operation(Expression):
     # Hold on to the input expressions so
     # they don't get gc'ed
-    cdef Expression right
-    cdef Expression left
+    cdef public ast_operator op
+    cdef public Expression right
+    cdef public Expression left
 
 cdef class ColumnNameReference(Expression):
-    pass
+    cdef public str name
