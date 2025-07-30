@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -238,8 +238,11 @@ class data_profile {
 
   double bool_probability_true           = 0.5;
   std::optional<double> null_probability = 0.01;
-  cudf::size_type cardinality            = 2000;
-  cudf::size_type avg_run_length         = 4;
+  cudf::size_type cardinality =
+    2000;  /// Upper bound on the number of unique values generated if `0 <= cardinality < n`, where
+           /// `n` is the total number of values to be generated. If `cardinality >= n`, n` unique
+           /// values of the requested data type are generated.
+  cudf::size_type avg_run_length = 4;
 
  public:
   template <typename T,
