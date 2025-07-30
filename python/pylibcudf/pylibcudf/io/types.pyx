@@ -661,3 +661,9 @@ cdef class SinkInfo:
             self.c_obj = sink_info(paths)
 
     __hash__ = None
+
+ColumnEncoding.__str__ = ColumnEncoding.__repr__
+CompressionType.__str__ = CompressionType.__repr__
+DictionaryPolicy.__str__ = DictionaryPolicy.__repr__
+QuoteStyle.__str__ = QuoteStyle.__repr__
+StatisticsFreq.__str__ = StatisticsFreq.__repr__
