@@ -251,6 +251,11 @@ class TimeDeltaColumn(TemporalBaseColumn):
                 )
 
     def as_string_column(self, dtype) -> StringColumn:
+        if cudf.get_option("mode.pandas_compatible"):
+            if isinstance(dtype, np.dtype) and dtype.kind == "O":
+                raise TypeError(
+                    f"cannot astype a timedelta like from {self.dtype} to {dtype}"
+                )
         return self.strftime("%D days %H:%M:%S")
 
     def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:

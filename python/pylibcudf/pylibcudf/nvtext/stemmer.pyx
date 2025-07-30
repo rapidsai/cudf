@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -12,7 +12,9 @@ from pylibcudf.libcudf.nvtext.stemmer cimport (
 )
 from pylibcudf.libcudf.types cimport size_type
 
-__all__ = ["is_letter", "porter_stemmer_measure"]
+from pylibcudf.libcudf.nvtext.stemmer import letter_type as LetterType # no-cython-lint
+
+__all__ = ["is_letter", "porter_stemmer_measure", "LetterType"]
 
 cpdef Column is_letter(
     Column input,
@@ -75,3 +77,5 @@ cpdef Column porter_stemmer_measure(Column input):
         c_result = cpp_porter_stemmer_measure(input.view())
 
     return Column.from_libcudf(move(c_result))
+
+LetterType.__str__ = LetterType.__repr__
