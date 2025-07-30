@@ -77,24 +77,32 @@ cudf::table create_sparse_results_table(cudf::table_view const& flattened_values
 
       // Special handling for SUM_WITH_OVERFLOW which needs a struct column
       if (agg == cudf::aggregation::SUM_WITH_OVERFLOW) {
+        // Lambda to create empty columns for better readability
+        auto make_empty_column =
+          [&stream](cudf::type_id type_id, cudf::size_type size, cudf::mask_state mask_state) {
+            return make_fixed_width_column(cudf::data_type{type_id}, size, mask_state, stream);
+          };
+
+        // Lambda to create children for SUM_WITH_OVERFLOW struct column
+        auto make_children = [&make_empty_column](cudf::size_type size,
+                                                  cudf::mask_state mask_state) {
+          std::vector<std::unique_ptr<cudf::column>> children;
+          // Create sum child column (int64_t) - no null mask needed, struct-level mask handles
+          // nullability
+          children.push_back(
+            make_empty_column(cudf::type_id::INT64, size, cudf::mask_state::UNALLOCATED));
+          // Create overflow child column (bool) - no null mask needed, only value matters
+          children.push_back(
+            make_empty_column(cudf::type_id::BOOL8, size, cudf::mask_state::UNALLOCATED));
+          return children;
+        };
+
         if (col.size() == 0) {
           // For empty columns, create empty struct column manually
-          std::vector<std::unique_ptr<cudf::column>> children;
-          children.push_back(make_fixed_width_column(
-            cudf::data_type{cudf::type_id::INT64}, 0, cudf::mask_state::UNALLOCATED, stream));
-          children.push_back(make_fixed_width_column(
-            cudf::data_type{cudf::type_id::BOOL8}, 0, cudf::mask_state::UNALLOCATED, stream));
-          return make_structs_column(0, std::move(children), 0, {}, stream);
+          auto children = make_children(0, cudf::mask_state::UNALLOCATED);
+          return create_structs_hierarchy(0, std::move(children), 0, {}, stream);
         } else {
-          std::vector<std::unique_ptr<cudf::column>> children;
-
-          // Create sum child column (int64_t)
-          children.push_back(make_fixed_width_column(
-            cudf::data_type{cudf::type_id::INT64}, col.size(), mask_flag, stream));
-
-          // Create overflow child column (bool)
-          children.push_back(make_fixed_width_column(
-            cudf::data_type{cudf::type_id::BOOL8}, col.size(), mask_flag, stream));
+          auto children = make_children(col.size(), mask_flag);
 
           // Create struct column with the children
           // For SUM_WITH_OVERFLOW, make struct nullable if input has nulls (same as other
@@ -103,10 +111,10 @@ cudf::table create_sparse_results_table(cudf::table_view const& flattened_values
             // Start with ALL_NULL, results will be marked valid during aggregation
             auto null_mask = cudf::create_null_mask(col.size(), cudf::mask_state::ALL_NULL, stream);
             auto null_count = col.size();  // All null initially
-            return make_structs_column(
+            return create_structs_hierarchy(
               col.size(), std::move(children), null_count, std::move(null_mask), stream);
           } else {
-            return make_structs_column(col.size(), std::move(children), 0, {}, stream);
+            return create_structs_hierarchy(col.size(), std::move(children), 0, {}, stream);
           }
         }
       } else {

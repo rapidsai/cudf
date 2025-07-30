@@ -1372,8 +1372,8 @@ struct target_type_impl<Source,
 
 constexpr bool is_sum_product_agg(aggregation::Kind k)
 {
-  return (k == aggregation::SUM) || (k == aggregation::SUM_WITH_OVERFLOW) ||
-         (k == aggregation::PRODUCT) || (k == aggregation::SUM_OF_SQUARES);
+  return (k == aggregation::SUM) || (k == aggregation::PRODUCT) ||
+         (k == aggregation::SUM_OF_SQUARES);
 }
 
 // Summing/Multiplying integers of any type, always use int64_t accumulator (except

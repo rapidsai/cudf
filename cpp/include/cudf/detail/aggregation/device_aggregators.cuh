@@ -168,18 +168,21 @@ struct update_target_element<Source, aggregation::SUM_WITH_OVERFLOW> {
     auto sum_column      = target.child(0);
     auto overflow_column = target.child(1);
 
-    // Mark child columns as valid when they will be updated
-    if (sum_column.is_null(target_index)) { sum_column.set_valid(target_index); }
-    if (overflow_column.is_null(target_index)) { overflow_column.set_valid(target_index); }
-
     auto const source_value = source.element<Source>(source_index);
     auto const old_sum =
       cudf::detail::atomic_add(&sum_column.element<int64_t>(target_index), source_value);
 
-    // Check for overflow: if old_sum and source_value have same sign but result has different sign
-    auto const new_sum  = old_sum + source_value;
-    auto const overflow = ((old_sum > 0 && source_value > 0 && new_sum < 0) ||
-                           (old_sum < 0 && source_value < 0 && new_sum > 0));
+    // Early exit if overflow is already set to avoid unnecessary overflow checking
+    if (overflow_column.element<bool>(target_index)) { return; }
+
+    // Check for overflow before performing the addition to avoid UB
+    // For positive overflow: old_sum > 0, source_value > 0, and old_sum > max - source_value
+    // For negative overflow: old_sum < 0, source_value < 0, and old_sum < min - source_value
+    auto constexpr int64_max = cuda::std::numeric_limits<int64_t>::max();
+    auto constexpr int64_min = cuda::std::numeric_limits<int64_t>::min();
+    auto const overflow =
+      ((old_sum > 0 && source_value > 0 && old_sum > int64_max - source_value) ||
+       (old_sum < 0 && source_value < 0 && old_sum < int64_min - source_value));
     if (overflow) {
       // Atomically set overflow flag to true (use atomic_max since true > false)
       cudf::detail::atomic_max(&overflow_column.element<bool>(target_index), true);

@@ -254,7 +254,7 @@ TYPED_TEST(groupby_sum_with_overflow_test, basic)
   std::vector<std::unique_ptr<cudf::column>> children;
   children.push_back(sum_col.release());
   children.push_back(overflow_col.release());
-  auto expect_vals = cudf::make_structs_column(3, std::move(children), 0, {});
+  auto expect_vals = cudf::create_structs_hierarchy(3, std::move(children), 0, {});
 
   auto agg = cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, *expect_vals, std::move(agg));
@@ -277,7 +277,7 @@ TYPED_TEST(groupby_sum_with_overflow_test, empty_cols)
   std::vector<std::unique_ptr<cudf::column>> children;
   children.push_back(sum_col.release());
   children.push_back(overflow_col.release());
-  auto expect_vals = cudf::make_structs_column(0, std::move(children), 0, {});
+  auto expect_vals = cudf::create_structs_hierarchy(0, std::move(children), 0, {});
 
   auto agg = cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, *expect_vals, std::move(agg));
@@ -289,16 +289,18 @@ TYPED_TEST(groupby_sum_with_overflow_test, zero_valid_keys)
 {
   using V = TypeParam;
 
-  cudf::test::fixed_width_column_wrapper<int32_t> keys{1, 2, 3}, expect_keys{};
-  cudf::test::fixed_width_column_wrapper<V> vals{{3, 1, 2}, {0, 0, 0}};
+  cudf::test::fixed_width_column_wrapper<K> keys({1, 2, 3}, cudf::test::iterators::all_nulls());
+  cudf::test::fixed_width_column_wrapper<V> vals{3, 4, 5};
 
-  // Expected: all keys are valid, so we'd expect 3 groups, but there are actually no valid groups
-  std::vector<std::unique_ptr<cudf::column>> children;
+  cudf::test::fixed_width_column_wrapper<K> expect_keys{};
+
+  // Create expected empty struct column with sum and overflow children
   auto sum_col      = cudf::test::fixed_width_column_wrapper<int64_t>{};
   auto overflow_col = cudf::test::fixed_width_column_wrapper<bool>{};
+  std::vector<std::unique_ptr<cudf::column>> children;
   children.push_back(sum_col.release());
   children.push_back(overflow_col.release());
-  auto expect_vals = cudf::make_structs_column(0, std::move(children), 0, {});
+  auto expect_vals = cudf::create_structs_hierarchy(0, std::move(children), 0, {});
 
   auto agg = cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, *expect_vals, std::move(agg));
@@ -310,13 +312,13 @@ TYPED_TEST(groupby_sum_with_overflow_test, zero_valid_values)
 {
   using V = TypeParam;
 
-  cudf::test::fixed_width_column_wrapper<int32_t> keys{1, 1, 1};
+  cudf::test::fixed_width_column_wrapper<K> keys{1, 1, 1};
   cudf::test::fixed_width_column_wrapper<V> vals({3, 4, 5}, cudf::test::iterators::all_nulls());
 
-  cudf::test::fixed_width_column_wrapper<int32_t> expect_keys{1};
+  cudf::test::fixed_width_column_wrapper<K> expect_keys{1};
 
   // Create expected struct column with sum and overflow children (null result)
-  // When the struct is null, children should have valid values but the struct itself is null
+  // Child columns have no null masks, only struct-level null mask matters
   auto sum_col      = cudf::test::fixed_width_column_wrapper<int64_t>({0});
   auto overflow_col = cudf::test::fixed_width_column_wrapper<bool>({false});
   std::vector<std::unique_ptr<cudf::column>> children;
@@ -326,7 +328,7 @@ TYPED_TEST(groupby_sum_with_overflow_test, zero_valid_values)
   auto [validity_mask, null_count] =
     cudf::test::detail::make_null_mask(validity.begin(), validity.end());
   auto expect_vals =
-    cudf::make_structs_column(1, std::move(children), null_count, std::move(validity_mask));
+    cudf::create_structs_hierarchy(1, std::move(children), null_count, std::move(validity_mask));
 
   auto agg = cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, *expect_vals, std::move(agg));
@@ -338,20 +340,29 @@ TYPED_TEST(groupby_sum_with_overflow_test, null_keys_and_values)
 {
   using V = TypeParam;
 
-  cudf::test::fixed_width_column_wrapper<int32_t> keys{{1, 2, 3, 1, 2, 2, 1, 3, 3, 2},
-                                                       {1, 1, 1, 1, 1, 1, 1, 0, 1, 1}};
-  cudf::test::fixed_width_column_wrapper<V> vals{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
-                                                 {0, 1, 1, 1, 1, 0, 1, 1, 1, 1}};
-  cudf::test::fixed_width_column_wrapper<int32_t> expect_keys{1, 2, 3};
+  cudf::test::fixed_width_column_wrapper<K> keys(
+    {1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
+    {true, true, true, true, true, true, true, false, true, true, true});
+  cudf::test::fixed_width_column_wrapper<V> vals({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 4},
+                                                 {0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
 
-  // Expected: key 1 has values 3, 6 (sum=9), key 2 has values 1, 4, 9 (sum=14), key 3 has value 2
-  // (sum=2)
+  //  { 1, 1,     2, 2, 2,   3, 3,    4}
+  cudf::test::fixed_width_column_wrapper<K> expect_keys({1, 2, 3, 4},
+                                                        cudf::test::iterators::no_nulls());
+
+  // Create expected struct column with sum and overflow children
+  //  { 3, 6,     1, 4, 9,   2, 8,    -}
+  // Child columns have no null masks, only struct-level null mask matters
+  auto sum_col      = cudf::test::fixed_width_column_wrapper<int64_t>({9, 14, 10, 0});
+  auto overflow_col = cudf::test::fixed_width_column_wrapper<bool>({false, false, false, false});
   std::vector<std::unique_ptr<cudf::column>> children;
-  auto sum_col      = cudf::test::fixed_width_column_wrapper<int64_t>{9, 14, 2};
-  auto overflow_col = cudf::test::fixed_width_column_wrapper<bool>{false, false, false};
   children.push_back(sum_col.release());
   children.push_back(overflow_col.release());
-  auto expect_vals = cudf::make_structs_column(3, std::move(children), 0, {});
+  std::vector<int> validity{1, 1, 1, 0};
+  auto [validity_mask, null_count] =
+    cudf::test::detail::make_null_mask(validity.begin(), validity.end());
+  auto expect_vals =
+    cudf::create_structs_hierarchy(4, std::move(children), null_count, std::move(validity_mask));
 
   auto agg = cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, *expect_vals, std::move(agg));
@@ -363,39 +374,63 @@ TYPED_TEST(groupby_sum_with_overflow_test, overflow_detection)
 {
   using V = TypeParam;
 
-  cudf::test::fixed_width_column_wrapper<int32_t> keys{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
-  // Mix of values that will cause overflow for some groups but not others
+  cudf::test::fixed_width_column_wrapper<K> keys{1, 2, 3, 4, 1, 2, 2, 1, 3, 3, 2, 4, 4};
+  // Mix of values that will cause positive and negative overflow for some groups but not others
   cudf::test::fixed_width_column_wrapper<V> vals{
-    9223372036854775800L,  // Close to INT64_MAX
-    100L,                  // Small value
-    200L,                  // Small value
-    20L,                   // Small value that will cause overflow when added to first
-    200L,                  // Small value
-    300L,                  // Small value
-    9223372036854775800L,  // Close to INT64_MAX
-    9223372036854775800L,  // Close to INT64_MAX
-    1L,                    // Small value
-    400L};                 // Small value
+    9223372036854775800L,    // Close to INT64_MAX
+    100L,                    // Small value
+    200L,                    // Small value
+    -9223372036854775800L,   // Close to INT64_MIN
+    20L,                     // Small value that will cause positive overflow when added to first
+    200L,                    // Small value
+    300L,                    // Small value
+    9223372036854775800L,    // Close to INT64_MAX
+    9223372036854775800L,    // Close to INT64_MAX
+    1L,                      // Small value
+    400L,                    // Small value
+    -20L,                    // Small value that will cause negative overflow when added to fourth
+    -9223372036854775800L};  // Close to INT64_MIN
 
-  cudf::test::fixed_width_column_wrapper<int32_t> expect_keys{1, 2, 3};
+  cudf::test::fixed_width_column_wrapper<K> expect_keys{1, 2, 3, 4};
 
   // Create expected struct column with sum and overflow children
-  // Group 1: 9223372036854775800 + 20 + 9223372036854775800 = overflow
+  // Group 1: 9223372036854775800 + 20 + 9223372036854775800 = positive overflow
   // Group 2: 100 + 200 + 300 + 400 = 1000 (no overflow)
-  // Group 3: 200 + 9223372036854775800 + 1 = overflow
+  // Group 3: 200 + 9223372036854775800 + 1 = positive overflow
+  // Group 4: -9223372036854775800 + (-20) + (-9223372036854775800) = negative overflow
   auto sum_col = cudf::test::fixed_width_column_wrapper<int64_t>{
-    4L,                    // Overflow result for group 1
-    1000L,                 // Normal sum for group 2 (no overflow)
-    -9223372036854775615L  // Overflow result for group 3
+    4L,                     // Positive overflow result for group 1
+    1000L,                  // Normal sum for group 2 (no overflow)
+    -9223372036854775615L,  // Positive overflow result for group 3
+    -4L                     // Negative overflow result for group 4
   };
-  auto overflow_col = cudf::test::fixed_width_column_wrapper<bool>{true, false, true};
+  auto overflow_col = cudf::test::fixed_width_column_wrapper<bool>{true, false, true, true};
   std::vector<std::unique_ptr<cudf::column>> children;
   children.push_back(sum_col.release());
   children.push_back(overflow_col.release());
-  auto expect_vals = cudf::make_structs_column(3, std::move(children), 0, {});
+  auto expect_vals = cudf::create_structs_hierarchy(4, std::move(children), 0, {});
 
   auto agg = cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, *expect_vals, std::move(agg));
 
   // Note: SUM_WITH_OVERFLOW only works with hash groupby, not sort groupby
+}
+
+// Test that SUM_WITH_OVERFLOW throws an error for invalid value types
+TEST(groupby_sum_with_overflow_error_test, invalid_value_type)
+{
+  using K = int32_t;
+  using V = int32_t;  // Invalid type for SUM_WITH_OVERFLOW, should only support int64_t
+
+  cudf::test::fixed_width_column_wrapper<K> keys{1, 1, 1, 2, 2, 2, 3, 3, 3};
+  cudf::test::fixed_width_column_wrapper<V> vals{1, 2, 3, 4, 5, 6, 7, 8, 9};
+
+  cudf::test::fixed_width_column_wrapper<K> expect_keys{1, 2, 3};
+
+  auto agg = cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>();
+
+  // SUM_WITH_OVERFLOW should throw a logic_error when used with non-int64_t value types
+  EXPECT_THROW(
+    test_single_agg(keys, vals, expect_keys, {}, std::move(agg), force_use_sort_impl::NO),
+    cudf::logic_error);
 }
