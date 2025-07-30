@@ -3109,3 +3109,8 @@ def test_to_dense_array():
     dense = sr.dropna().to_numpy()
     assert dense.size < filled.size
     assert filled.size == len(sr)
+
+
+def test_series_np_array_all_nan_object_raises():
+    with pytest.raises(MixedTypeError):
+        cudf.Series(np.array([np.nan, np.nan], dtype=object))

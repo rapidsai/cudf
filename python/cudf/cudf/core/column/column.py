@@ -3127,23 +3127,19 @@ def as_column(
             arbitrary = arbitrary[np.newaxis]
 
         if arbitrary.dtype.kind == "O":
-            if pd.isna(arbitrary).any():
-                new_array = pa.array(arbitrary)
+            is_na = pd.isna(arbitrary)
+            if is_na.any():
+                if is_na.all():
+                    # Avoid pyarrow converting np.ndarray[object] of all NaNs to float
+                    raise MixedTypeError(
+                        "Cannot have all NaN values with object dtype."
+                    )
+                arbitrary = pa.array(arbitrary)
             else:
                 # Let pandas potentially infer object type
                 # e.g. np.array([pd.Timestamp(...)], dtype=object) -> datetime64
-                new_array = pd.Series(arbitrary)
-            res = as_column(new_array, dtype=dtype, nan_as_null=nan_as_null)
-            if (
-                cudf.get_option("mode.pandas_compatible")
-                and res.dtype.kind == "f"
-                and arbitrary.dtype.kind == "O"
-            ):
-                raise MixedTypeError(
-                    "Cannot create column with mixed types, "
-                    "pandas Series with object dtype cannot be converted to cudf Series with float dtype."
-                )
-            return res
+                arbitrary = pd.Series(arbitrary)
+            return as_column(arbitrary, dtype=dtype, nan_as_null=nan_as_null)
         elif arbitrary.dtype.kind in "SU":
             column = ColumnBase.from_arrow(pa.array(arbitrary))
             if dtype is not None:
