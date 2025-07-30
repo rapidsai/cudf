@@ -118,3 +118,12 @@ def test_multiindex_droplevel_index(level):
     level = list(level)
     gdfIndex = cudf.from_pandas(pdfIndex)
     assert_eq(pdfIndex.droplevel(level), gdfIndex.droplevel(level))
+
+
+def test_multiindex_droplevel_single_level_none_names():
+    data = [(1, 2), (3, 4)]
+    pidx = pd.MultiIndex.from_tuples(data, names=[None, None])
+    gidx = cudf.MultiIndex.from_tuples(data, names=[None, None])
+    result = gidx.droplevel(0)
+    expected = pidx.droplevel(0)
+    assert_eq(result, expected)

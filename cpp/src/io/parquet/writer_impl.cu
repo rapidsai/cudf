@@ -2160,7 +2160,14 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
       auto& row_group = agg_meta->file(p).row_groups[global_r];
 
       for (auto i = 0; i < num_columns; i++) {
-        auto const& ck          = chunks[r][i];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-reference"
+#endif
+        auto const& ck = chunks[r][i];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic pop
+#endif
         auto const dev_bfr      = ck.is_compressed ? ck.compressed_bfr : ck.uncompressed_bfr;
         auto& column_chunk_meta = row_group.columns[i].meta_data;
 
@@ -2203,7 +2210,14 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         auto& row_group    = agg_meta->file(p).row_groups[global_r];
 
         for (auto i = 0; i < num_columns; i++) {
-          auto const& ck          = chunks[r][i];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-reference"
+#endif
+          auto const& ck = chunks[r][i];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic pop
+#endif
           auto const& col         = col_desc[ck.col_desc_id];
           auto& column_chunk_meta = row_group.columns[i].meta_data;
 
@@ -2446,7 +2460,14 @@ void writer::impl::write_parquet_data_to_sink(
       auto& row_group    = _agg_meta->file(p).row_groups[global_r];
 
       for (std::size_t i = 0; i < num_columns; i++) {
-        auto const& ck     = chunks[r][i];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-reference"
+#endif
+        auto const& ck = chunks[r][i];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic pop
+#endif
         auto const dev_bfr = ck.is_compressed ? ck.compressed_bfr : ck.uncompressed_bfr;
 
         // Skip the range [0, ck.ck_stat_size) since it has already been copied to host
@@ -2493,7 +2514,14 @@ void writer::impl::write_parquet_data_to_sink(
         int const global_r    = global_rowgroup_base[p] + r - first_rg_in_part[p];
         auto const& row_group = _agg_meta->file(p).row_groups[global_r];
         for (std::size_t i = 0; i < num_columns; i++) {
-          EncColumnChunk const& ck      = chunks[r][i];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-reference"
+#endif
+          EncColumnChunk const& ck = chunks[r][i];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic pop
+#endif
           auto const& column_chunk_meta = row_group.columns[i].meta_data;
 
           // start transfer of the column index
