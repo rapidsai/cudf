@@ -3,18 +3,22 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, TypeAlias
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias
 
 import numpy as np
 
 import pylibcudf as plc
 
-from cudf.api.types import _is_scalar_or_zero_d_array, is_integer
+from cudf.api.types import (
+    _is_scalar_or_zero_d_array,
+    is_integer,
+)
 from cudf.core.column.column import as_column
 from cudf.core.copy_types import BooleanMask, GatherMap
-from cudf.core.dtypes import CategoricalDtype
+from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 from cudf.core.index import Index
 from cudf.core.multiindex import MultiIndex
+from cudf.core.series import Series
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -22,7 +26,6 @@ if TYPE_CHECKING:
     from cudf.core.column.column import ColumnBase
     from cudf.core.column_accessor import ColumnAccessor
     from cudf.core.dataframe import DataFrame
-    from cudf.core.series import Series
 
 
 class EmptyIndexer:
@@ -65,7 +68,9 @@ IndexingSpec: TypeAlias = (
 
 
 # Helpers for code-sharing between loc and iloc paths
-def expand_key(key: Any, frame: DataFrame | Series) -> tuple[Any, ...]:
+def expand_key(
+    key: Any, frame: DataFrame | Series, method_type: Literal["iloc", "loc"]
+) -> tuple[Any, ...]:
     """Slice-expand key to match dimension of the frame being indexed.
 
     Parameters
@@ -92,6 +97,33 @@ def expand_key(key: Any, frame: DataFrame | Series) -> tuple[Any, ...]:
     into a supported indexing type.
     """
     dim = len(frame.shape)
+    if (
+        isinstance(key, bool)
+        or (
+            isinstance(key, Series)
+            and key.dtype.kind == "b"
+            and method_type == "loc"
+            and len(key) != len(frame)
+        )
+        or (
+            isinstance(key, Series)
+            and key.dtype.kind == "b"
+            and method_type == "iloc"
+        )
+    ) and not (
+        frame.index.dtype.kind == "b"
+        or isinstance(frame.index, MultiIndex)
+        and frame.index.get_level_values(0).dtype.kind == "b"
+    ):
+        raise KeyError(
+            f"{key}: boolean label can not be used without a boolean index"
+        )
+
+    if isinstance(key, slice) and (
+        isinstance(key.start, bool) or isinstance(key.stop, bool)
+    ):
+        raise TypeError(f"{key}: boolean values can not be used in a slice")
+
     if isinstance(key, tuple):
         # Key potentially indexes rows and columns, slice-expand to
         # shape of frame
@@ -211,7 +243,7 @@ def destructure_iloc_key(
     IndexError
         If there are too many indexers, or any individual indexer is a tuple.
     """
-    indexers = expand_key(key, frame)
+    indexers = expand_key(key, frame, "iloc")
     if any(isinstance(k, tuple) for k in indexers):
         raise IndexError(
             "Too many indexers: can't have nested tuples in iloc indexing"
@@ -370,7 +402,7 @@ def destructure_loc_key(
     IndexError
         If there are too many indexers.
     """
-    return expand_key(key, frame)
+    return expand_key(key, frame, "loc")
 
 
 def destructure_dataframe_loc_indexer(
@@ -459,7 +491,7 @@ def ordered_find(needles: ColumnBase, haystack: ColumnBase) -> GatherMap:
     # Pre-process to match dtypes
     needle_kind = needles.dtype.kind
     haystack_kind = haystack.dtype.kind
-    if haystack_kind == "O":
+    if haystack_kind == "O" and not isinstance(haystack.dtype, IntervalDtype):
         try:
             needles = needles.astype(haystack.dtype)
         except ValueError:
