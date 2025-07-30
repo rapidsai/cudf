@@ -21,6 +21,7 @@
 #include <cudf/table/primitive_row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -28,11 +29,9 @@
 
 #include <cuco/static_set.cuh>
 
+#include <algorithm>
+
 namespace cudf::detail {
-
-namespace {
-
-}  // namespace
 
 rmm::device_uvector<bool> contains(table_view const& haystack,
                                    table_view const& needles,
@@ -55,7 +54,13 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
   // The output vector.
   auto contained = rmm::device_uvector<bool>(needles.num_rows(), stream, mr);
 
-  if (cudf::is_primitive_row_op_compatible(haystack)) {
+  // Only use primitive row operators for non-floating-point types since they don't handle NaN
+  // equality
+  auto const has_floating_point =
+    std::any_of(haystack.begin(), haystack.end(), [](auto const& col) {
+      return cudf::is_floating_point(col.type());
+    });
+  if (cudf::is_primitive_row_op_compatible(haystack) && !has_floating_point) {
     auto const d_haystack_hasher =
       cudf::row::primitive::row_hasher{nullate::DYNAMIC{has_any_nulls}, preprocessed_haystack};
     auto const d_needle_hasher =

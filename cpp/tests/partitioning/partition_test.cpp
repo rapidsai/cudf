@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,11 @@
 #include <cudf/partitioning.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
+
+#include <cuda/std/tuple>
+#include <thrust/iterator/zip_iterator.h>
+
+#include <algorithm>
 
 template <typename T>
 class PartitionTest : public cudf::test::BaseFixture {
@@ -100,15 +105,18 @@ void expect_equal_partitions(cudf::table_view expected,
   // Split the partitions, sort each partition, then compare for equality
   auto actual_split   = cudf::split(actual, split_points);
   auto expected_split = cudf::split(expected, split_points);
-  std::equal(expected_split.begin(),
-             expected_split.end(),
-             actual_split.begin(),
-             [](cudf::table_view expected, cudf::table_view actual) {
-               auto sorted_expected = cudf::sort(expected);
-               auto sorted_actual   = cudf::sort(actual);
-               CUDF_TEST_EXPECT_TABLES_EQUAL(*sorted_expected, *sorted_actual);
-               return true;
-             });
+
+  auto begin =
+    thrust::make_zip_iterator(cuda::std::make_tuple(expected_split.begin(), actual_split.begin()));
+  auto end =
+    thrust::make_zip_iterator(cuda::std::make_tuple(expected_split.end(), actual_split.end()));
+
+  std::for_each(begin, end, [](auto const& zipped) {
+    auto [expected, actual] = zipped;
+    auto sorted_expected    = cudf::sort(expected);
+    auto sorted_actual      = cudf::sort(actual);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*sorted_expected, *sorted_actual);
+  });
 }
 
 void run_partition_test(cudf::table_view table_to_partition,

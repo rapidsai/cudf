@@ -194,3 +194,77 @@ def set_decomp_env_vars(monkeypatch, request):
         for key, value in env_vars.items():
             m.setenv(key, value)
         yield
+
+
+signed_integer_types = ["int8", "int16", "int32", "int64"]
+unsigned_integer_types = ["uint8", "uint16", "uint32", "uint64"]
+float_types = ["float32", "float64"]
+datetime_types = [
+    "datetime64[ns]",
+    "datetime64[us]",
+    "datetime64[ms]",
+    "datetime64[s]",
+]
+timedelta_types = [
+    "timedelta64[ns]",
+    "timedelta64[us]",
+    "timedelta64[ms]",
+    "timedelta64[s]",
+]
+string_types = ["str"]
+bool_types = ["bool"]
+category_types = ["category"]
+
+
+@pytest.fixture(params=signed_integer_types)
+def signed_integer_types_as_str(request):
+    """
+    - "int8", "int16", "int32", "int64"
+    - "uint8", "uint16", "uint32", "uint64"
+    """
+    return request.param
+
+
+@pytest.fixture(params=signed_integer_types + unsigned_integer_types)
+def integer_types_as_str(request):
+    """
+    - "int8", "int16", "int32", "int64"
+    - "uint8", "uint16", "uint32", "uint64"
+    """
+    return request.param
+
+
+@pytest.fixture(
+    params=signed_integer_types + unsigned_integer_types + float_types
+)
+def numeric_types_as_str(request):
+    """
+    - "int8", "int16", "int32", "int64"
+    - "uint8", "uint16", "uint32", "uint64"
+    - "float32", "float64"
+    """
+    return request.param
+
+
+@pytest.fixture(
+    params=signed_integer_types
+    + unsigned_integer_types
+    + float_types
+    + datetime_types
+    + timedelta_types
+    + string_types
+    + bool_types
+    + category_types
+)
+def all_supported_types_as_str(request):
+    """
+    - "int8", "int16", "int32", "int64"
+    - "uint8", "uint16", "uint32", "uint64"
+    - "float32", "float64"
+    - "datetime64[ns]", "datetime64[us]", "datetime64[ms]", "datetime64[s]"
+    - "timedelta64[ns]", "timedelta64[us]", "timedelta64[ms]", "timedelta64[s]"
+    - "str"
+    - "category"
+    - "bool"
+    """
+    return request.param
