@@ -2573,19 +2573,25 @@ def column_empty(
     elif isinstance(dtype, CategoricalDtype):
         data = None
         children = (
-            cudf.core.column.NumericalColumn(
-                data=as_buffer(
-                    rmm.DeviceBuffer(size=row_count * SIZE_TYPE_DTYPE.itemsize)
-                ),
-                size=None,
-                dtype=SIZE_TYPE_DTYPE,
+            ColumnBase.from_pylibcudf(
+                plc.Column.from_scalar(
+                    plc.Scalar.from_py(
+                        None, dtype_to_pylibcudf_type(SIZE_TYPE_DTYPE)
+                    ),
+                    row_count,
+                )
             ),
         )
-    elif dtype.kind in "OU" and not isinstance(dtype, DecimalDtype):
-        data = as_buffer(rmm.DeviceBuffer(size=0))
-        children = (as_column(0, length=row_count + 1, dtype=SIZE_TYPE_DTYPE),)
     else:
-        data = as_buffer(rmm.DeviceBuffer(size=row_count * dtype.itemsize))
+        col = ColumnBase.from_pylibcudf(
+            plc.Column.from_scalar(
+                plc.Scalar.from_py(None, dtype_to_pylibcudf_type(dtype)),
+                row_count,
+            )
+        )._with_type_metadata(dtype)
+        if for_numba:
+            col = col.set_mask(None)
+        return col
 
     if row_count > 0 and not for_numba:
         mask = as_buffer(
