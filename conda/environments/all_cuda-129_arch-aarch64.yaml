@@ -12,7 +12,6 @@ dependencies:
 - c-compiler
 - cachetools
 - certifi
-- clang-tools=20.1.4
 - clang-tools==20.1.4
 - clang==20.1.4
 - cmake>=3.30.4
