@@ -27,7 +27,6 @@
 #include <vector>
 
 namespace CUDF_EXPORT cudf {
-
 namespace ast {
 /**
  * @addtogroup expressions
