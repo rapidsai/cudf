@@ -12,9 +12,9 @@ from cudf.testing import assert_eq
 def test_series_typecast_to_object_error():
     actual = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(ValueError):
+        with pytest.raises(TypeError):
             actual.astype(object)
-        with pytest.raises(ValueError):
+        with pytest.raises(TypeError):
             actual.astype(np.dtype("object"))
         new_series = actual.astype("str")
         assert new_series[0] == "1970-01-01 00:00:00.000000001"

@@ -415,7 +415,7 @@ def test_null_like_to_nan_pandas_compat():
 
 def test_non_strings_dtype_object_pandas_compat_raises():
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(ValueError):
+        with pytest.raises(TypeError):
             cudf.Series([1], dtype=object)
 
 

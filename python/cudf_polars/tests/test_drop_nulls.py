@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -43,6 +43,11 @@ def test_drop_null(null_data):
 )
 def test_fill_null(null_data, value):
     q = null_data.select(pl.col("a").fill_null(value))
+    assert_gpu_result_equal(q)
+
+
+def test_fill_null_with_string():
+    q = pl.LazyFrame({"a": [None, "a"]}).select(pl.col("a").fill_null("b"))
     assert_gpu_result_equal(q)
 
 

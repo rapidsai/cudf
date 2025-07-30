@@ -40,6 +40,7 @@ from cudf.utils.dtypes import (
     cudf_dtype_from_pa_type,
     find_common_type,
     is_dtype_obj_numeric,
+    is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _array_ufunc, _warn_no_dask_cudf
@@ -1456,7 +1457,16 @@ class Frame(BinaryOperand, Scannable, Serializable):
             values = [*values._columns]
         if len(values) != self._num_columns:
             raise ValueError("Mismatch number of columns to search for.")
-
+        if cudf.get_option("mode.pandas_compatible"):
+            if any(
+                col.has_nulls()
+                and is_pandas_nullable_extension_dtype(col.dtype)
+                for col in self._columns
+            ):
+                raise ValueError(
+                    "searchsorted requires array to be sorted, which is impossible "
+                    "with NAs present."
+                )
         # TODO: Change behavior based on the decision in
         # https://github.com/pandas-dev/pandas/issues/54668
         common_dtype_list = [
@@ -1485,6 +1495,8 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 na_position=itertools.repeat(na_position, times=len(sources)),
             )
         )
+        if cudf.get_option("mode.pandas_compatible"):
+            outcol = outcol.astype(np.dtype("int64"))
 
         # Return result as cupy array if the values is non-scalar
         # If values is scalar, result is expected to be scalar.
