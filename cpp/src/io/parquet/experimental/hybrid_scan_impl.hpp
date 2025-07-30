@@ -120,13 +120,13 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
     rmm::cuda_stream_view stream);
 
   /**
-   * @copydoc cudf::io::experimental::hybrid_scan::filter_data_pages_with_stats
+   * @copydoc cudf::io::experimental::hybrid_scan::build_row_mask_with_page_index_stats
    */
-  [[nodiscard]] std::pair<std::unique_ptr<cudf::column>, std::vector<std::vector<bool>>>
-  filter_data_pages_with_stats(cudf::host_span<std::vector<size_type> const> row_group_indices,
-                               parquet_reader_options const& options,
-                               rmm::cuda_stream_view stream,
-                               rmm::device_async_resource_ref mr);
+  [[nodiscard]] std::unique_ptr<cudf::column> build_row_mask_with_page_index_stats(
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr);
 
   /**
    * @brief Fetches byte ranges of column chunks of filter columns
@@ -144,10 +144,10 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    * @copydoc cudf::io::experimental::hybrid_scan::materialize_filter_columns
    */
   [[nodiscard]] table_with_metadata materialize_filter_columns(
-    cudf::host_span<std::vector<bool> const> data_page_pask,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     std::vector<rmm::device_buffer> column_chunk_buffers,
     cudf::mutable_column_view row_mask,
+    use_data_page_mask mask_data_pages,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream);
 
@@ -170,6 +170,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     std::vector<rmm::device_buffer> column_chunk_buffers,
     cudf::column_view row_mask,
+    use_data_page_mask mask_data_pages,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream);
 

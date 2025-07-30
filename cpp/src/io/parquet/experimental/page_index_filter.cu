@@ -602,7 +602,7 @@ struct is_row_required_fn {
 
 }  // namespace
 
-std::unique_ptr<cudf::column> aggregate_reader_metadata::filter_data_pages_with_stats(
+std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_page_index_stats(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   cudf::host_span<cudf::data_type const> output_dtypes,
   cudf::host_span<cudf::size_type const> output_column_schemas,
