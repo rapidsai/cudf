@@ -5,7 +5,7 @@
     "args": {
       "CUDA": "12.9",
       "PYTHON_PACKAGE_MANAGER": "conda",
-      "BASE": "rapidsai/devcontainers:25.10-cpp-mambaforge-ubuntu22.04"
+      "BASE": "rapidsai/devcontainers:25.10-cpp-mambaforge"
     }
   },
   "runArgs": [

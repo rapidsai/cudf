@@ -11,6 +11,8 @@ from pylibcudf.io.types cimport (
     TableWithMetadata,
     compression_type,
 )
+from pylibcudf.column cimport Column
+from pylibcudf.scalar cimport Scalar
 
 from pylibcudf.libcudf.io.json cimport (
     json_recovery_mode_t,
@@ -76,7 +78,16 @@ cdef class JsonReaderOptionsBuilder:
     cpdef JsonReaderOptionsBuilder unquoted_control_chars(self, bool val)
     cpdef build(self)
 
-cpdef TableWithMetadata read_json(JsonReaderOptions options)
+cpdef TableWithMetadata read_json(JsonReaderOptions options, Stream stream = *)
+
+cpdef TableWithMetadata read_json_from_string_column(
+    Column input,
+    Scalar separator,
+    Scalar narep,
+    list dtypes = *,
+    compression_type compression = *,
+    json_recovery_mode_t recovery_mode = *,
+    Stream stream = *)
 
 cdef class JsonWriterOptions:
     cdef json_writer_options c_obj
