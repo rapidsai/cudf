@@ -6,6 +6,7 @@ from pylibcudf.libcudf.expressions cimport (
     expression,
     table_reference,
 )
+from pylibcudf.libcudf.types cimport size_type
 
 from .scalar cimport Scalar
 
@@ -18,7 +19,8 @@ cdef class Literal(Expression):
     cdef public Scalar scalar
 
 cdef class ColumnReference(Expression):
-    pass
+    cdef public size_type index
+    cdef public table_reference table_source
 
 cdef class Operation(Expression):
     # Hold on to the input expressions so

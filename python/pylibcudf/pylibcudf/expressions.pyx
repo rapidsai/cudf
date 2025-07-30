@@ -217,6 +217,8 @@ cdef class ColumnReference(Expression):
         size_type index,
         table_reference table_source=table_reference.LEFT
     ):
+        self.index = index
+        self.table_source = table_source
         self.c_obj = <expression_ptr>move(make_unique[libcudf_exp.column_reference](
             index, table_source
         ))
