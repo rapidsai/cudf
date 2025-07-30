@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import functools
-import io
 from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -423,27 +422,12 @@ class StringFunction(Expr):
             return Column(plc_column, dtype=self.dtype)
         elif self.name is StringFunction.Name.JsonDecode:
             plc_column = self.children[0].evaluate(df, context=context).obj
-            # Once https://github.com/rapidsai/cudf/issues/19338 is implemented,
-            # we can use do this conversion on device.
-            buff = io.StringIO(
-                plc.strings.combine.join_strings(
-                    plc_column,
-                    plc.Scalar.from_py("\n", plc_column.type()),
-                    plc.Scalar.from_py("NULL", plc_column.type()),
-                )
-                .to_scalar()
-                .to_py()
+            plc_table_with_metadata = plc.io.json.read_json_from_string_column(
+                plc_column,
+                plc.Scalar.from_py("\n"),
+                plc.Scalar.from_py("NULL"),
+                _dtypes_for_json_decode(self.dtype),
             )
-            source = plc.io.types.SourceInfo([buff])
-            options = (
-                plc.io.json.JsonReaderOptions.builder(source)
-                .lines(val=True)
-                .dtypes(_dtypes_for_json_decode(self.dtype))
-                .compression(plc.io.types.CompressionType.NONE)
-                .recovery_mode(plc.io.types.JSONRecoveryMode.RECOVER_WITH_NULL)
-                .build()
-            )
-            plc_table_with_metadata = plc.io.json.read_json(options)
             return Column(
                 plc.Column.struct_from_children(plc_table_with_metadata.columns),
                 dtype=self.dtype,
@@ -692,13 +676,14 @@ class StringFunction(Expr):
             )
         elif self.name is StringFunction.Name.Strptime:
             # TODO: ignores ambiguous
-            format, strict, exact, cache = self.options
+            format, strict, _, _ = self.options
             col = self.children[0].evaluate(df, context=context)
 
             is_timestamps = plc.strings.convert.convert_datetime.is_timestamp(
                 col.obj, format
             )
 
+            plc_col = col.obj
             if strict:
                 if not plc.reduce.reduce(
                     is_timestamps,
@@ -710,16 +695,17 @@ class StringFunction(Expr):
                 not_timestamps = plc.unary.unary_operation(
                     is_timestamps, plc.unary.UnaryOperator.NOT
                 )
-                null = plc.Scalar.from_py(None, col.obj.type())
-                res = plc.copying.boolean_mask_scatter(
-                    [null], plc.Table([col.obj]), not_timestamps
-                )
-                return Column(
-                    plc.strings.convert.convert_datetime.to_timestamps(
-                        res.columns()[0], self.dtype.plc, format
-                    ),
-                    dtype=self.dtype,
-                )
+                null = plc.Scalar.from_py(None, plc_col.type())
+                plc_col = plc.copying.boolean_mask_scatter(
+                    [null], plc.Table([plc_col]), not_timestamps
+                ).columns()[0]
+
+            return Column(
+                plc.strings.convert.convert_datetime.to_timestamps(
+                    plc_col, self.dtype.plc, format
+                ),
+                dtype=self.dtype,
+            )
         elif self.name is StringFunction.Name.Replace:
             column, target, repl = columns
             n, _ = self.options

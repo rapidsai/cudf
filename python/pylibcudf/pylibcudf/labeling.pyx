@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -53,3 +53,5 @@ cpdef Column label_bins(
         )
 
     return Column.from_libcudf(move(c_result))
+
+Inclusive.__str__ = Inclusive.__repr__

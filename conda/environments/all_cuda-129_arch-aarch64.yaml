@@ -12,7 +12,6 @@ dependencies:
 - c-compiler
 - cachetools
 - certifi
-- clang-tools=20.1.4
 - clang-tools==20.1.4
 - clang==20.1.4
 - cmake>=3.30.4
@@ -33,7 +32,7 @@ dependencies:
 - fastavro>=0.22.9
 - flatbuffers==24.3.25
 - fsspec>=0.6.0
-- gcc_linux-aarch64=13.*
+- gcc_linux-aarch64=14.*
 - hypothesis>=6.131.7
 - identify>=2.5.20
 - include-what-you-use==0.24.0
@@ -41,6 +40,7 @@ dependencies:
 - jupyter_client
 - libcurand-dev
 - libkvikio==25.10.*,>=0.0.0a0
+- libnvcomp-dev==4.2.0.11
 - librdkafka>=2.8.0,<2.9.0a0
 - librmm==25.10.*,>=0.0.0a0
 - make
@@ -58,7 +58,6 @@ dependencies:
 - numba>=0.59.1,<0.62.0a0
 - numpy>=1.23,<3.0a0
 - numpydoc
-- nvcomp==4.2.0.11
 - nvidia-ml-py
 - nvtx>=0.2.1
 - openpyxl
