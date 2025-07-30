@@ -289,7 +289,7 @@ TYPED_TEST(PageFilteringWithPageIndexStats, FilterPagesWithPageIndexStats)
     EXPECT_EQ(row_mask->size(), expected_num_rows);
     EXPECT_EQ(row_mask->null_count(), 0);
 
-    // Half the rows should survive the page index filter
+    // Copy the row mask to the host and count the number of surviving rows
     auto const host_row_mask = cudf::detail::make_host_vector<bool>(
       {row_mask->view().data<bool>(), static_cast<size_t>(row_mask->view().size())}, stream);
     EXPECT_EQ(std::count(host_row_mask.begin(), host_row_mask.end(), true),
