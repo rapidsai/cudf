@@ -314,6 +314,8 @@ void hybrid_scan_reader_impl::update_row_mask(cudf::column_view in_row_mask,
                                               cudf::size_type out_row_mask_offset,
                                               rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
+
   auto const total_rows = static_cast<cudf::size_type>(in_row_mask.size());
 
   CUDF_EXPECTS(out_row_mask_offset + total_rows <= out_row_mask.size(),
