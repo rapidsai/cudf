@@ -17,7 +17,6 @@
 #include "jit/cache.hpp"
 #include "jit/helpers.hpp"
 #include "jit/parser.hpp"
-#include "jit/row_ir.hpp"
 #include "jit/span.cuh"
 
 #include <cudf/column/column.hpp>

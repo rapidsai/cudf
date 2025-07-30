@@ -231,9 +231,8 @@ TEST_F(TransformTest, LessComparator)
 
 TEST_F(TransformTest, LessComparatorLarge)
 {
-  auto a = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i * 2; });
-  auto b = thrust::make_counting_iterator(500);
-
+  auto a     = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i * 2; });
+  auto b     = thrust::make_counting_iterator(500);
   auto c_0   = column_wrapper<int32_t>(a, a + 2000);
   auto c_1   = column_wrapper<int32_t>(b, b + 2000);
   auto table = cudf::table_view{{c_0, c_1}};
@@ -277,10 +276,9 @@ TEST_F(TransformTest, MultiLevelTreeArithmetic)
 
 TEST_F(TransformTest, MultiLevelTreeArithmeticLarge)
 {
-  auto a = thrust::make_counting_iterator(0);
-  auto b = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i + 1; });
-  auto c = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i * 2; });
-
+  auto a     = thrust::make_counting_iterator(0);
+  auto b     = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i + 1; });
+  auto c     = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i * 2; });
   auto c_0   = column_wrapper<int32_t>(a, a + 2000);
   auto c_1   = column_wrapper<int32_t>(b, b + 2000);
   auto c_2   = column_wrapper<int32_t>(c, c + 2000);

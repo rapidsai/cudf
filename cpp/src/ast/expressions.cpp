@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/detail/expression_transformer.hpp>
 #include <cudf/ast/detail/operators.hpp>
@@ -95,7 +94,6 @@ auto column_name_reference::accept(detail::expression_transformer& visitor) cons
 {
   return visitor.visit(*this);
 }
-
 }  // namespace ast
 
 }  // namespace cudf
