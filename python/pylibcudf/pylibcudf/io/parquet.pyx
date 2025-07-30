@@ -45,15 +45,17 @@ from pylibcudf.utils cimport _get_stream
 
 __all__ = [
     "ChunkedParquetReader",
-    "ParquetWriterOptions",
-    "ParquetWriterOptionsBuilder",
-    "read_parquet",
-    "write_parquet",
+    "ChunkedParquetWriterOptions",
+    "ChunkedParquetWriterOptionsBuilder",
+    "ParquetChunkedWriter",
     "ParquetReaderOptions",
     "ParquetReaderOptionsBuilder",
-    "ChunkedParquetWriterOptions",
-    "ChunkedParquetWriterOptionsBuilder"
+    "ParquetWriterOptions",
+    "ParquetWriterOptionsBuilder",
+    "is_supported_write_parquet",
     "merge_row_group_metadata",
+    "read_parquet",
+    "write_parquet",
 ]
 
 
@@ -915,6 +917,38 @@ cdef class ParquetWriterOptionsBuilder:
         Self
         """
         self.c_obj.write_arrow_schema(enabled)
+        return self
+
+    cpdef ParquetWriterOptionsBuilder row_group_size_rows(self, size_type val):
+        """
+        Sets the maximum row group size, in rows.
+
+        Parameters
+        ----------
+        val : size_type
+            Maximum row group size, in rows to set
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.row_group_size_rows(val)
+        return self
+
+    cpdef ParquetWriterOptionsBuilder max_page_size_bytes(self, size_t val):
+        """
+        Sets the maximum uncompressed page size, in bytes.
+
+        Parameters
+        ----------
+        val : size_t
+            Maximum uncompressed page size, in bytes to set
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.max_page_size_bytes(val)
         return self
 
     cpdef ParquetWriterOptions build(self):
