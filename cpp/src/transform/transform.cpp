@@ -332,7 +332,7 @@ std::unique_ptr<column> compute_column_jit(table_view const& table,
 {
   row_ir::ast_converter converter;
   row_ir::ast_args args{.table = table, .table_column_names = {}};
-  // [ ] get column names
+  // TODO(lamarrr): get column names
   auto transform_args =
     converter.compute_column(row_ir::target::CUDA, expr, false, args, stream, mr);
 

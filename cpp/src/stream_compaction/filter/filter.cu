@@ -349,7 +349,7 @@ std::vector<std::unique_ptr<column>> filter_jit(table_view const& table,
 {
   row_ir::ast_converter converter;
   row_ir::ast_args args{.table = table, .table_column_names = {}};
-  // [ ] get column names
+  // TODO(lamarrr): get column names
   auto filter_args =
     converter.filter(row_ir::target::CUDA, expr, false, args, copy_mask, stream, mr);
 
