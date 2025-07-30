@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "jit/row_ir.hpp"
 
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/detail/expression_transformer.hpp>
@@ -95,26 +94,6 @@ auto column_name_reference::accept(detail::expression_transformer& visitor) cons
   -> decltype(visitor.visit(*this))
 {
   return visitor.visit(*this);
-}
-
-std::unique_ptr<row_ir::node> literal::accept(row_ir::ast_converter& converter) const
-{
-  return converter.add_ir_node(*this);
-}
-
-std::unique_ptr<row_ir::node> column_reference::accept(row_ir::ast_converter& converter) const
-{
-  return converter.add_ir_node(*this);
-}
-
-std::unique_ptr<row_ir::node> operation::accept(row_ir::ast_converter& converter) const
-{
-  return converter.add_ir_node(*this);
-}
-
-std::unique_ptr<row_ir::node> column_name_reference::accept(row_ir::ast_converter& converter) const
-{
-  return converter.add_ir_node(*this);
 }
 
 }  // namespace ast
