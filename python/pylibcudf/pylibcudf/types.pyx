@@ -305,3 +305,14 @@ def _from_arrow(obj: pa.DataType) -> DataType:
 
 SIZE_TYPE = DataType(type_to_id[size_type]())
 SIZE_TYPE_ID = SIZE_TYPE.id()
+
+TypeId.__str__ = TypeId.__repr__
+NanPolicy.__str__ = NanPolicy.__repr__
+NullPolicy.__str__ = NullPolicy.__repr__
+Interpolation.__str__ = Interpolation.__repr__
+MaskState.__str__ = MaskState.__repr__
+NanEquality.__str__ = NanEquality.__repr__
+NullEquality.__str__ = NullEquality.__repr__
+NullOrder.__str__ = NullOrder.__repr__
+Order.__str__ = Order.__repr__
+Sorted.__str__ = Sorted.__repr__

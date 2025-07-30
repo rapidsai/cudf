@@ -62,3 +62,11 @@ def stable_sort(
     column_order: list[Order],
     null_precedence: list[NullOrder],
 ) -> Table: ...
+def top_k(
+    col: Column,
+    k: int,
+    sort_order: Order = Order.DESCENDING,
+) -> Column: ...
+def top_k_order(
+    col: Column, k: int, sort_order: Order = Order.DESCENDING
+) -> Column: ...
