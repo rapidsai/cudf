@@ -18,7 +18,6 @@
 
 #include <cudf/fixed_point/detail/floating_conversion.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
-#include <cudf/fixed_point_conv.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/export.hpp>

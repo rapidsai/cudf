@@ -25,6 +25,12 @@
 #include <cudf/utilities/traits.hpp>
 
 namespace CUDF_EXPORT cudf {
+/**
+ * @addtogroup fixed_point_conv
+ * @{
+ * @file
+ * @brief Conversion functions for fixed-point numbers
+ */
 
 /**
  * @brief Convert a floating-point value to fixed point
@@ -105,4 +111,5 @@ CUDF_HOST_DEVICE Floating convert_to_floating(Input input)
   }
 }
 
+/** @} */  // end of group
 }  // namespace CUDF_EXPORT cudf
