@@ -22,6 +22,11 @@
 namespace CUDF_EXPORT cudf {
 
 namespace ast {
+/**
+ * @addtogroup expressions
+ * @{
+ * @file
+ */
 
 /**
  * @brief Enum of supported operators.
@@ -90,6 +95,7 @@ enum class ast_operator : int32_t {
   CAST_TO_FLOAT64  ///< Cast value to double
 };
 
+/** @} */  // end of group
 }  // namespace ast
 
 }  // namespace CUDF_EXPORT cudf
