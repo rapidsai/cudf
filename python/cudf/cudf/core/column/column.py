@@ -3126,7 +3126,7 @@ def as_column(
             # TODO: Or treat as scalar?
             arbitrary = arbitrary[np.newaxis]
 
-        if arbitrary.dtype.kind in "OSU":
+        if arbitrary.dtype.kind == "O":
             if pd.isna(arbitrary).any():
                 new_array = pa.array(arbitrary)
             else:
@@ -3144,6 +3144,11 @@ def as_column(
                     "pandas Series with object dtype cannot be converted to cudf Series with float dtype."
                 )
             return res
+        elif arbitrary.dtype.kind in "SU":
+            column = ColumnBase.from_arrow(pa.array(arbitrary))
+            if dtype is not None:
+                column = column.astype(dtype)
+            return column
         elif arbitrary.dtype.kind in "biuf":
             if not arbitrary.dtype.isnative:
                 # Not supported by pylibcudf
@@ -3181,7 +3186,6 @@ def as_column(
                 # Consider NaT as NA in the mask
                 # but maintain NaT as a value
                 mask = plc.Column.from_array_interface(~is_nat)
-                # mask = as_column(~is_nat).as_mask()
             plc_column = plc.Column.from_array_interface(arbitrary)
             if mask is not None:
                 plc_column = plc_column.with_mask(
@@ -3190,14 +3194,6 @@ def as_column(
             column = ColumnBase.from_pylibcudf(plc_column)
             if dtype is not None:
                 column = column.astype(dtype)
-            # buffer = as_buffer(arbitrary.view("|u1"))
-            # col = build_column(
-            #     data=buffer,
-            #     mask=mask,
-            #     dtype=arbitrary.dtype,
-            # )
-            # if dtype:
-            #     col = col.astype(dtype)
             return column
         else:
             raise NotImplementedError(f"{arbitrary.dtype} not supported")
