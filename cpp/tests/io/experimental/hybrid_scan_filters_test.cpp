@@ -302,7 +302,7 @@ TYPED_TEST(PageFilteringWithPageIndexStats, FilterPagesWithPageIndexStats)
     auto const literal     = cudf::ast::literal(literal_value);
     auto const col_ref     = cudf::ast::column_name_reference("col0");
     auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref, literal);
-    // Half the pages (signed) or 3/4th the pages (unsigned) should be filtered out by the page
+    // Half the pages (unsigned) or 3/4th the pages (signed) should be filtered out by the page
     // index filter
     auto constexpr expected_surviving_rows =
       (num_concat * num_ordered_rows) / (std::is_signed_v<T> ? 4 : 2);
@@ -316,7 +316,7 @@ TYPED_TEST(PageFilteringWithPageIndexStats, FilterPagesWithPageIndexStats)
     auto col_ref       = cudf::ast::column_name_reference("col2");
     auto filter_expression =
       cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col_ref, literal);
-    // Half the pages (signed) or 3/4th the pages (unsigned) should be filtered out by the page
+    // Half the pages (unsigned) or 3/4th the pages (signed) should be filtered out by the page
     // index filter
     auto constexpr expected_surviving_rows =
       (num_concat * num_ordered_rows) / (std::is_signed_v<T> ? 4 : 2);
