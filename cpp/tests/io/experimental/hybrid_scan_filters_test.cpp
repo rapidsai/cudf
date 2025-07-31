@@ -29,8 +29,6 @@
 
 #include <src/io/parquet/parquet_gpu.hpp>
 
-using namespace cudf::io;
-
 namespace {
 
 /**
@@ -50,14 +48,15 @@ auto filter_row_groups_with_dictionaries(cudf::host_span<uint8_t const> file_buf
                                          rmm::device_async_resource_ref mr)
 {
   // Create reader options with empty source info
-  parquet_reader_options options = parquet_reader_options::builder().filter(filter_expression);
+  cudf::io::parquet_reader_options options =
+    cudf::io::parquet_reader_options::builder().filter(filter_expression);
 
   // Fetch footer and page index bytes from the buffer.
   auto const footer_buffer = fetch_footer_bytes(file_buffer_span);
 
   // Create hybrid scan reader with footer bytes
   auto const reader =
-    std::make_unique<parquet::experimental::hybrid_scan_reader>(footer_buffer, options);
+    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(footer_buffer, options);
 
   // Get page index byte range from the reader
   auto const page_index_byte_range = reader->page_index_byte_range();
@@ -116,7 +115,8 @@ TEST_F(HybridScanFiltersTest, TestMetadata)
   auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
 
   // Create reader options with empty source info
-  parquet_reader_options options = parquet_reader_options::builder().filter(filter_expression);
+  cudf::io::parquet_reader_options options =
+    cudf::io::parquet_reader_options::builder().filter(filter_expression);
 
   // Input file buffer span
   auto const file_buffer_span = cudf::host_span<uint8_t const>(
@@ -127,7 +127,7 @@ TEST_F(HybridScanFiltersTest, TestMetadata)
 
   // Create hybrid scan reader with footer bytes
   auto const reader =
-    std::make_unique<parquet::experimental::hybrid_scan_reader>(footer_buffer, options);
+    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(footer_buffer, options);
 
   // Get Parquet file metadata from the reader
   auto parquet_metadata = reader->parquet_metadata();
@@ -184,7 +184,8 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithStats)
   auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
 
   // Create reader options with empty source info
-  parquet_reader_options options = parquet_reader_options::builder().filter(filter_expression);
+  cudf::io::parquet_reader_options options =
+    cudf::io::parquet_reader_options::builder().filter(filter_expression);
 
   // Input file buffer span
   auto const file_buffer_span = cudf::host_span<uint8_t const>(
@@ -195,7 +196,7 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithStats)
 
   // Create hybrid scan reader with footer bytes
   auto const reader =
-    std::make_unique<parquet::experimental::hybrid_scan_reader>(footer_buffer, options);
+    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(footer_buffer, options);
 
   // Get all row groups from the reader
   auto input_row_group_indices = reader->all_row_groups(options);
@@ -254,14 +255,15 @@ TYPED_TEST(PageFilteringWithPageIndexStats, FilterPagesWithPageIndexStats)
                                                      rmm::device_async_resource_ref mr =
                                                        cudf::get_current_device_resource_ref()) {
     // Create reader options with empty source info
-    parquet_reader_options options = parquet_reader_options::builder().filter(filter_expression);
+    cudf::io::parquet_reader_options options =
+      cudf::io::parquet_reader_options::builder().filter(filter_expression);
 
     // Fetch footer and page index bytes from the buffer.
     auto const footer_buffer = fetch_footer_bytes(file_buffer_span);
 
     // Create hybrid scan reader with footer bytes
     auto const reader =
-      std::make_unique<parquet::experimental::hybrid_scan_reader>(footer_buffer, options);
+      std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(footer_buffer, options);
 
     // Get all row groups from the reader
     auto input_row_group_indices = reader->all_row_groups(options);
@@ -661,7 +663,7 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterFewLiteralsTyped)
 
   // Specifying ZSTD compression to explicitly test decompression of dictionary pages
   auto const buffer =
-    std::get<1>(create_parquet_with_stats<T, num_concat>(100, compression_type::ZSTD));
+    std::get<1>(create_parquet_with_stats<T, num_concat>(100, cudf::io::compression_type::ZSTD));
 
   // For string tests use `col2` containing constant "0100" and for temporal types use `col1`
   // containing low cardinality descending values. For all other types use `col0`
@@ -766,7 +768,7 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterManyLiteralsTyped)
   auto constexpr num_concat = 1;
   // Specifying no compression to explicitly test uncompressed dictionary pages
   auto const buffer =
-    std::get<1>(create_parquet_with_stats<T, num_concat>(100, compression_type::NONE));
+    std::get<1>(create_parquet_with_stats<T, num_concat>(100, cudf::io::compression_type::NONE));
 
   // For string tests use `col2` containing constant "0100" and for temporal types use `col1`
   // containing low cardinality descending values. For all other types use `col0`

@@ -182,7 +182,7 @@ enum class use_data_page_mask : bool {
  *
  * Build an initial row mask: Once the row groups are filtered, the next step is to build an
  * initial row mask column to indicate which rows in the current span of row groups will survive in
- * the read table. This initial row mask may either be a BOOL8 cudf column of size equal to the
+ * the read table. This initial row mask may be a BOOL8 cudf column of size equal to the
  * total number of rows in the current span of row groups (computed by `total_rows_in_row_groups()`)
  * containing all `true` values. Alternatively, the row mask may be built with
  * the `build_row_mask_with_page_index_stats()` function and contain a `true` value for only the

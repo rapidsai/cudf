@@ -35,8 +35,6 @@
 
 auto constexpr bloom_filter_alignment = 32;
 
-using namespace cudf::io;
-
 namespace {
 
 /**
@@ -61,7 +59,8 @@ auto hybrid_scan(std::vector<char>& buffer,
                  rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>& aligned_mr)
 {
   // Create reader options with empty source info
-  parquet_reader_options options = parquet_reader_options::builder().filter(filter_expression);
+  cudf::io::parquet_reader_options options =
+    cudf::io::parquet_reader_options::builder().filter(filter_expression);
 
   // Set payload column names if provided
   if (payload_column_names.has_value()) { options.set_columns(payload_column_names.value()); }
@@ -75,7 +74,7 @@ auto hybrid_scan(std::vector<char>& buffer,
 
   // Create hybrid scan reader with footer bytes
   auto const reader =
-    std::make_unique<parquet::experimental::hybrid_scan_reader>(footer_buffer, options);
+    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(footer_buffer, options);
 
   // Get Parquet file metadata from the reader
   [[maybe_unused]] auto const parquet_metadata = reader->parquet_metadata();
@@ -158,7 +157,7 @@ auto hybrid_scan(std::vector<char>& buffer,
     reader->materialize_filter_columns(current_row_group_indices,
                                        std::move(filter_column_chunk_buffers),
                                        row_mask->mutable_view(),
-                                       parquet::experimental::use_data_page_mask::YES,
+                                       cudf::io::parquet::experimental::use_data_page_mask::YES,
                                        options,
                                        stream);
 
@@ -175,7 +174,7 @@ auto hybrid_scan(std::vector<char>& buffer,
     reader->materialize_payload_columns(current_row_group_indices,
                                         std::move(payload_column_chunk_buffers),
                                         row_mask->view(),
-                                        parquet::experimental::use_data_page_mask::YES,
+                                        cudf::io::parquet::experimental::use_data_page_mask::YES,
                                         options,
                                         stream);
 
@@ -224,9 +223,9 @@ TEST_F(HybridScanTest, PruneRowGroupsOnlyAndScanAllColumns)
   // Check equivalence (equal without checking nullability) with the parquet file read with the
   // original reader
   {
-    parquet_reader_options const options =
-      parquet_reader_options::builder(
-        source_info(cudf::host_span<char>(parquet_buffer.data(), parquet_buffer.size())))
+    cudf::io::parquet_reader_options const options =
+      cudf::io::parquet_reader_options::builder(
+        cudf::io::source_info(cudf::host_span<char>(parquet_buffer.data(), parquet_buffer.size())))
         .filter(filter_expression);
     auto [expected_tbl, expected_meta] = read_parquet(options, stream);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}), read_filter_table->view());
@@ -271,9 +270,9 @@ TEST_F(HybridScanTest, PruneRowGroupsOnlyAndScanSelectColumns)
 
     CUDF_EXPECTS(read_filter_table->num_rows() == read_payload_table->num_rows(),
                  "Filter and payload tables should have the same number of rows");
-    parquet_reader_options const options =
-      parquet_reader_options::builder(
-        source_info(cudf::host_span<char>(parquet_buffer.data(), parquet_buffer.size())))
+    cudf::io::parquet_reader_options const options =
+      cudf::io::parquet_reader_options::builder(
+        cudf::io::source_info(cudf::host_span<char>(parquet_buffer.data(), parquet_buffer.size())))
         .filter(filter_expression);
     auto [expected_tbl, expected_meta] = read_parquet(options, stream);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}), read_filter_table->view());
@@ -294,9 +293,9 @@ TEST_F(HybridScanTest, PruneRowGroupsOnlyAndScanSelectColumns)
 
     CUDF_EXPECTS(read_filter_table->num_rows() == read_payload_table->num_rows(),
                  "Filter and payload tables should have the same number of rows");
-    parquet_reader_options const options =
-      parquet_reader_options::builder(
-        source_info(cudf::host_span<char>(parquet_buffer.data(), parquet_buffer.size())))
+    cudf::io::parquet_reader_options const options =
+      cudf::io::parquet_reader_options::builder(
+        cudf::io::source_info(cudf::host_span<char>(parquet_buffer.data(), parquet_buffer.size())))
         .filter(filter_expression);
     auto [expected_tbl, expected_meta] = read_parquet(options, stream);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}), read_filter_table->view());
@@ -337,9 +336,9 @@ TEST_F(HybridScanTest, PruneDataPagesOnlyAndScanAllColumns)
   // Check equivalence (equal without checking nullability) with the parquet file read with the
   // original reader
   {
-    parquet_reader_options const options =
-      parquet_reader_options::builder(
-        source_info(cudf::host_span<char>(buffer.data(), buffer.size())))
+    cudf::io::parquet_reader_options const options =
+      cudf::io::parquet_reader_options::builder(
+        cudf::io::source_info(cudf::host_span<char>(buffer.data(), buffer.size())))
         .filter(filter_expression);
     auto [expected_tbl, expected_meta] = read_parquet(options, stream);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}), read_filter_table->view());
