@@ -722,3 +722,33 @@ def test_roundtrip_series_plc_column(ps):
     expect = cudf.Series(ps)
     actual = cudf.Series.from_pylibcudf(*expect.to_pylibcudf())
     assert_eq(expect, actual)
+
+
+def test_series_construction_with_nulls():
+    fields = [
+        pa.array([1], type=pa.int64()),
+        pa.array([None], type=pa.int64()),
+        pa.array([3], type=pa.int64()),
+    ]
+    expect = pa.StructArray.from_arrays(fields, ["a", "b", "c"])
+    got = cudf.Series(expect).to_arrow()
+
+    assert expect == got
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [{}],
+        [{"a": None}],
+        [{"a": 1}],
+        [{"a": "one"}],
+        [{"a": 1}, {"a": 2}],
+        [{"a": 1, "b": "one"}, {"a": 2, "b": "two"}],
+        [{"b": "two", "a": None}, None, {"a": "one", "b": "two"}],
+    ],
+)
+def test_create_struct_series(data):
+    expect = pd.Series(data)
+    got = cudf.Series(data)
+    assert_eq(expect, got, check_dtype=False)
