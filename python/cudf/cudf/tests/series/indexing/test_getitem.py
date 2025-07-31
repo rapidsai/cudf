@@ -120,3 +120,26 @@ def test_struct_slice(series, slce):
     got = cudf.Series(series)[slce]
     expected = cudf.Series(series[slce])
     assert got.to_arrow() == expected.to_arrow()
+
+
+@pytest.mark.parametrize(
+    "series, expected",
+    [
+        (
+            [
+                {"a": "Hello world", "b": []},
+                {"a": "CUDF", "b": [1, 2, 3], "c": 1},
+                {},
+            ],
+            {"a": "Hello world", "b": [], "c": cudf.NA},
+        ),
+        ([{}], {}),
+        (
+            [{"b": True}, {"a": 1, "c": [1, 2, 3], "d": "1", "b": False}],
+            {"a": cudf.NA, "c": cudf.NA, "d": cudf.NA, "b": True},
+        ),
+    ],
+)
+def test_struct_getitem(series, expected):
+    sr = cudf.Series(series)
+    assert sr[0] == expected
