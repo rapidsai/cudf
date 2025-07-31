@@ -2188,3 +2188,12 @@ def test_from_arrays_infer_names(idx):
     expected = pd.MultiIndex.from_arrays(arrays)
     result = cudf.MultiIndex.from_arrays(arrays)
     assert_eq(result, expected)
+
+
+def test_multiindex_droplevel_single_level_none_names():
+    data = [(1, 2), (3, 4)]
+    pidx = pd.MultiIndex.from_tuples(data, names=[None, None])
+    gidx = cudf.MultiIndex.from_tuples(data, names=[None, None])
+    result = gidx.droplevel(0)
+    expected = pidx.droplevel(0)
+    assert_eq(result, expected)
