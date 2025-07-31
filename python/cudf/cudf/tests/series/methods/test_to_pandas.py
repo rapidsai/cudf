@@ -3,6 +3,8 @@
 import datetime
 import decimal
 
+import cupy as cp
+import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
@@ -152,3 +154,30 @@ def test_series_to_pandas_arrow_type(scalar):
     result = ser.to_pandas(arrow_type=True)
     expected = pd.Series(pd.arrays.ArrowExtensionArray(pa_array))
     pd.testing.assert_series_equal(result, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1000000, 200000, 3000000],
+        [1000000, 200000, None],
+        [],
+        [None],
+        [None, None, None, None, None],
+        [12, 12, 22, 343, 4353534, 435342],
+        np.array([10, 20, 30, None, 100]),
+        cp.asarray([10, 20, 30, 100]),
+    ],
+)
+def test_timedelta_series_to_pandas(data, timedelta_types_as_str):
+    gsr = cudf.Series(data, dtype=timedelta_types_as_str)
+
+    expected = np.array(
+        cp.asnumpy(data) if isinstance(data, cp.ndarray) else data,
+        dtype=timedelta_types_as_str,
+    )
+
+    expected = pd.Series(expected)
+    actual = gsr.to_pandas()
+
+    assert_eq(expected, actual)

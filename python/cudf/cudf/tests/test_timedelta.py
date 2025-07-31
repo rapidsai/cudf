@@ -30,38 +30,6 @@ from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
         [12, 11, 232, 223432411, 2343241, 234324, 23234],
         [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
         [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
-        [
-            136457654736252,
-            134736784364431,
-            245345345545332,
-            223432411,
-            2343241,
-            3634548734,
-            23234,
-        ],
-        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
-    ]
-)
-def data(request):
-    return request.param
-
-
-@pytest.fixture(
-    params=[
-        [1000000, 200000, 3000000],
-        [1000000, 200000, None],
-        [],
-        [None],
-        [None, None, None, None, None],
-        [12, 12, 22, 343, 4353534, 435342],
-        np.array([10, 20, 30, None, 100]),
-        cp.asarray([10, 20, 30, 100]),
-        [1000000, 200000, 3000000],
-        [1000000, 200000, None],
-        [1],
-        [12, 11, 232, 223432411, 2343241, 234324, 23234],
-        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
-        [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
         [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
     ]
 )
@@ -72,33 +40,6 @@ def data_non_overflow(request):
 @pytest.fixture(params=utils.TIMEDELTA_TYPES)
 def timedelta_dtype(request):
     return request.param
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        [1000000, 200000, 3000000],
-        [1000000, 200000, None],
-        [],
-        [None],
-        [None, None, None, None, None],
-        [12, 12, 22, 343, 4353534, 435342],
-        np.array([10, 20, 30, None, 100]),
-        cp.asarray([10, 20, 30, 100]),
-    ],
-)
-def test_timedelta_series_to_pandas(data, timedelta_dtype):
-    gsr = cudf.Series(data, dtype=timedelta_dtype)
-
-    expected = np.array(
-        cp.asnumpy(data) if isinstance(data, cp.ndarray) else data,
-        dtype=timedelta_dtype,
-    )
-
-    expected = pd.Series(expected)
-    actual = gsr.to_pandas()
-
-    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize(
@@ -424,50 +365,6 @@ def test_timedelta_reduction_ops(
         )
     else:
         assert_eq(expected, actual)
-
-
-def test_timedelta_dt_components(data, timedelta_dtype):
-    gsr = cudf.Series(data, dtype=timedelta_dtype)
-    psr = gsr.to_pandas()
-
-    expected = psr.dt.components
-    actual = gsr.dt.components
-
-    if gsr.isnull().any():
-        assert_eq(expected, actual.astype("float"))
-    else:
-        assert_eq(expected, actual)
-
-
-def test_timedelta_dt_properties(data, timedelta_dtype):
-    gsr = cudf.Series(data, dtype=timedelta_dtype)
-    psr = gsr.to_pandas()
-
-    def local_assert(expected, actual, **kwargs):
-        if gsr.isnull().any():
-            assert_eq(expected, actual.astype("float"), **kwargs)
-        else:
-            assert_eq(expected, actual, **kwargs)
-
-    expected_days = psr.dt.days
-    actual_days = gsr.dt.days
-
-    local_assert(expected_days, actual_days, check_dtype=False)
-
-    expected_seconds = psr.dt.seconds
-    actual_seconds = gsr.dt.seconds
-
-    local_assert(expected_seconds, actual_seconds, check_dtype=False)
-
-    expected_microseconds = psr.dt.microseconds
-    actual_microseconds = gsr.dt.microseconds
-
-    local_assert(expected_microseconds, actual_microseconds, check_dtype=False)
-
-    expected_nanoseconds = psr.dt.nanoseconds
-    actual_nanoseconds = gsr.dt.nanoseconds
-
-    local_assert(expected_nanoseconds, actual_nanoseconds, check_dtype=False)
 
 
 def test_timedelta_index(data, timedelta_dtype):
