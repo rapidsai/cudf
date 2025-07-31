@@ -53,22 +53,20 @@ struct identity_initializer {
            (k == aggregation::SUM or k == aggregation::MIN or k == aggregation::MAX or
             k == aggregation::COUNT_VALID or k == aggregation::COUNT_ALL or
             k == aggregation::ARGMAX or k == aggregation::ARGMIN or
-            k == aggregation::SUM_OF_SQUARES or k == aggregation::STD or
+            k == aggregation::SUM_OF_SQUARES or k == aggregation::M2 or k == aggregation::STD or
             k == aggregation::VARIANCE or
             (k == aggregation::PRODUCT and is_product_supported<T>()));
   }
 
   template <typename T, aggregation::Kind k>
-  T identity_from_operator()
-    requires(not std::is_same_v<corresponding_operator_t<k>, void>)
+  T identity_from_operator() requires(not std::is_same_v<corresponding_operator_t<k>, void>)
   {
     using DeviceType = device_storage_type_t<T>;
     return corresponding_operator_t<k>::template identity<DeviceType>();
   }
 
   template <typename T, aggregation::Kind k>
-  T identity_from_operator()
-    requires(std::is_same_v<corresponding_operator_t<k>, void>)
+  T identity_from_operator() requires(std::is_same_v<corresponding_operator_t<k>, void>)
   {
     CUDF_FAIL("Unable to get identity/sentinel from device operator");
   }

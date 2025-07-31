@@ -86,6 +86,10 @@ struct corresponding_operator<aggregation::SUM_OF_SQUARES> {
   using type = DeviceSum;
 };
 template <>
+struct corresponding_operator<aggregation::M2> {
+  using type = DeviceSum;
+};
+template <>
 struct corresponding_operator<aggregation::STD> {
   using type = DeviceSum;
 };
