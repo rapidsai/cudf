@@ -213,15 +213,15 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
     }
   }
 
-  // Use the `_page_mask` from page pruning stage, if non empty, otherwise set all pages in this
-  // subpass to be decoded
+  // Use the `_subpass_page_mask` derived from `_page_mask` if non empty, otherwise set all pages in
+  // this subpass to be decoded
   auto host_page_mask = [&]() {
-    if (_page_mask.empty()) {
+    if (_subpass_page_mask.empty()) {
       auto page_mask = cudf::detail::make_host_vector<bool>(subpass.pages.size(), _stream);
       std::fill(page_mask.begin(), page_mask.end(), true);
       return page_mask;
     } else {
-      return _page_mask;
+      return _subpass_page_mask;
     }
   }();
 
@@ -527,7 +527,9 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
 }
 
 reader_impl::reader_impl()
-  : _options{}, _page_mask{cudf::detail::make_host_vector<bool>(0, cudf::get_default_stream())}
+  : _options{},
+    _pass_page_mask{cudf::detail::make_host_vector<bool>(0, cudf::get_default_stream())},
+    _subpass_page_mask{cudf::detail::make_host_vector<bool>(0, cudf::get_default_stream())}
 {
 }
 
@@ -557,7 +559,8 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
              options.get_num_rows(),
              options.get_row_groups()},
     _sources{std::move(sources)},
-    _page_mask{cudf::detail::make_host_vector<bool>(0, _stream)},
+    _pass_page_mask{cudf::detail::make_host_vector<bool>(0, _stream)},
+    _subpass_page_mask{cudf::detail::make_host_vector<bool>(0, _stream)},
     _output_chunk_read_limit{chunk_read_limit},
     _input_pass_read_limit{pass_read_limit}
 {
