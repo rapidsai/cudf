@@ -465,7 +465,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - &rapids_build_backend rapids-build-backend>=0.3.0,<0.4.0.dev0
+          - &rapids_build_backend rapids-build-backend @ git+https://github.com/KyleFromNVIDIA/rapids-build-backend.git@write-git-commit-to-manifest-in
       - output_types: conda
         packages:
           - scikit-build-core>=0.10.0
