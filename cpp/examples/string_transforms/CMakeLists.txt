@@ -87,4 +87,6 @@ target_link_libraries(
 )
 install(TARGETS localize_phone_precompiled DESTINATION bin/examples/libcudf/string_transformers)
 
-install(FILES ${CMAKE_CURRENT_LIST_DIR}/info.csv DESTINATION bin/examples/libcudf/string_transformers)
+install(FILES ${CMAKE_CURRENT_LIST_DIR}/info.csv
+        DESTINATION bin/examples/libcudf/string_transformers
+)
