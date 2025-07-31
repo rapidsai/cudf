@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/groupby.hpp>
+#include <cudf/sorting.hpp>
 
 using namespace cudf::test::iterators;
 
@@ -46,9 +47,13 @@ auto compute_M2(cudf::column_view const& keys, cudf::column_view const& values)
   requests[0].values = values;
   requests[0].aggregations.emplace_back(cudf::make_m2_aggregation<cudf::groupby_aggregation>());
 
-  auto gb_obj = cudf::groupby::groupby(cudf::table_view({keys}));
-  auto result = gb_obj.aggregate(requests);
-  return std::pair(std::move(result.first->release()[0]), std::move(result.second[0].results[0]));
+  auto gb_obj            = cudf::groupby::groupby(cudf::table_view({keys}));
+  auto const result      = gb_obj.aggregate(requests);
+  auto const sort_order  = cudf::sorted_order(result.first->view(), {}, {});
+  auto const sorted_keys = cudf::gather(result.first->view(), *sort_order);
+  auto const sorted_vals =
+    cudf::gather(cudf::table_view({result.second[0].results[0]->view()}), *sort_order);
+  return std::pair(std::move(sorted_keys->release()[0]), std::move(sorted_vals->release()[0]));
 }
 }  // namespace
 
