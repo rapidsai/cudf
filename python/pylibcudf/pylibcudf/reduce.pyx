@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
 from libcpp.memory cimport unique_ptr
@@ -102,3 +102,5 @@ cpdef tuple minmax(Column col):
         Scalar.from_libcudf(move(result.first)),
         Scalar.from_libcudf(move(result.second)),
     )
+
+ScanType.__str__ = ScanType.__repr__

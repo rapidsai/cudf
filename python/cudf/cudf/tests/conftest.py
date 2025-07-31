@@ -299,6 +299,26 @@ def temporal_types_as_str(request):
     params=signed_integer_types
     + unsigned_integer_types
     + float_types
+    + bool_types
+    + datetime_types
+    + timedelta_types
+)
+def numeric_and_temporal_types_as_str(request):
+    """
+    - "int8", "int16", "int32", "int64"
+    - "uint8", "uint16", "uint32", "uint64"
+    - "float32", "float64"
+    - "bool"
+    - "datetime64[ns]", "datetime64[us]", "datetime64[ms]", "datetime64[s]"
+    - "timedelta64[ns]", "timedelta64[us]", "timedelta64[ms]", "timedelta64[s]"
+    """
+    return request.param
+
+
+@pytest.fixture(
+    params=signed_integer_types
+    + unsigned_integer_types
+    + float_types
     + datetime_types
     + timedelta_types
     + string_types
@@ -316,4 +336,34 @@ def all_supported_types_as_str(request):
     - "category"
     - "bool"
     """
+    return request.param
+
+
+@pytest.fixture(params=[True, False])
+def dropna(request):
+    """Param for `dropna` argument"""
+    return request.param
+
+
+@pytest.fixture(params=[True, False, None])
+def nan_as_null(request):
+    """Param for `nan_as_null` argument"""
+    return request.param
+
+
+@pytest.fixture(params=[True, False])
+def inplace(request):
+    """Param for `inplace` argument"""
+    return request.param
+
+
+@pytest.fixture(params=[True, False])
+def ignore_index(request):
+    """Param for `ignore_index` argument"""
+    return request.param
+
+
+@pytest.fixture(params=[True, False])
+def ascending(request):
+    """Param for `ascending` argument"""
     return request.param
