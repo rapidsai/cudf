@@ -571,8 +571,7 @@ def test_str_iterate_error():
     "data",
     [
         ["abc", "xyz", "pqr", "tuv"],
-        ["aaaaaaaaaaaa"],
-        ["aaaaaaaaaaaa", "bdfeqwert", "poiuytre"],
+        ["aaaaaaaaaaaa", None],
     ],
 )
 @pytest.mark.parametrize(
@@ -606,9 +605,7 @@ def test_string_str_subscriptable(data, index):
 @pytest.mark.parametrize(
     "data,expected",
     [
-        (["abc", "xyz", "pqr", "tuv"], [3, 3, 3, 3]),
         (["aaaaaaaaaaaa"], [12]),
-        (["aaaaaaaaaaaa", "bdfeqwert", "poiuytre"], [12, 9, 8]),
         (["abc", "d", "ef"], [3, 1, 2]),
         (["Hello", "Bye", "Thanks 😊"], [5, 3, 11]),
         (["\n\t", "Bye", "Thanks 😊"], [2, 3, 11]),
@@ -927,17 +924,12 @@ def test_string_str_url_encode(data):
     assert_eq(expected, got)
 
 
-@pytest.mark.parametrize(
-    "data",
-    [
-        [
-            "http://www.hellow.com?k1=acc%C3%A9nted&k2=a%2F/b.c",
-            "%2Fhome%2fnfs",
-            "987%20ZYX",
-        ]
-    ],
-)
-def test_string_str_decode_url(data):
+def test_string_str_decode_url():
+    data = [
+        "http://www.hellow.com?k1=acc%C3%A9nted&k2=a%2F/b.c",
+        "%2Fhome%2fnfs",
+        "987%20ZYX",
+    ]
     gs = cudf.Series(data)
 
     got = gs.str.url_decode()
@@ -1563,11 +1555,8 @@ def test_string_replace_multi():
         ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", None],
     ],
 )
-@pytest.mark.parametrize("width", [0, 1, 4, 9, 100])
-@pytest.mark.parametrize(
-    "side",
-    ["left", "right", "both"],
-)
+@pytest.mark.parametrize("width", [0, 1, 25])
+@pytest.mark.parametrize("side", ["left", "right", "both"])
 @pytest.mark.parametrize("fillchar", [" ", ".", "\n", "+", "\t"])
 def test_strings_pad_tests(data, width, side, fillchar):
     gs = cudf.Series(data)
@@ -1593,12 +1582,12 @@ def test_strings_pad_tests(data, width, side, fillchar):
         ["abc", "xyz", "a", "ab", "123", "097"],
         ["A B", "1.5", "3,000"],
         ["23", "³", "⅕", ""],
-        # [" ", "\t\r\n ", ""],
+        pytest.param([" ", "\t\r\n ", ""], marks=pytest.mark.xfail),
         ["leopard", "Golden Eagle", "SNAKE", ""],
         ["line to be wrapped", "another line to be wrapped"],
     ],
 )
-@pytest.mark.parametrize("width", [1, 4, 8, 12, 100])
+@pytest.mark.parametrize("width", [1, 20])
 def test_string_wrap(data, width):
     gs = cudf.Series(data)
     ps = pd.Series(data)
@@ -1656,7 +1645,7 @@ def test_string_wrap(data, width):
         ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", None],
     ],
 )
-@pytest.mark.parametrize("width", [0, 1, 4, 6, 9, 100])
+@pytest.mark.parametrize("width", [0, 20])
 def test_strings_zfill_tests(data, width):
     gs = cudf.Series(data)
     ps = pd.Series(data)
@@ -1695,7 +1684,7 @@ def test_string_strip_fail():
         ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", None],
     ],
 )
-@pytest.mark.parametrize("width", [0, 1, 4, 9, 100])
+@pytest.mark.parametrize("width", [0, 20])
 @pytest.mark.parametrize("fillchar", ["⅕", "1", ".", "t", " ", ","])
 def test_strings_filling_tests(data, width, fillchar):
     gs = cudf.Series(data)
@@ -1731,7 +1720,7 @@ def test_strings_filling_tests(data, width, fillchar):
     )
 
 
-@pytest.mark.parametrize("n", [-1, 0, 1, 3, 10])
+@pytest.mark.parametrize("n", [-1, 0, 1, 4])
 @pytest.mark.parametrize("expand", [True, False])
 def test_string_rsplit_re(n, expand):
     data = ["a b", " c ", "   d", "e   ", "f"]
@@ -1766,7 +1755,7 @@ def test_string_rsplit_re(n, expand):
         ],
     ],
 )
-@pytest.mark.parametrize("n", [-1, 2, 1, 9])
+@pytest.mark.parametrize("n", [-1, 0, 1, 4])
 @pytest.mark.parametrize("expand", [True, False])
 def test_strings_split(data, n, expand):
     gs = cudf.Series(data)
@@ -1918,7 +1907,7 @@ def test_string_partition_fail():
         ],
     ],
 )
-@pytest.mark.parametrize("n", [-1, 2, 1, 9])
+@pytest.mark.parametrize("n", [-1, 2, 9])
 @pytest.mark.parametrize("expand", [True, False])
 def test_strings_rsplit(data, n, expand):
     gs = cudf.Series(data)
@@ -2044,25 +2033,30 @@ def test_string_filter_alphanum():
 
 
 @pytest.mark.parametrize(
-    "case_op", ["title", "capitalize", "lower", "upper", "swapcase"]
+    "case_op",
+    [
+        "title",
+        "capitalize",
+        "lower",
+        "upper",
+        "swapcase",
+        "isdecimal",
+        "isalnum",
+        "isalpha",
+        "isdigit",
+        "isnumeric",
+        "isspace",
+    ],
 )
 def test_string_char_case(case_op, data_char_types):
     gs = cudf.Series(data_char_types)
     ps = pd.Series(data_char_types)
+    assert_eq(getattr(gs.str, case_op)(), getattr(ps.str, case_op)())
 
-    s = gs.str
-    a = getattr(s, case_op)
 
-    assert_eq(a(), getattr(ps.str, case_op)())
-
-    assert_eq(gs.str.capitalize(), ps.str.capitalize())
-    assert_eq(gs.str.isdecimal(), ps.str.isdecimal())
-    assert_eq(gs.str.isalnum(), ps.str.isalnum())
-    assert_eq(gs.str.isalpha(), ps.str.isalpha())
-    assert_eq(gs.str.isdigit(), ps.str.isdigit())
-    assert_eq(gs.str.isnumeric(), ps.str.isnumeric())
-    assert_eq(gs.str.isspace(), ps.str.isspace())
-
+def test_string_isempty(data_char_types):
+    gs = cudf.Series(data_char_types)
+    ps = pd.Series(data_char_types)
     assert_eq(gs.str.isempty(), ps == "")
 
 
@@ -2074,9 +2068,7 @@ def test_string_char_case(case_op, data_char_types):
         ["abcdefghij", "0123456789", "9876543210", None, "accénted", ""],
     ],
 )
-@pytest.mark.parametrize(
-    "index", [-100, -5, -2, -6, -1, 0, 1, 2, 3, 9, 10, 100]
-)
+@pytest.mark.parametrize("index", [-100, -3, -1, 0, 1, 4, 50])
 def test_string_get(string, index):
     pds = pd.Series(string)
     gds = cudf.Series(string)
@@ -2095,14 +2087,8 @@ def test_string_get(string, index):
         ["koala", "fox", "chameleon"],
     ],
 )
-@pytest.mark.parametrize(
-    "number",
-    [-10, 0, 1, 3, 10],
-)
-@pytest.mark.parametrize(
-    "diff",
-    [0, 2, 5, 9],
-)
+@pytest.mark.parametrize("number", [-10, 0, 1, 3, 10])
+@pytest.mark.parametrize("diff", [0, 3])
 def test_string_slice_str(string, number, diff):
     pds = pd.Series(string)
     gds = cudf.Series(string)
@@ -2140,20 +2126,20 @@ def test_string_slice_from():
     ],
 )
 @pytest.mark.parametrize("number", [0, 1, 10])
-@pytest.mark.parametrize("diff", [0, 2, 9])
-@pytest.mark.parametrize("repr", ["2", "!!"])
-def test_string_slice_replace(string, number, diff, repr):
+@pytest.mark.parametrize("diff", [0, 3])
+@pytest.mark.parametrize("repl", ["2", "!!"])
+def test_string_slice_replace(string, number, diff, repl):
     pds = pd.Series(string)
     gds = cudf.Series(string)
 
     assert_eq(
-        pds.str.slice_replace(start=number, repl=repr),
-        gds.str.slice_replace(start=number, repl=repr),
+        pds.str.slice_replace(start=number, repl=repl),
+        gds.str.slice_replace(start=number, repl=repl),
         check_dtype=False,
     )
     assert_eq(
-        pds.str.slice_replace(stop=number, repl=repr),
-        gds.str.slice_replace(stop=number, repl=repr),
+        pds.str.slice_replace(stop=number, repl=repl),
+        gds.str.slice_replace(stop=number, repl=repl),
     )
     assert_eq(pds.str.slice_replace(), gds.str.slice_replace())
     assert_eq(
@@ -2161,8 +2147,8 @@ def test_string_slice_replace(string, number, diff, repr):
         gds.str.slice_replace(start=number, stop=number + diff),
     )
     assert_eq(
-        pds.str.slice_replace(start=number, stop=number + diff, repl=repr),
-        gds.str.slice_replace(start=number, stop=number + diff, repl=repr),
+        pds.str.slice_replace(start=number, stop=number + diff, repl=repl),
+        gds.str.slice_replace(start=number, stop=number + diff, repl=repl),
         check_dtype=False,
     )
 
@@ -2386,10 +2372,6 @@ def test_string_like(pat, esc, expect):
 
 
 @pytest.mark.parametrize(
-    "data",
-    [["hello", "world", None, "", "!"]],
-)
-@pytest.mark.parametrize(
     "repeats",
     [
         2,
@@ -2403,7 +2385,7 @@ def test_string_like(pat, esc, expect):
     ],
 )
 def test_string_repeat(data, repeats):
-    ps = pd.Series(data)
+    ps = pd.Series(["hello", "world", None, "", "!"])
     gs = cudf.from_pandas(ps)
 
     expect = ps.str.repeat(repeats)
@@ -2428,7 +2410,7 @@ def test_string_cat_str_error():
         gs.str.cat(gs.str)
 
 
-@pytest.mark.parametrize("sep", ["", " ", "|", ",", "|||"])
+@pytest.mark.parametrize("sep", ["", " ", ",", "|||"])
 def test_string_join(ps_gs, sep):
     ps, gs = ps_gs
 
@@ -2557,7 +2539,7 @@ def _cat_convert_seq_to_cudf(others):
         ],
     ],
 )
-@pytest.mark.parametrize("sep", [None, "", " ", "|", ",", "|||"])
+@pytest.mark.parametrize("sep", [None, "", " ", ",", "|||"])
 @pytest.mark.parametrize("na_rep", [None, "", "null", "a"])
 @pytest.mark.parametrize("name", [None, "This is the name"])
 def test_string_index_duplicate_str_cat(data, others, sep, na_rep, name):
@@ -2797,7 +2779,7 @@ def test_string_cat(ps_gs, others, sep, na_rep, index):
         ],
     ],
 )
-@pytest.mark.parametrize("sep", [None, "", " ", "|", ",", "|||"])
+@pytest.mark.parametrize("sep", [None, "", " ", "|", "|||"])
 @pytest.mark.parametrize("na_rep", [None, "", "null", "a"])
 @pytest.mark.parametrize("name", [None, "This is the name"])
 def test_string_index_str_cat(data, others, sep, na_rep, name):

@@ -1,6 +1,5 @@
 # Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
-from contextlib import nullcontext as does_not_raise
 from decimal import Decimal
 from sys import getsizeof
 
@@ -23,13 +22,6 @@ from cudf.testing._utils import (
     assert_exceptions_equal,
 )
 from cudf.utils import dtypes as dtypeutils
-
-
-def raise_builder(flags, exceptions):
-    if any(flags):
-        return pytest.raises(exceptions)
-    else:
-        return does_not_raise()
 
 
 @pytest.fixture(
