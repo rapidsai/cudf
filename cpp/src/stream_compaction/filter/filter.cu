@@ -251,9 +251,9 @@ std::vector<std::unique_ptr<column>> filter_operation(column_view base_column,
                                                       std::vector<column_view> const& columns,
                                                       std::string const& predicate_udf,
                                                       bool is_ptx,
-                                                      null_aware is_null_aware,
                                                       std::optional<void*> user_data,
                                                       std::optional<std::vector<bool>> copy_mask,
+                                                      null_aware is_null_aware,
                                                       rmm::cuda_stream_view stream,
                                                       rmm::device_async_resource_ref mr)
 {
@@ -315,9 +315,9 @@ namespace detail {
 std::vector<std::unique_ptr<column>> filter(std::vector<column_view> const& columns,
                                             std::string const& predicate_udf,
                                             bool is_ptx,
-                                            null_aware is_null_aware,
                                             std::optional<void*> user_data,
                                             std::optional<std::vector<bool>> copy_mask,
+                                            null_aware is_null_aware,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr)
 {
@@ -329,7 +329,7 @@ std::vector<std::unique_ptr<column>> filter(std::vector<column_view> const& colu
   perform_checks(*base_column, columns, copy_mask);
 
   auto filtered = filter_operation(
-    *base_column, columns, predicate_udf, is_ptx, is_null_aware, user_data, copy_mask, stream, mr);
+    *base_column, columns, predicate_udf, is_ptx, user_data, copy_mask, is_null_aware, stream, mr);
 
   return filtered;
 }
@@ -339,15 +339,15 @@ std::vector<std::unique_ptr<column>> filter(std::vector<column_view> const& colu
 std::vector<std::unique_ptr<column>> filter(std::vector<column_view> const& columns,
                                             std::string const& predicate_udf,
                                             bool is_ptx,
-                                            null_aware is_null_aware,
                                             std::optional<void*> user_data,
                                             std::optional<std::vector<bool>> copy_mask,
+                                            null_aware is_null_aware,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::filter(
-    columns, predicate_udf, is_ptx, is_null_aware, user_data, copy_mask, stream, mr);
+    columns, predicate_udf, is_ptx, user_data, copy_mask, is_null_aware, stream, mr);
 }
 
 }  // namespace cudf
