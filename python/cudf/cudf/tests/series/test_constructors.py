@@ -8,6 +8,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_210
 from cudf.core.column.column import as_column
 from cudf.errors import MixedTypeError
 from cudf.testing import assert_eq
@@ -45,6 +46,19 @@ def test_series_unitness_np_datetimelike_units():
         cudf.Series(data)
     with pytest.raises(TypeError):
         pd.Series(data)
+
+
+def test_from_numpyextensionarray_string_object_pandas_compat_mode():
+    if PANDAS_GE_210:
+        NumpyExtensionArray = pd.arrays.NumpyExtensionArray
+    else:
+        NumpyExtensionArray = pd.arrays.PandasArray
+
+    data = NumpyExtensionArray(np.array(["a", None], dtype=object))
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = cudf.Series(data)
+    expected = pd.Series(data)
+    assert_eq(result, expected)
 
 
 def test_list_category_like_maintains_dtype():

@@ -3045,8 +3045,10 @@ def as_column(
             if (
                 cudf.get_option("mode.pandas_compatible")
                 and inferred_dtype == "mixed"
-                and not isinstance(
-                    pyarrow_array.type, (pa.ListType, pa.StructType)
+                and not (
+                    pa.types.is_list(pyarrow_array.type)
+                    or pa.types.is_struct(pyarrow_array.type)
+                    or pa.types.is_string(pyarrow_array.type)
                 )
             ):
                 raise MixedTypeError("Cannot create column with mixed types")

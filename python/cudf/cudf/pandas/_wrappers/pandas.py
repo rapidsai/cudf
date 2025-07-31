@@ -280,6 +280,7 @@ DataFrame = make_final_proxy_type(
         "_constructor_sliced": _FastSlowAttribute("_constructor_sliced"),
         "_accessors": set(),
         "_ipython_canary_method_should_not_exist_": ignore_ipython_canary_check,
+        "__iter__": custom_iter,
         "dtypes": _FastSlowAttribute("dtypes", private=True),
     },
 )
