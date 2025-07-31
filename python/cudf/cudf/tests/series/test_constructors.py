@@ -14,6 +14,66 @@ from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal
 
 
+@pytest.fixture(
+    params=[
+        [1000000, 200000, 3000000],
+        [1000000, 200000, None],
+        [],
+        [None],
+        [None, None, None, None, None],
+        [12, 12, 22, 343, 4353534, 435342],
+        np.array([10, 20, 30, None, 100]),
+        cp.asarray([10, 20, 30, 100]),
+        [1000000, 200000, 3000000],
+        [1000000, 200000, None],
+        [1],
+        [12, 11, 232, 223432411, 2343241, 234324, 23234],
+        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+        [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
+        [
+            136457654736252,
+            134736784364431,
+            245345345545332,
+            223432411,
+            2343241,
+            3634548734,
+            23234,
+        ],
+        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+    ]
+)
+def timedelta_data(request):
+    return request.param
+
+
+def test_timedelta_series_create(timedelta_data, timedelta_types_as_str):
+    if timedelta_types_as_str != "timedelta64[ns]":
+        pytest.skip(
+            "Bug in pandas : https://github.com/pandas-dev/pandas/issues/35465"
+        )
+    psr = pd.Series(
+        cp.asnumpy(timedelta_data)
+        if isinstance(timedelta_data, cp.ndarray)
+        else timedelta_data,
+        dtype=timedelta_types_as_str,
+    )
+    gsr = cudf.Series(timedelta_data, dtype=timedelta_types_as_str)
+
+    assert_eq(psr, gsr)
+
+
+def test_timedelta_from_pandas(timedelta_data, timedelta_types_as_str):
+    psr = pd.Series(
+        cp.asnumpy(timedelta_data)
+        if isinstance(timedelta_data, cp.ndarray)
+        else timedelta_data,
+        dtype=timedelta_types_as_str,
+    )
+    gsr = cudf.from_pandas(psr)
+
+    assert_eq(psr, gsr)
+
+
 def test_construct_int_series_with_nulls_compat_mode():
     # in compatibility mode, constructing a Series
     # with nulls should result in a floating Series:

@@ -1,5 +1,6 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -101,3 +102,48 @@ def test_empty_astype_always_castable(type1, type2, as_dtype, copy):
         assert ser._column is result._column
     else:
         assert ser._column is not result._column
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1000000, 200000, 3000000],
+        [12, 12, 22, 343, 4353534, 435342],
+        [0.3534, 12, 22, 343, 43.53534, 4353.42],
+        cp.asarray([10, 20, 30, 100]),
+    ],
+)
+@pytest.mark.parametrize("cast_dtype", ["int64", "category"])
+def test_timedelta_from_typecast(data, timedelta_types_as_str, cast_dtype):
+    if timedelta_types_as_str != "timedelta64[ns]":
+        pytest.skip(
+            "Bug in pandas : https://github.com/pandas-dev/pandas/issues/35465"
+        )
+    psr = pd.Series(
+        cp.asnumpy(data) if isinstance(data, cp.ndarray) else data,
+        dtype=timedelta_types_as_str,
+    )
+    gsr = cudf.Series(data, dtype=timedelta_types_as_str)
+
+    if cast_dtype == "int64":
+        assert_eq(psr.values.view(cast_dtype), gsr.astype(cast_dtype).values)
+    else:
+        assert_eq(psr.astype(cast_dtype), gsr.astype(cast_dtype))
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1000000, 200000, 3000000],
+        [12, 12, 22, 343, 4353534, 435342],
+        [0.3534, 12, 22, 343, 43.53534, 4353.42],
+        cp.asarray([10, 20, 30, 100]),
+    ],
+)
+def test_timedelta_to_typecast(data, timedelta_types_as_str):
+    psr = pd.Series(cp.asnumpy(data) if isinstance(data, cp.ndarray) else data)
+    gsr = cudf.Series(data)
+
+    assert_eq(
+        psr.astype(timedelta_types_as_str), gsr.astype(timedelta_types_as_str)
+    )
