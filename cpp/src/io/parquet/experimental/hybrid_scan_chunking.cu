@@ -76,11 +76,11 @@ void hybrid_scan_reader_impl::handle_chunking(
       _pass_itm_data.reset();
 
       _file_itm_data._current_input_pass++;
-      // no more passes. we are absolutely done with this file.
-      if (_file_itm_data._current_input_pass == _file_itm_data.num_passes()) { return; }
 
-      // setup the next pass
-      setup_next_pass(std::move(column_chunk_buffers));
+      // no more passes. we are absolutely done with this file.
+      CUDF_EXPECTS(_file_itm_data._current_input_pass == _file_itm_data.num_passes(),
+                   "Hybrid scan reader must only create one pass per chunking setup");
+      return;
     }
   }
 
