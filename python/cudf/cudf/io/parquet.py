@@ -16,7 +16,6 @@ from uuid import uuid4
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 
 import pylibcudf as plc
 
@@ -2291,8 +2290,10 @@ def _process_metadata(
                 range_index_meta = index_col[0]
 
             if row_groups is not None:
+                import pyarrow.parquet as pq
+
                 per_file_metadata = [
-                    pa.parquet.read_metadata(
+                    pq.read_metadata(
                         # Pyarrow cannot read directly from bytes
                         io.BytesIO(s) if isinstance(s, bytes) else s
                     )

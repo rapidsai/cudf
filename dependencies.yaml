@@ -10,8 +10,7 @@ files:
       - build_all
       - build_cpp
       - build_python_common
-      - clang_format
-      - clang_tidy
+      - clang
       - cuda
       - cuda_version
       - depends_on_cupy
@@ -22,6 +21,7 @@ files:
       - depends_on_rmm
       - develop
       - docs
+      - iwyu
       - notebooks
       - py_version
       - pyarrow_run
@@ -124,10 +124,11 @@ files:
     includes:
       - build_all
       - build_base
-      - clang_tidy
+      - clang
       - cuda
       - cuda_version
       - develop
+      - iwyu
       - py_version
   docs:
     output: none
@@ -434,13 +435,13 @@ dependencies:
               arch: x86_64
               cuda: "12.*"
             packages:
-              - gcc_linux-64=13.*
+              - gcc_linux-64=14.*
               - sysroot_linux-64==2.28
           - matrix:
               arch: aarch64
               cuda: "12.*"
             packages:
-              - gcc_linux-aarch64=13.*
+              - gcc_linux-aarch64=14.*
               - sysroot_linux-aarch64==2.28
       - output_types: conda
         matrices:
@@ -558,18 +559,16 @@ dependencies:
       - output_types: conda
         packages:
           - &doxygen doxygen=1.9.1 # pre-commit hook needs a specific version.
-  clang_format:
-    common:
-      - output_types: conda
-        packages:
-          - clang==20.1.4
-          - clang-tools=20.1.4
-  clang_tidy:
+  clang:
     common:
       - output_types: conda
         packages:
           - clang==20.1.4
           - clang-tools==20.1.4
+  iwyu:
+    common:
+      - output_types: conda
+        packages:
           - include-what-you-use==0.24.0
   docs:
     common:

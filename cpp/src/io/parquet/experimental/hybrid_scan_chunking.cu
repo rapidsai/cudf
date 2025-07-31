@@ -50,6 +50,9 @@ void hybrid_scan_reader_impl::handle_chunking(
   if (!_pass_itm_data) {
     // setup the next pass
     setup_next_pass(std::move(column_chunk_buffers), options);
+
+    // Must be called as soon as we create the pass
+    set_pass_page_mask(data_page_mask);
   }
 
   auto& pass = *_pass_itm_data;
@@ -80,9 +83,6 @@ void hybrid_scan_reader_impl::handle_chunking(
       setup_next_pass(std::move(column_chunk_buffers), options);
     }
   }
-
-  // Must be called before `setup_next_subpass()` to select pages to decompress
-  set_page_mask(data_page_mask);
 
   // setup the next sub pass
   setup_next_subpass(read_mode::READ_ALL);
