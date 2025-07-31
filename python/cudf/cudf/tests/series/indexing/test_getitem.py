@@ -64,3 +64,59 @@ def test_struct_int_values():
     assert isinstance(actual_series[0]["b"], int)
     assert isinstance(actual_series[1]["b"], type(None))
     assert isinstance(actual_series[2]["b"], int)
+
+
+def test_struct_slice_nested_struct():
+    data = [
+        {"a": {"b": 42, "c": "abc"}},
+        {"a": {"b": 42, "c": "hello world"}},
+    ]
+
+    got = cudf.Series(data)[0:1]
+    expect = cudf.Series(data[0:1])
+    assert got.to_arrow() == expect.to_arrow()
+
+
+@pytest.mark.parametrize(
+    "series, slce",
+    [
+        (
+            [
+                {"a": "Hello world", "b": []},
+                {"a": "CUDF", "b": [1, 2, 3], "c": 1},
+                {},
+                None,
+            ],
+            slice(1, None),
+        ),
+        (
+            [
+                {"a": "Hello world", "b": []},
+                {"a": "CUDF", "b": [1, 2, 3], "c": 1},
+                {},
+                None,
+                {"d": ["Hello", "rapids"]},
+                None,
+                cudf.NA,
+            ],
+            slice(1, 5),
+        ),
+        (
+            [
+                {"a": "Hello world", "b": []},
+                {"a": "CUDF", "b": [1, 2, 3], "c": 1},
+                {},
+                None,
+                {"c": 5},
+                None,
+                cudf.NA,
+            ],
+            slice(None, 4),
+        ),
+        ([{"a": {"b": 42, "c": -1}}, {"a": {"b": 0, "c": None}}], slice(0, 1)),
+    ],
+)
+def test_struct_slice(series, slce):
+    got = cudf.Series(series)[slce]
+    expected = cudf.Series(series[slce])
+    assert got.to_arrow() == expected.to_arrow()
