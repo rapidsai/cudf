@@ -178,6 +178,8 @@ struct update_target_element<Source, aggregation::SUM_WITH_OVERFLOW> {
     // Check for overflow before performing the addition to avoid UB
     // For positive overflow: old_sum > 0, source_value > 0, and old_sum > max - source_value
     // For negative overflow: old_sum < 0, source_value < 0, and old_sum < min - source_value
+    // TODO: to be replaced by CCCL equivalents once https://github.com/NVIDIA/cccl/pull/3755 is
+    // ready
     auto constexpr int64_max = cuda::std::numeric_limits<int64_t>::max();
     auto constexpr int64_min = cuda::std::numeric_limits<int64_t>::min();
     auto const overflow =
