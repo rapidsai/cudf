@@ -101,7 +101,7 @@ cpdef Table gather(
             stream.view()
         )
 
-    return Table.from_libcudf(move(c_result))
+    return Table.from_libcudf(move(c_result), stream)
 
 
 cpdef Table scatter(
@@ -168,7 +168,7 @@ cpdef Table scatter(
                 target_table.view(),
                 stream.view()
             )
-    return Table.from_libcudf(move(c_result))
+    return Table.from_libcudf(move(c_result), stream)
 
 
 cpdef ColumnOrTable empty_like(ColumnOrTable input):
@@ -235,7 +235,7 @@ cpdef Column allocate_like(
                 stream.view()
             )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream)
 
 
 cpdef Column copy_range_in_place(
@@ -349,7 +349,7 @@ cpdef Column copy_range(
             stream.view()
         )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream)
 
 
 cpdef Column shift(
@@ -392,7 +392,7 @@ cpdef Column shift(
                 dereference(fill_value.c_obj),
                 stream.view()
             )
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream)
 
 
 cpdef list slice(ColumnOrTable input, list indices, Stream stream=None):
@@ -556,7 +556,7 @@ cpdef Column copy_if_else(
                 stream.view()
             )
 
-    return Column.from_libcudf(move(result))
+    return Column.from_libcudf(move(result), stream)
 
 
 cpdef Table boolean_mask_scatter(
@@ -620,7 +620,7 @@ cpdef Table boolean_mask_scatter(
                 stream.view()
             )
 
-    return Table.from_libcudf(move(result))
+    return Table.from_libcudf(move(result), stream)
 
 
 cpdef Scalar get_element(Column input_column, size_type index, Stream stream=None):
