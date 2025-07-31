@@ -673,11 +673,6 @@ def test_timdelta_binop_tz_timestamp(op):
         op(s, date_tz_scalar)
 
 
-def test_timedelta_getitem_na():
-    s = cudf.Series([1, 2, None, 3], dtype="timedelta64[ns]")
-    assert s[2] is cudf.NaT
-
-
 @pytest.mark.parametrize(
     "op",
     [
@@ -724,17 +719,3 @@ def test_tdi_reductions(method, kwargs):
     result = getattr(pd_tdi, method)(**kwargs)
     expected = getattr(cudf_tdi, method)(**kwargs)
     assert result == expected
-
-
-def test_writable_numpy_array():
-    gi = cudf.Index([1, 2, 3], dtype="timedelta64[ns]")
-    expected_flags = pd.Index(
-        [1, 2, 3], dtype="timedelta64[ns]"
-    )._data._ndarray.flags
-
-    actual_flags = gi.to_pandas()._data._ndarray.flags
-    assert expected_flags.c_contiguous == actual_flags.c_contiguous
-    assert expected_flags.f_contiguous == actual_flags.f_contiguous
-    assert expected_flags.writeable == actual_flags.writeable
-    assert expected_flags.aligned == actual_flags.aligned
-    assert expected_flags.writebackifcopy == actual_flags.writebackifcopy

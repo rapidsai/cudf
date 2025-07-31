@@ -143,3 +143,8 @@ def test_struct_slice(series, slce):
 def test_struct_getitem(series, expected):
     sr = cudf.Series(series)
     assert sr[0] == expected
+
+
+def test_timedelta_getitem_na():
+    s = cudf.Series([1, 2, None, 3], dtype="timedelta64[ns]")
+    assert s[2] is cudf.NaT

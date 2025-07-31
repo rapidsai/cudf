@@ -181,3 +181,17 @@ def test_timedelta_series_to_pandas(data, timedelta_types_as_str):
     actual = gsr.to_pandas()
 
     assert_eq(expected, actual)
+
+
+def test_writable_numpy_array_timedelta():
+    gi = cudf.Index([1, 2, 3], dtype="timedelta64[ns]")
+    expected_flags = pd.Index(
+        [1, 2, 3], dtype="timedelta64[ns]"
+    )._data._ndarray.flags
+
+    actual_flags = gi.to_pandas()._data._ndarray.flags
+    assert expected_flags.c_contiguous == actual_flags.c_contiguous
+    assert expected_flags.f_contiguous == actual_flags.f_contiguous
+    assert expected_flags.writeable == actual_flags.writeable
+    assert expected_flags.aligned == actual_flags.aligned
+    assert expected_flags.writebackifcopy == actual_flags.writebackifcopy
