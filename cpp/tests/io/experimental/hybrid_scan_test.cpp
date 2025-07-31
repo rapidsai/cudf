@@ -250,7 +250,7 @@ auto hybrid_scan(std::vector<char>& buffer,
  *         row validity column
  */
 auto chunked_hybrid_scan(
-  std::vector<char>& buffer,
+  std::vector<char> const& buffer,
   cudf::ast::operation const& filter_expression,
   cudf::size_type num_filter_columns,
   std::optional<std::vector<std::string>> const& payload_column_names,
@@ -359,9 +359,8 @@ TEST_F(HybridScanTest, PruneRowGroupsOnlyAndScanAllColumns)
   srand(0xc0ffee);
   using T = uint32_t;
 
-  // A table not concated with itself with result in a parquet file with several row groups each
-  // with a single page. Since there is only one page per row group, the page and row group stats
-  // are identical and we can only prune row groups.
+  // A table with several row groups each containing a single page per column. The data page and row
+  // group stats are identical so only row groups can be pruned using stats
   auto constexpr num_concat            = 1;
   auto [written_table, parquet_buffer] = create_parquet_with_stats<T, num_concat>();
 
@@ -402,9 +401,8 @@ TEST_F(HybridScanTest, PruneRowGroupsOnlyAndScanSelectColumns)
   srand(0xcafe);
   using T = cudf::timestamp_ms;
 
-  // A table not concated with itself with result in a parquet file with several row groups each
-  // with a single page. Since there is only one page per row group, the page and row group stats
-  // are identical and we can only prune row groups.
+  // A table with several row groups each containing a single page per column. The data page and row
+  // group stats are identical so only row groups can be pruned using stats
   auto constexpr num_concat            = 1;
   auto [written_table, parquet_buffer] = create_parquet_with_stats<T, num_concat>();
 
@@ -472,9 +470,9 @@ TEST_F(HybridScanTest, PruneDataPagesOnlyAndScanAllColumns)
   srand(0xf00d);
   using T = cudf::duration_ms;
 
-  // A table concatenated multiple times by itself with result in a parquet file with a row group
-  // per concatenation with multiple pages per row group. Since all row groups will be identical,
-  // we can only prune pages based on page index stats
+  // A table concatenated with itself results in a parquet file with a row group per concatenated
+  // table, each containing multiple pages per column. All row groups will be identical so only data
+  // pages can be pruned using page index stats
   auto constexpr num_concat    = 2;
   auto [written_table, buffer] = create_parquet_with_stats<T, num_concat>();
 
@@ -601,105 +599,72 @@ TEST_F(HybridScanTest, MaterializeListPayloadColumn)
   }
 }
 
-TEST_F(HybridScanTest, PruneRowGroupsOnlyAndChunkedScanAllColumns)
+TEST_F(HybridScanTest, ChunkedHybridScanBasics)
 {
   srand(0xc0ffee);
-  using T = uint32_t;
 
-  // A table not concated with itself with result in a parquet file with several row groups each
-  // with a single page. Since there is only one page per row group, the page and row group stats
-  // are identical and we can only prune row groups.
-  auto constexpr num_concat            = 1;
-  auto [written_table, parquet_buffer] = create_parquet_with_stats<T, num_concat>();
+  // Helper to test chunked hybrid scan reader
+  auto const test_chunked_hybrid_scan = [&](std::vector<char> const& parquet_buffer,
+                                            cudf::ast::operation const& filter_expression,
+                                            cudf::size_type num_filter_columns) {
+    auto stream     = cudf::get_default_stream();
+    auto mr         = cudf::get_current_device_resource_ref();
+    auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
+      cudf::get_current_device_resource(), bloom_filter_alignment);
 
-  // Filtering AST - table[0] < 100
-  auto constexpr num_filter_columns = 1;
-  auto literal_value                = cudf::numeric_scalar<uint32_t>(100);
-  auto literal                      = cudf::ast::literal(literal_value);
-  auto col_ref_0                    = cudf::ast::column_name_reference("col0");
-  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+    // Read parquet using the hybrid scan reader
+    auto [read_filter_table, read_payload_table, read_filter_meta, read_payload_meta, row_mask] =
+      chunked_hybrid_scan(
+        parquet_buffer, filter_expression, num_filter_columns, {}, stream, mr, aligned_mr);
 
-  auto stream     = cudf::get_default_stream();
-  auto mr         = cudf::get_current_device_resource_ref();
-  auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
-    cudf::get_current_device_resource(), bloom_filter_alignment);
+    CUDF_EXPECTS(read_filter_table->num_rows() == read_payload_table->num_rows(),
+                 "Filter and payload tables should have the same number of rows");
 
-  // Read parquet using the hybrid scan reader
-  auto [read_filter_table, read_payload_table, read_filter_meta, read_payload_meta, row_mask] =
-    chunked_hybrid_scan(
-      parquet_buffer, filter_expression, num_filter_columns, {}, stream, mr, aligned_mr);
-
-  CUDF_EXPECTS(read_filter_table->num_rows() == read_payload_table->num_rows(),
-               "Filter and payload tables should have the same number of rows");
-
-  // Check equivalence (equal without checking nullability) with the parquet file read with the
-  // original reader
-  {
+    // Check equivalence (equal without checking nullability) with the parquet file read with the
+    // original reader
     cudf::io::parquet_reader_options const options =
-      cudf::io::parquet_reader_options::builder(
-        cudf::io::source_info(cudf::host_span<char>(parquet_buffer.data(), parquet_buffer.size())))
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info(cudf::host_span<char const>(
+                                                  parquet_buffer.data(), parquet_buffer.size())))
         .filter(filter_expression);
     auto [expected_tbl, expected_meta] = cudf::io::read_parquet(options, stream);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}), read_filter_table->view());
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({1, 2}), read_payload_table->view());
-  }
-}
+  };
 
-TEST_F(HybridScanTest, PruneDataPagesOnlyAndChunkedScanAllColumns)
-{
-  srand(0xf00d);
-  using T = cudf::duration_ms;
-
-  // A table concatenated multiple times by itself with result in a parquet file with a row group
-  // per concatenation with multiple pages per row group. Since all row groups will be identical,
-  // we can only prune pages based on page index stats
-  auto constexpr num_concat    = 2;
-  auto [written_table, buffer] = create_parquet_with_stats<T, num_concat>();
-
-  // Filtering AST - table[0] < 100
-  auto constexpr num_filter_columns = 1;
-  auto literal_value                = cudf::duration_scalar<T>(T{100});
-  auto literal                      = cudf::ast::literal(literal_value);
-  auto col_ref_0                    = cudf::ast::column_name_reference("col0");
-  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
-
-  auto stream     = cudf::get_default_stream();
-  auto mr         = cudf::get_current_device_resource_ref();
-  auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
-    cudf::get_current_device_resource(), bloom_filter_alignment);
-
-  // Read parquet using the hybrid scan reader
-  auto [read_filter_table, read_payload_table, read_filter_meta, read_payload_meta, row_mask] =
-    chunked_hybrid_scan(buffer, filter_expression, num_filter_columns, {}, stream, mr, aligned_mr);
-
-  CUDF_EXPECTS(read_filter_table->num_rows() == read_payload_table->num_rows(),
-               "Filter and payload tables should have the same number of rows");
-
-  // Check equivalence (equal without checking nullability) with the parquet file read with the
-  // original reader
+  // A table with several row groups each containing a single page per column. The data page and row
+  // group stats are identical so only row groups can be pruned using stats
   {
-    cudf::io::parquet_reader_options const options =
-      cudf::io::parquet_reader_options::builder(
-        cudf::io::source_info(cudf::host_span<char>(buffer.data(), buffer.size())))
-        .filter(filter_expression);
-    auto [expected_tbl, expected_meta] = cudf::io::read_parquet(options, stream);
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}), read_filter_table->view());
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({1, 2}), read_payload_table->view());
-  }
+    using T                   = uint32_t;
+    auto constexpr num_concat = 1;
+    auto parquet_buffer       = create_parquet_with_stats<T, num_concat>().second;
 
-  // Check equivalence (equal without checking nullability) with the original table with the
-  // applied boolean mask
-  {
-    auto col_ref_0 = cudf::ast::column_reference(0);
+    // Filtering AST - table[0] < 100
+    auto constexpr num_filter_columns = 1;
+    auto literal_value                = cudf::numeric_scalar<T>(100);
+    auto literal                      = cudf::ast::literal(literal_value);
+    auto col_ref_0                    = cudf::ast::column_name_reference("col0");
     auto filter_expression =
       cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
 
-    auto predicate = cudf::compute_column(written_table->view(), filter_expression);
-    EXPECT_EQ(predicate->view().type().id(), cudf::type_id::BOOL8)
-      << "Predicate filter should return a boolean";
-    auto expected = cudf::apply_boolean_mask(written_table->view(), *predicate);
-    // Check equivalence as the nullability between columns may be different
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->select({0}), read_filter_table->view());
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->select({1, 2}), read_payload_table->view());
+    test_chunked_hybrid_scan(parquet_buffer, filter_expression, num_filter_columns);
+  }
+
+  // A table concatenated with itself results in a parquet file with a row group per concatenated
+  // table, each containing multiple pages per column. All row groups will be identical so only data
+  // pages can be pruned using page index stats
+  {
+    using T                   = cudf::duration_ms;
+    auto constexpr num_concat = 2;
+    auto parquet_buffer       = create_parquet_with_stats<T, num_concat>().second;
+
+    // Filtering AST - table[0] < 100
+    auto constexpr num_filter_columns = 1;
+    auto literal_value                = cudf::duration_scalar<T>(T{100});
+    auto literal                      = cudf::ast::literal(literal_value);
+    auto col_ref_0                    = cudf::ast::column_name_reference("col0");
+    auto filter_expression =
+      cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+
+    test_chunked_hybrid_scan(parquet_buffer, filter_expression, num_filter_columns);
   }
 }
