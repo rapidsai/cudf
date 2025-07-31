@@ -55,13 +55,21 @@ class Record:
 
 
 @dataclasses.dataclass
+class VersionInfo:
+    """Information about the commit of the software used to run the query."""
+
+    version: str
+    commit: str
+
+
+@dataclasses.dataclass
 class PackageVersions:
     """Information about the versions of the software used to run the query."""
 
-    cudf_polars: str
+    cudf_polars: str | VersionInfo
     polars: str
     python: str
-    rapidsmpf: str | None
+    rapidsmpf: str | VersionInfo | None
 
     @classmethod
     def collect(cls) -> PackageVersions:
@@ -71,15 +79,24 @@ class PackageVersions:
             "polars",
             "rapidsmpf",
         ]
-        versions = {}
+        versions: dict[str, str | VersionInfo | None] = {}
         for name in packages:
             try:
                 package = importlib.import_module(name)
-                versions[name] = package.__version__
             except (AttributeError, ImportError):  # noqa: PERF203
                 versions[name] = None
+            else:
+                if name in ("cudf_polars", "rapidsmpf"):
+                    versions[name] = VersionInfo(
+                        version=package.__version__,
+                        commit=package.__git_commit__,
+                    )
+                else:
+                    versions[name] = package.__version__
+
         versions["python"] = ".".join(str(v) for v in sys.version_info[:3])
-        return cls(**versions)
+        # we manually ensure that only cudf-polars and rapidsmpf have a VersionInfo
+        return cls(**versions)  # type: ignore[arg-type]
 
 
 @dataclasses.dataclass
