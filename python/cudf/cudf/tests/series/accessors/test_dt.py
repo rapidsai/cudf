@@ -82,3 +82,14 @@ def test_timedelta_dt_properties(timedelta_data, timedelta_types_as_str):
     actual_nanoseconds = gsr.dt.nanoseconds
 
     local_assert(expected_nanoseconds, actual_nanoseconds, check_dtype=False)
+
+
+def test_timedelta_series_total_seconds(
+    timedelta_data, timedelta_types_as_str
+):
+    gsr = cudf.Series(timedelta_data, dtype=timedelta_types_as_str)
+    psr = gsr.to_pandas()
+
+    expected = psr.dt.total_seconds()
+    actual = gsr.dt.total_seconds()
+    assert_eq(expected, actual)

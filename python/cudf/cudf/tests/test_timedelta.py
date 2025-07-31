@@ -367,13 +367,6 @@ def test_timedelta_reduction_ops(
         assert_eq(expected, actual)
 
 
-def test_timedelta_index(data, timedelta_dtype):
-    gdi = cudf.Index(data, dtype=timedelta_dtype)
-    pdi = gdi.to_pandas()
-
-    assert_eq(pdi, gdi)
-
-
 @pytest.mark.parametrize("datetime_dtype", utils.DATETIME_TYPES)
 def test_timedelta_index_datetime_index_ops(
     data_non_overflow, datetime_dtype, timedelta_dtype
@@ -522,50 +515,6 @@ def test_timedelta_index_ops_with_scalars(
         )
     )
     assert_eq(expected, actual)
-
-
-@pytest.mark.parametrize("name", ["abcd", None])
-def test_timedelta_index_properties(data, timedelta_dtype, name):
-    gdi = cudf.Index(data, dtype=timedelta_dtype, name=name)
-    pdi = gdi.to_pandas()
-
-    def local_assert(expected, actual):
-        if actual._column.null_count:
-            assert_eq(expected, actual.astype("float64"))
-        else:
-            assert_eq(expected, actual)
-
-    expected_days = pdi.days
-    actual_days = gdi.days
-
-    local_assert(expected_days, actual_days)
-
-    expected_seconds = pdi.seconds
-    actual_seconds = gdi.seconds
-
-    local_assert(expected_seconds, actual_seconds)
-
-    expected_microseconds = pdi.microseconds
-    actual_microseconds = gdi.microseconds
-
-    local_assert(expected_microseconds, actual_microseconds)
-
-    expected_nanoseconds = pdi.nanoseconds
-    actual_nanoseconds = gdi.nanoseconds
-
-    local_assert(expected_nanoseconds, actual_nanoseconds)
-
-    expected_components = pdi.components
-    actual_components = gdi.components
-
-    if actual_components.isnull().any().any():
-        assert_eq(expected_components, actual_components.astype("float"))
-    else:
-        assert_eq(
-            expected_components,
-            actual_components,
-            check_index_type=not actual_components.empty,
-        )
 
 
 @pytest.mark.parametrize(
@@ -938,37 +887,6 @@ def test_timedelta_reductions(data, op, timedelta_dtype):
         assert_eq(expected.to_numpy(), actual)
 
 
-def test_error_values():
-    s = cudf.Series([1, 2, 3], dtype="timedelta64[ns]")
-    with pytest.raises(NotImplementedError, match="cupy does not support"):
-        s.values
-
-
-@pytest.mark.parametrize("name", [None, "delta-index"])
-def test_create_TimedeltaIndex(timedelta_dtype, name):
-    gdi = cudf.TimedeltaIndex(
-        [1132223, 2023232, 342234324, 4234324],
-        dtype=timedelta_dtype,
-        name=name,
-    )
-    pdi = gdi.to_pandas()
-    assert_eq(pdi, gdi)
-
-
-def test_timedelta_constructor():
-    data = [43534, 43543, 37897, 2000]
-    dtype = "timedelta64[ns]"
-    expected = pd.TimedeltaIndex(data=data, dtype=dtype)
-    actual = cudf.TimedeltaIndex(data=data, dtype=dtype)
-
-    assert_eq(expected, actual)
-
-    expected = pd.TimedeltaIndex(data=pd.Series(data), dtype=dtype)
-    actual = cudf.TimedeltaIndex(data=cudf.Series(data), dtype=dtype)
-
-    assert_eq(expected, actual)
-
-
 @pytest.mark.parametrize("op", [operator.add, operator.sub])
 def test_timdelta_binop_tz_timestamp(op):
     s = cudf.Series([1, 2, 3], dtype="timedelta64[ns]")
@@ -1031,44 +949,6 @@ def test_tdi_reductions(method, kwargs):
     result = getattr(pd_tdi, method)(**kwargs)
     expected = getattr(cudf_tdi, method)(**kwargs)
     assert result == expected
-
-
-def test_tdi_asi8():
-    pd_tdi = pd.TimedeltaIndex(["1 day", "2 days", "3 days"])
-    cudf_tdi = cudf.from_pandas(pd_tdi)
-
-    result = pd_tdi.asi8
-    expected = cudf_tdi.asi8
-    assert_eq(result, expected)
-
-
-def test_tdi_unit():
-    pd_tdi = pd.TimedeltaIndex(
-        ["1 day", "2 days", "3 days"], dtype="timedelta64[ns]"
-    )
-    cudf_tdi = cudf.from_pandas(pd_tdi)
-
-    result = pd_tdi.unit
-    expected = cudf_tdi.unit
-    assert result == expected
-
-
-def test_timedelta_series_total_seconds(data, timedelta_dtype):
-    gsr = cudf.Series(data, dtype=timedelta_dtype)
-    psr = gsr.to_pandas()
-
-    expected = psr.dt.total_seconds()
-    actual = gsr.dt.total_seconds()
-    assert_eq(expected, actual)
-
-
-def test_timedelta_index_total_seconds(data, timedelta_dtype):
-    gi = cudf.Index(data, dtype=timedelta_dtype)
-    pi = gi.to_pandas()
-
-    expected = pi.total_seconds()
-    actual = gi.total_seconds()
-    assert_eq(expected, actual)
 
 
 def test_writable_numpy_array():
