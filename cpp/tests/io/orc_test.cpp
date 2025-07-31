@@ -2311,6 +2311,7 @@ INSTANTIATE_TEST_CASE_P(Nvcomp,
                                            ::testing::Values(cudf::io::compression_type::AUTO,
                                                              cudf::io::compression_type::SNAPPY,
                                                              cudf::io::compression_type::LZ4,
+                                                             cudf::io::compression_type::ZLIB,
                                                              cudf::io::compression_type::ZSTD)));
 
 INSTANTIATE_TEST_CASE_P(DeviceInternal,
@@ -2332,6 +2333,7 @@ INSTANTIATE_TEST_CASE_P(Nvcomp,
                                            ::testing::Values(cudf::io::compression_type::AUTO,
                                                              cudf::io::compression_type::SNAPPY,
                                                              cudf::io::compression_type::LZ4,
+                                                             cudf::io::compression_type::ZLIB,
                                                              cudf::io::compression_type::ZSTD)));
 
 INSTANTIATE_TEST_CASE_P(DeviceInternal,
