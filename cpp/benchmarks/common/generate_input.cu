@@ -549,7 +549,7 @@ struct create_rand_col_fn {
                                            thrust::minstd_rand& engine,
                                            cudf::size_type num_rows)
   {
-    if (profile.get_cardinality() == 0 || profile.get_cardinality() >= num_rows) {
+    if (profile.get_cardinality() >= num_rows) {
       return create_distinct_rows_column<T>(profile, engine, num_rows);
     }
     return create_random_column<T>(profile, engine, num_rows);

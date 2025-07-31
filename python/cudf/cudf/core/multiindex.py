@@ -1654,7 +1654,9 @@ class MultiIndex(Index):
             new_data.pop(self._data.names[i])
 
         if len(new_data) == 1:
-            return _index_from_data(new_data)
+            return Index._from_column(
+                next(iter(new_data.values())), name=new_names[0]
+            )
         else:
             mi = type(self)._from_data(new_data)
             mi.names = new_names
