@@ -56,21 +56,22 @@ namespace detail {
  * the kernel needs to internally loop over left rows. Otherwise, loop over right rows.
  */
 template <bool has_nulls>
-void launch_mixed_join(table_device_view left_table,
-                       table_device_view right_table,
-                       table_device_view probe,
-                       table_device_view build,
-                       row_hash const hash_probe,
-                       row_equality const equality_probe,
-                       join_kind const join_type,
-                       cudf::detail::mixed_join_hash_table_ref_t const& hash_table_ref,
-                       size_type* join_output_l,
-                       size_type* join_output_r,
-                       cudf::ast::detail::expression_device_view device_expression_data,
-                       bool const swap_tables,
-                       detail::grid_1d const config,
-                       int64_t shmem_size_per_block,
-                       rmm::cuda_stream_view stream);
+void launch_mixed_join(
+  table_device_view left_table,
+  table_device_view right_table,
+  table_device_view probe,
+  table_device_view build,
+  row_hash const hash_probe,
+  row_equality const equality_probe,
+  join_kind const join_type,
+  cudf::detail::mixed_join_hash_table_ref_t<cuco::retrieve_tag> const& hash_table_ref,
+  size_type* join_output_l,
+  size_type* join_output_r,
+  cudf::ast::detail::expression_device_view device_expression_data,
+  bool const swap_tables,
+  detail::grid_1d const config,
+  int64_t shmem_size_per_block,
+  rmm::cuda_stream_view stream);
 
 }  // namespace detail
 

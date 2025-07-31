@@ -35,7 +35,7 @@
 namespace cudf::detail {
 template <typename Hasher>
 struct pair_fn {
-  pair_fn(Hasher hash) : _hash{hash} {}
+  __host__ __device__ pair_fn(Hasher hash) : _hash{hash} {}
 
   __device__ cuco::pair<hash_value_type, size_type> operator()(size_type i) const noexcept
   {
@@ -170,16 +170,10 @@ void build_join_hash_table(
   auto const nulls = nullate::DYNAMIC{has_nested_nulls};
 
   // Insert rows into hash table
-  if (cudf::is_primitive_row_op_compatible(build)) {
-    auto const d_hasher = cudf::row::primitive::row_hasher{nulls, preprocessed_build};
+  auto const row_hash = experimental::row::hash::row_hasher{preprocessed_build};
+  auto const d_hasher = row_hash.device_hasher(nulls);
 
-    insert_rows(build, d_hasher);
-  } else {
-    auto const row_hash = experimental::row::hash::row_hasher{preprocessed_build};
-    auto const d_hasher = row_hash.device_hasher(nulls);
-
-    insert_rows(build, d_hasher);
-  }
+  insert_rows(build, d_hasher);
 }
 
 // Convenient alias for a pair of unique pointers to device uvectors.

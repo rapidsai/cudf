@@ -28,7 +28,7 @@ template void launch_mixed_join<true>(
   row_hash const hash_probe,
   row_equality const equality_probe,
   join_kind const join_type,
-  cudf::detail::mixed_join_hash_table_ref_t const& hash_table_ref,
+  cudf::detail::mixed_join_hash_table_ref_t<cuco::retrieve_tag> const& hash_table_ref,
   size_type* join_output_l,
   size_type* join_output_r,
   cudf::ast::detail::expression_device_view device_expression_data,

@@ -34,18 +34,18 @@
 namespace cudf {
 namespace detail {
 template <int block_size, bool has_nulls>
-CUDF_KERNEL void __launch_bounds__(block_size)
-  compute_mixed_join_output_size(table_device_view left_table,
-                                 table_device_view right_table,
-                                 table_device_view probe,
-                                 table_device_view build,
-                                 row_hash const hash_probe,
-                                 row_equality const equality_probe,
-                                 join_kind const join_type,
-                                 cudf::detail::mixed_join_hash_table_ref_t hash_table_ref,
-                                 ast::detail::expression_device_view device_expression_data,
-                                 bool const swap_tables,
-                                 cudf::device_span<cudf::size_type> matches_per_row)
+CUDF_KERNEL void __launch_bounds__(block_size) compute_mixed_join_output_size(
+  table_device_view left_table,
+  table_device_view right_table,
+  table_device_view probe,
+  table_device_view build,
+  row_hash const hash_probe,
+  row_equality const equality_probe,
+  join_kind const join_type,
+  cudf::detail::mixed_join_hash_table_ref_t<cuco::count_tag> hash_table_ref,
+  ast::detail::expression_device_view device_expression_data,
+  bool const swap_tables,
+  cudf::device_span<cudf::size_type> matches_per_row)
 {
   // The (required) extern storage of the shared memory array leads to
   // conflicting declarations between different templates. The easiest
@@ -72,7 +72,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   // TODO: Address asymmetry in operator.
   auto count_equality = pair_expression_equality<has_nulls>{
     evaluator, thread_intermediate_storage, swap_tables, equality_probe};
-  auto count_ref = hash_table_ref.rebind_operator(cuco::count_tag{}).rebind_key_eq(count_equality);
+  auto count_ref = hash_table_ref.rebind_key_eq(count_equality);
 
   for (auto outer_row_index = start_idx; outer_row_index < outer_num_rows;
        outer_row_index += stride) {
@@ -96,7 +96,7 @@ std::size_t launch_compute_mixed_join_output_size(
   row_hash const hash_probe,
   row_equality const equality_probe,
   join_kind const join_type,
-  cudf::detail::mixed_join_hash_table_ref_t hash_table_ref,
+  cudf::detail::mixed_join_hash_table_ref_t<cuco::count_tag> hash_table_ref,
   ast::detail::expression_device_view device_expression_data,
   bool const swap_tables,
   cudf::device_span<cudf::size_type> matches_per_row,

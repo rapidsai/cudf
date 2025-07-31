@@ -71,7 +71,8 @@ using mixed_multimap_type =
                         cuco::double_hashing<1, mixed_join_hasher1, mixed_join_hasher2>,
                         cudf::detail::cuco_allocator<char>,
                         cuco::storage<2>>;
-using mixed_join_hash_table_ref_t = mixed_multimap_type::ref_type<>;
+template <typename Tag>
+using mixed_join_hash_table_ref_t = mixed_multimap_type::ref_type<Tag>;
 
 bool is_trivial_join(table_view const& left, table_view const& right, join_kind join_type);
 }  // namespace cudf::detail
