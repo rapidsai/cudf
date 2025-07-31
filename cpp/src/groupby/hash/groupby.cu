@@ -52,9 +52,9 @@ const auto hash_aggregations = std::set{aggregation::SUM,
                                         aggregation::ARGMAX,
                                         aggregation::SUM_OF_SQUARES,
                                         aggregation::MEAN,
+                                        aggregation::M2,
                                         aggregation::STD,
-                                        aggregation::VARIANCE,
-                                        aggregation::M2};
+                                        aggregation::VARIANCE};
 
 /**
  * @brief Indicates whether the specified aggregation operation can be computed
