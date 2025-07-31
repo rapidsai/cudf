@@ -152,10 +152,10 @@ auto apply_parquet_filters(cudf::host_span<uint8_t const> file_buffer_span,
   std::vector<cudf::size_type> final_row_group_indices(current_row_group_indices.begin(),
                                                        current_row_group_indices.end());
 
-  return std::make_tuple(std::move(reader),
-                         std::move(final_row_group_indices),
-                         std::move(row_mask),
-                         std::move(data_page_mask));
+  return std::tuple{std::move(reader),
+                    std::move(final_row_group_indices),
+                    std::move(row_mask),
+                    std::move(data_page_mask)};
 }
 /**
  * @brief Read parquet file with the hybrid scan reader

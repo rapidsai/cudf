@@ -796,7 +796,7 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask
 
       // Copy page indices with at least one required row
       auto const filtered_pages_end_iter =
-        thrust::copy_if(rmm::exec_policy_nosync(streams[col_idx]),
+        thrust::copy_if(rmm::exec_policy_nosync(stream),
                         page_indices.begin(),
                         page_indices.end(),
                         thrust::counting_iterator<size_type>(0),
