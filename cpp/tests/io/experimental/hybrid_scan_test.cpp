@@ -141,10 +141,8 @@ auto hybrid_scan(std::vector<char>& buffer,
   }
 
   // Filter data pages with page index stats
-  auto [row_mask, data_page_mask] =
-    reader->filter_data_pages_with_stats(current_row_group_indices, options, stream, mr);
-
-  EXPECT_EQ(data_page_mask.size(), num_filter_columns);
+  auto row_mask =
+    reader->build_row_mask_with_page_index_stats(current_row_group_indices, options, stream, mr);
 
   // Get column chunk byte ranges from the reader
   auto const filter_column_chunk_byte_ranges =
@@ -156,10 +154,10 @@ auto hybrid_scan(std::vector<char>& buffer,
 
   // Materialize the table with only the filter columns
   auto [filter_table, filter_metadata] =
-    reader->materialize_filter_columns(data_page_mask,
-                                       current_row_group_indices,
+    reader->materialize_filter_columns(current_row_group_indices,
                                        std::move(filter_column_chunk_buffers),
                                        row_mask->mutable_view(),
+                                       cudf::io::parquet::experimental::use_data_page_mask::YES,
                                        options,
                                        stream);
 
@@ -168,14 +166,15 @@ auto hybrid_scan(std::vector<char>& buffer,
     reader->payload_column_chunks_byte_ranges(current_row_group_indices, options);
 
   // Fetch column chunk device buffers from the input buffer
-  [[maybe_unused]] auto payload_column_chunk_buffers =
+  auto payload_column_chunk_buffers =
     fetch_byte_ranges(file_buffer_span, payload_column_chunk_byte_ranges, stream, mr);
 
   // Materialize the table with only the payload columns
-  [[maybe_unused]] auto [payload_table, payload_metadata] =
+  auto [payload_table, payload_metadata] =
     reader->materialize_payload_columns(current_row_group_indices,
                                         std::move(payload_column_chunk_buffers),
                                         row_mask->view(),
+                                        cudf::io::parquet::experimental::use_data_page_mask::YES,
                                         options,
                                         stream);
 
@@ -228,7 +227,7 @@ TEST_F(HybridScanTest, PruneRowGroupsOnlyAndScanAllColumns)
       cudf::io::parquet_reader_options::builder(
         cudf::io::source_info(cudf::host_span<char>(parquet_buffer.data(), parquet_buffer.size())))
         .filter(filter_expression);
-    auto [expected_tbl, expected_meta] = cudf::io::read_parquet(options, stream);
+    auto [expected_tbl, expected_meta] = read_parquet(options, stream);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}), read_filter_table->view());
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({1, 2}), read_payload_table->view());
   }
@@ -275,7 +274,7 @@ TEST_F(HybridScanTest, PruneRowGroupsOnlyAndScanSelectColumns)
       cudf::io::parquet_reader_options::builder(
         cudf::io::source_info(cudf::host_span<char>(parquet_buffer.data(), parquet_buffer.size())))
         .filter(filter_expression);
-    auto [expected_tbl, expected_meta] = cudf::io::read_parquet(options, stream);
+    auto [expected_tbl, expected_meta] = read_parquet(options, stream);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}), read_filter_table->view());
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({2}), read_payload_table->view());
   }
@@ -298,7 +297,7 @@ TEST_F(HybridScanTest, PruneRowGroupsOnlyAndScanSelectColumns)
       cudf::io::parquet_reader_options::builder(
         cudf::io::source_info(cudf::host_span<char>(parquet_buffer.data(), parquet_buffer.size())))
         .filter(filter_expression);
-    auto [expected_tbl, expected_meta] = cudf::io::read_parquet(options, stream);
+    auto [expected_tbl, expected_meta] = read_parquet(options, stream);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}), read_filter_table->view());
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({2, 1}), read_payload_table->view());
   }
@@ -341,7 +340,7 @@ TEST_F(HybridScanTest, PruneDataPagesOnlyAndScanAllColumns)
       cudf::io::parquet_reader_options::builder(
         cudf::io::source_info(cudf::host_span<char>(buffer.data(), buffer.size())))
         .filter(filter_expression);
-    auto [expected_tbl, expected_meta] = cudf::io::read_parquet(options, stream);
+    auto [expected_tbl, expected_meta] = read_parquet(options, stream);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}), read_filter_table->view());
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({1, 2}), read_payload_table->view());
   }
