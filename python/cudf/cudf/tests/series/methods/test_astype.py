@@ -8,6 +8,7 @@ import pytest
 
 import cudf
 from cudf.testing import assert_eq
+from cudf.testing._utils import assert_exceptions_equal
 
 
 def test_series_typecast_to_object_error():
@@ -147,3 +148,169 @@ def test_timedelta_to_typecast(data, timedelta_types_as_str):
     assert_eq(
         psr.astype(timedelta_types_as_str), gsr.astype(timedelta_types_as_str)
     )
+
+
+@pytest.mark.parametrize("data", [[], [1, 2, 3, 4, 5]])
+def test_numeric_to_timedelta(
+    data, numeric_types_as_str, timedelta_types_as_str
+):
+    sr = cudf.Series(data, dtype=numeric_types_as_str)
+    psr = sr.to_pandas()
+
+    actual = sr.astype(timedelta_types_as_str)
+    expected = psr.astype(timedelta_types_as_str)
+
+    assert_eq(expected, actual)
+
+
+def test_timedelta_datetime_cast_invalid():
+    sr = cudf.Series([1, 2, 3], dtype="timedelta64[ns]")
+    psr = sr.to_pandas()
+
+    assert_exceptions_equal(
+        psr.astype,
+        sr.astype,
+        (["datetime64[ns]"],),
+        (["datetime64[ns]"],),
+    )
+
+    sr = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
+    psr = sr.to_pandas()
+
+    assert_exceptions_equal(
+        psr.astype,
+        sr.astype,
+        (["timedelta64[ns]"],),
+        (["timedelta64[ns]"],),
+    )
+
+
+@pytest.mark.parametrize(
+    "sr_data, sr_dtype, exp_data, exp_dtype",
+    [
+        [
+            [1, 2, 3],
+            "timedelta64[ns]",
+            [
+                "0 days 00:00:00.000000001",
+                "0 days 00:00:00.000000002",
+                "0 days 00:00:00.000000003",
+            ],
+            None,
+        ],
+        [
+            [1000000, 200000, 3000000],
+            "timedelta64[ms]",
+            ["0 days 00:16:40", "0 days 00:03:20", "0 days 00:50:00"],
+            None,
+        ],
+        [
+            [1000000, 200000, 3000000],
+            "timedelta64[s]",
+            ["11 days 13:46:40", "2 days 07:33:20", "34 days 17:20:00"],
+            None,
+        ],
+        [
+            [None, None, None, None, None],
+            "timedelta64[us]",
+            [None, None, None, None, None],
+            "str",
+        ],
+        [
+            [
+                136457654,
+                None,
+                245345345,
+                223432411,
+                None,
+                3634548734,
+                23234,
+            ],
+            "timedelta64[us]",
+            [
+                "0 days 00:02:16.457654",
+                None,
+                "0 days 00:04:05.345345",
+                "0 days 00:03:43.432411",
+                None,
+                "0 days 01:00:34.548734",
+                "0 days 00:00:00.023234",
+            ],
+            None,
+        ],
+        [
+            [
+                136457654,
+                None,
+                245345345,
+                223432411,
+                None,
+                3634548734,
+                23234,
+            ],
+            "timedelta64[ms]",
+            [
+                "1 days 13:54:17.654",
+                None,
+                "2 days 20:09:05.345",
+                "2 days 14:03:52.411",
+                None,
+                "42 days 01:35:48.734",
+                "0 days 00:00:23.234",
+            ],
+            None,
+        ],
+        [
+            [
+                136457654,
+                None,
+                245345345,
+                223432411,
+                None,
+                3634548734,
+                23234,
+            ],
+            "timedelta64[s]",
+            [
+                "1579 days 08:54:14",
+                None,
+                "2839 days 15:29:05",
+                "2586 days 00:33:31",
+                None,
+                "42066 days 12:52:14",
+                "0 days 06:27:14",
+            ],
+            None,
+        ],
+        [
+            [
+                136457654,
+                None,
+                245345345,
+                223432411,
+                None,
+                3634548734,
+                23234,
+            ],
+            "timedelta64[ns]",
+            [
+                "0 days 00:00:00.136457654",
+                None,
+                "0 days 00:00:00.245345345",
+                "0 days 00:00:00.223432411",
+                None,
+                "0 days 00:00:03.634548734",
+                "0 days 00:00:00.000023234",
+            ],
+            None,
+        ],
+    ],
+)
+def test_timedelta_str_roundtrip(sr_data, sr_dtype, exp_data, exp_dtype):
+    gsr = cudf.Series(sr_data, dtype=sr_dtype)
+    actual_series = gsr.astype("str")
+
+    expected_series = cudf.Series(exp_data, dtype=exp_dtype)
+    assert_eq(expected_series, actual_series)
+
+    assert_eq(gsr, actual_series.astype(gsr.dtype))

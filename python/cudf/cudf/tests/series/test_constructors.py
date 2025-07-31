@@ -695,3 +695,30 @@ def test_to_dense_array():
     dense = sr.dropna().to_numpy()
     assert dense.size < filled.size
     assert filled.size == len(sr)
+
+
+@pytest.mark.parametrize(
+    "ps",
+    [
+        pd.Series([0, 1, 2, np.nan, 4, None, 6]),
+        pd.Series(
+            [0, 1, 2, np.nan, 4, None, 6],
+            index=["q", "w", "e", "r", "t", "y", "u"],
+            name="a",
+        ),
+        pd.Series([0, 1, 2, 3, 4]),
+        pd.Series(["a", "b", "u", "h", "d"]),
+        pd.Series([None, None, np.nan, None, np.inf, -np.inf]),
+        pd.Series([], dtype="float64"),
+        pd.Series(
+            [pd.NaT, pd.Timestamp("1939-05-27"), pd.Timestamp("1940-04-25")]
+        ),
+        pd.Series([np.nan]),
+        pd.Series([None]),
+        pd.Series(["a", "b", "", "c", None, "e"]),
+    ],
+)
+def test_roundtrip_series_plc_column(ps):
+    expect = cudf.Series(ps)
+    actual = cudf.Series.from_pylibcudf(*expect.to_pylibcudf())
+    assert_eq(expect, actual)
