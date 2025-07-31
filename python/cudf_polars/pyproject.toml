@@ -56,6 +56,9 @@ Homepage = "https://github.com/rapidsai/cudf"
 [tool.setuptools]
 license-files = ["LICENSE"]
 
+[tool.setuptools.package-data]
+cudf_polars = ["GIT_COMMIT"]
+
 [tool.setuptools.dynamic]
 version = {file = "cudf_polars/VERSION"}
 
