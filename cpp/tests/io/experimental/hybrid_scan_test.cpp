@@ -145,17 +145,14 @@ auto apply_parquet_filters(cudf::host_span<uint8_t const> file_buffer_span,
     current_row_group_indices = bloom_filtered_row_group_indices;
   }
 
-  // Filter data pages with page index stats
-  auto [row_mask, data_page_mask] =
-    reader->filter_data_pages_with_stats(current_row_group_indices, options, stream, mr);
+  // Build row mask using page index stats
+  auto row_mask =
+    reader->build_row_mask_with_page_index_stats(current_row_group_indices, options, stream, mr);
 
   std::vector<cudf::size_type> final_row_group_indices(current_row_group_indices.begin(),
                                                        current_row_group_indices.end());
 
-  return std::tuple{std::move(reader),
-                    std::move(final_row_group_indices),
-                    std::move(row_mask),
-                    std::move(data_page_mask)};
+  return std::tuple{std::move(reader), std::move(final_row_group_indices), std::move(row_mask)};
 }
 /**
  * @brief Read parquet file with the hybrid scan reader
@@ -189,12 +186,10 @@ auto hybrid_scan(std::vector<char>& buffer,
   auto const file_buffer_span =
     cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(buffer.data()), buffer.size());
 
-  auto [reader, filtered_row_group_indices, row_mask, data_page_mask] =
+  auto [reader, filtered_row_group_indices, row_mask] =
     apply_parquet_filters(file_buffer_span, options, stream, mr);
 
   auto current_row_group_indices = cudf::host_span<cudf::size_type>(filtered_row_group_indices);
-
-  EXPECT_EQ(data_page_mask.size(), num_filter_columns);
 
   // Get column chunk byte ranges from the reader
   auto const filter_column_chunk_byte_ranges =
@@ -206,10 +201,10 @@ auto hybrid_scan(std::vector<char>& buffer,
 
   // Materialize the table with only the filter columns
   auto [filter_table, filter_metadata] =
-    reader->materialize_filter_columns(data_page_mask,
-                                       current_row_group_indices,
+    reader->materialize_filter_columns(current_row_group_indices,
                                        std::move(filter_column_chunk_buffers),
                                        row_mask->mutable_view(),
+                                       cudf::io::parquet::experimental::use_data_page_mask::YES,
                                        options,
                                        stream);
 
@@ -226,6 +221,7 @@ auto hybrid_scan(std::vector<char>& buffer,
     reader->materialize_payload_columns(current_row_group_indices,
                                         std::move(payload_column_chunk_buffers),
                                         row_mask->view(),
+                                        cudf::io::parquet::experimental::use_data_page_mask::YES,
                                         options,
                                         stream);
 
@@ -269,12 +265,10 @@ auto chunked_hybrid_scan(
   auto const file_buffer_span =
     cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(buffer.data()), buffer.size());
 
-  auto [reader, filtered_row_group_indices, row_mask, data_page_mask] =
+  auto [reader, filtered_row_group_indices, row_mask] =
     apply_parquet_filters(file_buffer_span, options, stream, mr);
 
   auto current_row_group_indices = cudf::host_span<cudf::size_type>(filtered_row_group_indices);
-
-  EXPECT_EQ(data_page_mask.size(), num_filter_columns);
 
   // Helper to split the materialization of filter columns into chunks
   auto tables          = std::vector<std::unique_ptr<cudf::table>>{};
@@ -289,7 +283,15 @@ auto chunked_hybrid_scan(
 
       // Setup chunking for filter columns and materialize the columns
       reader->setup_chunking_for_filter_columns(
-        1024, 1024, row_group_indices, {}, std::move(filter_column_chunk_buffers), options, stream);
+        1024,
+        1024,
+        row_group_indices,
+        row_mask->view(),
+        cudf::io::parquet::experimental::use_data_page_mask::YES,
+        std::move(filter_column_chunk_buffers),
+        options,
+        stream);
+
       while (reader->has_next_table_chunk()) {
         auto chunk = reader->materialize_filter_columns_chunk(row_mask->mutable_view(), stream);
         tables.push_back(std::move(chunk.tbl));
@@ -319,13 +321,16 @@ auto chunked_hybrid_scan(
         fetch_byte_ranges(file_buffer_span, payload_column_chunk_byte_ranges, stream, mr);
 
       // Setup chunking for payload columns and materialize the table
-      reader->setup_chunking_for_payload_columns(1024,
-                                                 1024,
-                                                 row_group_indices,
-                                                 row_mask->view(),
-                                                 std::move(payload_column_chunk_buffers),
-                                                 options,
-                                                 stream);
+      reader->setup_chunking_for_payload_columns(
+        1024,
+        1024,
+        row_group_indices,
+        row_mask->view(),
+        cudf::io::parquet::experimental::use_data_page_mask::YES,
+        std::move(payload_column_chunk_buffers),
+        options,
+        stream);
+
       while (reader->has_next_table_chunk()) {
         auto chunk = reader->materialize_payload_columns_chunk(row_mask->view(), stream);
         tables.push_back(std::move(chunk.tbl));
@@ -390,7 +395,7 @@ TEST_F(HybridScanTest, PruneRowGroupsOnlyAndScanAllColumns)
       cudf::io::parquet_reader_options::builder(
         cudf::io::source_info(cudf::host_span<char>(parquet_buffer.data(), parquet_buffer.size())))
         .filter(filter_expression);
-    auto [expected_tbl, expected_meta] = cudf::io::read_parquet(options, stream);
+    auto [expected_tbl, expected_meta] = read_parquet(options, stream);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}), read_filter_table->view());
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({1, 2}), read_payload_table->view());
   }
@@ -436,7 +441,7 @@ TEST_F(HybridScanTest, PruneRowGroupsOnlyAndScanSelectColumns)
       cudf::io::parquet_reader_options::builder(
         cudf::io::source_info(cudf::host_span<char>(parquet_buffer.data(), parquet_buffer.size())))
         .filter(filter_expression);
-    auto [expected_tbl, expected_meta] = cudf::io::read_parquet(options, stream);
+    auto [expected_tbl, expected_meta] = read_parquet(options, stream);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}), read_filter_table->view());
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({2}), read_payload_table->view());
   }
@@ -459,7 +464,7 @@ TEST_F(HybridScanTest, PruneRowGroupsOnlyAndScanSelectColumns)
       cudf::io::parquet_reader_options::builder(
         cudf::io::source_info(cudf::host_span<char>(parquet_buffer.data(), parquet_buffer.size())))
         .filter(filter_expression);
-    auto [expected_tbl, expected_meta] = cudf::io::read_parquet(options, stream);
+    auto [expected_tbl, expected_meta] = read_parquet(options, stream);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}), read_filter_table->view());
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({2, 1}), read_payload_table->view());
   }
@@ -502,7 +507,7 @@ TEST_F(HybridScanTest, PruneDataPagesOnlyAndScanAllColumns)
       cudf::io::parquet_reader_options::builder(
         cudf::io::source_info(cudf::host_span<char>(buffer.data(), buffer.size())))
         .filter(filter_expression);
-    auto [expected_tbl, expected_meta] = cudf::io::read_parquet(options, stream);
+    auto [expected_tbl, expected_meta] = read_parquet(options, stream);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}), read_filter_table->view());
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({1, 2}), read_payload_table->view());
   }
