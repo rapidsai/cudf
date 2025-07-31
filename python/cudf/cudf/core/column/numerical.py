@@ -15,7 +15,7 @@ import pylibcudf as plc
 import cudf
 from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
-from cudf.core.buffer import acquire_spill_lock, as_buffer
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.column.numerical_base import NumericalBaseColumn
 from cudf.core.dtypes import CategoricalDtype
@@ -28,6 +28,7 @@ from cudf.utils.dtypes import (
     find_common_type,
     get_dtype_of_same_kind,
     get_dtype_of_same_type,
+    is_pandas_nullable_extension_dtype,
     min_signed_type,
     min_unsigned_type,
 )
@@ -306,7 +307,7 @@ class NumericalColumn(NumericalBaseColumn):
             mask, _ = plc.transform.nans_to_nulls(
                 self.to_pylibcudf(mode="read")
             )
-            return self.set_mask(as_buffer(mask))
+            return self.set_mask(mask)
 
     def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
         if isinstance(other, ColumnBase):
@@ -360,6 +361,16 @@ class NumericalColumn(NumericalBaseColumn):
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
     def as_string_column(self, dtype) -> StringColumn:
+        col = self
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and isinstance(dtype, np.dtype)
+            and dtype.kind == "O"
+        ):
+            raise ValueError(
+                "Cannot convert numerical column to string column "
+                "when dtype is an object dtype in pandas compatibility mode."
+            )
         if len(self) == 0:
             return cast(
                 cudf.core.column.StringColumn,
@@ -374,13 +385,22 @@ class NumericalColumn(NumericalBaseColumn):
         elif self.dtype.kind in {"i", "u"}:
             conv_func = plc.strings.convert.convert_integers.from_integers
         elif self.dtype.kind == "f":
+            if cudf.get_option(
+                "mode.pandas_compatible"
+            ) and is_pandas_nullable_extension_dtype(dtype):
+                # In pandas compatibility mode, we convert nans to nulls
+                col = self.nans_to_nulls()
             conv_func = plc.strings.convert.convert_floats.from_floats
         else:
             raise ValueError(f"No string conversion from type {self.dtype}")
 
         with acquire_spill_lock():
-            return type(self).from_pylibcudf(  # type: ignore[return-value]
-                conv_func(self.to_pylibcudf(mode="read"))
+            return (
+                type(self)
+                .from_pylibcudf(  # type: ignore[return-value]
+                    conv_func(col.to_pylibcudf(mode="read"))
+                )
+                ._with_type_metadata(dtype)
             )
 
     def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:
@@ -413,8 +433,19 @@ class NumericalColumn(NumericalBaseColumn):
             ):
                 # Short-circuit the cast if the dtypes are equivalent
                 # but not the same type object.
-                self._dtype = dtype
-                return self
+                if (
+                    is_pandas_nullable_extension_dtype(dtype)
+                    and isinstance(self.dtype, np.dtype)
+                    and self.dtype.kind == "f"
+                ):
+                    # If the dtype is a pandas nullable extension type, we need to
+                    # float column doesn't have any NaNs.
+                    res = self.nans_to_nulls()
+                    res._dtype = dtype
+                    return res
+                else:
+                    self._dtype = dtype
+                    return self
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
     def all(self, skipna: bool = True) -> bool:
@@ -640,6 +671,17 @@ class NumericalColumn(NumericalBaseColumn):
                 if "float" in to_dtype_numpy.name:
                     finfo = np.finfo(to_dtype_numpy)
                     lower_, upper_ = finfo.min, finfo.max
+
+                    # Check specifically for np.pi values when casting to lower precision
+                    if self_dtype_numpy.itemsize > to_dtype_numpy.itemsize:
+                        # Check if column contains pi value
+                        if len(col) > 0:
+                            # Create a simple column with pi to test if the precision matters
+                            pi_col = self == np.pi
+                            # Test if pi can be correctly represented after casting
+                            if pi_col.any():
+                                # If pi is present, we cannot safely cast to lower precision
+                                return False
                 elif "int" in to_dtype_numpy.name:
                     iinfo = np.iinfo(to_dtype_numpy)
                     lower_, upper_ = iinfo.min, iinfo.max
@@ -717,7 +759,19 @@ class NumericalColumn(NumericalBaseColumn):
                 children=(codes,),
             )
         if cudf.get_option("mode.pandas_compatible"):
-            self._dtype = get_dtype_of_same_type(dtype, self.dtype)
+            res_dtype = get_dtype_of_same_type(dtype, self.dtype)
+            if (
+                is_pandas_nullable_extension_dtype(res_dtype)
+                and isinstance(self.dtype, np.dtype)
+                and self.dtype.kind == "f"
+            ):
+                # If the dtype is a pandas nullable extension type, we need to
+                # float column doesn't have any NaNs.
+                res = self.nans_to_nulls()
+                res._dtype = res_dtype
+                return res
+            self._dtype = res_dtype
+
         return self
 
     def _reduction_result_dtype(self, reduction_op: str) -> Dtype:

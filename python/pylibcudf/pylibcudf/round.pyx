@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from libc.stdint cimport int32_t
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -47,3 +47,5 @@ cpdef Column round(
         )
 
     return Column.from_libcudf(move(c_result))
+
+RoundingMethod.__str__ = RoundingMethod.__repr__

@@ -563,7 +563,7 @@ dependencies:
       - output_types: conda
         packages:
           - clang==20.1.4
-          - clang-tools=20.1.4
+          - clang-tools==20.1.4
   clang_tidy:
     common:
       - output_types: conda
