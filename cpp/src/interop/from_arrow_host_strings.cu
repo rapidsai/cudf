@@ -61,28 +61,16 @@ std::unique_ptr<column> from_arrow_string(ArrowSchemaView* schema,
 {
   auto [offsets_column, offset, char_data_length] = get_offsets_column(schema, input, stream, mr);
 
-  void const* char_buffers[] = {nullptr, input->buffers[chars_buffer_idx]};
-  ArrowArray char_array      = {
-         .length     = char_data_length,
-         .null_count = 0,
-         .offset     = 0,
-         .n_buffers  = 2,
-         .n_children = 0,
-         .buffers    = char_buffers,
-  };
-
   rmm::device_buffer chars(char_data_length, stream, mr);
-  auto const* chars_data = static_cast<uint8_t const*>(char_array.buffers[1]) + offset;
+  auto const* chars_data = static_cast<uint8_t const*>(input->buffers[chars_buffer_idx]) + offset;
   CUDF_CUDA_TRY(
     cudaMemcpyAsync(chars.data(), chars_data, chars.size(), cudaMemcpyDefault, stream.value()));
-  auto const num_rows = offsets_column->size() - 1;
-  auto out_mask       = mask ? std::move(*mask.release()) : rmm::device_buffer{};
 
-  return make_strings_column(num_rows,
+  return make_strings_column(static_cast<size_type>(input->length),
                              std::move(offsets_column),
                              std::move(chars),
-                             out_mask.is_empty() ? 0 : null_count,
-                             std::move(out_mask));
+                             null_count,
+                             std::move(*mask.release()));
 }
 
 constexpr int stringview_vector_idx = 1;

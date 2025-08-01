@@ -99,13 +99,13 @@ std::tuple<std::unique_ptr<column>, int64_t, int64_t> copy_offsets_column(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  void const* offsets_buffer = offsets->buffers[fixed_width_data_buffer_idx];
+  auto offsets_buffer =
+    static_cast<OffsetType const*>(offsets->buffers[fixed_width_data_buffer_idx]);
+  auto const offset = offsets_buffer[offsets->offset];
+  auto const length = offsets_buffer[offsets->offset + offsets->length - 1] - offset;
   auto result =
     get_column_copy(schema, offsets, data_type(type_to_id<OffsetType>()), true, stream, mr);
-  auto const offset = static_cast<OffsetType const*>(offsets_buffer)[offsets->offset];
-  auto const length =
-    static_cast<OffsetType const*>(offsets_buffer)[offsets->offset + offsets->length - 1] - offset;
-  if (offsets->offset != 0) {
+  if (offset != 0) {
     auto begin = result->mutable_view().begin<OffsetType>();
     auto end   = begin + offsets->length;
     thrust::transform(
@@ -215,7 +215,7 @@ struct dispatch_copy_from_arrow_host {
   }
 
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>() || is_fixed_point<T>())>
-  std::unique_ptr<column> operator()(ArrowSchemaView* schema,
+  std::unique_ptr<column> operator()(ArrowSchemaView*,
                                      ArrowArray const* input,
                                      data_type type,
                                      bool skip_mask)
@@ -244,7 +244,7 @@ struct dispatch_copy_from_arrow_host {
 };
 
 template <>
-std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<bool>(ArrowSchemaView* schema,
+std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<bool>(ArrowSchemaView*,
                                                                         ArrowArray const* input,
                                                                         data_type type,
                                                                         bool skip_mask)
