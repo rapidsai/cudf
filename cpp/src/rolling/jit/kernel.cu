@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "rolling/detail/rolling_jit.hpp"
-#include "rolling/jit/operation.hpp"
+#include <rolling/detail/rolling_jit.hpp>
+#include <rolling/jit/operation.hpp>
 
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/types.hpp>
