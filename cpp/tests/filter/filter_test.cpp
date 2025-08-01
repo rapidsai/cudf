@@ -63,7 +63,7 @@ TYPED_TEST(FilterNumericTest, NoAssertions)
 
   EXPECT_NO_THROW(
     results = cudf::filter(
-      {a, b}, this->udf, false, cudf::null_aware::NO, std::nullopt, std::vector{true, false}));
+      {a, b}, this->udf, false, std::nullopt, std::vector{true, false}, cudf::null_aware::NO));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, results[0]->view());
 }
 
@@ -86,7 +86,7 @@ TYPED_TEST(FilterChronoTest, NoAssertions)
   std::vector<std::unique_ptr<cudf::column>> results;
   EXPECT_NO_THROW(
     results = cudf::filter(
-      {a, b}, this->udf, false, cudf::null_aware::NO, std::nullopt, std::vector{true, false}));
+      {a, b}, this->udf, false, std::nullopt, std::vector{true, false}, cudf::null_aware::NO));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, results[0]->view());
 }
 
@@ -111,7 +111,7 @@ TYPED_TEST(FilterFixedPointTest, NoAssertions)
 
   EXPECT_NO_THROW(
     results = cudf::filter(
-      {a, b}, this->udf, false, cudf::null_aware::NO, std::nullopt, std::vector{true, false}));
+      {a, b}, this->udf, false, std::nullopt, std::vector{true, false}, cudf::null_aware::NO));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, results[0]->view());
 }
