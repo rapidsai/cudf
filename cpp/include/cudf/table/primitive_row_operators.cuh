@@ -135,7 +135,10 @@ class row_equality_comparator {
         bool const lhs_is_null{_lhs.column(i).is_null(lhs_row_index)};
         bool const rhs_is_null{_rhs.column(i).is_null(rhs_row_index)};
         if (lhs_is_null and rhs_is_null) {
-          return _nulls_are_equal == null_equality::EQUAL;
+          // If nulls are unequal, return false immediately
+          if (_nulls_are_equal == null_equality::UNEQUAL) { return false; }
+          // If nulls are equal, continue checking other columns
+          continue;
         } else if (lhs_is_null != rhs_is_null) {
           return false;
         }
