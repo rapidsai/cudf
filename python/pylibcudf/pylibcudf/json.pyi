@@ -1,5 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
+from rmm.pylibrmm.stream import Stream
+
 from pylibcudf.column import Column
 from pylibcudf.scalar import Scalar
 
@@ -19,5 +21,8 @@ class GetJsonObjectOptions:
     def set_missing_fields_as_nulls(self, val: bool) -> None: ...
 
 def get_json_object(
-    col: Column, json_path: Scalar, options: GetJsonObjectOptions | None = None
+    col: Column,
+    json_path: Scalar,
+    options: GetJsonObjectOptions | None = None,
+    stream: Stream | None = None,
 ) -> Column: ...

@@ -9,6 +9,8 @@ from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
 
+from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+
 
 cdef extern from "dlpack/dlpack.h" nogil:
     ctypedef struct DLManagedTensor:
@@ -33,11 +35,13 @@ cdef extern from "cudf/interop.hpp" nogil:
 cdef extern from "cudf/interop.hpp" namespace "cudf" \
         nogil:
     cdef unique_ptr[table] from_dlpack(
-        const DLManagedTensor* managed_tensor
+        const DLManagedTensor* managed_tensor,
+        cuda_stream_view stream
     ) except +libcudf_exception_handler
 
     DLManagedTensor* to_dlpack(
-        const table_view& input
+        const table_view& input,
+        cuda_stream_view stream
     ) except +libcudf_exception_handler
 
     cdef cppclass column_metadata:

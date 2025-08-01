@@ -2,6 +2,8 @@
 
 from enum import IntEnum
 
+from rmm.pylibrmm.stream import Stream
+
 from pylibcudf.column import Column
 
 class Inclusive(IntEnum):
@@ -14,4 +16,5 @@ def label_bins(
     left_inclusive: Inclusive,
     right_edges: Column,
     right_inclusive: Inclusive,
+    stream: Stream | None = None,
 ) -> Column: ...
