@@ -383,9 +383,8 @@ TEST_F(groupby_cache_test, duplicate_agggregations)
   EXPECT_NO_THROW(gb_obj.aggregate(requests));
 
   // sort groupby
-  // WAR to force groupby to use sort implementation
-  requests[0].aggregations.push_back(
-    cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(0));
+  // Force groupby to use sort implementation
+  requests[0].use_sort_groupby = true;
   EXPECT_NO_THROW(gb_obj.aggregate(requests));
 }
 
@@ -414,8 +413,7 @@ TEST_F(groupby_cache_test, duplicate_columns)
   EXPECT_NO_THROW(gb_obj.aggregate(requests));
 
   // sort groupby
-  // WAR to force groupby to use sort implementation
-  requests[0].aggregations.push_back(
-    cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(0));
+  // Force groupby to use sort implementation
+  requests[0].use_sort_groupby = true;
   EXPECT_NO_THROW(gb_obj.aggregate(requests));
 }
