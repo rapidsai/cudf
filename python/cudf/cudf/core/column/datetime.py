@@ -24,10 +24,9 @@ from cudf.core._internals.timezones import (
     get_tz_data,
 )
 from cudf.core.buffer import Buffer, acquire_spill_lock
-from cudf.core.column.column import ColumnBase, as_column, column_empty
+from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.temporal_base import TemporalBaseColumn
 from cudf.utils.dtypes import (
-    CUDF_STRING_DTYPE,
     _get_base_dtype,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
@@ -474,8 +473,8 @@ class DatetimeColumn(TemporalBaseColumn):
         if re.match(".*%A|.*%a|.*%B|.*%b", format):
             names = self._strftime_names
         else:
-            names = column_empty(0, dtype=CUDF_STRING_DTYPE).to_pylibcudf(
-                mode="read"
+            names = plc.Column.from_scalar(
+                plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING)), 0
             )
         with acquire_spill_lock():
             return type(self).from_pylibcudf(  # type: ignore[return-value]
