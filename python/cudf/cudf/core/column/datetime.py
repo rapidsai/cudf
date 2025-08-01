@@ -470,7 +470,7 @@ class DatetimeColumn(TemporalBaseColumn):
     def strftime(self, format: str) -> StringColumn:
         if len(self) == 0:
             return super().strftime(format)
-        if re.match(".*%A|.*%a|.*%B|.*%b", format):
+        if re.search("%[aAbB]", format):
             names = self._strftime_names
         else:
             names = plc.Column.from_scalar(
