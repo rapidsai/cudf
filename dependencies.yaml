@@ -454,6 +454,7 @@ dependencies:
         packages:
           - flatbuffers==24.3.25
           - librdkafka>=2.8.0,<2.9.0a0
+          - libnvjitlink-dev
   depends_on_libnvcomp:
     common:
       - output_types: conda

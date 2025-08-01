@@ -15,7 +15,7 @@
  */
 #pragma once
 
-#include "jit/span.cuh"
+#include <jit/span.cuh>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
