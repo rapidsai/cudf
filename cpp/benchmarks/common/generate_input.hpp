@@ -449,14 +449,14 @@ class data_profile {
  * For example, `data_profile` initialization
  * @code{.pseudo}
  * data_profile profile;
- * profile.set_null_probability(0.0);
+ * profile.set_null_probability(0.01);
  * profile.set_cardinality(0);
  * profile.set_distribution_params(cudf::type_id::INT32, distribution_id::UNIFORM, 0, 100);
  * @endcode
  * becomes
  * @code{.pseudo}
  * data_profile const profile =
- *   data_profile_builder().cardinality(0).null_probability(0.0).distribution(
+ *   data_profile_builder().cardinality(0).null_probability(0.01).distribution(
  *     cudf::type_id::INT32, distribution_id::UNIFORM, 0, 100);
  * @endcode
  * The builder makes it easier to have immutable `data_profile` objects even with the complex
@@ -465,7 +465,7 @@ class data_profile {
  *
  * The builder API also includes a few additional convenience setters:
  * Overload of `distribution` that only takes the distribution type (not the range).
- * `no_validity`, which is a simpler equivalent of `null_probability(std::nullopr)`.
+ * `no_validity`, which is a simpler equivalent of `null_probability(std::nullopt)`.
  */
 class data_profile_builder {
   data_profile profile;
