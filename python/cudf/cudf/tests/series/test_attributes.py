@@ -209,3 +209,9 @@ def test_datetime_has_null_test_pyarrow():
     )
     assert data.has_nulls is True
     assert data.null_count == 1
+
+
+def test_error_values_datetime():
+    s = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
+    with pytest.raises(NotImplementedError, match="cupy does not support"):
+        s.values

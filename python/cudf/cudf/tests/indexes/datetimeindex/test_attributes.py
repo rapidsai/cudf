@@ -97,3 +97,12 @@ def test_writable_numpy_array():
     assert expected_flags.writeable == actual_flags.writeable
     assert expected_flags.aligned == actual_flags.aligned
     assert expected_flags.writebackifcopy == actual_flags.writebackifcopy
+
+
+def test_dti_asi8():
+    pd_dti = pd.DatetimeIndex(["2020-01-01", "2020-12-31"], name="foo")
+    cudf_dti = cudf.from_pandas(pd_dti)
+
+    result = pd_dti.asi8
+    expected = cudf_dti.asi8
+    assert_eq(result, expected)

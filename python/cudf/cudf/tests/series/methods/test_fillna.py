@@ -79,3 +79,42 @@ def test_timedelta_fillna(data, timedelta_types_as_str, fill_value):
     actual = actual.dropna()
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [],
+        [1, 2],
+        [None, 1],
+        [None, None],
+    ],
+)
+@pytest.mark.parametrize(
+    "fill_value",
+    [
+        np.datetime64("2005-02"),
+        np.datetime64("2005-02-25"),
+        np.datetime64("2005-02-25T03:30"),
+        np.datetime64("nat"),
+        "NaT",
+    ],
+)
+def test_datetime_fillna(data, datetime_types_as_str, fill_value):
+    sr = cudf.Series(data, dtype=datetime_types_as_str)
+    psr = sr.to_pandas()
+
+    expected = psr.dropna()
+    actual = sr.dropna()
+
+    assert_eq(expected, actual)
+
+    expected = psr.fillna(fill_value)
+    actual = sr.fillna(fill_value)
+
+    assert_eq(expected, actual)
+
+    expected = expected.dropna()
+    actual = actual.dropna()
+
+    assert_eq(expected, actual)

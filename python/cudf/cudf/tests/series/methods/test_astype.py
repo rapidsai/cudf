@@ -440,3 +440,60 @@ def test_typecast_from_datetime_to_datetime(
     ser_casted = ser.astype(datetime_types_as_str2)
 
     np.testing.assert_equal(np_casted, ser_casted.to_numpy())
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["2001-01-01", "2002-02-02", "2000-01-05", "NaT"],
+        ["2001-01-01", "2002-02-02", "2000-01-05", None],
+        [None, None, None, None, None],
+    ],
+)
+def test_str_null_to_datetime(data, datetime_types_as_str):
+    psr = pd.Series(data)
+    gsr = cudf.Series(data)
+
+    assert_eq(
+        psr.astype(datetime_types_as_str), gsr.astype(datetime_types_as_str)
+    )
+
+
+def test_str_to_datetime_error():
+    psr = pd.Series(["2001-01-01", "2002-02-02", "2000-01-05", "None"])
+    gsr = cudf.Series(["2001-01-01", "2002-02-02", "2000-01-05", "None"])
+
+    assert_exceptions_equal(
+        lfunc=psr.astype,
+        rfunc=gsr.astype,
+        lfunc_args_and_kwargs=(["datetime64[s]"],),
+        rfunc_args_and_kwargs=(["datetime64[s]"],),
+        check_exception_type=False,
+    )
+
+
+@pytest.mark.parametrize("timezone", ["", "Z"])
+@pytest.mark.parametrize(
+    "data",
+    [
+        "2002-10-27T04:30",
+        "2002-10-27T04:30:00",
+        "2002-10-27T04:30:00.000",
+        "2002-10-27T04:30:00.000000",
+        "2002-10-27T04:30:00.000000000",
+    ],
+)
+def test_datetime_infer_format(data, timezone, datetime_types_as_str):
+    ts_data = [data + timezone]
+    sr = cudf.Series(ts_data)
+    psr = pd.Series(ts_data)
+    if not timezone:
+        expected = psr.astype(datetime_types_as_str)
+        actual = sr.astype(datetime_types_as_str)
+
+        assert_eq(expected, actual)
+    else:
+        with cudf.option_context("mode.pandas_compatible", True):
+            with pytest.raises(NotImplementedError):
+                # pandas doesn't allow parsing "Z" to naive type
+                sr.astype(datetime_types_as_str)
