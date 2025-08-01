@@ -76,8 +76,8 @@ void bench_groupby_m2(nvbench::state& state, nvbench::type_list<Type>)
   groupby_m2_helper<Type>(state, num_rows, value_key_ratio, null_probability);
 }
 
-NVBENCH_BENCH_TYPES(bench_groupby_m2, NVBENCH_TYPE_AXES(nvbench::type_list<int32_t, float, double>))
+NVBENCH_BENCH_TYPES(bench_groupby_m2, NVBENCH_TYPE_AXES(nvbench::type_list<int32_t, double>))
   .set_name("groupby_m2")
-  .add_float64_axis("null_probability", {0, 0.1, 0.9})
   .add_int64_axis("value_key_ratio", {10, 30, 100})
-  .add_int64_axis("num_rows", {10'000, 1'000'000, 10'000'000});
+  .add_int64_axis("num_rows", {10'000, 1'000'000, 10'000'000})
+  .add_float64_axis("null_probability", {0, 0.1, 0.9});
