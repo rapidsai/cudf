@@ -43,6 +43,7 @@ namespace {
  * @brief List of aggregation operations that can be computed with a hash-based implementation.
  */
 const auto hash_aggregations = std::set{aggregation::SUM,
+                                        aggregation::SUM_WITH_OVERFLOW,
                                         aggregation::PRODUCT,
                                         aggregation::MIN,
                                         aggregation::MAX,

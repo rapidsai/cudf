@@ -137,7 +137,29 @@ def test_dtype_dtypes_equal():
     assert ser.dtypes is ser.to_pandas().dtypes
 
 
-def test_roundtrip_series_plc_column(ps):
-    expect = cudf.Series(ps)
-    actual = cudf.Series.from_pylibcudf(*expect.to_pylibcudf())
-    assert_eq(expect, actual)
+@pytest.mark.parametrize("data", [[], [1, 2, 3, 4, 5]])
+@pytest.mark.parametrize(
+    "scalar",
+    [
+        1,
+        2,
+        3,
+        "a",
+        np.timedelta64(1, "s"),
+        np.timedelta64(2, "s"),
+        np.timedelta64(2, "D"),
+        np.timedelta64(3, "ms"),
+        np.timedelta64(4, "us"),
+        np.timedelta64(5, "ns"),
+        np.timedelta64(6, "ns"),
+        np.datetime64(6, "s"),
+    ],
+)
+def test_timedelta_contains(data, timedelta_types_as_str, scalar):
+    sr = cudf.Series(data, dtype=timedelta_types_as_str)
+    psr = sr.to_pandas()
+
+    expected = scalar in sr
+    actual = scalar in psr
+
+    assert_eq(expected, actual)
