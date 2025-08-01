@@ -131,6 +131,7 @@ class row_equality_comparator {
   {
     // if any of null equality check fails, we dont need to compare elements in the row
     if (_has_nulls) {
+      bool all_nulls = true;
       for (size_type i = 0; i < _lhs.num_columns(); ++i) {
         bool const lhs_is_null{_lhs.column(i).is_null(lhs_row_index)};
         bool const rhs_is_null{_rhs.column(i).is_null(rhs_row_index)};
@@ -141,8 +142,14 @@ class row_equality_comparator {
           continue;
         } else if (lhs_is_null != rhs_is_null) {
           return false;
+        } else {
+          // Both are non-null
+          all_nulls = false;
         }
       }
+
+      // If all columns were null and nulls are equal, the rows are equal
+      if (all_nulls && _nulls_are_equal == null_equality::EQUAL) { return true; }
     }
 
     element_equality_comparator comparator;
