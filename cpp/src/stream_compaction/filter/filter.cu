@@ -14,11 +14,6 @@
  * limitations under the License.
  */
 
-#include <jit/cache.hpp>
-#include <jit/helpers.hpp>
-#include <jit/parser.hpp>
-#include <jit/span.cuh>
-
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -37,6 +32,10 @@
 #include <cuda/std/iterator>
 #include <thrust/copy.h>
 
+#include <jit/cache.hpp>
+#include <jit/helpers.hpp>
+#include <jit/parser.hpp>
+#include <jit/span.cuh>
 #include <jit_preprocessed_files/stream_compaction/filter/jit/kernel.cu.jit.hpp>
 
 #include <utility>
