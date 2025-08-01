@@ -252,7 +252,7 @@ cdef class ParquetReaderOptionsBuilder:
 
         Returns
         -------
-        None
+        ParquetReaderOptionsBuilder
         """
         self.c_obj.filter(<expression &>dereference(filter.c_obj))
         return self
@@ -263,12 +263,12 @@ cdef class ParquetReaderOptionsBuilder:
 
         Parameters
         ----------
-        col_names : list
+        col_names : list[str]
             List of column names
 
         Returns
         -------
-        None
+        ParquetReaderOptionsBuilder
         """
         cdef vector[string] vec
         for name in col_names:
