@@ -125,7 +125,7 @@ std::unique_ptr<table> dispatch_groupby(table_view const& keys,
 bool can_use_hash_groupby(host_span<aggregation_request const> requests)
 {
   return std::all_of(requests.begin(), requests.end(), [](aggregation_request const& r) {
-    // If any request explicitly wants sort-based groupby, fallback to sort-based
+    // If any request explicitly wants sort-based groupby, fallback to sort-based.
     if (r.use_sort_groupby) { return false; }
 
     auto const v_type = is_dictionary(r.values.type())
