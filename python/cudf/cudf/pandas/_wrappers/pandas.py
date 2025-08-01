@@ -266,10 +266,6 @@ def ignore_ipython_canary_check(self, **kwargs):
     )
 
 
-def _DataFrame_dtypes(self):
-    return self._fsproxy_slow.dtypes
-
-
 DataFrame = make_final_proxy_type(
     "DataFrame",
     cudf.DataFrame,
@@ -285,7 +281,6 @@ DataFrame = make_final_proxy_type(
         "_accessors": set(),
         "_ipython_canary_method_should_not_exist_": ignore_ipython_canary_check,
         "__iter__": custom_iter,
-        "dtypes": property(_DataFrame_dtypes),
     },
 )
 
