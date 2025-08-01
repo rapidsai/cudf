@@ -358,7 +358,7 @@ def test_json_lines_basic(json_input, engine):
         pd_df = pd.read_json(json_input, lines=True)
 
     assert all(cu_df.dtypes == ["int64", "int64", "int64"])
-    for cu_col, pd_col in zip(cu_df.columns, pd_df.columns):
+    for cu_col, pd_col in zip(cu_df.columns, pd_df.columns, strict=True):
         assert str(cu_col) == str(pd_col)
         np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col].to_numpy())
 
@@ -392,7 +392,7 @@ def test_json_lines_multiple(tmpdir, json_input, engine):
     pd_df = pd.concat([pdf, pdf])
 
     assert all(cu_df.dtypes == ["int64", "int64", "int64"])
-    for cu_col, pd_col in zip(cu_df.columns, pd_df.columns):
+    for cu_col, pd_col in zip(cu_df.columns, pd_df.columns, strict=True):
         assert str(cu_col) == str(pd_col)
         np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col].to_numpy())
 
@@ -430,7 +430,7 @@ def test_json_read_directory(tmpdir, json_input, engine):
     pd_df = pd.concat([pdf, pdf, pdf])
 
     assert all(cu_df.dtypes == ["int64", "int64", "int64"])
-    for cu_col, pd_col in zip(cu_df.columns, pd_df.columns):
+    for cu_col, pd_col in zip(cu_df.columns, pd_df.columns, strict=True):
         assert str(cu_col) == str(pd_col)
         np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col].to_numpy())
 

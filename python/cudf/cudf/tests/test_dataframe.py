@@ -349,7 +349,7 @@ def test_axes(data):
     expected = psr.axes
     actual = csr.axes
 
-    for e, a in zip(expected, actual):
+    for e, a in zip(expected, actual, strict=True):
         assert_eq(e, a, exact=False)
 
 
@@ -1678,7 +1678,7 @@ def test_dataframe_hash_partition_keep_index(keep_index):
 
     parts = gdf.partition_by_hash(["key"], nparts=2, keep_index=keep_index)
 
-    for exp, got in zip(expected, parts):
+    for exp, got in zip(expected, parts, strict=True):
         assert_eq(exp, got)
 
 
@@ -5725,7 +5725,7 @@ def test_cov_nans():
 )
 def test_df_sr_binop(psr, colnames, op):
     data = [[3.0, 2.0, 5.0], [3.0, None, 5.0], [6.0, 7.0, np.nan]]
-    data = dict(zip(colnames, data))
+    data = dict(zip(colnames, data, strict=True))
 
     gsr = cudf.Series.from_pandas(psr).astype("float64")
 
@@ -5775,7 +5775,7 @@ def test_df_sr_binop(psr, colnames, op):
 def test_df_sr_binop_col_order(op):
     colnames = [0, 1, 2]
     data = [[0, 2, 5], [3, None, 5], [6, 7, np.nan]]
-    data = dict(zip(colnames, data))
+    data = dict(zip(colnames, data, strict=True))
 
     gdf = cudf.DataFrame(data)
     pdf = pd.DataFrame.from_dict(data)
@@ -9082,8 +9082,8 @@ def test_update_for_dataframes(
 ):
     errors = "ignore"
     join = "left"
-    left = dict(zip(left_keys, data_left))
-    right = dict(zip(right_keys, data_right))
+    left = dict(zip(left_keys, data_left, strict=True))
+    right = dict(zip(right_keys, data_right, strict=True))
     pdf = pd.DataFrame(left)
     gdf = cudf.DataFrame(left, nan_as_null=False)
 
@@ -10927,7 +10927,7 @@ def test_dataframe_column_name(name):
 @pytest.mark.parametrize("names", [["abc", "def"], [1, 2], ["abc", 10]])
 def test_dataframe_multiindex_column_names(names):
     arrays = [["A", "A", "B", "B"], ["one", "two", "one", "two"]]
-    tuples = list(zip(*arrays))
+    tuples = list(zip(*arrays, strict=True))
     index = pd.MultiIndex.from_tuples(tuples, names=["first", "second"])
 
     pdf = pd.DataFrame([[1, 2, 3, 4], [5, 6, 7, 8]], columns=index)

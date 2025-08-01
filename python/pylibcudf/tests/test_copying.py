@@ -216,7 +216,7 @@ def _pyarrow_boolean_mask_scatter_table(source, mask, target_table):
     return pa.table(
         [
             _pyarrow_boolean_mask_scatter_column(r, mask, v)
-            for v, r in zip(target_table, source)
+            for v, r in zip(target_table, source, strict=True)
         ],
         [""] * target_table.num_columns,
     )
@@ -448,7 +448,9 @@ def test_empty_like_table(source_table):
     _, plc_source_table = source_table
     result = plc.copying.empty_like(plc_source_table)
     assert result.num_columns() == plc_source_table.num_columns()
-    for icol, rcol in zip(plc_source_table.columns(), result.columns()):
+    for icol, rcol in zip(
+        plc_source_table.columns(), result.columns(), strict=True
+    ):
         assert rcol.type() == icol.type()
 
 
@@ -664,7 +666,7 @@ def test_slice_column(target_column):
     upper_bounds = bounds[1::2]
     lower_bounds = bounds[::2]
     result = plc.copying.slice(plc_target_column, bounds)
-    for lb, ub, slice_ in zip(lower_bounds, upper_bounds, result):
+    for lb, ub, slice_ in zip(lower_bounds, upper_bounds, result, strict=True):
         assert_column_eq(pa_target_column[lb:ub], slice_)
 
 
@@ -692,7 +694,7 @@ def test_slice_table(target_table):
     upper_bounds = bounds[1::2]
     lower_bounds = bounds[::2]
     result = plc.copying.slice(plc_target_table, bounds)
-    for lb, ub, slice_ in zip(lower_bounds, upper_bounds, result):
+    for lb, ub, slice_ in zip(lower_bounds, upper_bounds, result, strict=True):
         assert_table_eq(pa_target_table[lb:ub], slice_)
 
 
@@ -701,7 +703,7 @@ def test_split_column(target_column):
     lower_bounds = [0] + upper_bounds[:-1]
     pa_target_column, plc_target_column = target_column
     result = plc.copying.split(plc_target_column, upper_bounds)
-    for lb, ub, split in zip(lower_bounds, upper_bounds, result):
+    for lb, ub, split in zip(lower_bounds, upper_bounds, result, strict=True):
         assert_column_eq(pa_target_column[lb:ub], split)
 
 
@@ -723,7 +725,7 @@ def test_split_table(target_table):
     upper_bounds = [1, 3, 5]
     lower_bounds = [0] + upper_bounds[:-1]
     result = plc.copying.split(plc_target_table, upper_bounds)
-    for lb, ub, split in zip(lower_bounds, upper_bounds, result):
+    for lb, ub, split in zip(lower_bounds, upper_bounds, result, strict=True):
         assert_table_eq(pa_target_table[lb:ub], split)
 
 

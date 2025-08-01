@@ -595,7 +595,8 @@ def test_empty_df_head_tail_index(n):
                                 "one",
                                 "two",
                             ],
-                        ]
+                        ],
+                        strict=True,
                     )
                 )
             ),
@@ -623,7 +624,8 @@ def test_empty_df_head_tail_index(n):
                                 "one",
                                 "two",
                             ],
-                        ]
+                        ],
+                        strict=True,
                     )
                 )
             )

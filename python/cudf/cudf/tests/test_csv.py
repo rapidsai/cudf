@@ -140,8 +140,8 @@ def make_all_numeric_dataframe():
 
     return (
         df,
-        OrderedDict(zip(gdf_dtypes, gdf_dtypes)),
-        OrderedDict(zip(gdf_dtypes, np_dtypes)),
+        OrderedDict(zip(gdf_dtypes, gdf_dtypes, strict=True)),
+        OrderedDict(zip(gdf_dtypes, np_dtypes, strict=True)),
     )
 
 

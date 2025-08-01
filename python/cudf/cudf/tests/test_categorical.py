@@ -58,7 +58,9 @@ r b
 s c
 t a
 """
-    assert all(x == y for x, y in zip(string.split(), expect_str.split()))
+    assert all(
+        x == y for x, y in zip(string.split(), expect_str.split(), strict=True)
+    )
     assert_eq(cat.codes, cudf_cat.codes.to_numpy())
 
 

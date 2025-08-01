@@ -421,7 +421,7 @@ def test_parquet_read_metadata(tmp_path, pdf):
     assert num_columns == len(pdf.columns)
     assert num_rows == len(pdf.index)
     assert row_groups == num_row_groups(num_rows, row_group_size)
-    for a, b in zip(col_names, pdf.columns):
+    for a, b in zip(col_names, pdf.columns, strict=True):
         assert a == b
 
 

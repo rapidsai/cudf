@@ -47,6 +47,8 @@ select = [
     "W",
     # isort
     "I",
+    # zip-without-explicit-strict
+    "B905",
     # no-blank-line-before-function
     "D201",
     # one-blank-line-after-class
@@ -130,7 +132,7 @@ ignore = [
     # `typing.ClassVar`
     "RUF012",
 ]
-fixable = ["ALL"]
+fixable = []
 exclude = [
     "cpp/scripts/gdb-pretty-printers.py",
 ]

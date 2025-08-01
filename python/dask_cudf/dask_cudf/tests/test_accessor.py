@@ -138,7 +138,9 @@ def test_categorical_basic(data):
 3 c
 4 a
 """
-    assert all(x == y for x, y in zip(string.split(), expect_str.split()))
+    assert all(
+        x == y for x, y in zip(string.split(), expect_str.split(), strict=True)
+    )
     with dask.config.set({"dataframe.convert-string": False}):
         df = DataFrame()
         df["a"] = ["xyz", "abc", "def"] * 10

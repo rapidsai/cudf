@@ -497,7 +497,7 @@ def test_multiindex_columns(pdf, pdfIndex, query):
 
 def test_multiindex_from_tuples():
     arrays = [["a", "a", "b", "b"], ["house", "store", "house", "store"]]
-    tuples = list(zip(*arrays))
+    tuples = list(zip(*arrays, strict=True))
     pmi = pd.MultiIndex.from_tuples(tuples)
     gmi = cudf.MultiIndex.from_tuples(tuples)
     assert_eq(pmi, gmi)
@@ -752,9 +752,9 @@ def test_multiindex_copy_sem():
     pmi = pdf.index
     pmi_copy = pmi.copy(names=names)
 
-    for glv, plv in zip(gmi_copy.levels, pmi_copy.levels):
+    for glv, plv in zip(gmi_copy.levels, pmi_copy.levels, strict=True):
         assert all(glv.values_host == plv.values)
-    for gval, pval in zip(gmi.codes, pmi.codes):
+    for gval, pval in zip(gmi.codes, pmi.codes, strict=True):
         assert_eq(gval, pval)
     assert_eq(gmi_copy.names, pmi_copy.names)
 
@@ -836,7 +836,7 @@ def test_multiindex_copy_deep(data, copy_on_write, deep):
                 child.base_data.get_ptr(mode="read") for child in rchildren
             ]
 
-            assert all((x == y) for x, y in zip(lptrs, rptrs))
+            assert all((x == y) for x, y in zip(lptrs, rptrs, strict=True))
 
         elif isinstance(data, pd.MultiIndex):
             data = cudf.MultiIndex.from_pandas(data)
@@ -854,19 +854,25 @@ def test_multiindex_copy_deep(data, copy_on_write, deep):
                 lv._column.base_data.get_ptr(mode="read") for lv in mi2._levels
             ]
 
-            assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
+            assert all(
+                (x == y) == same_ref for x, y in zip(lptrs, rptrs, strict=True)
+            )
 
             # Assert ._codes identity
             lptrs = [c.base_data.get_ptr(mode="read") for c in mi1._codes]
             rptrs = [c.base_data.get_ptr(mode="read") for c in mi2._codes]
 
-            assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
+            assert all(
+                (x == y) == same_ref for x, y in zip(lptrs, rptrs, strict=True)
+            )
 
             # Assert ._data identity
             lptrs = [d.base_data.get_ptr(mode="read") for d in mi1._columns]
             rptrs = [d.base_data.get_ptr(mode="read") for d in mi2._columns]
 
-            assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
+            assert all(
+                (x == y) == same_ref for x, y in zip(lptrs, rptrs, strict=True)
+            )
 
 
 @pytest.mark.parametrize(
@@ -916,7 +922,7 @@ def test_multiindex_iloc(pdf, gdf, pdfIndex, iloc_rows, iloc_columns):
 
 def test_multiindex_iloc_scalar():
     arrays = [["a", "a", "b", "b"], [1, 2, 3, 4]]
-    tuples = list(zip(*arrays))
+    tuples = list(zip(*arrays, strict=True))
     idx = cudf.MultiIndex.from_tuples(tuples)
     gdf = cudf.DataFrame(
         {"first": cp.random.rand(4), "second": cp.random.rand(4)}
@@ -1275,7 +1281,8 @@ def test_multiindex_fillna(gdi, fill_value, expected):
                             "one",
                             "two",
                         ],
-                    ]
+                    ],
+                    strict=True,
                 )
             )
         ),
@@ -1319,7 +1326,8 @@ def test_multiindex_empty(pdi):
                             "one",
                             "two",
                         ],
-                    ]
+                    ],
+                    strict=True,
                 )
             )
         ),
@@ -1421,7 +1429,8 @@ def test_multiindex_droplevel_index(pdfIndex, level):
                             "one",
                             "two",
                         ],
-                    ]
+                    ],
+                    strict=True,
                 )
             )
         ),
@@ -1854,7 +1863,7 @@ def test_multiindex_type_methods(pidx, func):
 
 def test_multiindex_index_single_row():
     arrays = [["a", "a", "b", "b"], [1, 2, 3, 4]]
-    tuples = list(zip(*arrays))
+    tuples = list(zip(*arrays, strict=True))
     idx = cudf.MultiIndex.from_tuples(tuples)
     gdf = cudf.DataFrame(
         {"first": cp.random.rand(4), "second": cp.random.rand(4)}
@@ -2016,7 +2025,9 @@ def test_multiindex_codes():
         [("a", "b"), ("a", "c"), ("b", "c")], names=["A", "Z"]
     )
 
-    for p_array, g_array in zip(midx.to_pandas().codes, midx.codes):
+    for p_array, g_array in zip(
+        midx.to_pandas().codes, midx.codes, strict=True
+    ):
         assert_eq(p_array, g_array)
 
 
@@ -2140,7 +2151,9 @@ def test_index_to_pandas_arrow_type(scalar):
 
 
 def test_multi_index_contains_hashable():
-    gidx = cudf.MultiIndex.from_tuples(zip(["foo", "bar", "baz"], [1, 2, 3]))
+    gidx = cudf.MultiIndex.from_tuples(
+        zip(["foo", "bar", "baz"], [1, 2, 3], strict=True)
+    )
     pidx = gidx.to_pandas()
 
     assert_exceptions_equal(
