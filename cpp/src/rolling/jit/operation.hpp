@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "rolling/jit/operation-udf.hpp"
+#include <rolling/jit/operation-udf.hpp>
 
 #include <cudf/types.hpp>
 
