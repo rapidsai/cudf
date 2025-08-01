@@ -42,8 +42,7 @@ struct groupby_stream_test : public cudf::test::BaseFixture {
       requests.push_back(cudf::groupby::aggregation_request{});
       requests.front().values = vals;
       if (use_sort == force_use_sort_impl::YES) {
-        requests.front().aggregations.push_back(
-          cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(0));
+        requests.front().use_sort_groupby = true;
       }
       requests.front().aggregations.push_back(std::move(agg));
       return requests;

@@ -60,6 +60,7 @@ struct sort_groupby_helper;
 struct aggregation_request {
   column_view values;                                              ///< The elements to aggregate
   std::vector<std::unique_ptr<groupby_aggregation>> aggregations;  ///< Desired aggregations
+  bool use_sort_groupby{false};                                   ///< Force sort-based groupby
 };
 
 /**

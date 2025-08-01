@@ -61,9 +61,8 @@ void test_single_agg(cudf::column_view const& keys,
   requests[0].aggregations.push_back(std::move(agg));
 
   if (use_sort == force_use_sort_impl::YES) {
-    // WAR to force cudf::groupby to use sort implementation
-    requests[0].aggregations.push_back(
-      cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(0));
+    // Force cudf::groupby to use sort implementation
+    requests[0].use_sort_groupby = true;
   }
 
   // since the default behavior of cudf::groupby(...) for an empty null_precedence vector is
