@@ -40,9 +40,11 @@ using io::detail::inline_column_buffer;
 using parquet::detail::CompactProtocolReader;
 using parquet::detail::equality_literals_collector;
 using parquet::detail::input_column_info;
+using parquet::detail::row_group_info;
 using text::byte_range_info;
 
 namespace {
+
 // Construct a vector of all row group indices from the input vectors
 [[nodiscard]] auto all_row_group_indices(
   host_span<std::vector<cudf::size_type> const> row_group_indices)
@@ -175,13 +177,12 @@ size_type aggregate_reader_metadata::total_rows_in_row_groups(
                 [&](auto const src_idx) {
                   auto const& pfm = per_file_metadata[src_idx];
                   for (auto const row_group_idx : row_group_indices[src_idx]) {
-                    CUDF_EXPECTS(
-                      row_group_idx < static_cast<cudf::size_type>(pfm.row_groups.size()),
-                      "Row group index out of bounds");
+                    CUDF_EXPECTS(std::cmp_less(row_group_idx, pfm.row_groups.size()),
+                                 "Row group index out of bounds");
                     total_rows += pfm.row_groups[row_group_idx].num_rows;
                   }
                 });
-  CUDF_EXPECTS(total_rows <= static_cast<size_t>(std::numeric_limits<size_type>::max()),
+  CUDF_EXPECTS(std::cmp_less_equal(total_rows, std::numeric_limits<size_type>::max()),
                "Total number of rows exceeds cudf::size_type's limit");
 
   return static_cast<size_type>(total_rows);
@@ -448,13 +449,28 @@ aggregate_reader_metadata::filter_row_groups_with_dictionary_pages(
   cudf::detail::hostdevice_span<parquet::detail::PageInfo const> pages,
   cudf::host_span<std::vector<cudf::size_type> const> row_group_indices,
   cudf::host_span<std::vector<ast::literal*> const> literals,
+  cudf::host_span<std::vector<ast::ast_operator> const> operators,
   cudf::host_span<data_type const> output_dtypes,
-  cudf::host_span<cudf::size_type const> output_column_schemas,
+  cudf::host_span<cudf::size_type const> dictionary_col_schemas,
   std::reference_wrapper<ast::expression const> filter,
   rmm::cuda_stream_view stream) const
 {
-  // Not yet implemented so just return all row group indices
-  return all_row_group_indices(row_group_indices);
+  // Compute total number of input row groups
+  auto const total_row_groups = static_cast<size_t>(compute_total_row_groups(row_group_indices));
+
+  // Filter row groups using column chunk dictionaries
+  auto const dictionary_filtered_row_groups = apply_dictionary_filter(chunks,
+                                                                      pages,
+                                                                      row_group_indices,
+                                                                      literals,
+                                                                      operators,
+                                                                      total_row_groups,
+                                                                      output_dtypes,
+                                                                      dictionary_col_schemas,
+                                                                      filter,
+                                                                      stream);
+
+  return dictionary_filtered_row_groups.value_or(all_row_group_indices(row_group_indices));
 }
 
 std::vector<std::vector<cudf::size_type>>

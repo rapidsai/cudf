@@ -30,6 +30,7 @@ from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     cudf_dtype_to_pa_type,
+    get_dtype_of_same_kind,
     get_dtype_of_same_type,
     pyarrow_dtype_to_cudf_dtype,
 )
@@ -116,6 +117,11 @@ class DecimalBaseColumn(NumericalBaseColumn):
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
     def as_string_column(self, dtype) -> StringColumn:
+        if cudf.get_option("mode.pandas_compatible"):
+            if isinstance(dtype, np.dtype) and dtype.kind == "O":
+                raise TypeError(
+                    f"Cannot cast a decimal from {self.dtype} to {dtype}"
+                )
         if len(self) > 0:
             with acquire_spill_lock():
                 plc_column = (
@@ -208,7 +214,12 @@ class DecimalBaseColumn(NumericalBaseColumn):
         }:
             if isinstance(rhs, (int, Decimal)):
                 rhs = _to_plc_scalar(rhs, self.dtype)
-            return binaryop.binaryop(lhs, rhs, op, np.dtype(np.bool_))
+            return binaryop.binaryop(
+                lhs,
+                rhs,
+                op,
+                get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
+            )
         else:
             raise TypeError(
                 f"{op} not supported for the following dtypes: "

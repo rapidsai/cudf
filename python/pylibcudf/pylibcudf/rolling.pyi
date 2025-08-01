@@ -43,3 +43,11 @@ def rolling_window[WindowType: (Column, int)](
 def is_valid_rolling_aggregation(
     source: DataType, agg: Aggregation
 ) -> bool: ...
+def make_range_windows(
+    group_keys: Table,
+    orderby: Column,
+    order: Order,
+    null_order: NullOrder,
+    preceding: RangeWindowType,
+    following: RangeWindowType,
+) -> tuple[Column, Column]: ...

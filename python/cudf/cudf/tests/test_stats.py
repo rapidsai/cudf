@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 import cupy as cp
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 
 import cudf
@@ -14,14 +15,22 @@ from cudf.datasets import randomdata
 from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
 
-params_dtypes = [np.int32, np.uint32, np.float32, np.float64]
-methods = ["min", "max", "sum", "mean", "var", "std"]
 
-interpolation_methods = ["linear", "lower", "higher", "midpoint", "nearest"]
+@pytest.fixture(params=[np.int32, np.uint32, np.float32, np.float64])
+def dtype(request):
+    return request.param
 
 
-@pytest.mark.parametrize("method", methods)
-@pytest.mark.parametrize("dtype", params_dtypes)
+@pytest.fixture(params=["min", "max", "sum", "mean", "var", "std"])
+def method(request):
+    return request.param
+
+
+@pytest.fixture(params=["linear", "lower", "higher", "midpoint", "nearest"])
+def int_method(request):
+    return request.param
+
+
 @pytest.mark.parametrize("skipna", [True, False])
 def test_series_reductions(method, dtype, skipna):
     rng = np.random.default_rng(seed=0)
@@ -52,12 +61,9 @@ def test_series_reductions(method, dtype, skipna):
     np.testing.assert_approx_equal(expect, got)
 
 
-@pytest.mark.parametrize("method", methods)
 def test_series_reductions_concurrency(method):
-    e = ThreadPoolExecutor(10)
-
     rng = np.random.default_rng(seed=0)
-    srs = [cudf.Series(rng.random(10000)) for _ in range(1)]
+    srs = [cudf.Series(rng.random(10000))]
 
     def call_test(sr):
         fn = getattr(sr, method)
@@ -69,7 +75,8 @@ def test_series_reductions_concurrency(method):
     def f(sr):
         return call_test(sr + 1)
 
-    list(e.map(f, srs * 50))
+    with ThreadPoolExecutor(10) as e:
+        list(e.map(f, srs * 50))
 
 
 @pytest.mark.parametrize("ddof", range(3))
@@ -85,19 +92,17 @@ def test_series_std(ddof):
 
 def test_series_unique():
     rng = np.random.default_rng(seed=0)
-    for size in [10**x for x in range(5)]:
-        arr = rng.integers(low=-1, high=10, size=size)
-        mask = arr != -1
-        sr = cudf.Series(arr)
-        sr[~mask] = None
-        assert set(arr[mask]) == set(sr.unique().dropna().to_numpy())
-        assert len(set(arr[mask])) == sr.nunique()
+    size = 100
+    arr = rng.integers(low=-1, high=10, size=size)
+    mask = arr != -1
+    sr = cudf.Series(arr)
+    sr[~mask] = None
+    assert set(arr[mask]) == set(sr.unique().dropna().to_numpy())
+    assert len(set(arr[mask])) == sr.nunique()
 
 
-@pytest.mark.parametrize(
-    "nan_as_null, dropna",
-    [(True, True), (True, False), (False, True), (False, False)],
-)
+@pytest.mark.parametrize("nan_as_null", [True, False])
+@pytest.mark.parametrize("dropna", [True, False])
 def test_series_nunique(nan_as_null, dropna):
     # We remove nulls as opposed to NaNs using the dropna parameter,
     # so to test against pandas we replace NaN with another discrete value
@@ -142,7 +147,6 @@ def test_series_scale():
     assert_eq(sr.scale(), scaled)
 
 
-@pytest.mark.parametrize("int_method", interpolation_methods)
 def test_exact_quantiles(int_method):
     arr = np.asarray([6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.01, 0.8, 5.7])
     quant_values = [0.0, 0.25, 0.33, 0.5, 1.0]
@@ -161,7 +165,6 @@ def test_exact_quantiles(int_method):
     )
 
 
-@pytest.mark.parametrize("int_method", interpolation_methods)
 def test_exact_quantiles_int(int_method):
     arr = np.asarray([7, 0, 3, 4, 2, 1, -1, 1, 6])
     quant_values = [0.0, 0.25, 0.33, 0.5, 1.0]
@@ -280,24 +283,33 @@ def test_kurt_skew_error(op):
 
 
 @pytest.mark.parametrize(
-    "data",
+    "data, index, dtype, nan_as_null",
     [
-        cudf.Series(np.random.default_rng(seed=0).normal(-100, 100, 1000)),
-        cudf.Series(np.random.default_rng(seed=0).integers(-50, 50, 1000)),
-        cudf.Series(np.zeros(100)),
-        cudf.Series(np.repeat(np.nan, 100)),
-        cudf.Series(np.array([1.123, 2.343, np.nan, 0.0])),
-        cudf.Series(
-            [5, 10, 53, None, np.nan, None, 12, 43, -423], nan_as_null=False
-        ),
-        cudf.Series([1.1032, 2.32, 43.4, 13, -312.0], index=[0, 4, 3, 19, 6]),
-        cudf.Series([], dtype="float64"),
-        cudf.Series([-3]),
+        [
+            np.random.default_rng(seed=0).normal(-100, 100, 1000),
+            None,
+            None,
+            None,
+        ],
+        [
+            np.random.default_rng(seed=0).integers(-50, 50, 1000),
+            None,
+            None,
+            None,
+        ],
+        [np.zeros(100), None, None, None],
+        [np.repeat(np.nan, 100), None, None, None],
+        [np.array([1.123, 2.343, np.nan, 0.0]), None, None, None],
+        [[5, 10, 53, None, np.nan, None, 12, 43, -423], None, None, False],
+        [[1.1032, 2.32, 43.4, 13, -312.0], [0, 4, 3, 19, 6], None, None],
+        [[], None, "float64", None],
+        [[-3], None, None, None],
     ],
 )
 @pytest.mark.parametrize("null_flag", [False, True])
 @pytest.mark.parametrize("numeric_only", [False, True])
-def test_skew_series(data, null_flag, numeric_only):
+def test_skew_series(data, index, dtype, nan_as_null, null_flag, numeric_only):
+    data = cudf.Series(data, index=index, dtype=dtype, nan_as_null=nan_as_null)
     pdata = data.to_pandas()
 
     if null_flag and len(data) > 2:
@@ -310,7 +322,6 @@ def test_skew_series(data, null_flag, numeric_only):
     assert_eq(got, expected)
 
 
-@pytest.mark.parametrize("dtype", params_dtypes)
 @pytest.mark.parametrize("num_na", [0, 1, 50, 99, 100])
 def test_series_median(dtype, num_na):
     rng = np.random.default_rng(seed=0)
@@ -352,8 +363,8 @@ def test_series_median(dtype, num_na):
         np.zeros(100),
         np.array([1.123, 2.343, np.nan, 0.0]),
         np.array([-2, 3.75, 6, None, None, None, -8.5, None, 4.2]),
-        cudf.Series([], dtype="float64"),
-        cudf.Series([-3]),
+        np.array([], dtype="float64"),
+        np.array([-3]),
     ],
 )
 @pytest.mark.parametrize("periods", range(-5, 5))
@@ -387,10 +398,10 @@ def test_series_pct_change(data, periods, fill_method):
         np.zeros(100),
         np.repeat(np.nan, 100),
         np.array([1.123, 2.343, np.nan, 0.0]),
-        cudf.Series([5, 10, 53, None, np.nan, None], nan_as_null=False),
-        cudf.Series([1.1, 2.32, 43.4], index=[0, 4, 3]),
-        cudf.Series([], dtype="float64"),
-        cudf.Series([-3]),
+        pa.array([5, 10, 53, None, np.nan, None]),
+        pd.Series([1.1, 2.32, 43.4], index=[0, 4, 3]),
+        np.array([], dtype="float64"),
+        np.array([-3]),
     ],
 )
 @pytest.mark.parametrize(
@@ -401,8 +412,8 @@ def test_series_pct_change(data, periods, fill_method):
         np.zeros(100),
         np.repeat(np.nan, 100),
         np.array([1.123, 2.343, np.nan, 0.0]),
-        cudf.Series([1.1, 2.32, 43.4], index=[0, 500, 4000]),
-        cudf.Series([5]),
+        pd.Series([1.1, 2.32, 43.4], index=[0, 500, 4000]),
+        np.array([5]),
     ],
 )
 def test_cov1d(data1, data2):
@@ -431,10 +442,10 @@ def test_cov1d(data1, data2):
         np.zeros(100),
         np.repeat(np.nan, 100),
         np.array([1.123, 2.343, np.nan, 0.0]),
-        cudf.Series([5, 10, 53, None, np.nan, None], nan_as_null=False),
-        cudf.Series([1.1032, 2.32, 43.4], index=[0, 4, 3]),
-        cudf.Series([], dtype="float64"),
-        cudf.Series([-3]),
+        pa.array([5, 10, 53, None, np.nan, None]),
+        pd.Series([1.1032, 2.32, 43.4], index=[0, 4, 3]),
+        np.array([], dtype="float64"),
+        np.array([-3]),
     ],
 )
 @pytest.mark.parametrize(
@@ -445,8 +456,8 @@ def test_cov1d(data1, data2):
         np.zeros(100),
         np.repeat(np.nan, 100),
         np.array([1.123, 2.343, np.nan, 0.0]),
-        cudf.Series([1.1, 2.32, 43.4], index=[0, 500, 4000]),
-        cudf.Series([5]),
+        pd.Series([1.1, 2.32, 43.4], index=[0, 500, 4000]),
+        np.array([5]),
     ],
 )
 @pytest.mark.parametrize("method", ["spearman", "pearson"])
@@ -606,17 +617,12 @@ def test_cov_corr_datetime_timedelta(data1, data2, dtype):
     assert_eq(psr1.cov(psr2), gsr1.cov(gsr2))
 
 
-@pytest.mark.parametrize(
-    "data",
-    [
-        randomdata(
-            nrows=1000, dtypes={"a": float, "b": int, "c": float, "d": str}
-        ),
-    ],
-)
 @pytest.mark.parametrize("null_flag", [False, True])
 @pytest.mark.parametrize("numeric_only", [False, True])
-def test_kurtosis_df(data, null_flag, numeric_only):
+def test_kurtosis_df(null_flag, numeric_only):
+    data = randomdata(
+        nrows=1000, dtypes={"a": float, "b": int, "c": float, "d": str}
+    )
     if not numeric_only:
         data = data.select_dtypes(include="number")
     pdata = data.to_pandas()
@@ -638,17 +644,12 @@ def test_kurtosis_df(data, null_flag, numeric_only):
     np.testing.assert_array_almost_equal(got, expected)
 
 
-@pytest.mark.parametrize(
-    "data",
-    [
-        randomdata(
-            nrows=1000, dtypes={"a": float, "b": int, "c": float, "d": str}
-        ),
-    ],
-)
 @pytest.mark.parametrize("null_flag", [False, True])
 @pytest.mark.parametrize("numeric_only", [False, True])
-def test_skew_df(data, null_flag, numeric_only):
+def test_skew_df(null_flag, numeric_only):
+    data = randomdata(
+        nrows=1000, dtypes={"a": float, "b": int, "c": float, "d": str}
+    )
     if not numeric_only:
         data = data.select_dtypes(include="number")
     pdata = data.to_pandas()

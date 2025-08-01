@@ -1,7 +1,5 @@
 # Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
-import itertools
-import operator
 from decimal import Decimal
 
 import numpy as np
@@ -10,8 +8,6 @@ import pytest
 
 from cudf import Series
 from cudf.testing import _utils as utils, assert_eq
-
-_unaops = [operator.abs, operator.invert, operator.neg, np.ceil, np.floor]
 
 
 @pytest.mark.parametrize("dtype", utils.NUMERIC_TYPES)
@@ -54,29 +50,6 @@ def test_series_pandas_methods_empty(mth):
     sr = Series(arr)
     psr = pd.Series(arr)
     np.testing.assert_equal(getattr(sr, mth)(), getattr(psr, mth)())
-
-
-def generate_valid_scalar_unaop_combos():
-    results = []
-
-    # All ops valid for integer values
-    int_values = [0, 1, -1]
-    int_dtypes = utils.INTEGER_TYPES
-    int_ops = _unaops
-
-    results += list(itertools.product(int_values, int_dtypes, int_ops))
-
-    float_values = [0.0, 1.0, -1.1]
-    float_dtypes = utils.FLOAT_TYPES
-    float_ops = [op for op in _unaops if op is not operator.invert]
-    results += list(itertools.product(float_values, float_dtypes, float_ops))
-
-    bool_values = [True, False]
-    bool_dtypes = ["bool"]
-    bool_ops = [op for op in _unaops if op is not operator.neg]
-    results += list(itertools.product(bool_values, bool_dtypes, bool_ops))
-
-    return results
 
 
 def test_series_bool_neg():

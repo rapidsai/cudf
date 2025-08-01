@@ -213,7 +213,7 @@ def _create_delegating_mixin(
 
     class OperationMixin:
         @classmethod
-        def __init_subclass__(cls):
+        def __init_subclass__(cls) -> None:
             # Support composition of various OperationMixins. Note that since
             # this __init_subclass__ is defined on mixins, it does not prohibit
             # classes that inherit it from implementing this method as well as

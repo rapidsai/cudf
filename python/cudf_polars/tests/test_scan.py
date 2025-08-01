@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
 
 import polars as pl
@@ -11,7 +13,10 @@ from cudf_polars.testing.asserts import (
     assert_ir_translation_raises,
 )
 from cudf_polars.testing.io import make_partitioned_source
-from cudf_polars.utils.versions import POLARS_VERSION_LT_128
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
 
 NO_CHUNK_ENGINE = pl.GPUEngine(raise_on_fail=True, parquet_options={"chunked": False})
 
@@ -100,11 +105,7 @@ def test_scan(
     )
     request.applymarker(
         pytest.mark.xfail(
-            condition=(
-                not POLARS_VERSION_LT_128
-                and zlice is not None
-                and scan_fn is pl.scan_ndjson
-            ),
+            condition=(zlice is not None and scan_fn is pl.scan_ndjson),
             reason="slice pushdown not supported in the libcudf JSON reader",
         )
     )
@@ -331,10 +332,13 @@ def test_scan_parquet_only_row_index_raises(df, tmp_path):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
-def test_scan_include_file_path(request, tmp_path, format, scan_fn, df):
+@pytest.mark.parametrize("n_rows", [None, 2])
+def test_scan_include_file_path(request, tmp_path, format, scan_fn, df, n_rows):
+    if n_rows is not None:
+        df = df.head(n_rows)
     make_partitioned_source(df, tmp_path / "file", format)
 
-    q = scan_fn(tmp_path / "file", include_file_paths="files")
+    q = scan_fn(tmp_path / "file", include_file_paths="files", n_rows=n_rows)
 
     if format == "ndjson":
         assert_ir_translation_raises(q, NotImplementedError)
@@ -409,13 +413,7 @@ def test_scan_hf_url_raises():
     assert_ir_translation_raises(q, NotImplementedError)
 
 
-def test_select_arbitrary_order_with_row_index_column(request, tmp_path):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=POLARS_VERSION_LT_128,
-            reason="unsupported until polars 1.28",
-        )
-    )
+def test_select_arbitrary_order_with_row_index_column(tmp_path):
     df = pl.DataFrame({"a": [1, 2, 3]})
     df.write_parquet(tmp_path / "df.parquet")
     q = pl.scan_parquet(tmp_path / "df.parquet", row_index_name="foo").select(
@@ -462,3 +460,14 @@ def test_scan_csv_without_header_and_new_column_names_raises(df, tmp_path):
     make_partitioned_source(df, path, "csv", write_kwargs={"include_header": False})
     q = pl.scan_csv(path, has_header=False)
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_scan_with_row_index(tmp_path: Path) -> None:
+    df = pl.DataFrame({"a": [1, 2, 3, 4]})
+    df.write_csv(tmp_path / "test-0.csv")
+    df.write_csv(tmp_path / "test-1.csv")
+
+    result = pl.scan_csv(
+        tmp_path / "test-*.csv", row_index_name="index", row_index_offset=0
+    )
+    assert_gpu_result_equal(result)

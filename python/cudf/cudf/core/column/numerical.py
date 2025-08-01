@@ -26,7 +26,9 @@ from cudf.utils.dtypes import (
     cudf_dtype_to_pa_type,
     dtype_to_pylibcudf_type,
     find_common_type,
+    get_dtype_of_same_kind,
     get_dtype_of_same_type,
+    is_pandas_nullable_extension_dtype,
     min_signed_type,
     min_unsigned_type,
 )
@@ -223,7 +225,7 @@ class NumericalColumn(NumericalBaseColumn):
             "__eq__",
             "__ne__",
         }:
-            out_dtype = np.dtype(np.bool_)
+            out_dtype = get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
 
             # If `other` is a Python integer and it is out-of-bounds
             # promotion could fail but we can trivially define the result
@@ -245,7 +247,7 @@ class NumericalColumn(NumericalBaseColumn):
                     op = "__lt__"
 
         elif op in {"NULL_EQUALS", "NULL_NOT_EQUALS"}:
-            out_dtype = np.dtype(np.bool_)
+            out_dtype = get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
 
         reflect, op = self._check_reflected_op(op)
         if (other := self._normalize_binop_operand(other)) is NotImplemented:
@@ -266,7 +268,9 @@ class NumericalColumn(NumericalBaseColumn):
                     (isinstance(tmp, NumericalColumn) and 0 in tmp)
                     or (isinstance(tmp, pa.Scalar) and tmp.as_py() == 0)
                 ):
-                    out_dtype = np.dtype(np.float64)
+                    out_dtype = get_dtype_of_same_kind(
+                        out_dtype, np.dtype(np.float64)
+                    )
 
         if op in {"__and__", "__or__", "__xor__"}:
             if self.dtype.kind == "f" or other_cudf_dtype.kind == "f":
@@ -276,7 +280,9 @@ class NumericalColumn(NumericalBaseColumn):
                     f"{other_cudf_dtype.type.__name__}"
                 )
             if self.dtype.kind == "b" or other_cudf_dtype.kind == "b":
-                out_dtype = np.dtype(np.bool_)
+                out_dtype = get_dtype_of_same_kind(
+                    out_dtype, np.dtype(np.bool_)
+                )
 
         elif (
             op == "__pow__"
@@ -355,6 +361,16 @@ class NumericalColumn(NumericalBaseColumn):
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
     def as_string_column(self, dtype) -> StringColumn:
+        col = self
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and isinstance(dtype, np.dtype)
+            and dtype.kind == "O"
+        ):
+            raise ValueError(
+                "Cannot convert numerical column to string column "
+                "when dtype is an object dtype in pandas compatibility mode."
+            )
         if len(self) == 0:
             return cast(
                 cudf.core.column.StringColumn,
@@ -369,13 +385,22 @@ class NumericalColumn(NumericalBaseColumn):
         elif self.dtype.kind in {"i", "u"}:
             conv_func = plc.strings.convert.convert_integers.from_integers
         elif self.dtype.kind == "f":
+            if cudf.get_option(
+                "mode.pandas_compatible"
+            ) and is_pandas_nullable_extension_dtype(dtype):
+                # In pandas compatibility mode, we convert nans to nulls
+                col = self.nans_to_nulls()
             conv_func = plc.strings.convert.convert_floats.from_floats
         else:
             raise ValueError(f"No string conversion from type {self.dtype}")
 
         with acquire_spill_lock():
-            return type(self).from_pylibcudf(  # type: ignore[return-value]
-                conv_func(self.to_pylibcudf(mode="read"))
+            return (
+                type(self)
+                .from_pylibcudf(  # type: ignore[return-value]
+                    conv_func(col.to_pylibcudf(mode="read"))
+                )
+                ._with_type_metadata(dtype)
             )
 
     def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:
@@ -408,8 +433,19 @@ class NumericalColumn(NumericalBaseColumn):
             ):
                 # Short-circuit the cast if the dtypes are equivalent
                 # but not the same type object.
-                self._dtype = dtype
-                return self
+                if (
+                    is_pandas_nullable_extension_dtype(dtype)
+                    and isinstance(self.dtype, np.dtype)
+                    and self.dtype.kind == "f"
+                ):
+                    # If the dtype is a pandas nullable extension type, we need to
+                    # float column doesn't have any NaNs.
+                    res = self.nans_to_nulls()
+                    res._dtype = dtype
+                    return res
+                else:
+                    self._dtype = dtype
+                    return self
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
     def all(self, skipna: bool = True) -> bool:
@@ -635,6 +671,17 @@ class NumericalColumn(NumericalBaseColumn):
                 if "float" in to_dtype_numpy.name:
                     finfo = np.finfo(to_dtype_numpy)
                     lower_, upper_ = finfo.min, finfo.max
+
+                    # Check specifically for np.pi values when casting to lower precision
+                    if self_dtype_numpy.itemsize > to_dtype_numpy.itemsize:
+                        # Check if column contains pi value
+                        if len(col) > 0:
+                            # Create a simple column with pi to test if the precision matters
+                            pi_col = self == np.pi
+                            # Test if pi can be correctly represented after casting
+                            if pi_col.any():
+                                # If pi is present, we cannot safely cast to lower precision
+                                return False
                 elif "int" in to_dtype_numpy.name:
                     iinfo = np.iinfo(to_dtype_numpy)
                     lower_, upper_ = iinfo.min, iinfo.max
@@ -712,7 +759,19 @@ class NumericalColumn(NumericalBaseColumn):
                 children=(codes,),
             )
         if cudf.get_option("mode.pandas_compatible"):
-            self._dtype = get_dtype_of_same_type(dtype, self.dtype)
+            res_dtype = get_dtype_of_same_type(dtype, self.dtype)
+            if (
+                is_pandas_nullable_extension_dtype(res_dtype)
+                and isinstance(self.dtype, np.dtype)
+                and self.dtype.kind == "f"
+            ):
+                # If the dtype is a pandas nullable extension type, we need to
+                # float column doesn't have any NaNs.
+                res = self.nans_to_nulls()
+                res._dtype = res_dtype
+                return res
+            self._dtype = res_dtype
+
         return self
 
     def _reduction_result_dtype(self, reduction_op: str) -> Dtype:

@@ -10,7 +10,6 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_128
 
 
 def test_select():
@@ -82,13 +81,7 @@ def test_select_fast_count_unsupported_formats(tmp_path, fmt):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
-def test_select_fast_count_parquet(request, tmp_path):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=POLARS_VERSION_LT_128,
-            reason="not supported by cudf-polars until polars>=1.28",
-        )
-    )
+def test_select_fast_count_parquet(tmp_path):
     df = pl.DataFrame({"a": [1, 2, 3]})
     file = tmp_path / "data.parquet"
     df.write_parquet(file)

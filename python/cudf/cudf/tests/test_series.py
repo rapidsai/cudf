@@ -2308,9 +2308,9 @@ def test_series_constructor_error_mixed_type():
 def test_series_typecast_to_object_error():
     actual = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(ValueError):
+        with pytest.raises(TypeError):
             actual.astype(object)
-        with pytest.raises(ValueError):
+        with pytest.raises(TypeError):
             actual.astype(np.dtype("object"))
         new_series = actual.astype("str")
         assert new_series[0] == "1970-01-01 00:00:00.000000001"
@@ -3016,7 +3016,7 @@ def test_roundtrip_series_plc_column(ps):
 
 def test_non_strings_dtype_object_pandas_compat_raises():
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(ValueError):
+        with pytest.raises(TypeError):
             cudf.Series([1], dtype=object)
 
 

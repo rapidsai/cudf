@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -343,6 +343,52 @@ std::unique_ptr<table> stable_segmented_sort_by_key(
   std::vector<null_order> const& null_precedence = {},
   rmm::cuda_stream_view stream                   = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr              = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Computes the top k values of a column
+ *
+ * This performs the equivalent of a sort and the slice of the resulting first k elements.
+ * However, the returned column may or may not necessarily be sorted.
+ *
+ * @throw std::invalid_argument if k is greater than the number of rows in the column
+ *
+ * @param col Column to compute top k
+ * @param k Number of values to return
+ * @param sort_order The desired sort order for the top k values.
+ *                   Default is high to low.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return A column with the top k values of the input column.
+ */
+std::unique_ptr<column> top_k(
+  column_view const& col,
+  size_type k,
+  order sort_order                  = order::DESCENDING,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Computes the indices of the top k values of a column
+ *
+ * The indices will represent the top k elements but may or may not represent
+ * those elements as k sorted values.
+ *
+ * @throw std::invalid_argument if k is greater than the number of rows in the column
+ *
+ * @param col Column to compute top k
+ * @param k Number of values to return
+ * @param sort_order The desired sort order for the top k values.
+ *                   Default is high to low.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return Indices of the top k values of the input column
+ */
+std::unique_ptr<column> top_k_order(
+  column_view const& col,
+  size_type k,
+  order sort_order                  = order::DESCENDING,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT cudf
