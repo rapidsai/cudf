@@ -89,7 +89,7 @@ cudf::test::strings_column_wrapper constant_strings(cudf::size_type value)
 
   auto elements =
     thrust::make_transform_iterator(thrust::make_constant_iterator(value), [](auto i) {
-      std::array<char, 30> buf;
+      std::array<char, 30> buf{};
       snprintf(buf.data(), buf.size(), "%04d", i);
       return std::string(buf.data());
     });

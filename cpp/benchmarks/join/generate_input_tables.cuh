@@ -158,8 +158,9 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> generate_i
     static_cast<cudf::size_type>(build_table_numrows / multiplicity);
 
   double const null_probability = Nullable ? 0.3 : 0;
-  auto const profile =
-    data_profile{data_profile_builder().null_probability(null_probability).cardinality(0)};
+  auto const profile            = data_profile{data_profile_builder()
+                                      .null_probability(null_probability)
+                                      .cardinality(unique_rows_build_table_numrows + 1)};
   auto unique_rows_build_table =
     create_random_table(key_types, row_count{unique_rows_build_table_numrows + 1}, profile, 1);
 
@@ -227,7 +228,7 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> generate_i
   auto probe_cols = probe_table->release();
   for (auto i = 0; i < num_payload_cols; i++) {
     build_cols.emplace_back(cudf::sequence(build_table_numrows, *init));
-    probe_cols.emplace_back(cudf::sequence(build_table_numrows, *init));
+    probe_cols.emplace_back(cudf::sequence(probe_table_numrows, *init));
   }
 
   return std::pair{std::make_unique<cudf::table>(std::move(build_cols)),
