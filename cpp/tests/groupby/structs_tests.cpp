@@ -54,6 +54,7 @@ void print_agg_results(cudf::column_view const& keys, cudf::column_view const& v
     requests.push_back(cudf::groupby::aggregation_request{});
     requests.back().values = vals;
     requests.back().aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
+    requests.back().use_sort_groupby = true;
 
     auto gby = cudf::groupby::groupby{
       cudf::table_view({keys}), cudf::null_policy::INCLUDE, cudf::sorted::NO, {}, {}};
