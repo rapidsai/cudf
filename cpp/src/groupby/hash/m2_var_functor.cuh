@@ -55,7 +55,7 @@ struct m2_hash_functor {
   __device__ void operator()(column_device_view const&, size_type, size_type) noexcept
     requires(!is_m2_var_supported<Source>())
   {
-    CUDF_UNREACHABLE("Invalid source type for std, var aggregation combination.");
+    CUDF_UNREACHABLE("Invalid source type for M2 aggregation.");
   }
 
   template <typename Source>
