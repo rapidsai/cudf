@@ -465,7 +465,7 @@ class data_profile {
  *
  * The builder API also includes a few additional convenience setters:
  * Overload of `distribution` that only takes the distribution type (not the range).
- * `no_validity`, which is a simpler equivalent of `null_probability(std::nullopr)`.
+ * `no_validity`, which is a simpler equivalent of `null_probability(std::nullopt)`.
  */
 class data_profile_builder {
   data_profile profile;
