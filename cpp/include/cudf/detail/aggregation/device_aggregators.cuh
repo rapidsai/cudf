@@ -173,7 +173,9 @@ struct update_target_element<Source, aggregation::SUM_WITH_OVERFLOW> {
       cudf::detail::atomic_add(&sum_column.element<int64_t>(target_index), source_value);
 
     // Early exit if overflow is already set to avoid unnecessary overflow checking
-    if (overflow_column.element<bool>(target_index)) { return; }
+    auto bool_ref = cuda::atomic_ref<bool, cuda::thread_scope_device>{
+      *(overflow_column.data<bool>() + target_index)};
+    if (bool_ref.load(cuda::memory_order_relaxed)) { return; }
 
     // Check for overflow before performing the addition to avoid UB
     // For positive overflow: old_sum > 0, source_value > 0, and old_sum > max - source_value
