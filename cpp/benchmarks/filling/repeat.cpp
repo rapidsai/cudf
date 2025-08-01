@@ -21,8 +21,9 @@
 
 #include <nvbench/nvbench.cuh>
 
+namespace {
 template <typename TypeParam>
-static void nvbench_repeat(nvbench::state& state, nvbench::type_list<TypeParam>)
+void nvbench_repeat(nvbench::state& state, nvbench::type_list<TypeParam>)
 {
   auto const num_rows = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const num_cols = static_cast<cudf::size_type>(state.get_int64("num_cols"));
@@ -33,7 +34,7 @@ static void nvbench_repeat(nvbench::state& state, nvbench::type_list<TypeParam>)
                           row_count{num_rows},
                           nulls ? std::optional<double>{0.1} : std::nullopt);
   // Create table view
-  auto input = cudf::table_view(*input_table);
+  auto const input = input_table->view();
 
   // repeat counts
   data_profile const profile = data_profile_builder().cardinality(0).no_validity().distribution(
@@ -41,17 +42,16 @@ static void nvbench_repeat(nvbench::state& state, nvbench::type_list<TypeParam>)
   auto counts =
     create_random_column(cudf::type_to_id<cudf::size_type>(), row_count{num_rows}, profile);
 
-  auto output     = cudf::repeat(input, counts->view());
-  auto data_bytes = output->alloc_size();
+  auto output = cudf::repeat(input, counts->view());
 
-  state.add_element_count(num_rows, "num_rows");
-  state.add_global_memory_reads(data_bytes);
-  state.add_global_memory_writes(data_bytes);
+  state.add_global_memory_reads(input_table->alloc_size());
+  state.add_global_memory_writes(output->alloc_size());
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
 
   state.exec(nvbench::exec_tag::sync,
              [&](nvbench::launch& launch) { auto result = cudf::repeat(input, counts->view()); });
 }
+}  // namespace
 
 using Types = nvbench::type_list<double, int32_t>;
 
