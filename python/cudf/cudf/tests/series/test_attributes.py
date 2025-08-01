@@ -3,6 +3,7 @@ import re
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 
 import cudf
@@ -163,3 +164,48 @@ def test_timedelta_contains(data, timedelta_types_as_str, scalar):
     actual = scalar in psr
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data, expected",
+    [
+        [["2018-01-01", None, "2019-01-31", None, "2018-01-01"], True],
+        [
+            [
+                "2018-01-01",
+                "2018-01-02",
+                "2019-01-31",
+                "2018-03-01",
+                "2018-01-01",
+            ],
+            False,
+        ],
+        [
+            np.array(
+                ["2018-01-01", None, "2019-12-30"], dtype="datetime64[ms]"
+            ),
+            True,
+        ],
+    ],
+)
+def test_datetime_has_null_test(data, expected):
+    data = cudf.Series(data, dtype="datetime64[ms]")
+    pd_data = data.to_pandas()
+    count = pd_data.notna().value_counts()
+    expected_count = 0
+    if False in count.keys():
+        expected_count = count[False]
+
+    assert expected is data.has_nulls
+    assert expected_count == data.null_count
+
+
+def test_datetime_has_null_test_pyarrow():
+    data = cudf.Series(
+        pa.array(
+            [0, np.iinfo("int64").min, np.iinfo("int64").max, None],
+            type=pa.timestamp("ns"),
+        )
+    )
+    assert data.has_nulls is True
+    assert data.null_count == 1

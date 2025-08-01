@@ -361,3 +361,82 @@ def test_typecast_to_different_datetime_resolutions(datetime_types_as_str):
     np_data = np.array(pd_data).astype(datetime_types_as_str)
     gdf_series = cudf.Series(pd_data).astype(datetime_types_as_str)
     np.testing.assert_equal(np_data, gdf_series.to_numpy())
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [
+            "2019-07-16 00:00:00.333",
+            "2019-07-16 00:00:00.666",
+            "2019-07-16 00:00:00.888",
+        ],
+        [
+            "2019-07-16 00:00:00.333333",
+            "2019-07-16 00:00:00.666666",
+            "2019-07-16 00:00:00.888888",
+        ],
+        [
+            "2019-07-16 00:00:00.333333333",
+            "2019-07-16 00:00:00.666666666",
+            "2019-07-16 00:00:00.888888888",
+        ],
+    ],
+    ids=["ms_data", "us_data", "ns_data"],
+)
+def test_string_timstamp_typecast_to_different_datetime_resolutions(
+    data, datetime_types_as_str
+):
+    pd_sr = pd.Series(data)
+    gdf_sr = cudf.Series.from_pandas(pd_sr)
+
+    expect = pd_sr.values.astype(datetime_types_as_str)
+    got = gdf_sr.astype(datetime_types_as_str).values_host
+
+    np.testing.assert_equal(expect, got)
+
+
+def test_typecast_to_datetime(numeric_types_as_str, datetime_types_as_str):
+    data = np.arange(1, 10)
+    np_data = data.astype(numeric_types_as_str)
+    gdf_data = cudf.Series(np_data)
+
+    np_casted = np_data.astype(datetime_types_as_str)
+    gdf_casted = gdf_data.astype(datetime_types_as_str)
+
+    np.testing.assert_equal(np_casted, gdf_casted.to_numpy())
+
+
+def test_typecast_to_from_datetime(
+    numeric_types_as_str, datetime_types_as_str
+):
+    data = np.arange(1, 10)
+    np_data = data.astype(numeric_types_as_str)
+    gdf_data = cudf.Series(np_data)
+
+    np_casted = np_data.astype(datetime_types_as_str).astype(
+        numeric_types_as_str
+    )
+    gdf_casted = gdf_data.astype(datetime_types_as_str).astype(
+        numeric_types_as_str
+    )
+
+    np.testing.assert_equal(np_casted, gdf_casted.to_numpy())
+
+
+@pytest.fixture
+def datetime_types_as_str2(datetime_types_as_str):
+    return datetime_types_as_str
+
+
+def test_typecast_from_datetime_to_datetime(
+    datetime_types_as_str, datetime_types_as_str2
+):
+    data = np.arange(1, 10)
+    np_data = data.astype(datetime_types_as_str)
+    ser = cudf.Series(np_data)
+
+    np_casted = np_data.astype(datetime_types_as_str2)
+    ser_casted = ser.astype(datetime_types_as_str2)
+
+    np.testing.assert_equal(np_casted, ser_casted.to_numpy())
