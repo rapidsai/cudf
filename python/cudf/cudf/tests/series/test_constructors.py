@@ -752,3 +752,18 @@ def test_create_struct_series(data):
     expect = pd.Series(data)
     got = cudf.Series(data)
     assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pd.date_range("20010101", "20020215", freq="400h", name="times"),
+        pd.date_range(
+            "20010101", freq="243434324423423234ns", name="times", periods=10
+        ),
+    ],
+)
+def test_series_from_pandas_datetime_index(data):
+    pd_data = pd.Series(data)
+    gdf_data = cudf.Series(pd_data)
+    assert_eq(pd_data, gdf_data)
