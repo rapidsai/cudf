@@ -132,7 +132,7 @@ ignore = [
     # `typing.ClassVar`
     "RUF012",
 ]
-fixable = []
+fixable = ["ALL"]
 exclude = [
     "cpp/scripts/gdb-pretty-printers.py",
 ]
