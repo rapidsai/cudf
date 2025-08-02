@@ -357,16 +357,6 @@ chrono_scalar<T>::chrono_scalar(rmm::device_scalar<T>&& data,
 }
 
 template <typename T>
-chrono_scalar<T>::chrono_scalar(cudf::detail::device_scalar<T>&& data,
-                                bool is_valid,
-                                rmm::cuda_stream_view stream,
-                                rmm::device_async_resource_ref mr)
-  : detail::fixed_width_scalar<T>(
-      std::forward<cudf::detail::device_scalar<T>>(data), is_valid, stream, mr)
-{
-}
-
-template <typename T>
 chrono_scalar<T>::chrono_scalar(chrono_scalar<T> const& other,
                                 rmm::cuda_stream_view stream,
                                 rmm::device_async_resource_ref mr)

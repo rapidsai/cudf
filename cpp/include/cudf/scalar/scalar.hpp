@@ -599,19 +599,6 @@ class chrono_scalar : public detail::fixed_width_scalar<T> {
                 bool is_valid                     = true,
                 rmm::cuda_stream_view stream      = cudf::get_default_stream(),
                 rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
-
-  /**
-   * @brief Construct a new chrono scalar object from existing device memory.
-   *
-   * @param data The scalar's data in device memory.
-   * @param is_valid Whether the value held by the scalar is valid.
-   * @param stream CUDA stream used for device memory operations.
-   * @param mr Device memory resource to use for device memory allocation.
-   */
-  chrono_scalar(cudf::detail::device_scalar<T>&& data,
-                bool is_valid                     = true,
-                rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-                rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 };
 
 /**
