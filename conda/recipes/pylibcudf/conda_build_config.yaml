@@ -1,8 +1,8 @@
 c_compiler_version:
-  - 13
+  - 14
 
 cxx_compiler_version:
-  - 13
+  - 14
 
 c_stdlib:
   - sysroot
