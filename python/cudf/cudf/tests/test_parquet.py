@@ -4523,6 +4523,45 @@ def test_parquet_bloom_filters(
     )
 
 
+def test_parquet_bloom_filters_alignment(datadir):
+    import rmm
+
+    fname = datadir / "bloom_filter_alignment.parquet"
+
+    # Read expected table using pyarrow
+    expected = pq.read_table(
+        fname, columns=["d_day_name"], filters=[("d_day_name", "==", "Monday")]
+    ).to_pandas()
+
+    # Read with cudf using cuda memory resource
+    cuda_mr = rmm.mr.CudaMemoryResource()
+    rmm.mr.set_current_device_resource(cuda_mr)
+    read = cudf.read_parquet(
+        fname, columns=["d_day_name"], filters=[("d_day_name", "==", "Monday")]
+    ).to_pandas()
+    assert_eq(expected, read)
+
+    # Read with cudf using pool memory resource
+    free_memory, _ = rmm.mr.available_device_memory()
+    free_memory = int(round(float(free_memory) * 0.5 / 256) * 256)
+    pool_mr = rmm.mr.PoolMemoryResource(
+        cuda_mr, initial_pool_size=free_memory, maximum_pool_size=free_memory
+    )
+    rmm.mr.set_current_device_resource(pool_mr)
+    read = cudf.read_parquet(
+        fname, columns=["d_day_name"], filters=[("d_day_name", "==", "Monday")]
+    )
+    assert_eq(expected, read)
+
+    # Read with cudf using cuda async memory resource
+    cuda_async_mr = rmm.mr.CudaAsyncMemoryResource()
+    rmm.mr.set_current_device_resource(cuda_async_mr)
+    read = cudf.read_parquet(
+        fname, columns=["d_day_name"], filters=[("d_day_name", "==", "Monday")]
+    )
+    assert_eq(expected, read)
+
+
 def test_parquet_reader_unsupported_compression(datadir):
     fname = datadir / "hadoop_lz4_compressed.parquet"
 
