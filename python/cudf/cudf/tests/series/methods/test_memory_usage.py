@@ -1,7 +1,45 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
 
 import cudf
+from cudf.core.column.column import column_empty
 from cudf.testing import assert_eq
+
+
+def test_memory_usage_list():
+    s1 = cudf.Series([[1, 2], [3, 4]])
+    assert s1.memory_usage() == 44
+    s2 = cudf.Series([[[[1, 2]]], [[[3, 4]]]])
+    assert s2.memory_usage() == 68
+    s3 = cudf.Series([[{"b": 1, "a": 10}, {"b": 2, "a": 100}]])
+    assert s3.memory_usage() == 40
+
+
+def test_empty_nested_list_uninitialized_offsets_memory_usage():
+    col = column_empty(0, cudf.ListDtype(cudf.ListDtype("int64")))
+    nested_col = col.children[1]
+    empty_inner = type(nested_col)(
+        data=None,
+        size=nested_col.size,
+        dtype=nested_col.dtype,
+        mask=nested_col.mask,
+        offset=nested_col.offset,
+        null_count=nested_col.null_count,
+        children=(
+            column_empty(0, nested_col.children[0].dtype),
+            nested_col.children[1],
+        ),
+    )
+    col_empty_offset = type(col)(
+        data=None,
+        size=col.size,
+        dtype=col.dtype,
+        mask=col.mask,
+        offset=col.offset,
+        null_count=col.null_count,
+        children=(column_empty(0, col.children[0].dtype), empty_inner),
+    )
+    ser = cudf.Series._from_column(col_empty_offset)
+    assert ser.memory_usage() == 8
 
 
 def test_series_memory_usage():

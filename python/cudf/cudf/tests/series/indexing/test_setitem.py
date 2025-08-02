@@ -11,6 +11,70 @@ from cudf.testing._utils import (
 )
 
 
+@pytest.mark.parametrize(
+    "data,item",
+    [
+        (
+            # basic list into a list column
+            [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+            [0, 0, 0],
+        ),
+        (
+            # nested list into nested list column
+            [
+                [[1, 2, 3], [4, 5, 6]],
+                [[1, 2, 3], [4, 5, 6]],
+                [[1, 2, 3], [4, 5, 6]],
+            ],
+            [[0, 0, 0], [0, 0, 0]],
+        ),
+        (
+            # NA into a list column
+            [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+            pd.NA,
+        ),
+        (
+            # NA into nested list column
+            [
+                [[1, 2, 3], [4, 5, 6]],
+                [[1, 2, 3], [4, 5, 6]],
+                [[1, 2, 3], [4, 5, 6]],
+            ],
+            pd.NA,
+        ),
+    ],
+)
+def test_listcol_setitem(data, item):
+    sr = cudf.Series(data)
+
+    sr[1] = item
+    data[1] = item
+    expect = cudf.Series(data)
+
+    assert_eq(expect, sr)
+
+
+@pytest.mark.parametrize(
+    "data,item,error",
+    [
+        (
+            [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+            [[1, 2, 3], [4, 5, 6]],
+            "Could not convert .* with type list: tried to convert to int64",
+        ),
+        (
+            [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+            0,
+            "Can not set 0 into ListColumn",
+        ),
+    ],
+)
+def test_listcol_setitem_error_cases(data, item, error):
+    sr = cudf.Series(data)
+    with pytest.raises(BaseException, match=error):
+        sr[1] = item
+
+
 def test_fill_new_category():
     gs = cudf.Series(pd.Categorical(["a", "b", "c"]))
     with pytest.raises(TypeError):
