@@ -69,19 +69,29 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
   auto const available_shmem_size = get_available_shared_memory_size(grid_size);
   auto const offsets_buffer_size  = compute_shmem_offsets_size(flattened_values.num_columns()) * 2;
   auto const data_buffer_size     = available_shmem_size - offsets_buffer_size;
-  auto const is_shared_memory_compatible = std::all_of(
-    requests.begin(), requests.end(), [&](cudf::groupby::aggregation_request const& request) {
-      if (cudf::is_dictionary(request.values.type())) { return false; }
-      // Ensure there is enough buffer space to store local aggregations up to the max cardinality
-      // for shared memory aggregations
-      auto const size = cudf::type_dispatcher<cudf::dispatch_storage_type>(request.values.type(),
-                                                                           size_of_functor{});
-      return data_buffer_size >= (size * GROUPBY_CARDINALITY_THRESHOLD);
+
+  // Check if any aggregation is SUM_WITH_OVERFLOW, which should always use global memory
+  auto const has_sum_with_overflow =
+    std::any_of(agg_kinds.begin(), agg_kinds.end(), [](aggregation::Kind k) {
+      return k == aggregation::SUM_WITH_OVERFLOW;
     });
 
+  auto const is_shared_memory_compatible =
+    !has_sum_with_overflow &&
+    std::all_of(
+      requests.begin(), requests.end(), [&](cudf::groupby::aggregation_request const& request) {
+        if (cudf::is_dictionary(request.values.type())) { return false; }
+        // Ensure there is enough buffer space to store local aggregations up to the max cardinality
+        // for shared memory aggregations
+        auto const size = cudf::type_dispatcher<cudf::dispatch_storage_type>(request.values.type(),
+                                                                             size_of_functor{});
+        return data_buffer_size >= (size * GROUPBY_CARDINALITY_THRESHOLD);
+      });
+
   // Performs naive global memory aggregations when the workload is not compatible with shared
-  // memory, such as when aggregating dictionary columns or when there is insufficient dynamic
-  // shared memory for shared memory aggregations.
+  // memory, such as when aggregating dictionary columns, when there is insufficient dynamic
+  // shared memory for shared memory aggregations, or when SUM_WITH_OVERFLOW aggregations are
+  // present.
   if (!is_shared_memory_compatible) {
     return compute_global_memory_aggs(num_rows,
                                       skip_rows_with_nulls,
