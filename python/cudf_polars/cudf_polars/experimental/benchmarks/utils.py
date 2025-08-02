@@ -105,23 +105,35 @@ class GPUInfo:
 
     name: str
     index: int
-    free_memory: int
-    used_memory: int
-    total_memory: int
+    free_memory: int | None
+    used_memory: int | None
+    total_memory: int | None
 
     @classmethod
     def from_index(cls, index: int) -> GPUInfo:
         """Create a GPUInfo from an index."""
         pynvml.nvmlInit()
         handle = pynvml.nvmlDeviceGetHandleByIndex(index)
-        memory = pynvml.nvmlDeviceGetMemoryInfo(handle)
-        return cls(
-            name=pynvml.nvmlDeviceGetName(handle),
-            index=index,
-            free_memory=memory.free,
-            used_memory=memory.used,
-            total_memory=memory.total,
-        )
+        try:
+            memory = pynvml.nvmlDeviceGetMemoryInfo(handle)
+            return cls(
+                name=pynvml.nvmlDeviceGetName(handle),
+                index=index,
+                free_memory=memory.free,
+                used_memory=memory.used,
+                total_memory=memory.total,
+            )
+        except pynvml.NVMLError_NotSupported:
+            # Happens on systems without traditional GPU memory (e.g., Grace Hopper),
+            # where nvmlDeviceGetMemoryInfo is not supported.
+            # See: https://github.com/rapidsai/cudf/issues/19427
+            return cls(
+                name=pynvml.nvmlDeviceGetName(handle),
+                index=index,
+                free_memory=None,
+                used_memory=None,
+                total_memory=None,
+            )
 
 
 @dataclasses.dataclass
