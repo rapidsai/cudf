@@ -4523,21 +4523,23 @@ def test_parquet_bloom_filters(
     )
 
 
-def test_parquet_bloom_filters_alignment(datadir):
+@pytest.mark.parametrize("columns", [["r_reason_desc"], None])
+def test_parquet_bloom_filters_alignment(datadir, columns):
     import rmm
 
     fname = datadir / "bloom_filter_alignment.parquet"
+    filters = [("r_reason_desc", "==", "reason 31")]
 
     # Read expected table using pyarrow
     expected = pq.read_table(
-        fname, columns=["d_day_name"], filters=[("d_day_name", "==", "Monday")]
+        fname, columns=columns, filters=filters
     ).to_pandas()
 
     # Read with cudf using cuda memory resource
     cuda_mr = rmm.mr.CudaMemoryResource()
     rmm.mr.set_current_device_resource(cuda_mr)
     read = cudf.read_parquet(
-        fname, columns=["d_day_name"], filters=[("d_day_name", "==", "Monday")]
+        fname, columns=columns, filters=filters
     ).to_pandas()
     assert_eq(expected, read)
 
@@ -4548,17 +4550,13 @@ def test_parquet_bloom_filters_alignment(datadir):
         cuda_mr, initial_pool_size=free_memory, maximum_pool_size=free_memory
     )
     rmm.mr.set_current_device_resource(pool_mr)
-    read = cudf.read_parquet(
-        fname, columns=["d_day_name"], filters=[("d_day_name", "==", "Monday")]
-    )
+    read = cudf.read_parquet(fname, columns=columns, filters=filters)
     assert_eq(expected, read)
 
     # Read with cudf using cuda async memory resource
     cuda_async_mr = rmm.mr.CudaAsyncMemoryResource()
     rmm.mr.set_current_device_resource(cuda_async_mr)
-    read = cudf.read_parquet(
-        fname, columns=["d_day_name"], filters=[("d_day_name", "==", "Monday")]
-    )
+    read = cudf.read_parquet(fname, columns=columns, filters=filters)
     assert_eq(expected, read)
 
 
