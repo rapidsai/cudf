@@ -91,10 +91,11 @@ void write_parquet(cudf::table_view input,
  * @brief Enum to represent the available parquet filters
  */
 enum class parquet_filter_type : uint8_t {
-  ROW_GROUPS_WITH_STATS         = 0,
-  ROW_GROUPS_WITH_DICT_PAGES    = 1,
-  ROW_GROUPS_WITH_BLOOM_FILTERS = 2,
-  DATA_PAGES_WITH_PAGE_INDEX    = 3
+  ROW_GROUPS_WITH_STATS                = 0,
+  ROW_GROUPS_WITH_DICT_PAGES           = 1,
+  ROW_GROUPS_WITH_BLOOM_FILTERS        = 2,
+  FILTER_COLUMN_PAGES_WITH_PAGE_INDEX  = 3,
+  PAYLOAD_COLUMN_PAGES_WITH_PAGE_INDEX = 4,
 };
 
 /**
@@ -294,15 +295,18 @@ auto hybrid_scan(io_source const& io_source,
     std::cout << "SKIP: Row group filtering with bloom filters...\n\n";
   }
 
-  auto row_mask       = std::unique_ptr<cudf::column>{};
-  auto data_page_mask = std::vector<std::vector<bool>>{};
+  // Check whether to prune filter column data pages
+  using cudf::io::parquet::experimental::use_data_page_mask;
+  auto const prune_filter_data_pages =
+    filters.contains(parquet_filter_type::FILTER_COLUMN_PAGES_WITH_PAGE_INDEX);
 
-  if (filters.contains(parquet_filter_type::DATA_PAGES_WITH_PAGE_INDEX)) {
-    std::cout << "READER: Filter data pages with page index stats...\n";
+  auto row_mask = std::unique_ptr<cudf::column>{};
+  if (prune_filter_data_pages) {
+    std::cout << "READER: Filter data pages of filter columns with page index stats...\n";
     timer.reset();
     // Filter data pages with page index stats
-    std::tie(row_mask, data_page_mask) =
-      reader->filter_data_pages_with_stats(current_row_group_indices, options, stream, mr);
+    row_mask =
+      reader->build_row_mask_with_page_index_stats(current_row_group_indices, options, stream, mr);
     timer.print_elapsed_millis();
   } else {
     std::cout << "SKIP: Page filtering with page index stats...\n\n";
@@ -320,14 +324,16 @@ auto hybrid_scan(io_source const& io_source,
     fetch_byte_ranges(file_buffer_span, filter_column_chunk_byte_ranges, stream, mr);
 
   // Materialize the table with only the filter columns
-  auto filter_table = reader
-                        ->materialize_filter_columns(data_page_mask,
-                                                     current_row_group_indices,
-                                                     std::move(filter_column_chunk_buffers),
-                                                     row_mask->mutable_view(),
-                                                     options,
-                                                     stream)
-                        .tbl;
+  auto filter_table =
+    reader
+      ->materialize_filter_columns(
+        current_row_group_indices,
+        std::move(filter_column_chunk_buffers),
+        row_mask->mutable_view(),
+        prune_filter_data_pages ? use_data_page_mask::YES : use_data_page_mask::NO,
+        options,
+        stream)
+      .tbl;
   timer.print_elapsed_millis();
 
   std::cout << "READER: Materialize payload columns...\n";
@@ -338,14 +344,21 @@ auto hybrid_scan(io_source const& io_source,
   auto payload_column_chunk_buffers =
     fetch_byte_ranges(file_buffer_span, payload_column_chunk_byte_ranges, stream, mr);
 
+  // Check whether to prune payload column data pages
+  auto const prune_payload_data_pages =
+    filters.contains(parquet_filter_type::PAYLOAD_COLUMN_PAGES_WITH_PAGE_INDEX);
+
   // Materialize the table with only the payload columns
-  auto payload_table = reader
-                         ->materialize_payload_columns(current_row_group_indices,
-                                                       std::move(payload_column_chunk_buffers),
-                                                       row_mask->view(),
-                                                       options,
-                                                       stream)
-                         .tbl;
+  auto payload_table =
+    reader
+      ->materialize_payload_columns(
+        current_row_group_indices,
+        std::move(payload_column_chunk_buffers),
+        row_mask->view(),
+        prune_payload_data_pages ? use_data_page_mask::YES : use_data_page_mask::NO,
+        options,
+        stream)
+      .tbl;
   timer.print_elapsed_millis();
 
   return std::make_tuple(combine_tables(std::move(filter_table), std::move(payload_table)),
@@ -440,7 +453,11 @@ int main(int argc, char const** argv)
     filters.insert(parquet_filter_type::ROW_GROUPS_WITH_STATS);
     filters.insert(parquet_filter_type::ROW_GROUPS_WITH_DICT_PAGES);
     filters.insert(parquet_filter_type::ROW_GROUPS_WITH_BLOOM_FILTERS);
-    filters.insert(parquet_filter_type::DATA_PAGES_WITH_PAGE_INDEX);
+    // Deliberately disabled as it has low cost to benefit ratio
+    // filters.insert(parquet_filter_type::FILTER_COLUMN_PAGES_WITH_PAGE_INDEX);
+
+    // TODO: Uncomment when the illegal memory access issue is fixed
+    // filters.insert(parquet_filter_type::PAYLOAD_COLUMN_PAGES_WITH_PAGE_INDEX);
   }
 
   cudf::examples::timer timer;
