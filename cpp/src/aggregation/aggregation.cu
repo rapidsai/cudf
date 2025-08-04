@@ -60,14 +60,16 @@ struct identity_initializer {
   }
 
   template <typename T, aggregation::Kind k>
-  T identity_from_operator() requires(not std::is_same_v<corresponding_operator_t<k>, void>)
+  T identity_from_operator()
+    requires(not std::is_same_v<corresponding_operator_t<k>, void>)
   {
     using DeviceType = device_storage_type_t<T>;
     return corresponding_operator_t<k>::template identity<DeviceType>();
   }
 
   template <typename T, aggregation::Kind k>
-  T identity_from_operator() requires(std::is_same_v<corresponding_operator_t<k>, void>)
+  T identity_from_operator()
+    requires(std::is_same_v<corresponding_operator_t<k>, void>)
   {
     CUDF_FAIL("Unable to get identity/sentinel from device operator");
   }
