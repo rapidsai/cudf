@@ -836,32 +836,6 @@ class StringColumn(ColumnBase):
         )
 
     @acquire_spill_lock()
-    def subword_tokenize(
-        self,
-        hashed_vocabulary: plc.nvtext.subword_tokenize.HashedVocabulary,
-        max_sequence_length: int = 64,
-        stride: int = 48,
-        do_lower: bool = True,
-        do_truncate: bool = False,
-    ) -> tuple[ColumnBase, ColumnBase, ColumnBase]:
-        """
-        Subword tokenizes text series by using the pre-loaded hashed vocabulary
-        """
-        result = plc.nvtext.subword_tokenize.subword_tokenize(
-            self.to_pylibcudf(mode="read"),
-            hashed_vocabulary,
-            max_sequence_length,
-            stride,
-            do_lower,
-            do_truncate,
-        )
-        # return the 3 tensor components
-        tokens = type(self).from_pylibcudf(result[0])
-        masks = type(self).from_pylibcudf(result[1])
-        metadata = type(self).from_pylibcudf(result[2])
-        return tokens, masks, metadata
-
-    @acquire_spill_lock()
     def tokenize_scalar(self, delimiter: plc.Scalar) -> Self:
         return type(self).from_pylibcudf(  # type: ignore[return-value]
             plc.nvtext.tokenize.tokenize_scalar(
