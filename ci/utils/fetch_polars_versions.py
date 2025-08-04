@@ -80,7 +80,7 @@ if __name__ == "__main__":
         help="Path to dependencies.yaml",
     )
     parser.add_argument(
-        "--latest-only",
+        "--latest-patch-only",
         action="store_true",
         help="Return only the latest patch per minor version",
     )
