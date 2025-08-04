@@ -108,7 +108,7 @@ filterwarnings = [
     # Ignore numba PEP 456 warning specific to arm machines
     "ignore:FNV hashing is not implemented in Numba.*:UserWarning",
     # Allow running UDF tests on older architectures
-    "ignore:.*NVRTC log messages whilst compiling nrt.cu.*:UserWarning",
+    "ignore:.*NVRTC log messages whilst compiling.*:UserWarning",
 ]
 markers = [
     "spilling: mark benchmark a good candidate to run with `CUDF_SPILL=ON`",
