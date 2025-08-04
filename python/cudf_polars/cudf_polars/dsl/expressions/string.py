@@ -18,6 +18,7 @@ from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal, LiteralColumn
 from cudf_polars.dsl.utils.reshape import broadcast
+from cudf_polars.utils.versions import POLARS_VERSION_LT_132
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -722,8 +723,13 @@ class StringFunction(Expr):
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.PadStart:
-            (column,) = columns
-            width, char = self.options
+            if POLARS_VERSION_LT_132:
+                (column,) = columns
+                width, char = self.options
+            else:
+                (column, width) = columns
+                (char,) = self.options
+                width = width.obj.to_scalar().to_py()
             return Column(
                 plc.strings.padding.pad(
                     column.obj, width, plc.strings.SideType.LEFT, char
@@ -731,8 +737,13 @@ class StringFunction(Expr):
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.PadEnd:
-            (column,) = columns
-            width, char = self.options
+            if POLARS_VERSION_LT_132:
+                (column,) = columns
+                width, char = self.options
+            else:
+                (column, width) = columns
+                (char,) = self.options
+                width = width.obj.to_scalar().to_py()
             return Column(
                 plc.strings.padding.pad(
                     column.obj, width, plc.strings.SideType.RIGHT, char

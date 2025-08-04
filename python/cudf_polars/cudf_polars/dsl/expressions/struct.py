@@ -29,7 +29,6 @@ class StructFunction(Expr):
     class Name(IntEnum):
         """Internal and picklable representation of polars' `StructFunction`."""
 
-        FieldByIndex = auto()
         FieldByName = auto()
         RenameFields = auto()
         PrefixFields = auto()
@@ -37,9 +36,6 @@ class StructFunction(Expr):
         JsonEncode = auto()
         WithFields = auto()  # TODO: https://github.com/rapidsai/cudf/issues/19284
         MapFieldNames = auto()  # TODO: https://github.com/rapidsai/cudf/issues/19285
-        MultipleFields = (
-            auto()
-        )  # https://github.com/pola-rs/polars/pull/23022#issuecomment-2933910958
 
         @classmethod
         def from_polars(cls, obj: pl_expr.StructFunction) -> Self:
@@ -57,7 +53,7 @@ class StructFunction(Expr):
     _non_child = ("dtype", "name", "options")
 
     _valid_ops: ClassVar[set[Name]] = {
-        Name.FieldByIndex,
+        # Name.FieldByIndex,
         Name.FieldByName,
         Name.RenameFields,
         Name.PrefixFields,
