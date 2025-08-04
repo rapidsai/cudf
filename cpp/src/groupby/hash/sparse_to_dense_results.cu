@@ -50,23 +50,14 @@ void sparse_to_dense_results(host_span<aggregation_request const> requests,
   }
 }
 
-template void sparse_to_dense_results<hash_set_ref_t<cuco::find_tag>>(
+template void sparse_to_dense_results<simplified_hash_set_ref_t<cuco::find_tag>>(
   host_span<aggregation_request const> requests,
   cudf::detail::result_cache* sparse_results,
   cudf::detail::result_cache* dense_results,
   device_span<size_type const> gather_map,
-  hash_set_ref_t<cuco::find_tag> set,
+  simplified_hash_set_ref_t<cuco::find_tag> set,
   bitmask_type const* row_bitmask,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 
-template void sparse_to_dense_results<nullable_hash_set_ref_t<cuco::find_tag>>(
-  host_span<aggregation_request const> requests,
-  cudf::detail::result_cache* sparse_results,
-  cudf::detail::result_cache* dense_results,
-  device_span<size_type const> gather_map,
-  nullable_hash_set_ref_t<cuco::find_tag> set,
-  bitmask_type const* row_bitmask,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);
 }  // namespace cudf::groupby::detail::hash

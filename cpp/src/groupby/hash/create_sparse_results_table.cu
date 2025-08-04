@@ -157,31 +157,18 @@ cudf::table create_sparse_results_table(cudf::table_view const& flattened_values
   return sparse_table;
 }
 
-template void extract_populated_keys<global_set_t>(
-  global_set_t const& key_set,
+template void extract_populated_keys<simplified_global_set_t>(
+  simplified_global_set_t const& key_set,
   rmm::device_uvector<cudf::size_type>& populated_keys,
   rmm::cuda_stream_view stream);
 
-template void extract_populated_keys<nullable_global_set_t>(
-  nullable_global_set_t const& key_set,
-  rmm::device_uvector<cudf::size_type>& populated_keys,
-  rmm::cuda_stream_view stream);
-
-template cudf::table create_sparse_results_table<global_set_t>(
+template cudf::table create_sparse_results_table<simplified_global_set_t>(
   cudf::table_view const& flattened_values,
   cudf::aggregation::Kind const* d_agg_kinds,
   host_span<cudf::aggregation::Kind const> agg_kinds,
   bool direct_aggregations,
-  global_set_t const& global_set,
+  simplified_global_set_t const& global_set,
   rmm::device_uvector<cudf::size_type>& populated_keys,
   rmm::cuda_stream_view stream);
 
-template cudf::table create_sparse_results_table<nullable_global_set_t>(
-  cudf::table_view const& flattened_values,
-  cudf::aggregation::Kind const* d_agg_kinds,
-  host_span<cudf::aggregation::Kind const> agg_kinds,
-  bool direct_aggregations,
-  nullable_global_set_t const& global_set,
-  rmm::device_uvector<cudf::size_type>& populated_keys,
-  rmm::cuda_stream_view stream);
 }  // namespace cudf::groupby::detail::hash

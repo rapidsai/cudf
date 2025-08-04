@@ -19,12 +19,12 @@
 
 namespace cudf::groupby::detail::hash {
 template cudf::size_type
-max_occupancy_grid_size<nullable_hash_set_ref_t<cuco::insert_and_find_tag>>(cudf::size_type n);
+max_occupancy_grid_size<simplified_hash_set_ref_t<cuco::insert_and_find_tag>>(cudf::size_type n);
 
-template void compute_mapping_indices<nullable_hash_set_ref_t<cuco::insert_and_find_tag>>(
+template void compute_mapping_indices<simplified_hash_set_ref_t<cuco::insert_and_find_tag>>(
   cudf::size_type grid_size,
   cudf::size_type num,
-  nullable_hash_set_ref_t<cuco::insert_and_find_tag> global_set,
+  simplified_hash_set_ref_t<cuco::insert_and_find_tag> global_set,
   bitmask_type const* row_bitmask,
   bool skip_rows_with_nulls,
   cudf::size_type* local_mapping_index,

@@ -226,6 +226,5 @@ void hash_compound_agg_finalizer<SetType>::visit(cudf::detail::std_aggregation c
   dense_results->add_result(col, agg, std::move(result));
 }
 
-template class hash_compound_agg_finalizer<hash_set_ref_t<cuco::find_tag>>;
-template class hash_compound_agg_finalizer<nullable_hash_set_ref_t<cuco::find_tag>>;
+template class hash_compound_agg_finalizer<simplified_hash_set_ref_t<cuco::find_tag>>;
 }  // namespace cudf::groupby::detail::hash

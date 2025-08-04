@@ -37,6 +37,7 @@
 #include <memory>
 
 namespace cudf::groupby::detail::hash {
+
 template <typename Equal, typename Hash>
 std::unique_ptr<table> compute_groupby(table_view const& keys,
                                        host_span<aggregation_request const> requests,
@@ -54,12 +55,46 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
   // column is indexed by the hash set
   cudf::detail::result_cache sparse_results(requests.size());
 
+  auto const input_index_to_key_index = [&] {
+    auto set = cuco::static_set{
+      cuco::extent<int64_t>{num_keys},
+      cudf::detail::CUCO_DESIRED_LOAD_FACTOR,  // 50% load factor
+      cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
+      d_row_equal,
+      probing_scheme_t{d_row_hash},
+      cuco::thread_scope_device,
+      cuco::storage<GROUPBY_BUCKET_SIZE>{},
+      cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
+      stream.value()};
+
+    rmm::device_uvector<size_type> key_indices(num_keys, stream);
+    auto set_ref = set.ref(cuco::op::insert_and_find);
+    thrust::transform(rmm::exec_policy_nosync(stream),
+                      thrust::make_counting_iterator(0),
+                      thrust::make_counting_iterator(keys.num_rows()),
+                      key_indices.begin(),
+                      [set_ref] __device__(size_type const idx) mutable {
+                        auto const [inserted_idx_ptr, _] = set_ref.insert_and_find(idx);
+                        return *inserted_idx_ptr;
+                      });
+    return key_indices;
+  }();
+
+  // {
+  //   auto h_map = cudf::detail::make_std_vector(input_index_to_key_index, stream);
+  //   printf("\n\n\nmap: \n");
+  //   for (auto& idx : h_map) {
+  //     printf("%d, ", idx);
+  //   }
+  //   printf("\n\n\n");
+  // }
+
   auto set = cuco::static_set{
     cuco::extent<int64_t>{num_keys},
     cudf::detail::CUCO_DESIRED_LOAD_FACTOR,  // 50% load factor
     cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
-    d_row_equal,
-    probing_scheme_t{d_row_hash},
+    key_indices_comparator_t{input_index_to_key_index.begin()},
+    simplified_probing_scheme_t{input_index_to_key_index.begin()},
     cuco::thread_scope_device,
     cuco::storage<GROUPBY_BUCKET_SIZE>{},
     cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
@@ -78,6 +113,15 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
                                          requests,
                                          &sparse_results,
                                          stream);
+
+  // {
+  //   auto h_map = cudf::detail::make_std_vector(gather_map, stream);
+  //   printf("\n\n\ngather_map: \n");
+  //   for (auto& idx : h_map) {
+  //     printf("%d, ", idx);
+  //   }
+  //   printf("\n\n\n");
+  // }
 
   // Compact all results from sparse_results and insert into cache
   sparse_to_dense_results(requests,

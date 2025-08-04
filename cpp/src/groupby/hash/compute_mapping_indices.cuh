@@ -113,7 +113,7 @@ CUDF_KERNEL void mapping_indices_kernel(cudf::size_type num_input_rows,
   auto raw_set = cuco::static_set_ref{
     cuco::empty_key<cudf::size_type>{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
     global_set.key_eq(),
-    probing_scheme_t{global_set.hash_function()},
+    simplified_probing_scheme_t{global_set.hash_function()},
     cuco::thread_scope_block,
     cuco::bucket_storage_ref<cudf::size_type, GROUPBY_BUCKET_SIZE, decltype(valid_extent)>{
       valid_extent, slots}};
