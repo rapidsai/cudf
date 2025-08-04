@@ -19,6 +19,7 @@
 
 #include "compiled/binary_ops.hpp"
 #include "jit/cache.hpp"
+#include "jit/lto_ir.hpp"
 #include "jit/parser.hpp"
 #include "jit/util.hpp"
 
@@ -156,6 +157,40 @@ void binary_operation(mutable_column_view& out,
                                            cudf::type_to_name(lhs.type()),
                                            cudf::type_to_name(rhs.type()),
                                            std::string("cudf::binops::jit::UserDefinedOp"));
+
+#ifdef CUDF_USE_LTO_IR
+  // Try LTO-IR compilation first for better performance
+  std::vector<std::string> operators;
+  
+  // Extract operator information from PTX source  
+  // In a real implementation, this would parse the PTX more systematically
+  if (ptx.find("add") != std::string::npos) operators.push_back("add");
+  if (ptx.find("sub") != std::string::npos) operators.push_back("subtract");
+  if (ptx.find("mul") != std::string::npos) operators.push_back("multiply");
+  if (ptx.find("div") != std::string::npos) operators.push_back("divide");
+  if (ptx.find("eq") != std::string::npos) operators.push_back("equal");
+  if (ptx.find("ne") != std::string::npos) operators.push_back("not_equal");
+  if (ptx.find("lt") != std::string::npos) operators.push_back("less");
+  if (ptx.find("gt") != std::string::npos) operators.push_back("greater");
+  if (ptx.find("le") != std::string::npos) operators.push_back("less_equal");
+  if (ptx.find("ge") != std::string::npos) operators.push_back("greater_equal");
+  if (ptx.find("and") != std::string::npos) operators.push_back("logical_and");
+  if (ptx.find("or") != std::string::npos) operators.push_back("logical_or");
+  
+  auto lto_ir_kernel = cudf::jit::try_compile_with_lto_ir(
+    "binary_op", operators, kernel_name, cuda_source);
+  
+  if (lto_ir_kernel) {
+    lto_ir_kernel->configure_1d_max_occupancy(0, 0, nullptr, stream.value())
+      ->launch(out.size(),
+               cudf::jit::get_data_ptr(out),
+               cudf::jit::get_data_ptr(lhs),
+               cudf::jit::get_data_ptr(rhs));
+    return;
+  }
+  
+  // Fall back to traditional CUDA C++ compilation
+#endif
 
   cudf::jit::get_program_cache(*binaryop_jit_kernel_cu_jit)
     .get_kernel(kernel_name, {}, {{"binaryop/jit/operation-udf.hpp", cuda_source}}, {"-arch=sm_."})

@@ -47,6 +47,9 @@ HELP="$0 [clean] [libcudf] [pylibcudf] [cudf] [cudf_polars] [cudfjar] [dask_cudf
    --cmake-args=\\\"<args>\\\"   - pass arbitrary list of CMake configuration options (escape all quotes in argument)
    -h | --h[elp]                 - print this text
 
+   To enable LTO-IR for JIT compilation (experimental):
+     --cmake-args=\\\"-DCUDF_USE_LTO_IR=ON\\\"
+
    default action (no args) is to build and install 'libcudf', 'pylibcudf', 'cudf', 'cudf_polars', and 'dask_cudf' targets
 "
 LIB_BUILD_DIR=${LIB_BUILD_DIR:=${REPODIR}/cpp/build}

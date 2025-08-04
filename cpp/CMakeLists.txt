@@ -51,6 +51,7 @@ option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(BUILD_BENCHMARKS "Configure CMake to build (google & nvbench) benchmarks" OFF)
 option(BUILD_SHARED_LIBS "Build cuDF shared libraries" ON)
 option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
+option(CUDF_USE_LTO_IR "Enable LTO-IR for JIT compilation to reduce compilation time" OFF)
 option(CUDF_BUILD_TESTUTIL "Whether to build the test utilities contained in libcudf" ON)
 mark_as_advanced(CUDF_BUILD_TESTUTIL)
 option(CUDF_USE_PROPRIETARY_NVCOMP "Download and use NVCOMP with proprietary extensions" ON)
@@ -102,6 +103,7 @@ message(VERBOSE "CUDF: Configure CMake to build tests: ${BUILD_TESTS}")
 message(VERBOSE "CUDF: Configure CMake to build (google & nvbench) benchmarks: ${BUILD_BENCHMARKS}")
 message(VERBOSE "CUDF: Build cuDF shared libraries: ${BUILD_SHARED_LIBS}")
 message(VERBOSE "CUDF: Use a file cache for JIT compiled kernels: ${JITIFY_USE_CACHE}")
+message(VERBOSE "CUDF: Enable LTO-IR for JIT compilation: ${CUDF_USE_LTO_IR}")
 message(VERBOSE "CUDF: Build with per-thread default stream: ${CUDF_USE_PER_THREAD_DEFAULT_STREAM}")
 message(
   VERBOSE
@@ -578,6 +580,8 @@ add_library(
   src/io/utilities/type_inference.cu
   src/io/utilities/trie.cu
   src/jit/cache.cpp
+  src/jit/config.cpp
+  src/jit/lto_ir.cpp
   src/jit/parser.cpp
   src/jit/util.cpp
   src/join/conditional_join.cu
@@ -936,6 +940,17 @@ if(JITIFY_USE_CACHE)
     APPEND
     PROPERTY COMPILE_DEFINITIONS "JITIFY_USE_CACHE" "CUDF_VERSION=${PROJECT_VERSION}"
   )
+endif()
+
+if(CUDF_USE_LTO_IR)
+  # Enable LTO-IR compilation support for JIT kernels
+  set_property(
+    SOURCE src/jit/cache.cpp src/jit/lto_ir.cpp
+    APPEND
+    PROPERTY COMPILE_DEFINITIONS "CUDF_USE_LTO_IR"
+  )
+  # Add LTO-IR generation flags for CUDA compilation
+  string(APPEND CUDF_CUDA_FLAGS " --device-lto")
 endif()
 
 # Per-thread default stream

@@ -15,7 +15,9 @@
  */
 
 #include "jit/cache.hpp"
+#include "jit/config.hpp"
 #include "jit/helpers.hpp"
+#include "jit/lto_ir.hpp"
 #include "jit/parser.hpp"
 #include "jit/span.cuh"
 #include "jit/util.hpp"
@@ -41,6 +43,46 @@ namespace {
 
 jitify2::Kernel get_kernel(std::string const& kernel_name, std::string const& cuda_source)
 {
+#ifdef CUDF_USE_LTO_IR
+  auto& config = cudf::jit::jit_config::instance();
+  
+  // Only attempt LTO-IR if enabled in configuration
+  if (config.is_lto_ir_enabled()) {
+    // Try LTO-IR compilation first for better performance
+    // Parse the CUDA source to extract operator information
+    std::vector<std::string> operators;
+    
+    // Simple heuristic to detect common operators in CUDA source
+    // In a real implementation, this would be more sophisticated
+    if (cuda_source.find("GENERIC_TRANSFORM_OP") != std::string::npos) {
+      if (cuda_source.find("+") != std::string::npos) operators.push_back("add");
+      if (cuda_source.find("-") != std::string::npos) operators.push_back("subtract");
+      if (cuda_source.find("*") != std::string::npos) operators.push_back("multiply");
+      if (cuda_source.find("/") != std::string::npos) operators.push_back("divide");
+      if (cuda_source.find("sin") != std::string::npos) operators.push_back("sin");
+      if (cuda_source.find("cos") != std::string::npos) operators.push_back("cos");
+      if (cuda_source.find("exp") != std::string::npos) operators.push_back("exp");
+      if (cuda_source.find("log") != std::string::npos) operators.push_back("log");
+      if (cuda_source.find("sqrt") != std::string::npos) operators.push_back("sqrt");
+      if (cuda_source.find("abs") != std::string::npos) operators.push_back("abs");
+    }
+    
+    auto lto_ir_kernel = cudf::jit::try_compile_with_lto_ir(
+      "transform", operators, kernel_name, cuda_source);
+    
+    if (lto_ir_kernel) {
+      return *lto_ir_kernel;
+    }
+    
+    // Check if CUDA fallback is allowed
+    if (!config.is_cuda_fallback_allowed()) {
+      CUDF_FAIL("LTO-IR compilation failed and CUDA fallback is disabled");
+    }
+  }
+  
+  // Fall back to traditional CUDA C++ compilation
+#endif
+  
   return cudf::jit::get_program_cache(*transform_jit_kernel_cu_jit)
     .get_kernel(kernel_name,
                 {},

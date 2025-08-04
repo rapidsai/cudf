@@ -700,6 +700,9 @@ ConfigureTest(LABEL_BINS_TEST labeling/label_bins_tests.cpp)
 ConfigureTest(JIT_PARSER_TEST jit/parse_ptx_function.cpp)
 target_include_directories(JIT_PARSER_TEST PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>")
 
+ConfigureTest(LTO_IR_TEST jit/lto_ir_test.cpp)
+target_include_directories(LTO_IR_TEST PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>")
+
 # ##################################################################################################
 # * stream testing ---------------------------------------------------------------------------------
 if(CUDF_BUILD_STREAMS_TEST_UTIL)
