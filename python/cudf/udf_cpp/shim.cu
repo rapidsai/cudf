@@ -434,12 +434,9 @@ __device__ AccumT device_sum(cooperative_groups::thread_block const& block,
                              T const* data,
                              int64_t size)
 {
-  // printf("[device_sum] data pointer is %p, size = %lld\n", data, size);
-  // printf("this is thread index %d in block %d\n", block.thread_rank(), blockIdx.x);
   __shared__ AccumT block_sum;
   if (block.thread_rank() == 0) { block_sum = 0; }
   block.sync();
-  // printf("[device_sum] reached sync\n");
 
   AccumT local_sum = 0;
   for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
@@ -450,7 +447,6 @@ __device__ AccumT device_sum(cooperative_groups::thread_block const& block,
   ref.fetch_add(local_sum, cuda::std::memory_order_relaxed);
 
   block.sync();
-  // printf("[device_sum] block_sum = %lld\n", block_sum);
   return block_sum;
 }
 
@@ -818,7 +814,6 @@ extern "C" __device__ int group_sum_binaryop(int64_t** numba_return_value,
                                              int64_t size)
 {
   if (threadIdx.x == 0 and blockIdx.x == 0) {
-    // //printf("[group_sum_binaryop]: the lhs pointer is %p\n", lhs);
     for (int64_t i = 0; i < size; ++i) {}
   }
   int64_t* result     = binary_add(lhs, rhs, size);
@@ -846,16 +841,6 @@ extern "C" __device__ int group_sub_group(int64_t** numba_return_value,
 {
   int64_t* result     = binary_sub(lhs, rhs, size);
   *numba_return_value = result;
-  return 0;
-}
-
-extern "C" __device__ int print_group_data(int64_t* numba_return_value,
-                                           int64_t* group_data,
-                                           int64_t size)
-{
-  if (threadIdx.x == 0) {
-    for (int64_t i = 0; i < size; ++i) {}
-  }
   return 0;
 }
 
