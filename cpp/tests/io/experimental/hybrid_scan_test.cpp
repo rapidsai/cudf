@@ -33,7 +33,7 @@
 
 #include <rmm/mr/device/aligned_resource_adaptor.hpp>
 
-auto constexpr bloom_filter_alignment = 32;
+auto constexpr bloom_filter_alignment = 256;
 
 namespace {
 
