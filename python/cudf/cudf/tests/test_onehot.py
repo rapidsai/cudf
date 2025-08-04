@@ -42,7 +42,7 @@ def test_onehot_get_dummies_multicol(n_cols):
     n_categories = 5
     data = dict(
         zip(
-            ascii_lowercase,
+            ascii_lowercase[:n_cols],
             (np.arange(n_categories) for _ in range(n_cols)),
             strict=True,
         )
