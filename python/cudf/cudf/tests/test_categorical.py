@@ -37,6 +37,7 @@ def pd_str_cat():
 def test_categorical_basic():
     cat = pd.Categorical(["a", "a", "b", "c", "a"], categories=["a", "b", "c"])
     cudf_cat = cudf.Index(cat)
+    assert_eq(cat.codes, cudf_cat.codes.to_numpy())
 
     pdsr = pd.Series(cat, index=["p", "q", "r", "s", "t"])
     sr = cudf.Series(cat, index=["p", "q", "r", "s", "t"])
@@ -50,18 +51,7 @@ def test_categorical_basic():
         pdsr.cat.codes.values, sr.cat.codes.to_numpy()
     )
 
-    string = str(sr)
-    expect_str = """
-p a
-q a
-r b
-s c
-t a
-"""
-    assert all(
-        x == y for x, y in zip(string.split(), expect_str.split(), strict=True)
-    )
-    assert_eq(cat.codes, cudf_cat.codes.to_numpy())
+    assert str(sr) == str(pdsr)
 
 
 def test_categorical_integer():
