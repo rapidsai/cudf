@@ -16,7 +16,8 @@ from cudf.testing._utils import gen_rand_series
 
 
 def _kernel_multiply(a, b, out):
-    for i, (x, y) in enumerate(zip(a, b, strict=True)):
+    # numba doesn't support zip(..., strict=True), so we must tell ruff to ignore it.
+    for i, (x, y) in enumerate(zip(a, b)):  # noqa: B905
         out[i] = x * y
 
 
@@ -70,7 +71,7 @@ def test_dataframe_apply_rows(dtype, has_nulls, pessimistic):
 @pytest.mark.parametrize("nelem", [1, 2, 64, 128, 129])
 def test_df_apply_rows(nelem):
     def kernel(in1, in2, in3, out1, out2, extra1, extra2):
-        for i, (x, y, z) in enumerate(zip(in1, in2, in3, strict=True)):
+        for i, (x, y, z) in enumerate(zip(in1, in2, in3)):  # noqa: B905
             out1[i] = extra2 * x - extra1 * y
             out2[i] = y - extra1 * z
 
@@ -104,7 +105,7 @@ def test_df_apply_rows(nelem):
 @pytest.mark.parametrize("chunksize", [1, 2, 3, 4, 23])
 def test_df_apply_chunks(nelem, chunksize):
     def kernel(in1, in2, in3, out1, out2, extra1, extra2):
-        for i, (x, y, z) in enumerate(zip(in1, in2, in3, strict=True)):
+        for i, (x, y, z) in enumerate(zip(in1, in2, in3)):  # noqa: B905
             out1[i] = extra2 * x - extra1 * y + z
             out2[i] = i
 
@@ -137,7 +138,7 @@ def test_df_apply_chunks(nelem, chunksize):
 @pytest.mark.parametrize("nelem", [1, 15, 30, 64, 128, 129])
 def test_df_apply_custom_chunks(nelem):
     def kernel(in1, in2, in3, out1, out2, extra1, extra2):
-        for i, (x, y, z) in enumerate(zip(in1, in2, in3, strict=True)):
+        for i, (x, y, z) in enumerate(zip(in1, in2, in3)):  # noqa: B905
             out1[i] = extra2 * x - extra1 * y + z
             out2[i] = i
 
@@ -226,7 +227,7 @@ def test_df_apply_custom_chunks_blkct_tpb(nelem, blkct, tpb):
 @pytest.mark.parametrize("nelem", [1, 2, 64, 128, 1000, 5000])
 def test_df_apply_rows_incols_mapping(nelem):
     def kernel(x, y, z, out1, out2, extra1, extra2):
-        for i, (a, b, c) in enumerate(zip(x, y, z, strict=True)):
+        for i, (a, b, c) in enumerate(zip(x, y, z)):  # noqa: B905
             out1[i] = extra2 * a - extra1 * b
             out2[i] = b - extra1 * c
 
@@ -257,7 +258,7 @@ def test_df_apply_rows_incols_mapping(nelem):
 @pytest.mark.parametrize("chunksize", [1, 2, 3, 4, 23])
 def test_df_apply_chunks_incols_mapping(nelem, chunksize):
     def kernel(q, p, r, out1, out2, extra1, extra2):
-        for i, (a, b, c) in enumerate(zip(q, p, r, strict=True)):
+        for i, (a, b, c) in enumerate(zip(q, p, r)):  # noqa: B905
             out1[i] = extra2 * a - extra1 * b + c
             out2[i] = i
 
