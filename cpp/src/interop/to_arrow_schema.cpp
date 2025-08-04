@@ -85,31 +85,34 @@ int decimals_to_arrow(column_view input, int32_t precision, ArrowSchema* out)
 
 template <>
 int dispatch_to_arrow_type::operator()<numeric::decimal32>(column_view input,
-                                                           column_metadata const&,
+                                                           column_metadata const& metadata,
                                                            ArrowSchema* out)
 {
-  using DeviceType = int32_t;
-  return decimals_to_arrow<DeviceType>(input, cudf::detail::max_precision<DeviceType>(), out);
+  using DeviceType  = int32_t;
+  int32_t precision = metadata.precision.value_or(cudf::detail::max_precision<DeviceType>());
+  return decimals_to_arrow<DeviceType>(input, precision, out);
 }
 
 template <>
 int dispatch_to_arrow_type::operator()<numeric::decimal64>(column_view input,
-                                                           column_metadata const&,
+                                                           column_metadata const& metadata,
                                                            ArrowSchema* out)
 {
   using DeviceType = int64_t;
   // Arrow decimal 64 maxes at precision of 18, cudf::detail::max_precision<int64_t>() produces 19.
   // decimal32 has precision 1 - 9, decimal64 has precision 10 - 18, decimal128 is 19 - 38
-  return decimals_to_arrow<DeviceType>(input, cudf::detail::max_precision<DeviceType>() - 1, out);
+  int32_t precision = metadata.precision.value_or(cudf::detail::max_precision<DeviceType>() - 1);
+  return decimals_to_arrow<DeviceType>(input, precision, out);
 }
 
 template <>
 int dispatch_to_arrow_type::operator()<numeric::decimal128>(column_view input,
-                                                            column_metadata const&,
+                                                            column_metadata const& metadata,
                                                             ArrowSchema* out)
 {
-  using DeviceType = __int128_t;
-  return decimals_to_arrow<DeviceType>(input, cudf::detail::max_precision<DeviceType>(), out);
+  using DeviceType  = __int128_t;
+  int32_t precision = metadata.precision.value_or(cudf::detail::max_precision<DeviceType>());
+  return decimals_to_arrow<DeviceType>(input, precision, out);
 }
 
 template <>
