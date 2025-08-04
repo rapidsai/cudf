@@ -36,35 +36,12 @@ namespace detail {
  * @param stream CUDA stream used for device memory operations
  * @param mr Device memory resource to use for all device memory allocations
  */
-std::unique_ptr<column> string_column_from_arrow_host(ArrowSchemaView* schema,
+std::unique_ptr<column> string_column_from_arrow_host(ArrowSchemaView const* schema,
                                                       ArrowArray const* input,
                                                       std::unique_ptr<rmm::device_buffer>&& mask,
                                                       size_type null_count,
                                                       rmm::cuda_stream_view stream,
                                                       rmm::device_async_resource_ref mr);
-
-/**
- * @brief Convert ArrowArray to cudf column utility
- *
- * This function is simply a convenience wrapper around the dispatch functor with
- * some extra handling to avoid having to reproduce it for all of the nested types.
- * It also allows us to centralize the location where the recursive calls happen
- * so that we only need to forward declare this one function, rather than multiple
- * functions which handle the overloads for nested types (list, struct, etc.)
- *
- * @param schema Arrow schema includes the column type
- * @param input Column data, nulls, offset
- * @param type The cudf column type to map input to
- * @param skip_mask True if the mask is handled by the caller
- * @param stream CUDA stream used for device memory operations
- * @param mr Device memory resource to use for all device memory allocations
- */
-std::unique_ptr<column> get_column_copy(ArrowSchemaView* schema,
-                                        ArrowArray const* input,
-                                        data_type type,
-                                        bool skip_mask,
-                                        rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr);
 
 /**
  * @brief Create offsets column for list or strings column
@@ -77,7 +54,7 @@ std::unique_ptr<column> get_column_copy(ArrowSchemaView* schema,
  * @return Column plus offset and size bounds for copying data column
  */
 std::tuple<std::unique_ptr<column>, int64_t, int64_t> get_offsets_column(
-  ArrowSchemaView* schema,
+  ArrowSchemaView const* schema,
   ArrowArray const* input,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);

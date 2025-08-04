@@ -47,12 +47,11 @@
 
 namespace cudf {
 namespace detail {
-
 namespace {
 
 constexpr int chars_buffer_idx = 2;
 
-std::unique_ptr<column> from_arrow_string(ArrowSchemaView* schema,
+std::unique_ptr<column> from_arrow_string(ArrowSchemaView const* schema,
                                           ArrowArray const* input,
                                           std::unique_ptr<rmm::device_buffer>&& mask,
                                           size_type null_count,
@@ -75,7 +74,7 @@ std::unique_ptr<column> from_arrow_string(ArrowSchemaView* schema,
 
 constexpr int stringview_vector_idx = 1;
 
-std::unique_ptr<column> from_arrow_stringview(ArrowSchemaView* schema,
+std::unique_ptr<column> from_arrow_stringview(ArrowSchemaView const* schema,
                                               ArrowArray const* input,
                                               std::unique_ptr<rmm::device_buffer>&& mask,
                                               rmm::cuda_stream_view stream,
@@ -132,7 +131,7 @@ std::unique_ptr<column> from_arrow_stringview(ArrowSchemaView* schema,
 
 }  // namespace
 
-std::unique_ptr<column> string_column_from_arrow_host(ArrowSchemaView* schema,
+std::unique_ptr<column> string_column_from_arrow_host(ArrowSchemaView const* schema,
                                                       ArrowArray const* input,
                                                       std::unique_ptr<rmm::device_buffer>&& mask,
                                                       size_type null_count,
