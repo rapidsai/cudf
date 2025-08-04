@@ -1994,11 +1994,14 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         # Reassign the categories for any categorical index cols
         if not isinstance(out.index, cudf.RangeIndex):
-            _reassign_categories(
-                categories,
-                out.index._data,
-                indices[:first_data_column_position],
-            )
+            # If the index column was constructed and not generated via concatenation,
+            # then reassigning categories is neither needed nor a valid operation.
+            if first_data_column_position > 0:
+                _reassign_categories(
+                    categories,
+                    out.index._data,
+                    indices[:first_data_column_position],
+                )
             if not isinstance(out.index, MultiIndex) and isinstance(
                 out.index.dtype, CategoricalDtype
             ):
@@ -8860,11 +8863,11 @@ def _index_from_listlike_of_series(
 # Create a dictionary of the common, non-null columns
 def _get_non_null_cols_and_dtypes(col_idxs, list_of_columns):
     # A mapping of {idx: np.dtype}
-    dtypes = dict()
+    dtypes = {}
     # A mapping of {idx: [...columns]}, where `[...columns]`
     # is a list of columns with at least one valid value for each
     # column name across all input frames
-    non_null_columns = dict()
+    non_null_columns = {}
     for idx in col_idxs:
         for cols in list_of_columns:
             # Skip columns not in this frame
@@ -8889,8 +8892,10 @@ def _find_common_dtypes_and_categories(
 ) -> dict[Any, ColumnBase]:
     # A mapping of {idx: categories}, where `categories` is a
     # column of all the unique categorical values from each
-    # categorical column across all input frames
-    categories = dict()
+    # categorical column across all input frames. This function
+    # also modifies the input dtypes dictionary in place to capture
+    # the common dtype across columns being concatenated.
+    categories = {}
     for idx, cols in non_null_columns.items():
         # default to the first non-null dtype
         dtypes[idx] = cols[0].dtype
