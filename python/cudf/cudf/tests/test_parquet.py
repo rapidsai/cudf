@@ -4527,24 +4527,31 @@ def test_parquet_bloom_filters(
 def memory_resource(request):
     import rmm
 
+    current_mr = rmm.mr.get_current_device_resource()
+
     kind = request.param
     if kind == "cuda":
-        return rmm.mr.CudaMemoryResource()
+        mr = rmm.mr.CudaMemoryResource()
     elif kind == "pool":
         base = rmm.mr.CudaMemoryResource()
         free, _ = rmm.mr.available_device_memory()
         size = int(round(free * 0.5 / 256) * 256)
-        return rmm.mr.PoolMemoryResource(base, size, size)
+        mr = rmm.mr.PoolMemoryResource(base, size, size)
     elif kind == "cuda_async":
-        return rmm.mr.CudaAsyncMemoryResource()
+        mr = rmm.mr.CudaAsyncMemoryResource()
     else:
-        raise ValueError(f"Invalid memory resource type: {kind}")
+        raise ValueError(f"Invalid memory resource type requested: {kind}")
+
+    rmm.mr.set_current_device_resource(mr)
+
+    try:
+        yield mr
+    finally:
+        rmm.mr.set_current_device_resource(current_mr)
 
 
 @pytest.mark.parametrize("columns", [["r_reason_desc"], None])
 def test_parquet_bloom_filters_alignment(datadir, columns, memory_resource):
-    import rmm
-
     fname = datadir / "bloom_filter_alignment.parquet"
     filters = [("r_reason_desc", "==", "reason 31")]
 
@@ -4554,7 +4561,6 @@ def test_parquet_bloom_filters_alignment(datadir, columns, memory_resource):
     ).to_pandas()
 
     # Read with cudf using the memory resource from fixture
-    rmm.mr.set_current_device_resource(memory_resource)
     read = cudf.read_parquet(
         fname, columns=columns, filters=filters
     ).to_pandas()
