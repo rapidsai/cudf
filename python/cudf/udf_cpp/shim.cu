@@ -762,13 +762,6 @@ make_definition_corr(BlockCorr, int64, int64_t);
 #undef make_definition_corr
 }
 
-/*
-A block level data structure that represents the slice of a column
-that corresponds to a groupby group. This class is aware of only two
-things: the pointer to start of the data (an offset within a larger
-column) and the size of the group itself
-*/
-
 __device__ int64_t* block_alloc(size_t size)
 {
   __shared__ int64_t* ptr;
@@ -795,19 +788,6 @@ __device__ int64_t* binary_add(int64_t* lhs, int64_t* rhs, int64_t size)
   return ptr;
 }
 
-__device__ int64_t* binary_sub(int64_t* lhs, int64_t* rhs, int64_t size)
-{
-  auto ptr = block_alloc(size * sizeof(int64_t));
-  __syncthreads();  // may help clarify if block_alloc uses shared memory
-
-  for (int i = threadIdx.x; i < size; i += blockDim.x) {
-    ptr[i] = lhs[i] - rhs[i];
-  }
-
-  __syncthreads();
-  return ptr;
-}
-
 extern "C" __device__ int group_sum_binaryop(int64_t** numba_return_value,
                                              int64_t* lhs,
                                              int64_t* rhs,
@@ -817,29 +797,6 @@ extern "C" __device__ int group_sum_binaryop(int64_t** numba_return_value,
     for (int64_t i = 0; i < size; ++i) {}
   }
   int64_t* result     = binary_add(lhs, rhs, size);
-  *numba_return_value = result;
-  return 0;
-}
-
-extern "C" __device__ int group_sub_scalar(int64_t** numba_return_value,
-                                           int64_t* group_data,
-                                           int64_t scalar,
-                                           int64_t size)
-{
-  auto ptr = block_alloc(size * sizeof(int64_t));
-  for (int i = threadIdx.x; i < size; i += blockDim.x) {
-    ptr[i] = group_data[i] - scalar;
-  }
-  *numba_return_value = ptr;
-  return 0;
-}
-
-extern "C" __device__ int group_sub_group(int64_t** numba_return_value,
-                                          int64_t* lhs,
-                                          int64_t* rhs,
-                                          int64_t size)
-{
-  int64_t* result     = binary_sub(lhs, rhs, size);
   *numba_return_value = result;
   return 0;
 }
