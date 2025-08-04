@@ -368,12 +368,12 @@ std::unique_ptr<scalar> bitwise_reduction(bitwise_op bit_op,
                                           rmm::device_async_resource_ref mr);
 
 /**
- * @brief Computes quantile value for the of elements in the input column
+ * @brief Computes quantile value of the elements in the input column
  *
  * @throw std::invalid_argument if the input column type is not an arithmetic type
  *
  * @param col Input column to compute quantile
- * @param qvalue Quantile value
+ * @param quantile_value Quantile value
  * @param interpolation Interpolation method
  * @param output_type Data type of return type
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -381,7 +381,7 @@ std::unique_ptr<scalar> bitwise_reduction(bitwise_op bit_op,
  * @return Quantile as scalar of type `output_type`
  */
 std::unique_ptr<cudf::scalar> quantile(column_view const& col,
-                                       double qvalue,
+                                       double quantile_value,
                                        cudf::interpolation interpolation,
                                        cudf::data_type const output_type,
                                        rmm::cuda_stream_view stream,

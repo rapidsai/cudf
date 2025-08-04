@@ -29,7 +29,7 @@ namespace reduction {
 namespace detail {
 
 std::unique_ptr<cudf::scalar> quantile(column_view const& col,
-                                       double qvalue,
+                                       double quantile_value,
                                        cudf::interpolation interpolation,
                                        cudf::data_type const output_type,
                                        rmm::cuda_stream_view stream,
@@ -42,7 +42,7 @@ std::unique_ptr<cudf::scalar> quantile(column_view const& col,
     cudf::detail::split(*sorted_indices, {col.size() - col.null_count()}, stream)[0];
   auto exact   = output_type.id() == cudf::type_id::FLOAT64;
   auto col_ptr = cudf::detail::quantile(
-    col, {qvalue}, interpolation, valid_sorted_indices, exact, stream, current_mr);
+    col, {quantile_value}, interpolation, valid_sorted_indices, exact, stream, current_mr);
   auto result = cudf::detail::get_element(*col_ptr, 0, stream, mr);
   if (result->type().id() == output_type.id()) { return result; }
   return cudf::type_dispatcher(output_type,

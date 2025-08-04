@@ -71,17 +71,6 @@ def df(dtype, with_nulls, is_sorted):
 def test_agg(df, agg):
     expr = getattr(pl.col("a"), agg)()
     q = df.select(expr)
-
-    # https://github.com/rapidsai/cudf/issues/15852
-    # check_dtypes = agg not in {"median"}
-    # if (
-    #     not check_dtypes
-    #     and q.collect_schema()["a"] != pl.Float64
-    #     and DEFAULT_BLOCKSIZE_MODE == "default"
-    # ):
-    #     with pytest.raises(AssertionError):
-    #         assert_gpu_result_equal(q)
-    # assert_gpu_result_equal(q, check_dtypes=check_dtypes, check_exact=False)
     assert_gpu_result_equal(q, check_exact=False)
 
 
@@ -109,13 +98,6 @@ def test_cum_agg_reverse_unsupported(cum_agg):
 def test_quantile(df, q, interp):
     expr = pl.col("a").quantile(q, interp)
     q = df.select(expr)
-
-    # https://github.com/rapidsai/cudf/issues/15852
-    # check_dtypes = q.collect_schema()["a"] == pl.Float64
-    # if not check_dtypes:
-    #     with pytest.raises(AssertionError):
-    #         assert_gpu_result_equal(q)
-    # assert_gpu_result_equal(q, check_dtypes=check_dtypes, check_exact=False)
     assert_gpu_result_equal(q, check_exact=False)
 
 
