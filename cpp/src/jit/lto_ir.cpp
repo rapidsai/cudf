@@ -107,39 +107,42 @@ bool lto_ir_cache::is_lto_ir_available(std::string const& operation_type,
 
 void initialize_builtin_lto_ir_operators()
 {
+#ifdef CUDF_USE_LTO_IR
+  // This function will be implemented in the auto-generated lto_ir_data.cpp file
+  // when LTO-IR operators are actually generated at build time.
+  // For now, register empty placeholder operators to test the infrastructure.
+  
   auto& cache = lto_ir_cache::instance();
   
-  // Register common binary operators
-  // Note: In a real implementation, these would be actual pre-compiled LTO-IR data
-  // generated during build time from the existing CUDA kernels
+  // Register placeholder operators (empty data for now)
+  std::vector<std::string> empty_data;
   
   // Binary arithmetic operators
-  cache.register_operator("binary_op::add", {/* LTO-IR data for add */});
-  cache.register_operator("binary_op::subtract", {/* LTO-IR data for subtract */});
-  cache.register_operator("binary_op::multiply", {/* LTO-IR data for multiply */});
-  cache.register_operator("binary_op::divide", {/* LTO-IR data for divide */});
+  cache.register_operator("binary_op::add", empty_data);
+  cache.register_operator("binary_op::subtract", empty_data);
+  cache.register_operator("binary_op::multiply", empty_data);
+  cache.register_operator("binary_op::divide", empty_data);
   
   // Binary comparison operators
-  cache.register_operator("binary_op::equal", {/* LTO-IR data for equal */});
-  cache.register_operator("binary_op::not_equal", {/* LTO-IR data for not_equal */});
-  cache.register_operator("binary_op::less", {/* LTO-IR data for less */});
-  cache.register_operator("binary_op::greater", {/* LTO-IR data for greater */});
-  cache.register_operator("binary_op::less_equal", {/* LTO-IR data for less_equal */});
-  cache.register_operator("binary_op::greater_equal", {/* LTO-IR data for greater_equal */});
+  cache.register_operator("binary_op::equal", empty_data);
+  cache.register_operator("binary_op::not_equal", empty_data);
+  cache.register_operator("binary_op::less", empty_data);
+  cache.register_operator("binary_op::greater", empty_data);
+  cache.register_operator("binary_op::less_equal", empty_data);
+  cache.register_operator("binary_op::greater_equal", empty_data);
   
   // Binary logical operators
-  cache.register_operator("binary_op::logical_and", {/* LTO-IR data for logical_and */});
-  cache.register_operator("binary_op::logical_or", {/* LTO-IR data for logical_or */});
+  cache.register_operator("binary_op::logical_and", empty_data);
+  cache.register_operator("binary_op::logical_or", empty_data);
   
   // Transform operators (common mathematical functions)
-  cache.register_operator("transform::sin", {/* LTO-IR data for sin */});
-  cache.register_operator("transform::cos", {/* LTO-IR data for cos */});
-  cache.register_operator("transform::exp", {/* LTO-IR data for exp */});
-  cache.register_operator("transform::log", {/* LTO-IR data for log */});
-  cache.register_operator("transform::sqrt", {/* LTO-IR data for sqrt */});
-  cache.register_operator("transform::abs", {/* LTO-IR data for abs */});
-  
-  // TODO: Add more operators as they are pre-compiled
+  cache.register_operator("transform::sin", empty_data);
+  cache.register_operator("transform::cos", empty_data);
+  cache.register_operator("transform::exp", empty_data);
+  cache.register_operator("transform::log", empty_data);
+  cache.register_operator("transform::sqrt", empty_data);
+  cache.register_operator("transform::abs", empty_data);
+#endif
 }
 
 std::unique_ptr<jitify2::Kernel> try_compile_with_lto_ir(

@@ -22,6 +22,11 @@ include(${rapids-cmake-dir}/cuda/set_runtime.cmake)
 include(rapids-export)
 include(rapids-find)
 
+# Include LTO-IR functions if enabled
+if(CUDF_USE_LTO_IR)
+  include(cmake/LtoIr.cmake)
+endif()
+
 rapids_cuda_init_architectures(CUDF)
 
 project(
@@ -874,6 +879,11 @@ set_target_properties(
              LINK_FLAGS "-Wl,--exclude-libs,libzstd.a"
 )
 
+# Generate LTO-IR for built-in operators if enabled
+if(CUDF_USE_LTO_IR)
+  generate_builtin_lto_ir_operators(cudf)
+endif()
+
 # Export the compiler flags and definitions so the downstream applications can optionally retrieve
 # and use them.
 set_target_properties(
@@ -945,7 +955,7 @@ endif()
 if(CUDF_USE_LTO_IR)
   # Enable LTO-IR compilation support for JIT kernels
   set_property(
-    SOURCE src/jit/cache.cpp src/jit/lto_ir.cpp
+    SOURCE src/jit/cache.cpp src/jit/lto_ir.cpp src/jit/config.cpp
     APPEND
     PROPERTY COMPILE_DEFINITIONS "CUDF_USE_LTO_IR"
   )
