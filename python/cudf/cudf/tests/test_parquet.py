@@ -4539,8 +4539,6 @@ def memory_resource(request):
         mr = rmm.mr.PoolMemoryResource(base, size, size)
     elif kind == "cuda_async":
         mr = rmm.mr.CudaAsyncMemoryResource()
-    else:
-        raise ValueError(f"Invalid memory resource type requested: {kind}")
 
     rmm.mr.set_current_device_resource(mr)
 
