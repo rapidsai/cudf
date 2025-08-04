@@ -2021,6 +2021,16 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     "Only a column name can be used for the "
                     "key in a dtype mappings argument."
                 )
+            if cudf.get_option("mode.pandas_compatible"):
+                for d in dtype.values():  # type: ignore[union-attr]
+                    if inspect.isclass(d) and issubclass(
+                        d, pd.api.extensions.ExtensionDtype
+                    ):
+                        msg = (
+                            f"Expected an instance of {d.__name__}, "
+                            "but got the class instead. Try instantiating 'dtype'."
+                        )
+                        raise TypeError(msg)
             dtype = {
                 col_name: cudf.dtype(dtype)
                 for col_name, dtype in dtype.items()  # type: ignore[union-attr]
@@ -7412,6 +7422,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
              weight  kg    3.0
         dtype: float64
         """
+
         if future_stack:
             if dropna is not no_default:
                 raise ValueError(

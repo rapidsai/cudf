@@ -64,7 +64,7 @@ template void perform_contains(table_view const& haystack,
                                bool needles_has_nulls,
                                null_equality compare_nulls,
                                nan_equal_comparator_adapter_nested const& d_equal,
-                               cuco::linear_probing<1, hasher_adapter_t> const& probing_scheme,
+                               cuco::linear_probing<4, hasher_adapter_t> const& probing_scheme,
                                rmm::device_uvector<bool>& contained,
                                rmm::cuda_stream_view stream);
 
@@ -87,7 +87,7 @@ template void perform_contains(table_view const& haystack,
                                bool needles_has_nulls,
                                null_equality compare_nulls,
                                nan_unequal_comparator_adapter_nested const& d_equal,
-                               cuco::linear_probing<1, hasher_adapter_t> const& probing_scheme,
+                               cuco::linear_probing<4, hasher_adapter_t> const& probing_scheme,
                                rmm::device_uvector<bool>& contained,
                                rmm::cuda_stream_view stream);
 

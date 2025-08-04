@@ -687,8 +687,8 @@ add_library(
   src/search/contains_scalar.cu
   src/search/contains_table.cu
   src/search/contains_table_impl.cu
-  src/search/contains_table_impl_primitive.cu
   src/search/contains_table_impl_nested.cu
+  src/search/contains_table_impl_primitive.cu
   src/search/search_ordered.cu
   src/sort/is_sorted.cu
   src/sort/rank.cu
@@ -798,10 +798,6 @@ add_library(
   src/text/stemmer.cu
   src/text/bpe/byte_pair_encoding.cu
   src/text/bpe/load_merge_pairs.cu
-  src/text/subword/data_normalizer.cu
-  src/text/subword/load_hash_file.cu
-  src/text/subword/subword_tokenize.cu
-  src/text/subword/wordpiece_tokenizer.cu
   src/text/tokenize.cu
   src/text/vocabulary_tokenize.cu
   src/text/wordpiece_tokenize.cu
