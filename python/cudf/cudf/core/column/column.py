@@ -3147,22 +3147,22 @@ def as_column(
                 arbitrary = pd.Series(arbitrary)
             return as_column(arbitrary, dtype=dtype, nan_as_null=nan_as_null)
         elif arbitrary.dtype.kind in "SU":
-            column = ColumnBase.from_arrow(pa.array(arbitrary))
+            result_column = ColumnBase.from_arrow(pa.array(arbitrary))
             if dtype is not None:
-                column = column.astype(dtype)
-            return column
+                result_column = result_column.astype(dtype)
+            return result_column
         elif arbitrary.dtype.kind in "biuf":
             if not arbitrary.dtype.isnative:
                 # Not supported by pylibcudf
                 arbitrary = arbitrary.astype(arbitrary.dtype.newbyteorder("="))
-            column = ColumnBase.from_pylibcudf(
+            result_column = ColumnBase.from_pylibcudf(
                 plc.Column.from_array_interface(arbitrary)
             )
             if nan_as_null is not False:
-                column = column.nans_to_nulls()
+                result_column = result_column.nans_to_nulls()
             if dtype is not None:
-                column = column.astype(dtype)
-            return column
+                result_column = result_column.astype(dtype)
+            return result_column
         elif arbitrary.dtype.kind in "mM":
             time_unit = np.datetime_data(arbitrary.dtype)[0]
             if time_unit in ("D", "W", "M", "Y"):
@@ -3193,10 +3193,10 @@ def as_column(
                 plc_column = plc_column.with_mask(
                     *plc.transform.bools_to_mask(mask)
                 )
-            column = ColumnBase.from_pylibcudf(plc_column)
+            result_column = ColumnBase.from_pylibcudf(plc_column)
             if dtype is not None:
-                column = column.astype(dtype)
-            return column
+                result_column = result_column.astype(dtype)
+            return result_column
         else:
             raise NotImplementedError(f"{arbitrary.dtype} not supported")
     elif (view := as_memoryview(arbitrary)) is not None:
