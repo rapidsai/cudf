@@ -354,6 +354,9 @@ def test_json_lines_basic(json_input, engine):
     can_warn = isinstance(json_input, str) and not json_input.endswith(".json")
     with expect_warning_if(can_warn):
         cu_df = cudf.read_json(json_input, engine=engine, lines=True)
+    # io types must seek to the beginning before you can read again
+    if hasattr(json_input, "seek"):
+        json_input.seek(0)
     with expect_warning_if(can_warn):
         pd_df = pd.read_json(json_input, lines=True)
 
