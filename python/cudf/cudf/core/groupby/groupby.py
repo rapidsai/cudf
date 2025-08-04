@@ -1577,7 +1577,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 rs = cp.random.get_random_state()
                 rs.seed(seed=random_state)
                 for off, size in zip(
-                    group_offsets, size_per_group, strict=True
+                    group_offsets[:-1], size_per_group, strict=True
                 ):
                     rs.shuffle(indices[off : off + size])
             else:
