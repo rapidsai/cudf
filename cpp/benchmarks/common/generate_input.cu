@@ -549,7 +549,7 @@ struct create_rand_col_fn {
                                            thrust::minstd_rand& engine,
                                            cudf::size_type num_rows)
   {
-    if (profile.get_cardinality() == 0 || profile.get_cardinality() >= num_rows) {
+    if (profile.get_cardinality() >= num_rows) {
       return create_distinct_rows_column<T>(profile, engine, num_rows);
     }
     return create_random_column<T>(profile, engine, num_rows);
@@ -1063,12 +1063,10 @@ std::unique_ptr<cudf::column> create_string_column(cudf::size_type num_rows,
   auto const num_matches = (static_cast<int64_t>(num_rows) * hit_rate) / 100;
 
   // Create a randomized gather-map to build a column out of the strings in data.
-  data_profile gather_profile =
-    data_profile_builder().cardinality(0).null_probability(0.0).distribution(
-      cudf::type_id::INT32, distribution_id::UNIFORM, 1, data_view.size() - 1);
+  data_profile gather_profile = data_profile_builder().cardinality(0).no_validity().distribution(
+    cudf::type_id::INT32, distribution_id::UNIFORM, 1, data_view.size() - 1);
   auto gather_table =
     create_random_table({cudf::type_id::INT32}, row_count{num_rows}, gather_profile);
-  gather_table->get_column(0).set_null_mask(rmm::device_buffer{}, 0);
 
   // Create scatter map by placing 0-index values throughout the gather-map
   auto scatter_data = cudf::sequence(num_matches,

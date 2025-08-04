@@ -69,12 +69,10 @@ def dtype(arbitrary: Any) -> DtypeObj:
         pass
     else:
         if np_dtype.kind == "O":
-            if cudf.get_option("mode.pandas_compatible"):
-                raise ValueError(
-                    "cudf does not support object dtype. Use 'str' instead."
-                )
             return CUDF_STRING_DTYPE
         elif np_dtype.kind == "U":
+            if cudf.get_option("mode.pandas_compatible"):
+                return np_dtype
             return CUDF_STRING_DTYPE
         elif np_dtype not in SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES:
             raise TypeError(f"Unsupported type {np_dtype}")
@@ -982,6 +980,13 @@ class IntervalDtype(StructDtype):
             dtypes = {}
         else:
             self._subtype = cudf.dtype(subtype)
+            if isinstance(
+                self._subtype, cudf.CategoricalDtype
+            ) or cudf.utils.dtypes.is_dtype_obj_string(self._subtype):
+                raise TypeError(
+                    "category, object, and string subtypes are not supported "
+                    "for IntervalDtype"
+                )
             dtypes = {"left": self._subtype, "right": self._subtype}
         super().__init__(dtypes)
 

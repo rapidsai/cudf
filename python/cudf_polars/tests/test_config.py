@@ -134,14 +134,16 @@ def test_parquet_options(executor: str) -> None:
         )
     )
     assert config.parquet_options.chunked is True
+    assert config.parquet_options.n_output_chunks == 1
 
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(
             executor=executor,
-            parquet_options={"chunked": False},
+            parquet_options={"chunked": False, "n_output_chunks": 16},
         )
     )
     assert config.parquet_options.chunked is False
+    assert config.parquet_options.n_output_chunks == 16
 
 
 def test_validate_streaming_executor_shuffle_method(rapidsmpf_available) -> None:
@@ -299,6 +301,7 @@ def test_executor_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_parquet_options_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     with monkeypatch.context() as m:
         m.setenv("CUDF_POLARS__PARQUET_OPTIONS__CHUNKED", "0")
+        m.setenv("CUDF_POLARS__PARQUET_OPTIONS__N_OUTPUT_CHUNKS", "2")
         m.setenv("CUDF_POLARS__PARQUET_OPTIONS__CHUNK_READ_LIMIT", "100")
         m.setenv("CUDF_POLARS__PARQUET_OPTIONS__PASS_READ_LIMIT", "200")
         m.setenv("CUDF_POLARS__PARQUET_OPTIONS__MAX_FOOTER_SAMPLES", "0")
@@ -308,6 +311,7 @@ def test_parquet_options_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         engine = pl.GPUEngine()
         config = ConfigOptions.from_polars_engine(engine)
         assert config.parquet_options.chunked is False
+        assert config.parquet_options.n_output_chunks == 2
         assert config.parquet_options.chunk_read_limit == 100
         assert config.parquet_options.pass_read_limit == 200
         assert config.parquet_options.max_footer_samples == 0
@@ -401,6 +405,7 @@ def test_cardinality_factor_compat() -> None:
     "option",
     [
         "chunked",
+        "n_output_chunks",
         "chunk_read_limit",
         "pass_read_limit",
         "max_footer_samples",

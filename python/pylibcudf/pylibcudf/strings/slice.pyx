@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -13,6 +13,9 @@ from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.scalar cimport Scalar
 
 from cython.operator import dereference
+from rmm.pylibrmm.stream cimport Stream
+
+from ..utils cimport _get_stream
 
 __all__ = ["slice_strings"]
 
@@ -20,7 +23,8 @@ cpdef Column slice_strings(
     Column input,
     ColumnOrScalar start=None,
     ColumnOrScalar stop=None,
-    Scalar step=None
+    Scalar step=None,
+    Stream stream=None
 ):
     """Perform a slice operation on a strings column.
 
@@ -41,6 +45,8 @@ cpdef Column slice_strings(
         The end character position or positions
     step : Scalar
         Distance between input characters retrieved
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -51,6 +57,7 @@ cpdef Column slice_strings(
     cdef numeric_scalar[size_type]* cpp_start
     cdef numeric_scalar[size_type]* cpp_stop
     cdef numeric_scalar[size_type]* cpp_step
+    stream = _get_stream(stream)
 
     if input is None:
         raise ValueError("input cannot be None")
@@ -68,7 +75,8 @@ cpdef Column slice_strings(
             c_result = cpp_slice.slice_strings(
                 input.view(),
                 start.view(),
-                stop.view()
+                stop.view(),
+                stream.view()
             )
 
     elif ColumnOrScalar is Scalar:
@@ -94,9 +102,10 @@ cpdef Column slice_strings(
                 input.view(),
                 dereference(cpp_start),
                 dereference(cpp_stop),
-                dereference(cpp_step)
+                dereference(cpp_step),
+                stream.view()
             )
     else:
         raise ValueError("start, stop, and step must be either Column or Scalar")
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream)
