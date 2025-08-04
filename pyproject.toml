@@ -136,6 +136,10 @@ fixable = ["ALL"]
 exclude = [
     "cpp/scripts/gdb-pretty-printers.py",
 ]
+extend-unsafe-fixes = [
+    # zip-without-explicit-strict's autofix sets strict to False, but we want to enforce True
+    "B905",
+]
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "numpy.can_cast".msg = "Use find_common_dtype from cudf.utils.dtypes instead"
