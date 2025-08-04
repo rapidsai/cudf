@@ -68,7 +68,7 @@ struct m2_hash_functor {
     using SumType   = cudf::detail::target_type_t<Source, aggregation::SUM>;
     using CountType = cudf::detail::target_type_t<Source, aggregation::COUNT_VALID>;
 
-    if (source.is_null(source_index)) return;
+    if (source.is_null(source_index)) { return; }
     auto const group_size = count.element<CountType>(target_index);
     if (group_size == 0) { return; }
 
