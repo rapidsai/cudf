@@ -855,9 +855,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             else self._groupby.plc_groupby.aggregate(requests)
         )
 
-        for i, result, val in zip(
-            column_included, results, values, strict=True
-        ):
+        for i, result in zip(column_included, results, strict=True):
             result_columns[i] = [
                 ColumnBase.from_pylibcudf(col) for col in result.columns()
             ]
