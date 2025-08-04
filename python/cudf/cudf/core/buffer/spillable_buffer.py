@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2024, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -21,8 +21,8 @@ from cudf.core.buffer.buffer import (
     host_memory_allocation,
 )
 from cudf.core.buffer.exposure_tracked_buffer import ExposureTrackedBuffer
+from cudf.core.buffer.string import format_bytes
 from cudf.utils.performance_tracking import _get_color_for_nvtx
-from cudf.utils.string import format_bytes
 
 if TYPE_CHECKING:
     from cudf.core.buffer.spill_manager import SpillManager

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
+#include <cudf_test/testing_main.hpp>
 
 #include <cudf/io/parquet.hpp>
 #include <cudf/table/table.hpp>
@@ -112,7 +113,7 @@ TEST_F(ParquetTest, ChunkedOperations)
   auto filepath = temp_env->get_temp_filepath("MultiColumn.parquet");
   cudf::io::chunked_parquet_writer_options out_opts =
     cudf::io::chunked_parquet_writer_options::builder(cudf::io::sink_info{filepath});
-  cudf::io::parquet_chunked_writer(out_opts, cudf::test::get_default_stream()).write(tab);
+  cudf::io::chunked_parquet_writer(out_opts, cudf::test::get_default_stream()).write(tab);
 
   auto reader = cudf::io::chunked_parquet_reader(
     1L << 31,
@@ -122,3 +123,5 @@ TEST_F(ParquetTest, ChunkedOperations)
     auto chunk = reader.read_chunk();
   }
 }
+
+CUDF_TEST_PROGRAM_MAIN()

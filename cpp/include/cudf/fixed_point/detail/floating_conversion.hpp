@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/traits.hpp>
 
+#include <cuda/std/bit>
 #include <cuda/std/cmath>
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
@@ -39,7 +40,7 @@ namespace detail {
 template <typename T,
           CUDF_ENABLE_IF(std::is_same_v<T, uint32_t> || std::is_same_v<T, uint64_t> ||
                          std::is_same_v<T, __uint128_t>)>
-CUDF_HOST_DEVICE inline int count_significant_bits(T value)
+CUDF_HOST_DEVICE inline constexpr int count_significant_bits(T value)
 {
 #ifdef __CUDA_ARCH__
   if constexpr (std::is_same_v<T, uint64_t>) {
@@ -53,20 +54,17 @@ CUDF_HOST_DEVICE inline int count_significant_bits(T value)
     return 128 - (__clzll(high_bits) + static_cast<int>(high_bits == 0) * __clzll(low_bits));
   }
 #else
-  // Undefined behavior to call __builtin_clzll() with zero in gcc and clang
-  if (value == 0) { return 0; }
-
   if constexpr (std::is_same_v<T, uint64_t>) {
-    return 64 - __builtin_clzll(value);
+    return 64 - cuda::std::countl_zero(value);
   } else if constexpr (std::is_same_v<T, uint32_t>) {
-    return 32 - __builtin_clz(value);
+    return 32 - cuda::std::countl_zero(value);
   } else if constexpr (std::is_same_v<T, __uint128_t>) {
     // 128 bit type, must break up into high and low components
     auto const high_bits = static_cast<uint64_t>(value >> 64);
     if (high_bits == 0) {
-      return 64 - __builtin_clzll(static_cast<uint64_t>(value));
+      return 64 - cuda::std::countl_zero(static_cast<uint64_t>(value));
     } else {
-      return 128 - __builtin_clzll(high_bits);
+      return 128 - cuda::std::countl_zero(high_bits);
     }
   }
 #endif

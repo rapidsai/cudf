@@ -25,7 +25,6 @@ from . import (
     hashing,
     interop,
     io,
-    jit,
     join,
     json,
     labeling,
@@ -49,6 +48,7 @@ from . import (
     transpose,
     types,
     unary,
+    utilities,
 )
 from .column import Column
 from .gpumemoryview import gpumemoryview
@@ -78,7 +78,6 @@ __all__ = [
     "hashing",
     "interop",
     "io",
-    "jit",
     "join",
     "json",
     "labeling",
@@ -102,4 +101,5 @@ __all__ = [
     "transpose",
     "types",
     "unary",
+    "utilities",
 ]

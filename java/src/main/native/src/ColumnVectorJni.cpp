@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,11 +28,9 @@
 #include <cudf/lists/combine.hpp>
 #include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/lists/filling.hpp>
-#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/reshape.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/combine.hpp>
-#include <cudf/structs/structs_column_view.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
@@ -176,21 +174,25 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromArrow(JNIEnv* env,
     switch (n_type) {
       case cudf::type_id::DECIMAL32:
         JNI_THROW_NEW(
-          env, cudf::jni::ILLEGAL_ARG_CLASS, "Don't support converting DECIMAL32 yet", 0);
+          env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "Don't support converting DECIMAL32 yet", 0);
         break;
       case cudf::type_id::DECIMAL64:
         JNI_THROW_NEW(
-          env, cudf::jni::ILLEGAL_ARG_CLASS, "Don't support converting DECIMAL64 yet", 0);
+          env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "Don't support converting DECIMAL64 yet", 0);
         break;
       case cudf::type_id::STRUCT:
-        JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "Don't support converting STRUCT yet", 0);
+        JNI_THROW_NEW(
+          env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "Don't support converting STRUCT yet", 0);
         break;
       case cudf::type_id::LIST:
-        JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "Don't support converting LIST yet", 0);
+        JNI_THROW_NEW(
+          env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "Don't support converting LIST yet", 0);
         break;
       case cudf::type_id::DICTIONARY32:
-        JNI_THROW_NEW(
-          env, cudf::jni::ILLEGAL_ARG_CLASS, "Don't support converting DICTIONARY32 yet", 0);
+        JNI_THROW_NEW(env,
+                      cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS,
+                      "Don't support converting DICTIONARY32 yet",
+                      0);
         break;
       case cudf::type_id::STRING:
         arrow_array = std::make_shared<arrow::StringArray>(
@@ -208,19 +210,19 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromArrow(JNIEnv* env,
 
     ArrowSchema sch;
     if (!arrow::ExportSchema(*arrow_table->schema(), &sch).ok()) {
-      JNI_THROW_NEW(env, "java/lang/RuntimeException", "Unable to produce an ArrowSchema", 0)
+      JNI_THROW_NEW(env, cudf::jni::RUNTIME_EXCEPTION_CLASS, "Unable to produce an ArrowSchema", 0)
     }
     auto batch = arrow_table->CombineChunksToBatch().ValueOrDie();
     ArrowArray arr;
     if (!arrow::ExportRecordBatch(*batch, &arr).ok()) {
-      JNI_THROW_NEW(env, "java/lang/RuntimeException", "Unable to produce an ArrowArray", 0)
+      JNI_THROW_NEW(env, cudf::jni::RUNTIME_EXCEPTION_CLASS, "Unable to produce an ArrowArray", 0)
     }
     auto retCols = cudf::from_arrow(&sch, &arr)->release();
     arr.release(&arr);
     sch.release(&sch);
 
     if (retCols.size() != 1) {
-      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Must result in one column", 0);
+      JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "Must result in one column", 0);
     }
     return release_as_jlong(retCols[0]);
   }
@@ -414,6 +416,20 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_md5(JNIEnv* env,
     auto column_views =
       cudf::jni::native_jpointerArray<cudf::column_view>{env, column_handles}.get_dereferenced();
     return release_as_jlong(cudf::hashing::md5(cudf::table_view{column_views}));
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_sha1(JNIEnv* env,
+                                                              jobject j_object,
+                                                              jlongArray column_handles)
+{
+  JNI_NULL_CHECK(env, column_handles, "array of column handles is null", 0);
+
+  try {
+    auto column_views =
+      cudf::jni::native_jpointerArray<cudf::column_view>{env, column_handles}.get_dereferenced();
+    return release_as_jlong(cudf::hashing::sha1(cudf::table_view{column_views}));
   }
   CATCH_STD(env, 0);
 }

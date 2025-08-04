@@ -1,12 +1,12 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
-from typing import Any
 import operator
-from numba.core import cgutils
-from numba.cuda.descriptor import cuda_target
+from typing import Any
+
 import numba
 from numba import cuda, types
+from numba.core import cgutils
 from numba.core.extending import (
     make_attribute_wrapper,
     models,
@@ -17,9 +17,10 @@ from numba.core.extending import (
 from numba.core.typing import signature as nb_signature
 from numba.core.typing.templates import AbstractTemplate, AttributeTemplate
 from numba.cuda.cudadecl import registry as cuda_registry
+from numba.cuda.descriptor import cuda_target
 from numba.np import numpy_support
 
-from cudf.core.udf._ops import arith_ops, comparison_ops, unary_ops
+from cudf.core.udf.nrt_utils import _current_nrt_context
 from cudf.core.udf.utils import Row, UDFError
 
 index_default_type = types.int64
@@ -76,6 +77,7 @@ class GroupViewType(numba.types.Type):
             name=f"GroupView({self.group_scalar_type}, {self.index_type})"
         )
 
+
 class ManagedGroupViewType(numba.types.Type):
     """
     An NRT tracked version of a group to be constructed
@@ -84,21 +86,28 @@ class ManagedGroupViewType(numba.types.Type):
 
     def __init__(self, group):
         self.group = group
+        ctx = _current_nrt_context.get(None)
+        if ctx is not None:
+            # we're in a compilation that is determining
+            # if NRT must be linked
+            ctx.use_nrt = True
         super().__init__(name="managed_group_view")
 
     @property
     def group_scalar_type(self):
         return self.group.group_scalar_type
-    
+
     @property
     def index_type(self):
         return self.group.index_type
-    
 
 
 @register_model(ManagedGroupViewType)
 class managed_group_view_model(models.StructModel):
-    _members = (("meminfo", types.voidptr), ("group_view", GroupViewType(types.int64)))
+    _members = (
+        ("meminfo", types.voidptr),
+        ("group_view", GroupViewType(types.int64)),
+    )
 
     def __init__(self, dmm, fe_type):
         super().__init__(dmm, fe_type, self._members)
@@ -107,11 +116,10 @@ class managed_group_view_model(models.StructModel):
         return True
 
     def get_nrt_meminfo(self, builder, value):
-        udf_group_and_meminfo = cgutils.create_struct_proxy(ManagedGroupViewType(GroupViewType(types.int64)))(
-            cuda_target.target_context, builder, value=value
-        )
+        udf_group_and_meminfo = cgutils.create_struct_proxy(
+            ManagedGroupViewType(GroupViewType(types.int64))
+        )(cuda_target.target_context, builder, value=value)
         return udf_group_and_meminfo.meminfo
-
 
 
 class GroupByJITDataFrame(Row):
@@ -379,12 +387,14 @@ class GroupViewAttr(AttributeTemplate):
 
     def resolve_idxmax(self, mod):
         return types.BoundFunction(
-            GroupViewIdxMax, GroupViewType(mod.group_scalar_type, mod.index_type)
+            GroupViewIdxMax,
+            GroupViewType(mod.group_scalar_type, mod.index_type),
         )
 
     def resolve_idxmin(self, mod):
         return types.BoundFunction(
-            GroupViewIdxMin, GroupViewType(mod.group_scalar_type, mod.index_type)
+            GroupViewIdxMin,
+            GroupViewType(mod.group_scalar_type, mod.index_type),
         )
 
     def resolve_corr(self, mod):
@@ -429,12 +439,13 @@ for attr in ("group_data", "index", "size"):
     make_attribute_wrapper(GroupViewType, attr, attr)
 
 
-#for op in arith_ops + comparison_ops + unary_ops:
+# for op in arith_ops + comparison_ops + unary_ops:
 #    cuda_registry.register_global(op)(GroupOpBase)
 
 
 class ManagedGroupViewSumTyping(AbstractTemplate):
-    key = f"ManagedGroupViewType.sum"
+    key = "ManagedGroupViewType.sum"
+
     def generic(self, args, kws):
         return nb_signature(
             self.this.group_scalar_type,
@@ -452,13 +463,14 @@ class ManagedGroupViewTypeAttrs(GroupViewAttr):
             ManagedGroupViewType(GroupViewType(mod.group_scalar_type)),
         )
 
+
 _group_sum_binaryop = cuda.declare_device(
     "group_sum_binaryop",
     types.CPointer(types.int64)(
         types.CPointer(types.int64),
         types.CPointer(types.int64),
         group_size_type,
-    )
+    ),
 )
 
 _group_sub_scalar = cuda.declare_device(
@@ -477,15 +489,17 @@ _group_sub_group = cuda.declare_device(
     ),
 )
 
+
 def call_group_sum(lhs, rhs, size):
     return _group_sum_binaryop(lhs, rhs, size)
+
 
 def call_group_sub_scalar(lhs, scalar, size):
     return _group_sub_scalar(lhs, scalar, size)
 
+
 def call_group_sub_group(lhs, rhs, size):
     return _group_sub_group(lhs, rhs, size)
-
 
 
 class GroupViewSubScalar(AbstractTemplate):
@@ -495,10 +509,13 @@ class GroupViewSubScalar(AbstractTemplate):
             args[1], types.Integer
         ):
             return nb_signature(
-                ManagedGroupViewType(GroupViewType(types.int64)), args[0], args[1]
+                ManagedGroupViewType(GroupViewType(types.int64)),
+                args[0],
+                args[1],
             )
         else:
             return None
+
 
 class GroupViewAdd(AbstractTemplate):
     def generic(self, args, kws):
@@ -506,11 +523,15 @@ class GroupViewAdd(AbstractTemplate):
             args[1], GroupViewType
         ):
             return nb_signature(
-                ManagedGroupViewType(GroupViewType(types.int64)), args[0], args[1]
+                ManagedGroupViewType(GroupViewType(types.int64)),
+                args[0],
+                args[1],
             )
 
+
 class ManagedGroupViewSub(AbstractTemplate):
-    """ Typing for managed_group_view - managed_group_view """
+    """Typing for managed_group_view - managed_group_view"""
+
     def generic(self, args, kws):
         if isinstance(args[0], ManagedGroupViewType) and isinstance(
             args[1], ManagedGroupViewType
@@ -522,6 +543,7 @@ class ManagedGroupViewSub(AbstractTemplate):
             )
         else:
             return None
+
 
 cuda_registry.register_global(operator.add)(GroupViewAdd)
 cuda_registry.register_global(operator.sub)(GroupViewSubScalar)

@@ -14,11 +14,7 @@ from cudf_polars.dsl.expressions.base import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
-    import pylibcudf as plc
-
-    from cudf_polars.containers import Column, DataFrame
+    from cudf_polars.containers import Column, DataFrame, DataType
 
 
 __all__ = ["Slice"]
@@ -30,24 +26,21 @@ class Slice(Expr):
 
     def __init__(
         self,
-        dtype: plc.DataType,
+        dtype: DataType,
         offset: int,
-        length: int,
+        length: int | None,
         column: Expr,
     ) -> None:
         self.dtype = dtype
         self.offset = offset
         self.length = length
         self.children = (column,)
+        self.is_pointwise = False
 
     def do_evaluate(
-        self,
-        df: DataFrame,
-        *,
-        context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: Mapping[Expr, Column] | None = None,
+        self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         (child,) = self.children
-        column = child.evaluate(df, context=context, mapping=mapping)
+        column = child.evaluate(df, context=context)
         return column.slice((self.offset, self.length))

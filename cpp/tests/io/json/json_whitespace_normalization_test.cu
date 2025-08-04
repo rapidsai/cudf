@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,6 @@
 #include <cudf/io/detail/json.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -43,7 +42,8 @@ TEST_F(JsonWSNormalizationTest, ReadJsonOption)
   std::string const host_input = "{ \"a\" : {\"b\" :\t\"c\"}}";
   cudf::io::json_reader_options input_options =
     cudf::io::json_reader_options::builder(
-      cudf::io::source_info{host_input.data(), host_input.size()})
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(host_input.data()), host_input.size()}})
       .lines(true)
       .mixed_types_as_string(true)
       .normalize_whitespace(true);
@@ -54,7 +54,8 @@ TEST_F(JsonWSNormalizationTest, ReadJsonOption)
   std::string const expected_input = R"({ "a" : {"b":"c"}})";
   cudf::io::json_reader_options expected_input_options =
     cudf::io::json_reader_options::builder(
-      cudf::io::source_info{expected_input.data(), expected_input.size()})
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(expected_input.data()), expected_input.size()}})
       .lines(true)
       .mixed_types_as_string(true)
       .normalize_whitespace(false);
@@ -79,7 +80,8 @@ TEST_F(JsonWSNormalizationTest, ReadJsonOption_InvalidRows)
   )";
   cudf::io::json_reader_options input_options =
     cudf::io::json_reader_options::builder(
-      cudf::io::source_info{host_input.data(), host_input.size()})
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(host_input.data()), host_input.size()}})
       .lines(true)
       .mixed_types_as_string(true)
       .normalize_whitespace(true)
@@ -98,7 +100,8 @@ TEST_F(JsonWSNormalizationTest, ReadJsonOption_InvalidRows)
   )";
   cudf::io::json_reader_options expected_input_options =
     cudf::io::json_reader_options::builder(
-      cudf::io::source_info{expected_input.data(), expected_input.size()})
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(expected_input.data()), expected_input.size()}})
       .lines(true)
       .mixed_types_as_string(true)
       .normalize_whitespace(false)
@@ -128,7 +131,8 @@ TEST_F(JsonWSNormalizationTest, ReadJsonOption_InvalidRows_NoMixedType)
 
   cudf::io::json_reader_options input_options =
     cudf::io::json_reader_options::builder(
-      cudf::io::source_info{host_input.data(), host_input.size()})
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(host_input.data()), host_input.size()}})
       .dtypes(dtype_schema)
       .lines(true)
       .prune_columns(true)
@@ -149,7 +153,8 @@ TEST_F(JsonWSNormalizationTest, ReadJsonOption_InvalidRows_NoMixedType)
 
   cudf::io::json_reader_options expected_input_options =
     cudf::io::json_reader_options::builder(
-      cudf::io::source_info{expected_input.data(), expected_input.size()})
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(expected_input.data()), expected_input.size()}})
       .dtypes(dtype_schema)
       .lines(true)
       .prune_columns(true)

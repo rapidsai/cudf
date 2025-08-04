@@ -33,6 +33,48 @@
 
 using namespace cudf::strings::udf;
 
+/**
+ * @brief Destructor for a udf_string object.
+ *
+ * NRT API compatible destructor for udf_string objects.
+ *
+ * @param udf_str Pointer to the udf_string object to be destructed.
+ * @param size Size of the udf_string object (not used).
+ * @param dtor_info Additional information for the destructor (not used).
+ */
+__device__ void udf_str_dtor(void* udf_str, size_t size, void* dtor_info)
+{
+  auto ptr = reinterpret_cast<udf_string*>(udf_str);
+  ptr->~udf_string();
+}
+
+__device__ NRT_MemInfo* make_meminfo_for_new_udf_string(udf_string* udf_str)
+{
+  // only used in the context of this function
+  struct mi_str_allocation {
+    NRT_MemInfo mi;
+    udf_string st;
+  };
+
+  mi_str_allocation* mi_and_str = (mi_str_allocation*)NRT_Allocate(sizeof(mi_str_allocation));
+  if (mi_and_str != NULL) {
+    auto mi_ptr        = &(mi_and_str->mi);
+    udf_string* st_ptr = &(mi_and_str->st);
+
+    // udf_str_dtor can destruct the string without knowing the size
+    size_t size = 0;
+    NRT_MemInfo_init(mi_ptr, st_ptr, size, udf_str_dtor, NULL);
+
+    // copy the udf_string to the allocated heap space
+    udf_string* in_str_ptr = reinterpret_cast<udf_string*>(udf_str);
+    memcpy(st_ptr, in_str_ptr, sizeof(udf_string));
+    return mi_ptr;
+  } else {
+    __trap();
+    return nullptr;
+  }
+}
+
 extern "C" __device__ int len(int* nb_retval, void const* str)
 {
   auto sv    = reinterpret_cast<cudf::string_view const*>(str);
@@ -229,14 +271,13 @@ extern "C" __device__ int pycount(int* nb_retval, void const* str, void const* s
   return 0;
 }
 
-extern "C" __device__ int udf_string_from_string_view(int* nb_retbal,
+extern "C" __device__ int udf_string_from_string_view(void** out_meminfo,
                                                       void const* str,
                                                       void* udf_str)
 {
   auto str_view_ptr = reinterpret_cast<cudf::string_view const*>(str);
-  auto udf_str_ptr  = new (udf_str) udf_string;
-  *udf_str_ptr      = udf_string(*str_view_ptr);
-
+  auto udf_str_ptr  = new (udf_str) udf_string(*str_view_ptr);
+  *out_meminfo      = make_meminfo_for_new_udf_string(udf_str_ptr);
   return 0;
 }
 
@@ -245,62 +286,56 @@ extern "C" __device__ int string_view_from_udf_string(int* nb_retval,
                                                       void* str)
 {
   auto udf_str_ptr = reinterpret_cast<udf_string const*>(udf_str);
-  auto sv_ptr      = new (str) cudf::string_view;
-  *sv_ptr          = cudf::string_view(*udf_str_ptr);
-
+  auto sv_ptr      = new (str) cudf::string_view(*udf_str_ptr);
   return 0;
 }
 
-extern "C" __device__ int strip(int* nb_retval,
+extern "C" __device__ int strip(void** out_meminfo,
                                 void* udf_str,
                                 void* const* to_strip,
                                 void* const* strip_str)
 {
   auto to_strip_ptr  = reinterpret_cast<cudf::string_view const*>(to_strip);
   auto strip_str_ptr = reinterpret_cast<cudf::string_view const*>(strip_str);
-  auto udf_str_ptr   = new (udf_str) udf_string;
-
-  *udf_str_ptr = strip(*to_strip_ptr, *strip_str_ptr);
-
+  auto udf_str_ptr   = new (udf_str) udf_string(strip(*to_strip_ptr, *strip_str_ptr));
+  *out_meminfo       = make_meminfo_for_new_udf_string(udf_str_ptr);
   return 0;
 }
 
-extern "C" __device__ int lstrip(int* nb_retval,
+extern "C" __device__ int lstrip(void** out_meminfo,
                                  void* udf_str,
                                  void* const* to_strip,
                                  void* const* strip_str)
 {
   auto to_strip_ptr  = reinterpret_cast<cudf::string_view const*>(to_strip);
   auto strip_str_ptr = reinterpret_cast<cudf::string_view const*>(strip_str);
-  auto udf_str_ptr   = new (udf_str) udf_string;
-
-  *udf_str_ptr = strip(*to_strip_ptr, *strip_str_ptr, cudf::strings::side_type::LEFT);
-
+  auto udf_str_ptr =
+    new (udf_str) udf_string(strip(*to_strip_ptr, *strip_str_ptr, cudf::strings::side_type::LEFT));
+  *out_meminfo = make_meminfo_for_new_udf_string(udf_str_ptr);
   return 0;
 }
 
-extern "C" __device__ int rstrip(int* nb_retval,
+extern "C" __device__ int rstrip(void** out_meminfo,
                                  void* udf_str,
                                  void* const* to_strip,
                                  void* const* strip_str)
 {
   auto to_strip_ptr  = reinterpret_cast<cudf::string_view const*>(to_strip);
   auto strip_str_ptr = reinterpret_cast<cudf::string_view const*>(strip_str);
-  auto udf_str_ptr   = new (udf_str) udf_string;
-
-  *udf_str_ptr = strip(*to_strip_ptr, *strip_str_ptr, cudf::strings::side_type::RIGHT);
-
+  auto udf_str_ptr =
+    new (udf_str) udf_string(strip(*to_strip_ptr, *strip_str_ptr, cudf::strings::side_type::RIGHT));
+  *out_meminfo = make_meminfo_for_new_udf_string(udf_str_ptr);
   return 0;
 }
-extern "C" __device__ int upper(int* nb_retval,
+
+extern "C" __device__ int upper(void** out_meminfo,
                                 void* udf_str,
                                 void const* st,
                                 std::uintptr_t flags_table,
                                 std::uintptr_t cases_table,
                                 std::uintptr_t special_table)
 {
-  auto udf_str_ptr = new (udf_str) udf_string;
-  auto st_ptr      = reinterpret_cast<cudf::string_view const*>(st);
+  auto st_ptr = reinterpret_cast<cudf::string_view const*>(st);
 
   auto flags_table_ptr =
     reinterpret_cast<cudf::strings::detail::character_flags_table_type*>(flags_table);
@@ -311,20 +346,19 @@ extern "C" __device__ int upper(int* nb_retval,
 
   cudf::strings::udf::chars_tables tables{flags_table_ptr, cases_table_ptr, special_table_ptr};
 
-  *udf_str_ptr = to_upper(tables, *st_ptr);
-
+  auto udf_str_ptr = new (udf_str) udf_string(to_upper(tables, *st_ptr));
+  *out_meminfo     = make_meminfo_for_new_udf_string(udf_str_ptr);
   return 0;
 }
 
-extern "C" __device__ int lower(int* nb_retval,
+extern "C" __device__ int lower(void** out_meminfo,
                                 void* udf_str,
                                 void const* st,
                                 std::uintptr_t flags_table,
                                 std::uintptr_t cases_table,
                                 std::uintptr_t special_table)
 {
-  auto udf_str_ptr = new (udf_str) udf_string;
-  auto st_ptr      = reinterpret_cast<cudf::string_view const*>(st);
+  auto st_ptr = reinterpret_cast<cudf::string_view const*>(st);
 
   auto flags_table_ptr =
     reinterpret_cast<cudf::strings::detail::character_flags_table_type*>(flags_table);
@@ -334,33 +368,39 @@ extern "C" __device__ int lower(int* nb_retval,
     reinterpret_cast<cudf::strings::detail::special_case_mapping*>(special_table);
 
   cudf::strings::udf::chars_tables tables{flags_table_ptr, cases_table_ptr, special_table_ptr};
-  *udf_str_ptr = to_lower(tables, *st_ptr);
+
+  auto udf_str_ptr = new (udf_str) udf_string(to_lower(tables, *st_ptr));
+  *out_meminfo     = make_meminfo_for_new_udf_string(udf_str_ptr);
   return 0;
 }
 
-extern "C" __device__ int concat(int* nb_retval, void* udf_str, void* const* lhs, void* const* rhs)
+extern "C" __device__ int concat(void** out_meminfo,
+                                 void* udf_str,
+                                 void* const* lhs,
+                                 void* const* rhs)
 {
   auto lhs_ptr = reinterpret_cast<cudf::string_view const*>(lhs);
   auto rhs_ptr = reinterpret_cast<cudf::string_view const*>(rhs);
 
-  auto udf_str_ptr = new (udf_str) udf_string;
-
   udf_string result;
   result.append(*lhs_ptr).append(*rhs_ptr);
-  *udf_str_ptr = result;
+  auto udf_str_ptr = new (udf_str) udf_string(std::move(result));
+  *out_meminfo     = make_meminfo_for_new_udf_string(udf_str_ptr);
   return 0;
 }
 
-extern "C" __device__ int replace(
-  int* nb_retval, void* udf_str, void* const src, void* const to_replace, void* const replacement)
+extern "C" __device__ int replace(void** out_meminfo,
+                                  void* udf_str,
+                                  void* const src,
+                                  void* const to_replace,
+                                  void* const replacement)
 {
   auto src_ptr         = reinterpret_cast<cudf::string_view const*>(src);
   auto to_replace_ptr  = reinterpret_cast<cudf::string_view const*>(to_replace);
   auto replacement_ptr = reinterpret_cast<cudf::string_view const*>(replacement);
 
-  auto udf_str_ptr = new (udf_str) udf_string;
-  *udf_str_ptr     = replace(*src_ptr, *to_replace_ptr, *replacement_ptr);
-
+  auto udf_str_ptr = new (udf_str) udf_string(replace(*src_ptr, *to_replace_ptr, *replacement_ptr));
+  *out_meminfo     = make_meminfo_for_new_udf_string(udf_str_ptr);
   return 0;
 }
 
@@ -394,12 +434,12 @@ __device__ AccumT device_sum(cooperative_groups::thread_block const& block,
                              T const* data,
                              int64_t size)
 {
-  //printf("[device_sum] data pointer is %p, size = %lld\n", data, size);
-  //printf("this is thread index %d in block %d\n", block.thread_rank(), blockIdx.x);
+  // printf("[device_sum] data pointer is %p, size = %lld\n", data, size);
+  // printf("this is thread index %d in block %d\n", block.thread_rank(), blockIdx.x);
   __shared__ AccumT block_sum;
   if (block.thread_rank() == 0) { block_sum = 0; }
   block.sync();
-  //printf("[device_sum] reached sync\n");
+  // printf("[device_sum] reached sync\n");
 
   AccumT local_sum = 0;
   for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
@@ -410,7 +450,7 @@ __device__ AccumT device_sum(cooperative_groups::thread_block const& block,
   ref.fetch_add(local_sum, cuda::std::memory_order_relaxed);
 
   block.sync();
-  //printf("[device_sum] block_sum = %lld\n", block_sum);
+  // printf("[device_sum] block_sum = %lld\n", block_sum);
   return block_sum;
 }
 
@@ -730,7 +770,7 @@ make_definition_corr(BlockCorr, int64, int64_t);
 A block level data structure that represents the slice of a column
 that corresponds to a groupby group. This class is aware of only two
 things: the pointer to start of the data (an offset within a larger
-column) and the size of the group itslef
+column) and the size of the group itself
 */
 
 __device__ int64_t* block_alloc(size_t size)
@@ -784,7 +824,7 @@ extern "C" __device__ int group_sum_binaryop(int64_t** numba_return_value,
                                              int64_t* rhs,
                                              int64_t size)
 {
-  //printf("[group_sum_binaryop]: threadIdx %d in block %d\n", threadIdx.x, blockIdx.x);
+  // printf("[group_sum_binaryop]: threadIdx %d in block %d\n", threadIdx.x, blockIdx.x);
   if (threadIdx.x == 0 and blockIdx.x == 0) {
     // //printf("[group_sum_binaryop]: the lhs pointer is %p\n", lhs);
     for (int64_t i = 0; i < size; ++i) {
@@ -798,11 +838,11 @@ extern "C" __device__ int group_sum_binaryop(int64_t** numba_return_value,
 }
 
 extern "C" __device__ int group_sub_scalar(int64_t** numba_return_value,
-                                             int64_t* group_data,
-                                             int64_t scalar,
-                                             int64_t size)
+                                           int64_t* group_data,
+                                           int64_t scalar,
+                                           int64_t size)
 {
-  //printf("[group_sub_scalar]: the group_data pointer is %p\n", group_data);
+  // printf("[group_sub_scalar]: the group_data pointer is %p\n", group_data);
   auto ptr = block_alloc(size * sizeof(int64_t));
   for (int i = threadIdx.x; i < size; i += blockDim.x) {
     ptr[i] = group_data[i] - scalar;
@@ -812,14 +852,13 @@ extern "C" __device__ int group_sub_scalar(int64_t** numba_return_value,
 }
 
 extern "C" __device__ int group_sub_group(int64_t** numba_return_value,
-                                             int64_t* lhs,
-                                             int64_t* rhs,
-                                             int64_t size)
+                                          int64_t* lhs,
+                                          int64_t* rhs,
+                                          int64_t size)
 {
-
-  int64_t* result = binary_sub(lhs, rhs, size);
+  int64_t* result     = binary_sub(lhs, rhs, size);
   *numba_return_value = result;
-  //printf("[group_sub_group] result pointer is %p\n", result);
+  // printf("[group_sub_group] result pointer is %p\n", result);
   return 0;
 }
 
@@ -827,11 +866,11 @@ extern "C" __device__ int print_group_data(int64_t* numba_return_value,
                                            int64_t* group_data,
                                            int64_t size)
 {
-  //printf("[print_group_data] thread %d in block %d\n", threadIdx.x, blockIdx.x);
+  // printf("[print_group_data] thread %d in block %d\n", threadIdx.x, blockIdx.x);
   if (threadIdx.x == 0) {
-    //printf("[print_group_data]: the data pointer is %p\n", group_data);
+    // printf("[print_group_data]: the data pointer is %p\n", group_data);
     for (int64_t i = 0; i < size; ++i) {
-      //printf("group_data[%lld] = %lld, block idx = %d\n", i, group_data[i], blockIdx.x);
+      // printf("group_data[%lld] = %lld, block idx = %d\n", i, group_data[i], blockIdx.x);
     }
   }
   return 0;
@@ -839,7 +878,7 @@ extern "C" __device__ int print_group_data(int64_t* numba_return_value,
 
 __device__ void udf_group_dtor(void* udf_group_ptr, size_t size, void* dtor_info)
 {
-  //printf("[udf_group_dtor] threadIdx %d in block %d\n", threadIdx.x, blockIdx.x);
+  // printf("[udf_group_dtor] threadIdx %d in block %d\n", threadIdx.x, blockIdx.x);
   auto ptr = reinterpret_cast<int64_t*>(udf_group_ptr);
   block_free(ptr);
 }
@@ -847,14 +886,16 @@ __device__ void udf_group_dtor(void* udf_group_ptr, size_t size, void* dtor_info
 extern "C" __device__ int meminfo_from_new_udf_group(void** nb_retval, void* group_data)
 {
   if (threadIdx.x == 0) {
-    //printf("threadIdx 0 [meminfo_from_new_udf_group] creating a meminfo around pointer %p\n", group_data);
+    // printf("threadIdx 0 [meminfo_from_new_udf_group] creating a meminfo around pointer %p\n",
+    // group_data);
     *nb_retval = NRT_MemInfo_new(group_data, NULL, udf_group_dtor, NULL);
   } else {
-    //printf("threadIdx %d [meminfo_from_new_udf_group] not creating a meminfo\n", threadIdx.x);
+    // printf("threadIdx %d [meminfo_from_new_udf_group] not creating a meminfo\n", threadIdx.x);
     *nb_retval = nullptr;
   }
   __syncthreads();
-  //printf("threadIdx %d [meminfo_from_new_udf_group] returning pointer %p\n", threadIdx.x, *nb_retval);
+  // printf("threadIdx %d [meminfo_from_new_udf_group] returning pointer %p\n", threadIdx.x,
+  // *nb_retval);
   return 0;
 }
 
@@ -867,36 +908,6 @@ struct meminfo_and_str {
   NRT_MemInfo mi;
   udf_string st;
 };
-
-/*
-Create a new MemInfo object holding the reference count of a udf_string. When returning
-new strings, shim functions expect a pointer to a stack allocated buffer into which it
-will construct the udf_string it returns. Since one can not safely build a MemInfo object
-around this stack memory, we store a copy of the udf_string itself next to the MemInfo
-which manages the lifetime of the udf_string.
-*/
-extern "C" __device__ int meminfo_from_new_udf_str(void** nb_retval, void* udf_str)
-{
-  // allocate enough room for both the meminfo and udf_string
-  meminfo_and_str* mi_and_str = (meminfo_and_str*)NRT_Allocate(sizeof(meminfo_and_str));
-  if (mi_and_str != NULL) {
-    auto mi_ptr        = &(mi_and_str->mi);
-    udf_string* st_ptr = &(mi_and_str->st);
-
-    // We pass a null size here because the udf_string actually exists on the stack
-    // and tracks the size of the string data that it points to.
-    NRT_MemInfo_init(mi_ptr, st_ptr, NULL, udf_str_dtor, NULL);
-
-    // copy the udf_string to the extra heap space
-    udf_string* in_str_ptr = reinterpret_cast<udf_string*>(udf_str);
-    memcpy(st_ptr, in_str_ptr, sizeof(udf_string));
-    *nb_retval = &(mi_and_str->mi);
-  } else {
-    *nb_retval = NULL;
-  }
-
-  return 0;
-}
 
 extern "C" int __device__ extern_NRT_Decref(int& retval, void* ptr)
 {

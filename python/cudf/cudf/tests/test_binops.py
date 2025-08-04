@@ -1,7 +1,9 @@
 # Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
+import datetime
 import decimal
 import operator
+import re
 import warnings
 from itertools import combinations_with_replacement, product
 
@@ -18,6 +20,7 @@ from cudf.core._compat import (
     PANDAS_VERSION,
 )
 from cudf.core.buffer.spill_manager import get_global_manager
+from cudf.core.column.column import as_column
 from cudf.testing import _utils as utils, assert_eq
 from cudf.utils.dtypes import (
     DATETIME_TYPES,
@@ -442,7 +445,7 @@ def test_validity_add(nelem, lhs_nulls, rhs_nulls):
         lhs_bitmask = utils.expand_bits_to_bytes(lhs_mask)[:nelem]
         lhs_null_count = utils.count_zero(lhs_bitmask)
         assert lhs_null_count >= 0
-        lhs = Series.from_masked_array(lhs_data, lhs_mask)
+        lhs = Series._from_column(as_column(lhs_data).set_mask(lhs_mask))
         assert lhs.null_count == lhs_null_count
     else:
         lhs = Series(lhs_data)
@@ -453,7 +456,7 @@ def test_validity_add(nelem, lhs_nulls, rhs_nulls):
         rhs_bitmask = utils.expand_bits_to_bytes(rhs_mask)[:nelem]
         rhs_null_count = utils.count_zero(rhs_bitmask)
         assert rhs_null_count >= 0
-        rhs = Series.from_masked_array(rhs_data, rhs_mask)
+        rhs = Series._from_column(as_column(rhs_data).set_mask(rhs_mask))
         assert rhs.null_count == rhs_null_count
     else:
         rhs = Series(rhs_data)
@@ -652,7 +655,11 @@ def test_different_shapes_and_columns_with_unaligned_indices(binop):
     # cast x and y as float64 so it matches pandas dtype
     cd_frame["x"] = cd_frame["x"].astype(np.float64)
     cd_frame["y"] = cd_frame["y"].astype(np.float64)
-    assert_eq(cd_frame, pd_frame)
+
+    # Sort both frames by index and then by all columns to ensure consistent ordering
+    pd_sorted = pd_frame.sort_index().sort_values(list(pd_frame.columns))
+    cd_sorted = cd_frame.sort_index().sort_values(list(cd_frame.columns))
+    assert_eq(cd_sorted, pd_sorted)
 
     pdf1 = pd.DataFrame({"x": [1, 1]}, index=["a", "a"])
     pdf2 = pd.DataFrame({"x": [2]}, index=["a"])
@@ -660,7 +667,11 @@ def test_different_shapes_and_columns_with_unaligned_indices(binop):
     gdf2 = cudf.DataFrame.from_pandas(pdf2)
     pd_frame = binop(pdf1, pdf2)
     cd_frame = binop(gdf1, gdf2)
-    assert_eq(pd_frame, cd_frame)
+
+    # Sort both frames consistently for comparison
+    pd_sorted = pd_frame.sort_index().sort_values(list(pd_frame.columns))
+    cd_sorted = cd_frame.sort_index().sort_values(list(cd_frame.columns))
+    assert_eq(pd_sorted, cd_sorted)
 
 
 @pytest.mark.parametrize(
@@ -1033,6 +1044,10 @@ def test_vector_to_none_binops(dtype):
     assert_eq(expect, got)
 
 
+def is_timezone_aware_dtype(dtype: str) -> bool:
+    return bool(re.match(r"^datetime64\[ns, .+\]$", dtype))
+
+
 @pytest.mark.parametrize("n_periods", [0, 1, -1, 12, -12])
 @pytest.mark.parametrize(
     "frequency",
@@ -1054,6 +1069,7 @@ def test_vector_to_none_binops(dtype):
         ["datetime64[us]", "00.012345"],
         ["datetime64[ms]", "00.012"],
         ["datetime64[s]", "00"],
+        ["datetime64[ns, Asia/Kathmandu]", "00.012345678"],
     ],
 )
 @pytest.mark.parametrize("op", [operator.add, operator.sub])
@@ -1089,8 +1105,17 @@ def test_datetime_dateoffset_binaryop(
         f"2000-01-31 00:00:{components}",
         f"2000-02-29 00:00:{components}",
     ]
-    gsr = cudf.Series(date_col, dtype=dtype)
-    psr = gsr.to_pandas()
+    if is_timezone_aware_dtype(dtype):
+        # Construct naive datetime64[ns] Series
+        gsr = cudf.Series(date_col, dtype="datetime64[ns]")
+        psr = gsr.to_pandas()
+
+        # Convert to timezone-aware (both cudf and pandas)
+        gsr = gsr.dt.tz_localize("UTC").dt.tz_convert("Asia/Kathmandu")
+        psr = psr.dt.tz_localize("UTC").dt.tz_convert("Asia/Kathmandu")
+    else:
+        gsr = cudf.Series(date_col, dtype=dtype)
+        psr = gsr.to_pandas()
 
     kwargs = {frequency: n_periods}
 
@@ -1100,10 +1125,22 @@ def test_datetime_dateoffset_binaryop(
     expect = op(psr, poffset)
     got = op(gsr, goffset)
 
+    if is_timezone_aware_dtype(dtype):
+        assert isinstance(expect.dtype, pd.DatetimeTZDtype)
+        assert str(expect.dtype.tz) == str(got.dtype.tz)
+        expect = expect.dt.tz_convert("UTC")
+        got = got.dt.tz_convert("UTC")
+
     assert_eq(expect, got)
 
     expect = op(psr, -poffset)
     got = op(gsr, -goffset)
+
+    if is_timezone_aware_dtype(dtype):
+        assert isinstance(expect.dtype, pd.DatetimeTZDtype)
+        assert str(expect.dtype.tz) == str(got.dtype.tz)
+        expect = expect.dt.tz_convert("UTC")
+        got = got.dt.tz_convert("UTC")
 
     assert_eq(expect, got)
 
@@ -2286,7 +2323,6 @@ def test_binops_decimal_scalar_compare(args, reflected):
     Tested compare operations:
         eq, lt, gt, le, ge
     Each operation has 3 data setups: pyints, Decimal, and
-    decimal cudf.Scalar
     For each data setup, there is at least one row that lead to one of the
     following compare results: {True, False, None}.
     """
@@ -2643,3 +2679,35 @@ def test_cat_non_cat_compare_ops(comp_op, data_left, data_right, ordered):
         expected = comp_op(pd_non_cat, pd_cat)
         result = comp_op(cudf_non_cat, cudf_cat)
         assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "left_data, right_data",
+    [[["a", "b"], [1, 2]], [[[1, 2, 3], [4, 5]], [{"a": 1}, {"a": 2}]]],
+)
+@pytest.mark.parametrize(
+    "op, expected_data",
+    [[operator.eq, [False, False]], [operator.ne, [True, True]]],
+)
+@pytest.mark.parametrize("with_na", [True, False])
+def test_eq_ne_non_comparable_types(
+    left_data, right_data, op, expected_data, with_na
+):
+    if with_na:
+        left_data[0] = None
+    left = cudf.Series(left_data)
+    right = cudf.Series(right_data)
+    result = op(left, right)
+    if with_na:
+        expected_data[0] = None
+    expected = cudf.Series(expected_data)
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("op", _binops_compare)
+def test_binops_compare_stdlib_date_scalar(op):
+    dt = datetime.date(2020, 1, 1)
+    data = [dt]
+    result = op(cudf.Series(data), dt)
+    expected = op(pd.Series(data), dt)
+    assert_eq(result, expected)

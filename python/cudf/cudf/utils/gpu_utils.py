@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 
 def validate_setup():
@@ -15,7 +15,10 @@ def validate_setup():
 
     import warnings
 
-    from cuda.bindings.runtime import cudaDeviceAttr, cudaError_t
+    from cuda.bindings.runtime import (
+        cudaDeviceAttr,
+        cudaError_t,
+    )
 
     from rmm._cuda.gpu import (
         CUDARuntimeError,
@@ -30,7 +33,6 @@ def validate_setup():
 
     notify_caller_errors = {
         cudaError_t.cudaErrorInitializationError,
-        cudaError_t.cudaErrorInsufficientDriver,
         cudaError_t.cudaErrorInvalidDeviceFunction,
         cudaError_t.cudaErrorInvalidDevice,
         cudaError_t.cudaErrorStartupFailure,
@@ -53,12 +55,23 @@ def validate_setup():
     except CUDARuntimeError as e:
         if e.status in notify_caller_errors:
             raise e
+
+        # We must distinguish between "CPU only" and "the driver is
+        # insufficient for the runtime".
+        if e.status == cudaError_t.cudaErrorInsufficientDriver:
+            # cudaDriverGetVersion() returns 0 when ``libcuda.so`` is
+            # missing. Otherwise there is a CUDA driver but it is
+            # insufficient for the runtime, so we re-raise the original
+            # exception
+            if driverGetVersion() != 0:
+                raise e
+
         # If there is no GPU detected, set `gpus_count` to -1
         gpus_count = -1
     except RuntimeError as e:
-        # getDeviceCount() can raise a RuntimeError
-        # when ``libcuda.so`` is missing.
-        # We don't want this to propagate up to the user.
+        # When using cuda-python < 12.9, getDeviceCount() can raise a
+        # RuntimeError if ``libcuda.so`` is missing. We don't want this to
+        # propagate up to the user.
         warnings.warn(str(e))
         return
 
@@ -95,14 +108,14 @@ def validate_setup():
 
         cuda_runtime_version = runtimeGetVersion()
 
-        if cuda_runtime_version < 11000:
-            # Require CUDA Runtime version 11.0 or greater.
+        if cuda_runtime_version < 12000:
+            # Require CUDA Runtime version 12.0 or greater.
             major_version = cuda_runtime_version // 1000
             minor_version = (cuda_runtime_version % 1000) // 10
             raise UnsupportedCUDAError(
                 "Detected CUDA Runtime version is "
                 f"{major_version}.{minor_version}. "
-                "Please update your CUDA Runtime to 11.0 or above."
+                "Please update your CUDA Runtime to 12.0 or above."
             )
 
         cuda_driver_supported_rt_version = driverGetVersion()
@@ -129,13 +142,13 @@ def validate_setup():
             # Driver Runtime version is >= Runtime version
             pass
         elif (
-            cuda_driver_supported_rt_version >= 11000
-            and cuda_runtime_version >= 11000
+            cuda_driver_supported_rt_version >= 12000
+            and cuda_runtime_version >= 12000
         ):
             # With cuda enhanced compatibility any code compiled
-            # with 11.x version of cuda can now run on any
-            # driver >= 450.80.02. 11000 is the minimum cuda
-            # version 450.80.02 supports.
+            # with 12.x version of cuda can now run on any
+            # driver >= 525.60.13. 12000 is the minimum cuda
+            # version 525.60.13 supports.
             pass
         else:
             raise UnsupportedCUDAError(

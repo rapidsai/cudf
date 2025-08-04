@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -543,11 +543,6 @@ class udf_string {
   __device__ void shift_bytes(cudf::size_type start_pos,
                               cudf::size_type end_pos,
                               cudf::size_type nbytes);
-};
-
-struct managed_udf_string {
-  void* meminfo;
-  udf_string udf_str;
 };
 
 }  // namespace udf

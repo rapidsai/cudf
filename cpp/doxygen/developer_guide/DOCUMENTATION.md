@@ -95,7 +95,7 @@ for documenting C++ code in libcudf.
      */
 
     /**
-     * @brief One sentence description of the class.
+     * @brief One line description of the class
      *
      * @ingroup optional_predefined_group_id
      *
@@ -111,7 +111,7 @@ for documenting C++ code in libcudf.
       void set_my_int( int value ); ///< Try to use descriptive member names
 
       /**
-       * @brief Short, one sentence description of the member function.
+       * @brief Short, one line description of the member function
        *
        * A more detailed description of what this function does and what
        * its logic does.
@@ -139,7 +139,7 @@ for documenting C++ code in libcudf.
     };
 
     /**
-     * @brief Short, one sentence description of this free function.
+     * @brief Short, one line description of this free function
      *
      * @ingroup optional_predefined_group_id
      *
@@ -170,7 +170,7 @@ for documenting C++ code in libcudf.
     }
 
     /**
-     * @brief Short, one sentence description.
+     * @brief Short, one line description
      *
      * @ingroup optional_predefined_group_id
      *
@@ -192,14 +192,15 @@ Also, try to include a short [example](#inline-examples) if possible.
 
 ### @brief
 
-The [\@brief](https://www.doxygen.nl/manual/commands.html#cmdbrief) text should be a short, one sentence description.
+The [\@brief](https://www.doxygen.nl/manual/commands.html#cmdbrief) text should be a short, one line description.
 Doxygen does not provide much space to show this text in the output pages.
-Always follow the \@brief line with a blank comment line.
+Always follow the \@brief line with a blank comment line. Normally this is like a title and not sentence
+and therefore does not need a period. Only use a period if it is a sentence.
 
 The longer description is the rest of the comment text that is not tagged with any doxygen command.
 
     /**
-     * @brief Short description.
+     * @brief Short description or title
      *
      * Long description.
      *
@@ -279,6 +280,7 @@ Also include append `[in]`, `[out]` or `[in,out]` to the `@param` if it is not c
      *
 
 It is also recommended to vertically aligning the 3 columns of text if possible to make it easier to read in a source code editor.
+Finally, the description is normally like a title and only needs a period if it is a sentence.
 
 #### @return
 

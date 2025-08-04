@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 import sys
 from collections.abc import Callable, Iterable
@@ -35,11 +35,11 @@ ScalarLike = Any
 ColumnLike = Any
 
 # binary operation
-ColumnBinaryOperand = Union["cudf.Scalar", "cudf.core.column.ColumnBase"]
+ColumnBinaryOperand = Union[ScalarLike, "cudf.core.column.ColumnBase"]
 
 DataFrameOrSeries = Union["cudf.Series", "cudf.DataFrame"]
-SeriesOrIndex = Union["cudf.Series", "cudf.core.index.BaseIndex"]
-SeriesOrSingleColumnIndex = Union["cudf.Series", "cudf.core.index.Index"]
+SeriesOrIndex = Union["cudf.Series", "cudf.Index"]
+SeriesOrSingleColumnIndex = Union["cudf.Series", "cudf.Index"]
 
 # Groupby aggregation
 AggType = Union[str, Callable]  # noqa: UP007

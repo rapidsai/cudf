@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 
 """Benchmarks of Series methods."""
 
@@ -21,3 +21,19 @@ def bench_sort_values(benchmark, series):
 @pytest.mark.parametrize("n", [10])
 def bench_series_nsmallest(benchmark, series, n):
     benchmark(series.nsmallest, n)
+
+
+@benchmark_with_object(cls="series", dtype="int", nulls=False)
+def bench_series_cp_asarray(benchmark, series):
+    benchmark(cupy.asarray, series)
+
+
+@benchmark_with_object(cls="series", dtype="int", nulls=False)
+@pytest.mark.pandas_incompatible
+def bench_to_cupy(benchmark, series):
+    benchmark(lambda: series.values)
+
+
+@benchmark_with_object(cls="series", dtype="int", nulls=False)
+def bench_series_values(benchmark, series):
+    benchmark(lambda: series.values)

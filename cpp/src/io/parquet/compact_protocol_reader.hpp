@@ -18,9 +18,10 @@
 
 #include "parquet_common.hpp"
 
-#include <cudf/fixed_point/detail/floating_conversion.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/utilities/export.hpp>
+
+#include <cuda/std/bit>
 
 #include <algorithm>
 #include <cstddef>
@@ -130,9 +131,9 @@ class CompactProtocolReader {
   void read(SortingColumn* s);
 
  public:
-  static int NumRequiredBits(uint32_t max_level) noexcept
+  static inline constexpr int NumRequiredBits(uint32_t max_level) noexcept
   {
-    return numeric::detail::count_significant_bits(max_level);
+    return 32 - cuda::std::countl_zero(max_level);
   }
   bool InitSchema(FileMetaData* md);
 

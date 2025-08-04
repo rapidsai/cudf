@@ -18,6 +18,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/strings/udf/managed_udf_string.cuh>
 
 #include <rmm/device_buffer.hpp>
 
@@ -35,8 +36,6 @@ namespace udf {
 int get_cuda_build_version();
 
 class udf_string;
-class managed_udf_string;
-
 /**
  * @brief Return a cudf::string_view array for the given strings column
  *
@@ -51,7 +50,7 @@ class managed_udf_string;
 std::unique_ptr<rmm::device_buffer> to_string_view_array(cudf::column_view const input);
 
 /**
- * @brief Return a STRINGS column given an array of managed_udf_string objects
+ * @brief Return a strings column given an array of managed_udf_string objects
  *
  * This will make a copy of the strings in managed_strings in order to build
  * the output column.

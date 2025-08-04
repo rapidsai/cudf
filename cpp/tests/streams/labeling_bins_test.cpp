@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
+#include <cudf_test/testing_main.hpp>
 
 #include <cudf/labeling/label_bins.hpp>
 
@@ -35,3 +36,5 @@ TEST_F(LabelingBinsStreamTest, SimpleStringsTest)
                    cudf::inclusive::NO,
                    cudf::test::get_default_stream());
 }
+
+CUDF_TEST_PROGRAM_MAIN()

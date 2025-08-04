@@ -31,9 +31,9 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/std/functional>
+#include <cuda/std/iterator>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/iterator_traits.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/pair.h>
 #include <thrust/transform_reduce.h>
@@ -56,9 +56,9 @@ struct minmax_pair {
   T max_val;
 
   __host__ __device__ minmax_pair()
-    : min_val(cudf::DeviceMin::identity<T>()), max_val(cudf::DeviceMax::identity<T>()){};
-  __host__ __device__ minmax_pair(T val) : min_val(val), max_val(val){};
-  __host__ __device__ minmax_pair(T min_val_, T max_val_) : min_val(min_val_), max_val(max_val_){};
+    : min_val(cudf::DeviceMin::identity<T>()), max_val(cudf::DeviceMax::identity<T>()) {};
+  __host__ __device__ minmax_pair(T val) : min_val(val), max_val(val) {};
+  __host__ __device__ minmax_pair(T min_val_, T max_val_) : min_val(min_val_), max_val(max_val_) {};
 };
 
 /**
@@ -75,7 +75,7 @@ struct minmax_pair {
  */
 template <typename Op,
           typename InputIterator,
-          typename OutputType = typename thrust::iterator_value<InputIterator>::type>
+          typename OutputType = cuda::std::iter_value_t<InputIterator>>
 auto reduce_device(InputIterator d_in,
                    size_type num_items,
                    Op binary_op,
@@ -188,11 +188,11 @@ struct minmax_functor {
     T* max_data;
   };
 
-  template <typename T,
-            std::enable_if_t<is_supported<T>() and !std::is_same_v<T, cudf::string_view> and
-                             !cudf::is_dictionary<T>()>* = nullptr>
+  template <typename T>
   std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> operator()(
     cudf::column_view const& col, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+    requires(is_supported<T>() and !std::is_same_v<T, cudf::string_view> and
+             !cudf::is_dictionary<T>())
   {
     using storage_type = device_storage_type_t<T>;
     // compute minimum and maximum values
@@ -210,9 +210,10 @@ struct minmax_functor {
   /**
    * @brief Specialization for strings column.
    */
-  template <typename T, std::enable_if_t<std::is_same_v<T, cudf::string_view>>* = nullptr>
+  template <typename T>
   std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> operator()(
     cudf::column_view const& col, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+    requires(std::is_same_v<T, cudf::string_view>)
   {
     // compute minimum and maximum values
     auto dev_result = reduce<cudf::string_view>(col, stream);
@@ -228,9 +229,10 @@ struct minmax_functor {
   /**
    * @brief Specialization for dictionary column.
    */
-  template <typename T, std::enable_if_t<cudf::is_dictionary<T>()>* = nullptr>
+  template <typename T>
   std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> operator()(
     cudf::column_view const& col, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+    requires(cudf::is_dictionary<T>())
   {
     // compute minimum and maximum values
     auto dev_result = reduce<T>(col, stream);
@@ -243,9 +245,10 @@ struct minmax_functor {
             detail::get_element(keys, static_cast<size_type>(host_result.max_val), stream, mr)};
   }
 
-  template <typename T, std::enable_if_t<!is_supported<T>()>* = nullptr>
+  template <typename T>
   std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> operator()(
     cudf::column_view const&, rmm::cuda_stream_view, rmm::device_async_resource_ref)
+    requires(!is_supported<T>())
   {
     CUDF_FAIL("type not supported for minmax() operation");
   }

@@ -29,7 +29,6 @@ set(cython_sources
     hashing.pyx
     interop.pyx
     _interop_helpers.pyx
-    jit.pyx
     join.pyx
     json.pyx
     labeling.pyx
@@ -54,6 +53,7 @@ set(cython_sources
     types.pyx
     unary.pyx
     utils.pyx
+    utilities.pyx
 )
 set(linked_libraries cudf::cudf)
 rapids_cython_create_modules(

@@ -7,12 +7,14 @@ from __future__ import annotations
 
 import contextlib
 import os
+import textwrap
 import time
 import warnings
 from functools import cache, partial
 from typing import TYPE_CHECKING, Literal, overload
 
 import nvtx
+from typing_extensions import assert_never
 
 from polars.exceptions import ComputeError, PerformanceWarning
 
@@ -20,9 +22,10 @@ import pylibcudf
 import rmm
 from rmm._cuda import gpu
 
+from cudf_polars.dsl.tracing import CUDF_POLARS_NVTX_DOMAIN
 from cudf_polars.dsl.translate import Translator
+from cudf_polars.utils.config import _env_get_int, get_total_device_memory
 from cudf_polars.utils.timer import Timer
-from cudf_polars.utils.versions import POLARS_VERSION_LT_125
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -43,13 +46,6 @@ _SUPPORTED_PREFETCHES = {
     "gather",
     "hash_join",
 }
-
-
-def _env_get_int(name: str, default: int) -> int:
-    try:
-        return int(os.getenv(name, default))
-    except (ValueError, TypeError):  # pragma: no cover
-        return default  # pragma: no cover
 
 
 @cache
@@ -102,8 +98,7 @@ def default_memory_resource(
         ):
             raise ComputeError(
                 "GPU engine requested, but incorrect cudf-polars package installed. "
-                "If your system has a CUDA 11 driver, please uninstall `cudf-polars-cu12` "
-                "and install `cudf-polars-cu11`"
+                "cudf-polars requires CUDA 12.0+ to installed."
             ) from None
         else:
             raise
@@ -140,7 +135,11 @@ def set_memory_resource(
         mr = default_memory_resource(
             device=device,
             cuda_managed_memory=bool(
-                _env_get_int("POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY", default=1) != 0
+                _env_get_int(
+                    "POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY",
+                    default=1 if get_total_device_memory() is not None else 0,
+                )
+                != 0
             ),
         )
     rmm.mr.set_current_device_resource(mr)
@@ -185,9 +184,7 @@ def _callback(
     n_rows: int | None,
     should_time: Literal[False],
     *,
-    device: int | None,
-    memory_resource: int | None,
-    executor: Literal["in-memory", "streaming"] | None,
+    memory_resource: rmm.mr.DeviceMemoryResource | None,
     config_options: ConfigOptions,
     timer: Timer | None,
 ) -> pl.DataFrame: ...
@@ -201,9 +198,7 @@ def _callback(
     n_rows: int | None,
     should_time: Literal[True],
     *,
-    device: int | None,
-    memory_resource: int | None,
-    executor: Literal["in-memory", "streaming"] | None,
+    memory_resource: rmm.mr.DeviceMemoryResource | None,
     config_options: ConfigOptions,
     timer: Timer | None,
 ) -> tuple[pl.DataFrame, list[tuple[int, int, str]]]: ...
@@ -216,9 +211,7 @@ def _callback(
     n_rows: int | None,
     should_time: bool,  # noqa: FBT001
     *,
-    device: int | None,
-    memory_resource: int | None,
-    executor: Literal["in-memory", "streaming"] | None,
+    memory_resource: rmm.mr.DeviceMemoryResource | None,
     config_options: ConfigOptions,
     timer: Timer | None,
 ) -> pl.DataFrame | tuple[pl.DataFrame, list[tuple[int, int, str]]]:
@@ -228,23 +221,32 @@ def _callback(
     if timer is not None:
         assert should_time
     with (
-        nvtx.annotate(message="ExecuteIR", domain="cudf_polars"),
+        nvtx.annotate(message="ExecuteIR", domain=CUDF_POLARS_NVTX_DOMAIN),
         # Device must be set before memory resource is obtained.
-        set_device(device),
+        set_device(config_options.device),
         set_memory_resource(memory_resource),
     ):
-        if executor is None or executor == "in-memory":
+        if config_options.executor.name == "in-memory":
             df = ir.evaluate(cache={}, timer=timer).to_polars()
             if timer is None:
                 return df
             else:
                 return df, timer.timings
-        elif executor == "streaming":
+        elif config_options.executor.name == "streaming":
             from cudf_polars.experimental.parallel import evaluate_streaming
 
+            if timer is not None:
+                msg = textwrap.dedent("""\
+                    LazyFrame.profile() is not supported with the streaming executor.
+                    To profile execution with the streaming executor, use:
+
+                    - NVIDIA NSight Systems with the 'streaming' scheduler.
+                    - Dask's built-in profiling tools with the 'distributed' scheduler.
+                    """)
+                raise NotImplementedError(msg)
+
             return evaluate_streaming(ir, config_options).to_polars()
-        else:
-            raise ValueError(f"Unknown executor '{executor}'")
+        assert_never(f"Unknown executor '{config_options.executor}'")
 
 
 def execute_with_cudf(
@@ -263,7 +265,7 @@ def execute_with_cudf(
         profiling should occur).
 
     config
-        GPUEngine configuration object
+        GPUEngine object. Configuration is available as ``engine.config``.
 
     Raises
     ------
@@ -281,21 +283,20 @@ def execute_with_cudf(
     else:
         start = time.monotonic_ns()
         timer = Timer(start - duration_since_start)
-    device = config.device
+
     memory_resource = config.memory_resource
-    raise_on_fail = config.config.get("raise_on_fail", False)
-    executor = config.config.get("executor", None)
-    with nvtx.annotate(message="ConvertIR", domain="cudf_polars"):
+
+    with nvtx.annotate(message="ConvertIR", domain=CUDF_POLARS_NVTX_DOMAIN):
         translator = Translator(nt, config)
         ir = translator.translate_ir()
         ir_translation_errors = translator.errors
         if timer is not None:
             timer.store(start, time.monotonic_ns(), "gpu-ir-translation")
+
         if (
             memory_resource is None
-            and executor == "streaming"
-            and translator.config_options.get("executor_options.scheduler")
-            == "distributed"
+            and translator.config_options.executor.name == "streaming"
+            and translator.config_options.executor.scheduler == "distributed"
         ):  # pragma: no cover; Requires distributed cluster
             memory_resource = rmm.mr.get_current_device_resource()
         if len(ir_translation_errors):
@@ -312,35 +313,15 @@ def execute_with_cudf(
             exception = NotImplementedError(error_message, unique_errors)
             if bool(int(os.environ.get("POLARS_VERBOSE", 0))):
                 warnings.warn(error_message, PerformanceWarning, stacklevel=2)
-            if raise_on_fail:
+            if translator.config_options.raise_on_fail:
                 raise exception
         else:
-            if POLARS_VERSION_LT_125:  # pragma: no cover
-                nt.set_udf(
-                    partial(
-                        _callback,
-                        ir,
-                        should_time=False,
-                        device=device,
-                        memory_resource=memory_resource,
-                        executor=executor,
-                        config_options=translator.config_options,
-                        timer=None,
-                    )
+            nt.set_udf(
+                partial(
+                    _callback,
+                    ir,
+                    memory_resource=memory_resource,
+                    config_options=translator.config_options,
+                    timer=timer,
                 )
-            else:
-                nt.set_udf(
-                    partial(
-                        _callback,
-                        ir,
-                        device=device,
-                        memory_resource=memory_resource,
-                        executor=executor,
-                        config_options=translator.config_options,
-                        timer=timer,
-                    )
-                )
-
-
-if POLARS_VERSION_LT_125:  # pragma: no cover
-    execute_with_cudf = partial(execute_with_cudf, duration_since_start=None)
+            )

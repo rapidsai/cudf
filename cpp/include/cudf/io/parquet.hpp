@@ -48,6 +48,28 @@ constexpr int32_t default_column_index_truncate_length = 64;   ///< truncate to 
 constexpr size_t default_max_dictionary_size           = 1024 * 1024;  ///< 1MB dictionary size
 constexpr size_type default_max_page_fragment_size     = 5000;  ///< 5000 rows per page fragment
 
+/**
+ * @brief Check if the compression type is supported for reading Parquet files.
+ *
+ * @note This is a runtime check. Some compression types may not be supported because of the current
+ * system configuration.
+ *
+ * @param compression Compression type
+ * @return Boolean indicating if the compression type is supported
+ */
+[[nodiscard]] bool is_supported_read_parquet(compression_type compression);
+
+/**
+ * @brief Check if the compression type is supported for writing Parquet files.
+ *
+ * @note This is a runtime check. Some compression types may not be supported because of the current
+ * system configuration.
+ *
+ * @param compression Compression type
+ * @return Boolean indicating if the compression type is supported
+ */
+[[nodiscard]] bool is_supported_write_parquet(compression_type compression);
+
 class parquet_reader_options_builder;
 
 /**
@@ -96,16 +118,18 @@ class parquet_reader_options {
    * @brief Default constructor.
    *
    * This has been added since Cython requires a default constructor to create objects on stack.
+   * The `hybrid_scan_reader` also uses this to create `parquet_reader_options` without a source.
    */
   explicit parquet_reader_options() = default;
 
   /**
-   * @brief Creates a parquet_reader_options_builder which will build parquet_reader_options.
+   * @brief Creates a `parquet_reader_options_builder` to build `parquet_reader_options`.
+   *        By default, build with empty data source info.
    *
    * @param src Source information to read parquet file
    * @return Builder to build reader options
    */
-  static parquet_reader_options_builder builder(source_info src);
+  static parquet_reader_options_builder builder(source_info src = source_info{});
 
   /**
    * @brief Returns source info.
@@ -115,8 +139,7 @@ class parquet_reader_options {
   [[nodiscard]] source_info const& get_source() const { return _source; }
 
   /**
-   * @brief Returns true/false depending on whether strings should be converted to categories or
-   * not.
+   * @brief Returns boolean depending on whether strings should be converted to categories.
    *
    * @return `true` if strings should be converted to categories
    */
@@ -126,21 +149,21 @@ class parquet_reader_options {
   }
 
   /**
-   * @brief Returns true/false depending whether to use pandas metadata or not while reading.
+   * @brief Returns boolean depending on whether to use pandas metadata while reading.
    *
    * @return `true` if pandas metadata is used while reading
    */
   [[nodiscard]] bool is_enabled_use_pandas_metadata() const { return _use_pandas_metadata; }
 
   /**
-   * @brief Returns true/false depending whether to use arrow schema while reading.
+   * @brief Returns boolean depending on whether to use arrow schema while reading.
    *
    * @return `true` if arrow schema is used while reading
    */
   [[nodiscard]] bool is_enabled_use_arrow_schema() const { return _use_arrow_schema; }
 
   /**
-   * @brief Returns true/false depending on whether to read matching projected and filter columns
+   * @brief Returns boolean depending on whether to read matching projected and filter columns
    * from mismatched Parquet sources.
    *
    * @return `true` if mismatched projected and filter columns will be read from mismatched Parquet
@@ -286,14 +309,14 @@ class parquet_reader_options {
   /**
    * @brief Sets to enable/disable use of pandas metadata to read.
    *
-   * @param val Boolean value whether to use pandas metadata
+   * @param val Boolean indicating whether to use pandas metadata
    */
   void enable_use_pandas_metadata(bool val) { _use_pandas_metadata = val; }
 
   /**
    * @brief Sets to enable/disable use of arrow schema to read.
    *
-   * @param val Boolean value whether to use arrow schema
+   * @param val Boolean indicating whether to use arrow schema
    */
   void enable_use_arrow_schema(bool val) { _use_arrow_schema = val; }
 
@@ -301,8 +324,8 @@ class parquet_reader_options {
    * @brief Sets to enable/disable reading of matching projected and filter columns from mismatched
    * Parquet sources.
    *
-   * @param val Boolean value whether to read matching projected and filter columns from mismatched
-   * Parquet sources.
+   * @param val Boolean indicating whether to read matching projected and filter columns from
+   * mismatched Parquet sources.
    */
   void enable_allow_mismatched_pq_schemas(bool val) { _allow_mismatched_pq_schemas = val; }
 
@@ -350,6 +373,7 @@ class parquet_reader_options_builder {
    * @brief Default constructor.
    *
    * This has been added since Cython requires a default constructor to create objects on stack.
+   * The `hybrid_scan_reader` also uses this to construct `parquet_reader_options` without a source.
    */
   parquet_reader_options_builder() = default;
 
@@ -644,7 +668,7 @@ struct sorting_column {
 };
 
 /**
- * @brief Base settings for `write_parquet()` and `parquet_chunked_writer`.
+ * @brief Base settings for `write_parquet()` and `chunked_parquet_writer`.
  */
 class parquet_writer_options_base {
   // Specify the sink to use for writer output
@@ -1370,7 +1394,7 @@ std::unique_ptr<std::vector<uint8_t>> merge_row_group_metadata(
 class chunked_parquet_writer_options_builder;
 
 /**
- * @brief Settings for `parquet_chunked_writer`.
+ * @brief Settings for `chunked_parquet_writer`.
  */
 class chunked_parquet_writer_options : public parquet_writer_options_base {
   /**
@@ -1425,7 +1449,7 @@ class chunked_parquet_writer_options_builder
 /**
  * @brief chunked parquet writer class to handle options and write tables in chunks.
  *
- * The intent of the parquet_chunked_writer is to allow writing of an
+ * The intent of the chunked_parquet_writer is to allow writing of an
  * arbitrarily large / arbitrary number of rows to a parquet file in multiple passes.
  *
  * The following code snippet demonstrates how to write a single parquet file containing
@@ -1434,21 +1458,21 @@ class chunked_parquet_writer_options_builder
  * @code
  *  auto destination = cudf::io::sink_info("dataset.parquet");
  *  auto options = cudf::io::chunked_parquet_writer_options::builder(destination, table->view());
- *  auto writer  = cudf::io::parquet_chunked_writer(options);
+ *  auto writer  = cudf::io::chunked_parquet_writer(options);
  *
  *  writer.write(table0)
  *  writer.write(table1)
  *  writer.close()
  *  @endcode
  */
-class parquet_chunked_writer {
+class chunked_parquet_writer {
  public:
   /**
    * @brief Default constructor, this should never be used.
    *        This is added just to satisfy cython.
    *        This is added to not leak detail API
    */
-  parquet_chunked_writer();
+  chunked_parquet_writer();
 
   /**
    * @brief Constructor with chunked writer options
@@ -1456,13 +1480,13 @@ class parquet_chunked_writer {
    * @param[in] options options used to write table
    * @param[in] stream CUDA stream used for device memory operations and kernel launches
    */
-  parquet_chunked_writer(chunked_parquet_writer_options const& options,
+  chunked_parquet_writer(chunked_parquet_writer_options const& options,
                          rmm::cuda_stream_view stream = cudf::get_default_stream());
   /**
    * @brief Default destructor.
    *        This is added to not leak detail API
    */
-  ~parquet_chunked_writer();
+  ~chunked_parquet_writer();
 
   /**
    * @brief Writes table to output.
@@ -1475,7 +1499,7 @@ class parquet_chunked_writer {
    * @throws rmm::bad_alloc if there is insufficient space for temporary buffers
    * @return returns reference of the class object
    */
-  parquet_chunked_writer& write(table_view const& table,
+  chunked_parquet_writer& write(table_view const& table,
                                 std::vector<partition_info> const& partitions = {});
 
   /**
@@ -1492,6 +1516,14 @@ class parquet_chunked_writer {
   /// Unique pointer to impl writer class
   std::unique_ptr<parquet::detail::writer> writer;
 };
+
+/**
+ * @brief Deprecated type alias for the `chunked_parquet_writer`
+ *
+ * @deprecated Use chunked_parquet_writer instead. This alias will be removed in a future release.
+ */
+using parquet_chunked_writer [[deprecated("Use chunked_parquet_writer instead")]] =
+  chunked_parquet_writer;
 
 /** @} */  // end of group
 

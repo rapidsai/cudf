@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from libc.stdint cimport int64_t
 from libcpp.string cimport string
 from libcpp.unordered_map cimport unordered_map
@@ -25,9 +25,12 @@ cdef extern from "cudf/io/parquet_metadata.hpp" namespace "cudf::io" nogil:
         parquet_schema schema() except +libcudf_exception_handler
         int64_t num_rows() except +libcudf_exception_handler
         size_type num_rowgroups() except +libcudf_exception_handler
+        vector[size_type] num_rowgroups_per_file() except +libcudf_exception_handler
         unordered_map[string, string] metadata() except +libcudf_exception_handler
         vector[unordered_map[string, int64_t]] rowgroup_metadata()\
             except +libcudf_exception_handler
+        unordered_map[string, vector[int64_t]] \
+            columnchunk_metadata() except +libcudf_exception_handler
 
     cdef parquet_metadata read_parquet_metadata(
         source_info src_info

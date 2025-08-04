@@ -14,44 +14,31 @@ from libcpp.vector cimport vector
 from rmm.pylibrmm.stream cimport Stream
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
-from pylibcudf.libcudf.table.table cimport table
-
 from pylibcudf.libcudf.interop cimport (
     ArrowArray,
     ArrowArrayStream,
+    ArrowDeviceArray,
     ArrowSchema,
     arrow_table,
     column_metadata,
+    to_arrow_device_raw,
     to_arrow_host_raw,
     to_arrow_schema_raw,
 )
+from pylibcudf.libcudf.table.table cimport table
 
 from .column cimport Column
+from .types cimport DataType
 from .utils cimport _get_stream
 from pylibcudf._interop_helpers cimport (
     _release_schema,
     _release_array,
+    _release_device_array,
     _metadata_to_libcudf,
 )
-from ._interop_helpers import ColumnMetadata
-
-from functools import singledispatchmethod
+from ._interop_helpers import ArrowLike, ColumnMetadata
 
 __all__ = ["Table"]
-
-
-class _ArrowLikeMeta(type):
-    # We cannot separate stream and array via singledispatch because the
-    # dispatch will often be ambiguous when objects expose both protocols.
-    def __subclasscheck__(cls, other):
-        return (
-            hasattr(other, "__arrow_c_stream__")
-            or hasattr(other, "__arrow_c_array__")
-        )
-
-
-class _ArrowLike(metaclass=_ArrowLikeMeta):
-    pass
 
 
 cdef class _ArrowTableHolder:
@@ -67,28 +54,73 @@ cdef class Table:
     columns : list
         The columns in this table.
     """
-    def __init__(self, obj):
-        self._init(obj)
-
     __hash__ = None
 
-    @singledispatchmethod
-    def _init(self, obj):
-        raise ValueError(f"Invalid input type {type(obj)}")
-
-    @_init.register(list)
-    def _(self, list columns):
+    def __init__(self, list columns):
         if not all(isinstance(c, Column) for c in columns):
             raise ValueError("All columns must be pylibcudf Column objects")
         self._columns = columns
 
-    @_init.register(_ArrowLike)
-    def _(self, arrow_like):
-        cdef ArrowArrayStream* c_stream
+    @staticmethod
+    def from_arrow(obj: ArrowLike, dtype: DataType | None = None) -> Table:
+        """
+        Create a Table from an Arrow-like object using the Arrow C data interface.
+
+        This method supports constructing a `pylibcudf.Table` from an object that
+        implements one of the Arrow C data interface protocols, such as:
+
+        - `__arrow_c_device_array__`: Returns a tuple of (ArrowSchema, ArrowDeviceArray)
+          representing columnar device memory.
+        - `__arrow_c_stream__`: Returns an ArrowArrayStream pointer representing
+          a stream of host columnar batches.
+        - `__arrow_c_device_stream__`: Not yet implemented.
+        - `__arrow_c_array__`: Not yet implemented.
+
+        Parameters
+        ----------
+        obj : Arrow-like type
+            An object implementing one of the Arrow C data interface methods.
+        dtype: DataType
+            The pylibcudf data type.
+
+        Returns
+        -------
+        Table
+            A Table constructed from the Arrow-like input.
+
+        Raises
+        ------
+        NotImplementedError
+            If the input is a device or host stream not yet supported.
+            If the dtype argument is not None.
+        ValueError
+            If the input does not implement a supported Arrow C interface.
+        """
+        if dtype is not None:
+            raise NotImplementedError(
+                "Creating a Table with the dtype argument specified."
+            )
+        cdef ArrowSchema* c_schema
+        cdef ArrowDeviceArray* c_array
         cdef _ArrowTableHolder result
         cdef unique_ptr[arrow_table] c_result
-        if hasattr(arrow_like, "__arrow_c_stream__"):
-            stream = arrow_like.__arrow_c_stream__()
+        if hasattr(obj, "__arrow_c_device_array__"):
+            schema, array = obj.__arrow_c_device_array__()
+            c_schema = <ArrowSchema*>PyCapsule_GetPointer(schema, "arrow_schema")
+            c_array = (
+                <ArrowDeviceArray*>PyCapsule_GetPointer(array, "arrow_device_array")
+            )
+
+            result = _ArrowTableHolder()
+            with nogil:
+                c_result = make_unique[arrow_table](
+                    move(dereference(c_schema)), move(dereference(c_array))
+                )
+            result.tbl.swap(c_result)
+
+            return Table.from_table_view_of_arbitrary(result.tbl.get().view(), result)
+        elif hasattr(obj, "__arrow_c_stream__"):
+            stream = obj.__arrow_c_stream__()
             c_stream = (
                 <ArrowArrayStream*>PyCapsule_GetPointer(stream, "arrow_array_stream")
             )
@@ -98,10 +130,16 @@ cdef class Table:
                 c_result = make_unique[arrow_table](move(dereference(c_stream)))
             result.tbl.swap(c_result)
 
-            tmp = Table.from_table_view_of_arbitrary(result.tbl.get().view(), result)
-            self._columns = tmp.columns()
-        elif hasattr(arrow_like, "__arrow_c_array__"):
-            raise NotImplementedError("arrays not yet supported")
+            return Table.from_table_view_of_arbitrary(result.tbl.get().view(), result)
+        elif hasattr(obj, "__arrow_c_device_stream__"):
+            # TODO: When we add support for this case, it should be moved above
+            # the __arrow_c_stream__ case since we should prioritize device
+            # data if possible.
+            raise NotImplementedError("Device streams not yet supported")
+        elif hasattr(obj, "__arrow_c_array__"):
+            raise NotImplementedError("Arrow host arrays not yet supported")
+        else:
+            raise ValueError("Invalid Arrow-like object")
 
     cdef table_view view(self) nogil:
         """Generate a libcudf table_view to pass to libcudf algorithms.
@@ -192,6 +230,10 @@ cdef class Table:
         """The columns in this table."""
         return self._columns
 
+    cpdef tuple shape(self):
+        """The shape of this table"""
+        return (self.num_rows(), self.num_columns())
+
     def _to_schema(self, metadata=None):
         """Create an Arrow schema from this table."""
         if metadata is None:
@@ -212,7 +254,7 @@ cdef class Table:
         with nogil:
             raw_schema_ptr = to_arrow_schema_raw(self.view(), c_metadata)
 
-        return PyCapsule_New(<void*>raw_schema_ptr, 'arrow_schema', _release_schema)
+        return PyCapsule_New(<void*>raw_schema_ptr, "arrow_schema", _release_schema)
 
     def _to_host_array(self):
         cdef ArrowArray* raw_host_array_ptr
@@ -221,8 +263,33 @@ cdef class Table:
 
         return PyCapsule_New(<void*>raw_host_array_ptr, "arrow_array", _release_array)
 
+    def _to_device_array(self):
+        cdef ArrowDeviceArray* raw_device_array_ptr
+        with nogil:
+            raw_device_array_ptr = to_arrow_device_raw(self.view(), self)
+
+        return PyCapsule_New(
+            <void*>raw_device_array_ptr,
+            "arrow_device_array",
+            _release_device_array
+        )
+
     def __arrow_c_array__(self, requested_schema=None):
         if requested_schema is not None:
             raise ValueError("pylibcudf.Table does not support alternative schema")
 
         return self._to_schema(), self._to_host_array()
+
+    def __arrow_c_device_array__(self, requested_schema=None, **kwargs):
+        if requested_schema is not None:
+            raise ValueError("pylibcudf.Table does not support alternative schema")
+
+        non_default_kwargs = [
+            name for name, value in kwargs.items() if value is not None
+        ]
+        if non_default_kwargs:
+            raise NotImplementedError(
+                f"Received unsupported keyword argument(s): {non_default_kwargs}"
+            )
+
+        return self._to_schema(), self._to_device_array()

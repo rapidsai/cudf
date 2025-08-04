@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cub/device/device_segmented_reduce.cuh>
-#include <thrust/iterator/iterator_traits.h>
+#include <cuda/std/iterator>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -55,9 +55,7 @@ template <typename InputIterator,
           typename OffsetIterator,
           typename OutputIterator,
           typename BinaryOp,
-          typename OutputType = typename thrust::iterator_value<OutputIterator>::type,
-          typename std::enable_if_t<is_fixed_width<OutputType>() &&
-                                    !cudf::is_fixed_point<OutputType>()>* = nullptr>
+          typename OutputType = cuda::std::iter_value_t<OutputIterator>>
 void segmented_reduce(InputIterator d_in,
                       OffsetIterator d_offset_begin,
                       OffsetIterator d_offset_end,
@@ -65,6 +63,7 @@ void segmented_reduce(InputIterator d_in,
                       BinaryOp op,
                       OutputType initial_value,
                       rmm::cuda_stream_view stream)
+  requires(is_fixed_width<OutputType>() && !cudf::is_fixed_point<OutputType>())
 {
   auto const num_segments = static_cast<size_type>(std::distance(d_offset_begin, d_offset_end)) - 1;
   auto const binary_op    = cudf::detail::cast_functor<OutputType>(op);
@@ -99,9 +98,7 @@ template <typename InputIterator,
           typename OffsetIterator,
           typename OutputIterator,
           typename BinaryOp,
-          typename OutputType = typename thrust::iterator_value<OutputIterator>::type,
-          typename std::enable_if_t<!(is_fixed_width<OutputType>() &&
-                                      !cudf::is_fixed_point<OutputType>())>* = nullptr>
+          typename OutputType = cuda::std::iter_value_t<OutputIterator>>
 void segmented_reduce(InputIterator,
                       OffsetIterator,
                       OffsetIterator,
@@ -109,6 +106,7 @@ void segmented_reduce(InputIterator,
                       BinaryOp,
                       OutputType,
                       rmm::cuda_stream_view)
+  requires(!(is_fixed_width<OutputType>() && !cudf::is_fixed_point<OutputType>()))
 {
   CUDF_FAIL(
     "Unsupported data types called on segmented_reduce. Only numeric and chrono types are "
@@ -146,8 +144,8 @@ void segmented_reduce(InputIterator d_in,
                       size_type* d_valid_counts,
                       rmm::cuda_stream_view stream)
 {
-  using OutputType       = typename thrust::iterator_value<OutputIterator>::type;
-  using IntermediateType = typename thrust::iterator_value<InputIterator>::type;
+  using OutputType       = cuda::std::iter_value_t<OutputIterator>;
+  using IntermediateType = cuda::std::iter_value_t<InputIterator>;
   auto num_segments      = static_cast<size_type>(std::distance(d_offset_begin, d_offset_end)) - 1;
   auto const initial_value = op.template get_identity<IntermediateType>();
   auto const binary_op     = cudf::detail::cast_functor<IntermediateType>(op.get_binary_op());

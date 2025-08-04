@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import pyarrow as pa
 import pytest
 
 import polars as pl
@@ -14,6 +13,7 @@ import pylibcudf as plc
 import cudf_polars.dsl.expr as expr_nodes
 import cudf_polars.dsl.ir as ir_nodes
 from cudf_polars import Translator
+from cudf_polars.containers import DataType
 from cudf_polars.containers.dataframe import DataFrame, NamedColumn
 from cudf_polars.dsl.to_ast import insert_colrefs, to_ast, to_parquet_filter
 
@@ -77,7 +77,9 @@ def test_compute_column(expr, df):
         ast = to_ast(e_with_colrefs)
         if ast is not None:
             return NamedColumn(
-                plc.transform.compute_column(table.table, ast), name=e.name
+                plc.transform.compute_column(table.table, ast),
+                name=e.name,
+                dtype=e.value.dtype,
             )
         return e.evaluate(table)
 
@@ -89,9 +91,7 @@ def test_compute_column(expr, df):
 
 
 def test_invalid_colref_construction_raises():
-    literal = expr_nodes.Literal(
-        plc.DataType(plc.TypeId.INT8), pa.scalar(1, type=pa.int8())
-    )
+    literal = expr_nodes.Literal(DataType(pl.datatypes.Int8()), 1)
     with pytest.raises(TypeError):
         expr_nodes.ColRef(
             literal.dtype, 0, plc.expressions.TableReference.LEFT, literal
@@ -99,14 +99,14 @@ def test_invalid_colref_construction_raises():
 
 
 def test_to_ast_without_colref_raises():
-    col = expr_nodes.Col(plc.DataType(plc.TypeId.INT8), "a")
+    col = expr_nodes.Col(DataType(pl.datatypes.Int8()), "a")
 
     with pytest.raises(TypeError):
         to_ast(col)
 
 
 def test_to_parquet_filter_with_colref_raises():
-    col = expr_nodes.Col(plc.DataType(plc.TypeId.INT8), "a")
+    col = expr_nodes.Col(DataType(pl.datatypes.Int8()), "a")
     colref = expr_nodes.ColRef(col.dtype, 0, plc.expressions.TableReference.LEFT, col)
 
     with pytest.raises(TypeError):

@@ -15,7 +15,6 @@ from . cimport (
     groupby,
     hashing,
     interop,
-    jit,
     join,
     json,
     labeling,
@@ -39,6 +38,7 @@ from . cimport (
     transpose,
     types,
     unary,
+    utilities,
 )
 from .column cimport Column
 from .gpumemoryview cimport gpumemoryview
@@ -67,7 +67,6 @@ __all__ = [
     "groupby",
     "hashing",
     "interop",
-    "jit",
     "join",
     "json",
     "lists",
@@ -90,4 +89,5 @@ __all__ = [
     "types",
     "unary",
     "nvtext",
+    "utilities",
 ]

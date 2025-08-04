@@ -5,9 +5,7 @@
 from __future__ import annotations
 
 import operator
-from typing import TYPE_CHECKING, Any
-
-import pyarrow as pa
+from typing import TYPE_CHECKING, Any, TypedDict
 
 import pylibcudf as plc
 import rmm.mr
@@ -16,6 +14,7 @@ from rmm.pylibrmm.stream import DEFAULT_STREAM
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.expr import Col
 from cudf_polars.dsl.ir import IR
+from cudf_polars.dsl.tracing import nvtx_annotate_cudf_polars
 from cudf_polars.experimental.base import get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.experimental.utils import _concat
@@ -23,15 +22,24 @@ from cudf_polars.experimental.utils import _concat
 if TYPE_CHECKING:
     from collections.abc import MutableMapping, Sequence
 
+    from cudf_polars.containers import DataType
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.experimental.parallel import PartitionInfo
     from cudf_polars.typing import Schema
-    from cudf_polars.utils.config import ConfigOptions
+    from cudf_polars.utils.config import ShuffleMethod
 
 
 # Supported shuffle methods
 _SHUFFLE_METHODS = ("rapidsmpf", "tasks")
+
+
+class ShuffleOptions(TypedDict):
+    """RapidsMPF shuffling options."""
+
+    on: Sequence[str]
+    column_names: Sequence[str]
+    dtypes: Sequence[DataType]
 
 
 # Experimental rapidsmpf shuffler integration
@@ -39,15 +47,20 @@ class RMPFIntegration:  # pragma: no cover
     """cuDF-Polars protocol for rapidsmpf shuffler."""
 
     @staticmethod
+    @nvtx_annotate_cudf_polars(message="RMPFIntegration.insert_partition")
     def insert_partition(
         df: DataFrame,
-        on: Sequence[str],
+        partition_id: int,  # Not currently used
         partition_count: int,
         shuffler: Any,
+        options: ShuffleOptions,
+        *other: Any,
     ) -> None:
         """Add cudf-polars DataFrame chunks to an RMP shuffler."""
-        from rapidsmpf.shuffler import partition_and_pack
+        from rapidsmpf.integrations.cudf.partition import partition_and_pack
 
+        on = options["on"]
+        assert not other, f"Unexpected arguments: {other}"
         columns_to_hash = tuple(df.column_names.index(val) for val in on)
         packed_inputs = partition_and_pack(
             df.table,
@@ -59,15 +72,18 @@ class RMPFIntegration:  # pragma: no cover
         shuffler.insert_chunks(packed_inputs)
 
     @staticmethod
+    @nvtx_annotate_cudf_polars(message="RMPFIntegration.extract_partition")
     def extract_partition(
         partition_id: int,
-        column_names: list[str],
         shuffler: Any,
+        options: ShuffleOptions,
     ) -> DataFrame:
         """Extract a finished partition from the RMP shuffler."""
-        from rapidsmpf.shuffler import unpack_and_concat
+        from rapidsmpf.integrations.cudf.partition import unpack_and_concat
 
         shuffler.wait_on(partition_id)
+        column_names = options["column_names"]
+        dtypes = options["dtypes"]
         return DataFrame.from_table(
             unpack_and_concat(
                 shuffler.extract(partition_id),
@@ -75,6 +91,7 @@ class RMPFIntegration:  # pragma: no cover
                 device_mr=rmm.mr.get_current_device_resource(),
             ),
             column_names,
+            dtypes,
         )
 
 
@@ -87,24 +104,24 @@ class Shuffle(IR):
     Only hash-based partitioning is supported (for now).
     """
 
-    __slots__ = ("config_options", "keys")
-    _non_child = ("schema", "keys", "config_options")
+    __slots__ = ("keys", "shuffle_method")
+    _non_child = ("schema", "keys", "shuffle_method")
     keys: tuple[NamedExpr, ...]
     """Keys to shuffle on."""
-    config_options: ConfigOptions
-    """Configuration options."""
+    shuffle_method: ShuffleMethod
+    """Shuffle method to use."""
 
     def __init__(
         self,
         schema: Schema,
         keys: tuple[NamedExpr, ...],
-        config_options: ConfigOptions,
+        shuffle_method: ShuffleMethod,
         df: IR,
     ):
         self.schema = schema
         self.keys = keys
-        self.config_options = config_options
-        self._non_child_args = (schema, keys, config_options)
+        self.shuffle_method = shuffle_method
+        self._non_child_args = (schema, keys, shuffle_method)
         self.children = (df,)
 
     @classmethod
@@ -112,7 +129,7 @@ class Shuffle(IR):
         cls,
         schema: Schema,
         keys: tuple[NamedExpr, ...],
-        config_options: ConfigOptions,
+        shuffle_method: ShuffleMethod,
         df: DataFrame,
     ) -> DataFrame:  # pragma: no cover
         """Evaluate and return a dataframe."""
@@ -120,6 +137,7 @@ class Shuffle(IR):
         return df
 
 
+@nvtx_annotate_cudf_polars(message="Shuffle")
 def _partition_dataframe(
     df: DataFrame,
     keys: tuple[NamedExpr, ...],
@@ -146,13 +164,17 @@ def _partition_dataframe(
     A dictionary mapping between int partition indices and
     DataFrame fragments.
     """
+    if df.num_rows == 0:
+        # Fast path for empty DataFrame
+        return dict.fromkeys(range(count), df)
+
     # Hash the specified keys to calculate the output
     # partition for each row
     partition_map = plc.binaryop.binary_operation(
         plc.hashing.murmurhash3_x86_32(
             DataFrame([expr.evaluate(df) for expr in keys]).table
         ),
-        plc.interop.from_arrow(pa.scalar(count, type="uint32")),
+        plc.Scalar.from_py(count, plc.DataType(plc.TypeId.UINT32)),
         plc.binaryop.BinaryOperator.PYMOD,
         plc.types.DataType(plc.types.TypeId.UINT32),
     )
@@ -169,6 +191,7 @@ def _partition_dataframe(
         i: DataFrame.from_table(
             split,
             df.column_names,
+            df.dtypes,
         )
         for i, split in enumerate(plc.copying.split(t, offsets[1:-1]))
     }
@@ -235,36 +258,38 @@ def _(
     ir: Shuffle, partition_info: MutableMapping[IR, PartitionInfo]
 ) -> MutableMapping[Any, Any]:
     # Extract "shuffle_method" configuration
-    shuffle_method = ir.config_options.get("executor_options.shuffle_method")
+    shuffle_method = ir.shuffle_method
 
     # Try using rapidsmpf shuffler if we have "simple" shuffle
     # keys, and the "shuffle_method" config is set to "rapidsmpf"
     _keys: list[Col]
-    if shuffle_method in (None, "rapidsmpf") and len(
+    if shuffle_method == "rapidsmpf" and len(
         _keys := [ne.value for ne in ir.keys if isinstance(ne.value, Col)]
     ) == len(ir.keys):  # pragma: no cover
-        shuffle_on = [k.name for k in _keys]
-        try:
-            from rapidsmpf.integrations.dask import rapidsmpf_shuffle_graph
+        from rapidsmpf.integrations.dask import rapidsmpf_shuffle_graph
 
+        shuffle_on = [k.name for k in _keys]
+
+        try:
             return rapidsmpf_shuffle_graph(
                 get_key_name(ir.children[0]),
                 get_key_name(ir),
-                list(ir.schema.keys()),
-                shuffle_on,
                 partition_info[ir.children[0]].count,
                 partition_info[ir].count,
                 RMPFIntegration,
+                {
+                    "on": shuffle_on,
+                    "column_names": list(ir.schema.keys()),
+                    "dtypes": list(ir.schema.values()),
+                },
             )
-        except (ImportError, ValueError) as err:
-            # ImportError: rapidsmpf is not installed
+        except ValueError as err:
             # ValueError: rapidsmpf couldn't find a distributed client
             if shuffle_method == "rapidsmpf":
                 # Only raise an error if the user specifically
                 # set the shuffle method to "rapidsmpf"
                 raise ValueError(
-                    "Rapidsmp is not installed correctly or the current "
-                    "Dask cluster does not support rapidsmpf shuffling."
+                    "The current Dask cluster does not support rapidsmpf shuffling."
                 ) from err
 
     # Simple task-based fall-back

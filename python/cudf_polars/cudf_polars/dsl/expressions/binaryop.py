@@ -13,12 +13,10 @@ from polars.polars import _expr_nodes as pl_expr
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
-from cudf_polars.dsl.expressions.base import AggInfo, ExecutionContext, Expr
+from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
-    from cudf_polars.containers import DataFrame
+    from cudf_polars.containers import DataFrame, DataType
 
 __all__ = ["BinOp"]
 
@@ -29,13 +27,13 @@ class BinOp(Expr):
 
     def __init__(
         self,
-        dtype: plc.DataType,
+        dtype: DataType,
         op: plc.binaryop.BinaryOperator,
         left: Expr,
         right: Expr,
     ) -> None:
         self.dtype = dtype
-        if plc.traits.is_boolean(self.dtype):
+        if plc.traits.is_boolean(self.dtype.plc):
             # For boolean output types, bitand and bitor implement
             # boolean logic, so translate. bitxor also does, but the
             # default behaviour is correct.
@@ -44,7 +42,7 @@ class BinOp(Expr):
         self.children = (left, right)
         self.is_pointwise = True
         if not plc.binaryop.is_supported_operation(
-            self.dtype, left.dtype, right.dtype, op
+            self.dtype.plc, left.dtype.plc, right.dtype.plc, op
         ):
             raise NotImplementedError(
                 f"Operation {op.name} not supported "
@@ -85,17 +83,10 @@ class BinOp(Expr):
     }
 
     def do_evaluate(
-        self,
-        df: DataFrame,
-        *,
-        context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: Mapping[Expr, Column] | None = None,
+        self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        left, right = (
-            child.evaluate(df, context=context, mapping=mapping)
-            for child in self.children
-        )
+        left, right = (child.evaluate(df, context=context) for child in self.children)
         lop = left.obj
         rop = right.obj
         if left.size != right.size:
@@ -103,33 +94,27 @@ class BinOp(Expr):
                 lop = left.obj_scalar
             elif right.is_scalar:
                 rop = right.obj_scalar
-        return Column(
-            plc.binaryop.binary_operation(lop, rop, self.op, self.dtype),
-        )
+        if plc.traits.is_integral_not_bool(self.dtype.plc) and self.op in {
+            plc.binaryop.BinaryOperator.FLOOR_DIV,
+            plc.binaryop.BinaryOperator.PYMOD,
+        }:
+            if right.obj.size() == 1 and right.obj.to_scalar().to_py() == 0:
+                return Column(
+                    plc.Column.all_null_like(left.obj, left.obj.size()),
+                    dtype=self.dtype,
+                )
 
-    def collect_agg(self, *, depth: int) -> AggInfo:
-        """Collect information about aggregations in groupbys."""
-        if depth == 1:
-            # inside aggregation, need to pre-evaluate,
-            # groupby construction has checked that we don't have
-            # nested aggs, so stop the recursion and return ourselves
-            # for pre-eval
-            return AggInfo([(self, plc.aggregation.collect_list(), self)])
-        else:
-            left_info, right_info = (
-                child.collect_agg(depth=depth) for child in self.children
-            )
-            requests = [*left_info.requests, *right_info.requests]
-            # TODO: Hack, if there were no reductions inside this
-            # binary expression then we want to pre-evaluate and
-            # collect ourselves. Otherwise we want to collect the
-            # aggregations inside and post-evaluate. This is a bad way
-            # of checking that we are in case 1.
-            if all(
-                agg.kind() == plc.aggregation.Kind.COLLECT_LIST
-                for _, agg, _ in requests
-            ):
-                return AggInfo([(self, plc.aggregation.collect_list(), self)])
-            return AggInfo(
-                [*left_info.requests, *right_info.requests],
-            )
+            if right.obj.size() > 1:
+                rop = plc.replace.find_and_replace_all(
+                    right.obj,
+                    plc.Column.from_scalar(
+                        plc.Scalar.from_py(0, dtype=self.dtype.plc), 1
+                    ),
+                    plc.Column.from_scalar(
+                        plc.Scalar.from_py(None, dtype=self.dtype.plc), 1
+                    ),
+                )
+        return Column(
+            plc.binaryop.binary_operation(lop, rop, self.op, self.dtype.plc),
+            dtype=self.dtype,
+        )

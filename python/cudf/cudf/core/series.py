@@ -6,7 +6,7 @@ import functools
 import inspect
 import textwrap
 import warnings
-from collections import abc
+from collections.abc import Mapping
 from shutil import get_terminal_size
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -27,49 +27,50 @@ from cudf.api.types import (
 )
 from cudf.core import indexing_utils
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core.buffer import acquire_spill_lock
+from cudf.core.accessors import (
+    CategoricalAccessor,
+    ListMethods,
+    StringMethods,
+    StructMethods,
+)
 from cudf.core.column import (
     ColumnBase,
-    DatetimeColumn,
     IntervalColumn,
-    TimeDeltaColumn,
     as_column,
 )
-from cudf.core.column.categorical import (
-    _DEFAULT_CATEGORICAL_VALUE,
-    CategoricalAccessor as CategoricalAccessor,
-    CategoricalColumn,
-)
 from cudf.core.column.column import concat_columns
-from cudf.core.column.lists import ListMethods
-from cudf.core.column.string import StringMethods
-from cudf.core.column.struct import StructMethods
 from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.dtypes import CategoricalDtype
 from cudf.core.groupby.groupby import SeriesGroupBy, groupby_doc_template
-from cudf.core.index import BaseIndex, DatetimeIndex, RangeIndex, ensure_index
+from cudf.core.index import (
+    DatetimeIndex,
+    Index,
+    RangeIndex,
+    ensure_index,
+)
 from cudf.core.indexed_frame import (
     IndexedFrame,
     _FrameIndexer,
-    _get_label_range_or_mask,
     _indices_from_labels,
     doc_reset_index_template,
 )
 from cudf.core.resample import SeriesResampler
 from cudf.core.single_column_frame import SingleColumnFrame
-from cudf.core.udf.scalar_function import _get_scalar_kernel
+from cudf.core.udf.scalar_function import SeriesApplyKernel
 from cudf.utils import docutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
-    can_convert_to_column,
+    _get_nan_for_dtype,
     find_common_type,
     is_dtype_obj_numeric,
     is_mixed_with_object_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
+from cudf.utils.utils import _EQUALITY_OPS, _is_same_name
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping
+    from collections.abc import Hashable, MutableMapping
 
     import pyarrow as pa
 
@@ -79,6 +80,7 @@ if TYPE_CHECKING:
         NotImplementedType,
         ScalarLike,
     )
+    from cudf.core.dataframe import DataFrame
 
 
 def _format_percentile_names(percentiles):
@@ -163,24 +165,12 @@ def _describe_categorical(obj, percentiles):
     return data
 
 
-def _append_new_row_inplace(col: ColumnBase, value: ScalarLike) -> None:
-    """Append a scalar `value` to the end of `col` inplace.
-    Cast to common type if possible
-    """
-    val_col = as_column(value)
-    to_type = find_common_type([val_col.dtype, col.dtype])
-    val_col = val_col.astype(to_type)
-    old_col = col.astype(to_type)
-
-    col._mimic_inplace(concat_columns([old_col, val_col]), inplace=True)
-
-
 class _SeriesIlocIndexer(_FrameIndexer):
     """
     For integer-location based selection.
     """
 
-    _frame: cudf.Series
+    _frame: Series
 
     @_performance_tracking
     def __getitem__(self, arg):
@@ -244,6 +234,15 @@ class _SeriesLocIndexer(_FrameIndexer):
 
     @_performance_tracking
     def __getitem__(self, arg: Any) -> ScalarLike | DataFrameOrSeries:
+        if not isinstance(self._frame.index, cudf.MultiIndex):
+            indexing_spec = indexing_utils.parse_row_loc_indexer(
+                indexing_utils.destructure_series_loc_indexer(
+                    arg, self._frame
+                ),
+                self._frame.index,
+            )
+            return self._frame._getitem_preprocessed(indexing_spec)
+
         if isinstance(arg, pd.MultiIndex):
             arg = cudf.from_pandas(arg)
 
@@ -279,29 +278,7 @@ class _SeriesLocIndexer(_FrameIndexer):
                 and not isinstance(self._frame.index, cudf.MultiIndex)
                 and is_scalar(value)
             ):
-                idx = self._frame.index
-                if isinstance(idx, cudf.RangeIndex):
-                    if isinstance(key, int) and (key == idx[-1] + idx.step):
-                        idx_copy = cudf.RangeIndex(
-                            start=idx.start,
-                            stop=idx.stop + idx.step,
-                            step=idx.step,
-                            name=idx.name,
-                        )
-                    else:
-                        idx_copy = idx._as_int_index()
-                        _append_new_row_inplace(idx_copy._column, key)
-                else:
-                    # TODO: Modifying index in place is bad because
-                    # our index are immutable, but columns are not (which
-                    # means our index are mutable with internal APIs).
-                    # Get rid of the deep copy once columns too are
-                    # immutable.
-                    idx_copy = idx.copy(deep=True)
-                    _append_new_row_inplace(idx_copy._column, key)
-
-                self._frame._index = idx_copy
-                _append_new_row_inplace(self._frame._column, value)
+                self.append_new_row(key, value, column=True)
                 return
             else:
                 raise e
@@ -317,30 +294,23 @@ class _SeriesLocIndexer(_FrameIndexer):
             arg = arg[0]
         if _is_scalar_or_zero_d_array(arg):
             index_dtype = self._frame.index.dtype
-            warn_msg = (
-                "Series.__getitem__ treating keys as positions is deprecated. "
-                "In a future version, integer keys will always be treated "
-                "as labels (consistent with DataFrame behavior). To access "
-                "a value by position, use `ser.iloc[pos]`"
-            )
             if not is_dtype_obj_numeric(
                 index_dtype, include_decimal=False
             ) and not (
-                isinstance(index_dtype, cudf.CategoricalDtype)
+                isinstance(index_dtype, CategoricalDtype)
                 and index_dtype.categories.dtype.kind in "iu"
             ):
                 # TODO: switch to cudf.utils.dtypes.is_integer(arg)
-                if isinstance(arg, cudf.Scalar) and arg.dtype.kind in "iu":
+                if is_integer(arg):
                     # Do not remove until pandas 3.0 support is added.
                     assert PANDAS_LT_300, (
                         "Need to drop after pandas-3.0 support is added."
                     )
-                    warnings.warn(warn_msg, FutureWarning)
-                    return arg.value
-                elif is_integer(arg):
-                    # Do not remove until pandas 3.0 support is added.
-                    assert PANDAS_LT_300, (
-                        "Need to drop after pandas-3.0 support is added."
+                    warn_msg = (
+                        "Series.__getitem__ treating keys as positions is deprecated. "
+                        "In a future version, integer keys will always be treated "
+                        "as labels (consistent with DataFrame behavior). To access "
+                        "a value by position, use `ser.iloc[pos]`"
                     )
                     warnings.warn(warn_msg, FutureWarning)
                     return arg
@@ -359,9 +329,15 @@ class _SeriesLocIndexer(_FrameIndexer):
                 raise KeyError("Label scalar is out of bounds")
 
         elif isinstance(arg, slice):
-            return _get_label_range_or_mask(
-                self._frame.index, arg.start, arg.stop, arg.step
+            indexer = indexing_utils.find_label_range_or_mask(
+                arg, self._frame.index
             )
+            if isinstance(indexer, indexing_utils.EmptyIndexer):
+                return slice(0, 0, 1)
+            elif isinstance(indexer, indexing_utils.SliceIndexer):
+                return indexer.key
+            else:
+                return indexer.key.column
         elif isinstance(arg, (cudf.MultiIndex, pd.MultiIndex)):
             if isinstance(arg, pd.MultiIndex):
                 arg = cudf.MultiIndex.from_pandas(arg)
@@ -369,13 +345,13 @@ class _SeriesLocIndexer(_FrameIndexer):
             return _indices_from_labels(self._frame, arg)
 
         else:
-            arg = cudf.core.series.Series._from_column(
-                cudf.core.column.as_column(arg)
-            )
-            if arg.dtype.kind == "b":
-                return arg
+            col = as_column(arg)
+            if col.dtype.kind == "b":
+                return Series._from_column(col)
             else:
-                indices = _indices_from_labels(self._frame, arg)
+                indices = _indices_from_labels(
+                    self._frame, Index._from_column(col)
+                )
                 if indices.null_count > 0:
                     raise KeyError("label scalar is out of bound")
                 return indices
@@ -450,60 +426,6 @@ class Series(SingleColumnFrame, IndexedFrame):
 
     @classmethod
     @_performance_tracking
-    def from_categorical(cls, categorical, codes=None):
-        """Creates from a pandas.Categorical
-
-        Parameters
-        ----------
-        categorical : pandas.Categorical
-            Contains data stored in a pandas Categorical.
-
-        codes : array-like, optional.
-            The category codes of this categorical. If ``codes`` are
-            defined, they are used instead of ``categorical.codes``
-
-        Returns
-        -------
-        Series
-            A cudf categorical series.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> import pandas as pd
-        >>> pd_categorical = pd.Categorical(pd.Series(['a', 'b', 'c', 'a'], dtype='category'))
-        >>> pd_categorical
-        ['a', 'b', 'c', 'a']
-        Categories (3, object): ['a', 'b', 'c']
-        >>> series = cudf.Series.from_categorical(pd_categorical)
-        >>> series
-        0    a
-        1    b
-        2    c
-        3    a
-        dtype: category
-        Categories (3, object): ['a', 'b', 'c']
-        """
-        col = as_column(categorical)
-        if codes is not None:
-            codes = as_column(codes)
-
-            valid_codes = codes != codes.dtype.type(_DEFAULT_CATEGORICAL_VALUE)
-
-            mask = None
-            if not valid_codes.all():
-                mask = valid_codes.as_mask()
-            col = CategoricalColumn(
-                data=col.data,
-                size=codes.size,
-                dtype=col.dtype,
-                mask=mask,
-                children=(codes,),
-            )
-        return Series._from_column(col)
-
-    @classmethod
-    @_performance_tracking
     def from_arrow(cls, array: pa.Array) -> Self:
         """Create from PyArrow Array/ChunkedArray.
 
@@ -532,55 +454,6 @@ class Series(SingleColumnFrame, IndexedFrame):
         """
         return cls._from_column(ColumnBase.from_arrow(array))
 
-    @classmethod
-    @_performance_tracking
-    def from_masked_array(cls, data, mask, null_count=None):
-        """Create a Series with null-mask.
-        This is equivalent to:
-
-            Series(data).set_mask(mask, null_count=null_count)
-
-        Parameters
-        ----------
-        data : 1D array-like
-            The values.  Null values must not be skipped.  They can appear
-            as garbage values.
-        mask : 1D array-like
-            The null-mask.  Valid values are marked as ``1``; otherwise ``0``.
-            The mask bit given the data index ``idx`` is computed as::
-
-                (mask[idx // 8] >> (idx % 8)) & 1
-        null_count : int, optional
-            The number of null values.
-            If None, it is calculated automatically.
-
-        Returns
-        -------
-        Series
-
-        Examples
-        --------
-        >>> import cudf
-        >>> a = cudf.Series([1, 2, 3, None, 4, None])
-        >>> a
-        0       1
-        1       2
-        2       3
-        3    <NA>
-        4       4
-        5    <NA>
-        dtype: int64
-        >>> b = cudf.Series([10, 11, 12, 13, 14])
-        >>> cudf.Series.from_masked_array(data=b, mask=a._column.mask)
-        0      10
-        1      11
-        2      12
-        3    <NA>
-        4      14
-        dtype: int64
-        """
-        return cls._from_column(as_column(data).set_mask(mask))
-
     @_performance_tracking
     def __init__(
         self,
@@ -600,7 +473,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         if dtype is not None:
             dtype = cudf.dtype(dtype)
 
-        if isinstance(data, (pd.Series, pd.Index, BaseIndex, Series)):
+        if isinstance(data, (pd.Series, pd.Index, Index, Series)):
             if copy and not isinstance(data, (pd.Series, pd.Index)):
                 data = data.copy(deep=True)
             name_from_data = data.name
@@ -673,11 +546,9 @@ class Series(SingleColumnFrame, IndexedFrame):
 
         super().__init__({name: column}, index=first_index)
         if second_index is not None:
-            # TODO: This there a better way to do this?
             reindexed = self.reindex(index=second_index, copy=False)
             self._data = reindexed._data
             self._index = second_index
-        self._check_data_index_length_match()
 
     @classmethod
     @_performance_tracking
@@ -685,8 +556,8 @@ class Series(SingleColumnFrame, IndexedFrame):
         cls,
         column: ColumnBase,
         *,
-        name: abc.Hashable = None,
-        index: BaseIndex | None = None,
+        name: Hashable = None,
+        index: Index | None = None,
     ) -> Self:
         ca = ColumnAccessor({name: column}, verify=False)
         return cls._from_data(ca, index=index)
@@ -696,7 +567,7 @@ class Series(SingleColumnFrame, IndexedFrame):
     def _from_data(
         cls,
         data: MutableMapping,
-        index: BaseIndex | None = None,
+        index: Index | None = None,
         name: Any = no_default,
     ) -> Series:
         out = super()._from_data(data=data, index=index)
@@ -862,31 +733,6 @@ class Series(SingleColumnFrame, IndexedFrame):
         return self._column.has_nulls(include_nan=True)
 
     @_performance_tracking
-    def serialize(self):
-        header, frames = super().serialize()
-
-        header["index"], index_frames = self.index.device_serialize()
-        header["index_frame_count"] = len(index_frames)
-        # For backwards compatibility with older versions of cuDF, index
-        # columns are placed before data columns.
-        frames = index_frames + frames
-
-        return header, frames
-
-    @classmethod
-    @_performance_tracking
-    def deserialize(cls, header, frames):
-        index_nframes = header["index_frame_count"]
-        obj = super().deserialize(
-            header, frames[header["index_frame_count"] :]
-        )
-
-        index = cls.device_deserialize(header["index"], frames[:index_nframes])
-        obj.index = index
-
-        return obj
-
-    @_performance_tracking
     def drop(
         self,
         labels=None,
@@ -905,28 +751,6 @@ class Series(SingleColumnFrame, IndexedFrame):
         return super().drop(
             labels, axis, index, columns, level, inplace, errors
         )
-
-    def tolist(self):
-        """Conversion to host memory lists is currently unsupported
-
-        Raises
-        ------
-        TypeError
-            If this method is called
-
-        Notes
-        -----
-        cuDF currently does not support implicity conversion from GPU stored series to
-        host stored lists. A `TypeError` is raised when this method is called.
-        Consider calling `.to_arrow().to_pylist()` to construct a Python list.
-        """
-        raise TypeError(
-            "cuDF does not support conversion to host memory "
-            "via the `tolist()` method. Consider using "
-            "`.to_arrow().to_pylist()` to construct a Python list."
-        )
-
-    to_list = tolist
 
     @_performance_tracking
     def to_dict(self, into: type[dict] = dict) -> dict:
@@ -1141,7 +965,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         )
 
     @_performance_tracking
-    def to_frame(self, name: abc.Hashable = no_default) -> cudf.DataFrame:
+    def to_frame(self, name: Hashable = no_default) -> DataFrame:
         """Convert Series into a DataFrame
 
         Parameters
@@ -1176,7 +1000,36 @@ class Series(SingleColumnFrame, IndexedFrame):
         return self._to_frame(name=name, index=self.index)
 
     @_performance_tracking
-    def memory_usage(self, index=True, deep=False):
+    def memory_usage(self, index: bool = True, deep: bool = False) -> int:  # type: ignore[override]
+        """
+        Return the memory usage of the Series.
+
+        Parameters
+        ----------
+        index : bool, default True
+            Specifies whether to include the memory usage of the index.
+        deep : bool, default False
+            The deep parameter is ignored and is only included for pandas
+            compatibility.
+
+        Returns
+        -------
+        int
+            The total memory usage in bytes.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(range(3), index=['a','b','c'])
+        >>> s.memory_usage()
+        43
+
+        Not including the index gives the size of the rest of the data, which
+        is necessarily smaller:
+
+        >>> s.memory_usage(index=False)
+        24
+        """
         return self._column.memory_usage + (
             self.index.memory_usage() if index else 0
         )
@@ -1387,6 +1240,25 @@ class Series(SingleColumnFrame, IndexedFrame):
     def __getitem__(self, arg):
         if isinstance(arg, slice):
             return self.iloc[arg]
+        elif is_integer(arg) and not (
+            (
+                isinstance(self.index.dtype, CategoricalDtype)
+                and self.index.dtype.categories.dtype.kind in {"i", "u", "f"}
+            )
+            or self.index.dtype.kind in {"i", "u", "f"}
+        ):
+            # Do not remove until pandas 3.0 support is added.
+            assert PANDAS_LT_300, (
+                "Need to drop after pandas-3.0 support is added."
+            )
+            warnings.warn(
+                "Series.__getitem__ treating keys as positions is deprecated "
+                "In a future version, integer keys will always be treated as labels "
+                "(consistent with DataFrame behavior) To access a value by position, "
+                "use `ser.iloc[pos]`",
+                FutureWarning,
+            )
+            return self.iloc[arg]
         else:
             return self.loc[arg]
 
@@ -1416,7 +1288,7 @@ class Series(SingleColumnFrame, IndexedFrame):
                 preprocess = cudf.concat([top, bottom])
         else:
             preprocess = self
-        if isinstance(preprocess.dtype, cudf.CategoricalDtype):
+        if isinstance(preprocess.dtype, CategoricalDtype):
             min_rows = (
                 height
                 if pd.get_option("display.min_rows") == 0
@@ -1452,7 +1324,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             output = repr(preprocess._pandas_repr_compatible().to_pandas())
 
         lines = output.split("\n")
-        if isinstance(preprocess.dtype, cudf.CategoricalDtype):
+        if isinstance(preprocess.dtype, CategoricalDtype):
             category_memory = lines[-1]
             if preprocess.dtype.categories.dtype.kind == "f":
                 category_memory = category_memory.replace("'", "").split(": ")
@@ -1483,7 +1355,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             lines = output.split(",")
             lines[-1] = " dtype: %s)" % self.dtype
             return ",".join(lines)
-        if isinstance(preprocess._column, cudf.core.column.CategoricalColumn):
+        if isinstance(preprocess._column.dtype, CategoricalDtype):
             lines.append(category_memory)
         return "\n".join(lines)
 
@@ -1497,14 +1369,14 @@ class Series(SingleColumnFrame, IndexedFrame):
     ) -> tuple[
         dict[str | None, tuple[ColumnBase, Any, bool, Any]]
         | NotImplementedType,
-        BaseIndex | None,
+        Index | None,
         dict[str, Any],
     ]:
         # Specialize binops to align indices.
         if isinstance(other, Series):
             if (
                 not can_reindex
-                and fn in cudf.utils.utils._EQUALITY_OPS
+                and fn in _EQUALITY_OPS
                 and not self.index.equals(other.index)
             ):
                 raise ValueError(
@@ -1515,9 +1387,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             lhs = self
 
         ca_attributes = {}
-        if hasattr(other, "name") and cudf.utils.utils._is_same_name(
-            self.name, other.name
-        ):
+        if hasattr(other, "name") and _is_same_name(self.name, other.name):
             ca_attributes["level_names"] = self._data._level_names
 
         operands = lhs._make_operands_for_binop(other, fill_value, reflect)
@@ -1572,9 +1442,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             else:
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore", FutureWarning)
-                    result_index = cudf.core.index.Index._concat(
-                        [o.index for o in objs]
-                    )
+                    result_index = Index._concat([o.index for o in objs])
         elif index is False:
             result_index = None
         else:
@@ -1592,24 +1460,16 @@ class Series(SingleColumnFrame, IndexedFrame):
                 if (
                     obj.null_count == len(obj)
                     or len(obj) == 0
-                    or isinstance(
-                        obj._column, cudf.core.column.CategoricalColumn
-                    )
-                    or isinstance(
-                        objs[0]._column, cudf.core.column.CategoricalColumn
-                    )
+                    or isinstance(obj._column.dtype, CategoricalDtype)
+                    or isinstance(objs[0]._column.dtype, CategoricalDtype)
                 ):
                     continue
 
                 if (
                     not dtype_mismatch
                     and (
-                        not isinstance(
-                            objs[0]._column, cudf.core.column.CategoricalColumn
-                        )
-                        and not isinstance(
-                            obj._column, cudf.core.column.CategoricalColumn
-                        )
+                        not isinstance(objs[0]._column.dtype, CategoricalDtype)
+                        and not isinstance(obj._column.dtype, CategoricalDtype)
                     )
                     and objs[0].dtype != obj.dtype
                 ):
@@ -1643,12 +1503,6 @@ class Series(SingleColumnFrame, IndexedFrame):
     def null_count(self):
         """Number of null values"""
         return self._column.null_count
-
-    @property  # type: ignore
-    @_performance_tracking
-    def nullable(self):
-        """A boolean indicating whether a null-mask is needed"""
-        return self._column.nullable
 
     @property  # type: ignore
     @_performance_tracking
@@ -1847,7 +1701,7 @@ class Series(SingleColumnFrame, IndexedFrame):
     ):
         if isinstance(value, pd.Series):
             value = Series.from_pandas(value)
-        elif isinstance(value, abc.Mapping):
+        elif isinstance(value, Mapping):
             value = Series(value)
         if isinstance(value, cudf.Series):
             if not self.index.equals(value.index):
@@ -2080,16 +1934,10 @@ class Series(SingleColumnFrame, IndexedFrame):
         """
         return self._column.data
 
-    @property  # type: ignore
-    @_performance_tracking
-    def nullmask(self):
-        """The gpu buffer for the null-mask"""
-        return cudf.Series(self._column.nullmask)
-
     @_performance_tracking
     def astype(
         self,
-        dtype: Dtype | dict[abc.Hashable, Dtype],
+        dtype: Dtype | dict[Hashable, Dtype],
         copy: bool = False,
         errors: Literal["raise", "ignore"] = "raise",
     ) -> Self:
@@ -2647,7 +2495,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         elif by_row != "compat":
             raise NotImplementedError("by_row is currently not supported.")
 
-        result = self._apply(func, _get_scalar_kernel, *args, **kwargs)
+        result = self._apply(func, SeriesApplyKernel, *args, **kwargs)
         result.name = self.name
         return result
 
@@ -2799,7 +2647,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             raise NotImplementedError("ddof parameter is not implemented yet")
 
         if self.empty or other.empty:
-            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+            return _get_nan_for_dtype(self.dtype)
 
         lhs = self.nans_to_nulls().dropna()
         rhs = other.nans_to_nulls().dropna()
@@ -2930,7 +2778,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             raise NotImplementedError("Unsupported argument 'min_periods'")
 
         if self.empty or other.empty:
-            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+            return _get_nan_for_dtype(self.dtype)
 
         lhs = self.nans_to_nulls().dropna()
         rhs = other.nans_to_nulls().dropna()
@@ -3202,9 +3050,9 @@ class Series(SingleColumnFrame, IndexedFrame):
             res = res[res.index.notna()]
         else:
             res = self.groupby(self, dropna=dropna).count(dropna=dropna)
-            if isinstance(self.dtype, cudf.CategoricalDtype) and len(
-                res
-            ) != len(self.dtype.categories):
+            if isinstance(self.dtype, CategoricalDtype) and len(res) != len(
+                self.dtype.categories
+            ):
                 # For categorical dtypes: When there exists
                 # categories in dtypes and they are missing in the
                 # column, `value_counts` will have to return
@@ -3294,7 +3142,7 @@ class Series(SingleColumnFrame, IndexedFrame):
                 np_array_q = np.asarray(q)
             except TypeError:
                 try:
-                    np_array_q = cudf.core.column.as_column(q).values_host
+                    np_array_q = cupy.asarray(q).get()
                 except TypeError:
                     raise TypeError(
                         f"q must be a scalar or array-like, got {type(q)}"
@@ -3342,12 +3190,12 @@ class Series(SingleColumnFrame, IndexedFrame):
         dtype = "str"
         if self.dtype.kind == "b":
             data = _describe_categorical(self, percentiles)
-        elif isinstance(self._column, cudf.core.column.NumericalColumn):
+        elif is_dtype_obj_numeric(self._column.dtype):
             data = _describe_numeric(self, percentiles)
             dtype = None
-        elif isinstance(self._column, TimeDeltaColumn):
+        elif self._column.dtype.kind == "m":
             data = _describe_timedelta(self, percentiles)
-        elif isinstance(self._column, DatetimeColumn):
+        elif self._column.dtype.kind == "M":
             data = _describe_timestamp(self, percentiles)
         else:
             data = _describe_categorical(self, percentiles)
@@ -3468,7 +3316,7 @@ class Series(SingleColumnFrame, IndexedFrame):
 
     @_performance_tracking
     @docutils.doc_apply(
-        groupby_doc_template.format(
+        groupby_doc_template.format(  # type: ignore[has-type]
             ret=textwrap.dedent(
                 """
                 Returns
@@ -3830,6 +3678,8 @@ class Series(SingleColumnFrame, IndexedFrame):
         ----------
         col : pylibcudf.Column
             The input Column.
+        metadata : dict | None
+            The Series metadata.
 
         Returns
         -------
@@ -3857,9 +3707,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             name = metadata.get("name")
             index = metadata.get("index")
         return cls._from_column(
-            cudf.core.column.ColumnBase.from_pylibcudf(
-                col, data_ptr_exposed=True
-            ),
+            ColumnBase.from_pylibcudf(col, data_ptr_exposed=True),
             name=name,
             index=index,
         )
@@ -4496,7 +4344,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         )
 
     @_performance_tracking
-    def isocalendar(self) -> cudf.DataFrame:
+    def isocalendar(self) -> DataFrame:
         """
         Returns a DataFrame with the year, week, and day
         calculated according to the ISO 8601 standard.
@@ -4931,7 +4779,10 @@ class DatetimeProperties(BaseDatelikeProperties):
             :meth:`pandas.DatetimeIndex.strftime`
 
             The following date format identifiers are not yet
-            supported: ``%c``, ``%x``,``%X``
+            supported: ``%c``, ``%x``, ``%X``.
+
+            Timezone-aware datetimes will always be represented as UTC
+            even if ``%z`` is not specified.
         """
 
         if not isinstance(date_format, str):
@@ -5191,7 +5042,7 @@ class TimedeltaProperties(BaseDatelikeProperties):
 
     @property  # type: ignore
     @_performance_tracking
-    def components(self) -> cudf.DataFrame:
+    def components(self) -> DataFrame:
         """
         Return a Dataframe of the components of the Timedeltas.
 
@@ -5343,141 +5194,3 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
     ]
 
     return result
-
-
-@acquire_spill_lock()
-@_performance_tracking
-def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
-    r"""Returns a boolean array where two arrays are equal within a tolerance.
-
-    Two values in ``a`` and ``b`` are  considered equal when the following
-    equation is satisfied.
-
-    .. math::
-       |a - b| \le \mathrm{atol} + \mathrm{rtol} |b|
-
-    Parameters
-    ----------
-    a : list-like, array-like or cudf.Series
-        Input sequence to compare.
-    b : list-like, array-like or cudf.Series
-        Input sequence to compare.
-    rtol : float
-        The relative tolerance.
-    atol : float
-        The absolute tolerance.
-    equal_nan : bool
-        If ``True``, null's in ``a`` will be considered equal
-        to null's in ``b``.
-
-    Returns
-    -------
-    Series
-
-    See Also
-    --------
-    np.isclose : Returns a boolean array where two arrays are element-wise
-        equal within a tolerance.
-
-    Examples
-    --------
-    >>> import cudf
-    >>> s1 = cudf.Series([1.9876543,   2.9876654,   3.9876543, None, 9.9, 1.0])
-    >>> s2 = cudf.Series([1.987654321, 2.987654321, 3.987654321, None, 19.9,
-    ... None])
-    >>> s1
-    0    1.9876543
-    1    2.9876654
-    2    3.9876543
-    3         <NA>
-    4          9.9
-    5          1.0
-    dtype: float64
-    >>> s2
-    0    1.987654321
-    1    2.987654321
-    2    3.987654321
-    3           <NA>
-    4           19.9
-    5           <NA>
-    dtype: float64
-    >>> cudf.isclose(s1, s2)
-    0     True
-    1     True
-    2     True
-    3    False
-    4    False
-    5    False
-    dtype: bool
-    >>> cudf.isclose(s1, s2, equal_nan=True)
-    0     True
-    1     True
-    2     True
-    3     True
-    4    False
-    5    False
-    dtype: bool
-    >>> cudf.isclose(s1, s2, equal_nan=False)
-    0     True
-    1     True
-    2     True
-    3    False
-    4    False
-    5    False
-    dtype: bool
-    """
-
-    if not can_convert_to_column(a):
-        raise TypeError(
-            f"Parameter `a` is expected to be a "
-            f"list-like or Series object, found:{type(a)}"
-        )
-    if not can_convert_to_column(b):
-        raise TypeError(
-            f"Parameter `b` is expected to be a "
-            f"list-like or Series object, found:{type(a)}"
-        )
-
-    if isinstance(a, pd.Series):
-        a = Series.from_pandas(a)
-    if isinstance(b, pd.Series):
-        b = Series.from_pandas(b)
-
-    index = None
-
-    if isinstance(a, cudf.Series) and isinstance(b, cudf.Series):
-        b = b.reindex(a.index)
-        index = cudf.Index(a.index)
-
-    a_col = as_column(a)
-    a_array = cupy.asarray(a_col.data_array_view(mode="read"))
-
-    b_col = as_column(b)
-    b_array = cupy.asarray(b_col.data_array_view(mode="read"))
-
-    result = cupy.isclose(
-        a=a_array, b=b_array, rtol=rtol, atol=atol, equal_nan=equal_nan
-    )
-    result_col = as_column(result)
-
-    if a_col.null_count and b_col.null_count:
-        a_nulls = a_col.isnull()
-        b_nulls = b_col.isnull()
-        null_values = a_nulls | b_nulls
-
-        if equal_nan is True:
-            equal_nulls = a_nulls & b_nulls
-
-        del a_nulls, b_nulls
-    elif a_col.null_count:
-        null_values = a_col.isnull()
-    elif b_col.null_count:
-        null_values = b_col.isnull()
-    else:
-        return Series._from_column(result_col, index=index)
-
-    result_col[null_values] = False
-    if equal_nan is True and a_col.null_count and b_col.null_count:
-        result_col[equal_nulls] = True
-
-    return Series._from_column(result_col, index=index)

@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/strings/udf/managed_udf_string.cuh>
 #include <cudf/strings/udf/udf_apis.hpp>
 #include <cudf/strings/udf/udf_string.cuh>
 #include <cudf/strings/utilities.hpp>
@@ -31,7 +32,9 @@
 namespace cudf {
 namespace strings {
 namespace udf {
+
 namespace detail {
+
 namespace {
 
 /**

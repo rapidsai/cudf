@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -278,6 +278,17 @@ class column {
    * the column.
    */
   contents release() noexcept;
+
+  /**
+   * @brief Returns the total device allocation size of the column in bytes
+   *
+   * This includes the size of the data buffer, null mask, and any child columns.
+   * It also includes any padding bytes and is at least as large as
+   * `size()*sizeof(T)` for the column's logical type.
+   *
+   * @return The total allocation size in bytes
+   */
+  [[nodiscard]] std::size_t alloc_size() const;
 
   /**
    * @brief Creates an immutable, non-owning view of the column's data and

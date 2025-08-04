@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include "join_common_utils.cuh"
 #include "join_common_utils.hpp"
 #include "mixed_join_common_utils.cuh"
@@ -22,6 +24,7 @@
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>

@@ -5,7 +5,6 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 import cudf
-from cudf._fuzz_testing.utils import compare_dataframe
 
 
 def test_parquet_long_list(tmpdir):
@@ -55,4 +54,4 @@ def test_parquet_long_list(tmpdir):
     # Make sure that the cudf reader matches the pandas reader for this data
     actual = cudf.read_parquet(file_name)
     expected = pd.read_parquet(file_name)
-    compare_dataframe(actual, expected, nullable=False)
+    assert actual.to_arrow().equals(pa.Table.from_pandas(expected))

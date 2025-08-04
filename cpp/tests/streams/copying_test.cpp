@@ -18,6 +18,7 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
 #include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/contiguous_split.hpp>
@@ -360,3 +361,5 @@ TEST_F(CopyingTest, ContiguousSplit)
   cudf::table_view tbl({col, col2});
   auto result = cudf::contiguous_split(tbl, splits, cudf::test::get_default_stream());
 }
+
+CUDF_TEST_PROGRAM_MAIN()

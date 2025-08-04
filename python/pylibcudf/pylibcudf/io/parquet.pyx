@@ -26,8 +26,9 @@ from pylibcudf.libcudf.io.parquet cimport (
     parquet_reader_options,
     read_parquet as cpp_read_parquet,
     write_parquet as cpp_write_parquet,
+    is_supported_write_parquet as cpp_is_supported_write_parquet,
     parquet_writer_options,
-    parquet_chunked_writer as cpp_parquet_chunked_writer,
+    chunked_parquet_writer as cpp_chunked_parquet_writer,
     chunked_parquet_writer_options,
     merge_row_group_metadata as cpp_merge_row_group_metadata,
 )
@@ -338,7 +339,7 @@ cpdef read_parquet(ParquetReaderOptions options, Stream stream = None):
     return TableWithMetadata.from_libcudf(c_result, stream)
 
 
-cdef class ParquetChunkedWriter:
+cdef class ChunkedParquetWriter:
     cpdef memoryview close(self, list metadata_file_path):
         """
         Closes the chunked Parquet writer.
@@ -403,14 +404,14 @@ cdef class ParquetChunkedWriter:
 
         Returns
         -------
-        ParquetChunkedWriter
+        ChunkedParquetWriter
         """
-        cdef ParquetChunkedWriter parquet_writer = ParquetChunkedWriter.__new__(
-            ParquetChunkedWriter
+        cdef ChunkedParquetWriter parquet_writer = ChunkedParquetWriter.__new__(
+            ChunkedParquetWriter
         )
         cdef Stream s = _get_stream(stream)
         parquet_writer.c_obj.reset(
-            new cpp_parquet_chunked_writer(options.c_obj, s.view())
+            new cpp_chunked_parquet_writer(options.c_obj, s.view())
         )
         return parquet_writer
 
@@ -958,6 +959,14 @@ cpdef memoryview write_parquet(ParquetWriterOptions options, Stream stream = Non
         c_result = cpp_write_parquet(move(options.c_obj), s.view())
 
     return memoryview(HostBuffer.from_unique_ptr(move(c_result)))
+
+
+cpdef bool is_supported_write_parquet(compression_type compression):
+    """Check if the compression type is supported for writing Parquet files.
+
+    For details, see :cpp:func:`is_supported_write_parquet`.
+    """
+    return cpp_is_supported_write_parquet(compression)
 
 
 cpdef memoryview merge_row_group_metadata(list metdata_list):

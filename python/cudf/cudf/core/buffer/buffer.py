@@ -14,7 +14,7 @@ import pylibcudf
 import rmm
 
 from cudf.core.abc import Serializable
-from cudf.utils.string import format_bytes
+from cudf.core.buffer.string import format_bytes
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

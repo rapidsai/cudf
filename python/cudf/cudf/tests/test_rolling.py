@@ -1,6 +1,7 @@
 # Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 import math
+import pickle
 
 import numpy as np
 import pandas as pd
@@ -530,3 +531,9 @@ def test_pandas_compat_int_nan_min_periods(klass):
     result = getattr(cudf, klass)(data).rolling(2, min_periods=1).sum()
     expected = getattr(cudf, klass)([None, 1, 3, 2, 4, 10, 17])
     assert_eq(result, expected)
+
+
+def test_groupby_rolling_pickleable():
+    df = cudf.DataFrame({"a": [1, 1, 2], "b": [1, 2, 3]})
+    gb_rolling = pickle.loads(pickle.dumps(df.groupby("a").rolling(2)))
+    assert_eq(gb_rolling.obj, cudf.DataFrame({"b": [1, 2, 3]}))

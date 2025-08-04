@@ -1,3 +1,5 @@
+(pylibcudf-developer-docs)=
+
 # Developer Documentation
 
 pylibcudf is a lightweight Cython wrapper around libcudf.
@@ -134,15 +136,15 @@ def pa_column(pa_dtype):
 
 @pytest.fixture(scope="module")
 def column(pa_column):
-    return plc.interop.from_arrow(pa_column)
+    return plc.Column.from_arrow(pa_column)
 
 
 def test_foo(pa_column, column):
     index = 1
-    result = plc.foo(column)
-    expected = pa.foo(pa_column)
+    got = plc.foo(column)
+    expect = pa.foo(pa_column)
 
-    assert_column_eq(result, expected)
+    assert_column_eq(expect, got)
 ```
 
 Some guidelines on what should be tested:
@@ -222,6 +224,22 @@ from pylibcudf.libcudf.copying cimport out_of_bounds_policy
 from pylibcudf.libcudf.copying import \
     out_of_bounds_policy as OutOfBoundsPolicy  # no-cython-lint
 ```
+
+### Enum string representations
+
+By default, Cython's `cpdef enum class` generates a valid Python `Enum` type for
+each C++ enum. However, the default `__str__` implementation for these enums is not
+very informative. It returns the underlying value (e.g., `11` instead of `<type_id.BOOL8: 11>`).
+
+To improve developer experience, we manually set `__str__ = __repr__` for all public
+enums. This ensures that printing an enum from Python returns a meaningful name like:
+
+```python
+>>> from pylibcudf.types import TypeId
+>>> print(TypeId.INT32)
+<type_id.INT32>
+```
+
 
 ### Handling overloaded functions in libcudf
 As a C++ library, libcudf makes extensive use of function overloading.

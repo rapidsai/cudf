@@ -17,22 +17,14 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
+#include <cudf_test/testing_main.hpp>
 
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/jit/runtime_support.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 
-class TransformTest : public cudf::test::BaseFixture {
- protected:
-  void SetUp() override
-  {
-    if (!cudf::is_runtime_jit_supported()) {
-      GTEST_SKIP() << "Skipping tests that require runtime JIT support";
-    }
-  }
-};
+class TransformTest : public cudf::test::BaseFixture {};
 
 template <class dtype, class Data>
 void test_udf(char const* udf, Data data_init, cudf::size_type size, bool is_ptx)
@@ -45,6 +37,7 @@ void test_udf(char const* udf, Data data_init, cudf::size_type size, bool is_ptx
                   udf,
                   cudf::data_type(cudf::type_to_id<dtype>()),
                   is_ptx,
+                  std::nullopt,
                   cudf::test::get_default_stream());
 }
 
@@ -168,3 +161,5 @@ TEST_F(TransformTest, SegmentedRowBitCount)
   auto constexpr segment_length = 2;
   cudf::segmented_row_bit_count(input, segment_length, cudf::test::get_default_stream());
 }
+
+CUDF_TEST_PROGRAM_MAIN()

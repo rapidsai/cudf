@@ -15,25 +15,26 @@
 #   run-pandas-tests.sh --tb=line --report-log=log.json
 #
 # This script creates a `pandas-testing` directory if it doesn't exist
+#
+# If running locally, it's recommended to pass '-m "not slow and not single_cpu and not db"'
 
 set -euo pipefail
+
+EXITCODE=0
+trap "EXITCODE=1" ERR
+set +e
 
 # Grab the Pandas source corresponding to the version
 # of Pandas installed.
 PANDAS_VERSION=$(python -c "import pandas; print(pandas.__version__)")
 
-# tests/io/test_clipboard.py::TestClipboard crashes pytest workers (possibly due to fixture patching clipboard functionality)
-PYTEST_IGNORES="--ignore=tests/io/parser/common/test_read_errors.py \
---ignore=tests/io/test_clipboard.py"
-
+echo "Running Pandas tests for version ${PANDAS_VERSION}"
 mkdir -p pandas-testing
 cd pandas-testing
 
 if [ ! -d "pandas" ]; then
-    git clone https://github.com/pandas-dev/pandas
+    git clone https://github.com/pandas-dev/pandas --depth=1 -b "v${PANDAS_VERSION}" pandas
 fi
-cd pandas && git clean -fdx && git checkout v$PANDAS_VERSION && cd ../
-
 
 if [ ! -d "pandas-tests" ]; then
     # Copy just the tests out of the Pandas source tree.
@@ -68,16 +69,16 @@ EOF
     # Substitute `pandas.tests` with a relative import.
     # This will depend on the location of the test module relative to
     # the pandas-tests directory.
-    for hit in $(find . -iname '*.py' | xargs grep "pandas.tests" | cut -d ":" -f 1 | sort | uniq); do
+    for hit in $(find . -iname '*.py' -print0 | xargs -0 grep "pandas.tests" | cut -d ":" -f 1 | sort | uniq); do
         # Get the relative path to the test module
-        test_module=$(echo $hit | cut -d "/" -f 2-)
+        test_module=$(echo "$hit" | cut -d "/" -f 2-)
         # Get the number of directories to go up
-        num_dirs=$(echo $test_module | grep -o "/" | wc -l)
-        num_dots=$(($num_dirs - 2))
+        num_dirs=$(echo "$test_module" | grep -o "/" | wc -l)
+        num_dots=$((num_dirs - 2))
         # Construct the relative import
         relative_import=$(printf "%0.s." $(seq 1 $num_dots))
         # Replace the import
-        sed -i "s/pandas.tests/${relative_import}/g" $hit
+        sed -i "s/pandas.tests/${relative_import}/g" "$hit"
     done
 fi
 
@@ -132,16 +133,36 @@ TEST_THAT_CRASH_PYTEST_WORKERS="not test_bitmasks_pyarrow \
 and not test_large_string_pyarrow \
 and not test_interchange_from_corrected_buffer_dtypes \
 and not test_eof_states \
-and not test_array_tz"
+and not test_array_tz \
+and not test_resample_empty_dataframe"
 
-# TODO: Remove "not db" once a postgres & mysql container is set up on the CI
+# these weakref tests are flaky, since they rely on the timing of the cyclic GC
+# We skip them always
+TEST_THAT_USE_WEAKREFS="not test_no_reference_cycle"
+TEST_THAT_USE_STRING_DTYPE_GROUPBY="not test_string_dtype_all_na"
+
+# TODO: Add reason to skip these tests
+TEST_THAT_NEED_REASON_TO_SKIP="not test_groupby_raises_category_on_category \
+and not test_constructor_no_pandas_array \
+and not test_is_monotonic_na \
+and not test_index_contains \
+and not test_frame_op_subclass_nonclass_constructor \
+and not test_round_trip_current \
+and not test_pickle_frame_v124_unpickle_130"
+
+PYTEST_IGNORES=("--ignore=tests/io/parser/common/test_read_errors.py"
+                "--ignore=tests/io/test_clipboard.py" # crashes pytest workers (possibly due to fixture patching clipboard functionality)
+)
+
+
 PANDAS_CI="1" timeout 90m python -m pytest -p cudf.pandas \
-    -v -m "not single_cpu and not db" \
-    -k "$TEST_THAT_NEED_MOTO_SERVER and $TEST_THAT_CRASH_PYTEST_WORKERS and not test_groupby_raises_category_on_category and not test_constructor_no_pandas_array and not test_is_monotonic_na and not test_index_contains and not test_index_contains and not test_frame_op_subclass_nonclass_constructor and not test_round_trip_current and not test_pickle_frame_v124_unpickle_130" \
     --import-mode=importlib \
-    ${PYTEST_IGNORES} \
-    "$@" || [ $? = 1 ]  # Exit success if exit code was 1 (permit test failures but not other errors)
+    -k "$TEST_THAT_NEED_MOTO_SERVER and $TEST_THAT_CRASH_PYTEST_WORKERS and $TEST_THAT_NEED_REASON_TO_SKIP and $TEST_THAT_USE_STRING_DTYPE_GROUPBY and $TEST_THAT_USE_WEAKREFS" \
+    "${PYTEST_IGNORES[@]}" \
+    "$@"
 
-mv *.json ..
+mv ./*.json ..
 cd ..
 rm -rf pandas-testing/pandas-tests/
+rapids-logger "Test script exiting with value: $EXITCODE"
+exit ${EXITCODE}

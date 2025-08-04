@@ -17,9 +17,9 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
+#include <cudf_test/testing_main.hpp>
 
 #include <cudf/binaryop.hpp>
-#include <cudf/jit/runtime_support.hpp>
 #include <cudf/scalar/scalar.hpp>
 
 class BinaryopTest : public cudf::test::BaseFixture {};
@@ -60,15 +60,7 @@ TEST_F(BinaryopTest, ScalarColumn)
                          cudf::test::get_default_stream());
 }
 
-class BinaryopPTXTest : public BinaryopTest {
- protected:
-  void SetUp() override
-  {
-    if (!cudf::is_runtime_jit_supported()) {
-      GTEST_SKIP() << "Skipping tests that require runtime JIT support";
-    }
-  }
-};
+class BinaryopPTXTest : public BinaryopTest {};
 
 TEST_F(BinaryopPTXTest, ColumnColumnPTX)
 {
@@ -122,5 +114,8 @@ TEST_F(BinaryopPTXTest, ColumnColumnPTX)
 
   cudf::binary_operation(
     lhs, rhs, ptx, cudf::data_type(cudf::type_to_id<int32_t>()), cudf::test::get_default_stream());
-  cudf::binary_operation(lhs, rhs, ptx, cudf::data_type(cudf::type_to_id<int64_t>()));
+  cudf::binary_operation(
+    lhs, rhs, ptx, cudf::data_type(cudf::type_to_id<int64_t>()), cudf::test::get_default_stream());
 }
+
+CUDF_TEST_PROGRAM_MAIN()

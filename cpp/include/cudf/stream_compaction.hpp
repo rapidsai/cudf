@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace CUDF_EXPORT cudf {
@@ -420,6 +421,48 @@ cudf::size_type distinct_count(column_view const& input,
 cudf::size_type distinct_count(table_view const& input,
                                null_equality nulls_equal    = null_equality::EQUAL,
                                rmm::cuda_stream_view stream = cudf::get_default_stream());
+
+/**
+ * @brief Creates a new column by applying a filter function against every
+ * element of the input columns.
+ *
+ * Null values in the input columns are considered as not matching the filter.
+ *
+ * Computes:
+ * `out[i]... = predicate(columns[i]... ) ? (columns[i]...): not-applied`.
+ *
+ * Note that for every scalar in `columns` (columns of size 1), `columns[i] ==
+ * input[0]`
+ *
+ *
+ * @throws std::invalid_argument if any of the input columns have different sizes (except scalars of
+ * size 1)
+ * @throws std::invalid_argument if `output_type` or any of the inputs are not fixed-width or string
+ * types
+ * @throws cudf::logic_error if JIT is not supported by the runtime
+ * @throws std::invalid_argument if the size of `copy_mask` does not match the number of input
+ * columns
+ *
+ * The size of the resulting column is the size of the largest column.
+ *
+ * @param columns       Immutable views of the columns to filter
+ * @param predicate_udf The PTX/CUDA string of the transform function to apply
+ * @param is_ptx        true: the UDF is treated as PTX code; false: the UDF is treated as CUDA code
+ * @param user_data     User-defined device data to pass to the UDF.
+ * @param copy_mask     Optional vector of booleans indicating which columns to copy from the input
+ *                      columns to the output. If not provided, all columns are copied.
+ * @param stream        CUDA stream used for device memory operations and kernel launches
+ * @param mr            Device memory resource used to allocate the returned column's device memory
+ * @return              The filtered target columns
+ */
+std::vector<std::unique_ptr<column>> filter(
+  std::vector<column_view> const& columns,
+  std::string const& predicate_udf,
+  bool is_ptx,
+  std::optional<void*> user_data             = std::nullopt,
+  std::optional<std::vector<bool>> copy_mask = std::nullopt,
+  rmm::cuda_stream_view stream               = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr          = cudf::get_current_device_resource_ref());
 
 /** @} */
 }  // namespace CUDF_EXPORT cudf

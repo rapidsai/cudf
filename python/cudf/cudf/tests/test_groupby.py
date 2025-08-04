@@ -15,8 +15,6 @@ import pytest
 from numba import cuda
 from numpy.testing import assert_array_equal
 
-import rmm
-
 import cudf
 from cudf import DataFrame, Series
 from cudf.api.extensions import no_default
@@ -526,10 +524,33 @@ def groupby_apply_jit_reductions_test_inner(func, data, dtype):
     reason="Include groups missing on old versions of pandas",
 )
 def test_groupby_apply_jit_unary_reductions(
-    func, dtype, dataset, groupby_jit_datasets
+    request, func, dtype, dataset, groupby_jit_datasets
 ):
-    dataset = groupby_jit_datasets[dataset]
-    groupby_apply_jit_reductions_test_inner(func, dataset, dtype)
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(
+                (
+                    dataset == "nans"
+                    and func in {"var", "std", "mean"}
+                    and str(dtype) in {"int64", "float32", "float64"}
+                )
+                or (
+                    dataset == "nans"
+                    and func in {"idxmax", "idxmin", "sum"}
+                    and dtype.kind == "f"
+                )
+            ),
+            reason=("https://github.com/rapidsai/cudf/issues/14860"),
+        )
+    )
+    warn_condition = (
+        dataset == "nans"
+        and func in {"idxmax", "idxmin"}
+        and dtype.kind == "f"
+    )
+    dataset = groupby_jit_datasets[dataset].copy(deep=True)
+    with expect_warning_if(warn_condition, FutureWarning):
+        groupby_apply_jit_reductions_test_inner(func, dataset, dtype)
 
 
 # test unary reductions for special values
@@ -591,7 +612,7 @@ def groupby_apply_jit_idx_reductions_special_vals_inner(
 def test_groupby_apply_jit_reductions_special_vals(
     func, dtype, dataset, groupby_jit_datasets, special_val
 ):
-    dataset = groupby_jit_datasets[dataset]
+    dataset = groupby_jit_datasets[dataset].copy(deep=True)
     with expect_warning_if(
         func in {"var", "std"} and not np.isnan(special_val), RuntimeWarning
     ):
@@ -623,7 +644,7 @@ def test_groupby_apply_jit_reductions_special_vals(
 def test_groupby_apply_jit_idx_reductions_special_vals(
     func, dtype, dataset, groupby_jit_datasets, special_val
 ):
-    dataset = groupby_jit_datasets[dataset]
+    dataset = groupby_jit_datasets[dataset].copy(deep=True)
     groupby_apply_jit_idx_reductions_special_vals_inner(
         func, dataset, dtype, special_val
     )
@@ -673,7 +694,7 @@ def test_groupby_apply_jit_sum_integer_overflow(dtype):
     reason="Fails in older versions of pandas",
 )
 def test_groupby_apply_jit_correlation(dataset, groupby_jit_datasets, dtype):
-    dataset = groupby_jit_datasets[dataset]
+    dataset = groupby_jit_datasets[dataset].copy(deep=True)
 
     dataset["val1"] = dataset["val1"].astype(dtype)
     dataset["val2"] = dataset["val2"].astype(dtype)
@@ -758,17 +779,14 @@ def test_groupby_apply_jit_no_df_ops(groupby_jit_data_small):
     ):
         run_groupby_apply_jit_test(groupby_jit_data_small, func, ["key1"])
 
+
 def test_groupby_apply_jit_add_basic():
-    df = cudf.DataFrame({
-        'a':[1,1,1],
-        'b':[1,2,3],
-        'c':[1,2,3]
-    })
+    df = cudf.DataFrame({"a": [1, 1, 1], "b": [1, 2, 3], "c": [1, 2, 3]})
 
     def f(group):
-        return (group['b'] + group['c']).sum()
+        return (group["b"] + group["c"]).sum()
 
-    run_groupby_apply_jit_test(df, f, ['a'])
+    run_groupby_apply_jit_test(df, f, ["a"])
 
 
 @pytest.mark.parametrize("dtype", ["uint8", "str"])
@@ -1074,13 +1092,9 @@ def test_groupby_agg_decimal(num_groups, nelem_per_group, func):
     )
 
     expect_df = pdf.groupby("idx", sort=True).agg(func)
-    if rmm._cuda.gpu.runtimeGetVersion() < 11000:
-        with pytest.raises(RuntimeError):
-            got_df = gdf.groupby("idx", sort=True).agg(func)
-    else:
-        got_df = gdf.groupby("idx", sort=True).agg(func)
-        assert_eq(expect_df["x"], got_df["x"], check_dtype=False)
-        assert_eq(expect_df["y"], got_df["y"], check_dtype=False)
+    got_df = gdf.groupby("idx", sort=True).agg(func)
+    assert_eq(expect_df["x"], got_df["x"], check_dtype=False)
+    assert_eq(expect_df["y"], got_df["y"], check_dtype=False)
 
 
 @pytest.mark.parametrize(
@@ -1502,12 +1516,7 @@ def test_groupby_datetime_multi_agg_multi_groupby():
     ],
 )
 def test_groupby_multi_agg_hash_groupby(agg):
-    alphabets = "abcdefghijklmnopqrstuvwxyz"
-    prefixes = alphabets[:10]
-    coll_dict = dict()
-    for prefix in prefixes:
-        for this_name in alphabets:
-            coll_dict[prefix + this_name] = float
+    coll_dict = {letter: float for letter in string.ascii_lowercase}
     coll_dict["id"] = int
     gdf = cudf.datasets.timeseries(
         start="2000",
@@ -2750,8 +2759,6 @@ def test_groupby_shift_row_mixed_fill(
     # simulate it column by column
     expected = pdf.copy()
     for col, single_fill in zip(pdf.iloc[:, 1:], fill_value):
-        if isinstance(single_fill, cudf.Scalar):
-            single_fill = single_fill._host_value
         expected[col] = (
             pdf[col]
             .groupby(pdf["0"])
@@ -2883,7 +2890,6 @@ def test_groupby_diff_row_zero_shift(nelem):
     )
 
 
-# TODO: test for category columns when cudf.Scalar supports category type
 @pytest.mark.parametrize("nelem", [10, 100, 1000])
 @pytest.mark.skipif(
     PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
@@ -2932,7 +2938,6 @@ def test_groupby_fillna_multi_value(nelem):
     assert_groupby_results_equal(expect[value_cols], got[value_cols])
 
 
-# TODO: test for category columns when cudf.Scalar supports category type
 # TODO: cudf.fillna does not support decimal column to column fill yet
 @pytest.mark.parametrize("nelem", [10, 100, 1000])
 @pytest.mark.skipif(
@@ -4108,14 +4113,14 @@ def test_size_as_index_false():
     df = pd.DataFrame({"a": [1, 2, 1], "b": [1, 2, 3]}, columns=["a", "b"])
     expected = df.groupby("a", as_index=False).size()
     result = cudf.from_pandas(df).groupby("a", as_index=False).size()
-    assert_eq(result, expected)
+    assert_groupby_results_equal(result, expected, as_index=False, by="a")
 
 
 def test_size_series_with_name():
     ser = pd.Series(range(3), name="foo")
     expected = ser.groupby(ser).size()
     result = cudf.from_pandas(ser).groupby(ser).size()
-    assert_eq(result, expected)
+    assert_groupby_results_equal(result, expected)
 
 
 @pytest.mark.parametrize("op", ["cumsum", "cumprod", "cummin", "cummax"])
@@ -4143,4 +4148,4 @@ def test_agg_duplicate_aggs_pandas_compat_raises():
         index=cudf.Index([1, 2], name="a"),
         columns=pd.MultiIndex.from_tuples([("b", "mean")]),
     )
-    assert_eq(result, expected)
+    assert_groupby_results_equal(result, expected)

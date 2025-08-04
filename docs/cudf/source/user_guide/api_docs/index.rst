@@ -19,12 +19,9 @@ This page provides a list of all publicly accessible modules, methods and classe
     general_utilities
     window
     io
-    string_handling
     character_normalizer
     wordpiece_tokenizer
     tokenize_vocabulary
-    list_handling
-    struct_handling
     options
     extension_dtypes
     performance_tracking

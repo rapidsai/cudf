@@ -33,16 +33,16 @@ static void bench_join(nvbench::state& state)
   auto const table =
     create_random_table({cudf::type_id::STRING}, row_count{num_rows}, table_profile);
   cudf::strings_column_view input(table->view().column(0));
+  std::string_view separator(":");
+  std::string_view narep("null");
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   // gather some throughput statistics as well
-  auto const chars_size = input.chars_size(cudf::get_default_stream());
-  state.add_element_count(chars_size, "chars_size");            // number of bytes;
-  state.add_global_memory_reads<nvbench::int8_t>(chars_size);   // all bytes are read;
-  state.add_global_memory_writes<nvbench::int8_t>(chars_size);  // all bytes are written
+  auto const data_size = table->alloc_size();
+  state.add_global_memory_reads<nvbench::int8_t>(data_size);
+  state.add_global_memory_writes<nvbench::int8_t>(data_size +
+                                                  (num_rows * (separator.size() + narep.size())));
 
-  std::string_view separator(":");
-  std::string_view narep("null");
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     auto result = cudf::strings::join_strings(input, separator, narep);
   });

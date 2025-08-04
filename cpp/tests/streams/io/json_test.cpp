@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
 #include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/testing_main.hpp>
 
 #include <cudf/io/json.hpp>
 #include <cudf/table/table_view.hpp>
@@ -32,7 +33,9 @@ TEST_F(JSONTest, JSONreader)
 {
   std::string data = "[1, 1.1]\n[2, 2.2]\n[3, 3.3]\n";
   cudf::io::json_reader_options in_options =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(data.data()), data.size()}})
       .dtypes(std::vector<cudf::data_type>{cudf::data_type{cudf::type_id::INT32},
                                            cudf::data_type{cudf::type_id::FLOAT64}})
       .lines(true);
@@ -61,3 +64,5 @@ TEST_F(JSONTest, JSONwriter)
 
   cudf::io::write_json(options_builder.build(), cudf::test::get_default_stream());
 }
+
+CUDF_TEST_PROGRAM_MAIN()

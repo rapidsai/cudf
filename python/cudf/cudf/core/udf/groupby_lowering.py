@@ -1,25 +1,25 @@
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 
+import operator
 from functools import partial
 
-from numba import types
+from numba import cuda, types
 from numba.core import cgutils
 from numba.core.extending import lower_builtin
 from numba.core.typing import signature as nb_signature
 from numba.cuda.cudaimpl import lower as cuda_lower, registry as cuda_registry
-from numba import cuda
-from numba.core.datamodel import default_manager
+
 from cudf.core.udf.groupby_typing import (
     SUPPORTED_GROUPBY_NUMBA_TYPES,
     GroupView,
     GroupViewType,
     ManagedGroupViewType,
     call_cuda_functions,
+    call_group_sub_group,
+    call_group_sub_scalar,
+    call_group_sum,
     group_size_type,
     index_default_type,
-    call_group_sum,
-    call_group_sub_scalar,
-    call_group_sub_group
 )
 
 
@@ -192,26 +192,32 @@ for ty in SUPPORTED_GROUPBY_NUMBA_TYPES:
     cuda_lower("GroupViewType.idxmin", GroupViewType(ty, types.int64))(
         cuda_Group_idxmin
     )
-    cuda_lower("GroupViewType.corr", GroupViewType(ty), GroupViewType(ty))(group_corr)
+    cuda_lower("GroupViewType.corr", GroupViewType(ty), GroupViewType(ty))(
+        group_corr
+    )
 
 
 _print_group_data = cuda.declare_device(
-    'print_group_data',
-    types.void(types.CPointer(types.int64), types.int64)
+    "print_group_data", types.void(types.CPointer(types.int64), types.int64)
 )
+
+
 def call_print_group_data(data_ptr, size):
     _print_group_data(data_ptr, size)
 
-_udf_grp_meminfo = cuda.declare_device(                                                                                                                                                                                                  
-    "meminfo_from_new_udf_group", types.voidptr(types.CPointer(types.int64))                                                                                                                                                             
-)                                                                                                                                                                                                                                        
-                                                                                                                                                                                                                                         
-def make_udf_grp_meminfo(data_ptr):                                                                                                                                                                                                      
-    return _udf_grp_meminfo(data_ptr)                                                                                                                                                                                                    
-   
 
-import operator
-@cuda_lower(operator.add, GroupViewType(types.int64), GroupViewType(types.int64))
+_udf_grp_meminfo = cuda.declare_device(
+    "meminfo_from_new_udf_group", types.voidptr(types.CPointer(types.int64))
+)
+
+
+def make_udf_grp_meminfo(data_ptr):
+    return _udf_grp_meminfo(data_ptr)
+
+
+@cuda_lower(
+    operator.add, GroupViewType(types.int64), GroupViewType(types.int64)
+)
 def cuda_lower_add(context, builder, sig, args):
     lhs_grp = cgutils.create_struct_proxy(sig.args[0])(
         context, builder, value=args[0]
@@ -236,23 +242,25 @@ def cuda_lower_add(context, builder, sig, args):
         ),
     )
 
-    mi = context.compile_internal(                                                                                                                                                                                                        
-        builder,                                                                                                                                                                                                                         
-        make_udf_grp_meminfo,                                                                                                                                                                                                           
-        types.voidptr(                                                                                                                                                                                                                      
-            types.CPointer(types.int64),                                                                                                                                                                                   
-        ),                                                                                                                                                                                                                               
-        (out_ptr,),                                                                                                                                                                                                         
-    )  
+    mi = context.compile_internal(
+        builder,
+        make_udf_grp_meminfo,
+        types.voidptr(
+            types.CPointer(types.int64),
+        ),
+        (out_ptr,),
+    )
 
-
-    out_grp = cgutils.create_struct_proxy(GroupViewType(types.int64))(context, builder)
+    out_grp = cgutils.create_struct_proxy(GroupViewType(types.int64))(
+        context, builder
+    )
     out_grp.group_data = out_ptr
     out_grp.size = lhs_grp.size
 
     output.group_view = out_grp._getvalue()
     output.meminfo = mi
     return output._getvalue()
+
 
 @cuda_lower(operator.sub, GroupViewType(types.int64), types.int64)
 def group_view_sub_scalar_impl(context, builder, sig, args):
@@ -275,17 +283,18 @@ def group_view_sub_scalar_impl(context, builder, sig, args):
         ),
     )
 
-    mi = context.compile_internal(                                                                                                                                                                                                        
-        builder,                                                                                                                                                                                                                         
-        make_udf_grp_meminfo,                                                                                                                                                                                                           
-        types.voidptr(                                                                                                                                                                                                                      
-            types.CPointer(types.int64),                                                                                                                                                                                   
-        ),                                                                                                                                                                                                                               
-        (out_ptr,),                                                                                                                                                                                                         
-    )  
+    mi = context.compile_internal(
+        builder,
+        make_udf_grp_meminfo,
+        types.voidptr(
+            types.CPointer(types.int64),
+        ),
+        (out_ptr,),
+    )
 
-
-    out_grp = cgutils.create_struct_proxy(GroupViewType(types.int64))(context, builder)
+    out_grp = cgutils.create_struct_proxy(GroupViewType(types.int64))(
+        context, builder
+    )
     out_grp.group_data = out_ptr
     out_grp.size = lhs_grp.size
 
@@ -293,10 +302,11 @@ def group_view_sub_scalar_impl(context, builder, sig, args):
     output.meminfo = mi
     return output._getvalue()
 
+
 @cuda_lower(
-    operator.sub, 
-    ManagedGroupViewType(GroupViewType(types.int64)), 
-    ManagedGroupViewType(GroupViewType(types.int64))
+    operator.sub,
+    ManagedGroupViewType(GroupViewType(types.int64)),
+    ManagedGroupViewType(GroupViewType(types.int64)),
 )
 def managed_group_sub_managed_group_impl(context, builder, sig, args):
     lhs_managed_grp = cgutils.create_struct_proxy(sig.args[0])(
@@ -311,7 +321,6 @@ def managed_group_sub_managed_group_impl(context, builder, sig, args):
     rhs_grp = cgutils.create_struct_proxy(GroupViewType(types.int64))(
         context, builder, value=rhs_manged_grp.group_view
     )
-
 
     output = cgutils.create_struct_proxy(sig.return_type)(context, builder)
 
@@ -330,27 +339,28 @@ def managed_group_sub_managed_group_impl(context, builder, sig, args):
         ),
     )
     mi = context.compile_internal(
-        builder,                                                                                                                                                                                                                         
-        make_udf_grp_meminfo,                                                                                                                                                                                                           
-        types.voidptr(                                                                                                                                                                                                                      
-            types.CPointer(types.int64),                                                                                                                                                                                   
-        ),                                                                                                                                                                                                                               
-        (out_ptr,),                                                                                                                                                                                                         
+        builder,
+        make_udf_grp_meminfo,
+        types.voidptr(
+            types.CPointer(types.int64),
+        ),
+        (out_ptr,),
     )
-    out_grp = cgutils.create_struct_proxy(GroupViewType(types.int64))(context, builder)
+    out_grp = cgutils.create_struct_proxy(GroupViewType(types.int64))(
+        context, builder
+    )
     out_grp.group_data = out_ptr
     out_grp.size = lhs_grp.size
     output.group_view = out_grp._getvalue()
     output.meminfo = mi
 
-
     return output._getvalue()
 
 
-
-
-
-@cuda_lower("ManagedGroupViewType.sum", ManagedGroupViewType(GroupViewType(types.int64)))
+@cuda_lower(
+    "ManagedGroupViewType.sum",
+    ManagedGroupViewType(GroupViewType(types.int64)),
+)
 def managed_group_reduction_impl_basic(context, builder, sig, args):
     """
     Instruction boilerplate used for calling a groupby reduction
@@ -364,21 +374,17 @@ def managed_group_reduction_impl_basic(context, builder, sig, args):
     grp = cgutils.create_struct_proxy(sig.args[0])(
         context, builder, value=args[0]
     )
-    grp_view = cgutils.create_struct_proxy(GroupViewType(types.int64))(context, builder, value=grp.group_view)
+    grp_view = cgutils.create_struct_proxy(GroupViewType(types.int64))(
+        context, builder, value=grp.group_view
+    )
 
-    # what specific (numba) GroupType
-    grp_type = sig.args[0]
-
-    func = call_cuda_functions['sum'][(types.int64, types.int64)]
+    func = call_cuda_functions["sum"][(types.int64, types.int64)]
 
     _ = context.compile_internal(
         builder,
         call_print_group_data,
-        types.void(
-            types.CPointer(types.int64),
-            group_size_type
-        ),
-        (grp_view.group_data, grp_view.size)
+        types.void(types.CPointer(types.int64), group_size_type),
+        (grp_view.group_data, grp_view.size),
     )
 
     # insert the forward declaration and return its result
@@ -391,16 +397,17 @@ def managed_group_reduction_impl_basic(context, builder, sig, args):
     )
 
 
-
-@cuda_registry.lower_cast(ManagedGroupViewType(GroupViewType(types.int64)), GroupViewType(types.int64))
+@cuda_registry.lower_cast(
+    ManagedGroupViewType(GroupViewType(types.int64)),
+    GroupViewType(types.int64),
+)
 def cast_managed_group_view_to_group_view(
     context, builder, fromty, toty, val
-):#
+):  #
+    managed = cgutils.create_struct_proxy(fromty)(context, builder, value=val)
 
-    managed = cgutils.create_struct_proxy(fromty)(
-        context, builder, value=val
+    result = cgutils.create_struct_proxy(toty)(
+        context, builder, value=managed.group_view
     )
-
-    result = cgutils.create_struct_proxy(toty)(context, builder, value=managed.group_view)
     context.nrt.incref(builder, fromty, val)
     return result._getvalue()

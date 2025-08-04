@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/aggregation.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -351,6 +352,37 @@ std::unique_ptr<scalar> merge_sets(lists_column_view const& col,
                                    nan_equality nans_equal,
                                    rmm::cuda_stream_view stream,
                                    rmm::device_async_resource_ref mr);
+
+/**
+ * @brief Performs bitwise reduction on the input column, ignoring nulls.
+ *
+ * @param bit_op Bitwise operation to perform on the input
+ * @param col input column to perform bitwise reduction on
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return Scalar containing the result of bitwise operation on all elements of the input
+ */
+std::unique_ptr<scalar> bitwise_reduction(bitwise_op bit_op,
+                                          column_view const& col,
+                                          rmm::cuda_stream_view stream,
+                                          rmm::device_async_resource_ref mr);
+
+/**
+ * @brief Computes the number of unique elements in the input column
+ *
+ * @param col Input column to compute the number of unique elements
+ * @param null_handling Indicates if null values will be counted while computing the number of
+ * unique elements
+ * @param output_dtype Data type of return type
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return Number of unique elements as scalar of type `output_dtype`
+ */
+std::unique_ptr<scalar> nunique(column_view const& col,
+                                null_policy null_handling,
+                                data_type const output_dtype,
+                                rmm::cuda_stream_view stream,
+                                rmm::device_async_resource_ref mr);
 
 }  // namespace reduction::detail
 }  // namespace CUDF_EXPORT cudf

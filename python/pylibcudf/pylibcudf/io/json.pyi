@@ -14,6 +14,7 @@ from pylibcudf.io.types import (
     SourceInfo,
     TableWithMetadata,
 )
+from pylibcudf.scalar import Scalar
 from pylibcudf.table import Table
 from pylibcudf.types import DataType
 
@@ -66,10 +67,20 @@ class JsonReaderOptionsBuilder:
     def recovery_mode(self, recovery_mode: JSONRecoveryMode) -> Self: ...
     def strict_validation(self, val: bool) -> Self: ...
     def unquoted_control_chars(self, val: bool) -> Self: ...
+    def utf8_escaped(self, val: bool) -> Self: ...
     def build(self) -> JsonReaderOptions: ...
 
 def read_json(
     options: JsonReaderOptions, stream: Stream = None
+) -> TableWithMetadata: ...
+def read_json_from_string_column(
+    input: Column,
+    separator: Scalar,
+    narep: Scalar,
+    dtypes: list,
+    compression: CompressionType,
+    recovery_mode: JSONRecoveryMode,
+    stream: Stream = None,
 ) -> TableWithMetadata: ...
 
 class JsonWriterOptions:
@@ -94,3 +105,4 @@ def chunked_read_json(
     chunk_size: int = 100_000_000,
     stream: Stream = None,
 ) -> tuple[list[Column], list[str], ChildNameToTypeMap]: ...
+def is_supported_write_json(type: DataType) -> bool: ...

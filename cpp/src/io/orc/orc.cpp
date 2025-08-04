@@ -16,10 +16,11 @@
 
 #include "orc.hpp"
 
-#include "io/comp/io_uncomp.hpp"
 #include "orc_field_reader.hpp"
 #include "orc_field_writer.hpp"
 
+#include <cudf/io/detail/codec.hpp>
+#include <cudf/io/orc.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 
 #include <thrust/tabulate.h>
@@ -43,7 +44,7 @@ namespace {
 uint32_t protobuf_reader::read_field_size(uint8_t const* end)
 {
   auto const size = get<uint32_t>();
-  CUDF_EXPECTS(size <= static_cast<uint32_t>(end - m_cur), "Protobuf parsing out of bounds");
+  CUDF_EXPECTS(std::cmp_less_equal(size, end - m_cur), "Protobuf parsing out of bounds");
   return size;
 }
 
@@ -418,6 +419,7 @@ orc_decompressor::orc_decompressor(CompressionKind kind, uint64_t block_size)
       break;
     default: CUDF_FAIL("Invalid compression type");
   }
+  CUDF_EXPECTS(is_supported_read_orc(_compression), "Unsupported compression type for ORC reader");
 }
 
 host_span<uint8_t const> orc_decompressor::decompress_blocks(host_span<uint8_t const> src)

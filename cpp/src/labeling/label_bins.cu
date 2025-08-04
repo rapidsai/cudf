@@ -164,21 +164,21 @@ constexpr auto is_supported_bin_type()
 
 struct bin_type_dispatcher {
   template <typename T, typename... Args>
-  std::enable_if_t<not detail::is_supported_bin_type<T>(), std::unique_ptr<column>> operator()(
-    Args&&...)
+  std::unique_ptr<column> operator()(Args&&...)
+    requires(not detail::is_supported_bin_type<T>())
   {
     CUDF_FAIL("Type not support for cudf::bin");
   }
 
   template <typename T>
-  std::enable_if_t<detail::is_supported_bin_type<T>(), std::unique_ptr<column>> operator()(
-    column_view const& input,
-    column_view const& left_edges,
-    inclusive left_inclusive,
-    column_view const& right_edges,
-    inclusive right_inclusive,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr)
+  std::unique_ptr<column> operator()(column_view const& input,
+                                     column_view const& left_edges,
+                                     inclusive left_inclusive,
+                                     column_view const& right_edges,
+                                     inclusive right_inclusive,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
+    requires(detail::is_supported_bin_type<T>())
   {
     if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::YES))
       return label_bins<T, cuda::std::less_equal<T>, cuda::std::less_equal<T>>(
@@ -208,7 +208,7 @@ std::unique_ptr<column> label_bins(column_view const& input,
                                    rmm::cuda_stream_view stream,
                                    rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE()
+  CUDF_FUNC_RANGE();
   CUDF_EXPECTS(
     cudf::have_same_types(input, left_edges) && cudf::have_same_types(input, right_edges),
     "The input and edge columns must have the same types.",

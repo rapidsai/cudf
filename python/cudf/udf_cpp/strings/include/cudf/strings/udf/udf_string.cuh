@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -451,12 +451,6 @@ __device__ udf_string& udf_string::erase(cudf::size_type pos, cudf::size_type co
 __device__ inline cudf::size_type udf_string::char_offset(cudf::size_type byte_pos) const
 {
   return cudf::strings::detail::characters_in_string(data(), byte_pos);
-}
-
-__device__ void udf_str_dtor(void* udf_str, size_t size, void* dtor_info)
-{
-  auto ptr = reinterpret_cast<udf_string*>(udf_str);
-  ptr->~udf_string();
 }
 
 }  // namespace udf

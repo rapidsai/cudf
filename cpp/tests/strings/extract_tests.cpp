@@ -226,10 +226,10 @@ TEST_F(StringsExtractTests, SpecialNewLines)
     cudf::test::strings_column_wrapper({"zzé", "zzé", "zzé", "", "zzé", "zzé"}, {1, 1, 1, 0, 1, 1});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
 
-  prog = cudf::strings::regex_program::create("q(q.*l)l");
+  prog     = cudf::strings::regex_program::create("q(q.*l)l");
   expected = cudf::test::strings_column_wrapper({"", "qq" LINE_SEPARATOR "zzé\rll", "", "", "", ""},
                                                 {0, 1, 0, 0, 0, 0});
-  results = cudf::strings::extract(view, *prog);
+  results  = cudf::strings::extract(view, *prog);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
   // expect no matches here since the newline(s) interrupts the pattern
   prog = cudf::strings::regex_program::create("q(q.*l)l", cudf::strings::regex_flags::EXT_NEWLINE);
@@ -336,6 +336,24 @@ TEST_F(StringsExtractTests, Errors)
 
   EXPECT_THROW(cudf::strings::extract(sv, *prog), cudf::logic_error);
   EXPECT_THROW(cudf::strings::extract_all_record(sv, *prog), cudf::logic_error);
+}
+
+TEST_F(StringsExtractTests, EmptyInput)
+{
+  auto const input   = cudf::test::strings_column_wrapper();
+  auto const sv      = cudf::strings_column_view(input);
+  auto const pattern = std::string("(\\w+)");
+  auto const prog    = cudf::strings::regex_program::create(pattern);
+
+  auto rt = cudf::strings::extract(sv, *prog);
+  EXPECT_EQ(1, rt->num_columns());
+  EXPECT_EQ(0, rt->num_rows());
+
+  auto rl = cudf::strings::extract_all_record(sv, *prog);
+  EXPECT_EQ(0, rl->size());
+
+  auto rs = cudf::strings::extract_single(sv, *prog, 1);
+  EXPECT_EQ(0, rs->size());
 }
 
 TEST_F(StringsExtractTests, MediumRegex)

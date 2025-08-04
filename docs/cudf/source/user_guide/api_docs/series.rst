@@ -25,8 +25,6 @@ Attributes
    Series.dtypes
    Series.shape
    Series.ndim
-   Series.nullable
-   Series.nullmask
    Series.null_count
    Series.size
    Series.T
@@ -327,8 +325,107 @@ Timedelta properties
    components
 
 .. _api.series.str:
-.. include:: string_handling.rst
 
+String handling
+~~~~~~~~~~~~~~~
+.. currentmodule:: cudf
+.. autosummary::
+   :toctree: api/
+
+   Series.str
+
+.. currentmodule:: cudf.core.accessors.string.StringMethods
+.. autosummary::
+   :toctree: api/
+
+   byte_count
+   capitalize
+   cat
+   center
+   character_ngrams
+   character_tokenize
+   code_points
+   contains
+   count
+   detokenize
+   edit_distance
+   edit_distance_matrix
+   endswith
+   extract
+   filter_alphanum
+   filter_characters
+   filter_tokens
+   find
+   findall
+   find_multiple
+   get
+   get_json_object
+   hex_to_int
+   htoi
+   index
+   insert
+   ip2int
+   ip_to_int
+   is_consonant
+   is_vowel
+   isalnum
+   isalpha
+   isdecimal
+   isdigit
+   isempty
+   isfloat
+   ishex
+   isinteger
+   isipv4
+   isspace
+   islower
+   isnumeric
+   isupper
+   istimestamp
+   istitle
+   jaccard_index
+   join
+   len
+   like
+   ljust
+   lower
+   lstrip
+   match
+   minhash
+   ngrams
+   ngrams_tokenize
+   normalize_spaces
+   pad
+   partition
+   porter_stemmer_measure
+   repeat
+   removeprefix
+   removesuffix
+   replace
+   replace_tokens
+   replace_with_backrefs
+   rfind
+   rindex
+   rjust
+   rpartition
+   rsplit
+   rstrip
+   slice
+   slice_from
+   slice_replace
+   split
+   startswith
+   strip
+   swapcase
+   title
+   token_count
+   tokenize
+   translate
+   upper
+   url_decode
+   url_encode
+   wrap
+   zfill
 
 .. _api.series.cat:
 
@@ -344,7 +441,7 @@ the ``Series.cat`` accessor.
 
    Series.cat
 
-.. currentmodule:: cudf.core.column.categorical.CategoricalAccessor
+.. currentmodule:: cudf.core.accessors.categorical.CategoricalAccessor
 .. autosummary::
    :toctree: api/
 
@@ -360,11 +457,47 @@ the ``Series.cat`` accessor.
 
 
 .. _api.series.list:
-.. include:: list_handling.rst
+
+List handling
+~~~~~~~~~~~~~
+.. currentmodule:: cudf
+.. autosummary::
+   :toctree: api/
+
+   Series.list
+
+.. currentmodule:: cudf.core.accessors.lists.ListMethods
+.. autosummary::
+   :toctree: api/
+
+   astype
+   concat
+   contains
+   index
+   get
+   leaves
+   len
+   sort_values
+   take
+   unique
 
 
 .. _api.series.struct:
-.. include:: struct_handling.rst
+
+Struct handling
+~~~~~~~~~~~~~~~
+.. currentmodule:: cudf
+.. autosummary::
+   :toctree: api/
+
+   Series.struct
+
+.. currentmodule:: cudf.core.accessors.struct.StructMethods
+.. autosummary::
+   :toctree: api/
+
+   field
+   explode
 
 
 ..
@@ -400,8 +533,6 @@ Serialization / IO / conversion
    Series.to_pandas
    Series.to_string
    Series.from_arrow
-   Series.from_categorical
-   Series.from_masked_array
    Series.from_pandas
    Series.hash_values
    Series.to_pylibcudf

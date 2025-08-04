@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import itertools
+import random
+from datetime import date
 
-import numpy as np
 import pytest
 
 import polars as pl
@@ -22,7 +23,23 @@ def df():
             "key1": [1, 1, 1, 2, 3, 1, 4, 6, 7],
             "key2": [2, 2, 2, 2, 6, 1, 4, 6, 8],
             "int": [1, 2, 3, 4, 5, 6, 7, 8, 9],
-            "float": [7.0, 1, 2, 3, 4, 5, 6, 7, 8],
+            "int32": pl.Series([1, 2, 3, 4, 5, 6, 7, 8, 9], dtype=pl.Int32()),
+            "uint16_with_null": pl.Series(
+                [1, None, 2, None, None, None, 4, 5, 6], dtype=pl.UInt16()
+            ),
+            "float": [7.0, 1, 2, 3, 4.5, 5, 6, 7, 8],
+            "string": ["abc", "def", "hijk", "lmno", "had", "to", "be", "or", "not"],
+            "datetime": [
+                date(1970, 1, 1),
+                date(1972, 1, 10),
+                date(2000, 1, 1),
+                date(2004, 12, 1),
+                date(2004, 10, 1),
+                date(1971, 2, 1),
+                date(2003, 12, 1),
+                date(2001, 1, 1),
+                date(1999, 12, 31),
+            ],
         }
     )
 
@@ -45,15 +62,36 @@ def keys(request):
 
 @pytest.fixture(
     params=[
+        [],
         ["int"],
         ["float", "int"],
         [pl.col("float") + pl.col("int")],
-        [pl.col("float").max() - pl.col("int").min()],
+        [pl.col("float").is_not_null()],
+        [pl.col("int32").sum()],
+        [pl.col("int32").mean()],
+        [
+            pl.col("uint16_with_null").sum(),
+            pl.col("uint16_with_null").mean().alias("mean"),
+        ],
+        [pl.col("float").max() - pl.col("int").min() + pl.col("int").max()],
         [pl.col("float").mean(), pl.col("int").std()],
         [(pl.col("float") - pl.lit(2)).max()],
+        [pl.lit(10).alias("literal_value")],
         [pl.col("float").sum().round(decimals=1)],
         [pl.col("float").round(decimals=1).sum()],
+        [pl.col("float").sum().round()],
+        [pl.col("float").round().sum()],
         [pl.col("int").first(), pl.col("float").last()],
+        [pl.col("int").sum(), pl.col("string").str.replace("h", "foo", literal=True)],
+        [pl.col("float").quantile(0.3, interpolation="nearest")],
+        [pl.col("float").quantile(0.3, interpolation="higher")],
+        [pl.col("float").quantile(0.3, interpolation="lower")],
+        [pl.col("float").quantile(0.3, interpolation="midpoint")],
+        [pl.col("float").quantile(0.3, interpolation="linear")],
+        [
+            pl.col("datetime").max(),
+            pl.col("datetime").max().dt.is_leap_year().alias("leapyear"),
+        ],
     ],
     ids=lambda aggs: "-".join(map(str, aggs)),
 )
@@ -112,8 +150,10 @@ def test_groupby_len(df, keys):
 @pytest.mark.parametrize(
     "expr",
     [
-        pl.col("float").is_not_null(),
         (pl.col("int").max() + pl.col("float").min()).max(),
+        pl.when(pl.col("int") < pl.lit(2))
+        .then(pl.col("float").sum())
+        .otherwise(pl.lit(-2)),
     ],
 )
 def test_groupby_unsupported(df, expr):
@@ -194,12 +234,18 @@ def test_groupby_unary_non_pointwise_raises(df, expr):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
+def test_groupby_agg_broadcast_raises(df):
+    q = df.group_by("key1").agg(pl.col("int") + pl.col("float").max())
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
 @pytest.mark.parametrize("nrows", [30, 300, 300_000])
 @pytest.mark.parametrize("nkeys", [1, 2, 4])
 def test_groupby_maintain_order_random(nrows, nkeys, with_nulls):
     key_names = [f"key{key}" for key in range(nkeys)]
-    key_values = [np.random.randint(100, size=nrows) for _ in key_names]
-    value = np.random.randint(-100, 100, size=nrows)
+    rng = random.Random(2)
+    key_values = [rng.choices(range(100), k=nrows) for _ in key_names]
+    value = rng.choices(range(-100, 100), k=nrows)
     df = pl.DataFrame(dict(zip(key_names, key_values, strict=True), value=value))
     if with_nulls:
         df = df.with_columns(
@@ -212,10 +258,56 @@ def test_groupby_maintain_order_random(nrows, nkeys, with_nulls):
             )
         )
     q = df.lazy().group_by(key_names, maintain_order=True).agg(pl.col("value").sum())
-    assert_gpu_result_equal(q)
+    # The streaming executor is too slow for large n_rows with blocksize_mode="small"
+    assert_gpu_result_equal(q, blocksize_mode="default" if nrows > 30 else None)
 
 
 def test_groupby_len_with_nulls():
     df = pl.DataFrame({"a": [1, 1, 1, 2], "b": [1, None, 2, 3]})
     q = df.lazy().group_by("a").agg(pl.col("b").len())
+    assert_gpu_result_equal(q, check_row_order=False)
+
+
+@pytest.mark.parametrize("column", ["int", "string", "uint16_with_null"])
+def test_groupby_nunique(df: pl.LazyFrame, column):
+    q = df.group_by("key1").agg(pl.col(column).n_unique())
+
+    assert_gpu_result_equal(q, check_row_order=False)
+
+
+def test_groupby_null_count_raises(df: pl.LazyFrame):
+    q = df.group_by("key1").agg(pl.col("int") + pl.col("uint16_with_null").null_count())
+
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.col("int").all(),
+        pl.col("int").any(),
+        pl.col("int").is_duplicated(),
+        pl.col("int").is_first_distinct(),
+        pl.col("int").is_last_distinct(),
+        pl.col("int").is_unique(),
+    ],
+    ids=[
+        "all_horizontal",
+        "any_horizontal",
+        "is_duplicated",
+        "is_first_distinct",
+        "is_last_distinct",
+        "is_unique",
+    ],
+)
+def test_groupby_unsupported_non_pointwise_boolean_function(df: pl.LazyFrame, expr):
+    q = df.group_by("key1").agg(expr)
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_groupby_mean_type_promotion(df: pl.LazyFrame) -> None:
+    df = df.with_columns(pl.col("float").cast(pl.Float32))
+
+    q = df.group_by("key1").agg(pl.col("float").mean())
+
     assert_gpu_result_equal(q, check_row_order=False)
