@@ -4554,9 +4554,7 @@ def test_parquet_bloom_filters_alignment(datadir, columns, memory_resource):
     filters = [("r_reason_desc", "==", "Did not like the color")]
 
     # Read expected table using pyarrow
-    expected = pq.read_table(
-        fname, columns=columns, filters=filters
-    )
+    expected = pq.read_table(fname, columns=columns, filters=filters)
 
     # Read with cudf using the memory resource from fixture
     read = cudf.read_parquet(
