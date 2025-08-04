@@ -4523,8 +4523,26 @@ def test_parquet_bloom_filters(
     )
 
 
+@pytest.fixture(params=["cuda", "pool", "cuda_async"])
+def memory_resource(request):
+    import rmm
+
+    kind = request.param
+    if kind == "cuda":
+        return rmm.mr.CudaMemoryResource()
+    elif kind == "pool":
+        base = rmm.mr.CudaMemoryResource()
+        free, _ = rmm.mr.available_device_memory()
+        size = int(round(free * 0.5 / 256) * 256)
+        return rmm.mr.PoolMemoryResource(base, size, size)
+    elif kind == "cuda_async":
+        return rmm.mr.CudaAsyncMemoryResource()
+    else:
+        raise ValueError(f"Invalid memory resource type: {kind}")
+
+
 @pytest.mark.parametrize("columns", [["r_reason_desc"], None])
-def test_parquet_bloom_filters_alignment(datadir, columns):
+def test_parquet_bloom_filters_alignment(datadir, columns, memory_resource):
     import rmm
 
     fname = datadir / "bloom_filter_alignment.parquet"
@@ -4535,28 +4553,12 @@ def test_parquet_bloom_filters_alignment(datadir, columns):
         fname, columns=columns, filters=filters
     ).to_pandas()
 
-    # Read with cudf using cuda memory resource
-    cuda_mr = rmm.mr.CudaMemoryResource()
-    rmm.mr.set_current_device_resource(cuda_mr)
+    # Read with cudf using the memory resource from fixture
+    rmm.mr.set_current_device_resource(memory_resource)
     read = cudf.read_parquet(
         fname, columns=columns, filters=filters
     ).to_pandas()
-    assert_eq(expected, read)
 
-    # Read with cudf using pool memory resource
-    free_memory, _ = rmm.mr.available_device_memory()
-    free_memory = int(round(float(free_memory) * 0.5 / 256) * 256)
-    pool_mr = rmm.mr.PoolMemoryResource(
-        cuda_mr, initial_pool_size=free_memory, maximum_pool_size=free_memory
-    )
-    rmm.mr.set_current_device_resource(pool_mr)
-    read = cudf.read_parquet(fname, columns=columns, filters=filters)
-    assert_eq(expected, read)
-
-    # Read with cudf using cuda async memory resource
-    cuda_async_mr = rmm.mr.CudaAsyncMemoryResource()
-    rmm.mr.set_current_device_resource(cuda_async_mr)
-    read = cudf.read_parquet(fname, columns=columns, filters=filters)
     assert_eq(expected, read)
 
 
