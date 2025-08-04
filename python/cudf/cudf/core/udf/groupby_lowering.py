@@ -197,15 +197,6 @@ for ty in SUPPORTED_GROUPBY_NUMBA_TYPES:
     )
 
 
-_print_group_data = cuda.declare_device(
-    "print_group_data", types.void(types.CPointer(types.int64), types.int64)
-)
-
-
-def call_print_group_data(data_ptr, size):
-    _print_group_data(data_ptr, size)
-
-
 _udf_grp_meminfo = cuda.declare_device(
     "meminfo_from_new_udf_group", types.voidptr(types.CPointer(types.int64))
 )
@@ -379,13 +370,6 @@ def managed_group_reduction_impl_basic(context, builder, sig, args):
     )
 
     func = call_cuda_functions["sum"][(types.int64, types.int64)]
-
-    _ = context.compile_internal(
-        builder,
-        call_print_group_data,
-        types.void(types.CPointer(types.int64), group_size_type),
-        (grp_view.group_data, grp_view.size),
-    )
 
     # insert the forward declaration and return its result
     # pass it the data pointer and the group's size
