@@ -4551,17 +4551,17 @@ def memory_resource(request):
 @pytest.mark.parametrize("columns", [["r_reason_desc"], None])
 def test_parquet_bloom_filters_alignment(datadir, columns, memory_resource):
     fname = datadir / "bloom_filter_alignment.parquet"
-    filters = [("r_reason_desc", "==", "reason 31")]
+    filters = [("r_reason_desc", "==", "Did not like the color")]
 
     # Read expected table using pyarrow
     expected = pq.read_table(
         fname, columns=columns, filters=filters
-    ).to_pandas()
+    )
 
     # Read with cudf using the memory resource from fixture
     read = cudf.read_parquet(
         fname, columns=columns, filters=filters
-    ).to_pandas()
+    ).to_arrow()
 
     assert_eq(expected, read)
 
