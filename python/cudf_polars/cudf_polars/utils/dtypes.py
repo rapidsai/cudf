@@ -63,6 +63,11 @@ def can_cast(from_: plc.DataType, to: plc.DataType) -> bool:
             and not from_is_empty
             and is_numeric_not_bool(from_)
         )
+        or (
+            plc.traits.is_integral_not_bool(from_)
+            and not to_is_empty
+            and plc.traits.is_timestamp(to)
+        )
     )
 
 

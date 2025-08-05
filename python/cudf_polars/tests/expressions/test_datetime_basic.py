@@ -344,3 +344,29 @@ def test_datetime_cast_time_unit_duration(dtype, time_unit):
 
     q = df.select(pl.col("date").dt.cast_time_unit(time_unit).alias("time_unit_ms"))
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "datetime_dtype",
+    [
+        pl.Datetime("ms"),
+        pl.Datetime("us"),
+        pl.Datetime("ns"),
+    ],
+)
+def test_datetime_from_integer(datetime_dtype):
+    sr = pl.Series(
+        "date",
+        [
+            0,  # 1970-01-01
+            946684800000,  # 2000-01-01
+            1262304000000,  # 2010-01-01
+            1577836800000,  # 2020-01-01
+            1735689600000,  # 2025-01-01
+        ],
+        dtype=pl.Int64(),
+    )
+    df = pl.DataFrame({"data": sr}).lazy()
+
+    q = df.select(pl.col("data").cast(datetime_dtype).alias("datetime_from_int"))
+    assert_gpu_result_equal(q)

@@ -293,6 +293,20 @@ class Column:
             or self.obj.type().id() == plc.TypeId.STRING
         ):
             return Column(self._handle_string_cast(plc_dtype), dtype=dtype)
+        elif (
+            plc.traits.is_integral_not_bool(self.obj.type())
+            and plc.traits.is_timestamp(plc_dtype)
+        ):
+            result = plc.column.Column(
+                plc_dtype,
+                self.obj.size(),
+                self.obj.data(),
+                self.obj.null_mask(),
+                self.obj.null_count(),
+                self.obj.offset(),
+                self.obj.children(),
+            )
+            return Column(result, dtype=dtype)
         else:
             result = Column(plc.unary.cast(self.obj, plc_dtype), dtype=dtype)
             if is_order_preserving_cast(self.obj.type(), plc_dtype):
