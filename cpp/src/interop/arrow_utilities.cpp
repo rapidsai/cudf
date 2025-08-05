@@ -26,7 +26,6 @@ namespace cudf {
 namespace detail {
 data_type arrow_to_cudf_type(ArrowSchemaView const* arrow_view)
 {
-  std::cout << "ARROW TYPE: " << arrow_view->type << std::endl;
   switch (arrow_view->type) {
     case NANOARROW_TYPE_NA: return data_type(type_id::EMPTY);
     case NANOARROW_TYPE_BOOL: return data_type(type_id::BOOL8);
