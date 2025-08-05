@@ -11,11 +11,13 @@ from pylibcudf.libcudf.aggregation cimport rolling_aggregation
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.types cimport size_type
+from rmm.pylibrmm.stream cimport Stream
 
 from .aggregation cimport Aggregation
 from .column cimport Column
 from .scalar cimport Scalar
 from .types cimport DataType
+from .utils cimport _get_stream
 
 
 __all__ = [
@@ -121,6 +123,7 @@ cpdef Table grouped_range_rolling_window(
     PrecedingRangeWindowType preceding,
     FollowingRangeWindowType following,
     list requests,
+    Stream stream=None,
 ):
     """
     Perform grouping-aware range-based rolling window aggregations on some columns.
@@ -154,6 +157,8 @@ cpdef Table grouped_range_rolling_window(
     for req in requests:
         crequests.push_back(move((<RollingRequest?>req).view()))
 
+    stream = _get_stream(stream)
+
     with nogil:
         result = cpp_rolling.grouped_range_rolling_window(
             group_keys.view(),
@@ -162,9 +167,10 @@ cpdef Table grouped_range_rolling_window(
             null_order,
             dereference(preceding.c_obj.get()),
             dereference(following.c_obj.get()),
-            crequests
+            crequests,
+            stream.view()
         )
-    return Table.from_libcudf(move(result))
+    return Table.from_libcudf(move(result), stream)
 
 
 cpdef Column rolling_window(
@@ -173,6 +179,7 @@ cpdef Column rolling_window(
     WindowType following_window,
     size_type min_periods,
     Aggregation agg,
+    Stream stream=None,
 ):
     """Perform a rolling window operation on a column
 
@@ -202,6 +209,9 @@ cpdef Column rolling_window(
     # TODO: Consider making all the conversion functions nogil functions that
     # reclaim the GIL internally for just the necessary scope like column.view()
     cdef const rolling_aggregation *c_agg = agg.view_underlying_as_rolling()
+
+    stream = _get_stream(stream)
+
     if WindowType is Column:
         with nogil:
             result = cpp_rolling.rolling_window(
@@ -210,6 +220,7 @@ cpdef Column rolling_window(
                 following_window.view(),
                 min_periods,
                 dereference(c_agg),
+                stream.view()
             )
     else:
         with nogil:
@@ -219,9 +230,10 @@ cpdef Column rolling_window(
                 following_window,
                 min_periods,
                 dereference(c_agg),
+                stream.view()
             )
 
-    return Column.from_libcudf(move(result))
+    return Column.from_libcudf(move(result), stream)
 
 
 cpdef bool is_valid_rolling_aggregation(DataType source, Aggregation agg):
@@ -249,6 +261,7 @@ cpdef tuple make_range_windows(
     null_order null_order,
     PrecedingRangeWindowType preceding,
     FollowingRangeWindowType following,
+    Stream stream=None,
 ):
     """
     Constructs preceding and following columns given window range specifications.
@@ -277,6 +290,8 @@ cpdef tuple make_range_windows(
     """
     cdef pair[unique_ptr[column], unique_ptr[column]] result
 
+    stream = _get_stream(stream)
+
     with nogil:
         result = cpp_rolling.make_range_windows(
             group_keys.view(),
@@ -285,8 +300,9 @@ cpdef tuple make_range_windows(
             null_order,
             dereference(preceding.c_obj.get()),
             dereference(following.c_obj.get()),
+            stream.view()
         )
     return (
-        Column.from_libcudf(move(result.first)),
-        Column.from_libcudf(move(result.second))
+        Column.from_libcudf(move(result.first), stream),
+        Column.from_libcudf(move(result.second), stream)
     )
