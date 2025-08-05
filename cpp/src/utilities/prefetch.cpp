@@ -70,15 +70,14 @@ cudaError_t prefetch_noexcept(std::string_view key,
                 << std::endl;
     }
 
-    cudaError_t result;
 #if defined(CUDART_VERSION) && CUDART_VERSION >= 13000
     cudaMemLocation location{
       (device_id.value() == cudaCpuDeviceId) ? cudaMemLocationTypeHost : cudaMemLocationTypeDevice,
       device_id.value()};
     constexpr int flags = 0;
-    result              = cudaMemPrefetchAsync(ptr, size, location, flags, stream.value());
+    auto result         = cudaMemPrefetchAsync(ptr, size, location, flags, stream.value());
 #else
-    result = cudaMemPrefetchAsync(ptr, size, device_id.value(), stream.value());
+    auto result = cudaMemPrefetchAsync(ptr, size, device_id.value(), stream.value());
 #endif
     // Need to flush the CUDA error so that the context is not corrupted.
     if (result == cudaErrorInvalidValue) { cudaGetLastError(); }
