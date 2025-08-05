@@ -58,6 +58,11 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
   // column is indexed by the hash set
   cudf::detail::result_cache sparse_results(requests.size());
 
+  auto row_bitmask =
+    skip_rows_with_nulls
+      ? cudf::bitmask_and(keys, stream, cudf::get_current_device_resource_ref()).first
+      : rmm::device_buffer{};
+
   auto const [input_index_to_key_index, gather_map] = [&] {
     auto set = cuco::static_set{
       cuco::extent<int64_t>{num_keys},
@@ -76,11 +81,19 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
                       thrust::make_counting_iterator(0),
                       thrust::make_counting_iterator(keys.num_rows()),
                       key_indices.begin(),
-                      [set_ref] __device__(size_type const idx) mutable {
-                        auto const [inserted_idx_ptr, _] = set_ref.insert_and_find(idx);
-                        return *inserted_idx_ptr;
+                      [set_ref,
+                       skip_rows_with_nulls,
+                       row_bitmask = static_cast<bitmask_type*>(
+                         row_bitmask.data())] __device__(size_type const idx) mutable {
+                        if (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, idx)) {
+                          auto const [inserted_idx_ptr, _] = set_ref.insert_and_find(idx);
+                          return *inserted_idx_ptr;
+                        }
+                        return -1;
                       });
     rmm::device_uvector<cudf::size_type> gather_map(num_keys, stream);
+    // thrust::uninitialized_fill(
+    //   rmm::exec_policy_nosync(stream), gather_map.begin(), gather_map.end(), -1);
     auto const keys_end = set.retrieve_all(gather_map.begin(), stream.value());
     gather_map.resize(std::distance(gather_map.begin(), keys_end), stream);
     return std::pair{std::move(key_indices), std::move(gather_map)};
@@ -105,11 +118,6 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
     cuco::storage<GROUPBY_BUCKET_SIZE>{},
     cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
     stream.value()};
-
-  auto row_bitmask =
-    skip_rows_with_nulls
-      ? cudf::bitmask_and(keys, stream, cudf::get_current_device_resource_ref()).first
-      : rmm::device_buffer{};
 
   // Compute all single pass aggs first
   compute_aggregations(num_keys,
