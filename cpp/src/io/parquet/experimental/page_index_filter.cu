@@ -223,6 +223,38 @@ namespace {
         });
     });
 }
+
+/**
+ * @brief Compute if the page index is present in all parquet data sources for all input columns
+ */
+[[nodiscard]] bool compute_has_page_index(
+  cudf::host_span<metadata_base const> file_metadatas,
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  cudf::host_span<input_column_info const> input_columns)
+{
+  // For all output columns, check all parquet data sources
+  return std::all_of(input_columns.begin(), input_columns.end(), [&](auto const& input_column) {
+    // For all parquet data sources
+    return std::all_of(
+      thrust::counting_iterator<size_t>(0),
+      thrust::counting_iterator(row_group_indices.size()),
+      [&](auto const src_index) {
+        // For all row groups in this parquet data source
+        auto const& rg_indices = row_group_indices[src_index];
+        return std::all_of(rg_indices.begin(), rg_indices.end(), [&](auto const& rg_index) {
+          auto const& row_group = file_metadatas[src_index].row_groups[rg_index];
+          auto col              = std::find_if(row_group.columns.begin(),
+                                  row_group.columns.end(),
+                                  [schema_idx = input_column.schema_idx](ColumnChunk const& col) {
+                                    return col.schema_idx == schema_idx;
+                                  });
+          // Check if the offset_index and column_index are present
+          return col != file_metadatas[src_index].row_groups[rg_index].columns.end() and
+                 col->offset_index.has_value() and col->column_index.has_value();
+        });
+      });
+  });
+}
 /**
  * @brief Construct a vector of all required data pages from the page row counts
  */
@@ -669,7 +701,7 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask
   cudf::column_view row_mask,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   cudf::host_span<cudf::data_type const> output_dtypes,
-  cudf::host_span<cudf::size_type const> output_column_schemas,
+  cudf::host_span<input_column_info const> input_columns,
   rmm::cuda_stream_view stream) const
 {
   CUDF_FUNC_RANGE();
@@ -681,7 +713,7 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask
   auto const num_columns = output_dtypes.size();
 
   auto const has_page_index =
-    compute_has_page_index(per_file_metadata, row_group_indices, output_column_schemas);
+    compute_has_page_index(per_file_metadata, row_group_indices, input_columns);
 
   // TODO: Don't use page pruning in case of lists and structs until we support them
   if (not has_page_index) {
@@ -698,7 +730,7 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask
   col_chunk_page_offsets.reserve(num_columns);
 
   if (num_columns == 1) {
-    auto const schema_idx = output_column_schemas[0];
+    auto const schema_idx = input_columns[0].schema_idx;
     auto [counts, offsets, chunk_offsets] =
       make_page_row_counts_and_offsets(per_file_metadata, row_group_indices, schema_idx, stream);
     page_row_counts.emplace_back(std::move(counts));
@@ -717,7 +749,7 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask
                   [&](auto const col_idx) {
                     page_row_counts_and_offsets_tasks.emplace_back(
                       cudf::detail::host_worker_pool().submit_task([&, col_idx = col_idx] {
-                        auto const schema_idx = output_column_schemas[col_idx];
+                        auto const schema_idx = input_columns[col_idx].schema_idx;
                         return make_page_row_counts_and_offsets(
                           per_file_metadata, row_group_indices, schema_idx, streams[col_idx]);
                       }));
