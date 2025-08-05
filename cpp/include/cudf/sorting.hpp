@@ -390,5 +390,74 @@ std::unique_ptr<column> top_k_order(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
+/**
+ * @brief Computes the top k values within each segment of a column
+ *
+ * This performs the equivalent of a sort and the slice of the resulting first k elements
+ * within each segment.
+ * However, the values within each segment may not necessarily be sorted.
+ *
+ * @code{.pseudo}
+ * Example:
+ * col = { 3, 4, 5, 4, 1, 2, 3, 5, 6, 7, 8, 9, 10 }
+ * offsets = {0, 3, 7, 13}
+ * result = cudf::top_k_segmented(col, offsets, 3);
+ * result is {5,4,3, 4,3,2, 10,8,9} // each segment may not be sorted
+ * @endcode
+ *
+ * @throw std::invalid_argument if k is greater than the number of rows in the column
+ *
+ * @param col Column to compute top k
+ * @param segment_offsets The column of `size_type` type containing start offset index for each
+ * contiguous segment
+ * @param k Number of values to return
+ * @param sort_order The desired sort order for the top k values.
+ *                   Default is high to low.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return A column with the top k values of the input column.
+ */
+std::unique_ptr<column> top_k_segmented(
+  column_view const& col,
+  column_view const& segment_offsets,
+  size_type k,
+  order sort_order                  = order::DESCENDING,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Computes the indices of the top k values within each segment of a column
+ *
+ * The indices will represent the top k elements within each segment but may not represent
+ * those elements as k sorted values.
+ *
+ * @code{.pseudo}
+ * Example:
+ * col = { 3, 4, 5, 4, 1, 2, 3, 5, 6, 7, 8, 9, 10 }
+ * offsets = {0, 3, 7, 13}
+ * result = cudf::top_k_segmented_order(col, offsets, 3);
+ * result is { 2,1,0, 3,6,5, 12,10,11} // each segment may not be sorted
+ * @endcode
+ *
+ * @throw std::invalid_argument if k is greater than the number of rows in the column
+ *
+ * @param col Column to compute top k
+ * @param segment_offsets The column of `size_type` type containing start offset index for each
+ * contiguous segment
+ * @param k Number of values to return
+ * @param sort_order The desired sort order for the top k values.
+ *                   Default is high to low.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return Indices of the top k values of the input column
+ */
+std::unique_ptr<column> top_k_segmented_order(
+  column_view const& col,
+  column_view const& segment_offsets,
+  size_type k,
+  order sort_order                  = order::DESCENDING,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT cudf
