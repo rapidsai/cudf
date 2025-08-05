@@ -64,6 +64,30 @@ size_t batched_decompress_temp_size(compression_type compression,
                                     size_t max_total_uncomp_size);
 
 /**
+ * @brief Return the amount of temporary space required in bytes for a given decompression
+ * operation using synchronous nvcomp APIs.
+ *
+ * The size returned reflects the size of the scratch buffer to be passed to
+ * `batched_decompress_async`. This version uses the sync APIs which are more precise, but
+ * potentially require a kernel launch.
+ *
+ * @param[in] compression Compression type
+ * @param[in] inputs Device span of compressed data chunks
+ * @param[in] max_uncomp_chunk_size Maximum size of any single uncompressed chunk
+ * @param[in] max_total_uncomp_size Maximum total size of uncompressed data
+ * @param[in] stream CUDA stream to use
+ * @returns The total required size in bytes
+ */
+[[nodiscard]] size_t batched_decompress_temp_size_ex(
+  compression_type compression,
+  device_span<device_span<uint8_t const> const> inputs,
+  size_t max_uncomp_chunk_size,
+  size_t max_total_uncomp_size,
+  rmm::cuda_stream_view stream);
+
+[[nodiscard]] constexpr bool is_batched_decompress_temp_size_ex_supported();
+
+/**
  * @brief Gets the maximum size any chunk could compress to in the batch.
  *
  * @param compression Compression type
