@@ -5,7 +5,7 @@ source ci/use_gha_tools_from_branch.sh
 
 # download CI artifacts
 LIBRMM_CHANNEL=$(rapids-get-pr-artifact rmm 2008 cpp conda)
-RMM_CHANNEL=$(rapids-get-pr-artifact rmm 2008 cpp conda)
+RMM_CHANNEL=$(rapids-get-pr-artifact rmm 2008 python conda)
 
 # For `rattler` builds:
 #

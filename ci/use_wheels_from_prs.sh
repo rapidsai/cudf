@@ -13,7 +13,7 @@ LIBRMM_WHEELHOUSE=$(
   RAPIDS_PY_WHEEL_NAME="librmm_${RAPIDS_PY_CUDA_SUFFIX}" rapids-get-pr-artifact rmm 2008 cpp wheel
 )
 RMM_WHEELHOUSE=$(
-  RAPIDS_PY_WHEEL_NAME="librmm_${RAPIDS_PY_CUDA_SUFFIX}" rapids-get-pr-artifact rmm 2008 cpp wheel
+  RAPIDS_PY_WHEEL_NAME="librmm_${RAPIDS_PY_CUDA_SUFFIX}" rapids-get-pr-artifact rmm 2008 python wheel
 )
 
 # write a pip constraints file saying e.g. "whenever you encounter a requirement for 'librmm-cu12', use this wheel"
