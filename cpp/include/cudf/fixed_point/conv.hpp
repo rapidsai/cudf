@@ -24,7 +24,7 @@
 
 namespace CUDF_EXPORT cudf {
 /**
- * @addtogroup fixed_point_conv
+ * @addtogroup fixed_point_classes
  * @{
  * @file
  * @brief Conversion functions for fixed-point numbers
