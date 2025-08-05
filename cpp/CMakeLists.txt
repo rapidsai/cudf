@@ -133,6 +133,11 @@ set(CUDF_CUDA_FLAGS "")
 set(CUDF_CXX_DEFINITIONS "")
 set(CUDF_CUDA_DEFINITIONS "")
 
+# For now, disable CMake's automatic module scanning for C++ files. There is an sccache bug in the
+# version RAPIDS uses in CI that causes it to handle the resulting -M* flags incorrectly with
+# gcc>=14. We can remove this once we upgrade to a newer sccache version.
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
+
 # Set logging level
 set(LIBCUDF_LOGGING_LEVEL
     "INFO"
@@ -532,6 +537,7 @@ add_library(
   src/io/parquet/decode_preprocess.cu
   src/io/parquet/experimental/dictionary_page_filter.cu
   src/io/parquet/experimental/hybrid_scan.cpp
+  src/io/parquet/experimental/hybrid_scan_chunking.cu
   src/io/parquet/experimental/hybrid_scan_helpers.cpp
   src/io/parquet/experimental/hybrid_scan_impl.cpp
   src/io/parquet/experimental/hybrid_scan_preprocess.cu
@@ -573,7 +579,6 @@ add_library(
   src/io/utilities/trie.cu
   src/jit/cache.cpp
   src/jit/parser.cpp
-  src/jit/runtime_support.cpp
   src/jit/util.cpp
   src/join/conditional_join.cu
   src/join/cross_join.cu
@@ -682,8 +687,8 @@ add_library(
   src/search/contains_scalar.cu
   src/search/contains_table.cu
   src/search/contains_table_impl.cu
-  src/search/contains_table_impl_primitive.cu
   src/search/contains_table_impl_nested.cu
+  src/search/contains_table_impl_primitive.cu
   src/search/search_ordered.cu
   src/sort/is_sorted.cu
   src/sort/rank.cu
@@ -793,10 +798,6 @@ add_library(
   src/text/stemmer.cu
   src/text/bpe/byte_pair_encoding.cu
   src/text/bpe/load_merge_pairs.cu
-  src/text/subword/data_normalizer.cu
-  src/text/subword/load_hash_file.cu
-  src/text/subword/subword_tokenize.cu
-  src/text/subword/wordpiece_tokenizer.cu
   src/text/tokenize.cu
   src/text/vocabulary_tokenize.cu
   src/text/wordpiece_tokenize.cu

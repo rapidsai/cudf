@@ -10,6 +10,7 @@ import operator
 import pickle
 import re
 from contextlib import contextmanager
+from functools import reduce
 from io import BytesIO
 
 import cupy as cp
@@ -249,12 +250,14 @@ def pdfIndexNulls():
 
 
 def test_from_pandas(pdf, pdfIndex):
+    pdf = pdf.copy(deep=False)
     pdf.index = pdfIndex
     gdf = cudf.from_pandas(pdf)
     assert_eq(pdf, gdf)
 
 
 def test_multiindex_transpose(pdf, pdfIndex):
+    pdf = pdf.copy(deep=False)
     pdf.index = pdfIndex
     gdf = cudf.from_pandas(pdf)
     assert_eq(pdf.transpose(), gdf.transpose())
@@ -284,6 +287,8 @@ def test_series_multiindex(pdfIndex):
 
 def test_multiindex_take(pdf, gdf, pdfIndex):
     gdfIndex = cudf.from_pandas(pdfIndex)
+    pdf = pdf.copy(deep=False)
+    gdf = gdf.copy(deep=False)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
     assert_eq(pdf.index.take([0]), gdf.index.take([0]))
@@ -302,6 +307,8 @@ def test_multiindex_take(pdf, gdf, pdfIndex):
 
 def test_multiindex_getitem(pdf, gdf, pdfIndex):
     gdfIndex = cudf.from_pandas(pdfIndex)
+    pdf = pdf.copy(deep=False)
+    gdf = gdf.copy(deep=False)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
     assert_eq(pdf.index[0], gdf.index[0])
@@ -336,6 +343,8 @@ def test_multiindex_getitem(pdf, gdf, pdfIndex):
 def test_multiindex_loc(pdf, gdf, pdfIndex, key_tuple):
     gdfIndex = cudf.from_pandas(pdfIndex)
     assert_eq(pdfIndex, gdfIndex)
+    pdf = pdf.copy(deep=False)
+    gdf = gdf.copy(deep=False)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
     # The index is unsorted, which makes things slow but is fine for testing.
@@ -349,14 +358,9 @@ def test_multiindex_loc(pdf, gdf, pdfIndex, key_tuple):
     assert_eq(expected, got)
 
 
-@pytest.mark.parametrize(
-    "indexer",
-    [
-        (([1, 1], [0, 1]), slice(None)),
-        (([1, 1], [1, 0]), slice(None)),
-    ],
-)
-def test_multiindex_compatible_ordering(indexer):
+@pytest.mark.parametrize("second_val", [[0, 1], [1, 0]])
+def test_multiindex_compatible_ordering(second_val):
+    indexer = (([1, 1], second_val), slice(None))
     df = pd.DataFrame(
         {"a": [1, 1, 2, 3], "b": [1, 0, 1, 1], "c": [1, 2, 3, 4]}
     ).set_index(["a", "b"])
@@ -376,15 +380,16 @@ def test_multiindex_compatible_ordering(indexer):
         slice(None),
     ],
 )
-def test_multiindex_loc_slice(pdf, gdf, pdfIndex, arg):
+def test_multiindex_loc_slice(pdf, pdfIndex, arg):
     gdf = cudf.from_pandas(pdf)
     gdfIndex = cudf.from_pandas(pdfIndex)
+    pdf = pdf.copy(deep=False)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
     assert_eq(pdf.loc[arg], gdf.loc[arg])
 
 
-def test_multiindex_loc_errors(pdf, gdf, pdfIndex):
+def test_multiindex_loc_errors(pdf, pdfIndex):
     gdf = cudf.from_pandas(pdf)
     gdfIndex = cudf.from_pandas(pdfIndex)
     gdf.index = gdfIndex
@@ -402,6 +407,8 @@ def test_multiindex_loc_errors(pdf, gdf, pdfIndex):
 def test_multiindex_loc_then_column(pdf, gdf, pdfIndex):
     gdfIndex = cudf.from_pandas(pdfIndex)
     assert_eq(pdfIndex, gdfIndex)
+    pdf = pdf.copy(deep=False)
+    gdf = gdf.copy(deep=False)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
     # The index is unsorted, which makes things slow but is fine for testing.
@@ -413,6 +420,8 @@ def test_multiindex_loc_then_column(pdf, gdf, pdfIndex):
 
 def test_multiindex_loc_rows_0(pdf, gdf, pdfIndex):
     gdfIndex = cudf.from_pandas(pdfIndex)
+    pdf = pdf.copy(deep=False)
+    gdf = gdf.copy(deep=False)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
 
@@ -426,6 +435,8 @@ def test_multiindex_loc_rows_0(pdf, gdf, pdfIndex):
 
 def test_multiindex_loc_rows_1_2_key(pdf, gdf, pdfIndex):
     gdfIndex = cudf.from_pandas(pdfIndex)
+    pdf = pdf.copy(deep=False)
+    gdf = gdf.copy(deep=False)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
     assert_eq(pdf.loc[("c", "forest"), :], gdf.loc[("c", "forest"), :])
@@ -433,6 +444,8 @@ def test_multiindex_loc_rows_1_2_key(pdf, gdf, pdfIndex):
 
 def test_multiindex_loc_rows_1_1_key(pdf, gdf, pdfIndex):
     gdfIndex = cudf.from_pandas(pdfIndex)
+    pdf = pdf.copy(deep=False)
+    gdf = gdf.copy(deep=False)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
     assert_eq(pdf.loc[("c",), :], gdf.loc[("c",), :])
@@ -467,7 +480,8 @@ def test_multiindex_column_shape():
         ("c", "forest", "clear"),
     ],
 )
-def test_multiindex_columns(pdf, gdf, pdfIndex, query):
+def test_multiindex_columns(pdf, pdfIndex, query):
+    pdf = pdf.copy(deep=False)
     pdf = pdf.T
     gdf = cudf.from_pandas(pdf)
     gdfIndex = cudf.from_pandas(pdfIndex)
@@ -490,8 +504,6 @@ def test_multiindex_from_tuples():
 
 
 def test_multiindex_from_dataframe():
-    if not hasattr(pd.MultiIndex([[]], [[]]), "codes"):
-        pytest.skip()
     pdf = pd.DataFrame(
         [["a", "house"], ["a", "store"], ["b", "house"], ["b", "store"]]
     )
@@ -690,49 +702,44 @@ def test_multiindex_equals():
     assert_eq(mi1.equals(mi2), False)
 
 
-@pytest.mark.parametrize(
-    "data",
-    [
-        {
-            "Date": [
-                "2020-08-27",
-                "2020-08-28",
-                "2020-08-31",
-                "2020-08-27",
-                "2020-08-28",
-                "2020-08-31",
-                "2020-08-27",
-                "2020-08-28",
-                "2020-08-31",
-            ],
-            "Close": [
-                3400.00,
-                3401.80,
-                3450.96,
-                226.58,
-                228.91,
-                225.53,
-                505.13,
-                525.91,
-                534.98,
-            ],
-            "Symbol": [
-                "AMZN",
-                "AMZN",
-                "AMZN",
-                "MSFT",
-                "MSFT",
-                "MSFT",
-                "NVDA",
-                "NVDA",
-                "NVDA",
-            ],
-        }
-    ],
-)
-@pytest.mark.parametrize("names", [["X", "Y"]])
-def test_multiindex_copy_sem(data, names):
+def test_multiindex_copy_sem():
     """Test semantic equality for MultiIndex.copy"""
+    names = ["X", "Y"]
+    data = {
+        "Date": [
+            "2020-08-27",
+            "2020-08-28",
+            "2020-08-31",
+            "2020-08-27",
+            "2020-08-28",
+            "2020-08-31",
+            "2020-08-27",
+            "2020-08-28",
+            "2020-08-31",
+        ],
+        "Close": [
+            3400.00,
+            3401.80,
+            3450.96,
+            226.58,
+            228.91,
+            225.53,
+            505.13,
+            525.91,
+            534.98,
+        ],
+        "Symbol": [
+            "AMZN",
+            "AMZN",
+            "AMZN",
+            "MSFT",
+            "MSFT",
+            "MSFT",
+            "NVDA",
+            "NVDA",
+            "NVDA",
+        ],
+    }
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas()
 
@@ -795,7 +802,7 @@ def test_multiindex_copy_sem(data, names):
                 "NVDA",
             ],
         },
-        cudf.MultiIndex(
+        pd.MultiIndex(
             levels=[[1001, 1002], [2001, 2002]],
             codes=[[1, 1, 0, 0], [0, 1, 0, 1]],
             names=["col1", "col2"],
@@ -809,58 +816,57 @@ def test_multiindex_copy_deep(data, copy_on_write, deep):
     Case1: Constructed from GroupBy, StringColumns
     Case2: Constructed from MultiIndex, NumericColumns
     """
-    original_cow_setting = cudf.get_option("copy_on_write")
-    cudf.set_option("copy_on_write", copy_on_write)
+    with cudf.option_context("copy_on_write", copy_on_write):
+        if isinstance(data, dict):
+            gdf = cudf.DataFrame(data)
+            mi1 = gdf.groupby(["Date", "Symbol"]).mean().index
+            mi2 = mi1.copy(deep=deep)
 
-    if isinstance(data, dict):
-        import operator
-        from functools import reduce
+            lchildren = [col.children for col in mi1._columns]
+            rchildren = [col.children for col in mi2._columns]
 
-        gdf = cudf.DataFrame(data)
-        mi1 = gdf.groupby(["Date", "Symbol"]).mean().index
-        mi2 = mi1.copy(deep=deep)
+            # Flatten
+            lchildren = reduce(operator.add, lchildren)
+            rchildren = reduce(operator.add, rchildren)
 
-        lchildren = [col.children for col in mi1._columns]
-        rchildren = [col.children for col in mi2._columns]
+            lptrs = [
+                child.base_data.get_ptr(mode="read") for child in lchildren
+            ]
+            rptrs = [
+                child.base_data.get_ptr(mode="read") for child in rchildren
+            ]
 
-        # Flatten
-        lchildren = reduce(operator.add, lchildren)
-        rchildren = reduce(operator.add, rchildren)
+            assert all((x == y) for x, y in zip(lptrs, rptrs))
 
-        lptrs = [child.base_data.get_ptr(mode="read") for child in lchildren]
-        rptrs = [child.base_data.get_ptr(mode="read") for child in rchildren]
+        elif isinstance(data, pd.MultiIndex):
+            data = cudf.MultiIndex.from_pandas(data)
+            same_ref = (not deep) or (
+                cudf.get_option("copy_on_write") and not deep
+            )
+            mi1 = data
+            mi2 = mi1.copy(deep=deep)
 
-        assert all((x == y) for x, y in zip(lptrs, rptrs))
+            # Assert ._levels identity
+            lptrs = [
+                lv._column.base_data.get_ptr(mode="read") for lv in mi1._levels
+            ]
+            rptrs = [
+                lv._column.base_data.get_ptr(mode="read") for lv in mi2._levels
+            ]
 
-    elif isinstance(data, cudf.MultiIndex):
-        same_ref = (not deep) or (
-            cudf.get_option("copy_on_write") and not deep
-        )
-        mi1 = data
-        mi2 = mi1.copy(deep=deep)
+            assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
 
-        # Assert ._levels identity
-        lptrs = [
-            lv._column.base_data.get_ptr(mode="read") for lv in mi1._levels
-        ]
-        rptrs = [
-            lv._column.base_data.get_ptr(mode="read") for lv in mi2._levels
-        ]
+            # Assert ._codes identity
+            lptrs = [c.base_data.get_ptr(mode="read") for c in mi1._codes]
+            rptrs = [c.base_data.get_ptr(mode="read") for c in mi2._codes]
 
-        assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
+            assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
 
-        # Assert ._codes identity
-        lptrs = [c.base_data.get_ptr(mode="read") for c in mi1._codes]
-        rptrs = [c.base_data.get_ptr(mode="read") for c in mi2._codes]
+            # Assert ._data identity
+            lptrs = [d.base_data.get_ptr(mode="read") for d in mi1._columns]
+            rptrs = [d.base_data.get_ptr(mode="read") for d in mi2._columns]
 
-        assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
-
-        # Assert ._data identity
-        lptrs = [d.base_data.get_ptr(mode="read") for d in mi1._columns]
-        rptrs = [d.base_data.get_ptr(mode="read") for d in mi2._columns]
-
-        assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
-    cudf.set_option("copy_on_write", original_cow_setting)
+            assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
 
 
 @pytest.mark.parametrize(
@@ -894,6 +900,8 @@ def test_multiindex_copy_deep(data, copy_on_write, deep):
 def test_multiindex_iloc(pdf, gdf, pdfIndex, iloc_rows, iloc_columns):
     gdfIndex = cudf.from_pandas(pdfIndex)
     assert_eq(pdfIndex, gdfIndex)
+    pdf = pdf.copy(deep=False)
+    gdf = gdf.copy(deep=False)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
     presult = pdf.iloc[iloc_rows, iloc_columns]
@@ -950,6 +958,8 @@ def test_multiindex_iloc_scalar():
 def test_multicolumn_iloc(pdf, gdf, pdfIndex, iloc_rows, iloc_columns):
     gdfIndex = cudf.from_pandas(pdfIndex)
     assert_eq(pdfIndex, gdfIndex)
+    pdf = pdf.copy(deep=False)
+    gdf = gdf.copy(deep=False)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
     pdf = pdf.T
@@ -1001,6 +1011,8 @@ def test_multiindex_groupby_to_frame():
 
 def test_multiindex_reset_index(pdf, gdf, pdfIndex):
     gdfIndex = cudf.from_pandas(pdfIndex)
+    pdf = pdf.copy(deep=False)
+    gdf = gdf.copy(deep=False)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
     assert_eq(pdf.reset_index(), gdf.reset_index())
@@ -1045,6 +1057,8 @@ def test_multiindex_multicolumn_reset_index():
 
 def test_groupby_multiindex_columns_from_pandas(pdf, gdf, pdfIndex):
     gdfIndex = cudf.from_pandas(pdfIndex)
+    pdf = pdf.copy(deep=False)
+    gdf = gdf.copy(deep=False)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
     assert_eq(gdf, pdf)
@@ -1053,6 +1067,8 @@ def test_groupby_multiindex_columns_from_pandas(pdf, gdf, pdfIndex):
 
 def test_multiindex_rows_with_wildcard(pdf, gdf, pdfIndex):
     gdfIndex = cudf.from_pandas(pdfIndex)
+    pdf = pdf.copy(deep=False)
+    gdf = gdf.copy(deep=False)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
     # The index is unsorted, which makes things slow but is fine for testing.
@@ -1101,6 +1117,7 @@ def test_multiindex_multicolumn_zero_row_slice():
 
 
 def test_multicolumn_loc(pdf, pdfIndex):
+    pdf = pdf.copy(deep=False)
     pdf = pdf.T
     pdf.columns = pdfIndex
     gdf = cudf.from_pandas(pdf)
@@ -1114,6 +1131,7 @@ def test_multicolumn_loc(pdf, pdfIndex):
     reason="https://github.com/pandas-dev/pandas/issues/43351",
 )
 def test_multicolumn_set_item(pdf, pdfIndex):
+    pdf = pdf.copy(deep=False)
     pdf = pdf.T
     pdf.columns = pdfIndex
     gdf = cudf.from_pandas(pdf)
@@ -1181,39 +1199,39 @@ def test_multiindex_to_numpy():
     "gdi, fill_value, expected",
     [
         (
-            cudf.MultiIndex(
+            lambda: cudf.MultiIndex(
                 levels=[[1, 3, 4, None], [1, 2, 5]],
                 codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
                 names=["x", "y"],
             ),
             5,
-            cudf.MultiIndex(
+            lambda: cudf.MultiIndex(
                 levels=[[1, 3, 4, 5], [1, 2, 5]],
                 codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
                 names=["x", "y"],
             ),
         ),
         (
-            cudf.MultiIndex(
+            lambda: cudf.MultiIndex(
                 levels=[[1, 3, 4, None], [1, None, 5]],
                 codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
                 names=["x", "y"],
             ),
             100,
-            cudf.MultiIndex(
+            lambda: cudf.MultiIndex(
                 levels=[[1, 3, 4, 100], [1, 100, 5]],
                 codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
                 names=["x", "y"],
             ),
         ),
         (
-            cudf.MultiIndex(
+            lambda: cudf.MultiIndex(
                 levels=[["a", "b", "c", None], ["1", None, "5"]],
                 codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
                 names=["x", "y"],
             ),
             "100",
-            cudf.MultiIndex(
+            lambda: cudf.MultiIndex(
                 levels=[["a", "b", "c", "100"], ["1", "100", "5"]],
                 codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
                 names=["x", "y"],
@@ -1222,7 +1240,7 @@ def test_multiindex_to_numpy():
     ],
 )
 def test_multiindex_fillna(gdi, fill_value, expected):
-    assert_eq(expected, gdi.fillna(fill_value))
+    assert_eq(expected(), gdi().fillna(fill_value))
 
 
 @pytest.mark.parametrize(
@@ -1479,15 +1497,12 @@ def test_multiindex_argsort(pdi, ascending):
 
 
 @pytest.mark.parametrize(
-    "idx", [pd.MultiIndex.from_product([["python", "cobra"], [2018, 2019]])]
-)
-@pytest.mark.parametrize(
     "names", [[None, None], ["a", None], ["new name", "another name"]]
 )
 @pytest.mark.parametrize("inplace", [True, False])
-def test_multiindex_set_names(idx, names, inplace):
-    pi = idx.copy()
-    gi = cudf.from_pandas(idx)
+def test_multiindex_set_names(names, inplace):
+    pi = pd.MultiIndex.from_product([["python", "cobra"], [2018, 2019]])
+    gi = cudf.from_pandas(pi)
 
     expected = pi.set_names(names=names, inplace=inplace)
     actual = gi.set_names(names=names, inplace=inplace)
@@ -1498,18 +1513,7 @@ def test_multiindex_set_names(idx, names, inplace):
     assert_eq(expected, actual)
 
 
-@pytest.mark.parametrize(
-    "idx",
-    [
-        pd.MultiIndex.from_product(
-            [["python", "cobra"], [2018, 2019], ["aab", "bcd"]]
-        ),
-        pd.MultiIndex.from_product(
-            [["python", "cobra"], [2018, 2019], ["aab", "bcd"]],
-            names=[1, 0, 2],
-        ),
-    ],
-)
+@pytest.mark.parametrize("idx_names", [[None, None, None], [1, 0, 2]])
 @pytest.mark.parametrize(
     "level, names",
     [
@@ -1523,10 +1527,12 @@ def test_multiindex_set_names(idx, names, inplace):
 )
 @pytest.mark.parametrize("inplace", [True, False])
 def test_multiindex_set_names_default_and_int_names(
-    idx, level, names, inplace
+    idx_names, level, names, inplace
 ):
-    pi = idx.copy()
-    gi = cudf.from_pandas(idx)
+    pi = pd.MultiIndex.from_product(
+        [["python", "cobra"], [2018, 2019], ["aab", "bcd"]], names=idx_names
+    )
+    gi = cudf.from_pandas(pi)
 
     expected = pi.set_names(names=names, level=level, inplace=inplace)
     actual = gi.set_names(names=names, level=level, inplace=inplace)
@@ -1537,15 +1543,6 @@ def test_multiindex_set_names_default_and_int_names(
     assert_eq(expected, actual)
 
 
-@pytest.mark.parametrize(
-    "idx",
-    [
-        pd.MultiIndex.from_product(
-            [["python", "cobra"], [2018, 2019], ["aab", "bcd"]],
-            names=["one", None, "three"],
-        ),
-    ],
-)
 @pytest.mark.parametrize(
     "level, names",
     [
@@ -1560,9 +1557,12 @@ def test_multiindex_set_names_default_and_int_names(
     ],
 )
 @pytest.mark.parametrize("inplace", [True, False])
-def test_multiindex_set_names_string_names(idx, level, names, inplace):
-    pi = idx.copy()
-    gi = cudf.from_pandas(idx)
+def test_multiindex_set_names_string_names(level, names, inplace):
+    pi = pd.MultiIndex.from_product(
+        [["python", "cobra"], [2018, 2019], ["aab", "bcd"]],
+        names=["one", None, "three"],
+    )
+    gi = cudf.from_pandas(pi)
 
     expected = pi.set_names(names=names, level=level, inplace=inplace)
     actual = gi.set_names(names=names, level=level, inplace=inplace)
@@ -1590,15 +1590,7 @@ def test_multiindex_set_names_error(level, names):
     )
 
 
-@pytest.mark.parametrize(
-    "idx",
-    [
-        pd.MultiIndex.from_product([["python", "cobra"], [2018, 2019]]),
-        pd.MultiIndex.from_product(
-            [["python", "cobra"], [2018, 2019]], names=["old name", None]
-        ),
-    ],
-)
+@pytest.mark.parametrize("name", [None, "old name"])
 @pytest.mark.parametrize(
     "names",
     [
@@ -1611,9 +1603,11 @@ def test_multiindex_set_names_error(level, names):
     ],
 )
 @pytest.mark.parametrize("inplace", [True, False])
-def test_multiindex_rename(idx, names, inplace):
-    pi = idx.copy()
-    gi = cudf.from_pandas(idx)
+def test_multiindex_rename(name, names, inplace):
+    pi = pd.MultiIndex.from_product(
+        [["python", "cobra"], [2018, 2019]], names=[name, None]
+    )
+    gi = cudf.from_pandas(pi)
 
     expected = pi.rename(names=names, inplace=inplace)
     actual = gi.rename(names=names, inplace=inplace)
@@ -2193,4 +2187,13 @@ def test_from_arrays_infer_names(idx):
     arrays = [idx([1], name="foo"), idx([2], name="bar")]
     expected = pd.MultiIndex.from_arrays(arrays)
     result = cudf.MultiIndex.from_arrays(arrays)
+    assert_eq(result, expected)
+
+
+def test_multiindex_droplevel_single_level_none_names():
+    data = [(1, 2), (3, 4)]
+    pidx = pd.MultiIndex.from_tuples(data, names=[None, None])
+    gidx = cudf.MultiIndex.from_tuples(data, names=[None, None])
+    result = gidx.droplevel(0)
+    expected = pidx.droplevel(0)
     assert_eq(result, expected)

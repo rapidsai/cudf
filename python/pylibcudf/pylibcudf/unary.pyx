@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -184,3 +184,5 @@ cpdef bool is_supported_cast(DataType from_, DataType to):
     """
     with nogil:
         return cpp_unary.is_supported_cast(from_.c_obj, to.c_obj)
+
+UnaryOperator.__str__ = UnaryOperator.__repr__

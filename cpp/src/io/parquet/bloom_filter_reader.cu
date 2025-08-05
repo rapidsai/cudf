@@ -402,10 +402,12 @@ size_t aggregate_reader_metadata::get_bloom_filter_alignment() const
   // Required alignment:
   // https://github.com/NVIDIA/cuCollections/blob/deab5799f3e4226cb8a49acf2199c03b14941ee4/include/cuco/detail/bloom_filter/bloom_filter_impl.cuh#L55-L67
   using policy_type = cuco::arrow_filter_policy<cuda::std::byte, cudf::hashing::detail::XXHash_64>;
-  return alignof(cuco::bloom_filter_ref<cuda::std::byte,
-                                        cuco::extent<std::size_t>,
-                                        cuco::thread_scope_thread,
-                                        policy_type>::filter_block_type);
+  auto constexpr alignment = alignof(cuco::bloom_filter_ref<cuda::std::byte,
+                                                            cuco::extent<std::size_t>,
+                                                            cuco::thread_scope_thread,
+                                                            policy_type>::filter_block_type);
+  static_assert((alignment & (alignment - 1)) == 0, "Alignment must be a power of 2");
+  return std::max<size_t>(alignment, rmm::CUDA_ALLOCATION_ALIGNMENT);
 }
 
 std::vector<rmm::device_buffer> aggregate_reader_metadata::read_bloom_filters(
