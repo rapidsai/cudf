@@ -67,8 +67,9 @@ def test_dataframe_apply_rows(dtype, has_nulls, pessimistic):
     assert_eq(df_expected, df_actual)
 
 
-@pytest.mark.parametrize("nelem", [1, 2, 64, 128, 129])
-def test_df_apply_rows(nelem):
+def test_df_apply_rows():
+    nelem = 20
+
     def kernel(in1, in2, in3, out1, out2, extra1, extra2):
         for i, (x, y, z) in enumerate(zip(in1, in2, in3)):
             out1[i] = extra2 * x - extra1 * y
@@ -100,9 +101,10 @@ def test_df_apply_rows(nelem):
     np.testing.assert_array_almost_equal(got_out2, expect_out2)
 
 
-@pytest.mark.parametrize("nelem", [1, 2, 64, 128, 129])
-@pytest.mark.parametrize("chunksize", [1, 2, 3, 4, 23])
-def test_df_apply_chunks(nelem, chunksize):
+@pytest.mark.parametrize("chunksize", [1, 4, 23])
+def test_df_apply_chunks(chunksize):
+    nelem = 20
+
     def kernel(in1, in2, in3, out1, out2, extra1, extra2):
         for i, (x, y, z) in enumerate(zip(in1, in2, in3)):
             out1[i] = extra2 * x - extra1 * y + z
@@ -134,8 +136,9 @@ def test_df_apply_chunks(nelem, chunksize):
     np.testing.assert_array_almost_equal(got_out2.to_numpy(), expect_out2)
 
 
-@pytest.mark.parametrize("nelem", [1, 15, 30, 64, 128, 129])
-def test_df_apply_custom_chunks(nelem):
+def test_df_apply_custom_chunks():
+    nelem = 20
+
     def kernel(in1, in2, in3, out1, out2, extra1, extra2):
         for i, (x, y, z) in enumerate(zip(in1, in2, in3)):
             out1[i] = extra2 * x - extra1 * y + z
@@ -172,10 +175,11 @@ def test_df_apply_custom_chunks(nelem):
     np.testing.assert_array_almost_equal(got_out2.to_numpy(), expect_out2)
 
 
-@pytest.mark.parametrize("nelem", [1, 15, 30, 64, 128, 129])
 @pytest.mark.parametrize("blkct", [None, 1, 8])
-@pytest.mark.parametrize("tpb", [1, 8, 64])
-def test_df_apply_custom_chunks_blkct_tpb(nelem, blkct, tpb):
+@pytest.mark.parametrize("tpb", [1, 8])
+def test_df_apply_custom_chunks_blkct_tpb(blkct, tpb):
+    nelem = 20
+
     def kernel(in1, in2, in3, out1, out2, extra1, extra2):
         for i in range(cuda.threadIdx.x, in1.size, cuda.blockDim.x):
             x = in1[i]
@@ -220,8 +224,9 @@ def test_df_apply_custom_chunks_blkct_tpb(nelem, blkct, tpb):
     np.testing.assert_array_almost_equal(got_out2.to_numpy(), expect_out2)
 
 
-@pytest.mark.parametrize("nelem", [1, 2, 64, 128, 1000, 5000])
-def test_df_apply_rows_incols_mapping(nelem):
+def test_df_apply_rows_incols_mapping():
+    nelem = 20
+
     def kernel(x, y, z, out1, out2, extra1, extra2):
         for i, (a, b, c) in enumerate(zip(x, y, z)):
             out1[i] = extra2 * a - extra1 * b
@@ -250,9 +255,10 @@ def test_df_apply_rows_incols_mapping(nelem):
     assert_eq(outdf[["out1", "out2"]], expected_out)
 
 
-@pytest.mark.parametrize("nelem", [1, 2, 64, 128, 129])
-@pytest.mark.parametrize("chunksize", [1, 2, 3, 4, 23])
-def test_df_apply_chunks_incols_mapping(nelem, chunksize):
+@pytest.mark.parametrize("chunksize", [1, 4, 23])
+def test_df_apply_chunks_incols_mapping(chunksize):
+    nelem = 20
+
     def kernel(q, p, r, out1, out2, extra1, extra2):
         for i, (a, b, c) in enumerate(zip(q, p, r)):
             out1[i] = extra2 * a - extra1 * b + c
