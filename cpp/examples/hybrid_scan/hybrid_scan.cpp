@@ -26,6 +26,7 @@
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
 
+#include <rmm/aligned.hpp>
 #include <rmm/mr/device/aligned_resource_adaptor.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/statistics_resource_adaptor.hpp>
@@ -276,7 +277,7 @@ auto hybrid_scan(io_source const& io_source,
   if (filters.contains(parquet_filter_type::ROW_GROUPS_WITH_BLOOM_FILTERS) and
       bloom_filter_byte_ranges.size()) {
     // Fetch 32 byte aligned bloom filter data buffers from the input file buffer
-    auto constexpr bloom_filter_alignment = 32;
+    auto constexpr bloom_filter_alignment = rmm::CUDA_ALLOCATION_ALIGNMENT;
     auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
       mr, bloom_filter_alignment);
     std::cout << "READER: Filter row groups with bloom filters...\n";
