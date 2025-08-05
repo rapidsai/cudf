@@ -455,9 +455,7 @@ int main(int argc, char const** argv)
     filters.insert(parquet_filter_type::ROW_GROUPS_WITH_BLOOM_FILTERS);
     // Deliberately disabled as it has low cost to benefit ratio
     // filters.insert(parquet_filter_type::FILTER_COLUMN_PAGES_WITH_PAGE_INDEX);
-
-    // TODO: Uncomment when the illegal memory access issue is fixed
-    // filters.insert(parquet_filter_type::PAYLOAD_COLUMN_PAGES_WITH_PAGE_INDEX);
+    filters.insert(parquet_filter_type::PAYLOAD_COLUMN_PAGES_WITH_PAGE_INDEX);
   }
 
   cudf::examples::timer timer;
