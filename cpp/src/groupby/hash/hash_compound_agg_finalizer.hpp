@@ -24,14 +24,14 @@
 #include <rmm/mr/device/device_memory_resource.hpp>
 
 namespace cudf::groupby::detail::hash {
-template <typename SetType>
+
 class hash_compound_agg_finalizer final : public cudf::detail::aggregation_finalizer {
   column_view col;
   data_type result_type;
   cudf::detail::result_cache* sparse_results;
   cudf::detail::result_cache* dense_results;
+  device_span<size_type const> key_indices;
   device_span<size_type const> gather_map;
-  SetType set;
   bitmask_type const* __restrict__ row_bitmask;
   rmm::cuda_stream_view stream;
   rmm::device_async_resource_ref mr;
@@ -42,8 +42,8 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
   hash_compound_agg_finalizer(column_view col,
                               cudf::detail::result_cache* sparse_results,
                               cudf::detail::result_cache* dense_results,
+                              device_span<size_type const> key_indices,
                               device_span<size_type const> gather_map,
-                              SetType set,
                               bitmask_type const* row_bitmask,
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr);

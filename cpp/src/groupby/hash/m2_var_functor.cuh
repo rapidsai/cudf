@@ -33,21 +33,25 @@ constexpr static bool is_m2_var_supported()
   return is_numeric<Source>() && !is_fixed_point<Source>();
 }
 
-template <typename SetType>
 struct m2_hash_functor {
-  SetType set;
+  device_span<size_type const> key_indices;
   bitmask_type const* __restrict__ row_bitmask;
   mutable_column_device_view target;
   column_device_view source;
   column_device_view sum;
   column_device_view count;
-  m2_hash_functor(SetType set,
+  m2_hash_functor(device_span<size_type const> key_indices,
                   bitmask_type const* row_bitmask,
                   mutable_column_device_view target,
                   column_device_view source,
                   column_device_view sum,
                   column_device_view count)
-    : set{set}, row_bitmask{row_bitmask}, target{target}, source{source}, sum{sum}, count{count}
+    : key_indices{key_indices},
+      row_bitmask{row_bitmask},
+      target{target},
+      source{source},
+      sum{sum},
+      count{count}
   {
   }
 
@@ -64,7 +68,7 @@ struct m2_hash_functor {
                              size_type target_index) noexcept
     requires(is_m2_var_supported<Source>())
   {
-    using Target    = cudf::detail::target_type_t<Source, aggregation::VARIANCE>;
+    using Target    = cudf::detail::target_type_t<Source, aggregation::M2>;
     using SumType   = cudf::detail::target_type_t<Source, aggregation::SUM>;
     using CountType = cudf::detail::target_type_t<Source, aggregation::COUNT_VALID>;
 
@@ -84,7 +88,7 @@ struct m2_hash_functor {
   __device__ inline void operator()(size_type source_index)
   {
     if (row_bitmask == nullptr or bit_is_set(row_bitmask, source_index)) {
-      auto const target_index = *set.find(source_index);
+      auto const target_index = key_indices[source_index];
 
       auto col         = source;
       auto source_type = source.type();
@@ -99,23 +103,22 @@ struct m2_hash_functor {
   }
 };
 
-template <typename SetType>
 struct var_hash_functor {
-  SetType set;
+  device_span<size_type const> key_indices;
   bitmask_type const* __restrict__ row_bitmask;
   mutable_column_device_view target;
   column_device_view source;
   column_device_view sum;
   column_device_view count;
   size_type ddof;
-  var_hash_functor(SetType set,
+  var_hash_functor(device_span<size_type const> key_indices,
                    bitmask_type const* row_bitmask,
                    mutable_column_device_view target,
                    column_device_view source,
                    column_device_view sum,
                    column_device_view count,
                    size_type ddof)
-    : set{set},
+    : key_indices(key_indices),
       row_bitmask{row_bitmask},
       target{target},
       source{source},
@@ -159,7 +162,7 @@ struct var_hash_functor {
   __device__ inline void operator()(size_type source_index)
   {
     if (row_bitmask == nullptr or cudf::bit_is_set(row_bitmask, source_index)) {
-      auto const target_index = *set.find(source_index);
+      auto const target_index = key_indices[source_index];
 
       auto col         = source;
       auto source_type = source.type();
