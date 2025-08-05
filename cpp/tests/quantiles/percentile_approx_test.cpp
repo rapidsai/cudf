@@ -31,7 +31,7 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <arrow/util/tdigest.h>
+#include <arrow/util/tdigest_internal.h>
 
 namespace {
 std::unique_ptr<cudf::column> arrow_percentile_approx(cudf::column_view const& _values,
