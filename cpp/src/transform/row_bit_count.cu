@@ -233,8 +233,8 @@ struct flatten_functor {
     auto sliced_child = lcv.get_sliced_child(stream);
 
     // We don't pass sliced_child by value as that will generate
-    // using a host function ( ~column_view() ) in a host/device context
-    // when compiling with CUDA 13
+    // invocation of a host function ( ~column_view() ) in a host/device
+    // context when compiling with CUDA 13
     auto iter =
       cudf::detail::make_counting_transform_iterator(0, [&](auto) { return sliced_child; });
     h_info.complex_type_count++;
