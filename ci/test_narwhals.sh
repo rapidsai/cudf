@@ -69,9 +69,11 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest \
 # columns aren't object anymore. The test expects object, causing a mismatch.
 # test_nan: Narwhals expect this test to fail, but as of polars 1.30 we raise a RuntimeError,
 # not polars ComputeError. So the test is looking for the wrong error and fails.
+# test_floordiv_int_by_zero: This bug is fixed as of 25.08, narwhals should remove the xfail
 TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_POLARS=" \
 test_dtypes or \
-test_nan \
+test_nan or \
+test_floordiv_int_by_zero \
 "
 
 rapids-logger "Run narwhals tests for cuDF Polars"
