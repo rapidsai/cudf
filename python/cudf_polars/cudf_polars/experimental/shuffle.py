@@ -86,7 +86,10 @@ class RMPFIntegration:  # pragma: no cover
         options: ShuffleOptions,
     ) -> DataFrame:
         """Extract a finished partition from the RMP shuffler."""
-        from rapidsmpf.integrations.cudf.partition import unpack_and_concat
+        from rapidsmpf.integrations.cudf.partition import (
+            unpack_and_concat,
+            unspill_partitions,
+        )
         from rapidsmpf.integrations.dask.core import get_worker_context
 
         context = get_worker_context()
@@ -100,7 +103,13 @@ class RMPFIntegration:  # pragma: no cover
         dtypes = options["dtypes"]
         return DataFrame.from_table(
             unpack_and_concat(
-                shuffler.extract(partition_id),
+                unspill_partitions(
+                    shuffler.extract(partition_id),
+                    br=context.br,
+                    stream=DEFAULT_STREAM,
+                    allow_overbooking=True,
+                    statistics=context.statistics,
+                ),
                 br=context.br,
                 stream=DEFAULT_STREAM,
             ),
