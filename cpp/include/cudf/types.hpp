@@ -235,7 +235,7 @@ enum class type_id : int32_t {
 };
 
 /// @brief Indicates whether a function is null-aware or not.
-enum class null_aware : uint8_t {
+enum class null_aware : bool {
   NO  = 0,  ///< The function is not null-aware
   YES = 1   ///< The function is null-aware
 };
