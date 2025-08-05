@@ -39,6 +39,7 @@ class ShuffleOptions(TypedDict):
     on: Sequence[str]
     column_names: Sequence[str]
     dtypes: Sequence[DataType]
+    use_concat_insert: bool
 
 
 # Experimental rapidsmpf shuffler integration
@@ -76,7 +77,11 @@ class RMPFIntegration:  # pragma: no cover
             br=context.br,
             stream=DEFAULT_STREAM,
         )
-        shuffler.insert_chunks(packed_inputs)
+
+        if options["use_concat_insert"]:
+            shuffler.concat_insert(packed_inputs)
+        else:
+            shuffler.insert_chunks(packed_inputs)
 
     @staticmethod
     @nvtx_annotate_cudf_polars(message="RMPFIntegration.extract_partition")
@@ -127,24 +132,28 @@ class Shuffle(IR):
     Only hash-based partitioning is supported (for now).
     """
 
-    __slots__ = ("keys", "shuffle_method")
-    _non_child = ("schema", "keys", "shuffle_method")
+    __slots__ = ("keys", "shuffle_method", "use_concat_insert")
+    _non_child = ("schema", "keys", "shuffle_method", "use_concat_insert")
     keys: tuple[NamedExpr, ...]
     """Keys to shuffle on."""
     shuffle_method: ShuffleMethod
     """Shuffle method to use."""
+    use_concat_insert: bool
+    """Whether to use concat_insert for inserting chunks with the rapidsmpf shuffler."""
 
     def __init__(
         self,
         schema: Schema,
         keys: tuple[NamedExpr, ...],
         shuffle_method: ShuffleMethod,
+        use_concat_insert: bool,  # noqa: FBT001
         df: IR,
     ):
         self.schema = schema
         self.keys = keys
         self.shuffle_method = shuffle_method
-        self._non_child_args = (schema, keys, shuffle_method)
+        self.use_concat_insert = use_concat_insert
+        self._non_child_args = (schema, keys, shuffle_method, use_concat_insert)
         self.children = (df,)
 
     @classmethod
@@ -291,6 +300,9 @@ def _(
     ) == len(ir.keys):  # pragma: no cover
         from rapidsmpf.integrations.dask import rapidsmpf_shuffle_graph
 
+        # TODO: use_concat_insert should come from the configuration
+        # / environment. We need to plumb that though Shuffler init to here.
+
         shuffle_on = [k.name for k in _keys]
 
         try:
@@ -304,6 +316,7 @@ def _(
                     "on": shuffle_on,
                     "column_names": list(ir.schema.keys()),
                     "dtypes": list(ir.schema.values()),
+                    "use_concat_insert": ir.use_concat_insert,
                 },
             )
         except ValueError as err:
