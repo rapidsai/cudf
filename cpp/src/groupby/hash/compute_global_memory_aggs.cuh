@@ -39,15 +39,14 @@
 #include <vector>
 
 namespace cudf::groupby::detail::hash {
-template <typename SetType>
 void compute_global_memory_aggs(cudf::size_type num_rows,
                                 bool skip_rows_with_nulls,
                                 bitmask_type const* row_bitmask,
                                 cudf::table_view const& flattened_values,
                                 cudf::aggregation::Kind const* d_agg_kinds,
                                 host_span<cudf::aggregation::Kind const> agg_kinds,
-                                SetType& global_set,
                                 cudf::device_span<cudf::size_type const> populated_keys,
+                                cudf::size_type const* key_indices,
                                 std::vector<std::unique_ptr<aggregation>>& aggregations,
                                 cudf::detail::result_cache* sparse_results,
                                 rmm::cuda_stream_view stream)
@@ -63,14 +62,13 @@ void compute_global_memory_aggs(cudf::size_type num_rows,
   // prepare to launch kernel to do the actual aggregation
   auto d_values       = table_device_view::create(flattened_values, stream);
   auto d_sparse_table = mutable_table_device_view::create(sparse_table, stream);
-  auto global_set_ref = global_set.ref(cuco::op::insert_and_find);
 
   thrust::for_each_n(
     rmm::exec_policy_nosync(stream),
     thrust::counting_iterator{0},
     num_rows,
     hash::compute_single_pass_aggs_fn{
-      global_set_ref, *d_values, *d_sparse_table, d_agg_kinds, row_bitmask, skip_rows_with_nulls});
+      key_indices, *d_values, *d_sparse_table, d_agg_kinds, row_bitmask, skip_rows_with_nulls});
 
   // Add results back to sparse_results cache
   auto sparse_result_cols = sparse_table.release();

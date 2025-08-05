@@ -18,16 +18,16 @@
 #include "compute_global_memory_aggs.hpp"
 
 namespace cudf::groupby::detail::hash {
-template void compute_global_memory_aggs<simplified_global_set_t>(
-  cudf::size_type num_rows,
-  bool skip_rows_with_nulls,
-  bitmask_type const* row_bitmask,
-  cudf::table_view const& flattened_values,
-  cudf::aggregation::Kind const* d_agg_kinds,
-  host_span<cudf::aggregation::Kind const> agg_kinds,
-  simplified_global_set_t& global_set,
-  cudf::device_span<cudf::size_type const> populated_keys,
-  std::vector<std::unique_ptr<aggregation>>& aggregations,
-  cudf::detail::result_cache* sparse_results,
-  rmm::cuda_stream_view stream);
+// template void compute_global_memory_aggs<simplified_global_set_t>(
+//   cudf::size_type num_rows,
+//   bool skip_rows_with_nulls,
+//   bitmask_type const* row_bitmask,
+//   cudf::table_view const& flattened_values,
+//   cudf::aggregation::Kind const* d_agg_kinds,
+//   host_span<cudf::aggregation::Kind const> agg_kinds,
+//   simplified_global_set_t& global_set,
+//   cudf::device_span<cudf::size_type const> populated_keys,
+//   std::vector<std::unique_ptr<aggregation>>& aggregations,
+//   cudf::detail::result_cache* sparse_results,
+//   rmm::cuda_stream_view stream);
 }  // namespace cudf::groupby::detail::hash

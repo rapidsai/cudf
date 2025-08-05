@@ -28,15 +28,14 @@
 #include <vector>
 
 namespace cudf::groupby::detail::hash {
-template <typename SetType>
 void compute_global_memory_aggs(cudf::size_type num_rows,
                                 bool skip_rows_with_nulls,
                                 bitmask_type const* row_bitmask,
                                 cudf::table_view const& flattened_values,
                                 cudf::aggregation::Kind const* d_agg_kinds,
                                 host_span<cudf::aggregation::Kind const> agg_kinds,
-                                SetType& global_set,
                                 cudf::device_span<cudf::size_type const> populated_keys,
+                                cudf::size_type const* key_indices,
                                 std::vector<std::unique_ptr<aggregation>>& aggregations,
                                 cudf::detail::result_cache* sparse_results,
                                 rmm::cuda_stream_view stream);
