@@ -22,7 +22,7 @@
 
 namespace CUDF_EXPORT cudf {
 /**
- * @addtogroup jit
+ * @addtogroup column_transformation
  * @{
  * @file
  */
