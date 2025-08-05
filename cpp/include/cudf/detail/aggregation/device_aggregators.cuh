@@ -23,7 +23,9 @@
 #include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/types.hpp>
 #include <cudf/utilities/traits.cuh>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
@@ -156,7 +158,10 @@ struct update_target_element<Source, aggregation::SUM> {
 };
 
 template <typename Source>
-  requires(cuda::std::is_same_v<Source, int64_t>)
+  requires(((cudf::is_integral<Source>() && !cuda::std::is_same_v<Source, bool> &&
+             cuda::std::is_signed_v<Source>) ||
+            cudf::is_fixed_point<Source>()) &&
+           cudf::has_atomic_support<device_storage_type_t<Source>>())
 struct update_target_element<Source, aggregation::SUM_WITH_OVERFLOW> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
@@ -168,9 +173,20 @@ struct update_target_element<Source, aggregation::SUM_WITH_OVERFLOW> {
     auto sum_column      = target.child(0);
     auto overflow_column = target.child(1);
 
-    auto const source_value = source.element<Source>(source_index);
+    using DeviceType = device_storage_type_t<Source>;
+
+    // Extract source value: for integral types, read as Source then cast; for decimal types, read
+    // as DeviceType directly
+    DeviceType device_source_value;
+    if constexpr (cudf::is_fixed_point<Source>()) {
+      device_source_value = source.element<DeviceType>(source_index);
+    } else {
+      auto const source_value = source.element<Source>(source_index);
+      device_source_value     = static_cast<DeviceType>(source_value);
+    }
+
     auto const old_sum =
-      cudf::detail::atomic_add(&sum_column.element<int64_t>(target_index), source_value);
+      cudf::detail::atomic_add(&sum_column.element<DeviceType>(target_index), device_source_value);
 
     // Early exit if overflow is already set to avoid unnecessary overflow checking
     auto bool_ref = cuda::atomic_ref<bool, cuda::thread_scope_device>{
@@ -178,15 +194,18 @@ struct update_target_element<Source, aggregation::SUM_WITH_OVERFLOW> {
     if (bool_ref.load(cuda::memory_order_relaxed)) { return; }
 
     // Check for overflow before performing the addition to avoid UB
-    // For positive overflow: old_sum > 0, source_value > 0, and old_sum > max - source_value
-    // For negative overflow: old_sum < 0, source_value < 0, and old_sum < min - source_value
-    // TODO: to be replaced by CCCL equivalents once https://github.com/NVIDIA/cccl/pull/3755 is
-    // ready
-    auto constexpr int64_max = cuda::std::numeric_limits<int64_t>::max();
-    auto constexpr int64_min = cuda::std::numeric_limits<int64_t>::min();
-    auto const overflow =
-      ((old_sum > 0 && source_value > 0 && old_sum > int64_max - source_value) ||
-       (old_sum < 0 && source_value < 0 && old_sum < int64_min - source_value));
+    auto constexpr type_max = cuda::std::numeric_limits<DeviceType>::max();
+    auto constexpr type_min = cuda::std::numeric_limits<DeviceType>::min();
+
+    bool overflow = false;
+    // Check for positive overflow (signed types only)
+    if (old_sum > 0 && device_source_value > 0 && old_sum > type_max - device_source_value) {
+      overflow = true;
+    }
+    // Check for negative overflow (signed types only)
+    if (old_sum < 0 && device_source_value < 0 && old_sum < type_min - device_source_value) {
+      overflow = true;
+    }
     if (overflow) {
       // Atomically set overflow flag to true (use atomic_max since true > false)
       cudf::detail::atomic_max(&overflow_column.element<bool>(target_index), true);

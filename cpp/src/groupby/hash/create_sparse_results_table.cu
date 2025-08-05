@@ -70,12 +70,12 @@ struct sparse_column_creator {
       };
 
       // Lambda to create children for SUM_WITH_OVERFLOW struct column
-      auto make_children = [&make_empty_column](cudf::size_type size, cudf::mask_state mask_state) {
+      auto make_children = [&make_empty_column, &col_type](cudf::size_type size,
+                                                           cudf::mask_state mask_state) {
         std::vector<std::unique_ptr<cudf::column>> children;
-        // Create sum child column (int64_t) - no null mask needed, struct-level mask handles
-        // nullability
-        children.push_back(
-          make_empty_column(cudf::type_id::INT64, size, cudf::mask_state::UNALLOCATED));
+        // Create sum child column (same type as input column) - no null mask needed, struct-level
+        // mask handles nullability
+        children.push_back(make_empty_column(col_type.id(), size, cudf::mask_state::UNALLOCATED));
         // Create overflow child column (bool) - no null mask needed, only value matters
         children.push_back(
           make_empty_column(cudf::type_id::BOOL8, size, cudf::mask_state::UNALLOCATED));

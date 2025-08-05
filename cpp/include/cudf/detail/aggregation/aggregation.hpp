@@ -1411,8 +1411,12 @@ struct target_type_impl<Source,
   using type = Source;
 };
 
-// SUM_WITH_OVERFLOW always outputs a struct {sum: int64_t, overflow: bool} regardless of input type
+// SUM_WITH_OVERFLOW outputs a struct {sum: Source, overflow: bool} where sum type matches input
+// type Only supports signed integral types (excluding bool) and decimal types
 template <typename Source>
+  requires((cudf::is_integral<Source>() && !cuda::std::is_same_v<Source, bool> &&
+            cuda::std::is_signed_v<Source>) ||
+           cudf::is_fixed_point<Source>())
 struct target_type_impl<Source, aggregation::SUM_WITH_OVERFLOW> {
   using type = struct_view;  // SUM_WITH_OVERFLOW outputs a struct with sum and overflow fields
 };
