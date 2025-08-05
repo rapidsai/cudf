@@ -111,18 +111,6 @@ struct sparse_column_creator {
 };
 }  // anonymous namespace
 
-template <typename SetType>
-void extract_populated_keys(SetType const& key_set,
-                            rmm::device_uvector<cudf::size_type>& populated_keys,
-                            rmm::cuda_stream_view stream)
-{
-  CUDF_FUNC_RANGE();
-
-  auto const keys_end = key_set.retrieve_all(populated_keys.begin(), stream.value());
-
-  populated_keys.resize(std::distance(populated_keys.begin(), keys_end), stream);
-}
-
 // make table that will hold sparse results
 cudf::table create_sparse_results_table(cudf::table_view const& flattened_values,
                                         cudf::aggregation::Kind const* d_agg_kinds,
