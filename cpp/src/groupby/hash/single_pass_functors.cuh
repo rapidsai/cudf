@@ -213,11 +213,16 @@ struct global_memory_fallback_fn {
 
   __device__ void operator()(cudf::size_type i) const
   {
-    auto const block_id = (i % stride) / GROUPBY_BLOCK_SIZE;
+    auto num_rows      = input_values.num_rows();
+    auto const row_idx = i % num_rows;
+    auto const col_idx = i / num_rows;
+
+    auto const block_id = (row_idx % stride) / GROUPBY_BLOCK_SIZE;
     if (block_cardinality[block_id] >= GROUPBY_CARDINALITY_THRESHOLD and
-        (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, i))) {
-      auto const target_idx = key_indices[i];
-      cudf::detail::aggregate_row(output_values, target_idx, input_values, i, aggs);
+        (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, row_idx))) {
+      auto const target_idx = key_indices[row_idx];
+      cudf::detail::aggregate_row_parallel(
+        output_values, col_idx, target_idx, input_values, row_idx, aggs);
     }
   }
 };

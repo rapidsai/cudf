@@ -432,4 +432,21 @@ __device__ inline void aggregate_row(mutable_table_device_view target,
                                   source_index);
   }
 }
+
+__device__ inline void aggregate_row_parallel(mutable_table_device_view target,
+                                              size_type target_col,
+                                              size_type target_index,
+                                              table_device_view source,
+                                              size_type source_index,
+                                              aggregation::Kind const* aggs)
+{
+  dispatch_type_and_aggregation(source.column(target_col).type(),
+                                aggs[target_col],
+                                elementwise_aggregator{},
+                                target.column(target_col),
+                                target_index,
+                                source.column(target_col),
+                                source_index);
+}
+
 }  // namespace cudf::detail
