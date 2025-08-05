@@ -6,6 +6,8 @@ set -euo pipefail
 # Support invoking test_python_cudf.sh outside the script directory
 cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../
 
+source ci/use_gha_tools_from_branch.sh
+
 # Common setup steps shared by Python test jobs
 source ./ci/test_python_common.sh test_python_other
 

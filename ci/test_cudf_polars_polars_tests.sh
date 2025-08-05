@@ -3,6 +3,8 @@
 
 set -euo pipefail
 
+source ci/use_gha_tools_from_branch.sh
+source ci/use_gha_tools_from_branch.sh
 source rapids-init-pip
 
 rapids-logger "Download wheels"

@@ -6,6 +6,7 @@ set -euo pipefail
 package_name=$1
 package_dir=$2
 
+source ci/use_gha_tools_from_branch.sh
 source rapids-configure-sccache
 source rapids-date-string
 source rapids-init-pip

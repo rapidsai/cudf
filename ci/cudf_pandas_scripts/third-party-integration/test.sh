@@ -5,6 +5,8 @@
 
 set -euo pipefail
 
+source ci/use_gha_tools_from_branch.sh
+source ./ci/use_wheels_from_prs.sh
 
 extract_lib_from_dependencies_yaml() {
     local file=$1

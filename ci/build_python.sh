@@ -3,9 +3,11 @@
 
 set -euo pipefail
 
+source ci/use_gha_tools_from_branch.sh
 source rapids-configure-sccache
 
 source rapids-date-string
+source ci/use_conda_packages_from_prs.sh
 
 export CMAKE_GENERATOR=Ninja
 
