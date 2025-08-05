@@ -104,7 +104,16 @@ def test_decimal_other(data_type):
     "plc_type",
     [plc.TypeId.DECIMAL128, plc.TypeId.DECIMAL64, plc.TypeId.DECIMAL32],
 )
-def test_decimal_respect_metadata_precision(plc_type):
+def test_decimal_respect_metadata_precision(plc_type, request):
+    request.node.add_marker(
+        pytest.mark.xfail(
+            parse(pa.__version__) < parse("19.0.0")
+            and plc_type in {plc.TypeId.DECIMAL64, plc.TypeId.DECIMAL32},
+            reason=(
+                "pyarrow does not interpret Arrow schema decimal type string correctly"
+            ),
+        )
+    )
     precision, scale = 3, 2
     expected = pa.array(
         [decimal.Decimal("1.23"), None], type=pa.decimal128(precision, scale)
