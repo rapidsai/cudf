@@ -68,7 +68,7 @@ requirements:
     - typing_extensions >=4.0.0
     - pandas >=2.0,<2.4.0dev0
     - numpy >=1.23,<3.0a0
-    - pyarrow>=14.0.0,<20.0.0a0
+    - pyarrow>=15.0.0,<22.0.0a0
     - libcudf =${{ version }}
     - ${{ pin_compatible("rmm", upper_bound="x.x") }}
     - fsspec >=0.6.0
