@@ -109,13 +109,13 @@ test_is_finite_expr or \
 test_is_finite_series or \
 test_maybe_convert_dtypes_pandas or \
 test_log_dtype_pandas or \
-test_len_over_2369 \
-test_all_ignore_nulls \
-test_allh_kleene \
-test_anyh_kleene \
-test_offset_by_date_pandas \
-test_select_boolean_cols \
-test_select_boolean_cols_multi_group_by \
+test_len_over_2369 or \
+test_all_ignore_nulls or \
+test_allh_kleene or \
+test_anyh_kleene or \
+test_offset_by_date_pandas or \
+test_select_boolean_cols or \
+test_select_boolean_cols_multi_group_by or \
 test_to_datetime_pd_preserves_pyarrow_backend_dtype \
 "
 
@@ -148,8 +148,7 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 NARWHALS_DEFAULT_CONSTRUCTORS=pandas python -m 
         ${TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_PANDAS} \
     )" \
     --numprocesses=8 \
-    --dist=worksteal \
-    -l
+    --dist=worksteal
 
 popd
 
