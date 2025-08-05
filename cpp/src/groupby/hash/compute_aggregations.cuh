@@ -56,6 +56,7 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
   bool skip_rows_with_nulls,
   bitmask_type const* row_bitmask,
   SetType& global_set,
+  size_type const* key_indices,
   cudf::host_span<cudf::groupby::aggregation_request const> requests,
   cudf::detail::result_cache* sparse_results,
   rmm::cuda_stream_view stream)
@@ -135,6 +136,7 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
                           local_mapping_index.data(),
                           global_mapping_index.data(),
                           block_cardinality.data(),
+                          key_indices,
                           needs_global_memory_fallback.data(),
                           stream);
 

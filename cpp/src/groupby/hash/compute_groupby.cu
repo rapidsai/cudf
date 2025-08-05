@@ -113,6 +113,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
                                          skip_rows_with_nulls,
                                          static_cast<bitmask_type*>(row_bitmask.data()),
                                          set,
+                                         input_index_to_key_index.begin(),
                                          requests,
                                          &sparse_results,
                                          stream);
