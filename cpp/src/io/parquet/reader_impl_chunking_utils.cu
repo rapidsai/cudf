@@ -712,6 +712,60 @@ void include_decompression_scratch_size(device_span<ColumnChunkDesc const> chunk
     return cudf::io::detail::get_decompression_scratch_size(d);
   });
 
+  // Sum up only compressed pages (exclude NONE compression type)
+  auto const total_decomp_info = thrust::reduce(rmm::exec_policy(stream),
+                                                decomp_info.begin(),
+                                                decomp_info.end(),
+                                                decompression_info{},
+                                                decomp_sum{});
+  auto const total_temp_size   = get_decompression_scratch_size(total_decomp_info);
+
+  // collect only compressed page data
+  rmm::device_uvector<device_span<uint8_t const>> page_spans(pages.size(), stream);
+  {
+    rmm::device_uvector<device_span<uint8_t const>> temp_spans(pages.size(), stream);
+    auto iter = thrust::make_counting_iterator(size_t{0});
+    thrust::for_each(
+      rmm::exec_policy_nosync(stream),
+      iter,
+      iter + pages.size(),
+      [pages = pages.begin(), chunks = chunks.begin(), temp_spans = temp_spans.begin()] __device__(
+        size_t i) {
+        auto const& page = pages[i];
+        if (parquet_compression_support(chunks[page.chunk_idx].codec).first !=
+            compression_type::NONE) {
+          temp_spans[i] = {page.page_data, static_cast<size_t>(page.compressed_page_size)};
+        } else {
+          temp_spans[i] = {nullptr, 0};  // Mark uncompressed pages
+        }
+      });
+
+    // Copy only non-null spans
+    auto end_iter =
+      thrust::copy_if(rmm::exec_policy_nosync(stream),
+                      temp_spans.begin(),
+                      temp_spans.end(),
+                      page_spans.begin(),
+                      [] __device__(auto const& span) { return span.data() != nullptr; });
+    page_spans.resize(end_iter - page_spans.begin(), stream);
+  }
+
+  auto const total_temp_size_ex = cudf::io::detail::get_decompression_scratch_size_ex(
+    total_decomp_info.type,
+    page_spans,
+    total_decomp_info.max_page_decompressed_size,
+    total_decomp_info.total_decompressed_size,
+    stream);
+
+  if (total_temp_size_ex < total_temp_size) {
+    auto fudge_factor = (double)total_temp_size_ex / total_temp_size;
+    // apply factor to temp_cost
+    thrust::for_each(rmm::exec_policy_nosync(stream),
+                     temp_cost.begin(),
+                     temp_cost.end(),
+                     [fudge_factor] __device__(size_t& cost) { cost *= fudge_factor; });
+  }
+
   // add to the cumulative_page_info data
   rmm::device_uvector<size_t> d_temp_cost = cudf::detail::make_device_uvector_async(
     temp_cost, stream, cudf::get_current_device_resource_ref());
