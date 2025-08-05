@@ -211,7 +211,7 @@ struct global_memory_fallback_fn {
   {
   }
 
-  __device__ void operator()(cudf::size_type i) const
+  __device__ void operator()(int64_t i) const
   {
     auto num_rows      = input_values.num_rows();
     auto const row_idx = i % num_rows;

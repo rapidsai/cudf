@@ -197,8 +197,8 @@ void compute_aggregations(int64_t num_rows,
     cudf::scoped_range rng{"global_memory_fallback_fn"};
     auto const stride = GROUPBY_BLOCK_SIZE * grid_size;
     thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                       thrust::counting_iterator{0},
-                       num_rows * flattened_values.num_columns(),
+                       thrust::counting_iterator{int64_t{0}},
+                       num_rows * int64_t{flattened_values.num_columns()},
                        global_memory_fallback_fn{key_indices,
                                                  *d_values,
                                                  *d_sparse_table,
