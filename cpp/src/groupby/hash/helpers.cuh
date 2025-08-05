@@ -63,7 +63,7 @@ struct key_indices_hasher_t {
   size_type const* key_indices{nullptr};
   using hasher = cuco::default_hash_function<size_type>;
 
-  __device__ bool operator()(size_type idx) const { return hasher{}(key_indices[idx]); }
+  __device__ std::uint32_t operator()(size_type idx) const { return hasher{}(key_indices[idx]); }
 };
 struct simplified_probing_scheme_t : cuco::linear_probing<GROUPBY_CG_SIZE, key_indices_hasher_t> {
   __device__ simplified_probing_scheme_t(key_indices_hasher_t const& hasher)
