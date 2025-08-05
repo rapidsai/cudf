@@ -58,7 +58,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
   // column is indexed by the hash set
   cudf::detail::result_cache sparse_results(requests.size());
 
-  auto const input_index_to_key_index = [&] {
+  auto const [input_index_to_key_index, gather_map] = [&] {
     auto set = cuco::static_set{
       cuco::extent<int64_t>{num_keys},
       cudf::detail::CUCO_DESIRED_LOAD_FACTOR,  // 50% load factor
@@ -80,7 +80,10 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
                         auto const [inserted_idx_ptr, _] = set_ref.insert_and_find(idx);
                         return *inserted_idx_ptr;
                       });
-    return key_indices;
+    rmm::device_uvector<cudf::size_type> gather_map(num_keys, stream);
+    auto const keys_end = set.retrieve_all(gather_map.begin(), stream.value());
+    gather_map.resize(std::distance(gather_map.begin(), keys_end), stream);
+    return std::pair{std::move(key_indices), std::move(gather_map)};
   }();
 
   // {
@@ -109,14 +112,14 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
       : rmm::device_buffer{};
 
   // Compute all single pass aggs first
-  auto gather_map = compute_aggregations(num_keys,
-                                         skip_rows_with_nulls,
-                                         static_cast<bitmask_type*>(row_bitmask.data()),
-                                         set,
-                                         input_index_to_key_index.begin(),
-                                         requests,
-                                         &sparse_results,
-                                         stream);
+  compute_aggregations(num_keys,
+                       skip_rows_with_nulls,
+                       static_cast<bitmask_type*>(row_bitmask.data()),
+                       set,
+                       gather_map,
+                       requests,
+                       &sparse_results,
+                       stream);
 
   // {
   //   auto h_map = cudf::detail::make_std_vector(gather_map, stream);

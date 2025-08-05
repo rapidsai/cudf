@@ -124,13 +124,11 @@ void extract_populated_keys(SetType const& key_set,
 }
 
 // make table that will hold sparse results
-template <typename GlobalSetType>
 cudf::table create_sparse_results_table(cudf::table_view const& flattened_values,
                                         cudf::aggregation::Kind const* d_agg_kinds,
                                         host_span<cudf::aggregation::Kind const> agg_kinds,
                                         bool direct_aggregations,
-                                        GlobalSetType const& global_set,
-                                        rmm::device_uvector<cudf::size_type>& populated_keys,
+                                        cudf::device_span<cudf::size_type const> populated_keys,
                                         rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
@@ -147,7 +145,6 @@ cudf::table create_sparse_results_table(cudf::table_view const& flattened_values
   // only for the keys inserted in global hash set
   if (!direct_aggregations) {
     auto d_sparse_table = cudf::mutable_table_device_view::create(sparse_table, stream);
-    extract_populated_keys(global_set, populated_keys, stream);
     thrust::for_each_n(
       rmm::exec_policy(stream),
       thrust::make_counting_iterator(0),
@@ -161,19 +158,5 @@ cudf::table create_sparse_results_table(cudf::table_view const& flattened_values
   }
   return sparse_table;
 }
-
-template void extract_populated_keys<simplified_global_set_t>(
-  simplified_global_set_t const& key_set,
-  rmm::device_uvector<cudf::size_type>& populated_keys,
-  rmm::cuda_stream_view stream);
-
-template cudf::table create_sparse_results_table<simplified_global_set_t>(
-  cudf::table_view const& flattened_values,
-  cudf::aggregation::Kind const* d_agg_kinds,
-  host_span<cudf::aggregation::Kind const> agg_kinds,
-  bool direct_aggregations,
-  simplified_global_set_t const& global_set,
-  rmm::device_uvector<cudf::size_type>& populated_keys,
-  rmm::cuda_stream_view stream);
 
 }  // namespace cudf::groupby::detail::hash

@@ -40,32 +40,25 @@
 
 namespace cudf::groupby::detail::hash {
 template <typename SetType>
-rmm::device_uvector<cudf::size_type> compute_global_memory_aggs(
-  cudf::size_type num_rows,
-  bool skip_rows_with_nulls,
-  bitmask_type const* row_bitmask,
-  cudf::table_view const& flattened_values,
-  cudf::aggregation::Kind const* d_agg_kinds,
-  host_span<cudf::aggregation::Kind const> agg_kinds,
-  SetType& global_set,
-  std::vector<std::unique_ptr<aggregation>>& aggregations,
-  cudf::detail::result_cache* sparse_results,
-  rmm::cuda_stream_view stream)
+void compute_global_memory_aggs(cudf::size_type num_rows,
+                                bool skip_rows_with_nulls,
+                                bitmask_type const* row_bitmask,
+                                cudf::table_view const& flattened_values,
+                                cudf::aggregation::Kind const* d_agg_kinds,
+                                host_span<cudf::aggregation::Kind const> agg_kinds,
+                                SetType& global_set,
+                                cudf::device_span<cudf::size_type const> populated_keys,
+                                std::vector<std::unique_ptr<aggregation>>& aggregations,
+                                cudf::detail::result_cache* sparse_results,
+                                rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
 
   auto constexpr uses_global_memory_aggs = true;
-  // 'populated_keys' contains inserted row_indices (keys) of global hash set
-  rmm::device_uvector<cudf::size_type> populated_keys(num_rows, stream);
 
   // make table that will hold sparse results
-  cudf::table sparse_table = create_sparse_results_table(flattened_values,
-                                                         d_agg_kinds,
-                                                         agg_kinds,
-                                                         uses_global_memory_aggs,
-                                                         global_set,
-                                                         populated_keys,
-                                                         stream);
+  cudf::table sparse_table = create_sparse_results_table(
+    flattened_values, d_agg_kinds, agg_kinds, uses_global_memory_aggs, populated_keys, stream);
 
   // prepare to launch kernel to do the actual aggregation
   auto d_values       = table_device_view::create(flattened_values, stream);
@@ -78,7 +71,6 @@ rmm::device_uvector<cudf::size_type> compute_global_memory_aggs(
     num_rows,
     hash::compute_single_pass_aggs_fn{
       global_set_ref, *d_values, *d_sparse_table, d_agg_kinds, row_bitmask, skip_rows_with_nulls});
-  extract_populated_keys(global_set, populated_keys, stream);
 
   // Add results back to sparse_results cache
   auto sparse_result_cols = sparse_table.release();
@@ -87,7 +79,5 @@ rmm::device_uvector<cudf::size_type> compute_global_memory_aggs(
     sparse_results->add_result(
       flattened_values.column(i), *aggregations[i], std::move(sparse_result_cols[i]));
   }
-
-  return populated_keys;
 }
 }  // namespace cudf::groupby::detail::hash

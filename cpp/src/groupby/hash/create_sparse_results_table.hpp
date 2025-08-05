@@ -43,12 +43,10 @@ void extract_populated_keys(SetType const& key_set,
                             rmm::cuda_stream_view stream);
 
 // make table that will hold sparse results
-template <typename GlobalSetType>
 cudf::table create_sparse_results_table(cudf::table_view const& flattened_values,
                                         cudf::aggregation::Kind const* d_agg_kinds,
                                         host_span<cudf::aggregation::Kind const> agg_kinds,
                                         bool direct_aggregations,
-                                        GlobalSetType const& global_set,
-                                        rmm::device_uvector<cudf::size_type>& populated_keys,
+                                        cudf::device_span<cudf::size_type const> populated_keys,
                                         rmm::cuda_stream_view stream);
 }  // namespace cudf::groupby::detail::hash
