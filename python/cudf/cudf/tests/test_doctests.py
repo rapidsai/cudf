@@ -19,7 +19,7 @@ tests = [cudf, cudf.core.groupby]
 
 
 def _name_in_all(parent, name):
-    return name in set(getattr(parent, "__all__", []))
+    return name in getattr(parent, "__all__", [])
 
 
 def _is_public_name(parent, name):
