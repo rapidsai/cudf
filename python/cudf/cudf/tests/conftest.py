@@ -335,6 +335,12 @@ def all_supported_types_as_str(request):
     return request.param
 
 
+@pytest.fixture(params=[list, np.array])
+def one_dimensional_array_types(request):
+    """1D array containers commonly accepted by cuDF and pandas"""
+    return request.param
+
+
 @pytest.fixture(params=[True, False])
 def dropna(request):
     """Param for `dropna` argument"""
