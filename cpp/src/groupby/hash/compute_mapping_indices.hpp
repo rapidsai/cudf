@@ -29,6 +29,8 @@ namespace cudf::groupby::detail::hash {
 template <class SetRef>
 [[nodiscard]] cudf::size_type max_occupancy_grid_size(cudf::size_type n);
 
+[[nodiscard]] cudf::size_type max_occupancy_grid_size_smem_kernel(cudf::size_type n);
+
 template <class SetRef>
 void compute_mapping_indices(cudf::size_type grid_size,
                              cudf::size_type num,

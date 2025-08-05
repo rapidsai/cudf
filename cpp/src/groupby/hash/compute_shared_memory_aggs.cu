@@ -275,6 +275,16 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
 }
 }  // namespace
 
+cudf::size_type max_occupancy_grid_size_smem_kernel(cudf::size_type n)
+{
+  cudf::size_type max_active_blocks{-1};
+  CUDF_CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+    &max_active_blocks, single_pass_shmem_aggs_kernel, GROUPBY_BLOCK_SIZE, 0));
+  auto const grid_size  = max_active_blocks * cudf::detail::num_multiprocessors();
+  auto const num_blocks = cudf::util::div_rounding_up_safe(n, GROUPBY_BLOCK_SIZE);
+  return std::min(grid_size, num_blocks);
+}
+
 size_type get_available_shared_memory_size(cudf::size_type grid_size)
 {
   auto const active_blocks_per_sm =

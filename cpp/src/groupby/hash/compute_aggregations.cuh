@@ -67,8 +67,13 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
   auto const d_agg_kinds                   = cudf::detail::make_device_uvector_async(
     agg_kinds, stream, rmm::mr::get_current_device_resource());
 
-  auto const grid_size =
+  auto grid_size =
     max_occupancy_grid_size<typename SetType::ref_type<cuco::insert_and_find_tag>>(num_rows);
+
+  if (auto const tmp = max_occupancy_grid_size_smem_kernel(num_rows); grid_size > tmp) {
+    grid_size = tmp;
+  }
+
   auto const available_shmem_size = get_available_shared_memory_size(grid_size);
   auto const offsets_buffer_size  = compute_shmem_offsets_size(flattened_values.num_columns()) * 2;
   auto const data_buffer_size     = available_shmem_size - offsets_buffer_size;
