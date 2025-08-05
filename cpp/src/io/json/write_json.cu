@@ -714,9 +714,10 @@ struct column_to_strings_fn {
                                      host_span<column_name_info const> children_names) const
     requires(std::is_same_v<column_type, cudf::struct_view>)
   {
+    auto structs_view   = structs_column_view{column};
     auto const child_it = cudf::detail::make_counting_transform_iterator(
-      0, [&stream = stream_, structs_view = structs_column_view{column}](auto const child_idx) {
-        return structs_view.get_sliced_child(child_idx, stream);
+      0, [&stream = stream_, &s_v = structs_view](auto const child_idx) {
+        return s_v.get_sliced_child(child_idx, stream);
       });
     auto col_string = operator()(child_it,
                                  child_it + column.num_children(),

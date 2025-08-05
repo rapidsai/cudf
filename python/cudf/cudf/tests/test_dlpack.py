@@ -1,7 +1,7 @@
 # Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 import itertools
-from contextlib import ExitStack as does_not_raise
+from contextlib import nullcontext as does_not_raise
 
 import cupy
 import numpy as np

@@ -13,5 +13,4 @@ nvtext
     normalize
     replace
     stemmer
-    subword_tokenize
     tokenize
