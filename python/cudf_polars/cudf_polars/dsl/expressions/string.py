@@ -271,6 +271,8 @@ class StringFunction(Expr):
         pattern: str,
         flags: plc.strings.regex_flags.RegexFlags = plc.strings.regex_flags.RegexFlags.DEFAULT,
     ) -> plc.strings.regex_program.RegexProgram:
+        if pattern == "":
+            raise NotImplementedError("Empty regex pattern is not yet supported")
         try:
             return plc.strings.regex_program.RegexProgram.create(
                 pattern,
@@ -726,9 +728,11 @@ class StringFunction(Expr):
             if POLARS_VERSION_LT_132:
                 (column,) = columns
                 width, char = self.options
-            else:
+            else:  # pragma: no cover
                 (column, width) = columns
                 (char,) = self.options
+                # TODO: Maybe accept a string scalar in
+                # cudf::strings::pad to avoid DtoH transfer
                 width = width.obj.to_scalar().to_py()
             return Column(
                 plc.strings.padding.pad(
@@ -740,9 +744,11 @@ class StringFunction(Expr):
             if POLARS_VERSION_LT_132:
                 (column,) = columns
                 width, char = self.options
-            else:
+            else:  # pragma: no cover
                 (column, width) = columns
                 (char,) = self.options
+                # TODO: Maybe accept a string scalar in
+                # cudf::strings::pad to avoid DtoH transfer
                 width = width.obj.to_scalar().to_py()
             return Column(
                 plc.strings.padding.pad(

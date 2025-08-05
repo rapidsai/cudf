@@ -157,3 +157,8 @@ def test_join_where(left, right, conditions, zlice):
         # therefore we only check the length
 
         assert_gpu_result_equal(q_len)
+
+
+def test_cross_join_empty_right_table(left) -> None:
+    q = left.join(pl.LazyFrame(), how="cross")
+    assert_gpu_result_equal(q)

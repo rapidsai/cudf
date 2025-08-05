@@ -14,6 +14,7 @@ import pylibcudf as plc
 
 from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
+from cudf_polars.utils.versions import POLARS_VERSION_LT_132
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -36,6 +37,11 @@ class StructFunction(Expr):
         JsonEncode = auto()
         WithFields = auto()  # TODO: https://github.com/rapidsai/cudf/issues/19284
         MapFieldNames = auto()  # TODO: https://github.com/rapidsai/cudf/issues/19285
+        if POLARS_VERSION_LT_132:
+            FieldByIndex = auto()
+            MultipleFields = (
+                auto()
+            )  # https://github.com/pola-rs/polars/pull/23022#issuecomment-2933910958
 
         @classmethod
         def from_polars(cls, obj: pl_expr.StructFunction) -> Self:
@@ -52,8 +58,7 @@ class StructFunction(Expr):
     __slots__ = ("name", "options")
     _non_child = ("dtype", "name", "options")
 
-    _valid_ops: ClassVar[set[Name]] = {
-        # Name.FieldByIndex,
+    _supported_ops: ClassVar[set[Name]] = {
         Name.FieldByName,
         Name.RenameFields,
         Name.PrefixFields,
@@ -73,7 +78,7 @@ class StructFunction(Expr):
         self.name = name
         self.children = children
         self.is_pointwise = True
-        if self.name not in self._valid_ops:
+        if self.name not in self._supported_ops:
             raise NotImplementedError(
                 f"Struct function {self.name}"
             )  # pragma: no cover

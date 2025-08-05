@@ -324,8 +324,17 @@ class Scan(IR):
             raise NotImplementedError(
                 "Read from cloud storage"
             )  # pragma: no cover; no test yet
-        if any(str(p).startswith("https:/") for p in self.paths):
+        if any(
+            str(p).startswith("https:/" if POLARS_VERSION_LT_131 else "https://")
+            for p in self.paths
+        ):
             raise NotImplementedError("Read from https")
+        if any(
+            str(p).startswith("file:/" if POLARS_VERSION_LT_131 else "file://")
+            for p in self.paths
+        ):
+            # TODO: removing the file:// may work
+            raise NotImplementedError("Read from file URI")
         if self.typ == "csv":
             if self.reader_options["skip_rows_after_header"] != 0:
                 raise NotImplementedError("Skipping rows after header in CSV reader")
@@ -1780,6 +1789,17 @@ class Join(IR):
         if how == "Cross":
             # Separate implementation, since cross_join returns the
             # result, not the gather maps
+            if right.num_rows == 0:
+                return DataFrame(
+                    [
+                        Column(
+                            plc.Column.from_iterable_of_py([], dtype=col.dtype.plc),
+                            col.dtype,
+                            name=col.name,
+                        )
+                        for col in left.columns
+                    ]
+                )
             columns = plc.join.cross_join(left.table, right.table).columns()
             left_cols = [
                 Column(new, name=old.name, dtype=old.dtype).sorted_like(old)

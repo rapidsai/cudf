@@ -242,3 +242,10 @@ def test_expr_is_in_empty_list():
     ldf = pl.LazyFrame({"a": [1, 2, 3, 4]})
     q = ldf.select(pl.col("a").is_in([]))
     assert_gpu_result_equal(q)
+
+
+def test_boolean_is_close():
+    ldf = pl.LazyFrame({"a": [1.0, 1.2, 1.4, 1.45, 1.6]})
+    q = ldf.select(pl.col("a").is_close(1.4, abs_tol=0.1))
+
+    assert_ir_translation_raises(q, NotImplementedError)

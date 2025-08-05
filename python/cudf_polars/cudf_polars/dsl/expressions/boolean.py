@@ -17,6 +17,7 @@ from cudf_polars.dsl.expressions.base import (
     ExecutionContext,
     Expr,
 )
+from cudf_polars.utils.versions import POLARS_VERSION_LT_132
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -38,7 +39,8 @@ class BooleanFunction(Expr):
         Any = auto()
         AnyHorizontal = auto()
         IsBetween = auto()
-        IsClose = auto()
+        if not POLARS_VERSION_LT_132:
+            IsClose = auto()
         IsDuplicated = auto()
         IsFinite = auto()
         IsFirstDistinct = auto()
@@ -67,6 +69,25 @@ class BooleanFunction(Expr):
     __slots__ = ("name", "options")
     _non_child = ("dtype", "name", "options")
 
+    _supported_ops: ClassVar[set[Name]] = {
+        Name.All,
+        Name.AllHorizontal,
+        Name.Any,
+        Name.AnyHorizontal,
+        Name.IsDuplicated,
+        Name.IsFinite,
+        Name.IsFirstDistinct,
+        Name.IsIn,
+        Name.IsInfinite,
+        Name.IsLastDistinct,
+        Name.IsNan,
+        Name.IsNotNan,
+        Name.IsNotNull,
+        Name.IsNull,
+        Name.IsUnique,
+        Name.Not,
+    }
+
     def __init__(
         self,
         dtype: DataType,
@@ -86,6 +107,10 @@ class BooleanFunction(Expr):
             BooleanFunction.Name.IsLastDistinct,
             BooleanFunction.Name.IsUnique,
         )
+        if self.name not in self._supported_ops:
+            raise NotImplementedError(
+                f"Boolean function {self.name}"
+            )  # pragma: no cover
 
     @staticmethod
     def _distinct(
