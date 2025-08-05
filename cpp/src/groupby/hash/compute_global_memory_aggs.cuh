@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include "single_pass_functors.cuh"
 
 #include <cudf/detail/aggregation/result_cache.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
@@ -51,6 +52,8 @@ rmm::device_uvector<cudf::size_type> compute_global_memory_aggs(
   cudf::detail::result_cache* sparse_results,
   rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
+
   auto constexpr uses_global_memory_aggs = true;
   // 'populated_keys' contains inserted row_indices (keys) of global hash set
   rmm::device_uvector<cudf::size_type> populated_keys(num_rows, stream);

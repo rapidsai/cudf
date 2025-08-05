@@ -181,6 +181,8 @@ void compute_mapping_indices(cudf::size_type grid_size,
                              cuda::std::atomic_flag* needs_global_memory_fallback,
                              rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
+
   mapping_indices_kernel<<<grid_size, GROUPBY_BLOCK_SIZE, 0, stream>>>(
     num,
     global_set,

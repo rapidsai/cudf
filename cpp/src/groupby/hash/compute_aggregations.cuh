@@ -25,6 +25,7 @@
 #include "single_pass_functors.cuh"
 
 #include <cudf/detail/aggregation/result_cache.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -59,6 +60,8 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
   cudf::detail::result_cache* sparse_results,
   rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
+
   // flatten the aggs to a table that can be operated on by aggregate_row
   auto [flattened_values, agg_kinds, aggs] = flatten_single_pass_aggs(requests, stream);
   auto const d_agg_kinds                   = cudf::detail::make_device_uvector_async(

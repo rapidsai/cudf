@@ -21,6 +21,7 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -115,6 +116,8 @@ void extract_populated_keys(SetType const& key_set,
                             rmm::device_uvector<cudf::size_type>& populated_keys,
                             rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
+
   auto const keys_end = key_set.retrieve_all(populated_keys.begin(), stream.value());
 
   populated_keys.resize(std::distance(populated_keys.begin(), keys_end), stream);
@@ -130,6 +133,8 @@ cudf::table create_sparse_results_table(cudf::table_view const& flattened_values
                                         rmm::device_uvector<cudf::size_type>& populated_keys,
                                         rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
+
   // TODO single allocation - room for performance improvement
   std::vector<std::unique_ptr<cudf::column>> sparse_columns;
   std::transform(flattened_values.begin(),

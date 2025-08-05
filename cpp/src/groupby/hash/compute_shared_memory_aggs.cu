@@ -300,6 +300,8 @@ void compute_shared_memory_aggs(cudf::size_type grid_size,
                                 cudf::aggregation::Kind const* d_agg_kinds,
                                 rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
+
   // For each aggregation, need one offset determining where the aggregation is
   // performed, another indicating the validity of the aggregation
   auto const offsets_size = compute_shmem_offsets_size(output_values.num_columns());
