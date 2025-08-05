@@ -17,7 +17,7 @@
 // #include "compute_global_memory_aggs.cuh"
 // #include "compute_global_memory_aggs.hpp"
 
-namespace cudf::groupby::detail::hash {
+// namespace cudf::groupby::detail::hash {
 // template void compute_global_memory_aggs<simplified_global_set_t>(
 //   cudf::size_type num_rows,
 //   bool skip_rows_with_nulls,
@@ -30,4 +30,4 @@ namespace cudf::groupby::detail::hash {
 //   std::vector<std::unique_ptr<aggregation>>& aggregations,
 //   cudf::detail::result_cache* sparse_results,
 //   rmm::cuda_stream_view stream);
-}  // namespace cudf::groupby::detail::hash
+// }  // namespace cudf::groupby::detail::hash
