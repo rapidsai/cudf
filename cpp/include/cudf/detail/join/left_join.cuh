@@ -91,6 +91,9 @@ struct left_join {
             cudf::null_equality compare_nulls,
             double load_factor,
             rmm::cuda_stream_view stream);
+
+  std::unique_ptr<rmm::device_uvector<cudf::size_type>> semi_join(cudf::table_view const& probe, rmm::cuda_stream_view stream);
+  std::unique_ptr<rmm::device_uvector<cudf::size_type>> anti_join(cudf::table_view const& probe, rmm::cuda_stream_view stream);
 };
 }  // namespace detail
 }  // namespace CUDF_EXPORT cudf
