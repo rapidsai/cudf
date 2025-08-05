@@ -90,10 +90,13 @@ aggregate_reader_metadata::aggregate_reader_metadata(cudf::host_span<uint8_t con
   num_rows          = calc_num_rows();
   num_row_groups    = calc_num_row_groups();
 
-  // Force all columns to be nullable
+  // Force all leaf columns to be nullable
   auto& schema = per_file_metadata.front().schema;
   std::for_each(schema.begin(), schema.end(), [](auto& col) {
-    col.repetition_type = FieldRepetitionType::OPTIONAL;
+    // Modifying the repetition type of lists converts them to structs, so we must skip that
+    auto const is_leaf_col =
+      not(col.type == Type::UNDEFINED or col.is_stub() or col.is_list() or col.is_struct());
+    if (is_leaf_col) { col.repetition_type = FieldRepetitionType::OPTIONAL; }
   });
 
   // Collect and apply arrow:schema from Parquet's key value metadata section
@@ -239,15 +242,9 @@ aggregate_reader_metadata::select_payload_columns(
                                                               int schema_idx) {
     auto const& schema_elem     = get_schema(schema_idx);
     std::string const curr_path = path_till_now + schema_elem.name;
-    // If the current path is not a filter column, then add it and its children to the list of valid
-    // payload columns
-    if (filter_columns_set.count(curr_path) == 0) {
-      valid_payload_columns.push_back(curr_path);
-      // Add all children as well
-      for (auto const& child_idx : schema_elem.children_idx) {
-        add_column_path(curr_path + ".", child_idx);
-      }
-    }
+    // Add the current path to the list of valid payload columns if it is not a filter column
+    // TODO: Add children when AST filter expressions start supporting nested struct columns
+    if (filter_columns_set.count(curr_path) == 0) { valid_payload_columns.push_back(curr_path); }
   };
 
   // Add all but filter columns to valid payload columns
@@ -260,44 +257,6 @@ aggregate_reader_metadata::select_payload_columns(
   // Call the base `select_columns()` method with all but filter columns
   return select_columns(
     valid_payload_columns, {}, include_index, strings_to_categorical, timestamp_type_id);
-}
-
-std::tuple<cudf::size_type, std::vector<row_group_info>>
-aggregate_reader_metadata::select_row_groups(
-  host_span<std::vector<cudf::size_type> const> row_group_indices)
-{
-  // Hybrid scan reader does not support skip rows or num rows
-  auto rows_to_read = cudf::size_type{0};
-
-  // Vector to hold the `row_group_info` of selected row groups
-  std::vector<row_group_info> selection;
-  // Number of rows in each data source
-  std::vector<size_t> num_rows_per_source(per_file_metadata.size(), 0);
-
-  CUDF_EXPECTS(row_group_indices.size() == per_file_metadata.size(),
-               "Must specify row groups for each source");
-
-  auto total_row_groups = 0;
-  for (size_t src_idx = 0; src_idx < row_group_indices.size(); ++src_idx) {
-    auto const& fmd = per_file_metadata[src_idx];
-    for (auto const& rowgroup_idx : row_group_indices[src_idx]) {
-      CUDF_EXPECTS(rowgroup_idx >= 0 and std::cmp_less(rowgroup_idx, fmd.row_groups.size()),
-                   "Invalid rowgroup index",
-                   std::invalid_argument);
-      auto const chunk_start_row  = rows_to_read;
-      auto const num_rows_this_rg = get_row_group(rowgroup_idx, src_idx).num_rows;
-      rows_to_read += num_rows_this_rg;
-      num_rows_per_source[src_idx] += num_rows_this_rg;
-      selection.emplace_back(rowgroup_idx, rows_to_read, src_idx);
-      // if page-level indexes are present, then collect extra chunk and page info.
-      column_info_for_row_group(selection.back(), chunk_start_row);
-      total_row_groups++;
-    }
-  }
-
-  CUDF_EXPECTS(total_row_groups > 0, "No row groups added");
-
-  return {rows_to_read, std::move(selection)};
 }
 
 std::vector<std::vector<cudf::size_type>> aggregate_reader_metadata::filter_row_groups_with_stats(

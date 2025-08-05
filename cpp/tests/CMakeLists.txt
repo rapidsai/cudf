@@ -333,8 +333,12 @@ ConfigureTest(
   PERCENT 30
 )
 ConfigureTest(
-  HYBRID_SCAN_TEST io/experimental/hybrid_scan_common.cpp
-  io/experimental/hybrid_scan_filters_test.cpp io/parquet_common.cpp io/parquet_test.cpp
+  HYBRID_SCAN_TEST
+  io/experimental/hybrid_scan_common.cpp
+  io/experimental/hybrid_scan_filters_test.cpp
+  io/experimental/hybrid_scan_test.cpp
+  io/parquet_common.cpp
+  io/parquet_test.cpp
 )
 ConfigureTest(
   JSON_TEST io/json/json_test.cpp io/json/json_chunked_reader.cu

@@ -146,18 +146,14 @@ def pytest_sessionfinish(session, exitstatus):
 
 @pytest.fixture(params=[32, 64])
 def default_integer_bitwidth(request):
-    old_default = cudf.get_option("default_integer_bitwidth")
-    cudf.set_option("default_integer_bitwidth", request.param)
-    yield request.param
-    cudf.set_option("default_integer_bitwidth", old_default)
+    with cudf.option_context("default_integer_bitwidth", request.param):
+        yield request.param
 
 
 @pytest.fixture(params=[32, 64])
 def default_float_bitwidth(request):
-    old_default = cudf.get_option("default_float_bitwidth")
-    cudf.set_option("default_float_bitwidth", request.param)
-    yield request.param
-    cudf.set_option("default_float_bitwidth", old_default)
+    with cudf.option_context("default_float_bitwidth", request.param):
+        yield request.param
 
 
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
@@ -194,3 +190,176 @@ def set_decomp_env_vars(monkeypatch, request):
         for key, value in env_vars.items():
             m.setenv(key, value)
         yield
+
+
+signed_integer_types = ["int8", "int16", "int32", "int64"]
+unsigned_integer_types = ["uint8", "uint16", "uint32", "uint64"]
+float_types = ["float32", "float64"]
+datetime_types = [
+    "datetime64[ns]",
+    "datetime64[us]",
+    "datetime64[ms]",
+    "datetime64[s]",
+]
+timedelta_types = [
+    "timedelta64[ns]",
+    "timedelta64[us]",
+    "timedelta64[ms]",
+    "timedelta64[s]",
+]
+string_types = ["str"]
+bool_types = ["bool"]
+category_types = ["category"]
+
+
+@pytest.fixture(params=signed_integer_types)
+def signed_integer_types_as_str(request):
+    """
+    - "int8", "int16", "int32", "int64"
+    - "uint8", "uint16", "uint32", "uint64"
+    """
+    return request.param
+
+
+@pytest.fixture(params=signed_integer_types + unsigned_integer_types)
+def integer_types_as_str(request):
+    """
+    - "int8", "int16", "int32", "int64"
+    - "uint8", "uint16", "uint32", "uint64"
+    """
+    return request.param
+
+
+@pytest.fixture(params=float_types)
+def float_types_as_str(request):
+    """
+    - "float32", "float64"
+    """
+    return request.param
+
+
+@pytest.fixture(
+    params=signed_integer_types + unsigned_integer_types + float_types
+)
+def numeric_types_as_str(request):
+    """
+    - "int8", "int16", "int32", "int64"
+    - "uint8", "uint16", "uint32", "uint64"
+    - "float32", "float64"
+    """
+    return request.param
+
+
+@pytest.fixture(
+    params=signed_integer_types
+    + unsigned_integer_types
+    + float_types
+    + bool_types
+)
+def numeric_and_bool_types_as_str(request):
+    """
+    - "int8", "int16", "int32", "int64"
+    - "uint8", "uint16", "uint32", "uint64"
+    - "float32", "float64"
+    - "bool"
+    """
+    return request.param
+
+
+@pytest.fixture(params=datetime_types)
+def datetime_types_as_str(request):
+    """
+    - "datetime64[ns]", "datetime64[us]", "datetime64[ms]", "datetime64[s]"
+    """
+    return request.param
+
+
+@pytest.fixture(params=timedelta_types)
+def timedelta_types_as_str(request):
+    """
+    - "timedelta64[ns]", "timedelta64[us]", "timedelta64[ms]", "timedelta64[s]"
+    """
+    return request.param
+
+
+@pytest.fixture(params=datetime_types + timedelta_types)
+def temporal_types_as_str(request):
+    """
+    - "datetime64[ns]", "datetime64[us]", "datetime64[ms]", "datetime64[s]"
+    - "timedelta64[ns]", "timedelta64[us]", "timedelta64[ms]", "timedelta64[s]"
+    """
+    return request.param
+
+
+@pytest.fixture(
+    params=signed_integer_types
+    + unsigned_integer_types
+    + float_types
+    + bool_types
+    + datetime_types
+    + timedelta_types
+)
+def numeric_and_temporal_types_as_str(request):
+    """
+    - "int8", "int16", "int32", "int64"
+    - "uint8", "uint16", "uint32", "uint64"
+    - "float32", "float64"
+    - "bool"
+    - "datetime64[ns]", "datetime64[us]", "datetime64[ms]", "datetime64[s]"
+    - "timedelta64[ns]", "timedelta64[us]", "timedelta64[ms]", "timedelta64[s]"
+    """
+    return request.param
+
+
+@pytest.fixture(
+    params=signed_integer_types
+    + unsigned_integer_types
+    + float_types
+    + datetime_types
+    + timedelta_types
+    + string_types
+    + bool_types
+    + category_types
+)
+def all_supported_types_as_str(request):
+    """
+    - "int8", "int16", "int32", "int64"
+    - "uint8", "uint16", "uint32", "uint64"
+    - "float32", "float64"
+    - "datetime64[ns]", "datetime64[us]", "datetime64[ms]", "datetime64[s]"
+    - "timedelta64[ns]", "timedelta64[us]", "timedelta64[ms]", "timedelta64[s]"
+    - "str"
+    - "category"
+    - "bool"
+    """
+    return request.param
+
+
+@pytest.fixture(params=[True, False])
+def dropna(request):
+    """Param for `dropna` argument"""
+    return request.param
+
+
+@pytest.fixture(params=[True, False, None])
+def nan_as_null(request):
+    """Param for `nan_as_null` argument"""
+    return request.param
+
+
+@pytest.fixture(params=[True, False])
+def inplace(request):
+    """Param for `inplace` argument"""
+    return request.param
+
+
+@pytest.fixture(params=[True, False])
+def ignore_index(request):
+    """Param for `ignore_index` argument"""
+    return request.param
+
+
+@pytest.fixture(params=[True, False])
+def ascending(request):
+    """Param for `ascending` argument"""
+    return request.param

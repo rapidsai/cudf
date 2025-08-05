@@ -17,6 +17,7 @@
 #include "decompression.hpp"
 
 #include "common_internal.hpp"
+#include "cudf/utilities/memory_resource.hpp"
 #include "gpuinflate.hpp"
 #include "io/utilities/getenv_or.hpp"
 #include "nvcomp_adapter.hpp"
@@ -533,7 +534,8 @@ void device_decompress(compression_type compression,
                        size_t max_total_uncomp_size,
                        rmm::cuda_stream_view stream)
 {
-  if (compression == compression_type::NONE) { return; }
+  CUDF_FUNC_RANGE();
+  if (compression == compression_type::NONE or inputs.empty()) { return; }
 
   auto const nvcomp_type      = to_nvcomp_compression(compression);
   auto nvcomp_disabled_reason = nvcomp_type.has_value()
@@ -561,29 +563,21 @@ void host_decompress(compression_type compression,
                      device_span<codec_exec_result> results,
                      rmm::cuda_stream_view stream)
 {
-  if (compression == compression_type::NONE) { return; }
+  CUDF_FUNC_RANGE();
+  if (compression == compression_type::NONE or inputs.empty()) { return; }
 
   auto const num_chunks = inputs.size();
   auto const h_inputs   = cudf::detail::make_host_vector_async(inputs, stream);
   auto const h_outputs  = cudf::detail::make_host_vector_async(outputs, stream);
   stream.synchronize();
 
-  // Generate order vector to submit largest tasks first
-  std::vector<size_t> task_order(num_chunks);
-  std::iota(task_order.begin(), task_order.end(), 0);
-  std::sort(task_order.begin(), task_order.end(), [&](size_t a, size_t b) {
-    return h_inputs[a].size() > h_inputs[b].size();
-  });
-
   std::vector<std::future<size_t>> tasks;
   auto const num_streams =
     std::min<std::size_t>(num_chunks, cudf::detail::host_worker_pool().get_thread_count());
   auto const streams = cudf::detail::fork_streams(stream, num_streams);
   for (size_t i = 0; i < num_chunks; ++i) {
-    auto const idx        = task_order[i];
     auto const cur_stream = streams[i % streams.size()];
-    auto task =
-      [d_in = h_inputs[idx], d_out = h_outputs[idx], cur_stream, compression]() -> size_t {
+    auto task = [d_in = h_inputs[i], d_out = h_outputs[i], cur_stream, compression]() -> size_t {
       auto h_in = cudf::detail::make_pinned_vector_async<uint8_t>(d_in.size(), cur_stream);
       cudf::detail::cuda_memcpy<uint8_t>(h_in, d_in, cur_stream);
 
@@ -600,13 +594,11 @@ void host_decompress(compression_type compression,
   }
   auto h_results = cudf::detail::make_pinned_vector<codec_exec_result>(num_chunks, stream);
   for (auto i = 0ul; i < num_chunks; ++i) {
-    h_results[task_order[i]] = {tasks[i].get(), codec_status::SUCCESS};
+    h_results[i] = {tasks[i].get(), codec_status::SUCCESS};
   }
 
   cudf::detail::cuda_memcpy<codec_exec_result>(results, h_results, stream);
 }
-
-enum class host_engine_state : uint8_t { ON, OFF, AUTO };
 
 [[nodiscard]] host_engine_state get_host_engine_state(compression_type compression)
 {
@@ -622,26 +614,14 @@ enum class host_engine_state : uint8_t { ON, OFF, AUTO };
 
   if (env_var == "AUTO") {
     return host_engine_state::AUTO;
+  } else if (env_var == "HYBRID") {
+    return host_engine_state::HYBRID;
   } else if (env_var == "OFF") {
     return host_engine_state::OFF;
   } else if (env_var == "ON") {
     return host_engine_state::ON;
   }
   CUDF_FAIL("Invalid LIBCUDF_HOST_DECOMPRESSION value: " + env_var);
-}
-
-[[nodiscard]] bool use_host_decompression(compression_type compression, size_t num_buffers)
-{
-  switch (get_host_engine_state(compression)) {
-    case host_engine_state::OFF: return false;
-    case host_engine_state::ON: return true;
-    case host_engine_state::AUTO: {
-      auto const threshold = getenv_or("LIBCUDF_HOST_DECOMPRESSION_THRESHOLD",
-                                       default_host_decompression_auto_threshold);
-      return num_buffers < threshold;
-    }
-    default: return false;  // Default case: use device decompression
-  }
 }
 
 }  // namespace
@@ -768,12 +748,40 @@ void decompress(compression_type compression,
   CUDF_FUNC_RANGE();
 
   if (inputs.empty()) { return; }
-  if (detail::use_host_decompression(compression, inputs.size())) {
-    return detail::host_decompress(compression, inputs, outputs, results, stream);
-  } else {
-    return detail::device_decompress(
-      compression, inputs, outputs, results, max_uncomp_chunk_size, max_total_uncomp_size, stream);
-  }
+
+  // sort inputs by size, largest first
+  auto const [sorted_inputs, sorted_outputs, order] =
+    sort_tasks(inputs, outputs, stream, cudf::get_current_device_resource_ref());
+  auto inputs_view  = device_span<device_span<uint8_t const> const>(sorted_inputs);
+  auto outputs_view = device_span<device_span<uint8_t> const>(sorted_outputs);
+
+  auto tmp_results = cudf::detail::make_device_uvector_async<detail::codec_exec_result>(
+    results, stream, cudf::get_current_device_resource_ref());
+  auto results_view = device_span<codec_exec_result>(tmp_results);
+
+  auto const split_idx = find_split_index(
+    inputs_view,
+    get_host_engine_state(compression),
+    getenv_or("LIBCUDF_HOST_DECOMPRESSION_THRESHOLD", default_host_decompression_auto_threshold),
+    getenv_or("LIBCUDF_HOST_DECOMPRESSION_RATIO", default_host_device_decompression_work_ratio),
+    stream);
+
+  auto const streams = cudf::detail::fork_streams(stream, 2);
+  detail::device_decompress(compression,
+                            inputs_view.subspan(split_idx, sorted_inputs.size() - split_idx),
+                            outputs_view.subspan(split_idx, sorted_outputs.size() - split_idx),
+                            results_view.subspan(split_idx, tmp_results.size() - split_idx),
+                            max_uncomp_chunk_size,
+                            max_total_uncomp_size,
+                            streams[0]);
+  detail::host_decompress(compression,
+                          inputs_view.subspan(0, split_idx),
+                          outputs_view.subspan(0, split_idx),
+                          results_view.subspan(0, split_idx),
+                          streams[1]);
+  cudf::detail::join_streams(streams, stream);
+
+  copy_results_to_original_order(results_view, results, order, stream);
 }
 
 [[nodiscard]] bool is_host_decompression_supported(compression_type compression)

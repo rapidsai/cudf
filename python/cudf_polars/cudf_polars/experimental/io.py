@@ -116,7 +116,7 @@ class ScanPartitionPlan:
             )
 
             blocksize: int = config_options.executor.target_partition_size
-            column_stats = _extract_scan_stats(ir)
+            column_stats = _extract_scan_stats(ir, config_options)
             column_sizes: list[int] = []
             for name, cs in column_stats.items():
                 storage_size = cs.source_info.storage_size(name)
@@ -416,12 +416,13 @@ def _sink_to_directory(
     schema: Schema,
     kind: str,
     path: str,
+    parquet_options: ParquetOptions,
     options: dict[str, Any],
     df: DataFrame,
     ready: None,
 ) -> DataFrame:
     """Sink a partition to a new file."""
-    return Sink.do_evaluate(schema, kind, path, options, df)
+    return Sink.do_evaluate(schema, kind, path, parquet_options, options, df)
 
 
 def _sink_to_parquet_file(
@@ -434,23 +435,11 @@ def _sink_to_parquet_file(
     """Sink a partition to an open Parquet file."""
     # Set up a new chunked Parquet writer if necessary.
     if writer is None:
-        metadata = plc.io.types.TableInputMetadata(df.table)
-        for i, name in enumerate(df.column_names):
-            metadata.column_metadata[i].set_name(name)
-
+        metadata = Sink._make_parquet_metadata(df)
         sink = plc.io.types.SinkInfo([path])
-        builder = plc.io.parquet.ChunkedParquetWriterOptions.builder(sink)
-        compression = options["compression"]
-        if compression != "Uncompressed":
-            builder.compression(
-                getattr(plc.io.types.CompressionType, compression.upper())
-            )
-
-        if options["data_page_size"] is not None:
-            builder.max_page_size_bytes(options["data_page_size"])
-        if options["row_group_size"] is not None:
-            builder.row_group_size_rows(options["row_group_size"])
-
+        builder = Sink._apply_parquet_writer_options(
+            plc.io.parquet.ChunkedParquetWriterOptions.builder(sink), options
+        )
         writer_options = builder.metadata(metadata).build()
         writer = plc.io.parquet.ChunkedParquetWriter.from_options(writer_options)
 
@@ -565,6 +554,7 @@ def _directory_sink_graph(
             sink.schema,
             sink.kind,
             f"{sink.path}/part.{str(i).zfill(width)}.{suffix}",
+            sink.parquet_options,
             sink.options,
             (child_name, i),
             setup_name,
@@ -593,13 +583,13 @@ class ParquetMetadata:
     ----------
     paths
         Parquet-dataset paths.
-    max_file_samples
-        Maximum number of files to sample for metadata.
+    max_footer_samples
+        Maximum number of file footers to sample metadata from.
     """
 
     __slots__ = (
         "column_names",
-        "max_file_samples",
+        "max_footer_samples",
         "mean_size_per_file",
         "num_row_groups_per_file",
         "paths",
@@ -609,8 +599,8 @@ class ParquetMetadata:
 
     paths: tuple[str, ...]
     """Parquet-dataset paths."""
-    max_file_samples: int
-    """Maximum number of files to sample for metadata."""
+    max_footer_samples: int
+    """Maximum number of file footers to sample metadata from."""
     row_count: ColumnStat[int]
     """Total row-count estimate."""
     num_row_groups_per_file: tuple[int, ...]
@@ -622,15 +612,17 @@ class ParquetMetadata:
     sample_paths: tuple[str, ...]
     """Sampled file paths."""
 
-    def __init__(self, paths: tuple[str, ...], max_file_samples: int):
+    def __init__(self, paths: tuple[str, ...], max_footer_samples: int):
         self.paths = paths
-        self.max_file_samples = max_file_samples
+        self.max_footer_samples = max_footer_samples
         self.row_count = ColumnStat[int]()
         self.num_row_groups_per_file = ()
         self.mean_size_per_file = {}
         self.column_names = ()
-        stride = max(1, int(len(paths) / max_file_samples)) if max_file_samples else 1
-        self.sample_paths = paths[: stride * max_file_samples : stride]
+        stride = (
+            max(1, int(len(paths) / max_footer_samples)) if max_footer_samples else 1
+        )
+        self.sample_paths = paths[: stride * max_footer_samples : stride]
 
         if not self.sample_paths:
             # No paths to sample from
@@ -685,21 +677,21 @@ class ParquetSourceInfo(DataSourceInfo):
     ----------
     paths
         Parquet-dataset paths.
-    max_file_samples
-        Maximum number of files to sample metadata from.
-    max_rg_samples
+    max_footer_samples
+        Maximum number of file footers to sample metadata from.
+    max_row_group_samples
         Maximum number of row-groups to sample data from.
     """
 
     def __init__(
         self,
         paths: tuple[str, ...],
-        max_file_samples: int,
-        max_rg_samples: int,
+        max_footer_samples: int,
+        max_row_group_samples: int,
     ):
         self.paths = paths
-        self.max_file_samples = max_file_samples
-        self.max_rg_samples = max_rg_samples
+        self.max_footer_samples = max_footer_samples
+        self.max_row_group_samples = max_row_group_samples
         # Helper attributes
         self._key_columns: set[str] = set()  # Used to fuse lazy row-group sampling
         self._unique_stats: dict[str, UniqueStats] = {}
@@ -707,7 +699,7 @@ class ParquetSourceInfo(DataSourceInfo):
     @functools.cached_property
     def metadata(self) -> ParquetMetadata:
         """Return Parquet metadata."""
-        return ParquetMetadata(self.paths, self.max_file_samples)
+        return ParquetMetadata(self.paths, self.max_footer_samples)
 
     @property
     def row_count(self) -> ColumnStat[int]:
@@ -717,7 +709,7 @@ class ParquetSourceInfo(DataSourceInfo):
     def _sample_row_groups(self) -> None:
         """Estimate unique-value statistics from a row-group sample."""
         sample_paths = self.metadata.sample_paths
-        if not sample_paths or self.max_rg_samples < 1:
+        if not sample_paths or self.max_row_group_samples < 1:
             # No row-groups to sample from
             return
 
@@ -742,14 +734,14 @@ class ParquetSourceInfo(DataSourceInfo):
             for rg_id in range(num_rgs):
                 n += 1
                 samples[path].append(rg_id)
-                if n == self.max_rg_samples:
+                if n == self.max_row_group_samples:
                     break
-            if n == self.max_rg_samples:
+            if n == self.max_row_group_samples:
                 break
 
-        exact = sampled_file_count == len(self.paths) and self.max_rg_samples >= sum(
-            num_row_groups_per_file
-        )
+        exact = sampled_file_count == len(
+            self.paths
+        ) and self.max_row_group_samples >= sum(num_row_groups_per_file)
 
         options = plc.io.parquet.ParquetReaderOptions.builder(
             plc.io.SourceInfo(list(samples))
@@ -809,22 +801,23 @@ class ParquetSourceInfo(DataSourceInfo):
 @functools.cache
 def _sample_pq_stats(
     paths: tuple[str, ...],
-    max_file_samples: int,
-    max_rg_samples: int,
+    max_footer_samples: int,
+    max_row_group_samples: int,
 ) -> ParquetSourceInfo:
     """Return Parquet datasource information."""
-    return ParquetSourceInfo(paths, max_file_samples, max_rg_samples)
+    return ParquetSourceInfo(paths, max_footer_samples, max_row_group_samples)
 
 
 def _extract_scan_stats(
-    ir: Scan, *, max_file_samples: int = 3, max_rg_samples: int = 1
+    ir: Scan,
+    config_options: ConfigOptions,
 ) -> dict[str, ColumnStats]:
     """Extract base ColumnStats for a Scan node."""
     if ir.typ == "parquet":
-        # TODO: Add max_file_samples and max_rg_samples
-        # to the ConfigOption system.
         source_info = _sample_pq_stats(
-            tuple(ir.paths), max_file_samples, max_rg_samples
+            tuple(ir.paths),
+            config_options.parquet_options.max_footer_samples,
+            config_options.parquet_options.max_row_group_samples,
         )
         return {
             name: ColumnStats(
