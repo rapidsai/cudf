@@ -336,10 +336,29 @@ class StringFunction(Expr):
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.ZFill:
+            # TODO: expensive validation
+            # polars pads based on bytes, libcudf by visual width
+            # only pass chars if the visual width matches the byte length
+            column = self.children[0].evaluate(df, context=context)
+            col_len_bytes = plc.strings.attributes.count_bytes(column.obj)
+            col_len_chars = plc.strings.attributes.count_characters(column.obj)
+            equal = plc.binaryop.binary_operation(
+                col_len_bytes,
+                col_len_chars,
+                plc.binaryop.BinaryOperator.NULL_EQUALS,
+                plc.DataType(plc.TypeId.BOOL8),
+            )
+            if not plc.reduce.reduce(
+                equal,
+                plc.aggregation.all(),
+                plc.DataType(plc.TypeId.BOOL8),
+            ).to_py():
+                raise InvalidOperationError(
+                    "zfill only supports ascii strings with no unicode characters"
+                )
             if isinstance(self.children[1], Literal):
-                child, width = self.children
+                width = self.children[1]
                 assert isinstance(width, Literal)
-                column = child.evaluate(df, context=context)
                 if width.value is None:
                     return Column(
                         plc.Column.from_scalar(
@@ -352,9 +371,8 @@ class StringFunction(Expr):
                     plc.strings.padding.zfill(column.obj, width.value), self.dtype
                 )
             else:
-                col, col_width = [
-                    child.evaluate(df, context=context) for child in self.children
-                ]
+                col_width = self.children[1].evaluate(df, context=context)
+                assert isinstance(col_width, Column)
                 all_gt_0 = plc.binaryop.binary_operation(
                     col_width.obj,
                     plc.Scalar.from_py(0, plc.DataType(plc.TypeId.INT64)),
@@ -370,7 +388,7 @@ class StringFunction(Expr):
                     raise InvalidOperationError("fill conversion failed.")
 
                 return Column(
-                    plc.strings.padding.zfill_by_widths(col.obj, col_width.obj),
+                    plc.strings.padding.zfill_by_widths(column.obj, col_width.obj),
                     self.dtype,
                 )
 

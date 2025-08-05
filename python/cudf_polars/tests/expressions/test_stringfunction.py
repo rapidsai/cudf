@@ -570,6 +570,14 @@ def test_string_zfill_column(fill):
         assert_gpu_result_equal(q)
 
 
+def test_string_zfill_forbidden_chars():
+    ldf = pl.LazyFrame({"a": ["Café", "345", "東京", None]})
+    q = ldf.select(pl.col("a").str.zfill(3))
+    assert_collect_raises(
+        q, polars_except=(), cudf_except=pl.exceptions.InvalidOperationError
+    )
+
+
 @pytest.mark.parametrize(
     "width",
     [
