@@ -8,7 +8,6 @@ import operator
 from typing import TYPE_CHECKING, Any, TypedDict
 
 import pylibcudf as plc
-import rmm.mr
 from rmm.pylibrmm.stream import DEFAULT_STREAM
 
 from cudf_polars.containers import DataFrame
@@ -58,6 +57,14 @@ class RMPFIntegration:  # pragma: no cover
     ) -> None:
         """Add cudf-polars DataFrame chunks to an RMP shuffler."""
         from rapidsmpf.integrations.cudf.partition import partition_and_pack
+        from rapidsmpf.integrations.dask.core import get_worker_context
+
+        context = get_worker_context()
+
+        if context.br is None:  # pragma: no cover
+            raise ValueError(
+                "rapidsmpf insert_partition called on an uninitialized worker."
+            )
 
         on = options["on"]
         assert not other, f"Unexpected arguments: {other}"
@@ -66,8 +73,8 @@ class RMPFIntegration:  # pragma: no cover
             df.table,
             columns_to_hash=columns_to_hash,
             num_partitions=partition_count,
+            br=context.br,
             stream=DEFAULT_STREAM,
-            device_mr=rmm.mr.get_current_device_resource(),
         )
         shuffler.insert_chunks(packed_inputs)
 
@@ -80,6 +87,13 @@ class RMPFIntegration:  # pragma: no cover
     ) -> DataFrame:
         """Extract a finished partition from the RMP shuffler."""
         from rapidsmpf.integrations.cudf.partition import unpack_and_concat
+        from rapidsmpf.integrations.dask.core import get_worker_context
+
+        context = get_worker_context()
+        if context.br is None:  # pragma: no cover
+            raise ValueError(
+                "rapidsmpf extract_partition called on an uninitialized worker."
+            )
 
         shuffler.wait_on(partition_id)
         column_names = options["column_names"]
@@ -87,8 +101,8 @@ class RMPFIntegration:  # pragma: no cover
         return DataFrame.from_table(
             unpack_and_concat(
                 shuffler.extract(partition_id),
+                br=context.br,
                 stream=DEFAULT_STREAM,
-                device_mr=rmm.mr.get_current_device_resource(),
             ),
             column_names,
             dtypes,
