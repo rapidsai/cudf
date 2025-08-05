@@ -21,11 +21,18 @@
 #include <cstdint>
 
 namespace CUDF_EXPORT cudf {
+/**
+ * @addtogroup jit
+ * @{
+ * @file
+ */
 
 /// @brief The source type of a user-defined function (UDF) used in JIT compilation.
 enum class udf_source_type : std::int8_t {
   CUDA = 0,  ///< The UDF is a CUDA source-code string
   PTX  = 1   ///< The UDF is a PTX source-code string
 };
+
+/** @} */
 
 }  // namespace CUDF_EXPORT cudf
