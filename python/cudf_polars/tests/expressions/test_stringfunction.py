@@ -522,7 +522,6 @@ def test_string_join(ldf, ignore_nulls, delimiter):
         ["1", "0"],
         ["123", "45"],
         ["", "0"],
-        ["-1", "+2"],
         ["abc", "def"],
     ],
 )
@@ -543,11 +542,32 @@ def test_string_zfill(fill, input_strings):
 @pytest.mark.parametrize(
     "fill",
     [
+        5
+        if not POLARS_VERSION_LT_130
+        else pytest.param(5, marks=pytest.mark.xfail(reason="fixed in Polars 1.30")),
+        999
+        if not POLARS_VERSION_LT_130
+        else pytest.param(999, marks=pytest.mark.xfail(reason="fixed in Polars 1.30")),
+    ],
+)
+def test_string_zfill_pl_129(fill):
+    ldf = pl.LazyFrame({"a": ["-1", "+2"]})
+    q = ldf.select(pl.col("a").str.zfill(fill))
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "fill",
+    [
         0,
         1,
         2,
-        5,
-        999,
+        5
+        if not POLARS_VERSION_LT_130
+        else pytest.param(5, marks=pytest.mark.xfail(reason="fixed in Polars 1.30")),
+        999
+        if not POLARS_VERSION_LT_130
+        else pytest.param(999, marks=pytest.mark.xfail(reason="fixed in Polars 1.30")),
         -1,
         pytest.param(None, marks=pytest.mark.xfail(reason="None dtype")),
     ],
@@ -564,7 +584,9 @@ def test_string_zfill_column(fill):
         assert_collect_raises(
             q,
             polars_except=pl.exceptions.InvalidOperationError,
-            cudf_except=pl.exceptions.InvalidOperationError,
+            cudf_except=pl.exceptions.InvalidOperationError
+            if not POLARS_VERSION_LT_130
+            else pl.exceptions.ComputeError,
         )
     else:
         assert_gpu_result_equal(q)
@@ -574,7 +596,11 @@ def test_string_zfill_forbidden_chars():
     ldf = pl.LazyFrame({"a": ["Café", "345", "東京", None]})
     q = ldf.select(pl.col("a").str.zfill(3))
     assert_collect_raises(
-        q, polars_except=(), cudf_except=pl.exceptions.InvalidOperationError
+        q,
+        polars_except=(),
+        cudf_except=pl.exceptions.InvalidOperationError
+        if not POLARS_VERSION_LT_130
+        else pl.exceptions.ComputeError,
     )
 
 
