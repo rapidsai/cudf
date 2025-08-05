@@ -693,14 +693,7 @@ size_t batched_decompress_temp_size_ex(compression_type compression,
     compression, d_input_ptrs, d_input_sizes, max_uncomp_chunk_size, max_total_uncomp_size, stream);
 }
 
-constexpr bool is_batched_decompress_temp_size_ex_supported()
-{
-#if NVCOMP_VER_MAJOR >= 5
-  return true;
-#else
-  return false;
-#endif
-}
+
 
 void batched_decompress(compression_type compression,
                         device_span<device_span<uint8_t const> const> inputs,

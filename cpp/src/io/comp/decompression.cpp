@@ -37,7 +37,6 @@
 #include <cstdint>
 #include <cstring>  // memset
 #include <future>
-#include <numeric>
 #include <sstream>
 
 namespace cudf::io::detail {
@@ -649,6 +648,42 @@ size_t get_uncompressed_size(compression_type compression, host_span<uint8_t con
   if (di.type == compression_type::BROTLI) return get_gpu_debrotli_scratch_size(di.num_pages);
   // only Brotli kernel requires scratch memory
   return 0;
+}
+
+[[nodiscard]] size_t get_decompression_scratch_size_ex(
+  compression_type compression,
+  device_span<device_span<uint8_t const> const> inputs,
+  size_t max_uncomp_chunk_size,
+  size_t max_total_uncomp_size,
+  rmm::cuda_stream_view stream)
+{
+  if (compression == compression_type::NONE or
+      get_host_engine_state(compression) == host_engine_state::ON) {
+    return 0;
+  }
+
+  auto const nvcomp_type = to_nvcomp_compression(compression);
+  auto nvcomp_disabled   = nvcomp_type.has_value() ? nvcomp::is_decompression_disabled(*nvcomp_type)
+                                                   : "invalid compression type";
+  if (nvcomp_disabled) {
+    CUDF_FAIL("Cannot compute decompression scratch size for " + compression_type_name(compression) + 
+              " compression: " + nvcomp_disabled.value() + 
+              ". This function requires nvcomp library support for the specified compression type.");
+  }
+    return nvcomp::batched_decompress_temp_size_ex(
+      nvcomp_type.value(), inputs, max_uncomp_chunk_size, max_total_uncomp_size, stream);
+}
+
+[[nodiscard]] constexpr bool is_decompression_scratch_size_ex_supported(
+  compression_type compression)
+{  
+  auto const nvcomp_type = to_nvcomp_compression(compression);
+  auto nvcomp_disabled   = nvcomp_type.has_value() ? nvcomp::is_decompression_disabled(*nvcomp_type)
+                                                   : "invalid compression type";
+  if (nvcomp_disabled) {
+    return false;
+  }
+  return nvcomp::is_batched_decompress_temp_size_ex_supported(nvcomp_type.value());
 }
 
 size_t decompress(compression_type compression,

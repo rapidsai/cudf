@@ -19,6 +19,7 @@
 #include "io/comp/compression.hpp"
 
 #include <cudf/io/nvcomp_adapter.hpp>
+#include <cudf/io/types.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -85,7 +86,14 @@ size_t batched_decompress_temp_size(compression_type compression,
   size_t max_total_uncomp_size,
   rmm::cuda_stream_view stream);
 
-[[nodiscard]] constexpr bool is_batched_decompress_temp_size_ex_supported();
+[[nodiscard]] constexpr bool is_batched_decompress_temp_size_ex_supported(compression_type compression)
+{
+#if NVCOMP_VER_MAJOR >= 5
+  return compression == compression_type::ZSTD;
+#else
+  return false;
+#endif
+}
 
 /**
  * @brief Gets the maximum size any chunk could compress to in the batch.
