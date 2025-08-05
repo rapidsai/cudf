@@ -148,7 +148,8 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 NARWHALS_DEFAULT_CONSTRUCTORS=pandas python -m 
         ${TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_PANDAS} \
     )" \
     --numprocesses=8 \
-    --dist=worksteal
+    --dist=worksteal \
+    -l
 
 popd
 
