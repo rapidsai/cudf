@@ -48,7 +48,6 @@ def test_collect_assert_raises():
         assert_collect_raises(
             df,
             polars_except=pl.exceptions.InvalidOperationError,
-            cudf_except=(),
         )
 
     with pytest.raises(AssertionError, match="GPU execution DID NOT RAISE"):
@@ -56,7 +55,6 @@ def test_collect_assert_raises():
         # but we expect an error.
         assert_collect_raises(
             df,
-            polars_except=(),
             cudf_except=pl.exceptions.InvalidOperationError,
         )
 

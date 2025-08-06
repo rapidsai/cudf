@@ -14,7 +14,6 @@ import pylibcudf as plc
 
 from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
-from cudf_polars.utils.versions import POLARS_VERSION_LT_132
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -37,11 +36,10 @@ class StructFunction(Expr):
         JsonEncode = auto()
         WithFields = auto()  # TODO: https://github.com/rapidsai/cudf/issues/19284
         MapFieldNames = auto()  # TODO: https://github.com/rapidsai/cudf/issues/19285
-        if POLARS_VERSION_LT_132:
-            FieldByIndex = auto()
-            MultipleFields = (
-                auto()
-            )  # https://github.com/pola-rs/polars/pull/23022#issuecomment-2933910958
+        FieldByIndex = auto()
+        MultipleFields = (
+            auto()
+        )  # https://github.com/pola-rs/polars/pull/23022#issuecomment-2933910958
 
         @classmethod
         def from_polars(cls, obj: pl_expr.StructFunction) -> Self:

@@ -12,7 +12,7 @@ from polars.polars import _expr_nodes as pl_expr
 from cudf_polars.dsl.expressions.boolean import BooleanFunction
 from cudf_polars.dsl.expressions.datetime import TemporalFunction
 from cudf_polars.dsl.expressions.string import StringFunction
-from cudf_polars.utils.versions import POLARS_VERSION_LT_131
+from cudf_polars.utils.versions import POLARS_VERSION_LT_131, POLARS_VERSION_LT_132
 
 if not POLARS_VERSION_LT_131:
     from cudf_polars.dsl.expressions.struct import StructFunction
@@ -46,8 +46,21 @@ def test_from_polars_all_names(function):
     polars_function = getattr(pl_expr, function.__name__)
     polars_names = [name for name in dir(polars_function) if not name.startswith("_")]
     # Check names advertised by polars are the same as we advertise
-    assert set(polars_names) == set(function.Name.__members__)
-    for name in function.Name:
+    polars_names_set = set(polars_names)
+    cudf_polars_names_set = set(function.Name.__members__)
+    if not POLARS_VERSION_LT_132 and function == StructFunction:
+        cudf_polars_names_set = cudf_polars_names_set - {
+            "FieldByIndex",
+            "MultipleFields",
+        }
+    assert polars_names_set == cudf_polars_names_set
+    names = function.Name
+    if not POLARS_VERSION_LT_132 and function == StructFunction:
+        names = set(names) - {
+            StructFunction.Name.FieldByIndex,
+            StructFunction.Name.MultipleFields,
+        }
+    for name in names:
         attr = getattr(polars_function, name.name)
         assert function.Name.from_polars(attr) == name
 

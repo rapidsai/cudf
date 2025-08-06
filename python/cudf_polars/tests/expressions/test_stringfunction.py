@@ -610,7 +610,6 @@ def test_string_zfill_forbidden_chars():
     q = ldf.select(pl.col("a").str.zfill(3))
     assert_collect_raises(
         q,
-        polars_except=None,
         cudf_except=pl.exceptions.InvalidOperationError
         if not POLARS_VERSION_LT_130
         else pl.exceptions.ComputeError,

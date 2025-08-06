@@ -17,7 +17,6 @@ from cudf_polars.dsl.expressions.base import (
     ExecutionContext,
     Expr,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_132
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -39,8 +38,7 @@ class BooleanFunction(Expr):
         Any = auto()
         AnyHorizontal = auto()
         IsBetween = auto()
-        if not POLARS_VERSION_LT_132:
-            IsClose = auto()
+        IsClose = auto()
         IsDuplicated = auto()
         IsFinite = auto()
         IsFirstDistinct = auto()

@@ -227,8 +227,8 @@ def _process_kwargs(
 def assert_collect_raises(
     lazydf: pl.LazyFrame,
     *,
-    polars_except: type[Exception] | tuple[type[Exception], ...] | None,
-    cudf_except: type[Exception] | tuple[type[Exception], ...] | None,
+    polars_except: type[Exception] | tuple[type[Exception], ...] | None = None,
+    cudf_except: type[Exception] | tuple[type[Exception], ...] | None = None,
     collect_kwargs: dict[OptimizationArgs, bool] | None = None,
     polars_collect_kwargs: dict[OptimizationArgs, bool] | None = None,
     cudf_collect_kwargs: dict[OptimizationArgs, bool] | None = None,

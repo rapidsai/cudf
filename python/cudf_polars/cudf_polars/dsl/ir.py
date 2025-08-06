@@ -1773,6 +1773,7 @@ class Join(IR):
         columns: Iterable[plc.Column],
         template: Iterable[NamedColumn],
         *,
+        left: bool = True,
         empty: bool = False,
         rename: Callable[[str], str] = lambda name: name,
     ) -> list[Column]:
@@ -1785,10 +1786,19 @@ class Join(IR):
                 )
                 for col in template
             ]
-        return [
-            Column(new, col.dtype, name=rename(col.name)).sorted_like(col)
+
+        columns = [
+            Column(new, col.dtype, name=rename(col.name))
             for new, col in zip(columns, template, strict=True)
         ]
+
+        if left:
+            columns = [
+                col.sorted_like(orig)
+                for col, orig in zip(columns, template, strict=True)
+            ]
+
+        return columns
 
     @classmethod
     @nvtx_annotate_cudf_polars(message="Join")
@@ -1817,6 +1827,7 @@ class Join(IR):
                 right_cols = Join._build_columns(
                     [],
                     right.columns,
+                    left=False,
                     empty=True,
                     rename=lambda name: name
                     if name not in left.column_names_set
@@ -1835,6 +1846,7 @@ class Join(IR):
                 rename=lambda name: name
                 if name not in left.column_names_set
                 else f"{name}{suffix}",
+                left=False,
             )
             return DataFrame([*left_cols, *right_cols]).slice(zlice)
         # TODO: Waiting on clarity based on https://github.com/pola-rs/polars/issues/17184
