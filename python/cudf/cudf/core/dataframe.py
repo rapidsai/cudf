@@ -55,6 +55,7 @@ from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
+    StringColumn,
     StructColumn,
     as_column,
     column_empty,
@@ -148,12 +149,17 @@ def _recursively_update_struct_names(
 ) -> ColumnBase:
     """Update a Column with struct names from pylibcudf.io.TableWithMetadata.child_names"""
     if col.children:
-        children = list(col.children)
-        for i, (child, names) in enumerate(
-            zip(children, child_names.values())
-        ):
-            children[i] = _recursively_update_struct_names(child, names)
-        col.set_base_children(tuple(children))
+        if not child_names:
+            assert isinstance(col, StringColumn), (
+                "Only string columns can have unnamed children"
+            )
+        else:
+            children = list(col.children)
+            for i, (child, names) in enumerate(
+                zip(children, child_names.values(), strict=True)
+            ):
+                children[i] = _recursively_update_struct_names(child, names)
+            col.set_base_children(tuple(children))
 
     if isinstance(col.dtype, StructDtype):
         col = col._rename_fields(child_names.keys())  # type: ignore[attr-defined]
@@ -722,7 +728,9 @@ def _array_to_column_accessor(
     return ColumnAccessor(
         {
             column_label: as_column(data[:, i], nan_as_null=nan_as_null)
-            for column_label, i in zip(columns_labels, range(data.shape[1]))
+            for column_label, i in zip(
+                columns_labels, range(data.shape[1]), strict=True
+            )
         },
         verify=False,
         rangeindex=isinstance(columns_labels, pd.RangeIndex),
@@ -769,7 +777,7 @@ def _mapping_to_column_accessor(
         )
         data = data.copy()
         for key, aligned_series in zip(
-            values_as_series.keys(), aligned_input_series
+            values_as_series.keys(), aligned_input_series, strict=True
         ):
             if index is not None:
                 aligned_series = aligned_series.reindex(index=index)
@@ -1908,6 +1916,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                         zip(
                             indices[:first_data_column_position],
                             cols[:first_data_column_position],
+                            strict=True,
                         )
                     )
                 )
@@ -1917,6 +1926,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                         zip(
                             indices[first_data_column_position:],
                             cols[first_data_column_position:],
+                            strict=True,
                         )
                     ),
                     index=table_index,
@@ -1990,11 +2000,14 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         # Reassign the categories for any categorical index cols
         if not isinstance(out.index, cudf.RangeIndex):
-            _reassign_categories(
-                categories,
-                out.index._data,
-                indices[:first_data_column_position],
-            )
+            # If the index column was constructed and not generated via concatenation,
+            # then reassigning categories is neither needed nor a valid operation.
+            if first_data_column_position > 0:
+                _reassign_categories(
+                    categories,
+                    out.index._data,
+                    indices[:first_data_column_position],
+                )
             if not isinstance(out.index, MultiIndex) and isinstance(
                 out.index.dtype, CategoricalDtype
             ):
@@ -2233,7 +2246,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     "whose columns & index are same respectively, "
                     "please reindex."
                 )
-            rhs = dict(zip(other_pd_index, other.values_host))
+            rhs = dict(zip(other_pd_index, other.values_host, strict=True))
             # For keys in right but not left, perform binops between NaN (not
             # NULL!) and the right value (result is NaN).
             left_default = as_column(np.nan, length=len(self))
@@ -2861,7 +2874,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             )
 
         self._data = ColumnAccessor(
-            data=dict(zip(pd_columns, self._columns)),
+            data=dict(zip(pd_columns, self._columns, strict=True)),
             multiindex=multiindex,
             level_names=level_names,
             label_dtype=label_dtype,
@@ -2883,7 +2896,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 f"got {len(self)} elements"
             )
         self._data = ColumnAccessor(
-            data=dict(zip(other.names, self._columns)),
+            data=dict(zip(other.names, self._columns, strict=True)),
             multiindex=other.multiindex,
             rangeindex=other.rangeindex,
             level_names=other.level_names,
@@ -3292,7 +3305,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         out = []
         for (name, col), other_col in zip(
-            self._column_labels_and_values, other_cols
+            self._column_labels_and_values, other_cols, strict=True
         ):
             if cond_col := cond._data.get(name):
                 out.append(col.where(cond_col, other_col, inplace))
@@ -5903,7 +5916,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     )
                 data = data.copy(deep=False)
                 for gen_name, col_name in zip(
-                    index_descr, index._column_names
+                    index_descr, index._column_names, strict=True
                 ):
                     data._insert(
                         data.shape[1],
@@ -7661,7 +7674,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 cudf.get_option("mode.pandas_compatible")
                 and common_type == "object"
             ):
-                for col, hcol in zip(columns, homogenized):
+                for col, hcol in zip(columns, homogenized, strict=True):
                     if is_mixed_with_object_dtype(col, hcol):
                         raise TypeError(
                             "Stacking a DataFrame with mixed object and "
@@ -7701,6 +7714,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                         else [
                             stacked[i] for i in unnamed_level_values.argsort()
                         ],
+                        strict=True,
                     )
                 ),
                 isinstance(unnamed_level_values, pd.MultiIndex),
@@ -8341,7 +8355,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             exprs.append(e.strip())
 
         ret = self if inplace else self.copy(deep=False)
-        for name, expr in zip(targets, exprs):
+        for name, expr in zip(targets, exprs, strict=True):
             ret._data[name] = self._compute_column(expr)
         if not inplace:
             return ret
@@ -8519,10 +8533,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             ColumnBase.from_pylibcudf(plc_col, data_ptr_exposed=True)
             for plc_col in plc_columns
         )
+        # We only have child names if the source is a pylibcudf.io.TableWithMetadata.
         if child_names is not None:
             cudf_cols = (
-                _recursively_update_struct_names(col, child_names)
-                for col, child_names in zip(
+                _recursively_update_struct_names(col, cn)
+                for col, cn in zip(
                     cudf_cols, child_names.values(), strict=True
                 )
             )
@@ -8861,7 +8876,7 @@ def _setitem_with_dataframe(
     ):
         replace_df = replace_df.reindex(input_df.index)
 
-    for col_1, col_2 in zip(input_cols, replace_df._column_names):
+    for col_1, col_2 in zip(input_cols, replace_df._column_names, strict=True):
         if col_1 in input_df._column_names:
             if mask is not None:
                 input_df._data[col_1][mask] = as_column(replace_df[col_2])
@@ -8917,11 +8932,11 @@ def _index_from_listlike_of_series(
 # Create a dictionary of the common, non-null columns
 def _get_non_null_cols_and_dtypes(col_idxs, list_of_columns):
     # A mapping of {idx: np.dtype}
-    dtypes = dict()
+    dtypes = {}
     # A mapping of {idx: [...columns]}, where `[...columns]`
     # is a list of columns with at least one valid value for each
     # column name across all input frames
-    non_null_columns = dict()
+    non_null_columns = {}
     for idx in col_idxs:
         for cols in list_of_columns:
             # Skip columns not in this frame
@@ -8946,8 +8961,10 @@ def _find_common_dtypes_and_categories(
 ) -> dict[Any, ColumnBase]:
     # A mapping of {idx: categories}, where `categories` is a
     # column of all the unique categorical values from each
-    # categorical column across all input frames
-    categories = dict()
+    # categorical column across all input frames. This function
+    # also modifies the input dtypes dictionary in place to capture
+    # the common dtype across columns being concatenated.
+    categories = {}
     for idx, cols in non_null_columns.items():
         # default to the first non-null dtype
         dtypes[idx] = cols[0].dtype
@@ -8996,7 +9013,7 @@ def _cast_cols_to_common_dtypes(col_idxs, list_of_columns, dtypes, categories):
 
 
 def _reassign_categories(categories, cols, col_idxs):
-    for name, idx in zip(cols, col_idxs):
+    for name, idx in zip(cols, col_idxs, strict=True):
         if idx in categories:
             codes = as_unsigned_codes(len(categories[idx]), cols[name])
             cols[name] = CategoricalColumn(
