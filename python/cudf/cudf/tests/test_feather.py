@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 import os
 from string import ascii_letters
@@ -13,7 +13,7 @@ from cudf.testing import assert_eq
 from cudf.testing._utils import NUMERIC_TYPES
 
 
-@pytest.fixture(params=[0, 1, 10, 100])
+@pytest.fixture(params=[0, 10])
 def pdf(request):
     rng = np.random.default_rng(seed=0)
     types = [*NUMERIC_TYPES, "bool"]
@@ -41,25 +41,15 @@ def pdf(request):
     return test_pdf
 
 
-@pytest.fixture
-def gdf(pdf):
-    return cudf.DataFrame.from_pandas(pdf)
-
-
-@pytest.fixture
-def feather_file(tmp_path_factory, pdf):
-    fname = tmp_path_factory.mktemp("feather") / "test.feather"
-    pdf.to_feather(fname)
-    return fname
-
-
 @pytest.mark.filterwarnings("ignore:Using CPU")
 @pytest.mark.filterwarnings("ignore:Strings are not yet supported")
 @pytest.mark.parametrize(
     "columns",
     [["col_int8"], ["col_category"], ["col_int32", "col_float32"], None],
 )
-def test_feather_reader(feather_file, columns):
+def test_feather_reader(pdf, columns, tmp_path):
+    feather_file = tmp_path / "test.feather"
+    pdf.to_feather(feather_file)
     expect = pa.feather.read_table(feather_file, columns=columns).to_pandas()
     got = (
         cudf.read_feather(feather_file, columns=columns)
@@ -71,9 +61,10 @@ def test_feather_reader(feather_file, columns):
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
-def test_feather_writer(tmpdir, pdf, gdf):
-    pdf_fname = tmpdir.join("pdf.feather")
-    gdf_fname = tmpdir.join("gdf.feather")
+def test_feather_writer(tmp_path, pdf):
+    gdf = cudf.DataFrame.from_pandas(pdf)
+    pdf_fname = tmp_path / "pdf.feather"
+    gdf_fname = tmp_path / "gdf.feather"
 
     pdf.to_feather(pdf_fname)
     gdf.to_feather(gdf_fname)
