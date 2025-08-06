@@ -1,6 +1,8 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
+from pylibcudf._interop_helpers import ArrowLike
 from pylibcudf.column import Column
+from pylibcudf.types import DataType
 
 class Table:
     def __init__(self, column: list[Column]): ...
@@ -8,3 +10,7 @@ class Table:
     def num_rows(self) -> int: ...
     def shape(self) -> tuple[int, int]: ...
     def columns(self) -> list[Column]: ...
+    @staticmethod
+    def from_arrow(
+        arrow_like: ArrowLike, dtype: DataType | None = None
+    ) -> Table: ...

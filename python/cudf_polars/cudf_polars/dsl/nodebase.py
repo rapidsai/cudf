@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, ClassVar, Generic, TypeVar
 
 if TYPE_CHECKING:
-    from collections.abc import Hashable, Sequence
+    from collections.abc import Generator, Hashable, Sequence
 
     from typing_extensions import Self
 
@@ -102,8 +102,8 @@ class Node(Generic[T]):
 
         Override this in subclasses, rather than :meth:`__eq__`.
 
-        Parameter
-        ---------
+        Parameters
+        ----------
         other
             object of same type to compare to.
 
@@ -155,3 +155,10 @@ class Node(Generic[T]):
             args = ", ".join(f"{arg!r}" for arg in self._ctor_arguments(self.children))
             self._repr_value = f"{type(self).__name__}({args})"
             return self._repr_value
+
+    def __rich_repr__(self) -> Generator[Any, None, None]:
+        """Formatting for rich.pretty.pprint."""
+        for attr in self._non_child:
+            yield attr, getattr(self, attr)
+
+        yield from self.children

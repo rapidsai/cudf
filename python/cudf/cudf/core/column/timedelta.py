@@ -17,12 +17,12 @@ from cudf.core._internals import binaryop
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.temporal_base import TemporalBaseColumn
-from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.dtypes import (
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
     find_common_type,
 )
+from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.temporal import unit_to_nanoseconds_conversion
 
 if TYPE_CHECKING:
@@ -96,7 +96,10 @@ class TimeDeltaColumn(TemporalBaseColumn):
         null_count: int | None = None,
         children: tuple = (),
     ):
-        if not (isinstance(dtype, np.dtype) and dtype.kind == "m"):
+        if cudf.get_option("mode.pandas_compatible"):
+            if not dtype.kind == "m":
+                raise ValueError("dtype must be a timedelta numpy dtype.")
+        elif not (isinstance(dtype, np.dtype) and dtype.kind == "m"):
             raise ValueError("dtype must be a timedelta numpy dtype.")
         super().__init__(
             data=data,
@@ -247,7 +250,12 @@ class TimeDeltaColumn(TemporalBaseColumn):
                     )
                 )
 
-    def as_string_column(self) -> StringColumn:
+    def as_string_column(self, dtype) -> StringColumn:
+        if cudf.get_option("mode.pandas_compatible"):
+            if isinstance(dtype, np.dtype) and dtype.kind == "O":
+                raise TypeError(
+                    f"cannot astype a timedelta like from {self.dtype} to {dtype}"
+                )
         return self.strftime("%D days %H:%M:%S")
 
     def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:

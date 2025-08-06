@@ -18,17 +18,16 @@ if TYPE_CHECKING:
     from typing import Any
 
     from cudf_polars.dsl import expr
-    from cudf_polars.utils import config
+    from cudf_polars.typing import Schema
 
 __all__ = ["rewrite_groupby"]
 
 
 def rewrite_groupby(
     node: Any,
-    schema: dict[str, plc.DataType],
+    schema: Schema,
     keys: Sequence[expr.NamedExpr],
     aggs: Sequence[expr.NamedExpr],
-    config_options: config.ConfigOptions,
     inp: ir.IR,
 ) -> ir.IR:
     """
@@ -44,8 +43,6 @@ def rewrite_groupby(
         Grouping keys.
     aggs
         Originally requested aggregations.
-    config_options
-        Configuration options.
     inp
         Input plan node to the groupby.
 
@@ -91,7 +88,6 @@ def rewrite_groupby(
         aggs,
         node.maintain_order,
         node.options.slice,
-        config_options,
         inp,
     )
     return apply_post_evaluation(inp)

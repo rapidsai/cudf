@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from pylibcudf.column cimport Column
@@ -6,7 +6,7 @@ from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.strings cimport padding as cpp_padding
 from pylibcudf.libcudf.strings.side_type cimport side_type
 
-__all__ = ["pad", "zfill"]
+__all__ = ["pad", "zfill", "zfill_by_widths"]
 
 cpdef Column pad(Column input, size_type width, side_type side, str fill_char):
     """
@@ -67,6 +67,34 @@ cpdef Column zfill(Column input, size_type width):
         c_result = cpp_padding.zfill(
             input.view(),
             width,
+        )
+
+    return Column.from_libcudf(move(c_result))
+
+cpdef Column zfill_by_widths(Column input, Column widths):
+    """
+    Add '0' as padding to the left of each string.
+
+    For details, see :cpp:func:`cudf::strings::zfill_by_widths`.
+
+    Parameters
+    ----------
+    input : Column
+        Strings instance for this operation
+    widths : Column
+        The minimum number of characters for each string.
+
+    Returns
+    -------
+    Column
+        New column of strings.
+    """
+    cdef unique_ptr[column] c_result
+
+    with nogil:
+        c_result = cpp_padding.zfill_by_widths(
+            input.view(),
+            widths.view(),
         )
 
     return Column.from_libcudf(move(c_result))

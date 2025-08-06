@@ -21,6 +21,7 @@ from cudf.core.column import (
     concat_columns,
 )
 from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.dtypes import CategoricalDtype, dtype as cudf_dtype
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
@@ -353,7 +354,7 @@ def concat(
                     result = obj.to_frame()
                 else:
                     result = obj.copy(deep=True)
-                result.columns = cudf.RangeIndex(len(result._data))
+                result.columns = cudf.RangeIndex(result._num_columns)
             else:
                 result = type(obj)._from_data(
                     data=obj._data.copy(deep=True),
@@ -655,7 +656,7 @@ def melt(
 
     # Error for unimplemented support for datatype
     if any(
-        isinstance(frame[col].dtype, cudf.CategoricalDtype)
+        isinstance(frame[col].dtype, CategoricalDtype)
         for col in itertools.chain(id_vars, value_vars)
     ):
         raise NotImplementedError(
@@ -700,7 +701,7 @@ def melt(
     if not value_vars:
         # TODO: Use frame._data.label_dtype when it's more consistently set
         var_data = column_empty(
-            0, dtype=cudf.dtype(frame._data.to_pandas_index.dtype)
+            0, dtype=cudf_dtype(frame._data.to_pandas_index.dtype)
         )
     else:
         var_data = as_column(value_vars).take(
@@ -728,7 +729,6 @@ def get_dummies(
     prefix_sep="_",
     dummy_na=False,
     columns=None,
-    cats=None,
     sparse=False,
     drop_first=False,
     dtype="bool",
@@ -749,10 +749,6 @@ def get_dummies(
         Separator to use when appending prefixes
     dummy_na : boolean, optional
         Add a column to indicate Nones, if False Nones are ignored.
-    cats : dict, optional
-        Dictionary mapping column names to sequences of values representing
-        that column's category. If not supplied, it is computed as the unique
-        values of the column.
     sparse : boolean, optional
         Right now this is NON-FUNCTIONAL argument in rapids.
     drop_first : boolean, optional
@@ -814,18 +810,10 @@ def get_dummies(
     3  False  False   True  False
     4  False  False  False   True
     """
-
-    if cats is None:
-        cats = {}
-    else:
-        warnings.warn(
-            "cats is deprecated and will be removed in a future version.",
-            FutureWarning,
-        )
     if sparse:
         raise NotImplementedError("sparse is not supported yet")
 
-    dtype = cudf.dtype(dtype)
+    dtype = cudf_dtype(dtype)
 
     if isinstance(data, cudf.DataFrame):
         encode_fallback_dtypes = [CUDF_STRING_DTYPE, "category"]
@@ -867,33 +855,25 @@ def get_dummies(
             }
 
             for name in columns:
-                if name not in cats:
-                    unique = _get_unique(
-                        column=data._data[name], dummy_na=dummy_na
-                    )
-                else:
-                    unique = as_column(cats[name])
-
                 col_enc_data = _one_hot_encode_column(
                     column=data._data[name],
-                    categories=unique,
                     prefix=prefix_map.get(name, prefix),
                     prefix_sep=prefix_sep_map.get(name, prefix_sep),
                     dtype=dtype,
                     drop_first=drop_first,
+                    dummy_na=dummy_na,
                 )
                 result_data.update(col_enc_data)
             return cudf.DataFrame._from_data(result_data, index=data.index)
     else:
         ser = cudf.Series(data)
-        unique = _get_unique(column=ser._column, dummy_na=dummy_na)
         data = _one_hot_encode_column(
             column=ser._column,
-            categories=unique,
             prefix=prefix,
             prefix_sep=prefix_sep,
             dtype=dtype,
             drop_first=drop_first,
+            dummy_na=dummy_na,
         )
         return cudf.DataFrame._from_data(data, index=ser.index)
 
@@ -1019,9 +999,9 @@ def _pivot(
     Parameters
     ----------
     col_accessor : DataFrame
-    index : cudf.Index
+    index : Index
         Index labels of the result
-    columns : cudf.Index
+    columns : Index
         Column labels of the result
     """
     columns_labels, columns_idx = columns._encode()
@@ -1043,18 +1023,18 @@ def _pivot(
             scatter_map = (columns_idx * np.int32(nrows)) + index_idx
             target_col = column_empty(row_count=new_size, dtype=col.dtype)
             target_col[scatter_map] = col
-            target = cudf.Index._from_column(target_col)
             result.update(
-                {
-                    name: idx._column
-                    for name, idx in zip(
+                dict(
+                    zip(
                         names,
-                        target._split(list(range(nrows, new_size, nrows))),
+                        target_col.split_by_offsets(
+                            list(range(nrows, new_size, nrows))
+                        ),
                     )
-                }
+                )
             )
 
-    # the result of pivot always has a multicolumn
+    # the result of pivot always has a MultiIndex
     ca = ColumnAccessor(
         result,
         multiindex=True,
@@ -1173,6 +1153,7 @@ def pivot(
     # MultiIndex to Index
     if not values_is_list:
         result._data.droplevel(0)
+        result._data.label_dtype = column_data.dtype
 
     return result
 
@@ -1316,34 +1297,27 @@ def unstack(df, level, fill_value=None, sort: bool = True):
         return result
 
 
-def _get_unique(column: ColumnBase, dummy_na: bool) -> ColumnBase:
-    """
-    Returns unique values in a column, if
-    dummy_na is False, nan's are also dropped.
-    """
-    if isinstance(column.dtype, cudf.CategoricalDtype):
-        unique = column.categories  # type: ignore[attr-defined]
-    else:
-        unique = column.unique().sort_values()
-    if not dummy_na:
-        unique = unique.nans_to_nulls().dropna()
-    return unique
-
-
 def _one_hot_encode_column(
     column: ColumnBase,
-    categories: ColumnBase,
     prefix: str | None,
     prefix_sep: str | None,
     dtype: DtypeObj,
     drop_first: bool,
+    dummy_na: bool,
 ) -> dict[str, ColumnBase]:
     """Encode a single column with one hot encoding. The return dictionary
     contains pairs of (category, encodings). The keys may be prefixed with
     `prefix`, separated with category name with `prefix_sep`. The encoding
     columns maybe coerced into `dtype`.
     """
-    if isinstance(column.dtype, cudf.CategoricalDtype):
+    if isinstance(column.dtype, CategoricalDtype):
+        categories = column.categories  # type: ignore[attr-defined]
+    else:
+        categories = column.unique().sort_values()
+    if not dummy_na:
+        categories = categories.nans_to_nulls().dropna()
+
+    if isinstance(column.dtype, CategoricalDtype):
         if column.size == column.null_count:
             column = column_empty(
                 row_count=column.size, dtype=categories.dtype
@@ -1517,7 +1491,7 @@ def crosstab(
 
 
 def pivot_table(
-    data,
+    data: DataFrame,
     values=None,
     index=None,
     columns=None,
@@ -1601,7 +1575,7 @@ def pivot_table(
                     to_filter.append(x)
             except TypeError:
                 pass
-        if len(to_filter) < len(data._column_names):
+        if len(to_filter) < data._num_columns:
             data = data[to_filter]
 
     else:

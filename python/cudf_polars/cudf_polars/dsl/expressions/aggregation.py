@@ -16,7 +16,7 @@ from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal
 
 if TYPE_CHECKING:
-    from cudf_polars.containers import DataFrame
+    from cudf_polars.containers import DataFrame, DataType
 
 __all__ = ["Agg"]
 
@@ -26,7 +26,7 @@ class Agg(Expr):
     _non_child = ("dtype", "name", "options")
 
     def __init__(
-        self, dtype: plc.DataType, name: str, options: Any, *children: Expr
+        self, dtype: DataType, name: str, options: Any, *children: Expr
     ) -> None:
         self.dtype = dtype
         self.name = name
@@ -71,7 +71,7 @@ class Agg(Expr):
                 raise NotImplementedError("Only support literal quantile values")
             if options == "equiprobable":
                 raise NotImplementedError("Quantile with equiprobable interpolation")
-            if plc.traits.is_duration(child.dtype):
+            if plc.traits.is_duration(child.dtype.plc):
                 raise NotImplementedError("Quantile with duration data type")
             req = plc.aggregation.quantile(
                 quantiles=[quantile.value], interp=Agg.interp_mapping[options]
@@ -140,27 +140,33 @@ class Agg(Expr):
     ) -> Column:
         return Column(
             plc.Column.from_scalar(
-                plc.reduce.reduce(column.obj, request, self.dtype),
+                plc.reduce.reduce(column.obj, request, self.dtype.plc),
                 1,
-            )
+            ),
+            name=column.name,
+            dtype=self.dtype,
         )
 
     def _count(self, column: Column, *, include_nulls: bool) -> Column:
         null_count = column.null_count if not include_nulls else 0
         return Column(
             plc.Column.from_scalar(
-                plc.Scalar.from_py(column.size - null_count, self.dtype),
+                plc.Scalar.from_py(column.size - null_count, self.dtype.plc),
                 1,
-            )
+            ),
+            name=column.name,
+            dtype=self.dtype,
         )
 
     def _sum(self, column: Column) -> Column:
         if column.size == 0 or column.null_count == column.size:
             return Column(
                 plc.Column.from_scalar(
-                    plc.Scalar.from_py(0, self.dtype),
+                    plc.Scalar.from_py(0, self.dtype.plc),
                     1,
-                )
+                ),
+                name=column.name,
+                dtype=self.dtype,
             )
         return self._reduce(column, request=plc.aggregation.sum())
 
@@ -168,9 +174,11 @@ class Agg(Expr):
         if propagate_nans and column.nan_count > 0:
             return Column(
                 plc.Column.from_scalar(
-                    plc.Scalar.from_py(float("nan"), self.dtype),
+                    plc.Scalar.from_py(float("nan"), self.dtype.plc),
                     1,
-                )
+                ),
+                name=column.name,
+                dtype=self.dtype,
             )
         if column.nan_count > 0:
             column = column.mask_nans()
@@ -180,20 +188,28 @@ class Agg(Expr):
         if propagate_nans and column.nan_count > 0:
             return Column(
                 plc.Column.from_scalar(
-                    plc.Scalar.from_py(float("nan"), self.dtype),
+                    plc.Scalar.from_py(float("nan"), self.dtype.plc),
                     1,
-                )
+                ),
+                name=column.name,
+                dtype=self.dtype,
             )
         if column.nan_count > 0:
             column = column.mask_nans()
         return self._reduce(column, request=plc.aggregation.max())
 
     def _first(self, column: Column) -> Column:
-        return Column(plc.copying.slice(column.obj, [0, 1])[0])
+        return Column(
+            plc.copying.slice(column.obj, [0, 1])[0], name=column.name, dtype=self.dtype
+        )
 
     def _last(self, column: Column) -> Column:
         n = column.size
-        return Column(plc.copying.slice(column.obj, [n - 1, n])[0])
+        return Column(
+            plc.copying.slice(column.obj, [n - 1, n])[0],
+            name=column.name,
+            dtype=self.dtype,
+        )
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME

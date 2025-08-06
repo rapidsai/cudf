@@ -10,6 +10,7 @@ import cudf
 from cudf.core.column.column import as_column, pa_mask_buffer_to_mask
 from cudf.core.column.struct import StructColumn
 from cudf.core.dtypes import IntervalDtype
+from cudf.utils.dtypes import is_dtype_obj_interval
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -45,7 +46,13 @@ class IntervalColumn(StructColumn):
 
     @staticmethod
     def _validate_dtype_instance(dtype: IntervalDtype) -> IntervalDtype:
-        if not isinstance(dtype, IntervalDtype):
+        if (
+            not cudf.get_option("mode.pandas_compatible")
+            and not isinstance(dtype, IntervalDtype)
+        ) or (
+            cudf.get_option("mode.pandas_compatible")
+            and not is_dtype_obj_interval(dtype)
+        ):
             raise ValueError("dtype must be a IntervalDtype.")
         return dtype
 
@@ -195,7 +202,10 @@ class IntervalColumn(StructColumn):
         # self.to_arrow) is currently the best known way to convert interval
         # types into pandas (trying to convert the underlying numerical columns
         # directly is problematic), so we're stuck with this for now.
-        if nullable:
+        if nullable or (
+            cudf.get_option("mode.pandas_compatible")
+            and isinstance(self.dtype, pd.ArrowDtype)
+        ):
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         elif arrow_type:
             raise NotImplementedError(f"{arrow_type=} is not implemented.")
@@ -205,6 +215,8 @@ class IntervalColumn(StructColumn):
 
     def element_indexing(self, index: int):
         result = super().element_indexing(index)
-        if cudf.get_option("mode.pandas_compatible"):
+        if isinstance(result, dict) and cudf.get_option(
+            "mode.pandas_compatible"
+        ):
             return pd.Interval(**result, closed=self.dtype.closed)
         return result

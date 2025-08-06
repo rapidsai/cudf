@@ -21,6 +21,8 @@ from cudf.options import get_option
 from cudf.utils.dtypes import SIZE_TYPE_DTYPE
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from cudf.core.dataframe import DataFrame
     from cudf.core.index import Index
 
@@ -276,14 +278,16 @@ class Merge:
             )
             for map_, n, null in zip(maps, lengths, nullify)
         ]
+        if self.how == "right":
+            # If how is right, right map is primary sort key.
+            key_order = reversed(key_order)
         return [
             ColumnBase.from_pylibcudf(col)
             for col in sorting.sort_by_key(
-                list(maps),
-                # If how is right, right map is primary sort key.
-                key_order[:: -1 if self.how == "right" else 1],
-                [True] * len(key_order),
-                ["last"] * len(key_order),
+                maps,
+                key_order,
+                itertools.repeat(True, times=len(key_order)),
+                itertools.repeat("last", times=len(key_order)),
                 stable=True,
             )
         ]
@@ -455,12 +459,20 @@ class Merge:
             multiindex_columns = (
                 self.lhs._data.multiindex and self.rhs._data.multiindex
             )
+            rangeindex_columns = (
+                self.lhs._data.rangeindex and self.rhs._data.rangeindex
+            )
         elif self.lhs._data:
             multiindex_columns = self.lhs._data.multiindex
+            rangeindex_columns = self.lhs._data.rangeindex
         elif self.rhs._data:
             multiindex_columns = self.rhs._data.multiindex
+            rangeindex_columns = self.rhs._data.rangeindex
         else:
             multiindex_columns = False
+            rangeindex_columns = (
+                self.lhs._data.rangeindex and self.rhs._data.rangeindex
+            )
 
         index: Index | None
         if self._using_right_index:
@@ -475,7 +487,9 @@ class Merge:
         # Construct result from data and index:
         return (
             left_result._data.__class__(
-                data=data, multiindex=multiindex_columns
+                data=data,
+                multiindex=multiindex_columns,
+                rangeindex=rangeindex_columns,
             ),
             index,
         )
@@ -500,16 +514,18 @@ class Merge:
         if by:
             keep_index = self._using_left_index or self._using_right_index
             if keep_index:
-                to_sort = [*result.index._columns, *result._columns]
+                to_sort: Iterable[ColumnBase] = itertools.chain(
+                    result.index._columns, result._columns
+                )
                 index_names = result.index.names
             else:
-                to_sort = [*result._columns]
+                to_sort = result._columns
                 index_names = None
             result_columns = sorting.sort_by_key(
                 to_sort,
                 by,
-                [True] * len(by),
-                ["last"] * len(by),
+                itertools.repeat(True, times=len(by)),
+                itertools.repeat("last", times=len(by)),
                 stable=True,
             )
             result = result._from_columns_like_self(
