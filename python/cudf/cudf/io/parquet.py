@@ -1,6 +1,7 @@
 # Copyright (c) 2019-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
+import datetime
 import io
 import itertools
 import math
@@ -18,6 +19,7 @@ import numpy as np
 import pandas as pd
 
 import pylibcudf as plc
+from pylibcudf import expressions as plc_expr
 
 from cudf.api.types import is_list_like
 from cudf.core.buffer import acquire_spill_lock
@@ -534,6 +536,146 @@ def write_to_dataset(
     return metadata
 
 
+_BIN_OPS = {
+    "==": plc_expr.ASTOperator.EQUAL,
+    "!=": plc_expr.ASTOperator.NOT_EQUAL,
+    "<": plc_expr.ASTOperator.LESS,
+    "<=": plc_expr.ASTOperator.LESS_EQUAL,
+    ">": plc_expr.ASTOperator.GREATER,
+    ">=": plc_expr.ASTOperator.GREATER_EQUAL,
+}
+
+
+def translate_filters_to_ast(
+    filters: list[list[tuple[str, str, Any]]],
+) -> plc_expr.Expression:
+    """
+    Convert a filter expression in Disjunctive Normal Form (DNF) to a pylibcudf AST.
+
+    Parameters
+    ----------
+    filters : list[list[tuple[str, str, Any]]]
+        A filter expression in DNF.
+        DNF is represented as a list of OR-ed clauses, where each clause is a list of
+        AND-ed predicates. Each predicate is a tuple of the form:
+            (column_name, operator, value)
+
+    Returns
+    -------
+    plc.expressions.Expression
+        A pylibcudf AST expression representing the filter.
+
+    Notes
+    -----
+    This function supports the following operators:
+      - Binary comparisons: ==, !=, <, <=, >, >=
+      - Membership tests: "in", "not in"
+      - Null checks: "is None", "is not None"
+
+    The translation is performed by recursively reducing:
+      - Each clause's predicates into a conjunction (AND)
+      - All clauses into a disjunction (OR) of those conjunctions
+    """
+
+    def _raise_for_unsupported_scalar_types(val: Any):
+        if not (
+            isinstance(val, (int, float))
+            or isinstance(val, (datetime.date, datetime.timedelta))
+            or isinstance(val, str)
+        ):
+            return val
+        raise NotImplementedError(
+            "Only numeric, string, or timestamp/duration scalars are accepted"
+        )
+
+    def make_expr(col: str, op: str, val: Any) -> plc_expr.Expression:
+        col_ref = plc_expr.ColumnNameReference(col)
+
+        if op in _BIN_OPS:
+            return plc_expr.Operation(
+                _BIN_OPS[op],
+                col_ref,
+                plc_expr.Literal(
+                    plc.Scalar.from_py(
+                        _raise_for_unsupported_scalar_types(val)
+                    )
+                ),
+            )
+        elif op == "in":
+            values = [
+                plc_expr.Literal(
+                    plc.Scalar.from_py(_raise_for_unsupported_scalar_types(v))
+                )
+                for v in val
+            ]
+            return reduce(
+                lambda acc, x: plc_expr.Operation(
+                    plc_expr.ASTOperator.LOGICAL_OR, acc, x
+                ),
+                [
+                    plc_expr.Operation(plc_expr.ASTOperator.EQUAL, col_ref, v)
+                    for v in values
+                ],
+            )
+        elif op == "not in":
+            values = [
+                plc_expr.Literal(
+                    plc.Scalar.from_py(_raise_for_unsupported_scalar_types(v))
+                )
+                for v in val
+            ]
+            return reduce(
+                lambda acc, x: plc_expr.Operation(
+                    plc_expr.ASTOperator.LOGICAL_AND, acc, x
+                ),
+                [
+                    plc_expr.Operation(
+                        plc_expr.ASTOperator.NOT_EQUAL, col_ref, v
+                    )
+                    for v in values
+                ],
+            )
+        elif op == "is":
+            if val is None:
+                return plc_expr.Operation(
+                    plc_expr.ASTOperator.IS_NULL, col_ref
+                )
+            raise NotImplementedError("Only `is None` supported")
+        elif op == "is not":
+            if val is None:
+                return plc_expr.Operation(
+                    plc_expr.ASTOperator.NOT,
+                    plc_expr.Operation(plc_expr.ASTOperator.IS_NULL, col_ref),
+                )
+            raise NotImplementedError("Only `is not None` supported")
+        else:
+            raise NotImplementedError(f"Unsupported op: {op}")
+
+    clauses = [
+        reduce(
+            lambda acc, x: plc_expr.Operation(
+                plc_expr.ASTOperator.LOGICAL_AND, acc, x
+            ),
+            [make_expr(*pred) for pred in clause],
+        )
+        for clause in filters
+    ]
+
+    if not clauses:
+        raise ValueError("Empty filter expression")
+
+    return (
+        reduce(
+            lambda acc, x: plc_expr.Operation(
+                plc_expr.ASTOperator.LOGICAL_OR, acc, x
+            ),
+            clauses,
+        )
+        if len(clauses) > 1
+        else clauses[0]
+    )
+
+
 def _parse_metadata(meta) -> tuple[bool, Any, None | np.dtype]:
     file_is_range_index = False
     file_index_cols = None
@@ -821,6 +963,38 @@ def read_parquet(
 
     # Normalize and validate filters
     filters = _normalize_filters(filters)
+
+    if (
+        engine == "cudf"
+        and filters is not None
+        and categorical_partitions is None
+        and dataset_kwargs is None
+        and len(filepath_or_buffer) == 1
+    ):
+        try:
+            ast_filter = translate_filters_to_ast(filters)
+
+            filepaths_or_buffers = ioutils.get_reader_filepath_or_buffer(
+                path_or_data=filepath_or_buffer,
+                fs=fs,
+                storage_options=storage_options,
+                bytes_per_thread=bytes_per_thread,
+            )
+
+            return _parquet_to_frame(
+                filepaths_or_buffers,
+                engine=engine,
+                columns=columns,
+                use_pandas_metadata=use_pandas_metadata,
+                row_groups=None,
+                filters=ast_filter,
+                allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
+                nrows=nrows,
+                skip_rows=skip_rows,
+            )
+        except NotImplementedError:
+            # Fall back to the pyarrow
+            pass
 
     # Use pyarrow dataset to detect/process directory-partitioned
     # data and apply filters. Note that we can only support partitioned
@@ -1172,7 +1346,7 @@ def _read_parquet(
     # cudf and pyarrow to read parquet data
     if engine == "cudf":
         if set(kwargs.keys()).difference(
-            set(("_chunk_read_limit", "_pass_read_limit"))
+            set(("_chunk_read_limit", "_pass_read_limit", "filters"))
         ):
             raise ValueError(
                 "cudf engine doesn't support the "
@@ -1188,10 +1362,12 @@ def _read_parquet(
         if skip_rows is None:
             skip_rows = 0
         if get_option("io.parquet.low_memory"):
-            # Note: If this function ever takes accepts filters
-            # allow_range_index needs to be False when a filter is passed
-            # (see read_parquet)
-            allow_range_index = columns is not None and len(columns) != 0
+            # If filters are used, we can't rely on a RangeIndex
+            # (row count may be reduced)
+            filters = kwargs.get("filters", None)
+            allow_range_index = (
+                filters is None and columns is not None and len(columns) != 0
+            )
 
             options = (
                 plc.io.parquet.ParquetReaderOptions.builder(
@@ -1209,6 +1385,8 @@ def _read_parquet(
                 options.set_skip_rows(skip_rows)
             if columns is not None:
                 options.set_columns(columns)
+            if filters is not None:
+                options.set_filter(filters)
 
             reader = plc.io.parquet.ChunkedParquetReader(
                 options,
