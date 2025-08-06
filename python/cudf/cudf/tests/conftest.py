@@ -222,6 +222,12 @@ def comparison_op(request):
     return request.param
 
 
+@pytest.fixture
+def comparison_op_method(comparison_op):
+    """Comparison methods defined on Series/DataFrame"""
+    return comparison_op.__name__
+
+
 @pytest.fixture(params=arithmetic_ops + comparison_ops)
 def binary_op(request):
     return request.param

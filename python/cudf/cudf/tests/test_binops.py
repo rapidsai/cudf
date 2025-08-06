@@ -59,7 +59,7 @@ def binop_arithmetic_func(request):
 
 
 @pytest.fixture(params=["eq", "ne", "lt", "le", "gt", "ge"])
-def binop_comparison_func(request):
+def comparison_op_method(request):
     return request.param
 
 
@@ -696,7 +696,7 @@ def test_operator_func_series_and_scalar(
 @pytest.mark.parametrize("scalar_b", [0, 1, None, np.nan])
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
 def test_operator_func_between_series_logical(
-    dtype, binop_comparison_func, scalar_a, scalar_b, fill_value
+    dtype, comparison_op_method, scalar_a, scalar_b, fill_value
 ):
     gdf_series_a = Series([scalar_a], nan_as_null=False).astype(dtype)
     gdf_series_b = Series([scalar_b], nan_as_null=False).astype(dtype)
@@ -704,10 +704,10 @@ def test_operator_func_between_series_logical(
     pdf_series_a = gdf_series_a.to_pandas(nullable=True)
     pdf_series_b = gdf_series_b.to_pandas(nullable=True)
 
-    gdf_series_result = getattr(gdf_series_a, binop_comparison_func)(
+    gdf_series_result = getattr(gdf_series_a, comparison_op_method)(
         gdf_series_b, fill_value=fill_value
     )
-    pdf_series_result = getattr(pdf_series_a, binop_comparison_func)(
+    pdf_series_result = getattr(pdf_series_a, comparison_op_method)(
         pdf_series_b, fill_value=fill_value
     )
     expect = pdf_series_result
@@ -733,7 +733,7 @@ def test_operator_func_between_series_logical(
 @pytest.mark.parametrize("scalar", [-59.0, np.nan, 0, 59.0])
 @pytest.mark.parametrize("fill_value", [None, 1.0])
 def test_operator_func_series_and_scalar_logical(
-    request, dtype, binop_comparison_func, has_nulls, scalar, fill_value
+    request, dtype, comparison_op_method, has_nulls, scalar, fill_value
 ):
     request.applymarker(
         pytest.mark.xfail(
@@ -742,9 +742,7 @@ def test_operator_func_series_and_scalar_logical(
             and scalar is np.nan
             and (
                 has_nulls
-                or (
-                    not has_nulls and binop_comparison_func not in {"eq", "ne"}
-                )
+                or (not has_nulls and comparison_op_method not in {"eq", "ne"})
             ),
             reason="https://github.com/pandas-dev/pandas/issues/57447",
         )
@@ -754,11 +752,11 @@ def test_operator_func_series_and_scalar_logical(
     else:
         gdf_series = cudf.Series([-1.0, 0, 10.5, 1.1], dtype=dtype)
     pdf_series = gdf_series.to_pandas(nullable=True)
-    gdf_series_result = getattr(gdf_series, binop_comparison_func)(
+    gdf_series_result = getattr(gdf_series, comparison_op_method)(
         scalar,
         fill_value=fill_value,
     )
-    pdf_series_result = getattr(pdf_series, binop_comparison_func)(
+    pdf_series_result = getattr(pdf_series, comparison_op_method)(
         scalar, fill_value=fill_value
     )
 
@@ -810,7 +808,7 @@ def test_operator_func_dataframe(
 
 @pytest.mark.parametrize("nulls", _nulls)
 @pytest.mark.parametrize("other", ["df", "scalar"])
-def test_logical_operator_func_dataframe(binop_comparison_func, nulls, other):
+def test_logical_operator_func_dataframe(comparison_op_method, nulls, other):
     num_rows = 100
     num_cols = 3
 
@@ -841,8 +839,8 @@ def test_logical_operator_func_dataframe(binop_comparison_func, nulls, other):
         else 59.0
     )
 
-    got = getattr(gdf1, binop_comparison_func)(gdf2)
-    expect = getattr(pdf1, binop_comparison_func)(pdf2)[list(got._data)]
+    got = getattr(gdf1, comparison_op_method)(gdf2)
+    expect = getattr(pdf1, comparison_op_method)(pdf2)[list(got._data)]
 
     assert_eq(expect, got)
 
@@ -1238,13 +1236,13 @@ def test_binops_with_lhs_numpy_scalar(frame, dtype):
         "timedelta64[s]",
     ],
 )
-def test_binops_with_NA_consistent(dtype, binop_comparison_func):
+def test_binops_with_NA_consistent(dtype, comparison_op_method):
     data = [1, 2, 3]
     sr = cudf.Series(data, dtype=dtype)
 
-    result = getattr(sr, binop_comparison_func)(cudf.NA)
+    result = getattr(sr, comparison_op_method)(cudf.NA)
     if dtype in NUMERIC_TYPES:
-        if binop_comparison_func == "ne":
+        if comparison_op_method == "ne":
             expect_all = True
         else:
             expect_all = False
@@ -2314,7 +2312,7 @@ def test_column_null_scalar_comparison(dtype, null_scalar, comparison_op):
     assert result.isnull().all()
 
 
-def test_equality_ops_index_mismatch(binop_comparison_func):
+def test_equality_ops_index_mismatch(comparison_op_method):
     a = cudf.Series(
         [1, 2, 3, None, None, 4], index=["a", "b", "c", "d", "e", "f"]
     )
@@ -2325,8 +2323,8 @@ def test_equality_ops_index_mismatch(binop_comparison_func):
 
     pa = a.to_pandas(nullable=True)
     pb = b.to_pandas(nullable=True)
-    expected = getattr(pa, binop_comparison_func)(pb)
-    actual = getattr(a, binop_comparison_func)(b).to_pandas(nullable=True)
+    expected = getattr(pa, comparison_op_method)(pb)
+    actual = getattr(a, comparison_op_method)(b).to_pandas(nullable=True)
 
     assert_eq(expected, actual)
 
