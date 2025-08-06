@@ -4523,6 +4523,47 @@ def test_parquet_bloom_filters(
     )
 
 
+@pytest.fixture(params=["cuda", "pool", "cuda_async"])
+def memory_resource(request):
+    import rmm
+
+    current_mr = rmm.mr.get_current_device_resource()
+
+    kind = request.param
+    if kind == "cuda":
+        mr = rmm.mr.CudaMemoryResource()
+    elif kind == "pool":
+        base = rmm.mr.CudaMemoryResource()
+        free, _ = rmm.mr.available_device_memory()
+        size = int(round(free * 0.5 / 256) * 256)
+        mr = rmm.mr.PoolMemoryResource(base, size, size)
+    elif kind == "cuda_async":
+        mr = rmm.mr.CudaAsyncMemoryResource()
+
+    rmm.mr.set_current_device_resource(mr)
+
+    try:
+        yield mr
+    finally:
+        rmm.mr.set_current_device_resource(current_mr)
+
+
+@pytest.mark.parametrize("columns", [["r_reason_desc"], None])
+def test_parquet_bloom_filters_alignment(datadir, columns, memory_resource):
+    fname = datadir / "bloom_filter_alignment.parquet"
+    filters = [("r_reason_desc", "==", "Did not like the color")]
+
+    # Read expected table using pyarrow
+    expected = pq.read_table(fname, columns=columns, filters=filters)
+
+    # Read with cudf using the memory resource from fixture
+    read = cudf.read_parquet(
+        fname, columns=columns, filters=filters
+    ).to_arrow()
+
+    assert_eq(expected, read)
+
+
 def test_parquet_reader_unsupported_compression(datadir):
     fname = datadir / "hadoop_lz4_compressed.parquet"
 

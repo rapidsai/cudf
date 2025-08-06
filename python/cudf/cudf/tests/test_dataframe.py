@@ -13,7 +13,7 @@ import string
 import textwrap
 import warnings
 from collections import OrderedDict, defaultdict, namedtuple
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext as does_not_raise
 from copy import copy
 
 import cupy
@@ -40,7 +40,6 @@ from cudf.testing._utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
     assert_exceptions_equal,
-    does_not_raise,
     expect_warning_if,
     gen_rand,
 )

@@ -1,5 +1,7 @@
 # Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
+from contextlib import nullcontext as does_not_raise
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -10,7 +12,6 @@ from dask import dataframe as dd
 
 from cudf import DataFrame, Series, date_range
 from cudf.testing import assert_eq
-from cudf.testing._utils import does_not_raise
 
 import dask_cudf
 
