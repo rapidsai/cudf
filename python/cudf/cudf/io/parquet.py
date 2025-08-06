@@ -851,7 +851,9 @@ def _process_dataset(
             raise ValueError(
                 "Cannot specify a row_group selection for a directory path."
             )
-        row_groups_map = {path: rgs for path, rgs in zip(paths, row_groups)}
+        row_groups_map = {
+            path: rgs for path, rgs in zip(paths, row_groups, strict=True)
+        }
 
     # Apply filters and discover partition columns
     partition_keys = []
@@ -1265,7 +1267,9 @@ def _parquet_to_frame(
     # unique set of partition keys. Therefore, we start by
     # aggregating all paths with matching keys using a dict
     plan = {}
-    for i, (keys, path) in enumerate(zip(partition_keys, paths_or_buffers)):
+    for i, (keys, path) in enumerate(
+        zip(partition_keys, paths_or_buffers, strict=True)
+    ):
         rgs = row_groups[i] if row_groups else None
         tkeys = tuple(keys)
         if tkeys in plan:
@@ -1415,7 +1419,9 @@ def _read_parquet(
 
             data = {
                 name: ColumnBase.from_pylibcudf(col)
-                for name, col in zip(column_names, concatenated_columns)
+                for name, col in zip(
+                    column_names, concatenated_columns, strict=True
+                )
             }
             df = DataFrame._from_data(data)
             ioutils._add_df_col_struct_names(df, child_names)
@@ -1693,7 +1699,7 @@ def _get_partitioned(
         subdir = fs.sep.join(
             [
                 _hive_dirname(name, val)
-                for name, val in zip(partition_cols, keys)
+                for name, val in zip(partition_cols, keys, strict=True)
             ]
         )
         prefix = fs.sep.join([root_path, subdir])
@@ -2129,7 +2135,9 @@ class ParquetDatasetWriter:
             subdir = fs.sep.join(
                 [
                     f"{name}={val}"
-                    for name, val in zip(self.partition_cols, keys)
+                    for name, val in zip(
+                        self.partition_cols, keys, strict=True
+                    )
                 ]
             )
             prefix = fs.sep.join([self.path, subdir])
@@ -2207,6 +2215,7 @@ class ParquetDatasetWriter:
             paths,
             partition_info,
             metadata_file_paths,
+            strict=True,
         ):
             if path in self.path_cw_map:  # path is a currently open file
                 cw_idx = self.path_cw_map[path]
@@ -2227,7 +2236,7 @@ class ParquetDatasetWriter:
 
         if new_cw_paths:
             # Create new cw for unhandled paths encountered in this write_table
-            new_paths, part_info, meta_paths = zip(*new_cw_paths)
+            new_paths, part_info, meta_paths = zip(*new_cw_paths, strict=True)
             self._chunked_writers.append(
                 (
                     ParquetWriter(new_paths, **self.common_args),
@@ -2345,7 +2354,7 @@ def _set_col_metadata(
 
     if isinstance(col.dtype, StructDtype):
         for i, (child_col, name) in enumerate(
-            zip(col.children, list(col.dtype.fields))
+            zip(col.children, list(col.dtype.fields), strict=True)
         ):
             col_meta.child(i).set_name(name)
             _set_col_metadata(

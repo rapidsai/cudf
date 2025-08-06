@@ -211,7 +211,7 @@ def test_multiindex():
     ],
 )
 def test_multiindex_tuples(testarr):
-    tuples = list(zip(*testarr[0]))
+    tuples = list(zip(*testarr[0], strict=True))
 
     index = MultiIndex.from_tuples(tuples, names=testarr[1])
     index_pd = pd.MultiIndex.from_tuples(tuples, names=testarr[1])
