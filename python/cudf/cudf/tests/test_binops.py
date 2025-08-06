@@ -306,27 +306,24 @@ def test_series_compare(cmpop, obj_class, dtype):
 @pytest.mark.parametrize("reverse", [False, True])
 def test_series_compare_integer(dtype, val, cmpop, reverse):
     # Tests that these actually work, even though they are out of bound.
-    op = cmpop
     force_cast_val = np.array(val).astype(dtype)
     sr = Series(
         [np.iinfo(dtype).min, np.iinfo(dtype).max, force_cast_val, None],
         dtype=dtype,
     )
-
-    if reverse:
-        _op = op
-
-        def op(x, y):
-            return _op(y, x)
-
     # We expect the same result as comparing to a value within range (e.g. 0)
     # except that a NULL value evaluates to False
-    if op(0, val):
-        expected = Series([True, True, True, None])
+    exp = False
+    if reverse:
+        if cmpop(val, 0):
+            exp = True
+        res = cmpop(val, sr)
     else:
-        expected = Series([False, False, False, None])
+        if cmpop(0, val):
+            exp = True
+        res = cmpop(sr, val)
 
-    res = op(sr, val)
+    expected = Series([exp, exp, exp, None])
     assert_eq(res, expected)
 
 
