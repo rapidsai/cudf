@@ -751,11 +751,6 @@ static __device__ void update_list_offsets_for_pruned_pages(page_state_s* state)
       (reinterpret_cast<cudf::size_type*>(nesting_info.data_out))[idx] = offset;
     }
   }
-
-  if (tid == 0) {
-    // update valid value count for the max depth
-    state->nesting_info[max_depth].valid_count = 0;
-  }
 }
 
 /**
