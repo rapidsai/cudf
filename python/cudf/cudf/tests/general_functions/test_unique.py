@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# Copyright (c) 2025, NVIDIA CORPORATION.
 
 import cupy as cp
 import numpy as np
@@ -9,35 +9,23 @@ import cudf
 from cudf.testing import assert_eq
 
 
-@pytest.fixture
-def df():
-    rng = np.random.default_rng(seed=0)
-    arr = rng.integers(2, size=10, dtype=np.int64)
-    return pd.DataFrame(
-        {
-            "foo": arr,
-            "bar": [pd.Timestamp(x) for x in arr],
-        }
-    )
-
-
-@pytest.fixture(params=["foo", "bar"])
-def series_test_vals(request, df):
-    actual = cudf.unique(cudf.Series.from_pandas(df[request.param]))
-    expected = pd.unique(df[request.param])
-    return actual, expected
-
-
-def test_unique_series_obj(series_test_vals):
-    actual, expected = series_test_vals
-
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 1, 2],
+        [pd.Timestamp(1), pd.Timestamp(1), pd.Timestamp(2)],
+    ],
+)
+def test_unique_series_obj(data):
+    actual = cudf.unique(cudf.Series(data))
+    expected = pd.unique(pd.Series(data))
     assert isinstance(expected, np.ndarray)
     assert isinstance(actual, cudf.Series)
     assert_eq(actual, pd.Series(expected, name=actual.name))
 
 
 @pytest.mark.parametrize(
-    "index",
+    "cudf_index,pandas_index",
     [
         (cudf.Index, pd.Index),
         (cudf.MultiIndex, pd.MultiIndex),
@@ -45,21 +33,26 @@ def test_unique_series_obj(series_test_vals):
         (cudf.CategoricalIndex, pd.CategoricalIndex),
     ],
 )
-@pytest.mark.parametrize("col", ["foo", "bar"])
-def test_unique_index_obj(index, col, df):
-    df = cudf.DataFrame.from_pandas(df)
-    if index[0] == cudf.MultiIndex:
-        df.index = cudf.MultiIndex.from_arrays([df[col], df[col]])
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 1, 2],
+        [pd.Timestamp(1), pd.Timestamp(1), pd.Timestamp(2)],
+    ],
+)
+def test_unique_index_obj(cudf_index, pandas_index, data):
+    if cudf_index == cudf.MultiIndex:
+        idx = cudf_index.from_arrays([data, data])
     else:
-        df.index = index[0](df[col])
-    actual = cudf.unique(df.index)
-    expected = pd.unique(df.index.to_pandas())
+        idx = cudf_index(data)
+    actual = cudf.unique(idx)
+    expected = pd.unique(idx.to_pandas())
 
     isinstance(expected, np.ndarray)
-    assert isinstance(actual, index[0])
+    assert isinstance(actual, cudf_index)
 
-    if index[0] == cudf.MultiIndex:
-        expect = index[1].from_arrays(
+    if cudf_index == cudf.MultiIndex:
+        expect = pandas_index.from_arrays(
             [
                 [x[0] for x in expected],
                 [x[1] for x in expected],
@@ -68,12 +61,13 @@ def test_unique_index_obj(index, col, df):
         )
         assert_eq(actual, expect)
     else:
-        assert_eq(actual, index[1](expected, name=actual.name))
+        assert_eq(actual, cudf_index(expected, name=actual.name))
 
 
-def test_unique_cupy_ndarray(df):
-    arr = np.asarray(df["foo"])
-    garr = cp.asarray(df["foo"])
+def test_unique_cupy_ndarray():
+    ser = pd.Series(pd.Series([1, 1, 2]))
+    arr = np.asarray(ser)
+    garr = cp.asarray(ser)
 
     expected = pd.unique(arr)
     actual = cudf.unique(garr)
@@ -102,7 +96,8 @@ def test_category_dtype_unique(data):
     assert_eq(actual, pd.Series(expected))
 
 
-def test_unique_fails_value_error(df):
+def test_unique_fails_value_error():
+    df = pd.DataFrame({"foo": [1, 2, 3]})
     with pytest.raises(
         ValueError,
         match="Must pass cudf.Series, cudf.Index, or cupy.ndarray object",
@@ -111,8 +106,9 @@ def test_unique_fails_value_error(df):
 
 
 def test_unique_fails_not_implemented_error():
+    ser = cudf.Series(["foo", "foo"], dtype="category")
     with cudf.option_context("mode.pandas_compatible", True):
         with pytest.raises(
             NotImplementedError, match="cudf.Categorical is not implemented"
         ):
-            cudf.unique(cudf.Series(["foo", "foo"], dtype="category"))
+            cudf.unique(ser)

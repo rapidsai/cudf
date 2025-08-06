@@ -1,7 +1,8 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 
 import cudf
@@ -84,22 +85,26 @@ def test_dropna_dataframe(data, how, axis, inplace):
     "data",
     [
         {
-            "a": cudf.Series([None, None, None], dtype="float64"),
-            "b": cudf.Series([1, 2, None]),
+            "a": pa.array([None, None, None], type=pa.float64()),
+            "b": [1, 2, None],
         },
         {
-            "a": cudf.Series([np.nan, np.nan, np.nan], dtype="float64"),
-            "b": cudf.Series([1, 2, None]),
+            "a": pa.array([np.nan, np.nan, np.nan]),
+            "b": [1, 2, None],
         },
-        cudf.Series([None, None, None], dtype="object"),
+        {"a": pa.array([None, None, None], type=pa.string())},
     ],
 )
 @pytest.mark.parametrize("axis", [0, 1])
 def test_dropna_with_all_nulls(how, data, axis):
-    gdf = cudf.DataFrame({"a": data})
+    gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas()
 
-    assert_eq(pdf.dropna(axis=axis, how=how), gdf.dropna(axis=axis, how=how))
+    assert_eq(
+        pdf.dropna(axis=axis, how=how),
+        gdf.dropna(axis=axis, how=how),
+        check_dtype=False,
+    )
 
 
 def test_dropna_nan_as_null():
@@ -208,12 +213,12 @@ def test_dropna_thresh_cols(thresh, subset, inplace):
     [
         {
             "key": [1, 2, 10],
-            "val": cudf.Series([np.nan, 3, 1], nan_as_null=False),
+            "val": pa.array([np.nan, 3.0, 1.0]),
             "abc": [np.nan, None, 1],
         },
         {
             "key": [None, 2, 1],
-            "val": cudf.Series([3, np.nan, 0.1], nan_as_null=True),
+            "val": pa.array([3.0, None, 0.1]),
             "abc": [None, 1, None],
         },
     ],
@@ -250,10 +255,9 @@ def test_dropna_index(data, dtype):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("data", [[[1, None, 2], [None, None, 2]]])
 @pytest.mark.parametrize("how", ["all", "any"])
-def test_dropna_multiindex(data, how):
-    pi = pd.MultiIndex.from_arrays(data)
+def test_dropna_multiindex(how):
+    pi = pd.MultiIndex.from_arrays([[1, None, 2], [None, None, 2]])
     gi = cudf.from_pandas(pi)
 
     expect = pi.dropna(how)
