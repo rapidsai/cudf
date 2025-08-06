@@ -293,10 +293,9 @@ class Column:
             or self.obj.type().id() == plc.TypeId.STRING
         ):
             return Column(self._handle_string_cast(plc_dtype), dtype=dtype)
-        elif (
-            plc.traits.is_integral_not_bool(self.obj.type())
-            and plc.traits.is_timestamp(plc_dtype)
-        ):
+        elif plc.traits.is_integral_not_bool(
+            self.obj.type()
+        ) and plc.traits.is_timestamp(plc_dtype):
             result = plc.column.Column(
                 plc_dtype,
                 self.obj.size(),
