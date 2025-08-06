@@ -32,38 +32,6 @@ from cudf.utils.dtypes import (
 )
 
 STRING_TYPES = {"str"}
-
-
-@pytest.fixture(
-    params=[
-        "add",
-        "radd",
-        "sub",
-        "rsub",
-        "mul",
-        "rmul",
-        "mod",
-        "rmod",
-        "pow",
-        "rpow",
-        "div",
-        "divide",
-        "floordiv",
-        "rfloordiv",
-        "truediv",
-        "rtruediv",
-        "eq",
-        "ne",
-        "lt",
-        "le",
-        "gt",
-        "ge",
-    ]
-)
-def binop_func(request):
-    return request.param
-
-
 pytest_xfail = pytest.mark.xfail
 pytestmark = pytest.mark.spilling
 
@@ -817,8 +785,8 @@ def test_logical_operator_func_dataframe(comparison_op_method, nulls, other):
 
 
 @pytest.mark.parametrize("rhs", [0, 1, 10])
-def test_binop_bool_uint(request, binop_func, rhs):
-    if binop_func in {"rmod", "rfloordiv"}:
+def test_binop_bool_uint(request, binary_op_method, rhs):
+    if binary_op_method in {"rmod", "rfloordiv"}:
         request.applymarker(
             pytest.mark.xfail(
                 reason="https://github.com/rapidsai/cudf/issues/12162"
@@ -827,8 +795,8 @@ def test_binop_bool_uint(request, binop_func, rhs):
     psr = pd.Series([True, False, False])
     gsr = cudf.from_pandas(psr)
     assert_eq(
-        getattr(psr, binop_func)(rhs),
-        getattr(gsr, binop_func)(rhs),
+        getattr(psr, binary_op_method)(rhs),
+        getattr(gsr, binary_op_method)(rhs),
         check_dtype=False,
     )
 

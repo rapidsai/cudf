@@ -244,6 +244,19 @@ def binary_op(request):
 
 
 @pytest.fixture(
+    params=itertools.chain(
+        itertools.chain.from_iterable(
+            (op.__name__, f"r{op.__name__}") for op in arithmetic_ops
+        ),
+        (op.__name__ for op in comparison_ops),
+    )
+)
+def binary_op_method(request):
+    """Binary methods defined on Series/DataFrame"""
+    return request.param
+
+
+@pytest.fixture(
     params=[
         "min",
         "max",
