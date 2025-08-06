@@ -538,6 +538,7 @@ dependencies:
               - cuda-nvrtc-dev
               - cuda-nvtx-dev
               - libcurand-dev
+              - libnvjitlink-dev
       - output_types: conda
         matrices:
           - matrix:
