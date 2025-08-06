@@ -1,6 +1,7 @@
 # Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 import itertools
+import operator
 import os
 import pathlib
 
@@ -190,6 +191,40 @@ def set_decomp_env_vars(monkeypatch, request):
         for key, value in env_vars.items():
             m.setenv(key, value)
         yield
+
+
+arithmetic_ops = [
+    operator.add,
+    operator.sub,
+    operator.mul,
+    operator.floordiv,
+    operator.truediv,
+    operator.mod,
+    operator.pow,
+]
+comparison_ops = [
+    operator.eq,
+    operator.ne,
+    operator.lt,
+    operator.le,
+    operator.gt,
+    operator.ge,
+]
+
+
+@pytest.fixture(params=arithmetic_ops)
+def arithmetic_op(request):
+    return request.param
+
+
+@pytest.fixture(params=comparison_ops)
+def comparison_op(request):
+    return request.param
+
+
+@pytest.fixture(params=arithmetic_ops + comparison_ops)
+def binary_op(request):
+    return request.param
 
 
 @pytest.fixture(
