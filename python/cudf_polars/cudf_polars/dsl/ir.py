@@ -47,6 +47,7 @@ if TYPE_CHECKING:
 
     from polars.polars import _expr_nodes as pl_expr
 
+    from cudf_polars.containers.dataframe import NamedColumn
     from cudf_polars.typing import CSECache, ClosedInterval, Schema, Slice as Zlice
     from cudf_polars.utils.config import ParquetOptions
     from cudf_polars.utils.timer import Timer
@@ -1767,6 +1768,28 @@ class Join(IR):
             [plc.types.NullOrder.AFTER, plc.types.NullOrder.AFTER],
         ).columns()
 
+    @staticmethod
+    def _build_columns(
+        columns: Iterable[plc.Column],
+        template: Iterable[NamedColumn],
+        *,
+        empty: bool = False,
+        rename: Callable[[str], str] = lambda name: name,
+    ) -> list[Column]:
+        if empty:
+            return [
+                Column(
+                    plc.Column.from_iterable_of_py([], dtype=col.dtype.plc),
+                    col.dtype,
+                    name=rename(col.name),
+                )
+                for col in template
+            ]
+        return [
+            Column(new, col.dtype, name=rename(col.name)).sorted_like(col)
+            for new, col in zip(columns, template, strict=True)
+        ]
+
     @classmethod
     @nvtx_annotate_cudf_polars(message="Join")
     def do_evaluate(
@@ -1790,38 +1813,29 @@ class Join(IR):
             # Separate implementation, since cross_join returns the
             # result, not the gather maps
             if right.num_rows == 0:
-                return DataFrame(
-                    [
-                        Column(
-                            plc.Column.from_iterable_of_py([], dtype=col.dtype.plc),
-                            col.dtype,
-                            name=col.name,
-                        )
-                        for col in left.columns
-                    ]
-                )
-            columns = plc.join.cross_join(left.table, right.table).columns()
-            left_cols = [
-                Column(new, name=old.name, dtype=old.dtype).sorted_like(old)
-                for new, old in zip(
-                    columns[: left.num_columns], left.columns, strict=True
-                )
-            ]
-            right_cols = [
-                Column(
-                    new,
-                    name=name
+                left_cols = Join._build_columns([], left.columns, empty=True)
+                right_cols = Join._build_columns(
+                    [],
+                    right.columns,
+                    empty=True,
+                    rename=lambda name: name
                     if name not in left.column_names_set
                     else f"{name}{suffix}",
-                    dtype=old.dtype,
                 )
-                for new, name, old in zip(
-                    columns[left.num_columns :],
-                    right.column_names,
-                    right.columns,
-                    strict=True,
-                )
-            ]
+                return DataFrame([*left_cols, *right_cols])
+
+            columns = plc.join.cross_join(left.table, right.table).columns()
+            left_cols = Join._build_columns(
+                columns[: left.num_columns],
+                left.columns,
+            )
+            right_cols = Join._build_columns(
+                columns[left.num_columns :],
+                right.columns,
+                rename=lambda name: name
+                if name not in left.column_names_set
+                else f"{name}{suffix}",
+            )
             return DataFrame([*left_cols, *right_cols]).slice(zlice)
         # TODO: Waiting on clarity based on https://github.com/pola-rs/polars/issues/17184
         left_on = DataFrame(broadcast(*(e.evaluate(left) for e in left_on_exprs)))

@@ -159,6 +159,12 @@ def test_join_where(left, right, conditions, zlice):
         assert_gpu_result_equal(q_len)
 
 
-def test_cross_join_empty_right_table(left) -> None:
-    q = left.join(pl.LazyFrame(), how="cross")
+def test_cross_join_empty_right_table():
+    a = pl.LazyFrame({"a": [1, 2, 3], "x": [7, 2, 1]})
+    b = pl.LazyFrame({"b": [2, 2, 2], "x": [7, 1, 3]})
+
+    q = a.join(b, how="cross").filter(
+        (pl.col("a") == pl.col("a")) & (pl.col("b") < pl.col("b"))
+    )
+
     assert_gpu_result_equal(q)

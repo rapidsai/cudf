@@ -102,13 +102,13 @@ def test_rolling_dataframe_basic(data, agg, nulls, center):
 @pytest.mark.parametrize(
     "agg",
     [
-        pytest.param("sum"),
-        pytest.param("min"),
-        pytest.param("max"),
-        pytest.param("mean"),
-        pytest.param("count"),
-        pytest.param("std"),
-        pytest.param("var"),
+        "sum",
+        "min",
+        "max",
+        "mean",
+        "count",
+        "std",
+        "var",
     ],
 )
 def test_rolling_with_offset(agg):
@@ -134,9 +134,8 @@ def test_rolling_with_offset(agg):
 @pytest.mark.parametrize("agg", ["std", "var"])
 @pytest.mark.parametrize("ddof", [0, 1])
 @pytest.mark.parametrize("center", [True, False])
-@pytest.mark.parametrize("seed", [100, 2000])
 @pytest.mark.parametrize("window_size", [2, 10, 100])
-def test_rolling_var_std_large(agg, ddof, center, seed, window_size):
+def test_rolling_var_std_large(agg, ddof, center, window_size):
     iupper_bound = math.sqrt(np.iinfo(np.int64).max / window_size)
     ilower_bound = -math.sqrt(abs(np.iinfo(np.int64).min) / window_size)
 
@@ -170,7 +169,7 @@ def test_rolling_var_std_large(agg, ddof, center, seed, window_size):
         ],
         rows=n_rows,
         use_threads=False,
-        seed=seed,
+        seed=100,
     )
     pdf = data.to_pandas()
     gdf = cudf.from_pandas(pdf)

@@ -11,6 +11,7 @@ from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from polars.exceptions import InvalidOperationError
+from polars.polars import dtype_str_repr
 
 import pylibcudf as plc
 
@@ -138,6 +139,7 @@ class StringFunction(Expr):
         Name.Reverse,
         Name.Tail,
         Name.Titlecase,
+        Name.ZFill,
     }
     __slots__ = ("_regex_program", "name", "options")
     _non_child = ("dtype", "name", "options")
@@ -265,6 +267,17 @@ class StringFunction(Expr):
                 raise NotImplementedError(
                     "strip operations only support scalar patterns"
                 )
+        elif self.name is StringFunction.Name.ZFill:
+            if isinstance(self.children[1], Literal):
+                _, width = self.children
+                assert isinstance(width, Literal)
+                if width.value is not None and width.value < 0:
+                    dtypestr = dtype_str_repr(width.dtype.polars)
+                    raise InvalidOperationError(
+                        f"conversion from `{dtypestr}` to `u64` "
+                        f"failed in column 'literal' for 1 out of "
+                        f"1 values: [{width.value}]"
+                    ) from None
 
     @staticmethod
     def _create_regex_program(
@@ -325,6 +338,63 @@ class StringFunction(Expr):
                 ),
                 dtype=self.dtype,
             )
+        elif self.name is StringFunction.Name.ZFill:
+            # TODO: expensive validation
+            # polars pads based on bytes, libcudf by visual width
+            # only pass chars if the visual width matches the byte length
+            column = self.children[0].evaluate(df, context=context)
+            col_len_bytes = plc.strings.attributes.count_bytes(column.obj)
+            col_len_chars = plc.strings.attributes.count_characters(column.obj)
+            equal = plc.binaryop.binary_operation(
+                col_len_bytes,
+                col_len_chars,
+                plc.binaryop.BinaryOperator.NULL_EQUALS,
+                plc.DataType(plc.TypeId.BOOL8),
+            )
+            if not plc.reduce.reduce(
+                equal,
+                plc.aggregation.all(),
+                plc.DataType(plc.TypeId.BOOL8),
+            ).to_py():
+                raise InvalidOperationError(
+                    "zfill only supports ascii strings with no unicode characters"
+                )
+            if isinstance(self.children[1], Literal):
+                width = self.children[1]
+                assert isinstance(width, Literal)
+                if width.value is None:
+                    return Column(
+                        plc.Column.from_scalar(
+                            plc.Scalar.from_py(None, self.dtype.plc),
+                            column.size,
+                        ),
+                        self.dtype,
+                    )
+                return Column(
+                    plc.strings.padding.zfill(column.obj, width.value), self.dtype
+                )
+            else:
+                col_width = self.children[1].evaluate(df, context=context)
+                assert isinstance(col_width, Column)
+                all_gt_0 = plc.binaryop.binary_operation(
+                    col_width.obj,
+                    plc.Scalar.from_py(0, plc.DataType(plc.TypeId.INT64)),
+                    plc.binaryop.BinaryOperator.GREATER_EQUAL,
+                    plc.DataType(plc.TypeId.BOOL8),
+                )
+
+                if not plc.reduce.reduce(
+                    all_gt_0,
+                    plc.aggregation.all(),
+                    plc.DataType(plc.TypeId.BOOL8),
+                ).to_py():
+                    raise InvalidOperationError("fill conversion failed.")
+
+                return Column(
+                    plc.strings.padding.zfill_by_widths(column.obj, col_width.obj),
+                    self.dtype,
+                )
+
         elif self.name is StringFunction.Name.Contains:
             child, arg = self.children
             column = child.evaluate(df, context=context)
@@ -729,11 +799,11 @@ class StringFunction(Expr):
                 (column,) = columns
                 width, char = self.options
             else:  # pragma: no cover
-                (column, width) = columns
+                (column, width_col) = columns
                 (char,) = self.options
                 # TODO: Maybe accept a string scalar in
                 # cudf::strings::pad to avoid DtoH transfer
-                width = width.obj.to_scalar().to_py()
+                width = width_col.obj.to_scalar().to_py()
             return Column(
                 plc.strings.padding.pad(
                     column.obj, width, plc.strings.SideType.LEFT, char
@@ -745,11 +815,11 @@ class StringFunction(Expr):
                 (column,) = columns
                 width, char = self.options
             else:  # pragma: no cover
-                (column, width) = columns
+                (column, width_col) = columns
                 (char,) = self.options
                 # TODO: Maybe accept a string scalar in
                 # cudf::strings::pad to avoid DtoH transfer
-                width = width.obj.to_scalar().to_py()
+                width = width_col.obj.to_scalar().to_py()
             return Column(
                 plc.strings.padding.pad(
                     column.obj, width, plc.strings.SideType.RIGHT, char
