@@ -18,7 +18,7 @@ def get_polars_specifier(deps_yaml_path):
     try:
         includes = deps["files"]["all"]["includes"]
         if "run_cudf_polars" not in includes:
-            raise KeyError
+            raise KeyError()
     except KeyError:
         raise RuntimeError("run_cudf_polars not found in dependencies.yaml")
 
