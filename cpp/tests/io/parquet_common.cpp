@@ -478,9 +478,9 @@ template <typename T>
 std::enable_if_t<std::is_same_v<T, cudf::string_view>, cudf::test::strings_column_wrapper>
 ascending()
 {
-  std::array<char, 10> buf;
-  auto elements = cudf::detail::make_counting_transform_iterator(0, [&buf](auto i) {
-    sprintf(buf.data(), "%09d", i);
+  auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+    std::array<char, 30> buf{};
+    snprintf(buf.data(), buf.size(), "%09d", i);
     return std::string(buf.data());
   });
   return cudf::test::strings_column_wrapper(elements, elements + num_ordered_rows);
@@ -490,9 +490,9 @@ template <typename T>
 std::enable_if_t<std::is_same_v<T, cudf::string_view>, cudf::test::strings_column_wrapper>
 descending()
 {
-  std::array<char, 10> buf;
-  auto elements = cudf::detail::make_counting_transform_iterator(0, [&buf](auto i) {
-    sprintf(buf.data(), "%09d", static_cast<short>(num_ordered_rows - i));
+  auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+    std::array<char, 30> buf{};
+    snprintf(buf.data(), buf.size(), "%09d", static_cast<short>(num_ordered_rows - i));
     return std::string(buf.data());
   });
   return cudf::test::strings_column_wrapper(elements, elements + num_ordered_rows);
@@ -502,9 +502,9 @@ template <typename T>
 std::enable_if_t<std::is_same_v<T, cudf::string_view>, cudf::test::strings_column_wrapper>
 unordered()
 {
-  std::array<char, 10> buf;
-  auto elements = cudf::detail::make_counting_transform_iterator(0, [&buf](auto i) {
-    sprintf(buf.data(), "%09d", (i % 2 == 0) ? i : (num_ordered_rows - i));
+  auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+    std::array<char, 30> buf{};
+    snprintf(buf.data(), buf.size(), "%09d", (i % 2 == 0) ? i : (num_ordered_rows - i));
     return std::string(buf.data());
   });
   return cudf::test::strings_column_wrapper(elements, elements + num_ordered_rows);

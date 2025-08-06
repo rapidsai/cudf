@@ -1,10 +1,11 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.copying cimport out_of_bounds_policy
 from pylibcudf.libcudf.lists cimport (
     contains as cpp_contains,
     explode as cpp_explode,
@@ -276,7 +277,11 @@ cpdef Column reverse(Column input):
     return Column.from_libcudf(move(c_result))
 
 
-cpdef Column segmented_gather(Column input, Column gather_map_list):
+cpdef Column segmented_gather(
+    Column input,
+    Column gather_map_list,
+    out_of_bounds_policy bounds_policy=out_of_bounds_policy.DONT_CHECK,
+):
     """Create a column with elements gathered based on the indices in gather_map_list
 
     For details, see :cpp:func:`segmented_gather`.
@@ -287,6 +292,16 @@ cpdef Column segmented_gather(Column input, Column gather_map_list):
         The input column.
     gather_map_list : Column
         The indices of the lists column to gather.
+    bounds_policy : OutOfBoundsPolicy
+        Can be ``DONT_CHECK`` or ``NULLIFY``. Selects whether or not to nullify
+        the output list row's element, when the gather index falls outside the range
+        ``[-n, n)``, where ``n`` is the number of elements in list row corresponding
+        to the gather-map row.
+
+        When ``bounds_policy`` is ``DONT_CHECK``, it's the caller's responsibility to
+        ensure that the indices in ``gather_map_list`` are in-bounds for the lists in
+        ``input`` before calling this function. The behavior with out-of-bounds indices
+        and ``DONT_CHECK`` is undefined and maybe produce invalid results or crash.
 
     Returns
     -------
@@ -303,6 +318,7 @@ cpdef Column segmented_gather(Column input, Column gather_map_list):
         c_result = cpp_gather.segmented_gather(
             list_view1.view(),
             list_view2.view(),
+            bounds_policy,
         )
     return Column.from_libcudf(move(c_result))
 
@@ -661,3 +677,6 @@ cpdef Column distinct(Column input, null_equality nulls_equal, nan_equality nans
             nans_equal,
         )
     return Column.from_libcudf(move(c_result))
+
+ConcatenateNullPolicy.__str__ = ConcatenateNullPolicy.__repr__
+DuplicateFindOption.__str__ = DuplicateFindOption.__repr__

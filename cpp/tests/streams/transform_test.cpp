@@ -21,19 +21,10 @@
 
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/jit/runtime_support.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 
-class TransformTest : public cudf::test::BaseFixture {
- protected:
-  void SetUp() override
-  {
-    if (!cudf::is_runtime_jit_supported()) {
-      GTEST_SKIP() << "Skipping tests that require runtime JIT support";
-    }
-  }
-};
+class TransformTest : public cudf::test::BaseFixture {};
 
 template <class dtype, class Data>
 void test_udf(char const* udf, Data data_init, cudf::size_type size, bool is_ptx)

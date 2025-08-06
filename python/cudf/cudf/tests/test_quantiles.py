@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 import re
 
@@ -93,14 +93,9 @@ def test_quantile_type_int_float(interpolation):
     assert type(expected) is type(actual)
 
 
-@pytest.mark.parametrize(
-    "data",
-    [
-        [float("nan"), float("nan"), 0.9],
-        [float("nan"), float("nan"), float("nan")],
-    ],
-)
-def test_ignore_nans(data):
+@pytest.mark.parametrize("val", [0.9, float("nan")])
+def test_ignore_nans(val):
+    data = [float("nan"), float("nan"), val]
     psr = pd.Series(data)
     gsr = cudf.Series(data, nan_as_null=False)
 

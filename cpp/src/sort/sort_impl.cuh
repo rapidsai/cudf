@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,14 @@
 
 #pragma once
 
-#include "common_sort_impl.cuh"
+#include "sort.hpp"
 #include "sort_column_impl.cuh"
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+
+#include <thrust/sequence.h>
+#include <thrust/sort.h>
 
 namespace cudf {
 namespace detail {

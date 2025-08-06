@@ -480,6 +480,10 @@ class DatetimeColumn(TemporalBaseColumn):
             self.dtype.name, "%Y-%m-%d %H:%M:%S"
         )
         if cudf.get_option("mode.pandas_compatible"):
+            if isinstance(dtype, np.dtype) and dtype.kind == "O":
+                raise TypeError(
+                    f"Cannot astype a datetimelike from {self.dtype} to {dtype}"
+                )
             if format.endswith("f"):
                 sub_second_res_len = 3
             else:
@@ -838,9 +842,6 @@ class DatetimeTZColumn(DatetimeColumn):
         )
         offsets_from_utc = offsets.take(indices, nullify=True)
         return self + offsets_from_utc
-
-    def strftime(self, format: str) -> StringColumn:
-        return self._local_time.strftime(format)
 
     def as_string_column(self, dtype) -> StringColumn:
         return self._local_time.as_string_column(dtype)

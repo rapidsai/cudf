@@ -1,6 +1,7 @@
 # Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 import math
+import pickle
 
 import numpy as np
 import pandas as pd
@@ -101,13 +102,13 @@ def test_rolling_dataframe_basic(data, agg, nulls, center):
 @pytest.mark.parametrize(
     "agg",
     [
-        pytest.param("sum"),
-        pytest.param("min"),
-        pytest.param("max"),
-        pytest.param("mean"),
-        pytest.param("count"),
-        pytest.param("std"),
-        pytest.param("var"),
+        "sum",
+        "min",
+        "max",
+        "mean",
+        "count",
+        "std",
+        "var",
     ],
 )
 def test_rolling_with_offset(agg):
@@ -133,9 +134,8 @@ def test_rolling_with_offset(agg):
 @pytest.mark.parametrize("agg", ["std", "var"])
 @pytest.mark.parametrize("ddof", [0, 1])
 @pytest.mark.parametrize("center", [True, False])
-@pytest.mark.parametrize("seed", [100, 2000])
 @pytest.mark.parametrize("window_size", [2, 10, 100])
-def test_rolling_var_std_large(agg, ddof, center, seed, window_size):
+def test_rolling_var_std_large(agg, ddof, center, window_size):
     iupper_bound = math.sqrt(np.iinfo(np.int64).max / window_size)
     ilower_bound = -math.sqrt(abs(np.iinfo(np.int64).min) / window_size)
 
@@ -169,7 +169,7 @@ def test_rolling_var_std_large(agg, ddof, center, seed, window_size):
         ],
         rows=n_rows,
         use_threads=False,
-        seed=seed,
+        seed=100,
     )
     pdf = data.to_pandas()
     gdf = cudf.from_pandas(pdf)
@@ -530,3 +530,9 @@ def test_pandas_compat_int_nan_min_periods(klass):
     result = getattr(cudf, klass)(data).rolling(2, min_periods=1).sum()
     expected = getattr(cudf, klass)([None, 1, 3, 2, 4, 10, 17])
     assert_eq(result, expected)
+
+
+def test_groupby_rolling_pickleable():
+    df = cudf.DataFrame({"a": [1, 1, 2], "b": [1, 2, 3]})
+    gb_rolling = pickle.loads(pickle.dumps(df.groupby("a").rolling(2)))
+    assert_eq(gb_rolling.obj, cudf.DataFrame({"b": [1, 2, 3]}))

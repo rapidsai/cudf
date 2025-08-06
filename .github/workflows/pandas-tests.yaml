@@ -4,12 +4,17 @@ on:
   workflow_dispatch:
     inputs:
       branch:
+        description: |
+          Git branch the workflow run targets.
+          Required even when 'sha' is provided because it is also used for organizing artifacts.
         required: true
         type: string
       date:
+        description: "Date (YYYY-MM-DD) this run is for. Used to organize artifacts produced by nightly builds"
         required: true
         type: string
       sha:
+        description: "Full git commit SHA to check out"
         required: true
         type: string
 
@@ -17,10 +22,9 @@ jobs:
   pandas-tests:
       # run the Pandas unit tests
       secrets: inherit
-      uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-25.08
+      uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-25.10
       with:
-        # This selects "ARCH=amd64 + the latest supported Python + CUDA".
-        matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
+        matrix_filter: '[{"ARCH": "amd64", "PY_VER": "3.13", "CUDA_VER": "12.9.1", "LINUX_VER": "ubuntu24.04", "GPU": "l4", "DRIVER": "latest", "DEPENDENCIES": "newest"}]'
         build_type: nightly
         branch: ${{ inputs.branch }}
         date: ${{ inputs.date }}

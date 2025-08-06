@@ -17,6 +17,14 @@ compute-sanitizer --tool memcheck custom_optimized names.csv
 compute-sanitizer --tool memcheck custom_prealloc names.csv
 compute-sanitizer --tool memcheck custom_with_malloc names.csv
 
+compute-sanitizer --tool memcheck compute_checksum_jit info.csv output.csv
+compute-sanitizer --tool memcheck extract_email_jit info.csv output.csv
+compute-sanitizer --tool memcheck extract_email_precompiled info.csv output.csv
+compute-sanitizer --tool memcheck format_phone_jit info.csv output.csv
+compute-sanitizer --tool memcheck format_phone_precompiled info.csv output.csv
+compute-sanitizer --tool memcheck localize_phone_jit info.csv output.csv
+compute-sanitizer --tool memcheck localize_phone_precompiled info.csv output.csv
+
 compute-sanitizer --tool memcheck parquet_io example.parquet
 compute-sanitizer --tool memcheck parquet_io example.parquet output.parquet DELTA_BINARY_PACKED ZSTD TRUE
 

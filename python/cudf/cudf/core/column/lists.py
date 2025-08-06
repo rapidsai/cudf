@@ -6,9 +6,9 @@ import itertools
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Literal, cast
 
+import numpy as np
 import pandas as pd
 import pyarrow as pa
-from typing_extensions import Self
 
 import pylibcudf as plc
 
@@ -299,6 +299,11 @@ class ListColumn(ColumnBase):
         """
         Create a strings column from a list column
         """
+        if cudf.get_option("mode.pandas_compatible"):
+            if isinstance(dtype, np.dtype) and dtype.kind == "O":
+                raise TypeError(
+                    f"Cannot cast a list from {self.dtype} to {dtype}"
+                )
         lc = self._transform_leaves(lambda col: col.as_string_column(dtype))
 
         # Separator strings to match the Python format
@@ -489,5 +494,62 @@ class ListColumn(ColumnBase):
             plc.lists.segmented_gather(
                 self.to_pylibcudf(mode="read"),
                 gather_map.to_pylibcudf(mode="read"),
+            )
+        )
+
+    @acquire_spill_lock()
+    def join_list_elements(
+        self,
+        separator: str | StringColumn,
+        sep_na_rep: str,
+        string_na_rep: str,
+    ) -> StringColumn:
+        if isinstance(separator, str):
+            sep = pa_scalar_to_plc_scalar(pa.scalar(separator))
+        else:
+            sep = separator.to_pylibcudf(mode="read")
+        plc_column = plc.strings.combine.join_list_elements(
+            self.to_pylibcudf(mode="read"),
+            sep,
+            pa_scalar_to_plc_scalar(pa.scalar(sep_na_rep)),
+            pa_scalar_to_plc_scalar(pa.scalar(string_na_rep)),
+            plc.strings.combine.SeparatorOnNulls.YES,
+            plc.strings.combine.OutputIfEmptyList.NULL_ELEMENT,
+        )
+        return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def minhash_ngrams(
+        self,
+        width: int,
+        seed: np.uint32,
+        a: NumericalColumn,
+        b: NumericalColumn,
+    ) -> Self:
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
+            plc.nvtext.minhash.minhash_ngrams(
+                self.to_pylibcudf(mode="read"),
+                width,
+                seed,
+                a.to_pylibcudf(mode="read"),
+                b.to_pylibcudf(mode="read"),
+            )
+        )
+
+    @acquire_spill_lock()
+    def minhash64_ngrams(
+        self,
+        width: int,
+        seed: np.uint64,
+        a: NumericalColumn,
+        b: NumericalColumn,
+    ) -> Self:
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
+            plc.nvtext.minhash.minhash64_ngrams(
+                self.to_pylibcudf(mode="read"),
+                width,
+                seed,
+                a.to_pylibcudf(mode="read"),
+                b.to_pylibcudf(mode="read"),
             )
         )

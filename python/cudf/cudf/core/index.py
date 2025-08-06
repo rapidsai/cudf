@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import itertools
 import operator
 import warnings
@@ -51,7 +52,6 @@ from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
-    _dtype_pandas_compatible,
     _maybe_convert_to_default_type,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
@@ -917,6 +917,7 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
                     (1, 'Blue')],
                 )
         """
+
         if not isinstance(other, Index):
             other = Index(
                 other,
@@ -929,10 +930,16 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
                 f"[None, False, True]; {sort} was passed."
             )
 
-        if not len(self) or not len(other) or self.equals(other):
-            common_dtype = _dtype_pandas_compatible(
-                find_common_type([self.dtype, other.dtype])
-            )
+        if self.equals(other):
+            if self.has_duplicates:
+                result = self.unique()._get_reconciled_name_object(other)
+            else:
+                result = self._get_reconciled_name_object(other)
+            if sort is True:
+                result = result.sort_values()  # type: ignore[assignment]
+            return result
+        if not len(self) or not len(other):
+            common_dtype = find_common_type([self.dtype, other.dtype])
 
             lhs = self.unique() if self.has_duplicates else self
             rhs = other
@@ -1712,6 +1719,9 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
         if gather_map.dtype.kind not in "iu":
             gather_map = gather_map.astype(SIZE_TYPE_DTYPE)
 
+        # TODO: This call is purely to validate the bounds if
+        # check_bounds is True, require instead that the caller
+        # provides a GatherMap.
         GatherMap(gather_map, len(self), nullify=not check_bounds or nullify)
         return self._from_columns_like_self(
             [
@@ -1866,6 +1876,8 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
             result = _concat_range_index(non_empties)
         else:
             data = concat_columns([o._column for o in non_empties])
+            if cls is IntervalIndex:
+                data = data._with_type_metadata(non_empties[0]._column.dtype)
             result = Index._from_column(data)
 
         names = {obj.name for obj in objs}
@@ -3574,22 +3586,26 @@ class DatetimeIndex(Index):
             return pd.Timestamp(value)
         return value
 
+    def find_label_range(self, loc: slice) -> slice:
+        # For indexing, try to interpret slice arguments as datetime-convertible
+        if any(
+            not (val is None or isinstance(val, (str, datetime.datetime)))
+            for val in (loc.start, loc.stop)
+        ):
+            raise TypeError(
+                "Can only slice DatetimeIndex with a string or datetime objects"
+            )
+        new_slice = slice(
+            pd.to_datetime(loc.start) if loc.start is not None else None,
+            pd.to_datetime(loc.stop) if loc.stop is not None else None,
+            loc.step,
+        )
+        return super().find_label_range(new_slice)
+
     @_performance_tracking
     def copy(self, name=None, deep=False):
         idx_copy = super().copy(name=name, deep=deep)
         return idx_copy._copy_type_metadata(self)
-
-    def searchsorted(
-        self,
-        value,
-        side: Literal["left", "right"] = "left",
-        ascending: bool = True,
-        na_position: Literal["first", "last"] = "last",
-    ):
-        value = self.dtype.type(value)
-        return super().searchsorted(
-            value, side=side, ascending=ascending, na_position=na_position
-        )
 
     def as_unit(self, unit: str, round_ok: bool = True) -> Self:
         """
@@ -5222,6 +5238,12 @@ class IntervalIndex(Index):
         IntervalIndex([(0, 1], (1, 2], (2, 3]], dtype='interval[int64, right]')
         """
         breaks = as_column(breaks, dtype=dtype)
+        if (
+            len(breaks) == 0
+            and dtype is None
+            and breaks.dtype == CUDF_STRING_DTYPE
+        ):
+            breaks = breaks.astype(np.dtype(np.int64))
         if copy:
             breaks = breaks.copy()
         left_col = breaks.slice(0, len(breaks) - 1)
