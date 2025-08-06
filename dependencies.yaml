@@ -23,6 +23,7 @@ files:
       - docs
       - iwyu
       - notebooks
+      - numpy_run
       - py_version
       - pyarrow_run
       - rapids_build_skbuild
@@ -69,6 +70,7 @@ files:
       - test_python_common
       - test_python_cudf_common
       - test_python_cudf
+      - numpy_run
       - test_python_pylibcudf
       - depends_on_cudf
       - depends_on_pylibcudf
@@ -77,6 +79,7 @@ files:
     output: none
     includes:
       - cuda_version
+      - numpy_run
       - py_version
       - test_python_common
       - test_python_pylibcudf
@@ -86,6 +89,7 @@ files:
     output: none
     includes:
       - cuda_version
+      - numpy_run
       - py_version
       - test_python_common
       - test_python_cudf_common
@@ -169,6 +173,7 @@ files:
     extras:
       table: project
     includes:
+      - numpy_run
       - run_common
       - run_cudf
       - pyarrow_run
@@ -261,6 +266,7 @@ files:
       table: project.optional-dependencies
       key: test
     includes:
+      - numpy_run
       - pyarrow_run
       - test_python_common
       - test_python_cudf_common
@@ -311,6 +317,7 @@ files:
       table: project.optional-dependencies
       key: test
     includes:
+      - numpy_run
       - test_python_common
       - test_python_cudf_polars
   py_build_dask_cudf:
@@ -326,6 +333,7 @@ files:
     extras:
       table: project
     includes:
+      - numpy_run
       - run_common
       - run_dask_cudf
       - depends_on_cudf
@@ -489,6 +497,11 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
         - &numba-cuda-dep numba-cuda>=0.14.0,<0.15.0a0
+  numpy_run:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - numpy>=1.23,<3.0a0
   pyarrow_run:
     common:
       - output_types: [conda]
@@ -632,7 +645,6 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - fsspec>=0.6.0
-          - &numpy numpy>=1.23,<3.0a0
           - pandas>=2.0,<2.4.0dev0
   run_pylibcudf:
     common:
@@ -816,7 +828,6 @@ dependencies:
           - mmh3
           - nanoarrow
           - hypothesis>=6.131.7
-          - *numpy
           - pandas
       - output_types: conda
         packages:
@@ -889,7 +900,6 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - dask-cuda==25.10.*,>=0.0.0a0
-          - *numpy
           - rich
   test_python_narwhals:
     common:
