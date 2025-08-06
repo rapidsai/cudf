@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -84,15 +84,15 @@ TEST_F(SequenceTestFixture, BadTypes)
 {
   cudf::string_scalar string_init("zero");
   cudf::string_scalar string_step("???");
-  EXPECT_THROW(cudf::sequence(10, string_init, string_step), cudf::logic_error);
+  EXPECT_THROW(cudf::sequence(10, string_init, string_step), std::invalid_argument);
 
   cudf::numeric_scalar<bool> bool_init(true);
   cudf::numeric_scalar<bool> bool_step(false);
-  EXPECT_THROW(cudf::sequence(10, bool_init, bool_step), cudf::logic_error);
+  EXPECT_THROW(cudf::sequence(10, bool_init, bool_step), cudf::data_type_error);
 
   cudf::timestamp_scalar<cudf::timestamp_s> ts_init(cudf::duration_s{10}, true);
   cudf::timestamp_scalar<cudf::timestamp_s> ts_step(cudf::duration_s{10}, true);
-  EXPECT_THROW(cudf::sequence(10, ts_init, ts_step), cudf::logic_error);
+  EXPECT_THROW(cudf::sequence(10, ts_init, ts_step), std::invalid_argument);
 }
 
 TEST_F(SequenceTestFixture, MismatchedInputs)
