@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from libcpp.memory cimport unique_ptr
 from libcpp.pair cimport pair
 from libcpp.utility cimport move
@@ -117,3 +117,5 @@ cpdef Column filter_characters(
             dereference(c_replacement),
         )
     return Column.from_libcudf(move(c_result))
+
+FilterType.__str__ = FilterType.__repr__
