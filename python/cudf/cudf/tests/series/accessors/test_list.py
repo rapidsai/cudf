@@ -78,7 +78,7 @@ def test_take(data, idx):
     ps = pd.Series(data)
     gs = cudf.from_pandas(ps)
 
-    expected = pd.Series(zip(ps, idx)).map(
+    expected = pd.Series(zip(ps, idx, strict=True)).map(
         lambda x: [x[0][i] for i in x[1]] if x[0] is not None else None
     )
     got = gs.list.take(idx)

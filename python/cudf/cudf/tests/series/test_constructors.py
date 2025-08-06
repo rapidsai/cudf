@@ -732,6 +732,11 @@ def test_to_dense_array():
     assert filled.size == len(sr)
 
 
+def test_series_np_array_all_nan_object_raises():
+    with pytest.raises(MixedTypeError):
+        cudf.Series(np.array([np.nan, np.nan], dtype=object))
+
+
 @pytest.mark.parametrize(
     "ps",
     [
