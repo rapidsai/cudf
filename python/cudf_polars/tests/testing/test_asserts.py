@@ -85,11 +85,17 @@ def test_collect_assert_raises():
             cudf_except=pl.exceptions.InvalidOperationError,
         )
 
-    assert_collect_raises(
-        df.select(pl.col("a") + 1),
-        polars_except=None,
-        cudf_except=None,
-    )
+    with pytest.raises(AssertionError, match="no exception was expected"):
+        assert_collect_raises(
+            q,
+            polars_except=pl.exceptions.InvalidOperationError,
+        )
+    
+    with pytest.raises(AssertionError, match="no exception was expected"):
+        assert_collect_raises(
+            q,
+            cudf_except=pl.exceptions.InvalidOperationError,
+        )
 
 
 def test_sink_ir_translation_raises_bad_extension():

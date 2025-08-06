@@ -53,6 +53,12 @@ def test_from_polars_all_names(function):
             "FieldByIndex",
             "MultipleFields",
         }
+    if POLARS_VERSION_LT_132 and function == TemporalFunction:
+        cudf_polars_names_set = cudf_polars_names_set - {
+            "DaysInMonth",
+        }
+    if POLARS_VERSION_LT_132 and function == BooleanFunction:
+        cudf_polars_names_set = cudf_polars_names_set - {"IsClose"}
     assert polars_names_set == cudf_polars_names_set
     names = function.Name
     if not POLARS_VERSION_LT_132 and function == StructFunction:
@@ -60,6 +66,10 @@ def test_from_polars_all_names(function):
             StructFunction.Name.FieldByIndex,
             StructFunction.Name.MultipleFields,
         }
+    if POLARS_VERSION_LT_132 and function == TemporalFunction:
+        names = set(names) - {TemporalFunction.Name.DaysInMonth}
+    if POLARS_VERSION_LT_132 and function == BooleanFunction:
+        names = set(names) - {BooleanFunction.Name.IsClose}
     for name in names:
         attr = getattr(polars_function, name.name)
         assert function.Name.from_polars(attr) == name

@@ -383,11 +383,14 @@ class StringFunction(Expr):
                     plc.DataType(plc.TypeId.BOOL8),
                 )
 
-                if not plc.reduce.reduce(
-                    all_gt_0,
-                    plc.aggregation.all(),
-                    plc.DataType(plc.TypeId.BOOL8),
-                ).to_py():
+                if (
+                    POLARS_VERSION_LT_132
+                    and not plc.reduce.reduce(
+                        all_gt_0,
+                        plc.aggregation.all(),
+                        plc.DataType(plc.TypeId.BOOL8),
+                    ).to_py()
+                ):  # pragma: no cover
                     raise InvalidOperationError("fill conversion failed.")
 
                 return Column(
@@ -795,10 +798,10 @@ class StringFunction(Expr):
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.PadStart:
-            if POLARS_VERSION_LT_132:
+            if POLARS_VERSION_LT_132:  # pragma: no cover
                 (column,) = columns
                 width, char = self.options
-            else:  # pragma: no cover
+            else:
                 (column, width_col) = columns
                 (char,) = self.options
                 # TODO: Maybe accept a string scalar in
@@ -811,10 +814,10 @@ class StringFunction(Expr):
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.PadEnd:
-            if POLARS_VERSION_LT_132:
+            if POLARS_VERSION_LT_132:  # pragma: no cover
                 (column,) = columns
                 width, char = self.options
-            else:  # pragma: no cover
+            else:
                 (column, width_col) = columns
                 (char,) = self.options
                 # TODO: Maybe accept a string scalar in

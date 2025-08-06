@@ -11,6 +11,7 @@ from cudf_polars.testing.asserts import (
     assert_ir_translation_raises,
     get_default_engine,
 )
+from cudf_polars.utils.versions import POLARS_VERSION_LT_132
 
 
 @pytest.fixture(params=[False, True], ids=["nulls_not_equal", "nulls_equal"])
@@ -159,7 +160,10 @@ def test_join_where(left, right, conditions, zlice):
         assert_gpu_result_equal(q_len)
 
 
-def test_cross_join_empty_right_table():
+def test_cross_join_empty_right_table(request):
+    request.applymarker(
+        pytest.mark.xfail(condition=POLARS_VERSION_LT_132, reason="nested loop join")
+    )
     a = pl.LazyFrame({"a": [1, 2, 3], "x": [7, 2, 1]})
     b = pl.LazyFrame({"b": [2, 2, 2], "x": [7, 1, 3]})
 

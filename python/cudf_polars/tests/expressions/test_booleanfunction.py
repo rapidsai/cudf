@@ -12,7 +12,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_130
+from cudf_polars.utils.versions import POLARS_VERSION_LT_130, POLARS_VERSION_LT_132
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -244,7 +244,12 @@ def test_expr_is_in_empty_list():
     assert_gpu_result_equal(q)
 
 
-def test_boolean_is_close():
+def test_boolean_is_close(request):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=POLARS_VERSION_LT_132, reason="Not supported until polars 1.32"
+        )
+    )
     ldf = pl.LazyFrame({"a": [1.0, 1.2, 1.4, 1.45, 1.6]})
     q = ldf.select(pl.col("a").is_close(1.4, abs_tol=0.1))
 

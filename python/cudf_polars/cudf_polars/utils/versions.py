@@ -6,12 +6,11 @@
 # ruff: noqa: SIM300
 from __future__ import annotations
 
+from importlib import metadata
+
 from packaging.version import parse
 
-from polars import __version__
-
-POLARS_VERSION = parse(__version__)
-
+POLARS_VERSION = parse(metadata.version("polars"))
 POLARS_LOWER_BOUND = parse("1.28")
 POLARS_VERSION_LT_129 = POLARS_VERSION < parse("1.29")
 POLARS_VERSION_LT_130 = POLARS_VERSION < parse("1.30")
