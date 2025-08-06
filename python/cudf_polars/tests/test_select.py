@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import decimal
+
 import pytest
 
 import polars as pl
@@ -24,6 +26,14 @@ def test_select():
         pl.col("a") + pl.col("b"), (pl.col("a") * 2 + pl.col("b")).alias("d")
     )
 
+    assert_gpu_result_equal(query)
+
+
+def test_select_decimal():
+    ldf = pl.LazyFrame(
+        {"a": pl.Series(values=[decimal.Decimal("1.0"), None], dtype=pl.Decimal(3, 1))}
+    )
+    query = ldf.select(pl.col("a"))
     assert_gpu_result_equal(query)
 
 
