@@ -42,7 +42,8 @@ git clone --recursive https://github.com/rapidsai/cudf.git -b branch-25.10
 ```bash
 cd cudf
 export WORKSPACE=`pwd`
-scl enable gcc-toolset-11 "java/ci/build-in-docker.sh"
+source java/ci/env.sh
+${sclCMD} "java/ci/build-in-docker.sh"
 ```
 
 ### The output

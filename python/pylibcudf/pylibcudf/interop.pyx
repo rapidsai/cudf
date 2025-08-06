@@ -18,11 +18,14 @@ from pylibcudf.libcudf.interop cimport (
 )
 from pylibcudf.libcudf.table.table cimport table
 
+from rmm.pylibrmm.stream cimport Stream
+
 from .column cimport Column
 from .scalar cimport Scalar
 from .table cimport Table
 from .types cimport DataType, type_id
 from .types import LIBCUDF_TO_ARROW_TYPES
+from .utils cimport _get_stream
 from ._interop_helpers import ColumnMetadata
 
 try:
@@ -177,7 +180,7 @@ if pa is not None:
         return to_arrow(Column.from_scalar(plc_object, 1), metadata=metadata)[0]
 
 
-cpdef Table from_dlpack(object managed_tensor):
+cpdef Table from_dlpack(object managed_tensor, Stream stream=None):
     """
     Convert a DLPack DLTensor into a cudf table.
 
@@ -187,6 +190,8 @@ cpdef Table from_dlpack(object managed_tensor):
     ----------
     managed_tensor : PyCapsule
         A 1D or 2D column-major (Fortran order) tensor.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -202,6 +207,7 @@ cpdef Table from_dlpack(object managed_tensor):
     if dlpack_tensor is NULL:
         raise ValueError("PyCapsule object contained a NULL pointer")
     PyCapsule_SetName(managed_tensor, "used_dltensor")
+    stream = _get_stream(stream)
 
     # Note: A copy is always performed when converting the dlpack
     # data to a libcudf table. We also delete the dlpack_tensor pointer
@@ -209,14 +215,14 @@ cpdef Table from_dlpack(object managed_tensor):
     # TODO: https://github.com/rapidsai/cudf/issues/10874
     # TODO: https://github.com/rapidsai/cudf/issues/10849
     with nogil:
-        c_result = cpp_from_dlpack(dlpack_tensor)
+        c_result = cpp_from_dlpack(dlpack_tensor, stream.view())
 
-    cdef Table result = Table.from_libcudf(move(c_result))
+    cdef Table result = Table.from_libcudf(move(c_result), stream)
     dlpack_tensor.deleter(dlpack_tensor)
     return result
 
 
-cpdef object to_dlpack(Table input):
+cpdef object to_dlpack(Table input, Stream stream=None):
     """
     Convert a cudf table into a DLPack DLTensor.
 
@@ -226,6 +232,8 @@ cpdef object to_dlpack(Table input):
     ----------
     input : Table
         A 1D or 2D column-major (Fortran order) tensor.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -239,9 +247,10 @@ cpdef object to_dlpack(Table input):
                 "Input is required to have null count as zero."
             )
     cdef DLManagedTensor *dlpack_tensor
+    stream = _get_stream(stream)
 
     with nogil:
-        dlpack_tensor = cpp_to_dlpack(input.view())
+        dlpack_tensor = cpp_to_dlpack(input.view(), stream.view())
 
     return PyCapsule_New(
         dlpack_tensor,

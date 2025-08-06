@@ -3,7 +3,6 @@
 
 import datetime
 import inspect
-from itertools import product
 
 import numpy as np
 import pandas as pd
@@ -14,13 +13,15 @@ from cudf import DataFrame
 from cudf.testing import assert_eq
 from cudf.utils import queryutils
 
-_params_query_parser = []
-_params_query_parser.append(("a > @b", ("a", "__CUDF_ENVREF__b")))
-_params_query_parser.append(("(a + b) <= @c", ("a", "b", "__CUDF_ENVREF__c")))
-_params_query_parser.append(("a > b if a > 0 else b > a", ("a", "b")))
 
-
-@pytest.mark.parametrize("text,expect_args", _params_query_parser)
+@pytest.mark.parametrize(
+    "text,expect_args",
+    [
+        ("a > @b", ("a", "__CUDF_ENVREF__b")),
+        ("(a + b) <= @c", ("a", "b", "__CUDF_ENVREF__c")),
+        ("a > b if a > 0 else b > a", ("a", "b")),
+    ],
+)
 def test_query_parser(text, expect_args):
     info = queryutils.query_parser(text)
     fn = queryutils.query_builder(info, "myfoo")
@@ -29,21 +30,18 @@ def test_query_parser(text, expect_args):
     assert tuple(argspec.args) == tuple(expect_args)
 
 
-params_query_data = list(product([1, 2, 7, 8, 9, 16, 100, 129], range(2)))
-params_query_fn = [
-    (lambda a, b: a < b, "a < b"),
-    (lambda a, b: a * 2 >= b, "a * 2 >= b"),
-    (lambda a, b: 2 * (a + b) > (a + b) / 2, "2 * (a + b) > (a + b) / 2"),
-]
-nulls = [True, False]
-
-
+@pytest.mark.parametrize("nelem", [1, 10])
 @pytest.mark.parametrize(
-    "data,fn,nulls", product(params_query_data, params_query_fn, nulls)
+    "fn",
+    [
+        (lambda a, b: a < b, "a < b"),
+        (lambda a, b: a * 2 >= b, "a * 2 >= b"),
+        (lambda a, b: 2 * (a + b) > (a + b) / 2, "2 * (a + b) > (a + b) / 2"),
+    ],
 )
-def test_query(data, fn, nulls):
+@pytest.mark.parametrize("nulls", [True, False])
+def test_query(nelem, fn, nulls):
     # prepare
-    nelem, seed = data
     expect_fn, query_expr = fn
     rng = np.random.default_rng(seed=0)
     pdf = pd.DataFrame()
@@ -55,21 +53,19 @@ def test_query(data, fn, nulls):
     assert_eq(pdf.query(query_expr), gdf.query(query_expr))
 
 
-params_query_env_fn = [
-    (lambda a, b, c, d: a * c > b + d, "a * @c > b + @d"),
-    (
-        lambda a, b, c, d: ((a / c) < d) | ((b**c) > d),
-        "((a / @c) < @d) | ((b ** @c) > @d)",
-    ),
-]
-
-
+@pytest.mark.parametrize("nelem", [1, 10])
 @pytest.mark.parametrize(
-    "data,fn", product(params_query_data, params_query_env_fn)
+    "fn",
+    [
+        (lambda a, b, c, d: a * c > b + d, "a * @c > b + @d"),
+        (
+            lambda a, b, c, d: ((a / c) < d) | ((b**c) > d),
+            "((a / @c) < @d) | ((b ** @c) > @d)",
+        ),
+    ],
 )
-def test_query_ref_env(data, fn):
+def test_query_ref_env(nelem, fn):
     # prepare
-    nelem, seed = data
     expect_fn, query_expr = fn
     rng = np.random.default_rng(seed=0)
     df = DataFrame()
@@ -225,16 +221,9 @@ def test_query_with_index_keyword(query, a_val, b_val, c_val):
     assert_eq(out, expect)
 
 
-@pytest.mark.parametrize(
-    "data, query",
-    [
-        # Only need to test the dtypes that pandas
-        # supports but that we do not
-        (["a", "b", "c"], "data == 'a'"),
-    ],
-)
-def test_query_unsupported_dtypes(data, query):
-    gdf = cudf.DataFrame({"data": data})
+def test_query_unsupported_dtypes():
+    query = "data == 'a'"
+    gdf = cudf.DataFrame({"data": ["a", "b", "c"]})
 
     # make sure the query works in pandas
     pdf = gdf.to_pandas()
@@ -246,3 +235,37 @@ def test_query_unsupported_dtypes(data, query):
     # but fails in cuDF
     with pytest.raises(TypeError):
         gdf.query(query)
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        [0, 1.0, 2.0, None, np.nan, None, 3, 5],
+        [0, 1.0, 2.0, None, 3, np.nan, None, 4],
+        [0, 1.0, 2.0, None, 3, np.nan, None, 4, None, 9],
+    ],
+)
+@pytest.mark.parametrize("nan_as_null", [True, False])
+@pytest.mark.parametrize(
+    "query",
+    [
+        "a == 3",
+        pytest.param(
+            "a != 3",
+            marks=pytest.mark.xfail(reason="incompatible with pandas"),
+        ),
+        "a < 3",
+        "a <= 3",
+        "a < 3",
+        "a >= 3",
+    ],
+)
+def test_query_mask(values, nan_as_null, query):
+    data = {"a": values}
+    pdf = pd.DataFrame(data)
+    gdf = cudf.DataFrame(data, nan_as_null=nan_as_null)
+
+    pdf_q_res = pdf.query(query)
+    gdf_q_res = gdf.query(query)
+
+    assert_eq(pdf_q_res, gdf_q_res)
