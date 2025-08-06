@@ -514,6 +514,11 @@ def test_isocalendar_series(data):
         "%B",
         "%a",
         "%A",
+        "%U_",
+        "_%b",
+        "%B*",
+        "%a ",
+        "%A1",
     ],
 )
 def test_datetime_strftime(data, datetime_types_as_str, date_format):
