@@ -314,6 +314,12 @@ def integer_types_as_str(request):
     return request.param
 
 
+@pytest.fixture
+def integer_types_as_str2(integer_types_as_str):
+    """Used for testing cartesian product of integer_types_as_str"""
+    return integer_types_as_str
+
+
 @pytest.fixture(params=float_types)
 def float_types_as_str(request):
     """
@@ -332,6 +338,12 @@ def numeric_types_as_str(request):
     - "float32", "float64"
     """
     return request.param
+
+
+@pytest.fixture
+def numeric_types_as_str2(numeric_types_as_str):
+    """Used for testing cartesian product of numeric_types_as_str"""
+    return numeric_types_as_str
 
 
 @pytest.fixture(
