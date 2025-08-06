@@ -50,7 +50,9 @@ def test_bool_raises():
 
 
 def test_multi_index_contains_hashable():
-    gidx = cudf.MultiIndex.from_tuples(zip(["foo", "bar", "baz"], [1, 2, 3], strict=True))
+    gidx = cudf.MultiIndex.from_tuples(
+        zip(["foo", "bar", "baz"], [1, 2, 3], strict=True)
+    )
     pidx = gidx.to_pandas()
 
     assert_exceptions_equal(
@@ -66,7 +68,9 @@ def test_multiindex_codes():
         [("a", "b"), ("a", "c"), ("b", "c")], names=["A", "Z"]
     )
 
-    for p_array, g_array in zip(midx.to_pandas().codes, midx.codes, strict=True):
+    for p_array, g_array in zip(
+        midx.to_pandas().codes, midx.codes, strict=True
+    ):
         assert_eq(p_array, g_array)
 
 
