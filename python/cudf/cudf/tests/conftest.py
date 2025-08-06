@@ -192,6 +192,26 @@ def set_decomp_env_vars(monkeypatch, request):
         yield
 
 
+@pytest.fixture(
+    params=[
+        "min",
+        "max",
+        "sum",
+        "product",
+        "quantile",
+        "all",
+        "any",
+        "std",
+        "var",
+        "median",
+        "kurtosis",
+        "skew",
+    ]
+)
+def reduction_methods(request):
+    return request.param
+
+
 signed_integer_types = ["int8", "int16", "int32", "int64"]
 unsigned_integer_types = ["uint8", "uint16", "uint32", "uint64"]
 float_types = ["float32", "float64"]
