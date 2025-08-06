@@ -347,26 +347,26 @@ def test_datetime_cast_time_unit_duration(dtype, time_unit):
 
 
 @pytest.mark.parametrize(
-    "datetime_dtype",
-    [
-        pl.Datetime("ms"),
-        pl.Datetime("us"),
-        pl.Datetime("ns"),
-    ],
+    "datetime_dtype", [pl.Datetime("ms"), pl.Datetime("us"), pl.Datetime("ns")]
 )
 def test_datetime_from_integer(datetime_dtype):
     sr = pl.Series(
         "date",
         [
-            0,  # 1970-01-01
-            946684800000,  # 2000-01-01
-            1262304000000,  # 2010-01-01
-            1577836800000,  # 2020-01-01
-            1735689600000,  # 2025-01-01
+            0,  # Epoch
+            946684800000,
+            -315619200000,
+            -2208988800000,
+            1262304000000,
+            1577836800000,
+            1735689600000,
+            None,
+            2**63 - 1,
+            -(2**63),
         ],
         dtype=pl.Int64(),
     )
-    df = pl.DataFrame({"data": sr}).lazy()
 
+    df = pl.DataFrame({"data": sr}).lazy()
     q = df.select(pl.col("data").cast(datetime_dtype).alias("datetime_from_int"))
     assert_gpu_result_equal(q)
