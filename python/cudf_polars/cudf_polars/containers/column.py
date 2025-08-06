@@ -306,7 +306,7 @@ class Column:
                 upcasted.offset(),
                 upcasted.children(),
             )
-            return Column(result, dtype=dtype)
+            return Column(result, dtype=dtype).sorted_like(self)
         else:
             result = Column(plc.unary.cast(self.obj, plc_dtype), dtype=dtype)
             if is_order_preserving_cast(self.obj.type(), plc_dtype):

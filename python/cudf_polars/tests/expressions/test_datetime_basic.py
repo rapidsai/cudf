@@ -348,37 +348,35 @@ def test_datetime_cast_time_unit_duration(dtype, time_unit):
 
 
 @pytest.mark.parametrize(
-    "datetime_dtype, integer_dtype, values",
+    "datetime_dtype",
     [
-        # Int64
-        (pl.Datetime("ms"), pl.Int64(), [0, 1, 100, 2**63 - 1, -(2**63), -100]),
-        (pl.Datetime("us"), pl.Int64(), [0, 1, 100, 2**63 - 1, -(2**63), -100]),
-        (pl.Datetime("ns"), pl.Int64(), [0, 1, 100, 2**63 - 1, -(2**63), -100]),
-        # Int32
-        (pl.Datetime("ms"), pl.Int32(), [0, 1, 100, 2**31 - 1, -(2**31), -100]),
-        (pl.Datetime("us"), pl.Int32(), [0, 1, 100, 2**31 - 1, -(2**31), -100]),
-        (pl.Datetime("ns"), pl.Int32(), [0, 1, 100, 2**31 - 1, -(2**31), -100]),
-        # Int16
-        (pl.Datetime("ms"), pl.Int16(), [0, 1, 100, 2**15 - 1, -(2**15), -100]),
-        (pl.Datetime("us"), pl.Int16(), [0, 1, 100, 2**15 - 1, -(2**15), -100]),
-        (pl.Datetime("ns"), pl.Int16(), [0, 1, 100, 2**15 - 1, -(2**15), -100]),
-        # Int8
-        (pl.Datetime("ms"), pl.Int8(), [0, 1, 100, 2**7 - 1, -(2**7), -100]),
-        (pl.Datetime("us"), pl.Int8(), [0, 1, 100, 2**7 - 1, -(2**7), -100]),
-        (pl.Datetime("ns"), pl.Int8(), [0, 1, 100, 2**7 - 1, -(2**7), -100]),
-        # UInt64
-        (pl.Datetime("ms"), pl.UInt64(), [0, 1, 100, 2**64 - 1]),
-        (pl.Datetime("us"), pl.UInt64(), [0, 1, 100, 2**64 - 1]),
-        (pl.Datetime("ns"), pl.UInt64(), [0, 1, 100, 2**64 - 1]),
-        # UInt32
-        (pl.Datetime("ms"), pl.UInt32(), [0, 1, 100, 2**32 - 1]),
-        (pl.Datetime("us"), pl.UInt32(), [0, 1, 100, 2**32 - 1]),
-        (pl.Datetime("ns"), pl.UInt32(), [0, 1, 100, 2**32 - 1]),
+        pl.Datetime("ms"),
+        pl.Datetime("us"),
+        pl.Datetime("ns"),
     ],
 )
-def test_datetime_from_integer(datetime_dtype, integer_dtype, values):
-    sr = pl.Series("date", values, dtype=integer_dtype)
-    df = pl.DataFrame({"data": sr}).lazy()
+@pytest.mark.parametrize(
+    "integer_dtype",
+    [
+        pl.Int64(),
+        pl.UInt64(),
+        pl.Int32(),
+        pl.UInt32(),
+        pl.Int16(),
+        pl.UInt16(),
+        pl.Int8(),
+        pl.UInt8(),
+    ],
+)
+def test_datetime_from_integer(datetime_dtype, integer_dtype):
+    values = [
+        0,
+        1,
+        100,
+        pl.select(integer_dtype.max()).item(),
+        pl.select(integer_dtype.min()).item(),
+    ]
+    df = pl.LazyFrame({"data": pl.Series(values, dtype=integer_dtype)})
     q = df.select(pl.col("data").cast(datetime_dtype).alias("datetime_from_int"))
     if integer_dtype == pl.UInt64():
         assert_collect_raises(
