@@ -14,7 +14,9 @@ def test_groupby_maintain_order_random(with_nulls):
     key_names = [f"key{key}" for key in range(nkeys)]
     key_values = [rng.integers(100, size=nrows) for _ in key_names]
     value = rng.integers(-100, 100, size=nrows)
-    df = cudf.DataFrame(dict(zip(key_names, key_values), value=value))
+    df = cudf.DataFrame(
+        dict(zip(key_names, key_values, strict=True), value=value)
+    )
     if with_nulls:
         for key in key_names:
             df.loc[df[key] == 1, key] = None
