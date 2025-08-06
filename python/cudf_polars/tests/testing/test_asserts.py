@@ -87,6 +87,12 @@ def test_collect_assert_raises():
             cudf_except=pl.exceptions.InvalidOperationError,
         )
 
+    assert_collect_raises(
+        df.select(pl.col("a") + 1),
+        polars_except=None,
+        cudf_except=None,
+    )
+
 
 def test_sink_ir_translation_raises_bad_extension():
     df = pl.LazyFrame({"a": [1, 2, 3]})

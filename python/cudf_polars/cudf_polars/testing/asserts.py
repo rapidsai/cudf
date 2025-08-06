@@ -227,8 +227,8 @@ def _process_kwargs(
 def assert_collect_raises(
     lazydf: pl.LazyFrame,
     *,
-    polars_except: type[Exception] | tuple[type[Exception], ...],
-    cudf_except: type[Exception] | tuple[type[Exception], ...],
+    polars_except: type[Exception] | tuple[type[Exception], ...] | None,
+    cudf_except: type[Exception] | tuple[type[Exception], ...] | None,
     collect_kwargs: dict[OptimizationArgs, bool] | None = None,
     polars_collect_kwargs: dict[OptimizationArgs, bool] | None = None,
     cudf_collect_kwargs: dict[OptimizationArgs, bool] | None = None,
@@ -279,27 +279,33 @@ def assert_collect_raises(
 
     try:
         lazydf.collect(**final_polars_collect_kwargs)  # type: ignore[call-overload,misc]
-    except polars_except:
-        pass
     except Exception as e:
-        raise AssertionError(
-            f"CPU execution RAISED {type(e)}, EXPECTED {polars_except}"
-        ) from e
+        if polars_except is None:
+            raise AssertionError(
+                f"CPU execution RAISED {type(e)}, but no exception was expected"
+            ) from e
+        elif not isinstance(e, polars_except):
+            raise AssertionError(
+                f"CPU execution RAISED {type(e)}, EXPECTED {polars_except}"
+            ) from e
     else:
-        if polars_except != ():
+        if polars_except is not None:
             raise AssertionError(f"CPU execution DID NOT RAISE {polars_except}")
 
     engine = GPUEngine(raise_on_fail=True)
     try:
         lazydf.collect(**final_cudf_collect_kwargs, engine=engine)  # type: ignore[call-overload,misc]
-    except cudf_except:
-        pass
     except Exception as e:
-        raise AssertionError(
-            f"GPU execution RAISED {type(e)}, EXPECTED {cudf_except}"
-        ) from e
+        if cudf_except is None:
+            raise AssertionError(
+                f"GPU execution RAISED {type(e)}, but no exception was expected"
+            ) from e
+        elif not isinstance(e, cudf_except):
+            raise AssertionError(
+                f"GPU execution RAISED {type(e)}, EXPECTED {cudf_except}"
+            ) from e
     else:
-        if cudf_except != ():
+        if cudf_except is not None:
             raise AssertionError(f"GPU execution DID NOT RAISE {cudf_except}")
 
 

@@ -18,6 +18,7 @@ from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_129,
     POLARS_VERSION_LT_130,
     POLARS_VERSION_LT_131,
+    POLARS_VERSION_LT_132,
 )
 
 
@@ -530,10 +531,15 @@ def test_string_zfill(fill, input_strings):
     q = ldf.select(pl.col("a").str.zfill(fill))
 
     if fill is not None and fill < 0:
+        cudf_except = (
+            pl.exceptions.InvalidOperationError
+            if not POLARS_VERSION_LT_132
+            else pl.exceptions.ComputeError
+        )
         assert_collect_raises(
             q,
             polars_except=pl.exceptions.InvalidOperationError,
-            cudf_except=pl.exceptions.ComputeError,
+            cudf_except=cudf_except,
         )
     else:
         assert_gpu_result_equal(q)
@@ -543,10 +549,10 @@ def test_string_zfill(fill, input_strings):
     "fill",
     [
         5
-        if not POLARS_VERSION_LT_130
+        if not POLARS_VERSION_LT_131
         else pytest.param(5, marks=pytest.mark.xfail(reason="fixed in Polars 1.30")),
         999
-        if not POLARS_VERSION_LT_130
+        if not POLARS_VERSION_LT_131
         else pytest.param(999, marks=pytest.mark.xfail(reason="fixed in Polars 1.30")),
     ],
 )
@@ -563,10 +569,10 @@ def test_string_zfill_pl_129(fill):
         1,
         2,
         5
-        if not POLARS_VERSION_LT_130
+        if not POLARS_VERSION_LT_131
         else pytest.param(5, marks=pytest.mark.xfail(reason="fixed in Polars 1.30")),
         999
-        if not POLARS_VERSION_LT_130
+        if not POLARS_VERSION_LT_131
         else pytest.param(999, marks=pytest.mark.xfail(reason="fixed in Polars 1.30")),
         -1,
         pytest.param(None, marks=pytest.mark.xfail(reason="None dtype")),
@@ -581,12 +587,19 @@ def test_string_zfill_column(fill):
     ).lazy()
     q = ldf.select(pl.col("input_strings").str.zfill(pl.col("fill")))
     if fill is not None and fill < 0:
+        cudf_except = (
+            (
+                pl.exceptions.InvalidOperationError
+                if not POLARS_VERSION_LT_130
+                else pl.exceptions.ComputeError
+            )
+            if POLARS_VERSION_LT_132
+            else None
+        )
         assert_collect_raises(
             q,
             polars_except=pl.exceptions.InvalidOperationError,
-            cudf_except=pl.exceptions.InvalidOperationError
-            if not POLARS_VERSION_LT_130
-            else pl.exceptions.ComputeError,
+            cudf_except=cudf_except,
         )
     else:
         assert_gpu_result_equal(q)
@@ -597,7 +610,7 @@ def test_string_zfill_forbidden_chars():
     q = ldf.select(pl.col("a").str.zfill(3))
     assert_collect_raises(
         q,
-        polars_except=(),
+        polars_except=None,
         cudf_except=pl.exceptions.InvalidOperationError
         if not POLARS_VERSION_LT_130
         else pl.exceptions.ComputeError,
