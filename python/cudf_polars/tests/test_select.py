@@ -37,6 +37,21 @@ def test_select_decimal():
     assert_gpu_result_equal(query)
 
 
+def test_select_decimal_precision_none_result_max_precision():
+    ldf = pl.LazyFrame(
+        {
+            "a": pl.Series(
+                values=[decimal.Decimal("1.0"), None], dtype=pl.Decimal(None, 1)
+            )
+        }
+    )
+    query = ldf.select(pl.col("a"))
+    cpu_result = query.collect()
+    gpu_result = query.collect(engine="gpu")
+    assert cpu_result.schema["a"].precision is None
+    assert gpu_result.schema["a"].precision == 38
+
+
 def test_select_reduce():
     ldf = pl.DataFrame(
         {
