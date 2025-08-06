@@ -748,7 +748,10 @@ static __device__ void update_list_offsets_for_pruned_pages(page_state_s* state)
       int const idx                 = nesting_info.value_count;
       cudf::size_type const offset =
         next_nesting_info.value_count + next_nesting_info.page_start_value;
-      (reinterpret_cast<cudf::size_type*>(nesting_info.data_out))[idx] = offset;
+
+      // Write the offset safely to avoid misaligned access
+      uint8_t* write_ptr = nesting_info.data_out + (idx * sizeof(cudf::size_type));
+      cuda::std::memcpy(write_ptr, &offset, sizeof(cudf::size_type));
     }
   }
 }

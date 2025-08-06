@@ -445,7 +445,7 @@ int main(int argc, char const** argv)
     std::cout << "\nReading " << input_filepath << "...\n";
     std::cout << "Note: Not timing this initial parquet read as it may include\n"
                  "times for nvcomp, cufile loading and RMM growth.\n\n";
-    auto [table_legacy_reader, metadata] = read_parquet(data_source, filter_expression, stream);
+    std::ignore = read_parquet(data_source, filter_expression, stream);
   }
 
   // Insert which filters to apply
@@ -466,18 +466,17 @@ int main(int argc, char const** argv)
     hybrid_scan(data_source, filter_expression, filters, stream, stats_mr);
   timer.print_elapsed_millis();
 
-  std::cout << "Reading " << input_filepath << " with legacy parquet reader...\n";
+  std::cout << "Reading " << input_filepath << " with main parquet reader...\n";
   timer.reset();
-  auto [table_legacy_reader, metadata] = read_parquet(data_source, filter_expression, stream);
+  auto [table_main_reader, metadata] = read_parquet(data_source, filter_expression, stream);
   timer.print_elapsed_millis();
 
   std::cout << "Writing " << output_filepath << "...\n";
-  write_parquet(table_legacy_reader->view(), metadata, "legacy_" + output_filepath, stream);
+  write_parquet(table_main_reader->view(), metadata, "main_" + output_filepath, stream);
   write_parquet(table_next_gen_reader->view(), metadata, "next_gen_" + output_filepath, stream);
 
   // Check for validity
-  // FIXME:For lists, this will fail on column types mismatch. The data would still be intact.
-  cudf::examples::check_tables_equal(table_next_gen_reader->view(), table_legacy_reader->view());
+  cudf::examples::check_tables_equal(table_next_gen_reader->view(), table_main_reader->view());
 
   return 0;
 }
