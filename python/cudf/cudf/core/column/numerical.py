@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import cupy as cp
 import numpy as np
+import pandas as pd
 import pyarrow as pa
 from typing_extensions import Self
 
@@ -200,6 +201,7 @@ class NumericalColumn(NumericalBaseColumn):
             return super().__invert__()
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
+        # import pdb;pdb.set_trace()
         int_float_dtype_mapping = {
             np.int8: np.float32,
             np.int16: np.float32,
@@ -395,15 +397,21 @@ class NumericalColumn(NumericalBaseColumn):
             #   => np.int64
             # np.promote_types(np.asarray([0], dtype=np.int64).dtype, np.uint8)
             #   => np.int64
-
+            # import pdb;pdb.set_trace()
             if is_pandas_nullable_extension_dtype(self.dtype):
-                common_dtype = get_dtype_of_same_kind(
-                    self.dtype,
-                    np.result_type(self.dtype.numpy_dtype, other),  # noqa: TID251
-                )
+                if isinstance(self.dtype, pd.ArrowDtype):
+                    common_dtype = cudf.utils.dtypes.find_common_type(
+                        [self.dtype, other]
+                    )
+                else:
+                    common_dtype = get_dtype_of_same_kind(
+                        self.dtype,
+                        np.result_type(self.dtype.numpy_dtype, other),  # noqa: TID251
+                    )
+
             else:
                 common_dtype = np.result_type(self.dtype, other)  # noqa: TID251
-            if common_dtype.kind in {"b", "i", "u", "f"}:
+            if common_dtype.kind in {"b", "i", "u", "f"}:  # type: ignore[union-attr]
                 if self.dtype.kind == "b" and not isinstance(other, bool):
                     common_dtype = min_signed_type(other)
                 return pa.scalar(
@@ -492,6 +500,16 @@ class NumericalColumn(NumericalBaseColumn):
             return self
 
         if cudf.get_option("mode.pandas_compatible"):
+            if (
+                is_pandas_nullable_extension_dtype(self.dtype)
+                and isinstance(dtype, np.dtype)
+                and self.null_count > 0
+            ):
+                if dtype.kind in "iu":
+                    raise ValueError("cannot convert NA to integer")
+                elif dtype.kind == "b":
+                    raise ValueError("cannot convert float NaN to bool")
+
             if (
                 not is_pandas_nullable_extension_dtype(self.dtype)
                 and is_pandas_nullable_extension_dtype(dtype)
