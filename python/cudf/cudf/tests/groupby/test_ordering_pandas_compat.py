@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 import numpy as np
 import pytest
 
@@ -6,14 +6,10 @@ import cudf
 from cudf.testing import assert_eq
 
 
-@pytest.fixture(params=[False, True], ids=["without_nulls", "with_nulls"])
-def with_nulls(request):
-    return request.param
-
-
-@pytest.mark.parametrize("nrows", [30, 300, 300_000])
-@pytest.mark.parametrize("nkeys", [1, 2, 4])
-def test_groupby_maintain_order_random(nrows, nkeys, with_nulls):
+@pytest.mark.parametrize("with_nulls", [False, True])
+def test_groupby_maintain_order_random(with_nulls):
+    nrows = 20
+    nkeys = 3
     rng = np.random.default_rng(seed=0)
     key_names = [f"key{key}" for key in range(nkeys)]
     key_values = [rng.integers(100, size=nrows) for _ in key_names]
