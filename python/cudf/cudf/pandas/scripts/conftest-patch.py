@@ -5282,7 +5282,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/frame/methods/test_rename.py::TestRename::test_rename_axis_style_raises",
     "tests/frame/methods/test_rename.py::TestRename::test_rename_inplace",
     "tests/frame/methods/test_rename.py::TestRename::test_rename_mapper_and_positional_arguments_raises",
-    "tests/frame/methods/test_rename.py::TestRename::test_rename_multiindex",
     "tests/frame/methods/test_rename.py::TestRename::test_rename_no_mappings_raises",
     "tests/frame/methods/test_rename.py::TestRename::test_rename_nocopy",
     "tests/frame/methods/test_replace.py::TestDataFrameReplace::test_replace_NA_with_None",

@@ -122,7 +122,7 @@ def gdf_np_dtypes():
         np.uint32,
         np.uint64,
     ]
-    return dict(zip(gdf_dtypes, np_dtypes))
+    return dict(zip(gdf_dtypes, np_dtypes, strict=True))
 
 
 @pytest.fixture
