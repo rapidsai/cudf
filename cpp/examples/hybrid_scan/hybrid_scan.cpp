@@ -310,7 +310,7 @@ auto hybrid_scan(io_source const& io_source,
       reader->build_row_mask_with_page_index_stats(current_row_group_indices, options, stream, mr);
     timer.print_elapsed_millis();
   } else {
-    std::cout << "SKIP: Page filtering with page index stats...\n\n";
+    std::cout << "SKIP: Filter column data page filtering with page index stats...\n\n";
     auto num_rows = reader->total_rows_in_row_groups(current_row_group_indices);
     row_mask      = cudf::make_numeric_column(
       cudf::data_type{cudf::type_id::BOOL8}, num_rows, rmm::device_buffer{}, 0, stream, mr);
@@ -337,6 +337,16 @@ auto hybrid_scan(io_source const& io_source,
       .tbl;
   timer.print_elapsed_millis();
 
+  // Check whether to prune payload column data pages
+  auto const prune_payload_data_pages =
+    filters.contains(parquet_filter_type::PAYLOAD_COLUMN_PAGES_WITH_PAGE_INDEX);
+
+  if (prune_payload_data_pages) {
+    std::cout << "READER: Filter data pages of payload columns with page index stats...\n";
+  } else {
+    std::cout << "SKIP: Payload column data page filtering with page index stats...\n\n";
+  }
+
   std::cout << "READER: Materialize payload columns...\n";
   timer.reset();
   // Get column chunk byte ranges from the reader
@@ -344,10 +354,6 @@ auto hybrid_scan(io_source const& io_source,
     reader->payload_column_chunks_byte_ranges(current_row_group_indices, options);
   auto payload_column_chunk_buffers =
     fetch_byte_ranges(file_buffer_span, payload_column_chunk_byte_ranges, stream, mr);
-
-  // Check whether to prune payload column data pages
-  auto const prune_payload_data_pages =
-    filters.contains(parquet_filter_type::PAYLOAD_COLUMN_PAGES_WITH_PAGE_INDEX);
 
   // Materialize the table with only the payload columns
   auto payload_table =
