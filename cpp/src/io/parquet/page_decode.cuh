@@ -727,7 +727,7 @@ inline __device__ void get_nesting_bounds(int& start_depth,
  * This function iterates through the nesting levels of a column and updates the offsets for a list
  * column. The offset for the current nesting level equals the length of the next nesting level
  *
- * @tparam decode_block_size The size of the block used for decoding.
+ * @tparam block_size The size of the block used for decoding.
  * @param[in,out] state Pointer to page state containing column and nesting information.
  */
 template <int block_size>
@@ -738,7 +738,7 @@ static __device__ void update_list_offsets_for_pruned_pages(page_state_s* state)
   auto const tid               = cg::this_thread_block().thread_rank();
 
   // Iterate by depth and store offset(s) to the list location(s)
-  for (int depth = tid; depth <= max_depth; depth += block_size) {
+  for (int depth = tid; depth < max_depth; depth += block_size) {
     auto& nesting_info = state->nesting_info[depth];
     // If we're -not- at a leaf column and we're within nesting/row bounds and we have a valid
     // data_out pointer, it implies this is a list column, so emit an offset for the current nesting
@@ -748,10 +748,7 @@ static __device__ void update_list_offsets_for_pruned_pages(page_state_s* state)
       int const idx                 = nesting_info.value_count;
       cudf::size_type const offset =
         next_nesting_info.value_count + next_nesting_info.page_start_value;
-
-      // Write the offset safely to avoid misaligned access
-      uint8_t* write_ptr = nesting_info.data_out + (idx * sizeof(cudf::size_type));
-      cuda::std::memcpy(write_ptr, &offset, sizeof(cudf::size_type));
+      (reinterpret_cast<cudf::size_type*>(nesting_info.data_out))[idx] = offset;
     }
   }
 }
