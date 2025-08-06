@@ -292,11 +292,16 @@ struct compute_single_pass_aggs_fn {
   {
   }
 
-  __device__ void operator()(size_type i)
+  __device__ void operator()(int64_t i)
   {
-    if (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, i)) {
-      auto const target_idx = key_indices[i];
-      cudf::detail::aggregate_row(output_values, target_idx, input_values, i, aggs);
+    auto const num_rows = input_values.num_rows();
+    auto const row_idx  = static_cast<size_type>(i % num_rows);
+
+    if (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, row_idx)) {
+      auto const target_idx = key_indices[row_idx];
+      auto const col_idx    = static_cast<size_type>(i / num_rows);
+      cudf::detail::aggregate_row_parallel(
+        output_values, col_idx, target_idx, input_values, row_idx, aggs);
     }
   }
 };
