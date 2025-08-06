@@ -67,25 +67,6 @@ class BooleanFunction(Expr):
     __slots__ = ("name", "options")
     _non_child = ("dtype", "name", "options")
 
-    _supported_ops: ClassVar[set[Name]] = {
-        Name.All,
-        Name.AllHorizontal,
-        Name.Any,
-        Name.AnyHorizontal,
-        Name.IsDuplicated,
-        Name.IsFinite,
-        Name.IsFirstDistinct,
-        Name.IsIn,
-        Name.IsInfinite,
-        Name.IsLastDistinct,
-        Name.IsNan,
-        Name.IsNotNan,
-        Name.IsNotNull,
-        Name.IsNull,
-        Name.IsUnique,
-        Name.Not,
-    }
-
     def __init__(
         self,
         dtype: DataType,
@@ -105,7 +86,10 @@ class BooleanFunction(Expr):
             BooleanFunction.Name.IsLastDistinct,
             BooleanFunction.Name.IsUnique,
         )
-        if self.name not in self._supported_ops:
+        if self.name in {
+            BooleanFunction.Name.IsBetween,
+            BooleanFunction.Name.IsClose,
+        }:
             raise NotImplementedError(
                 f"Boolean function {self.name}"
             )  # pragma: no cover
