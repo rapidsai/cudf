@@ -10,8 +10,7 @@ from cudf import DataFrame, Index
 from cudf.testing import assert_eq
 
 
-@pytest.mark.parametrize("ncats,nelem", [(2, 2), (2, 10), (10, 100)])
-def test_factorize_series_obj(ncats, nelem):
+def test_factorize_series_obj():
     df = DataFrame()
     rng = np.random.default_rng(seed=0)
 
@@ -31,8 +30,7 @@ def test_factorize_series_obj(ncats, nelem):
     np.testing.assert_array_equal(uvals.get(), handcoded)
 
 
-@pytest.mark.parametrize("ncats,nelem", [(2, 2), (2, 10), (10, 100)])
-def test_factorize_index_obj(ncats, nelem):
+def test_factorize_index_obj():
     df = DataFrame()
     rng = np.random.default_rng(seed=0)
 
