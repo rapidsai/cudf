@@ -296,14 +296,15 @@ class Column:
         elif plc.traits.is_integral_not_bool(
             self.obj.type()
         ) and plc.traits.is_timestamp(plc_dtype):
+            upcasted = plc.unary.cast(self.obj, plc.DataType(plc.TypeId.INT64))
             result = plc.column.Column(
                 plc_dtype,
-                self.obj.size(),
-                self.obj.data(),
-                self.obj.null_mask(),
-                self.obj.null_count(),
-                self.obj.offset(),
-                self.obj.children(),
+                upcasted.size(),
+                upcasted.data(),
+                upcasted.null_mask(),
+                upcasted.null_count(),
+                upcasted.offset(),
+                upcasted.children(),
             )
             return Column(result, dtype=dtype)
         else:

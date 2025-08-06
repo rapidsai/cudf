@@ -11,6 +11,7 @@ import polars as pl
 
 from cudf_polars.dsl.expr import TemporalFunction
 from cudf_polars.testing.asserts import (
+    assert_collect_raises,
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
@@ -347,26 +348,43 @@ def test_datetime_cast_time_unit_duration(dtype, time_unit):
 
 
 @pytest.mark.parametrize(
-    "datetime_dtype", [pl.Datetime("ms"), pl.Datetime("us"), pl.Datetime("ns")]
+    "datetime_dtype, integer_dtype, values",
+    [
+        # Int64
+        (pl.Datetime("ms"), pl.Int64(), [0, 1, 100, 2**63 - 1, -(2**63), -100]),
+        (pl.Datetime("us"), pl.Int64(), [0, 1, 100, 2**63 - 1, -(2**63), -100]),
+        (pl.Datetime("ns"), pl.Int64(), [0, 1, 100, 2**63 - 1, -(2**63), -100]),
+        # Int32
+        (pl.Datetime("ms"), pl.Int32(), [0, 1, 100, 2**31 - 1, -(2**31), -100]),
+        (pl.Datetime("us"), pl.Int32(), [0, 1, 100, 2**31 - 1, -(2**31), -100]),
+        (pl.Datetime("ns"), pl.Int32(), [0, 1, 100, 2**31 - 1, -(2**31), -100]),
+        # Int16
+        (pl.Datetime("ms"), pl.Int16(), [0, 1, 100, 2**15 - 1, -(2**15), -100]),
+        (pl.Datetime("us"), pl.Int16(), [0, 1, 100, 2**15 - 1, -(2**15), -100]),
+        (pl.Datetime("ns"), pl.Int16(), [0, 1, 100, 2**15 - 1, -(2**15), -100]),
+        # Int8
+        (pl.Datetime("ms"), pl.Int8(), [0, 1, 100, 2**7 - 1, -(2**7), -100]),
+        (pl.Datetime("us"), pl.Int8(), [0, 1, 100, 2**7 - 1, -(2**7), -100]),
+        (pl.Datetime("ns"), pl.Int8(), [0, 1, 100, 2**7 - 1, -(2**7), -100]),
+        # UInt64
+        (pl.Datetime("ms"), pl.UInt64(), [0, 1, 100, 2**64 - 1]),
+        (pl.Datetime("us"), pl.UInt64(), [0, 1, 100, 2**64 - 1]),
+        (pl.Datetime("ns"), pl.UInt64(), [0, 1, 100, 2**64 - 1]),
+        # UInt32
+        (pl.Datetime("ms"), pl.UInt32(), [0, 1, 100, 2**32 - 1]),
+        (pl.Datetime("us"), pl.UInt32(), [0, 1, 100, 2**32 - 1]),
+        (pl.Datetime("ns"), pl.UInt32(), [0, 1, 100, 2**32 - 1]),
+    ],
 )
-def test_datetime_from_integer(datetime_dtype):
-    sr = pl.Series(
-        "date",
-        [
-            0,  # Epoch
-            946684800000,
-            -315619200000,
-            -2208988800000,
-            1262304000000,
-            1577836800000,
-            1735689600000,
-            None,
-            2**63 - 1,
-            -(2**63),
-        ],
-        dtype=pl.Int64(),
-    )
-
+def test_datetime_from_integer(datetime_dtype, integer_dtype, values):
+    sr = pl.Series("date", values, dtype=integer_dtype)
     df = pl.DataFrame({"data": sr}).lazy()
     q = df.select(pl.col("data").cast(datetime_dtype).alias("datetime_from_int"))
-    assert_gpu_result_equal(q)
+    if integer_dtype == pl.UInt64():
+        assert_collect_raises(
+            q,
+            cudf_except=pl.exceptions.ComputeError,
+            polars_except=pl.exceptions.InvalidOperationError,
+        )
+    else:
+        assert_gpu_result_equal(q)

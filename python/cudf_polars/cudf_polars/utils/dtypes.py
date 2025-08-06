@@ -65,6 +65,7 @@ def can_cast(from_: plc.DataType, to: plc.DataType) -> bool:
         )
         or (
             plc.traits.is_integral_not_bool(from_)
+            and from_.id() != plc.TypeId.UINT64  # not overflow safe
             and not to_is_empty
             and plc.traits.is_timestamp(to)
         )
