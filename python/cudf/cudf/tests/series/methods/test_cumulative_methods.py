@@ -16,11 +16,11 @@ def nelem(request):
 
 
 @pytest.fixture(params=["cumsum", "cummin", "cummax", "cumprod"])
-def cummulative_methods(request):
+def cumulative_methods(request):
     return request.param
 
 
-def test_cummulative_methods(numeric_types_as_str, nelem, cummulative_methods):
+def test_cumulative_methods(numeric_types_as_str, nelem, cumulative_methods):
     dtype = np.dtype(numeric_types_as_str)
     if dtype == np.int8:
         # to keep data in range
@@ -33,20 +33,20 @@ def test_cummulative_methods(numeric_types_as_str, nelem, cummulative_methods):
     gs = cudf.Series(data)
     ps = pd.Series(data)
     np.testing.assert_array_almost_equal(
-        getattr(gs, cummulative_methods)().to_numpy(),
-        getattr(ps, cummulative_methods)(),
+        getattr(gs, cumulative_methods)().to_numpy(),
+        getattr(ps, cumulative_methods)(),
         decimal=decimal,
     )
 
 
-def test_cummulative_methods_masked(numeric_types_as_str, cummulative_methods):
+def test_cumulative_methods_masked(numeric_types_as_str, cumulative_methods):
     data = [1, 2, None, 4, 5]
     gs = cudf.Series(data).astype(numeric_types_as_str)
     # float64 since pandas usses NaN as missing value
     ps = pd.Series(data).astype("float64")
     assert_eq(
-        getattr(gs, cummulative_methods)(),
-        getattr(ps, cummulative_methods)(),
+        getattr(gs, cumulative_methods)(),
+        getattr(ps, cumulative_methods)(),
         check_dtype=False,
     )
 
