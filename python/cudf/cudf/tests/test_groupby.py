@@ -217,7 +217,7 @@ def test_groupby_as_index_multiindex(pdf, gdf, as_index):
         assert_eq(pdf, gdf)
     else:
         # column names don't match - check just the values
-        for gcol, pcol in zip(gdf, pdf):
+        for gcol, pcol in zip(gdf, pdf, strict=True):
             assert_array_equal(gdf[gcol].to_numpy(), pdf[pcol].values)
 
 
@@ -1916,7 +1916,7 @@ def test_grouping(grouper):
     gdf = cudf.from_pandas(pdf)
 
     for pdf_group, gdf_group in zip(
-        pdf.groupby(grouper), gdf.groupby(grouper)
+        pdf.groupby(grouper), gdf.groupby(grouper), strict=True
     ):
         assert pdf_group[0] == gdf_group[0]
         assert_eq(pdf_group[1], gdf_group[1])
@@ -2749,7 +2749,7 @@ def test_groupby_shift_row_mixed_fill(shift_perc, direction, fill_value):
     # Pandas does not support specifying different fill_value by column, so we
     # simulate it column by column
     expected = pdf.copy()
-    for col, single_fill in zip(pdf.iloc[:, 1:], fill_value):
+    for col, single_fill in zip(pdf.iloc[:, 1:], fill_value, strict=True):
         expected[col] = (
             pdf[col]
             .groupby(pdf["0"])
@@ -3725,7 +3725,8 @@ class TestHeadTail:
                             sorted(values_to_sort.tolist(), key=keyfunc),
                             key=keyfunc,
                         )
-                    )
+                    ),
+                    strict=True,
                 )
                 return cudf.DataFrame(
                     {"a": expect_a, "b": expect_b}, index=index
