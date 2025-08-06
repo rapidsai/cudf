@@ -6,10 +6,12 @@ Script to generate a parquet file with 3 columns:
 3. Random integer data
 """
 
-import pandas as pd
-import numpy as np
 import argparse
+import random
 from pathlib import Path
+
+import numpy as np
+import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
@@ -128,8 +130,72 @@ def generate_parquet_data(num_rows=1000, output_file="generated_data.parquet"):
     positive_int_column = np.random.randint(0, 100000, num_rows)
     negative_float_column = np.random.uniform(-1000, -1, num_rows)
 
-    # Create DataFrame
-    df = pd.DataFrame(
+    # Generate new columns with random lists of integers and strings
+    # Generate random list of integers column
+    random_list_int_column = [
+        [
+            np.random.randint(-1000, 1000)
+            for _ in range(np.random.randint(2, 8))
+        ]
+        for _ in range(num_rows)
+    ]
+
+    # Generate random list of strings column
+    words = [
+        "apple",
+        "banana",
+        "cherry",
+        "date",
+        "elderberry",
+        "fig",
+        "grape",
+        "honeydew",
+        "kiwi",
+        "lemon",
+        "mango",
+        "nectarine",
+        "orange",
+        "papaya",
+        "quince",
+        "raspberry",
+    ]
+    random_list_string_column = [
+        [random.choice(words) for _ in range(np.random.randint(1, 6))]
+        for _ in range(num_rows)
+    ]
+
+    # Generate another random list of integers column
+    random_list_int_column2 = [
+        [np.random.randint(1, 10000) for _ in range(np.random.randint(1, 10))]
+        for _ in range(num_rows)
+    ]
+
+    # Generate another random list of strings column
+    colors = [
+        "red",
+        "blue",
+        "green",
+        "yellow",
+        "purple",
+        "orange",
+        "pink",
+        "brown",
+        "black",
+        "white",
+        "gray",
+        "cyan",
+        "magenta",
+        "lime",
+        "navy",
+        "teal",
+    ]
+    random_list_string_column2 = [
+        [random.choice(colors) for _ in range(np.random.randint(2, 7))]
+        for _ in range(num_rows)
+    ]
+
+    # Create the original DataFrame with all columns
+    original_df = pd.DataFrame(
         {
             "string_col": string_column,
             "float_col": float_column,
@@ -153,6 +219,23 @@ def generate_parquet_data(num_rows=1000, output_file="generated_data.parquet"):
         }
     )
 
+    # Get all column names except the 0th one (string_col)
+    all_columns = list(original_df.columns)
+    columns_to_remove = all_columns[1:]  # Exclude the 0th column
+
+    # Randomly select 4 columns to remove
+    columns_to_remove = random.sample(columns_to_remove, 4)
+    print(f"Removing columns: {columns_to_remove}")
+
+    # Create new DataFrame with removed columns and new list columns
+    df = original_df.drop(columns=columns_to_remove)
+
+    # Add the new list columns
+    df["random_list_int_col"] = random_list_int_column
+    df["random_list_string_col"] = random_list_string_column
+    df["random_list_int_col2"] = random_list_int_column2
+    df["random_list_string_col2"] = random_list_string_column2
+
     # Convert DataFrame to Arrow Table
     table = pa.Table.from_pandas(df)
 
@@ -168,6 +251,7 @@ def generate_parquet_data(num_rows=1000, output_file="generated_data.parquet"):
 
     print(f"Generated parquet file: {output_file}")
     print(f"Number of rows: {num_rows}")
+    print(f"Number of columns: {len(df.columns)}")
 
     # Display first few rows
     print("\nFirst 5 rows:")

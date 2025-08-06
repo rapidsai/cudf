@@ -6,10 +6,11 @@ Script to generate a parquet file with 3 columns:
 3. Random integer data
 """
 
-import pandas as pd
-import numpy as np
 import argparse
 from pathlib import Path
+
+import numpy as np
+import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 

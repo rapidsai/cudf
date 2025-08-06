@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """
 Script to generate a parquet file with 50 columns:
-Various data types including strings, numbers, timestamps, booleans, lists, etc.
+Various data types including strings, numbers, timestamps, booleans, etc.
 """
 
-import pandas as pd
-import numpy as np
 import argparse
+import random
 from pathlib import Path
+
+import numpy as np
+import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
@@ -22,8 +24,8 @@ def generate_parquet_data(
         num_rows (int): Number of rows to generate
         output_file (str): Output parquet file path
     """
-    # Generate ascending numbers in string format (xxxxxx) that repeat every 1/4th
-    # of num_rows
+    # Generate ascending numbers in string format (xxxxxx) that repeat every
+    # 1/2th of num_rows
     half_size = num_rows // 2
     base_strings = [f"{i:07d}" for i in range(1, half_size + 1)]
     string_column = base_strings * 2
@@ -57,24 +59,6 @@ def generate_parquet_data(
     # Generate decimal data (as strings to maintain precision)
     decimal_column = [
         f"{np.random.uniform(0, 1000):.6f}" for _ in range(num_rows)
-    ]
-
-    # Generate list of integers
-    list_int_column = [
-        [np.random.randint(1, 100) for _ in range(np.random.randint(1, 5))]
-        for _ in range(num_rows)
-    ]
-
-    # Generate list of doubles
-    list_double_column = [
-        [np.random.uniform(0, 100) for _ in range(np.random.randint(1, 4))]
-        for _ in range(num_rows)
-    ]
-
-    # Generate list of floats (replacing categorical data)
-    list_float_column = [
-        [np.random.uniform(0, 100) for _ in range(np.random.randint(2, 6))]
-        for _ in range(num_rows)
     ]
 
     # Generate UUID-like strings
@@ -194,51 +178,17 @@ def generate_parquet_data(
         f"{np.random.uniform(-0.001, 0.001):.6f}" for _ in range(num_rows)
     ]
 
-    # Additional list columns
-    list_int_col_2 = [
-        [np.random.randint(10, 99) for _ in range(np.random.randint(2, 6))]
-        for _ in range(num_rows)
-    ]
-    list_int_col_3 = [
-        [np.random.randint(-50, 50) for _ in range(np.random.randint(1, 3))]
-        for _ in range(num_rows)
-    ]
-    list_double_col_2 = [
-        [np.random.uniform(-10, 10) for _ in range(np.random.randint(2, 5))]
-        for _ in range(num_rows)
-    ]
-    list_double_col_3 = [
-        [np.random.uniform(0.1, 0.9) for _ in range(np.random.randint(1, 4))]
-        for _ in range(num_rows)
-    ]
-
-    # Additional list of floats columns (replacing categorical columns)
-    list_float_col_2 = [
-        [np.random.uniform(-50, 50) for _ in range(np.random.randint(1, 4))]
-        for _ in range(num_rows)
-    ]
-    list_float_col_3 = [
-        [np.random.uniform(0, 1) for _ in range(np.random.randint(2, 5))]
-        for _ in range(num_rows)
-    ]
-    list_float_col_4 = [
-        [np.random.uniform(10, 1000) for _ in range(np.random.randint(1, 3))]
-        for _ in range(num_rows)
-    ]
-    list_float_col_5 = [
-        [np.random.uniform(-0.1, 0.1) for _ in range(np.random.randint(2, 6))]
-        for _ in range(num_rows)
-    ]
-
     # Additional UUID columns
     uuid_col_2 = [
         f"id-{i:06x}-{np.random.randint(100, 999)}-"
-        f"{np.random.randint(100, 999)}-{np.random.randint(10000000, 99999999)}"
+        f"{np.random.randint(100, 999)}-"
+        f"{np.random.randint(10000000, 99999999)}"
         for i in range(num_rows)
     ]
     uuid_col_3 = [
         f"ref-{np.random.randint(100000, 999999)}-"
-        f"{np.random.randint(1000, 9999)}-{np.random.randint(100000000, 999999999)}"
+        f"{np.random.randint(1000, 9999)}-"
+        f"{np.random.randint(100000000, 999999999)}"
         for _ in range(num_rows)
     ]
 
@@ -290,8 +240,185 @@ def generate_parquet_data(
     negative_float_col_2 = np.random.uniform(-100, -10, num_rows)
     negative_float_col_3 = np.random.uniform(-0.1, -0.01, num_rows)
 
-    # Create DataFrame
-    df = pd.DataFrame(
+    # Additional string columns to replace list columns
+    string_col_6 = [f"item_{i:06d}" for i in range(num_rows)]
+    string_col_7 = [
+        f"tag_{np.random.randint(100, 999)}" for _ in range(num_rows)
+    ]
+    string_col_8 = [
+        f"name_{chr(97 + i % 26)}{i % 1000}" for i in range(num_rows)
+    ]
+    string_col_9 = [
+        f"key_{np.random.randint(10000, 99999)}" for _ in range(num_rows)
+    ]
+    string_col_10 = [
+        f"val_{np.random.randint(1000000, 9999999)}" for _ in range(num_rows)
+    ]
+
+    # Additional float columns to replace list columns
+    float_col_6 = np.random.uniform(-1000.0, 1000.0, num_rows)
+    float_col_7 = np.random.uniform(0.0, 10.0, num_rows)
+    float_col_8 = np.random.uniform(-100.0, 100.0, num_rows)
+    float_col_9 = np.random.uniform(1.0, 1000.0, num_rows)
+    float_col_10 = np.random.uniform(-0.01, 0.01, num_rows)
+
+    # Additional integer columns to replace list columns
+    int_col_6 = np.random.randint(-5000, 5000, num_rows)
+    int_col_7 = np.random.randint(50, 500, num_rows)
+    int_col_8 = np.random.randint(500000, 5000000, num_rows)
+    int_col_9 = np.random.randint(0, 100, num_rows)
+    int_col_10 = np.random.randint(-1000, 1000, num_rows)
+
+    # Additional boolean columns to replace list columns
+    bool_col_6 = np.random.choice([True, False], num_rows, p=[0.5, 0.5])
+    bool_col_7 = np.random.choice([True, False], num_rows, p=[0.2, 0.8])
+    bool_col_8 = np.random.choice([True, False], num_rows, p=[0.8, 0.2])
+    bool_col_9 = [i % 4 == 0 for i in range(num_rows)]
+    bool_col_10 = [i % 5 == 0 for i in range(num_rows)]
+
+    # Additional timestamp columns to replace list columns
+    timestamp_col_4 = pd.date_range(
+        "2022-01-01", periods=min(num_rows, 1000), freq="D"
+    )
+    timestamp_col_4 = timestamp_col_4.tolist() * (
+        num_rows // min(num_rows, 1000) + 1
+    )
+    timestamp_col_4 = timestamp_col_4[:num_rows]
+
+    timestamp_col_5 = pd.date_range(
+        "2026-01-01", periods=min(num_rows, 1000), freq="W"
+    )
+    timestamp_col_5 = timestamp_col_5.tolist() * (
+        num_rows // min(num_rows, 1000) + 1
+    )
+    timestamp_col_5 = timestamp_col_5[:num_rows]
+
+    # Additional decimal columns to replace list columns
+    decimal_col_6 = [
+        f"{np.random.uniform(-50, 50):.3f}" for _ in range(num_rows)
+    ]
+    decimal_col_7 = [
+        f"{np.random.uniform(0, 10):.5f}" for _ in range(num_rows)
+    ]
+    decimal_col_8 = [
+        f"{np.random.uniform(500, 5000):.1f}" for _ in range(num_rows)
+    ]
+    decimal_col_9 = [
+        f"{np.random.uniform(-0.01, 0.01):.7f}" for _ in range(num_rows)
+    ]
+    decimal_col_10 = [
+        f"{np.random.uniform(100, 1000):.4f}" for _ in range(num_rows)
+    ]
+
+    # Generate new list columns to replace removed columns
+    # List of integers
+    list_int_col_1 = [
+        [np.random.randint(-1000, 1000)
+         for _ in range(np.random.randint(2, 8))]
+        for _ in range(num_rows)
+    ]
+    list_int_col_2 = [
+        [np.random.randint(1, 10000) for _ in range(np.random.randint(1, 10))]
+        for _ in range(num_rows)
+    ]
+    list_int_col_3 = [
+        [np.random.randint(-500, 500) for _ in range(np.random.randint(3, 12))]
+        for _ in range(num_rows)
+    ]
+
+    # List of floats
+    list_float_col_1 = [
+        [np.random.uniform(-100.0, 100.0)
+         for _ in range(np.random.randint(2, 6))]
+        for _ in range(num_rows)
+    ]
+    list_float_col_2 = [
+        [np.random.uniform(0.0, 1.0) for _ in range(np.random.randint(1, 8))]
+        for _ in range(num_rows)
+    ]
+    list_float_col_3 = [
+        [np.random.uniform(-10.0, 10.0)
+         for _ in range(np.random.randint(2, 9))]
+        for _ in range(num_rows)
+    ]
+
+    # List of strings
+    fruits = [
+        "apple", "banana", "cherry", "date", "elderberry", "fig", "grape",
+        "honeydew", "kiwi", "lemon", "mango", "nectarine", "orange",
+        "papaya", "quince", "raspberry"
+    ]
+    list_string_col_1 = [
+        [random.choice(fruits) for _ in range(np.random.randint(1, 6))]
+        for _ in range(num_rows)
+    ]
+
+    colors = [
+        "red", "blue", "green", "yellow", "purple", "orange", "pink", "brown",
+        "black", "white", "gray", "cyan", "magenta", "lime", "navy", "teal"
+    ]
+    list_string_col_2 = [
+        [random.choice(colors) for _ in range(np.random.randint(2, 7))]
+        for _ in range(num_rows)
+    ]
+
+    animals = [
+        "cat", "dog", "bird", "fish", "horse", "cow", "pig", "sheep",
+        "goat", "rabbit", "hamster", "guinea_pig", "ferret", "chinchilla"
+    ]
+    list_string_col_3 = [
+        [random.choice(animals) for _ in range(np.random.randint(1, 5))]
+        for _ in range(num_rows)
+    ]
+
+    # List of timestamps
+    list_timestamp_col_1 = [
+        [pd.Timestamp.now() + pd.Timedelta(days=np.random.randint(-365, 365))
+         for _ in range(np.random.randint(1, 4))]
+        for _ in range(num_rows)
+    ]
+    list_timestamp_col_2 = [
+        [pd.Timestamp("2024-01-01") +
+         pd.Timedelta(hours=np.random.randint(0, 8760))
+         for _ in range(np.random.randint(2, 6))]
+        for _ in range(num_rows)
+    ]
+
+    # List of booleans
+    list_bool_col_1 = [
+        [random.choice([True, False]) for _ in range(np.random.randint(2, 8))]
+        for _ in range(num_rows)
+    ]
+    list_bool_col_2 = [
+        [i % 2 == 0 for i in range(np.random.randint(3, 10))]
+        for _ in range(num_rows)
+    ]
+
+    # List of dates
+    list_date_col_1 = [
+        [pd.date_range("2020-01-01", periods=1, freq="D")[0] +
+         pd.Timedelta(days=np.random.randint(-1000, 1000))
+         for _ in range(np.random.randint(1, 5))]
+        for _ in range(num_rows)
+    ]
+
+    # List of times
+    list_time_col_1 = [
+        [(pd.Timestamp("00:00:00") +
+          pd.Timedelta(hours=np.random.randint(0, 24))).time()
+         for _ in range(np.random.randint(2, 6))]
+        for _ in range(num_rows)
+    ]
+
+    # List of mixed types (integers and strings)
+    list_mixed_col_1 = [
+        [str(random.choice([np.random.randint(1, 100), random.choice(fruits)]))
+         for _ in range(np.random.randint(2, 7))]
+        for _ in range(num_rows)
+    ]
+
+    # Create the original DataFrame with all columns
+    original_df = pd.DataFrame(
         {
             "string_col": string_column,
             "float_col": float_column,
@@ -299,9 +426,6 @@ def generate_parquet_data(
             "timestamp_col": timestamp_column,
             "bool_col": bool_column,
             "decimal_col": decimal_column,
-            "list_int_col": list_int_column,
-            "list_double_col": list_double_column,
-            "list_float_col": list_float_column,
             "uuid_col": uuid_column,
             "email_col": email_column,
             "ip_col": ip_column,
@@ -335,14 +459,6 @@ def generate_parquet_data(
             "decimal_col_3": decimal_col_3,
             "decimal_col_4": decimal_col_4,
             "decimal_col_5": decimal_col_5,
-            "list_int_col_2": list_int_col_2,
-            "list_int_col_3": list_int_col_3,
-            "list_double_col_2": list_double_col_2,
-            "list_double_col_3": list_double_col_3,
-            "list_float_col_2": list_float_col_2,
-            "list_float_col_3": list_float_col_3,
-            "list_float_col_4": list_float_col_4,
-            "list_float_col_5": list_float_col_5,
             "uuid_col_2": uuid_col_2,
             "uuid_col_3": uuid_col_3,
             "email_col_2": email_col_2,
@@ -363,8 +479,63 @@ def generate_parquet_data(
             "positive_int_col_3": positive_int_col_3,
             "negative_float_col_2": negative_float_col_2,
             "negative_float_col_3": negative_float_col_3,
+            "string_col_6": string_col_6,
+            "string_col_7": string_col_7,
+            "string_col_8": string_col_8,
+            "string_col_9": string_col_9,
+            "string_col_10": string_col_10,
+            "float_col_6": float_col_6,
+            "float_col_7": float_col_7,
+            "float_col_8": float_col_8,
+            "float_col_9": float_col_9,
+            "float_col_10": float_col_10,
+            "int_col_6": int_col_6,
+            "int_col_7": int_col_7,
+            "int_col_8": int_col_8,
+            "int_col_9": int_col_9,
+            "int_col_10": int_col_10,
+            "bool_col_6": bool_col_6,
+            "bool_col_7": bool_col_7,
+            "bool_col_8": bool_col_8,
+            "bool_col_9": bool_col_9,
+            "bool_col_10": bool_col_10,
+            "timestamp_col_4": timestamp_col_4,
+            "timestamp_col_5": timestamp_col_5,
+            "decimal_col_6": decimal_col_6,
+            "decimal_col_7": decimal_col_7,
+            "decimal_col_8": decimal_col_8,
+            "decimal_col_9": decimal_col_9,
+            "decimal_col_10": decimal_col_10,
         }
     )
+
+    # Get all column names except the 0th one (string_col)
+    all_columns = list(original_df.columns)
+    columns_to_remove = all_columns[1:]  # Exclude the 0th column
+
+    # Randomly select 15 columns to remove
+    columns_to_remove = random.sample(columns_to_remove, 15)
+
+    # Create new DataFrame with removed columns and new list columns
+    df = original_df.drop(columns=columns_to_remove)
+
+    # Add the new list columns
+    df["list_int_col_1"] = list_int_col_1
+    df["list_int_col_2"] = list_int_col_2
+    df["list_int_col_3"] = list_int_col_3
+    df["list_float_col_1"] = list_float_col_1
+    df["list_float_col_2"] = list_float_col_2
+    df["list_float_col_3"] = list_float_col_3
+    df["list_string_col_1"] = list_string_col_1
+    df["list_string_col_2"] = list_string_col_2
+    df["list_string_col_3"] = list_string_col_3
+    df["list_timestamp_col_1"] = list_timestamp_col_1
+    df["list_timestamp_col_2"] = list_timestamp_col_2
+    df["list_bool_col_1"] = list_bool_col_1
+    df["list_bool_col_2"] = list_bool_col_2
+    df["list_date_col_1"] = list_date_col_1
+    df["list_time_col_1"] = list_time_col_1
+    df["list_mixed_col_1"] = list_mixed_col_1
 
     # Convert DataFrame to Arrow Table
     table = pa.Table.from_pandas(df)
