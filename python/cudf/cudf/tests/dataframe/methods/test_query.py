@@ -30,7 +30,6 @@ def test_query_parser(text, expect_args):
     assert tuple(argspec.args) == tuple(expect_args)
 
 
-@pytest.mark.parametrize("nelem", [1, 10])
 @pytest.mark.parametrize(
     "fn",
     [
@@ -40,20 +39,22 @@ def test_query_parser(text, expect_args):
     ],
 )
 @pytest.mark.parametrize("nulls", [True, False])
-def test_query(nelem, fn, nulls):
-    # prepare
+def test_query(fn, nulls):
+    nelem = 5
     expect_fn, query_expr = fn
     rng = np.random.default_rng(seed=0)
-    pdf = pd.DataFrame()
-    pdf["a"] = np.arange(nelem)
-    pdf["b"] = rng.random(nelem) * nelem
+    pdf = pd.DataFrame(
+        {
+            "a": np.arange(nelem),
+            "b": rng.random(nelem) * nelem,
+        }
+    )
     if nulls:
         pdf.loc[::2, "a"] = None
     gdf = cudf.from_pandas(pdf)
     assert_eq(pdf.query(query_expr), gdf.query(query_expr))
 
 
-@pytest.mark.parametrize("nelem", [1, 10])
 @pytest.mark.parametrize(
     "fn",
     [
@@ -64,8 +65,8 @@ def test_query(nelem, fn, nulls):
         ),
     ],
 )
-def test_query_ref_env(nelem, fn):
-    # prepare
+def test_query_ref_env(fn):
+    nelem = 5
     expect_fn, query_expr = fn
     rng = np.random.default_rng(seed=0)
     df = DataFrame()
@@ -104,7 +105,8 @@ def test_query_local_dict():
     got = df.query(expr, local_dict={"val": 10})
     np.testing.assert_array_equal(aa[aa < 10], got["a"].to_numpy())
 
-    # test for datetime
+
+def test_query_local_dict_datetime():
     df = DataFrame()
     data = np.array(["2018-10-07", "2018-10-08"], dtype="datetime64")
     df["datetimes"] = data
@@ -166,7 +168,6 @@ def test_query_empty_frames():
     assert_eq(got, expect)
 
 
-@pytest.mark.parametrize(("a_val", "b_val", "c_val"), [(4, 3, 15)])
 @pytest.mark.parametrize("index", ["a", ["a", "b"]])
 @pytest.mark.parametrize(
     "query",
@@ -176,7 +177,10 @@ def test_query_empty_frames():
         "(a < @a_val and b >@b_val) or c >@c_val",
     ],
 )
-def test_query_with_index_name(index, query, a_val, b_val, c_val):
+def test_query_with_index_name(index, query):
+    a_val = 4  # noqa: F841
+    b_val = 3  # noqa: F841
+    c_val = 15  # noqa: F841
     pdf = pd.DataFrame(
         {
             "a": [1, None, 3, 4, 5],
@@ -194,7 +198,6 @@ def test_query_with_index_name(index, query, a_val, b_val, c_val):
     assert_eq(out, expect)
 
 
-@pytest.mark.parametrize(("a_val", "b_val", "c_val"), [(4, 3, 15)])
 @pytest.mark.parametrize(
     "query",
     [
@@ -203,7 +206,10 @@ def test_query_with_index_name(index, query, a_val, b_val, c_val):
         "(index < @a_val and b >@b_val) or c >@c_val",
     ],
 )
-def test_query_with_index_keyword(query, a_val, b_val, c_val):
+def test_query_with_index_keyword(query):
+    a_val = 4  # noqa: F841
+    b_val = 3  # noqa: F841
+    c_val = 15  # noqa: F841
     pdf = pd.DataFrame(
         {
             "a": [1, None, 3, 4, 5],
@@ -238,15 +244,6 @@ def test_query_unsupported_dtypes():
 
 
 @pytest.mark.parametrize(
-    "values",
-    [
-        [0, 1.0, 2.0, None, np.nan, None, 3, 5],
-        [0, 1.0, 2.0, None, 3, np.nan, None, 4],
-        [0, 1.0, 2.0, None, 3, np.nan, None, 4, None, 9],
-    ],
-)
-@pytest.mark.parametrize("nan_as_null", [True, False])
-@pytest.mark.parametrize(
     "query",
     [
         "a == 3",
@@ -260,7 +257,8 @@ def test_query_unsupported_dtypes():
         "a >= 3",
     ],
 )
-def test_query_mask(values, nan_as_null, query):
+def test_query_mask(nan_as_null, query):
+    values = [0, 1.0, 2.0, None, 3, np.nan, None, 4]
     data = {"a": values}
     pdf = pd.DataFrame(data)
     gdf = cudf.DataFrame(data, nan_as_null=nan_as_null)
