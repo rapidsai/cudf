@@ -217,6 +217,16 @@ def arithmetic_op(request):
     return request.param
 
 
+@pytest.fixture(
+    params=itertools.chain.from_iterable(
+        (op.__name__, f"r{op.__name__}") for op in arithmetic_ops
+    )
+)
+def arithmetic_op_method(request):
+    """Arithmetic methods defined on Series/DataFrame"""
+    return request.param
+
+
 @pytest.fixture(params=comparison_ops)
 def comparison_op(request):
     return request.param

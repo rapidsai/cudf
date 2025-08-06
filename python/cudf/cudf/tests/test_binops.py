@@ -52,35 +52,6 @@ STRING_TYPES = {"str"}
         "rfloordiv",
         "truediv",
         "rtruediv",
-    ]
-)
-def binop_arithmetic_func(request):
-    return request.param
-
-
-@pytest.fixture(params=["eq", "ne", "lt", "le", "gt", "ge"])
-def comparison_op_method(request):
-    return request.param
-
-
-@pytest.fixture(
-    params=[
-        "add",
-        "radd",
-        "sub",
-        "rsub",
-        "mul",
-        "rmul",
-        "mod",
-        "rmod",
-        "pow",
-        "rpow",
-        "div",
-        "divide",
-        "floordiv",
-        "rfloordiv",
-        "truediv",
-        "rtruediv",
         "eq",
         "ne",
         "lt",
@@ -644,7 +615,7 @@ def test_boolean_scalar_binop(op):
 @pytest.mark.parametrize("fill_value", [None, 27])
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
 def test_operator_func_between_series(
-    dtype, binop_arithmetic_func, has_nulls, fill_value
+    dtype, arithmetic_op_method, has_nulls, fill_value
 ):
     count = 1000
     gdf_series_a = utils.gen_rand_series(
@@ -656,10 +627,10 @@ def test_operator_func_between_series(
     pdf_series_a = gdf_series_a.to_pandas()
     pdf_series_b = gdf_series_b.to_pandas()
 
-    gdf_result = getattr(gdf_series_a, binop_arithmetic_func)(
+    gdf_result = getattr(gdf_series_a, arithmetic_op_method)(
         gdf_series_b, fill_value=fill_value
     )
-    pdf_result = getattr(pdf_series_a, binop_arithmetic_func)(
+    pdf_result = getattr(pdf_series_a, arithmetic_op_method)(
         pdf_series_b, fill_value=fill_value
     )
 
@@ -670,7 +641,7 @@ def test_operator_func_between_series(
 @pytest.mark.parametrize("fill_value", [None, 27])
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
 def test_operator_func_series_and_scalar(
-    dtype, binop_arithmetic_func, has_nulls, fill_value
+    dtype, arithmetic_op_method, has_nulls, fill_value
 ):
     count = 1000
     scalar = 59
@@ -679,11 +650,11 @@ def test_operator_func_series_and_scalar(
     )
     pdf_series = gdf_series.to_pandas()
 
-    gdf_series_result = getattr(gdf_series, binop_arithmetic_func)(
+    gdf_series_result = getattr(gdf_series, arithmetic_op_method)(
         scalar,
         fill_value=fill_value,
     )
-    pdf_series_result = getattr(pdf_series, binop_arithmetic_func)(
+    pdf_series_result = getattr(pdf_series, arithmetic_op_method)(
         scalar,
         fill_value=fill_value,
     )
@@ -770,7 +741,7 @@ def test_operator_func_series_and_scalar_logical(
 @pytest.mark.parametrize("fill_value", [None, 27])
 @pytest.mark.parametrize("other", ["df", "scalar"])
 def test_operator_func_dataframe(
-    binop_arithmetic_func, nulls, fill_value, other
+    arithmetic_op_method, nulls, fill_value, other
 ):
     num_rows = 100
     num_cols = 3
@@ -798,8 +769,8 @@ def test_operator_func_dataframe(
     gdf1 = cudf.DataFrame.from_pandas(pdf1)
     gdf2 = cudf.DataFrame.from_pandas(pdf2) if other == "df" else 59.0
 
-    got = getattr(gdf1, binop_arithmetic_func)(gdf2, fill_value=fill_value)
-    expect = getattr(pdf1, binop_arithmetic_func)(pdf2, fill_value=fill_value)[
+    got = getattr(gdf1, arithmetic_op_method)(gdf2, fill_value=fill_value)
+    expect = getattr(pdf1, arithmetic_op_method)(pdf2, fill_value=fill_value)[
         list(got._data)
     ]
 
