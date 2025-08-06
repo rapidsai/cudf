@@ -95,7 +95,7 @@ def test_multiindex_copy_deep(data, copy_on_write, deep):
                 child.base_data.get_ptr(mode="read") for child in rchildren
             ]
 
-            assert all((x == y) for x, y in zip(lptrs, rptrs))
+            assert all((x == y) for x, y in zip(lptrs, rptrs, strict=True))
 
         elif isinstance(data, pd.MultiIndex):
             data = cudf.MultiIndex.from_pandas(data)
@@ -113,16 +113,22 @@ def test_multiindex_copy_deep(data, copy_on_write, deep):
                 lv._column.base_data.get_ptr(mode="read") for lv in mi2._levels
             ]
 
-            assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
+            assert all(
+                (x == y) == same_ref for x, y in zip(lptrs, rptrs, strict=True)
+            )
 
             # Assert ._codes identity
             lptrs = [c.base_data.get_ptr(mode="read") for c in mi1._codes]
             rptrs = [c.base_data.get_ptr(mode="read") for c in mi2._codes]
 
-            assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
+            assert all(
+                (x == y) == same_ref for x, y in zip(lptrs, rptrs, strict=True)
+            )
 
             # Assert ._data identity
             lptrs = [d.base_data.get_ptr(mode="read") for d in mi1._columns]
             rptrs = [d.base_data.get_ptr(mode="read") for d in mi2._columns]
 
-            assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
+            assert all(
+                (x == y) == same_ref for x, y in zip(lptrs, rptrs, strict=True)
+            )

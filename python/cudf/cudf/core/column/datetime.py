@@ -440,7 +440,7 @@ class DatetimeColumn(TemporalBaseColumn):
         return {
             field: self.strftime(format=directive).astype(np.dtype(np.uint32))
             for field, directive in zip(
-                ["year", "week", "day"], ["%G", "%V", "%u"]
+                ["year", "week", "day"], ["%G", "%V", "%u"], strict=True
             )
         }
 

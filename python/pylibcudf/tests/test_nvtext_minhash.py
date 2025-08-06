@@ -29,7 +29,10 @@ def test_minhash(minhash_input_data, width):
         width,
     )
     pa_result = plc.interop.to_arrow(result)
-    assert all(len(got) == len(seeds) for got, s in zip(pa_result, input_arr))
+    assert all(
+        len(got) == len(seeds)
+        for got, s in zip(pa_result, input_arr, strict=True)
+    )
     assert pa_result.type == pa.list_(
         pa.field("element", seed_type, nullable=False)
     )
@@ -75,7 +78,10 @@ def test_minhash_ngrams(minhash_ngrams_input_data, ngrams):
         plc.Column.from_arrow(ab),
     )
     pa_result = plc.interop.to_arrow(result)
-    assert all(len(got) == len(ab) for got, s in zip(pa_result, input_arr))
+    assert all(
+        len(got) == len(ab)
+        for got, s in zip(pa_result, input_arr, strict=True)
+    )
     assert pa_result.type == pa.list_(
         pa.field("element", seed_type, nullable=False)
     )
