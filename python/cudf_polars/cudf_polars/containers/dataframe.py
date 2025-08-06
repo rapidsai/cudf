@@ -46,7 +46,7 @@ def _create_polars_column_metadata(
 
     return plc.interop.ColumnMetadata(
         name=name,
-        timezone=timezone or "",
+        timezone=timezone,
         precision=precision,
         children_meta=children_meta,
     )
