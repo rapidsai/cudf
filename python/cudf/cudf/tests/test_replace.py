@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 import operator
 import re
@@ -27,11 +27,11 @@ from cudf.testing._utils import (
 
 
 @pytest.mark.parametrize(
-    "gsr",
+    "gsr_data, dtype",
     [
-        cudf.Series([5, 1, 2, 3, None, 243, None, 4]),
-        cudf.Series(["one", "two", "three", None, "one"], dtype="category"),
-        cudf.Series([*list(range(400)), None]),
+        [[5, 1, 2, 3, None, 243, None, 4], None],
+        [["one", "two", "three", None, "one"], "category"],
+        [[*list(range(400)), None], None],
     ],
 )
 @pytest.mark.parametrize(
@@ -49,7 +49,8 @@ from cudf.testing._utils import (
         (np.inf, 4),
     ],
 )
-def test_series_replace_all(gsr, to_replace, value):
+def test_series_replace_all(gsr_data, dtype, to_replace, value):
+    gsr = cudf.Series(gsr_data, dtype=dtype)
     psr = gsr.to_pandas()
 
     gd_to_replace = to_replace
@@ -183,28 +184,30 @@ def test_series_replace_with_nulls():
     reason="warning introduced in pandas-2.2.0",
 )
 @pytest.mark.parametrize(
-    "df",
+    "data, dtype",
     [
-        cudf.DataFrame(
+        (
             {
                 "a": [0, 1, None, 2, 3],
                 "b": [3, 2, 2, 3, None],
                 "c": ["abc", "def", ".", None, None],
-            }
+            },
+            None,
         ),
-        cudf.DataFrame(
+        (
             {
                 "a": ["one", "two", None, "three"],
                 "b": ["one", None, "two", "three"],
             },
-            dtype="category",
+            "category",
         ),
-        cudf.DataFrame(
+        (
             {
                 "col one": [None, 10, 11, None, 1000, 500, 600],
                 "col two": ["abc", "def", "ghi", None, "pp", None, "a"],
                 "a": [0.324, 0.234, 324.342, 23.32, 9.9, None, None],
-            }
+            },
+            None,
         ),
     ],
 )
@@ -245,8 +248,8 @@ def test_series_replace_with_nulls():
         ),
     ],
 )
-def test_dataframe_replace(df, to_replace, value):
-    gdf = df
+def test_dataframe_replace(data, dtype, to_replace, value):
+    gdf = cudf.DataFrame(data, dtype=dtype)
     pdf = gdf.to_pandas()
 
     pd_value = value
@@ -262,7 +265,7 @@ def test_dataframe_replace(df, to_replace, value):
         gd_to_replace = to_replace
 
     can_warn = (
-        isinstance(df["a"].dtype, cudf.CategoricalDtype)
+        isinstance(gdf["a"].dtype, cudf.CategoricalDtype)
         and isinstance(to_replace, str)
         and to_replace == "two"
         and isinstance(value, str)
@@ -394,26 +397,29 @@ def test_fillna_method_numerical(data, container, data_dtype, method, inplace):
 
 
 @pytest.mark.parametrize(
-    "gsr_data",
+    "gsr_data, dtype",
     [
-        cudf.Series(["2.34", "5.2", "7.47", None, "92.29", None]).astype(
-            Decimal64Dtype(7, 2)
+        (["2.34", "5.2", "7.47", None, "92.29", None], Decimal64Dtype(7, 2)),
+        (
+            ["-74.56", None, "-23.73", "34.55", "2.89", None],
+            Decimal32Dtype(7, 2),
         ),
-        cudf.Series(["-74.56", None, "-23.73", "34.55", "2.89", None]).astype(
-            Decimal32Dtype(7, 2)
+        (
+            ["85.955", np.nan, "-3.243", np.nan, "29.492", np.nan],
+            Decimal64Dtype(8, 3),
         ),
-        cudf.Series(
-            ["85.955", np.nan, "-3.243", np.nan, "29.492", np.nan]
-        ).astype(Decimal64Dtype(8, 3)),
-        cudf.Series(
-            ["2.964", None, "57.432", "-989.330", None, "56.444"]
-        ).astype(Decimal64Dtype(8, 3)),
-        cudf.Series(
-            [np.nan, "55.2498", np.nan, "-5.2965", "-28.9423", np.nan]
-        ).astype(Decimal64Dtype(10, 4)),
-        cudf.Series(
-            ["2.964", None, "54347.432", "-989.330", None, "56.444"]
-        ).astype(Decimal128Dtype(20, 7)),
+        (
+            ["2.964", None, "57.432", "-989.330", None, "56.444"],
+            Decimal64Dtype(8, 3),
+        ),
+        (
+            [np.nan, "55.2498", np.nan, "-5.2965", "-28.9423", np.nan],
+            Decimal64Dtype(10, 4),
+        ),
+        (
+            ["2.964", None, "54347.432", "-989.330", None, "56.444"],
+            Decimal128Dtype(20, 7),
+        ),
     ],
 )
 @pytest.mark.parametrize(
@@ -433,8 +439,8 @@ def test_fillna_method_numerical(data, container, data_dtype, method, inplace):
     ],
 )
 @pytest.mark.parametrize("inplace", [True, False])
-def test_fillna_decimal(gsr_data, fill_value, inplace):
-    gsr = gsr_data.copy(deep=True)
+def test_fillna_decimal(gsr_data, dtype, fill_value, inplace):
+    gsr = cudf.Series(gsr_data).astype(dtype)
     psr = gsr.to_pandas()
 
     if isinstance(fill_value, cudf.Series):
@@ -1306,67 +1312,73 @@ def test_series_replace_errors():
     "gsr,old,new,expected",
     [
         (
-            cudf.Series(["a", "b", "c", None]),
+            lambda: cudf.Series(["a", "b", "c", None]),
             None,
             "a",
-            cudf.Series(["a", "b", "c", "a"]),
+            lambda: cudf.Series(["a", "b", "c", "a"]),
         ),
         (
-            cudf.Series(["a", "b", "c", None]),
+            lambda: cudf.Series(["a", "b", "c", None]),
             [None, "a", "a"],
             ["c", "b", "d"],
-            cudf.Series(["d", "b", "c", "c"]),
+            lambda: cudf.Series(["d", "b", "c", "c"]),
         ),
         (
-            cudf.Series(["a", "b", "c", None]),
+            lambda: cudf.Series(["a", "b", "c", None]),
             [None, "a"],
             ["b", None],
-            cudf.Series([None, "b", "c", "b"]),
+            lambda: cudf.Series([None, "b", "c", "b"]),
         ),
         (
-            cudf.Series(["a", "b", "c", None]),
+            lambda: cudf.Series(["a", "b", "c", None]),
             [None, None],
             [None, None],
-            cudf.Series(["a", "b", "c", None]),
+            lambda: cudf.Series(["a", "b", "c", None]),
         ),
-        (cudf.Series([1, 2, None, 3]), None, 10, cudf.Series([1, 2, 10, 3])),
         (
-            cudf.Series([1, 2, None, 3]),
+            lambda: cudf.Series([1, 2, None, 3]),
+            None,
+            10,
+            lambda: cudf.Series([1, 2, 10, 3]),
+        ),
+        (
+            lambda: cudf.Series([1, 2, None, 3]),
             [None, 1, 1],
             [3, 2, 4],
-            cudf.Series([4, 2, 3, 3]),
+            lambda: cudf.Series([4, 2, 3, 3]),
         ),
         (
-            cudf.Series([1, 2, None, 3]),
+            lambda: cudf.Series([1, 2, None, 3]),
             [None, 1],
             [2, None],
-            cudf.Series([None, 2, 2, 3]),
+            lambda: cudf.Series([None, 2, 2, 3]),
         ),
         (
-            cudf.Series(["a", "q", "t", None], dtype="category"),
+            lambda: cudf.Series(["a", "q", "t", None], dtype="category"),
             None,
             "z",
-            cudf.Series(["a", "q", "t", "z"], dtype="category"),
+            lambda: cudf.Series(["a", "q", "t", "z"], dtype="category"),
         ),
         (
-            cudf.Series(["a", "q", "t", None], dtype="category"),
+            lambda: cudf.Series(["a", "q", "t", None], dtype="category"),
             [None, "a", "q"],
             ["z", None, None],
-            cudf.Series([None, None, "t", "z"], dtype="category"),
+            lambda: cudf.Series([None, None, "t", "z"], dtype="category"),
         ),
         (
-            cudf.Series(["a", None, "t", None], dtype="category"),
+            lambda: cudf.Series(["a", None, "t", None], dtype="category"),
             [None, "t"],
             ["p", None],
-            cudf.Series(["a", "p", None, "p"], dtype="category"),
+            lambda: cudf.Series(["a", "p", None, "p"], dtype="category"),
         ),
     ],
 )
 def test_replace_nulls(gsr, old, new, expected):
+    gsr = gsr()
     with expect_warning_if(isinstance(gsr.dtype, cudf.CategoricalDtype)):
         actual = gsr.replace(old, new)
     assert_eq(
-        expected.sort_values().reset_index(drop=True),
+        expected().sort_values().reset_index(drop=True),
         actual.sort_values().reset_index(drop=True),
     )
 

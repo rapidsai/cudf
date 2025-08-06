@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 from copy import copy, deepcopy
 
 import cupy as cp
@@ -23,55 +23,29 @@ DataFrame copy expectations
 
 
 @pytest.mark.parametrize(
-    "copy_parameters",
+    "fn",
     [
-        {"fn": lambda x: x.copy(), "expected_equality": False},
-        {"fn": lambda x: x.copy(deep=True), "expected_equality": False},
-        {"fn": lambda x: copy(x), "expected_equality": False},
-        {"fn": lambda x: deepcopy(x), "expected_equality": False},
+        lambda x: x.copy(),
+        lambda x: x.copy(deep=True),
+        lambda x: copy(x),
+        lambda x: deepcopy(x),
     ],
 )
-def test_dataframe_deep_copy(copy_parameters):
+def test_dataframe_deep_copy(fn):
     pdf = pd.DataFrame(
         [[1, 2, 3], [4, 5, 6], [7, 8, 9]], columns=["a", "b", "c"]
     )
     gdf = DataFrame.from_pandas(pdf)
-    copy_pdf = copy_parameters["fn"](pdf)
-    copy_gdf = copy_parameters["fn"](gdf)
+    copy_pdf = fn(pdf)
+    copy_gdf = fn(gdf)
     copy_pdf["b"] = [0, 0, 0]
     copy_gdf["b"] = [0, 0, 0]
     pdf_is_equal = np.array_equal(pdf["b"].values, copy_pdf["b"].values)
     gdf_is_equal = np.array_equal(
         gdf["b"].to_numpy(), copy_gdf["b"].to_numpy()
     )
-    assert pdf_is_equal == copy_parameters["expected_equality"]
-    assert gdf_is_equal == copy_parameters["expected_equality"]
-
-
-@pytest.mark.parametrize(
-    "copy_parameters",
-    [
-        {"fn": lambda x: x.copy(), "expected_equality": False},
-        {"fn": lambda x: x.copy(deep=True), "expected_equality": False},
-        {"fn": lambda x: copy(x), "expected_equality": False},
-        {"fn": lambda x: deepcopy(x), "expected_equality": False},
-    ],
-)
-def test_dataframe_deep_copy_and_insert(copy_parameters):
-    pdf = pd.DataFrame(
-        [[1, 2, 3], [4, 5, 6], [7, 8, 9]], columns=["a", "b", "c"]
-    )
-    gdf = DataFrame.from_pandas(pdf)
-    copy_pdf = copy_parameters["fn"](pdf)
-    copy_gdf = copy_parameters["fn"](gdf)
-    copy_pdf["b"] = [0, 0, 0]
-    copy_gdf["b"] = [0, 0, 0]
-    pdf_is_equal = np.array_equal(pdf["b"].values, copy_pdf["b"].values)
-    gdf_is_equal = np.array_equal(
-        gdf["b"].to_numpy(), copy_gdf["b"].to_numpy()
-    )
-    assert pdf_is_equal == copy_parameters["expected_equality"]
-    assert gdf_is_equal == copy_parameters["expected_equality"]
+    assert not pdf_is_equal
+    assert not gdf_is_equal
 
 
 """
