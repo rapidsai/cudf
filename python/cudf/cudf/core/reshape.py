@@ -463,7 +463,7 @@ def concat(
                     "label types in cuDF at this time. You must convert "
                     "the labels to the same type."
                 )
-            for k, o in zip(keys_objs, objs):
+            for k, o in zip(keys_objs, objs, strict=True):
                 for name, col in o._column_labels_and_values:
                     # if only series, then only keep keys_objs as column labels
                     # if the existing column is multiindex, prepend it
@@ -834,14 +834,14 @@ def get_dummies(
         elif isinstance(prefix, dict):
             prefix_map = prefix
         else:
-            prefix_map = dict(zip(columns, prefix))
+            prefix_map = dict(zip(columns, prefix, strict=True))
 
         if isinstance(prefix_sep, str):
             prefix_sep_map = {}
         elif isinstance(prefix_sep, dict):
             prefix_sep_map = prefix_sep
         else:
-            prefix_sep_map = dict(zip(columns, prefix_sep))
+            prefix_sep_map = dict(zip(columns, prefix_sep, strict=True))
 
         # If we have no columns to encode, we need to drop
         # fallback columns(if any)
@@ -1030,6 +1030,7 @@ def _pivot(
                         target_col.split_by_offsets(
                             list(range(nrows, new_size, nrows))
                         ),
+                        strict=True,
                     )
                 )
             )
@@ -1335,7 +1336,9 @@ def _one_hot_encode_column(
         x if x is not None else "<NA>"
         for x in categories.to_arrow().to_pylist()
     )
-    data = dict(zip(result_labels, column.one_hot_encode(categories)))
+    data = dict(
+        zip(result_labels, column.one_hot_encode(categories), strict=True)
+    )
 
     if drop_first and len(data):
         data.pop(next(iter(data)))
@@ -1463,8 +1466,8 @@ def crosstab(
         raise ValueError("colnames must be unique")
 
     data = {
-        **dict(zip(rownames, map(as_column, index))),
-        **dict(zip(colnames, map(as_column, columns))),
+        **dict(zip(rownames, map(as_column, index), strict=True)),
+        **dict(zip(colnames, map(as_column, columns), strict=True)),
     }
 
     df = cudf.DataFrame._from_data(data)
