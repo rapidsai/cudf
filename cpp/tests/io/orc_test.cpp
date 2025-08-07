@@ -2321,10 +2321,25 @@ TEST_F(OrcReaderTest, DeviceReadAsyncThrows)
   auto throwing_source = std::make_unique<cudf::test::ThrowingDeviceReadDatasource>(out_buffer);
   cudf::io::source_info source_info(throwing_source.get());
 
-  // Try to read the ORC file - this should propagate the DeviceReadAsyncException
+  // Try to read the ORC file - this should propagate the AsyncException
   // from device_read_async
   cudf::io::orc_reader_options read_args = cudf::io::orc_reader_options::builder(source_info);
-  EXPECT_THROW(cudf::io::read_orc(read_args), cudf::test::DeviceReadAsyncException);
+  EXPECT_THROW(cudf::io::read_orc(read_args), cudf::test::AsyncException);
+}
+
+TEST_F(OrcReaderTest, DeviceWriteAsyncThrows)
+{
+  // Create a simple table to write
+  auto col0           = cudf::test::fixed_width_column_wrapper<int>{{1, 2, 3, 4, 5}};
+  auto table_to_write = table_view{{col0}};
+
+  auto throwing_sink = std::make_unique<cudf::test::ThrowingDeviceWriteDataSink>();
+
+  cudf::io::orc_writer_options write_args =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{throwing_sink.get()}, table_to_write);
+
+  // The write_orc call should throw AsyncException
+  EXPECT_THROW(cudf::io::write_orc(write_args), cudf::test::AsyncException);
 }
 
 INSTANTIATE_TEST_CASE_P(Nvcomp,

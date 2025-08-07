@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/io/data_sink.hpp>
 #include <cudf/io/datasource.hpp>
 
 #include <future>
@@ -26,7 +27,7 @@ namespace cudf::test {
 /**
  * @brief Custom exception for device read async testing
  */
-class DeviceReadAsyncException : public std::exception {};
+class AsyncException : public std::exception {};
 
 /**
  * @brief Datasource that throws an exception in device_read_async for testing
@@ -67,11 +68,43 @@ class ThrowingDeviceReadDatasource : public cudf::io::datasource {
   {
     // This datasource returns a future that throws a custom exception when accessed for testing
     std::promise<size_t> promise;
-    promise.set_exception(std::make_exception_ptr(DeviceReadAsyncException()));
+    promise.set_exception(std::make_exception_ptr(AsyncException()));
     return promise.get_future();
   }
 
   [[nodiscard]] size_t size() const override { return data_.size(); }
+};
+
+/**
+ * @brief Data sink that throws an exception in device_write_async for testing
+ */
+class ThrowingDeviceWriteDataSink : public cudf::io::data_sink {
+ private:
+  size_t buffer_size_ = 0;
+
+ public:
+  void host_write(void const* data, size_t size) override { buffer_size_ += size; }
+
+  [[nodiscard]] bool supports_device_write() const override { return true; }
+
+  void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
+  {
+    this->device_write_async(gpu_data, size, stream).get();
+  }
+
+  std::future<void> device_write_async(void const* gpu_data,
+                                       size_t size,
+                                       rmm::cuda_stream_view stream) override
+  {
+    // This data sink returns a future that throws a custom exception when accessed for testing
+    std::promise<void> promise;
+    promise.set_exception(std::make_exception_ptr(AsyncException()));
+    return promise.get_future();
+  }
+
+  void flush() override {}
+
+  size_t bytes_written() override { return buffer_size_; }
 };
 
 }  // namespace cudf::test

@@ -3609,11 +3609,26 @@ TEST_F(JsonReaderTest, DeviceReadAsyncThrows)
   auto throwing_source = std::make_unique<cudf::test::ThrowingDeviceReadDatasource>(json_data);
   cudf::io::source_info source_info(throwing_source.get());
 
-  // Try to read the JSON data - this should propagate the DeviceReadAsyncException
+  // Try to read the JSON data - this should propagate the AsyncException
   // from device_read_async
   cudf::io::json_reader_options read_args =
     cudf::io::json_reader_options::builder(source_info).lines(true);
-  EXPECT_THROW(cudf::io::read_json(read_args), cudf::test::DeviceReadAsyncException);
+  EXPECT_THROW(cudf::io::read_json(read_args), cudf::test::AsyncException);
+}
+
+TEST_F(JsonReaderTest, DeviceWriteAsyncThrows)
+{
+  // Create a simple table to write
+  auto col0           = cudf::test::fixed_width_column_wrapper<int>{{1, 2, 3, 4, 5}};
+  auto table_to_write = cudf::table_view{{col0}};
+
+  auto throwing_sink = std::make_unique<cudf::test::ThrowingDeviceWriteDataSink>();
+
+  cudf::io::json_writer_options write_args = cudf::io::json_writer_options::builder(
+    cudf::io::sink_info{throwing_sink.get()}, table_to_write);
+
+  // The write_json call should throw AsyncException
+  EXPECT_THROW(cudf::io::write_json(write_args), cudf::test::AsyncException);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
