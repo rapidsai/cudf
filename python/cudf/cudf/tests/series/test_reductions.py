@@ -11,7 +11,11 @@ from packaging.version import parse
 
 import cudf
 from cudf import Series
-from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
+from cudf.core._compat import (
+    PANDAS_CURRENT_SUPPORTED_VERSION,
+    PANDAS_GE_230,
+    PANDAS_VERSION,
+)
 from cudf.core.column.column import as_column
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing import _utils as utils, assert_eq
@@ -511,3 +515,84 @@ def test_dataframe_axis_0_preserve_column_type_in_index(columns):
     result = cudf_df.sum(axis=0)
     expected = pd_df.sum(axis=0)
     assert_eq(result, expected, check_index_type=True)
+
+
+@pytest.mark.parametrize(
+    "data_non_overflow",
+    [
+        [1000000, 200000, 3000000],
+        [1000000, 200000, None],
+        [],
+        [None],
+        [None, None, None, None, None],
+        [12, 12, 22, 343, 4353534, 435342],
+        [10, 20, 30, None, 100],
+        [1000000, 200000, 3000000],
+        [1000000, 200000, None],
+        [1],
+        [12, 11, 232, 223432411, 2343241, 234324, 23234],
+        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+        [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
+        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+    ],
+)
+def test_timedelta_reduction_ops(
+    data_non_overflow, timedelta_types_as_str, reduction_methods
+):
+    if reduction_methods in {
+        "var",
+        "kurtosis",
+        "skew",
+        "any",
+        "all",
+        "product",
+    }:
+        pytest.skip(
+            f"pandas doesn't support {reduction_methods} with {timedelta_types_as_str}"
+        )
+    gsr = cudf.Series(data_non_overflow, dtype=timedelta_types_as_str)
+    psr = gsr.to_pandas()
+
+    if len(psr) > 0 and psr.isnull().all() and reduction_methods == "median":
+        with pytest.warns(RuntimeWarning, match="Mean of empty slice"):
+            expected = getattr(psr, reduction_methods)()
+    else:
+        with expect_warning_if(
+            PANDAS_GE_230
+            and reduction_methods == "quantile"
+            and len(data_non_overflow) == 0
+            and timedelta_types_as_str != "timedelta64[ns]"
+        ):
+            expected = getattr(psr, reduction_methods)()
+    actual = getattr(gsr, reduction_methods)()
+    if pd.isna(expected) and pd.isna(actual):
+        pass
+    elif isinstance(expected, pd.Timedelta) and isinstance(
+        actual, pd.Timedelta
+    ):
+        assert (
+            expected.round(gsr._column.time_unit).value
+            == actual.round(gsr._column.time_unit).value
+        )
+    else:
+        assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("data", [[1, 2, 3], [], [1, 20, 1000, None]])
+@pytest.mark.parametrize("ddof", [1, 2])
+def test_timedelta_std_ddofs(data, timedelta_types_as_str, ddof):
+    gsr = cudf.Series(data, dtype=timedelta_types_as_str)
+    psr = gsr.to_pandas()
+
+    expected = psr.std(ddof=ddof)
+    actual = gsr.std(ddof=ddof)
+
+    if np.isnat(expected.to_numpy()) and np.isnat(actual.to_numpy()):
+        assert True
+    else:
+        np.testing.assert_allclose(
+            expected.to_numpy().astype("float64"),
+            actual.to_numpy().astype("float64"),
+            rtol=1e-5,
+            atol=0,
+        )
