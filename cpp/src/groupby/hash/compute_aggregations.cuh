@@ -101,7 +101,9 @@ void compute_aggregations(int64_t num_rows,
   // memory, such as when aggregating dictionary columns, when there is insufficient dynamic
   // shared memory for shared memory aggregations, or when SUM_WITH_OVERFLOW aggregations are
   // present.
+  stream.synchronize();
   if (!is_shared_memory_compatible) {
+    cudf::scoped_range rng{"compute_global_memory_aggs"};
     compute_global_memory_aggs(num_rows,
                                skip_rows_with_nulls,
                                row_bitmask,
@@ -128,17 +130,23 @@ void compute_aggregations(int64_t num_rows,
 
   auto global_set_ref = global_set.ref(cuco::op::insert_and_find);
 
-  compute_mapping_indices(grid_size,
-                          num_rows,
-                          global_set_ref,
-                          row_bitmask,
-                          skip_rows_with_nulls,
-                          local_mapping_index.data(),
-                          global_mapping_index.data(),
-                          block_cardinality.data(),
-                          key_indices,
-                          needs_global_memory_fallback.data(),
-                          stream);
+  stream.synchronize();
+
+  {
+    cudf::scoped_range rng{"compute_mapping_indices"};
+    compute_mapping_indices(grid_size,
+                            num_rows,
+                            global_set_ref,
+                            row_bitmask,
+                            skip_rows_with_nulls,
+                            local_mapping_index.data(),
+                            global_mapping_index.data(),
+                            block_cardinality.data(),
+                            key_indices,
+                            needs_global_memory_fallback.data(),
+                            stream);
+    stream.synchronize();
+  }
 
   cuda::std::atomic_flag h_needs_fallback;
   // Cannot use `device_scalar::value` as it requires a copy constructor, which
@@ -152,30 +160,41 @@ void compute_aggregations(int64_t num_rows,
   auto const needs_fallback = h_needs_fallback.test();
 
   // make table that will hold sparse results
-  cudf::table sparse_table = create_sparse_results_table(
-    flattened_values, d_agg_kinds.data(), agg_kinds, needs_fallback, populated_keys, stream);
+  cudf::table sparse_table = [&] {
+    cudf::scoped_range rng{"create_sparse_results_table"};
+    auto tmp = create_sparse_results_table(
+      flattened_values, d_agg_kinds.data(), agg_kinds, needs_fallback, populated_keys, stream);
+    stream.synchronize();
+    return tmp;
+  }();
+
   // prepare to launch kernel to do the actual aggregation
   auto d_values       = table_device_view::create(flattened_values, stream);
   auto d_sparse_table = mutable_table_device_view::create(sparse_table, stream);
 
-  compute_shared_memory_aggs(grid_size,
-                             available_shmem_size,
-                             num_rows,
-                             row_bitmask,
-                             skip_rows_with_nulls,
-                             local_mapping_index.data(),
-                             global_mapping_index.data(),
-                             block_cardinality.data(),
-                             *d_values,
-                             *d_sparse_table,
-                             d_agg_kinds.data(),
-                             stream);
+  {
+    cudf::scoped_range rng{"compute_shared_memory_aggs"};
+    compute_shared_memory_aggs(grid_size,
+                               available_shmem_size,
+                               num_rows,
+                               row_bitmask,
+                               skip_rows_with_nulls,
+                               local_mapping_index.data(),
+                               global_mapping_index.data(),
+                               block_cardinality.data(),
+                               *d_values,
+                               *d_sparse_table,
+                               d_agg_kinds.data(),
+                               stream);
+    stream.synchronize();
+  }
 
   // The shared memory groupby is designed so that each thread block can handle up to 128 unique
   // keys. When a block reaches this cardinality limit, shared memory becomes insufficient to store
   // the temporary aggregation results. In these situations, we must fall back to a global memory
   // aggregator to process the remaining aggregation requests.
   if (needs_fallback) {
+    cudf::scoped_range rng{"global_memory_fallback_fn"};
     auto const stride = GROUPBY_BLOCK_SIZE * grid_size;
     thrust::for_each_n(rmm::exec_policy_nosync(stream),
                        thrust::make_counting_iterator(int64_t{0}),
@@ -188,6 +207,7 @@ void compute_aggregations(int64_t num_rows,
                                                  stride,
                                                  row_bitmask,
                                                  skip_rows_with_nulls});
+    stream.synchronize();
   }
 
   // Add results back to sparse_results cache
@@ -197,5 +217,6 @@ void compute_aggregations(int64_t num_rows,
     sparse_results->add_result(
       flattened_values.column(i), *aggs[i], std::move(sparse_result_cols[i]));
   }
+  stream.synchronize();
 }
 }  // namespace cudf::groupby::detail::hash
