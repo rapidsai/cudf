@@ -12,6 +12,7 @@ from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
+from pylibcudf.libcudf.jit cimport udf_source_type
 from pylibcudf.libcudf.types cimport bitmask_type, size_type
 
 from rmm.librmm.device_buffer cimport device_buffer
@@ -135,7 +136,7 @@ cpdef Column mask_to_bools(Py_ssize_t bitmask, int begin_bit, int end_bit):
 cpdef Column transform(list[Column] inputs,
                        str transform_udf,
                        DataType output_type,
-                       bool is_ptx):
+                       UDFSourceType source_type):
     """Create a new column by applying a transform function against
        multiple input columns.
 
@@ -147,9 +148,8 @@ cpdef Column transform(list[Column] inputs,
         The PTX/CUDA string of the transform function to apply.
     output_type : DataType
         The output type that is compatible with the output type in the unary_udf.
-    is_ptx : bool
-        If `True`, the UDF is treated as PTX code.
-        If `False`, the UDF is treated as CUDA code.
+    source_type : UDFSourceType
+        Source type of the UDF
 
     Returns
     -------
@@ -159,14 +159,14 @@ cpdef Column transform(list[Column] inputs,
     cdef vector[column_view] c_inputs
     cdef unique_ptr[column] c_result
     cdef string c_transform_udf = transform_udf.encode()
-    cdef bool c_is_ptx = is_ptx
+    cdef udf_source_type c_source_type = source_type
 
     for input in inputs:
         c_inputs.push_back((<Column?>input).view())
 
     with nogil:
         c_result = cpp_transform.transform(
-            c_inputs, c_transform_udf, output_type.c_obj, c_is_ptx
+            c_inputs, c_transform_udf, output_type.c_obj, c_source_type
         )
 
     return Column.from_libcudf(move(c_result))

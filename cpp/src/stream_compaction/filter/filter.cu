@@ -220,17 +220,27 @@ jitify2::ConfiguredKernel build_kernel(std::string const& kernel_name,
                                        std::vector<column_view> const& input_columns,
                                        bool has_user_data,
                                        std::string const& udf,
-                                       bool is_ptx,
+                                       udf_source_type source_type,
                                        rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr)
 {
-  auto const cuda_source =
-    is_ptx ? cudf::jit::parse_single_function_ptx(
-               udf,
-               "GENERIC_FILTER_OP",
-               cudf::jit::build_ptx_params(
-                 span_outputs, cudf::jit::column_type_names(input_columns), has_user_data))
-           : cudf::jit::parse_single_function_cuda(udf, "GENERIC_FILTER_OP");
+  auto const cuda_source = [&]() {
+    switch (source_type) {
+      case udf_source_type::CUDA: {
+        return cudf::jit::parse_single_function_cuda(udf, "GENERIC_FILTER_OP");
+      } break;
+      case udf_source_type::PTX: {
+        return cudf::jit::parse_single_function_ptx(
+          udf,
+          "GENERIC_FILTER_OP",
+          cudf::jit::build_ptx_params(
+            span_outputs, cudf::jit::column_type_names(input_columns), has_user_data));
+      } break;
+      default: {
+        CUDF_UNREACHABLE();
+      }
+    }
+  }();
 
   return get_kernel(jitify2::reflection::Template(kernel_name)
                       .instantiate(cudf::jit::build_jit_template_params(
@@ -245,7 +255,7 @@ jitify2::ConfiguredKernel build_kernel(std::string const& kernel_name,
 std::vector<std::unique_ptr<column>> filter_operation(column_view base_column,
                                                       std::vector<column_view> const& columns,
                                                       std::string const& predicate_udf,
-                                                      bool is_ptx,
+                                                      udf_source_type source_type,
                                                       std::optional<void*> user_data,
                                                       std::optional<std::vector<bool>> copy_mask,
                                                       rmm::cuda_stream_view stream,
@@ -260,7 +270,7 @@ std::vector<std::unique_ptr<column>> filter_operation(column_view base_column,
                              columns,
                              user_data.has_value(),
                              predicate_udf,
-                             is_ptx,
+                             source_type,
                              stream,
                              mr);
 
@@ -307,7 +317,7 @@ std::vector<std::unique_ptr<column>> filter_operation(column_view base_column,
 namespace detail {
 std::vector<std::unique_ptr<column>> filter(std::vector<column_view> const& columns,
                                             std::string const& predicate_udf,
-                                            bool is_ptx,
+                                            udf_source_type source_type,
                                             std::optional<void*> user_data,
                                             std::optional<std::vector<bool>> copy_mask,
                                             rmm::cuda_stream_view stream,
@@ -321,7 +331,7 @@ std::vector<std::unique_ptr<column>> filter(std::vector<column_view> const& colu
   perform_checks(*base_column, columns, copy_mask);
 
   auto filtered = filter_operation(
-    *base_column, columns, predicate_udf, is_ptx, user_data, copy_mask, stream, mr);
+    *base_column, columns, predicate_udf, source_type, user_data, copy_mask, stream, mr);
 
   return filtered;
 }
@@ -330,14 +340,14 @@ std::vector<std::unique_ptr<column>> filter(std::vector<column_view> const& colu
 
 std::vector<std::unique_ptr<column>> filter(std::vector<column_view> const& columns,
                                             std::string const& predicate_udf,
-                                            bool is_ptx,
+                                            udf_source_type source_type,
                                             std::optional<void*> user_data,
                                             std::optional<std::vector<bool>> copy_mask,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::filter(columns, predicate_udf, is_ptx, user_data, copy_mask, stream, mr);
+  return detail::filter(columns, predicate_udf, source_type, user_data, copy_mask, stream, mr);
 }
 
 }  // namespace cudf

@@ -56,37 +56,51 @@ struct AssertsTest : public RuntimeSupportTest {};
 
 TEST_F(AssertsTest, TypeSupport)
 {
-  EXPECT_NO_THROW(
-    cudf::transform({a, b, t}, udf, cudf::data_type{cudf::type_id::FLOAT32}, false, std::nullopt));
+  EXPECT_NO_THROW(cudf::transform({a, b, t},
+                                  udf,
+                                  cudf::data_type{cudf::type_id::FLOAT32},
+                                  cudf::udf_source_type::CUDA,
+                                  std::nullopt));
 
-  EXPECT_THROW(
-    cudf::transform({a, b, t}, udf, cudf::data_type{cudf::type_id::STRUCT}, false, std::nullopt),
-    std::invalid_argument);
+  EXPECT_THROW(cudf::transform({a, b, t},
+                               udf,
+                               cudf::data_type{cudf::type_id::STRUCT},
+                               cudf::udf_source_type::CUDA,
+                               std::nullopt),
+               std::invalid_argument);
 
-  EXPECT_THROW(
-    cudf::transform(
-      {struct_col, t}, udf, cudf::data_type{cudf::type_id::FLOAT32}, false, std::nullopt),
-    std::invalid_argument);
+  EXPECT_THROW(cudf::transform({struct_col, t},
+                               udf,
+                               cudf::data_type{cudf::type_id::FLOAT32},
+                               cudf::udf_source_type::CUDA,
+                               std::nullopt),
+               std::invalid_argument);
 }
 
 TEST_F(AssertsTest, UnequalRowCount)
 {
-  EXPECT_THROW(
-    cudf::transform(
-      {a, b, bad_col}, udf, cudf::data_type{cudf::type_id::FLOAT32}, false, std::nullopt),
-    std::invalid_argument);
+  EXPECT_THROW(cudf::transform({a, b, bad_col},
+                               udf,
+                               cudf::data_type{cudf::type_id::FLOAT32},
+                               cudf::udf_source_type::CUDA,
+                               std::nullopt),
+               std::invalid_argument);
 }
 
 TEST_F(AssertsTest, NullSupport)
 {
-  EXPECT_NO_THROW(cudf::transform(
-    {a, b_nulls, t}, udf, cudf::data_type{cudf::type_id::FLOAT32}, false, std::nullopt));
+  EXPECT_NO_THROW(cudf::transform({a, b_nulls, t},
+                                  udf,
+                                  cudf::data_type{cudf::type_id::FLOAT32},
+                                  cudf::udf_source_type::CUDA,
+                                  std::nullopt));
 }
 
 struct UnaryOperationIntegrationTest : public cudf::test::BaseFixture {};
 
 template <class dtype, class Op, class Data>
-void test_udf(char const* udf, Op op, Data data_init, cudf::size_type size, bool is_ptx)
+void test_udf(
+  char const* udf, Op op, Data data_init, cudf::size_type size, cudf::udf_source_type source_type)
 {
   auto all_valid = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
   auto data_iter = cudf::detail::make_counting_transform_iterator(0, data_init);
@@ -95,7 +109,7 @@ void test_udf(char const* udf, Op op, Data data_init, cudf::size_type size, bool
     data_iter, data_iter + size, all_valid);
 
   std::unique_ptr<cudf::column> out =
-    cudf::transform({in}, udf, cudf::data_type(cudf::type_to_id<dtype>()), is_ptx);
+    cudf::transform({in}, udf, cudf::data_type(cudf::type_to_id<dtype>()), source_type);
 
   ASSERT_UNARY<dtype, dtype>(out->view(), in, op);
 }
@@ -157,11 +171,11 @@ __device__ inline void    fdsf   (
   auto op        = [](dtype a) { return a * a * a * a; };
   auto data_init = [](cudf::size_type row) { return row % 3; };
 
-  test_udf<dtype>(cuda.c_str(), op, data_init, 500, false);
-  test_udf<dtype>(ptx.c_str(), op, data_init, 500, true);
+  test_udf<dtype>(cuda.c_str(), op, data_init, 500, cudf::udf_source_type::CUDA);
+  test_udf<dtype>(ptx.c_str(), op, data_init, 500, cudf::udf_source_type::PTX);
 
-  test_udf<dtype>(cuda.c_str(), op, data_init, 0, false);
-  test_udf<dtype>(ptx.c_str(), op, data_init, 0, true);
+  test_udf<dtype>(cuda.c_str(), op, data_init, 0, cudf::udf_source_type::CUDA);
+  test_udf<dtype>(ptx.c_str(), op, data_init, 0, cudf::udf_source_type::PTX);
 }
 
 TEST_F(UnaryOperationIntegrationTest, Transform_INT32_INT32)
@@ -195,8 +209,8 @@ TEST_F(UnaryOperationIntegrationTest, Transform_INT32_INT32)
   auto op        = [](dtype a) { return a * a - a; };
   auto data_init = [](cudf::size_type row) { return row % 78; };
 
-  test_udf<dtype>(cuda.c_str(), op, data_init, 500, false);
-  test_udf<dtype>(ptx.c_str(), op, data_init, 500, true);
+  test_udf<dtype>(cuda.c_str(), op, data_init, 500, cudf::udf_source_type::CUDA);
+  test_udf<dtype>(ptx.c_str(), op, data_init, 500, cudf::udf_source_type::PTX);
 }
 
 TEST_F(UnaryOperationIntegrationTest, Transform_INT8_INT8)
@@ -250,8 +264,8 @@ __device__ inline void f(
   auto op        = [](dtype a) { return std::toupper(a); };
   auto data_init = [](cudf::size_type row) { return 'a' + (row % 26); };
 
-  test_udf<dtype>(cuda.c_str(), op, data_init, 500, false);
-  test_udf<dtype>(ptx.c_str(), op, data_init, 500, true);
+  test_udf<dtype>(cuda.c_str(), op, data_init, 500, cudf::udf_source_type::CUDA);
+  test_udf<dtype>(ptx.c_str(), op, data_init, 500, cudf::udf_source_type::PTX);
 }
 
 TEST_F(UnaryOperationIntegrationTest, Transform_Datetime)
@@ -276,7 +290,7 @@ __device__ inline void f(cudf::timestamp_us* output, cudf::timestamp_us input)
   auto random_eng = cudf::test::UniformRandomGenerator<cudf::timestamp_us::rep>(0, 100000000);
   auto data_init  = [&random_eng](cudf::size_type row) { return random_eng.generate(); };
 
-  test_udf<dtype>(cuda.c_str(), op, data_init, 500, false);
+  test_udf<dtype>(cuda.c_str(), op, data_init, 500, cudf::udf_source_type::CUDA);
 }
 
 struct TernaryOperationTest : public cudf::test::BaseFixture {};
@@ -383,13 +397,13 @@ __device__ inline void transform(
   cudf::test::fixed_width_column_wrapper<T> c(c_host.begin(), c_host.end());
   cudf::test::fixed_width_column_wrapper<T> expected(expected_host.begin(), expected_host.end());
 
-  std::unique_ptr<cudf::column> cuda_result =
-    cudf::transform({a, b, c}, cuda, cudf::data_type(cudf::type_to_id<T>()), false);
+  std::unique_ptr<cudf::column> cuda_result = cudf::transform(
+    {a, b, c}, cuda, cudf::data_type(cudf::type_to_id<T>()), cudf::udf_source_type::CUDA);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cuda_result, expected);
 
-  std::unique_ptr<cudf::column> ptx_result =
-    cudf::transform({a, b, c}, ptx, cudf::data_type(cudf::type_to_id<T>()), true);
+  std::unique_ptr<cudf::column> ptx_result = cudf::transform(
+    {a, b, c}, ptx, cudf::data_type(cudf::type_to_id<T>()), cudf::udf_source_type::PTX);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*ptx_result, expected);
 }
@@ -436,7 +450,10 @@ TYPED_TEST(TernaryDecimalOperationTest, TransformDecimalsAndScalar)
     expected_host.begin(), expected_host.end(), RES.scale());
 
   std::unique_ptr<cudf::column> cuda_result =
-    cudf::transform({a, b, c}, cuda, cudf::data_type(cudf::type_to_id<T>(), RES.scale()), false);
+    cudf::transform({a, b, c},
+                    cuda,
+                    cudf::data_type(cudf::type_to_id<T>(), RES.scale()),
+                    cudf::udf_source_type::CUDA);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cuda_result, expected);
 }
@@ -456,7 +473,8 @@ TEST_F(StringOperationTest, StringComparison)
   )***";
 
   auto expected = cudf::test::fixed_width_column_wrapper<bool>{true, true, false, false, true};
-  auto result   = cudf::transform({a, b, c}, cuda, cudf::data_type(cudf::type_id::BOOL8), false);
+  auto result   = cudf::transform(
+    {a, b, c}, cuda, cudf::data_type(cudf::type_id::BOOL8), cudf::udf_source_type::CUDA);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -474,7 +492,8 @@ TEST_F(StringOperationTest, StringContains)
 
   auto expected =
     cudf::test::fixed_width_column_wrapper<bool>{false, true, false, false, true, false};
-  auto result = cudf::transform({a, b}, cuda, cudf::data_type(cudf::type_id::BOOL8), false);
+  auto result = cudf::transform(
+    {a, b}, cuda, cudf::data_type(cudf::type_id::BOOL8), cudf::udf_source_type::CUDA);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -491,7 +510,8 @@ TEST_F(StringOperationTest, StringFind)
   )***";
 
   auto expected = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 1, 2, 1};
-  auto result   = cudf::transform({a, b}, cuda, cudf::data_type(cudf::type_id::INT32), false);
+  auto result   = cudf::transform(
+    {a, b}, cuda, cudf::data_type(cudf::type_id::INT32), cudf::udf_source_type::CUDA);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -511,7 +531,8 @@ TEST_F(StringOperationTest, MixedTypes)
 
   auto expected =
     cudf::test::fixed_width_column_wrapper<bool>{true, true, false, false, false, false};
-  auto result = cudf::transform({a, b, c, d}, cuda, cudf::data_type(cudf::type_id::BOOL8), false);
+  auto result = cudf::transform(
+    {a, b, c, d}, cuda, cudf::data_type(cudf::type_id::BOOL8), cudf::udf_source_type::CUDA);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -532,13 +553,16 @@ TEST_F(StringOperationTest, Output)
 
   auto expected =
     cudf::test::strings_column_wrapper{"this", "is", "the", "largest", "lexicographical", "test"};
-  auto result = cudf::transform({a, b, c, d}, cuda, cudf::data_type(cudf::type_id::STRING), false);
+  auto result = cudf::transform(
+    {a, b, c, d}, cuda, cudf::data_type(cudf::type_id::STRING), cudf::udf_source_type::CUDA);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 
   auto expected_empty = cudf::test::strings_column_wrapper{};
-  auto result_empty   = cudf::transform(
-    {empty, empty, empty, empty}, cuda, cudf::data_type(cudf::type_id::STRING), false);
+  auto result_empty   = cudf::transform({empty, empty, empty, empty},
+                                      cuda,
+                                      cudf::data_type(cudf::type_id::STRING),
+                                      cudf::udf_source_type::CUDA);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_empty, result_empty->view());
 }
@@ -589,7 +613,7 @@ __device__ void transform(void* user_data, cudf::size_type row,
   auto result   = cudf::transform({first_name, last_name, scratch_sizes},
                                 cuda,
                                 cudf::data_type(cudf::type_id::STRING),
-                                false,
+                                cudf::udf_source_type::CUDA,
                                 scratch.data());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
@@ -711,13 +735,13 @@ TEST_F(NullTest, ColumnNulls)
 
   expected->set_null_mask(std::move(expected_mask), expect_null_count);
 
-  auto cuda_result =
-    cudf::transform({*low, *high, *t}, cuda, cudf::data_type(cudf::type_id::FLOAT32), false);
+  auto cuda_result = cudf::transform(
+    {*low, *high, *t}, cuda, cudf::data_type(cudf::type_id::FLOAT32), cudf::udf_source_type::CUDA);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cuda_result, *expected);
 
-  auto ptx_result =
-    cudf::transform({*low, *high, *t}, ptx, cudf::data_type(cudf::type_id::FLOAT32), true);
+  auto ptx_result = cudf::transform(
+    {*low, *high, *t}, ptx, cudf::data_type(cudf::type_id::FLOAT32), cudf::udf_source_type::PTX);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*ptx_result, *expected);
 }
@@ -741,13 +765,17 @@ TEST_F(NullTest, ColumnNulls_And_Scalar)
 
   expected->set_null_mask(std::move(expected_mask), expect_null_count);
 
-  auto cuda_result =
-    cudf::transform({*low, *high, *t_scalar}, cuda, cudf::data_type(cudf::type_id::FLOAT32), false);
+  auto cuda_result = cudf::transform({*low, *high, *t_scalar},
+                                     cuda,
+                                     cudf::data_type(cudf::type_id::FLOAT32),
+                                     cudf::udf_source_type::CUDA);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cuda_result, *expected);
 
-  auto ptx_result =
-    cudf::transform({*low, *high, *t_scalar}, ptx, cudf::data_type(cudf::type_id::FLOAT32), true);
+  auto ptx_result = cudf::transform({*low, *high, *t_scalar},
+                                    ptx,
+                                    cudf::data_type(cudf::type_id::FLOAT32),
+                                    cudf::udf_source_type::PTX);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*ptx_result, *expected);
 }
@@ -770,13 +798,17 @@ TEST_F(NullTest, ColumnNulls_And_ScalarNull)
   expected->set_null_mask(cudf::create_null_mask(low_host.size(), cudf::mask_state::ALL_NULL),
                           low->size());
 
-  auto cuda_result =
-    cudf::transform({*low, *high, *t_scalar}, cuda, cudf::data_type(cudf::type_id::FLOAT32), false);
+  auto cuda_result = cudf::transform({*low, *high, *t_scalar},
+                                     cuda,
+                                     cudf::data_type(cudf::type_id::FLOAT32),
+                                     cudf::udf_source_type::CUDA);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cuda_result, *expected);
 
-  auto ptx_result =
-    cudf::transform({*low, *high, *t_scalar}, ptx, cudf::data_type(cudf::type_id::FLOAT32), true);
+  auto ptx_result = cudf::transform({*low, *high, *t_scalar},
+                                    ptx,
+                                    cudf::data_type(cudf::type_id::FLOAT32),
+                                    cudf::udf_source_type::PTX);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*ptx_result, *expected);
 }
