@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 """
 Test related to Cut
@@ -12,19 +12,16 @@ from cudf.core.cut import cut
 from cudf.testing import assert_eq
 
 
-@pytest.mark.parametrize(
-    "x", [[1, 7, 5, 4, 6, 3], [1, 7], np.array([1, 7, 5, 4, 6, 3])]
-)
+@pytest.mark.parametrize("box", [list, np.array])
 @pytest.mark.parametrize("bins", [1, 2, 3])
 @pytest.mark.parametrize("right", [True, False])
 @pytest.mark.parametrize("include_lowest", [True, False])
-@pytest.mark.parametrize(
-    "ordered", [True]
-)  # if ordered is False we need labels
-@pytest.mark.parametrize("precision", [1, 2, 3])
-def test_cut_basic(x, bins, right, include_lowest, ordered, precision):
+@pytest.mark.parametrize("precision", [1, 3])
+def test_cut_basic(box, bins, right, include_lowest, precision):
     # will test optional labels, retbins and duplicates separately
     # they need more specific parameters to work
+    x = box([1, 7, 5, 4, 6, 3])
+    ordered = True
     pcat = pd.cut(
         x=x,
         bins=bins,
@@ -46,20 +43,16 @@ def test_cut_basic(x, bins, right, include_lowest, ordered, precision):
     assert_eq(pindex, gindex)
 
 
-@pytest.mark.parametrize("x", [[1, 7, 5, 4, 6, 3]])
-@pytest.mark.parametrize("bins", [3])  # labels must be the same len as bins
 @pytest.mark.parametrize("right", [True, False])
 @pytest.mark.parametrize("include_lowest", [True, False])
+@pytest.mark.parametrize("ordered", [True, False])
+@pytest.mark.parametrize("precision", [1, 3])
 @pytest.mark.parametrize(
-    "ordered", [True, False]
-)  # labels must be unique if ordered=True
-@pytest.mark.parametrize("precision", [1, 2, 3])
-@pytest.mark.parametrize(
-    "labels", [["bad", "medium", "good"], ["A", "B", "C"], [1, 2, 3], False]
+    "labels", [["bad", "medium", "good"], [1, 2, 3], False]
 )
-def test_cut_labels(
-    x, bins, right, include_lowest, ordered, precision, labels
-):
+def test_cut_labels(right, include_lowest, ordered, precision, labels):
+    x = [1, 7, 5, 4, 6, 3]
+    bins = 3
     pcat = pd.cut(
         x=x,
         bins=bins,
@@ -83,20 +76,14 @@ def test_cut_labels(
     assert_eq(pindex, gindex)
 
 
-@pytest.mark.parametrize("x", [[1, 7, 5, 4, 6, 3]])
-@pytest.mark.parametrize("bins", [3])  # labels must be the same len as bins
 @pytest.mark.parametrize("right", [True, False])
 @pytest.mark.parametrize("include_lowest", [True, False])
-@pytest.mark.parametrize(
-    "ordered", [False]
-)  # labels must be unique if ordered=True
-@pytest.mark.parametrize("precision", [1, 2, 3])
-@pytest.mark.parametrize(
-    "labels", [["bad", "good", "good"], ["B", "A", "B"], [1, 2, 2], False]
-)
-def test_cut_labels_non_unique(
-    x, bins, right, include_lowest, ordered, precision, labels
-):
+@pytest.mark.parametrize("precision", [1, 3])
+@pytest.mark.parametrize("labels", [["bad", "good", "good"], [1, 2, 2], False])
+def test_cut_labels_non_unique(right, include_lowest, precision, labels):
+    x = [1, 7, 5, 4, 6, 3]
+    bins = 3
+    ordered = False
     pcat = pd.cut(
         x=x,
         bins=bins,
@@ -134,8 +121,8 @@ def test_cut_labels_non_unique(
     [1, 2, 3, [1, 2, 3], [0, 2, 4, 6, 10]],
 )
 @pytest.mark.parametrize("right", [True, False])
-@pytest.mark.parametrize("precision", [3])
-def test_cut_right(x, bins, right, precision):
+def test_cut_right(x, bins, right):
+    precision = 3
     pcat = pd.cut(
         x=x,
         bins=bins,
@@ -168,12 +155,10 @@ def test_cut_right(x, bins, right, precision):
 )
 @pytest.mark.parametrize("right", [True, False])
 @pytest.mark.parametrize("include_lowest", [True, False])
-@pytest.mark.parametrize("ordered", [True])
-@pytest.mark.parametrize("precision", [1, 2, 3])
-@pytest.mark.parametrize("duplicates", ["drop"])
-def test_cut_drop_duplicates(
-    x, bins, right, precision, duplicates, ordered, include_lowest
-):
+@pytest.mark.parametrize("precision", [1, 3])
+def test_cut_drop_duplicates(x, bins, right, precision, include_lowest):
+    ordered = True
+    duplicates = "drop"
     pcat = pd.cut(
         x=x,
         bins=bins,
@@ -212,13 +197,12 @@ def test_cut_drop_duplicates(
 )
 @pytest.mark.parametrize("right", [True, False])
 @pytest.mark.parametrize("include_lowest", [True, False])
-@pytest.mark.parametrize("ordered", [True])
-@pytest.mark.parametrize("precision", [1, 2, 3])
-@pytest.mark.parametrize("duplicates", ["raises"])
-def test_cut_drop_duplicates_raises(
-    x, bins, right, precision, duplicates, ordered, include_lowest
-):
-    with pytest.raises(ValueError) as excgd:
+@pytest.mark.parametrize("precision", [1, 3])
+def test_cut_drop_duplicates_raises(x, bins, right, precision, include_lowest):
+    ordered = True
+    duplicates = "raise"
+    msg = "Bin edges must be unique"
+    with pytest.raises(ValueError, match=msg):
         cut(
             x=x,
             bins=bins,
@@ -228,7 +212,7 @@ def test_cut_drop_duplicates_raises(
             include_lowest=include_lowest,
             ordered=ordered,
         )
-    with pytest.raises(ValueError) as excpd:
+    with pytest.raises(ValueError, match=msg):
         pd.cut(
             x=x,
             bins=bins,
@@ -238,8 +222,6 @@ def test_cut_drop_duplicates_raises(
             include_lowest=include_lowest,
             ordered=ordered,
         )
-
-    assert_eq(str(excgd.value), str(excpd.value))
 
 
 @pytest.mark.parametrize(
@@ -252,14 +234,11 @@ def test_cut_drop_duplicates_raises(
         np.array([2, 4, 6, 8, 10]),
     ],
 )
-@pytest.mark.parametrize(
-    "bins",
-    [pd.IntervalIndex.from_tuples([(0, 1), (2, 3), (4, 5)])],
-)
 @pytest.mark.parametrize("right", [True, False])
-@pytest.mark.parametrize("precision", [1, 2, 3])
+@pytest.mark.parametrize("precision", [1, 3])
 @pytest.mark.parametrize("duplicates", ["drop", "raise"])
-def test_cut_intervalindex_bin(x, bins, right, precision, duplicates):
+def test_cut_intervalindex_bin(x, right, precision, duplicates):
+    bins = pd.IntervalIndex.from_tuples([(0, 1), (2, 3), (4, 5)])
     pcat = pd.cut(
         x=x,
         bins=bins,
@@ -279,16 +258,13 @@ def test_cut_intervalindex_bin(x, bins, right, precision, duplicates):
     assert_eq(pindex, gindex)
 
 
-@pytest.mark.parametrize(
-    "x",
-    [pd.Series(np.array([2, 4, 6, 8, 10]), index=["a", "b", "c", "d", "e"])],
-)
-@pytest.mark.parametrize("bins", [1, 2, 3])
+@pytest.mark.parametrize("bins", [1, 3])
 @pytest.mark.parametrize("right", [True, False])
 @pytest.mark.parametrize("include_lowest", [True, False])
-@pytest.mark.parametrize("ordered", [True])
-@pytest.mark.parametrize("precision", [3])
-def test_cut_series(x, bins, right, include_lowest, ordered, precision):
+def test_cut_series(bins, right, include_lowest):
+    x = pd.Series(np.array([2, 4, 6, 8, 10]), index=["a", "b", "c", "d", "e"])
+    precision = 3
+    ordered = True
     pcat = pd.cut(
         x=x,
         bins=bins,

@@ -49,13 +49,14 @@ struct identity_initializer {
   template <typename T, aggregation::Kind k>
   static constexpr bool is_supported()
   {
-    return cudf::is_fixed_width<T>() and
-           (k == aggregation::SUM or k == aggregation::MIN or k == aggregation::MAX or
-            k == aggregation::COUNT_VALID or k == aggregation::COUNT_ALL or
-            k == aggregation::ARGMAX or k == aggregation::ARGMIN or
-            k == aggregation::SUM_OF_SQUARES or k == aggregation::STD or
-            k == aggregation::VARIANCE or
-            (k == aggregation::PRODUCT and is_product_supported<T>()));
+    return (cudf::is_fixed_width<T>() and
+            (k == aggregation::SUM or k == aggregation::MIN or k == aggregation::MAX or
+             k == aggregation::COUNT_VALID or k == aggregation::COUNT_ALL or
+             k == aggregation::ARGMAX or k == aggregation::ARGMIN or
+             k == aggregation::SUM_OF_SQUARES or k == aggregation::STD or
+             k == aggregation::VARIANCE or
+             (k == aggregation::PRODUCT and is_product_supported<T>()))) or
+           (k == aggregation::SUM_WITH_OVERFLOW and std::is_same_v<T, cudf::struct_view>);
   }
 
   template <typename T, aggregation::Kind k>
@@ -94,11 +95,28 @@ struct identity_initializer {
   void operator()(mutable_column_view const& col, rmm::cuda_stream_view stream)
     requires(is_supported<T, k>())
   {
-    using DeviceType = device_storage_type_t<T>;
-    thrust::fill(rmm::exec_policy(stream),
-                 col.begin<DeviceType>(),
-                 col.end<DeviceType>(),
-                 get_identity<DeviceType, k>());
+    if constexpr (k == aggregation::SUM_WITH_OVERFLOW) {
+      // SUM_WITH_OVERFLOW uses a struct with sum (int64_t) and overflow (bool) children
+      // Initialize sum child to 0 and overflow child to false
+      auto sum_col      = col.child(0);
+      auto overflow_col = col.child(1);
+
+      auto zip_begin = thrust::make_zip_iterator(
+        thrust::make_tuple(sum_col.begin<int64_t>(), overflow_col.begin<bool>()));
+      thrust::fill(rmm::exec_policy_nosync(stream),
+                   zip_begin,
+                   zip_begin + col.size(),
+                   thrust::make_tuple(int64_t{0}, false));
+    } else if constexpr (std::is_same_v<T, cudf::struct_view>) {
+      // This should only happen for SUM_WITH_OVERFLOW, but handle it just in case
+      CUDF_FAIL("Struct columns are only supported for SUM_WITH_OVERFLOW aggregation");
+    } else {
+      using DeviceType = device_storage_type_t<T>;
+      thrust::fill(rmm::exec_policy_nosync(stream),
+                   col.begin<DeviceType>(),
+                   col.end<DeviceType>(),
+                   get_identity<DeviceType, k>());
+    }
   }
 
   template <typename T, aggregation::Kind k>

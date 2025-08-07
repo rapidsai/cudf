@@ -89,7 +89,8 @@ def _make_avro_table(avro_dtypes, avro_dtype_data, nullable=False):
     )
 
     records = [
-        {"prop1": val1, "prop2": val2} for val1, val2 in zip(*avro_dtype_data)
+        {"prop1": val1, "prop2": val2}
+        for val1, val2 in zip(*avro_dtype_data, strict=True)
     ]
 
     buffer = io.BytesIO()
