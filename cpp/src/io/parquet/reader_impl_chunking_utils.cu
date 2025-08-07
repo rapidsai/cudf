@@ -30,7 +30,6 @@
 
 #include <cub/device/device_radix_sort.cuh>
 #include <thrust/binary_search.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/logical.h>
 #include <thrust/sequence.h>
@@ -127,8 +126,8 @@ void codec_stats::add_pages(host_span<ColumnChunkDesc const> chunks,
                             host_span<bool const> page_mask)
 {
   // Create a page mask iterator that defaults to true if the page_mask is empty
-  auto page_mask_iter =
-    page_mask.empty() ? thrust::make_constant_iterator(true) : page_mask.begin();
+  auto page_mask_iter = cudf::detail::make_counting_transform_iterator(
+    0, [&](auto i) { return page_mask.empty() ? true : page_mask[i]; });
 
   // Zip iterator for iterating over pages and the page mask
   auto zip_iter = thrust::make_zip_iterator(pages.begin(), page_mask_iter);
