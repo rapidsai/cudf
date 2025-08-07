@@ -2,6 +2,7 @@
 
 
 import pandas as pd
+import pytest
 
 import cudf
 from cudf.testing import assert_eq
@@ -49,3 +50,26 @@ def test_with_multiindex():
     gdf_q = gdf.quantile(q, interpolation="nearest", method="table")
 
     assert_eq(pdf_q, gdf_q, check_index_type=False)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [1, 2, 3], "b": [10, 11, 12]},
+        {"a": [1, 0, 3], "b": [10, 11, 12]},
+        {"a": [1, 2, 3], "b": [10, 11, None]},
+        {
+            "a": [],
+        },
+        {},
+    ],
+)
+@pytest.mark.parametrize("op", ["all", "any"])
+def test_any_all_axis_none(data, op):
+    gdf = cudf.DataFrame(data)
+    pdf = gdf.to_pandas()
+
+    expected = getattr(pdf, op)(axis=None)
+    actual = getattr(gdf, op)(axis=None)
+
+    assert expected == actual
