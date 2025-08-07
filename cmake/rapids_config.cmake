@@ -37,4 +37,7 @@ endif()
 
 set(rapids-cmake-version "${RAPIDS_VERSION_MAJOR_MINOR}")
 set(rapids-cmake-branch "${_rapids_branch}")
+
+set(rapids-cmake-repo bdice/rapids-cmake)
+set(rapids-cmake-branch update-nvbench)
 include("${CMAKE_CURRENT_LIST_DIR}/RAPIDS.cmake")
