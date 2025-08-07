@@ -61,7 +61,7 @@ static void BM_transform_polynomials_concurrent(nvbench::state& state)
   std::transform(constants.begin(),
                  constants.end(),
                  std::back_inserter(inputs),
-                 [](auto& col) -> cudf::column_view { return *col; });
+                 [](auto const& col) { return col->view(); });
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     auto root_stream = launch.get_stream().get_stream();
