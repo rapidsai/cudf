@@ -66,7 +66,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
 {
   auto const binary_op     = cudf::detail::cast_functor<OutputType>(op.get_binary_op());
   auto const initial_value = init.value_or(op.template get_identity<OutputType>());
-  auto dev_result          = cudf::detail::device_scalar<OutputType>{initial_value, stream, mr};
+  auto dev_result          = rmm::device_scalar<OutputType>{initial_value, stream, mr};
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
