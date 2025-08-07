@@ -577,7 +577,7 @@ def test_multiindex_iloc(pdf, gdf, pdfIndex, iloc_rows, iloc_columns):
 
 def test_multiindex_iloc_scalar():
     arrays = [["a", "a", "b", "b"], [1, 2, 3, 4]]
-    tuples = list(zip(*arrays))
+    tuples = list(zip(*arrays, strict=True))
     idx = cudf.MultiIndex.from_tuples(tuples)
     gdf = cudf.DataFrame(
         {"first": cp.random.rand(4), "second": cp.random.rand(4)}
@@ -824,7 +824,7 @@ def test_pickle_roundtrip_multiindex(names):
 
 def test_multiindex_index_single_row():
     arrays = [["a", "a", "b", "b"], [1, 2, 3, 4]]
-    tuples = list(zip(*arrays))
+    tuples = list(zip(*arrays, strict=True))
     idx = cudf.MultiIndex.from_tuples(tuples)
     gdf = cudf.DataFrame(
         {"first": cp.random.rand(4), "second": cp.random.rand(4)}

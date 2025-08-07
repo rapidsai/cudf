@@ -459,7 +459,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 )
                 self._children = tuple(  # type: ignore[assignment]
                     child._with_type_metadata(dtype)
-                    for child, dtype in zip(children, dtypes)
+                    for child, dtype in zip(children, dtypes, strict=True)
                 )
         return self._children  # type: ignore[return-value]
 
@@ -2062,7 +2062,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             frames.extend(mask_frames)
         if self.children:
             child_headers, child_frames = zip(
-                *(c.device_serialize() for c in self.children)
+                *(c.device_serialize() for c in self.children),
+                strict=True,
             )
             header["subheaders"] = list(child_headers)
             frames.extend(chain(*child_frames))
@@ -3386,7 +3387,7 @@ def serialize_columns(columns: list[ColumnBase]) -> tuple[list[dict], list]:
         header_columns: list[tuple[dict, list]] = [
             c.device_serialize() for c in columns
         ]
-        headers, column_frames = zip(*header_columns)
+        headers, column_frames = zip(*header_columns, strict=True)
         for f in column_frames:
             frames.extend(f)
 
