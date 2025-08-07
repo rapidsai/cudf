@@ -57,7 +57,7 @@ static void BM_transform_polynomials_concurrent(nvbench::state& state)
     std::back_inserter(constants),
     [&](int) { return create_random_column(cudf::type_to_id<key_type>(), row_count{1}, profile); });
 
-  std::vector<cudf::column_view> inputs{*column};
+  std::vector<cudf::column_view> inputs{column->view()};
   std::transform(constants.begin(),
                  constants.end(),
                  std::back_inserter(inputs),
