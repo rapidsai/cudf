@@ -60,3 +60,17 @@ def test_fillna_dataframe(pdf, value, inplace):
         expect = pdf
 
     assert_eq(expect, got)
+
+
+def test_fillna_columns_multiindex():
+    columns = pd.MultiIndex.from_tuples([("a", "b"), ("d", "e")])
+    pdf = pd.DataFrame(
+        {"0": [1, 2, None, 3, None], "1": [None, None, None, None, 4]}
+    )
+    pdf.columns = columns
+    gdf = cudf.from_pandas(pdf)
+
+    expected = pdf.fillna(10)
+    actual = gdf.fillna(10)
+
+    assert_eq(expected, actual)

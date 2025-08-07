@@ -3,6 +3,7 @@ import decimal
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 
 import cudf
@@ -525,3 +526,50 @@ def test_series_fillna_invalid_dtype(integer_types_as_str):
     )
     with pytest.raises(TypeError, match=msg):
         gdf.fillna(fill_value)
+
+
+@pytest.mark.parametrize(
+    "data", [[1, 2.0, 3, 4, None, 1, None, 10, None], ["a", "b", "c"]]
+)
+@pytest.mark.parametrize(
+    "index",
+    [
+        None,
+        [1, 2, 3],
+        ["a", "b", "z"],
+        ["a", "b", "c", "d", "e", "f", "g", "l", "m"],
+    ],
+)
+@pytest.mark.parametrize("value", [[1, 2, 3, 4, None, 1, None, 10, None]])
+def test_series_fillna(data, index, value):
+    psr = pd.Series(
+        data,
+        index=index if index is not None and len(index) == len(data) else None,
+    )
+    gsr = cudf.Series(
+        data,
+        index=index if index is not None and len(index) == len(data) else None,
+    )
+
+    expect = psr.fillna(pd.Series(value))
+    got = gsr.fillna(cudf.Series(value))
+    assert_eq(expect, got)
+
+
+def test_series_fillna_error():
+    psr = pd.Series([1, 2, None, 3, None])
+    gsr = cudf.from_pandas(psr)
+
+    assert_exceptions_equal(
+        psr.fillna,
+        gsr.fillna,
+        ([pd.DataFrame({"a": [1, 2, 3]})],),
+        ([cudf.DataFrame({"a": [1, 2, 3]})],),
+    )
+
+
+def test_fillna_nan_and_null():
+    ser = cudf.Series(pa.array([float("nan"), None, 1.1]), nan_as_null=False)
+    result = ser.fillna(2.2)
+    expected = cudf.Series([2.2, 2.2, 1.1])
+    assert_eq(result, expected)

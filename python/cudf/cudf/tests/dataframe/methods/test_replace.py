@@ -1,6 +1,6 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
 
-
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -11,6 +11,7 @@ from cudf.core._compat import (
 )
 from cudf.testing import assert_eq
 from cudf.testing._utils import (
+    assert_exceptions_equal,
     expect_warning_if,
 )
 
@@ -146,3 +147,26 @@ def test_dataframe_replace_with_nulls():
     gdf1 = cudf.DataFrame({"a": [0, 1, 2, 3], "b": [0, 1, 2, None]})
     gdf9 = gdf1.replace([0, 1], [4, 5]).fillna(3)
     assert_eq(gdf9, pdf6)
+
+
+def test_replace_df_error():
+    pdf = pd.DataFrame({"a": [1, 2, 3, 4, 5, 666]})
+    gdf = cudf.from_pandas(pdf)
+
+    assert_exceptions_equal(
+        lfunc=pdf.replace,
+        rfunc=gdf.replace,
+        lfunc_args_and_kwargs=([], {"to_replace": -1, "value": []}),
+        rfunc_args_and_kwargs=([], {"to_replace": -1, "value": []}),
+    )
+
+
+def test_replace_multiple_rows(datadir):
+    path = datadir / "parquet" / "replace_multiple_rows.parquet"
+    pdf = pd.read_parquet(path)
+    gdf = cudf.read_parquet(path)
+
+    pdf.replace([np.inf, -np.inf], np.nan, inplace=True)
+    gdf.replace([np.inf, -np.inf], np.nan, inplace=True)
+
+    assert_eq(pdf, gdf, check_dtype=False)
