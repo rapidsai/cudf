@@ -87,5 +87,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     polars_range = get_polars_specifier(args.deps_yaml)
-    versions = get_polars_versions(polars_range, latest_only=args.latest_only)
+    versions = get_polars_versions(
+        polars_range, latest_only=args.latest_patch_only
+    )
     print(" ".join(versions))
