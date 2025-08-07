@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "../io_test_utils.hpp"
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -3589,6 +3591,29 @@ TEST_F(JsonBatchedReaderTest, EmptyLastBatch)
   EXPECT_EQ(result.metadata.schema_info[0].name, "a");
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
                                  cudf::test::strings_column_wrapper{{"b", "b", "b", "b"}});
+}
+
+TEST_F(JsonReaderTest, DeviceReadAsyncThrows)
+{
+  // Create simple JSON data
+  std::string json_string = R"({"a": 1}
+{"a": 2}
+{"a": 3}
+{"a": 4}
+{"a": 5})";
+
+  // Convert to char vector
+  std::vector<char> json_data(json_string.begin(), json_string.end());
+
+  // Create our throwing datasource
+  auto throwing_source = std::make_unique<cudf::test::ThrowingDeviceReadDatasource>(json_data);
+  cudf::io::source_info source_info(throwing_source.get());
+
+  // Try to read the JSON data - this should propagate the DeviceReadAsyncException
+  // from device_read_async
+  cudf::io::json_reader_options read_args =
+    cudf::io::json_reader_options::builder(source_info).lines(true);
+  EXPECT_THROW(cudf::io::read_json(read_args), cudf::test::DeviceReadAsyncException);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

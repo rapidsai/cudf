@@ -15,6 +15,7 @@
  */
 
 #include "compression_common.hpp"
+#include "io_test_utils.hpp"
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
@@ -2303,6 +2304,27 @@ TEST_F(OrcWriterTest, MultipleBlocksInStripeFooter)
       reinterpret_cast<std::byte const*>(out_buffer.data()), out_buffer.size()}});
   auto result = cudf::io::read_orc(in_opts);
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
+TEST_F(OrcReaderTest, DeviceReadAsyncThrows)
+{
+  // Create a simple ORC file in memory
+  auto col0           = cudf::test::fixed_width_column_wrapper<int>{{1, 2, 3, 4, 5}};
+  auto table_to_write = table_view{{col0}};
+
+  std::vector<char> out_buffer;
+  cudf::io::orc_writer_options write_args =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{&out_buffer}, table_to_write);
+  cudf::io::write_orc(write_args);
+
+  // Create our throwing datasource
+  auto throwing_source = std::make_unique<cudf::test::ThrowingDeviceReadDatasource>(out_buffer);
+  cudf::io::source_info source_info(throwing_source.get());
+
+  // Try to read the ORC file - this should propagate the DeviceReadAsyncException
+  // from device_read_async
+  cudf::io::orc_reader_options read_args = cudf::io::orc_reader_options::builder(source_info);
+  EXPECT_THROW(cudf::io::read_orc(read_args), cudf::test::DeviceReadAsyncException);
 }
 
 INSTANTIATE_TEST_CASE_P(Nvcomp,
