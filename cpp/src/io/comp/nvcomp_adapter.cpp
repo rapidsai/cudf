@@ -638,28 +638,29 @@ size_t batched_decompress_temp_size_ex(compression_type compression,
                                        rmm::cuda_stream_view stream)
 {
 #if NVCOMP_VER_MAJOR >= 5
-  size_t temp_size = 0;
-  auto d_statuses  = rmm::device_uvector<nvcompStatus_t>(input_data_ptrs.size(), stream);
-  nvcompStatus_t const nvcomp_status =
-    batched_decompress_get_temp_size_sync(compression,
-                                          input_data_ptrs.data(),
-                                          input_data_sizes.data(),
-                                          input_data_ptrs.size(),
-                                          max_uncomp_chunk_size,
-                                          &temp_size,
-                                          max_total_uncomp_size,
-                                          d_statuses.data(),
-                                          stream.value());
-  CHECK_NVCOMP_STATUS(nvcomp_status);
-  auto const h_statuses = cudf::detail::make_host_vector(d_statuses, stream);
-  for (auto const& status : h_statuses) {
-    CHECK_NVCOMP_STATUS(status);
+  if (is_batched_decompress_temp_size_ex_supported(compression)) {
+    size_t temp_size = 0;
+    auto d_statuses  = rmm::device_uvector<nvcompStatus_t>(input_data_ptrs.size(), stream);
+    nvcompStatus_t const nvcomp_status =
+      batched_decompress_get_temp_size_sync(compression,
+                                            input_data_ptrs.data(),
+                                            input_data_sizes.data(),
+                                            input_data_ptrs.size(),
+                                            max_uncomp_chunk_size,
+                                            &temp_size,
+                                            max_total_uncomp_size,
+                                            d_statuses.data(),
+                                            stream.value());
+    CHECK_NVCOMP_STATUS(nvcomp_status);
+    auto const h_statuses = cudf::detail::make_host_vector(d_statuses, stream);
+    for (auto const& status : h_statuses) {
+      CHECK_NVCOMP_STATUS(status);
+    }
+    return temp_size;
   }
-  return temp_size;
-#else
+#endif
   return batched_decompress_temp_size(
     compression, input_data_ptrs.size(), max_uncomp_chunk_size, max_total_uncomp_size);
-#endif
 }
 
 }  // namespace
@@ -681,6 +682,15 @@ size_t batched_decompress_temp_size(compression_type compression,
   return temp_size;
 }
 
+bool is_batched_decompress_temp_size_ex_supported(compression_type compression)
+{
+#if NVCOMP_VER_MAJOR >= 5
+  return compression == compression_type::ZSTD;
+#else
+  return false;
+#endif
+}
+
 size_t batched_decompress_temp_size_ex(compression_type compression,
                                        device_span<device_span<uint8_t const> const> inputs,
                                        size_t max_uncomp_chunk_size,
@@ -692,8 +702,6 @@ size_t batched_decompress_temp_size_ex(compression_type compression,
   return batched_decompress_temp_size_ex(
     compression, d_input_ptrs, d_input_sizes, max_uncomp_chunk_size, max_total_uncomp_size, stream);
 }
-
-
 
 void batched_decompress(compression_type compression,
                         device_span<device_span<uint8_t const> const> inputs,

@@ -666,23 +666,19 @@ size_t get_uncompressed_size(compression_type compression, host_span<uint8_t con
   auto nvcomp_disabled   = nvcomp_type.has_value() ? nvcomp::is_decompression_disabled(*nvcomp_type)
                                                    : "invalid compression type";
   if (nvcomp_disabled) {
-    CUDF_FAIL("Cannot compute decompression scratch size for " + compression_type_name(compression) + 
-              " compression: " + nvcomp_disabled.value() + 
-              ". This function requires nvcomp library support for the specified compression type.");
+    CUDF_FAIL("Cannot compute decompression scratch size for " +
+              compression_type_name(compression));
   }
-    return nvcomp::batched_decompress_temp_size_ex(
-      nvcomp_type.value(), inputs, max_uncomp_chunk_size, max_total_uncomp_size, stream);
+  return nvcomp::batched_decompress_temp_size_ex(
+    nvcomp_type.value(), inputs, max_uncomp_chunk_size, max_total_uncomp_size, stream);
 }
 
-[[nodiscard]] constexpr bool is_decompression_scratch_size_ex_supported(
-  compression_type compression)
-{  
+[[nodiscard]] bool is_decompression_scratch_size_ex_supported(compression_type compression)
+{
   auto const nvcomp_type = to_nvcomp_compression(compression);
   auto nvcomp_disabled   = nvcomp_type.has_value() ? nvcomp::is_decompression_disabled(*nvcomp_type)
                                                    : "invalid compression type";
-  if (nvcomp_disabled) {
-    return false;
-  }
+  if (nvcomp_disabled) { return false; }
   return nvcomp::is_batched_decompress_temp_size_ex_supported(nvcomp_type.value());
 }
 

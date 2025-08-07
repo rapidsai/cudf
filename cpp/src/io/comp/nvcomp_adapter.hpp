@@ -86,14 +86,7 @@ size_t batched_decompress_temp_size(compression_type compression,
   size_t max_total_uncomp_size,
   rmm::cuda_stream_view stream);
 
-[[nodiscard]] constexpr bool is_batched_decompress_temp_size_ex_supported(compression_type compression)
-{
-#if NVCOMP_VER_MAJOR >= 5
-  return compression == compression_type::ZSTD;
-#else
-  return false;
-#endif
-}
+[[nodiscard]] bool is_batched_decompress_temp_size_ex_supported(compression_type compression);
 
 /**
  * @brief Gets the maximum size any chunk could compress to in the batch.

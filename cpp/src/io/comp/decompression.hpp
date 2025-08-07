@@ -56,7 +56,8 @@ struct decompression_info {
 /**
  * @brief Functor which returns total scratch space required based on the compressed input data.
  *
- * Might launch a kernel. Should be used only if is_decompression_scratch_size_ex_supported returns true.
+ * Might launch a kernel. Should be used only if is_decompression_scratch_size_ex_supported returns
+ * true.
  */
 [[nodiscard]] size_t get_decompression_scratch_size_ex(
   compression_type compression,
@@ -66,9 +67,10 @@ struct decompression_info {
   rmm::cuda_stream_view stream);
 
 /**
- * @brief Checks if the decompression scratch size can be computed using the extended API of the nvcomp library.
+ * @brief Checks if the decompression scratch size can be computed using the extended API of the
+ * nvcomp library.
  */
-[[nodiscard]] constexpr bool is_decompression_scratch_size_ex_supported(compression_type compression);
+[[nodiscard]] bool is_decompression_scratch_size_ex_supported(compression_type compression);
 
 /**
  * @brief Computes the uncompressed sizes of Snappy-compressed input data.
