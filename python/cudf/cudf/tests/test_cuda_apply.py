@@ -16,7 +16,8 @@ from cudf.testing._utils import gen_rand_series
 
 
 def _kernel_multiply(a, b, out):
-    for i, (x, y) in enumerate(zip(a, b)):
+    # numba doesn't support zip(..., strict=True), so we must tell ruff to ignore it.
+    for i, (x, y) in enumerate(zip(a, b)):  # noqa: B905
         out[i] = x * y
 
 
@@ -71,7 +72,7 @@ def test_df_apply_rows():
     nelem = 20
 
     def kernel(in1, in2, in3, out1, out2, extra1, extra2):
-        for i, (x, y, z) in enumerate(zip(in1, in2, in3)):
+        for i, (x, y, z) in enumerate(zip(in1, in2, in3)):  # noqa: B905
             out1[i] = extra2 * x - extra1 * y
             out2[i] = y - extra1 * z
 
@@ -106,7 +107,7 @@ def test_df_apply_chunks(chunksize):
     nelem = 20
 
     def kernel(in1, in2, in3, out1, out2, extra1, extra2):
-        for i, (x, y, z) in enumerate(zip(in1, in2, in3)):
+        for i, (x, y, z) in enumerate(zip(in1, in2, in3)):  # noqa: B905
             out1[i] = extra2 * x - extra1 * y + z
             out2[i] = i
 
@@ -140,7 +141,7 @@ def test_df_apply_custom_chunks():
     nelem = 20
 
     def kernel(in1, in2, in3, out1, out2, extra1, extra2):
-        for i, (x, y, z) in enumerate(zip(in1, in2, in3)):
+        for i, (x, y, z) in enumerate(zip(in1, in2, in3)):  # noqa: B905
             out1[i] = extra2 * x - extra1 * y + z
             out2[i] = i
 
@@ -157,7 +158,10 @@ def test_df_apply_custom_chunks():
 
     expect_out1 = extra2 * in1 - extra1 * in2 + in3
     expect_out2 = np.hstack(
-        [np.arange(e - s) for s, e in zip(chunks, chunks[1:] + [len(df)])]
+        [
+            np.arange(e - s)
+            for s, e in zip(chunks, chunks[1:] + [len(df)], strict=True)
+        ]
     )
 
     outdf = df.apply_chunks(
@@ -203,7 +207,7 @@ def test_df_apply_custom_chunks_blkct_tpb(blkct, tpb):
     expect_out2 = np.hstack(
         [
             tpb * np.arange(e - s)
-            for s, e in zip(chunks, chunks[1:] + [len(df)])
+            for s, e in zip(chunks, chunks[1:] + [len(df)], strict=True)
         ]
     )
 
@@ -228,7 +232,7 @@ def test_df_apply_rows_incols_mapping():
     nelem = 20
 
     def kernel(x, y, z, out1, out2, extra1, extra2):
-        for i, (a, b, c) in enumerate(zip(x, y, z)):
+        for i, (a, b, c) in enumerate(zip(x, y, z)):  # noqa: B905
             out1[i] = extra2 * a - extra1 * b
             out2[i] = b - extra1 * c
 
@@ -260,7 +264,7 @@ def test_df_apply_chunks_incols_mapping(chunksize):
     nelem = 20
 
     def kernel(q, p, r, out1, out2, extra1, extra2):
-        for i, (a, b, c) in enumerate(zip(q, p, r)):
+        for i, (a, b, c) in enumerate(zip(q, p, r)):  # noqa: B905
             out1[i] = extra2 * a - extra1 * b + c
             out2[i] = i
 

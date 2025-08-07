@@ -118,7 +118,7 @@ def test_ufunc_index(request, ufunc):
         expect = ufunc(*(arg.to_pandas() for arg in pandas_args))
 
     if ufunc.nout > 1:
-        for g, e in zip(got, expect):
+        for g, e in zip(got, expect, strict=True):
             assert_eq(g, e, check_exact=False)
     else:
         assert_eq(got, expect, check_exact=False)
@@ -145,7 +145,7 @@ def test_binary_ufunc_index_array(ufunc, reflect):
         expect = ufunc(args[0].to_pandas(), args[1].to_numpy())
 
     if ufunc.nout > 1:
-        for g, e in zip(got, expect):
+        for g, e in zip(got, expect, strict=True):
             if reflect:
                 assert (cp.asnumpy(g) == e).all()
             else:
@@ -241,7 +241,7 @@ def test_ufunc_series(request, ufunc, has_nulls, indexed):
         expect = ufunc(*(arg.to_pandas() for arg in pandas_args))
 
     if ufunc.nout > 1:
-        for g, e in zip(got, expect):
+        for g, e in zip(got, expect, strict=True):
             if has_nulls:
                 e[mask] = np.nan
             assert_eq(g, e, check_exact=False)
@@ -336,7 +336,7 @@ def test_binary_ufunc_series_array(
         expect = ufunc(args[0].to_pandas(), args[1].to_numpy())
 
     if ufunc.nout > 1:
-        for g, e in zip(got, expect):
+        for g, e in zip(got, expect, strict=True):
             if has_nulls:
                 e[mask] = np.nan
             if reflect:
@@ -457,7 +457,7 @@ def test_ufunc_dataframe(request, ufunc, has_nulls, indexed):
         expect = ufunc(*(arg.to_pandas() for arg in pandas_args))
 
     if ufunc.nout > 1:
-        for g, e in zip(got, expect):
+        for g, e in zip(got, expect, strict=True):
             if has_nulls:
                 e[mask] = np.nan
             assert_eq(g, e, check_exact=False)
