@@ -63,9 +63,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
       ? cudf::bitmask_and(keys, stream, cudf::get_current_device_resource_ref()).first
       : rmm::device_buffer{};
 
-  stream.synchronize();
   auto const [input_index_to_key_index, gather_map] = [&] {
-    cudf::scoped_range rng{"insert set"};
     auto set = cuco::static_set{
       cuco::extent<int64_t>{num_keys},
       cudf::detail::CUCO_DESIRED_LOAD_FACTOR,  // 50% load factor
@@ -98,7 +96,6 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
     //   rmm::exec_policy_nosync(stream), gather_map.begin(), gather_map.end(), -1);
     auto const keys_end = set.retrieve_all(gather_map.begin(), stream.value());
     gather_map.resize(std::distance(gather_map.begin(), keys_end), stream);
-    stream.synchronize();
     return std::pair{std::move(key_indices), std::move(gather_map)};
   }();
 
@@ -123,20 +120,16 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
     stream.value()};
 
   // Compute all single pass aggs first
-  stream.synchronize();
-  {
-    cudf::scoped_range rng{"compute_aggregations"};
-    compute_aggregations(num_keys,
-                         skip_rows_with_nulls,
-                         static_cast<bitmask_type*>(row_bitmask.data()),
-                         set,
-                         gather_map,
-                         input_index_to_key_index.begin(),
-                         requests,
-                         &sparse_results,
-                         stream);
-    stream.synchronize();
-  }
+  compute_aggregations(num_keys,
+                       skip_rows_with_nulls,
+                       static_cast<bitmask_type*>(row_bitmask.data()),
+                       set,
+                       gather_map,
+                       input_index_to_key_index.begin(),
+                       requests,
+                       &sparse_results,
+                       stream);
+
   // {
   //   auto h_map = cudf::detail::make_std_vector(gather_map, stream);
   //   printf("\n\n\ngather_map: \n");
@@ -147,30 +140,21 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
   // }
 
   // Compact all results from sparse_results and insert into cache
-  {
-    cudf::scoped_range rng{"sparse_to_dense_results"};
-    sparse_to_dense_results(requests,
-                            &sparse_results,
-                            cache,
-                            input_index_to_key_index,
-                            gather_map,
-                            static_cast<bitmask_type*>(row_bitmask.data()),
-                            stream,
-                            mr);
-    stream.synchronize();
-  }
+  sparse_to_dense_results(requests,
+                          &sparse_results,
+                          cache,
+                          input_index_to_key_index,
+                          gather_map,
+                          static_cast<bitmask_type*>(row_bitmask.data()),
+                          stream,
+                          mr);
 
-  {
-    cudf::scoped_range rng{"gather"};
-    auto tmp = cudf::detail::gather(keys,
-                                    gather_map,
-                                    out_of_bounds_policy::DONT_CHECK,
-                                    cudf::detail::negative_index_policy::NOT_ALLOWED,
-                                    stream,
-                                    mr);
-    stream.synchronize();
-    return tmp;
-  }
+  return cudf::detail::gather(keys,
+                              gather_map,
+                              out_of_bounds_policy::DONT_CHECK,
+                              cudf::detail::negative_index_policy::NOT_ALLOWED,
+                              stream,
+                              mr);
 }
 
 template std::unique_ptr<table> compute_groupby<row_comparator_t, row_hash_t>(
