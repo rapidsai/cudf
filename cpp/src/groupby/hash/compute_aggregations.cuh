@@ -115,6 +115,7 @@ void compute_aggregations(int64_t num_rows,
                                aggs,
                                sparse_results,
                                stream);
+    stream.synchronize();
     return;
   }
 
@@ -151,12 +152,15 @@ void compute_aggregations(int64_t num_rows,
   cuda::std::atomic_flag h_needs_fallback;
   // Cannot use `device_scalar::value` as it requires a copy constructor, which
   // `atomic_flag` doesn't have.
-  CUDF_CUDA_TRY(cudaMemcpyAsync(&h_needs_fallback,
-                                needs_global_memory_fallback.data(),
-                                sizeof(cuda::std::atomic_flag),
-                                cudaMemcpyDefault,
-                                stream.value()));
-  stream.synchronize();
+  {
+    cudf::scoped_range rng{"needs_global_memory_fallback"};
+    CUDF_CUDA_TRY(cudaMemcpyAsync(&h_needs_fallback,
+                                  needs_global_memory_fallback.data(),
+                                  sizeof(cuda::std::atomic_flag),
+                                  cudaMemcpyDefault,
+                                  stream.value()));
+    stream.synchronize();
+  }
   auto const needs_fallback = h_needs_fallback.test();
 
   // make table that will hold sparse results

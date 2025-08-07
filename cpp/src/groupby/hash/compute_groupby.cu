@@ -65,7 +65,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
 
   stream.synchronize();
   auto const [input_index_to_key_index, gather_map] = [&] {
-    cudf::scoped_range rng{"insert set"};
+    cudf::scoped_range rng{"process set"};
     auto set = cuco::static_set{
       cuco::extent<int64_t>{num_keys},
       cudf::detail::CUCO_DESIRED_LOAD_FACTOR,  // 50% load factor
@@ -78,27 +78,34 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
       stream.value()};
 
     rmm::device_uvector<size_type> key_indices(num_keys, stream);
-    auto set_ref = set.ref(cuco::op::insert_and_find);
-    thrust::transform(rmm::exec_policy_nosync(stream),
-                      thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(keys.num_rows()),
-                      key_indices.begin(),
-                      [set_ref,
-                       skip_rows_with_nulls,
-                       row_bitmask = static_cast<bitmask_type*>(
-                         row_bitmask.data())] __device__(size_type const idx) mutable {
-                        if (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, idx)) {
-                          auto const [inserted_idx_ptr, _] = set_ref.insert_and_find(idx);
-                          return *inserted_idx_ptr;
-                        }
-                        return -1;
-                      });
-    rmm::device_uvector<cudf::size_type> gather_map(num_keys, stream);
-    // thrust::uninitialized_fill(
-    //   rmm::exec_policy_nosync(stream), gather_map.begin(), gather_map.end(), -1);
-    auto const keys_end = set.retrieve_all(gather_map.begin(), stream.value());
-    gather_map.resize(std::distance(gather_map.begin(), keys_end), stream);
     stream.synchronize();
+    {
+      cudf::scoped_range rng{"insert set"};
+      auto set_ref = set.ref(cuco::op::insert_and_find);
+      thrust::transform(rmm::exec_policy_nosync(stream),
+                        thrust::make_counting_iterator(0),
+                        thrust::make_counting_iterator(keys.num_rows()),
+                        key_indices.begin(),
+                        [set_ref,
+                         skip_rows_with_nulls,
+                         row_bitmask = static_cast<bitmask_type*>(
+                           row_bitmask.data())] __device__(size_type const idx) mutable {
+                          if (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, idx)) {
+                            auto const [inserted_idx_ptr, _] = set_ref.insert_and_find(idx);
+                            return *inserted_idx_ptr;
+                          }
+                          return -1;
+                        });
+      stream.synchronize();
+    }
+    rmm::device_uvector<cudf::size_type> gather_map(num_keys, stream);
+    stream.synchronize();
+    {
+      cudf::scoped_range rng{"gather map"};
+      auto const keys_end = set.retrieve_all(gather_map.begin(), stream.value());
+      gather_map.resize(std::distance(gather_map.begin(), keys_end), stream);
+      stream.synchronize();
+    }
     return std::pair{std::move(key_indices), std::move(gather_map)};
   }();
 
