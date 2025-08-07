@@ -718,7 +718,7 @@ class StructDtype(_BaseDtype):
         """
         new_result = {}
         for (new_field, field_dtype), result_value in zip(
-            self.fields.items(), result.values()
+            self.fields.items(), result.values(), strict=True
         ):
             if isinstance(field_dtype, StructDtype) and isinstance(
                 result_value, dict

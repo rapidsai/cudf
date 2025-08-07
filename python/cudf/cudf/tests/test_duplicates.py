@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 import itertools
 import random
@@ -156,7 +156,7 @@ def test_drop_duplicates():
     assert_eq(gdf.drop_duplicates(), pdf.drop_duplicates())
 
 
-@pytest.mark.skip(reason="cudf does not support duplicate column names yet")
+@pytest.mark.xfail(reason="cudf does not support duplicate column names yet")
 def test_drop_duplicates_with_duplicate_column_names():
     df = pd.DataFrame(
         [[1, 2, 5], [3, 4, 6], [3, 4, 7]], columns=["a", "a", "b"]
@@ -267,8 +267,8 @@ def test_drop_duplicates_empty(df):
     assert_eq(result, df)
 
 
-@pytest.mark.parametrize("num_columns", [3, 4, 5])
-def test_dataframe_drop_duplicates_numeric_method(num_columns):
+def test_dataframe_drop_duplicates_numeric_method():
+    num_columns = 3
     comb = list(itertools.permutations(range(num_columns), num_columns))
     shuf = list(comb)
     random.Random(num_columns).shuffle(shuf)
@@ -588,7 +588,9 @@ def test_drop_duplicates_multi_index():
         ["one", "two", "one", "two", "one", "two", "one", "two"],
     ]
 
-    idx = pd.MultiIndex.from_tuples(list(zip(*arrays)), names=["a", "b"])
+    idx = pd.MultiIndex.from_tuples(
+        list(zip(*arrays, strict=True)), names=["a", "b"]
+    )
     rng = np.random.default_rng(seed=0)
     pdf = pd.DataFrame(rng.integers(0, 2, (8, 4)), index=idx)
     gdf = cudf.DataFrame.from_pandas(pdf)

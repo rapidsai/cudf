@@ -99,6 +99,7 @@ def _describe_numeric(obj, percentiles):
             zip(
                 _format_percentile_names(percentiles),
                 obj.quantile(percentiles).to_numpy(na_value=np.nan).tolist(),
+                strict=True,
             )
         ),
         "max": obj.max(),
@@ -120,6 +121,7 @@ def _describe_timetype(obj, percentiles, typ):
                 .astype(CUDF_STRING_DTYPE)
                 .to_numpy(na_value=np.nan)
                 .tolist(),
+                strict=True,
             )
         ),
         "max": str(typ(obj.max())),
