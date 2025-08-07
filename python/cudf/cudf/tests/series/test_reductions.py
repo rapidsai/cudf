@@ -596,3 +596,52 @@ def test_timedelta_std_ddofs(data, timedelta_types_as_str, ddof):
             rtol=1e-5,
             atol=0,
         )
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["a", "b", "c", "d", "e"],
+        ["a", "z", ".", '"', "aa", "zz"],
+        ["aa", "zz"],
+        ["z", "a", "zz", "aa"],
+        ["1", "2", "3", "4", "5"],
+        [""],
+        ["a"],
+        ["hello"],
+        ["small text", "this is a larger text......"],
+        ["👋🏻", "🔥", "🥇"],
+        ["This is 💯", "here is a calendar", "📅"],
+        ["", ".", ";", "[", "]"],
+        ["\t", ".", "\n", "\n\t", "\t\n"],
+    ],
+)
+def test_str_reductions(data, reduction_methods):
+    psr = pd.Series(data)
+    sr = cudf.Series(data)
+
+    if reduction_methods in {"sum", "max", "min"}:
+        assert_eq(
+            getattr(psr, reduction_methods)(), getattr(sr, reduction_methods)()
+        )
+    else:
+        with pytest.raises((TypeError, NotImplementedError)):
+            getattr(sr, reduction_methods)()
+
+
+def test_string_any_all_error():
+    s = cudf.Series([None, None], dtype="str")
+    ps = s.to_pandas(nullable=True)
+    assert_exceptions_equal(
+        s.any,
+        ps.any,
+        lfunc_args_and_kwargs=([], {"skipna": False}),
+        rfunc_args_and_kwargs=([], {"skipna": False}),
+    )
+
+    assert_exceptions_equal(
+        s.all,
+        ps.all,
+        lfunc_args_and_kwargs=([], {"skipna": False}),
+        rfunc_args_and_kwargs=([], {"skipna": False}),
+    )
