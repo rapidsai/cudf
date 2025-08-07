@@ -110,6 +110,19 @@ TEST_F(SequenceTestFixture, MismatchedInputs)
   EXPECT_THROW(cudf::sequence(10, init3, step3), cudf::data_type_error);
 }
 
+TEST_F(SequenceTestFixture, InvalidInput)
+{
+  cudf::numeric_scalar<int> init(0, false);
+  EXPECT_THROW(cudf::sequence(10, init), std::invalid_argument);
+  cudf::numeric_scalar<int8_t> step1(1);
+  EXPECT_THROW(cudf::sequence(10, init, step1), std::invalid_argument);
+
+  cudf::numeric_scalar<int> zero(0);
+  cudf::numeric_scalar<float> step(1, false);
+  EXPECT_THROW(cudf::sequence(10, zero, step), std::invalid_argument);
+  EXPECT_THROW(cudf::sequence(10, init, step), std::invalid_argument);
+}
+
 TYPED_TEST(SequenceTypedTestFixture, DefaultStep)
 {
   using T = TypeParam;
