@@ -1256,7 +1256,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         if cudf.get_option("mode.pandas_compatible"):
             for key, value in result_dict.items():
                 if isinstance(
-                    value, (cudf.CategoricalDtype, cudf.IntervalDtype)
+                    value, (CategoricalDtype, IntervalDtype)
                 ):
                     # Convert to pandas dtype for compatibility
                     result_dict[key] = value.to_pandas()
@@ -1264,11 +1264,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     raise TypeError(
                         f"Column '{key}' has ListDtype, which is not supported in pandas."
                     )
-                else:
-                    result_dict[key] = value
 
-        result = pd.Series(result_dict, dtype="object")
-        result.index.names = self._data.to_pandas_index.names
+        result = pd.Series(result_dict, index=self._data.to_pandas_index, dtype="object")
         return result
 
     @property
