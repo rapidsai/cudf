@@ -217,6 +217,9 @@ def _(node: pl_ir.PythonScan, translator: Translator, schema: Schema) -> ir.IR:
 @_translate_ir.register
 def _(node: pl_ir.Scan, translator: Translator, schema: Schema) -> ir.IR:
     typ, *options = node.scan_type
+    paths = node.paths
+    # Polars does not currently populate `paths` for Iceberg scans.
+    assert len(paths) != 0
     if typ == "ndjson":
         (reader_options,) = map(json.loads, options)
         cloud_options = None
@@ -247,7 +250,7 @@ def _(node: pl_ir.Scan, translator: Translator, schema: Schema) -> ir.IR:
         typ,
         reader_options,
         cloud_options,
-        node.paths,
+        paths,
         with_columns,
         skip_rows,
         n_rows,
