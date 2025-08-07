@@ -126,8 +126,7 @@ fixed_point_scalar<T>::fixed_point_scalar(rep_type value,
                                           rmm::cuda_stream_view stream,
                                           rmm::device_async_resource_ref mr)
   : scalar{data_type{type_to_id<T>(), static_cast<int32_t>(scale)}, is_valid, stream, mr},
-    _data{is_valid ? rmm::device_scalar<rep_type>{value, stream, mr}
-                   : rmm::device_scalar<rep_type>{stream, mr}}
+    _data{value, stream, mr}
 {
 }
 
@@ -136,9 +135,7 @@ fixed_point_scalar<T>::fixed_point_scalar(rep_type value,
                                           bool is_valid,
                                           rmm::cuda_stream_view stream,
                                           rmm::device_async_resource_ref mr)
-  : scalar{data_type{type_to_id<T>(), 0}, is_valid, stream, mr},
-    _data{is_valid ? rmm::device_scalar<rep_type>{value, stream, mr}
-                   : rmm::device_scalar<rep_type>{stream, mr}}
+  : scalar{data_type{type_to_id<T>(), 0}, is_valid, stream, mr}, _data{value, stream, mr}
 {
 }
 
@@ -148,8 +145,7 @@ fixed_point_scalar<T>::fixed_point_scalar(T value,
                                           rmm::cuda_stream_view stream,
                                           rmm::device_async_resource_ref mr)
   : scalar{data_type{type_to_id<T>(), value.scale()}, is_valid, stream, mr},
-    _data{is_valid ? rmm::device_scalar<rep_type>{value.value(), stream, mr}
-                   : rmm::device_scalar<rep_type>{stream, mr}}
+    _data{value.value(), stream, mr}
 {
 }
 
@@ -216,8 +212,7 @@ fixed_width_scalar<T>::fixed_width_scalar(T value,
                                           bool is_valid,
                                           rmm::cuda_stream_view stream,
                                           rmm::device_async_resource_ref mr)
-  : scalar(data_type(type_to_id<T>()), is_valid, stream, mr),
-    _data{is_valid ? rmm::device_scalar<T>{value, stream, mr} : rmm::device_scalar<T>{stream, mr}}
+  : scalar(data_type(type_to_id<T>()), is_valid, stream, mr), _data(value, stream, mr)
 {
 }
 

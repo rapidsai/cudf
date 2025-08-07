@@ -33,9 +33,7 @@ struct scalar_construction_helper {
   {
     using Type       = device_storage_type_t<T>;
     using ScalarType = scalar_type_t<T>;
-    auto result      = std::make_unique<ScalarType>(Type{}, true, stream, mr);
-    result->set_valid_async(false, stream);
-    return result;
+    return std::make_unique<ScalarType>(Type{}, false, stream, mr);
   }
 
   template <typename T, std::enable_if_t<is_fixed_point<T>()>* = nullptr>
@@ -44,9 +42,7 @@ struct scalar_construction_helper {
   {
     using Type       = device_storage_type_t<T>;
     using ScalarType = scalar_type_t<T>;
-    auto result = std::make_unique<ScalarType>(Type{}, numeric::scale_type{0}, true, stream, mr);
-    result->set_valid_async(false, stream);
-    return result;
+    return std::make_unique<ScalarType>(Type{}, numeric::scale_type{0}, false, stream, mr);
   }
 
   template <typename T, typename... Args, std::enable_if_t<not is_fixed_width<T>()>* = nullptr>
