@@ -960,6 +960,8 @@ def read_parquet(
     # Normalize and validate filters
     filters = _normalize_filters(filters)
 
+    # Attempt to translate filters to a libcudf AST
+    ast_filter = None
     if (
         engine == "cudf"
         and filters is not None
@@ -968,27 +970,7 @@ def read_parquet(
     ):
         try:
             ast_filter = translate_filters_to_ast(filters)
-
-            filepaths_or_buffers = ioutils.get_reader_filepath_or_buffer(
-                path_or_data=filepath_or_buffer,
-                fs=fs,
-                storage_options=storage_options,
-                bytes_per_thread=bytes_per_thread,
-            )
-
-            return _parquet_to_frame(
-                filepaths_or_buffers,
-                engine=engine,
-                columns=columns,
-                use_pandas_metadata=use_pandas_metadata,
-                row_groups=None,
-                filters=ast_filter,
-                allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
-                nrows=nrows,
-                skip_rows=skip_rows,
-            )
         except NotImplementedError:
-            # Fall back to the pyarrow
             pass
 
     # Use pyarrow dataset to detect/process directory-partitioned
@@ -997,7 +979,7 @@ def read_parquet(
     # paths.
     partition_keys = []
     partition_categories = {}
-    if fs and paths:
+    if ast_filter is None and fs and paths:
         (
             paths,
             row_groups,
@@ -1015,7 +997,7 @@ def read_parquet(
 
     # Prepare remote-IO options
     prefetch_options = kwargs.pop("prefetch_options", {})
-    if not ioutils._is_local_filesystem(fs):
+    if ast_filter is None and not ioutils._is_local_filesystem(fs):
         # The default prefetch method depends on the
         # `row_groups` argument. In most cases we will use
         # method="all" by default, because it is fastest
@@ -1079,7 +1061,7 @@ def read_parquet(
     # will be dropped almost immediately after IO. However,
     # we do NEED these columns for accurate filtering.
     projected_columns = None
-    if columns and filters:
+    if ast_filter is None and columns and filters:
         projected_columns = columns
         columns = sorted(
             set(v[0] for v in itertools.chain.from_iterable(filters))
@@ -1100,10 +1082,13 @@ def read_parquet(
         nrows=nrows,
         skip_rows=skip_rows,
         allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
+        filters=ast_filter,
         **kwargs,
     )
     # Apply filters row-wise (if any are defined), and return
-    df = _apply_post_filters(df, filters)
+    if ast_filter is None:
+        df = _apply_post_filters(df, filters)
+
     if projected_columns:
         # Elements of `projected_columns` may now be in the index.
         # We must filter these names from our projection
@@ -1336,6 +1321,7 @@ def _read_parquet(
     nrows: int | None = None,
     skip_rows: int | None = None,
     allow_mismatched_pq_schemas: bool = False,
+    filters: plc_expr.Expression | None = None,
     *args,
     **kwargs,
 ) -> DataFrame:
@@ -1361,7 +1347,6 @@ def _read_parquet(
         if get_option("io.parquet.low_memory"):
             # If filters are used, we can't rely on a RangeIndex
             # (row count may be reduced)
-            filters = kwargs.get("filters", None)
             allow_range_index = (
                 filters is None and columns is not None and len(columns) != 0
             )
@@ -1432,7 +1417,6 @@ def _read_parquet(
             return df
         else:
             allow_range_index = True
-            filters = kwargs.get("filters", None)
             if columns is not None and len(columns) == 0 or filters:
                 allow_range_index = False
 
