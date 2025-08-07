@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import decimal
 from typing import TYPE_CHECKING
 
 import pytest
@@ -45,6 +46,14 @@ def df():
             "a": [1, 2, 3, None, 4, 5],
             "b": ["ẅ", "x", "y", "z", "123", "abcd"],
             "c": [None, None, 4, 5, -1, 0],
+            "d": [
+                decimal.Decimal("1.23"),
+                None,
+                decimal.Decimal("0.00"),
+                None,
+                decimal.Decimal("-5.67"),
+                None,
+            ],
         }
     )
 
