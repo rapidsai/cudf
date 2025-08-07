@@ -86,7 +86,7 @@ def test_multiindex_types():
 
 def test_multiindex_from_tuples():
     arrays = [["a", "a", "b", "b"], ["house", "store", "house", "store"]]
-    tuples = list(zip(*arrays))
+    tuples = list(zip(*arrays, strict=True))
     pmi = pd.MultiIndex.from_tuples(tuples)
     gmi = cudf.MultiIndex.from_tuples(tuples)
     assert_eq(pmi, gmi)
