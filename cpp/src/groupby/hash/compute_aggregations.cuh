@@ -198,7 +198,7 @@ void compute_aggregations(int64_t num_rows,
     auto const stride = GROUPBY_BLOCK_SIZE * grid_size;
     thrust::for_each_n(rmm::exec_policy_nosync(stream),
                        thrust::make_counting_iterator(int64_t{0}),
-                       num_rows * int64_t{flattened_values.num_columns()},
+                       num_rows * static_cast<int64_t>(flattened_values.num_columns()),
                        global_memory_fallback_fn{key_indices,
                                                  *d_values,
                                                  *d_sparse_table,
