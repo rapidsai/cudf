@@ -441,7 +441,7 @@ def test_invalid_regex_raises():
     )
 
 
-@pytest.mark.parametrize("pattern", ["a{1000}", "a(?i:B)"])
+@pytest.mark.parametrize("pattern", ["a{1000}", "a(?i:B)", ""])
 def test_unsupported_regex_raises(pattern):
     df = pl.LazyFrame({"a": ["abc"]})
 

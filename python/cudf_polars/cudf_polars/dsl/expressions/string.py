@@ -271,7 +271,11 @@ class StringFunction(Expr):
             if isinstance(self.children[1], Literal):
                 _, width = self.children
                 assert isinstance(width, Literal)
-                if width.value is not None and width.value < 0:
+                if (
+                    POLARS_VERSION_LT_132
+                    and width.value is not None
+                    and width.value < 0
+                ):  # pragma: no cover
                     dtypestr = dtype_str_repr(width.dtype.polars)
                     raise InvalidOperationError(
                         f"conversion from `{dtypestr}` to `u64` "

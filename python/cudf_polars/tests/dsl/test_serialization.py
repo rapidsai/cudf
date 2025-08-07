@@ -12,7 +12,11 @@ from polars.polars import _expr_nodes as pl_expr
 from cudf_polars.dsl.expressions.boolean import BooleanFunction
 from cudf_polars.dsl.expressions.datetime import TemporalFunction
 from cudf_polars.dsl.expressions.string import StringFunction
-from cudf_polars.utils.versions import POLARS_VERSION_LT_131, POLARS_VERSION_LT_132
+from cudf_polars.utils.versions import (
+    POLARS_VERSION_LT_131,
+    POLARS_VERSION_LT_132,
+    POLARS_VERSION_LT_1321,
+)
 
 if not POLARS_VERSION_LT_131:
     from cudf_polars.dsl.expressions.struct import StructFunction
@@ -53,7 +57,7 @@ def test_from_polars_all_names(function):
             "FieldByIndex",
             "MultipleFields",
         }
-    if POLARS_VERSION_LT_132 and function == TemporalFunction:
+    if POLARS_VERSION_LT_1321 and function == TemporalFunction:
         cudf_polars_names_set = cudf_polars_names_set - {
             "DaysInMonth",
         }
@@ -66,7 +70,7 @@ def test_from_polars_all_names(function):
             StructFunction.Name.FieldByIndex,
             StructFunction.Name.MultipleFields,
         }
-    if POLARS_VERSION_LT_132 and function == TemporalFunction:
+    if POLARS_VERSION_LT_1321 and function == TemporalFunction:
         names = set(names) - {TemporalFunction.Name.DaysInMonth}
     if POLARS_VERSION_LT_132 and function == BooleanFunction:
         names = set(names) - {BooleanFunction.Name.IsClose}

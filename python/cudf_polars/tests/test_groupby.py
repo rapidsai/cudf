@@ -14,7 +14,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_132
+from cudf_polars.utils.versions import POLARS_VERSION_LT_1321
 
 
 @pytest.fixture
@@ -217,7 +217,7 @@ def test_groupby_nan_minmax_raises(op):
         pytest.param(
             pl.Series("value", [[4, 5, 6]], dtype=pl.List(pl.Int32)),
             marks=pytest.mark.xfail(
-                condition=not POLARS_VERSION_LT_132,
+                condition=not POLARS_VERSION_LT_1321,
                 reason="https://github.com/rapidsai/cudf/issues/19610",
             ),
         ),
