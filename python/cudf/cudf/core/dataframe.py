@@ -1252,7 +1252,26 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         string              object
         dtype: object
         """
-        return pd.Series(dict(self._dtypes), dtype="object")
+        result_dict = dict(self._dtypes)
+        if cudf.get_option("mode.pandas_compatible"):
+            # Update the following to raise error when there is a ListDtype and still update the dict.
+            for key, value in result_dict.items():
+                if isinstance(
+                    value, (cudf.CategoricalDtype, cudf.IntervalDtype)
+                ):
+                    # Convert to pandas dtype for compatibility
+                    result_dict[key] = value.to_pandas()
+                elif isinstance(value, cudf.ListDtype):
+                    raise TypeError(
+                        f"Column '{key}' has ListDtype, which is not supported in pandas."
+                    )
+                else:
+                    result_dict[key] = value
+            # result_dict = {key: value.to_pandas() if isinstance(value, (cudf.CategoricalDtype, cudf.IntervalDtype)) else value for key, value in result_dict.items()}
+
+        result = pd.Series(result_dict, dtype="object")
+        result.index.names = self._data.to_pandas_index.names
+        return result
 
     @property
     def ndim(self) -> int:
