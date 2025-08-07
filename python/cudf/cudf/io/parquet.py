@@ -546,6 +546,78 @@ _BIN_OPS = {
 }
 
 
+def _raise_for_unsupported_scalar_types(val: Any):
+    if not (
+        isinstance(val, (int, float))
+        or isinstance(val, (datetime.date, datetime.timedelta))
+        or isinstance(val, str)
+    ):
+        return val
+    raise NotImplementedError(
+        "Only numeric, string, or timestamp/duration scalars are accepted"
+    )
+
+
+def make_literal(v: Any) -> plc_expr.Literal:
+    return plc_expr.Literal(
+        plc.Scalar.from_py(_raise_for_unsupported_scalar_types(v))
+    )
+
+
+def make_expr(col: str, op: str, val: Any) -> plc_expr.Expression:
+    col_ref = plc_expr.ColumnNameReference(col)
+
+    match op:
+        case op if op in _BIN_OPS:
+            return plc_expr.Operation(
+                _BIN_OPS[op],
+                col_ref,
+                make_literal(val),
+            )
+
+        case "in":
+            equal_ops = [
+                plc_expr.Operation(
+                    plc_expr.ASTOperator.EQUAL, col_ref, make_literal(v)
+                )
+                for v in val
+            ]
+            return reduce(
+                partial(plc_expr.Operation, plc_expr.ASTOperator.LOGICAL_OR),
+                equal_ops,
+            )
+
+        case "not in":
+            not_equal_ops = [
+                plc_expr.Operation(
+                    plc_expr.ASTOperator.NOT_EQUAL, col_ref, make_literal(v)
+                )
+                for v in val
+            ]
+            return reduce(
+                partial(plc_expr.Operation, plc_expr.ASTOperator.LOGICAL_AND),
+                not_equal_ops,
+            )
+
+        case "is":
+            if val is None:
+                return plc_expr.Operation(
+                    plc_expr.ASTOperator.IS_NULL, col_ref
+                )
+            raise NotImplementedError("Only `is None` supported")
+
+        case "is not":
+            if val is None:
+                return plc_expr.Operation(
+                    plc_expr.ASTOperator.NOT,
+                    plc_expr.Operation(plc_expr.ASTOperator.IS_NULL, col_ref),
+                )
+            raise NotImplementedError("Only `is not None` supported")
+
+        case _:
+            raise NotImplementedError(f"Unsupported op: {op}")
+
+
 def translate_filters_to_ast(
     filters: list[list[tuple[str, str, Any]]],
 ) -> plc_expr.Expression:
@@ -577,86 +649,10 @@ def translate_filters_to_ast(
       - All clauses into a disjunction (OR) of those conjunctions
     """
 
-    def _raise_for_unsupported_scalar_types(val: Any):
-        if not (
-            isinstance(val, (int, float))
-            or isinstance(val, (datetime.date, datetime.timedelta))
-            or isinstance(val, str)
-        ):
-            return val
-        raise NotImplementedError(
-            "Only numeric, string, or timestamp/duration scalars are accepted"
-        )
-
-    def make_expr(col: str, op: str, val: Any) -> plc_expr.Expression:
-        col_ref = plc_expr.ColumnNameReference(col)
-
-        if op in _BIN_OPS:
-            return plc_expr.Operation(
-                _BIN_OPS[op],
-                col_ref,
-                plc_expr.Literal(
-                    plc.Scalar.from_py(
-                        _raise_for_unsupported_scalar_types(val)
-                    )
-                ),
-            )
-        elif op == "in":
-            values = [
-                plc_expr.Literal(
-                    plc.Scalar.from_py(_raise_for_unsupported_scalar_types(v))
-                )
-                for v in val
-            ]
-            return reduce(
-                lambda acc, x: plc_expr.Operation(
-                    plc_expr.ASTOperator.LOGICAL_OR, acc, x
-                ),
-                [
-                    plc_expr.Operation(plc_expr.ASTOperator.EQUAL, col_ref, v)
-                    for v in values
-                ],
-            )
-        elif op == "not in":
-            values = [
-                plc_expr.Literal(
-                    plc.Scalar.from_py(_raise_for_unsupported_scalar_types(v))
-                )
-                for v in val
-            ]
-            return reduce(
-                lambda acc, x: plc_expr.Operation(
-                    plc_expr.ASTOperator.LOGICAL_AND, acc, x
-                ),
-                [
-                    plc_expr.Operation(
-                        plc_expr.ASTOperator.NOT_EQUAL, col_ref, v
-                    )
-                    for v in values
-                ],
-            )
-        elif op == "is":
-            if val is None:
-                return plc_expr.Operation(
-                    plc_expr.ASTOperator.IS_NULL, col_ref
-                )
-            raise NotImplementedError("Only `is None` supported")
-        elif op == "is not":
-            if val is None:
-                return plc_expr.Operation(
-                    plc_expr.ASTOperator.NOT,
-                    plc_expr.Operation(plc_expr.ASTOperator.IS_NULL, col_ref),
-                )
-            raise NotImplementedError("Only `is not None` supported")
-        else:
-            raise NotImplementedError(f"Unsupported op: {op}")
-
     clauses = [
         reduce(
-            lambda acc, x: plc_expr.Operation(
-                plc_expr.ASTOperator.LOGICAL_AND, acc, x
-            ),
-            [make_expr(*pred) for pred in clause],
+            partial(plc_expr.Operation, plc_expr.ASTOperator.LOGICAL_AND),
+            (make_expr(*pred) for pred in clause),
         )
         for clause in filters
     ]
@@ -666,9 +662,7 @@ def translate_filters_to_ast(
 
     return (
         reduce(
-            lambda acc, x: plc_expr.Operation(
-                plc_expr.ASTOperator.LOGICAL_OR, acc, x
-            ),
+            partial(plc_expr.Operation, plc_expr.ASTOperator.LOGICAL_OR),
             clauses,
         )
         if len(clauses) > 1
@@ -971,7 +965,6 @@ def read_parquet(
         and filters is not None
         and categorical_partitions is None
         and dataset_kwargs is None
-        and len(filepath_or_buffer) == 1
     ):
         try:
             ast_filter = translate_filters_to_ast(filters)

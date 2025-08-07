@@ -6,11 +6,12 @@ import os
 from tempfile import TemporaryDirectory
 
 import pytest
+from config import NUM_ROWS
 
 import cudf
 
 
-@pytest.mark.parametrize("num_rows", [500_000_000])
+@pytest.mark.parametrize("num_rows", NUM_ROWS)
 def bench_read_parquet_with_filters(benchmark, num_rows):
     df = cudf.DataFrame(
         {
