@@ -5,6 +5,7 @@ from __future__ import annotations
 import calendar
 import functools
 import locale
+import re
 import warnings
 from locale import nl_langinfo
 from typing import TYPE_CHECKING, Literal
@@ -23,10 +24,9 @@ from cudf.core._internals.timezones import (
     get_tz_data,
 )
 from cudf.core.buffer import Buffer, acquire_spill_lock
-from cudf.core.column.column import ColumnBase, as_column, column_empty
+from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.temporal_base import TemporalBaseColumn
 from cudf.utils.dtypes import (
-    CUDF_STRING_DTYPE,
     _get_base_dtype,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
@@ -59,49 +59,6 @@ _DATETIME_SPECIAL_FORMATS = {
     "%A",
     "%a",
 }
-
-_DATETIME_NAMES = [
-    nl_langinfo(locale.AM_STR),  # type: ignore
-    nl_langinfo(locale.PM_STR),  # type: ignore
-    nl_langinfo(locale.DAY_1),
-    nl_langinfo(locale.DAY_2),
-    nl_langinfo(locale.DAY_3),
-    nl_langinfo(locale.DAY_4),
-    nl_langinfo(locale.DAY_5),
-    nl_langinfo(locale.DAY_6),
-    nl_langinfo(locale.DAY_7),
-    nl_langinfo(locale.ABDAY_1),
-    nl_langinfo(locale.ABDAY_2),
-    nl_langinfo(locale.ABDAY_3),
-    nl_langinfo(locale.ABDAY_4),
-    nl_langinfo(locale.ABDAY_5),
-    nl_langinfo(locale.ABDAY_6),
-    nl_langinfo(locale.ABDAY_7),
-    nl_langinfo(locale.MON_1),
-    nl_langinfo(locale.MON_2),
-    nl_langinfo(locale.MON_3),
-    nl_langinfo(locale.MON_4),
-    nl_langinfo(locale.MON_5),
-    nl_langinfo(locale.MON_6),
-    nl_langinfo(locale.MON_7),
-    nl_langinfo(locale.MON_8),
-    nl_langinfo(locale.MON_9),
-    nl_langinfo(locale.MON_10),
-    nl_langinfo(locale.MON_11),
-    nl_langinfo(locale.MON_12),
-    nl_langinfo(locale.ABMON_1),
-    nl_langinfo(locale.ABMON_2),
-    nl_langinfo(locale.ABMON_3),
-    nl_langinfo(locale.ABMON_4),
-    nl_langinfo(locale.ABMON_5),
-    nl_langinfo(locale.ABMON_6),
-    nl_langinfo(locale.ABMON_7),
-    nl_langinfo(locale.ABMON_8),
-    nl_langinfo(locale.ABMON_9),
-    nl_langinfo(locale.ABMON_10),
-    nl_langinfo(locale.ABMON_11),
-    nl_langinfo(locale.ABMON_12),
-]
 
 
 def _resolve_binop_resolution(
@@ -440,7 +397,7 @@ class DatetimeColumn(TemporalBaseColumn):
         return {
             field: self.strftime(format=directive).astype(np.dtype(np.uint32))
             for field, directive in zip(
-                ["year", "week", "day"], ["%G", "%V", "%u"]
+                ["year", "week", "day"], ["%G", "%V", "%u"], strict=True
             )
         }
 
@@ -459,19 +416,72 @@ class DatetimeColumn(TemporalBaseColumn):
             f"cannot astype a datetimelike from {self.dtype} to {dtype}"
         )
 
+    @functools.cached_property
+    def _strftime_names(self) -> plc.Column:
+        """Strftime names for %A, %a, %B, %b"""
+        return plc.Column.from_iterable_of_py(
+            [
+                nl_langinfo(loc)
+                for loc in (
+                    locale.AM_STR,
+                    locale.PM_STR,
+                    locale.DAY_1,
+                    locale.DAY_2,
+                    locale.DAY_3,
+                    locale.DAY_4,
+                    locale.DAY_5,
+                    locale.DAY_6,
+                    locale.DAY_7,
+                    locale.ABDAY_1,
+                    locale.ABDAY_2,
+                    locale.ABDAY_3,
+                    locale.ABDAY_4,
+                    locale.ABDAY_5,
+                    locale.ABDAY_6,
+                    locale.ABDAY_7,
+                    locale.MON_1,
+                    locale.MON_2,
+                    locale.MON_3,
+                    locale.MON_4,
+                    locale.MON_5,
+                    locale.MON_6,
+                    locale.MON_7,
+                    locale.MON_8,
+                    locale.MON_9,
+                    locale.MON_10,
+                    locale.MON_11,
+                    locale.MON_12,
+                    locale.ABMON_1,
+                    locale.ABMON_2,
+                    locale.ABMON_3,
+                    locale.ABMON_4,
+                    locale.ABMON_5,
+                    locale.ABMON_6,
+                    locale.ABMON_7,
+                    locale.ABMON_8,
+                    locale.ABMON_9,
+                    locale.ABMON_10,
+                    locale.ABMON_11,
+                    locale.ABMON_12,
+                )
+            ]
+        )
+
     def strftime(self, format: str) -> StringColumn:
         if len(self) == 0:
             return super().strftime(format)
-        if format in _DATETIME_SPECIAL_FORMATS:
-            names = as_column(_DATETIME_NAMES)
+        if re.search("%[aAbB]", format):
+            names = self._strftime_names
         else:
-            names = column_empty(0, dtype=CUDF_STRING_DTYPE)
+            names = plc.Column.from_scalar(
+                plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING)), 0
+            )
         with acquire_spill_lock():
             return type(self).from_pylibcudf(  # type: ignore[return-value]
                 plc.strings.convert.convert_datetime.from_timestamps(
                     self.to_pylibcudf(mode="read"),
                     format,
-                    names.to_pylibcudf(mode="read"),
+                    names,
                 )
             )
 
