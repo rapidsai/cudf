@@ -131,15 +131,7 @@ def test_categorical_basic(data):
         pdsr.cat.codes.values, result.cat.codes.values_host
     )
 
-    string = str(result)
-    expect_str = """
-0 a
-1 a
-2 b
-3 c
-4 a
-"""
-    assert all(x == y for x, y in zip(string.split(), expect_str.split()))
+    assert str(result) == str(pdsr)
     with dask.config.set({"dataframe.convert-string": False}):
         df = DataFrame()
         df["a"] = ["xyz", "abc", "def"] * 10

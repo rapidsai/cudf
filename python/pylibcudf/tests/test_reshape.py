@@ -20,7 +20,7 @@ def test_interleave_columns(reshape_data):
     raw_data, reshape_plc_tbl = reshape_data
     got = plc.reshape.interleave_columns(reshape_plc_tbl)
 
-    interleaved_data = [pa.array(pair) for pair in zip(*raw_data)]
+    interleaved_data = [pa.array(pair) for pair in zip(*raw_data, strict=True)]
 
     expect = pa.concat_arrays(interleaved_data)
 
