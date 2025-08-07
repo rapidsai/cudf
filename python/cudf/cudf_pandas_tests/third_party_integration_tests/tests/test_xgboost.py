@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ n_features = 16
 def xgboost_assert_equal(expect, got, rtol: float = 1e-7, atol: float = 0.0):
     if isinstance(expect, (tuple, list)):
         assert len(expect) == len(got)
-        for e, g in zip(expect, got):
+        for e, g in zip(expect, got, strict=True):
             xgboost_assert_equal(e, g, rtol, atol)
     elif isinstance(expect, scipy.sparse.csr_matrix):
         np.testing.assert_allclose(expect.data, got.data, rtol=rtol, atol=atol)
