@@ -25,9 +25,11 @@ def _get_all_zones():
     return zones
 
 
-# NOTE: ALL_TIME_ZONES is a very large list; we likely do NOT want to
+# NOTE: _get_all_zones is a very large list; we likely do NOT want to
 # use it for more than a handful of tests
-ALL_TIME_ZONES = _get_all_zones()
+@pytest.fixture(params=_get_all_zones())
+def zone_name(request):
+    return request.param
 
 
 @pytest.fixture(params=["ns", "us", "ms", "s"])
@@ -42,7 +44,6 @@ def tz(request):
     return request.param
 
 
-@pytest.mark.parametrize("zone_name", ALL_TIME_ZONES)
 def test_tz_localize(unit, zone_name):
     s = cudf.Series(date_range("2001-01-01", "2001-01-02", freq="1s"))
     s = s.astype(f"<M8[{unit}]")
@@ -52,7 +53,6 @@ def test_tz_localize(unit, zone_name):
     assert str(s.dtype.tz) == zone_name
 
 
-@pytest.mark.parametrize("zone_name", ALL_TIME_ZONES)
 def test_localize_ambiguous(request, unit, zone_name):
     request.applymarker(
         pytest.mark.xfail(
@@ -78,7 +78,6 @@ def test_localize_ambiguous(request, unit, zone_name):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("zone_name", ALL_TIME_ZONES)
 def test_localize_nonexistent(request, unit, zone_name):
     request.applymarker(
         pytest.mark.xfail(

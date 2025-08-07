@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 import itertools
 import operator
@@ -64,7 +64,7 @@ else:
         keys = []
         val_x = []
         val_y = []
-        for k, v in zip(left_key, left_val):
+        for k, v in zip(left_key, left_val, strict=True):
             if k not in right_have:
                 continue
             for i in right_have[k]:
@@ -76,7 +76,11 @@ else:
             # Python sort is stable, so this will preserve input order for
             # equal items.
             keys, val_x, val_y = zip(
-                *sorted(zip(keys, val_x, val_y), key=operator.itemgetter(0))
+                *sorted(
+                    zip(keys, val_x, val_y, strict=True),
+                    key=operator.itemgetter(0),
+                ),
+                strict=True,
             )
         return cudf.DataFrame({"key": keys, "val_x": val_x, "val_y": val_y})
 
@@ -92,7 +96,7 @@ else:
         keys = []
         val_x = []
         val_y = []
-        for k, v in zip(left_key, left_val):
+        for k, v in zip(left_key, left_val, strict=True):
             if k not in right_have:
                 right_vals = [None]
             else:
@@ -107,7 +111,11 @@ else:
             # Python sort is stable, so this will preserve input order for
             # equal items.
             keys, val_x, val_y = zip(
-                *sorted(zip(keys, val_x, val_y), key=operator.itemgetter(0))
+                *sorted(
+                    zip(keys, val_x, val_y, strict=True),
+                    key=operator.itemgetter(0),
+                ),
+                strict=True,
             )
         return cudf.DataFrame({"key": keys, "val_x": val_x, "val_y": val_y})
 
@@ -122,7 +130,7 @@ else:
         keys = []
         val_x = []
         val_y = []
-        for k, v in zip(left_key, left_val):
+        for k, v in zip(left_key, left_val, strict=True):
             if k not in right_have:
                 right_vals = [None]
             else:
@@ -132,7 +140,7 @@ else:
                 val_x.append(v)
                 val_y.append(rv)
         left_have = set(left_key)
-        for k, v in zip(right_key, right_val):
+        for k, v in zip(right_key, right_val, strict=True):
             if k not in left_have:
                 keys.append(k)
                 val_x.append(None)
@@ -142,7 +150,11 @@ else:
         # equal items.
         # outer joins are always sorted, but we test both sort values
         keys, val_x, val_y = zip(
-            *sorted(zip(keys, val_x, val_y), key=operator.itemgetter(0))
+            *sorted(
+                zip(keys, val_x, val_y, strict=True),
+                key=operator.itemgetter(0),
+            ),
+            strict=True,
         )
         return cudf.DataFrame({"key": keys, "val_x": val_x, "val_y": val_y})
 
