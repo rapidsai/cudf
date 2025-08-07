@@ -386,20 +386,28 @@ TEST_F(HybridScanTest, MaterializeListPayloadColumn)
       cudf::test::fixed_width_column_wrapper<int32_t>(offsets_iter, offsets_iter + num_rows + 1);
     auto col2 = cudf::make_lists_column(
       num_rows, offsets_col.release(), bools_col.release(), 0, rmm::device_buffer{});
+    // list<list<bool>> column
+    auto col3 = make_parquet_list_list_col<bool>(0, num_rows, 5, 8, false);
+    // Another string column
+    auto col4 = testdata::ascending<cudf::string_view>();
 
     // Input table
-    auto table = cudf::table_view{{col0, col1, *col2}};
+    auto constexpr num_concat = 3;
+    auto table                = cudf::table_view{{col0, col1, *col2, *col3, col4}};
+    auto expected             = cudf::concatenate(std::vector<table_view>(num_concat, table));
+    table                     = expected->view();
     cudf::io::table_input_metadata expected_metadata(table);
     expected_metadata.column_metadata[0].set_name("col0");
     expected_metadata.column_metadata[1].set_name("col1");
     expected_metadata.column_metadata[2].set_name("col2");
-
+    expected_metadata.column_metadata[3].set_name("col3");
+    expected_metadata.column_metadata[4].set_name("col4");
     // Write to parquet buffer
     cudf::io::parquet_writer_options out_opts =
       cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&parquet_buffer}, table)
         .metadata(std::move(expected_metadata))
-        .row_group_size_rows(page_size_for_ordered_tests)
-        .max_page_size_rows(page_size_for_ordered_tests / 5)
+        .row_group_size_rows(num_rows)
+        .max_page_size_rows(page_size_for_ordered_tests)
         .compression(cudf::io::compression_type::AUTO)
         .dictionary_policy(cudf::io::dictionary_policy::ALWAYS)
         .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN);
@@ -434,6 +442,7 @@ TEST_F(HybridScanTest, MaterializeListPayloadColumn)
         .filter(filter_expression);
     auto [expected_tbl, expected_meta] = cudf::io::read_parquet(options, stream);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}), read_filter_table->view());
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({1, 2}), read_payload_table->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({1, 2, 3, 4}),
+                                       read_payload_table->view());
   }
 }
