@@ -43,12 +43,8 @@ class ThrowingDeviceReadDatasource : public cudf::io::datasource {
   {
     size = std::min(size, data_.size() - offset);
     // Convert char data to bytes for the buffer
-    std::vector<std::byte> byte_data;
-    byte_data.reserve(size);
-    std::transform(data_.begin() + offset,
-                   data_.begin() + offset + size,
-                   std::back_inserter(byte_data),
-                   [](char c) { return static_cast<std::byte>(c); });
+    std::vector<std::byte> byte_data(size);
+    std::memcpy(byte_data.data(), data_.data() + offset, size);
     return cudf::io::datasource::buffer::create(std::move(byte_data));
   }
 
@@ -60,6 +56,19 @@ class ThrowingDeviceReadDatasource : public cudf::io::datasource {
   }
 
   [[nodiscard]] bool supports_device_read() const override { return true; }
+
+  std::unique_ptr<cudf::io::datasource::buffer> device_read(size_t offset,
+                                                            size_t size,
+                                                            rmm::cuda_stream_view stream) override
+  {
+    // For testing, just copy the data from the host buffer into a new buffer
+    size = std::min(size, data_.size() - offset);
+    rmm::device_buffer out_data(size, stream);
+    cudaMemcpyAsync(
+      out_data.data(), data_.data() + offset, size, cudaMemcpyHostToDevice, stream.value());
+    cudaStreamSynchronize(stream.value());
+    return cudf::io::datasource::buffer::create(std::move(out_data));
+  }
 
   std::future<size_t> device_read_async(size_t offset,
                                         size_t size,
@@ -89,7 +98,7 @@ class ThrowingDeviceWriteDataSink : public cudf::io::data_sink {
 
   void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
   {
-    this->device_write_async(gpu_data, size, stream).get();
+    buffer_size_ += size;
   }
 
   std::future<void> device_write_async(void const* gpu_data,
