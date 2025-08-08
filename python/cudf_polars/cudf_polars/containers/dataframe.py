@@ -29,7 +29,7 @@ __all__: list[str] = ["DataFrame"]
 def _create_polars_column_metadata(
     name: str, dtype: PolarsDataType
 ) -> plc.interop.ColumnMetadata:
-    """Create ColumnMetadata preserving dtype attributes not supported by cudf."""
+    """Create ColumnMetadata preserving dtype attributes not supported by libcudf."""
     children_meta = []
     timezone = ""
     precision: int | None = None
