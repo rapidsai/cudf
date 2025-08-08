@@ -128,7 +128,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     # First join with date_dim to get day names
     wscs_with_dates = wscs.join(date_dim, left_on="sold_date_sk", right_on="d_date_sk")
     # Create separate aggregations for each day to better control null handling
-    days = [
+    days = (
         "Sunday",
         "Monday",
         "Tuesday",
@@ -136,8 +136,8 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         "Thursday",
         "Friday",
         "Saturday",
-    ]
-    day_cols = [
+    )
+    day_cols = (
         "sun_sales",
         "mon_sales",
         "tue_sales",
@@ -145,7 +145,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         "thu_sales",
         "fri_sales",
         "sat_sales",
-    ]
+    )
     # Start with all week sequences
     all_weeks = wscs_with_dates.select("d_week_seq").unique()
     wswscs = all_weeks
@@ -162,8 +162,8 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         )
         .group_by("d_week_seq")
         .agg(
-            *[pl.col(name).sum().alias(name) for name in day_cols],
-            *[pl.col(name).count().alias(f"{name}_count") for name in day_cols],
+            *(pl.col(name).sum().alias(name) for name in day_cols),
+            *(pl.col(name).count().alias(f"{name}_count") for name in day_cols),
         )
         .with_columns(
             [
