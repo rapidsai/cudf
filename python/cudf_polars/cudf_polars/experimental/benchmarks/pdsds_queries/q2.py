@@ -149,18 +149,34 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     # Start with all week sequences
     all_weeks = wscs_with_dates.select("d_week_seq").unique()
     wswscs = all_weeks
-    for day, col_name in zip(days, day_cols, strict=False):
-        # Get sales for this specific day
-        day_sales = (
-            wscs_with_dates
-            # TODO: .filter(pl.col('d_day_name') == day) should work but does not
-            # There's some bug in cudf_polars with FILTER on Column with NULLs
-            .filter(pl.col("d_day_name").is_not_null() & (pl.col("d_day_name") == day))
-            .group_by("d_week_seq")
-            .agg([pl.col("sales_price").sum().alias(col_name)])
+
+    wswscs = (
+        wscs_with_dates.with_columns(
+            [
+                pl.when(pl.col("d_day_name") == day)
+                .then(pl.col("sales_price"))
+                .otherwise(None)
+                .alias(name)
+                for day, name in zip(days, day_cols, strict=True)
+            ]
         )
-        # Left join to preserve weeks with no sales for this day (which should be null)
-        wswscs = wswscs.join(day_sales, on="d_week_seq", how="left")
+        .group_by("d_week_seq")
+        .agg(
+            *[pl.col(name).sum().alias(name) for name in day_cols],
+            *[pl.col(name).count().alias(f"{name}_count") for name in day_cols],
+        )
+        .with_columns(
+            [
+                pl.when(pl.col(f"{name}_count") > 0)
+                .then(pl.col(name))
+                .otherwise(None)
+                .alias(name)
+                for name in day_cols
+            ]
+        )
+        .select(["d_week_seq", *day_cols])
+    )
+
     # Step 3: Create year 1998 data (y subquery equivalent)
     y_1998 = (
         wswscs.join(date_dim, left_on="d_week_seq", right_on="d_week_seq")

@@ -60,35 +60,11 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .join(item, left_on="ss_item_sk", right_on="i_item_sk")
         .join(customer_demographics, left_on="ss_cdemo_sk", right_on="cd_demo_sk")
         .join(promotion, left_on="ss_promo_sk", right_on="p_promo_sk")
-        # TODO: Bug in cudf_polars with FILTER on Column with NULLs
-        # .filter(pl.col('cd_gender') == 'F')
-        # .filter(pl.col('cd_marital_status') == 'W')
-        # .filter(pl.col('cd_education_status') == '2 yr Degree')
-        # .filter(
-        #     (pl.col('p_channel_email') == 'N') |
-        #     (pl.col('p_channel_event') == 'N')
-        # )
-        # .filter(pl.col('d_year') == 1998)
-        .filter(pl.col("cd_gender").is_not_null() & (pl.col("cd_gender") == "F"))
-        .filter(
-            pl.col("cd_marital_status").is_not_null()
-            & (pl.col("cd_marital_status") == "W")
-        )
-        .filter(
-            pl.col("cd_education_status").is_not_null()
-            & (pl.col("cd_education_status") == "2 yr Degree")
-        )
-        .filter(
-            (
-                pl.col("p_channel_email").is_not_null()
-                & (pl.col("p_channel_email") == "N")
-            )
-            | (
-                pl.col("p_channel_event").is_not_null()
-                & (pl.col("p_channel_event") == "N")
-            )
-        )
-        .filter(pl.col("d_year").is_not_null() & (pl.col("d_year") == 1998))
+        .filter(pl.col("cd_gender") == "F")
+        .filter(pl.col("cd_marital_status") == "W")
+        .filter(pl.col("cd_education_status") == "2 yr Degree")
+        .filter((pl.col("p_channel_email") == "N") | (pl.col("p_channel_event") == "N"))
+        .filter(pl.col("d_year") == 1998)
         .group_by("i_item_id")
         .agg(
             [

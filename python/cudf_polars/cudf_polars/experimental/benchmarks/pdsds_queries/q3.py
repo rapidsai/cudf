@@ -49,18 +49,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     return (
         date_dim.join(store_sales, left_on="d_date_sk", right_on="ss_sold_date_sk")
         .join(item, left_on="ss_item_sk", right_on="i_item_sk")
-        # TODO: There's some bug in cudf_polars with FILTER on Column with NULLs
-        # This should work:
-        # .filter(
-        #     (pl.col('i_manufact_id') == 427) &
-        #     (pl.col('d_moy') == 11)
-        # )
-        .filter(
-            (pl.col("i_manufact_id").is_not_null())
-            & (pl.col("d_moy").is_not_null())
-            & (pl.col("i_manufact_id") == 427)
-            & (pl.col("d_moy") == 11)
-        )
+        .filter((pl.col("i_manufact_id") == 427) & (pl.col("d_moy") == 11))
         .group_by(["d_year", "i_brand", "i_brand_id"])
         .agg([pl.col("ss_ext_discount_amt").sum().alias("sum_agg")])
         .select(

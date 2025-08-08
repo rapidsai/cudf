@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from datetime import date, timedelta
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -166,11 +167,11 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
     catalog_page = get_data(run_config.dataset_path, "catalog_page", run_config.suffix)
     web_site = get_data(run_config.dataset_path, "web_site", run_config.suffix)
-    # Date range filter - use actual date values
-    from datetime import date, timedelta
 
+    # Date range filter - use actual date values
     start_date = date(2002, 8, 22)
     end_date = start_date + timedelta(days=14)
+
     # Step 1: Create ssr CTE (Store Sales and Returns)
     # Filter sales and returns by date first, then transform
     store_sales_data = (
@@ -181,7 +182,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
                 pl.col("ss_store_sk").alias("store_sk"),
                 pl.col("ss_sold_date_sk").alias("date_sk"),
                 pl.col("ss_ext_sales_price").alias("sales_price"),
-                pl.col("ss_net_profit").alias("profit"),  # Keep original nulls
+                pl.col("ss_net_profit").alias("profit"),
                 pl.lit(0.0).alias("return_amt"),
                 pl.lit(0.0).alias("net_loss"),
             ]
@@ -197,9 +198,9 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
                 pl.col("sr_store_sk").alias("store_sk"),
                 pl.col("sr_returned_date_sk").alias("date_sk"),
                 pl.lit(0.0).alias("sales_price"),
-                pl.lit(0.0).alias("profit"),  # Use 0.0 for returns profit
+                pl.lit(0.0).alias("profit"),
                 pl.col("sr_return_amt").alias("return_amt"),
-                pl.col("sr_net_loss").alias("net_loss"),  # Keep original nulls
+                pl.col("sr_net_loss").alias("net_loss"),
             ]
         )
     )
@@ -241,6 +242,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         )
         .drop(["sales_count", "profit_count", "returns1_count", "profit_loss_count"])
     )
+
     # Step 2: Create csr CTE (Catalog Sales and Returns)
     # Filter sales and returns by date first, then transform
     catalog_sales_data = (
@@ -251,7 +253,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
                 pl.col("cs_catalog_page_sk").alias("page_sk"),
                 pl.col("cs_sold_date_sk").alias("date_sk"),
                 pl.col("cs_ext_sales_price").alias("sales_price"),
-                pl.col("cs_net_profit").alias("profit"),  # Keep original nulls
+                pl.col("cs_net_profit").alias("profit"),
                 pl.lit(0.0).alias("return_amt"),
                 pl.lit(0.0).alias("net_loss"),
             ]
@@ -267,9 +269,9 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
                 pl.col("cr_catalog_page_sk").alias("page_sk"),
                 pl.col("cr_returned_date_sk").alias("date_sk"),
                 pl.lit(0.0).alias("sales_price"),
-                pl.lit(0.0).alias("profit"),  # Use 0.0 for returns profit
+                pl.lit(0.0).alias("profit"),
                 pl.col("cr_return_amount").alias("return_amt"),
-                pl.col("cr_net_loss").alias("net_loss"),  # Keep original nulls
+                pl.col("cr_net_loss").alias("net_loss"),
             ]
         )
     )
@@ -313,6 +315,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         )
         .drop(["sales_count", "profit_count", "returns1_count", "profit_loss_count"])
     )
+
     # Step 3: Create wsr CTE (Web Sales and Returns)
     # Filter sales and returns by date first, then transform
     web_sales_data = (
@@ -323,7 +326,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
                 pl.col("ws_web_site_sk").alias("wsr_web_site_sk"),
                 pl.col("ws_sold_date_sk").alias("date_sk"),
                 pl.col("ws_ext_sales_price").alias("sales_price"),
-                pl.col("ws_net_profit").alias("profit"),  # Keep original nulls
+                pl.col("ws_net_profit").alias("profit"),
                 pl.lit(0.0).alias("return_amt"),
                 pl.lit(0.0).alias("net_loss"),
             ]
@@ -344,9 +347,9 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
                 pl.col("ws_web_site_sk").alias("wsr_web_site_sk"),
                 pl.col("wr_returned_date_sk").alias("date_sk"),
                 pl.lit(0.0).alias("sales_price"),
-                pl.lit(0.0).alias("profit"),  # Use 0.0 for returns profit
+                pl.lit(0.0).alias("profit"),
                 pl.col("wr_return_amt").alias("return_amt"),
-                pl.col("wr_net_loss").alias("net_loss"),  # Keep original nulls
+                pl.col("wr_net_loss").alias("net_loss"),
             ]
         )
     )
@@ -390,6 +393,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         )
         .drop(["sales_count", "profit_count", "returns1_count", "profit_loss_count"])
     )
+
     # Step 4: Create the union of all channels
     store_channel = ssr.select(
         [
@@ -421,6 +425,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         ]
     )
     all_channels = pl.concat([store_channel, catalog_channel, web_channel])
+
     # Step 5: Group by channel and id (filter out NULL rollup rows)
     return (
         all_channels.group_by(["channel", "id"])
