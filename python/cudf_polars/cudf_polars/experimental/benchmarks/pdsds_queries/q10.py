@@ -18,7 +18,6 @@ if TYPE_CHECKING:
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 10."""
     return """
-    -- start query 10 in stream 0 using template query10.tpl
     SELECT cd_gender,
                    cd_marital_status,
                    cd_education_status,
@@ -182,6 +181,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .agg(
             [
                 # Cast -> Int64 to match DuckDB
+                # TODO: We should plan to make these optional
                 pl.len().alias("cnt1").cast(pl.Int64),
                 pl.len().alias("cnt2").cast(pl.Int64),
                 pl.len().alias("cnt3").cast(pl.Int64),
