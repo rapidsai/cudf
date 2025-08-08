@@ -13,6 +13,6 @@ jobs:
         persist-credentials: false
         sparse-checkout: .github/labeler.yml
         sparse-checkout-cone-mode: false
-    - uses: actions/labeler@v4
+    - uses: actions/labeler@v5
       with:
         repo-token: "${{ secrets.GITHUB_TOKEN }}"
