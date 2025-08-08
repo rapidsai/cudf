@@ -100,3 +100,39 @@ def test_groupby_agg_mean_min():
     got_df = gdf.groupby(["x", "y"]).agg(["mean", "min"])
     expect_df = pdf.groupby(["x", "y"]).agg(["mean", "min"])
     assert_groupby_results_equal(got_df, expect_df)
+
+
+def test_groupby_agg_min_max_dictargs():
+    pdf = pd.DataFrame(np.ones((20, 5)), columns=["x", "y", "val", "a", "b"])
+    gdf = cudf.DataFrame(pdf)
+    expect_df = pdf.groupby(["x", "y"]).agg({"a": "min", "b": "max"})
+    got_df = gdf.groupby(["x", "y"]).agg({"a": "min", "b": "max"})
+    assert_groupby_results_equal(expect_df, got_df)
+
+
+def test_groupby_agg_min_max_dictlist():
+    pdf = pd.DataFrame(np.ones((20, 5)), columns=["x", "y", "val", "a", "b"])
+    gdf = cudf.DataFrame(pdf)
+    expect_df = pdf.groupby(["x", "y"]).agg(
+        {"a": ["min", "max"], "b": ["min", "max"]}
+    )
+    got_df = gdf.groupby(["x", "y"]).agg(
+        {"a": ["min", "max"], "b": ["min", "max"]}
+    )
+    assert_groupby_results_equal(got_df, expect_df)
+
+
+def test_groupby_as_index_single_agg(as_index):
+    pdf = pd.DataFrame({"x": [1, 2, 3], "y": [0, 1, 1]})
+    gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [0, 1, 1]})
+    gdf = gdf.groupby("y", as_index=as_index).agg({"x": "mean"})
+    pdf = pdf.groupby("y", as_index=as_index).agg({"x": "mean"})
+    assert_groupby_results_equal(pdf, gdf, as_index=as_index, by="y")
+
+
+def test_groupby_default():
+    pdf = pd.DataFrame({"x": [1, 2, 3], "y": [0, 1, 1]})
+    gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [0, 1, 1]})
+    gdf = gdf.groupby("y").agg({"x": "mean"})
+    pdf = pdf.groupby("y").agg({"x": "mean"})
+    assert_groupby_results_equal(pdf, gdf)
