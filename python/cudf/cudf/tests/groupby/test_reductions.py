@@ -432,3 +432,190 @@ def test_groupby_index_type():
     df["counts"] = [1, 2, 3]
     res = df.groupby(by="string_col").counts.sum()
     assert res.index.dtype == cudf.dtype("object")
+
+
+@pytest.mark.parametrize(
+    "interpolation", ["linear", "lower", "higher", "nearest", "midpoint"]
+)
+@pytest.mark.parametrize("q", [0.25, 0.4, 0.5, 0.7, 1])
+def test_groupby_quantile(request, interpolation, q):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(q == 0.5 and interpolation == "nearest"),
+            reason=(
+                "Pandas NaN Rounding will fail nearest interpolation at 0.5"
+            ),
+        )
+    )
+
+    raw_data = {
+        "y": [None, 1, 2, 3, 4, None, 6, 7, 8, 9],
+        "x": [1, 2, 3, 1, 2, 2, 1, None, 3, 2],
+    }
+    # Pandas>0.25 now casts NaN in quantile operations as a float64
+    # # so we are filling with zeros.
+    pdf = pd.DataFrame(raw_data).fillna(0)
+    gdf = cudf.DataFrame.from_pandas(pdf)
+
+    pdg = pdf.groupby("x")
+    gdg = gdf.groupby("x")
+
+    pdresult = pdg.quantile(q, interpolation=interpolation)
+    gdresult = gdg.quantile(q, interpolation=interpolation)
+
+    assert_groupby_results_equal(pdresult, gdresult)
+
+
+def test_groupby_std():
+    raw_data = {
+        "x": [1, 2, 3, 1, 2, 2, 1, None, 3, 2],
+        "y": [None, 1, 2, 3, 4, None, 6, 7, 8, 9],
+    }
+    pdf = pd.DataFrame(raw_data)
+    gdf = cudf.DataFrame.from_pandas(pdf)
+    pdg = pdf.groupby("x")
+    gdg = gdf.groupby("x")
+    pdresult = pdg.std()
+    gdresult = gdg.std()
+
+    assert_groupby_results_equal(pdresult, gdresult)
+
+
+def test_groupby_size():
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 3, 4],
+            "b": ["bob", "bob", "alice", "cooper"],
+            "c": [1, 2, 3, 4],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    assert_groupby_results_equal(
+        pdf.groupby("a").size(),
+        gdf.groupby("a").size(),
+        check_dtype=False,
+    )
+
+    assert_groupby_results_equal(
+        pdf.groupby(["a", "b", "c"]).size(),
+        gdf.groupby(["a", "b", "c"]).size(),
+        check_dtype=False,
+    )
+
+    sr = pd.Series(range(len(pdf)))
+    assert_groupby_results_equal(
+        pdf.groupby(sr).size(),
+        gdf.groupby(sr).size(),
+        check_dtype=False,
+    )
+
+
+def test_groupby_datetime(request, as_index, groupby_reduction_methods):
+    pdf = pd.DataFrame(
+        {
+            "x": [1, 2, 3],
+            "y": [4, 5, 6],
+            "val": [7, 8, 9],
+            "datetime": pd.date_range("2020-01-01", periods=3),
+        }
+    )
+    gdf = cudf.DataFrame(pdf)
+    pdg = pdf.groupby("datetime", as_index=as_index)
+    gdg = gdf.groupby("datetime", as_index=as_index)
+    pdres = getattr(pdg, groupby_reduction_methods)()
+    gdres = getattr(gdg, groupby_reduction_methods)()
+    assert_groupby_results_equal(
+        pdres,
+        gdres,
+        as_index=as_index,
+        by=["datetime"],
+    )
+
+
+def test_groupby_dropna():
+    df = cudf.DataFrame({"a": [1, 1, None], "b": [1, 2, 3]})
+    expect = cudf.DataFrame(
+        {"b": [3, 3]}, index=cudf.Series([1, None], name="a")
+    )
+    got = df.groupby("a", dropna=False).sum()
+    assert_groupby_results_equal(expect, got)
+
+    df = cudf.DataFrame(
+        {"a": [1, 1, 1, None], "b": [1, None, 1, None], "c": [1, 2, 3, 4]}
+    )
+    idx = cudf.MultiIndex.from_frame(
+        df[["a", "b"]].drop_duplicates().sort_values(["a", "b"]),
+        names=["a", "b"],
+    )
+    expect = cudf.DataFrame({"c": [4, 2, 4]}, index=idx)
+    got = df.groupby(["a", "b"], dropna=False).sum()
+
+    assert_groupby_results_equal(expect, got)
+
+
+def test_groupby_dropna_getattr():
+    df = cudf.DataFrame()
+    df["id"] = [0, 1, 1, None, None, 3, 3]
+    df["val"] = [0, 1, 1, 2, 2, 3, 3]
+    got = df.groupby("id", dropna=False).val.sum()
+
+    expect = cudf.Series(
+        [0, 2, 6, 4], name="val", index=cudf.Series([0, 1, 3, None], name="id")
+    )
+
+    assert_groupby_results_equal(expect, got)
+
+
+def test_groupby_categorical_from_string():
+    gdf = cudf.DataFrame()
+    gdf["id"] = ["a", "b", "c"]
+    gdf["val"] = [0, 1, 2]
+    gdf["id"] = gdf["id"].astype("category")
+    assert_groupby_results_equal(
+        cudf.DataFrame({"val": gdf["val"]}).set_index(keys=gdf["id"]),
+        gdf.groupby("id").sum(),
+    )
+
+
+def test_groupby_arbitrary_length_series():
+    gdf = cudf.DataFrame({"a": [1, 1, 2], "b": [2, 3, 4]}, index=[4, 5, 6])
+    gsr = cudf.Series([1.0, 2.0, 2.0], index=[3, 4, 5])
+
+    pdf = gdf.to_pandas()
+    psr = gsr.to_pandas()
+
+    expect = pdf.groupby(psr).sum()
+    got = gdf.groupby(gsr).sum()
+
+    assert_groupby_results_equal(expect, got)
+
+
+def test_groupby_series_same_name_as_dataframe_column():
+    gdf = cudf.DataFrame({"a": [1, 1, 2], "b": [2, 3, 4]}, index=[4, 5, 6])
+    gsr = cudf.Series([1.0, 2.0, 2.0], name="a", index=[3, 4, 5])
+
+    pdf = gdf.to_pandas()
+    psr = gsr.to_pandas()
+
+    expect = pdf.groupby(psr).sum()
+    got = gdf.groupby(gsr).sum()
+
+    assert_groupby_results_equal(expect, got)
+
+
+def test_group_by_series_and_column_name_in_by():
+    gdf = cudf.DataFrame(
+        {"x": [1.0, 2.0, 3.0], "y": [1, 2, 1]}, index=[1, 2, 3]
+    )
+    gsr0 = cudf.Series([0.0, 1.0, 2.0], name="a", index=[1, 2, 3])
+    gsr1 = cudf.Series([0.0, 1.0, 3.0], name="b", index=[3, 4, 5])
+
+    pdf = gdf.to_pandas()
+    psr0 = gsr0.to_pandas()
+    psr1 = gsr1.to_pandas()
+
+    expect = pdf.groupby(["x", psr0, psr1]).sum()
+    got = gdf.groupby(["x", gsr0, gsr1]).sum()
+
+    assert_groupby_results_equal(expect, got)

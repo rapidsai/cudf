@@ -432,3 +432,31 @@ def test_groupby_nulls_basic(groupby_reduction_methods, request):
         getattr(pdf.groupby("a"), groupby_reduction_methods)(),
         getattr(gdf.groupby("a"), groupby_reduction_methods)(),
     )
+
+
+@pytest.mark.parametrize("agg", [lambda x: x.count(), "count"])
+@pytest.mark.parametrize("by", ["a", ["a", "b"], ["a", "c"]])
+def test_groupby_count(agg, by):
+    pdf = pd.DataFrame(
+        {"a": [1, 1, 1, 2, 3], "b": [1, 2, 2, 2, 1], "c": [1, 2, None, 4, 5]}
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    expect = pdf.groupby(by).agg(agg)
+    got = gdf.groupby(by).agg(agg)
+
+    assert_groupby_results_equal(expect, got, check_dtype=True)
+
+
+@pytest.mark.parametrize("agg", [lambda x: x.median(), "median"])
+@pytest.mark.parametrize("by", ["a", ["a", "b"], ["a", "c"]])
+def test_groupby_median(agg, by):
+    pdf = pd.DataFrame(
+        {"a": [1, 1, 1, 2, 3], "b": [1, 2, 2, 2, 1], "c": [1, 2, None, 4, 5]}
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    expect = pdf.groupby(by).agg(agg)
+    got = gdf.groupby(by).agg(agg)
+
+    assert_groupby_results_equal(expect, got, check_dtype=False)
