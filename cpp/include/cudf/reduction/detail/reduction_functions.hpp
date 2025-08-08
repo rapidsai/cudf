@@ -370,10 +370,12 @@ std::unique_ptr<scalar> bitwise_reduction(bitwise_op bit_op,
 /**
  * @brief Computes quantile value of the elements in the input column
  *
+ * @see cudf::quantile for additional details
+ *
  * @throw std::invalid_argument if the input column type is not an arithmetic type
  *
  * @param col Input column to compute quantile
- * @param quantile_value Quantile value
+ * @param quantile_value Quantile value in range [0,1]
  * @param interpolation Interpolation method
  * @param output_type Data type of return type
  * @param stream CUDA stream used for device memory operations and kernel launches
