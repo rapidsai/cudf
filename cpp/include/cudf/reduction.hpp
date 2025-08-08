@@ -144,13 +144,13 @@ std::unique_ptr<scalar> reduce(
  *
  * For empty or all-null input, the result is a null scalar for the sum and false for overflow.
  *
- * The input column must be an arithmetic type. The output sum scalar type matches the input
- * column type to preserve precision during overflow detection.
+ * The input column must be int64_t type. The output sum scalar type is int64_t and the
+ * overflow flag is bool to preserve precision during overflow detection.
  *
  * @throw cudf::logic_error if aggregation type is not SUM_WITH_OVERFLOW.
- * @throw cudf::logic_error if input column data type is not arithmetic.
+ * @throw cudf::logic_error if input column data type is not int64_t.
  *
- * @param col Input column view (must be arithmetic type)
+ * @param col Input column view (must be int64_t type)
  * @param agg Aggregation operator (must be SUM_WITH_OVERFLOW aggregation)
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned scalars' device memory
@@ -174,9 +174,9 @@ std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> reduce_with_overflow
  * rmm::cuda_stream_view, rmm::device_async_resource_ref) for more details
  *
  * @throw cudf::logic_error if aggregation type is not SUM_WITH_OVERFLOW.
- * @throw cudf::logic_error if input column data type is not arithmetic.
+ * @throw cudf::logic_error if input column data type is not int64_t.
  *
- * @param col Input column view (must be arithmetic type)
+ * @param col Input column view (must be int64_t type)
  * @param agg Aggregation operator (must be SUM_WITH_OVERFLOW aggregation)
  * @param init The initial value of the reduction
  * @param stream CUDA stream used for device memory operations and kernel launches

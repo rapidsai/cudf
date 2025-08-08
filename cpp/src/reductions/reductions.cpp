@@ -52,19 +52,9 @@ std::unique_ptr<scalar> reduce_aggregate_impl(
   switch (agg.kind) {
     case aggregation::SUM: return sum(col, output_dtype, init, stream, mr);
     case aggregation::SUM_WITH_OVERFLOW: {
-      // TODO: Implement actual SUM_WITH_OVERFLOW for reductions
-      // For now, delegate to regular sum and create a struct result
-      auto sum_result = sum(col, col.type(), init, stream, mr);
-      auto overflow_scalar =
-        cudf::make_default_constructed_scalar(cudf::data_type{cudf::type_id::BOOL8}, stream, mr);
-      static_cast<cudf::numeric_scalar<bool>*>(overflow_scalar.get())->set_value(false, stream);
-
-      // Create struct result with {sum, overflow}
-      std::vector<std::unique_ptr<cudf::column>> children;
-      children.push_back(cudf::make_column_from_scalar(*sum_result, 1, stream, mr));
-      children.push_back(cudf::make_column_from_scalar(*overflow_scalar, 1, stream, mr));
-      auto struct_column = cudf::make_structs_column(1, std::move(children), 0, {}, stream, mr);
-      return cudf::get_element(*struct_column, 0, stream, mr);
+      // SUM_WITH_OVERFLOW is only supported via the reduce_with_overflow_check API
+      // This case should not be reached through the regular reduce() API
+      CUDF_FAIL("SUM_WITH_OVERFLOW must be used through reduce_with_overflow_check API");
     }
     case aggregation::PRODUCT: return product(col, output_dtype, init, stream, mr);
     case aggregation::MIN: return min(col, output_dtype, init, stream, mr);
@@ -285,24 +275,17 @@ std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> reduce_with_overflow
     return std::make_pair(std::move(null_sum_scalar), std::move(overflow_scalar));
   }
 
-  // Use the existing SUM_WITH_OVERFLOW implementation and extract the struct fields
-  // SUM_WITH_OVERFLOW automatically determines the output struct type
-  auto struct_result =
-    reduction::detail::reduce(col, agg, cudf::data_type{cudf::type_id::STRUCT}, init, stream, mr);
+  // Implement SUM_WITH_OVERFLOW reduction directly for int64_t
+  // This avoids going through the regular reduce() path which would hit CUDF_FAIL
 
-  // The result is a struct scalar with two fields: {sum, overflow}
-  auto struct_scalar_ptr = static_cast<cudf::struct_scalar const*>(struct_result.get());
-  auto table_view        = struct_scalar_ptr->view();
+  // For now, use regular sum and return overflow=false as placeholder
+  // TODO: Implement actual overflow detection during sum accumulation
+  auto sum_result = sum(col, col.type(), init, stream, mr);
+  auto overflow_scalar =
+    cudf::make_default_constructed_scalar(cudf::data_type{cudf::type_id::BOOL8}, stream, mr);
+  static_cast<cudf::numeric_scalar<bool>*>(overflow_scalar.get())->set_value(false, stream);
 
-  // Extract the sum result (field 0) and overflow flag (field 1)
-  auto sum_column      = table_view.column(0);
-  auto overflow_column = table_view.column(1);
-
-  // Convert single-element columns back to scalars
-  auto sum_scalar      = cudf::get_element(sum_column, 0, stream, mr);
-  auto overflow_scalar = cudf::get_element(overflow_column, 0, stream, mr);
-
-  return std::make_pair(std::move(sum_scalar), std::move(overflow_scalar));
+  return std::make_pair(std::move(sum_result), std::move(overflow_scalar));
 }
 
 }  // namespace detail
@@ -321,9 +304,9 @@ std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> reduce_with_overflow
                "reduce_with_overflow_check only supports SUM_WITH_OVERFLOW aggregation",
                cudf::logic_error);
 
-  // Validate that input column is arithmetic
-  CUDF_EXPECTS(cudf::is_numeric(col.type()),
-               "reduce_with_overflow_check requires arithmetic input types",
+  // Validate that input column is int64_t (unified validation for SUM_WITH_OVERFLOW)
+  CUDF_EXPECTS(col.type().id() == cudf::type_id::INT64,
+               "SUM_WITH_OVERFLOW aggregation only supports int64_t input types",
                cudf::logic_error);
 
   return reduction::detail::reduce_with_overflow_check(col, agg, std::nullopt, stream, mr);
@@ -343,9 +326,9 @@ std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> reduce_with_overflow
                "reduce_with_overflow_check only supports SUM_WITH_OVERFLOW aggregation",
                cudf::logic_error);
 
-  // Validate that input column is arithmetic
-  CUDF_EXPECTS(cudf::is_numeric(col.type()),
-               "reduce_with_overflow_check requires arithmetic input types",
+  // Validate that input column is int64_t (unified validation for SUM_WITH_OVERFLOW)
+  CUDF_EXPECTS(col.type().id() == cudf::type_id::INT64,
+               "SUM_WITH_OVERFLOW aggregation only supports int64_t input types",
                cudf::logic_error);
 
   if (init.has_value()) {
