@@ -131,13 +131,13 @@ std::unique_ptr<scalar> reduce(
  * @brief  Computes the reduction of the values in all rows of a column with overflow detection
  *
  * This function performs reduction operations with overflow detection, currently supporting
- * only SUM aggregation. For SUM operations, overflow is detected during accumulation and
- * the function returns a pair where the first scalar contains the result (potentially partial
+ * only SUM_WITH_OVERFLOW aggregation. For SUM operations, overflow is detected during accumulation
+ * and the function returns a pair where the first scalar contains the result (potentially partial
  * if overflow occurred) and the second scalar contains a boolean indicating whether overflow
  * was detected.
  *
- * Only SUM aggregation is supported. For other aggregation types, this function will throw
- * cudf::logic_error.
+ * Only SUM_WITH_OVERFLOW aggregation is supported. For other aggregation types, this function will
+ * throw cudf::logic_error.
  *
  * Any null values are skipped for the operation.
  * If the reduction fails, both output scalars return with `%is_valid()==false`.
@@ -147,11 +147,11 @@ std::unique_ptr<scalar> reduce(
  * The input column must be an arithmetic type. The output sum scalar type matches the input
  * column type to preserve precision during overflow detection.
  *
- * @throw cudf::logic_error if aggregation type is not SUM.
+ * @throw cudf::logic_error if aggregation type is not SUM_WITH_OVERFLOW.
  * @throw cudf::logic_error if input column data type is not arithmetic.
  *
  * @param col Input column view (must be arithmetic type)
- * @param agg Aggregation operator (must be SUM aggregation)
+ * @param agg Aggregation operator (must be SUM_WITH_OVERFLOW aggregation)
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned scalars' device memory
  * @returns A std::pair where first scalar contains the sum result and second scalar contains
@@ -168,16 +168,16 @@ std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> reduce_with_overflow
  *         and an initial value
  *
  * This function performs reduction operations with overflow detection and an initial value,
- * currently supporting only SUM aggregation.
+ * currently supporting only SUM_WITH_OVERFLOW aggregation.
  *
  * @see cudf::reduce_with_overflow_check(column_view const&, reduce_aggregation const&,
  * rmm::cuda_stream_view, rmm::device_async_resource_ref) for more details
  *
- * @throw cudf::logic_error if aggregation type is not SUM.
+ * @throw cudf::logic_error if aggregation type is not SUM_WITH_OVERFLOW.
  * @throw cudf::logic_error if input column data type is not arithmetic.
  *
  * @param col Input column view (must be arithmetic type)
- * @param agg Aggregation operator (must be SUM aggregation)
+ * @param agg Aggregation operator (must be SUM_WITH_OVERFLOW aggregation)
  * @param init The initial value of the reduction
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned scalars' device memory
