@@ -19,6 +19,63 @@ def test_groups():
         assert_eq(pagg.get_group(key), agg.get_group(key))
 
 
+@pytest.mark.parametrize(
+    "by",
+    [
+        "a",
+        "b",
+        ["a"],
+        ["b"],
+        ["a", "b"],
+        ["b", "a"],
+        np.array([0, 0, 0, 1, 1, 1, 2]),
+    ],
+)
+def test_groupby_groups(by):
+    pdf = pd.DataFrame(
+        {"a": [1, 2, 1, 2, 1, 2, 3], "b": [1, 2, 3, 4, 5, 6, 7]}
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    pdg = pdf.groupby(by)
+    gdg = gdf.groupby(by)
+
+    for key in pdg.groups:
+        assert key in gdg.groups
+        assert_eq(pdg.groups[key], gdg.groups[key])
+
+
+@pytest.mark.parametrize(
+    "by",
+    [
+        "a",
+        "b",
+        ["a"],
+        ["b"],
+        ["a", "b"],
+        ["b", "a"],
+        ["a", "c"],
+        ["a", "b", "c"],
+    ],
+)
+def test_groupby_groups_multi(by):
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 2, 1, 2, 1, 2, 3],
+            "b": ["a", "b", "a", "b", "b", "c", "c"],
+            "c": [1, 2, 3, 4, 5, 6, 7],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    pdg = pdf.groupby(by)
+    gdg = gdf.groupby(by)
+
+    for key in pdg.groups:
+        assert key in gdg.groups
+        assert_eq(pdg.groups[key], gdg.groups[key])
+
+
 def test_groupby_iterate_groups():
     rng = np.random.default_rng(seed=0)
     nelem = 20

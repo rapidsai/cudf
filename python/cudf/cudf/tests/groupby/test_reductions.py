@@ -619,3 +619,41 @@ def test_group_by_series_and_column_name_in_by():
     got = gdf.groupby(["x", gsr0, gsr1]).sum()
 
     assert_groupby_results_equal(expect, got)
+
+
+def test_raise_data_error():
+    pdf = pd.DataFrame({"a": [1, 2, 3, 4], "b": ["a", "b", "c", "d"]})
+    gdf = cudf.from_pandas(pdf)
+
+    assert_exceptions_equal(
+        pdf.groupby("a").mean,
+        gdf.groupby("a").mean,
+    )
+
+
+def test_reset_index_after_empty_groupby():
+    # GH #5475
+    pdf = pd.DataFrame({"a": [1, 2, 3]})
+    gdf = cudf.from_pandas(pdf)
+
+    assert_groupby_results_equal(
+        pdf.groupby("a").sum().reset_index(),
+        gdf.groupby("a").sum().reset_index(),
+        as_index=False,
+        by="a",
+    )
+
+
+def test_groupby_attribute_error():
+    err_msg = "Test error message"
+
+    class TestGroupBy(cudf.core.groupby.GroupBy):
+        @property
+        def _groupby(self):
+            raise AttributeError(err_msg)
+
+    a = cudf.DataFrame({"a": [1, 2], "b": [2, 3]})
+    gb = TestGroupBy(a, a["a"])
+
+    with pytest.raises(AttributeError, match=err_msg):
+        gb.sum()

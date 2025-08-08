@@ -1,5 +1,6 @@
 # Copyright (c) 2023-2025, NVIDIA CORPORATION.
 import decimal
+import itertools
 
 import numpy as np
 import pandas as pd
@@ -460,3 +461,55 @@ def test_groupby_median(agg, by):
     got = gdf.groupby(by).agg(agg)
 
     assert_groupby_results_equal(expect, got, check_dtype=False)
+
+
+def test_multi_agg():
+    gdf = cudf.DataFrame(
+        {"a": [1, 1, 2, 2], "b": [1, 2, 3, 4], "c": ["a", "b", "c", "d"]}
+    )
+    pdf = gdf.to_pandas()
+    assert_groupby_results_equal(
+        pdf.groupby("a").agg({"b": ["count", "mean"], "c": ["count"]}),
+        gdf.groupby("a").agg({"b": ["count", "mean"], "c": ["count"]}),
+    )
+
+
+@pytest.mark.parametrize(
+    "agg",
+    (
+        [
+            *itertools.combinations(["count", "max", "min", "nunique"], 2),
+            {"b": "min", "c": "mean"},
+            {"b": "max", "c": "mean"},
+            {"b": "count", "c": "mean"},
+            {"b": "nunique", "c": "mean"},
+        ]
+    ),
+)
+def test_groupby_agg_combinations(agg):
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 2, 2, 3],
+            "b": ["a", "a", "b", "c", "d"],
+            "c": [1, 2, 3, 4, 5],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    assert_groupby_results_equal(
+        pdf.groupby("a").agg(agg),
+        gdf.groupby("a").agg(agg),
+        check_dtype=False,
+    )
+
+
+@pytest.mark.parametrize("list_agg", [list, "collect"])
+def test_groupby_list_simple(list_agg):
+    pdf = pd.DataFrame({"a": [1, 1, 1, 2, 2, 2], "b": [1, 2, None, 4, 5, 6]})
+    gdf = cudf.from_pandas(pdf)
+
+    assert_groupby_results_equal(
+        pdf.groupby("a").agg({"b": list}),
+        gdf.groupby("a").agg({"b": list_agg}),
+        check_dtype=False,
+    )
