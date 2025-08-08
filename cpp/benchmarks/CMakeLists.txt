@@ -261,6 +261,7 @@ ConfigureBench(
 
 ConfigureNVBench(
   GROUPBY_NVBENCH
+  groupby/group_complex_keys.cpp
   groupby/group_histogram.cpp
   groupby/group_max.cpp
   groupby/group_max_multithreaded.cpp
