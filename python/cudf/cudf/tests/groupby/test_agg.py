@@ -613,3 +613,17 @@ def test_groupby_list_columns_excluded():
         gdf.groupby("a").agg("mean"),
         check_dtype=False,
     )
+
+
+def test_groupby_mix_agg_scan():
+    err_msg = "Cannot perform both aggregation and scan in one operation"
+    func = ["cumsum", "sum"]
+    gb = cudf.DataFrame(np.ones((10, 3)), columns=["x", "y", "z"]).groupby(
+        ["x", "y"], sort=True
+    )
+
+    gb.agg(func[0])
+    gb.agg(func[1])
+    gb.agg(func[1:])
+    with pytest.raises(NotImplementedError, match=err_msg):
+        gb.agg(func)

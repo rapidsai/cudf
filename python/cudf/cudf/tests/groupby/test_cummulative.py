@@ -65,3 +65,31 @@ def test_groupby_2keys_scan(func):
     expect_df = getattr(pdf.groupby(["x", "y"], sort=True)["y"], func)()
     got_df = getattr(gdf.groupby(["x", "y"], sort=True)["y"], func)()
     assert_groupby_results_equal(got_df, expect_df)
+
+
+@pytest.mark.parametrize(
+    "with_nan", [False, True], ids=["just-NA", "also-NaN"]
+)
+@pytest.mark.parametrize(
+    "duplicate_index", [False, True], ids=["rangeindex", "dupindex"]
+)
+def test_groupby_scan_null_keys(with_nan, dropna, duplicate_index):
+    key_col = [None, 1, 2, None, 3, None, 3, 1, None, 1]
+    if with_nan:
+        df = pd.DataFrame(
+            {"key": pd.Series(key_col, dtype="float32"), "value": range(10)}
+        )
+    else:
+        df = pd.DataFrame(
+            {"key": pd.Series(key_col, dtype="Int32"), "value": range(10)}
+        )
+
+    if duplicate_index:
+        # Non-default index with duplicates
+        df.index = [1, 2, 3, 1, 3, 2, 4, 1, 6, 10]
+
+    cdf = cudf.from_pandas(df)
+
+    expect = df.groupby("key", dropna=dropna).cumsum()
+    got = cdf.groupby("key", dropna=dropna).cumsum()
+    assert_groupby_results_equal(expect, got)
