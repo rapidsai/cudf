@@ -20,6 +20,7 @@
 #include "io/parquet/reader_impl_helpers.hpp"
 #include "io/utilities/row_selection.hpp"
 
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/logger.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
@@ -72,6 +73,8 @@ namespace {
 
 metadata::metadata(cudf::host_span<uint8_t const> footer_bytes)
 {
+  CUDF_FUNC_RANGE();
+
   CompactProtocolReader cp(footer_bytes.data(), footer_bytes.size());
   cp.read(this);
   CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
