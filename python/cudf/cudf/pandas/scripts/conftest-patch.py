@@ -3534,7 +3534,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/extension/test_arrow.py::TestArrowArray::test_unstack[bool-series-index3]",
     "tests/extension/test_arrow.py::TestArrowArray::test_unstack[decimal128(7, 3)-frame-index2]",
     "tests/extension/test_arrow.py::TestArrowArray::test_unstack[decimal128(7, 3)-frame-index3]",
-    "tests/extension/test_arrow.py::TestArrowArray::test_unstack[decimal128(7, 3)-series-index0]",
     "tests/extension/test_arrow.py::TestArrowArray::test_unstack[decimal128(7, 3)-series-index2]",
     "tests/extension/test_arrow.py::TestArrowArray::test_unstack[decimal128(7, 3)-series-index3]",
     "tests/extension/test_arrow.py::TestArrowArray::test_unstack[double-frame-index2]",
