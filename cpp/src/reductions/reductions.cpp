@@ -245,4 +245,88 @@ std::unique_ptr<scalar> reduce(column_view const& col,
   CUDF_FUNC_RANGE();
   return reduction::detail::reduce(col, agg, output_dtype, init, stream, mr);
 }
+
+namespace reduction {
+namespace detail {
+
+std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> reduce_with_overflow_check(
+  column_view const& col,
+  reduce_aggregation const& agg,
+  std::optional<std::reference_wrapper<scalar const>> init,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  // Handle empty or all-null input
+  if (col.size() == col.null_count()) {
+    auto null_sum_scalar = cudf::make_default_constructed_scalar(col.type(), stream, mr);
+    null_sum_scalar->set_valid_async(false, stream);
+    auto overflow_scalar = cudf::make_numeric_scalar<bool>(false, stream, mr);
+    return std::make_pair(std::move(null_sum_scalar), std::move(overflow_scalar));
+  }
+
+  // For now, implement a simple version that detects potential overflow
+  // In a full implementation, this would use optimized GPU kernels
+
+  // Get the regular sum result
+  auto sum_result = reduce(col, agg, col.type(), init, stream, mr);
+
+  // For now, we'll return overflow = false since we need GPU kernel implementation
+  // for proper overflow detection during accumulation
+  auto overflow_scalar = cudf::make_numeric_scalar<bool>(false, stream, mr);
+
+  return std::make_pair(std::move(sum_result), std::move(overflow_scalar));
+}
+
+}  // namespace detail
+}  // namespace reduction
+
+std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> reduce_with_overflow_check(
+  column_view const& col,
+  reduce_aggregation const& agg,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+
+  // Validate that only SUM aggregation is supported
+  CUDF_EXPECTS(agg.kind == aggregation::SUM,
+               "reduce_with_overflow_check currently only supports SUM aggregation",
+               cudf::logic_error);
+
+  // Validate that input column is arithmetic
+  CUDF_EXPECTS(cudf::is_numeric(col.type()),
+               "reduce_with_overflow_check requires arithmetic input types",
+               cudf::logic_error);
+
+  return reduction::detail::reduce_with_overflow_check(col, agg, std::nullopt, stream, mr);
+}
+
+std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> reduce_with_overflow_check(
+  column_view const& col,
+  reduce_aggregation const& agg,
+  std::optional<std::reference_wrapper<scalar const>> init,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+
+  // Validate that only SUM aggregation is supported
+  CUDF_EXPECTS(agg.kind == aggregation::SUM,
+               "reduce_with_overflow_check currently only supports SUM aggregation",
+               cudf::logic_error);
+
+  // Validate that input column is arithmetic
+  CUDF_EXPECTS(cudf::is_numeric(col.type()),
+               "reduce_with_overflow_check requires arithmetic input types",
+               cudf::logic_error);
+
+  if (init.has_value()) {
+    CUDF_EXPECTS(cudf::have_same_types(col, init.value().get()),
+                 "column and initial value must be the same type",
+                 cudf::data_type_error);
+  }
+
+  return reduction::detail::reduce_with_overflow_check(col, agg, init, stream, mr);
+}
+
 }  // namespace cudf

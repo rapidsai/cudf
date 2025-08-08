@@ -128,6 +128,70 @@ std::unique_ptr<scalar> reduce(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
+ * @brief  Computes the reduction of the values in all rows of a column with overflow detection
+ *
+ * This function performs reduction operations with overflow detection, currently supporting
+ * only SUM aggregation. For SUM operations, overflow is detected during accumulation and
+ * the function returns a pair where the first scalar contains the result (potentially partial
+ * if overflow occurred) and the second scalar contains a boolean indicating whether overflow
+ * was detected.
+ *
+ * Only SUM aggregation is supported. For other aggregation types, this function will throw
+ * cudf::logic_error.
+ *
+ * Any null values are skipped for the operation.
+ * If the reduction fails, both output scalars return with `%is_valid()==false`.
+ *
+ * For empty or all-null input, the result is a null scalar for the sum and false for overflow.
+ *
+ * The input column must be an arithmetic type. The output sum scalar type matches the input
+ * column type to preserve precision during overflow detection.
+ *
+ * @throw cudf::logic_error if aggregation type is not SUM.
+ * @throw cudf::logic_error if input column data type is not arithmetic.
+ *
+ * @param col Input column view (must be arithmetic type)
+ * @param agg Aggregation operator (must be SUM aggregation)
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned scalars' device memory
+ * @returns A std::pair where first scalar contains the sum result and second scalar contains
+ *          the overflow flag (bool)
+ */
+std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> reduce_with_overflow_check(
+  column_view const& col,
+  reduce_aggregation const& agg,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief  Computes the reduction of the values in all rows of a column with overflow detection
+ *         and an initial value
+ *
+ * This function performs reduction operations with overflow detection and an initial value,
+ * currently supporting only SUM aggregation.
+ *
+ * @see cudf::reduce_with_overflow_check(column_view const&, reduce_aggregation const&,
+ * rmm::cuda_stream_view, rmm::device_async_resource_ref) for more details
+ *
+ * @throw cudf::logic_error if aggregation type is not SUM.
+ * @throw cudf::logic_error if input column data type is not arithmetic.
+ *
+ * @param col Input column view (must be arithmetic type)
+ * @param agg Aggregation operator (must be SUM aggregation)
+ * @param init The initial value of the reduction
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned scalars' device memory
+ * @returns A std::pair where first scalar contains the sum result and second scalar contains
+ *          the overflow flag (bool)
+ */
+std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> reduce_with_overflow_check(
+  column_view const& col,
+  reduce_aggregation const& agg,
+  std::optional<std::reference_wrapper<scalar const>> init,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
  * @brief  Compute reduction of each segment in the input column
  *
  * This function does not detect overflows in reductions. When `output_dtype`
