@@ -1054,7 +1054,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
     if (not page_mask[page_idx]) {
       pp->num_nulls  = pp->num_rows;
       pp->num_valids = 0;
-      // Set s->nesting info to nullptr to bypass `null_count_back_copier` at the end of scope
+      // Set s->nesting info = nullptr to bypass `null_count_back_copier` at return
       s->nesting_info = nullptr;
       return;
     }

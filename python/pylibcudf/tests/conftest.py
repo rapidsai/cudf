@@ -119,7 +119,10 @@ def _generate_table_data(types, nrows, seed=42):
                 )
             elif isinstance(typ, pa.ListType):
                 pa_array = pa.array(
-                    [list(row_vals) for row_vals in zip(rand_arrs[0])],
+                    [
+                        list(row_vals)
+                        for row_vals in zip(rand_arrs[0], strict=True)
+                    ],
                     type=typ,
                 )
                 child_colnames.append(("", grandchild_colnames))
