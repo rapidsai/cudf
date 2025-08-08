@@ -657,3 +657,22 @@ def test_groupby_attribute_error():
 
     with pytest.raises(AttributeError, match=err_msg):
         gb.sum()
+
+
+@pytest.mark.parametrize(
+    "pdf",
+    [pd.DataFrame(), pd.DataFrame({"a": []}), pd.Series([], dtype="float64")],
+)
+def test_groupby_no_keys(pdf):
+    gdf = cudf.from_pandas(pdf)
+    if isinstance(pdf, pd.DataFrame):
+        kwargs = {"check_column_type": False}
+    else:
+        kwargs = {}
+    assert_groupby_results_equal(
+        pdf.groupby([]).max(),
+        gdf.groupby([]).max(),
+        check_dtype=False,
+        check_index_type=False,  # Int64 v/s Float64
+        **kwargs,
+    )

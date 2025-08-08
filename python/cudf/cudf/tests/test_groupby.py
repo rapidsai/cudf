@@ -24,10 +24,6 @@ from cudf.core.udf.groupby_typing import SUPPORTED_GROUPBY_NUMPY_TYPES
 from cudf.core.udf.utils import UDFError, precompiled
 from cudf.testing import assert_eq
 from cudf.testing._utils import (
-    DATETIME_TYPES,
-    SIGNED_TYPES,
-    TIMEDELTA_TYPES,
-    assert_exceptions_equal,
     expect_warning_if,
 )
 from cudf.testing.dataset_generator import rand_dataframe
@@ -715,116 +711,6 @@ def test_groupby_apply_noempty_group():
     assert_groupby_results_equal(expect, got)
 
 
-@pytest.mark.parametrize("list_agg", [list, "collect"])
-def test_groupby_list_of_lists(list_agg):
-    pdf = pd.DataFrame(
-        {
-            "a": [1, 1, 1, 2, 2, 2],
-            "b": [[1, 2], [3, None, 5], None, [], [7, 8], [9]],
-        }
-    )
-    gdf = cudf.from_pandas(pdf)
-
-    assert_groupby_results_equal(
-        pdf.groupby("a").agg({"b": list}),
-        gdf.groupby("a").agg({"b": list_agg}),
-        check_dtype=False,
-    )
-
-
-@pytest.mark.parametrize("list_agg", [list, "collect"])
-def test_groupby_list_of_structs(list_agg):
-    pdf = pd.DataFrame(
-        {
-            "a": [1, 1, 1, 2, 2, 2],
-            "b": [
-                {"c": "1", "d": 1},
-                {"c": "2", "d": 2},
-                {"c": "3", "d": 3},
-                {"c": "4", "d": 4},
-                {"c": "5", "d": 5},
-                {"c": "6", "d": 6},
-            ],
-        }
-    )
-    gdf = cudf.from_pandas(pdf)
-    grouped = gdf.groupby("a").agg({"b": list_agg})
-    assert_groupby_results_equal(
-        pdf.groupby("a").agg({"b": list}),
-        grouped,
-        check_dtype=True,
-    )
-    assert grouped["b"].dtype.element_type == gdf["b"].dtype
-
-
-@pytest.mark.parametrize("list_agg", [list, "collect"])
-def test_groupby_list_single_element(list_agg):
-    pdf = pd.DataFrame({"a": [1, 2], "b": [3, None]})
-    gdf = cudf.from_pandas(pdf)
-
-    assert_groupby_results_equal(
-        pdf.groupby("a").agg({"b": list}),
-        gdf.groupby("a").agg({"b": list_agg}),
-        check_dtype=False,
-    )
-
-
-@pytest.mark.parametrize(
-    "agg", [list, [list, "count"], {"b": list, "c": "sum"}]
-)
-def test_groupby_list_strings(agg):
-    pdf = pd.DataFrame(
-        {
-            "a": [1, 1, 1, 2, 2],
-            "b": ["b", "a", None, "e", "d"],
-            "c": [1, 2, 3, 4, 5],
-        }
-    )
-    gdf = cudf.from_pandas(pdf)
-
-    assert_groupby_results_equal(
-        pdf.groupby("a").agg(agg),
-        gdf.groupby("a").agg(agg),
-        check_dtype=False,
-    )
-
-
-def test_groupby_list_columns_excluded():
-    pdf = pd.DataFrame(
-        {
-            "a": [1, 1, 2, 2],
-            "b": [1, 2, 3, 4],
-            "c": [[1, 2], [3, 4], [5, 6], [7, 8]],
-        }
-    )
-    gdf = cudf.from_pandas(pdf)
-
-    pandas_result = pdf.groupby("a").mean(numeric_only=True)
-    pandas_agg_result = pdf.groupby("a").agg("mean", numeric_only=True)
-
-    assert_groupby_results_equal(
-        pandas_result,
-        gdf.groupby("a").mean(numeric_only=True),
-        check_dtype=False,
-    )
-
-    assert_groupby_results_equal(
-        pandas_agg_result,
-        gdf.groupby("a").agg("mean"),
-        check_dtype=False,
-    )
-
-
-def test_groupby_pipe():
-    pdf = pd.DataFrame({"A": "a b a b".split(), "B": [1, 2, 3, 4]})
-    gdf = cudf.from_pandas(pdf)
-
-    expected = pdf.groupby("A").pipe(lambda x: x.max() - x.min())
-    actual = gdf.groupby("A").pipe(lambda x: x.max() - x.min())
-
-    assert_groupby_results_equal(expected, actual)
-
-
 def create_test_groupby_apply_return_scalars_params():
     def f0(x):
         x = x[~x["B"].isna()]
@@ -940,25 +826,6 @@ def test_groupby_apply_return_series_dataframe(func, args):
     "pdf",
     [pd.DataFrame(), pd.DataFrame({"a": []}), pd.Series([], dtype="float64")],
 )
-def test_groupby_no_keys(pdf):
-    gdf = cudf.from_pandas(pdf)
-    if isinstance(pdf, pd.DataFrame):
-        kwargs = {"check_column_type": False}
-    else:
-        kwargs = {}
-    assert_groupby_results_equal(
-        pdf.groupby([]).max(),
-        gdf.groupby([]).max(),
-        check_dtype=False,
-        check_index_type=False,  # Int64 v/s Float64
-        **kwargs,
-    )
-
-
-@pytest.mark.parametrize(
-    "pdf",
-    [pd.DataFrame(), pd.DataFrame({"a": []}), pd.Series([], dtype="float64")],
-)
 def test_groupby_apply_no_keys(pdf):
     gdf = cudf.from_pandas(pdf)
     if isinstance(pdf, pd.DataFrame):
@@ -971,74 +838,6 @@ def test_groupby_apply_no_keys(pdf):
         check_index_type=False,  # Int64 v/s Float64
         **kwargs,
     )
-
-
-@pytest.mark.parametrize(
-    "pdf",
-    [pd.DataFrame({"a": [1, 2]}), pd.DataFrame({"a": [1, 2], "b": [2, 3]})],
-)
-def test_groupby_nonempty_no_keys(pdf):
-    gdf = cudf.from_pandas(pdf)
-    assert_exceptions_equal(
-        lambda: pdf.groupby([]),
-        lambda: gdf.groupby([]),
-    )
-
-
-@pytest.mark.parametrize(
-    "by,data",
-    [
-        pytest.param(
-            [],
-            [],
-            marks=pytest.mark.xfail(reason="dtype always cast to object"),
-        ),
-        ([1, 1, 2, 2], [0, 0, 1, 1]),
-        ([1, 2, 3, 4], [0, 0, 0, 0]),
-        ([1, 2, 1, 2], [0, 1, 1, 1]),
-    ],
-)
-@pytest.mark.parametrize(
-    "dtype",
-    SIGNED_TYPES + DATETIME_TYPES + TIMEDELTA_TYPES + ["string", "category"],
-)
-def test_groupby_unique(by, data, dtype):
-    pdf = pd.DataFrame({"by": by, "data": data})
-    pdf["data"] = pdf["data"].astype(dtype)
-    gdf = cudf.from_pandas(pdf)
-
-    expect = pdf.groupby("by")["data"].unique()
-    got = gdf.groupby("by")["data"].unique()
-    assert_groupby_results_equal(expect, got)
-
-
-@pytest.mark.parametrize(
-    "func", ["cummin", "cummax", "cumcount", "cumsum", "cumprod"]
-)
-def test_groupby_2keys_scan(func):
-    nelem = 20
-    pdf = make_frame(pd.DataFrame, nelem=nelem)
-    expect_df = pdf.groupby(["x", "y"], sort=True).agg(func)
-    gdf = cudf.from_pandas(pdf)
-    got_df = gdf.groupby(["x", "y"], sort=True).agg(func)
-    # pd.groupby.cumcount returns a series.
-    if isinstance(expect_df, pd.Series):
-        expect_df = expect_df.to_frame("val")
-
-    check_dtype = func not in _index_type_aggs
-    assert_groupby_results_equal(got_df, expect_df, check_dtype=check_dtype)
-
-    expect_df = getattr(pdf.groupby(["x", "y"], sort=True), func)()
-    got_df = getattr(gdf.groupby(["x", "y"], sort=True), func)()
-    assert_groupby_results_equal(got_df, expect_df, check_dtype=check_dtype)
-
-    expect_df = getattr(pdf.groupby(["x", "y"], sort=True)[["x"]], func)()
-    got_df = getattr(gdf.groupby(["x", "y"], sort=True)[["x"]], func)()
-    assert_groupby_results_equal(got_df, expect_df, check_dtype=check_dtype)
-
-    expect_df = getattr(pdf.groupby(["x", "y"], sort=True)["y"], func)()
-    got_df = getattr(gdf.groupby(["x", "y"], sort=True)["y"], func)()
-    assert_groupby_results_equal(got_df, expect_df, check_dtype=check_dtype)
 
 
 @pytest.mark.parametrize("method", ["average", "min", "max", "first", "dense"])

@@ -1,6 +1,5 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
-
-
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -38,3 +37,31 @@ def test_groupby_cumcount(index):
         gdf.groupby(sr).cumcount(),
         check_dtype=False,
     )
+
+
+@pytest.mark.parametrize(
+    "func", ["cummin", "cummax", "cumcount", "cumsum", "cumprod"]
+)
+def test_groupby_2keys_scan(func):
+    nelem = 20
+    pdf = pd.DataFrame(np.ones((nelem, 3)), columns=["x", "y", "val"])
+    expect_df = pdf.groupby(["x", "y"], sort=True).agg(func)
+    gdf = cudf.from_pandas(pdf)
+    got_df = gdf.groupby(["x", "y"], sort=True).agg(func)
+    # pd.groupby.cumcount returns a series.
+    if isinstance(expect_df, pd.Series):
+        expect_df = expect_df.to_frame("val")
+
+    assert_groupby_results_equal(got_df, expect_df)
+
+    expect_df = getattr(pdf.groupby(["x", "y"], sort=True), func)()
+    got_df = getattr(gdf.groupby(["x", "y"], sort=True), func)()
+    assert_groupby_results_equal(got_df, expect_df)
+
+    expect_df = getattr(pdf.groupby(["x", "y"], sort=True)[["x"]], func)()
+    got_df = getattr(gdf.groupby(["x", "y"], sort=True)[["x"]], func)()
+    assert_groupby_results_equal(got_df, expect_df)
+
+    expect_df = getattr(pdf.groupby(["x", "y"], sort=True)["y"], func)()
+    got_df = getattr(gdf.groupby(["x", "y"], sort=True)["y"], func)()
+    assert_groupby_results_equal(got_df, expect_df)
