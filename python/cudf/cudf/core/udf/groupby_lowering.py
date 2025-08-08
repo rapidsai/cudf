@@ -1,18 +1,21 @@
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 
+import operator
 from functools import partial
 
-from numba import types
+from numba import cuda, types
 from numba.core import cgutils
 from numba.core.extending import lower_builtin
 from numba.core.typing import signature as nb_signature
-from numba.cuda.cudaimpl import lower as cuda_lower
+from numba.cuda.cudaimpl import lower as cuda_lower, registry as cuda_registry
 
 from cudf.core.udf.groupby_typing import (
     SUPPORTED_GROUPBY_NUMBA_TYPES,
-    Group,
-    GroupType,
+    GroupView,
+    GroupViewType,
+    ManagedGroupViewType,
     call_cuda_functions,
+    call_group_sum,
     group_size_type,
     index_default_type,
 )
@@ -91,7 +94,7 @@ def group_corr(context, builder, sig, args):
     return result
 
 
-@lower_builtin(Group, types.Array, group_size_type, types.Array)
+@lower_builtin(GroupView, types.Array, group_size_type, types.Array)
 def group_constructor(context, builder, sig, args):
     """
     Instruction boilerplate used for instantiating a Group
@@ -173,18 +176,125 @@ cuda_Group_count = cuda_Group_size
 
 
 for ty in SUPPORTED_GROUPBY_NUMBA_TYPES:
-    cuda_lower("GroupType.max", GroupType(ty))(cuda_Group_max)
-    cuda_lower("GroupType.min", GroupType(ty))(cuda_Group_min)
-    cuda_lower("GroupType.sum", GroupType(ty))(cuda_Group_sum)
-    cuda_lower("GroupType.count", GroupType(ty))(cuda_Group_count)
-    cuda_lower("GroupType.size", GroupType(ty))(cuda_Group_size)
-    cuda_lower("GroupType.mean", GroupType(ty))(cuda_Group_mean)
-    cuda_lower("GroupType.std", GroupType(ty))(cuda_Group_std)
-    cuda_lower("GroupType.var", GroupType(ty))(cuda_Group_var)
-    cuda_lower("GroupType.idxmax", GroupType(ty, types.int64))(
+    cuda_lower("GroupViewType.max", GroupViewType(ty))(cuda_Group_max)
+    cuda_lower("GroupViewType.min", GroupViewType(ty))(cuda_Group_min)
+    cuda_lower("GroupViewType.sum", GroupViewType(ty))(cuda_Group_sum)
+    cuda_lower("GroupViewType.count", GroupViewType(ty))(cuda_Group_count)
+    cuda_lower("GroupViewType.size", GroupViewType(ty))(cuda_Group_size)
+    cuda_lower("GroupViewType.mean", GroupViewType(ty))(cuda_Group_mean)
+    cuda_lower("GroupViewType.std", GroupViewType(ty))(cuda_Group_std)
+    cuda_lower("GroupViewType.var", GroupViewType(ty))(cuda_Group_var)
+    cuda_lower("GroupViewType.idxmax", GroupViewType(ty, types.int64))(
         cuda_Group_idxmax
     )
-    cuda_lower("GroupType.idxmin", GroupType(ty, types.int64))(
+    cuda_lower("GroupViewType.idxmin", GroupViewType(ty, types.int64))(
         cuda_Group_idxmin
     )
-    cuda_lower("GroupType.corr", GroupType(ty), GroupType(ty))(group_corr)
+    cuda_lower("GroupViewType.corr", GroupViewType(ty), GroupViewType(ty))(
+        group_corr
+    )
+
+
+_udf_grp_meminfo = cuda.declare_device(
+    "meminfo_from_new_udf_group", types.voidptr(types.CPointer(types.int64))
+)
+
+
+def make_udf_grp_meminfo(data_ptr):
+    return _udf_grp_meminfo(data_ptr)
+
+
+@cuda_lower(
+    operator.add, GroupViewType(types.int64), GroupViewType(types.int64)
+)
+def cuda_lower_add(context, builder, sig, args):
+    lhs_grp = cgutils.create_struct_proxy(sig.args[0])(
+        context, builder, value=args[0]
+    )
+    rhs_grp = cgutils.create_struct_proxy(sig.args[1])(
+        context, builder, value=args[1]
+    )
+
+    output = cgutils.create_struct_proxy(sig.return_type)(context, builder)
+    out_ptr = context.compile_internal(
+        builder,
+        call_group_sum,
+        types.CPointer(types.int64)(
+            sig.args[0].group_data_type,
+            sig.args[1].group_data_type,
+            group_size_type,
+        ),
+        (
+            lhs_grp.group_data,
+            rhs_grp.group_data,
+            lhs_grp.size,
+        ),
+    )
+
+    mi = context.compile_internal(
+        builder,
+        make_udf_grp_meminfo,
+        types.voidptr(
+            types.CPointer(types.int64),
+        ),
+        (out_ptr,),
+    )
+
+    out_grp = cgutils.create_struct_proxy(GroupViewType(types.int64))(
+        context, builder
+    )
+    out_grp.group_data = out_ptr
+    out_grp.size = lhs_grp.size
+
+    output.group_view = out_grp._getvalue()
+    output.meminfo = mi
+    return output._getvalue()
+
+
+@cuda_lower(
+    "ManagedGroupViewType.sum",
+    ManagedGroupViewType(GroupViewType(types.int64)),
+)
+def managed_group_reduction_impl_basic(context, builder, sig, args):
+    """
+    Instruction boilerplate used for calling a groupby reduction
+    __device__ function. Centers around a forward declaration of
+    this function and adds the pre/post processing instructions
+    necessary for calling it.
+    """
+    # return type
+    retty = sig.return_type
+    # a variable logically corresponding to the calling `Group`
+    grp = cgutils.create_struct_proxy(sig.args[0])(
+        context, builder, value=args[0]
+    )
+    grp_view = cgutils.create_struct_proxy(GroupViewType(types.int64))(
+        context, builder, value=grp.group_view
+    )
+
+    func = call_cuda_functions["sum"][(types.int64, types.int64)]
+
+    # insert the forward declaration and return its result
+    # pass it the data pointer and the group's size
+    return context.compile_internal(
+        builder,
+        func,
+        nb_signature(retty, types.CPointer(types.int64), types.int64),
+        (grp_view.group_data, grp_view.size),
+    )
+
+
+@cuda_registry.lower_cast(
+    ManagedGroupViewType(GroupViewType(types.int64)),
+    GroupViewType(types.int64),
+)
+def cast_managed_group_view_to_group_view(
+    context, builder, fromty, toty, val
+):  #
+    managed = cgutils.create_struct_proxy(fromty)(context, builder, value=val)
+
+    result = cgutils.create_struct_proxy(toty)(
+        context, builder, value=managed.group_view
+    )
+    context.nrt.incref(builder, fromty, val)
+    return result._getvalue()

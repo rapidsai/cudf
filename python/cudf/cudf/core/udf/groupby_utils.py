@@ -9,14 +9,16 @@ from numba import cuda, types
 from numba.core.errors import TypingError
 from numba.cuda.cudadrv.devices import get_context
 from numba.np import numpy_support
+from numba.np.numpy_support import as_dtype
 
 from cudf.core.column import as_column, column_empty
 from cudf.core.udf.groupby_typing import (
     SUPPORTED_GROUPBY_NUMPY_TYPES,
-    Group,
     GroupByJITDataFrame,
-    GroupType,
+    GroupView,
+    GroupViewType,
 )
+from cudf.core.udf.nrt_utils import nrt_enabled
 from cudf.core.udf.templates import (
     group_initializer_template,
     groupby_apply_kernel_template,
@@ -57,7 +59,7 @@ def _get_frame_groupby_type(dtype, index_dtype):
         title = info[2] if len(info) == 3 else None
         ty = numpy_support.from_dtype(elemdtype)
         indexty = numpy_support.from_dtype(index_dtype)
-        groupty = GroupType(ty, indexty)
+        groupty = GroupViewType(ty, indexty)
         infos = {
             "type": groupty,
             "offset": offset,
@@ -126,6 +128,10 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
     offsets = as_column(offsets)
     ngroups = len(offsets) - 1
 
+    if isinstance(return_type, GroupViewType):
+        return_type = as_dtype(return_type.group_scalar_type)
+        assert False
+
     output = column_empty(ngroups, dtype=return_type, for_numba=True)
     launch_args = [
         offsets,
@@ -149,7 +155,8 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
     if kernel.specialized:
         specialized = kernel
     else:
-        specialized = kernel.specialize(*launch_args)
+        with nrt_enabled():
+            specialized = kernel.specialize(*launch_args)
 
     # Ask the driver to give a good config
     ctx = get_context()
@@ -187,7 +194,7 @@ def _can_be_jitted(frame, func, args):
     try:
         kr._get_udf_return_type()
         return True
-    except (UDFError, TypingError):
+    except (UDFError, TypingError, KeyError):
         return False
 
 
@@ -242,7 +249,7 @@ class GroupByApplyKernel(ApplyKernelBase):
         dataframe_group_type = self._get_frame_type()
         global_exec_context = {
             "cuda": cuda,
-            "Group": Group,
+            "Group": GroupView,
             "dataframe_group_type": dataframe_group_type,
             "types": types,
         }

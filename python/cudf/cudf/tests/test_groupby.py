@@ -779,6 +779,15 @@ def test_groupby_apply_jit_no_df_ops(groupby_jit_data_small):
         run_groupby_apply_jit_test(groupby_jit_data_small, func, ["key1"])
 
 
+def test_groupby_apply_jit_add_basic():
+    df = cudf.DataFrame({"a": [1, 1, 1], "b": [1, 2, 3], "c": [1, 2, 3]})
+
+    def f(group):
+        return (group["b"] + group["c"]).sum()
+
+    run_groupby_apply_jit_test(df, f, ["a"])
+
+
 @pytest.mark.parametrize("dtype", ["uint8", "str"])
 @pytest.mark.skipif(
     PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,

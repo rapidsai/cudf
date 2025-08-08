@@ -439,7 +439,6 @@ __device__ AccumT device_sum(cooperative_groups::thread_block const& block,
   block.sync();
 
   AccumT local_sum = 0;
-
   for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
     local_sum += static_cast<AccumT>(data[idx]);
   }
@@ -761,4 +760,60 @@ make_definition_corr(BlockCorr, int32, int32_t);
 make_definition_corr(BlockCorr, int64, int64_t);
 
 #undef make_definition_corr
+}
+
+__device__ int64_t* block_alloc(size_t size)
+{
+  __shared__ int64_t* ptr;
+  if (threadIdx.x == 0) { ptr = (int64_t*)malloc(size * sizeof(int64_t)); }
+  __syncthreads();  // all threads wait for ptr to be written
+  return ptr;
+}
+
+__device__ void block_free(int64_t* ptr)
+{
+  if (threadIdx.x == 0) { free(ptr); }
+}
+
+__device__ int64_t* binary_add(int64_t* lhs, int64_t* rhs, int64_t size)
+{
+  auto ptr = block_alloc(size * sizeof(int64_t));
+  __syncthreads();  // may help clarify if block_alloc uses shared memory
+
+  for (int i = threadIdx.x; i < size; i += blockDim.x) {
+    ptr[i] = lhs[i] + rhs[i];
+  }
+
+  __syncthreads();
+  return ptr;
+}
+
+extern "C" __device__ int group_sum_binaryop(int64_t** numba_return_value,
+                                             int64_t* lhs,
+                                             int64_t* rhs,
+                                             int64_t size)
+{
+  if (threadIdx.x == 0 and blockIdx.x == 0) {
+    for (int64_t i = 0; i < size; ++i) {}
+  }
+  int64_t* result     = binary_add(lhs, rhs, size);
+  *numba_return_value = result;
+  return 0;
+}
+
+__device__ void udf_group_dtor(void* udf_group_ptr, size_t size, void* dtor_info)
+{
+  auto ptr = reinterpret_cast<int64_t*>(udf_group_ptr);
+  block_free(ptr);
+}
+
+extern "C" __device__ int meminfo_from_new_udf_group(void** nb_retval, void* group_data)
+{
+  if (threadIdx.x == 0) {
+    *nb_retval = NRT_MemInfo_new(group_data, NULL, udf_group_dtor, NULL);
+  } else {
+    *nb_retval = nullptr;
+  }
+  __syncthreads();
+  return 0;
 }

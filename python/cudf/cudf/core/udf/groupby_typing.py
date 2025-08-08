@@ -1,10 +1,12 @@
 # Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
+import operator
 from typing import Any
 
 import numba
 from numba import cuda, types
+from numba.core import cgutils
 from numba.core.extending import (
     make_attribute_wrapper,
     models,
@@ -15,9 +17,10 @@ from numba.core.extending import (
 from numba.core.typing import signature as nb_signature
 from numba.core.typing.templates import AbstractTemplate, AttributeTemplate
 from numba.cuda.cudadecl import registry as cuda_registry
+from numba.cuda.descriptor import cuda_target
 from numba.np import numpy_support
 
-from cudf.core.udf._ops import arith_ops, comparison_ops, unary_ops
+from cudf.core.udf.nrt_utils import _current_nrt_context
 from cudf.core.udf.utils import Row, UDFError
 
 index_default_type = types.int64
@@ -37,18 +40,18 @@ _UDF_DOC_URL = (
 )
 
 
-class Group:
+class GroupView:
     """
     A piece of python code whose purpose is to be replaced
-    during compilation. After being registered to GroupType,
-    serves as a handle for instantiating GroupType objects
+    during compilation. After being registered to GroupViewType,
+    serves as a handle for instantiating GroupViewType objects
     in python code and accessing their attributes
     """
 
     pass
 
 
-class GroupType(numba.types.Type):
+class GroupViewType(numba.types.Type):
     """
     Numba extension type carrying metadata associated with a single
     GroupBy group. This metadata ultimately is passed to the CUDA
@@ -61,7 +64,7 @@ class GroupType(numba.types.Type):
             and not isinstance(group_scalar_type, types.Poison)
         ):
             # A frame containing an column with an unsupported dtype
-            # is calling groupby apply. Construct a GroupType with
+            # is calling groupby apply. Construct a GroupViewType with
             # a poisoned type so we can later error if this group is
             # used in the UDF body
             group_scalar_type = types.Poison(group_scalar_type)
@@ -71,8 +74,52 @@ class GroupType(numba.types.Type):
         self.group_size_type = group_size_type
         self.group_index_type = types.CPointer(index_type)
         super().__init__(
-            name=f"Group({self.group_scalar_type}, {self.index_type})"
+            name=f"GroupView({self.group_scalar_type}, {self.index_type})"
         )
+
+
+class ManagedGroupViewType(numba.types.Type):
+    """
+    An NRT tracked version of a group to be constructed
+    around intermediate groups that are allocated during the UDF
+    """
+
+    def __init__(self, group):
+        self.group = group
+        ctx = _current_nrt_context.get(None)
+        if ctx is not None:
+            # we're in a compilation that is determining
+            # if NRT must be linked
+            ctx.use_nrt = True
+        super().__init__(name="managed_group_view")
+
+    @property
+    def group_scalar_type(self):
+        return self.group.group_scalar_type
+
+    @property
+    def index_type(self):
+        return self.group.index_type
+
+
+@register_model(ManagedGroupViewType)
+class managed_group_view_model(models.StructModel):
+    _members = (
+        ("meminfo", types.voidptr),
+        ("group_view", GroupViewType(types.int64)),
+    )
+
+    def __init__(self, dmm, fe_type):
+        super().__init__(dmm, fe_type, self._members)
+
+    def has_nrt_meminfo(self):
+        return True
+
+    def get_nrt_meminfo(self, builder, value):
+        udf_group_and_meminfo = cgutils.create_struct_proxy(
+            ManagedGroupViewType(GroupViewType(types.int64))
+        )(cuda_target.target_context, builder, value=value)
+        return udf_group_and_meminfo.meminfo
 
 
 class GroupByJITDataFrame(Row):
@@ -82,14 +129,14 @@ class GroupByJITDataFrame(Row):
 register_model(GroupByJITDataFrame)(models.RecordModel)
 
 
-@typeof_impl.register(Group)
+@typeof_impl.register(GroupView)
 def typeof_group(val, c):
     """
-    Tie Group and GroupType together such that when Numba
+    Tie Group and GroupViewType together such that when Numba
     sees usage of Group in raw python code, it knows to
-    treat those usages as uses of GroupType
+    treat those usages as uses of GroupViewType
     """
-    return GroupType(
+    return GroupViewType(
         numba.np.numpy_support.from_dtype(val.dtype),
         numba.np.numpy_support.from_dtype(val.index_dtype),
     )
@@ -97,7 +144,7 @@ def typeof_group(val, c):
 
 # The typing of the python "function" Group.__init__
 # as it appears in python code
-@type_callable(Group)
+@type_callable(GroupView)
 def type_group(context):
     def typer(group_data, size, index):
         if (
@@ -105,15 +152,15 @@ def type_group(context):
             and isinstance(size, types.Integer)
             and isinstance(index, types.Array)
         ):
-            return GroupType(group_data.dtype, index.dtype)
+            return GroupViewType(group_data.dtype, index.dtype)
 
     return typer
 
 
-@register_model(GroupType)
+@register_model(GroupViewType)
 class GroupModel(models.StructModel):
     """
-    Model backing GroupType instances. See the link below for details.
+    Model backing GroupViewType instances. See the link below for details.
     https://github.com/numba/numba/blob/main/numba/core/datamodel/models.py
     """
 
@@ -178,7 +225,7 @@ def _register_cuda_idx_reduction_caller(funcname, inputty):
     call_cuda_functions[funcname.lower()][type_key] = caller
 
 
-class GroupOpBase(AbstractTemplate):
+class GroupViewOpBase(AbstractTemplate):
     def make_error_string(self, args):
         fname = self.key.__name__
         sr_err = ", ".join(["Series" for _ in range(len(args))])
@@ -190,7 +237,7 @@ class GroupOpBase(AbstractTemplate):
     def generic(self, args, kws):
         # early exit to make sure typing doesn't fail for normal
         # non-group ops
-        if not all(isinstance(arg, GroupType) for arg in args):
+        if not all(isinstance(arg, GroupViewType) for arg in args):
             return None
         # check if any groups are poisoned for this op
         for arg in args:
@@ -211,7 +258,7 @@ class GroupOpBase(AbstractTemplate):
         raise UDFError(self.make_error_string(args))
 
 
-class GroupAttrBase(AbstractTemplate):
+class GroupViewAttrBase(AbstractTemplate):
     def make_error_string(self, args):
         fname = self.key.split(".")[-1]
         args = (self.this, *args)
@@ -226,7 +273,7 @@ class GroupAttrBase(AbstractTemplate):
     def generic(self, args, kws):
         # earlystop to make sure typing doesn't fail for normal
         # non-group ops
-        if not all(isinstance(arg, GroupType) for arg in args):
+        if not all(isinstance(arg, GroupViewType) for arg in args):
             return None
         # check if any groups are poisioned for this op
         for arg in (self.this, *args):
@@ -249,22 +296,22 @@ class GroupAttrBase(AbstractTemplate):
         raise UDFError(self.make_error_string(args))
 
 
-class GroupUnaryAttrBase(GroupAttrBase):
+class GroupViewUnaryAttrBase(GroupViewAttrBase):
     pass
 
 
-class GroupBinaryAttrBase(GroupAttrBase):
+class GroupViewBinaryAttrBase(GroupViewAttrBase):
     pass
 
 
 def _make_unary_attr(funcname):
-    class GroupUnaryReductionAttrTyping(GroupUnaryAttrBase):
-        key = f"GroupType.{funcname}"
+    class GroupUnaryReductionAttrTyping(GroupViewUnaryAttrBase):
+        key = f"GroupViewType.{funcname}"
 
     def _attr(self, mod):
         return types.BoundFunction(
             GroupUnaryReductionAttrTyping,
-            GroupType(mod.group_scalar_type, mod.index_type),
+            GroupViewType(mod.group_scalar_type, mod.index_type),
         )
 
     return _attr
@@ -284,28 +331,28 @@ def _create_reduction_attr(name, retty=None):
 
     def _attr(self, mod):
         return types.BoundFunction(
-            Attr, GroupType(mod.group_scalar_type, mod.index_type)
+            Attr, GroupViewType(mod.group_scalar_type, mod.index_type)
         )
 
     return _attr
 
 
-class GroupIdxMax(AbstractTemplate):
-    key = "GroupType.idxmax"
+class GroupViewIdxMax(AbstractTemplate):
+    key = "GroupViewType.idxmax"
 
     def generic(self, args, kws):
         return nb_signature(self.this.index_type, recvr=self.this)
 
 
-class GroupIdxMin(AbstractTemplate):
-    key = "GroupType.idxmin"
+class GroupViewIdxMin(AbstractTemplate):
+    key = "GroupViewType.idxmin"
 
     def generic(self, args, kws):
         return nb_signature(self.this.index_type, recvr=self.this)
 
 
-class GroupCorr(GroupBinaryAttrBase):
-    key = "GroupType.corr"
+class GroupViewCorr(GroupViewBinaryAttrBase):
+    key = "GroupViewType.corr"
 
 
 class DataFrameAttributeTemplate(AttributeTemplate):
@@ -321,8 +368,8 @@ class DataFrameAttr(DataFrameAttributeTemplate):
 
 
 @cuda_registry.register_attr
-class GroupAttr(AttributeTemplate):
-    key = GroupType
+class GroupViewAttr(AttributeTemplate):
+    key = GroupViewType
 
     resolve_max = _make_unary_attr("max")
     resolve_min = _make_unary_attr("min")
@@ -333,25 +380,27 @@ class GroupAttr(AttributeTemplate):
     resolve_std = _make_unary_attr("std")
 
     resolve_size = _create_reduction_attr(
-        "GroupType.size", retty=group_size_type
+        "GroupViewType.size", retty=group_size_type
     )
     resolve_count = _create_reduction_attr(
-        "GroupType.count", retty=types.int64
+        "GroupViewType.count", retty=types.int64
     )
 
     def resolve_idxmax(self, mod):
         return types.BoundFunction(
-            GroupIdxMax, GroupType(mod.group_scalar_type, mod.index_type)
+            GroupViewIdxMax,
+            GroupViewType(mod.group_scalar_type, mod.index_type),
         )
 
     def resolve_idxmin(self, mod):
         return types.BoundFunction(
-            GroupIdxMin, GroupType(mod.group_scalar_type, mod.index_type)
+            GroupViewIdxMin,
+            GroupViewType(mod.group_scalar_type, mod.index_type),
         )
 
     def resolve_corr(self, mod):
         return types.BoundFunction(
-            GroupCorr, GroupType(mod.group_scalar_type, mod.index_type)
+            GroupViewCorr, GroupViewType(mod.group_scalar_type, mod.index_type)
         )
 
 
@@ -388,8 +437,58 @@ _register_cuda_unary_reduction_caller("Var", types.float64, types.float64)
 
 
 for attr in ("group_data", "index", "size"):
-    make_attribute_wrapper(GroupType, attr, attr)
+    make_attribute_wrapper(GroupViewType, attr, attr)
 
 
-for op in arith_ops + comparison_ops + unary_ops:
-    cuda_registry.register_global(op)(GroupOpBase)
+# for op in arith_ops + comparison_ops + unary_ops:
+#    cuda_registry.register_global(op)(GroupOpBase)
+
+
+class ManagedGroupViewSumTyping(AbstractTemplate):
+    key = "ManagedGroupViewType.sum"
+
+    def generic(self, args, kws):
+        return nb_signature(
+            self.this.group_scalar_type,
+            recvr=self.this,
+        )
+
+
+@cuda_registry.register_attr
+class ManagedGroupViewTypeAttrs(GroupViewAttr):
+    key = ManagedGroupViewType(GroupViewType(types.int64))
+
+    def resolve_sum(self, mod):
+        return types.BoundFunction(
+            ManagedGroupViewSumTyping,
+            ManagedGroupViewType(GroupViewType(mod.group_scalar_type)),
+        )
+
+
+_group_sum_binaryop = cuda.declare_device(
+    "group_sum_binaryop",
+    types.CPointer(types.int64)(
+        types.CPointer(types.int64),
+        types.CPointer(types.int64),
+        group_size_type,
+    ),
+)
+
+
+def call_group_sum(lhs, rhs, size):
+    return _group_sum_binaryop(lhs, rhs, size)
+
+
+class GroupViewAdd(AbstractTemplate):
+    def generic(self, args, kws):
+        if isinstance(args[0], GroupViewType) and isinstance(
+            args[1], GroupViewType
+        ):
+            return nb_signature(
+                ManagedGroupViewType(GroupViewType(types.int64)),
+                args[0],
+                args[1],
+            )
+
+
+cuda_registry.register_global(operator.add)(GroupViewAdd)

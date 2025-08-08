@@ -29,7 +29,6 @@ from cudf.core.udf.strings_typing import (
 _STR_VIEW_PTR = types.CPointer(string_view)
 _UDF_STRING_PTR = types.CPointer(udf_string)
 
-
 # CUDA function declarations
 # read-only (input is a string_view, output is a fixed with type)
 _string_view_len = cuda.declare_device("len", size_type(_STR_VIEW_PTR))

@@ -21,7 +21,6 @@ import rmm
 
 from cudf._lib import strings_udf
 from cudf.core.buffer import as_buffer
-from cudf.core.udf.masked_typing import MaskedType
 from cudf.core.udf.nrt_utils import nrt_enabled
 from cudf.core.udf.strings_typing import (
     NRT_decref,
@@ -202,7 +201,7 @@ def compile_udf(udf, type_signature):
     ptx_code, return_type = cuda.compile_ptx_for_current_device(
         udf, type_signature, device=True
     )
-    if not isinstance(return_type, MaskedType):
+    if return_type.is_internal:
         output_type = numpy_support.as_dtype(return_type).type
     else:
         output_type = return_type
