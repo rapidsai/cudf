@@ -651,14 +651,19 @@ size_t batched_decompress_temp_size_ex(compression_type compression,
                                             max_total_uncomp_size,
                                             d_statuses.data(),
                                             stream.value());
-    CHECK_NVCOMP_STATUS(nvcomp_status);
-    auto const h_statuses = cudf::detail::make_host_vector(d_statuses, stream);
-    for (auto const& status : h_statuses) {
-      CHECK_NVCOMP_STATUS(status);
+    if (nvcomp_status == nvcompStatus_t::nvcompSuccess) {
+      auto const h_statuses = cudf::detail::make_host_vector(d_statuses, stream);
+      auto const are_all_success =
+        std::all_of(h_statuses.begin(), h_statuses.end(), [](nvcompStatus_t status) {
+          return status == nvcompStatus_t::nvcompSuccess;
+        });
+      if (are_all_success) { return temp_size; }
     }
-    return temp_size;
+    CUDF_LOG_WARN(
+      "batched_decompress_get_temp_size_sync failed, falling back to batched_decompress_temp_size");
   }
 #endif
+  // Fallback to the original batched decompress temp size calculation
   return batched_decompress_temp_size(
     compression, input_data_ptrs.size(), max_uncomp_chunk_size, max_total_uncomp_size);
 }
