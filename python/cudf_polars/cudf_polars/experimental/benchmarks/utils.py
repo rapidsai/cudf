@@ -155,9 +155,7 @@ class HardwareInfo:
         return cls(gpus=gpus)
 
 
-def _infer_scale_factor(path: str | Path, suffix: str) -> int | float:
-    name = Path(sys.argv[0]).name
-
+def _infer_scale_factor(name: str, path: str | Path, suffix: str) -> int | float:
     if "pdsh" in name:
         supplier = get_data(path, "supplier", suffix)
         num_rows = supplier.select(pl.len()).collect().item(0, 0)
@@ -214,12 +212,21 @@ class RunConfig:
             scheduler = None
 
         path = args.path
-        if (scale_factor := args.scale) is None:
+        name = Path(sys.argv[0]).name
+        scale_factor = args.scale
+
+        if scale_factor is None:
+            if "pdsds" in name:
+                raise ValueError(
+                    "--scale is required for PDS-DS benchmarks.\n"
+                    "TODO: This will be inferred once we maintain a map of scale factors to row counts."
+                )
             if path is None:
                 raise ValueError(
                     "Must specify --root and --scale if --path is not specified."
                 )
-            scale_factor = _infer_scale_factor(path, args.suffix)
+            # For PDS-H, infer scale factor based on row count
+            scale_factor = _infer_scale_factor(name, path, args.suffix)
         if path is None:
             path = f"{args.root}/scale-{scale_factor}"
         try:
@@ -229,7 +236,7 @@ class RunConfig:
 
         if args.scale is not None:
             # Validate the user-supplied scale factor
-            sf_inf = _infer_scale_factor(path, args.suffix)
+            sf_inf = _infer_scale_factor(name, path, args.suffix)
             rel_error = abs((scale_factor - sf_inf) / sf_inf)
             if rel_error > 0.01:
                 raise ValueError(
