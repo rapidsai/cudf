@@ -486,9 +486,19 @@ dependencies:
           - cython>=3.0.3
   build_python_cudf:
     common:
-      - output_types: [conda, requirements, pyproject]
+      - output_types: [conda]
         packages:
         - &numba-cuda-dep numba-cuda>=0.18.0,<0.19.0a0
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+            packages:
+              - &numba-cuda-cu12-dep numba-cuda[cu12]>=0.18.0,<0.19.0a0
+          - matrix: # Fallback for no matrix
+            packages:
+              - *numba-cuda-cu12-dep
   pyarrow_run:
     common:
       - output_types: [conda]
@@ -677,7 +687,7 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
-              - &numba-cuda-cu12-dep numba-cuda[cu12]>=0.18.0,<0.19.0a0
+              - *numba-cuda-cu12-dep
           - matrix: # Fallback for no matrix
             packages:
               - *numba-cuda-cu12-dep
@@ -772,12 +782,24 @@ dependencies:
           - matrix: {dependencies: "oldest"}
             packages:
               - numba==0.59.1
-              - numba-cuda==0.18.0
               - pandas==2.0.*
           - matrix: {dependencies: "latest"}
             packages:
-              - *numba-dep
               - pandas==2.3.1
+          - matrix:
+            packages:
+      - output_types: [conda]
+        matrices:
+          - matrix: {dependencies: "oldest"}
+            packages:
+              - numba-cuda==0.18.0
+          - matrix:
+            packages:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix: {dependencies: "oldest"}
+            packages:
+              - numba-cuda[cu12]==0.18.0
           - matrix:
             packages:
       - output_types: conda
