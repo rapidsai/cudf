@@ -64,7 +64,7 @@ struct m2_hash_functor {
                              size_type target_index) noexcept
     requires(is_m2_var_supported<Source>())
   {
-    using Target    = cudf::detail::target_type_t<Source, aggregation::VARIANCE>;
+    using Target    = cudf::detail::target_type_t<Source, aggregation::M2>;
     using SumType   = cudf::detail::target_type_t<Source, aggregation::SUM>;
     using CountType = cudf::detail::target_type_t<Source, aggregation::COUNT_VALID>;
 
