@@ -54,7 +54,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     promotion = get_data(run_config.dataset_path, "promotion", run_config.suffix)
-    # Main query with joins and aggregations
+
     return (
         store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .join(item, left_on="ss_item_sk", right_on="i_item_sk")

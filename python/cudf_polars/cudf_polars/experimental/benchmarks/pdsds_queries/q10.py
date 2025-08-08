@@ -99,6 +99,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         run_config.dataset_path, "catalog_sales", run_config.suffix
     )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+
     # Target counties and date range
     target_counties = [
         "Lycoming County",
@@ -107,6 +108,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         "Pike County",
         "Greene County",
     ]
+
     # Get customers with store sales in the target period (EXISTS condition 1)
     store_customers = (
         store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
@@ -117,6 +119,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .select("ss_customer_sk")
         .unique()
     )
+
     # Get customers with web sales in the target period (EXISTS condition 2a)
     web_customers = (
         web_sales.join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
@@ -127,6 +130,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .select(pl.col("ws_bill_customer_sk").alias("customer_sk"))
         .unique()
     )
+
     # Get customers with catalog sales in the target period (EXISTS condition 2b)
     catalog_customers = (
         catalog_sales.join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
@@ -137,8 +141,10 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .select(pl.col("cs_ship_customer_sk").alias("customer_sk"))
         .unique()
     )
+
     # Combine web and catalog customers (OR condition)
     web_or_catalog_customers = pl.concat([web_customers, catalog_customers]).unique()
+
     # Main query: join customer tables and apply filters
     return (
         customer.join(

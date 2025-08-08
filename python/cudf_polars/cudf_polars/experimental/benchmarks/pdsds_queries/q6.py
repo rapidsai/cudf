@@ -67,7 +67,6 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         pl.col("i_current_price").mean().alias("avg_price")
     )
 
-    # Main query
     return (
         customer_address.join(
             customer, left_on="ca_address_sk", right_on="c_current_addr_sk"
