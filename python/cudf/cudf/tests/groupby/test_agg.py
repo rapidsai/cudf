@@ -136,3 +136,60 @@ def test_groupby_default():
     gdf = gdf.groupby("y").agg({"x": "mean"})
     pdf = pdf.groupby("y").agg({"x": "mean"})
     assert_groupby_results_equal(pdf, gdf)
+
+
+def test_groupby_as_index_multiindex(as_index):
+    pdf = pd.DataFrame(
+        {"a": [1, 2, 1], "b": [3, 3, 3], "c": [2, 2, 3], "d": [3, 1, 2]}
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    gdf = gdf.groupby(["a", "b"], as_index=as_index, sort=True).agg(
+        {"c": "mean"}
+    )
+    pdf = pdf.groupby(["a", "b"], as_index=as_index, sort=True).agg(
+        {"c": "mean"}
+    )
+
+    if as_index:
+        assert_eq(pdf, gdf)
+    else:
+        # column names don't match - check just the values
+        for gcol, pcol in zip(gdf, pdf, strict=True):
+            np.testing.assert_array_equal(
+                gdf[gcol].to_numpy(), pdf[pcol].values
+            )
+
+
+@pytest.mark.parametrize(
+    "func",
+    [
+        "mean",
+        "std",
+        "var",
+        "min",
+        "max",
+        "idxmin",
+        "idxmax",
+        "count",
+        "sum",
+        "prod",
+    ],
+)
+def test_groupby_2keys_agg(func):
+    # gdf (Note: lack of multiIndex)
+    nelem = 20
+    pdf = pd.DataFrame(np.ones((nelem, 2)), columns=["x", "y"])
+    gdf = cudf.DataFrame(pdf)
+    expect_df = pdf.groupby(["x", "y"]).agg(func)
+    got_df = gdf.groupby(["x", "y"]).agg(func)
+
+    assert_groupby_results_equal(got_df, expect_df)
+
+
+def test_series_groupby_agg(groupby_reduction_methods):
+    s = pd.Series([1, 2, 3])
+    g = cudf.Series([1, 2, 3])
+    sg = s.groupby(s // 2).agg(groupby_reduction_methods)
+    gg = g.groupby(g // 2).agg(groupby_reduction_methods)
+    assert_groupby_results_equal(sg, gg)

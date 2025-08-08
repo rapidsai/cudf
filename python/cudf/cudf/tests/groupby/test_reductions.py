@@ -80,3 +80,13 @@ def test_groupby_cats():
     for i in range(len(got_vals)):
         expect = vals[cats == got_cats[i]].mean()
         np.testing.assert_almost_equal(got_vals[i], expect)
+
+
+def test_series_groupby(groupby_reduction_methods):
+    s = pd.Series([1, 2, 3])
+    g = cudf.Series([1, 2, 3])
+    sg = s.groupby(s // 2)
+    gg = g.groupby(g // 2)
+    sa = getattr(sg, groupby_reduction_methods)()
+    ga = getattr(gg, groupby_reduction_methods)()
+    assert_groupby_results_equal(sa, ga)

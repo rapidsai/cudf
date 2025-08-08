@@ -12,8 +12,6 @@ from functools import partial
 import numpy as np
 import pandas as pd
 import pytest
-from numba import cuda
-from numpy.testing import assert_array_equal
 
 import cudf
 from cudf import DataFrame, Series
@@ -104,134 +102,6 @@ def gdf():
 @pytest.fixture
 def pdf(gdf):
     return gdf.to_pandas()
-
-
-@pytest.mark.parametrize("as_index", [True, False])
-def test_groupby_as_index_multiindex(pdf, gdf, as_index):
-    pdf = pd.DataFrame(
-        {"a": [1, 2, 1], "b": [3, 3, 3], "c": [2, 2, 3], "d": [3, 1, 2]}
-    )
-    gdf = cudf.from_pandas(pdf)
-
-    gdf = gdf.groupby(["a", "b"], as_index=as_index, sort=True).agg(
-        {"c": "mean"}
-    )
-    pdf = pdf.groupby(["a", "b"], as_index=as_index, sort=True).agg(
-        {"c": "mean"}
-    )
-
-    if as_index:
-        assert_eq(pdf, gdf)
-    else:
-        # column names don't match - check just the values
-        for gcol, pcol in zip(gdf, pdf, strict=True):
-            assert_array_equal(gdf[gcol].to_numpy(), pdf[pcol].values)
-
-
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Fails in older versions of pandas",
-)
-def test_groupby_apply():
-    rng = np.random.default_rng(seed=0)
-    nelem = 20
-    df = DataFrame(
-        {
-            "key1": rng.integers(0, 3, nelem),
-            "key2": rng.integers(0, 2, nelem),
-            "val1": rng.random(nelem),
-            "val2": rng.random(nelem),
-        }
-    )
-
-    expect_grpby = df.to_pandas().groupby(
-        ["key1", "key2"], as_index=False, group_keys=False
-    )
-    got_grpby = df.groupby(["key1", "key2"])
-
-    def foo(df):
-        df["out"] = df["val1"] + df["val2"]
-        return df
-
-    expect = expect_grpby.apply(foo, include_groups=False)
-    got = got_grpby.apply(foo, include_groups=False)
-    assert_groupby_results_equal(expect, got)
-
-
-def f1(df, k):
-    df["out"] = df["val1"] + df["val2"] + k
-    return df
-
-
-def f2(df, k, L):
-    df["out"] = df["val1"] - df["val2"] + (k / L)
-    return df
-
-
-def f3(df, k, L, m):
-    df["out"] = ((k * df["val1"]) + (L * df["val2"])) / m
-    return df
-
-
-@pytest.mark.parametrize(
-    "func,args", [(f1, (42,)), (f2, (42, 119)), (f3, (42, 119, 212.1))]
-)
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Fails in older versions of pandas",
-)
-def test_groupby_apply_args(func, args):
-    rng = np.random.default_rng(seed=0)
-    nelem = 20
-    df = DataFrame(
-        {
-            "key1": rng.integers(0, 3, nelem),
-            "key2": rng.integers(0, 2, nelem),
-            "val1": rng.random(nelem),
-            "val2": rng.random(nelem),
-        }
-    )
-
-    expect_grpby = df.to_pandas().groupby(
-        ["key1", "key2"], as_index=False, group_keys=False
-    )
-    got_grpby = df.groupby(["key1", "key2"])
-    expect = expect_grpby.apply(func, *args, include_groups=False)
-    got = got_grpby.apply(func, *args, include_groups=False)
-    assert_groupby_results_equal(expect, got)
-
-
-def test_groupby_apply_grouped():
-    df = DataFrame()
-    nelem = 20
-    df["key1"] = range(nelem)
-    df["key2"] = range(nelem)
-    df["val1"] = range(nelem)
-    df["val2"] = range(nelem)
-
-    got_grpby = df.groupby(["key1", "key2"])
-
-    def foo(key1, val1, com1, com2):
-        for i in range(cuda.threadIdx.x, len(key1), cuda.blockDim.x):
-            com1[i] = key1[i] * 10000 + val1[i]
-            com2[i] = i
-
-    got = got_grpby.apply_grouped(
-        foo,
-        incols=["key1", "val1"],
-        outcols={"com1": np.float64, "com2": np.int32},
-        tpb=8,
-    )
-
-    got = got.to_pandas()
-
-    expect = df.copy()
-    expect["com1"] = (expect["key1"] * 10000 + expect["key1"]).astype(
-        np.float64
-    )
-    expect["com2"] = np.zeros(nelem, dtype=np.int32)
-
-    assert_groupby_results_equal(expect, got)
 
 
 @pytest.fixture(scope="module")
@@ -824,33 +694,6 @@ def test_groupby_apply_return_reindexed_series(as_index):
     assert_groupby_results_equal(expect, got)
 
 
-@pytest.mark.parametrize(
-    "func",
-    [
-        "mean",
-        "std",
-        "var",
-        "min",
-        "max",
-        "idxmin",
-        "idxmax",
-        "count",
-        "sum",
-        "prod",
-    ],
-)
-def test_groupby_2keys_agg(func):
-    # gdf (Note: lack of multiIndex)
-    nelem = 20
-    expect_df = (
-        make_frame(pd.DataFrame, nelem=nelem).groupby(["x", "y"]).agg(func)
-    )
-    got_df = make_frame(DataFrame, nelem=nelem).groupby(["x", "y"]).agg(func)
-
-    check_dtype = func not in _index_type_aggs
-    assert_groupby_results_equal(got_df, expect_df, check_dtype=check_dtype)
-
-
 @pytest.mark.parametrize("num_groups", [2, 20])
 @pytest.mark.parametrize("nelem_per_group", [1, 10])
 @pytest.mark.parametrize(
@@ -908,32 +751,6 @@ def test_groupby_agg_decimal(num_groups, nelem_per_group, func):
     got_df = gdf.groupby("idx", sort=True).agg(func)
     assert_eq(expect_df["x"], got_df["x"], check_dtype=False)
     assert_eq(expect_df["y"], got_df["y"], check_dtype=False)
-
-
-@pytest.mark.parametrize(
-    "agg", ["min", "max", "idxmin", "idxmax", "count", "sum", "prod", "mean"]
-)
-def test_series_groupby(agg):
-    s = pd.Series([1, 2, 3])
-    g = Series([1, 2, 3])
-    sg = s.groupby(s // 2)
-    gg = g.groupby(g // 2)
-    sa = getattr(sg, agg)()
-    ga = getattr(gg, agg)()
-    check_dtype = agg not in _index_type_aggs
-    assert_groupby_results_equal(sa, ga, check_dtype=check_dtype)
-
-
-@pytest.mark.parametrize(
-    "agg", ["min", "max", "idxmin", "idxmax", "count", "sum", "prod", "mean"]
-)
-def test_series_groupby_agg(agg):
-    s = pd.Series([1, 2, 3])
-    g = Series([1, 2, 3])
-    sg = s.groupby(s // 2).agg(agg)
-    gg = g.groupby(g // 2).agg(agg)
-    check_dtype = agg not in _index_type_aggs
-    assert_groupby_results_equal(sg, gg, check_dtype=check_dtype)
 
 
 @pytest.mark.parametrize(
