@@ -6,6 +6,10 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core._compat import (
+    PANDAS_CURRENT_SUPPORTED_VERSION,
+    PANDAS_VERSION,
+)
 from cudf.testing import assert_eq
 from cudf.tests.groupby.testing import assert_groupby_results_equal
 
@@ -254,3 +258,177 @@ def test_groupby_agg_decimal(groupby_reduction_methods, request):
     got_df = gdf.groupby("idx", sort=True).agg(groupby_reduction_methods)
     assert_eq(expect_df["x"], got_df["x"], check_dtype=False)
     assert_eq(expect_df["y"], got_df["y"], check_dtype=False)
+
+
+def test_groupby_use_agg_column_as_index():
+    pdf = pd.DataFrame({"a": [1, 1, 1, 3, 5]})
+    gdf = cudf.DataFrame({"a": [1, 1, 1, 3, 5]})
+    gdf["a"] = [1, 1, 1, 3, 5]
+    pdg = pdf.groupby("a").agg({"a": "count"})
+    gdg = gdf.groupby("a").agg({"a": "count"})
+    assert_groupby_results_equal(pdg, gdg, check_dtype=False)
+
+
+def test_groupby_list_then_string():
+    gdf = cudf.DataFrame(
+        {"a": [0, 1, 0, 1, 2], "b": [11, 2, 15, 12, 2], "c": [6, 7, 6, 7, 6]}
+    )
+    pdf = gdf.to_pandas()
+    gdg = gdf.groupby("a", as_index=True).agg(
+        {"b": ["min", "max"], "c": "max"}
+    )
+    pdg = pdf.groupby("a", as_index=True).agg(
+        {"b": ["min", "max"], "c": "max"}
+    )
+    assert_groupby_results_equal(gdg, pdg)
+
+
+def test_groupby_different_unequal_length_column_aggregations():
+    gdf = cudf.DataFrame(
+        {"a": [0, 1, 0, 1, 2], "b": [11, 2, 15, 12, 2], "c": [6, 7, 6, 7, 6]}
+    )
+    pdf = gdf.to_pandas()
+    gdg = gdf.groupby("a", as_index=True).agg(
+        {"b": "min", "c": ["max", "min"]}
+    )
+    pdg = pdf.groupby("a", as_index=True).agg(
+        {"b": "min", "c": ["max", "min"]}
+    )
+    assert_groupby_results_equal(pdg, gdg)
+
+
+def test_groupby_single_var_two_aggs():
+    gdf = cudf.DataFrame(
+        {"a": [0, 1, 0, 1, 2], "b": [11, 2, 15, 12, 2], "c": [6, 7, 6, 7, 6]}
+    )
+    pdf = gdf.to_pandas()
+    gdg = gdf.groupby("a", as_index=True).agg({"b": ["min", "max"]})
+    pdg = pdf.groupby("a", as_index=True).agg({"b": ["min", "max"]})
+    assert_groupby_results_equal(pdg, gdg)
+
+
+def test_groupby_double_var_two_aggs():
+    gdf = cudf.DataFrame(
+        {"a": [0, 1, 0, 1, 2], "b": [11, 2, 15, 12, 2], "c": [6, 7, 6, 7, 6]}
+    )
+    pdf = gdf.to_pandas()
+    gdg = gdf.groupby(["a", "b"], as_index=True).agg({"c": ["min", "max"]})
+    pdg = pdf.groupby(["a", "b"], as_index=True).agg({"c": ["min", "max"]})
+    assert_groupby_results_equal(pdg, gdg)
+
+
+def test_groupby_multi_agg_single_groupby_series():
+    rng = np.random.default_rng(seed=0)
+    pdf = pd.DataFrame(
+        {
+            "x": rng.integers(0, 5, size=100),
+            "y": rng.normal(size=100),
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    pdg = pdf.groupby("x").y.agg(["sum", "max"])
+    gdg = gdf.groupby("x").y.agg(["sum", "max"])
+
+    assert_groupby_results_equal(pdg, gdg)
+
+
+def test_groupby_multi_agg_multi_groupby():
+    rng = np.random.default_rng(seed=0)
+    pdf = pd.DataFrame(
+        {
+            "a": rng.integers(0, 5, 10),
+            "b": rng.integers(0, 5, 10),
+            "c": rng.integers(0, 5, 10),
+            "d": rng.integers(0, 5, 10),
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    pdg = pdf.groupby(["a", "b"]).agg(["sum", "max"])
+    gdg = gdf.groupby(["a", "b"]).agg(["sum", "max"])
+    assert_groupby_results_equal(pdg, gdg)
+
+
+def test_groupby_datetime_multi_agg_multi_groupby():
+    rng = np.random.default_rng(seed=0)
+    pdf = pd.DataFrame(
+        {
+            "a": pd.date_range(
+                "2020-01-01",
+                freq="D",
+                periods=10,
+            ),
+            "b": rng.integers(0, 5, 10),
+            "c": rng.integers(0, 5, 10),
+            "d": rng.integers(0, 5, 10),
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    pdg = pdf.groupby(["a", "b"]).agg(["sum", "max"])
+    gdg = gdf.groupby(["a", "b"]).agg(["sum", "max"])
+
+    assert_groupby_results_equal(pdg, gdg)
+
+
+@pytest.mark.parametrize(
+    "agg",
+    [
+        ["min", "max", "count", "mean"],
+        ["mean", "var", "std"],
+        ["count", "mean", "var", "std"],
+    ],
+)
+def test_groupby_multi_agg_hash_groupby(agg):
+    gdf = cudf.DataFrame(
+        {"id": [0, 0, 1, 1, 2, 2, 0], "a": [0, 1, 2, 3, 4, 5, 6]}
+    )
+    pdf = gdf.to_pandas()
+    check_dtype = "count" not in agg
+    pdg = pdf.groupby("id").agg(agg)
+    gdg = gdf.groupby("id").agg(agg)
+    assert_groupby_results_equal(pdg, gdg, check_dtype=check_dtype)
+
+
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="previous verion of pandas throws a warning",
+)
+def test_groupby_nulls_basic(groupby_reduction_methods, request):
+    pdf = pd.DataFrame({"a": [0, 0, 1, 1, 2, 2], "b": [1, 2, 1, 2, 1, None]})
+    gdf = cudf.from_pandas(pdf)
+    assert_groupby_results_equal(
+        getattr(pdf.groupby("a"), groupby_reduction_methods)(),
+        getattr(gdf.groupby("a"), groupby_reduction_methods)(),
+    )
+
+    pdf = pd.DataFrame(
+        {
+            "a": [0, 0, 1, 1, 2, 2],
+            "b": [1, 2, 1, 2, 1, None],
+            "c": [1, 2, 1, None, 1, 2],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    assert_groupby_results_equal(
+        getattr(pdf.groupby("a"), groupby_reduction_methods)(),
+        getattr(gdf.groupby("a"), groupby_reduction_methods)(),
+    )
+
+    pdf = pd.DataFrame(
+        {
+            "a": [0, 0, 1, 1, 2, 2],
+            "b": [1, 2, 1, 2, 1, None],
+            "c": [1, 2, None, None, 1, 2],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    request.applymarker(
+        pytest.mark.xfail(
+            groupby_reduction_methods in ["prod", "sum"],
+            reason="cuDF returns NaN instead of an actual value",
+        )
+    )
+    assert_groupby_results_equal(
+        getattr(pdf.groupby("a"), groupby_reduction_methods)(),
+        getattr(gdf.groupby("a"), groupby_reduction_methods)(),
+    )

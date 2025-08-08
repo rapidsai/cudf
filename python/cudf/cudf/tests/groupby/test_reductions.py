@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.testing._utils import assert_exceptions_equal
 from cudf.tests.groupby.testing import assert_groupby_results_equal
 
 
@@ -220,3 +221,214 @@ def test_groupby_levels(level):
         pdf.groupby(level=level).sum(),
         gdf.groupby(level=level).sum(),
     )
+
+
+def test_advanced_groupby_levels():
+    pdf = pd.DataFrame({"x": [1, 2, 3], "y": [1, 2, 1], "z": [1, 1, 1]})
+    gdf = cudf.from_pandas(pdf)
+    pdg = pdf.groupby(["x", "y"]).sum()
+    gdg = gdf.groupby(["x", "y"]).sum()
+    assert_groupby_results_equal(pdg, gdg)
+    pdh = pdg.groupby(level=1).sum()
+    gdh = gdg.groupby(level=1).sum()
+    assert_groupby_results_equal(pdh, gdh)
+    pdg = pdf.groupby(["x", "y", "z"]).sum()
+    gdg = gdf.groupby(["x", "y", "z"]).sum()
+    assert_groupby_results_equal(pdg, gdg)
+    pdg = pdf.groupby(["z"]).sum()
+    gdg = gdf.groupby(["z"]).sum()
+    assert_groupby_results_equal(pdg, gdg)
+    pdg = pdf.groupby(["y", "z"]).sum()
+    gdg = gdf.groupby(["y", "z"]).sum()
+    assert_groupby_results_equal(pdg, gdg)
+    pdg = pdf.groupby(["x", "z"]).sum()
+    gdg = gdf.groupby(["x", "z"]).sum()
+    assert_groupby_results_equal(pdg, gdg)
+    pdg = pdf.groupby(["y"]).sum()
+    gdg = gdf.groupby(["y"]).sum()
+    assert_groupby_results_equal(pdg, gdg)
+    pdg = pdf.groupby(["x"]).sum()
+    gdg = gdf.groupby(["x"]).sum()
+    assert_groupby_results_equal(pdg, gdg)
+    pdh = pdg.groupby(level=0).sum()
+    gdh = gdg.groupby(level=0).sum()
+    assert_groupby_results_equal(pdh, gdh)
+    pdg = pdf.groupby(["x", "y"]).sum()
+    gdg = gdf.groupby(["x", "y"]).sum()
+    pdh = pdg.groupby(level=[0, 1]).sum()
+    gdh = gdg.groupby(level=[0, 1]).sum()
+    assert_groupby_results_equal(pdh, gdh)
+    pdh = pdg.groupby(level=[1, 0]).sum()
+    gdh = gdg.groupby(level=[1, 0]).sum()
+    assert_groupby_results_equal(pdh, gdh)
+    pdg = pdf.groupby(["x", "y"]).sum()
+    gdg = gdf.groupby(["x", "y"]).sum()
+
+    assert_exceptions_equal(
+        lfunc=pdg.groupby,
+        rfunc=gdg.groupby,
+        lfunc_args_and_kwargs=([], {"level": 2}),
+        rfunc_args_and_kwargs=([], {"level": 2}),
+    )
+
+
+@pytest.mark.parametrize(
+    "func",
+    [
+        lambda df: df.groupby(["x", "y", "z"]).sum(),
+        lambda df: df.groupby(["x", "y"]).sum(),
+        lambda df: df.groupby(["x", "y"]).agg("sum"),
+        lambda df: df.groupby(["y"]).sum(),
+        lambda df: df.groupby(["y"]).agg("sum"),
+        lambda df: df.groupby(["x"]).sum(),
+        lambda df: df.groupby(["x"]).agg("sum"),
+        lambda df: df.groupby(["x", "y"]).z.sum(),
+        lambda df: df.groupby(["x", "y"]).z.agg("sum"),
+    ],
+)
+def test_empty_groupby(func):
+    pdf = pd.DataFrame({"x": [], "y": [], "z": []})
+    gdf = cudf.from_pandas(pdf)
+    assert_groupby_results_equal(func(pdf), func(gdf), check_index_type=False)
+
+
+def test_groupby_unsupported_columns():
+    rng = np.random.default_rng(seed=12)
+    pd_cat = pd.Categorical(
+        pd.Series(rng.choice(["a", "b", 1], 3), dtype="category")
+    )
+    pdf = pd.DataFrame(
+        {
+            "x": [1, 2, 3],
+            "y": ["a", "b", "c"],
+            "z": ["d", "e", "f"],
+            "a": [3, 4, 5],
+        }
+    )
+    pdf["b"] = pd_cat
+    gdf = cudf.from_pandas(pdf)
+    pdg = pdf.groupby("x").sum(numeric_only=True)
+    # cudf does not yet support numeric_only, so our default is False (unlike
+    # pandas, which defaults to inferring and throws a warning about it).
+    gdg = gdf.groupby("x").sum(numeric_only=True)
+    assert_groupby_results_equal(pdg, gdg)
+
+
+def test_list_of_series():
+    pdf = pd.DataFrame({"x": [1, 2, 3], "y": [1, 2, 1]})
+    gdf = cudf.from_pandas(pdf)
+    pdg = pdf.groupby([pdf.x]).y.sum()
+    gdg = gdf.groupby([gdf.x]).y.sum()
+    assert_groupby_results_equal(pdg, gdg)
+    pdg = pdf.groupby([pdf.x, pdf.y]).y.sum()
+    gdg = gdf.groupby([gdf.x, gdf.y]).y.sum()
+    assert_groupby_results_equal(pdg, gdg)
+
+
+def test_groupby_apply_basic_agg_single_column():
+    gdf = cudf.DataFrame(
+        {
+            "key": [0, 0, 1, 1, 2, 2, 0],
+            "val": [0, 1, 2, 3, 4, 5, 6],
+            "mult": [0, 1, 2, 3, 4, 5, 6],
+        }
+    )
+    pdf = gdf.to_pandas()
+
+    gdg = gdf.groupby(["key", "val"]).mult.sum()
+    pdg = pdf.groupby(["key", "val"]).mult.sum()
+    assert_groupby_results_equal(pdg, gdg)
+
+
+def test_groupby_nulls_in_index():
+    pdf = pd.DataFrame({"a": [None, 2, 1, 1], "b": [1, 2, 3, 4]})
+    gdf = cudf.from_pandas(pdf)
+
+    assert_groupby_results_equal(
+        pdf.groupby("a").sum(), gdf.groupby("a").sum()
+    )
+
+
+def test_groupby_all_nulls_index():
+    gdf = cudf.DataFrame(
+        {
+            "a": cudf.Series([None, None, None, None], dtype="object"),
+            "b": [1, 2, 3, 4],
+        }
+    )
+    pdf = gdf.to_pandas()
+    assert_groupby_results_equal(
+        pdf.groupby("a").sum(), gdf.groupby("a").sum()
+    )
+
+    gdf = cudf.DataFrame(
+        {"a": cudf.Series([np.nan, np.nan, np.nan, np.nan]), "b": [1, 2, 3, 4]}
+    )
+    pdf = gdf.to_pandas()
+    assert_groupby_results_equal(
+        pdf.groupby("a").sum(), gdf.groupby("a").sum()
+    )
+
+
+@pytest.mark.parametrize("sort", [True, False])
+def test_groupby_sort(sort):
+    pdf = pd.DataFrame({"a": [2, 2, 1, 1], "b": [1, 2, 3, 4]})
+    gdf = cudf.from_pandas(pdf)
+
+    assert_groupby_results_equal(
+        pdf.groupby("a", sort=sort).sum(),
+        gdf.groupby("a", sort=sort).sum(),
+        check_like=not sort,
+    )
+
+    pdf = pd.DataFrame(
+        {"c": [-1, 2, 1, 4], "b": [1, 2, 3, 4], "a": [2, 2, 1, 1]}
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    assert_groupby_results_equal(
+        pdf.groupby(["c", "b"], sort=sort).sum(),
+        gdf.groupby(["c", "b"], sort=sort).sum(),
+        check_like=not sort,
+    )
+
+    ps = pd.Series([1, 2, 3, 4, 5, 6, 7, 8], index=[2, 2, 2, 3, 3, 1, 1, 1])
+    gs = cudf.from_pandas(ps)
+
+    assert_groupby_results_equal(
+        ps.groupby(level=0, sort=sort).sum().to_frame(),
+        gs.groupby(level=0, sort=sort).sum().to_frame(),
+        check_like=not sort,
+    )
+
+    ps = pd.Series(
+        [1, 2, 3, 4, 5, 6, 7, 8],
+        index=pd.MultiIndex.from_product([(1, 2), ("a", "b"), (42, 84)]),
+    )
+    gs = cudf.from_pandas(ps)
+
+    assert_groupby_results_equal(
+        ps.groupby(level=0, sort=sort).sum().to_frame(),
+        gs.groupby(level=0, sort=sort).sum().to_frame(),
+        check_like=not sort,
+    )
+
+
+def test_groupby_cat():
+    pdf = pd.DataFrame(
+        {"a": [1, 1, 2], "b": pd.Series(["b", "b", "a"], dtype="category")}
+    )
+    gdf = cudf.from_pandas(pdf)
+    assert_groupby_results_equal(
+        pdf.groupby("a").count(),
+        gdf.groupby("a").count(),
+        check_dtype=False,
+    )
+
+
+def test_groupby_index_type():
+    df = cudf.DataFrame()
+    df["string_col"] = ["a", "b", "c"]
+    df["counts"] = [1, 2, 3]
+    res = df.groupby(by="string_col").counts.sum()
+    assert res.index.dtype == cudf.dtype("object")
