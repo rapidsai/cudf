@@ -1,11 +1,11 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from numpy.testing import assert_array_equal
 
 import cudf
 from cudf.testing import assert_eq
 
 
-def test_groupby_14955():
+def test_groups():
     # https://github.com/rapidsai/cudf/issues/14955
     df = cudf.DataFrame({"a": [1, 2] * 2}, index=[0] * 4)
     agg = df.groupby("a")

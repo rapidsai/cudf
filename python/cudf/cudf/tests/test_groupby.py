@@ -106,47 +106,6 @@ def pdf(gdf):
     return gdf.to_pandas()
 
 
-def test_groupby_mean():
-    nelem = 20
-    got_df = make_frame(DataFrame, nelem=nelem).groupby(["x", "y"]).mean()
-    expect_df = (
-        make_frame(pd.DataFrame, nelem=nelem).groupby(["x", "y"]).mean()
-    )
-    assert_groupby_results_equal(got_df, expect_df)
-
-
-def test_groupby_mean_3level():
-    nelem = 20
-    lvls = "z"
-    bys = list("xyz")
-    got_df = (
-        make_frame(DataFrame, nelem=nelem, extra_levels=lvls)
-        .groupby(bys)
-        .mean()
-    )
-    expect_df = (
-        make_frame(pd.DataFrame, nelem=nelem, extra_levels=lvls)
-        .groupby(bys)
-        .mean()
-    )
-    assert_groupby_results_equal(got_df, expect_df)
-
-
-def test_groupby_agg_mean_min():
-    nelem = 20
-    got_df = (
-        make_frame(DataFrame, nelem=nelem)
-        .groupby(["x", "y"])
-        .agg(["mean", "min"])
-    )
-    expect_df = (
-        make_frame(pd.DataFrame, nelem=nelem)
-        .groupby(["x", "y"])
-        .agg(["mean", "min"])
-    )
-    assert_groupby_results_equal(got_df, expect_df)
-
-
 def test_groupby_agg_min_max_dictargs():
     nelem = 20
     expect_df = (
