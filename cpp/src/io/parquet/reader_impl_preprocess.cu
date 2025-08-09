@@ -345,10 +345,10 @@ void reader_impl::read_compressed_data()
 
   auto& chunks = pass.chunks;
 
-  auto const [has_compressed_data, read_chunks_tasks] = read_column_chunks();
-  pass.has_compressed_data                            = has_compressed_data;
+  auto [has_compressed_data, read_chunks_tasks] = read_column_chunks();
+  pass.has_compressed_data                      = has_compressed_data;
 
-  read_chunks_tasks.wait();
+  read_chunks_tasks.get();
 
   // Process dataset chunk pages into output columns
   auto const total_pages = _has_page_index ? count_page_headers_with_pgidx(chunks, _stream)
