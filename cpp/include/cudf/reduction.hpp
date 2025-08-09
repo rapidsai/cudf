@@ -60,9 +60,10 @@ enum class scan_type : bool { INCLUSIVE, EXCLUSIVE };
  * | Aggregation | Output Type | Init Value | Empty Input | Comments |
  * | :---------: | ----------- | ---------- | ----------- | -------- |
  * | SUM/PRODUCT | output_dtype | yes | NA | Input accumulated into output_dtype variable |
- * | SUM_OF_SQUARES | output_dtype | no | NA | Input accumulated into output_dtype variable |
- * | MIN/MAX | col.type | yes | NA | Supports arithmetic, timestamp, duration, string |
- * | ANY/ALL | BOOL8 | yes | True for ALL only | Checks for non-zero elements |
+ * | SUM_WITH_OVERFLOW | STRUCT{INT64,BOOL8} | yes | {null,false} | Returns {sum, overflow_flag},
+ * input must be INT64 | | SUM_OF_SQUARES | output_dtype | no | NA | Input accumulated into
+ * output_dtype variable | | MIN/MAX | col.type | yes | NA | Supports arithmetic, timestamp,
+ * duration, string | | ANY/ALL | BOOL8 | yes | True for ALL only | Checks for non-zero elements |
  * | MEAN/VARIANCE/STD | FLOAT32/FLOAT64 | no | NA | output_dtype must be a float type |
  * | MEDIAN/QUANTILE | FLOAT64 | no | NA |  |
  * | NUNIQUE | output_dtype | no | 1 if all-nulls | May process null rows |
@@ -103,13 +104,14 @@ std::unique_ptr<scalar> reduce(
 /**
  * @brief  Computes the reduction of the values in all rows of a column with an initial value
  *
- * Only `sum`, `product`, `min`, `max`, `any`, and `all` reductions are supported.
+ * Only `sum`, `product`, `min`, `max`, `any`, `all`, and `sum_with_overflow` reductions are
+ * supported.
  *
  * @see cudf::reduce(column_view const&,reduce_aggregation
  * const&,data_type,rmm::cuda_stream_view,rmm::device_async_resource_ref) for more details
  *
- * @throw cudf::logic_error if reduction is not `sum`, `product`, `min`, `max`, `any`, or `all`
- * and `init` is specified.
+ * @throw cudf::logic_error if reduction is not `sum`, `product`, `min`, `max`, `any`, `all`, or
+ * `sum_with_overflow` and `init` is specified.
  *
  * @param col Input column view
  * @param agg Aggregation operator applied by the reduction
@@ -123,70 +125,6 @@ std::unique_ptr<scalar> reduce(
   column_view const& col,
   reduce_aggregation const& agg,
   data_type output_dtype,
-  std::optional<std::reference_wrapper<scalar const>> init,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
-
-/**
- * @brief  Computes the reduction of the values in all rows of a column with overflow detection
- *
- * This function performs reduction operations with overflow detection, currently supporting
- * only SUM_WITH_OVERFLOW aggregation. For SUM operations, overflow is detected during accumulation
- * and the function returns a pair where the first scalar contains the result (potentially partial
- * if overflow occurred) and the second scalar contains a boolean indicating whether overflow
- * was detected.
- *
- * Only SUM_WITH_OVERFLOW aggregation is supported. For other aggregation types, this function will
- * throw cudf::logic_error.
- *
- * Any null values are skipped for the operation.
- * If the reduction fails, both output scalars return with `%is_valid()==false`.
- *
- * For empty or all-null input, the result is a null scalar for the sum and false for overflow.
- *
- * The input column must be int64_t type. The output sum scalar type is int64_t and the
- * overflow flag is bool to preserve precision during overflow detection.
- *
- * @throw cudf::logic_error if aggregation type is not SUM_WITH_OVERFLOW.
- * @throw cudf::logic_error if input column data type is not int64_t.
- *
- * @param col Input column view (must be int64_t type)
- * @param agg Aggregation operator (must be SUM_WITH_OVERFLOW aggregation)
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned scalars' device memory
- * @returns A std::pair where first scalar contains the sum result and second scalar contains
- *          the overflow flag (bool)
- */
-std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> reduce_with_overflow_check(
-  column_view const& col,
-  reduce_aggregation const& agg,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
-
-/**
- * @brief  Computes the reduction of the values in all rows of a column with overflow detection
- *         and an initial value
- *
- * This function performs reduction operations with overflow detection and an initial value,
- * currently supporting only SUM_WITH_OVERFLOW aggregation.
- *
- * @see cudf::reduce_with_overflow_check(column_view const&, reduce_aggregation const&,
- * rmm::cuda_stream_view, rmm::device_async_resource_ref) for more details
- *
- * @throw cudf::logic_error if aggregation type is not SUM_WITH_OVERFLOW.
- * @throw cudf::logic_error if input column data type is not int64_t.
- *
- * @param col Input column view (must be int64_t type)
- * @param agg Aggregation operator (must be SUM_WITH_OVERFLOW aggregation)
- * @param init The initial value of the reduction
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned scalars' device memory
- * @returns A std::pair where first scalar contains the sum result and second scalar contains
- *          the overflow flag (bool)
- */
-std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> reduce_with_overflow_check(
-  column_view const& col,
-  reduce_aggregation const& agg,
   std::optional<std::reference_wrapper<scalar const>> init,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());

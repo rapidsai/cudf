@@ -52,9 +52,11 @@ std::unique_ptr<scalar> reduce_aggregate_impl(
   switch (agg.kind) {
     case aggregation::SUM: return sum(col, output_dtype, init, stream, mr);
     case aggregation::SUM_WITH_OVERFLOW: {
-      // SUM_WITH_OVERFLOW is only supported via the reduce_with_overflow_check API
-      // This case should not be reached through the regular reduce() API
-      CUDF_FAIL("SUM_WITH_OVERFLOW must be used through reduce_with_overflow_check API");
+      // Validate that input column is int64_t (unified validation for SUM_WITH_OVERFLOW)
+      CUDF_EXPECTS(col.type().id() == cudf::type_id::INT64,
+                   "SUM_WITH_OVERFLOW aggregation only supports int64_t input types",
+                   cudf::logic_error);
+      return sum_with_overflow(col, output_dtype, init, stream, mr);
     }
     case aggregation::PRODUCT: return product(col, output_dtype, init, stream, mr);
     case aggregation::MIN: return min(col, output_dtype, init, stream, mr);
@@ -196,6 +198,10 @@ std::unique_ptr<scalar> reduce_no_data_impl(reduce_aggregation const& agg,
       auto valid = !col.is_empty() && (nunique_agg._null_handling == cudf::null_policy::INCLUDE);
       return std::make_unique<numeric_scalar<size_type>>(!col.is_empty(), valid, stream, mr);
     }
+    case aggregation::SUM_WITH_OVERFLOW: {
+      // For empty input, return {null, false} struct
+      return sum_with_overflow(col, output_dtype, std::nullopt, stream, mr);
+    }
     default: {
       return cudf::is_nested(output_dtype)
                ? make_empty_scalar_like(col, stream, mr)
@@ -253,91 +259,6 @@ std::unique_ptr<scalar> reduce(column_view const& col,
 {
   CUDF_FUNC_RANGE();
   return reduction::detail::reduce(col, agg, output_dtype, init, stream, mr);
-}
-
-namespace reduction {
-namespace detail {
-
-std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> reduce_with_overflow_check(
-  column_view const& col,
-  reduce_aggregation const& agg,
-  std::optional<std::reference_wrapper<scalar const>> init,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
-{
-  // Handle empty or all-null input
-  if (col.size() == col.null_count()) {
-    auto null_sum_scalar = cudf::make_default_constructed_scalar(col.type(), stream, mr);
-    null_sum_scalar->set_valid_async(false, stream);
-    auto overflow_scalar =
-      cudf::make_default_constructed_scalar(cudf::data_type{cudf::type_id::BOOL8}, stream, mr);
-    static_cast<cudf::numeric_scalar<bool>*>(overflow_scalar.get())->set_value(false, stream);
-    return std::make_pair(std::move(null_sum_scalar), std::move(overflow_scalar));
-  }
-
-  // Implement SUM_WITH_OVERFLOW reduction directly for int64_t
-  // This avoids going through the regular reduce() path which would hit CUDF_FAIL
-
-  // For now, use regular sum and return overflow=false as placeholder
-  // TODO: Implement actual overflow detection during sum accumulation
-  auto sum_result = sum(col, col.type(), init, stream, mr);
-  auto overflow_scalar =
-    cudf::make_default_constructed_scalar(cudf::data_type{cudf::type_id::BOOL8}, stream, mr);
-  static_cast<cudf::numeric_scalar<bool>*>(overflow_scalar.get())->set_value(false, stream);
-
-  return std::make_pair(std::move(sum_result), std::move(overflow_scalar));
-}
-
-}  // namespace detail
-}  // namespace reduction
-
-std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> reduce_with_overflow_check(
-  column_view const& col,
-  reduce_aggregation const& agg,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-
-  // Validate that only SUM_WITH_OVERFLOW aggregation is supported
-  CUDF_EXPECTS(agg.kind == aggregation::SUM_WITH_OVERFLOW,
-               "reduce_with_overflow_check only supports SUM_WITH_OVERFLOW aggregation",
-               cudf::logic_error);
-
-  // Validate that input column is int64_t (unified validation for SUM_WITH_OVERFLOW)
-  CUDF_EXPECTS(col.type().id() == cudf::type_id::INT64,
-               "SUM_WITH_OVERFLOW aggregation only supports int64_t input types",
-               cudf::logic_error);
-
-  return reduction::detail::reduce_with_overflow_check(col, agg, std::nullopt, stream, mr);
-}
-
-std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> reduce_with_overflow_check(
-  column_view const& col,
-  reduce_aggregation const& agg,
-  std::optional<std::reference_wrapper<scalar const>> init,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-
-  // Validate that only SUM_WITH_OVERFLOW aggregation is supported
-  CUDF_EXPECTS(agg.kind == aggregation::SUM_WITH_OVERFLOW,
-               "reduce_with_overflow_check only supports SUM_WITH_OVERFLOW aggregation",
-               cudf::logic_error);
-
-  // Validate that input column is int64_t (unified validation for SUM_WITH_OVERFLOW)
-  CUDF_EXPECTS(col.type().id() == cudf::type_id::INT64,
-               "SUM_WITH_OVERFLOW aggregation only supports int64_t input types",
-               cudf::logic_error);
-
-  if (init.has_value()) {
-    CUDF_EXPECTS(cudf::have_same_types(col, init.value().get()),
-                 "column and initial value must be the same type",
-                 cudf::data_type_error);
-  }
-
-  return reduction::detail::reduce_with_overflow_check(col, agg, init, stream, mr);
 }
 
 }  // namespace cudf

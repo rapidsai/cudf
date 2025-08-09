@@ -52,6 +52,27 @@ std::unique_ptr<scalar> sum(column_view const& col,
                             rmm::device_async_resource_ref mr);
 
 /**
+ * @brief Computes sum with overflow detection of int64_t elements in input column
+ *
+ * Returns a struct scalar with {sum: int64_t, overflow: bool} fields.
+ * Only supports int64_t input columns.
+ *
+ * @throw cudf::logic_error if input column type is not int64_t
+ *
+ * @param col input column to compute sum with overflow detection (must be int64_t)
+ * @param output_dtype data type of return type (must be struct)
+ * @param init initial value of the sum
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return Struct scalar with sum and overflow flag
+ */
+std::unique_ptr<scalar> sum_with_overflow(column_view const& col,
+                                          data_type const output_dtype,
+                                          std::optional<std::reference_wrapper<scalar const>> init,
+                                          rmm::cuda_stream_view stream,
+                                          rmm::device_async_resource_ref mr);
+
+/**
  * @brief Computes minimum of elements in input column
  *
  * If all elements in input column are null, output scalar is null.
@@ -383,6 +404,22 @@ std::unique_ptr<scalar> nunique(column_view const& col,
                                 data_type const output_dtype,
                                 rmm::cuda_stream_view stream,
                                 rmm::device_async_resource_ref mr);
+
+/**
+ * @brief Computes sum of int64_t column with overflow detection
+ *
+ * @param col Input column of int64_t values
+ * @param output_dtype Output data type (must be STRUCT)
+ * @param init Optional initial value for the reduction
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return Struct scalar containing {sum: int64_t, overflow: bool}
+ */
+std::unique_ptr<scalar> sum_with_overflow(column_view const& col,
+                                          data_type const output_dtype,
+                                          std::optional<std::reference_wrapper<scalar const>> init,
+                                          rmm::cuda_stream_view stream,
+                                          rmm::device_async_resource_ref mr);
 
 }  // namespace reduction::detail
 }  // namespace CUDF_EXPORT cudf
