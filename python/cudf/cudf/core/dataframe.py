@@ -1256,10 +1256,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         result_dict = dict(self._dtypes)
         if cudf.get_option("mode.pandas_compatible"):
             for key, value in result_dict.items():
-                if isinstance(value, (CategoricalDtype, IntervalDtype)):
-                    # Convert to pandas dtype for compatibility
-                    result_dict[key] = value.to_pandas()
-                elif isinstance(
+                if isinstance(
                     value,
                     (
                         ListDtype,
