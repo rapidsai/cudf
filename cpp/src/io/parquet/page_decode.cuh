@@ -1506,4 +1506,60 @@ inline __device__ bool setup_local_page_info(page_state_s* const s,
   return true;
 }
 
+/**
+ * @brief Zero-fill null positions in output data using parallel per-bit processing
+ *
+ * This function processes the validity bitmap and zero-fills all positions in the output
+ * data that correspond to null values. It uses a parallel approach where each thread
+ * handles one bit position at a time.
+ *
+ * @tparam block_size CUDA block size for the kernel
+ * @param s Page state containing all necessary information
+ * @param valid_map_offset Starting bit offset in the validity map
+ * @param t Thread index within the block
+ */
+template <int block_size>
+__device__ void zero_fill_null_positions_shared(
+  page_state_s* s, uint32_t dtype_len, int valid_map_offset, int num_values, int t)
+{
+  // nesting level that is storing actual leaf values
+  int const leaf_level_index = s->col.max_nesting_depth - 1;
+  auto const& ni             = s->nesting_info[leaf_level_index];
+
+  // Check if we have nulls to fill
+  if (ni.valid_map == nullptr) { return; }
+
+  auto const data_out = ni.data_out;
+
+  constexpr int bits_per_mask = sizeof(cudf::bitmask_type) * 8;  // 32 bits
+
+  // Calculate the range of bits we need to process
+  int const start_bit = valid_map_offset + t;
+  int const end_bit   = valid_map_offset + num_values;
+
+  // Each thread handles one bit position
+  // Assume block_size is a multiple of bits_per_mask for optimization
+  static_assert(block_size % bits_per_mask == 0,
+                "assumes block_size is a multiple of bits_per_mask");
+  int const bit_in_block = start_bit % bits_per_mask;  // constant for the whole loop
+
+  // Loop over blocks of bits, one thread per bit
+  for (int bit_idx = start_bit; bit_idx < end_bit; bit_idx += block_size) {
+    int const validity_block_idx = bit_idx / bits_per_mask;
+
+    // Check if this bit represents a null value
+    cudf::bitmask_type const validity_word = ni.valid_map[validity_block_idx];
+    bool const is_valid                    = (validity_word >> bit_in_block) & 1;
+
+    if (!is_valid) {
+      // This position is null, zero-fill it
+      int const dst_pos =
+        bit_idx - valid_map_offset;  // same as value_count, which is row# for non-lists
+      void* const dst = data_out + (static_cast<size_t>(dst_pos) * dtype_len);
+      cuda::std::memset(dst, 0, dtype_len);
+    }
+  }
+  __syncthreads();
+}
+
 }  // namespace cudf::io::parquet::detail
