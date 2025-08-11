@@ -294,26 +294,6 @@ function(find_and_configure_arrow VERSION BUILD_STATIC EXCLUDE_FROM_ALL ENABLE_P
           FINAL_CODE_BLOCK arrow_dataset_code_string
         )
 
-        set(arrow_compute_code_string
-            [=[
-                if (TARGET cudf::arrow_compute_shared AND (NOT TARGET arrow_compute_shared))
-                    add_library(arrow_compute_shared ALIAS cudf::arrow_compute_shared)
-                endif()
-                if (TARGET cudf::arrow_compute_static AND (NOT TARGET arrow_compute_static))
-                    add_library(arrow_compute_static ALIAS cudf::arrow_compute_static)
-                endif()
-              ]=]
-        )
-
-        rapids_export(
-          BUILD ArrowCompute
-          VERSION ${VERSION}
-          EXPORT_SET arrow_compute_targets
-          GLOBAL_TARGETS arrow_compute_shared arrow_compute_static
-          NAMESPACE cudf::
-          FINAL_CODE_BLOCK arrow_compute_code_string
-        )
-
         set(parquet_code_string
             [=[
                 if (TARGET cudf::parquet_shared AND (NOT TARGET parquet_shared))
