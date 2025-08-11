@@ -48,11 +48,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   // Equality evaluator to use
   auto const evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
     left_table, right_table, device_expression_data);
-
-  // Single expression equality does not need swap_tables logic
   auto const equality =
     single_expression_equality<has_nulls>{evaluator, thread_intermediate_storage, equality_probe};
-
   // Create set ref with the new equality comparator
   auto const set_ref_equality = set_ref.rebind_key_eq(equality);
 
