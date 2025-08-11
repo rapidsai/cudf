@@ -3,7 +3,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.tests.groupby.testing import assert_groupby_results_equal
+from cudf.testing import assert_groupby_results_equal
 
 
 @pytest.mark.parametrize("n", [0, 2, 10])

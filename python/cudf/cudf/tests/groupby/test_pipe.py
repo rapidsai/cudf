@@ -2,7 +2,7 @@
 import pandas as pd
 
 import cudf
-from cudf.tests.groupby.testing import assert_groupby_results_equal
+from cudf.testing import assert_groupby_results_equal
 
 
 def test_groupby_pipe():

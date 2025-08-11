@@ -11,8 +11,7 @@ from cudf.core._compat import (
     PANDAS_CURRENT_SUPPORTED_VERSION,
     PANDAS_VERSION,
 )
-from cudf.testing import assert_eq
-from cudf.tests.groupby.testing import assert_groupby_results_equal
+from cudf.testing import assert_eq, assert_groupby_results_equal
 
 
 @pytest.mark.parametrize("empty", [True, False])

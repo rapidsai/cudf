@@ -5,8 +5,8 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.testing import assert_groupby_results_equal
 from cudf.testing._utils import assert_exceptions_equal
-from cudf.tests.groupby.testing import assert_groupby_results_equal
 
 
 def test_groupby_mean():

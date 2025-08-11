@@ -4,8 +4,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.testing import assert_eq
-from cudf.tests.groupby.testing import assert_groupby_results_equal
+from cudf.testing import assert_eq, assert_groupby_results_equal
 
 
 @pytest.mark.parametrize("method", ["average", "min", "max", "first", "dense"])

@@ -10,8 +10,8 @@ from cudf.core._compat import (
     PANDAS_CURRENT_SUPPORTED_VERSION,
     PANDAS_VERSION,
 )
+from cudf.testing import assert_groupby_results_equal
 from cudf.testing.dataset_generator import rand_dataframe
-from cudf.tests.groupby.testing import assert_groupby_results_equal
 
 
 @pytest.mark.parametrize("shift_perc", [0.5, 1.0, 1.5])
