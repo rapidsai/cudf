@@ -668,10 +668,6 @@ def test_unstack_multiindex(level):
 
 
 @pytest.mark.parametrize(
-    "data",
-    [{"A": [1.0, 2.0, 3.0, 4.0, 5.0], "B": [11.0, 12.0, 13.0, 14.0, 15.0]}],
-)
-@pytest.mark.parametrize(
     "index",
     [
         pd.Index(range(0, 5), name=None),
@@ -695,7 +691,11 @@ def test_unstack_multiindex(level):
         ),
     ],
 )
-def test_unstack_index(data, index, col_idx):
+def test_unstack_index(index, col_idx):
+    data = {
+        "A": [1.0, 2.0, 3.0, 4.0, 5.0],
+        "B": [11.0, 12.0, 13.0, 14.0, 15.0],
+    }
     pdf = pd.DataFrame(data)
     gdf = cudf.from_pandas(pdf)
 
@@ -733,9 +733,9 @@ def test_pivot_duplicate_error():
 @pytest.mark.parametrize(
     "aggfunc", ["mean", "count", {"D": "sum", "E": "count"}]
 )
-@pytest.mark.parametrize("fill_value", [0])
-def test_pivot_table_simple(aggfunc, fill_value):
+def test_pivot_table_simple(aggfunc):
     rng = np.random.default_rng(seed=0)
+    fill_value = 0
     pdf = pd.DataFrame(
         {
             "A": ["one", "one", "two", "three"] * 6,
@@ -768,9 +768,9 @@ def test_pivot_table_simple(aggfunc, fill_value):
 @pytest.mark.parametrize(
     "aggfunc", ["mean", "count", {"D": "sum", "E": "count"}]
 )
-@pytest.mark.parametrize("fill_value", [0])
-def test_dataframe_pivot_table_simple(aggfunc, fill_value):
+def test_dataframe_pivot_table_simple(aggfunc):
     rng = np.random.default_rng(seed=0)
+    fill_value = 0
     pdf = pd.DataFrame(
         {
             "A": ["one", "one", "two", "three"] * 6,
