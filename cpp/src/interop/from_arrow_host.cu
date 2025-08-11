@@ -390,6 +390,11 @@ std::tuple<std::unique_ptr<column>, int64_t, int64_t> copy_offsets_column(
     static_cast<OffsetType const*>(offsets->buffers[fixed_width_data_buffer_idx]);
   auto const offset = offsets_buffer[offsets->offset];
   auto const length = offsets_buffer[offsets->offset + offsets->length - 1] - offset;
+
+  constexpr auto max_offset = static_cast<int64_t>(std::numeric_limits<OffsetType>::max());
+  CUDF_EXPECTS(
+    length <= max_offset, "large list offsets exceed 32-bit integer bounds", std::overflow_error);
+
   // dispatch directly since we know the type
   auto result = dispatch_copy_from_arrow_host{stream, mr}.template operator()<OffsetType>(
     schema, offsets, data_type{type_to_id<OffsetType>()}, true);
@@ -437,20 +442,20 @@ std::tuple<std::unique_ptr<column>, int64_t, int64_t> get_offsets_column(
   CUDF_EXPECTS(schema->type == NANOARROW_TYPE_LARGE_LIST, "Unknown offsets parent type");
 
   // Large-lists must be copied to int32 column
-  constexpr auto max_offset = static_cast<int64_t>(std::numeric_limits<int32_t>::max());
-
-  auto int32_offsets = std::vector<int32_t>(input->length + 1);
+  auto int32_offsets = std::vector<int32_t>();
+  int32_offsets.reserve(input->length + 1);
   auto int64_offsets = static_cast<int64_t const*>(offsets_buffer);
   auto const offset  = int64_offsets[input->offset];
   auto const length  = int64_offsets[input->offset + input->length] - offset;
 
+  constexpr auto max_offset = static_cast<int64_t>(std::numeric_limits<int32_t>::max());
   CUDF_EXPECTS(
     length <= max_offset, "large list offsets exceed 32-bit integer bounds", std::overflow_error);
 
   // normalize the offsets while copying from int64 to int32
   std::transform(int64_offsets + input->offset,
                  int64_offsets + input->offset + input->length + 1,
-                 int32_offsets.begin(),
+                 std::back_inserter(int32_offsets),
                  [offset](int64_t o) { return static_cast<int32_t>(o - offset); });
 
   offsets_buffers[fixed_width_data_buffer_idx] = int32_offsets.data();
