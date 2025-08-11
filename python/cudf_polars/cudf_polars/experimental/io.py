@@ -281,7 +281,7 @@ class SplitScan(IR):
 def _(
     ir: Empty, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    return ir, {ir: PartitionInfo(count=1)}
+    return ir, {ir: PartitionInfo(count=1)}  # pragma: no cover
 
 
 @lower_ir_node.register(Scan)
