@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 
 import pandas as pd
@@ -34,7 +34,7 @@ def check_ca_equal(lhs, rhs):
     assert lhs.multiindex == rhs.multiindex
     assert lhs.rangeindex == rhs.rangeindex
     assert lhs.label_dtype == rhs.label_dtype
-    for l_key, r_key in zip(lhs, rhs):
+    for l_key, r_key in zip(lhs, rhs, strict=True):
         assert l_key == r_key
         assert_eq(lhs[l_key], rhs[r_key])
 
@@ -102,7 +102,7 @@ def test_iter(simple_data):
     yields column names.
     """
     ca = ColumnAccessor(simple_data)
-    for expect_key, got_key in zip(simple_data, ca):
+    for expect_key, got_key in zip(simple_data, ca, strict=True):
         assert expect_key == got_key
 
 

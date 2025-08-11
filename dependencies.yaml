@@ -465,7 +465,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - &rapids_build_backend rapids-build-backend>=0.3.0,<0.4.0.dev0
+          - &rapids_build_backend rapids-build-backend>=0.4.0,<0.5.0.dev0
       - output_types: conda
         packages:
           - scikit-build-core>=0.10.0
@@ -488,7 +488,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-        - &numba-cuda-dep numba-cuda>=0.14.0,<0.15.0a0
+        - &numba_cuda numba-cuda>=0.14.0,<0.15.0a0
   pyarrow_run:
     common:
       - output_types: [conda]
@@ -653,14 +653,14 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cachetools
-          - &numba-dep numba>=0.59.1,<0.62.0a0
+          - &numba numba>=0.59.1,<0.62.0a0
           - nvtx>=0.2.1
           - packaging
           - rich
           - typing_extensions>=4.0.0
       - output_types: [conda]
         packages:
-          - *numba-cuda-dep
+          - *numba_cuda
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -682,10 +682,10 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
-              - &numba-cuda-cu12-dep numba-cuda[cu12]>=0.14.0,<0.15.0a0
+              - &numba_cuda_cu12 numba-cuda[cu12]>=0.14.0,<0.15.0a0
           - matrix: # Fallback for no matrix
             packages:
-              - *numba-cuda-cu12-dep
+              - *numba_cuda_cu12
       - output_types: [requirements, pyproject]
         matrices:
           - matrix:
@@ -1120,4 +1120,4 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - narwhals==1.41
+          - narwhals==1.47

@@ -146,18 +146,14 @@ def pytest_sessionfinish(session, exitstatus):
 
 @pytest.fixture(params=[32, 64])
 def default_integer_bitwidth(request):
-    old_default = cudf.get_option("default_integer_bitwidth")
-    cudf.set_option("default_integer_bitwidth", request.param)
-    yield request.param
-    cudf.set_option("default_integer_bitwidth", old_default)
+    with cudf.option_context("default_integer_bitwidth", request.param):
+        yield request.param
 
 
 @pytest.fixture(params=[32, 64])
 def default_float_bitwidth(request):
-    old_default = cudf.get_option("default_float_bitwidth")
-    cudf.set_option("default_float_bitwidth", request.param)
-    yield request.param
-    cudf.set_option("default_float_bitwidth", old_default)
+    with cudf.option_context("default_float_bitwidth", request.param):
+        yield request.param
 
 
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
@@ -194,6 +190,26 @@ def set_decomp_env_vars(monkeypatch, request):
         for key, value in env_vars.items():
             m.setenv(key, value)
         yield
+
+
+@pytest.fixture(
+    params=[
+        "min",
+        "max",
+        "sum",
+        "product",
+        "quantile",
+        "all",
+        "any",
+        "std",
+        "var",
+        "median",
+        "kurtosis",
+        "skew",
+    ]
+)
+def reduction_methods(request):
+    return request.param
 
 
 signed_integer_types = ["int8", "int16", "int32", "int64"]

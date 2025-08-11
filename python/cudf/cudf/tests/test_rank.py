@@ -1,7 +1,4 @@
 # Copyright (c) 2020-2025, NVIDIA CORPORATION.
-
-from itertools import chain, combinations_with_replacement, product
-
 import numpy as np
 import pandas as pd
 import pytest
@@ -38,8 +35,8 @@ def test_rank_all_arguments(
         # not supported by pandas
         return
 
-    pdf = pdf.copy(deep=True)  # for parallel pytest
     if numeric_only:
+        pdf = pdf.copy(deep=True)  # for parallel pytest
         pdf["str"] = np.array(
             ["a", "b", "c", "d", "e", "1", "2", "3", "4", "5"]
         )
@@ -127,25 +124,11 @@ def test_rank_error_arguments(pdf):
 
 
 @pytest.mark.filterwarnings("ignore:invalid value encountered in cast")
-@pytest.mark.parametrize(
-    "elem,dtype",
-    list(
-        product(
-            combinations_with_replacement(
-                [
-                    np.full((3,), np.nan),
-                    100 * np.random.default_rng(seed=0).random(10),
-                    np.full((3,), np.inf),
-                    np.full((3,), -np.inf),
-                ],
-                4,
-            ),
-            [np.int32, np.int64, np.float32, np.float64],
-        )
-    ),
-)
-def test_series_rank_combinations(elem, dtype):
-    aa = np.fromiter(chain.from_iterable(elem), np.float64).astype(dtype)
+@pytest.mark.parametrize("elem1", [np.nan, np.inf, -np.inf, 1.43])
+@pytest.mark.parametrize("elem2", [np.nan, np.inf, -np.inf, 1.43])
+@pytest.mark.parametrize("dtype", [np.int32, np.int64, np.float32, np.float64])
+def test_series_rank_combinations(elem1, elem2, dtype):
+    aa = np.array([elem1, elem2], dtype=np.float64).astype(dtype)
     gdf = DataFrame({"a": aa})
     df = pd.DataFrame({"a": aa})
     ranked_gs = gdf["a"].rank(method="first")
