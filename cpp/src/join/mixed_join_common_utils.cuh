@@ -77,14 +77,6 @@ template <bool has_nulls>
 struct single_expression_equality : expression_equality<has_nulls> {
   using expression_equality<has_nulls>::expression_equality;
 
-  // The parameters are build/probe rather than left/right because the operator
-  // is called by cuco's kernels with parameters in this order (note that this
-  // is an implementation detail that we should eventually stop relying on by
-  // defining operators with suitable heterogeneous typing). Rather than
-  // converting to left/right semantics, we can operate directly on build/probe
-  // until we get to the expression evaluator, which needs to convert back to
-  // left/right semantics because the conditional expression need not be
-  // commutative.
   // TODO: The input types should really be size_type.
   __device__ __forceinline__ bool operator()(hash_value_type const left_index,
                                              hash_value_type const right_index) const noexcept
@@ -97,12 +89,15 @@ struct single_expression_equality : expression_equality<has_nulls> {
     // 1. The contents of the columns involved in the equality condition are equal.
     // 2. The predicate evaluated on the relevant columns (already encoded in the evaluator)
     // evaluates to true.
-    if (this->equality_probe(lhs_index_type{right_index}, rhs_index_type{left_index})) {
-      auto const lrow_idx = this->swap_tables ? left_index : right_index;
-      auto const rrow_idx = this->swap_tables ? right_index : left_index;
+
+    // cuco's contains() calls this with (left_table_index, right_table_index)
+    if (this->equality_probe(lhs_index_type{left_index}, rhs_index_type{right_index})) {
+      // For the AST evaluator, we need to map back to left/right table semantics
+      auto const left_table_idx  = this->swap_tables ? right_index : left_index;
+      auto const right_table_idx = this->swap_tables ? left_index : right_index;
       this->evaluator.evaluate(output_dest,
-                               static_cast<size_type>(lrow_idx),
-                               static_cast<size_type>(rrow_idx),
+                               static_cast<size_type>(left_table_idx),
+                               static_cast<size_type>(right_table_idx),
                                0,
                                this->thread_intermediate_storage);
       return (output_dest.is_valid() && output_dest.value());
@@ -129,14 +124,6 @@ template <bool has_nulls>
 struct pair_expression_equality : public expression_equality<has_nulls> {
   using expression_equality<has_nulls>::expression_equality;
 
-  // The parameters are build/probe rather than left/right because the operator
-  // is called by cuco's kernels with parameters in this order (note that this
-  // is an implementation detail that we should eventually stop relying on by
-  // defining operators with suitable heterogeneous typing). Rather than
-  // converting to left/right semantics, we can operate directly on build/probe
-  // until we get to the expression evaluator, which needs to convert back to
-  // left/right semantics because the conditional expression need not be
-  // commutative.
   __device__ __forceinline__ bool operator()(pair_type const& left_row,
                                              pair_type const& right_row) const noexcept
   {
