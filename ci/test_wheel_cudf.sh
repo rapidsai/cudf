@@ -17,6 +17,32 @@ rapids-logger "Install cudf, pylibcudf, and test requirements"
 # generate constraints (possibly pinning to oldest support versions of dependencies)
 rapids-generate-pip-constraints py_test_cudf ./constraints.txt
 
+RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
+RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
+mkdir -p "${RAPIDS_TESTS_DIR}"
+
+# To test pylibcudf without its optional dependencies, we create a virtual environment
+python -m venv env
+. env/bin/activate
+rapids-pip-retry install \
+    -v \
+    --constraint ./constraints.txt \
+    --constraint "${PIP_CONSTRAINT}" \
+    "$(echo "${CUDF_WHEELHOUSE}"/cudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test]" \
+    "$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
+    "$(echo "${PYLIBCUDF_WHEELHOUSE}"/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test]"
+
+rapids-logger "pytest pylibcudf without optional dependencies"
+pushd python/pylibcudf/tests
+python -m pytest \
+  --cache-clear \
+  --numprocesses=8 \
+  --dist=worksteal \
+  .
+popd
+
+deactivate
+
 # notes:
 #
 #   * echo to expand wildcard before adding `[test]` requires for pip
@@ -29,12 +55,7 @@ rapids-pip-retry install \
     --constraint "${PIP_CONSTRAINT}" \
     "$(echo "${CUDF_WHEELHOUSE}"/cudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test]" \
     "$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
-    "$(echo "${PYLIBCUDF_WHEELHOUSE}"/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test]"
-
-RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
-RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
-mkdir -p "${RAPIDS_TESTS_DIR}"
-
+    "$(echo "${PYLIBCUDF_WHEELHOUSE}"/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test, pyarrow, numpy]"
 
 rapids-logger "pytest pylibcudf"
 pushd python/pylibcudf/tests
