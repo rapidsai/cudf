@@ -57,8 +57,6 @@ def valid_query(name: str) -> bool:
 class PDSDSQueriesMeta(type):
     """Metaclass used for query lookup."""
 
-    name: str = "pdsds"
-
     def __getattr__(cls, name: str):  # type: ignore
         """Query lookup."""
         if valid_query(name):
@@ -74,6 +72,7 @@ class PDSDSQueries(metaclass=PDSDSQueriesMeta):
     """Base class for query loading."""
 
     q_impl: str
+    name: str = "pdsds"
 
 
 class PDSDSPolarsQueries(PDSDSQueries):
