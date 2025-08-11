@@ -48,6 +48,7 @@ Mark Adler    madler@alumni.caltech.edu
 #include "io/utilities/block_utils.cuh"
 
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -58,6 +59,8 @@ Mark Adler    madler@alumni.caltech.edu
 #include <thrust/sort.h>
 
 namespace cudf::io::detail {
+
+namespace {
 
 constexpr int max_bits    = 15;   // maximum bits in a code
 constexpr int max_l_codes = 286;  // maximum number of literal/length codes
@@ -1208,6 +1211,78 @@ CUDF_KERNEL void __launch_bounds__(1024)
   if (t < len) { dst[t] = src[t]; }
 }
 
+enum class task_type { DECOMPRESSION, COMPRESSION };
+// Relative cost of the trivial cases (uncompressible data)
+constexpr double trivial_case_cost_ratio = 0.1;
+
+CUDF_HOST_DEVICE double cost_factor(size_t input_size, size_t output_size, task_type task_type)
+{
+  if (task_type == task_type::DECOMPRESSION) {
+    auto const compression_ratio = std::max(1., static_cast<double>(output_size) / input_size);
+    // When the compression ratio is one, the cost factor is the same as the copy cost ratio,
+    // meaning that the cost of decompressing the block is the same as the cost of copying it. The
+    // cost factor asymptotes to one as the compression ratio increases, meaning that the cost
+    // approaches the base cost of decompressing (which is a lot higher than the copy cost)
+    return 1. - (1. - trivial_case_cost_ratio) / std::pow(compression_ratio, 4);
+  } else {
+    // We don't know the compression ratio for compression, so use a constant cost factor
+    return 1.;
+  }
+}
+
+CUDF_HOST_DEVICE double task_device_cost(size_t input_size, size_t output_size, task_type task_type)
+{
+  return cost_factor(input_size, output_size, task_type) * input_size;
+}
+
+CUDF_HOST_DEVICE double task_host_cost(size_t input_size,
+                                       size_t output_size,
+                                       double device_host_ratio,
+                                       task_type task_type)
+{
+  // Cost to copy the block to host and back; NOTE: assumes that the copy throughput is the same as
+  // the decompression/compression throughput when the data is uncompressible
+  auto const copy_cost = trivial_case_cost_ratio * (input_size + output_size);
+  return (cost_factor(input_size, output_size, task_type) * input_size + copy_cost) /
+         device_host_ratio;
+}
+
+sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const> inputs,
+                                   device_span<device_span<uint8_t> const> outputs,
+                                   rmm::cuda_stream_view stream,
+                                   task_type task_type,
+                                   rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  rmm::device_uvector<std::size_t> order(inputs.size(), stream, mr);
+  thrust::sequence(rmm::exec_policy_nosync(stream), order.begin(), order.end());
+  thrust::sort(rmm::exec_policy_nosync(stream),
+               order.begin(),
+               order.end(),
+               [inputs, outputs, task_type] __device__(std::size_t a, std::size_t b) {
+                 return task_device_cost(inputs[a].size(), outputs[a].size(), task_type) >
+                        task_device_cost(inputs[b].size(), outputs[b].size(), task_type);
+               });
+
+  auto sorted_inputs = rmm::device_uvector<device_span<uint8_t const>>(inputs.size(), stream, mr);
+  thrust::gather(rmm::exec_policy_nosync(stream),
+                 order.begin(),
+                 order.end(),
+                 inputs.begin(),
+                 sorted_inputs.begin());
+
+  auto sorted_outputs = rmm::device_uvector<device_span<uint8_t>>(outputs.size(), stream, mr);
+  thrust::gather(rmm::exec_policy_nosync(stream),
+                 order.begin(),
+                 order.end(),
+                 outputs.begin(),
+                 sorted_outputs.begin());
+
+  return {std::move(sorted_inputs), std::move(sorted_outputs), std::move(order)};
+}
+
+}  // namespace
+
 void gpuinflate(device_span<device_span<uint8_t const> const> inputs,
                 device_span<device_span<uint8_t> const> outputs,
                 device_span<codec_exec_result> results,
@@ -1230,36 +1305,21 @@ void gpu_copy_uncompressed_blocks(device_span<device_span<uint8_t const> const> 
   }
 }
 
-sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const> inputs,
-                                   device_span<device_span<uint8_t> const> outputs,
-                                   rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+sorted_codec_parameters sort_decompression_tasks(
+  device_span<device_span<uint8_t const> const> inputs,
+  device_span<device_span<uint8_t> const> outputs,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
-  rmm::device_uvector<std::size_t> order(inputs.size(), stream, mr);
-  thrust::sequence(rmm::exec_policy_nosync(stream), order.begin(), order.end());
-  thrust::sort(rmm::exec_policy_nosync(stream),
-               order.begin(),
-               order.end(),
-               [inputs] __device__(std::size_t a, std::size_t b) {
-                 return inputs[a].size() > inputs[b].size();
-               });
+  return sort_tasks(inputs, outputs, stream, task_type::DECOMPRESSION, mr);
+}
 
-  auto sorted_inputs = rmm::device_uvector<device_span<uint8_t const>>(inputs.size(), stream, mr);
-  thrust::gather(rmm::exec_policy_nosync(stream),
-                 order.begin(),
-                 order.end(),
-                 inputs.begin(),
-                 sorted_inputs.begin());
-
-  auto sorted_outputs = rmm::device_uvector<device_span<uint8_t>>(outputs.size(), stream, mr);
-  thrust::gather(rmm::exec_policy_nosync(stream),
-                 order.begin(),
-                 order.end(),
-                 outputs.begin(),
-                 sorted_outputs.begin());
-
-  return {std::move(sorted_inputs), std::move(sorted_outputs), std::move(order)};
+sorted_codec_parameters sort_compression_tasks(device_span<device_span<uint8_t const> const> inputs,
+                                               device_span<device_span<uint8_t> const> outputs,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::device_async_resource_ref mr)
+{
+  return sort_tasks(inputs, outputs, stream, task_type::COMPRESSION, mr);
 }
 
 void copy_results_to_original_order(device_span<codec_exec_result const> sorted_results,
@@ -1272,6 +1332,40 @@ void copy_results_to_original_order(device_span<codec_exec_result const> sorted_
                   sorted_results.end(),
                   order.begin(),
                   original_results.begin());
+}
+
+[[nodiscard]] size_t find_split_index(device_span<device_span<uint8_t const> const> inputs,
+                                      device_span<device_span<uint8_t> const> outputs,
+                                      host_engine_state host_state,
+                                      size_t auto_mode_threshold,
+                                      size_t hybrid_mode_cost_ratio,
+                                      rmm::cuda_stream_view stream)
+{
+  CUDF_FUNC_RANGE();
+  if (host_state == host_engine_state::OFF or inputs.empty()) { return 0; }
+  if (host_state == host_engine_state::ON) { return inputs.size(); }
+
+  if (host_state == host_engine_state::AUTO) {
+    return inputs.size() < auto_mode_threshold ? inputs.size() : 0;
+  }
+
+  if (host_state == host_engine_state::HYBRID) {
+    auto const h_inputs    = cudf::detail::make_host_vector(inputs, stream);
+    auto const h_outputs   = cudf::detail::make_host_vector(outputs, stream);
+    double total_host_cost = 0;
+    for (size_t i = 0; i < h_inputs.size(); ++i) {
+      if (total_host_cost >=
+          task_device_cost(h_inputs[i].size(), h_outputs[i].size(), task_type::DECOMPRESSION)) {
+        return i;
+      }
+      total_host_cost += task_host_cost(
+        h_inputs[i].size(), h_outputs[i].size(), hybrid_mode_cost_ratio, task_type::DECOMPRESSION);
+    }
+    return inputs.size();  // No split
+  }
+
+  CUDF_FAIL("Invalid host engine state for compression: " +
+            std::to_string(static_cast<uint8_t>(host_state)));
 }
 
 }  // namespace cudf::io::detail
