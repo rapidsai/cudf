@@ -35,12 +35,9 @@ class preprocessed_table;
 namespace CUDF_EXPORT cudf {
 namespace detail {
 
-using cudf::experimental::row::lhs_index_type;
-using cudf::experimental::row::rhs_index_type;
-
 struct left_join {
  public:
-  using key = rhs_index_type;
+  using key = size_type;
 
   using storage_type =
     cuco::bucket_storage<key,
