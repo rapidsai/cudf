@@ -30,8 +30,6 @@ template <cudf::size_type block_size, bool has_nulls>
 CUDF_KERNEL void __launch_bounds__(block_size)
   mixed_join_semi(table_device_view left_table,
                   table_device_view right_table,
-                  table_device_view probe,
-                  table_device_view build,
                   row_equality const equality_probe,
                   hash_set_ref_type set_ref,
                   cudf::device_span<bool> left_table_keep_mask,
@@ -51,10 +49,9 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   auto const evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
     left_table, right_table, device_expression_data);
 
-  // Make sure to swap_tables here as hash_set will use probe table as the left one
-  auto constexpr swap_tables = true;
-  auto const equality        = single_expression_equality<has_nulls>{
-    evaluator, thread_intermediate_storage, swap_tables, equality_probe};
+  // Single expression equality does not need swap_tables logic
+  auto const equality =
+    single_expression_equality<has_nulls>{evaluator, thread_intermediate_storage, equality_probe};
 
   // Create set ref with the new equality comparator
   auto const set_ref_equality = set_ref.rebind_key_eq(equality);
@@ -74,8 +71,6 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 void launch_mixed_join_semi(bool has_nulls,
                             table_device_view left_table,
                             table_device_view right_table,
-                            table_device_view probe,
-                            table_device_view build,
                             row_equality const equality_probe,
                             hash_set_ref_type set_ref,
                             cudf::device_span<bool> left_table_keep_mask,
@@ -89,8 +84,6 @@ void launch_mixed_join_semi(bool has_nulls,
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
         left_table,
         right_table,
-        probe,
-        build,
         equality_probe,
         set_ref,
         left_table_keep_mask,
@@ -100,8 +93,6 @@ void launch_mixed_join_semi(bool has_nulls,
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
         left_table,
         right_table,
-        probe,
-        build,
         equality_probe,
         set_ref,
         left_table_keep_mask,

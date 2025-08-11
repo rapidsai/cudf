@@ -123,7 +123,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   auto const preprocessed_probe =
     cudf::experimental::row::equality::preprocessed_table::create(probe, stream);
   auto const row_comparator =
-    cudf::experimental::row::equality::two_table_comparator{preprocessed_build, preprocessed_probe};
+    cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
   auto const equality_probe = row_comparator.equal_to<false>(has_nulls, compare_nulls);
 
   // Create hash table containing all keys found in right table
@@ -196,8 +196,6 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   launch_mixed_join_semi(has_nulls,
                          *left_conditional_view,
                          *right_conditional_view,
-                         *probe_view,
-                         *build_view,
                          equality_probe,
                          row_set_ref,
                          cudf::device_span<bool>(left_table_keep_mask),

@@ -44,8 +44,6 @@ namespace detail {
  * @param[in] has_nulls If the input has nulls
  * @param[in] left_table The left table
  * @param[in] right_table The right table
- * @param[in] probe The table with which to probe the hash table for matches.
- * @param[in] build The table with which the hash table was built.
  * @param[in] equality_probe The equality comparator used when probing the hash table.
  * @param[in] set_ref The hash table device view built from `build`.
  * @param[out] left_table_keep_mask The result of the join operation with "true" element indicating
@@ -56,8 +54,6 @@ namespace detail {
 void launch_mixed_join_semi(bool has_nulls,
                             table_device_view left_table,
                             table_device_view right_table,
-                            table_device_view probe,
-                            table_device_view build,
                             row_equality const equality_probe,
                             hash_set_ref_type set_ref,
                             cudf::device_span<bool> left_table_keep_mask,
