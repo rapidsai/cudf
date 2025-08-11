@@ -449,16 +449,23 @@ struct start_offset_output_iterator {
 /**
  * @brief Functor to return the number of bytes in a string page
  *
- * Note: This functor returns 0 for non-string columns and dictionary pages.
+ * Note: This functor returns 0 for non-string columns, and pruned and dictionary pages.
  */
 struct page_to_string_size {
   ColumnChunkDesc const* chunks;
+  PageInfo const* pages;
+  bool const* page_mask;
 
-  __device__ constexpr inline size_t operator()(PageInfo const& page) const
+  __device__ constexpr inline size_t operator()(auto idx) const
   {
-    auto const chunk = chunks[page.chunk_idx];
+    auto const chunk          = chunks[pages[idx].chunk_idx];
+    auto const& page          = pages[idx];
+    auto const is_page_pruned = not page_mask[idx];
 
-    if (not is_string_col(chunk) || (page.flags & PAGEINFO_FLAGS_DICTIONARY) != 0) { return 0; }
+    if (is_page_pruned or not is_string_col(chunk) ||
+        (page.flags & PAGEINFO_FLAGS_DICTIONARY) != 0) {
+      return 0;
+    }
     return page.str_bytes;
   }
 };

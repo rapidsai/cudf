@@ -345,10 +345,10 @@ void reader_impl::read_compressed_data()
 
   auto& chunks = pass.chunks;
 
-  auto [has_compressed_data, read_chunks_tasks] = read_column_chunks();
-  pass.has_compressed_data                      = has_compressed_data;
+  auto const [has_compressed_data, read_chunks_tasks] = read_column_chunks();
+  pass.has_compressed_data                            = has_compressed_data;
 
-  read_chunks_tasks.get();
+  read_chunks_tasks.wait();
 
   // Process dataset chunk pages into output columns
   auto const total_pages = _has_page_index ? count_page_headers_with_pgidx(chunks, _stream)
@@ -840,9 +840,12 @@ cudf::detail::host_vector<size_t> reader_impl::calculate_page_string_offsets()
 
   rmm::device_uvector<size_t> d_col_sizes(_input_columns.size(), _stream);
 
+  auto page_mask = cudf::detail::make_device_uvector_async(_subpass_page_mask, _stream, _mr);
+
   // use page_index to fetch page string sizes in the proper order
-  auto val_iter = thrust::make_transform_iterator(subpass.pages.device_begin(),
-                                                  page_to_string_size{pass.chunks.d_begin()});
+  auto val_iter = thrust::make_transform_iterator(
+    thrust::counting_iterator(0),
+    page_to_string_size{pass.chunks.d_begin(), subpass.pages.device_begin(), page_mask.begin()});
 
   // do scan by key to calculate string offsets for each page
   thrust::exclusive_scan_by_key(rmm::exec_policy_nosync(_stream),

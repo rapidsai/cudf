@@ -170,8 +170,9 @@ __device__ void update_string_offsets_for_pruned_pages(
 
   // Initial string offset
   auto const initial_value = state->page.str_offset;
-  auto value_count         = state->page.num_input_values;
-  auto const tid           = cg::this_thread_block().thread_rank();
+  // We must use page.num_valids here to cater for nulls
+  auto value_count = state->page.num_valids;
+  auto const tid   = cg::this_thread_block().thread_rank();
 
   // Offsets pointer contains string sizes in case of large strings and actual offsets
   // otherwise

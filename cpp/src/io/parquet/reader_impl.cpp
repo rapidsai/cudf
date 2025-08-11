@@ -899,14 +899,18 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
       auto const start_row = chunks[chunk_idx].start_row + page.chunk_row;
       auto const end_row   = start_row + page.num_rows;
       auto& input_col      = _input_columns[chunk_idx % num_columns];
-      auto max_depth       = input_col.nesting_depth();
+      auto const max_depth = input_col.nesting_depth();
       auto* cols           = &_output_buffers;
 
       for (size_t l_idx = 0; l_idx < max_depth; l_idx++) {
         auto& out_buf = (*cols)[input_col.nesting[l_idx]];
         cols          = &out_buf.children;
-        // Continue if the current column is a list column
-        if (out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) { continue; }
+        // If the current column is a list child column, increment the null count by the number of
+        // nulls in this page
+        if (out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) {
+          out_buf.null_count() += page.num_nulls;
+          continue;
+        }
         // Add the nullmask and bit bounds to corresponding lists
         null_masks.emplace_back(out_buf.null_mask());
         begin_bits.emplace_back(start_row);
