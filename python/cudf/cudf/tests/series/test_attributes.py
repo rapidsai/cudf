@@ -9,6 +9,84 @@ import cudf
 from cudf.testing import assert_eq
 
 
+@pytest.mark.parametrize(
+    "testlist",
+    [
+        [1, 2, 3, 4],
+        [1, 2, 3, 3, 4],
+        [10, 9, 8, 7],
+        [10, 9, 8, 8, 7],
+        ["c", "d", "e", "f"],
+        ["c", "d", "e", "e", "f"],
+        ["z", "y", "x", "r"],
+        ["z", "y", "x", "x", "r"],
+    ],
+)
+def test_series_is_unique_monotonic(testlist):
+    series = cudf.Series(testlist)
+    series_pd = pd.Series(testlist)
+
+    assert series.is_unique == series_pd.is_unique
+    assert series.is_monotonic_increasing == series_pd.is_monotonic_increasing
+    assert series.is_monotonic_decreasing == series_pd.is_monotonic_decreasing
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [pd.Timestamp("2018-01-01"), pd.Timestamp("2019-01-31"), None],
+        [1, 2, 3, None],
+        [None, 1, 2, 3],
+        ["a", "b", "c", None],
+        [None, "a", "b", "c"],
+    ],
+)
+def test_is_monotonic_always_false_for_null(data):
+    ser = cudf.Series(data)
+    assert ser.is_monotonic_increasing is False
+    assert ser.is_monotonic_decreasing is False
+
+
+@pytest.mark.parametrize("box", [cudf.Series, cudf.Index])
+@pytest.mark.parametrize(
+    "value,na_like",
+    [
+        [1, None],
+        [np.datetime64("2020-01-01", "ns"), np.datetime64("nat", "ns")],
+        ["s", None],
+        [1.0, np.nan],
+    ],
+    ids=repr,
+)
+def test_is_unique(box, value, na_like):
+    obj = box([value], nan_as_null=False)
+    assert obj.is_unique
+
+    obj = box([value, value], nan_as_null=False)
+    assert not obj.is_unique
+
+    obj = box([None, value], nan_as_null=False)
+    assert obj.is_unique
+
+    obj = box([None, None, value], nan_as_null=False)
+    assert not obj.is_unique
+
+    if na_like is not None:
+        obj = box([na_like, value], nan_as_null=False)
+        assert obj.is_unique
+
+        obj = box([na_like, na_like], nan_as_null=False)
+        assert not obj.is_unique
+
+        try:
+            if not np.isnat(na_like):
+                # pyarrow coerces nat to null
+                obj = box([None, na_like, value], nan_as_null=False)
+                assert obj.is_unique
+        except TypeError:
+            pass
+
+
 @pytest.fixture(
     params=[
         pd.Series([0, 1, 2, np.nan, 4, None, 6]),
