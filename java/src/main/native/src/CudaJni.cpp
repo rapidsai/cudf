@@ -199,9 +199,19 @@ JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Cuda_getNativeComputeMode(JNIEnv* env
     cudf::jni::auto_set_device(env);
     int device;
     CUDF_CUDA_TRY(cudaGetDevice(&device));
+
+#if defined(CUDART_VERSION) && CUDART_VERSION >= 13000
+    // CUDA 13.0+ removed computeMode from cudaDeviceProp
+    // Return computeMode from cudaDeviceGetAttribute
+    int compute_mode;
+    CUDF_CUDA_TRY(cudaDeviceGetAttribute(&compute_mode, cudaDevAttrComputeMode, device));
+    return compute_mode;
+#else
+    // CUDA 12.x and earlier
     cudaDeviceProp device_prop;
     CUDF_CUDA_TRY(cudaGetDeviceProperties(&device_prop, device));
     return device_prop.computeMode;
+#endif
   }
   CATCH_STD(env, -2);
 }
