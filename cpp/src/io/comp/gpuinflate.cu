@@ -1212,7 +1212,7 @@ CUDF_KERNEL void __launch_bounds__(1024)
 }
 
 enum class task_type { DECOMPRESSION, COMPRESSION };
-// Relative cost of the trivial cases (uncompressible data)
+// Relative cost of the trivial cases (incompressible data)
 constexpr double trivial_case_cost_ratio = 0.1;
 
 CUDF_HOST_DEVICE double cost_factor(size_t input_size, size_t output_size, task_type task_type)
@@ -1241,7 +1241,7 @@ CUDF_HOST_DEVICE double task_host_cost(size_t input_size,
                                        task_type task_type)
 {
   // Cost to copy the block to host and back; NOTE: assumes that the copy throughput is the same as
-  // the decompression/compression throughput when the data is uncompressible
+  // the decompression/compression throughput when the data is incompressible
   auto const copy_cost = trivial_case_cost_ratio * (input_size + output_size);
   return (cost_factor(input_size, output_size, task_type) * input_size + copy_cost) /
          device_host_ratio;
