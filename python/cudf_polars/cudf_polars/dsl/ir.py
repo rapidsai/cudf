@@ -2531,18 +2531,29 @@ class HConcat(IR):
 
 
 class Empty(IR):
-    """Represents an empty DataFrame."""
+    """Represents an empty DataFrame with a known schema."""
 
-    __slots__ = ()
-    _non_child = ()
+    __slots__ = ("schema",)
+    _non_child = ("schema",)
 
-    def __init__(self) -> None:
-        self.schema = {}
-        self._non_child_args = ()
+    def __init__(self, schema: Schema):
+        self.schema = schema
+        self._non_child_args = (schema,)
         self.children = ()
 
     @classmethod
     @nvtx_annotate_cudf_polars(message="Empty")
-    def do_evaluate(cls) -> DataFrame:  # pragma: no cover
+    def do_evaluate(cls, schema: Schema) -> DataFrame:  # pragma: no cover
         """Evaluate and return a dataframe."""
-        return DataFrame([])
+        return DataFrame(
+            [
+                Column(
+                    plc.Column.from_iterable_of_py([], dtype=dtype.plc),
+                    dtype=dtype,
+                    name=name,
+                )
+                for name, dtype in schema.items()
+            ]
+            if schema is not None
+            else []
+        )

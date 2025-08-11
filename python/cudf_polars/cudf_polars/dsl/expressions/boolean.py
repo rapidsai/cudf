@@ -87,7 +87,6 @@ class BooleanFunction(Expr):
             BooleanFunction.Name.IsUnique,
         )
         if self.name in {
-            BooleanFunction.Name.IsBetween,
             BooleanFunction.Name.IsClose,
         }:
             raise NotImplementedError(

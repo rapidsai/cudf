@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 import pylibcudf as plc
 
-from cudf_polars.dsl.ir import IR, DataFrameScan, Scan, Sink, Union
+from cudf_polars.dsl.ir import IR, DataFrameScan, Empty, Scan, Sink, Union
 from cudf_polars.experimental.base import (
     ColumnStat,
     ColumnStats,
@@ -275,6 +275,13 @@ class SplitScan(IR):
             predicate,
             parquet_options,
         )
+
+
+@lower_ir_node.register(Empty)
+def _(
+    ir: Empty, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    return ir, {ir: PartitionInfo(count=1)}
 
 
 @lower_ir_node.register(Scan)
