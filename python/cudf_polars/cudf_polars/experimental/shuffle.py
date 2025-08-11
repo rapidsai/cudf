@@ -267,9 +267,7 @@ def _(
         _keys := [ne.value for ne in ir.keys if isinstance(ne.value, Col)]
     ) == len(ir.keys):  # pragma: no cover
         if shuffle_method == "rapidsmpf-single":
-            from rapidsmpf.integrations.single import (
-                single_rapidsmpf_shuffle_graph as rapidsmpf_shuffle_graph,
-            )
+            from rapidsmpf.integrations.single import rapidsmpf_shuffle_graph
         else:
             from rapidsmpf.integrations.dask import rapidsmpf_shuffle_graph
 
