@@ -31,6 +31,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuco/static_set.cuh>
+#include <thrust/tabulate.h>
 
 #include <memory>
 
@@ -49,12 +50,10 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
   auto const num_keys = static_cast<int64_t>(keys.num_rows());
 
   rmm::device_uvector<hash_value_type> cached_hashes(num_keys, stream);
-  thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                     thrust::make_counting_iterator(0),
-                     keys.num_rows(),
-                     [d_row_hash, hashes = cached_hashes.begin()] __device__(int64_t idx) {
-                       hashes[idx] = d_row_hash(idx);
-                     });
+  thrust::tabulate(rmm::exec_policy_nosync(stream),
+                   cached_hashes.begin(),
+                   cached_hashes.end(),
+                   [d_row_hash] __device__(size_type const idx) { return d_row_hash(idx); });
 
   // Cache of sparse results where the location of aggregate value in each
   // column is indexed by the hash set
