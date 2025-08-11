@@ -40,18 +40,17 @@ namespace detail {
 /**
  * @brief Compute the specified simple reduction over the input range of elements.
  *
- * @param[in] d_in      the begin iterator
- * @param[in] num_items the number of items
- * @param[in] op        the reduction operator
- * @param[in] init      Optional initial value of the reduction
- * @param[in] stream    CUDA stream used for device memory operations and kernel launches
- * @param[in] mr        Device memory resource used to allocate the returned scalar's device
- * memory
- * @returns   Output scalar in device memory
- *
  * @tparam Op               the reduction operator with device binary operator
  * @tparam InputIterator    the input column iterator
  * @tparam OutputType       the output type of reduction
+ *
+ * @param d_in      the begin iterator
+ * @param num_items the number of items
+ * @param op        the reduction operator
+ * @param init      Optional initial value of the reduction
+ * @param stream    CUDA stream used for device memory operations and kernel launches
+ * @param mr        Device memory resource used to allocate the returned scalar's device memory
+ * @returns Output scalar in device memory
  */
 template <typename Op,
           typename InputIterator,
@@ -66,7 +65,8 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
 {
   auto const binary_op     = cudf::detail::cast_functor<OutputType>(op.get_binary_op());
   auto const initial_value = init.value_or(op.template get_identity<OutputType>());
-  auto dev_result          = rmm::device_scalar<OutputType>{initial_value, stream, mr};
+  using ScalarType         = cudf::scalar_type_t<OutputType>;
+  auto result              = std::make_unique<ScalarType>(initial_value, true, stream, mr);
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
@@ -74,7 +74,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
   cub::DeviceReduce::Reduce(d_temp_storage.data(),
                             temp_storage_bytes,
                             d_in,
-                            dev_result.data(),
+                            result->data(),
                             num_items,
                             binary_op,
                             initial_value,
@@ -85,15 +85,12 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
   cub::DeviceReduce::Reduce(d_temp_storage.data(),
                             temp_storage_bytes,
                             d_in,
-                            dev_result.data(),
+                            result->data(),
                             num_items,
                             binary_op,
                             initial_value,
                             stream.value());
-
-  // only for string_view, data is copied
-  auto s = new cudf::scalar_type_t<OutputType>(std::move(dev_result), true, stream, mr);
-  return std::unique_ptr<scalar>(s);
+  return result;
 }
 
 template <typename Op,
@@ -151,23 +148,11 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             initial_value,
                             stream.value());
 
-  using ScalarType = cudf::scalar_type_t<OutputType>;
-  auto s = new ScalarType(dev_result, true, stream, mr);  // only for string_view, data is copied
-  return std::unique_ptr<scalar>(s);
+  return std::make_unique<cudf::string_scalar>(dev_result, true, stream, mr);
 }
 
 /**
  * @brief compute reduction by the compound operator (reduce and transform)
- *
- * @param[in] d_in        the begin iterator
- * @param[in] num_items   the number of items
- * @param[in] op          the reduction operator
- * @param[in] valid_count Number of valid items
- * @param[in] ddof        Delta degrees of freedom used for standard deviation and variance
- * @param[in] stream      CUDA stream used for device memory operations and kernel launches
- * @param[in] mr          Device memory resource used to allocate the returned scalar's device
- * memory
- * @returns   Output scalar in device memory
  *
  * The reduction operator must have `intermediate::compute_result()` method.
  * This method performs reduction using binary operator `Op::Op` and transforms the
@@ -176,6 +161,15 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
  * @tparam Op               the reduction operator with device binary operator
  * @tparam InputIterator    the input column iterator
  * @tparam OutputType       the output type of reduction
+ *
+ * @param d_in        the begin iterator
+ * @param num_items   the number of items
+ * @param op          the reduction operator
+ * @param valid_count Number of valid items
+ * @param ddof        Delta degrees of freedom used for standard deviation and variance
+ * @param stream      CUDA stream used for device memory operations and kernel launches
+ * @param mr          Device memory resource used to allocate the returned scalar's device memory
+ * @returns Output scalar in device memory
  */
 template <typename Op,
           typename InputIterator,
@@ -219,14 +213,14 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
 
   // compute the result value from intermediate value in device
   using ScalarType = cudf::scalar_type_t<OutputType>;
-  auto result      = new ScalarType(OutputType{0}, true, stream, mr);
+  auto result      = std::make_unique<ScalarType>(OutputType{0}, true, stream, mr);
   thrust::for_each_n(rmm::exec_policy(stream),
                      intermediate_result.data(),
                      1,
                      [dres = result->data(), op, valid_count, ddof] __device__(auto i) {
                        *dres = op.template compute_result<OutputType>(i, valid_count, ddof);
                      });
-  return std::unique_ptr<scalar>(result);
+  return result;
 }
 
 }  // namespace detail
