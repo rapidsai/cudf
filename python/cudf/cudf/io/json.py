@@ -313,7 +313,7 @@ def _dtype_to_names_list(col: ColumnBase) -> list[tuple[Hashable, Any]]:
     if isinstance(col.dtype, StructDtype):
         return [
             (name, _dtype_to_names_list(child))
-            for name, child in zip(col.dtype.fields, col.children)
+            for name, child in zip(col.dtype.fields, col.children, strict=True)
         ]
     elif isinstance(col.dtype, ListDtype):
         return [("", _dtype_to_names_list(child)) for child in col.children]

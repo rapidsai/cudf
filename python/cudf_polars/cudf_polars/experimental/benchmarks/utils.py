@@ -55,13 +55,21 @@ class Record:
 
 
 @dataclasses.dataclass
+class VersionInfo:
+    """Information about the commit of the software used to run the query."""
+
+    version: str
+    commit: str
+
+
+@dataclasses.dataclass
 class PackageVersions:
     """Information about the versions of the software used to run the query."""
 
-    cudf_polars: str
+    cudf_polars: str | VersionInfo
     polars: str
     python: str
-    rapidsmpf: str | None
+    rapidsmpf: str | VersionInfo | None
 
     @classmethod
     def collect(cls) -> PackageVersions:
@@ -71,15 +79,24 @@ class PackageVersions:
             "polars",
             "rapidsmpf",
         ]
-        versions = {}
+        versions: dict[str, str | VersionInfo | None] = {}
         for name in packages:
             try:
                 package = importlib.import_module(name)
-                versions[name] = package.__version__
             except (AttributeError, ImportError):  # noqa: PERF203
                 versions[name] = None
+            else:
+                if name in ("cudf_polars", "rapidsmpf"):
+                    versions[name] = VersionInfo(
+                        version=package.__version__,
+                        commit=package.__git_commit__,
+                    )
+                else:
+                    versions[name] = package.__version__
+
         versions["python"] = ".".join(str(v) for v in sys.version_info[:3])
-        return cls(**versions)
+        # we manually ensure that only cudf-polars and rapidsmpf have a VersionInfo
+        return cls(**versions)  # type: ignore[arg-type]
 
 
 @dataclasses.dataclass
@@ -88,23 +105,35 @@ class GPUInfo:
 
     name: str
     index: int
-    free_memory: int
-    used_memory: int
-    total_memory: int
+    free_memory: int | None
+    used_memory: int | None
+    total_memory: int | None
 
     @classmethod
     def from_index(cls, index: int) -> GPUInfo:
         """Create a GPUInfo from an index."""
         pynvml.nvmlInit()
         handle = pynvml.nvmlDeviceGetHandleByIndex(index)
-        memory = pynvml.nvmlDeviceGetMemoryInfo(handle)
-        return cls(
-            name=pynvml.nvmlDeviceGetName(handle),
-            index=index,
-            free_memory=memory.free,
-            used_memory=memory.used,
-            total_memory=memory.total,
-        )
+        try:
+            memory = pynvml.nvmlDeviceGetMemoryInfo(handle)
+            return cls(
+                name=pynvml.nvmlDeviceGetName(handle),
+                index=index,
+                free_memory=memory.free,
+                used_memory=memory.used,
+                total_memory=memory.total,
+            )
+        except pynvml.NVMLError_NotSupported:
+            # Happens on systems without traditional GPU memory (e.g., Grace Hopper),
+            # where nvmlDeviceGetMemoryInfo is not supported.
+            # See: https://github.com/rapidsai/cudf/issues/19427
+            return cls(
+                name=pynvml.nvmlDeviceGetName(handle),
+                index=index,
+                free_memory=None,
+                used_memory=None,
+                total_memory=None,
+            )
 
 
 @dataclasses.dataclass
