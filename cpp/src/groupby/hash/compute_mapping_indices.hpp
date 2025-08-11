@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,12 +22,19 @@
 #include <cuda/std/atomic>
 
 namespace cudf::groupby::detail::hash {
+
 /*
- * @brief Computes the maximum number of active blocks of the given kernel that can be executed on
- * the underlying device
+ * @brief Computes the maximum number of active blocks of the shared memory aggregation kernel that
+ * can be executed on the underlying device.
+ */
+size_type max_active_blocks_shmem_aggs_kernel();
+
+/*
+ * @brief Computes the maximum number of active blocks of the mapping indices kernel that can be
+ * executed on the underlying device.
  */
 template <class SetRef>
-[[nodiscard]] cudf::size_type max_occupancy_grid_size(cudf::size_type n);
+[[nodiscard]] cudf::size_type max_active_blocks_mapping_kernel();
 
 template <class SetRef>
 void compute_mapping_indices(cudf::size_type grid_size,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@
 
 namespace cudf::groupby::detail::hash {
 template cudf::size_type
-max_occupancy_grid_size<nullable_hash_set_ref_t<cuco::insert_and_find_tag>>(cudf::size_type n);
+max_active_blocks_mapping_kernel<nullable_hash_set_ref_t<cuco::insert_and_find_tag>>();
 
 template void compute_mapping_indices<nullable_hash_set_ref_t<cuco::insert_and_find_tag>>(
   cudf::size_type grid_size,

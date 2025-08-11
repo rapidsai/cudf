@@ -25,6 +25,7 @@
 #include "single_pass_functors.cuh"
 
 #include <cudf/detail/aggregation/result_cache.hpp>
+#include <cudf/detail/utilities/cuda.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -45,6 +46,7 @@
 #include <vector>
 
 namespace cudf::groupby::detail::hash {
+
 /**
  * @brief Computes all aggregations from `requests` that require a single pass
  * over the data and stores the results in `sparse_results`
@@ -64,8 +66,17 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
   auto const d_agg_kinds                   = cudf::detail::make_device_uvector_async(
     agg_kinds, stream, rmm::mr::get_current_device_resource());
 
-  auto const grid_size =
-    max_occupancy_grid_size<typename SetType::ref_type<cuco::insert_and_find_tag>>(num_rows);
+  auto const grid_size = [&] {
+    auto const max_blocks_mapping =
+      max_active_blocks_mapping_kernel<typename SetType::ref_type<cuco::insert_and_find_tag>>();
+    auto const max_blocks_aggs = max_active_blocks_shmem_aggs_kernel();
+    // We launch the same grid size for both kernels, thus we need to take the minimum of the two.
+    auto const max_blocks    = std::min(max_blocks_mapping, max_blocks_aggs);
+    auto const max_grid_size = max_blocks * cudf::detail::num_multiprocessors();
+    auto const num_blocks =
+      cudf::util::div_rounding_up_safe(static_cast<size_type>(num_rows), GROUPBY_BLOCK_SIZE);
+    return std::min(max_grid_size, num_blocks);
+  }();
   auto const available_shmem_size = get_available_shared_memory_size(grid_size);
   auto const offsets_buffer_size  = compute_shmem_offsets_size(flattened_values.num_columns()) * 2;
   auto const data_buffer_size     = available_shmem_size - offsets_buffer_size;

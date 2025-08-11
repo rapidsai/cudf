@@ -287,6 +287,14 @@ size_type get_available_shared_memory_size(cudf::size_type grid_size)
                                      ALIGNMENT);
 }
 
+size_type max_active_blocks_shmem_aggs_kernel()
+{
+  size_type max_active_blocks{-1};
+  CUDF_CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+    &max_active_blocks, single_pass_shmem_aggs_kernel, GROUPBY_BLOCK_SIZE, 0));
+  return max_active_blocks;
+}
+
 void compute_shared_memory_aggs(cudf::size_type grid_size,
                                 size_type available_shmem_size,
                                 cudf::size_type num_input_rows,

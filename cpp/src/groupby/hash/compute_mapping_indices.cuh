@@ -30,7 +30,6 @@
 #include <cooperative_groups.h>
 #include <cuco/static_set_ref.cuh>
 #include <cuda/std/atomic>
-#include <cuda/std/utility>
 
 #include <algorithm>
 
@@ -159,14 +158,12 @@ CUDF_KERNEL void mapping_indices_kernel(cudf::size_type num_input_rows,
 }
 
 template <class SetRef>
-cudf::size_type max_occupancy_grid_size(cudf::size_type n)
+size_type max_active_blocks_mapping_kernel()
 {
-  cudf::size_type max_active_blocks{-1};
+  size_type max_active_blocks{-1};
   CUDF_CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
     &max_active_blocks, mapping_indices_kernel<SetRef>, GROUPBY_BLOCK_SIZE, 0));
-  auto const grid_size  = max_active_blocks * cudf::detail::num_multiprocessors();
-  auto const num_blocks = cudf::util::div_rounding_up_safe(n, GROUPBY_BLOCK_SIZE);
-  return std::min(grid_size, num_blocks);
+  return max_active_blocks;
 }
 
 template <class SetRef>

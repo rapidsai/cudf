@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@
 #include "compute_mapping_indices.hpp"
 
 namespace cudf::groupby::detail::hash {
-template cudf::size_type max_occupancy_grid_size<hash_set_ref_t<cuco::insert_and_find_tag>>(
-  cudf::size_type n);
+template cudf::size_type
+max_active_blocks_mapping_kernel<hash_set_ref_t<cuco::insert_and_find_tag>>();
 
 template void compute_mapping_indices<hash_set_ref_t<cuco::insert_and_find_tag>>(
   cudf::size_type grid_size,
