@@ -1,6 +1,7 @@
 # Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
+from libcpp.optional cimport optional
 from libcpp.pair cimport pair
 from libcpp.string cimport string
 from libcpp.vector cimport vector
@@ -43,6 +44,7 @@ cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
         const string & transform_udf,
         data_type output_type,
         bool is_ptx,
+        optional[void *] user_data,
         cuda_stream_view stream
     ) except +libcudf_exception_handler
 

@@ -3,6 +3,7 @@
 from cython.operator cimport dereference
 
 from libcpp.memory cimport unique_ptr
+from libcpp.optional cimport optional
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 from libcpp.utility cimport move, pair
@@ -187,6 +188,7 @@ cpdef Column transform(list[Column] inputs,
     cdef unique_ptr[column] c_result
     cdef string c_transform_udf = transform_udf.encode()
     cdef bool c_is_ptx = is_ptx
+    cdef optional[void *] user_data
 
     stream = _get_stream(stream)
 
@@ -199,6 +201,7 @@ cpdef Column transform(list[Column] inputs,
             c_transform_udf,
             output_type.c_obj,
             c_is_ptx,
+            user_data,
             stream.view(),
         )
 
