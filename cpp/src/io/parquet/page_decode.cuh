@@ -747,8 +747,7 @@ static __device__ void update_list_offsets_for_pruned_pages(page_state_s* state)
       auto const& next_nesting_info = state->nesting_info[depth + 1];
       cudf::size_type const offset =
         next_nesting_info.value_count + next_nesting_info.page_start_value;
-      for (int idx = nesting_info.value_count + tid; idx < state->page.num_rows;
-           idx += block_size) {
+      for (int idx = tid; idx < state->page.num_rows; idx += block_size) {
         (reinterpret_cast<cudf::size_type*>(nesting_info.data_out))[idx] = offset;
       }
     }
