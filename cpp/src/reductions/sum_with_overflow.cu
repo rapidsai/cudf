@@ -40,14 +40,14 @@ struct sum_overflow_result {
   int64_t sum;
   bool overflow;
 
-  __host__ __device__ sum_overflow_result() : sum(0), overflow(false) {}
-  __host__ __device__ sum_overflow_result(int64_t s, bool o) : sum(s), overflow(o) {}
+  CUDF_HOST_DEVICE sum_overflow_result() : sum(0), overflow(false) {}
+  CUDF_HOST_DEVICE sum_overflow_result(int64_t s, bool o) : sum(s), overflow(o) {}
 };
 
 // Binary operator for combining sum_overflow_result values
 struct overflow_sum_op {
-  __host__ __device__ sum_overflow_result operator()(sum_overflow_result const& lhs,
-                                                     sum_overflow_result const& rhs) const
+  CUDF_HOST_DEVICE sum_overflow_result operator()(sum_overflow_result const& lhs,
+                                                  sum_overflow_result const& rhs) const
   {
     // If either operand already has overflow, result has overflow
     if (lhs.overflow || rhs.overflow) {
@@ -60,11 +60,11 @@ struct overflow_sum_op {
     bool overflow_detected = false;
 
     // Check for positive overflow: would the addition exceed INT64_MAX?
-    if (rhs.sum > 0 && lhs.sum > std::numeric_limits<int64_t>::max() - rhs.sum) {
+    if (rhs.sum > 0 && lhs.sum > cuda::std::numeric_limits<int64_t>::max() - rhs.sum) {
       overflow_detected = true;
     }
     // Check for negative overflow: would the addition go below INT64_MIN?
-    else if (rhs.sum < 0 && lhs.sum < std::numeric_limits<int64_t>::min() - rhs.sum) {
+    else if (rhs.sum < 0 && lhs.sum < cuda::std::numeric_limits<int64_t>::min() - rhs.sum) {
       overflow_detected = true;
     }
 
@@ -77,7 +77,7 @@ struct overflow_sum_op {
 
 // Transform function to convert int64_t values to sum_overflow_result
 struct to_sum_overflow {
-  __host__ __device__ sum_overflow_result operator()(int64_t value) const
+  CUDF_HOST_DEVICE sum_overflow_result operator()(int64_t value) const
   {
     return sum_overflow_result{value, false};
   }
@@ -87,12 +87,11 @@ struct to_sum_overflow {
 struct null_aware_to_sum_overflow {
   cudf::column_device_view const* dcol_ptr;
 
-  __host__ __device__ null_aware_to_sum_overflow(cudf::column_device_view const* dcol)
-    : dcol_ptr(dcol)
+  CUDF_HOST_DEVICE null_aware_to_sum_overflow(cudf::column_device_view const* dcol) : dcol_ptr(dcol)
   {
   }
 
-  __device__ sum_overflow_result operator()(cudf::size_type idx) const
+  CUDF_HOST_DEVICE sum_overflow_result operator()(cudf::size_type idx) const
   {
     return dcol_ptr->is_valid(idx) ? sum_overflow_result{dcol_ptr->element<int64_t>(idx), false}
                                    : sum_overflow_result{0, false};

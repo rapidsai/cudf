@@ -3167,241 +3167,231 @@ struct ReduceWithOverflowTest : public cudf::test::BaseFixture {
   }
 };
 
-TEST_F(ReduceWithOverflowTest, BasicFunctionality)
+TEST_F(ReduceWithOverflowTest, SumWithoutOverflow)
 {
-  // Test with int64_t - basic functionality without overflow
-  {
-    std::vector<int64_t> values{1, 2, 3, 4, 5};
-    cudf::test::fixed_width_column_wrapper<int64_t> col(values.begin(), values.end());
+  std::vector<int64_t> values{1, 2, 3, 4, 5};
+  cudf::test::fixed_width_column_wrapper<int64_t> col(values.begin(), values.end());
 
-    auto result = cudf::reduce(col,
-                               *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
-                               cudf::data_type{cudf::type_id::STRUCT});
+  auto result = cudf::reduce(col,
+                             *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
+                             cudf::data_type{cudf::type_id::STRUCT});
 
-    auto [sum_result, overflow_flag] = extract_sum_overflow(result);
+  auto [sum_result, overflow_flag] = extract_sum_overflow(result);
 
-    EXPECT_TRUE(sum_result->is_valid());
-    EXPECT_TRUE(overflow_flag->is_valid());
+  EXPECT_TRUE(sum_result->is_valid());
+  EXPECT_TRUE(overflow_flag->is_valid());
 
-    auto sum_value = static_cast<cudf::numeric_scalar<int64_t> const*>(sum_result.get())->value();
-    auto overflow_value =
-      static_cast<cudf::numeric_scalar<bool> const*>(overflow_flag.get())->value();
+  auto sum_value = static_cast<cudf::numeric_scalar<int64_t> const*>(sum_result.get())->value();
+  auto overflow_value =
+    static_cast<cudf::numeric_scalar<bool> const*>(overflow_flag.get())->value();
 
-    EXPECT_EQ(sum_value, 15);      // 1+2+3+4+5 = 15
-    EXPECT_FALSE(overflow_value);  // No overflow expected
-  }
+  EXPECT_EQ(sum_value, 15);      // 1+2+3+4+5 = 15
+  EXPECT_FALSE(overflow_value);  // No overflow expected
+}
 
-  // Test with int64_t - positive overflow
-  {
-    std::vector<int64_t> positive_overflow_values{std::numeric_limits<int64_t>::max(),
-                                                  1};  // max + 1 should overflow
-    cudf::test::fixed_width_column_wrapper<int64_t> col(positive_overflow_values.begin(),
-                                                        positive_overflow_values.end());
+TEST_F(ReduceWithOverflowTest, PositiveOverflow)
+{
+  std::vector<int64_t> positive_overflow_values{std::numeric_limits<int64_t>::max(),
+                                                1};  // max + 1 should overflow
+  cudf::test::fixed_width_column_wrapper<int64_t> col(positive_overflow_values.begin(),
+                                                      positive_overflow_values.end());
 
-    auto result = cudf::reduce(col,
-                               *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
-                               cudf::data_type{cudf::type_id::STRUCT});
+  auto result = cudf::reduce(col,
+                             *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
+                             cudf::data_type{cudf::type_id::STRUCT});
 
-    auto [sum_result, overflow_flag] = extract_sum_overflow(result);
+  auto [sum_result, overflow_flag] = extract_sum_overflow(result);
 
-    EXPECT_TRUE(sum_result->is_valid());
-    EXPECT_TRUE(overflow_flag->is_valid());
+  EXPECT_TRUE(sum_result->is_valid());
+  EXPECT_TRUE(overflow_flag->is_valid());
 
-    auto overflow_value =
-      static_cast<cudf::numeric_scalar<bool> const*>(overflow_flag.get())->value();
+  auto overflow_value =
+    static_cast<cudf::numeric_scalar<bool> const*>(overflow_flag.get())->value();
 
-    EXPECT_TRUE(overflow_value);  // Should detect positive overflow
-  }
+  EXPECT_TRUE(overflow_value);  // Should detect positive overflow
+}
 
-  // Test with int64_t - negative overflow
-  {
-    std::vector<int64_t> negative_overflow_values{std::numeric_limits<int64_t>::min(),
-                                                  -1};  // min - 1 should overflow
-    cudf::test::fixed_width_column_wrapper<int64_t> col(negative_overflow_values.begin(),
-                                                        negative_overflow_values.end());
+TEST_F(ReduceWithOverflowTest, NegativeOverflow)
+{
+  std::vector<int64_t> negative_overflow_values{std::numeric_limits<int64_t>::min(),
+                                                -1};  // min - 1 should overflow
+  cudf::test::fixed_width_column_wrapper<int64_t> col(negative_overflow_values.begin(),
+                                                      negative_overflow_values.end());
 
-    auto result = cudf::reduce(col,
-                               *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
-                               cudf::data_type{cudf::type_id::STRUCT});
+  auto result = cudf::reduce(col,
+                             *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
+                             cudf::data_type{cudf::type_id::STRUCT});
 
-    auto [sum_result, overflow_flag] = extract_sum_overflow(result);
+  auto [sum_result, overflow_flag] = extract_sum_overflow(result);
 
-    EXPECT_TRUE(sum_result->is_valid());
-    EXPECT_TRUE(overflow_flag->is_valid());
+  EXPECT_TRUE(sum_result->is_valid());
+  EXPECT_TRUE(overflow_flag->is_valid());
 
-    auto overflow_value =
-      static_cast<cudf::numeric_scalar<bool> const*>(overflow_flag.get())->value();
+  auto overflow_value =
+    static_cast<cudf::numeric_scalar<bool> const*>(overflow_flag.get())->value();
 
-    EXPECT_TRUE(overflow_value);  // Should detect negative overflow
-  }
+  EXPECT_TRUE(overflow_value);  // Should detect negative overflow
+}
 
-  // Test with multiple int64_t values that accumulate to potential overflow
-  {
-    // Use large values that when accumulated could cause overflow
-    std::vector<int64_t> accumulating_overflow{
-      std::numeric_limits<int64_t>::max() / 3,
-      std::numeric_limits<int64_t>::max() / 3,
-      std::numeric_limits<int64_t>::max() / 3,
-      std::numeric_limits<int64_t>::max() / 3};  // This should overflow
-    cudf::test::fixed_width_column_wrapper<int64_t> col(accumulating_overflow.begin(),
-                                                        accumulating_overflow.end());
+TEST_F(ReduceWithOverflowTest, AccumulatingOverflow)
+{
+  // Use large values that when accumulated could cause overflow
+  std::vector<int64_t> accumulating_overflow{
+    std::numeric_limits<int64_t>::max() / 3,
+    std::numeric_limits<int64_t>::max() / 3,
+    std::numeric_limits<int64_t>::max() / 3,
+    std::numeric_limits<int64_t>::max() / 3};  // This should overflow
+  cudf::test::fixed_width_column_wrapper<int64_t> col(accumulating_overflow.begin(),
+                                                      accumulating_overflow.end());
 
-    auto result = cudf::reduce(col,
-                               *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
-                               cudf::data_type{cudf::type_id::STRUCT});
+  auto result = cudf::reduce(col,
+                             *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
+                             cudf::data_type{cudf::type_id::STRUCT});
 
-    auto [sum_result, overflow_flag] = extract_sum_overflow(result);
+  auto [sum_result, overflow_flag] = extract_sum_overflow(result);
 
-    EXPECT_TRUE(sum_result->is_valid());
-    EXPECT_TRUE(overflow_flag->is_valid());
+  EXPECT_TRUE(sum_result->is_valid());
+  EXPECT_TRUE(overflow_flag->is_valid());
 
-    auto overflow_value =
-      static_cast<cudf::numeric_scalar<bool> const*>(overflow_flag.get())->value();
+  auto overflow_value =
+    static_cast<cudf::numeric_scalar<bool> const*>(overflow_flag.get())->value();
 
-    // Should detect overflow since we're adding 4 * (max/3) which > max
-    EXPECT_TRUE(overflow_value);  // Should detect accumulating overflow
-  }
+  // Should detect overflow since we're adding 4 * (max/3) which > max
+  EXPECT_TRUE(overflow_value);  // Should detect accumulating overflow
+}
 
-  // Test with empty column
-  {
-    cudf::test::fixed_width_column_wrapper<int64_t> empty_col{};
+TEST_F(ReduceWithOverflowTest, EmptyColumn)
+{
+  cudf::test::fixed_width_column_wrapper<int64_t> empty_col{};
 
-    auto result = cudf::reduce(empty_col,
-                               *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
-                               cudf::data_type{cudf::type_id::STRUCT});
+  auto result = cudf::reduce(empty_col,
+                             *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
+                             cudf::data_type{cudf::type_id::STRUCT});
 
-    auto [sum_result, overflow_flag] = extract_sum_overflow(result);
+  auto [sum_result, overflow_flag] = extract_sum_overflow(result);
 
-    EXPECT_FALSE(sum_result->is_valid());  // Should be null for empty input
-    EXPECT_TRUE(overflow_flag->is_valid());
+  EXPECT_FALSE(sum_result->is_valid());  // Should be null for empty input
+  EXPECT_TRUE(overflow_flag->is_valid());
 
-    auto overflow_value =
-      static_cast<cudf::numeric_scalar<bool> const*>(overflow_flag.get())->value();
-    EXPECT_FALSE(overflow_value);  // No overflow for empty input
-  }
+  auto overflow_value =
+    static_cast<cudf::numeric_scalar<bool> const*>(overflow_flag.get())->value();
+  EXPECT_FALSE(overflow_value);  // No overflow for empty input
+}
 
-  // Test with all-null column
-  {
-    std::vector<int64_t> values{1, 2, 3};
-    std::vector<bool> validity{false, false, false};
-    cudf::test::fixed_width_column_wrapper<int64_t> null_col(
-      values.begin(), values.end(), validity.begin());
+TEST_F(ReduceWithOverflowTest, AllNullColumn)
+{
+  std::vector<int64_t> values{1, 2, 3};
+  std::vector<bool> validity{false, false, false};
+  cudf::test::fixed_width_column_wrapper<int64_t> null_col(
+    values.begin(), values.end(), validity.begin());
 
-    auto result = cudf::reduce(null_col,
-                               *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
-                               cudf::data_type{cudf::type_id::STRUCT});
+  auto result = cudf::reduce(null_col,
+                             *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
+                             cudf::data_type{cudf::type_id::STRUCT});
 
-    auto [sum_result, overflow_flag] = extract_sum_overflow(result);
+  auto [sum_result, overflow_flag] = extract_sum_overflow(result);
 
-    EXPECT_FALSE(sum_result->is_valid());  // Should be null for all-null input
-    EXPECT_TRUE(overflow_flag->is_valid());
+  EXPECT_FALSE(sum_result->is_valid());  // Should be null for all-null input
+  EXPECT_TRUE(overflow_flag->is_valid());
 
-    auto overflow_value =
-      static_cast<cudf::numeric_scalar<bool> const*>(overflow_flag.get())->value();
-    EXPECT_FALSE(overflow_value);  // No overflow for all-null input
-  }
+  auto overflow_value =
+    static_cast<cudf::numeric_scalar<bool> const*>(overflow_flag.get())->value();
+  EXPECT_FALSE(overflow_value);  // No overflow for all-null input
+}
 
-  // Test with initial value
-  {
-    std::vector<int64_t> values{1, 2, 3};
-    cudf::test::fixed_width_column_wrapper<int64_t> col(values.begin(), values.end());
-    auto init_scalar = cudf::make_fixed_width_scalar<int64_t>(10);
+TEST_F(ReduceWithOverflowTest, WithInitialValue)
+{
+  std::vector<int64_t> values{1, 2, 3};
+  cudf::test::fixed_width_column_wrapper<int64_t> col(values.begin(), values.end());
+  auto init_scalar = cudf::make_fixed_width_scalar<int64_t>(10);
 
-    auto result = cudf::reduce(col,
-                               *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
-                               cudf::data_type{cudf::type_id::STRUCT},
-                               *init_scalar);
+  auto result = cudf::reduce(col,
+                             *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
+                             cudf::data_type{cudf::type_id::STRUCT},
+                             *init_scalar);
 
-    auto [sum_result, overflow_flag] = extract_sum_overflow(result);
+  auto [sum_result, overflow_flag] = extract_sum_overflow(result);
 
-    EXPECT_TRUE(sum_result->is_valid());
-    EXPECT_TRUE(overflow_flag->is_valid());
+  EXPECT_TRUE(sum_result->is_valid());
+  EXPECT_TRUE(overflow_flag->is_valid());
 
-    auto sum_value = static_cast<cudf::numeric_scalar<int64_t> const*>(sum_result.get())->value();
-    auto overflow_value =
-      static_cast<cudf::numeric_scalar<bool> const*>(overflow_flag.get())->value();
+  auto sum_value = static_cast<cudf::numeric_scalar<int64_t> const*>(sum_result.get())->value();
+  auto overflow_value =
+    static_cast<cudf::numeric_scalar<bool> const*>(overflow_flag.get())->value();
 
-    EXPECT_EQ(sum_value, 16);      // 10 + 1 + 2 + 3 = 16
-    EXPECT_FALSE(overflow_value);  // No overflow expected
-  }
+  EXPECT_EQ(sum_value, 16);      // 10 + 1 + 2 + 3 = 16
+  EXPECT_FALSE(overflow_value);  // No overflow expected
+}
 
-  // Test with initial value causing positive overflow
-  {
-    std::vector<int64_t> values{1, 2, 3};
-    cudf::test::fixed_width_column_wrapper<int64_t> col(values.begin(), values.end());
-    auto init_scalar = cudf::make_fixed_width_scalar<int64_t>(
-      std::numeric_limits<int64_t>::max() - 3);  // max - 3 + 6 = max + 3 (overflow)
+TEST_F(ReduceWithOverflowTest, InitialValuePositiveOverflow)
+{
+  std::vector<int64_t> values{1, 2, 3};
+  cudf::test::fixed_width_column_wrapper<int64_t> col(values.begin(), values.end());
+  auto init_scalar = cudf::make_fixed_width_scalar<int64_t>(std::numeric_limits<int64_t>::max() -
+                                                            3);  // max - 3 + 6 = max + 3 (overflow)
 
-    auto result = cudf::reduce(col,
-                               *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
-                               cudf::data_type{cudf::type_id::STRUCT},
-                               *init_scalar);
+  auto result = cudf::reduce(col,
+                             *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
+                             cudf::data_type{cudf::type_id::STRUCT},
+                             *init_scalar);
 
-    auto [sum_result, overflow_flag] = extract_sum_overflow(result);
+  auto [sum_result, overflow_flag] = extract_sum_overflow(result);
 
-    EXPECT_TRUE(sum_result->is_valid());
-    EXPECT_TRUE(overflow_flag->is_valid());
+  EXPECT_TRUE(sum_result->is_valid());
+  EXPECT_TRUE(overflow_flag->is_valid());
 
-    auto overflow_value =
-      static_cast<cudf::numeric_scalar<bool> const*>(overflow_flag.get())->value();
+  auto overflow_value =
+    static_cast<cudf::numeric_scalar<bool> const*>(overflow_flag.get())->value();
 
-    // (max - 3) + 1 + 2 + 3 = max + 3, which should overflow
-    EXPECT_TRUE(overflow_value);  // Should detect overflow with initial value
-  }
+  // (max - 3) + 1 + 2 + 3 = max + 3, which should overflow
+  EXPECT_TRUE(overflow_value);  // Should detect overflow with initial value
+}
 
-  // Test with initial value causing negative overflow
-  {
-    std::vector<int64_t> values{-1, -2, -3};
-    cudf::test::fixed_width_column_wrapper<int64_t> col(values.begin(), values.end());
-    auto init_scalar = cudf::make_fixed_width_scalar<int64_t>(
-      std::numeric_limits<int64_t>::min() + 3);  // min + 3 - 6 = min - 3 (overflow)
+TEST_F(ReduceWithOverflowTest, InitialValueNegativeOverflow)
+{
+  std::vector<int64_t> values{-1, -2, -3};
+  cudf::test::fixed_width_column_wrapper<int64_t> col(values.begin(), values.end());
+  auto init_scalar = cudf::make_fixed_width_scalar<int64_t>(std::numeric_limits<int64_t>::min() +
+                                                            3);  // min + 3 - 6 = min - 3 (overflow)
 
-    auto result = cudf::reduce(col,
-                               *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
-                               cudf::data_type{cudf::type_id::STRUCT},
-                               *init_scalar);
+  auto result = cudf::reduce(col,
+                             *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
+                             cudf::data_type{cudf::type_id::STRUCT},
+                             *init_scalar);
 
-    auto [sum_result, overflow_flag] = extract_sum_overflow(result);
+  auto [sum_result, overflow_flag] = extract_sum_overflow(result);
 
-    EXPECT_TRUE(sum_result->is_valid());
-    EXPECT_TRUE(overflow_flag->is_valid());
+  EXPECT_TRUE(sum_result->is_valid());
+  EXPECT_TRUE(overflow_flag->is_valid());
 
-    auto overflow_value =
-      static_cast<cudf::numeric_scalar<bool> const*>(overflow_flag.get())->value();
+  auto overflow_value =
+    static_cast<cudf::numeric_scalar<bool> const*>(overflow_flag.get())->value();
 
-    // (min + 3) + (-1) + (-2) + (-3) = min - 3, which should overflow
-    EXPECT_TRUE(overflow_value);  // Should detect negative overflow with initial value
-  }
+  // (min + 3) + (-1) + (-2) + (-3) = min - 3, which should overflow
+  EXPECT_TRUE(overflow_value);  // Should detect negative overflow with initial value
+}
 
-  // Test error handling - wrong aggregation type
-  // (These tests are no longer relevant since regular aggregations work fine with reduce()
-  // Only SUM_WITH_OVERFLOW with wrong input types should fail)
-  {
-    // This test is removed since regular SUM and MIN aggregations work fine with reduce()
-  }
+TEST_F(ReduceWithOverflowTest, ErrorHandlingNonInt64)
+{
+  std::vector<int32_t> int32_values{1, 2, 3};
+  cudf::test::fixed_width_column_wrapper<int32_t> int32_col(int32_values.begin(),
+                                                            int32_values.end());
 
-  // Test error handling - non-int64_t arithmetic types should fail
-  {
-    std::vector<int32_t> int32_values{1, 2, 3};
-    cudf::test::fixed_width_column_wrapper<int32_t> int32_col(int32_values.begin(),
-                                                              int32_values.end());
+  EXPECT_THROW(cudf::reduce(int32_col,
+                            *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
+                            cudf::data_type{cudf::type_id::STRUCT}),
+               cudf::logic_error);
+}
 
-    EXPECT_THROW(cudf::reduce(int32_col,
-                              *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
-                              cudf::data_type{cudf::type_id::STRUCT}),
-                 cudf::logic_error);
-  }
+TEST_F(ReduceWithOverflowTest, ErrorHandlingNonArithmetic)
+{
+  std::vector<std::string> string_values{"a", "b", "c"};
+  cudf::test::strings_column_wrapper string_col(string_values.begin(), string_values.end());
 
-  // Test error handling - non-arithmetic type
-  {
-    std::vector<std::string> string_values{"a", "b", "c"};
-    cudf::test::strings_column_wrapper string_col(string_values.begin(), string_values.end());
-
-    EXPECT_THROW(cudf::reduce(string_col,
-                              *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
-                              cudf::data_type{cudf::type_id::STRUCT}),
-                 cudf::logic_error);
-  }
+  EXPECT_THROW(cudf::reduce(string_col,
+                            *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
+                            cudf::data_type{cudf::type_id::STRUCT}),
+               cudf::logic_error);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
