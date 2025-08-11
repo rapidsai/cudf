@@ -29,11 +29,9 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
 
 #include <cuco/static_set.cuh>
 
-#include <iterator>
 #include <memory>
 
 namespace cudf::groupby::detail::hash {
@@ -50,6 +48,14 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
   // convert to int64_t to avoid potential overflow with large `keys`
   auto const num_keys = static_cast<int64_t>(keys.num_rows());
 
+  rmm::device_uvector<hash_value_type> cached_hashes(num_keys, stream);
+  thrust::for_each_n(rmm::exec_policy_nosync(stream),
+                     thrust::make_counting_iterator(0),
+                     keys.num_rows(),
+                     [d_row_hash, hashes = cached_hashes.begin()] __device__(int64_t idx) {
+                       hashes[idx] = d_row_hash(idx);
+                     });
+
   // Cache of sparse results where the location of aggregate value in each
   // column is indexed by the hash set
   cudf::detail::result_cache sparse_results(requests.size());
@@ -59,7 +65,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
     cudf::detail::CUCO_DESIRED_LOAD_FACTOR,  // 50% load factor
     cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
     d_row_equal,
-    probing_scheme_t{d_row_hash},
+    probing_scheme_t{cache_assessor_t{cached_hashes.data()}},
     cuco::thread_scope_device,
     cuco::storage<GROUPBY_BUCKET_SIZE>{},
     cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},

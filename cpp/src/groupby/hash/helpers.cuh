@@ -56,8 +56,15 @@ using row_hash_t =
   cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
                                                    cudf::nullate::DYNAMIC>;
 
+/// Struct to access the cached values in memory.
+template <typename T>
+struct cache_assessor_t {
+  T const* values;
+  __device__ T operator()(size_type const idx) const noexcept { return values[idx]; }
+};
+
 /// Probing scheme type used by groupby hash table
-using probing_scheme_t = cuco::linear_probing<GROUPBY_CG_SIZE, row_hash_t>;
+using probing_scheme_t = cuco::linear_probing<GROUPBY_CG_SIZE, cache_assessor_t<hash_value_type>>;
 
 using row_comparator_t = cudf::experimental::row::equality::device_row_comparator<
   false,
