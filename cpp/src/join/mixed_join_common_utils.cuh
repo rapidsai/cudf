@@ -97,9 +97,9 @@ struct single_expression_equality : expression_equality<has_nulls> {
     // 1. The contents of the columns involved in the equality condition are equal.
     // 2. The predicate evaluated on the relevant columns (already encoded in the evaluator)
     // evaluates to true.
-    if (this->equality_probe(lhs_index_type{left_index}, rhs_index_type{right_index})) {
-      auto const lrow_idx = this->swap_tables ? right_index : left_index;
-      auto const rrow_idx = this->swap_tables ? left_index : right_index;
+    if (this->equality_probe(lhs_index_type{right_index}, rhs_index_type{left_index})) {
+      auto const lrow_idx = this->swap_tables ? left_index : right_index;
+      auto const rrow_idx = this->swap_tables ? right_index : left_index;
       this->evaluator.evaluate(output_dest,
                                static_cast<size_type>(lrow_idx),
                                static_cast<size_type>(rrow_idx),
