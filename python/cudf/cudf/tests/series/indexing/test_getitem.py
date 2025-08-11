@@ -145,6 +145,11 @@ def test_struct_getitem(series, expected):
     assert sr[0] == expected
 
 
+def test_datetime_getitem_na():
+    s = cudf.Series([1, 2, None, 3], dtype="datetime64[ns]")
+    assert s[2] is cudf.NaT
+
+
 def test_timedelta_getitem_na():
     s = cudf.Series([1, 2, None, 3], dtype="timedelta64[ns]")
     assert s[2] is cudf.NaT
