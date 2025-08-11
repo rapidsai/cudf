@@ -103,7 +103,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
                                                          pair_iter + block_end_offset,
                                                          join_output_l,
                                                          join_output_r,
-                                                         &counter_ref);
+                                                         counter_ref);
     } else {
       retrieve_ref
         .template retrieve<block_size,
@@ -117,7 +117,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
           pair_iter + block_end_offset,
           join_output_l,
           join_output_r,
-          &counter_ref);
+          counter_ref);
     }
   }
 }
