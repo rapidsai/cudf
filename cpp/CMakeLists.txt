@@ -693,6 +693,7 @@ add_library(
   src/sort/is_sorted.cu
   src/sort/rank.cu
   src/sort/segmented_sort.cu
+  src/sort/segmented_top_k.cu
   src/sort/sort.cu
   src/sort/sort_column.cu
   src/sort/sort_radix.cu
