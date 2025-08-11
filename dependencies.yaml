@@ -251,6 +251,14 @@ files:
       - depends_on_libcudf
       - depends_on_rmm
       - run_pylibcudf
+  py_run_pylibcudf_numpy:
+    output: pyproject
+    pyproject_dir: python/pylibcudf
+    extras:
+      table: project.optional-dependencies
+      key: numpy
+    includes:
+      - numpy_run
   py_run_pylibcudf_pyarrow:
     output: pyproject
     pyproject_dir: python/pylibcudf
@@ -266,8 +274,6 @@ files:
       table: project.optional-dependencies
       key: test
     includes:
-      - numpy_run
-      - pyarrow_run
       - test_python_common
       - test_python_cudf_common
       - test_python_pylibcudf
