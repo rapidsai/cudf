@@ -523,6 +523,7 @@ def _(node: pl_ir.Sink, translator: Translator, schema: Schema) -> ir.IR:
         schema=schema,
         kind=sink_kind,
         path=file["target"],
+        parquet_options=translator.config_options.parquet_options,
         options=options,
         cloud_options=cloud_options,
         df=translator.translate_ir(n=node.input),
@@ -863,6 +864,8 @@ def _(
     dtype: DataType,
     schema: Schema,
 ) -> expr.Expr:
+    if plc.traits.is_boolean(dtype.plc) and node.op == pl_expr.Operator.TrueDivide:
+        dtype = DataType(pl.Float64())
     return expr.BinOp(
         dtype,
         expr.BinOp._MAPPING[node.op],

@@ -13,7 +13,7 @@ from polars import GPUEngine
 from polars.testing.asserts import assert_frame_equal
 
 from cudf_polars.dsl.translate import Translator
-from cudf_polars.utils.config import StreamingFallbackMode
+from cudf_polars.utils.config import ConfigOptions, StreamingFallbackMode
 
 if TYPE_CHECKING:
     from cudf_polars.typing import OptimizationArgs
@@ -381,9 +381,9 @@ def assert_sink_result_equal(
     # the multi-partition executor might produce multiple files, one per partition.
     if (
         isinstance(engine, GPUEngine)
-        and engine.config["executor"] == "streaming"
+        and ConfigOptions.from_polars_engine(engine).executor.name == "streaming"
         and gpu_path.is_dir()
-    ):
+    ):  # pragma: no cover
         result = read_fn(gpu_path.joinpath("*"), **read_kwargs)
     else:
         result = read_fn(gpu_path, **read_kwargs)

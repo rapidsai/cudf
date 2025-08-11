@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -69,7 +69,16 @@ cudaError_t prefetch_noexcept(std::string_view key,
       std::cerr << "Prefetching " << size << " bytes for key " << key << " at location " << ptr
                 << std::endl;
     }
+
+#if defined(CUDART_VERSION) && CUDART_VERSION >= 13000
+    cudaMemLocation location{
+      (device_id.value() == cudaCpuDeviceId) ? cudaMemLocationTypeHost : cudaMemLocationTypeDevice,
+      device_id.value()};
+    constexpr int flags = 0;
+    auto result         = cudaMemPrefetchAsync(ptr, size, location, flags, stream.value());
+#else
     auto result = cudaMemPrefetchAsync(ptr, size, device_id.value(), stream.value());
+#endif
     // Need to flush the CUDA error so that the context is not corrupted.
     if (result == cudaErrorInvalidValue) { cudaGetLastError(); }
     return result;
