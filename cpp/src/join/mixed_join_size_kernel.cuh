@@ -63,9 +63,8 @@ CUDF_KERNEL void __launch_bounds__(block_size) compute_mixed_join_output_size(
   cudf::size_type const right_num_rows = right_table.num_rows();
   auto const outer_num_rows            = (swap_tables ? right_num_rows : left_num_rows);
 
-  auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
-    left_table, right_table, device_expression_data);
-
+  auto const evaluator = cudf::ast::detail::expression_evaluator<has_nulls>{
+    left_table, right_table, device_expression_data};
   auto const pair = pair_fn{hash_probe};
 
   // Figure out the number of elements for this key.

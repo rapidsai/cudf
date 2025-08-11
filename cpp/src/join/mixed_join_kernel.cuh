@@ -51,7 +51,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
              row_hash const hash_probe,
              row_equality const equality_probe,
              join_kind const join_type,
-             cudf::detail::mixed_join_hash_table_ref_t<cuco::retrieve_tag> const& hash_table_ref,
+             cudf::detail::mixed_join_hash_table_ref_t<cuco::retrieve_tag> hash_table_ref,
              thrust::transform_output_iterator<output_fn, size_type*> join_output_l,
              thrust::transform_output_iterator<output_fn, size_type*> join_output_r,
              size_t* size,
@@ -72,9 +72,9 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   cudf::size_type const right_num_rows = right_table.num_rows();
   auto const outer_num_rows            = (swap_tables ? right_num_rows : left_num_rows);
 
-  auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
-    left_table, right_table, device_expression_data);
-  auto equality = pair_expression_equality<has_nulls>{
+  auto const evaluator = cudf::ast::detail::expression_evaluator<has_nulls>{
+    left_table, right_table, device_expression_data};
+  auto const equality = pair_expression_equality<has_nulls>{
     evaluator, thread_intermediate_storage, swap_tables, equality_probe};
   auto retrieve_ref = hash_table_ref.rebind_key_eq(equality);
 
@@ -92,53 +92,39 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 
   if (block_begin_offset < block_end_offset) {
     if (join_type == join_kind::LEFT_JOIN || join_type == join_kind::FULL_JOIN) {
-      retrieve_ref.template retrieve_outer<
-        block_size,
-        thrust::transform_iterator<pair_fn<cudf::detail::row_hash>,
-                                   thrust::counting_iterator<cudf::size_type>>,
-        thrust::transform_output_iterator<output_fn, size_type*>,
-        thrust::transform_output_iterator<output_fn, size_type*>,
-        cuda::atomic<size_t, cuda::thread_scope_device>>(block,
-                                                         pair_iter + block_begin_offset,
-                                                         pair_iter + block_end_offset,
-                                                         join_output_l,
-                                                         join_output_r,
-                                                         counter_ref);
+      retrieve_ref.template retrieve_outer<block_size>(block,
+                                                       pair_iter + block_begin_offset,
+                                                       pair_iter + block_end_offset,
+                                                       swap_tables ? join_output_r : join_output_l,
+                                                       swap_tables ? join_output_l : join_output_r,
+                                                       counter_ref);
     } else {
-      retrieve_ref
-        .template retrieve<block_size,
-                           thrust::transform_iterator<pair_fn<cudf::detail::row_hash>,
-                                                      thrust::counting_iterator<cudf::size_type>>,
-                           thrust::transform_output_iterator<output_fn, size_type*>,
-                           thrust::transform_output_iterator<output_fn, size_type*>,
-                           cuda::atomic<size_t, cuda::thread_scope_device>>(
-          block,
-          pair_iter + block_begin_offset,
-          pair_iter + block_end_offset,
-          join_output_l,
-          join_output_r,
-          counter_ref);
+      retrieve_ref.template retrieve<block_size>(block,
+                                                 pair_iter + block_begin_offset,
+                                                 pair_iter + block_end_offset,
+                                                 swap_tables ? join_output_r : join_output_l,
+                                                 swap_tables ? join_output_l : join_output_r,
+                                                 counter_ref);
     }
   }
 }
 
 template <bool has_nulls>
-void launch_mixed_join(
-  table_device_view left_table,
-  table_device_view right_table,
-  table_device_view probe,
-  table_device_view build,
-  row_hash const hash_probe,
-  row_equality const equality_probe,
-  join_kind const join_type,
-  cudf::detail::mixed_join_hash_table_ref_t<cuco::retrieve_tag> const& hash_table_ref,
-  size_type* join_output_l,
-  size_type* join_output_r,
-  cudf::ast::detail::expression_device_view device_expression_data,
-  bool const swap_tables,
-  detail::grid_1d const config,
-  int64_t shmem_size_per_block,
-  rmm::cuda_stream_view stream)
+void launch_mixed_join(table_device_view left_table,
+                       table_device_view right_table,
+                       table_device_view probe,
+                       table_device_view build,
+                       row_hash const hash_probe,
+                       row_equality const equality_probe,
+                       join_kind const join_type,
+                       cudf::detail::mixed_join_hash_table_ref_t<cuco::retrieve_tag> hash_table_ref,
+                       size_type* join_output_l,
+                       size_type* join_output_r,
+                       cudf::ast::detail::expression_device_view device_expression_data,
+                       bool const swap_tables,
+                       detail::grid_1d const config,
+                       int64_t shmem_size_per_block,
+                       rmm::cuda_stream_view stream)
 {
   cudf::detail::device_scalar<size_t> size(0, stream);
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -86,8 +86,8 @@ struct single_expression_equality : expression_equality<has_nulls> {
   // left/right semantics because the conditional expression need not be
   // commutative.
   // TODO: The input types should really be size_type.
-  __device__ __forceinline__ bool operator()(hash_value_type const build_row_index,
-                                             hash_value_type const probe_row_index) const noexcept
+  __device__ __forceinline__ bool operator()(hash_value_type const left_index,
+                                             hash_value_type const right_index) const noexcept
   {
     using cudf::experimental::row::lhs_index_type;
     using cudf::experimental::row::rhs_index_type;
@@ -97,9 +97,9 @@ struct single_expression_equality : expression_equality<has_nulls> {
     // 1. The contents of the columns involved in the equality condition are equal.
     // 2. The predicate evaluated on the relevant columns (already encoded in the evaluator)
     // evaluates to true.
-    if (this->equality_probe(lhs_index_type{probe_row_index}, rhs_index_type{build_row_index})) {
-      auto const lrow_idx = this->swap_tables ? build_row_index : probe_row_index;
-      auto const rrow_idx = this->swap_tables ? probe_row_index : build_row_index;
+    if (this->equality_probe(lhs_index_type{left_index}, rhs_index_type{right_index})) {
+      auto const lrow_idx = this->swap_tables ? right_index : left_index;
+      auto const rrow_idx = this->swap_tables ? left_index : right_index;
       this->evaluator.evaluate(output_dest,
                                static_cast<size_type>(lrow_idx),
                                static_cast<size_type>(rrow_idx),
@@ -137,8 +137,8 @@ struct pair_expression_equality : public expression_equality<has_nulls> {
   // until we get to the expression evaluator, which needs to convert back to
   // left/right semantics because the conditional expression need not be
   // commutative.
-  __device__ __forceinline__ bool operator()(pair_type const& build_row,
-                                             pair_type const& probe_row) const noexcept
+  __device__ __forceinline__ bool operator()(pair_type const& left_row,
+                                             pair_type const& right_row) const noexcept
   {
     using cudf::experimental::row::lhs_index_type;
     using cudf::experimental::row::rhs_index_type;
@@ -149,10 +149,10 @@ struct pair_expression_equality : public expression_equality<has_nulls> {
     // 2. The contents of the columns involved in the equality condition are equal.
     // 3. The predicate evaluated on the relevant columns (already encoded in the evaluator)
     // evaluates to true.
-    if ((probe_row.first == build_row.first) &&
-        this->equality_probe(lhs_index_type{probe_row.second}, rhs_index_type{build_row.second})) {
-      auto const lrow_idx = this->swap_tables ? build_row.second : probe_row.second;
-      auto const rrow_idx = this->swap_tables ? probe_row.second : build_row.second;
+    if ((left_row.first == right_row.first) &&
+        this->equality_probe(lhs_index_type{left_row.second}, rhs_index_type{right_row.second})) {
+      auto const lrow_idx = this->swap_tables ? right_row.second : left_row.second;
+      auto const rrow_idx = this->swap_tables ? left_row.second : right_row.second;
       this->evaluator.evaluate(
         output_dest, lrow_idx, rrow_idx, 0, this->thread_intermediate_storage);
       return (output_dest.is_valid() && output_dest.value());
