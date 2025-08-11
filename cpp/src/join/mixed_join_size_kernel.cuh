@@ -37,8 +37,6 @@ template <int block_size, bool has_nulls>
 CUDF_KERNEL void __launch_bounds__(block_size) compute_mixed_join_output_size(
   table_device_view left_table,
   table_device_view right_table,
-  table_device_view probe,
-  table_device_view build,
   row_hash const hash_probe,
   row_equality const equality_probe,
   join_kind const join_type,
@@ -52,7 +50,7 @@ CUDF_KERNEL void __launch_bounds__(block_size) compute_mixed_join_output_size(
   // workaround is to declare an arbitrary (here char) array type then cast it
   // after the fact to the appropriate type.
   extern __shared__ char raw_intermediate_storage[];
-  cudf::ast::detail::IntermediateDataType<has_nulls>* intermediate_storage =
+  auto intermediate_storage =
     reinterpret_cast<cudf::ast::detail::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
   auto thread_intermediate_storage =
     intermediate_storage + (threadIdx.x * device_expression_data.num_intermediates);
@@ -90,8 +88,6 @@ template <bool has_nulls>
 std::size_t launch_compute_mixed_join_output_size(
   table_device_view left_table,
   table_device_view right_table,
-  table_device_view probe,
-  table_device_view build,
   row_hash const hash_probe,
   row_equality const equality_probe,
   join_kind const join_type,
@@ -108,8 +104,6 @@ std::size_t launch_compute_mixed_join_output_size(
     <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
       left_table,
       right_table,
-      probe,
-      build,
       hash_probe,
       equality_probe,
       join_type,

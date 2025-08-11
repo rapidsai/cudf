@@ -23,8 +23,6 @@ namespace detail {
 template std::size_t launch_compute_mixed_join_output_size<false>(
   table_device_view left_table,
   table_device_view right_table,
-  table_device_view probe,
-  table_device_view build,
   row_hash const hash_probe,
   row_equality const equality_probe,
   join_kind const join_type,

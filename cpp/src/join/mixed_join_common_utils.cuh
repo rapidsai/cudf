@@ -77,9 +77,8 @@ template <bool has_nulls>
 struct single_expression_equality : expression_equality<has_nulls> {
   using expression_equality<has_nulls>::expression_equality;
 
-  // TODO: The input types should really be size_type.
-  __device__ __forceinline__ bool operator()(hash_value_type const left_index,
-                                             hash_value_type const right_index) const noexcept
+  __device__ __forceinline__ bool operator()(size_type const left_index,
+                                             size_type const right_index) const noexcept
   {
     using cudf::experimental::row::lhs_index_type;
     using cudf::experimental::row::rhs_index_type;
@@ -89,8 +88,6 @@ struct single_expression_equality : expression_equality<has_nulls> {
     // 1. The contents of the columns involved in the equality condition are equal.
     // 2. The predicate evaluated on the relevant columns (already encoded in the evaluator)
     // evaluates to true.
-
-    // cuco's contains() calls this with (left_table_index, right_table_index)
     if (this->equality_probe(lhs_index_type{left_index}, rhs_index_type{right_index})) {
       // For the AST evaluator, we need to map back to left/right table semantics
       auto const left_table_idx  = this->swap_tables ? right_index : left_index;

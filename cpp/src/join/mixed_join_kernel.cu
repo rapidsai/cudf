@@ -23,8 +23,6 @@ namespace detail {
 template void launch_mixed_join<false>(
   table_device_view left_table,
   table_device_view right_table,
-  table_device_view probe,
-  table_device_view build,
   row_hash const hash_probe,
   row_equality const equality_probe,
   join_kind const join_type,

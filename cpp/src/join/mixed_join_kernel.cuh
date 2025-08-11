@@ -46,8 +46,6 @@ template <cudf::size_type block_size, bool has_nulls>
 CUDF_KERNEL void __launch_bounds__(block_size)
   mixed_join(table_device_view left_table,
              table_device_view right_table,
-             table_device_view probe,
-             table_device_view build,
              row_hash const hash_probe,
              row_equality const equality_probe,
              join_kind const join_type,
@@ -63,7 +61,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   // used to circumvent conflicts between arrays of different types between
   // different template instantiations due to the extern specifier.
   extern __shared__ char raw_intermediate_storage[];
-  cudf::ast::detail::IntermediateDataType<has_nulls>* intermediate_storage =
+  auto intermediate_storage =
     reinterpret_cast<cudf::ast::detail::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
   auto thread_intermediate_storage =
     &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
@@ -112,8 +110,6 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 template <bool has_nulls>
 void launch_mixed_join(table_device_view left_table,
                        table_device_view right_table,
-                       table_device_view probe,
-                       table_device_view build,
                        row_hash const hash_probe,
                        row_equality const equality_probe,
                        join_kind const join_type,
@@ -132,8 +128,6 @@ void launch_mixed_join(table_device_view left_table,
     <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
       left_table,
       right_table,
-      probe,
-      build,
       hash_probe,
       equality_probe,
       join_type,

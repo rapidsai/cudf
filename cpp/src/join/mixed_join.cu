@@ -198,8 +198,6 @@ mixed_join(
     if (has_nulls) {
       join_size = launch_compute_mixed_join_output_size<true>(*left_conditional_view,
                                                               *right_conditional_view,
-                                                              *probe_view,
-                                                              *build_view,
                                                               hash_probe,
                                                               equality_probe,
                                                               kernel_join_type,
@@ -214,8 +212,6 @@ mixed_join(
     } else {
       join_size = launch_compute_mixed_join_output_size<false>(*left_conditional_view,
                                                                *right_conditional_view,
-                                                               *probe_view,
-                                                               *build_view,
                                                                hash_probe,
                                                                equality_probe,
                                                                kernel_join_type,
@@ -251,8 +247,6 @@ mixed_join(
   if (has_nulls) {
     launch_mixed_join<true>(*left_conditional_view,
                             *right_conditional_view,
-                            *probe_view,
-                            *build_view,
                             hash_probe,
                             equality_probe,
                             kernel_join_type,
@@ -267,8 +261,6 @@ mixed_join(
   } else {
     launch_mixed_join<false>(*left_conditional_view,
                              *right_conditional_view,
-                             *probe_view,
-                             *build_view,
                              hash_probe,
                              equality_probe,
                              kernel_join_type,
@@ -443,8 +435,6 @@ compute_mixed_join_output_size(table_view const& left_equality,
     if (has_nulls) {
       return launch_compute_mixed_join_output_size<true>(*left_conditional_view,
                                                          *right_conditional_view,
-                                                         *probe_view,
-                                                         *build_view,
                                                          hash_probe,
                                                          equality_probe,
                                                          join_type,
@@ -459,8 +449,6 @@ compute_mixed_join_output_size(table_view const& left_equality,
     } else {
       return launch_compute_mixed_join_output_size<false>(*left_conditional_view,
                                                           *right_conditional_view,
-                                                          *probe_view,
-                                                          *build_view,
                                                           hash_probe,
                                                           equality_probe,
                                                           join_type,

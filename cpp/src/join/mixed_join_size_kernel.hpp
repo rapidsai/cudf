@@ -51,8 +51,6 @@ namespace detail {
  *
  * @param[in] left_table The left table
  * @param[in] right_table The right table
- * @param[in] probe The table with which to probe the hash table for matches.
- * @param[in] build The table with which the hash table was built.
  * @param[in] hash_probe The hasher used for the probe table.
  * @param[in] equality_probe The equality comparator used when probing the hash table.
  * @param[in] join_type The type of join to be performed
@@ -74,8 +72,6 @@ template <bool has_nulls>
 std::size_t launch_compute_mixed_join_output_size(
   cudf::table_device_view left_table,
   cudf::table_device_view right_table,
-  cudf::table_device_view probe,
-  cudf::table_device_view build,
   row_hash const hash_probe,
   row_equality const equality_probe,
   join_kind const join_type,
