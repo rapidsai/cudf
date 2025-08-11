@@ -75,6 +75,12 @@ __device__ NRT_MemInfo* make_meminfo_for_new_udf_string(udf_string* udf_str)
   }
 }
 
+extern "C" __device__ void NRT_decref_managed_string(NRT_MemInfo* mi)
+{
+  mi->dtor = udf_str_dtor;
+  NRT_decref(mi);
+}
+
 extern "C" __device__ int len(int* nb_retval, void const* str)
 {
   auto sv    = reinterpret_cast<cudf::string_view const*>(str);
