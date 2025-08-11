@@ -70,7 +70,7 @@ def test_pickle_index():
     idx = Index(np.arange(nelem), name="a")
     pickled = pickle.dumps(idx)
     out = pickle.loads(pickled)
-    assert (idx == out).all()
+    assert_eq(idx, out)
 
 
 def test_pickle_buffer():
@@ -89,7 +89,7 @@ def test_pickle_series(name):
     ser = Series(rng.random(10), name=name)
     pickled = pickle.dumps(ser)
     out = pickle.loads(pickled)
-    assert (ser == out).all()
+    assert_eq(ser, out)
 
 
 @pytest.mark.parametrize(
