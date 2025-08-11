@@ -490,12 +490,13 @@ TEST_F(HybridScanTest, MaterializeMixedPayloadColumns)
     cudf::io::write_parquet(out_opts);
   }
 
-  // Filtering AST - table[0] < 100
+  // Filtering AST - table[0] >= 100
   auto constexpr num_filter_columns = 1;
   auto literal_value                = cudf::numeric_scalar<uint32_t>(100);
   auto literal                      = cudf::ast::literal(literal_value);
   auto col_ref_0                    = cudf::ast::column_name_reference("col0");
-  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+  auto filter_expression =
+    cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col_ref_0, literal);
 
   auto stream     = cudf::get_default_stream();
   auto mr         = cudf::get_current_device_resource_ref();
