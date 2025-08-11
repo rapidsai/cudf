@@ -70,6 +70,7 @@ from cudf.core.dtypes import (
     Decimal64Dtype,
     Decimal128Dtype,
     IntervalDtype,
+    ListDtype,
     StructDtype,
 )
 from cudf.core.groupby.groupby import DataFrameGroupBy, groupby_doc_template
@@ -1252,7 +1253,27 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         string              object
         dtype: object
         """
-        return pd.Series(dict(self._dtypes), dtype="object")
+        result_dict = dict(self._dtypes)
+        if cudf.get_option("mode.pandas_compatible"):
+            for key, value in result_dict.items():
+                if isinstance(
+                    value,
+                    (
+                        ListDtype,
+                        StructDtype,
+                        Decimal32Dtype,
+                        Decimal64Dtype,
+                        Decimal128Dtype,
+                    ),
+                ):
+                    raise TypeError(
+                        f"Column '{key}' has {type(value).__name__}, which is not supported in pandas."
+                    )
+
+        result = pd.Series(
+            result_dict, index=self._data.to_pandas_index, dtype="object"
+        )
+        return result
 
     @property
     def ndim(self) -> int:
