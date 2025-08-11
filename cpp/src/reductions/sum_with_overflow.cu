@@ -142,7 +142,7 @@ std::unique_ptr<cudf::scalar> sum_with_overflow(
 
   if (col.has_nulls()) {
     // Use null-aware transform functor
-    result = thrust::transform_reduce(rmm::exec_policy(stream),
+    result = thrust::transform_reduce(rmm::exec_policy_nosync(stream),
                                       counting_iter,
                                       counting_iter + col.size(),
                                       null_aware_to_sum_overflow{dcol_ptr},
@@ -151,7 +151,7 @@ std::unique_ptr<cudf::scalar> sum_with_overflow(
   } else {
     // Use direct iterator for non-null case
     auto input_iter = dcol->begin<int64_t>();
-    result          = thrust::transform_reduce(rmm::exec_policy(stream),
+    result          = thrust::transform_reduce(rmm::exec_policy_nosync(stream),
                                       input_iter,
                                       input_iter + col.size(),
                                       to_sum_overflow{},
