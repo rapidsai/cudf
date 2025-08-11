@@ -38,10 +38,14 @@ enum class scan_type : bool { INCLUSIVE, EXCLUSIVE };
 /**
  * @brief  Computes the reduction of the values in all rows of a column.
  *
- * This function does not detect overflows in reductions. When `output_dtype`
- * does not match the `col.type()`, their values may be promoted to
- * `int64_t` or `double` for computing aggregations and then cast to
- * `output_dtype` before returning.
+ * This function does not detect overflows in reductions except for the
+ * `SUM_WITH_OVERFLOW` aggregation. When `output_dtype` does not match the
+ * `col.type()`, their values may be promoted to `int64_t` or `double` for
+ * computing aggregations and then cast to `output_dtype` before returning.
+ *
+ * The `SUM_WITH_OVERFLOW` aggregation is a special case that detects integer
+ * overflow during summation of `int64_t` values and returns a struct containing
+ * both the sum result and an overflow flag.
  *
  * Only `min` and `max` ops are supported for reduction of non-arithmetic
  * types (e.g. timestamp or string).
@@ -86,6 +90,8 @@ enum class scan_type : bool { INCLUSIVE, EXCLUSIVE };
  * output type is not BOOL8.
  * @throw cudf::logic_error if `mean`, `var`, or `std` reduction is called and
  * the `output_dtype` is not floating point.
+ * @throw cudf::logic_error if `sum_with_overflow` reduction is called and the
+ * input column type is not `INT64` or the `output_dtype` is not `STRUCT`.
  *
  * @param col Input column view
  * @param agg Aggregation operator applied by the reduction
@@ -105,7 +111,8 @@ std::unique_ptr<scalar> reduce(
  * @brief  Computes the reduction of the values in all rows of a column with an initial value
  *
  * Only `sum`, `product`, `min`, `max`, `any`, `all`, and `sum_with_overflow` reductions are
- * supported.
+ * supported. For `sum_with_overflow`, the initial value is added to the sum and overflow
+ * detection is performed throughout the entire computation.
  *
  * @see cudf::reduce(column_view const&,reduce_aggregation
  * const&,data_type,rmm::cuda_stream_view,rmm::device_async_resource_ref) for more details

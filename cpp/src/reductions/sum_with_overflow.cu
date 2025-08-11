@@ -26,12 +26,11 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/limits>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/transform_reduce.h>
-
-#include <limits>
 
 namespace cudf::reduction::detail {
 
@@ -46,8 +45,8 @@ struct sum_overflow_result {
 
 // Binary operator for combining sum_overflow_result values
 struct overflow_sum_op {
-  CUDF_HOST_DEVICE sum_overflow_result operator()(sum_overflow_result const& lhs,
-                                                  sum_overflow_result const& rhs) const
+  __device__ sum_overflow_result operator()(sum_overflow_result const& lhs,
+                                            sum_overflow_result const& rhs) const
   {
     // If either operand already has overflow, result has overflow
     if (lhs.overflow || rhs.overflow) {
@@ -77,7 +76,7 @@ struct overflow_sum_op {
 
 // Transform function to convert int64_t values to sum_overflow_result
 struct to_sum_overflow {
-  CUDF_HOST_DEVICE sum_overflow_result operator()(int64_t value) const
+  __device__ sum_overflow_result operator()(int64_t value) const
   {
     return sum_overflow_result{value, false};
   }
@@ -91,7 +90,7 @@ struct null_aware_to_sum_overflow {
   {
   }
 
-  CUDF_HOST_DEVICE sum_overflow_result operator()(cudf::size_type idx) const
+  __device__ sum_overflow_result operator()(cudf::size_type idx) const
   {
     return dcol_ptr->is_valid(idx) ? sum_overflow_result{dcol_ptr->element<int64_t>(idx), false}
                                    : sum_overflow_result{0, false};
