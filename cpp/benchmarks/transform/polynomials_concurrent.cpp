@@ -1,5 +1,3 @@
-
-
 /*
  * Copyright (c) 2025, NVIDIA CORPORATION.
  *
@@ -58,10 +56,10 @@ static void BM_transform_polynomials_concurrent(nvbench::state& state)
     [&](int) { return create_random_column(cudf::type_to_id<key_type>(), row_count{1}, profile); });
 
   std::vector<cudf::column_view> inputs{column->view()};
-  std::transform(constants.begin(),
-                 constants.end(),
-                 std::back_inserter(inputs),
-                 [](auto const& col) { return col->view(); });
+  std::transform(
+    constants.begin(), constants.end(), std::back_inserter(inputs), [](auto const& col) {
+      return col->view();
+    });
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     auto root_stream = launch.get_stream().get_stream();
@@ -106,12 +104,10 @@ static void BM_transform_polynomials_concurrent(nvbench::state& state)
       nvtxRangePop();
     };
 
-    threads.pause();
     threads.detach_sequence(std::size_t{0},
                             static_cast<std::size_t>(static_cast<uint64_t>(num_threads) *
                                                      static_cast<uint64_t>(runs_per_thread)),
                             polynomial_func);
-    threads.unpause();
     threads.wait();
 
     // Join all the streams back to the default stream
