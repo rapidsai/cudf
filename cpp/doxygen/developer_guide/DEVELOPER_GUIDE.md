@@ -662,7 +662,7 @@ It is recommended for internal use to avoid the implicit synchronization overhea
 memcpy operations on pageable host memory.
 
 ```c++
-// The same case as the rmm::device_scalar<T>
+// Same as the case with rmm::device_scalar<T> above
 cudf::detail::device_scalar<int> int_scalar{42, stream, mr};
 kernel<<<...>>>(int_scalar.data(),...);
 
