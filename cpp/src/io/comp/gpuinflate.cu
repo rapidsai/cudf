@@ -1223,7 +1223,7 @@ CUDF_HOST_DEVICE double cost_factor(size_t input_size, size_t output_size, task_
     // meaning that the cost of decompressing the block is the same as the cost of copying it. The
     // cost factor asymptotes to one as the compression ratio increases, meaning that the cost
     // approaches the base cost of decompressing (which is a lot higher than the copy cost)
-    return 1. - (1. - trivial_case_cost_ratio) / std::pow(compression_ratio, 4);
+    return 1. - (1. - trivial_case_cost_ratio) / cuda::std::pow(compression_ratio, 4);
   } else {
     // We don't know the compression ratio for compression, so use a constant cost factor
     return 1.;
@@ -1256,12 +1256,22 @@ sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const>
   CUDF_FUNC_RANGE();
   rmm::device_uvector<std::size_t> order(inputs.size(), stream, mr);
   thrust::sequence(rmm::exec_policy_nosync(stream), order.begin(), order.end());
+
+  // Precompute costs to avoid repeated computation during sorting
+  rmm::device_uvector<double> costs(inputs.size(), stream, mr);
+  thrust::transform(rmm::exec_policy_nosync(stream),
+                    thrust::make_counting_iterator<std::size_t>(0),
+                    thrust::make_counting_iterator<std::size_t>(inputs.size()),
+                    costs.begin(),
+                    [inputs, outputs, task_type] __device__(std::size_t i) {
+                      return task_device_cost(inputs[i].size(), outputs[i].size(), task_type);
+                    });
+
   thrust::sort(rmm::exec_policy_nosync(stream),
                order.begin(),
                order.end(),
-               [inputs, outputs, task_type] __device__(std::size_t a, std::size_t b) {
-                 return task_device_cost(inputs[a].size(), outputs[a].size(), task_type) >
-                        task_device_cost(inputs[b].size(), outputs[b].size(), task_type);
+               [costs = costs.data()] __device__(std::size_t a, std::size_t b) {
+                 return costs[a] > costs[b];
                });
 
   auto sorted_inputs = rmm::device_uvector<device_span<uint8_t const>>(inputs.size(), stream, mr);
