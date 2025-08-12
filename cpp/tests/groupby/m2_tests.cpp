@@ -57,7 +57,7 @@ auto compute_M2(cudf::column_view const& keys, cudf::column_view const& values)
     return std::pair(std::move(sorted_keys->release()[0]), std::move(sorted_vals->release()[0]));
   }();
 
-  auto [sort_gb_keys, sort_gb_vals] = [&] {
+  auto const [sort_gb_keys, sort_gb_vals] = [&] {
     // Create a fresh aggregation request for sort-based aggregation instead of reusing.
     // This is to avoid wrong output when the previous groupby aggregation has not been executed
     // while the requests vector is modified.
