@@ -40,7 +40,7 @@ namespace cudf::groupby::detail::hash {
 namespace {
 
 // The number of columns in the keys table that will trigger caching of row hashes.
-// This is a heuristic to reduce memory read when the keys table is hashes twice.
+// This is a heuristic to reduce memory read when the keys table is hashed twice.
 constexpr int HASH_CACHING_THRESHOLD = 4;
 
 int count_nested_columns(column_view const& input)
