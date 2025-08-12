@@ -33,7 +33,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <memory>
-#include <set>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -41,21 +41,29 @@ namespace cudf::groupby::detail::hash {
 namespace {
 /**
  * @brief List of aggregation operations that can be computed with a hash-based implementation.
+ *
+ * For single pass aggregations, the supported operations are the ones that can be atomically
+ * updated: SUM, SUM_WITH_OVERFLOW, SUM_OF_SQUARES, PRODUCT, MIN, MAX, COUNT_VALID, COUNT_ALL.
+ * For compound aggregations, the supported operations are the ones that depends on the single pass
+ * aggregations above: ARGMIN(MIN), ARGMAX(MAX), MEAN(SUM, COUNT_VALID), M2/STD/VARIANCE(M2,
+ * COUNT_VALID).
  */
-const auto hash_aggregations = std::set{aggregation::SUM,
-                                        aggregation::SUM_WITH_OVERFLOW,
-                                        aggregation::PRODUCT,
-                                        aggregation::MIN,
-                                        aggregation::MAX,
-                                        aggregation::COUNT_VALID,
-                                        aggregation::COUNT_ALL,
-                                        aggregation::ARGMIN,
-                                        aggregation::ARGMAX,
-                                        aggregation::SUM_OF_SQUARES,
-                                        aggregation::MEAN,
-                                        aggregation::M2,
-                                        aggregation::STD,
-                                        aggregation::VARIANCE};
+const auto hash_aggregations = std::unordered_set{// Single pass aggregations:
+                                                  aggregation::SUM,
+                                                  aggregation::SUM_WITH_OVERFLOW,
+                                                  aggregation::SUM_OF_SQUARES,
+                                                  aggregation::PRODUCT,
+                                                  aggregation::MIN,
+                                                  aggregation::MAX,
+                                                  aggregation::COUNT_VALID,
+                                                  aggregation::COUNT_ALL,
+                                                  // Compound aggregations:
+                                                  aggregation::ARGMIN,
+                                                  aggregation::ARGMAX,
+                                                  aggregation::MEAN,
+                                                  aggregation::M2,
+                                                  aggregation::STD,
+                                                  aggregation::VARIANCE};
 
 /**
  * @brief Indicates whether the specified aggregation operation can be computed

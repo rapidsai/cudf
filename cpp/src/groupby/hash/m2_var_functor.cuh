@@ -28,7 +28,7 @@
 namespace cudf::groupby::detail::hash {
 
 template <typename Source>
-constexpr static bool is_m2_var_supported()
+__device__ constexpr static bool is_m2_var_supported()
 {
   return is_numeric<Source>() && !is_fixed_point<Source>();
 }
