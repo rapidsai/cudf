@@ -12,7 +12,7 @@ CUDF_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-do
 LIBCUDF_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="libcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-github cpp)
 PYLIBCUDF_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-github python)
 
-rapids-logger "Install cudf, pylibcudf, and test requirements"
+rapids-logger "Install pylibcudf and its basic dependencies in a virtual environment"
 
 # generate constraints (possibly pinning to oldest support versions of dependencies)
 rapids-generate-pip-constraints py_test_cudf ./constraints.txt
@@ -28,7 +28,6 @@ rapids-pip-retry install \
     -v \
     --constraint ./constraints.txt \
     --constraint "${PIP_CONSTRAINT}" \
-    "$(echo "${CUDF_WHEELHOUSE}"/cudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test]" \
     "$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
     "$(echo "${PYLIBCUDF_WHEELHOUSE}"/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test]"
 
@@ -42,6 +41,8 @@ python -m pytest \
 popd
 
 deactivate
+
+rapids-logger "Install cudf, pylibcudf, and test requirements"
 
 # notes:
 #
