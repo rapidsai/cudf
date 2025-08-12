@@ -24,13 +24,13 @@ if TYPE_CHECKING:
 __all__ = ["apply_pre_evaluation", "decompose_aggs", "decompose_single_agg"]
 
 
-def _supports_sum(dt: plc.DataType) -> bool:
-    tid = dt.id()
+def _supports_sum(dtype: plc.DataType) -> bool:
+    tid = dtype.id()
     return (
-        plc.traits.is_integral(dt)
-        or plc.traits.is_floating_point(dt)
+        plc.traits.is_integral(dtype)
+        or plc.traits.is_floating_point(dtype)
         or tid == plc.TypeId.BOOL8
-        or plc.traits.is_duration(dt)
+        or plc.traits.is_duration(dtype)
         or tid in (plc.TypeId.DECIMAL32, plc.TypeId.DECIMAL64, plc.TypeId.DECIMAL128)
     )
 
