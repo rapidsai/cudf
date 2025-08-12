@@ -72,6 +72,7 @@ class PDSDSQueries(metaclass=PDSDSQueriesMeta):
     """Base class for query loading."""
 
     q_impl: str
+    name: str = "pdsds"
 
 
 class PDSDSPolarsQueries(PDSDSQueries):
