@@ -728,7 +728,7 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask
   col_chunk_page_offsets.reserve(num_columns);
 
   if (num_columns == 1) {
-    auto const schema_idx = input_columns[0].schema_idx;
+    auto const schema_idx = column_schema_indices.front();
     auto [counts, offsets, chunk_offsets] =
       make_page_row_counts_and_offsets(per_file_metadata, row_group_indices, schema_idx, stream);
     page_row_counts.emplace_back(std::move(counts));
@@ -747,9 +747,10 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask
                   [&](auto const col_idx) {
                     page_row_counts_and_offsets_tasks.emplace_back(
                       cudf::detail::host_worker_pool().submit_task([&, col_idx = col_idx] {
-                        auto const schema_idx = input_columns[col_idx].schema_idx;
-                        return make_page_row_counts_and_offsets(
-                          per_file_metadata, row_group_indices, schema_idx, streams[col_idx]);
+                        return make_page_row_counts_and_offsets(per_file_metadata,
+                                                                row_group_indices,
+                                                                column_schema_indices[col_idx],
+                                                                streams[col_idx]);
                       }));
                   });
 

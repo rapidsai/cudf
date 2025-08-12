@@ -294,7 +294,6 @@ class reader_impl {
   /**
    * @brief Calculate per-page offsets for string data
    *
-   * @param page_mask Boolean vector indicating if a page needs to be decoded or is pruned
    * @return Vector of total string data sizes for each column
    */
   cudf::detail::host_vector<size_t> calculate_page_string_offsets();
