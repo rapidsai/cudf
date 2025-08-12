@@ -22,6 +22,7 @@
 #include <cudf/reduction/detail/reduction_functions.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -121,8 +122,14 @@ std::unique_ptr<cudf::scalar> sum_with_overflow(
     std::vector<std::unique_ptr<cudf::column>> children;
     children.push_back(cudf::make_column_from_scalar(*sum_scalar, 1, stream, mr));
     children.push_back(cudf::make_column_from_scalar(*overflow_scalar, 1, stream, mr));
-    auto table_data = cudf::table(std::move(children));
-    return cudf::make_struct_scalar(table_data.view(), stream, mr);
+
+    // Use host_span of column_views instead of table_view to avoid double wrapping
+    std::vector<cudf::column_view> child_views;
+    child_views.push_back(children[0]->view());
+    child_views.push_back(children[1]->view());
+
+    return cudf::make_struct_scalar(
+      cudf::host_span<cudf::column_view const>{child_views}, stream, mr);
   }
 
   // Create device view
@@ -163,12 +170,18 @@ std::unique_ptr<cudf::scalar> sum_with_overflow(
   auto sum_scalar      = cudf::make_fixed_width_scalar<int64_t>(result.sum, stream, mr);
   auto overflow_scalar = cudf::make_fixed_width_scalar<bool>(result.overflow, stream, mr);
 
-  // Create struct scalar using cudf::make_struct_scalar with table_view
+  // Create struct scalar using cudf::make_struct_scalar with host_span of column_views
   std::vector<std::unique_ptr<cudf::column>> children;
   children.push_back(cudf::make_column_from_scalar(*sum_scalar, 1, stream, mr));
   children.push_back(cudf::make_column_from_scalar(*overflow_scalar, 1, stream, mr));
-  auto table_data = cudf::table(std::move(children));
-  return cudf::make_struct_scalar(table_data.view(), stream, mr);
+
+  // Use host_span of column_views instead of table_view to avoid double wrapping
+  std::vector<cudf::column_view> child_views;
+  child_views.push_back(children[0]->view());
+  child_views.push_back(children[1]->view());
+
+  return cudf::make_struct_scalar(
+    cudf::host_span<cudf::column_view const>{child_views}, stream, mr);
 }
 
 }  // namespace cudf::reduction::detail
