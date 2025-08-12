@@ -2645,7 +2645,7 @@ class RangeIndex(Index):
     def _column_labels_and_values(
         self,
     ) -> Iterable[tuple[Hashable, ColumnBase]]:
-        return zip(self._column_names, self._columns)
+        return zip(self._column_names, self._columns, strict=True)
 
     @_performance_tracking
     def _as_int_index(self) -> Index:

@@ -864,6 +864,8 @@ def _(
     dtype: DataType,
     schema: Schema,
 ) -> expr.Expr:
+    if plc.traits.is_boolean(dtype.plc) and node.op == pl_expr.Operator.TrueDivide:
+        dtype = DataType(pl.Float64())
     return expr.BinOp(
         dtype,
         expr.BinOp._MAPPING[node.op],

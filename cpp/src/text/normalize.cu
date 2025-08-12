@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 
+#include "text/detail/codepoint_metadata.ah"
 #include "text/normalize.cuh"
-#include "text/subword/detail/data_normalizer.hpp"
-#include "text/subword/detail/tokenizer_utils.cuh"
 #include "text/utilities/tokenize_ops.cuh"
 
 #include <cudf/column/column.hpp>
@@ -134,6 +133,74 @@ std::unique_ptr<cudf::column> normalize_spaces(cudf::strings_column_view const& 
                                    chars.release(),
                                    strings.null_count(),
                                    cudf::detail::copy_bitmask(strings.parent(), stream, mr));
+}
+
+/**
+ * @brief Retrieve the code point metadata table.
+ *
+ * Build the code point metadata table in device memory
+ * using the vector pieces from codepoint_metadata.ah
+ */
+rmm::device_uvector<codepoint_metadata_type> get_codepoint_metadata(rmm::cuda_stream_view stream)
+{
+  auto table_vector = rmm::device_uvector<codepoint_metadata_type>(codepoint_metadata_size, stream);
+  auto table        = table_vector.data();
+  thrust::fill(rmm::exec_policy(stream),
+               table + cp_section1_end,
+               table + codepoint_metadata_size,
+               codepoint_metadata_default_value);
+  CUDF_CUDA_TRY(cudaMemcpyAsync(table,
+                                codepoint_metadata,
+                                cp_section1_end * sizeof(codepoint_metadata[0]),  // 1st section
+                                cudaMemcpyDefault,
+                                stream.value()));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(
+    table + cp_section2_begin,
+    cp_metadata_917505_917999,
+    (cp_section2_end - cp_section2_begin + 1) * sizeof(codepoint_metadata[0]),  // 2nd section
+    cudaMemcpyDefault,
+    stream.value()));
+  return table_vector;
+}
+
+/**
+ * @brief Retrieve the aux code point data table.
+ *
+ * Build the aux code point data table in device memory
+ * using the vector pieces from codepoint_metadata.ah
+ */
+rmm::device_uvector<aux_codepoint_data_type> get_aux_codepoint_data(rmm::cuda_stream_view stream)
+{
+  auto table_vector = rmm::device_uvector<aux_codepoint_data_type>(aux_codepoint_data_size, stream);
+  auto table        = table_vector.data();
+  thrust::fill(rmm::exec_policy(stream),
+               table + aux_section1_end,
+               table + aux_codepoint_data_size,
+               aux_codepoint_default_value);
+  CUDF_CUDA_TRY(cudaMemcpyAsync(table,
+                                aux_codepoint_data,
+                                aux_section1_end * sizeof(aux_codepoint_data[0]),  // 1st section
+                                cudaMemcpyDefault,
+                                stream.value()));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(
+    table + aux_section2_begin,
+    aux_cp_data_44032_55203,
+    (aux_section2_end - aux_section2_begin + 1) * sizeof(aux_codepoint_data[0]),  // 2nd section
+    cudaMemcpyDefault,
+    stream.value()));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(
+    table + aux_section3_begin,
+    aux_cp_data_70475_71099,
+    (aux_section3_end - aux_section3_begin + 1) * sizeof(aux_codepoint_data[0]),  // 3rd section
+    cudaMemcpyDefault,
+    stream.value()));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(
+    table + aux_section4_begin,
+    aux_cp_data_119134_119232,
+    (aux_section4_end - aux_section4_begin + 1) * sizeof(aux_codepoint_data[0]),  // 4th section
+    cudaMemcpyDefault,
+    stream.value()));
+  return table_vector;
 }
 
 }  // namespace detail

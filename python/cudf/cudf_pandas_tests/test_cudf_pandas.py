@@ -791,14 +791,14 @@ def test_chunked_json_reader(tmpdir, data):
         pd.read_json(file_path, lines=True, chunksize=1) as pd_reader,
         xpd.read_json(file_path, lines=True, chunksize=1) as xpd_reader,
     ):
-        for pd_chunk, xpd_chunk in zip(pd_reader, xpd_reader):
+        for pd_chunk, xpd_chunk in zip(pd_reader, xpd_reader, strict=True):
             tm.assert_equal(pd_chunk, xpd_chunk)
 
     with (
         pd.read_json(StringIO(data), lines=True, chunksize=1) as pd_reader,
         xpd.read_json(StringIO(data), lines=True, chunksize=1) as xpd_reader,
     ):
-        for pd_chunk, xpd_chunk in zip(pd_reader, xpd_reader):
+        for pd_chunk, xpd_chunk in zip(pd_reader, xpd_reader, strict=True):
             tm.assert_equal(pd_chunk, xpd_chunk)
 
 
@@ -818,14 +818,14 @@ def test_chunked_csv_reader(tmpdir, data):
         pd.read_csv(file_path, chunksize=1) as pd_reader,
         xpd.read_csv(file_path, chunksize=1) as xpd_reader,
     ):
-        for pd_chunk, xpd_chunk in zip(pd_reader, xpd_reader):
+        for pd_chunk, xpd_chunk in zip(pd_reader, xpd_reader, strict=True):
             tm.assert_equal(pd_chunk, xpd_chunk, check_index_type=False)
 
     with (
         pd.read_json(StringIO(data), lines=True, chunksize=1) as pd_reader,
         xpd.read_json(StringIO(data), lines=True, chunksize=1) as xpd_reader,
     ):
-        for pd_chunk, xpd_chunk in zip(pd_reader, xpd_reader):
+        for pd_chunk, xpd_chunk in zip(pd_reader, xpd_reader, strict=True):
             tm.assert_equal(pd_chunk, xpd_chunk, check_index_type=False)
 
 
