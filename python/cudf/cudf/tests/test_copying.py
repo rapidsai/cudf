@@ -365,52 +365,48 @@ def test_series_zero_copy_cow_off():
 
 @pytest.mark.parametrize("copy_on_write", [True, False])
 def test_series_str_copy(copy_on_write):
-    original_cow_setting = cudf.get_option("copy_on_write")
-    cudf.set_option("copy_on_write", copy_on_write)
-    s = cudf.Series(["a", "b", "c", "d", "e"])
-    s1 = s.copy(deep=True)
-    s2 = s.copy(deep=True)
+    with cudf.option_context("copy_on_write", copy_on_write):
+        s = cudf.Series(["a", "b", "c", "d", "e"])
+        s1 = s.copy(deep=True)
+        s2 = s.copy(deep=True)
 
-    assert_eq(s, cudf.Series(["a", "b", "c", "d", "e"]))
-    assert_eq(s1, cudf.Series(["a", "b", "c", "d", "e"]))
-    assert_eq(s2, cudf.Series(["a", "b", "c", "d", "e"]))
+        assert_eq(s, cudf.Series(["a", "b", "c", "d", "e"]))
+        assert_eq(s1, cudf.Series(["a", "b", "c", "d", "e"]))
+        assert_eq(s2, cudf.Series(["a", "b", "c", "d", "e"]))
 
-    s[0:3] = "abc"
+        s[0:3] = "abc"
 
-    assert_eq(s, cudf.Series(["abc", "abc", "abc", "d", "e"]))
-    assert_eq(s1, cudf.Series(["a", "b", "c", "d", "e"]))
-    assert_eq(s2, cudf.Series(["a", "b", "c", "d", "e"]))
+        assert_eq(s, cudf.Series(["abc", "abc", "abc", "d", "e"]))
+        assert_eq(s1, cudf.Series(["a", "b", "c", "d", "e"]))
+        assert_eq(s2, cudf.Series(["a", "b", "c", "d", "e"]))
 
-    s2[1:4] = "xyz"
+        s2[1:4] = "xyz"
 
-    assert_eq(s, cudf.Series(["abc", "abc", "abc", "d", "e"]))
-    assert_eq(s1, cudf.Series(["a", "b", "c", "d", "e"]))
-    assert_eq(s2, cudf.Series(["a", "xyz", "xyz", "xyz", "e"]))
-    cudf.set_option("copy_on_write", original_cow_setting)
+        assert_eq(s, cudf.Series(["abc", "abc", "abc", "d", "e"]))
+        assert_eq(s1, cudf.Series(["a", "b", "c", "d", "e"]))
+        assert_eq(s2, cudf.Series(["a", "xyz", "xyz", "xyz", "e"]))
 
 
 @pytest.mark.parametrize("copy_on_write", [True, False])
 def test_series_cat_copy(copy_on_write):
-    original_cow_setting = cudf.get_option("copy_on_write")
-    cudf.set_option("copy_on_write", copy_on_write)
-    s = cudf.Series([10, 20, 30, 40, 50], dtype="category")
-    s1 = s.copy(deep=True)
-    s2 = s1.copy(deep=True)
-    s3 = s1.copy(deep=True)
+    with cudf.option_context("copy_on_write", copy_on_write):
+        s = cudf.Series([10, 20, 30, 40, 50], dtype="category")
+        s1 = s.copy(deep=True)
+        s2 = s1.copy(deep=True)
+        s3 = s1.copy(deep=True)
 
-    s[0] = 50
-    assert_eq(s, cudf.Series([50, 20, 30, 40, 50], dtype=s.dtype))
-    assert_eq(s1, cudf.Series([10, 20, 30, 40, 50], dtype="category"))
-    assert_eq(s2, cudf.Series([10, 20, 30, 40, 50], dtype="category"))
-    assert_eq(s3, cudf.Series([10, 20, 30, 40, 50], dtype="category"))
+        s[0] = 50
+        assert_eq(s, cudf.Series([50, 20, 30, 40, 50], dtype=s.dtype))
+        assert_eq(s1, cudf.Series([10, 20, 30, 40, 50], dtype="category"))
+        assert_eq(s2, cudf.Series([10, 20, 30, 40, 50], dtype="category"))
+        assert_eq(s3, cudf.Series([10, 20, 30, 40, 50], dtype="category"))
 
-    s2[3] = 10
-    s3[2:5] = 20
-    assert_eq(s, cudf.Series([50, 20, 30, 40, 50], dtype=s.dtype))
-    assert_eq(s1, cudf.Series([10, 20, 30, 40, 50], dtype=s.dtype))
-    assert_eq(s2, cudf.Series([10, 20, 30, 10, 50], dtype=s.dtype))
-    assert_eq(s3, cudf.Series([10, 20, 20, 20, 20], dtype=s.dtype))
-    cudf.set_option("copy_on_write", original_cow_setting)
+        s2[3] = 10
+        s3[2:5] = 20
+        assert_eq(s, cudf.Series([50, 20, 30, 40, 50], dtype=s.dtype))
+        assert_eq(s1, cudf.Series([10, 20, 30, 40, 50], dtype=s.dtype))
+        assert_eq(s2, cudf.Series([10, 20, 30, 10, 50], dtype=s.dtype))
+        assert_eq(s3, cudf.Series([10, 20, 20, 20, 20], dtype=s.dtype))
 
 
 def test_dataframe_cow_slice_setitem():
