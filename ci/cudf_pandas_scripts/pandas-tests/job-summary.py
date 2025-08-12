@@ -12,11 +12,13 @@ def get_total_and_passed(results):
     total_failed = 0
     total_errored = 0
     total_passed = 0
+    total_skipped = 0
     for module_name, row in results.items():
         total_failed += row.get("failed", 0)
         total_errored += row.get("errored", 0)
         total_passed += row.get("passed", 0)
-    total_tests = total_failed + total_errored + total_passed
+        total_skipped += row.get("skipped", 0)
+    total_tests = total_failed + total_errored + total_passed + total_skipped
     return total_tests, total_passed
 
 
