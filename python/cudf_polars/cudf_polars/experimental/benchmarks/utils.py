@@ -156,12 +156,12 @@ class HardwareInfo:
 
 
 def _infer_scale_factor(name: str, path: str | Path, suffix: str) -> int | float:
-    if "pdsh" in name:
+    if name == "pdsh":
         supplier = get_data(path, "supplier", suffix)
         num_rows = supplier.select(pl.len()).collect().item(0, 0)
         return num_rows / 10_000
 
-    elif "pdsds" in name:
+    elif name == "pdsds":
         # TODO: Keep a map of SF-row_count because of nonlinear scaling
         # See: https://www.tpc.org/TPC_Documents_Current_Versions/pdf/TPC-DS_v4.0.0.pdf pg.46
         customer = get_data(path, "promotion", suffix)
@@ -217,7 +217,7 @@ class RunConfig:
         scale_factor = args.scale
 
         if scale_factor is None:
-            if "pdsds" in name:
+            if name == "pdsh":
                 raise ValueError(
                     "--scale is required for PDS-DS benchmarks.\n"
                     "TODO: This will be inferred once we maintain a map of scale factors to row counts."
