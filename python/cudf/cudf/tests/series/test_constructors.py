@@ -1,4 +1,5 @@
 # Copyright (c) 2023-2025, NVIDIA CORPORATION.
+import datetime
 import decimal
 
 import cupy as cp
@@ -8,6 +9,10 @@ import pyarrow as pa
 import pytest
 
 import cudf
+from cudf.core._compat import (
+    PANDAS_CURRENT_SUPPORTED_VERSION,
+    PANDAS_VERSION,
+)
 from cudf.core.column.column import as_column
 from cudf.errors import MixedTypeError
 from cudf.testing import assert_eq
@@ -757,3 +762,97 @@ def test_create_struct_series(data):
     expect = pd.Series(data)
     got = cudf.Series(data)
     assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pd.date_range("20010101", "20020215", freq="400h", name="times"),
+        pd.date_range(
+            "20010101", freq="243434324423423234ns", name="times", periods=10
+        ),
+    ],
+)
+def test_series_from_pandas_datetime_index(data):
+    pd_data = pd.Series(data)
+    gdf_data = cudf.Series(pd_data)
+    assert_eq(pd_data, gdf_data)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    ["datetime64[D]", "datetime64[W]", "datetime64[M]", "datetime64[Y]"],
+)
+def test_datetime_array_timeunit_cast(dtype):
+    testdata = np.array(
+        [
+            np.datetime64("2016-11-20"),
+            np.datetime64("2020-11-20"),
+            np.datetime64("2019-11-20"),
+            np.datetime64("1918-11-20"),
+            np.datetime64("2118-11-20"),
+        ],
+        dtype=dtype,
+    )
+
+    gs = cudf.Series(testdata)
+    ps = pd.Series(testdata)
+
+    assert_eq(ps, gs)
+
+    gdf = cudf.DataFrame()
+    gdf["a"] = np.arange(5)
+    gdf["b"] = testdata
+
+    pdf = pd.DataFrame()
+    pdf["a"] = np.arange(5)
+    pdf["b"] = testdata
+    assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize("timeunit", ["D", "W", "M", "Y"])
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
+)
+def test_datetime_scalar_timeunit_cast(timeunit):
+    testscalar = np.datetime64("2016-11-20", timeunit)
+
+    gs = cudf.Series(testscalar)
+    ps = pd.Series(testscalar)
+
+    assert_eq(ps, gs, check_dtype=False)
+
+    gdf = cudf.DataFrame()
+    gdf["a"] = np.arange(5)
+    gdf["b"] = testscalar
+
+    pdf = pd.DataFrame()
+    pdf["a"] = np.arange(5)
+    pdf["b"] = testscalar
+
+    assert gdf["b"].dtype == np.dtype("datetime64[s]")
+    assert_eq(pdf, gdf, check_dtype=True)
+
+
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
+)
+def test_datetime_string_to_datetime_resolution_loss_raises():
+    data = ["2020-01-01 00:00:00.00001"]
+    dtype = "datetime64[s]"
+    with pytest.raises(ValueError):
+        cudf.Series(data, dtype=dtype)
+    with pytest.raises(ValueError):
+        pd.Series(data, dtype=dtype)
+
+
+def test_timezone_pyarrow_array():
+    pa_array = pa.array(
+        [datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc)],
+        type=pa.timestamp("ns", "UTC"),
+    )
+    result = cudf.Series(pa_array)
+    expected = pa_array.to_pandas()
+    assert_eq(result, expected)
