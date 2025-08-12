@@ -1,11 +1,14 @@
 # Copyright (c) 2019-2025, NVIDIA CORPORATION.
 import re
 from concurrent.futures import ThreadPoolExecutor
+from decimal import Decimal
 
 import cupy as cp
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
+from packaging.version import parse
 
 import cudf
 from cudf.testing import assert_eq
@@ -441,3 +444,370 @@ def test_ignore_nans(val):
     expected = gsr.quantile(0.9)
     result = psr.quantile(0.9)
     assert_eq(result, expected)
+
+
+def test_sum(numeric_types_as_str):
+    data = np.arange(10, dtype=numeric_types_as_str)
+    sr = cudf.Series(data)
+
+    got = sr.sum()
+    expect = data.sum()
+    significant = 4 if numeric_types_as_str == "float32" else 6
+    np.testing.assert_approx_equal(expect, got, significant=significant)
+
+
+@pytest.mark.parametrize(
+    "middle, expected",
+    [
+        ("there", "HellothereWorld"),
+        (None, "HelloWorld"),
+    ],
+)
+def test_sum_string(middle, expected):
+    s = cudf.Series(["Hello", middle, "World"])
+
+    assert s.sum() == expected
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        pytest.param(
+            cudf.Decimal64Dtype(6, 3),
+            marks=pytest.mark.skipif(
+                parse(pa.__version__) < parse("19.0.0"),
+                reason="decimal64 format string only supported in pyarrow >=19",
+            ),
+        ),
+        pytest.param(
+            cudf.Decimal64Dtype(10, 6),
+            marks=pytest.mark.skipif(
+                parse(pa.__version__) < parse("19.0.0"),
+                reason="decimal64 format string only supported in pyarrow >=19",
+            ),
+        ),
+        pytest.param(
+            cudf.Decimal64Dtype(16, 7),
+            marks=pytest.mark.skipif(
+                parse(pa.__version__) < parse("19.0.0"),
+                reason="decimal64 format string only supported in pyarrow >=19",
+            ),
+        ),
+        pytest.param(
+            cudf.Decimal32Dtype(6, 3),
+            marks=pytest.mark.skipif(
+                parse(pa.__version__) < parse("19.0.0"),
+                reason="decimal32 format string only supported in pyarrow >=19",
+            ),
+        ),
+        cudf.Decimal128Dtype(20, 7),
+    ],
+)
+def test_sum_decimal(dtype):
+    data = [str(x) for x in np.array([1, 11, 111]) / 100]
+
+    expected = pd.Series([Decimal(x) for x in data]).sum()
+    got = cudf.Series(data).astype(dtype).sum()
+
+    assert_eq(expected, got)
+
+
+def test_product(numeric_types_as_str):
+    data = np.arange(10, dtype=numeric_types_as_str)
+    sr = cudf.Series(data)
+
+    got = sr.product()
+    expect = pd.Series(data).product()
+    significant = 4 if numeric_types_as_str == "float32" else 6
+    np.testing.assert_approx_equal(expect, got, significant=significant)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        pytest.param(
+            cudf.Decimal64Dtype(6, 2),
+            marks=pytest.mark.skipif(
+                parse(pa.__version__) < parse("19.0.0"),
+                reason="decimal64 format string only supported in pyarrow >=19",
+            ),
+        ),
+        pytest.param(
+            cudf.Decimal64Dtype(8, 4),
+            marks=pytest.mark.skipif(
+                parse(pa.__version__) < parse("19.0.0"),
+                reason="decimal64 format string only supported in pyarrow >=19",
+            ),
+        ),
+        pytest.param(
+            cudf.Decimal64Dtype(10, 5),
+            marks=pytest.mark.skipif(
+                parse(pa.__version__) < parse("19.0.0"),
+                reason="decimal64 format string only supported in pyarrow >=19",
+            ),
+        ),
+        pytest.param(
+            cudf.Decimal32Dtype(6, 2),
+            marks=pytest.mark.skipif(
+                parse(pa.__version__) < parse("19.0.0"),
+                reason="decimal32 format string only supported in pyarrow >=19",
+            ),
+        ),
+        cudf.Decimal128Dtype(20, 5),
+    ],
+)
+def test_product_decimal(dtype):
+    data = [str(x) for x in np.array([1, 11, 111]) / 100]
+
+    expected = pd.Series([Decimal(x) for x in data]).product()
+    got = cudf.Series(data).astype(dtype).product()
+
+    assert_eq(expected, got)
+
+
+def test_sum_of_squares(numeric_types_as_str):
+    accuracy_for_dtype = {"float64": 6, "float32": 5}
+    data = np.arange(10, dtype=numeric_types_as_str)
+    sr = cudf.Series(data)
+    df = cudf.DataFrame(sr)
+
+    got = (sr**2).sum()
+    got_df = (df**2).sum()
+    expect = (data**2).sum()
+
+    if "int" in numeric_types_as_str:
+        np.testing.assert_array_almost_equal(expect, got)
+        np.testing.assert_array_almost_equal(expect, got_df.iloc[0])
+    else:
+        np.testing.assert_approx_equal(
+            expect, got, significant=accuracy_for_dtype[numeric_types_as_str]
+        )
+        np.testing.assert_approx_equal(
+            expect,
+            got_df.iloc[0],
+            significant=accuracy_for_dtype[numeric_types_as_str],
+        )
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        pytest.param(
+            cudf.Decimal64Dtype(6, 2),
+            marks=pytest.mark.skipif(
+                parse(pa.__version__) < parse("19.0.0"),
+                reason="decimal64 format string only supported in pyarrow >=19",
+            ),
+        ),
+        pytest.param(
+            cudf.Decimal64Dtype(8, 4),
+            marks=pytest.mark.skipif(
+                parse(pa.__version__) < parse("19.0.0"),
+                reason="decimal64 format string only supported in pyarrow >=19",
+            ),
+        ),
+        pytest.param(
+            cudf.Decimal64Dtype(10, 5),
+            marks=pytest.mark.skipif(
+                parse(pa.__version__) < parse("19.0.0"),
+                reason="decimal64 format string only supported in pyarrow >=19",
+            ),
+        ),
+        cudf.Decimal128Dtype(20, 7),
+        pytest.param(
+            cudf.Decimal32Dtype(6, 2),
+            marks=pytest.mark.skipif(
+                parse(pa.__version__) < parse("19.0.0"),
+                reason="decimal32 format string only supported in pyarrow >=19",
+            ),
+        ),
+    ],
+)
+def test_sum_of_squares_decimal(dtype):
+    data = [str(x) for x in np.array([1, 11, 111]) / 100]
+
+    expected = pd.Series([Decimal(x) for x in data]).pow(2).sum()
+    got = (cudf.Series(data).astype(dtype) ** 2).sum()
+
+    assert_eq(expected, got)
+
+
+def test_min(numeric_types_as_str):
+    data = np.arange(10, dtype=numeric_types_as_str)
+    sr = cudf.Series(data)
+
+    got = sr.min()
+    expect = getattr(np, numeric_types_as_str)(data.min())
+
+    assert expect == got
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        pytest.param(
+            cudf.Decimal64Dtype(6, 3),
+            marks=pytest.mark.skipif(
+                parse(pa.__version__) < parse("19.0.0"),
+                reason="decimal64 format string only supported in pyarrow >=19",
+            ),
+        ),
+        pytest.param(
+            cudf.Decimal64Dtype(10, 6),
+            marks=pytest.mark.skipif(
+                parse(pa.__version__) < parse("19.0.0"),
+                reason="decimal64 format string only supported in pyarrow >=19",
+            ),
+        ),
+        pytest.param(
+            cudf.Decimal64Dtype(16, 7),
+            marks=pytest.mark.skipif(
+                parse(pa.__version__) < parse("19.0.0"),
+                reason="decimal64 format string only supported in pyarrow >=19",
+            ),
+        ),
+        pytest.param(
+            cudf.Decimal32Dtype(6, 3),
+            marks=pytest.mark.skipif(
+                parse(pa.__version__) < parse("19.0.0"),
+                reason="decimal32 format string only supported in pyarrow >=19",
+            ),
+        ),
+        cudf.Decimal128Dtype(20, 7),
+    ],
+)
+def test_min_decimal(dtype):
+    data = [str(x) for x in np.array([1, 11, 111]) / 100]
+
+    expected = pd.Series([Decimal(x) for x in data]).min()
+    got = cudf.Series(data).astype(dtype).min()
+
+    assert_eq(expected, got)
+
+
+def test_max(numeric_types_as_str):
+    data = np.arange(10, dtype=numeric_types_as_str)
+    sr = cudf.Series(data)
+
+    got = sr.max()
+    expect = getattr(np, numeric_types_as_str)(data.max())
+
+    assert expect == got
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        pytest.param(
+            cudf.Decimal64Dtype(6, 3),
+            marks=pytest.mark.skipif(
+                parse(pa.__version__) < parse("19.0.0"),
+                reason="decimal64 format string only supported in pyarrow >=19",
+            ),
+        ),
+        pytest.param(
+            cudf.Decimal64Dtype(10, 6),
+            marks=pytest.mark.skipif(
+                parse(pa.__version__) < parse("19.0.0"),
+                reason="decimal64 format string only supported in pyarrow >=19",
+            ),
+        ),
+        pytest.param(
+            cudf.Decimal64Dtype(16, 7),
+            marks=pytest.mark.skipif(
+                parse(pa.__version__) < parse("19.0.0"),
+                reason="decimal64 format string only supported in pyarrow >=19",
+            ),
+        ),
+        pytest.param(
+            cudf.Decimal32Dtype(6, 3),
+            marks=pytest.mark.skipif(
+                parse(pa.__version__) < parse("19.0.0"),
+                reason="decimal32 format string only supported in pyarrow >=19",
+            ),
+        ),
+        cudf.Decimal128Dtype(20, 7),
+    ],
+)
+def test_max_decimal(dtype):
+    data = [str(x) for x in np.array([1, 11, 111]) / 100]
+
+    expected = pd.Series([Decimal(x) for x in data]).max()
+    got = cudf.Series(data).astype(dtype).max()
+
+    assert_eq(expected, got)
+
+
+def test_sum_masked():
+    data = np.array([1.1, 1.2, np.nan], dtype="float64")
+    sr = cudf.Series(data, nan_as_null=True)
+
+    got = sr.sum()
+    expected = np.nansum(data)
+    np.testing.assert_approx_equal(expected, got)
+
+
+def test_sum_boolean():
+    s = cudf.Series(np.arange(100000))
+    got = (s > 1).sum()
+    expect = 99998
+
+    assert expect == got
+
+
+def test_date_minmax():
+    rng = np.random.default_rng(seed=0)
+    np_data = rng.normal(size=10)
+    gdf_data = cudf.Series(np_data)
+
+    np_casted = np_data.astype("datetime64[ms]")
+    gdf_casted = gdf_data.astype("datetime64[ms]")
+
+    np_min = np_casted.min()
+    gdf_min = gdf_casted.min()
+    assert np_min == gdf_min
+
+    np_max = np_casted.max()
+    gdf_max = gdf_casted.max()
+    assert np_max == gdf_max
+
+
+@pytest.mark.parametrize(
+    "op",
+    ["sum", "product", "var", "kurt", "kurtosis", "skew"],
+)
+def test_datetime_unsupported_reductions(op):
+    gsr = cudf.Series([1, 2, 3, None], dtype="datetime64[ns]")
+    psr = gsr.to_pandas()
+
+    assert_exceptions_equal(
+        lfunc=getattr(psr, op),
+        rfunc=getattr(gsr, op),
+    )
+
+
+@pytest.mark.parametrize("op", ["product", "var", "kurt", "kurtosis", "skew"])
+def test_timedelta_unsupported_reductions(op):
+    gsr = cudf.Series([1, 2, 3, None], dtype="timedelta64[ns]")
+    psr = gsr.to_pandas()
+
+    assert_exceptions_equal(
+        lfunc=getattr(psr, op),
+        rfunc=getattr(gsr, op),
+    )
+
+
+def test_categorical_reductions(request, reduction_methods):
+    request.applymarker(
+        pytest.mark.xfail(
+            reduction_methods in ["quantile", "all", "any"],
+            reason=f"{reduction_methods} didn't fail",
+        )
+    )
+
+    gsr = cudf.Series([1, 2, 3, None], dtype="category")
+    psr = gsr.to_pandas()
+
+    assert_exceptions_equal(
+        getattr(psr, reduction_methods), getattr(gsr, reduction_methods)
+    )
