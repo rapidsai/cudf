@@ -909,3 +909,78 @@ def test_timedelta_reductions(data, op, timedelta_types_as_str):
         assert True
     else:
         assert_eq(expected.to_numpy(), actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["a", "b", "c", "d", "e"],
+        ["a", "z", ".", '"', "aa", "zz"],
+        ["aa", "zz"],
+        ["z", "a", "zz", "aa"],
+        ["1", "2", "3", "4", "5"],
+        [""],
+        ["a"],
+        ["hello"],
+        ["small text", "this is a larger text......"],
+        ["👋🏻", "🔥", "🥇"],
+        ["This is 💯", "here is a calendar", "📅"],
+        ["", ".", ";", "[", "]"],
+        ["\t", ".", "\n", "\n\t", "\t\n"],
+    ],
+)
+@pytest.mark.parametrize("op", ["min", "max", "sum"])
+def test_str_reductions_supported(data, op):
+    psr = pd.Series(data)
+    sr = cudf.Series(data)
+
+    assert_eq(getattr(psr, op)(), getattr(sr, op)())
+
+
+def test_str_mean():
+    sr = cudf.Series(["a", "b", "c", "d", "e"])
+
+    with pytest.raises(TypeError):
+        sr.mean()
+
+
+def test_string_product():
+    psr = pd.Series(["1", "2", "3", "4", "5"])
+    sr = cudf.Series(["1", "2", "3", "4", "5"])
+
+    assert_exceptions_equal(
+        lfunc=psr.product,
+        rfunc=sr.product,
+    )
+
+
+def test_string_var():
+    psr = pd.Series(["1", "2", "3", "4", "5"])
+    sr = cudf.Series(["1", "2", "3", "4", "5"])
+
+    assert_exceptions_equal(lfunc=psr.var, rfunc=sr.var)
+
+
+def test_string_std():
+    psr = pd.Series(["1", "2", "3", "4", "5"])
+    sr = cudf.Series(["1", "2", "3", "4", "5"])
+
+    assert_exceptions_equal(lfunc=psr.std, rfunc=sr.std)
+
+
+def test_string_reduction_error():
+    s = cudf.Series([None, None], dtype="str")
+    ps = s.to_pandas(nullable=True)
+    assert_exceptions_equal(
+        s.any,
+        ps.any,
+        lfunc_args_and_kwargs=([], {"skipna": False}),
+        rfunc_args_and_kwargs=([], {"skipna": False}),
+    )
+
+    assert_exceptions_equal(
+        s.all,
+        ps.all,
+        lfunc_args_and_kwargs=([], {"skipna": False}),
+        rfunc_args_and_kwargs=([], {"skipna": False}),
+    )
