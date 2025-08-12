@@ -1,4 +1,5 @@
 # Copyright (c) 2019-2025, NVIDIA CORPORATION.
+import re
 from concurrent.futures import ThreadPoolExecutor
 
 import cupy as cp
@@ -393,3 +394,50 @@ def test_min_count_ops(data, request, reduction_methods, skipna, min_count):
         getattr(psr, reduction_methods)(skipna=skipna, min_count=min_count),
         getattr(gsr, reduction_methods)(skipna=skipna, min_count=min_count),
     )
+
+
+@pytest.mark.parametrize("q", [2, [1, 2, 3]])
+def test_quantile_range_error(q):
+    ps = pd.Series([1, 2, 3])
+    gs = cudf.from_pandas(ps)
+    assert_exceptions_equal(
+        lfunc=ps.quantile,
+        rfunc=gs.quantile,
+        lfunc_args_and_kwargs=([q],),
+        rfunc_args_and_kwargs=([q],),
+    )
+
+
+def test_quantile_q_type():
+    gs = cudf.Series([1, 2, 3])
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            "q must be a scalar or array-like, got <class "
+            "'cudf.core.dataframe.DataFrame'>"
+        ),
+    ):
+        gs.quantile(cudf.DataFrame())
+
+
+def test_quantile_type_int_float(quantile_interpolation):
+    data = [1, 3, 4]
+    psr = pd.Series(data)
+    gsr = cudf.Series(data)
+
+    expected = psr.quantile(0.5, interpolation=quantile_interpolation)
+    actual = gsr.quantile(0.5, interpolation=quantile_interpolation)
+
+    assert expected == actual
+    assert type(expected) is type(actual)
+
+
+@pytest.mark.parametrize("val", [0.9, float("nan")])
+def test_ignore_nans(val):
+    data = [float("nan"), float("nan"), val]
+    psr = pd.Series(data)
+    gsr = cudf.Series(data, nan_as_null=False)
+
+    expected = gsr.quantile(0.9)
+    result = psr.quantile(0.9)
+    assert_eq(result, expected)
