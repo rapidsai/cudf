@@ -217,7 +217,7 @@ class RunConfig:
         scale_factor = args.scale
 
         if scale_factor is None:
-            if "pdsh" in name:
+            if "pdsds" in name:
                 raise ValueError(
                     "--scale is required for PDS-DS benchmarks.\n"
                     "TODO: This will be inferred once we maintain a map of scale factors to row counts."
