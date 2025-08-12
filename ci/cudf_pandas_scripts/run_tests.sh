@@ -12,6 +12,8 @@ RAPIDS_COVERAGE_DIR=${RAPIDS_COVERAGE_DIR:-"${PWD}/coverage-results"}
 mkdir -p "${RAPIDS_TESTS_DIR}" "${RAPIDS_COVERAGE_DIR}"
 
 DEPENDENCIES_PATH="dependencies.yaml"
+# https://github.com/jupyter/jupyter_core/pull/292
+export JUPYTER_PLATFORM_DIRS=1
 
 # Use grep to find the line containing the package name and version constraint
 pandas_version_constraint=$(grep -oP "pandas>=\d+\.\d+,\<\d+\.\d+\.\d+dev\d+" $DEPENDENCIES_PATH)
@@ -76,6 +78,7 @@ fi
 python -m pip install certifi ipykernel
 python -m ipykernel install --user --name python3
 
+rapids-logger "pytest cudf.pandas parallel"
 # The third-party integration tests are ignored because they are run in a separate nightly CI job
 # TODO: Root-cause why we cannot run the tests in profile.py in parallel and reconsider adding
 # them back. Tracking https://github.com/rapidsai/cudf/issues/18261
@@ -84,9 +87,25 @@ python -m pytest -p cudf.pandas \
     --numprocesses=8 \
     --dist=worksteal \
     -k "not profiler" \
+    -m "not serial" \
+    --config-file=./python/cudf/pyproject.toml \
     --cov-config=./python/cudf/.coveragerc \
     --cov=cudf \
     --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-pandas-coverage.xml" \
+    --cov-report=term \
+    ./python/cudf/cudf_pandas_tests/
+
+
+rapids-logger "pytest cudf.pandas serial"
+
+python -m pytest -p cudf.pandas \
+    --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
+    -k "not profiler" \
+    -m "serial" \
+    --config-file=./python/cudf/pyproject.toml \
+    --cov-config=./python/cudf/.coveragerc \
+    --cov=cudf \
+    --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-pandas-coverage-serial.xml" \
     --cov-report=term \
     ./python/cudf/cudf_pandas_tests/
 
@@ -97,7 +116,7 @@ python -m pytest -p cudf.pandas \
 # More details: https://github.com/rapidsai/cudf/pull/16930#issuecomment-2707873968
 python -m pytest -p cudf.pandas \
     --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
-    --numprocesses=1 \
+    --numprocesses=0 \
     -k "profiler" \
     ./python/cudf/cudf_pandas_tests/
 
@@ -114,15 +133,19 @@ for version in "${versions[@]}"; do
         --numprocesses=8 \
         --dist=worksteal \
         -k "not profiler" \
+        -m "not serial" \
         --cov-config=./python/cudf/.coveragerc \
         --cov=cudf \
         --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-pandas-coverage.xml" \
         --cov-report=term \
         ./python/cudf/cudf_pandas_tests/
 
+    # NOTE: We don't currently run serial tests (only 1 as of 2025-07-25)
+    # with multiple versions of pandas.
+
     python -m pytest -p cudf.pandas \
         --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
-        --numprocesses=1 \
+        --numprocesses=0 \
         -k "profiler" \
         ./python/cudf/cudf_pandas_tests/
 done

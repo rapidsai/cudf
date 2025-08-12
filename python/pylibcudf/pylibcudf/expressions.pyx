@@ -1,8 +1,6 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 import ast
 import functools
-
-import pyarrow as pa
 
 from pylibcudf.libcudf.expressions import \
     ast_operator as ASTOperator  # no-cython-lint
@@ -51,7 +49,6 @@ from .scalar cimport Scalar
 from .traits cimport is_chrono, is_numeric
 from .types cimport DataType
 
-from .interop import from_arrow
 
 # Aliases for simplicity
 ctypedef unique_ptr[libcudf_exp.expression] expression_ptr
@@ -388,7 +385,7 @@ class ExpressionTransformer(ast.NodeVisitor):
                 f"Unsupported literal {repr(node.value)} of type "
                 "{type(node.value).__name__}"
             )
-        return Literal(from_arrow(pa.scalar(node.value)))
+        return Literal(Scalar.from_py(node.value))
 
     def visit_UnaryOp(self, node):
         operand = self.visit(node.operand)
@@ -397,7 +394,7 @@ class ExpressionTransformer(ast.NodeVisitor):
             # operand, so there's no way to know whether this should be a float
             # or an int. We should maybe see what Spark does, and this will
             # probably require casting.
-            minus_one = Literal(from_arrow(pa.scalar(-1)))
+            minus_one = Literal(Scalar.from_py(-1))
             return Operation(ASTOperator.MUL, minus_one, operand)
         elif isinstance(node.op, ast.UAdd):
             return operand
@@ -483,3 +480,7 @@ def to_expression(str expr, tuple column_names):
         {name: ColumnReference(i) for i, name in enumerate(column_names)}
     )
     return visitor.visit(ast.parse(expr))
+
+
+ASTOperator.__str__ = ASTOperator.__repr__
+TableReference.__str__ = TableReference.__repr__

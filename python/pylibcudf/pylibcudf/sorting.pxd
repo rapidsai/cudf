@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from pylibcudf.libcudf.aggregation cimport rank_method
@@ -60,3 +60,7 @@ cpdef Table stable_sort_by_key(
 cpdef Table sort(Table source_table, list column_order, list null_precedence)
 
 cpdef Table stable_sort(Table source_table, list column_order, list null_precedence)
+
+cpdef Column top_k(Column col, size_type k, order sort_order = *)
+
+cpdef Column top_k_order(Column col, size_type k, order sort_order = *)

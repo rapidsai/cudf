@@ -15,6 +15,7 @@
  */
 
 #include "jit/cache.hpp"
+#include "jit/helpers.hpp"
 #include "jit/parser.hpp"
 #include "jit/span.cuh"
 #include "jit/util.hpp"
@@ -24,8 +25,8 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/transform.hpp>
-#include <cudf/jit/runtime_support.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/stream_compaction.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -38,163 +39,13 @@ namespace transformation {
 namespace jit {
 namespace {
 
-constexpr bool is_scalar(cudf::size_type base_column_size, cudf::size_type column_size)
-{
-  return column_size == 1 && column_size != base_column_size;
-}
-
-struct input_column_reflection {
-  std::string type_name;
-  bool is_scalar = false;
-
-  [[nodiscard]] std::string accessor(int32_t index) const
-  {
-    auto column_accessor =
-      jitify2::reflection::Template("cudf::transformation::jit::column_accessor")
-        .instantiate(type_name, index);
-
-    return is_scalar ? jitify2::reflection::Template("cudf::transformation::jit::scalar")
-                         .instantiate(column_accessor)
-                     : column_accessor;
-  }
-};
-
-jitify2::StringVec build_jit_template_params(
-  bool has_user_data,
-  std::vector<std::string> const& span_outputs,
-  std::vector<std::string> const& column_outputs,
-  std::vector<input_column_reflection> const& column_inputs)
-{
-  jitify2::StringVec tparams;
-
-  tparams.emplace_back(jitify2::reflection::reflect(has_user_data));
-
-  std::transform(thrust::make_counting_iterator<size_t>(0),
-                 thrust::make_counting_iterator(span_outputs.size()),
-                 std::back_inserter(tparams),
-                 [&](auto i) {
-                   return jitify2::reflection::Template("cudf::transformation::jit::span_accessor")
-                     .instantiate(span_outputs[i], i);
-                 });
-
-  std::transform(
-    thrust::make_counting_iterator<size_t>(0),
-    thrust::make_counting_iterator(column_outputs.size()),
-    std::back_inserter(tparams),
-    [&](auto i) {
-      return jitify2::reflection::Template("cudf::transformation::jit::column_accessor")
-        .instantiate(column_outputs[i], i);
-    });
-
-  std::transform(thrust::make_counting_iterator<size_t>(0),
-                 thrust::make_counting_iterator(column_inputs.size()),
-                 std::back_inserter(tparams),
-                 [&](auto i) { return column_inputs[i].accessor(i); });
-
-  return tparams;
-}
-
-std::map<uint32_t, std::string> build_ptx_params(std::vector<std::string> const& output_typenames,
-                                                 std::vector<std::string> const& input_typenames,
-                                                 bool has_user_data)
-{
-  std::map<uint32_t, std::string> params;
-  uint32_t index = 0;
-
-  if (has_user_data) {
-    params.emplace(index++, "void *");
-    params.emplace(index++, jitify2::reflection::reflect<cudf::size_type>());
-  }
-
-  for (auto& name : output_typenames) {
-    params.emplace(index++, name + "*");
-  }
-
-  for (auto& name : input_typenames) {
-    params.emplace(index++, name);
-  }
-
-  return params;
-}
-
-template <typename T>
-rmm::device_uvector<T> to_device_vector(std::vector<T> const& host,
-                                        rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr)
-{
-  rmm::device_uvector<T> device{host.size(), stream, mr};
-  detail::cuda_memcpy_async(device_span<T>{device}, host_span<T const>{host}, stream);
-  return device;
-}
-
-template <typename DeviceView, typename ColumnView>
-std::tuple<std::vector<std::unique_ptr<DeviceView, std::function<void(DeviceView*)>>>,
-           rmm::device_uvector<DeviceView>>
-column_views_to_device(std::vector<ColumnView> const& views,
-                       rmm::cuda_stream_view stream,
-                       rmm::device_async_resource_ref mr)
-{
-  std::vector<std::unique_ptr<DeviceView, std::function<void(DeviceView*)>>> handles;
-
-  std::transform(views.begin(), views.end(), std::back_inserter(handles), [&](auto const& view) {
-    return DeviceView::create(view, stream);
-  });
-
-  std::vector<DeviceView> host_array;
-
-  std::transform(
-    handles.begin(), handles.end(), std::back_inserter(host_array), [](auto const& handle) {
-      return *handle;
-    });
-
-  auto device_array = to_device_vector(host_array, stream, mr);
-
-  return std::make_tuple(std::move(handles), std::move(device_array));
-}
-
 jitify2::Kernel get_kernel(std::string const& kernel_name, std::string const& cuda_source)
 {
   return cudf::jit::get_program_cache(*transform_jit_kernel_cu_jit)
     .get_kernel(kernel_name,
                 {},
-                {{"transform/jit/operation-udf.hpp", cuda_source}},
-                {"-arch=sm_.",
-                 "--device-int128",
-                 // TODO: remove when we upgrade to CCCL >= 3.0
-
-                 // CCCL WAR for not using the correct INT128 feature macro:
-                 // https://github.com/NVIDIA/cccl/issues/3801
-                 "-D__SIZEOF_INT128__=16"});
-}
-
-input_column_reflection reflect_input_column(size_type base_column_size, column_view column)
-{
-  return input_column_reflection{type_to_name(column.type()),
-                                 is_scalar(base_column_size, column.size())};
-}
-
-std::vector<input_column_reflection> reflect_input_columns(size_type base_column_size,
-                                                           std::vector<column_view> const& inputs)
-{
-  std::vector<input_column_reflection> reflections;
-  std::transform(
-    inputs.begin(), inputs.end(), std::back_inserter(reflections), [&](auto const& view) {
-      return reflect_input_column(base_column_size, view);
-    });
-
-  return reflections;
-}
-
-template <typename ColumnView>
-std::vector<std::string> column_type_names(std::vector<ColumnView> const& views)
-{
-  std::vector<std::string> names;
-
-  std::transform(views.begin(), views.end(), std::back_inserter(names), [](auto const& view) {
-    return type_to_name(view.type());
-  });
-
-  return names;
+                {{"cudf/detail/operation-udf.hpp", cuda_source}},
+                {"-arch=sm_.", "--device-int128"});
 }
 
 jitify2::ConfiguredKernel build_transform_kernel(
@@ -209,20 +60,20 @@ jitify2::ConfiguredKernel build_transform_kernel(
   rmm::device_async_resource_ref mr)
 {
   auto const cuda_source =
-    is_ptx
-      ? cudf::jit::parse_single_function_ptx(
-          udf,
-          "GENERIC_TRANSFORM_OP",
-          build_ptx_params(
-            column_type_names(output_columns), column_type_names(input_columns), has_user_data))
-      : cudf::jit::parse_single_function_cuda(udf, "GENERIC_TRANSFORM_OP");
+    is_ptx ? cudf::jit::parse_single_function_ptx(
+               udf,
+               "GENERIC_TRANSFORM_OP",
+               cudf::jit::build_ptx_params(cudf::jit::column_type_names(output_columns),
+                                           cudf::jit::column_type_names(input_columns),
+                                           has_user_data))
+           : cudf::jit::parse_single_function_cuda(udf, "GENERIC_TRANSFORM_OP");
 
   return get_kernel(jitify2::reflection::Template(kernel_name)
-                      .instantiate(build_jit_template_params(
+                      .instantiate(cudf::jit::build_jit_template_params(
                         has_user_data,
                         {},
-                        column_type_names(output_columns),
-                        reflect_input_columns(base_column_size, input_columns))),
+                        cudf::jit::column_type_names(output_columns),
+                        cudf::jit::reflect_input_columns(base_column_size, input_columns))),
                     cuda_source)
     ->configure_1d_max_occupancy(0, 0, nullptr, stream.value());
 }
@@ -241,15 +92,16 @@ jitify2::ConfiguredKernel build_span_kernel(std::string const& kernel_name,
     is_ptx ? cudf::jit::parse_single_function_ptx(
                udf,
                "GENERIC_TRANSFORM_OP",
-               build_ptx_params(span_outputs, column_type_names(input_columns), has_user_data))
+               cudf::jit::build_ptx_params(
+                 span_outputs, cudf::jit::column_type_names(input_columns), has_user_data))
            : cudf::jit::parse_single_function_cuda(udf, "GENERIC_TRANSFORM_OP");
 
   return get_kernel(jitify2::reflection::Template(kernel_name)
-                      .instantiate(build_jit_template_params(
+                      .instantiate(cudf::jit::build_jit_template_params(
                         has_user_data,
                         span_outputs,
                         {},
-                        reflect_input_columns(base_column_size, input_columns))),
+                        cudf::jit::reflect_input_columns(base_column_size, input_columns))),
                     cuda_source)
     ->configure_1d_max_occupancy(0, 0, nullptr, stream.value());
 }
@@ -262,10 +114,10 @@ void launch_column_output_kernel(jitify2::ConfiguredKernel& kernel,
                                  rmm::device_async_resource_ref mr)
 {
   auto [output_handles, outputs] =
-    column_views_to_device<mutable_column_device_view, mutable_column_view>(
+    cudf::jit::column_views_to_device<mutable_column_device_view, mutable_column_view>(
       output_columns, stream, mr);
   auto [input_handles, inputs] =
-    column_views_to_device<column_device_view, column_view>(input_columns, stream, mr);
+    cudf::jit::column_views_to_device<column_device_view, column_view>(input_columns, stream, mr);
 
   mutable_column_device_view const* outputs_ptr = outputs.data();
   column_device_view const* inputs_ptr          = inputs.data();
@@ -279,20 +131,20 @@ void launch_column_output_kernel(jitify2::ConfiguredKernel& kernel,
 template <typename T>
 void launch_span_kernel(jitify2::ConfiguredKernel& kernel,
                         device_span<T> output,
-                        rmm::device_buffer& null_mask,
+                        bitmask_type* null_mask,
                         std::vector<column_view> const& input_cols,
                         std::optional<void*> user_data,
                         rmm::cuda_stream_view stream,
                         rmm::device_async_resource_ref mr)
 {
-  auto outputs = to_device_vector(std::vector{cudf::jit::device_optional_span<T>{
-                                    cudf::jit::device_span<T>{output.data(), output.size()},
-                                    static_cast<bitmask_type*>(null_mask.data())}},
-                                  stream,
-                                  mr);
+  auto outputs = cudf::jit::to_device_vector(
+    std::vector{cudf::jit::device_optional_span<T>{
+      cudf::jit::device_span<T>{output.data(), output.size()}, null_mask}},
+    stream,
+    mr);
 
   auto [input_handles, inputs] =
-    column_views_to_device<column_device_view, column_view>(input_cols, stream, mr);
+    cudf::jit::column_views_to_device<column_device_view, column_view>(input_cols, stream, mr);
 
   cudf::jit::device_optional_span<T> const* outputs_ptr = outputs.data();
   column_device_view const* inputs_ptr                  = inputs.data();
@@ -316,7 +168,7 @@ std::tuple<rmm::device_buffer, size_type> make_transform_null_mask(
   // then all the rows of the transform output will be null. This helps us prevent creating
   // column-sized bitmasks for each scalar.
   for (column_view const& col : inputs) {
-    if (is_scalar(base_column.size(), col.size())) {
+    if (cudf::jit::is_scalar(base_column.size(), col.size())) {
       // all nulls
       if (col.has_nulls()) {
         return std::make_tuple(
@@ -384,7 +236,13 @@ std::unique_ptr<column> string_view_operation(column_view base_column,
 
   rmm::device_uvector<string_view> string_views(base_column.size(), stream, mr);
 
-  launch_span_kernel<string_view>(kernel, string_views, null_mask, inputs, user_data, stream, mr);
+  launch_span_kernel<string_view>(kernel,
+                                  string_views,
+                                  static_cast<bitmask_type*>(null_mask.data()),
+                                  inputs,
+                                  user_data,
+                                  stream,
+                                  mr);
 
   auto output = make_strings_column(string_views, string_view{}, stream, mr);
 
@@ -397,7 +255,6 @@ void perform_checks(column_view base_column,
                     data_type output_type,
                     std::vector<column_view> const& inputs)
 {
-  CUDF_EXPECTS(is_runtime_jit_supported(), "Runtime JIT is only supported on CUDA Runtime 11.5+");
   CUDF_EXPECTS(is_fixed_width(output_type) || output_type.id() == type_id::STRING,
                "Transforms only support output of fixed-width or string types",
                std::invalid_argument);

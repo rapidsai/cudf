@@ -37,7 +37,7 @@ from cudf_polars.dsl.tracing import nvtx_annotate_cudf_polars
 from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.dsl.utils.windows import range_window_bounds
 from cudf_polars.utils import dtypes
-from cudf_polars.utils.versions import POLARS_VERSION_LT_128
+from cudf_polars.utils.versions import POLARS_VERSION_LT_131
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Iterable, Sequence
@@ -318,12 +318,6 @@ class Scan(IR):
             # TODO: polars has this implemented for parquet,
             # maybe we can do this too?
             raise NotImplementedError("slice pushdown for negative slices")
-        if (
-            POLARS_VERSION_LT_128 and self.typ in {"csv"} and self.skip_rows != 0
-        ):  # pragma: no cover
-            # This comes from slice pushdown, but that
-            # optimization doesn't happen right now
-            raise NotImplementedError("skipping rows in CSV reader")
         if self.cloud_options is not None and any(
             self.cloud_options.get(k) is not None for k in ("aws", "azure", "gcp")
         ):
@@ -505,9 +499,7 @@ class Scan(IR):
                 options = (
                     plc.io.csv.CsvReaderOptions.builder(plc.io.SourceInfo([path]))
                     .nrows(n_rows)
-                    .skiprows(
-                        skiprows if POLARS_VERSION_LT_128 else skiprows + skip_rows
-                    )  # pragma: no cover
+                    .skiprows(skiprows + skip_rows)
                     .lineterminator(str(eol))
                     .quotechar(str(quote))
                     .decimal(decimal)
@@ -519,9 +511,7 @@ class Scan(IR):
                 if column_names is not None:
                     options.set_names([str(name) for name in column_names])
                 else:
-                    if (
-                        not POLARS_VERSION_LT_128 and header > -1 and skip_rows > header
-                    ):  # pragma: no cover
+                    if header > -1 and skip_rows > header:  # pragma: no cover
                         # We need to read the header otherwise we would skip it
                         column_names = read_csv_header(path, str(sep))
                         options.set_names(column_names)
@@ -678,18 +668,33 @@ class Scan(IR):
 class Sink(IR):
     """Sink a dataframe to a file."""
 
-    __slots__ = ("cloud_options", "kind", "options", "path")
-    _non_child = ("schema", "kind", "path", "options", "cloud_options")
+    __slots__ = ("cloud_options", "kind", "options", "parquet_options", "path")
+    _non_child = (
+        "schema",
+        "kind",
+        "path",
+        "parquet_options",
+        "options",
+        "cloud_options",
+    )
 
     kind: str
+    """The type of file to write to. Eg. Parquet, CSV, etc."""
     path: str
+    """The path to write to"""
+    parquet_options: ParquetOptions
+    """GPU-specific configuration options"""
+    cloud_options: dict[str, Any] | None
+    """Cloud-related authentication options, currently ignored."""
     options: dict[str, Any]
+    """Sink options from Polars"""
 
     def __init__(
         self,
         schema: Schema,
         kind: str,
         path: str,
+        parquet_options: ParquetOptions,
         options: dict[str, Any],
         cloud_options: dict[str, Any],
         df: IR,
@@ -697,10 +702,11 @@ class Sink(IR):
         self.schema = schema
         self.kind = kind
         self.path = path
+        self.parquet_options = parquet_options
         self.options = options
         self.cloud_options = cloud_options
         self.children = (df,)
-        self._non_child_args = (schema, kind, path, options)
+        self._non_child_args = (schema, kind, path, parquet_options, options)
         if self.cloud_options is not None and any(
             self.cloud_options.get(k) is not None
             for k in ("config", "credential_provider")
@@ -793,9 +799,123 @@ class Sink(IR):
             schema_hash,
             self.kind,
             self.path,
+            self.parquet_options,
             json.dumps(self.options),
             json.dumps(self.cloud_options),
         )  # pragma: no cover
+
+    @classmethod
+    def _write_csv(
+        cls, target: plc.io.SinkInfo, options: dict[str, Any], df: DataFrame
+    ) -> None:
+        """Write CSV data to a sink."""
+        serialize = options["serialize_options"]
+        options = (
+            plc.io.csv.CsvWriterOptions.builder(target, df.table)
+            .include_header(options["include_header"])
+            .names(df.column_names if options["include_header"] else [])
+            .na_rep(serialize["null"])
+            .line_terminator(serialize["line_terminator"])
+            .inter_column_delimiter(chr(serialize["separator"]))
+            .build()
+        )
+        plc.io.csv.write_csv(options)
+
+    @classmethod
+    def _write_json(cls, target: plc.io.SinkInfo, df: DataFrame) -> None:
+        """Write Json data to a sink."""
+        metadata = plc.io.TableWithMetadata(
+            df.table, [(col, []) for col in df.column_names]
+        )
+        options = (
+            plc.io.json.JsonWriterOptions.builder(target, df.table)
+            .lines(val=True)
+            .na_rep("null")
+            .include_nulls(val=True)
+            .metadata(metadata)
+            .utf8_escaped(val=False)
+            .build()
+        )
+        plc.io.json.write_json(options)
+
+    @staticmethod
+    def _make_parquet_metadata(df: DataFrame) -> plc.io.types.TableInputMetadata:
+        """Create TableInputMetadata and set column names."""
+        metadata = plc.io.types.TableInputMetadata(df.table)
+        for i, name in enumerate(df.column_names):
+            metadata.column_metadata[i].set_name(name)
+        return metadata
+
+    @staticmethod
+    def _apply_parquet_writer_options(
+        builder: plc.io.parquet.ChunkedParquetWriterOptionsBuilder
+        | plc.io.parquet.ParquetWriterOptionsBuilder,
+        options: dict[str, Any],
+    ) -> (
+        plc.io.parquet.ChunkedParquetWriterOptionsBuilder
+        | plc.io.parquet.ParquetWriterOptionsBuilder
+    ):
+        """Apply writer options to the builder."""
+        compression = options.get("compression")
+        if compression and compression != "Uncompressed":
+            compression_type = getattr(
+                plc.io.types.CompressionType, compression.upper()
+            )
+            builder = builder.compression(compression_type)
+
+        if (data_page_size := options.get("data_page_size")) is not None:
+            builder = builder.max_page_size_bytes(data_page_size)
+
+        if (row_group_size := options.get("row_group_size")) is not None:
+            builder = builder.row_group_size_rows(row_group_size)
+
+        return builder
+
+    @classmethod
+    def _write_parquet(
+        cls,
+        target: plc.io.SinkInfo,
+        parquet_options: ParquetOptions,
+        options: dict[str, Any],
+        df: DataFrame,
+    ) -> None:
+        metadata: plc.io.types.TableInputMetadata = cls._make_parquet_metadata(df)
+
+        builder: (
+            plc.io.parquet.ChunkedParquetWriterOptionsBuilder
+            | plc.io.parquet.ParquetWriterOptionsBuilder
+        )
+
+        if (
+            parquet_options.chunked
+            and parquet_options.n_output_chunks != 1
+            and df.table.num_rows() != 0
+        ):
+            builder = plc.io.parquet.ChunkedParquetWriterOptions.builder(
+                target
+            ).metadata(metadata)
+            builder = cls._apply_parquet_writer_options(builder, options)
+            writer_options = builder.build()
+            writer = plc.io.parquet.ChunkedParquetWriter.from_options(writer_options)
+
+            # TODO: Can be based on a heuristic that estimates chunk size
+            # from the input table size and available GPU memory.
+            num_chunks = parquet_options.n_output_chunks
+            table_chunks = plc.copying.split(
+                df.table,
+                [i * df.table.num_rows() // num_chunks for i in range(1, num_chunks)],
+            )
+            for chunk in table_chunks:
+                writer.write(chunk)
+            writer.close([])
+
+        else:
+            builder = plc.io.parquet.ParquetWriterOptions.builder(
+                target, df.table
+            ).metadata(metadata)
+            builder = cls._apply_parquet_writer_options(builder, options)
+            writer_options = builder.build()
+            plc.io.parquet.write_parquet(writer_options)
 
     @classmethod
     @nvtx_annotate_cudf_polars(message="Sink")
@@ -804,6 +924,7 @@ class Sink(IR):
         schema: Schema,
         kind: str,
         path: str,
+        parquet_options: ParquetOptions,
         options: dict[str, Any],
         df: DataFrame,
     ) -> DataFrame:
@@ -813,52 +934,11 @@ class Sink(IR):
         if options.get("mkdir", False):
             Path(path).parent.mkdir(parents=True, exist_ok=True)
         if kind == "Csv":
-            serialize = options["serialize_options"]
-            options = (
-                plc.io.csv.CsvWriterOptions.builder(target, df.table)
-                .include_header(options["include_header"])
-                .names(df.column_names if options["include_header"] else [])
-                .na_rep(serialize["null"])
-                .line_terminator(serialize["line_terminator"])
-                .inter_column_delimiter(chr(serialize["separator"]))
-                .build()
-            )
-            plc.io.csv.write_csv(options)
-
+            cls._write_csv(target, options, df)
         elif kind == "Parquet":
-            metadata = plc.io.types.TableInputMetadata(df.table)
-            for i, name in enumerate(df.column_names):
-                metadata.column_metadata[i].set_name(name)
-
-            builder = plc.io.parquet.ParquetWriterOptions.builder(target, df.table)
-            compression = options["compression"]
-            if compression != "Uncompressed":
-                builder.compression(
-                    getattr(plc.io.types.CompressionType, compression.upper())
-                )
-
-            writer_options = builder.metadata(metadata).build()
-            if options["data_page_size"] is not None:
-                writer_options.set_max_page_size_bytes(options["data_page_size"])
-            if options["row_group_size"] is not None:
-                writer_options.set_row_group_size_rows(options["row_group_size"])
-
-            plc.io.parquet.write_parquet(writer_options)
-
+            cls._write_parquet(target, parquet_options, options, df)
         elif kind == "Json":
-            metadata = plc.io.TableWithMetadata(
-                df.table, [(col, []) for col in df.column_names]
-            )
-            options = (
-                plc.io.json.JsonWriterOptions.builder(target, df.table)
-                .lines(val=True)
-                .na_rep("null")
-                .include_nulls(val=True)
-                .metadata(metadata)
-                .utf8_escaped(val=False)
-                .build()
-            )
-            plc.io.json.write_json(options)
+            cls._write_json(target, df)
 
         return DataFrame([])
 
@@ -1015,8 +1095,7 @@ class Select(IR):
         self.children = (df,)
         self._non_child_args = (self.exprs, should_broadcast)
         if (
-            not POLARS_VERSION_LT_128
-            and Select._is_len_expr(self.exprs)
+            Select._is_len_expr(self.exprs)
             and isinstance(df, Scan)
             and df.typ != "parquet"
         ):  # pragma: no cover
@@ -1075,8 +1154,7 @@ class Select(IR):
             translation phase should fail earlier.
         """
         if (
-            not POLARS_VERSION_LT_128
-            and isinstance(self.children[0], Scan)
+            isinstance(self.children[0], Scan)
             and Select._is_len_expr(self.exprs)
             and self.children[0].typ == "parquet"
             and self.children[0].predicate is None
@@ -1330,6 +1408,7 @@ class GroupBy(IR):
         self.zlice = zlice
         self.children = (df,)
         self._non_child_args = (
+            schema,
             self.keys,
             self.agg_requests,
             maintain_order,
@@ -1340,6 +1419,7 @@ class GroupBy(IR):
     @nvtx_annotate_cudf_polars(message="GroupBy")
     def do_evaluate(
         cls,
+        schema: Schema,
         keys_in: Sequence[expr.NamedExpr],
         agg_requests: Sequence[expr.NamedExpr],
         maintain_order: bool,  # noqa: FBT001
@@ -1381,7 +1461,7 @@ class GroupBy(IR):
             names.append(name)
         group_keys, raw_tables = grouper.aggregate(requests)
         results = [
-            Column(column, name=name, dtype=request.value.dtype)
+            Column(column, name=name, dtype=schema[name])
             for name, column, request in zip(
                 names,
                 itertools.chain.from_iterable(t.columns() for t in raw_tables),
@@ -2014,10 +2094,10 @@ class Slice(IR):
     _non_child = ("schema", "offset", "length")
     offset: int
     """Start of the slice."""
-    length: int
+    length: int | None
     """Length of the slice."""
 
-    def __init__(self, schema: Schema, offset: int, length: int, df: IR):
+    def __init__(self, schema: Schema, offset: int, length: int | None, df: IR):
         self.schema = schema
         self.offset = offset
         self.length = length
@@ -2153,13 +2233,15 @@ class MapFunction(IR):
                 # same sub-shapes
                 raise NotImplementedError("Explode with more than one column")
             self.options = (tuple(to_explode),)
-        elif self.name == "rename":
+        elif POLARS_VERSION_LT_131 and self.name == "rename":  # pragma: no cover
+            # As of 1.31, polars validates renaming in the IR
             old, new, strict = self.options
-            # TODO: perhaps polars should validate renaming in the IR?
             if len(new) != len(set(new)) or (
                 set(new) & (set(df.schema.keys()) - set(old))
             ):
-                raise NotImplementedError("Duplicate new names in rename.")
+                raise NotImplementedError(
+                    "Duplicate new names in rename."
+                )  # pragma: no cover
             self.options = (tuple(old), tuple(new), strict)
         elif self.name == "unpivot":
             indices, pivotees, variable_name, value_name = self.options
@@ -2221,7 +2303,7 @@ class MapFunction(IR):
             # No-op in our data model
             # Don't think this appears in a plan tree from python
             return df  # pragma: no cover
-        elif name == "rename":
+        elif POLARS_VERSION_LT_131 and name == "rename":  # pragma: no cover
             # final tag is "swapping" which is useful for the
             # optimiser (it blocks some pushdown operations)
             old, new, _ = options

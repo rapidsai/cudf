@@ -84,6 +84,8 @@ def decompose_single_agg(
     """
     agg = named_expr.value
     name = named_expr.name
+    if isinstance(agg, expr.UnaryFunction) and agg.name == "null_count":
+        raise NotImplementedError("null_count is not supported inside groupby context")
     if isinstance(agg, expr.Col):
         # TODO: collect_list produces null for empty group in libcudf, empty list in polars.
         # But we need the nested value type, so need to track proper dtypes in our DSL.
@@ -149,12 +151,24 @@ def decompose_single_agg(
                 # agg.
                 replace_nulls(col, 0, is_top=is_top),
             )
+        elif agg.name == "mean":
+            post_agg_col: expr.Expr = expr.Col(
+                DataType(pl.Float64), name
+            )  # libcudf promotes to float64
+            if agg.dtype.plc.id() == plc.TypeId.FLOAT32:
+                # Cast back to float32 to match Polars
+                post_agg_col = expr.Cast(agg.dtype, post_agg_col)
+            return [(named_expr, True)], named_expr.reconstruct(post_agg_col)
         else:
             return [(named_expr, True)], named_expr.reconstruct(
                 expr.Col(agg.dtype, name)
             )
     if isinstance(agg, expr.Ternary):
         raise NotImplementedError("Ternary inside groupby")
+    if not agg.is_pointwise and isinstance(agg, expr.BooleanFunction):
+        raise NotImplementedError(
+            f"Non pointwise boolean function {agg.name!r} not supported in groupby or rolling context"
+        )
     if agg.is_pointwise:
         aggs, posts = _decompose_aggs(
             (expr.NamedExpr(next(name_generator), child) for child in agg.children),

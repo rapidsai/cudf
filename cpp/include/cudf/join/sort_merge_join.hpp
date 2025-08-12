@@ -44,6 +44,38 @@ namespace CUDF_EXPORT cudf {
 class sort_merge_join {
  public:
   /**
+   * @brief Holds context information about matches between tables during a join operation.
+   *
+   * This structure stores the left table view and a device vector containing the count of
+   * matching rows in the right table for each row in the left table. Used primarily by
+   * inner_join_match_context() to track join match information.
+   */
+  struct match_context {
+    table_view _left_table;  ///< View of the left table involved in the join operation
+    std::unique_ptr<rmm::device_uvector<size_type>>
+      _match_counts;  ///< A device vector containing the count of matching rows in the right table
+                      ///< for each row in left table
+  };
+
+  /**
+   * @brief Stores context information for partitioned join operations.
+   *
+   * This structure maintains context for partitioned join operations, containing the match
+   * context from a previous join operation along with the start and end indices that define
+   * the current partition of the left table being processed.
+   *
+   * Used with partitioned_inner_join() to perform large joins in smaller chunks while
+   * preserving the context from the initial match operation.
+   */
+  struct partition_context {
+    match_context
+      left_table_context;      ///< The match context from a previous inner_join_match_context call
+    size_type left_start_idx;  ///< The starting row index of the current left table partition
+    size_type
+      left_end_idx;  ///< The ending row index (exclusive) of the current left table partition
+  };
+
+  /**
    * @brief Construct a sort-merge join object that pre-processes the right table
    * on creation, and can be used on subsequent join operations with multiple
    * left tables.
@@ -82,6 +114,87 @@ class sort_merge_join {
              sorted is_left_sorted,
              rmm::cuda_stream_view stream      = cudf::get_default_stream(),
              rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+  /**
+   * @brief Returns context information about matches between the left and right tables.
+   *
+   * This method computes, for each row in the left table, how many matching rows exist in
+   * the right table according to inner join semantics, and returns the number of matches through a
+   * match_context object.
+   *
+   * This is particularly useful for:
+   * - Determining the total size of a potential join result without materializing it
+   * - Planning partitioned join operations for large datasets
+   *
+   * The returned match_context can be used directly with partitioned_inner_join() to
+   * process large joins in manageable chunks.
+   *
+   * @param left The left table to join with the pre-processed right table
+   * @param is_left_sorted Enum to indicate if left table is pre-sorted
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the result device memory
+   *
+   * @return A match_context object containing the left table view and a device vector
+   *         of match counts for each row in the left table
+   */
+  match_context inner_join_match_context(
+    table_view const& left,
+    sorted is_left_sorted,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+  /**
+   * @brief Performs an inner join between a partition of the left table and the right table.
+   *
+   * This method executes an inner join operation between a specific partition of the left table
+   * (defined by the partition_context) and the right table that was provided when constructing
+   * the sort_merge_join object. The partition_context must have been previously created by
+   * calling inner_join_match_context().
+   *
+   * This partitioning approach enables processing large joins in smaller, memory-efficient chunks,
+   * while maintaining consistent results as if the entire join was performed at once. This is
+   * particularly useful for handling large datasets that would otherwise exceed available memory
+   * resources.
+   *
+   * The returned indices can be used to construct the join result for this partition. The
+   * left_indices are relative to the original complete left table (not just the partition), so they
+   * can be used directly with the original left table to extract matching rows.
+   *
+   * @param context The partition context containing match information and partition bounds
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the join indices' device memory
+   *
+   * @return A pair of device vectors [`left_indices`, `right_indices`] containing the row indices
+   *         from both tables that satisfy the join condition for this partition. The left_indices
+   *         are relative to the complete left table, not just the partition.
+   *
+   * @code{.cpp}
+   * // Create join object with pre-processed right table
+   * sort_merge_join join_obj(right_table, sorted::NO);
+   *
+   * // Get match context for the entire left table
+   * auto context = join_obj.inner_join_match_context(left_table, sorted::NO);
+   *
+   * // Define partition boundaries (e.g., process 1000 rows at a time)
+   * for (size_type start = 0; start < left_table.num_rows(); start += 1000) {
+   *   size_type end = std::min(start + 1000, left_table.num_rows());
+   *
+   *   // Create partition context
+   *   sort_merge_join::partition_context part_ctx{context, start, end};
+   *
+   *   // Get join indices for this partition
+   *   auto [left_indices, right_indices] = join_obj.partitioned_inner_join(part_ctx);
+   *
+   *   // Process the partition result...
+   * }
+   * @endcode
+   */
+  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+            std::unique_ptr<rmm::device_uvector<size_type>>>
+  partitioned_inner_join(
+    partition_context const& context,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
  private:
   /**
@@ -158,6 +271,32 @@ class sort_merge_join {
   void postprocess_indices(device_span<size_type> smaller_indices,
                            device_span<size_type> larger_indices,
                            rmm::cuda_stream_view stream);
+
+  /**
+   * @brief Core merge operation implementation for the sort-merge join algorithm.
+   *
+   * This template method performs the actual merge operation between preprocessed left and
+   * right tables for different types of joins. It serves as the common implementation for
+   * various join methods (inner_join, inner_join_match_context, partitioned_inner_join).
+   *
+   * The method takes a generic merge operation functor that defines the specific join
+   * behavior to be applied during the merge phase. This design allows for different join
+   * operations (such as generating indices or counting matches) to share the same
+   * underlying merge algorithm.
+   *
+   * The method expects that tables have already been preprocessed to handle
+   * null values according to the null_equality setting.
+   *
+   * @tparam MergeOperation Functor type that implements the specific join operation
+   * @param right_view The preprocessed right table view
+   * @param left_view The preprocessed left table view
+   * @param op The merge operation functor to execute during the merge
+   *
+   * @return The result of the merge operation as defined by the MergeOperation functor
+   *         (typically pairs of join indices or match counts)
+   */
+  template <typename MergeOperation>
+  auto invoke_merge(table_view right_view, table_view left_view, MergeOperation&& op);
 };
 
 /**

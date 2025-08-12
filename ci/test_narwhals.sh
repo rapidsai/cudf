@@ -1,8 +1,10 @@
 #!/bin/bash
 # Copyright (c) 2025, NVIDIA CORPORATION.
 
+set -euo pipefail
+
 # Support invoking test_python_cudf.sh outside the script directory
-cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../ || exit 1
+cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../
 
 source rapids-init-pip
 
@@ -19,7 +21,7 @@ set +e
 rapids-logger "pytest narwhals"
 NARWHALS_VERSION=$(python -c "import narwhals; print(narwhals.__version__)")
 git clone https://github.com/narwhals-dev/narwhals.git --depth=1 -b "v${NARWHALS_VERSION}" narwhals
-pushd narwhals || exit 1
+pushd narwhals
 rapids-pip-retry install -U -e .
 
 rapids-logger "Check narwhals versions"
@@ -30,6 +32,9 @@ python -c "import narwhals; print(narwhals.show_versions())"
 # test_rolling_std_expr_lazy_grouped: xpassing in Narwhals
 # test_rolling_sum_expr_lazy_grouped: xpassing in Narwhals
 # test_rolling_var_expr_lazy_grouped: xpassing in Narwhals
+# test_offset_by_tz: xpassing in Narwhals
+# test_double_same_aggregation: xpassing in Narwhals
+# test_all_kind_of_aggs: xpassing in Narwhals
 TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF="not test_rolling_mean_expr_lazy_grouped[cudf-expected_a4-3-1-True] \
 and not test_rolling_mean_expr_lazy_grouped[cudf-expected_a5-4-1-True] \
 and not test_rolling_mean_expr_lazy_grouped[cudf-expected_a6-5-1-True] \
@@ -42,7 +47,10 @@ and not test_rolling_sum_expr_lazy_grouped[cudf-expected_a6-5-1-True] \
 and not test_rolling_var_expr_lazy_grouped[cudf-expected_a4-3-1-True-1] \
 and not test_rolling_var_expr_lazy_grouped[cudf-expected_a5-4-1-True-1] \
 and not test_rolling_var_expr_lazy_grouped[cudf-expected_a6-5-1-True-0] \
-and not test_horizontal_slice_with_series"
+and not test_horizontal_slice_with_series \
+and not test_offset_by_tz \
+and not test_double_same_aggregation \
+and not test_all_kind_of_aggs"
 
 rapids-logger "Run narwhals tests for cuDF"
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest \
@@ -61,13 +69,19 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest \
 # columns aren't object anymore. The test expects object, causing a mismatch.
 # test_nan: Narwhals expect this test to fail, but as of polars 1.30 we raise a RuntimeError,
 # not polars ComputeError. So the test is looking for the wrong error and fails.
+# test_floordiv_int_by_zero: This bug is fixed as of 25.08, narwhals should remove the xfail
 TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_POLARS=" \
 test_dtypes or \
-test_nan \
+test_nan or \
+test_floordiv_int_by_zero \
 "
 
 rapids-logger "Run narwhals tests for cuDF Polars"
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 NARWHALS_POLARS_GPU=1 python -m pytest \
+CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE=805306368 \
+CUDF_POLARS__EXECUTOR__FALLBACK_MODE=silent \
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
+NARWHALS_POLARS_GPU=1 \
+    python -m pytest \
     --cache-clear \
     --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars-narwhals.xml" \
     -p xdist \
@@ -86,12 +100,23 @@ rapids-logger "Run narwhals tests for cuDF Pandas"
 # test_maybe_convert_dtypes_pandas: https://github.com/rapidsai/cudf/issues/14149
 # test_log_dtype_pandas: cudf is promoting the type to float64
 # test_len_over_2369: It fails during fallback. The error is 'DataFrame' object has no attribute 'to_frame'
+# test_all_ignore_nulls, test_allh_kleene, and test_anyh_kleene: https://github.com/rapidsai/cudf/issues/19417
+# test_offset_by_date_pandas: https://github.com/rapidsai/cudf/issues/19418
+# test_select_boolean_cols and test_select_boolean_cols_multi_group_by: https://github.com/rapidsai/cudf/issues/19421
+# test_to_datetime_pd_preserves_pyarrow_backend_dtype: https://github.com/rapidsai/cudf/issues/19422
 TESTS_THAT_NEED_CUDF_FIX=" \
 test_is_finite_expr or \
 test_is_finite_series or \
 test_maybe_convert_dtypes_pandas or \
 test_log_dtype_pandas or \
-test_len_over_2369 \
+test_len_over_2369 or \
+test_all_ignore_nulls or \
+test_allh_kleene or \
+test_anyh_kleene or \
+test_offset_by_date_pandas or \
+test_select_boolean_cols or \
+test_select_boolean_cols_multi_group_by or \
+test_to_datetime_pd_preserves_pyarrow_backend_dtype \
 "
 
 # test_array_dunder_with_copy: https://github.com/rapidsai/cudf/issues/18248#issuecomment-2719234741
@@ -125,7 +150,7 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 NARWHALS_DEFAULT_CONSTRUCTORS=pandas python -m 
     --numprocesses=8 \
     --dist=worksteal
 
-popd || exit 1
+popd
 
 rapids-logger "Test script exiting with value: $EXITCODE"
 exit ${EXITCODE}

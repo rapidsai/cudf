@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from pylibcudf.column cimport Column
@@ -228,3 +228,6 @@ cpdef Column join_list_elements(
     else:
         raise ValueError("separator must be a Column or a Scalar")
     return Column.from_libcudf(move(c_result))
+
+OutputIfEmptyList.__str__ = OutputIfEmptyList.__repr__
+SeparatorOnNulls.__str__ = SeparatorOnNulls.__repr__

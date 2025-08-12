@@ -228,10 +228,9 @@ class bloom_filter_expression_converter : public equality_literals_collector {
         CUDF_EXPECTS(literal_iter != equality_literals.end(), "Could not find the literal ptr");
         col_literal_offset += std::distance(equality_literals.cbegin(), literal_iter);
 
-        // Evaluate boolean is_true(value) expression as NOT(NOT(value))
+        // Evaluate boolean is_true(value) expression as IDENTITY(value)
         auto const& value = _bloom_filter_expr.push(ast::column_reference{col_literal_offset});
-        _bloom_filter_expr.push(ast::operation{
-          ast_operator::NOT, _bloom_filter_expr.push(ast::operation{ast_operator::NOT, value})});
+        _bloom_filter_expr.push(ast::operation{ast_operator::IDENTITY, value});
       }
       // For all other expressions, push an always true expression
       else {
@@ -392,7 +391,7 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
 
   // Read task sync function
   for (auto& task : read_tasks) {
-    task.wait();
+    task.get();
   }
 }
 
@@ -403,10 +402,12 @@ size_t aggregate_reader_metadata::get_bloom_filter_alignment() const
   // Required alignment:
   // https://github.com/NVIDIA/cuCollections/blob/deab5799f3e4226cb8a49acf2199c03b14941ee4/include/cuco/detail/bloom_filter/bloom_filter_impl.cuh#L55-L67
   using policy_type = cuco::arrow_filter_policy<cuda::std::byte, cudf::hashing::detail::XXHash_64>;
-  return alignof(cuco::bloom_filter_ref<cuda::std::byte,
-                                        cuco::extent<std::size_t>,
-                                        cuco::thread_scope_thread,
-                                        policy_type>::filter_block_type);
+  auto constexpr alignment = alignof(cuco::bloom_filter_ref<cuda::std::byte,
+                                                            cuco::extent<std::size_t>,
+                                                            cuco::thread_scope_thread,
+                                                            policy_type>::filter_block_type);
+  static_assert((alignment & (alignment - 1)) == 0, "Alignment must be a power of 2");
+  return std::max<size_t>(alignment, rmm::CUDA_ALLOCATION_ALIGNMENT);
 }
 
 std::vector<rmm::device_buffer> aggregate_reader_metadata::read_bloom_filters(
@@ -512,7 +513,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   host_span<std::vector<ast::literal*> const> literals,
   size_type total_row_groups,
   host_span<data_type const> output_dtypes,
-  host_span<int const> bloom_filter_col_schemas,
+  host_span<cudf::size_type const> bloom_filter_col_schemas,
   std::reference_wrapper<ast::expression const> filter,
   rmm::cuda_stream_view stream) const
 {
