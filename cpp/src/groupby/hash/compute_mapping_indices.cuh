@@ -158,9 +158,9 @@ CUDF_KERNEL void mapping_indices_kernel(cudf::size_type num_input_rows,
 }
 
 template <class SetRef>
-size_type max_active_blocks_mapping_kernel()
+int32_t max_active_blocks_mapping_kernel()
 {
-  size_type max_active_blocks{-1};
+  int32_t max_active_blocks{-1};
   CUDF_CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
     &max_active_blocks, mapping_indices_kernel<SetRef>, GROUPBY_BLOCK_SIZE, 0));
   return max_active_blocks;

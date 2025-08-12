@@ -27,14 +27,14 @@ namespace cudf::groupby::detail::hash {
  * @brief Computes the maximum number of active blocks of the shared memory aggregation kernel that
  * can be executed on the underlying device.
  */
-size_type max_active_blocks_shmem_aggs_kernel();
+int32_t max_active_blocks_shmem_aggs_kernel();
 
 /*
  * @brief Computes the maximum number of active blocks of the mapping indices kernel that can be
  * executed on the underlying device.
  */
 template <class SetRef>
-[[nodiscard]] cudf::size_type max_active_blocks_mapping_kernel();
+[[nodiscard]] int32_t max_active_blocks_mapping_kernel();
 
 template <class SetRef>
 void compute_mapping_indices(cudf::size_type grid_size,

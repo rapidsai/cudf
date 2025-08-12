@@ -18,7 +18,7 @@
 #include "compute_mapping_indices.hpp"
 
 namespace cudf::groupby::detail::hash {
-template cudf::size_type
+template int32_t
 max_active_blocks_mapping_kernel<nullable_hash_set_ref_t<cuco::insert_and_find_tag>>();
 
 template void compute_mapping_indices<nullable_hash_set_ref_t<cuco::insert_and_find_tag>>(
