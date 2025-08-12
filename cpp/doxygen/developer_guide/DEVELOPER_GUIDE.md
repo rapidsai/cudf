@@ -656,9 +656,9 @@ int host_value = int_scalar.value();
 ```
 
 ##### cudf::detail::device_scalar<T>
-Acts as a drop-in replacement for `rmm::device_scalar<T>`, with the key difference 
-being the use of pinned host memory as a bounce buffer for data transfers. 
-It is recommended for internal use to avoid the implicit synchronization overhead caused by 
+Acts as a drop-in replacement for `rmm::device_scalar<T>`, with the key difference
+being the use of pinned host memory as a bounce buffer for data transfers.
+It is recommended for internal use to avoid the implicit synchronization overhead caused by
 memcpy operations on pageable host memory.
 
 ```c++
