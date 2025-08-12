@@ -209,6 +209,13 @@ def test_groupby_agg_decimal(groupby_reduction_methods, request):
             reason=f"{groupby_reduction_methods} not supported with Decimals in pandas",
         )
     )
+    request.applymarker(
+        pytest.mark.xfail(
+            groupby_reduction_methods in ["idxmax", "idxmin"]
+            and PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+            reason=f"{groupby_reduction_methods} not supported with Decimals in an older version of pandas",
+        )
+    )
     rng = np.random.default_rng(seed=0)
     num_groups = 4
     nelem_per_group = 10
