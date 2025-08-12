@@ -157,20 +157,21 @@ static void BM_filter_min_max(nvbench::state& state)
           cudf::apply_boolean_mask(input_table, filter_boolean->view(), stream, mr);
       } break;
       case engine_type::JIT: {
-        auto result =
-          cudf::filter(filter_inputs, udf, false, std::nullopt, std::vector{true, false, false});
+        auto result = cudf::filter(
+          filter_inputs, udf, false, std::nullopt, std::vector{true, false, false}, stream, mr);
       } break;
       default: break;
     }
   });
 }
 
-#define FILTER_BENCHMARK_DEFINE(name, key_type)                                               \
-  static void name(::nvbench::state& st) { ::BM_filter_min_max<key_type>(st); }               \
-  NVBENCH_BENCH(name)                                                                         \
-    .set_name(#name)                                                                          \
-    .add_int64_axis("num_rows", {100'000, 1'000'000, 10'000'000, 100'000'000, 1'000'000'000}) \
-    .add_string_axis("engine", {"ast", "jit"})                                                \
+#define FILTER_BENCHMARK_DEFINE(name, key_type)                                          \
+  static void name(::nvbench::state& st) { ::BM_filter_min_max<key_type>(st); }          \
+  NVBENCH_BENCH(name)                                                                    \
+    .set_name(#name)                                                                     \
+    .add_int64_axis("num_rows",                                                          \
+                    {100'000, 1'000'000, 10'000'000, 100'000'000}) \
+    .add_string_axis("engine", {"ast", "jit"})                                           \
     .add_string_axis("nullable", {"true", "false"});
 
 FILTER_BENCHMARK_DEFINE(filter_min_max_int32, int32_t);

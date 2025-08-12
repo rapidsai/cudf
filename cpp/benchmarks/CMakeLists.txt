@@ -176,7 +176,7 @@ ConfigureNVBench(NDSH_Q10_NVBENCH ndsh/q10.cpp ndsh/utilities.cpp)
 # ##################################################################################################
 # * filter benchmark -------------------------------------------------------------------
 
-ConfigureNVBench(FILTER_NVBENCH filter/min_max_filter.cpp)
+ConfigureNVBench(FILTER_NVBENCH filter/minmax_filter.cpp)
 
 # ##################################################################################################
 # * stream_compaction benchmark -------------------------------------------------------------------
