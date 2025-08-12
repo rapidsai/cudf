@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2024, NVIDIA CORPORATION.
+# Copyright (c) 2025, NVIDIA CORPORATION.
 import zoneinfo
 
 import pandas as pd
@@ -14,15 +14,6 @@ def test_tz_localize():
     idx = cudf.from_pandas(pidx)
     assert pidx.dtype == idx.dtype
     assert_eq(pidx.tz_localize(tz), idx.tz_localize(tz))
-
-
-def test_tz_convert():
-    tz = zoneinfo.ZoneInfo("America/New_York")
-    pidx = pd.date_range("2023-01-01", periods=3, freq="h")
-    idx = cudf.from_pandas(pidx)
-    pidx = pidx.tz_localize("UTC")
-    idx = idx.tz_localize("UTC")
-    assert_eq(pidx.tz_convert(tz), idx.tz_convert(tz))
 
 
 def test_delocalize_naive():
