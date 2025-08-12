@@ -66,7 +66,6 @@ files:
     output: none
     includes:
       - cuda_version
-      - depends_on_cupy
       - py_version
       - test_python_common
       - test_python_cudf_common
@@ -275,6 +274,7 @@ files:
       table: project.optional-dependencies
       key: test
     includes:
+      - depends_on_cupy
       - pyarrow_run
       - test_python_common
       - test_python_cudf_common
