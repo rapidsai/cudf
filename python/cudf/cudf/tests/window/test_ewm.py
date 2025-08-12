@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2024, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 import pytest
 
 import cudf
@@ -35,12 +35,10 @@ def test_ewma(data, params, adjust):
     sets of keyword arguemnts that effect the raw
     coefficients of the formula
     """
-    params["adjust"] = adjust
-
     gsr = cudf.Series(data, dtype="float64")
     psr = gsr.to_pandas()
 
-    expect = psr.ewm(**params).mean()
-    got = gsr.ewm(**params).mean()
+    expect = psr.ewm(**params, adjust=adjust).mean()
+    got = gsr.ewm(**params, adjust=adjust).mean()
 
     assert_eq(expect, got)
