@@ -1780,7 +1780,7 @@ class Join(IR):
         if empty:
             return [
                 Column(
-                    plc.Column.from_iterable_of_py([], dtype=col.dtype.plc),
+                    plc.column_factories.make_empty_column(col.dtype.plc),
                     col.dtype,
                     name=rename(col.name),
                 )
@@ -2548,12 +2548,10 @@ class Empty(IR):
         return DataFrame(
             [
                 Column(
-                    plc.Column.from_iterable_of_py([], dtype=dtype.plc),
+                    plc.column_factories.make_empty_column(dtype.plc),
                     dtype=dtype,
                     name=name,
                 )
                 for name, dtype in schema.items()
             ]
-            if schema is not None
-            else []
         )
