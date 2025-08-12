@@ -27,6 +27,7 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
+from cudf._lib import strings_udf
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     is_dict_like,
@@ -57,7 +58,7 @@ from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import _Resampler
 from cudf.core.udf.utils import (
     _get_input_args_from_frame,
-    _post_process_output_col,
+    _make_free_string_kernel,
     _return_arr_from_dtype,
 )
 from cudf.core.window import ExponentialMovingWindow, Rolling
@@ -74,6 +75,7 @@ from cudf.utils.dtypes import (
     is_column_like,
     is_dtype_obj_numeric,
     is_mixed_with_object_dtype,
+    is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
@@ -3446,7 +3448,15 @@ class IndexedFrame(Frame):
         except Exception as e:
             raise RuntimeError("UDF kernel execution failed.") from e
 
-        col = _post_process_output_col(ans_col, retty)
+        if retty == CUDF_STRING_DTYPE:
+            col = ColumnBase.from_pylibcudf(
+                strings_udf.column_from_managed_udf_string_array(ans_col)
+            )
+            free_kernel = _make_free_string_kernel()
+            with _CUDFNumbaConfig():
+                free_kernel.forall(len(col))(ans_col, len(col))
+        else:
+            col = as_column(ans_col, retty)
 
         col.set_base_mask(ans_mask.as_mask())
         result = cudf.Series._from_column(col, index=self.index)
@@ -6803,6 +6813,18 @@ def _append_new_row_inplace(col: ColumnBase, value: ScalarLike) -> None:
     Cast to common type if possible
     """
     val_col = as_column(value, dtype=col.dtype if value is None else None)
+    if (
+        cudf.get_option("mode.pandas_compatible")
+        and is_pandas_nullable_extension_dtype(col.dtype)
+        and val_col.dtype.kind == "f"
+    ):
+        # If the column is a pandas nullable extension type, we need to
+        # convert the nans to a nullable type as well.
+        val_col = val_col.nans_to_nulls()
+        if len(val_col) == val_col.null_count:
+            # If the column is all nulls, we can use the column dtype
+            # to avoid unnecessary casting.
+            val_col = val_col.astype(col.dtype)
     to_type = find_common_type([val_col.dtype, col.dtype])
     if (
         cudf.get_option("mode.pandas_compatible")
@@ -6810,9 +6832,13 @@ def _append_new_row_inplace(col: ColumnBase, value: ScalarLike) -> None:
         and is_mixed_with_object_dtype(val_col, col)
     ):
         raise MixedTypeError("Cannot append mixed types")
+    if cudf.get_option("mode.pandas_compatible") and val_col.can_cast_safely(
+        col.dtype
+    ):
+        to_type = col.dtype
     val_col = val_col.astype(to_type)
     old_col = col.astype(to_type)
-    res_col = concat_columns([old_col, val_col])
+    res_col = concat_columns([old_col, val_col])._with_type_metadata(to_type)
     if (
         cudf.get_option("mode.pandas_compatible")
         and res_col.dtype != col.dtype

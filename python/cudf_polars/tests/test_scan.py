@@ -13,7 +13,6 @@ from cudf_polars.testing.asserts import (
     assert_ir_translation_raises,
 )
 from cudf_polars.testing.io import make_partitioned_source
-from cudf_polars.utils.versions import POLARS_VERSION_LT_128
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -106,11 +105,7 @@ def test_scan(
     )
     request.applymarker(
         pytest.mark.xfail(
-            condition=(
-                not POLARS_VERSION_LT_128
-                and zlice is not None
-                and scan_fn is pl.scan_ndjson
-            ),
+            condition=(zlice is not None and scan_fn is pl.scan_ndjson),
             reason="slice pushdown not supported in the libcudf JSON reader",
         )
     )
@@ -418,13 +413,7 @@ def test_scan_hf_url_raises():
     assert_ir_translation_raises(q, NotImplementedError)
 
 
-def test_select_arbitrary_order_with_row_index_column(request, tmp_path):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=POLARS_VERSION_LT_128,
-            reason="unsupported until polars 1.28",
-        )
-    )
+def test_select_arbitrary_order_with_row_index_column(tmp_path):
     df = pl.DataFrame({"a": [1, 2, 3]})
     df.write_parquet(tmp_path / "df.parquet")
     q = pl.scan_parquet(tmp_path / "df.parquet", row_index_name="foo").select(
