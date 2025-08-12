@@ -36,6 +36,26 @@
 #include <memory>
 
 namespace cudf::groupby::detail::hash {
+
+namespace {
+
+// The number of columns in the keys table that will trigger caching of row hashes.
+// This is a heuristic to reduce memory read when the keys table is hashes twice.
+constexpr int HASH_CACHING_THRESHOLD = 4;
+
+int count_nested_columns(column_view const& input)
+{
+  if (!is_nested(input.type())) { return 1; }
+
+  // Count the current column too.
+  return 1 + std::accumulate(
+               input.child_begin(), input.child_end(), 0, [](int count, column_view const& child) {
+                 return count + count_nested_columns(child);
+               });
+}
+
+}  // namespace
+
 template <typename Equal, typename Hash>
 std::unique_ptr<table> compute_groupby(table_view const& keys,
                                        host_span<aggregation_request const> requests,
@@ -49,11 +69,24 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
   // convert to int64_t to avoid potential overflow with large `keys`
   auto const num_keys = static_cast<int64_t>(keys.num_rows());
 
-  rmm::device_uvector<hash_value_type> cached_hashes(num_keys, stream);
-  thrust::tabulate(rmm::exec_policy_nosync(stream),
-                   cached_hashes.begin(),
-                   cached_hashes.end(),
-                   [d_row_hash] __device__(size_type const idx) { return d_row_hash(idx); });
+  [[maybe_unused]] auto const [cached_hashes, cached_hashes_data] =
+    [&]() -> std::pair<rmm::device_uvector<hash_value_type>, hash_value_type const*> {
+    auto const num_columns =
+      std::accumulate(keys.begin(), keys.end(), 0, [](int count, column_view const& col) {
+        return count + count_nested_columns(col);
+      });
+
+    if (num_columns <= HASH_CACHING_THRESHOLD) {
+      return {rmm::device_uvector<hash_value_type>{0, stream}, nullptr};
+    }
+
+    rmm::device_uvector<hash_value_type> hashes(num_keys, stream);
+    thrust::tabulate(rmm::exec_policy_nosync(stream),
+                     hashes.begin(),
+                     hashes.end(),
+                     [d_row_hash] __device__(size_type const idx) { return d_row_hash(idx); });
+    return {std::move(hashes), hashes.data()};
+  }();
 
   // Cache of sparse results where the location of aggregate value in each
   // column is indexed by the hash set
@@ -64,7 +97,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
     cudf::detail::CUCO_DESIRED_LOAD_FACTOR,  // 50% load factor
     cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
     d_row_equal,
-    probing_scheme_t{row_hasher_with_cache_t{d_row_hash, cached_hashes.data()}},
+    probing_scheme_t{row_hasher_with_cache_t{d_row_hash, cached_hashes_data}},
     cuco::thread_scope_device,
     cuco::storage<GROUPBY_BUCKET_SIZE>{},
     cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
