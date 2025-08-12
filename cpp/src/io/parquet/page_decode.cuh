@@ -1507,15 +1507,18 @@ inline __device__ bool setup_local_page_info(page_state_s* const s,
 }
 
 /**
- * @brief Zero-fill null positions in output data using parallel per-bit processing
+ * @brief Zero-fill null positions in output data using parallel per-validity-block processing
  *
  * This function processes the validity bitmap and zero-fills all positions in the output
  * data that correspond to null values. It uses a parallel approach where each thread
- * handles one bit position at a time.
+ * handles one 32-bit validity block at a time, looping only over the zero bits (null positions)
+ * within that block.
  *
  * @tparam block_size CUDA block size for the kernel
  * @param s Page state containing all necessary information
+ * @param dtype_len Size of each data element in bytes
  * @param valid_map_offset Starting bit offset in the validity map
+ * @param num_values Number of values to process
  * @param t Thread index within the block
  */
 template <int block_size>
@@ -1527,38 +1530,87 @@ __device__ void zero_fill_null_positions_shared(
   auto const& ni             = s->nesting_info[leaf_level_index];
 
   // Check if we have nulls to fill
-  if (ni.valid_map == nullptr) { return; }
+  if ((ni.valid_map == nullptr) || (num_values == 0)) { return; }
 
   auto const data_out = ni.data_out;
 
-  constexpr int bits_per_mask = sizeof(cudf::bitmask_type) * 8;  // 32 bits
+  constexpr int bits_per_mask = sizeof(cudf::bitmask_type) * 8;
+  constexpr int warp_size = 32;
+  constexpr int num_warps = block_size / warp_size;
 
-  // Calculate the range of bits we need to process
-  int const start_bit = valid_map_offset + t;
-  int const end_bit   = valid_map_offset + num_values;
+  // Calculate the range of validity blocks we need to process
+  int const start_bit_idx = valid_map_offset;
+  int const end_bit_idx   = valid_map_offset + num_values;
+  int const start_block   = start_bit_idx / bits_per_mask;
+  int const end_block     = (end_bit_idx + bits_per_mask - 1) / bits_per_mask;  // round up
+  int const num_blocks    = end_block - start_block;
 
-  // Each thread handles one bit position
-  // Assume block_size is a multiple of bits_per_mask for optimization
-  static_assert(block_size % bits_per_mask == 0,
-                "assumes block_size is a multiple of bits_per_mask");
-  int const bit_in_block = start_bit % bits_per_mask;  // constant for the whole loop
+  int const warp_id = t / warp_size;
+  int const lane_id = t % warp_size;
 
-  // Loop over blocks of bits, one thread per bit
-  for (int bit_idx = start_bit; bit_idx < end_bit; bit_idx += block_size) {
-    int const validity_block_idx = bit_idx / bits_per_mask;
+  // Helper lambda for warp-parallel bit processing
+  auto process_block_parallel = [&](int block_idx) {
+    static_assert(bits_per_mask == warp_size, "if 64bit mask, use 2 warps per mask");
 
-    // Check if this bit represents a null value
-    cudf::bitmask_type const validity_word = ni.valid_map[validity_block_idx];
-    bool const is_valid                    = (validity_word >> bit_in_block) & 1;
-
-    if (!is_valid) {
-      // This position is null, zero-fill it
-      int const dst_pos =
-        bit_idx - valid_map_offset;  // same as value_count, which is row# for non-lists
+    cudf::bitmask_type validity_word = ni.valid_map[block_idx];
+    int const block_start_bit = block_idx * bits_per_mask;
+    
+    // Each thread in the warp processes one bit
+    int const bit_idx = block_start_bit + lane_id;
+    int const dst_pos = bit_idx - valid_map_offset;
+    
+    // Check if this bit is within our range
+    bool in_range = (bit_idx >= start_bit_idx && bit_idx < end_bit_idx);
+    
+    // Check if this bit is null (0 in validity mask)
+    bool is_null = ((validity_word >> lane_id) & 1) == 0;
+    
+    if (in_range && is_null) {
       void* const dst = data_out + (static_cast<size_t>(dst_pos) * dtype_len);
       cuda::std::memset(dst, 0, dtype_len);
     }
+  };
+
+  // Helper lambda for sequential bit processing (fallback for remaining blocks)
+  auto process_block_sequential = [&](int block_idx) {
+    cudf::bitmask_type validity_word = ni.valid_map[block_idx];
+    cudf::bitmask_type null_positions = ~validity_word;
+    int const dst_pos_first_bit = block_idx * bits_per_mask - valid_map_offset;
+    
+    while (null_positions != 0) {
+      int const bit_pos = __ffs(null_positions) - 1;
+      int const dst_pos = dst_pos_first_bit + bit_pos;
+      
+      void* const dst = data_out + (static_cast<size_t>(dst_pos) * dtype_len);
+      cuda::std::memset(dst, 0, dtype_len);
+      
+      null_positions &= (null_positions - 1);
+    }
+  };
+
+  // Phase 1: Assign specific blocks to warps for warp-parallel processing
+  if (warp_id == 0) {
+    // Warp 0: Process first block
+    process_block_parallel(start_block);
+  } else if (warp_id == 1 && num_blocks > 1) {
+    // Warp 1: Process last block (if different from first)
+    process_block_parallel(end_block - 1);
+  } else if (warp_id >= 2) {
+    // Warps 2+: Process additional blocks from the beginning
+    int const block_idx = start_block + (warp_id - 1);
+    if (block_idx < (end_block - 1)) {
+      process_block_parallel(block_idx);
+    }
   }
+
+  // Phase 2: All warps cooperatively process remaining middle blocks
+  auto const last_block_processed = static_cast<int>(num_blocks > 1);
+  int const remaining_start = start_block + num_warps - last_block_processed;
+  int const remaining_end = end_block - last_block_processed;
+  for (int block_idx = remaining_start + t; block_idx < remaining_end; block_idx += block_size) {
+    process_block_sequential(block_idx);
+  }
+
   __syncthreads();
 }
 
