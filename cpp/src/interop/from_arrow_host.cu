@@ -428,19 +428,9 @@ std::tuple<std::unique_ptr<column>, int64_t, int64_t> get_offsets_column(
           .buffers    = offsets_buffers,
   };
 
-  if (schema->type == NANOARROW_TYPE_STRING) {
+  if (schema->type == NANOARROW_TYPE_STRING || schema->type == NANOARROW_TYPE_LIST) {
     return copy_offsets_column<int32_t>(schema, &offsets_array, stream, mr);
   }
-
-  constexpr auto max_offset = static_cast<int64_t>(std::numeric_limits<int32_t>::max());
-  if (schema->type == NANOARROW_TYPE_LIST) {
-    auto result = copy_offsets_column<int32_t>(schema, &offsets_array, stream, mr);
-    CUDF_EXPECTS(std::get<2>(result) <= max_offset,
-                 "list offsets exceed 32-bit integer bounds",
-                 std::overflow_error);
-    return result;
-  }
-
   if (schema->type == NANOARROW_TYPE_LARGE_STRING) {
     return copy_offsets_column<int64_t>(schema, &offsets_array, stream, mr);
   }
@@ -454,6 +444,7 @@ std::tuple<std::unique_ptr<column>, int64_t, int64_t> get_offsets_column(
   auto const offset  = int64_offsets[input->offset];
   auto const length  = int64_offsets[input->offset + input->length] - offset;
 
+  constexpr auto max_offset = static_cast<int64_t>(std::numeric_limits<int32_t>::max());
   CUDF_EXPECTS(
     length <= max_offset, "large list offsets exceed 32-bit integer bounds", std::overflow_error);
 
