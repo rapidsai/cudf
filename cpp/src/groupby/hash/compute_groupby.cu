@@ -85,7 +85,8 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
                      hashes.begin(),
                      hashes.end(),
                      [d_row_hash] __device__(size_type const idx) { return d_row_hash(idx); });
-    return {std::move(hashes), hashes.data()};
+    auto hashes_data = hashes.data();
+    return {std::move(hashes), hashes_data};
   }();
 
   // Cache of sparse results where the location of aggregate value in each
