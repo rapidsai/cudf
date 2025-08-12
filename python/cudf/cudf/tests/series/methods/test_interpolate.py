@@ -1,35 +1,11 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2025, NVIDIA CORPORATION.
 
 import pytest
 
 import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing import assert_eq
-from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        # basics
-        {"A": [1.0, 2.0, 3.0], "B": [4.0, 5.0, 6.0]},
-        {"A": [1.0, None, 3.0], "B": [4.0, None, 6.0]},
-        {"A": [None, 2.0, 3.0], "B": [4.0, 5.0, None]},
-    ],
-)
-@pytest.mark.parametrize("method", ["linear"])
-@pytest.mark.parametrize("axis", [0])
-def test_interpolate_dataframe(data, method, axis):
-    # Pandas interpolate methods do not seem to work
-    # with nullable dtypes yet, so this method treats
-    # NAs as NaNs
-    # https://github.com/pandas-dev/pandas/issues/40252
-    gdf = cudf.DataFrame(data)
-    pdf = gdf.to_pandas()
-
-    expect = pdf.interpolate(method=method, axis=axis)
-    got = gdf.interpolate(method=method, axis=axis)
-    assert_eq(expect, got)
+from cudf.testing._utils import expect_warning_if
 
 
 @pytest.mark.skipif(
@@ -49,9 +25,9 @@ def test_interpolate_dataframe(data, method, axis):
         [0.1, 0.2, 0.3],
     ],
 )
-@pytest.mark.parametrize("method", ["linear"])
-@pytest.mark.parametrize("axis", [0])
-def test_interpolate_series(data, method, axis):
+def test_interpolate_series(data):
+    axis = 0
+    method = "linear"
     gsr = cudf.Series(data)
     psr = gsr.to_pandas()
 
@@ -64,11 +40,8 @@ def test_interpolate_series(data, method, axis):
     assert_eq(expect, got, check_dtype=psr.dtype != "object")
 
 
-@pytest.mark.parametrize(
-    "data,index", [([2.0, None, 4.0, None, 2.0], [1, 2, 3, 2, 1])]
-)
-def test_interpolate_series_unsorted_index(data, index):
-    gsr = cudf.Series(data, index=index)
+def test_interpolate_series_unsorted_index():
+    gsr = cudf.Series([2.0, None, 4.0, None, 2.0], index=[1, 2, 3, 2, 1])
     psr = gsr.to_pandas()
 
     expect = psr.interpolate(method="values")
@@ -107,38 +80,6 @@ def test_interpolate_series_values_or_index(data, index, method):
         got = gsr.interpolate(method=method)
 
     assert_eq(expect, got, check_dtype=psr.dtype != "object")
-
-
-@pytest.mark.parametrize(
-    "data,kwargs",
-    [
-        (
-            {"A": ["a", "b", "c"], "B": ["d", "e", "f"]},
-            {"axis": 0, "method": "linear"},
-        ),
-        ({"A": [1, 2, 3]}, {"method": "pad", "limit_direction": "forward"}),
-        ({"A": [1, 2, 3]}, {"method": "ffill", "limit_direction": "forward"}),
-        ({"A": [1, 2, 3]}, {"method": "bfill", "limit_direction": "backward"}),
-        (
-            {"A": [1, 2, 3]},
-            {"method": "backfill", "limit_direction": "backward"},
-        ),
-    ],
-)
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Does not fail on older versions of pandas",
-)
-def test_interpolate_dataframe_error_cases(data, kwargs):
-    gsr = cudf.DataFrame(data)
-    psr = gsr.to_pandas()
-
-    assert_exceptions_equal(
-        lfunc=psr.interpolate,
-        rfunc=gsr.interpolate,
-        lfunc_args_and_kwargs=([], kwargs),
-        rfunc_args_and_kwargs=([], kwargs),
-    )
 
 
 def test_interpolate_noop_new_column():
