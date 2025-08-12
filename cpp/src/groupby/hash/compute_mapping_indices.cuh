@@ -72,19 +72,18 @@ __device__ void find_local_mapping(cooperative_groups::thread_block const& block
   }
 }
 
-template <typename SetRef>
 __device__ void find_global_mapping(cooperative_groups::thread_block const& block,
                                     cudf::size_type cardinality,
-                                    SetRef global_set,
                                     cudf::size_type* shared_set_indices,
-                                    cudf::size_type* global_mapping_index)
+                                    cudf::size_type* global_mapping_index,
+                                    cudf::size_type const* key_indices)
 {
   // for all unique keys in shared memory hash set, stores their matches in
   // global hash set to `global_mapping_index`
   for (auto idx = block.thread_rank(); idx < cardinality; idx += block.num_threads()) {
     auto const input_idx = shared_set_indices[idx];
     global_mapping_index[block.group_index().x * GROUPBY_SHM_MAX_ELEMENTS + idx] =
-      *global_set.insert_and_find(input_idx).first;
+      key_indices[input_idx];
   }
 }
 
@@ -103,6 +102,7 @@ CUDF_KERNEL void mapping_indices_kernel(cudf::size_type num_input_rows,
                                         cudf::size_type* local_mapping_index,
                                         cudf::size_type* global_mapping_index,
                                         cudf::size_type* block_cardinality,
+                                        cudf::size_type const* key_indices,
                                         cuda::std::atomic_flag* needs_global_memory_fallback)
 {
   __shared__ cudf::size_type shared_set_indices[GROUPBY_SHM_MAX_ELEMENTS];
@@ -113,7 +113,7 @@ CUDF_KERNEL void mapping_indices_kernel(cudf::size_type num_input_rows,
   auto raw_set = cuco::static_set_ref{
     cuco::empty_key<cudf::size_type>{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
     global_set.key_eq(),
-    probing_scheme_t{global_set.hash_function()},
+    simplified_probing_scheme_t{global_set.hash_function()},
     cuco::thread_scope_block,
     cuco::bucket_storage_ref<cudf::size_type, GROUPBY_BUCKET_SIZE, decltype(valid_extent)>{
       valid_extent, slots}};
@@ -152,7 +152,7 @@ CUDF_KERNEL void mapping_indices_kernel(cudf::size_type num_input_rows,
   // Insert unique keys from shared to global hash set if block-cardinality
   // doesn't exceed the threshold upper-limit
   if (cardinality < GROUPBY_CARDINALITY_THRESHOLD) {
-    find_global_mapping(block, cardinality, global_set, shared_set_indices, global_mapping_index);
+    find_global_mapping(block, cardinality, shared_set_indices, global_mapping_index, key_indices);
   }
 
   if (block.thread_rank() == 0) { block_cardinality[block.group_index().x] = cardinality; }
@@ -178,9 +178,12 @@ void compute_mapping_indices(cudf::size_type grid_size,
                              cudf::size_type* local_mapping_index,
                              cudf::size_type* global_mapping_index,
                              cudf::size_type* block_cardinality,
+                             cudf::size_type const* key_indices,
                              cuda::std::atomic_flag* needs_global_memory_fallback,
                              rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
+
   mapping_indices_kernel<<<grid_size, GROUPBY_BLOCK_SIZE, 0, stream>>>(
     num,
     global_set,
@@ -189,6 +192,7 @@ void compute_mapping_indices(cudf::size_type grid_size,
     local_mapping_index,
     global_mapping_index,
     block_cardinality,
+    key_indices,
     needs_global_memory_fallback);
 }
 }  // namespace cudf::groupby::detail::hash

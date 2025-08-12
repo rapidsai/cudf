@@ -182,9 +182,8 @@ struct initialize_sparse_table {
   }
 };
 
-template <typename SetType>
 struct global_memory_fallback_fn {
-  SetType set;
+  cudf::size_type const* key_indices;
   cudf::table_device_view input_values;
   cudf::mutable_table_device_view output_values;
   cudf::aggregation::Kind const* __restrict__ aggs;
@@ -193,7 +192,7 @@ struct global_memory_fallback_fn {
   bitmask_type const* __restrict__ row_bitmask;
   bool skip_rows_with_nulls;
 
-  global_memory_fallback_fn(SetType set,
+  global_memory_fallback_fn(cudf::size_type const* key_indices,
                             cudf::table_device_view input_values,
                             cudf::mutable_table_device_view output_values,
                             cudf::aggregation::Kind const* aggs,
@@ -201,7 +200,7 @@ struct global_memory_fallback_fn {
                             cudf::size_type stride,
                             bitmask_type const* row_bitmask,
                             bool skip_rows_with_nulls)
-    : set(set),
+    : key_indices(key_indices),
       input_values(input_values),
       output_values(output_values),
       aggs(aggs),
@@ -212,13 +211,17 @@ struct global_memory_fallback_fn {
   {
   }
 
-  __device__ void operator()(cudf::size_type i)
+  __device__ void operator()(int64_t i) const
   {
-    auto const block_id = (i % stride) / GROUPBY_BLOCK_SIZE;
+    auto const num_rows = input_values.num_rows();
+    auto const row_idx  = static_cast<size_type>(i % num_rows);
+
+    auto const block_id = (row_idx % stride) / GROUPBY_BLOCK_SIZE;
     if (block_cardinality[block_id] >= GROUPBY_CARDINALITY_THRESHOLD and
-        (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, i))) {
-      auto const result = set.insert_and_find(i);
-      cudf::detail::aggregate_row(output_values, *result.first, input_values, i, aggs);
+        (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, row_idx))) {
+      auto const target_idx = key_indices[row_idx];
+      auto const col_idx    = static_cast<size_type>(i / num_rows);
+      cudf::detail::aggregate_row(col_idx, output_values, target_idx, input_values, row_idx, aggs);
     }
   }
 };
@@ -249,9 +252,8 @@ struct global_memory_fallback_fn {
  *
  * @tparam SetType The type of the hash set device ref
  */
-template <typename SetType>
 struct compute_single_pass_aggs_fn {
-  SetType set;
+  cudf::size_type const* key_indices;
   table_device_view input_values;
   mutable_table_device_view output_values;
   aggregation::Kind const* __restrict__ aggs;
@@ -274,13 +276,13 @@ struct compute_single_pass_aggs_fn {
    * null values should be skipped. It `true`, it is assumed `row_bitmask` is a
    * bitmask where bit `i` indicates the presence of a null value in row `i`.
    */
-  compute_single_pass_aggs_fn(SetType set,
+  compute_single_pass_aggs_fn(cudf::size_type const* key_indices,
                               table_device_view input_values,
                               mutable_table_device_view output_values,
                               aggregation::Kind const* aggs,
                               bitmask_type const* row_bitmask,
                               bool skip_rows_with_nulls)
-    : set(set),
+    : key_indices(key_indices),
       input_values(input_values),
       output_values(output_values),
       aggs(aggs),
@@ -289,12 +291,15 @@ struct compute_single_pass_aggs_fn {
   {
   }
 
-  __device__ void operator()(size_type i)
+  __device__ void operator()(int64_t i) const
   {
-    if (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, i)) {
-      auto const result = set.insert_and_find(i);
+    auto const num_rows = input_values.num_rows();
+    auto const row_idx  = static_cast<size_type>(i % num_rows);
 
-      cudf::detail::aggregate_row(output_values, *result.first, input_values, i, aggs);
+    if (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, row_idx)) {
+      auto const target_idx = key_indices[row_idx];
+      auto const col_idx    = static_cast<size_type>(i / num_rows);
+      cudf::detail::aggregate_row(col_idx, output_values, target_idx, input_values, row_idx, aggs);
     }
   }
 };

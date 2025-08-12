@@ -27,6 +27,7 @@
 #include <cudf/detail/binaryop.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
@@ -40,6 +41,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <memory>
+#include <string>
 #include <unordered_map>
 #include <utility>
 
@@ -860,12 +862,66 @@ void aggregate_result_functor::operator()<aggregation::HOST_UDF>(aggregation con
 
 }  // namespace detail
 
+namespace {
+
+std::string get_aggregation_name(aggregation const& agg)
+{
+  switch (agg.kind) {
+    case aggregation::Kind::SUM: return "sum";
+    case aggregation::Kind::SUM_WITH_OVERFLOW: return "sum_with_overflow";
+    case aggregation::Kind::PRODUCT: return "product";
+    case aggregation::Kind::MIN: return "min";
+    case aggregation::Kind::MAX: return "max";
+    case aggregation::Kind::COUNT_VALID: return "count_valid";
+    case aggregation::Kind::COUNT_ALL: return "count_all";
+    case aggregation::Kind::ANY: return "any";
+    case aggregation::Kind::ALL: return "all";
+    case aggregation::Kind::SUM_OF_SQUARES: return "sum_of_squares";
+    case aggregation::Kind::MEAN: return "mean";
+    case aggregation::Kind::M2: return "m2";
+    case aggregation::Kind::VARIANCE: return "variance";
+    case aggregation::Kind::STD: return "std";
+    case aggregation::Kind::MEDIAN: return "median";
+    case aggregation::Kind::QUANTILE: return "quantile";
+    case aggregation::Kind::ARGMAX: return "argmax";
+    case aggregation::Kind::ARGMIN: return "argmin";
+    case aggregation::Kind::NUNIQUE: return "nunique";
+    case aggregation::Kind::NTH_ELEMENT: return "nth_element";
+    case aggregation::Kind::ROW_NUMBER: return "row_number";
+    case aggregation::Kind::EWMA: return "ewma";
+    case aggregation::Kind::RANK: return "rank";
+    case aggregation::Kind::COLLECT_LIST: return "collect_list";
+    case aggregation::Kind::COLLECT_SET: return "collect_set";
+    case aggregation::Kind::LEAD: return "lead";
+    case aggregation::Kind::LAG: return "lag";
+    case aggregation::Kind::PTX: return "ptx";
+    case aggregation::Kind::CUDA: return "cuda";
+    case aggregation::Kind::HOST_UDF: return "host_udf";
+    case aggregation::Kind::MERGE_LISTS: return "merge_lists";
+    case aggregation::Kind::MERGE_SETS: return "merge_sets";
+    case aggregation::Kind::MERGE_M2: return "merge_m2";
+    case aggregation::Kind::COVARIANCE: return "covariance";
+    case aggregation::Kind::CORRELATION: return "correlation";
+    case aggregation::Kind::TDIGEST: return "tdigest";
+    case aggregation::Kind::MERGE_TDIGEST: return "merge_tdigest";
+    case aggregation::Kind::HISTOGRAM: return "histogram";
+    case aggregation::Kind::MERGE_HISTOGRAM: return "merge_histogram";
+    case aggregation::Kind::BITWISE_AGG: return "bitwise_agg";
+
+    default: return "";
+  }
+}
+
+}  // namespace
+
 // Sort-based groupby
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::sort_aggregate(
   host_span<aggregation_request const> requests,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
+  CUDF_FUNC_RANGE();
+
   // We're going to start by creating a cache of results so that aggs that
   // depend on other aggs will not have to be recalculated. e.g. mean depends on
   // sum and count. std depends on mean and count
@@ -875,6 +931,9 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::sort
     auto store_functor =
       detail::aggregate_result_functor(request.values, helper(), cache, stream, mr);
     for (auto const& agg : request.aggregations) {
+      auto const name = "sort_agg: " + get_aggregation_name(*agg);
+      cudf::scoped_range rng{name.c_str()};
+
       // TODO (dm): single pass compute all supported reductions
       cudf::detail::aggregation_dispatcher(agg->kind, store_functor, *agg);
     }

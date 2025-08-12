@@ -16,7 +16,7 @@
 
 #include "hash_compound_agg_finalizer.hpp"
 #include "helpers.cuh"
-#include "var_hash_functor.cuh"
+#include "m2_var_functor.cuh"
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
@@ -29,26 +29,24 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
 
 #include <memory>
 
 namespace cudf::groupby::detail::hash {
-template <typename SetType>
-hash_compound_agg_finalizer<SetType>::hash_compound_agg_finalizer(
-  column_view col,
-  cudf::detail::result_cache* sparse_results,
-  cudf::detail::result_cache* dense_results,
-  device_span<size_type const> gather_map,
-  SetType set,
-  bitmask_type const* row_bitmask,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+
+hash_compound_agg_finalizer::hash_compound_agg_finalizer(column_view col,
+                                                         cudf::detail::result_cache* sparse_results,
+                                                         cudf::detail::result_cache* dense_results,
+                                                         device_span<size_type const> key_indices,
+                                                         device_span<size_type const> gather_map,
+                                                         bitmask_type const* row_bitmask,
+                                                         rmm::cuda_stream_view stream,
+                                                         rmm::device_async_resource_ref mr)
   : col(col),
     sparse_results(sparse_results),
     dense_results(dense_results),
+    key_indices(key_indices),
     gather_map(gather_map),
-    set(set),
     row_bitmask(row_bitmask),
     stream(stream),
     mr(mr)
@@ -57,8 +55,7 @@ hash_compound_agg_finalizer<SetType>::hash_compound_agg_finalizer(
     cudf::is_dictionary(col.type()) ? cudf::dictionary_column_view(col).keys().type() : col.type();
 }
 
-template <typename SetType>
-auto hash_compound_agg_finalizer<SetType>::to_dense_agg_result(cudf::aggregation const& agg)
+auto hash_compound_agg_finalizer::to_dense_agg_result(cudf::aggregation const& agg)
 {
   auto s                  = sparse_results->get_result(col, agg);
   auto dense_result_table = cudf::detail::gather(table_view({std::move(s)}),
@@ -70,8 +67,7 @@ auto hash_compound_agg_finalizer<SetType>::to_dense_agg_result(cudf::aggregation
   return std::move(dense_result_table->release()[0]);
 }
 
-template <typename SetType>
-auto hash_compound_agg_finalizer<SetType>::gather_argminmax(aggregation const& agg)
+auto hash_compound_agg_finalizer::gather_argminmax(aggregation const& agg)
 {
   auto arg_result = to_dense_agg_result(agg);
   // We make a view of ARG(MIN/MAX) result without a null mask and gather
@@ -96,15 +92,13 @@ auto hash_compound_agg_finalizer<SetType>::gather_argminmax(aggregation const& a
   return std::move(gather_argminmax->release()[0]);
 }
 
-template <typename SetType>
-void hash_compound_agg_finalizer<SetType>::visit(cudf::aggregation const& agg)
+void hash_compound_agg_finalizer::visit(cudf::aggregation const& agg)
 {
   if (dense_results->has_result(col, agg)) return;
   dense_results->add_result(col, agg, to_dense_agg_result(agg));
 }
 
-template <typename SetType>
-void hash_compound_agg_finalizer<SetType>::visit(cudf::detail::min_aggregation const& agg)
+void hash_compound_agg_finalizer::visit(cudf::detail::min_aggregation const& agg)
 {
   if (dense_results->has_result(col, agg)) return;
   if (result_type.id() == type_id::STRING) {
@@ -115,8 +109,7 @@ void hash_compound_agg_finalizer<SetType>::visit(cudf::detail::min_aggregation c
   }
 }
 
-template <typename SetType>
-void hash_compound_agg_finalizer<SetType>::visit(cudf::detail::max_aggregation const& agg)
+void hash_compound_agg_finalizer::visit(cudf::detail::max_aggregation const& agg)
 {
   if (dense_results->has_result(col, agg)) return;
 
@@ -128,8 +121,7 @@ void hash_compound_agg_finalizer<SetType>::visit(cudf::detail::max_aggregation c
   }
 }
 
-template <typename SetType>
-void hash_compound_agg_finalizer<SetType>::visit(cudf::detail::mean_aggregation const& agg)
+void hash_compound_agg_finalizer::visit(cudf::detail::mean_aggregation const& agg)
 {
   if (dense_results->has_result(col, agg)) return;
 
@@ -150,8 +142,39 @@ void hash_compound_agg_finalizer<SetType>::visit(cudf::detail::mean_aggregation 
   dense_results->add_result(col, agg, std::move(result));
 }
 
-template <typename SetType>
-void hash_compound_agg_finalizer<SetType>::visit(cudf::detail::var_aggregation const& agg)
+void hash_compound_agg_finalizer::visit(cudf::detail::m2_aggregation const& agg)
+{
+  if (dense_results->has_result(col, agg)) { return; }
+
+  auto sum_agg   = make_sum_aggregation();
+  auto count_agg = make_count_aggregation();
+  this->visit(*sum_agg);
+  this->visit(*count_agg);
+  auto const sum_result   = sparse_results->get_result(col, *sum_agg);
+  auto const count_result = sparse_results->get_result(col, *count_agg);
+
+  auto const d_values_ptr = column_device_view::create(col, stream);
+  auto const d_sum_ptr    = column_device_view::create(sum_result, stream).release();
+  auto const d_count_ptr  = column_device_view::create(count_result, stream).release();
+
+  auto output = make_fixed_width_column(
+    cudf::detail::target_type(result_type, agg.kind), col.size(), mask_state::ALL_NULL, stream);
+  auto output_view  = mutable_column_device_view::create(output->mutable_view(), stream);
+  auto output_tview = mutable_table_view{{output->mutable_view()}};
+  cudf::detail::initialize_with_identity(
+    output_tview, host_span<cudf::aggregation::Kind const>(&agg.kind, 1), stream);
+
+  thrust::for_each_n(
+    rmm::exec_policy_nosync(stream),
+    thrust::make_counting_iterator(0),
+    col.size(),
+    m2_hash_functor{
+      key_indices, row_bitmask, *output_view, *d_values_ptr, *d_sum_ptr, *d_count_ptr});
+  sparse_results->add_result(col, agg, std::move(output));
+  dense_results->add_result(col, agg, to_dense_agg_result(agg));
+}
+
+void hash_compound_agg_finalizer::visit(cudf::detail::var_aggregation const& agg)
 {
   if (dense_results->has_result(col, agg)) return;
 
@@ -178,13 +201,12 @@ void hash_compound_agg_finalizer<SetType>::visit(cudf::detail::var_aggregation c
     thrust::make_counting_iterator(0),
     col.size(),
     var_hash_functor{
-      set, row_bitmask, *var_result_view, *values_view, *sum_view, *count_view, agg._ddof});
+      key_indices, row_bitmask, *var_result_view, *values_view, *sum_view, *count_view, agg._ddof});
   sparse_results->add_result(col, agg, std::move(var_result));
   dense_results->add_result(col, agg, to_dense_agg_result(agg));
 }
 
-template <typename SetType>
-void hash_compound_agg_finalizer<SetType>::visit(cudf::detail::std_aggregation const& agg)
+void hash_compound_agg_finalizer::visit(cudf::detail::std_aggregation const& agg)
 {
   if (dense_results->has_result(col, agg)) return;
   auto var_agg = make_variance_aggregation(agg._ddof);
@@ -195,6 +217,4 @@ void hash_compound_agg_finalizer<SetType>::visit(cudf::detail::std_aggregation c
   dense_results->add_result(col, agg, std::move(result));
 }
 
-template class hash_compound_agg_finalizer<hash_set_ref_t<cuco::find_tag>>;
-template class hash_compound_agg_finalizer<nullable_hash_set_ref_t<cuco::find_tag>>;
 }  // namespace cudf::groupby::detail::hash

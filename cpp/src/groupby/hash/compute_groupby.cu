@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,10 @@
 #include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/gather.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/cuda.hpp>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/groupby.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
@@ -37,6 +41,35 @@
 #include <memory>
 
 namespace cudf::groupby::detail::hash {
+template <typename SetRefType>
+CUDF_KERNEL void insert_kernel(size_type* __restrict__ key_indices,
+                               size_type num_rows,
+                               SetRefType set_ref,
+                               bitmask_type const* __restrict__ row_bitmask,
+                               bool skip_rows_with_nulls)
+{
+  auto const stride = cudf::detail::grid_1d::grid_stride();
+
+  for (auto idx = cudf::detail::grid_1d::global_thread_id(); idx < num_rows; idx += stride) {
+    auto const is_valid_input = not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, idx);
+    if (is_valid_input) {
+      auto const [inserted_idx_ptr, _] = set_ref.insert_and_find(idx);
+      key_indices[idx]                 = *inserted_idx_ptr;
+    }
+  }
+}
+
+template <typename SetRefType>
+cudf::size_type max_occupancy_insert_kernel(cudf::size_type n)
+{
+  cudf::size_type max_active_blocks{-1};
+  CUDF_CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+    &max_active_blocks, insert_kernel<SetRefType>, GROUPBY_BLOCK_SIZE, 0));
+  auto const grid_size  = max_active_blocks * cudf::detail::num_multiprocessors();
+  auto const num_blocks = cudf::util::div_rounding_up_safe(n, GROUPBY_BLOCK_SIZE);
+  return std::min(grid_size, num_blocks);
+}
+
 template <typename Equal, typename Hash>
 std::unique_ptr<table> compute_groupby(table_view const& keys,
                                        host_span<aggregation_request const> requests,
@@ -47,6 +80,8 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
                                        rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr)
 {
+  CUDF_FUNC_RANGE();
+
   // convert to int64_t to avoid potential overflow with large `keys`
   auto const num_keys = static_cast<int64_t>(keys.num_rows());
 
@@ -54,47 +89,137 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
   // column is indexed by the hash set
   cudf::detail::result_cache sparse_results(requests.size());
 
-  auto set = cuco::static_set{
-    cuco::extent<int64_t>{num_keys},
-    cudf::detail::CUCO_DESIRED_LOAD_FACTOR,  // 50% load factor
-    cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
-    d_row_equal,
-    probing_scheme_t{d_row_hash},
-    cuco::thread_scope_device,
-    cuco::storage<GROUPBY_BUCKET_SIZE>{},
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
-    stream.value()};
-
   auto row_bitmask =
     skip_rows_with_nulls
       ? cudf::bitmask_and(keys, stream, cudf::get_current_device_resource_ref()).first
       : rmm::device_buffer{};
 
+  stream.synchronize();
+  auto const [input_index_to_key_index, gather_map] = [&] {
+    cudf::scoped_range rng{"process set"};
+    auto set = cuco::static_set{
+      cuco::extent<int64_t>{num_keys},
+      cudf::detail::CUCO_DESIRED_LOAD_FACTOR,  // 50% load factor
+      cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
+      d_row_equal,
+      probing_scheme_t{d_row_hash},
+      cuco::thread_scope_device,
+      cuco::storage<GROUPBY_BUCKET_SIZE>{},
+      cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
+      stream.value()};
+
+    rmm::device_uvector<size_type> key_indices(num_keys, stream);
+    thrust::uninitialized_fill(
+      rmm::exec_policy_nosync(stream), key_indices.begin(), key_indices.end(), -1);
+    stream.synchronize();
+    {
+      cudf::scoped_range rng{"insert set"};
+      auto set_ref = set.ref(cuco::op::insert_and_find);
+
+      auto grid_size = max_occupancy_insert_kernel<decltype(set_ref)>(num_keys);
+      insert_kernel<<<grid_size, GROUPBY_BLOCK_SIZE, 0, stream.value()>>>(
+        key_indices.begin(),
+        num_keys,
+        set_ref,
+        static_cast<bitmask_type const*>(row_bitmask.data()),
+        skip_rows_with_nulls);
+
+      // thrust::transform(rmm::exec_policy_nosync(stream),
+      //                   thrust::make_counting_iterator(0),
+      //                   thrust::make_counting_iterator(keys.num_rows()),
+      //                   key_indices.begin(),
+      //                   [set_ref,
+      //                    skip_rows_with_nulls,
+      //                    row_bitmask = static_cast<bitmask_type*>(
+      //                      row_bitmask.data())] __device__(size_type const idx) mutable {
+      //                     if (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, idx)) {
+      //                       auto const [inserted_idx_ptr, _] = set_ref.insert_and_find(idx);
+      //                       return *inserted_idx_ptr;
+      //                     }
+      //                     return -1;
+      //                   });
+      stream.synchronize();
+    }
+    rmm::device_uvector<cudf::size_type> gather_map(num_keys, stream);
+    stream.synchronize();
+    {
+      cudf::scoped_range rng{"gather map"};
+      auto const keys_end = set.retrieve_all(gather_map.begin(), stream.value());
+      gather_map.resize(std::distance(gather_map.begin(), keys_end), stream);
+      stream.synchronize();
+    }
+    return std::pair{std::move(key_indices), std::move(gather_map)};
+  }();
+
+  // {
+  //   auto h_map = cudf::detail::make_std_vector(input_index_to_key_index, stream);
+  //   printf("\n\n\nmap: \n");
+  //   for (auto& idx : h_map) {
+  //     printf("%d, ", idx);
+  //   }
+  //   printf("\n\n\n");
+  // }
+
+  auto set = cuco::static_set{
+    cuco::extent<int64_t>{num_keys},
+    cudf::detail::CUCO_DESIRED_LOAD_FACTOR,  // 50% load factor
+    cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
+    key_indices_comparator_t{input_index_to_key_index.begin()},
+    simplified_probing_scheme_t{input_index_to_key_index.begin()},
+    cuco::thread_scope_device,
+    cuco::storage<GROUPBY_BUCKET_SIZE>{},
+    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
+    stream.value()};
+
   // Compute all single pass aggs first
-  auto gather_map = compute_aggregations(num_keys,
-                                         skip_rows_with_nulls,
-                                         static_cast<bitmask_type*>(row_bitmask.data()),
-                                         set,
-                                         requests,
-                                         &sparse_results,
-                                         stream);
+  stream.synchronize();
+  {
+    cudf::scoped_range rng{"compute_aggregations"};
+    compute_aggregations(num_keys,
+                         skip_rows_with_nulls,
+                         static_cast<bitmask_type*>(row_bitmask.data()),
+                         set,
+                         gather_map,
+                         input_index_to_key_index.begin(),
+                         requests,
+                         &sparse_results,
+                         stream);
+    stream.synchronize();
+  }
+  // {
+  //   auto h_map = cudf::detail::make_std_vector(gather_map, stream);
+  //   printf("\n\n\ngather_map: \n");
+  //   for (auto& idx : h_map) {
+  //     printf("%d, ", idx);
+  //   }
+  //   printf("\n\n\n");
+  // }
 
   // Compact all results from sparse_results and insert into cache
-  sparse_to_dense_results(requests,
-                          &sparse_results,
-                          cache,
-                          gather_map,
-                          set.ref(cuco::find),
-                          static_cast<bitmask_type*>(row_bitmask.data()),
-                          stream,
-                          mr);
+  {
+    cudf::scoped_range rng{"sparse_to_dense_results"};
+    sparse_to_dense_results(requests,
+                            &sparse_results,
+                            cache,
+                            input_index_to_key_index,
+                            gather_map,
+                            static_cast<bitmask_type*>(row_bitmask.data()),
+                            stream,
+                            mr);
+    stream.synchronize();
+  }
 
-  return cudf::detail::gather(keys,
-                              gather_map,
-                              out_of_bounds_policy::DONT_CHECK,
-                              cudf::detail::negative_index_policy::NOT_ALLOWED,
-                              stream,
-                              mr);
+  {
+    cudf::scoped_range rng{"gather"};
+    auto tmp = cudf::detail::gather(keys,
+                                    gather_map,
+                                    out_of_bounds_policy::DONT_CHECK,
+                                    cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                    stream,
+                                    mr);
+    stream.synchronize();
+    return tmp;
+  }
 }
 
 template std::unique_ptr<table> compute_groupby<row_comparator_t, row_hash_t>(

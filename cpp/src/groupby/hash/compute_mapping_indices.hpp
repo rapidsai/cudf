@@ -29,6 +29,8 @@ namespace cudf::groupby::detail::hash {
 template <class SetRef>
 [[nodiscard]] cudf::size_type max_occupancy_grid_size(cudf::size_type n);
 
+[[nodiscard]] cudf::size_type max_occupancy_grid_size_smem_kernel(cudf::size_type n);
+
 template <class SetRef>
 void compute_mapping_indices(cudf::size_type grid_size,
                              cudf::size_type num,
@@ -38,6 +40,7 @@ void compute_mapping_indices(cudf::size_type grid_size,
                              cudf::size_type* local_mapping_index,
                              cudf::size_type* global_mapping_index,
                              cudf::size_type* block_cardinality,
+                             cudf::size_type const* key_indices,
                              cuda::std::atomic_flag* needs_global_memory_fallback,
                              rmm::cuda_stream_view stream);
 }  // namespace cudf::groupby::detail::hash

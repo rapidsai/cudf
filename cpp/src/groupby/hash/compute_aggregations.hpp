@@ -29,12 +29,14 @@ namespace cudf::groupby::detail::hash {
  * over the data and stores the results in `sparse_results`
  */
 template <typename SetType>
-rmm::device_uvector<cudf::size_type> compute_aggregations(
-  int64_t num_rows,
-  bool skip_rows_with_nulls,
-  bitmask_type const* row_bitmask,
-  SetType& global_set,
-  cudf::host_span<cudf::groupby::aggregation_request const> requests,
-  cudf::detail::result_cache* sparse_results,
-  rmm::cuda_stream_view stream);
+void compute_aggregations(int64_t num_rows,
+                          bool skip_rows_with_nulls,
+                          bitmask_type const* row_bitmask,
+                          SetType& global_set,
+                          cudf::device_span<cudf::size_type const> populated_keys,
+                          size_type const* key_indices,
+                          cudf::host_span<cudf::groupby::aggregation_request const> requests,
+                          cudf::detail::result_cache* sparse_results,
+                          rmm::cuda_stream_view stream);
+
 }  // namespace cudf::groupby::detail::hash

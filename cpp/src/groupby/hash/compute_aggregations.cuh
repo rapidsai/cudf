@@ -25,6 +25,7 @@
 #include "single_pass_functors.cuh"
 
 #include <cudf/detail/aggregation/result_cache.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -50,22 +51,30 @@ namespace cudf::groupby::detail::hash {
  * over the data and stores the results in `sparse_results`
  */
 template <typename SetType>
-rmm::device_uvector<cudf::size_type> compute_aggregations(
-  int64_t num_rows,
-  bool skip_rows_with_nulls,
-  bitmask_type const* row_bitmask,
-  SetType& global_set,
-  cudf::host_span<cudf::groupby::aggregation_request const> requests,
-  cudf::detail::result_cache* sparse_results,
-  rmm::cuda_stream_view stream)
+void compute_aggregations(int64_t num_rows,
+                          bool skip_rows_with_nulls,
+                          bitmask_type const* row_bitmask,
+                          SetType& global_set,
+                          cudf::device_span<cudf::size_type const> populated_keys,
+                          size_type const* key_indices,
+                          cudf::host_span<cudf::groupby::aggregation_request const> requests,
+                          cudf::detail::result_cache* sparse_results,
+                          rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
+
   // flatten the aggs to a table that can be operated on by aggregate_row
   auto [flattened_values, agg_kinds, aggs] = flatten_single_pass_aggs(requests, stream);
   auto const d_agg_kinds                   = cudf::detail::make_device_uvector_async(
     agg_kinds, stream, rmm::mr::get_current_device_resource());
 
-  auto const grid_size =
+  auto grid_size =
     max_occupancy_grid_size<typename SetType::ref_type<cuco::insert_and_find_tag>>(num_rows);
+
+  if (auto const tmp = max_occupancy_grid_size_smem_kernel(num_rows); grid_size > tmp) {
+    grid_size = tmp;
+  }
+
   auto const available_shmem_size = get_available_shared_memory_size(grid_size);
   auto const offsets_buffer_size  = compute_shmem_offsets_size(flattened_values.num_columns()) * 2;
   auto const data_buffer_size     = available_shmem_size - offsets_buffer_size;
@@ -92,21 +101,24 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
   // memory, such as when aggregating dictionary columns, when there is insufficient dynamic
   // shared memory for shared memory aggregations, or when SUM_WITH_OVERFLOW aggregations are
   // present.
+  stream.synchronize();
   if (!is_shared_memory_compatible) {
-    return compute_global_memory_aggs(num_rows,
-                                      skip_rows_with_nulls,
-                                      row_bitmask,
-                                      flattened_values,
-                                      d_agg_kinds.data(),
-                                      agg_kinds,
-                                      global_set,
-                                      aggs,
-                                      sparse_results,
-                                      stream);
+    cudf::scoped_range rng{"compute_global_memory_aggs"};
+    compute_global_memory_aggs(num_rows,
+                               skip_rows_with_nulls,
+                               row_bitmask,
+                               flattened_values,
+                               d_agg_kinds.data(),
+                               agg_kinds,
+                               populated_keys,
+                               key_indices,
+                               aggs,
+                               sparse_results,
+                               stream);
+    stream.synchronize();
+    return;
   }
 
-  // 'populated_keys' contains inserted row_indices (keys) of global hash set
-  rmm::device_uvector<cudf::size_type> populated_keys(num_rows, stream);
   // 'local_mapping_index' maps from the global row index of the input table to its block-wise rank
   rmm::device_uvector<cudf::size_type> local_mapping_index(num_rows, stream);
   // 'global_mapping_index' maps from the block-wise rank to the row index of global aggregate table
@@ -119,63 +131,79 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
 
   auto global_set_ref = global_set.ref(cuco::op::insert_and_find);
 
-  compute_mapping_indices(grid_size,
-                          num_rows,
-                          global_set_ref,
-                          row_bitmask,
-                          skip_rows_with_nulls,
-                          local_mapping_index.data(),
-                          global_mapping_index.data(),
-                          block_cardinality.data(),
-                          needs_global_memory_fallback.data(),
-                          stream);
+  stream.synchronize();
+
+  {
+    cudf::scoped_range rng{"compute_mapping_indices"};
+    compute_mapping_indices(grid_size,
+                            num_rows,
+                            global_set_ref,
+                            row_bitmask,
+                            skip_rows_with_nulls,
+                            local_mapping_index.data(),
+                            global_mapping_index.data(),
+                            block_cardinality.data(),
+                            key_indices,
+                            needs_global_memory_fallback.data(),
+                            stream);
+    stream.synchronize();
+  }
 
   cuda::std::atomic_flag h_needs_fallback;
   // Cannot use `device_scalar::value` as it requires a copy constructor, which
   // `atomic_flag` doesn't have.
-  CUDF_CUDA_TRY(cudaMemcpyAsync(&h_needs_fallback,
-                                needs_global_memory_fallback.data(),
-                                sizeof(cuda::std::atomic_flag),
-                                cudaMemcpyDefault,
-                                stream.value()));
-  stream.synchronize();
+  {
+    cudf::scoped_range rng{"needs_global_memory_fallback"};
+    CUDF_CUDA_TRY(cudaMemcpyAsync(&h_needs_fallback,
+                                  needs_global_memory_fallback.data(),
+                                  sizeof(cuda::std::atomic_flag),
+                                  cudaMemcpyDefault,
+                                  stream.value()));
+    stream.synchronize();
+  }
   auto const needs_fallback = h_needs_fallback.test();
 
   // make table that will hold sparse results
-  cudf::table sparse_table = create_sparse_results_table(flattened_values,
-                                                         d_agg_kinds.data(),
-                                                         agg_kinds,
-                                                         needs_fallback,
-                                                         global_set,
-                                                         populated_keys,
-                                                         stream);
+  cudf::table sparse_table = [&] {
+    cudf::scoped_range rng{"create_sparse_results_table"};
+    auto tmp = create_sparse_results_table(
+      flattened_values, d_agg_kinds.data(), agg_kinds, needs_fallback, populated_keys, stream);
+    stream.synchronize();
+    return tmp;
+  }();
+
   // prepare to launch kernel to do the actual aggregation
   auto d_values       = table_device_view::create(flattened_values, stream);
   auto d_sparse_table = mutable_table_device_view::create(sparse_table, stream);
 
-  compute_shared_memory_aggs(grid_size,
-                             available_shmem_size,
-                             num_rows,
-                             row_bitmask,
-                             skip_rows_with_nulls,
-                             local_mapping_index.data(),
-                             global_mapping_index.data(),
-                             block_cardinality.data(),
-                             *d_values,
-                             *d_sparse_table,
-                             d_agg_kinds.data(),
-                             stream);
+  {
+    cudf::scoped_range rng{"compute_shared_memory_aggs"};
+    compute_shared_memory_aggs(grid_size,
+                               available_shmem_size,
+                               num_rows,
+                               row_bitmask,
+                               skip_rows_with_nulls,
+                               local_mapping_index.data(),
+                               global_mapping_index.data(),
+                               block_cardinality.data(),
+                               *d_values,
+                               *d_sparse_table,
+                               d_agg_kinds.data(),
+                               stream);
+    stream.synchronize();
+  }
 
   // The shared memory groupby is designed so that each thread block can handle up to 128 unique
   // keys. When a block reaches this cardinality limit, shared memory becomes insufficient to store
   // the temporary aggregation results. In these situations, we must fall back to a global memory
   // aggregator to process the remaining aggregation requests.
   if (needs_fallback) {
+    cudf::scoped_range rng{"global_memory_fallback_fn"};
     auto const stride = GROUPBY_BLOCK_SIZE * grid_size;
     thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                       thrust::counting_iterator{0},
-                       num_rows,
-                       global_memory_fallback_fn{global_set_ref,
+                       thrust::make_counting_iterator(int64_t{0}),
+                       num_rows * static_cast<int64_t>(flattened_values.num_columns()),
+                       global_memory_fallback_fn{key_indices,
                                                  *d_values,
                                                  *d_sparse_table,
                                                  d_agg_kinds.data(),
@@ -183,7 +211,7 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
                                                  stride,
                                                  row_bitmask,
                                                  skip_rows_with_nulls});
-    extract_populated_keys(global_set, populated_keys, stream);
+    stream.synchronize();
   }
 
   // Add results back to sparse_results cache
@@ -193,7 +221,6 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
     sparse_results->add_result(
       flattened_values.column(i), *aggs[i], std::move(sparse_result_cols[i]));
   }
-
-  return populated_keys;
+  stream.synchronize();
 }
 }  // namespace cudf::groupby::detail::hash

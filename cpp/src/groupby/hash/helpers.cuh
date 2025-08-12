@@ -59,6 +59,24 @@ using row_hash_t =
 /// Probing scheme type used by groupby hash table
 using probing_scheme_t = cuco::linear_probing<GROUPBY_CG_SIZE, row_hash_t>;
 
+struct key_indices_hasher_t {
+  size_type const* key_indices{nullptr};
+  using hasher = cuco::default_hash_function<size_type>;
+
+  __device__ std::uint32_t operator()(size_type idx) const { return hasher{}(key_indices[idx]); }
+};
+struct simplified_probing_scheme_t : cuco::linear_probing<GROUPBY_CG_SIZE, key_indices_hasher_t> {
+  __device__ simplified_probing_scheme_t(key_indices_hasher_t const& hasher)
+    : cuco::linear_probing<GROUPBY_CG_SIZE, key_indices_hasher_t>{hasher}
+  {
+  }
+
+  simplified_probing_scheme_t(size_type const* key_indices)
+    : cuco::linear_probing<GROUPBY_CG_SIZE, key_indices_hasher_t>{key_indices_hasher_t{key_indices}}
+  {
+  }
+};
+
 using row_comparator_t = cudf::experimental::row::equality::device_row_comparator<
   false,
   cudf::nullate::DYNAMIC,
@@ -69,41 +87,34 @@ using nullable_row_comparator_t = cudf::experimental::row::equality::device_row_
   cudf::nullate::DYNAMIC,
   cudf::experimental::row::equality::nan_equal_physical_equality_comparator>;
 
-using global_set_t = cuco::static_set<cudf::size_type,
-                                      cuco::extent<int64_t>,
-                                      cuda::thread_scope_device,
-                                      row_comparator_t,
-                                      probing_scheme_t,
-                                      cudf::detail::cuco_allocator<char>,
-                                      cuco::storage<GROUPBY_BUCKET_SIZE>>;
+struct key_indices_comparator_t {
+  size_type const* key_indices{nullptr};
 
-using nullable_global_set_t = cuco::static_set<cudf::size_type,
-                                               cuco::extent<int64_t>,
-                                               cuda::thread_scope_device,
-                                               nullable_row_comparator_t,
-                                               probing_scheme_t,
-                                               cudf::detail::cuco_allocator<char>,
-                                               cuco::storage<GROUPBY_BUCKET_SIZE>>;
+  __device__ bool operator()(size_type const lhs, size_type const rhs) const
+  {
+    return key_indices[lhs] == key_indices[rhs];
+  }
+};
+
+using simplified_row_comparator_t = key_indices_comparator_t;
+
+using simplified_global_set_t = cuco::static_set<cudf::size_type,
+                                                 cuco::extent<int64_t>,
+                                                 cuda::thread_scope_device,
+                                                 simplified_row_comparator_t,
+                                                 simplified_probing_scheme_t,
+                                                 cudf::detail::cuco_allocator<char>,
+                                                 cuco::storage<GROUPBY_BUCKET_SIZE>>;
 
 template <typename Op>
-using hash_set_ref_t =
+using simplified_hash_set_ref_t =
   cuco::static_set_ref<cudf::size_type,
                        cuda::thread_scope_device,
-                       row_comparator_t,
-                       probing_scheme_t,
+                       simplified_row_comparator_t,
+                       simplified_probing_scheme_t,
                        cuco::bucket_storage_ref<cudf::size_type,
                                                 GROUPBY_BUCKET_SIZE,
                                                 cuco::valid_extent<int64_t, cuco::dynamic_extent>>,
                        Op>;
 
-template <typename Op>
-using nullable_hash_set_ref_t =
-  cuco::static_set_ref<cudf::size_type,
-                       cuda::thread_scope_device,
-                       nullable_row_comparator_t,
-                       probing_scheme_t,
-                       cuco::bucket_storage_ref<cudf::size_type,
-                                                GROUPBY_BUCKET_SIZE,
-                                                cuco::valid_extent<int64_t, cuco::dynamic_extent>>,
-                       Op>;
 }  // namespace cudf::groupby::detail::hash
