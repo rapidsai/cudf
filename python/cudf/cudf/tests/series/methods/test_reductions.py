@@ -984,3 +984,58 @@ def test_string_reduction_error():
         lfunc_args_and_kwargs=([], {"skipna": False}),
         rfunc_args_and_kwargs=([], {"skipna": False}),
     )
+
+
+@pytest.mark.parametrize("data", [[1, 2, 3], [], [1, 20, 1000, None]])
+def test_datetime_stats(data, datetime_types_as_str, reduction_methods):
+    if reduction_methods not in ["mean", "quantile"]:
+        pytest.skip(f"{reduction_methods} not applicable for test")
+    gsr = cudf.Series(data, dtype=datetime_types_as_str)
+    psr = gsr.to_pandas()
+
+    with expect_warning_if(
+        PANDAS_GE_230
+        and reduction_methods == "quantile"
+        and len(data) == 0
+        and datetime_types_as_str != "datetime64[ns]"
+    ):
+        expected = getattr(psr, reduction_methods)()
+    actual = getattr(gsr, reduction_methods)()
+
+    if len(data) == 0:
+        assert np.isnat(expected.to_numpy()) and np.isnat(actual.to_numpy())
+    else:
+        assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [],
+        [1, 2, 3, 100],
+        [10, None, 100, None, None],
+        [None, None, None],
+        [1231],
+    ],
+)
+def test_datetime_reductions(data, reduction_methods, datetime_types_as_str):
+    if reduction_methods not in ["max", "min", "std", "median"]:
+        pytest.skip(f"{reduction_methods} not applicable for test")
+    sr = cudf.Series(data, dtype=datetime_types_as_str)
+    psr = sr.to_pandas()
+
+    actual = getattr(sr, reduction_methods)()
+    with expect_warning_if(
+        psr.size > 0 and psr.isnull().all() and reduction_methods == "median",
+        RuntimeWarning,
+    ):
+        expected = getattr(psr, reduction_methods)()
+
+    if (
+        expected is pd.NaT
+        and actual is pd.NaT
+        or (np.isnat(expected.to_numpy()) and np.isnat(actual))
+    ):
+        assert True
+    else:
+        assert_eq(expected, actual)
