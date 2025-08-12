@@ -2,6 +2,8 @@
 
 from enum import IntEnum
 
+from rmm.pylibrmm.stream import Stream
+
 from pylibcudf.column import Column
 from pylibcudf.scalar import Scalar
 from pylibcudf.types import DataType
@@ -48,6 +50,7 @@ def binary_operation(
     rhs: Column | Scalar,
     op: BinaryOperator,
     output_type: DataType,
+    stream: Stream | None = None,
 ) -> Column: ...
 def is_supported_operation(
     out: DataType, lhs: DataType, rhs: DataType, op: BinaryOperator
