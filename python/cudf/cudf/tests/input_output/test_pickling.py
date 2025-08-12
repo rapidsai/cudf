@@ -70,7 +70,7 @@ def test_pickle_index():
     idx = Index(np.arange(nelem), name="a")
     pickled = pickle.dumps(idx)
     out = pickle.loads(pickled)
-    assert (idx == out).all()
+    assert_eq(idx, out)
 
 
 def test_pickle_buffer():
@@ -83,17 +83,13 @@ def test_pickle_buffer():
     assert unpacked.size == arr.nbytes
 
 
-@pytest.mark.parametrize("named", [True, False])
-def test_pickle_series(named):
+@pytest.mark.parametrize("name", [None, "a"])
+def test_pickle_series(name):
     rng = np.random.default_rng(seed=0)
-    if named:
-        ser = Series(rng.random(10), name="a")
-    else:
-        ser = Series(rng.random(10))
-
+    ser = Series(rng.random(10), name=name)
     pickled = pickle.dumps(ser)
     out = pickle.loads(pickled)
-    assert (ser == out).all()
+    assert_eq(ser, out)
 
 
 @pytest.mark.parametrize(
