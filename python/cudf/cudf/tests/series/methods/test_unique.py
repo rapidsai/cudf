@@ -9,25 +9,6 @@ import cudf
 from cudf.testing import assert_eq
 
 
-def test_nunique_all_null(dropna):
-    data = [None, None]
-    pd_ser = pd.Series(data)
-    cudf_ser = cudf.Series(data)
-    result = pd_ser.nunique(dropna=dropna)
-    expected = cudf_ser.nunique(dropna=dropna)
-    assert result == expected
-
-
-def test_series_nunique():
-    cd_s = cudf.Series([1, 3, 5, 7, 7])
-    pd_s = cd_s.to_pandas()
-
-    actual = cd_s.nunique()
-    expected = pd_s.nunique()
-
-    assert_eq(expected, actual)
-
-
 @pytest.mark.parametrize(
     "data",
     [
@@ -37,9 +18,9 @@ def test_series_nunique():
     ],
 )
 @pytest.mark.parametrize("nulls", ["none", "some"])
-def test_datetime_nunique(data, nulls):
-    psr = data.copy()
+def test_datetime_unique(data, nulls):
     rng = np.random.default_rng(seed=0)
+    psr = data.copy()
 
     if len(data) > 0:
         if nulls == "some":
@@ -47,6 +28,11 @@ def test_datetime_nunique(data, nulls):
             psr[p] = None
 
     gsr = cudf.from_pandas(psr)
-    expected = psr.nunique()
-    got = gsr.nunique()
-    assert_eq(got, expected)
+    expected = psr.unique()
+    got = gsr.unique()
+
+    # Unique does not provide a guarantee on ordering.
+    assert_eq(
+        pd.Series(expected).sort_values(ignore_index=True),
+        got.sort_values(ignore_index=True).to_pandas(),
+    )
