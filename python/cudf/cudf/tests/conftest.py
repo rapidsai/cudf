@@ -460,7 +460,13 @@ def ascending(request):
     return request.param
 
 
-@pytest.fixture(params=[None, False, True])
+@pytest.fixture(params=[True, False])
+def numeric_only(request):
+    """Param for `numeric_only` argument"""
+    return request.param
+
+
+@pytest.fixture(params=[True, False, None])
 def categorical_ordered(request):
     """Param for `ordered` argument for categorical types"""
     return request.param
