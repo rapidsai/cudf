@@ -274,6 +274,7 @@ files:
       table: project.optional-dependencies
       key: test
     includes:
+      - pyarrow_run
       - test_python_common
       - test_python_cudf_common
       - test_python_pylibcudf
