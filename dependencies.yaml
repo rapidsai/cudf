@@ -663,7 +663,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cachetools
-          - &numba numba>=0.59.1,<0.62.0a0
+          - &numba numba>=0.60.0,<0.62.0a0
           - nvtx>=0.2.1
           - packaging
           - rich
@@ -781,7 +781,7 @@ dependencies:
         matrices:
           - matrix: {dependencies: "oldest"}
             packages:
-              - numba==0.59.1
+              - numba==0.60.0
               - pandas==2.0.*
               - numba-cuda==0.18.0
           - matrix: {dependencies: "latest"}
