@@ -24,6 +24,17 @@ if TYPE_CHECKING:
 __all__ = ["apply_pre_evaluation", "decompose_aggs", "decompose_single_agg"]
 
 
+def _supports_sum(dt: plc.DataType) -> bool:
+    tid = dt.id()
+    return (
+        plc.traits.is_integral(dt)
+        or plc.traits.is_floating_point(dt)
+        or tid == plc.TypeId.BOOL8
+        or plc.traits.is_duration(dt)
+        or tid in (plc.TypeId.DECIMAL32, plc.TypeId.DECIMAL64, plc.TypeId.DECIMAL128)
+    )
+
+
 def replace_nulls(col: expr.Expr, value: Any, *, is_top: bool) -> expr.Expr:
     """
     Replace nulls with the given scalar if at top level.
@@ -135,6 +146,9 @@ def decompose_single_agg(
                 named_expr.reconstruct(expr.Col(agg.dtype, name)),
             )
         elif agg.name == "sum":
+            if not _supports_sum(child.dtype.plc):
+                # libcudf cannot sum this input dtype, so we don't push the AGG
+                return [], named_expr.reconstruct(expr.Literal(agg.dtype, None))
             col = (
                 expr.Cast(agg.dtype, expr.Col(DataType(pl.datatypes.Int64()), name))
                 if (
@@ -143,13 +157,12 @@ def decompose_single_agg(
                 )
                 else expr.Col(agg.dtype, name)
             )
-            return [(named_expr, True)], expr.NamedExpr(
-                name,
+            return [(named_expr, True)], named_expr.reconstruct(
                 # In polars sum(empty_group) => 0, but in libcudf
                 # sum(empty_group) => null So must post-process by
                 # replacing nulls, but only if we're a "top-level"
                 # agg.
-                replace_nulls(col, 0, is_top=is_top),
+                replace_nulls(col, 0, is_top=is_top)
             )
         elif agg.name == "mean":
             post_agg_col: expr.Expr = expr.Col(

@@ -311,3 +311,9 @@ def test_groupby_mean_type_promotion(df: pl.LazyFrame) -> None:
     q = df.group_by("key1").agg(pl.col("float").mean())
 
     assert_gpu_result_equal(q, check_row_order=False)
+
+
+def test_groupby_sum_keeps_non_summable_as_null(df: pl.LazyFrame) -> None:
+    q = df.filter(pl.col("datetime") == date(2004, 12, 1)).group_by("datetime").sum()
+
+    assert_gpu_result_equal(q)
