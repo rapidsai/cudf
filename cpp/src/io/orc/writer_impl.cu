@@ -2715,8 +2715,8 @@ void writer::impl::write_orc_data_to_sink(encoded_data const& enc_data,
       stripe.footerLength = bytes_written;
     }
   }
-  for (auto const& task : write_tasks) {
-    task.wait();
+  for (auto& task : write_tasks) {
+    task.get();
   }
 }
 

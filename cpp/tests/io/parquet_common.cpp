@@ -18,6 +18,9 @@
 
 #include <cudf/io/parquet.hpp>
 
+#include <format>
+#include <string>
+
 // Global environment for temporary files
 cudf::test::TempDirTestEnvironment* const temp_env =
   static_cast<cudf::test::TempDirTestEnvironment*>(
@@ -478,11 +481,8 @@ template <typename T>
 std::enable_if_t<std::is_same_v<T, cudf::string_view>, cudf::test::strings_column_wrapper>
 ascending()
 {
-  auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-    std::array<char, 30> buf{};
-    snprintf(buf.data(), buf.size(), "%09d", i);
-    return std::string(buf.data());
-  });
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return std::format("{:09d}", i); });
   return cudf::test::strings_column_wrapper(elements, elements + num_ordered_rows);
 }
 
@@ -490,11 +490,8 @@ template <typename T>
 std::enable_if_t<std::is_same_v<T, cudf::string_view>, cudf::test::strings_column_wrapper>
 descending()
 {
-  auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-    std::array<char, 30> buf{};
-    snprintf(buf.data(), buf.size(), "%09d", static_cast<short>(num_ordered_rows - i));
-    return std::string(buf.data());
-  });
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return std::format("{:09d}", static_cast<short>(num_ordered_rows - i)); });
   return cudf::test::strings_column_wrapper(elements, elements + num_ordered_rows);
 }
 
@@ -502,11 +499,8 @@ template <typename T>
 std::enable_if_t<std::is_same_v<T, cudf::string_view>, cudf::test::strings_column_wrapper>
 unordered()
 {
-  auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-    std::array<char, 30> buf{};
-    snprintf(buf.data(), buf.size(), "%09d", (i % 2 == 0) ? i : (num_ordered_rows - i));
-    return std::string(buf.data());
-  });
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return std::format("{:09d}", (i % 2 == 0) ? i : (num_ordered_rows - i)); });
   return cudf::test::strings_column_wrapper(elements, elements + num_ordered_rows);
 }
 
