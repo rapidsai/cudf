@@ -6,6 +6,8 @@ from typing import Any, overload
 
 import pyarrow as pa
 
+from rmm.pylibrmm.stream import Stream
+
 from pylibcudf.column import Column
 from pylibcudf.scalar import Scalar
 from pylibcudf.table import Table
@@ -48,5 +50,7 @@ def to_arrow(
 def to_arrow(
     obj: Scalar, metadata: ColumnMetadata | str | None = None
 ) -> pa.Scalar[Any]: ...
-def from_dlpack(managed_tensor: Any) -> Table: ...
-def to_dlpack(input: Table) -> Any: ...
+def from_dlpack(
+    managed_tensor: Any, stream: Stream | None = None
+) -> Table: ...
+def to_dlpack(input: Table, stream: Stream | None = None) -> Any: ...

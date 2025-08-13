@@ -151,9 +151,16 @@ def test_groupby_len(df, keys):
     "expr",
     [
         (pl.col("int").max() + pl.col("float").min()).max(),
+        (
+            pl.when((pl.col("float") - pl.col("float").mean()) > 0)
+            .then(pl.col("float"))
+            .otherwise(None)
+            .sum()
+        ),
+        (pl.when(pl.col("int") > 5).then(pl.col("float")).otherwise(pl.lit(0.0)),),
     ],
 )
-def test_groupby_unsupported(df, expr):
+def test_groupby_unsupported(df: pl.LazyFrame, expr: pl.Expr) -> None:
     q = df.group_by("key1").agg(expr)
 
     assert_ir_translation_raises(q, NotImplementedError)
@@ -272,13 +279,72 @@ def test_groupby_nunique(df: pl.LazyFrame, column):
     assert_gpu_result_equal(q, check_row_order=False)
 
 
-def test_groupby_ternary(df):
-    df = df.with_columns(
-        foo=pl.when(pl.col("int").sum() > 0).then(True).otherwise(False)  # noqa: FBT003
-    )
+def test_groupby_null_count_raises(df: pl.LazyFrame):
+    q = df.group_by("key1").agg(pl.col("int") + pl.col("uint16_with_null").null_count())
 
-    expr = pl.when(pl.col("foo")).then(pl.col("int")).otherwise(0).sum()
+    assert_ir_translation_raises(q, NotImplementedError)
 
-    q = df.group_by("key1", maintain_order=True).agg(expr)
 
-    assert_gpu_result_equal(q)
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.col("int").all(),
+        pl.col("int").any(),
+        pl.col("int").is_duplicated(),
+        pl.col("int").is_first_distinct(),
+        pl.col("int").is_last_distinct(),
+        pl.col("int").is_unique(),
+    ],
+    ids=[
+        "all_horizontal",
+        "any_horizontal",
+        "is_duplicated",
+        "is_first_distinct",
+        "is_last_distinct",
+        "is_unique",
+    ],
+)
+def test_groupby_unsupported_non_pointwise_boolean_function(df: pl.LazyFrame, expr):
+    q = df.group_by("key1").agg(expr)
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_groupby_mean_type_promotion(df: pl.LazyFrame) -> None:
+    df = df.with_columns(pl.col("float").cast(pl.Float32))
+
+    q = df.group_by("key1").agg(pl.col("float").mean())
+
+    assert_gpu_result_equal(q, check_row_order=False)
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.when(pl.col("int") > 5).then(pl.col("float")).otherwise(None).sum(),
+        pl.when(pl.col("float").count() > 0)
+        .then(pl.col("float").sum())
+        .otherwise(None),
+        (
+            pl.when(pl.col("float").min() < pl.col("float").max())
+            .then(pl.col("float").max() - pl.col("float").min())
+            .otherwise(pl.lit(0.0))
+        ),
+        (
+            pl.when(pl.col("int").count() > 0)
+            .then(
+                pl.col("int").cast(pl.Float64).sum()
+                / pl.col("int").count().cast(pl.Float64)
+            )
+            .otherwise(None)
+        ),
+    ],
+    ids=[
+        "pre_pointwise_then_sum",
+        "post_over_aggs",
+        "post_multiple_aggs_range",
+        "post_manually_compute_mean",
+    ],
+)
+def test_groupby_ternary_supported(df: pl.LazyFrame, expr: pl.Expr) -> None:
+    q = df.group_by("key1").agg(expr)
+    assert_gpu_result_equal(q, check_row_order=False)

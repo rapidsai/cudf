@@ -1,19 +1,9 @@
-# Experimental streaming and multi-GPU options
-
-As well as in-memory execution, obtained by selecting `engine="gpu"`
-when `collect`ing a query, the GPU engine supports streaming execution
-that partitions the data in the query into chunks. To select streaming
-execution, we need to pass an appropriately configured `GPUEngine`
-object into `collect`.
+(cudf-polars-streaming)=
+# Streaming Execution
 
 The streaming executors work best when the inputs to your query come
 from parquet files. That is, start with `scan_parquet`, not existing
 Polars `DataFrame`s or CSV files.
-
-````{note}
-Streaming execution is in an experimental state and not all queries
-will run in streaming mode.
-````
 
 ## Single GPU streaming
 
@@ -21,11 +11,12 @@ The simplest case, requiring no additional dependencies, is the
 `synchronous` scheduler. An appropriate engine is:
 
 ```python
-engine = pl.GPUEngine(executor="streaming")
+engine = pl.GPUEngine()
 ```
 
 This uses the default synchronous *scheduler* and is equivalent to
-`pl.GPUEngine(executor="streaming", executor_options={"scheduler": "synchronous"})`.
+`pl.GPUEngine(executor="streaming", executor_options={"scheduler": "synchronous"})`,
+or simply passing `engine="gpu"` to `.collect()`.
 
 When executed with this engine, any parquet inputs are split into
 "partitions" that are streamed through the query graph. We try to
@@ -68,6 +59,10 @@ this fallback occurs or silence the warning instead:
 ````
 
 ## Multi GPU streaming
+
+```{note}
+The distributed scheduler is considered experimental and might change without warning.
+```
 
 Streaming utilising multiple GPUs simultaneously is supported by
 setting the `"scheduler"` to `"distributed"`:

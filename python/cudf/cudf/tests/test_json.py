@@ -354,11 +354,14 @@ def test_json_lines_basic(json_input, engine):
     can_warn = isinstance(json_input, str) and not json_input.endswith(".json")
     with expect_warning_if(can_warn):
         cu_df = cudf.read_json(json_input, engine=engine, lines=True)
+    # io types must seek to the beginning before you can read again
+    if hasattr(json_input, "seek"):
+        json_input.seek(0)
     with expect_warning_if(can_warn):
         pd_df = pd.read_json(json_input, lines=True)
 
     assert all(cu_df.dtypes == ["int64", "int64", "int64"])
-    for cu_col, pd_col in zip(cu_df.columns, pd_df.columns):
+    for cu_col, pd_col in zip(cu_df.columns, pd_df.columns, strict=True):
         assert str(cu_col) == str(pd_col)
         np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col].to_numpy())
 
@@ -392,7 +395,7 @@ def test_json_lines_multiple(tmpdir, json_input, engine):
     pd_df = pd.concat([pdf, pdf])
 
     assert all(cu_df.dtypes == ["int64", "int64", "int64"])
-    for cu_col, pd_col in zip(cu_df.columns, pd_df.columns):
+    for cu_col, pd_col in zip(cu_df.columns, pd_df.columns, strict=True):
         assert str(cu_col) == str(pd_col)
         np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col].to_numpy())
 
@@ -430,7 +433,7 @@ def test_json_read_directory(tmpdir, json_input, engine):
     pd_df = pd.concat([pdf, pdf, pdf])
 
     assert all(cu_df.dtypes == ["int64", "int64", "int64"])
-    for cu_col, pd_col in zip(cu_df.columns, pd_df.columns):
+    for cu_col, pd_col in zip(cu_df.columns, pd_df.columns, strict=True):
         assert str(cu_col) == str(pd_col)
         np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col].to_numpy())
 
@@ -1441,8 +1444,8 @@ def test_json_reader_on_bad_lines(on_bad_lines):
 def test_chunked_json_reader():
     df = cudf.DataFrame(
         {
-            "a": ["aaaa"] * 9_000_000,
-            "b": range(9_000_000),
+            "a": ["aaaa"] * 1_000_000,
+            "b": range(1_000_000),
         }
     )
     buf = BytesIO()

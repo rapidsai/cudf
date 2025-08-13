@@ -25,8 +25,8 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/transform.hpp>
-#include <cudf/jit/runtime_support.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/stream_compaction.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -44,14 +44,8 @@ jitify2::Kernel get_kernel(std::string const& kernel_name, std::string const& cu
   return cudf::jit::get_program_cache(*transform_jit_kernel_cu_jit)
     .get_kernel(kernel_name,
                 {},
-                {{"transform/jit/operation-udf.hpp", cuda_source}},
-                {"-arch=sm_.",
-                 "--device-int128",
-                 // TODO: remove when we upgrade to CCCL >= 3.0
-
-                 // CCCL WAR for not using the correct INT128 feature macro:
-                 // https://github.com/NVIDIA/cccl/issues/3801
-                 "-D__SIZEOF_INT128__=16"});
+                {{"cudf/detail/operation-udf.hpp", cuda_source}},
+                {"-arch=sm_.", "--device-int128"});
 }
 
 jitify2::ConfiguredKernel build_transform_kernel(
@@ -261,7 +255,6 @@ void perform_checks(column_view base_column,
                     data_type output_type,
                     std::vector<column_view> const& inputs)
 {
-  CUDF_EXPECTS(is_runtime_jit_supported(), "Runtime JIT is only supported on CUDA Runtime 11.5+");
   CUDF_EXPECTS(is_fixed_width(output_type) || output_type.id() == type_id::STRING,
                "Transforms only support output of fixed-width or string types",
                std::invalid_argument);

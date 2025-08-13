@@ -37,7 +37,7 @@ from cudf_polars.dsl.tracing import nvtx_annotate_cudf_polars
 from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.dsl.utils.windows import range_window_bounds
 from cudf_polars.utils import dtypes
-from cudf_polars.utils.versions import POLARS_VERSION_LT_128, POLARS_VERSION_LT_131
+from cudf_polars.utils.versions import POLARS_VERSION_LT_131
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Iterable, Sequence
@@ -318,12 +318,6 @@ class Scan(IR):
             # TODO: polars has this implemented for parquet,
             # maybe we can do this too?
             raise NotImplementedError("slice pushdown for negative slices")
-        if (
-            POLARS_VERSION_LT_128 and self.typ in {"csv"} and self.skip_rows != 0
-        ):  # pragma: no cover
-            # This comes from slice pushdown, but that
-            # optimization doesn't happen right now
-            raise NotImplementedError("skipping rows in CSV reader")
         if self.cloud_options is not None and any(
             self.cloud_options.get(k) is not None for k in ("aws", "azure", "gcp")
         ):
@@ -505,9 +499,7 @@ class Scan(IR):
                 options = (
                     plc.io.csv.CsvReaderOptions.builder(plc.io.SourceInfo([path]))
                     .nrows(n_rows)
-                    .skiprows(
-                        skiprows if POLARS_VERSION_LT_128 else skiprows + skip_rows
-                    )  # pragma: no cover
+                    .skiprows(skiprows + skip_rows)
                     .lineterminator(str(eol))
                     .quotechar(str(quote))
                     .decimal(decimal)
@@ -519,9 +511,7 @@ class Scan(IR):
                 if column_names is not None:
                     options.set_names([str(name) for name in column_names])
                 else:
-                    if (
-                        not POLARS_VERSION_LT_128 and header > -1 and skip_rows > header
-                    ):  # pragma: no cover
+                    if header > -1 and skip_rows > header:  # pragma: no cover
                         # We need to read the header otherwise we would skip it
                         column_names = read_csv_header(path, str(sep))
                         options.set_names(column_names)
@@ -678,18 +668,33 @@ class Scan(IR):
 class Sink(IR):
     """Sink a dataframe to a file."""
 
-    __slots__ = ("cloud_options", "kind", "options", "path")
-    _non_child = ("schema", "kind", "path", "options", "cloud_options")
+    __slots__ = ("cloud_options", "kind", "options", "parquet_options", "path")
+    _non_child = (
+        "schema",
+        "kind",
+        "path",
+        "parquet_options",
+        "options",
+        "cloud_options",
+    )
 
     kind: str
+    """The type of file to write to. Eg. Parquet, CSV, etc."""
     path: str
+    """The path to write to"""
+    parquet_options: ParquetOptions
+    """GPU-specific configuration options"""
+    cloud_options: dict[str, Any] | None
+    """Cloud-related authentication options, currently ignored."""
     options: dict[str, Any]
+    """Sink options from Polars"""
 
     def __init__(
         self,
         schema: Schema,
         kind: str,
         path: str,
+        parquet_options: ParquetOptions,
         options: dict[str, Any],
         cloud_options: dict[str, Any],
         df: IR,
@@ -697,10 +702,11 @@ class Sink(IR):
         self.schema = schema
         self.kind = kind
         self.path = path
+        self.parquet_options = parquet_options
         self.options = options
         self.cloud_options = cloud_options
         self.children = (df,)
-        self._non_child_args = (schema, kind, path, options)
+        self._non_child_args = (schema, kind, path, parquet_options, options)
         if self.cloud_options is not None and any(
             self.cloud_options.get(k) is not None
             for k in ("config", "credential_provider")
@@ -793,6 +799,7 @@ class Sink(IR):
             schema_hash,
             self.kind,
             self.path,
+            self.parquet_options,
             json.dumps(self.options),
             json.dumps(self.cloud_options),
         )  # pragma: no cover
@@ -831,6 +838,85 @@ class Sink(IR):
         )
         plc.io.json.write_json(options)
 
+    @staticmethod
+    def _make_parquet_metadata(df: DataFrame) -> plc.io.types.TableInputMetadata:
+        """Create TableInputMetadata and set column names."""
+        metadata = plc.io.types.TableInputMetadata(df.table)
+        for i, name in enumerate(df.column_names):
+            metadata.column_metadata[i].set_name(name)
+        return metadata
+
+    @staticmethod
+    def _apply_parquet_writer_options(
+        builder: plc.io.parquet.ChunkedParquetWriterOptionsBuilder
+        | plc.io.parquet.ParquetWriterOptionsBuilder,
+        options: dict[str, Any],
+    ) -> (
+        plc.io.parquet.ChunkedParquetWriterOptionsBuilder
+        | plc.io.parquet.ParquetWriterOptionsBuilder
+    ):
+        """Apply writer options to the builder."""
+        compression = options.get("compression")
+        if compression and compression != "Uncompressed":
+            compression_type = getattr(
+                plc.io.types.CompressionType, compression.upper()
+            )
+            builder = builder.compression(compression_type)
+
+        if (data_page_size := options.get("data_page_size")) is not None:
+            builder = builder.max_page_size_bytes(data_page_size)
+
+        if (row_group_size := options.get("row_group_size")) is not None:
+            builder = builder.row_group_size_rows(row_group_size)
+
+        return builder
+
+    @classmethod
+    def _write_parquet(
+        cls,
+        target: plc.io.SinkInfo,
+        parquet_options: ParquetOptions,
+        options: dict[str, Any],
+        df: DataFrame,
+    ) -> None:
+        metadata: plc.io.types.TableInputMetadata = cls._make_parquet_metadata(df)
+
+        builder: (
+            plc.io.parquet.ChunkedParquetWriterOptionsBuilder
+            | plc.io.parquet.ParquetWriterOptionsBuilder
+        )
+
+        if (
+            parquet_options.chunked
+            and parquet_options.n_output_chunks != 1
+            and df.table.num_rows() != 0
+        ):
+            builder = plc.io.parquet.ChunkedParquetWriterOptions.builder(
+                target
+            ).metadata(metadata)
+            builder = cls._apply_parquet_writer_options(builder, options)
+            writer_options = builder.build()
+            writer = plc.io.parquet.ChunkedParquetWriter.from_options(writer_options)
+
+            # TODO: Can be based on a heuristic that estimates chunk size
+            # from the input table size and available GPU memory.
+            num_chunks = parquet_options.n_output_chunks
+            table_chunks = plc.copying.split(
+                df.table,
+                [i * df.table.num_rows() // num_chunks for i in range(1, num_chunks)],
+            )
+            for chunk in table_chunks:
+                writer.write(chunk)
+            writer.close([])
+
+        else:
+            builder = plc.io.parquet.ParquetWriterOptions.builder(
+                target, df.table
+            ).metadata(metadata)
+            builder = cls._apply_parquet_writer_options(builder, options)
+            writer_options = builder.build()
+            plc.io.parquet.write_parquet(writer_options)
+
     @classmethod
     @nvtx_annotate_cudf_polars(message="Sink")
     def do_evaluate(
@@ -838,6 +924,7 @@ class Sink(IR):
         schema: Schema,
         kind: str,
         path: str,
+        parquet_options: ParquetOptions,
         options: dict[str, Any],
         df: DataFrame,
     ) -> DataFrame:
@@ -848,27 +935,8 @@ class Sink(IR):
             Path(path).parent.mkdir(parents=True, exist_ok=True)
         if kind == "Csv":
             cls._write_csv(target, options, df)
-
         elif kind == "Parquet":
-            metadata = plc.io.types.TableInputMetadata(df.table)
-            for i, name in enumerate(df.column_names):
-                metadata.column_metadata[i].set_name(name)
-
-            builder = plc.io.parquet.ParquetWriterOptions.builder(target, df.table)
-            compression = options["compression"]
-            if compression != "Uncompressed":
-                builder.compression(
-                    getattr(plc.io.types.CompressionType, compression.upper())
-                )
-
-            writer_options = builder.metadata(metadata).build()
-            if options["data_page_size"] is not None:
-                writer_options.set_max_page_size_bytes(options["data_page_size"])
-            if options["row_group_size"] is not None:
-                writer_options.set_row_group_size_rows(options["row_group_size"])
-
-            plc.io.parquet.write_parquet(writer_options)
-
+            cls._write_parquet(target, parquet_options, options, df)
         elif kind == "Json":
             cls._write_json(target, df)
 
@@ -1027,8 +1095,7 @@ class Select(IR):
         self.children = (df,)
         self._non_child_args = (self.exprs, should_broadcast)
         if (
-            not POLARS_VERSION_LT_128
-            and Select._is_len_expr(self.exprs)
+            Select._is_len_expr(self.exprs)
             and isinstance(df, Scan)
             and df.typ != "parquet"
         ):  # pragma: no cover
@@ -1087,8 +1154,7 @@ class Select(IR):
             translation phase should fail earlier.
         """
         if (
-            not POLARS_VERSION_LT_128
-            and isinstance(self.children[0], Scan)
+            isinstance(self.children[0], Scan)
             and Select._is_len_expr(self.exprs)
             and self.children[0].typ == "parquet"
             and self.children[0].predicate is None
@@ -2028,10 +2094,10 @@ class Slice(IR):
     _non_child = ("schema", "offset", "length")
     offset: int
     """Start of the slice."""
-    length: int
+    length: int | None
     """Length of the slice."""
 
-    def __init__(self, schema: Schema, offset: int, length: int, df: IR):
+    def __init__(self, schema: Schema, offset: int, length: int | None, df: IR):
         self.schema = schema
         self.offset = offset
         self.length = length

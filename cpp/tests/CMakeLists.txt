@@ -282,6 +282,10 @@ ConfigureTest(
 )
 
 # ##################################################################################################
+# * filter tests -------------------------------------------------------------------------
+ConfigureTest(FILTER_TEST filter/filter_test.cpp)
+
+# ##################################################################################################
 # * interop tests -------------------------------------------------------------------------
 ConfigureTest(
   INTEROP_TEST
@@ -319,7 +323,6 @@ ConfigureTest(
   io/parquet_bloom_filter_test.cu
   io/parquet_chunked_reader_test.cu
   io/parquet_chunked_writer_test.cpp
-  io/parquet_experimental_reader_test.cpp
   io/parquet_common.cpp
   io/parquet_misc_test.cpp
   io/parquet_reader_test.cpp
@@ -328,6 +331,14 @@ ConfigureTest(
   io/parquet_writer_test.cpp
   GPUS 1
   PERCENT 30
+)
+ConfigureTest(
+  HYBRID_SCAN_TEST
+  io/experimental/hybrid_scan_common.cpp
+  io/experimental/hybrid_scan_filters_test.cpp
+  io/experimental/hybrid_scan_test.cpp
+  io/parquet_common.cpp
+  io/parquet_test.cpp
 )
 ConfigureTest(
   JSON_TEST io/json/json_test.cpp io/json/json_chunked_reader.cu

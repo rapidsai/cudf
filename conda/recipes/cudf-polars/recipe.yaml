@@ -43,13 +43,14 @@ requirements:
   host:
     - python =${{ py_version }}
     - pip
-    - rapids-build-backend >=0.3.0,<0.4.0.dev0
+    - rapids-build-backend >=0.4.0,<0.5.0.dev0
     - setuptools
     - cuda-version =${{ cuda_version }}
   run:
+    - nvidia-ml-py
     - python
     - pylibcudf =${{ version }}
-    - polars >=1.25,<1.32
+    - polars >=1.28,<1.32
     - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
     - if: python == "3.10"
       then: typing_extensions

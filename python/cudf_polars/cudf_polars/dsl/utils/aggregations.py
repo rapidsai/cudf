@@ -84,6 +84,8 @@ def decompose_single_agg(
     """
     agg = named_expr.value
     name = named_expr.name
+    if isinstance(agg, expr.UnaryFunction) and agg.name == "null_count":
+        raise NotImplementedError("null_count is not supported inside groupby context")
     if isinstance(agg, expr.Col):
         # TODO: collect_list produces null for empty group in libcudf, empty list in polars.
         # But we need the nested value type, so need to track proper dtypes in our DSL.
@@ -149,6 +151,14 @@ def decompose_single_agg(
                 # agg.
                 replace_nulls(col, 0, is_top=is_top),
             )
+        elif agg.name == "mean":
+            post_agg_col: expr.Expr = expr.Col(
+                DataType(pl.Float64), name
+            )  # libcudf promotes to float64
+            if agg.dtype.plc.id() == plc.TypeId.FLOAT32:
+                # Cast back to float32 to match Polars
+                post_agg_col = expr.Cast(agg.dtype, post_agg_col)
+            return [(named_expr, True)], named_expr.reconstruct(post_agg_col)
         else:
             return [(named_expr, True)], named_expr.reconstruct(
                 expr.Col(agg.dtype, name)
@@ -157,27 +167,46 @@ def decompose_single_agg(
         when, then, otherwise = agg.children
 
         when_aggs, when_post = decompose_single_agg(
-            expr.NamedExpr(next(name_generator), when), name_generator, is_top=False
+            expr.NamedExpr(next(name_generator), when),
+            name_generator,
+            is_top=False,
         )
         then_aggs, then_post = decompose_single_agg(
-            expr.NamedExpr(next(name_generator), then), name_generator, is_top=is_top
+            expr.NamedExpr(next(name_generator), then),
+            name_generator,
+            is_top=False,
         )
         otherwise_aggs, otherwise_post = decompose_single_agg(
             expr.NamedExpr(next(name_generator), otherwise),
             name_generator,
-            is_top=is_top,
+            is_top=False,
         )
 
-        return (
-            when_aggs + then_aggs + otherwise_aggs,
-            named_expr.reconstruct(
-                expr.Ternary(
-                    agg.dtype,
-                    when_post.value,
-                    then_post.value,
-                    otherwise_post.value,
+        when_has = any(h for _, h in when_aggs)
+        then_has = any(h for _, h in then_aggs)
+        otherwise_has = any(h for _, h in otherwise_aggs)
+
+        if is_top and not (when_has or then_has or otherwise_has):
+            raise NotImplementedError(
+                "Broadcasted ternary with list output in groupby is not supported"
+            )
+
+        for post, has in (
+            (when_post, when_has),
+            (then_post, then_has),
+            (otherwise_post, otherwise_has),
+        ):
+            if is_top and not has and not isinstance(post.value, expr.Literal):
+                raise NotImplementedError(
+                    "Broadcasting aggregated expressions in groupby/rolling"
                 )
-            ),
+
+        return [*when_aggs, *then_aggs, *otherwise_aggs], named_expr.reconstruct(
+            agg.reconstruct([when_post.value, then_post.value, otherwise_post.value])
+        )
+    if not agg.is_pointwise and isinstance(agg, expr.BooleanFunction):
+        raise NotImplementedError(
+            f"Non pointwise boolean function {agg.name!r} not supported in groupby or rolling context"
         )
     if agg.is_pointwise:
         aggs, posts = _decompose_aggs(

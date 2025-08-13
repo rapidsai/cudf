@@ -1,7 +1,23 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Config utilities."""
+"""
+Configuration utilities for the cudf-polars engine.
+
+Most users will not construct these objects directly. Instead, you'll pass
+keyword arguments to :class:`~polars.lazyframe.engine_config.GPUEngine`. The
+majority of the options are passed as `**kwargs` and collected into the
+configuration described below:
+
+.. code-block:: python
+
+   >>> import polars as pl
+   >>> engine = pl.GPUEngine(
+   ...     executor="streaming",
+   ...     executor_options={"fallback_mode": "raise"}
+   ... )
+
+"""
 
 from __future__ import annotations
 
@@ -19,10 +35,50 @@ if TYPE_CHECKING:
 
     from typing_extensions import Self
 
-    import polars as pl
+    import polars.lazyframe.engine_config
 
 
-__all__ = ["ConfigOptions"]
+__all__ = [
+    "ConfigOptions",
+    "InMemoryExecutor",
+    "ParquetOptions",
+    "Scheduler",
+    "ShuffleMethod",
+    "StreamingExecutor",
+    "StreamingFallbackMode",
+]
+
+
+def _env_get_int(name: str, default: int) -> int:
+    try:
+        return int(os.getenv(name, default))
+    except (ValueError, TypeError):  # pragma: no cover
+        return default  # pragma: no cover
+
+
+def get_total_device_memory() -> int | None:
+    """Return the total memory of the current device."""
+    import pynvml
+
+    try:
+        pynvml.nvmlInit()
+        index = os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0]
+        if index and not index.isnumeric():  # pragma: no cover
+            # This means device_index is UUID.
+            # This works for both MIG and non-MIG device UUIDs.
+            handle = pynvml.nvmlDeviceGetHandleByUUID(str.encode(index))
+            if pynvml.nvmlDeviceIsMigDeviceHandle(handle):
+                # Additionally get parent device handle
+                # if the device itself is a MIG instance
+                handle = pynvml.nvmlDeviceGetDeviceHandleFromMigDeviceHandle(handle)
+        else:
+            handle = pynvml.nvmlDeviceGetHandleByIndex(int(index))
+
+        return pynvml.nvmlDeviceGetMemoryInfo(handle).total
+
+    except pynvml.NVMLError_NotSupported:  # pragma: no cover
+        # System doesn't have proper "GPU memory".
+        return None
 
 
 @functools.cache
@@ -58,8 +114,10 @@ class Scheduler(str, enum.Enum):
     """
     The scheduler to use for the streaming executor.
 
-    * ``Scheduler.SYNCHRONOUS`` : Use the synchronous scheduler.
-    * ``Scheduler.DISTRIBUTED`` : Use the distributed scheduler.
+    * ``Scheduler.SYNCHRONOUS`` : A zero-dependency, synchronous,
+      single-threaded scheduler.
+    * ``Scheduler.DISTRIBUTED`` : A Dask-based distributed scheduler.
+      Using this scheduler requires an active Dask cluster.
     """
 
     SYNCHRONOUS = "synchronous"
@@ -72,10 +130,39 @@ class ShuffleMethod(str, enum.Enum):
 
     * ``ShuffleMethod.TASKS`` : Use the task-based shuffler.
     * ``ShuffleMethod.RAPIDSMPF`` : Use the rapidsmpf scheduler.
+
+    With :class:`cudf_polars.utils.config.StreamingExecutor`, the default of ``None`` will attempt to use
+    ``ShuffleMethod.RAPIDSMPF``, but will fall back to ``ShuffleMethod.TASKS``
+    if rapidsmpf is not installed.
     """
 
     TASKS = "tasks"
     RAPIDSMPF = "rapidsmpf"
+
+
+T = TypeVar("T")
+
+
+def _make_default_factory(
+    key: str, converter: Callable[[str], T], *, default: T
+) -> Callable[[], T]:
+    def default_factory() -> T:
+        v = os.environ.get(key)
+        if v is None:
+            return default
+        return converter(v)
+
+    return default_factory
+
+
+def _bool_converter(v: str) -> bool:
+    lowered = v.lower()
+    if lowered in {"1", "true", "yes", "y"}:
+        return True
+    elif lowered in {"0", "false", "no", "n"}:
+        return False
+    else:
+        raise ValueError(f"Invalid boolean value: '{v}'")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -83,119 +170,117 @@ class ParquetOptions:
     """
     Configuration for the cudf-polars Parquet engine.
 
+    These options can be configured via environment variables
+    with the prefix ``CUDF_POLARS__PARQUET_OPTIONS__``.
+
     Parameters
     ----------
     chunked
-        Whether to use libcudf's ``ChunkedParquetReader`` to read the parquet
-        dataset in chunks. This is useful when reading very large parquet
-        files.
+        Whether to use libcudf's ``ChunkedParquetReader`` or ``ChunkedParquetWriter``
+        to read/write the parquet dataset in chunks. This is useful when reading/writing
+        very large parquet files.
+    n_output_chunks
+        Split the dataframe in ``n_output_chunks`` when using libcudf's ``ChunkedParquetWriter``.
     chunk_read_limit
         Limit on total number of bytes to be returned per read, or 0 if
         there is no limit.
     pass_read_limit
         Limit on the amount of memory used for reading and decompressing data
         or 0 if there is no limit.
+    max_footer_samples
+        Maximum number of file footers to sample for metadata. This
+        option is currently used by the streaming executor to gather
+        datasource statistics before generating a physical plan. Set to
+        0 to avoid metadata sampling. Default is 3.
+    max_row_group_samples
+        Maximum number of row-groups to sample for unique-value statistics.
+        This option may be used by the streaming executor to optimize
+        the physical plan. Default is 1.
+
+        Set to 0 to avoid row-group sampling. Note that row-group sampling
+        will also be skipped if ``max_footer_samples`` is 0.
     """
 
-    chunked: bool = True
-    chunk_read_limit: int = 0
-    pass_read_limit: int = 0
+    _env_prefix = "CUDF_POLARS__PARQUET_OPTIONS"
 
-    def __post_init__(self) -> None:
+    chunked: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__CHUNKED", _bool_converter, default=True
+        )
+    )
+    n_output_chunks: int = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__N_OUTPUT_CHUNKS", int, default=1
+        )
+    )
+    chunk_read_limit: int = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__CHUNK_READ_LIMIT", int, default=0
+        )
+    )
+    pass_read_limit: int = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__PASS_READ_LIMIT", int, default=0
+        )
+    )
+    max_footer_samples: int = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__MAX_FOOTER_SAMPLES", int, default=3
+        )
+    )
+    max_row_group_samples: int = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__MAX_ROW_GROUP_SAMPLES", int, default=1
+        )
+    )
+
+    def __post_init__(self) -> None:  # noqa: D105
         if not isinstance(self.chunked, bool):
             raise TypeError("chunked must be a bool")
+        if not isinstance(self.n_output_chunks, int):
+            raise TypeError("n_output_chunks must be an int")
         if not isinstance(self.chunk_read_limit, int):
             raise TypeError("chunk_read_limit must be an int")
         if not isinstance(self.pass_read_limit, int):
             raise TypeError("pass_read_limit must be an int")
+        if not isinstance(self.max_footer_samples, int):
+            raise TypeError("max_footer_samples must be an int")
+        if not isinstance(self.max_row_group_samples, int):
+            raise TypeError("max_row_group_samples must be an int")
 
 
 def default_blocksize(scheduler: str) -> int:
     """Return the default blocksize."""
-    try:
-        # Use PyNVML to find the worker device size.
-        import pynvml
-    except (ImportError, ValueError) as err:  # pragma: no cover
-        # Fall back to a conservative 12GiB default
-        warnings.warn(
-            "Failed to query the device size with NVML. Please "
-            "set 'target_partition_size' to a literal byte size to "
-            f"silence this warning. Original error: {err}",
-            stacklevel=1,
-        )
-        device_size = 12 * 1024**3
-    else:
-        try:
-            pynvml.nvmlInit()
-            index = os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0]
-            if index and not index.isnumeric():  # pragma: no cover
-                # This means device_index is UUID.
-                # This works for both MIG and non-MIG device UUIDs.
-                handle = pynvml.nvmlDeviceGetHandleByUUID(str.encode(index))
-                if pynvml.nvmlDeviceIsMigDeviceHandle(handle):
-                    # Additionally get parent device handle
-                    # if the device itself is a MIG instance
-                    handle = pynvml.nvmlDeviceGetDeviceHandleFromMigDeviceHandle(handle)
-            else:
-                handle = pynvml.nvmlDeviceGetHandleByIndex(int(index))
+    device_size = get_total_device_memory()
+    if device_size is None:  # pragma: no cover
+        # System doesn't have proper "GPU memory".
+        # Fall back to a conservative 1GB default.
+        return 1_000_000_000
 
-            device_size = pynvml.nvmlDeviceGetMemoryInfo(handle).total
-        except pynvml.NVMLError as err:  # pragma: no cover
-            warnings.warn(
-                "Failed to query the device size with NVML. Please "
-                "set 'target_partition_size' to a literal byte size to "
-                f"silence this warning. Original error: {err}",
-                stacklevel=1,
-            )
-            device_size = 12 * 1024**3
-
-    if scheduler == "distributed":
+    if (
+        scheduler == "distributed"
+        or _env_get_int("POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY", default=1) == 0
+    ):
         # Distributed execution requires a conservative
-        # blocksize for now.
+        # blocksize for now. We are also more conservative
+        # when UVM is disabled.
         blocksize = int(device_size * 0.025)
     else:
         # Single-GPU execution can lean on UVM to
         # support a much larger blocksize.
         blocksize = int(device_size * 0.0625)
 
-    return max(blocksize, 256_000_000)
-
-
-T = TypeVar("T")
-
-
-def from_env(name: str, converter: Callable[[str], T], default: T) -> T:
-    """
-    Get an engine value from the environment.
-
-    Parameters
-    ----------
-    name
-        The name of the engine variable. The environment
-        variable looked up will have ``CUDF_POLARS__`` prefixed.
-    converter
-        How to convert the value from the environment.
-    default
-        The default value to use if the environment variable is not set.
-    """
-    # TODO: Support other config options
-    # https://github.com/rapidsai/cudf/issues/19330
-    prefix = "CUDF_POLARS"
-    value = os.environ.get(f"{prefix}__{name}")
-    if value is None:
-        return default
-    return converter(value)
-
-
-def target_partition_size_default() -> int:
-    """The default factory for StreamingExecutor.target_partition_size."""
-    return from_env("STREAMING__TARGET_PARTITION_SIZE", int, 0)
+    # Use lower and upper bounds of 1GB and 10GB
+    return min(max(blocksize, 1_000_000_000), 10_000_000_000)
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
 class StreamingExecutor:
     """
     Configuration for the cudf-polars streaming executor.
+
+    These options can be configured via environment variables
+    with the prefix ``CUDF_POLARS__EXECUTOR__``.
 
     Parameters
     ----------
@@ -207,6 +292,9 @@ class StreamingExecutor:
     fallback_mode
         How to handle errors when the GPU engine fails to execute a query.
         ``StreamingFallbackMode.WARN`` by default.
+
+        This can be set using the ``CUDF_POLARS__EXECUTOR__FALLBACK_MODE``
+        environment variable.
     max_rows_per_partition
         The maximum number of rows to process per partition. 1_000_000 by default.
         When the number of rows exceeds this value, the query will be split into
@@ -227,7 +315,7 @@ class StreamingExecutor:
         This can be set via
 
         - keyword argument to ``polars.GPUEngine``
-        - the ``CUDF_POLARS__STREAMING__TARGET_PARTITION_SIZE`` environment variable
+        - the ``CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE`` environment variable
 
         By default, cudf-polars uses a target partition size that's a fraction
         of the device memory, where the fraction depends on the scheduler:
@@ -269,21 +357,67 @@ class StreamingExecutor:
     with the 'distributed' scheduler.
     """
 
-    name: Literal["streaming"] = dataclasses.field(default="streaming", init=False)
-    scheduler: Scheduler = Scheduler.SYNCHRONOUS
-    fallback_mode: StreamingFallbackMode = StreamingFallbackMode.WARN
-    max_rows_per_partition: int = 1_000_000
-    unique_fraction: dict[str, float] = dataclasses.field(default_factory=dict)
-    target_partition_size: int = dataclasses.field(
-        default_factory=target_partition_size_default
-    )
-    groupby_n_ary: int = 32
-    broadcast_join_limit: int = 0
-    shuffle_method: ShuffleMethod = ShuffleMethod.TASKS
-    rapidsmpf_spill: bool = False
-    sink_to_directory: bool | None = None
+    _env_prefix = "CUDF_POLARS__EXECUTOR"
 
-    def __post_init__(self) -> None:
+    name: Literal["streaming"] = dataclasses.field(default="streaming", init=False)
+    scheduler: Scheduler = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__SCHEDULER",
+            Scheduler.__call__,
+            default=Scheduler.SYNCHRONOUS,
+        )
+    )
+    fallback_mode: StreamingFallbackMode = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__FALLBACK_MODE",
+            StreamingFallbackMode.__call__,
+            default=StreamingFallbackMode.WARN,
+        )
+    )
+    max_rows_per_partition: int = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__MAX_ROWS_PER_PARTITION", int, default=1_000_000
+        )
+    )
+    unique_fraction: dict[str, float] = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__UNIQUE_FRACTION", json.loads, default={}
+        )
+    )
+    target_partition_size: int = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__TARGET_PARTITION_SIZE", int, default=0
+        )
+    )
+    groupby_n_ary: int = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__GROUPBY_N_ARY", int, default=32
+        )
+    )
+    broadcast_join_limit: int = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__BROADCAST_JOIN_LIMIT", int, default=0
+        )
+    )
+    shuffle_method: ShuffleMethod = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__SHUFFLE_METHOD",
+            ShuffleMethod.__call__,
+            default=ShuffleMethod.TASKS,
+        )
+    )
+    rapidsmpf_spill: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__RAPIDSMPF_SPILL", _bool_converter, default=False
+        )
+    )
+    sink_to_directory: bool | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__SINK_TO_DIRECTORY", _bool_converter, default=None
+        )
+    )
+
+    def __post_init__(self) -> None:  # noqa: D105
         # Handle shuffle_method defaults for streaming executor
         if self.shuffle_method is None:
             if self.scheduler == "distributed" and rapidsmpf_available():
@@ -348,7 +482,7 @@ class StreamingExecutor:
         if not isinstance(self.sink_to_directory, bool):
             raise TypeError("sink_to_directory must be bool")
 
-    def __hash__(self) -> int:
+    def __hash__(self) -> int:  # noqa: D105
         # cardinality factory, a dict, isn't natively hashable. We'll dump it
         # to json and hash that.
         d = dataclasses.asdict(self)
@@ -383,10 +517,10 @@ class ConfigOptions:
         query. ``False`` by default.
     parquet_options
         Options controlling parquet file reading and writing. See
-        :class:`ParquetOptions` for more.
+        :class:`~cudf_polars.utils.config.ParquetOptions` for more.
     executor
-        The executor to use for the GPU engine. See :class:`StreamingExecutor`
-        and :class:`InMemoryExecutor` for more.
+        The executor to use for the GPU engine. See :class:`~cudf_polars.utils.config.StreamingExecutor`
+        and :class:`~cudf_polars.utils.config.InMemoryExecutor` for more.
     device
         The GPU used to run the query. If not provided, the
         query uses the current CUDA device.
@@ -395,18 +529,15 @@ class ConfigOptions:
     raise_on_fail: bool = False
     parquet_options: ParquetOptions = dataclasses.field(default_factory=ParquetOptions)
     executor: StreamingExecutor | InMemoryExecutor = dataclasses.field(
-        default_factory=InMemoryExecutor
+        default_factory=StreamingExecutor
     )
     device: int | None = None
 
     @classmethod
-    def from_polars_engine(cls, engine: pl.GPUEngine) -> Self:
-        """
-        Create a `ConfigOptions` object from a `pl.GPUEngine` object.
-
-        This creates our internal, typed, configuration object from the
-        user-provided `polars.GPUEngine` object.
-        """
+    def from_polars_engine(
+        cls, engine: polars.lazyframe.engine_config.GPUEngine
+    ) -> Self:
+        """Create a :class:`ConfigOptions` from a :class:`~polars.lazyframe.engine_config.GPUEngine`."""
         # these are the valid top-level keys in the engine.config that
         # the user passes as **kwargs to GPUEngine.
         valid_options = {
@@ -420,11 +551,13 @@ class ConfigOptions:
         if extra_options:
             raise TypeError(f"Unsupported executor_options: {extra_options}")
 
-        user_executor = engine.config.get("executor", "in-memory")
+        env_prefix = "CUDF_POLARS"
+        user_executor = engine.config.get("executor")
         if user_executor is None:
-            user_executor = "in-memory"
+            user_executor = os.environ.get(f"{env_prefix}__EXECUTOR", "streaming")
         user_executor_options = engine.config.get("executor_options", {})
         user_parquet_options = engine.config.get("parquet_options", {})
+        # This is set in polars, and so can't be overridden by the environment
         user_raise_on_fail = engine.config.get("raise_on_fail", False)
 
         # Backward compatibility for "cardinality_factor"
@@ -456,7 +589,19 @@ class ConfigOptions:
                 executor = InMemoryExecutor(**user_executor_options)
             case "streaming":
                 user_executor_options = user_executor_options.copy()
-                user_executor_options.setdefault("shuffle_method", None)
+                # Handle the interaction between the default shuffle method, the
+                # scheduler, and whether rapidsmpf is available.
+                env_shuffle_method = os.environ.get(
+                    "CUDF_POLARS__EXECUTOR__SHUFFLE_METHOD", None
+                )
+                if env_shuffle_method is not None:
+                    shuffle_method_default = ShuffleMethod(env_shuffle_method)
+                else:
+                    shuffle_method_default = None
+
+                user_executor_options.setdefault(
+                    "shuffle_method", shuffle_method_default
+                )
                 executor = StreamingExecutor(**user_executor_options)
             case _:  # pragma: no cover; Unreachable
                 raise ValueError(f"Unsupported executor: {user_executor}")

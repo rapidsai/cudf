@@ -19,11 +19,16 @@ from cudf.core._compat import (
 from cudf.testing import assert_eq
 from cudf.testing._utils import expect_warning_if, set_random_null_mask_inplace
 
-_UFUNCS = [
-    obj
-    for obj in (getattr(np, name) for name in dir(np))
-    if isinstance(obj, np.ufunc)
-]
+
+@pytest.fixture(
+    params=[
+        obj
+        for obj in (getattr(np, name) for name in dir(np))
+        if isinstance(obj, np.ufunc)
+    ]
+)
+def ufunc(request):
+    return request.param
 
 
 @contextmanager
@@ -72,7 +77,6 @@ def _hide_ufunc_warnings(ufunc):
         yield
 
 
-@pytest.mark.parametrize("ufunc", _UFUNCS)
 def test_ufunc_index(request, ufunc):
     # Note: This test assumes that all ufuncs are unary or binary.
     fname = ufunc.__name__
@@ -114,7 +118,7 @@ def test_ufunc_index(request, ufunc):
         expect = ufunc(*(arg.to_pandas() for arg in pandas_args))
 
     if ufunc.nout > 1:
-        for g, e in zip(got, expect):
+        for g, e in zip(got, expect, strict=True):
             assert_eq(g, e, check_exact=False)
     else:
         assert_eq(got, expect, check_exact=False)
@@ -141,7 +145,7 @@ def test_binary_ufunc_index_array(ufunc, reflect):
         expect = ufunc(args[0].to_pandas(), args[1].to_numpy())
 
     if ufunc.nout > 1:
-        for g, e in zip(got, expect):
+        for g, e in zip(got, expect, strict=True):
             if reflect:
                 assert (cp.asnumpy(g) == e).all()
             else:
@@ -157,7 +161,6 @@ def test_binary_ufunc_index_array(ufunc, reflect):
     PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
     reason="warning not present in older pandas versions",
 )
-@pytest.mark.parametrize("ufunc", _UFUNCS)
 @pytest.mark.parametrize("has_nulls", [True, False])
 @pytest.mark.parametrize("indexed", [True, False])
 def test_ufunc_series(request, ufunc, has_nulls, indexed):
@@ -238,7 +241,7 @@ def test_ufunc_series(request, ufunc, has_nulls, indexed):
         expect = ufunc(*(arg.to_pandas() for arg in pandas_args))
 
     if ufunc.nout > 1:
-        for g, e in zip(got, expect):
+        for g, e in zip(got, expect, strict=True):
             if has_nulls:
                 e[mask] = np.nan
             assert_eq(g, e, check_exact=False)
@@ -333,7 +336,7 @@ def test_binary_ufunc_series_array(
         expect = ufunc(args[0].to_pandas(), args[1].to_numpy())
 
     if ufunc.nout > 1:
-        for g, e in zip(got, expect):
+        for g, e in zip(got, expect, strict=True):
             if has_nulls:
                 e[mask] = np.nan
             if reflect:
@@ -367,7 +370,6 @@ def test_ufunc_cudf_series_error_with_out_kwarg(func):
     PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
     reason="warning not present in older pandas versions",
 )
-@pytest.mark.parametrize("ufunc", (uf for uf in _UFUNCS if uf != np.matmul))
 @pytest.mark.parametrize("has_nulls", [True, False])
 @pytest.mark.parametrize("indexed", [True, False])
 def test_ufunc_dataframe(request, ufunc, has_nulls, indexed):
@@ -405,6 +407,12 @@ def test_ufunc_dataframe(request, ufunc, has_nulls, indexed):
             and parse(np.__version__) >= parse("2.1")
             and parse(cp.__version__) < parse("14"),
             reason="https://github.com/cupy/cupy/issues/9018",
+        )
+    )
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=fname == "matmul",
+            reason=f"{fname} is not supported in cuDF",
         )
     )
 
@@ -449,7 +457,7 @@ def test_ufunc_dataframe(request, ufunc, has_nulls, indexed):
         expect = ufunc(*(arg.to_pandas() for arg in pandas_args))
 
     if ufunc.nout > 1:
-        for g, e in zip(got, expect):
+        for g, e in zip(got, expect, strict=True):
             if has_nulls:
                 e[mask] = np.nan
             assert_eq(g, e, check_exact=False)

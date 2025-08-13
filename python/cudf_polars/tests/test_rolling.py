@@ -204,28 +204,47 @@ def test_unsupported_agg():
     assert_ir_translation_raises(q, NotImplementedError)
 
 
-def test_grouped_rolling_ternary():
-    df = pl.LazyFrame(
-        {
-            "foo": ["a", "a", "b", "b"],
-            "time": pl.select(
-                pl.date_range(
-                    start=pl.lit("2025-07-01"), end=pl.lit("2025-07-04"), interval="1d"
-                )
-            ).to_series(),
-            "value": [10, 20, 30, 40],
-            "bar": [True, False, True, False],
-        }
-    )
-
-    expr = pl.when(pl.col("bar")).then(pl.col("value")).otherwise(0).sum()
-
-    q = (
-        df.sort("time")
-        .rolling(
-            index_column="time", period="2d", offset="0d", group_by="foo", closed="both"
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.when(pl.col("values") > 5).then(pl.col("floats")).otherwise(None).sum(),
+        pl.when(pl.col("values").count() > 0)
+        .then(pl.col("values").sum())
+        .otherwise(None),
+        pl.when(pl.col("values").min() < pl.col("values").max())
+        .then(pl.col("values").max() - pl.col("values").min())
+        .otherwise(pl.lit(0)),
+        pl.when(pl.col("values").count() > 0)
+        .then(
+            pl.col("values").cast(pl.Float64).sum()
+            / pl.col("values").count().cast(pl.Float64)
         )
-        .agg(expr)
-    )
-
+        .otherwise(None),
+    ],
+    ids=[
+        "pre_pointwise_then_sum",
+        "post_over_aggs",
+        "post_multiple_aggs_range",
+        "post_manually_compute_mean",
+    ],
+)
+def test_rolling_ternary_supported(df, expr):
+    q = df.rolling("dt", period="48h", closed="both").agg(expr.alias("out"))
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.when(pl.col("values") > 3)
+        .then(pl.col("values"))
+        .otherwise(pl.lit(None, dtype=pl.Int64)),
+        pl.when((pl.col("floats") - pl.col("floats").mean()) > 0)
+        .then(pl.col("floats"))
+        .otherwise(None)
+        .sum(),
+    ],
+)
+def test_rolling_ternary_unsupported(df, expr):
+    q = df.rolling("dt", period="48h", closed="both").agg(expr.alias("out"))
+    assert_ir_translation_raises(q, NotImplementedError)

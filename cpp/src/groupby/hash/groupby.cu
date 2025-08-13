@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,7 +44,8 @@ namespace {
  * @brief List of aggregation operations that can be computed with a hash-based
  * implementation.
  */
-constexpr std::array<aggregation::Kind, 12> hash_aggregations{aggregation::SUM,
+constexpr std::array<aggregation::Kind, 13> hash_aggregations{aggregation::SUM,
+                                                              aggregation::SUM_WITH_OVERFLOW,
                                                               aggregation::PRODUCT,
                                                               aggregation::MIN,
                                                               aggregation::MAX,

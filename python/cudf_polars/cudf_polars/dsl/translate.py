@@ -523,6 +523,7 @@ def _(node: pl_ir.Sink, translator: Translator, schema: Schema) -> ir.IR:
         schema=schema,
         kind=sink_kind,
         path=file["target"],
+        parquet_options=translator.config_options.parquet_options,
         options=options,
         cloud_options=cloud_options,
         df=translator.translate_ir(n=node.input),
@@ -655,7 +656,7 @@ def _(
         if name in needs_cast:
             return expr.Cast(dtype, result_expr)
         return result_expr
-    elif isinstance(name, pl_expr.StructFunction):
+    elif not POLARS_VERSION_LT_131 and isinstance(name, pl_expr.StructFunction):
         return expr.StructFunction(
             dtype,
             expr.StructFunction.Name.from_polars(name),
@@ -675,17 +676,6 @@ def _(
             )
         elif name == "pow":
             return expr.BinOp(dtype, plc.binaryop.BinaryOperator.POW, *children)
-        elif name in "top_k":
-            (col, k) = children
-            assert isinstance(k, expr.Literal)
-            (descending,) = options
-            return expr.Slice(
-                dtype,
-                0,
-                k.value,
-                expr.Sort(dtype, (False, True, not descending), col),
-            )
-
         return expr.UnaryFunction(dtype, name, options, *children)
     raise NotImplementedError(
         f"No handler for Expr function node with {name=}"
@@ -874,6 +864,8 @@ def _(
     dtype: DataType,
     schema: Schema,
 ) -> expr.Expr:
+    if plc.traits.is_boolean(dtype.plc) and node.op == pl_expr.Operator.TrueDivide:
+        dtype = DataType(pl.Float64())
     return expr.BinOp(
         dtype,
         expr.BinOp._MAPPING[node.op],
