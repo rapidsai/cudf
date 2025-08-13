@@ -153,7 +153,7 @@ def decompose_single_agg(
             )
         elif agg.name == "mean":
             post_agg_col: expr.Expr = expr.Col(
-                DataType(pl.Float64), name
+                DataType(pl.Float64()), name
             )  # libcudf promotes to float64
             if agg.dtype.plc.id() == plc.TypeId.FLOAT32:
                 # Cast back to float32 to match Polars
