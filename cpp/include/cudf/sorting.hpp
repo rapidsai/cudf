@@ -396,20 +396,22 @@ std::unique_ptr<column> top_k_order(
  * This performs the equivalent of a sort and the slice of the resulting first k elements
  * within each segment.
  * However, the values within each segment may not necessarily be sorted.
+ * If a segment contain less than k elements then all values for that segment are returned.
  *
  * @code{.pseudo}
  * Example:
- * col = { 3, 4, 5, 4, 1, 2, 3, 5, 6, 7, 8, 9, 10 }
- * offsets = {0, 3, 7, 13}
+ * col = [ 3, 4, 5, 4, 1, 2, 3, 5, 6, 7, 8, 9, 10 ]
+ * offsets = [0, 3, 7, 13]
  * result = cudf::top_k_segmented(col, offsets, 3);
- * result is {5,4,3, 4,3,2, 10,8,9} // each segment may not be sorted
+ * result is [[5,4,3], [4,3,2], [10,8,9]] // each segment may not be sorted
  * @endcode
  *
- * @throw std::invalid_argument if k is greater than the number of rows in the column
+ * @throw std::invalid_argument if k less than or equal to zero
+ * @throw cudf::data_type_error if segment_offsets is not size_type
+ * @throw std::invalid_argument segments_offsets is empty or contains nulls
  *
  * @param col Column to compute top k
- * @param segment_offsets The column of `size_type` type containing start offset index for each
- * contiguous segment
+ * @param segment_offsets Start offset index for each contiguous segment
  * @param k Number of values to return
  * @param sort_order The desired sort order for the top k values.
  *                   Default is high to low.
@@ -430,20 +432,22 @@ std::unique_ptr<column> top_k_segmented(
  *
  * The indices will represent the top k elements within each segment but may not represent
  * those elements as k sorted values.
+ * If a segment contain less than k elements then all values for that segment are returned.
  *
  * @code{.pseudo}
  * Example:
- * col = { 3, 4, 5, 4, 1, 2, 3, 5, 6, 7, 8, 9, 10 }
- * offsets = {0, 3, 7, 13}
+ * col = [ 3, 4, 5, 4, 1, 2, 3, 5, 6, 7, 8, 9, 10 ]
+ * offsets = [0, 3, 7, 13]
  * result = cudf::top_k_segmented_order(col, offsets, 3);
- * result is { 2,1,0, 3,6,5, 12,10,11} // each segment may not be sorted
+ * result is [[2,1,0], [3,6,5], [12,10,11]] // each segment may not be sorted
  * @endcode
  *
- * @throw std::invalid_argument if k is greater than the number of rows in the column
+ * @throw std::invalid_argument if k less than or equal to zero
+ * @throw cudf::data_type_error if segment_offsets is not size_type
+ * @throw std::invalid_argument segments_offsets is empty or contains nulls
  *
  * @param col Column to compute top k
- * @param segment_offsets The column of `size_type` type containing start offset index for each
- * contiguous segment
+ * @param segment_offsets Start offset index for each contiguous segment
  * @param k Number of values to return
  * @param sort_order The desired sort order for the top k values.
  *                   Default is high to low.
