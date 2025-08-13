@@ -687,6 +687,23 @@ def test_from_pandas_object_dtype_passed_dtype(klass):
     assert_eq(result, expected)
 
 
+def test_series_basic():
+    # Make series from buffer
+    a1 = np.arange(10, dtype=np.float64)
+    series = cudf.Series(a1)
+    assert len(series) == 10
+    np.testing.assert_equal(series.to_numpy(), np.hstack([a1]))
+
+
+def test_series_from_cupy_scalars():
+    data = [0.1, 0.2, 0.3]
+    data_np = np.array(data)
+    data_cp = cp.array(data)
+    s_np = cudf.Series([data_np[0], data_np[2]])
+    s_cp = cudf.Series([data_cp[0], data_cp[2]])
+    assert_eq(s_np, s_cp)
+
+
 def test_to_dense_array():
     rng = np.random.default_rng(seed=0)
     data = rng.random(8)
