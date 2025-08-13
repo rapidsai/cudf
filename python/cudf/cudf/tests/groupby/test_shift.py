@@ -202,3 +202,15 @@ def test_groupby_shift_row_zero_shift(fill_value):
     assert_groupby_results_equal(
         expected[["1", "2", "3", "4"]], got[["1", "2", "3", "4"]]
     )
+
+
+def test_groupby_select_then_shift():
+    pdf = pd.DataFrame(
+        {"a": [1, 1, 1, 2, 2], "b": [1, 2, 3, 4, 5], "c": [3, 4, 5, 6, 7]}
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    expected = pdf.groupby("a")["c"].shift(1)
+    actual = gdf.groupby("a")["c"].shift(1)
+
+    assert_groupby_results_equal(expected, actual)

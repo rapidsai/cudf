@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.testing import assert_groupby_results_equal
+from cudf.testing import assert_eq, assert_groupby_results_equal
 from cudf.testing._utils import assert_exceptions_equal
 
 
@@ -675,4 +675,136 @@ def test_groupby_no_keys(pdf):
         check_dtype=False,
         check_index_type=False,  # Int64 v/s Float64
         **kwargs,
+    )
+
+
+@pytest.mark.parametrize("label", [None, "left", "right"])
+@pytest.mark.parametrize("closed", [None, "left", "right"])
+def test_groupby_freq_week(label, closed):
+    pdf = pd.DataFrame(
+        {
+            "Publish date": [
+                pd.Timestamp("2000-01-03"),
+                pd.Timestamp("2000-01-01"),
+                pd.Timestamp("2000-01-09"),
+                pd.Timestamp("2000-01-02"),
+                pd.Timestamp("2000-01-07"),
+                pd.Timestamp("2000-01-16"),
+            ],
+            "ID": [0, 1, 2, 3, 4, 5],
+            "Price": [10, 20, 30, 40, 50, 60],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    expect = pdf.groupby(
+        pd.Grouper(key="Publish date", freq="1W", label=label, closed=closed)
+    ).mean()
+    got = gdf.groupby(
+        cudf.Grouper(key="Publish date", freq="1W", label=label, closed=closed)
+    ).mean()
+    assert_eq(
+        expect,
+        got,
+        check_like=True,
+        check_dtype=False,
+        check_index_type=False,
+    )
+
+
+@pytest.mark.parametrize("label", [None, "left", "right"])
+@pytest.mark.parametrize("closed", [None, "left", "right"])
+def test_groupby_freq_day(label, closed):
+    pdf = pd.DataFrame(
+        {
+            "Publish date": [
+                pd.Timestamp("2000-01-03"),
+                pd.Timestamp("2000-01-01"),
+                pd.Timestamp("2000-01-09"),
+                pd.Timestamp("2000-01-02"),
+                pd.Timestamp("2000-01-07"),
+                pd.Timestamp("2000-01-16"),
+            ],
+            "ID": [0, 1, 2, 3, 4, 5],
+            "Price": [10, 20, 30, 40, 50, 60],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    expect = pdf.groupby(
+        pd.Grouper(key="Publish date", freq="3D", label=label, closed=closed)
+    ).mean()
+    got = gdf.groupby(
+        cudf.Grouper(key="Publish date", freq="3D", label=label, closed=closed)
+    ).mean()
+    assert_eq(
+        expect,
+        got,
+        check_like=True,
+        check_dtype=False,
+        check_index_type=False,
+    )
+
+
+@pytest.mark.parametrize("label", [None, "left", "right"])
+@pytest.mark.parametrize("closed", [None, "left", "right"])
+def test_groupby_freq_min(label, closed):
+    pdf = pd.DataFrame(
+        {
+            "Publish date": [
+                pd.Timestamp("2000-01-01 12:01:00"),
+                pd.Timestamp("2000-01-01 12:05:00"),
+                pd.Timestamp("2000-01-01 15:30:00"),
+                pd.Timestamp("2000-01-02 00:00:00"),
+                pd.Timestamp("2000-01-01 23:47:00"),
+                pd.Timestamp("2000-01-02 00:05:00"),
+            ],
+            "ID": [0, 1, 2, 3, 4, 5],
+            "Price": [10, 20, 30, 40, 50, 60],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    expect = pdf.groupby(
+        pd.Grouper(key="Publish date", freq="1h", label=label, closed=closed)
+    ).mean()
+    got = gdf.groupby(
+        cudf.Grouper(key="Publish date", freq="1h", label=label, closed=closed)
+    ).mean()
+    assert_eq(
+        expect,
+        got,
+        check_like=True,
+        check_dtype=False,
+        check_index_type=False,
+    )
+
+
+@pytest.mark.parametrize("label", [None, "left", "right"])
+@pytest.mark.parametrize("closed", [None, "left", "right"])
+def test_groupby_freq_s(label, closed):
+    pdf = pd.DataFrame(
+        {
+            "Publish date": [
+                pd.Timestamp("2000-01-01 00:00:02"),
+                pd.Timestamp("2000-01-01 00:00:07"),
+                pd.Timestamp("2000-01-01 00:00:02"),
+                pd.Timestamp("2000-01-02 00:00:15"),
+                pd.Timestamp("2000-01-01 00:00:05"),
+                pd.Timestamp("2000-01-02 00:00:09"),
+            ],
+            "ID": [0, 1, 2, 3, 4, 5],
+            "Price": [10, 20, 30, 40, 50, 60],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    expect = pdf.groupby(
+        pd.Grouper(key="Publish date", freq="3s", label=label, closed=closed)
+    ).mean()
+    got = gdf.groupby(
+        cudf.Grouper(key="Publish date", freq="3s", label=label, closed=closed)
+    ).mean()
+    assert_eq(
+        expect,
+        got,
+        check_like=True,
+        check_dtype=False,
+        check_index_type=False,
     )
