@@ -341,7 +341,8 @@ ConfigureTest(
   io/parquet_test.cpp
 )
 ConfigureTest(
-  PARQUET_EXPERIMENTAL_API_TEST io/parquet_experimental_apis_test.cu io/parquet_common.cpp io/parquet_test.cpp
+  PARQUET_EXPERIMENTAL_API_TEST io/parquet_experimental_apis_test.cu io/parquet_common.cpp
+  io/parquet_test.cpp
 )
 ConfigureTest(
   JSON_TEST io/json/json_test.cpp io/json/json_chunked_reader.cu
