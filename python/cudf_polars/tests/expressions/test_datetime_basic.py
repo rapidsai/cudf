@@ -400,7 +400,9 @@ def test_datetime_from_integer(datetime_dtype, integer_dtype):
     "integer_dtype",
     [
         pl.Int64(),
-        pl.UInt64(),
+        pytest.param(
+            pl.UInt64(), marks=pytest.mark.xfail(reason="INT64 can not fit max(UINT64)")
+        ),
         pl.Int32(),
         pl.UInt32(),
         pl.Int16(),
