@@ -16,28 +16,18 @@
 
 #include <benchmarks/common/generate_input.hpp>
 
-#include <cudf_test/column_wrapper.hpp>
-
-#include <cudf/column/column.hpp>
+#include <cudf/ast/expressions.hpp>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/stream_compaction.hpp>
-#include <cudf/strings/strings_column_view.hpp>
-#include <cudf/table/table.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
-
 #include <rmm/cuda_stream_view.hpp>
-
-#include <thrust/iterator/counting_iterator.h>
 
 #include <nvbench/nvbench.cuh>
 #include <nvbench/types.cuh>
 
-#include <algorithm>
-#include <cstddef>
-#include <cstdint>
-#include <cstdio>
 #include <vector>
 
 template <typename T>
