@@ -125,7 +125,7 @@ static void BM_filter_min_max(nvbench::state& state)
   auto min_scalar_column = cudf::make_column_from_scalar(min_scalar, 1);
   auto max_scalar_column = cudf::make_column_from_scalar(max_scalar, 1);
 
-  if constexpr (!cudf::is_fixed_point<key_type>()) {
+  {
     auto& column_ref  = tree.push(cudf::ast::column_reference{0});
     auto& min_literal = tree.push(cudf::ast::literal{min_scalar});
     auto& max_literal = tree.push(cudf::ast::literal{max_scalar});
@@ -165,13 +165,12 @@ static void BM_filter_min_max(nvbench::state& state)
   });
 }
 
-#define FILTER_BENCHMARK_DEFINE(name, key_type)                                          \
-  static void name(::nvbench::state& st) { ::BM_filter_min_max<key_type>(st); }          \
-  NVBENCH_BENCH(name)                                                                    \
-    .set_name(#name)                                                                     \
-    .add_int64_axis("num_rows",                                                          \
-                    {100'000, 1'000'000, 10'000'000, 100'000'000}) \
-    .add_string_axis("engine", {"ast", "jit"})                                           \
+#define FILTER_BENCHMARK_DEFINE(name, key_type)                                 \
+  static void name(::nvbench::state& st) { ::BM_filter_min_max<key_type>(st); } \
+  NVBENCH_BENCH(name)                                                           \
+    .set_name(#name)                                                            \
+    .add_int64_axis("num_rows", {100'000, 1'000'000, 10'000'000, 100'000'000})  \
+    .add_string_axis("engine", {"ast", "jit"})                                  \
     .add_string_axis("nullable", {"true", "false"});
 
 FILTER_BENCHMARK_DEFINE(filter_min_max_int32, int32_t);
