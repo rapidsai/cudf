@@ -170,8 +170,8 @@ static void BM_filter_min_max(nvbench::state& state)
   NVBENCH_BENCH(name)                                                           \
     .set_name(#name)                                                            \
     .add_string_axis("engine", {"ast", "jit"})                                  \
-    .add_string_axis("nullable", {"true", "false"})                             \
-    .add_int64_axis("num_rows", {100'000, 1'000'000, 10'000'000, 100'000'000})
+    .add_int64_axis("num_rows", {100'000, 1'000'000, 10'000'000, 100'000'000})  \
+    .add_string_axis("nullable", {"true", "false"})
 
 FILTER_BENCHMARK_DEFINE(filter_min_max_int32, int32_t);
 FILTER_BENCHMARK_DEFINE(filter_min_max_int64, int64_t);
