@@ -504,6 +504,47 @@ def test_construct_all_pd_NA_with_dtype(nan_as_null):
     assert_eq(result, expected)
 
 
+def test_cuda_array_interface(numeric_and_bool_types_as_str):
+    np_data = np.arange(10).astype(numeric_and_bool_types_as_str)
+    cupy_data = cp.array(np_data)
+    pd_data = pd.Series(np_data)
+
+    cudf_data = cudf.Series(cupy_data)
+    assert_eq(pd_data, cudf_data)
+
+    gdf = cudf.DataFrame()
+    gdf["test"] = cupy_data
+    pd_data.name = "test"
+    assert_eq(pd_data, gdf["test"])
+
+
+@pytest.mark.parametrize("num_elements", [0, 10])
+@pytest.mark.parametrize("null_type", [np.nan, None, "mixed"])
+def test_series_all_null(num_elements, null_type):
+    if null_type == "mixed":
+        data = []
+        data1 = [np.nan] * int(num_elements / 2)
+        data2 = [None] * int(num_elements / 2)
+        for idx in range(len(data1)):
+            data.append(data1[idx])
+            data.append(data2[idx])
+    else:
+        data = [null_type] * num_elements
+
+    # Typecast Pandas because None will return `object` dtype
+    expect = pd.Series(data, dtype="float64")
+    got = cudf.Series(data, dtype="float64")
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("num_elements", [0, 10])
+def test_series_all_valid_nan(num_elements):
+    data = [np.nan] * num_elements
+    sr = cudf.Series(data, nan_as_null=False)
+    np.testing.assert_equal(sr.null_count, 0)
+
+
 def test_series_empty_dtype():
     expected = pd.Series([])
     actual = cudf.Series([])

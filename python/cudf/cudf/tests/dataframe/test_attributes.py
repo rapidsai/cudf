@@ -34,3 +34,10 @@ def test_axes(data):
 
     for e, a in zip(expected, actual, strict=True):
         assert_eq(e, a, exact=False)
+
+
+def test_iter():
+    data = {"a": [1, 2, 3], "b": [4, 5, 6]}
+    pdf = pd.DataFrame(data)
+    gdf = cudf.DataFrame(data)
+    assert list(pdf) == list(gdf)

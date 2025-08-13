@@ -4,6 +4,7 @@ from contextlib import nullcontext as does_not_raise
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 
 import cudf
@@ -155,3 +156,68 @@ def test_init_series_list_columns_unsort():
     pdf = pd.DataFrame(pseries)
     gdf = cudf.DataFrame(gseries)
     assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize("nelem", [0, 10])
+@pytest.mark.parametrize("nchunks", [1, 5])
+def test_from_arrow_chunked_arrays(nelem, nchunks, numeric_types_as_str):
+    rng = np.random.default_rng(seed=0)
+    np_list_data = [
+        rng.integers(0, 100, nelem).astype(numeric_types_as_str)
+        for i in range(nchunks)
+    ]
+    pa_chunk_array = pa.chunked_array(np_list_data)
+
+    expect = pa_chunk_array.to_pandas()
+    got = cudf.Series(pa_chunk_array)
+
+    assert_eq(expect, got)
+
+    np_list_data2 = [
+        rng.integers(0, 100, nelem).astype(numeric_types_as_str)
+        for i in range(nchunks)
+    ]
+    pa_chunk_array2 = pa.chunked_array(np_list_data2)
+    pa_table = pa.Table.from_arrays(
+        [pa_chunk_array, pa_chunk_array2], names=["a", "b"]
+    )
+
+    expect = pa_table.to_pandas()
+    got = cudf.DataFrame.from_arrow(pa_table)
+
+    assert_eq(expect, got)
+
+
+def test_1row_arrow_table():
+    data = [pa.array([0]), pa.array([1])]
+    batch = pa.RecordBatch.from_arrays(data, ["f0", "f1"])
+    table = pa.Table.from_batches([batch])
+
+    expect = table.to_pandas()
+    got = cudf.DataFrame.from_arrow(table)
+    assert_eq(expect, got)
+
+
+def test_arrow_handle_no_index_name():
+    pdf = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    gdf = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+
+    gdf_arrow = gdf.to_arrow()
+    pdf_arrow = pa.Table.from_pandas(pdf)
+    assert pa.Table.equals(pdf_arrow, gdf_arrow)
+
+    got = cudf.DataFrame.from_arrow(gdf_arrow)
+    expect = pdf_arrow.to_pandas()
+    assert_eq(expect, got)
+
+
+def test_pandas_non_contiguious():
+    rng = np.random.default_rng(seed=0)
+    arr1 = rng.random(size=(5000, 10))
+    assert arr1.flags["C_CONTIGUOUS"] is True
+    df = pd.DataFrame(arr1)
+    for col in df.columns:
+        assert df[col].values.flags["C_CONTIGUOUS"] is False
+
+    gdf = cudf.DataFrame.from_pandas(df)
+    assert_eq(gdf.to_pandas(), df)

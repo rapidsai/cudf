@@ -35,3 +35,23 @@ def test_rename_index_not_supported(index):
     ser = cudf.Series(range(2))
     with pytest.raises(NotImplementedError):
         ser.rename(index=index)
+
+
+def test_series_rename2():
+    pds = pd.Series([1, 2, 3], name="asdf")
+    gds = cudf.Series([1, 2, 3], name="asdf")
+
+    expect = pds.rename("new_name")
+    got = gds.rename("new_name")
+
+    assert_eq(expect, got)
+
+    pds = pd.Series(expect)
+    gds = cudf.Series(got)
+
+    assert_eq(pds, gds)
+
+    pds = pd.Series(expect, name="name name")
+    gds = cudf.Series(got, name="name name")
+
+    assert_eq(pds, gds)
