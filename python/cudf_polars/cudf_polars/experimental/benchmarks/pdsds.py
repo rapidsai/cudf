@@ -35,6 +35,7 @@ with contextlib.suppress(ImportError):
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from types import ModuleType
+    from typing import Any
 
 # Without this setting, the first IO task to run
 # on each worker takes ~15 sec extra
@@ -72,6 +73,7 @@ class PDSDSQueries(metaclass=PDSDSQueriesMeta):
     """Base class for query loading."""
 
     q_impl: str
+    name: str = "pdsds"
 
 
 class PDSDSPolarsQueries(PDSDSQueries):
@@ -100,9 +102,10 @@ def execute_duckdb_query(query: str, dataset_path: Path) -> pl.DataFrame:
     return conn.execute("\n".join(statements)).pl()
 
 
-def run_duckdb(options: Sequence[str] | None = None) -> None:
+def run_duckdb(benchmark: Any, options: Sequence[str] | None = None) -> None:
     """Run the benchmark with DuckDB."""
     args = parse_args(options, num_queries=99)
+    vars(args).update({"query_set": benchmark.name})
     run_config = RunConfig.from_args(args)
     records: defaultdict[int, list[Record]] = defaultdict(list)
 
@@ -129,11 +132,12 @@ def run_duckdb(options: Sequence[str] | None = None) -> None:
             records[q_id].append(record)
 
 
-def run_validate(options: Sequence[str] | None = None) -> None:
+def run_validate(benchmark: Any, options: Sequence[str] | None = None) -> None:
     """Validate Polars CPU vs DuckDB or Polars GPU."""
     from polars.testing import assert_frame_equal
 
     args = parse_args(options, num_queries=99)
+    vars(args).update({"query_set": benchmark.name})
     run_config = RunConfig.from_args(args)
 
     baseline = args.baseline
@@ -211,6 +215,6 @@ if __name__ == "__main__":
     if args.engine == "polars":
         run_polars(PDSDSPolarsQueries, extra_args, num_queries=99)
     elif args.engine == "duckdb":
-        run_duckdb(extra_args)
+        run_duckdb(PDSDSDuckDBQueries, extra_args)
     elif args.engine == "validate":
-        run_validate(extra_args)
+        run_validate(PDSDSQueries, extra_args)
