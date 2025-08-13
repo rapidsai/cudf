@@ -40,6 +40,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuco/utility/error.hpp>
+
 #include <limits>
 
 namespace {
@@ -185,8 +187,7 @@ struct JoinTest : public cudf::test::BaseFixture {
   }
 };
 
-// Disabled for now, waiting on upstream cuco updates
-TEST_F(JoinTest, DISABLED_InvalidLoadFactor)
+TEST_F(JoinTest, InvalidLoadFactor)
 {
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 3}};
   strcol_wrapper col0_1({"s0", "s1", "s2", "s4", "s1"});
@@ -199,13 +200,13 @@ TEST_F(JoinTest, DISABLED_InvalidLoadFactor)
 
   // Test load factor of -0.1
   EXPECT_THROW(cudf::hash_join(t0, cudf::nullable_join::NO, cudf::null_equality::EQUAL, -0.1),
-               std::invalid_argument);
+               cuco::logic_error);
   // Test load factor of 0
   EXPECT_THROW(cudf::hash_join(t0, cudf::nullable_join::NO, cudf::null_equality::EQUAL, 0.0),
-               std::invalid_argument);
+               cuco::logic_error);
   // Test load factor > 1
   EXPECT_THROW(cudf::hash_join(t0, cudf::nullable_join::NO, cudf::null_equality::EQUAL, 1.5),
-               std::invalid_argument);
+               cuco::logic_error);
 }
 
 struct JoinParameterizedTest : public JoinTest, public testing::WithParamInterface<algorithm> {};
