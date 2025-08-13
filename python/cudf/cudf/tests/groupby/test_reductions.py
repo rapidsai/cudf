@@ -5,6 +5,10 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core._compat import (
+    PANDAS_CURRENT_SUPPORTED_VERSION,
+    PANDAS_VERSION,
+)
 from cudf.testing import assert_eq, assert_groupby_results_equal
 from cudf.testing._utils import assert_exceptions_equal
 
@@ -807,4 +811,129 @@ def test_groupby_freq_s(label, closed):
         check_like=True,
         check_dtype=False,
         check_index_type=False,
+    )
+
+
+@pytest.mark.parametrize("index_names", ["a", "b", "c", ["b", "c"]])
+def test_groupby_by_index_names(index_names):
+    gdf = cudf.DataFrame(
+        {"a": [1, 2, 3, 4], "b": ["a", "b", "a", "a"], "c": [1, 1, 2, 1]}
+    ).set_index(index_names)
+    pdf = gdf.to_pandas()
+
+    assert_groupby_results_equal(
+        pdf.groupby(index_names).min(), gdf.groupby(index_names).min()
+    )
+
+
+@pytest.mark.parametrize(
+    "groups", ["a", "b", "c", ["a", "c"], ["a", "b", "c"]]
+)
+def test_group_by_pandas_compat(groups):
+    with cudf.option_context("mode.pandas_compatible", True):
+        df = cudf.DataFrame(
+            {
+                "a": [1, 3, 2, 3, 3],
+                "b": ["x", "a", "y", "z", "a"],
+                "c": [10, 13, 11, 12, 12],
+            }
+        )
+        pdf = df.to_pandas()
+
+        assert_eq(pdf.groupby(groups).max(), df.groupby(groups).max())
+
+
+@pytest.mark.parametrize(
+    "groups", ["a", "b", "c", ["a", "c"], ["a", "b", "c"]]
+)
+@pytest.mark.parametrize("sort", [True, False])
+def test_group_by_pandas_sort_order(groups, sort):
+    with cudf.option_context("mode.pandas_compatible", True):
+        df = cudf.DataFrame(
+            {
+                "a": [10, 1, 10, 3, 2, 1, 3, 3],
+                "b": [5, 6, 7, 1, 2, 3, 4, 9],
+                "c": [20, 20, 10, 11, 13, 11, 12, 12],
+            }
+        )
+        pdf = df.to_pandas()
+
+        assert_eq(
+            pdf.groupby(groups, sort=sort).sum(),
+            df.groupby(groups, sort=sort).sum(),
+        )
+
+
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
+)
+def test_group_by_empty_reduction(
+    all_supported_types_as_str, groupby_reduction_methods, request
+):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=all_supported_types_as_str == "category"
+            and groupby_reduction_methods
+            in {"min", "max", "idxmin", "idxmax", "first", "last"},
+            reason=f"cuDF doesn't support {groupby_reduction_methods} on {all_supported_types_as_str}",
+        )
+    )
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=all_supported_types_as_str == "str"
+            and groupby_reduction_methods in {"idxmin", "idxmax"},
+            reason=f"cuDF doesn't support {groupby_reduction_methods} on {all_supported_types_as_str}",
+        )
+    )
+    request.applymarker(
+        pytest.mark.xfail(
+            condition="int" in all_supported_types_as_str
+            and groupby_reduction_methods == "mean",
+            reason=f"{all_supported_types_as_str} returns incorrect result type with {groupby_reduction_methods}",
+        )
+    )
+    request.applymarker(
+        pytest.mark.xfail(
+            condition="timedelta" in all_supported_types_as_str
+            and groupby_reduction_methods == "prod",
+            raises=RuntimeError,
+            reason=f"{all_supported_types_as_str} raises libcudf error with {groupby_reduction_methods}",
+        )
+    )
+    request.applymarker(
+        pytest.mark.xfail(
+            condition="datetime" in all_supported_types_as_str
+            and groupby_reduction_methods in {"mean", "prod", "sum"},
+            raises=RuntimeError,
+            reason=f"{all_supported_types_as_str} raises libcudf error with {groupby_reduction_methods}",
+        )
+    )
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=all_supported_types_as_str in {"str", "category"}
+            and groupby_reduction_methods in {"sum", "prod", "mean"},
+            raises=TypeError,
+            reason=f"{all_supported_types_as_str} raises TypeError with {groupby_reduction_methods}",
+        )
+    )
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=all_supported_types_as_str == "bool"
+            and groupby_reduction_methods in {"sum", "prod", "mean"},
+            reason=f"{all_supported_types_as_str} returns incorrect result type with {groupby_reduction_methods}",
+        )
+    )
+    gdf = cudf.DataFrame(
+        {"a": [], "b": [], "c": []}, dtype=all_supported_types_as_str
+    )
+    pdf = gdf.to_pandas()
+
+    gg = gdf.groupby("a")["c"]
+    pg = pdf.groupby("a", observed=True)["c"]
+
+    assert_eq(
+        getattr(gg, groupby_reduction_methods)(),
+        getattr(pg, groupby_reduction_methods)(),
+        check_dtype=True,
     )
