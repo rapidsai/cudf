@@ -262,44 +262,6 @@ aggregate_reader_metadata::select_payload_columns(
     valid_payload_columns, {}, include_index, strings_to_categorical, timestamp_type_id);
 }
 
-std::tuple<cudf::size_type, std::vector<row_group_info>>
-aggregate_reader_metadata::select_row_groups(
-  host_span<std::vector<cudf::size_type> const> row_group_indices)
-{
-  // Hybrid scan reader does not support skip rows or num rows
-  auto rows_to_read = cudf::size_type{0};
-
-  // Vector to hold the `row_group_info` of selected row groups
-  std::vector<row_group_info> selection;
-  // Number of rows in each data source
-  std::vector<size_t> num_rows_per_source(per_file_metadata.size(), 0);
-
-  CUDF_EXPECTS(row_group_indices.size() == per_file_metadata.size(),
-               "Must specify row groups for each source");
-
-  auto total_row_groups = 0;
-  for (size_t src_idx = 0; src_idx < row_group_indices.size(); ++src_idx) {
-    auto const& fmd = per_file_metadata[src_idx];
-    for (auto const& rowgroup_idx : row_group_indices[src_idx]) {
-      CUDF_EXPECTS(rowgroup_idx >= 0 and std::cmp_less(rowgroup_idx, fmd.row_groups.size()),
-                   "Invalid rowgroup index",
-                   std::invalid_argument);
-      auto const chunk_start_row  = rows_to_read;
-      auto const num_rows_this_rg = get_row_group(rowgroup_idx, src_idx).num_rows;
-      rows_to_read += num_rows_this_rg;
-      num_rows_per_source[src_idx] += num_rows_this_rg;
-      selection.emplace_back(rowgroup_idx, rows_to_read, src_idx);
-      // if page-level indexes are present, then collect extra chunk and page info.
-      column_info_for_row_group(selection.back(), chunk_start_row);
-      total_row_groups++;
-    }
-  }
-
-  CUDF_EXPECTS(total_row_groups > 0, "No row groups added");
-
-  return {rows_to_read, std::move(selection)};
-}
-
 std::vector<std::vector<cudf::size_type>> aggregate_reader_metadata::filter_row_groups_with_stats(
   host_span<std::vector<cudf::size_type> const> row_group_indices,
   host_span<data_type const> output_dtypes,

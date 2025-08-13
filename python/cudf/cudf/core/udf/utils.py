@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import functools
-import glob
 import os
 from pickle import dumps
 from typing import TYPE_CHECKING
@@ -16,16 +15,19 @@ from numba import cuda, typeof
 from numba.core.datamodel import default_manager, models
 from numba.core.extending import register_model
 from numba.np import numpy_support
-from numba.types import CPointer, Record, Tuple
+from numba.types import CPointer, Record, Tuple, int64, void
 
 import rmm
 
 from cudf._lib import strings_udf
 from cudf.core.buffer import as_buffer
 from cudf.core.udf.masked_typing import MaskedType
+from cudf.core.udf.nrt_utils import nrt_enabled
 from cudf.core.udf.strings_typing import (
+    NRT_decref,
+    managed_udf_string,
+    str_view_arg_handler,
     string_view,
-    udf_string,
 )
 from cudf.utils.dtypes import (
     BOOL_TYPES,
@@ -68,65 +70,9 @@ precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
 _udf_code_cache: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
 
 
-def _get_best_ptx_file(archs, max_compute_capability):
-    """
-    Determine of the available PTX files which one is
-    the most recent up to and including the device compute capability.
-    """
-    filtered_archs = [x for x in archs if x[0] <= max_compute_capability]
-    if filtered_archs:
-        return max(filtered_archs, key=lambda x: x[0])
-    else:
-        return None
-
-
-def _get_ptx_file(path, prefix):
-    if "RAPIDS_NO_INITIALIZE" in os.environ:
-        # cc=70 ptx is always built
-        cc = int(os.environ.get("STRINGS_UDF_CC", "70"))
-    else:
-        dev = cuda.get_current_device()
-
-        # Load the highest compute capability file available that is less than
-        # the current device's.
-        cc = int("".join(str(x) for x in dev.compute_capability))
-    files = glob.glob(os.path.join(path, f"{prefix}*.ptx"))
-    if len(files) == 0:
-        raise RuntimeError(f"Missing PTX files for cc={cc}")
-    regular_sms = []
-
-    for f in files:
-        file_name = os.path.basename(f)
-        sm_number = file_name.rstrip(".ptx").lstrip(prefix)
-        if sm_number.endswith("a"):
-            processed_sm_number = int(sm_number.rstrip("a"))
-            if processed_sm_number == cc:
-                return f
-        else:
-            regular_sms.append((int(sm_number), f))
-
-    regular_result = None
-
-    if regular_sms:
-        regular_result = _get_best_ptx_file(regular_sms, cc)
-
-    if regular_result is None:
-        raise RuntimeError(
-            "This cuDF installation is missing the necessary PTX "
-            f"files that are <={cc}."
-        )
-    else:
-        return regular_result[1]
-
-
-@functools.cache
-def _ptx_file():
-    return _get_ptx_file(
-        os.path.join(
-            os.path.dirname(strings_udf.__file__), "..", "core", "udf"
-        ),
-        "shim_",
-    )
+UDF_SHIM_FILE = os.path.join(
+    os.path.dirname(strings_udf.__file__), "..", "core", "udf", "shim.fatbin"
+)
 
 
 def _all_dtypes_from_frame(frame, supported_types=JIT_SUPPORTED_TYPES):
@@ -309,8 +255,27 @@ def _get_input_args_from_frame(fr: IndexedFrame) -> list:
 
 def _return_arr_from_dtype(dtype, size):
     if dtype == CUDF_STRING_DTYPE:
-        return rmm.DeviceBuffer(size=size * _get_extensionty_size(udf_string))
+        return rmm.DeviceBuffer(
+            size=size * _get_extensionty_size(managed_udf_string)
+        )
     return cp.empty(size, dtype=dtype)
+
+
+@functools.cache
+def _make_free_string_kernel():
+    with nrt_enabled():
+
+        @cuda.jit(
+            void(CPointer(managed_udf_string), int64),
+            link=[UDF_SHIM_FILE],
+            extensions=[str_view_arg_handler],
+        )
+        def free_managed_udf_string_array(ary, size):
+            gid = cuda.grid(1)
+            if gid < size:
+                NRT_decref(ary[gid])
+
+    return free_managed_udf_string_array
 
 
 # The only supported data layout in NVVM.

@@ -19,11 +19,16 @@ from cudf.core._compat import (
 from cudf.testing import assert_eq
 from cudf.testing._utils import expect_warning_if, set_random_null_mask_inplace
 
-_UFUNCS = [
-    obj
-    for obj in (getattr(np, name) for name in dir(np))
-    if isinstance(obj, np.ufunc)
-]
+
+@pytest.fixture(
+    params=[
+        obj
+        for obj in (getattr(np, name) for name in dir(np))
+        if isinstance(obj, np.ufunc)
+    ]
+)
+def ufunc(request):
+    return request.param
 
 
 @contextmanager
@@ -72,7 +77,6 @@ def _hide_ufunc_warnings(ufunc):
         yield
 
 
-@pytest.mark.parametrize("ufunc", _UFUNCS)
 def test_ufunc_index(request, ufunc):
     # Note: This test assumes that all ufuncs are unary or binary.
     fname = ufunc.__name__
@@ -157,7 +161,6 @@ def test_binary_ufunc_index_array(ufunc, reflect):
     PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
     reason="warning not present in older pandas versions",
 )
-@pytest.mark.parametrize("ufunc", _UFUNCS)
 @pytest.mark.parametrize("has_nulls", [True, False])
 @pytest.mark.parametrize("indexed", [True, False])
 def test_ufunc_series(request, ufunc, has_nulls, indexed):
@@ -367,7 +370,6 @@ def test_ufunc_cudf_series_error_with_out_kwarg(func):
     PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
     reason="warning not present in older pandas versions",
 )
-@pytest.mark.parametrize("ufunc", (uf for uf in _UFUNCS if uf != np.matmul))
 @pytest.mark.parametrize("has_nulls", [True, False])
 @pytest.mark.parametrize("indexed", [True, False])
 def test_ufunc_dataframe(request, ufunc, has_nulls, indexed):
@@ -405,6 +407,12 @@ def test_ufunc_dataframe(request, ufunc, has_nulls, indexed):
             and parse(np.__version__) >= parse("2.1")
             and parse(cp.__version__) < parse("14"),
             reason="https://github.com/cupy/cupy/issues/9018",
+        )
+    )
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=fname == "matmul",
+            reason=f"{fname} is not supported in cuDF",
         )
     )
 

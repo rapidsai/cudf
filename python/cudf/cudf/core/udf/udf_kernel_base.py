@@ -14,9 +14,9 @@ from cudf.core.udf.masked_typing import MaskedType
 from cudf.core.udf.nrt_utils import CaptureNRTUsage, nrt_enabled
 from cudf.core.udf.strings_typing import str_view_arg_handler
 from cudf.core.udf.utils import (
+    UDF_SHIM_FILE,
     _generate_cache_key,
     _masked_array_type_from_col,
-    _ptx_file,
     _supported_cols_from_frame,
     compile_udf,
     precompiled as kernel_cache,
@@ -111,7 +111,7 @@ class ApplyKernelBase(ABC):
         else:
             result = numpy_support.from_dtype(np.dtype(output_type))
 
-        result = result if result.is_internal else result.return_type
+        result = result if result.is_internal else result.return_as
 
         # _get_udf_return_type will throw a TypingError if the user tries to use
         # a field in the row containing an unsupported dtype, except in the
@@ -157,7 +157,9 @@ class ApplyKernelBase(ABC):
         ctx = nrt_enabled() if nrt else nullcontext()
         with ctx:
             kernel = cuda.jit(
-                self.sig, link=[_ptx_file()], extensions=[str_view_arg_handler]
+                self.sig,
+                link=[UDF_SHIM_FILE],
+                extensions=[str_view_arg_handler],
             )(_kernel)
         return kernel
 
