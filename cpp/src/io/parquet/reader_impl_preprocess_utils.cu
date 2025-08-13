@@ -238,7 +238,7 @@ void generate_depth_remappings(
   }
   auto sync_fn = [](decltype(read_tasks) read_tasks) {
     for (auto& task : read_tasks) {
-      task.wait();
+      task.get();
     }
   };
   return std::async(std::launch::deferred, sync_fn, std::move(read_tasks));
