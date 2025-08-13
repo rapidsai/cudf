@@ -29,9 +29,11 @@ def get_per_module_results(log_file_name):
         for line in f:
             try:
                 line = json.loads(line)
+
             except Exception:
                 line = {}
             if "outcome" in line:
+                was_skipped_by_cudf_pandas = False
                 outcome = line["outcome"]
                 # outcome can be "passed", "failed", or "skipped".
                 # Depending on other fields, it can indicate
@@ -42,6 +44,16 @@ def get_per_module_results(log_file_name):
                         # if the test failed during setup or teardown,
                         # it counts as an "errored" test:
                         outcome = "errored"
+                    elif outcome == "skipped":
+                        longrepr = line.get("longrepr", [])
+                        if (
+                            longrepr is not None
+                            and "Skipped: XPASSes with cudf.pandas enabled."
+                            in longrepr
+                        ):
+                            was_skipped_by_cudf_pandas = True
+                        else:
+                            continue
                     else:
                         # we don't care about other outcomes during
                         # setup or teardown
@@ -55,12 +67,6 @@ def get_per_module_results(log_file_name):
                     line.get("wasxfail", "")
                     == "Fails with cudf.pandas enabled."
                 )
-                if "Skipped: XPASSes with cudf.pandas enabled." in line.get(
-                    "longrepr", []
-                ):
-                    was_skipped_by_cudf_pandas = True
-                else:
-                    was_skipped_by_cudf_pandas = False
                 module_name = (
                     line["nodeid"]
                     .split("::")[0]
