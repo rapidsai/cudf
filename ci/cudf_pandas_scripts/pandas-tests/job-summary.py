@@ -28,6 +28,7 @@ def get_total_and_passed(results):
         total_passed,
         total_xfailed_by_cudf_pandas,
         total_skipped_by_cudf_pandas,
+        total_skipped,
     )
 
 
@@ -37,13 +38,17 @@ pr_json = sys.argv[2]
 # read the results of summarize-test-results.py --summary
 with open(main_json) as f:
     main_results = json.load(f)
-main_total, main_passed, _, _ = get_total_and_passed(main_results)
+main_total, main_passed, _, _, _ = get_total_and_passed(main_results)
 
 with open(pr_json) as f:
     pr_results = json.load(f)
-pr_total, pr_passed, pr_xfailed_by_cudf_pandas, pr_skipped_by_cudf_pandas = (
-    get_total_and_passed(pr_results)
-)
+(
+    pr_total,
+    pr_passed,
+    pr_xfailed_by_cudf_pandas,
+    pr_skipped_by_cudf_pandas,
+    pr_skipped,
+) = get_total_and_passed(pr_results)
 
 passing_percentage = pr_passed / pr_total * 100
 
@@ -52,10 +57,12 @@ comment = (
     f"{pr_passed}/{pr_total} ({passing_percentage:.2f}%) "
     "Pandas tests passing, "
     f"Trunk stats: {main_passed}/{main_total}."
-    f"Total tests: {pr_total}"
-    f"Passed tests: {pr_passed}"
-    f"cudf.Pandas Skipped: {pr_skipped_by_cudf_pandas}"
-    f"cudf.Pandas xFailed: {pr_xfailed_by_cudf_pandas}"
+    "\n"
+    f"Total tests: {pr_total}\n"
+    f"Passed tests: {pr_passed}\n"
+    f"cudf.Pandas Skipped: {pr_skipped_by_cudf_pandas}\n"
+    f"cudf.Pandas xFailed: {pr_xfailed_by_cudf_pandas}\n"
+    f"pandas skipped: {pr_skipped - pr_skipped_by_cudf_pandas}\n"
 )
 
 
