@@ -69,12 +69,16 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
   // convert to int64_t to avoid potential overflow with large `keys`
   auto const num_keys = static_cast<int64_t>(keys.num_rows());
 
-  auto const [row_bitmask,
-              row_bitmask_data] = [&]() -> std::pair<rmm::device_buffer, bitmask_type const*> {
+  [[maybe_unused]] auto const [row_bitmask_data, row_bitmask] =
+    [&]() -> std::pair<rmm::device_buffer, bitmask_type const*> {
     if (!skip_rows_with_nulls) { return {rmm::device_buffer{0, stream}, nullptr}; }
 
     // If there is just one column, we can use its null mask directly.
-    if (keys.num_columns() == 1) return {rmm::device_buffer{0, stream}, keys.column(0).null_mask()};
+    if (keys.num_columns() == 1) {
+      auto const& keys_col = keys.column(0);
+      return {rmm::device_buffer{0, stream},
+              keys_col.null_count() == 0 ? nullptr : keys_col.null_mask()};
+    }
 
     auto [null_mask, null_count] =
       cudf::bitmask_and(keys, stream, cudf::get_current_device_resource_ref());
@@ -99,7 +103,12 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
     thrust::tabulate(rmm::exec_policy_nosync(stream),
                      hashes.begin(),
                      hashes.end(),
-                     [d_row_hash] __device__(size_type const idx) { return d_row_hash(idx); });
+                     [d_row_hash, row_bitmask] __device__(size_type const idx) {
+                       if (!row_bitmask || cudf::bit_is_set(row_bitmask, idx)) {
+                         return d_row_hash(idx);
+                       }
+                       return hash_value_type{0};  // dummy value, as it will be unused
+                     });
     auto hashes_data = hashes.data();
     return {std::move(hashes), hashes_data};
   }();
@@ -121,17 +130,11 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
 
   // Compute all single pass aggs first
   auto gather_map =
-    compute_aggregations(num_keys, row_bitmask_data, set, requests, &sparse_results, stream);
+    compute_aggregations(num_keys, row_bitmask, set, requests, &sparse_results, stream);
 
   // Compact all results from sparse_results and insert into cache
-  sparse_to_dense_results(requests,
-                          &sparse_results,
-                          cache,
-                          gather_map,
-                          set.ref(cuco::find),
-                          row_bitmask_data,
-                          stream,
-                          mr);
+  sparse_to_dense_results(
+    requests, &sparse_results, cache, gather_map, set.ref(cuco::find), row_bitmask, stream, mr);
 
   return cudf::detail::gather(keys,
                               gather_map,
