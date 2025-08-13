@@ -42,8 +42,8 @@ function(find_and_configure_croaring VERSION)
     )
   endif()
 
-  # Export the find package root for downstream consumers
-  rapids_export_find_package_root(BUILD croaring "${croaring_BINARY_DIR}" EXPORT_SET cudf-exports)
+  rapids_export_find_package_root(BUILD croaring "${croaring_BINARY_DIR}" INSTALL_EXPORT_SET cudf-exports)
+
 endfunction()
 
 set(croaring_VERSION_cudf "4.3.6")
