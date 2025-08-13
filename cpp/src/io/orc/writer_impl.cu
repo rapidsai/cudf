@@ -910,7 +910,14 @@ encoded_data encode_columns(orc_table_view const& orc_table,
     std::vector<size_type> indices;
     for (auto const& stripe : segmentation.stripes) {
       for (auto rg_idx_it = stripe.cbegin(); rg_idx_it < stripe.cend() - 1; ++rg_idx_it) {
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-reference"
+#endif
         auto const& chunk = chunks[col_idx][*rg_idx_it];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic pop
+#endif
         indices.push_back(chunk.start_row);
         indices.push_back(chunk.start_row + chunk.num_rows);
       }
@@ -959,8 +966,15 @@ encoded_data encode_columns(orc_table_view const& orc_table,
         if (strm_id >= 0) {
           size_t stripe_size = 0;
           std::for_each(stripe.cbegin(), stripe.cend(), [&](auto rg_idx) {
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-reference"
+#endif
             auto const& ck = chunks[col_idx][rg_idx];
-            auto& strm     = col_streams[rg_idx];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic pop
+#endif
+            auto& strm = col_streams[rg_idx];
 
             if ((strm_type == CI_DICTIONARY) ||
                 (strm_type == CI_DATA2 && ck.encoding_kind == DICTIONARY_V2)) {
@@ -995,8 +1009,15 @@ encoded_data encode_columns(orc_table_view const& orc_table,
         // Set offsets
         for (auto rg_idx_it = stripe.cbegin(); rg_idx_it < stripe.cend(); ++rg_idx_it) {
           auto const rg_idx = *rg_idx_it;
-          auto const& ck    = chunks[col_idx][rg_idx];
-          auto& strm        = col_streams[rg_idx];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-reference"
+#endif
+          auto const& ck = chunks[col_idx][rg_idx];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic pop
+#endif
+          auto& strm = col_streams[rg_idx];
 
           if (strm_id < 0 or (strm_type == CI_DATA && streams[strm_id].length == 0 &&
                               (ck.type_kind == DOUBLE || ck.type_kind == FLOAT))) {
@@ -1495,7 +1516,14 @@ void write_index_stream(int32_t stripe_id,
     if (stream.ids[type] > 0) {
       record.pos = 0;
       if (compression != compression_type::NONE) {
-        auto const& ss   = strm_desc[stripe_id][stream.ids[type] - (columns.size() + 1)];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-reference"
+#endif
+        auto const& ss = strm_desc[stripe_id][stream.ids[type] - (columns.size() + 1)];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic pop
+#endif
         record.blk_pos   = ss.first_block;
         record.comp_pos  = 0;
         record.comp_size = ss.stream_size;
@@ -1522,10 +1550,17 @@ void write_index_stream(int32_t stripe_id,
   auto kind = TypeKind::STRUCT;
   // TBD: Not sure we need an empty index stream for column 0
   if (stream_id != 0) {
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-reference"
+#endif
     auto const& strm = enc_streams[column_id][0];
-    present          = find_record(strm, CI_PRESENT);
-    data             = find_record(strm, CI_DATA);
-    data2            = find_record(strm, CI_DATA2);
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic pop
+#endif
+    present = find_record(strm, CI_PRESENT);
+    data    = find_record(strm, CI_DATA);
+    data2   = find_record(strm, CI_DATA2);
 
     // Change string dictionary to int from index point of view
     kind = columns[column_id].orc_kind();
@@ -1551,7 +1586,14 @@ void write_index_stream(int32_t stripe_id,
                               : (&rg_stats[column_id * segmentation.num_rowgroups() + rowgroup]));
 
     if (stream_id != 0) {
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-reference"
+#endif
       const auto& strm = enc_streams[column_id][rowgroup];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic pop
+#endif
       scan_record(strm, CI_PRESENT, present);
       scan_record(strm, CI_DATA, data);
       scan_record(strm, CI_DATA2, data2);
@@ -2673,8 +2715,8 @@ void writer::impl::write_orc_data_to_sink(encoded_data const& enc_data,
       stripe.footerLength = bytes_written;
     }
   }
-  for (auto const& task : write_tasks) {
-    task.wait();
+  for (auto& task : write_tasks) {
+    task.get();
   }
 }
 
