@@ -4621,7 +4621,7 @@ class StringMethods(BaseAccessor):
         2    .
         dtype: object
         """
-        result_col = self._column.character_tokenize()
+        result_col = self._column.character_tokenize().children[1]
         if isinstance(self._parent, cudf.Series):
             lengths = self.len().fillna(0)
             index = self._parent.index.repeat(lengths)
