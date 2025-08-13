@@ -12,7 +12,7 @@
 # the License.
 # =============================================================================
 
-#   # Use CPM to clone CRoaring and set up the necessary targets and include directories.
+# Use CPM to clone CRoaring and set up the necessary targets and include directories.
 function(find_and_configure_croaring VERSION)
   rapids_cpm_find(
     croaring ${VERSION}
@@ -21,11 +21,8 @@ function(find_and_configure_croaring VERSION)
     GIT_REPOSITORY https://github.com/RoaringBitmap/CRoaring.git
     GIT_TAG v${VERSION}
     GIT_SHALLOW TRUE
-    OPTIONS
-    "ROARING_BUILD_STATIC ON"
-    "BUILD_SHARED_LIBS OFF"
-    "ENABLE_ROARING_TESTS OFF"
-    "ENABLE_ROARING_MICROBENCHMARKS OFF"
+    OPTIONS "ROARING_BUILD_STATIC ON" "BUILD_SHARED_LIBS OFF" "ENABLE_ROARING_TESTS OFF"
+            "ENABLE_ROARING_MICROBENCHMARKS OFF"
   )
 
   if(DEFINED croaring_SOURCE_DIR)
