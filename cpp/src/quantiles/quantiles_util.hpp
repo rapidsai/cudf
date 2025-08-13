@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/detail/utilities/assert.cuh>
+#include <cudf/fixed_point/conv.hpp>
 #include <cudf/types.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/error.hpp>
