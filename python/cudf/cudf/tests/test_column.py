@@ -313,16 +313,17 @@ def test_column_view_valid_numeric_to_numeric(data, from_dtype, to_dtype):
 
 
 @pytest.mark.parametrize(
-    "data,from_dtype,to_dtype",
+    "to_dtype",
     [
-        (np.arange(9), "int8", "int64"),
-        (np.arange(3), "int8", "int16"),
-        (np.arange(6), "int8", "float32"),
-        (np.arange(1), "int8", "datetime64[ns]"),
+        "int64",
+        "int16",
+        "float32",
+        "datetime64[ns]",
     ],
 )
-def test_column_view_invalid_numeric_to_numeric(data, from_dtype, to_dtype):
-    from_dtype = np.dtype(from_dtype)
+def test_column_view_invalid_numeric_to_numeric(to_dtype):
+    data = np.arange(5)
+    from_dtype = np.dtype("int8")
     to_dtype = np.dtype(to_dtype)
     cpu_data = np.asarray(data, dtype=from_dtype)
     gpu_data = as_column(data, dtype=from_dtype)
@@ -409,34 +410,19 @@ def test_column_view_string_slice(slc):
     assert_eq(expect, got)
 
 
+@pytest.mark.parametrize("box", [cp.asarray, np.asarray])
 @pytest.mark.parametrize(
-    "data,expected",
+    "data",
     [
-        (
-            np.array([1, 2, 3, 4, 5], dtype="uint8"),
-            cudf.core.column.as_column(
-                [1, 2, 3, 4, 5], dtype=np.dtype(np.uint8)
-            ),
-        ),
-        (
-            cp.array([1, 2, 3, 4, 5], dtype="uint8"),
-            cudf.core.column.as_column(
-                [1, 2, 3, 4, 5], dtype=np.dtype(np.uint8)
-            ),
-        ),
-        (
-            cp.array([], dtype="uint8"),
-            cudf.core.column.column_empty(0, dtype=np.dtype(np.uint8)),
-        ),
-        (
-            cp.array([255], dtype="uint8"),
-            cudf.core.column.as_column([255], dtype=np.dtype(np.uint8)),
-        ),
+        np.array([1, 2, 3, 4, 5], dtype="uint8"),
+        np.array([], dtype="uint8"),
+        np.array([255], dtype="uint8"),
     ],
 )
-def test_as_column_buffer(data, expected):
+def test_as_column_buffer(box, data):
+    expected = cudf.core.column.as_column(data)
     actual_column = cudf.core.column.as_column(
-        cudf.core.buffer.as_buffer(data), dtype=data.dtype
+        cudf.core.buffer.as_buffer(box(data)), dtype=data.dtype
     )
     assert_eq(
         cudf.Series._from_column(actual_column),
@@ -562,12 +548,8 @@ def test_build_series_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
         ("Float64", "float64"),
     ],
 )
-@pytest.mark.parametrize(
-    "data",
-    [[1, 2, 0]],
-)
-def test_astype_with_aliases(alias, expect_dtype, data):
-    pd_data = pd.Series(data)
+def test_astype_with_aliases(alias, expect_dtype):
+    pd_data = pd.Series([1, 2, 0])
     gd_data = cudf.Series.from_pandas(pd_data)
 
     assert_eq(pd_data.astype(expect_dtype), gd_data.astype(alias))
