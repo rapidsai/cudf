@@ -42,3 +42,18 @@ def test_head_tail(nelem, numeric_types_as_str):
 def test_tail_for_string():
     gdf = cudf.DataFrame({"id": ["a", "b"], "v": [1, 2]})
     assert_eq(gdf.tail(3), gdf.to_pandas().tail(3))
+
+
+def test_dataframe_0_row_dtype(all_supported_types_as_str):
+    data = cudf.Series([1, 2, 3, 4, 5], dtype=all_supported_types_as_str)
+
+    expect = cudf.DataFrame({"x": data, "y": data})
+    got = expect.head(0)
+
+    for col_name in got.columns:
+        assert expect[col_name].dtype == got[col_name].dtype
+
+    expect = cudf.Series(data)
+    got = expect.head(0)
+
+    assert expect.dtype == got.dtype

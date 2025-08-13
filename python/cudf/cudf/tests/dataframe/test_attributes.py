@@ -41,3 +41,10 @@ def test_iter():
     pdf = pd.DataFrame(data)
     gdf = cudf.DataFrame(data)
     assert list(pdf) == list(gdf)
+
+
+def test_column_assignment():
+    gdf = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
+    new_cols = ["q", "r", "s"]
+    gdf.columns = new_cols
+    assert list(gdf.columns) == new_cols

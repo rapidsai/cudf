@@ -518,6 +518,20 @@ def test_cuda_array_interface(numeric_and_bool_types_as_str):
     assert_eq(pd_data, gdf["test"])
 
 
+@pytest.mark.parametrize("nan_as_null", [True, False])
+def test_series_list_nanasnull(nan_as_null):
+    data = [1.0, 2.0, 3.0, np.nan, None]
+
+    expect = pa.array(data, from_pandas=nan_as_null)
+    got = cudf.Series(data, nan_as_null=nan_as_null).to_arrow()
+
+    # Bug in Arrow 0.14.1 where NaNs aren't handled
+    expect = expect.cast("int64", safe=False)
+    got = got.cast("int64", safe=False)
+
+    assert pa.Array.equals(expect, got)
+
+
 @pytest.mark.parametrize("num_elements", [0, 10])
 @pytest.mark.parametrize("null_type", [np.nan, None, "mixed"])
 def test_series_all_null(num_elements, null_type):
