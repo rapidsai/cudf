@@ -29,7 +29,7 @@ list(APPEND CUDF_CUDA_FLAGS -Xcompiler=-Wall,-Werror,-Wno-error=deprecated-decla
 # functions in contexts where the resulting instantiations would have internal linkage (e.g. in
 # anonymous namespaces). In such contexts, the visibility attribute on the template is ignored, and
 # the compiler issues a warning. This is not a problem and will be fixed in future versions of CCCL.
-list(APPEND CUDF_CUDA_FLAGS -diag-suppress=1407,737)
+list(APPEND CUDF_CUDA_FLAGS -diag-suppress=1407)
 
 if(DISABLE_DEPRECATION_WARNINGS)
   list(APPEND CUDF_CXX_FLAGS -Wno-deprecated-declarations)

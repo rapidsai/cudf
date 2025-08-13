@@ -285,7 +285,7 @@ TYPED_TEST(Roaring64BitmapBasicsTest, TestRoaring64BitmapBasics)
   using Key               = TypeParam;
 
   // Host vector of keys
-  thrust::host_vector<Key> keys(num_keys);
+  auto keys = thrust::host_vector<Key>(num_keys);
   std::iota(keys.begin(), keys.end(), Key{0});
 
   // Host vector of booleans to store the result of bitmap queries

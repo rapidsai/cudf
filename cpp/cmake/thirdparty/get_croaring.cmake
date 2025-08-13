@@ -12,22 +12,15 @@
 # the License.
 # =============================================================================
 
-# This function finds CRoaring and sets up the necessary targets and include directories.
+#   # Use CPM to clone CRoaring and set up the necessary targets and include directories.
 function(find_and_configure_croaring VERSION)
-  # Download and build CRoaring via CPM
-  CPMAddPackage(
-    NAME
-    croaring
-    ${VERSION}
-    GLOBAL_TARGETS
-    croaring
+  rapids_cpm_find(
+    croaring ${VERSION}
+    GLOBAL_TARGETS croaring
     CPM_ARGS
-    GITHUB_REPOSITORY
-    RoaringBitmap/CRoaring
-    GIT_TAG
-    v${VERSION}
-    GIT_SHALLOW
-    TRUE
+    GIT_REPOSITORY https://github.com/RoaringBitmap/CRoaring.git
+    GIT_TAG v${VERSION}
+    GIT_SHALLOW TRUE
     OPTIONS
     "ROARING_BUILD_STATIC ON"
     "BUILD_SHARED_LIBS OFF"
@@ -50,5 +43,5 @@ function(find_and_configure_croaring VERSION)
   rapids_export_find_package_root(BUILD croaring "${croaring_BINARY_DIR}" EXPORT_SET cudf-exports)
 endfunction()
 
-set(croaring_VERSION_cudf "4.3.5")
+set(croaring_VERSION_cudf "4.3.6")
 find_and_configure_croaring(${croaring_VERSION_cudf})
