@@ -13,14 +13,14 @@
 # =============================================================================
 
 # This function finds CRoaring and sets up the necessary targets and include directories.
-function(find_and_configure_roaring VERSION)
+function(find_and_configure_croaring VERSION)
   # Download and build CRoaring via CPM
   CPMAddPackage(
     NAME
-    roaring
+    croaring
     ${VERSION}
     GLOBAL_TARGETS
-    roaring
+    croaring
     CPM_ARGS
     GITHUB_REPOSITORY
     RoaringBitmap/CRoaring
@@ -31,22 +31,24 @@ function(find_and_configure_roaring VERSION)
     OPTIONS
     "ROARING_BUILD_STATIC ON"
     "BUILD_SHARED_LIBS OFF"
+    "ENABLE_ROARING_TESTS OFF"
+    "ENABLE_ROARING_MICROBENCHMARKS OFF"
   )
 
-  if(DEFINED roaring_SOURCE_DIR)
-    set(roaring_CPP_INCLUDE_DIR
-        "${roaring_SOURCE_DIR}/cpp"
+  if(DEFINED croaring_SOURCE_DIR)
+    set(croaring_CPP_INCLUDE_DIR
+        "${croaring_SOURCE_DIR}/cpp"
         PARENT_SCOPE
     )
-    set(roaring_C_INCLUDE_DIR
-        "${roaring_SOURCE_DIR}/include"
+    set(croaring_C_INCLUDE_DIR
+        "${croaring_SOURCE_DIR}/include"
         PARENT_SCOPE
     )
   endif()
 
   # Export the find package root for downstream consumers
-  rapids_export_find_package_root(BUILD roaring "${roaring_BINARY_DIR}" EXPORT_SET cudf-exports)
+  rapids_export_find_package_root(BUILD croaring "${croaring_BINARY_DIR}" EXPORT_SET cudf-exports)
 endfunction()
 
-set(roaring_VERSION_cudf "4.3.5")
-find_and_configure_roaring(${roaring_VERSION_cudf})
+set(croaring_VERSION_cudf "4.3.5")
+find_and_configure_croaring(${croaring_VERSION_cudf})

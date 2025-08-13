@@ -293,6 +293,9 @@ include(cmake/thirdparty/get_cccl.cmake)
 # find rmm
 include(cmake/thirdparty/get_rmm.cmake)
 
+# find croaring
+include(cmake/thirdparty/get_croaring.cmake)
+
 # find flatbuffers
 include(cmake/thirdparty/get_flatbuffers.cmake)
 
@@ -322,14 +325,11 @@ include(cmake/thirdparty/get_thread_pool.cmake)
 # find zstd
 include(cmake/thirdparty/get_zstd.cmake)
 
-# find roaring
-include(cmake/thirdparty/get_roaring.cmake)
-
 # Workaround until https://github.com/rapidsai/rapids-cmake/issues/176 is resolved
 if(NOT BUILD_SHARED_LIBS)
   include("${rapids-cmake-dir}/export/find_package_file.cmake")
   list(APPEND METADATA_KINDS BUILD INSTALL)
-  list(APPEND dependencies KvikIO ZLIB nvcomp nanoarrow zstd roaring)
+  list(APPEND dependencies KvikIO ZLIB nvcomp nanoarrow zstd croaring)
 
   foreach(METADATA_KIND IN LISTS METADATA_KINDS)
     foreach(dep IN LISTS dependencies)
@@ -916,8 +916,8 @@ target_include_directories(
          "$<BUILD_INTERFACE:${JITIFY_INCLUDE_DIR}>"
          "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
          "$<BUILD_INTERFACE:${CUDF_GENERATED_INCLUDE_DIR}/include>"
-         "$<BUILD_INTERFACE:${roaring_C_INCLUDE_DIR}>"
-         "$<BUILD_INTERFACE:${roaring_CPP_INCLUDE_DIR}>"
+         "$<BUILD_INTERFACE:${croaring_C_INCLUDE_DIR}>"
+         "$<BUILD_INTERFACE:${croaring_CPP_INCLUDE_DIR}>"
   PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
           "$<BUILD_INTERFACE:${nanoarrow_SOURCE_DIR}/src>"
           "$<BUILD_INTERFACE:${FlatBuffers_SOURCE_DIR}/include>"
