@@ -835,15 +835,16 @@ dependencies:
           - mmh3
           - nanoarrow
           - hypothesis>=6.131.7
-          - *numba_cuda
           - *numba
           - pandas
       - output_types: conda
         packages:
           - python-xxhash
+          - *numba_cuda
       - output_types: [pyproject, requirements]
         packages:
           - xxhash
+          - *numba_cuda_cu12
   test_python_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
