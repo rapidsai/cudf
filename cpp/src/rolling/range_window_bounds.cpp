@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -78,12 +78,16 @@ range_window_bounds::range_window_bounds(extent_type extent_,
 
 range_window_bounds range_window_bounds::unbounded(data_type type, rmm::cuda_stream_view stream)
 {
-  return {extent_type::UNBOUNDED, make_default_constructed_scalar(type, stream), stream};
+  auto s = make_default_constructed_scalar(type, stream);
+  s->set_valid_async(true, stream);
+  return {extent_type::UNBOUNDED, std::move(s), stream};
 }
 
 range_window_bounds range_window_bounds::current_row(data_type type, rmm::cuda_stream_view stream)
 {
-  return {extent_type::CURRENT_ROW, make_default_constructed_scalar(type, stream), stream};
+  auto s = make_default_constructed_scalar(type, stream);
+  s->set_valid_async(true, stream);
+  return {extent_type::CURRENT_ROW, std::move(s), stream};
 }
 
 range_window_bounds range_window_bounds::get(scalar const& boundary, rmm::cuda_stream_view stream)
