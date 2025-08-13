@@ -73,19 +73,22 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
     [&]() -> std::pair<rmm::device_buffer, bitmask_type const*> {
     if (!skip_rows_with_nulls) { return {rmm::device_buffer{0, stream}, nullptr}; }
 
-    // If there is just one column, we can use its null mask directly.
     if (keys.num_columns() == 1) {
       auto const& keys_col = keys.column(0);
-      return {rmm::device_buffer{0, stream},
-              keys_col.null_count() == 0 ? nullptr : keys_col.null_mask()};
+      // Only use the input null mask directly if the keys table was not sliced.
+      if (keys_col.offset() == 0) { return {rmm::device_buffer{0, stream}, keys_col.null_mask()}; }
+      // If the keys table was sliced, we need to copy the null mask to ensure its first bit aligns
+      // with the first row of the keys table.
+      auto null_mask_data  = cudf::copy_bitmask(keys_col, stream);
+      auto const null_mask = static_cast<bitmask_type const*>(null_mask_data.data());
+      return {std::move(null_mask_data), null_mask};
     }
 
-    auto [null_mask, null_count] =
-      cudf::bitmask_and(keys, stream, cudf::get_current_device_resource_ref());
+    auto [null_mask_data, null_count] = cudf::bitmask_and(keys, stream);
     if (null_count == 0) { return {rmm::device_buffer{0, stream}, nullptr}; }
 
-    auto const null_mask_data = static_cast<bitmask_type const*>(null_mask.data());
-    return {std::move(null_mask), null_mask_data};
+    auto const null_mask = static_cast<bitmask_type const*>(null_mask_data.data());
+    return {std::move(null_mask_data), null_mask};
   }();
 
   [[maybe_unused]] auto const [cached_hashes_data, cached_hashes_ptr] =
