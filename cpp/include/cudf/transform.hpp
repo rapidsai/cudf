@@ -56,8 +56,7 @@ namespace CUDF_EXPORT cudf {
  * @param output_type   The output type that is compatible with the output type in the UDF
  * @param is_ptx        true: the UDF is treated as PTX code; false: the UDF is treated as CUDA code
  * @param user_data     User-defined device data to pass to the UDF.
- * @param is_null_aware Signifies whether the UDF is null-aware and would prefer to handle
- * nullability of inputs and outputs
+ * @param is_null_aware Signifies the UDF will receive row inputs as optional values
  * @param stream        CUDA stream used for device memory operations and kernel launches
  * @param mr            Device memory resource used to allocate the returned column's device memory
  * @return              The column resulting from applying the transform function to
