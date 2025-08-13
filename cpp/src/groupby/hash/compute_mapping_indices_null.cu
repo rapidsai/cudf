@@ -26,7 +26,6 @@ template void compute_mapping_indices<nullable_hash_set_ref_t<cuco::insert_and_f
   cudf::size_type num,
   nullable_hash_set_ref_t<cuco::insert_and_find_tag> global_set,
   bitmask_type const* row_bitmask,
-  bool skip_rows_with_nulls,
   cudf::size_type* local_mapping_index,
   cudf::size_type* global_mapping_index,
   cudf::size_type* block_cardinality,

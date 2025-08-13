@@ -54,7 +54,6 @@ namespace cudf::groupby::detail::hash {
 template <typename SetType>
 rmm::device_uvector<cudf::size_type> compute_aggregations(
   int64_t num_rows,
-  bool skip_rows_with_nulls,
   bitmask_type const* row_bitmask,
   SetType& global_set,
   cudf::host_span<cudf::groupby::aggregation_request const> requests,
@@ -105,7 +104,6 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
   // present.
   if (!is_shared_memory_compatible) {
     return compute_global_memory_aggs(num_rows,
-                                      skip_rows_with_nulls,
                                       row_bitmask,
                                       flattened_values,
                                       d_agg_kinds.data(),
@@ -134,7 +132,6 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
                           num_rows,
                           global_set_ref,
                           row_bitmask,
-                          skip_rows_with_nulls,
                           local_mapping_index.data(),
                           global_mapping_index.data(),
                           block_cardinality.data(),
@@ -168,7 +165,6 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
                              available_shmem_size,
                              num_rows,
                              row_bitmask,
-                             skip_rows_with_nulls,
                              local_mapping_index.data(),
                              global_mapping_index.data(),
                              block_cardinality.data(),
@@ -192,8 +188,7 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
                                                  d_agg_kinds.data(),
                                                  block_cardinality.data(),
                                                  stride,
-                                                 row_bitmask,
-                                                 skip_rows_with_nulls});
+                                                 row_bitmask});
     extract_populated_keys(global_set, populated_keys, stream);
   }
 

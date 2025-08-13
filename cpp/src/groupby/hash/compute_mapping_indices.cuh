@@ -40,13 +40,12 @@ __device__ void find_local_mapping(cooperative_groups::thread_block const& block
                                    cudf::size_type num_input_rows,
                                    SetType shared_set,
                                    bitmask_type const* row_bitmask,
-                                   bool skip_rows_with_nulls,
                                    cudf::size_type* cardinality,
                                    cudf::size_type* local_mapping_index,
                                    cudf::size_type* shared_set_indices)
 {
   auto const is_valid_input =
-    idx < num_input_rows and (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, idx));
+    idx < num_input_rows and (not row_bitmask or cudf::bit_is_set(row_bitmask, idx));
   auto const [result_idx, inserted] = [&]() {
     if (is_valid_input) {
       auto const result      = shared_set.insert_and_find(idx);
@@ -98,7 +97,6 @@ template <class SetRef>
 CUDF_KERNEL void mapping_indices_kernel(cudf::size_type num_input_rows,
                                         SetRef global_set,
                                         bitmask_type const* row_bitmask,
-                                        bool skip_rows_with_nulls,
                                         cudf::size_type* local_mapping_index,
                                         cudf::size_type* global_mapping_index,
                                         cudf::size_type* block_cardinality,
@@ -135,7 +133,6 @@ CUDF_KERNEL void mapping_indices_kernel(cudf::size_type num_input_rows,
                        num_input_rows,
                        shared_set,
                        row_bitmask,
-                       skip_rows_with_nulls,
                        &cardinality,
                        local_mapping_index,
                        shared_set_indices);
@@ -171,7 +168,6 @@ void compute_mapping_indices(cudf::size_type grid_size,
                              cudf::size_type num,
                              SetRef global_set,
                              bitmask_type const* row_bitmask,
-                             bool skip_rows_with_nulls,
                              cudf::size_type* local_mapping_index,
                              cudf::size_type* global_mapping_index,
                              cudf::size_type* block_cardinality,
@@ -182,7 +178,6 @@ void compute_mapping_indices(cudf::size_type grid_size,
     num,
     global_set,
     row_bitmask,
-    skip_rows_with_nulls,
     local_mapping_index,
     global_mapping_index,
     block_cardinality,

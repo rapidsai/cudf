@@ -69,6 +69,21 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
   // convert to int64_t to avoid potential overflow with large `keys`
   auto const num_keys = static_cast<int64_t>(keys.num_rows());
 
+  auto const [row_bitmask,
+              row_bitmask_data] = [&]() -> std::pair<rmm::device_buffer, bitmask_type const*> {
+    if (!skip_rows_with_nulls) { return {rmm::device_buffer{0, stream}, nullptr}; }
+
+    // If there is just one column, we can use its null mask directly.
+    if (keys.num_columns() == 1) return {rmm::device_buffer{0, stream}, keys.column(0).null_mask()};
+
+    auto [null_mask, null_count] =
+      cudf::bitmask_and(keys, stream, cudf::get_current_device_resource_ref());
+    if (null_count == 0) { return {rmm::device_buffer{0, stream}, nullptr}; }
+
+    auto const null_mask_data = static_cast<bitmask_type const*>(null_mask.data());
+    return {std::move(null_mask), null_mask_data};
+  }();
+
   [[maybe_unused]] auto const [cached_hashes, cached_hashes_data] =
     [&]() -> std::pair<rmm::device_uvector<hash_value_type>, hash_value_type const*> {
     auto const num_columns =
@@ -104,19 +119,9 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
     cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
     stream.value()};
 
-  auto row_bitmask =
-    skip_rows_with_nulls
-      ? cudf::bitmask_and(keys, stream, cudf::get_current_device_resource_ref()).first
-      : rmm::device_buffer{};
-
   // Compute all single pass aggs first
-  auto gather_map = compute_aggregations(num_keys,
-                                         skip_rows_with_nulls,
-                                         static_cast<bitmask_type*>(row_bitmask.data()),
-                                         set,
-                                         requests,
-                                         &sparse_results,
-                                         stream);
+  auto gather_map =
+    compute_aggregations(num_keys, row_bitmask_data, set, requests, &sparse_results, stream);
 
   // Compact all results from sparse_results and insert into cache
   sparse_to_dense_results(requests,
@@ -124,7 +129,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
                           cache,
                           gather_map,
                           set.ref(cuco::find),
-                          static_cast<bitmask_type*>(row_bitmask.data()),
+                          row_bitmask_data,
                           stream,
                           mr);
 
