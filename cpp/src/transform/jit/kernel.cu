@@ -58,15 +58,12 @@ CUDF_KERNEL void kernel(cudf::mutable_column_device_view_core const* outputs,
         GENERIC_TRANSFORM_OP(&Out::element(outputs, i), In::element(inputs, i)...);
       }
     } else {
-      cuda::std::optional<typename Out::type> result = cuda::std::nullopt;
-
       if constexpr (has_user_data) {
-        GENERIC_TRANSFORM_OP(user_data, i, &result, In::nullable_element(inputs, i)...);
+        GENERIC_TRANSFORM_OP(
+          user_data, i, &Out::element(outputs, i), In::nullable_element(inputs, i)...);
       } else {
-        GENERIC_TRANSFORM_OP(&result, In::nullable_element(inputs, i)...);
+        GENERIC_TRANSFORM_OP(&Out::element(outputs, i), In::nullable_element(inputs, i)...);
       }
-
-      Out::assign_nullable(outputs, i, result);
     }
   }
 }
@@ -82,9 +79,9 @@ CUDF_KERNEL void fixed_point_kernel(cudf::mutable_column_device_view_core const*
   auto const output_scale = static_cast<numeric::scale_type>(outputs[0].type().scale());
 
   for (auto i = start; i < size; i += stride) {
-    if constexpr (!is_null_aware) {
-      typename Out::type result{numeric::scaled_integer<typename Out::type::rep>{0, output_scale}};
+    typename Out::type result{numeric::scaled_integer<typename Out::type::rep>{0, output_scale}};
 
+    if constexpr (!is_null_aware) {
       if (Out::is_null(outputs, i)) { continue; }
 
       if constexpr (has_user_data) {
@@ -93,18 +90,15 @@ CUDF_KERNEL void fixed_point_kernel(cudf::mutable_column_device_view_core const*
         GENERIC_TRANSFORM_OP(&result, In::element(inputs, i)...);
       }
 
-      Out::assign(outputs, i, result);
     } else {
-      cuda::std::optional<typename Out::type> result = cuda::std::nullopt;
-
       if constexpr (has_user_data) {
         GENERIC_TRANSFORM_OP(user_data, i, &result, In::nullable_element(inputs, i)...);
       } else {
         GENERIC_TRANSFORM_OP(&result, In::nullable_element(inputs, i)...);
       }
-
-      Out::assign_nullable(outputs, i, result);
     }
+
+    Out::assign(outputs, i, result);
   }
 }
 
@@ -127,15 +121,12 @@ CUDF_KERNEL void span_kernel(cudf::jit::device_optional_span<typename Out::type>
         GENERIC_TRANSFORM_OP(&Out::element(outputs, i), In::element(inputs, i)...);
       }
     } else {
-      cuda::std::optional<typename Out::type> result = cuda::std::nullopt;
-
       if constexpr (has_user_data) {
-        GENERIC_TRANSFORM_OP(user_data, i, &result, In::nullable_element(inputs, i)...);
+        GENERIC_TRANSFORM_OP(
+          user_data, i, &Out::element(outputs, i), In::nullable_element(inputs, i)...);
       } else {
-        GENERIC_TRANSFORM_OP(&result, In::nullable_element(inputs, i)...);
+        GENERIC_TRANSFORM_OP(&Out::element(outputs, i), In::nullable_element(inputs, i)...);
       }
-
-      Out::assign_nullable(outputs, i, result);
     }
   }
 }

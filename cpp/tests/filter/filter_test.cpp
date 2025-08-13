@@ -32,12 +32,6 @@ struct FilterTestFixture : public cudf::test::BaseFixture {
     template<typename T>
     __device__ void is_equal(bool * out, T a, T b) { *out = (a == b); }
     )***";
-
-  static constexpr char const* null_aware_udf = R"***(
-    template<typename T>
-    __device__ void null_is_equal(bool * out, cuda::std::optional<T> a, cuda::std::optional<T> b) {
-      *out = (!a.has_value() && !b.has_value()) ||  (a.has_value() && b.has_value() && (*a == *b));
-    })***";
 };
 
 template <typename T>
@@ -175,7 +169,7 @@ __device__ void is_even(bool* out, cuda::std::optional<int32_t> a) { *out = a.ha
   )***";
 
   auto null_result =
-    cudf::filter({a}, null_cuda, false, std::nullopt, std::vector{true}, cudf::null_aware::NO);
+    cudf::filter({a}, null_cuda, false, std::nullopt, std::vector{true}, cudf::null_aware::YES);
   auto null_expected = cudf::test::fixed_width_column_wrapper<int32_t>{2, 4, 6};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(null_expected, null_result[0]->view());

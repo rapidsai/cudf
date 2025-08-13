@@ -220,13 +220,11 @@ std::unique_ptr<column> transform_operation(column_view base_column,
     launch_column_output_kernel(kernel, {*output}, inputs, user_data, stream, mr);
     return output;
   } else {
-    auto null_mask = create_null_mask(base_column.size(), mask_state::UNINITIALIZED, stream, mr);
-    auto output    = make_fixed_width_column(
+    auto output = make_fixed_width_column(
       output_type,
       base_column.size(),
-      std::move(null_mask),
-      base_column
-        .size(),  // we initially assume all rows are null, even though the bitmask is uninitialized
+      create_null_mask(base_column.size(), mask_state::UNALLOCATED, stream, mr),
+      0,
       stream,
       mr);
 
@@ -244,11 +242,6 @@ std::unique_ptr<column> transform_operation(column_view base_column,
                                          mr);
 
     launch_column_output_kernel(kernel, {*output}, inputs, user_data, stream, mr);
-
-    auto null_count =
-      cudf::detail::null_count(output->view().null_mask(), 0, output->size(), stream);
-
-    output->set_null_count(null_count);
 
     return output;
   }
@@ -294,11 +287,10 @@ std::unique_ptr<column> string_view_operation(column_view base_column,
     return output;
 
   } else {
-    auto null_mask = create_null_mask(base_column.size(), mask_state::UNINITIALIZED, stream, mr);
-
-    auto kernel = build_span_kernel("cudf::transformation::jit::span_kernel",
+    auto null_mask = create_null_mask(base_column.size(), mask_state::UNALLOCATED, stream, mr);
+    auto kernel    = build_span_kernel("cudf::transformation::jit::span_kernel",
                                     base_column.size(),
-                                    {"cudf::string_view"},
+                                       {"cudf::string_view"},
                                     inputs,
                                     user_data.has_value(),
                                     is_null_aware,
@@ -319,16 +311,7 @@ std::unique_ptr<column> string_view_operation(column_view base_column,
 
     auto output = make_strings_column(string_views, string_view{}, stream, mr);
 
-    output->set_null_mask(
-      std::move(null_mask),
-      base_column
-        .size()  // we initially assume all rows are null, even though the bitmask is uninitialized
-    );
-
-    auto null_count =
-      cudf::detail::null_count(output->view().null_mask(), 0, output->size(), stream);
-
-    output->set_null_count(null_count);
+    output->set_null_mask(std::move(null_mask), 0);
 
     return output;
   }

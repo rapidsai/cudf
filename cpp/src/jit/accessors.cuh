@@ -76,18 +76,6 @@ struct column_accessor {
     if (is_null(inputs, row)) { return cuda::std::nullopt; }
     return inputs[index].element<T>(row);
   }
-
-  static __device__ void assign_nullable(cudf::mutable_column_device_view_core const* outputs,
-                                         cudf::size_type row,
-                                         cuda::std::optional<T> value)
-  {
-    if (value.has_value()) {
-      outputs[index].assign<T>(row, *value);
-      outputs[index].set_valid(row);
-    } else {
-      outputs[index].set_null(row);
-    }
-  }
 };
 
 template <typename T, int32_t Index>
@@ -119,18 +107,6 @@ struct span_accessor {
   {
     if (is_null(outputs, row)) { return cuda::std::nullopt; }
     return outputs[index].element(row);
-  }
-
-  static __device__ void assign_nullable(cudf::jit::device_optional_span<T> const* outputs,
-                                         cudf::size_type row,
-                                         cuda::std::optional<T> value)
-  {
-    if (value.has_value()) {
-      outputs[index].element(row) = *value;
-      outputs[index].set_valid(row);
-    } else {
-      outputs[index].set_null(row);
-    }
   }
 };
 

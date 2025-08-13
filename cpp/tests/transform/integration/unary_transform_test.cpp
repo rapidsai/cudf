@@ -803,7 +803,7 @@ TEST_F(NullTest, ColumnNulls_And_ScalarNull)
 TEST_F(NullTest, IsNull)
 {
   auto udf = R"***(
-  __device__ inline void is_null(cuda::std::optional<bool> * output, cuda::std::optional<float> input)
+  __device__ inline void is_null(bool * output, cuda::std::optional<float> input)
   {
     *output = !input.has_value();
   }
@@ -813,9 +813,8 @@ TEST_F(NullTest, IsNull)
                                                              {false, false, true, false, true})
                  .release();
 
-  auto expected = cudf::test::fixed_width_column_wrapper<bool>({true, true, false, true, false},
-                                                               {true, true, true, true, true})
-                    .release();
+  auto expected =
+    cudf::test::fixed_width_column_wrapper<bool>({true, true, false, true, false}).release();
 
   auto result = cudf::transform({*value},
                                 udf,
@@ -831,7 +830,7 @@ TEST_F(NullTest, NullProject)
 {
   auto udf = R"***(
 __device__ inline void null_lerp(
-       cuda::std::optional<float>* output,
+       float* output,
        cuda::std::optional<float> low,
        cuda::std::optional<float> high,
        cuda::std::optional<float> t
@@ -841,8 +840,8 @@ auto lerp = [] (auto l, auto h, auto t) {
 return l - t * l + t * h;
 };
   *output =  low.has_value() && high.has_value() && t.has_value()
-    ? cuda::std::optional(lerp(*low, *high, *t))
-    : cuda::std::optional(0.0F);
+    ? lerp(*low, *high, *t)
+    : 0.0F;
 }
 )***";
 
@@ -857,11 +856,9 @@ return l - t * l + t * h;
   auto expected_iter = cudf::detail::make_counting_transform_iterator(
     0, [&](auto i) { return ((i % 5) == 0) && ((i % 4) == 0) ? expected_host[i] : 0.0F; });
 
-  auto expected = cudf::test::fixed_width_column_wrapper<float>(
-                    expected_iter,
-                    expected_iter + low_host.size(),
-                    thrust::make_constant_iterator([]() { return true; }))
-                    .release();
+  auto expected =
+    cudf::test::fixed_width_column_wrapper<float>(expected_iter, expected_iter + low_host.size())
+      .release();
 
   auto cuda_result = cudf::transform({*low, *high, *t},
                                      udf,
