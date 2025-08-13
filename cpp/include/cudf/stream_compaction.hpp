@@ -451,8 +451,7 @@ cudf::size_type distinct_count(table_view const& input,
  * @param user_data     User-defined device data to pass to the UDF.
  * @param copy_mask     Optional vector of booleans indicating which columns to copy from the input
  *                      columns to the output. If not provided, all columns are copied.
- * @param is_null_aware Signifies whether the UDF is null-aware and would prefer to handle
- * nullability of inputs and outputs
+ * @param is_null_aware Signifies the UDF will receive row inputs as optional values
  * @param stream        CUDA stream used for device memory operations and kernel launches
  * @param mr            Device memory resource used to allocate the returned column's device memory
  * @return              The filtered target columns
