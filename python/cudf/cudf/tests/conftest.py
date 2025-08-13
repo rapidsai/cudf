@@ -1,6 +1,7 @@
 # Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 import itertools
+import operator
 import os
 import pathlib
 
@@ -192,6 +193,89 @@ def set_decomp_env_vars(monkeypatch, request):
         yield
 
 
+arithmetic_ops = [
+    operator.add,
+    operator.sub,
+    operator.mul,
+    operator.floordiv,
+    operator.truediv,
+    operator.mod,
+    operator.pow,
+]
+comparison_ops = [
+    operator.eq,
+    operator.ne,
+    operator.lt,
+    operator.le,
+    operator.gt,
+    operator.ge,
+]
+
+
+@pytest.fixture(params=arithmetic_ops)
+def arithmetic_op(request):
+    return request.param
+
+
+@pytest.fixture(
+    params=itertools.chain.from_iterable(
+        (op.__name__, f"r{op.__name__}") for op in arithmetic_ops
+    )
+)
+def arithmetic_op_method(request):
+    """Arithmetic methods defined on Series/DataFrame"""
+    return request.param
+
+
+@pytest.fixture(params=comparison_ops)
+def comparison_op(request):
+    return request.param
+
+
+@pytest.fixture
+def comparison_op_method(comparison_op):
+    """Comparison methods defined on Series/DataFrame"""
+    return comparison_op.__name__
+
+
+@pytest.fixture(params=arithmetic_ops + comparison_ops)
+def binary_op(request):
+    return request.param
+
+
+@pytest.fixture(
+    params=itertools.chain(
+        itertools.chain.from_iterable(
+            (op.__name__, f"r{op.__name__}") for op in arithmetic_ops
+        ),
+        (op.__name__ for op in comparison_ops),
+    )
+)
+def binary_op_method(request):
+    """Binary methods defined on Series/DataFrame"""
+    return request.param
+
+
+@pytest.fixture(
+    params=[
+        "min",
+        "max",
+        "sum",
+        "product",
+        "quantile",
+        "all",
+        "any",
+        "std",
+        "var",
+        "median",
+        "kurtosis",
+        "skew",
+    ]
+)
+def reduction_methods(request):
+    return request.param
+
+
 signed_integer_types = ["int8", "int16", "int32", "int64"]
 unsigned_integer_types = ["uint8", "uint16", "uint32", "uint64"]
 float_types = ["float32", "float64"]
@@ -230,6 +314,12 @@ def integer_types_as_str(request):
     return request.param
 
 
+@pytest.fixture
+def integer_types_as_str2(integer_types_as_str):
+    """Used for testing cartesian product of integer_types_as_str"""
+    return integer_types_as_str
+
+
 @pytest.fixture(params=float_types)
 def float_types_as_str(request):
     """
@@ -248,6 +338,12 @@ def numeric_types_as_str(request):
     - "float32", "float64"
     """
     return request.param
+
+
+@pytest.fixture
+def numeric_types_as_str2(numeric_types_as_str):
+    """Used for testing cartesian product of numeric_types_as_str"""
+    return numeric_types_as_str
 
 
 @pytest.fixture(
