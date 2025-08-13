@@ -169,9 +169,9 @@ __device__ void update_string_offsets_for_pruned_pages(
   namespace cg = cooperative_groups;
 
   // Initial string offset
-  auto const initial_value = state->page.str_offset;
-  // We must use page.num_valids here to cater for nulls
-  auto value_count = state->page.num_valids;
+  auto const initial_value = page.str_offset;
+  // We must use the batch size from the nesting info (the size of the page for this batch)
+  auto value_count = page.nesting[state->col.max_nesting_depth - 1].batch_size;
   auto const tid   = cg::this_thread_block().thread_rank();
 
   // Offsets pointer contains string sizes in case of large strings and actual offsets

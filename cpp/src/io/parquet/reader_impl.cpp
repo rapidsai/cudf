@@ -911,7 +911,6 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
         if (out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) {
           // TODO: For completeness, clear the corresponding null mask bits as well. Requires
           // computing the bit range using cumulative page infos
-          out_buf.null_count() += page.num_nulls;
           continue;
         }
         // Add the nullmask and bit bounds to corresponding lists

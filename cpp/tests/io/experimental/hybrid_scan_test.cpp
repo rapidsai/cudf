@@ -463,9 +463,44 @@ TEST_F(HybridScanTest, MaterializeMixedPayloadColumns)
     cudf::test::structs_column_wrapper _col8(std::move(col8_children), struct_valids);
     auto col8 = cudf::purge_nonempty_nulls(_col8);
 
+    // list<list<str(nullable)>(nullable)>(nullable)
+    constexpr int string_per_row  = 3;
+    constexpr int lists_per_list  = 2;
+    constexpr int num_string_rows = num_rows * string_per_row * lists_per_list;
+    cudf::test::strings_column_wrapper string_col{
+      string_iter, string_iter + num_string_rows, valids};
+    auto offset_iter = cudf::detail::make_counting_transform_iterator(
+      0, [](cudf::size_type idx) { return idx * string_per_row; });
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> list_offsets(
+      offset_iter, offset_iter + (num_rows * lists_per_list) + 1);
+    std::tie(null_mask, null_count) =
+      cudf::test::detail::make_null_mask(list_valids, list_valids + (num_rows * lists_per_list));
+
+    auto _list_col = cudf::make_lists_column(num_rows * lists_per_list,
+                                             list_offsets.release(),
+                                             string_col.release(),
+                                             null_count,
+                                             std::move(null_mask));
+    auto list_col  = cudf::purge_nonempty_nulls(*_list_col);
+
+    auto list_list_offsets_iter = cudf::detail::make_counting_transform_iterator(
+      0, [](cudf::size_type idx) { return idx * lists_per_list; });
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> list_list_offsets(
+      list_list_offsets_iter, list_list_offsets_iter + num_rows + 1);
+    auto list_list_valids =
+      cudf::detail::make_counting_transform_iterator(0, [&](int index) { return index % 80; });
+    std::tie(null_mask, null_count) =
+      cudf::test::detail::make_null_mask(list_list_valids, list_list_valids + num_rows);
+
+    auto _col9 = cudf::make_lists_column(
+      num_rows, list_list_offsets.release(), std::move(list_col), null_count, std::move(null_mask));
+
+    auto col9 = cudf::purge_nonempty_nulls(*_col9);
+
     // Input table
     auto constexpr num_concat = 3;
-    auto table    = cudf::table_view{{col0, col1, *col2, *col3, col4, *col5, *col6, *col7, *col8}};
+    auto table =
+      cudf::table_view{{col0, col1, *col2, *col3, col4, *col5, *col6, *col7, *col8, *col9}};
     auto expected = cudf::concatenate(std::vector<table_view>(num_concat, table));
     table         = expected->view();
     cudf::io::table_input_metadata expected_metadata(table);
@@ -478,6 +513,7 @@ TEST_F(HybridScanTest, MaterializeMixedPayloadColumns)
     expected_metadata.column_metadata[6].set_name("col6");
     expected_metadata.column_metadata[7].set_name("col7");
     expected_metadata.column_metadata[8].set_name("col8");
+    expected_metadata.column_metadata[9].set_name("col9");
     // Write to parquet buffer
     cudf::io::parquet_writer_options out_opts =
       cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&parquet_buffer}, table)
@@ -519,7 +555,7 @@ TEST_F(HybridScanTest, MaterializeMixedPayloadColumns)
         .filter(filter_expression);
     auto [expected_tbl, expected_meta] = cudf::io::read_parquet(options, stream);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}), read_filter_table->view());
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({1, 2, 3, 4, 5, 6, 7, 8}),
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({1, 2, 3, 4, 5, 6, 7, 8, 9}),
                                        read_payload_table->view());
   }
 }

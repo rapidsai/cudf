@@ -139,8 +139,8 @@ std::unique_ptr<cudf::column> make_parquet_list_list_col(
 
   // child values
   std::vector<T> child_values(num_rows * lists_per_row * list_size);
-  int first_child_value_index = skip_rows * lists_per_row * list_size;
-  int child_value_count       = 0;
+  auto first_child_value_index = skip_rows * lists_per_row * list_size;
+  int child_value_count        = 0;
   {
     for (int idx = 0; idx < (num_rows * lists_per_row * list_size); idx++) {
       int row_index = idx / (lists_per_row * list_size);
