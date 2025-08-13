@@ -230,8 +230,13 @@ struct flatten_functor {
     info.push_back({cur_depth, branch_depth_start, branch_depth_end});
 
     lists_column_view lcv(col);
-    auto iter = cudf::detail::make_counting_transform_iterator(
-      0, [col = lcv.get_sliced_child(stream)](auto) { return col; });
+    auto sliced_child = lcv.get_sliced_child(stream);
+
+    // We don't pass sliced_child by value as that will generate
+    // invocation of a host function ( ~column_view() ) in a host/device
+    // context when compiling with CUDA 13
+    auto iter =
+      cudf::detail::make_counting_transform_iterator(0, [&](auto) { return sliced_child; });
     h_info.complex_type_count++;
 
     flatten_hierarchy(

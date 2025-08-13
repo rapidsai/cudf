@@ -16,7 +16,6 @@ import textwrap
 import time
 from collections import defaultdict
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, assert_never
 
 import nvtx
@@ -41,6 +40,7 @@ except ImportError:
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
+    from pathlib import Path
 
 
 ExecutorType = Literal["in-memory", "streaming", "cpu"]
@@ -55,13 +55,21 @@ class Record:
 
 
 @dataclasses.dataclass
+class VersionInfo:
+    """Information about the commit of the software used to run the query."""
+
+    version: str
+    commit: str
+
+
+@dataclasses.dataclass
 class PackageVersions:
     """Information about the versions of the software used to run the query."""
 
-    cudf_polars: str
+    cudf_polars: str | VersionInfo
     polars: str
     python: str
-    rapidsmpf: str | None
+    rapidsmpf: str | VersionInfo | None
 
     @classmethod
     def collect(cls) -> PackageVersions:
@@ -71,15 +79,24 @@ class PackageVersions:
             "polars",
             "rapidsmpf",
         ]
-        versions = {}
+        versions: dict[str, str | VersionInfo | None] = {}
         for name in packages:
             try:
                 package = importlib.import_module(name)
-                versions[name] = package.__version__
             except (AttributeError, ImportError):  # noqa: PERF203
                 versions[name] = None
+            else:
+                if name in ("cudf_polars", "rapidsmpf"):
+                    versions[name] = VersionInfo(
+                        version=package.__version__,
+                        commit=package.__git_commit__,
+                    )
+                else:
+                    versions[name] = package.__version__
+
         versions["python"] = ".".join(str(v) for v in sys.version_info[:3])
-        return cls(**versions)
+        # we manually ensure that only cudf-polars and rapidsmpf have a VersionInfo
+        return cls(**versions)  # type: ignore[arg-type]
 
 
 @dataclasses.dataclass
@@ -88,23 +105,35 @@ class GPUInfo:
 
     name: str
     index: int
-    free_memory: int
-    used_memory: int
-    total_memory: int
+    free_memory: int | None
+    used_memory: int | None
+    total_memory: int | None
 
     @classmethod
     def from_index(cls, index: int) -> GPUInfo:
         """Create a GPUInfo from an index."""
         pynvml.nvmlInit()
         handle = pynvml.nvmlDeviceGetHandleByIndex(index)
-        memory = pynvml.nvmlDeviceGetMemoryInfo(handle)
-        return cls(
-            name=pynvml.nvmlDeviceGetName(handle),
-            index=index,
-            free_memory=memory.free,
-            used_memory=memory.used,
-            total_memory=memory.total,
-        )
+        try:
+            memory = pynvml.nvmlDeviceGetMemoryInfo(handle)
+            return cls(
+                name=pynvml.nvmlDeviceGetName(handle),
+                index=index,
+                free_memory=memory.free,
+                used_memory=memory.used,
+                total_memory=memory.total,
+            )
+        except pynvml.NVMLError_NotSupported:
+            # Happens on systems without traditional GPU memory (e.g., Grace Hopper),
+            # where nvmlDeviceGetMemoryInfo is not supported.
+            # See: https://github.com/rapidsai/cudf/issues/19427
+            return cls(
+                name=pynvml.nvmlDeviceGetName(handle),
+                index=index,
+                free_memory=None,
+                used_memory=None,
+                total_memory=None,
+            )
 
 
 @dataclasses.dataclass
@@ -126,9 +155,7 @@ class HardwareInfo:
         return cls(gpus=gpus)
 
 
-def _infer_scale_factor(path: str | Path, suffix: str) -> int | float:
-    name = Path(sys.argv[0]).name
-
+def _infer_scale_factor(name: str, path: str | Path, suffix: str) -> int | float:
     if "pdsh" in name:
         supplier = get_data(path, "supplier", suffix)
         num_rows = supplier.select(pl.len()).collect().item(0, 0)
@@ -147,7 +174,7 @@ def _infer_scale_factor(path: str | Path, suffix: str) -> int | float:
 
 @dataclasses.dataclass(kw_only=True)
 class RunConfig:
-    """Results for a PDS-H query run."""
+    """Results for a PDS-H or PDS-DS query run."""
 
     queries: list[int]
     suffix: str
@@ -174,6 +201,7 @@ class RunConfig:
     rapidsmpf_oom_protection: bool
     rapidsmpf_spill: bool
     spill_device: float
+    query_set: str
 
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> RunConfig:
@@ -185,12 +213,21 @@ class RunConfig:
             scheduler = None
 
         path = args.path
-        if (scale_factor := args.scale) is None:
+        name = args.query_set
+        scale_factor = args.scale
+
+        if scale_factor is None:
+            if "pdsds" in name:
+                raise ValueError(
+                    "--scale is required for PDS-DS benchmarks.\n"
+                    "TODO: This will be inferred once we maintain a map of scale factors to row counts."
+                )
             if path is None:
                 raise ValueError(
                     "Must specify --root and --scale if --path is not specified."
                 )
-            scale_factor = _infer_scale_factor(path, args.suffix)
+            # For PDS-H, infer scale factor based on row count
+            scale_factor = _infer_scale_factor(name, path, args.suffix)
         if path is None:
             path = f"{args.root}/scale-{scale_factor}"
         try:
@@ -200,7 +237,7 @@ class RunConfig:
 
         if args.scale is not None:
             # Validate the user-supplied scale factor
-            sf_inf = _infer_scale_factor(path, args.suffix)
+            sf_inf = _infer_scale_factor(name, path, args.suffix)
             rel_error = abs((scale_factor - sf_inf) / sf_inf)
             if rel_error > 0.01:
                 raise ValueError(
@@ -226,6 +263,7 @@ class RunConfig:
             spill_device=args.spill_device,
             rapidsmpf_spill=args.rapidsmpf_spill,
             max_rows_per_partition=args.max_rows_per_partition,
+            query_set=args.query_set,
         )
 
     def serialize(self, engine: pl.GPUEngine | None) -> dict:
@@ -652,6 +690,7 @@ def run_polars(
 ) -> None:
     """Run the queries using the given benchmark and executor options."""
     args = parse_args(options, num_queries=num_queries)
+    vars(args).update({"query_set": benchmark.name})
     run_config = RunConfig.from_args(args)
     validation_failures: list[int] = []
 
