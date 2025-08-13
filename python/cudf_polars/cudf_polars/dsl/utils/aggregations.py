@@ -24,17 +24,6 @@ if TYPE_CHECKING:
 __all__ = ["apply_pre_evaluation", "decompose_aggs", "decompose_single_agg"]
 
 
-def _supports_sum(dtype: plc.DataType) -> bool:
-    tid = dtype.id()
-    return (
-        plc.traits.is_integral(dtype)
-        or plc.traits.is_floating_point(dtype)
-        or tid == plc.TypeId.BOOL8
-        or plc.traits.is_duration(dtype)
-        or tid in (plc.TypeId.DECIMAL32, plc.TypeId.DECIMAL64, plc.TypeId.DECIMAL128)
-    )
-
-
 def replace_nulls(col: expr.Expr, value: Any, *, is_top: bool) -> expr.Expr:
     """
     Replace nulls with the given scalar if at top level.
@@ -136,6 +125,24 @@ def decompose_single_agg(
         )
         if any(has_agg for _, has_agg in aggs):
             raise NotImplementedError("Nested aggs in groupby not supported")
+
+        child_dtype = child.dtype.plc
+        req = agg.agg_request
+        is_median = agg.name == "median"
+        is_quantile = agg.name == "quantile"
+
+        is_group_quantile_supported = plc.traits.is_integral(
+            child_dtype
+        ) or plc.traits.is_floating_point(child_dtype)
+
+        # TODO: Check is_valid_rolling_aggregation too. We need to know the
+        # context
+        if ((is_median or is_quantile) and not is_group_quantile_supported) or (
+            not plc.aggregation.is_valid_aggregation(child_dtype, req)
+        ):
+            # libcudf cannot perform this aggregation on this dtype, so
+            # we don't push the agg.
+            return [], named_expr.reconstruct(expr.Literal(agg.dtype, None))
         if needs_masking:
             child = expr.UnaryFunction(child.dtype, "mask_nans", (), child)
             # The aggregation is just reconstructed with the new
@@ -146,9 +153,6 @@ def decompose_single_agg(
                 named_expr.reconstruct(expr.Col(agg.dtype, name)),
             )
         elif agg.name == "sum":
-            if not _supports_sum(child.dtype.plc):
-                # libcudf cannot sum this input dtype, so we don't push the AGG
-                return [], named_expr.reconstruct(expr.Literal(agg.dtype, None))
             col = (
                 expr.Cast(agg.dtype, expr.Col(DataType(pl.datatypes.Int64()), name))
                 if (

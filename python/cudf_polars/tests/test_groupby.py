@@ -313,7 +313,17 @@ def test_groupby_mean_type_promotion(df: pl.LazyFrame) -> None:
     assert_gpu_result_equal(q, check_row_order=False)
 
 
-def test_groupby_sum_keeps_non_summable_as_null(df: pl.LazyFrame) -> None:
-    q = df.filter(pl.col("datetime") == date(2004, 12, 1)).group_by("datetime").sum()
-
+@pytest.mark.parametrize(
+    "agg_expr",
+    [
+        pl.all().sum(),
+        pl.all().mean(),
+        pl.all().median(),
+        pl.all().quantile(0.5),
+    ],
+    ids=["sum", "mean", "median", "quantile-0.5"],
+)
+def test_groupby_aggs_keep_unsupported_as_null(df: pl.LazyFrame, agg_expr) -> None:
+    lf = df.filter(pl.col("datetime") == date(2004, 12, 1))
+    q = lf.group_by("datetime").agg(agg_expr)
     assert_gpu_result_equal(q)
