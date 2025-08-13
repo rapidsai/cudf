@@ -195,3 +195,21 @@ def test_writable_numpy_array_timedelta():
     assert expected_flags.writeable == actual_flags.writeable
     assert expected_flags.aligned == actual_flags.aligned
     assert expected_flags.writebackifcopy == actual_flags.writebackifcopy
+
+
+@pytest.mark.parametrize("nulls", ["some", "all"])
+def test_to_from_pandas_nulls(nulls):
+    data = np.arange(1, 10)
+    pd_data = pd.Series(data.astype("datetime64[ns]"))
+    if nulls == "some":
+        # Fill half the values with NaT
+        pd_data[list(range(0, len(pd_data), 2))] = np.datetime64("nat", "ns")
+    elif nulls == "all":
+        # Fill all the values with NaT
+        pd_data[:] = np.datetime64("nat", "ns")
+    gdf_data = cudf.Series.from_pandas(pd_data)
+
+    expect = pd_data
+    got = gdf_data.to_pandas()
+
+    assert_eq(expect, got)
