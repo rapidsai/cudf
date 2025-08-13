@@ -42,7 +42,7 @@ function(find_and_configure_croaring VERSION)
     )
   endif()
 
-  rapids_export_find_package_root(BUILD croaring "${croaring_BINARY_DIR}" INSTALL_EXPORT_SET cudf-exports)
+  rapids_export_find_package_root(BUILD croaring "${croaring_BINARY_DIR}" EXPORT_SET cudf-exports)
 
 endfunction()
 
