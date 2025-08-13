@@ -262,7 +262,7 @@ ConfigureBench(
 ConfigureNVBench(
   GROUPBY_NVBENCH
   groupby/group_histogram.cpp
-  groupby/group_m2.cpp
+  groupby/group_m2_var_std.cpp
   groupby/group_max.cpp
   groupby/group_max_multithreaded.cpp
   groupby/group_nunique.cpp
