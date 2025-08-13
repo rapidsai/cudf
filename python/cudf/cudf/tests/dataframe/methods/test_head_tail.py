@@ -57,3 +57,24 @@ def test_dataframe_0_row_dtype(all_supported_types_as_str):
     got = expect.head(0)
 
     assert expect.dtype == got.dtype
+
+
+def test_one_row_head():
+    gdf = cudf.DataFrame({"name": ["carl"], "score": [100]}, index=[123])
+    pdf = gdf.to_pandas()
+
+    head_gdf = gdf.head()
+    head_pdf = pdf.head()
+
+    assert_eq(head_pdf, head_gdf)
+
+
+@pytest.mark.parametrize("index", [None, [123], ["a", "b"]])
+def test_no_cols_head(index):
+    pdf = pd.DataFrame(index=index)
+    gdf = cudf.from_pandas(pdf)
+
+    head_gdf = gdf.head()
+    head_pdf = pdf.head()
+
+    assert_eq(head_pdf, head_gdf)

@@ -48,3 +48,9 @@ def test_column_assignment():
     new_cols = ["q", "r", "s"]
     gdf.columns = new_cols
     assert list(gdf.columns) == new_cols
+
+
+def test_ndim():
+    pdf = pd.DataFrame({"x": range(5), "y": range(5, 10)})
+    gdf = cudf.DataFrame.from_pandas(pdf)
+    assert pdf.ndim == gdf.ndim

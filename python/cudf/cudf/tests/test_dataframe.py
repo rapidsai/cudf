@@ -32,7 +32,6 @@ from cudf.core._compat import (
 )
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.column.column import as_column
-from cudf.errors import MixedTypeError
 from cudf.testing import _utils as utils, assert_eq, assert_neq
 from cudf.testing._utils import (
     ALL_TYPES,
@@ -40,7 +39,6 @@ from cudf.testing._utils import (
     NUMERIC_TYPES,
     assert_exceptions_equal,
     expect_warning_if,
-    gen_rand,
 )
 from cudf.utils.dtypes import SIZE_TYPE_DTYPE
 
@@ -498,125 +496,6 @@ def test_dataframe_dir_and_getattr():
     assert df.b.equals(df["b"])
     with pytest.raises(AttributeError):
         df.not_a_column
-
-
-def test_empty_dataframe_to_cupy():
-    df = cudf.DataFrame()
-
-    # Check fully empty dataframe.
-    mat = df.to_cupy()
-    assert mat.shape == (0, 0)
-    mat = df.to_numpy()
-    assert mat.shape == (0, 0)
-
-    df = cudf.DataFrame()
-    nelem = 123
-    rng = np.random.default_rng(seed=0)
-    for k in "abc":
-        df[k] = rng.random(nelem)
-
-    # Check all columns in empty dataframe.
-    mat = df.head(0).to_cupy()
-    assert mat.shape == (0, 3)
-
-
-def test_dataframe_to_cupy():
-    df = cudf.DataFrame()
-
-    nelem = 123
-    rng = np.random.default_rng(seed=0)
-    for k in "abcd":
-        df[k] = rng.random(nelem)
-
-    # Check all columns
-    mat = df.to_cupy()
-    assert mat.shape == (nelem, 4)
-    assert mat.strides == (8, 984)
-
-    mat = df.to_numpy()
-    assert mat.shape == (nelem, 4)
-    assert mat.strides == (8, 984)
-    for i, k in enumerate(df.columns):
-        np.testing.assert_array_equal(df[k].to_numpy(), mat[:, i])
-
-    # Check column subset
-    mat = df[["a", "c"]].to_cupy().get()
-    assert mat.shape == (nelem, 2)
-
-    for i, k in enumerate("ac"):
-        np.testing.assert_array_equal(df[k].to_numpy(), mat[:, i])
-
-
-@pytest.mark.parametrize("has_nulls", [False, True])
-@pytest.mark.parametrize("use_na_value", [False, True])
-def test_dataframe_to_cupy_single_column(has_nulls, use_na_value):
-    nelem = 10
-    data = np.arange(nelem, dtype=np.float64)
-
-    if has_nulls:
-        data = data.astype("object")
-        data[::2] = None
-
-    df = cudf.DataFrame({"a": data})
-
-    if has_nulls and not use_na_value:
-        with pytest.raises(ValueError, match="Column must have no nulls"):
-            df.to_cupy()
-        return
-
-    na_value = 0.0 if use_na_value else None
-    expected = (
-        cupy.asarray(df["a"].fillna(na_value))
-        if has_nulls
-        else cupy.asarray(df["a"])
-    )
-    result = df.to_cupy(na_value=na_value)
-    assert result.shape == (nelem, 1)
-    assert_eq(result.ravel(), expected)
-
-
-def test_dataframe_to_cupy_null_values():
-    df = cudf.DataFrame()
-
-    nelem = 123
-    na = -10000
-
-    refvalues = {}
-    rng = np.random.default_rng(seed=0)
-    for k in "abcd":
-        df[k] = data = rng.random(nelem)
-        bitmask = utils.random_bitmask(nelem)
-        df[k] = df[k]._column.set_mask(bitmask)
-        boolmask = np.asarray(
-            utils.expand_bits_to_bytes(bitmask)[:nelem], dtype=np.bool_
-        )
-        data[~boolmask] = na
-        refvalues[k] = data
-
-    # Check null value causes error
-    with pytest.raises(ValueError):
-        df.to_cupy()
-    with pytest.raises(ValueError):
-        df.to_numpy()
-
-    for k in df.columns:
-        df[k] = df[k].fillna(na)
-
-    mat = df.to_numpy()
-    for i, k in enumerate(df.columns):
-        np.testing.assert_array_equal(refvalues[k], mat[:, i])
-
-
-@pytest.mark.parametrize("method", ["to_cupy", "to_numpy"])
-@pytest.mark.parametrize("value", [1, True, 1.5])
-@pytest.mark.parametrize("constructor", ["DataFrame", "Series"])
-def test_to_array_categorical(method, value, constructor):
-    data = [value]
-    expected = getattr(pd, constructor)(data, dtype="category").to_numpy()
-    result = getattr(
-        getattr(cudf, constructor)(data, dtype="category"), method
-    )()
-    assert_eq(result, expected)
 
 
 def test_dataframe_append_empty():
@@ -2160,130 +2039,6 @@ def test_dataframe_assignment():
     assert_eq(gdf, pdf)
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES)
-@pytest.mark.parametrize("period", [-15, -1, 0, 1, 15])
-@pytest.mark.parametrize("data_empty", [False, True])
-def test_diff(dtype, period, data_empty):
-    if data_empty:
-        data = None
-    else:
-        if dtype == np.int8:
-            # to keep data in range
-            data = gen_rand(dtype, 100000, low=-2, high=2)
-        else:
-            data = gen_rand(dtype, 100000)
-
-    gdf = cudf.DataFrame({"a": cudf.Series(data, dtype=dtype)})
-    pdf = pd.DataFrame({"a": pd.Series(data, dtype=dtype)})
-
-    expected_outcome = pdf.a.diff(period)
-    diffed_outcome = gdf.a.diff(period).astype(expected_outcome.dtype)
-
-    if data_empty:
-        assert_eq(diffed_outcome, expected_outcome, check_index_type=False)
-    else:
-        assert_eq(diffed_outcome, expected_outcome)
-
-
-@pytest.mark.parametrize("nan_as_null", [True, False, None])
-@pytest.mark.parametrize("api_call", ["isnull", "isna", "notna", "notnull"])
-def test_dataframe_isnull_isna_and_reverse(na_data, nan_as_null, api_call):
-    def detect_nan(x):
-        # Check if the input is a float and if it is nan
-        return x.apply(lambda v: isinstance(v, float) and np.isnan(v))
-
-    df = na_data
-    nan_contains = df.select_dtypes(object).apply(detect_nan)
-    if nan_as_null is False and (
-        nan_contains.any().any() and not nan_contains.all().all()
-    ):
-        with pytest.raises(MixedTypeError):
-            cudf.DataFrame.from_pandas(df, nan_as_null=nan_as_null)
-    else:
-        gdf = cudf.DataFrame.from_pandas(df, nan_as_null=nan_as_null)
-
-        assert_eq(getattr(df, api_call)(), getattr(gdf, api_call)())
-
-        # Test individual columns
-        for col in df:
-            assert_eq(
-                getattr(df[col], api_call)(), getattr(gdf[col], api_call)()
-            )
-
-
-def test_ndim():
-    pdf = pd.DataFrame({"x": range(5), "y": range(5, 10)})
-    gdf = cudf.DataFrame.from_pandas(pdf)
-    assert pdf.ndim == gdf.ndim
-    assert pdf.x.ndim == gdf.x.ndim
-
-    s = pd.Series(dtype="float64")
-    gs = cudf.Series()
-    assert s.ndim == gs.ndim
-
-
-@pytest.mark.parametrize(
-    "decimals",
-    [
-        -3,
-        0,
-        5,
-        pd.Series(
-            [1, 4, 3, -6],
-            index=["floats", "ints", "floats_with_nan", "floats_same"],
-        ),
-        cudf.Series(
-            [-4, -2, 12], index=["ints", "floats_with_nan", "floats_same"]
-        ),
-        {"floats": -1, "ints": 15, "floats_will_nan": 2},
-    ],
-)
-def test_dataframe_round(decimals):
-    rng = np.random.default_rng(seed=0)
-    gdf = cudf.DataFrame(
-        {
-            "floats": np.arange(0.5, 10.5, 1),
-            "ints": rng.normal(-100, 100, 10),
-            "floats_with_na": np.array(
-                [
-                    14.123,
-                    2.343,
-                    np.nan,
-                    0.0,
-                    -8.302,
-                    np.nan,
-                    94.313,
-                    None,
-                    -8.029,
-                    np.nan,
-                ]
-            ),
-            "floats_same": np.repeat([-0.6459412758761901], 10),
-            "bools": rng.choice([True, None, False], 10),
-            "strings": rng.choice(["abc", "xyz", None], 10),
-            "struct": rng.choice([{"abc": 1}, {"xyz": 2}, None], 10),
-            "list": [[1], [2], None, [4], [3]] * 2,
-        }
-    )
-    pdf = gdf.to_pandas()
-
-    if isinstance(decimals, cudf.Series):
-        pdecimals = decimals.to_pandas()
-    else:
-        pdecimals = decimals
-
-    result = gdf.round(decimals)
-    expected = pdf.round(pdecimals)
-
-    assert_eq(result, expected)
-
-
-def test_dataframe_round_dict_decimal_validation():
-    df = cudf.DataFrame({"A": [0.12], "B": [0.13]})
-    with pytest.raises(TypeError):
-        df.round({"A": 1, "B": 0.5})
-
-
 @pytest.mark.parametrize(
     "data",
     [
@@ -2415,16 +2170,6 @@ def test_create_dataframe_cols_empty_data(a, b, misc_data, non_list_data):
     assert_eq(actual, expected)
 
 
-def test_empty_dataframe_describe():
-    pdf = pd.DataFrame({"a": [], "b": []})
-    gdf = cudf.from_pandas(pdf)
-
-    expected = pdf.describe()
-    actual = gdf.describe()
-
-    assert_eq(expected, actual)
-
-
 def test_as_column_types():
     col = as_column(cudf.Series([], dtype="float64"))
     assert_eq(col.dtype, np.dtype("float64"))
@@ -2497,27 +2242,6 @@ def test_as_column_types():
     gds = cudf.Series(cudf.Index(["1", "18", "9"]), dtype="int")
 
     assert_eq(pds, gds)
-
-
-def test_one_row_head():
-    gdf = cudf.DataFrame({"name": ["carl"], "score": [100]}, index=[123])
-    pdf = gdf.to_pandas()
-
-    head_gdf = gdf.head()
-    head_pdf = pdf.head()
-
-    assert_eq(head_pdf, head_gdf)
-
-
-@pytest.mark.parametrize("index", [None, [123], ["a", "b"]])
-def test_no_cols_head(index):
-    pdf = pd.DataFrame(index=index)
-    gdf = cudf.from_pandas(pdf)
-
-    head_gdf = gdf.head()
-    head_pdf = pdf.head()
-
-    assert_eq(head_pdf, head_gdf)
 
 
 @pytest.mark.parametrize("dtype", ALL_TYPES)
@@ -6488,129 +6212,6 @@ def test_dataframe_iterrows_itertuples():
         ),
     ):
         df.iterrows()
-
-
-@pytest_unmark_spilling
-@pytest.mark.parametrize(
-    "pdf",
-    [
-        pd.DataFrame(
-            {
-                "a": [1, 2, 3],
-                "b": [10, 22, 33],
-                "c": [0.3234, 0.23432, 0.0],
-                "d": ["hello", "world", "hello"],
-            }
-        ),
-        pd.DataFrame(
-            {
-                "a": [1, 2, 3],
-                "b": ["hello", "world", "hello"],
-                "c": [0.3234, 0.23432, 0.0],
-            }
-        ),
-        pd.DataFrame(
-            {
-                "int_data": [1, 2, 3],
-                "str_data": ["hello", "world", "hello"],
-                "float_data": [0.3234, 0.23432, 0.0],
-                "timedelta_data": pd.Series(
-                    [1, 2, 1], dtype="timedelta64[ns]"
-                ),
-                "datetime_data": pd.Series([1, 2, 1], dtype="datetime64[ns]"),
-            }
-        ),
-        pd.DataFrame(
-            {
-                "int_data": [1, 2, 3],
-                "str_data": ["hello", "world", "hello"],
-                "float_data": [0.3234, 0.23432, 0.0],
-                "timedelta_data": pd.Series(
-                    [1, 2, 1], dtype="timedelta64[ns]"
-                ),
-                "datetime_data": pd.Series([1, 2, 1], dtype="datetime64[ns]"),
-                "category_data": pd.Series(["a", "a", "b"], dtype="category"),
-            }
-        ),
-    ],
-)
-@pytest.mark.parametrize(
-    "include",
-    [None, "all", ["object"], ["int"], ["object", "int", "category"]],
-)
-def test_describe_misc_include(pdf, include):
-    df = cudf.DataFrame.from_pandas(pdf)
-
-    expected = pdf.describe(include=include)
-    actual = df.describe(include=include)
-
-    for col in expected.columns:
-        if expected[col].dtype == np.dtype("object"):
-            expected[col] = expected[col].fillna(-1).astype("str")
-            actual[col] = actual[col].fillna(-1).astype("str")
-
-    assert_eq(expected, actual)
-
-
-@pytest_unmark_spilling
-@pytest.mark.parametrize(
-    "pdf",
-    [
-        pd.DataFrame(
-            {
-                "a": [1, 2, 3],
-                "b": [10, 22, 33],
-                "c": [0.3234, 0.23432, 0.0],
-                "d": ["hello", "world", "hello"],
-            }
-        ),
-        pd.DataFrame(
-            {
-                "a": [1, 2, 3],
-                "b": ["hello", "world", "hello"],
-                "c": [0.3234, 0.23432, 0.0],
-            }
-        ),
-        pd.DataFrame(
-            {
-                "int_data": [1, 2, 3],
-                "str_data": ["hello", "world", "hello"],
-                "float_data": [0.3234, 0.23432, 0.0],
-                "timedelta_data": pd.Series(
-                    [1, 2, 1], dtype="timedelta64[ns]"
-                ),
-                "datetime_data": pd.Series([1, 2, 1], dtype="datetime64[ns]"),
-            }
-        ),
-        pd.DataFrame(
-            {
-                "int_data": [1, 2, 3],
-                "str_data": ["hello", "world", "hello"],
-                "float_data": [0.3234, 0.23432, 0.0],
-                "timedelta_data": pd.Series(
-                    [1, 2, 1], dtype="timedelta64[ns]"
-                ),
-                "datetime_data": pd.Series([1, 2, 1], dtype="datetime64[ns]"),
-                "category_data": pd.Series(["a", "a", "b"], dtype="category"),
-            }
-        ),
-    ],
-)
-@pytest.mark.parametrize(
-    "exclude", [None, ["object"], ["int"], ["object", "int", "category"]]
-)
-def test_describe_misc_exclude(pdf, exclude):
-    df = cudf.DataFrame.from_pandas(pdf)
-
-    expected = pdf.describe(exclude=exclude)
-    actual = df.describe(exclude=exclude)
-
-    for col in expected.columns:
-        if expected[col].dtype == np.dtype("object"):
-            expected[col] = expected[col].fillna(-1).astype("str")
-            actual[col] = actual[col].fillna(-1).astype("str")
-
-    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize(
