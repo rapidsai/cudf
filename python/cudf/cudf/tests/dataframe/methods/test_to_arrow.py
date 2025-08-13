@@ -79,3 +79,61 @@ def test_arrow_round_trip(preserve_index, index):
     pdf_out = table_pd.to_pandas()
 
     assert_eq(gdf_out, pdf_out)
+
+
+@pytest.mark.parametrize("nelem", [0, 2])
+def test_to_arrow(nelem, all_supported_types_as_str):
+    if all_supported_types_as_str in {"category", "str"}:
+        pytest.skip(f"Test not applicable with {all_supported_types_as_str}")
+    rng = np.random.default_rng(seed=0)
+    df = pd.DataFrame(
+        {
+            "a": rng.integers(0, 1000, nelem).astype(
+                all_supported_types_as_str
+            ),
+            "b": rng.integers(0, 1000, nelem).astype(
+                all_supported_types_as_str
+            ),
+        }
+    )
+    gdf = cudf.DataFrame.from_pandas(df)
+
+    pa_df = pa.Table.from_pandas(
+        df, preserve_index=False
+    ).replace_schema_metadata(None)
+
+    pa_gdf = gdf.to_arrow(preserve_index=False).replace_schema_metadata(None)
+
+    assert isinstance(pa_gdf, pa.Table)
+    assert pa.Table.equals(pa_df, pa_gdf)
+
+    pa_s = pa.Array.from_pandas(df.a)
+    pa_gs = gdf["a"].to_arrow()
+
+    assert isinstance(pa_gs, pa.Array)
+    assert pa.Array.equals(pa_s, pa_gs)
+
+    pa_i = pa.Array.from_pandas(df.index)
+    pa_gi = gdf.index.to_arrow()
+
+    assert isinstance(pa_gi, pa.Array)
+    assert pa.Array.equals(pa_i, pa_gi)
+
+
+def test_to_arrow_categorical():
+    df = pd.DataFrame({"a": pd.Series(["a", "b", "c"], dtype="category")})
+    gdf = cudf.DataFrame.from_pandas(df)
+
+    pa_df = pa.Table.from_pandas(
+        df, preserve_index=False
+    ).replace_schema_metadata(None)
+    pa_gdf = gdf.to_arrow(preserve_index=False).replace_schema_metadata(None)
+
+    assert isinstance(pa_gdf, pa.Table)
+    assert pa.Table.equals(pa_df, pa_gdf)
+
+    pa_s = pa.Array.from_pandas(df.a)
+    pa_gs = gdf["a"].to_arrow()
+
+    assert isinstance(pa_gs, pa.Array)
+    assert pa.Array.equals(pa_s, pa_gs)

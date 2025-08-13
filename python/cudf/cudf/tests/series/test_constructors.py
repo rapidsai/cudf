@@ -504,6 +504,43 @@ def test_construct_all_pd_NA_with_dtype(nan_as_null):
     assert_eq(result, expected)
 
 
+def test_to_from_arrow_nulls(all_supported_types_as_str):
+    if all_supported_types_as_str in {"category", "str"}:
+        pytest.skip(f"Test not applicable with {all_supported_types_as_str}")
+    data_type = all_supported_types_as_str
+    if data_type == "bool":
+        s1 = pa.array([True, None, False, None, True], type=data_type)
+    else:
+        dtype = np.dtype(data_type)
+        if dtype.type == np.datetime64:
+            time_unit, _ = np.datetime_data(dtype)
+            data_type = pa.timestamp(unit=time_unit)
+        elif dtype.type == np.timedelta64:
+            time_unit, _ = np.datetime_data(dtype)
+            data_type = pa.duration(unit=time_unit)
+        s1 = pa.array([1, None, 3, None, 5], type=data_type)
+    gs1 = cudf.Series.from_arrow(s1)
+    assert isinstance(gs1, cudf.Series)
+    # We have 64B padded buffers for nulls whereas Arrow returns a minimal
+    # number of bytes, so only check the first byte in this case
+    np.testing.assert_array_equal(
+        np.asarray(s1.buffers()[0]).view("u1")[0],
+        gs1._column.mask_array_view(mode="read").copy_to_host().view("u1")[0],
+    )
+    assert pa.Array.equals(s1, gs1.to_arrow())
+
+    s2 = pa.array([None, None, None, None, None], type=data_type)
+    gs2 = cudf.Series.from_arrow(s2)
+    assert isinstance(gs2, cudf.Series)
+    # We have 64B padded buffers for nulls whereas Arrow returns a minimal
+    # number of bytes, so only check the first byte in this case
+    np.testing.assert_array_equal(
+        np.asarray(s2.buffers()[0]).view("u1")[0],
+        gs2._column.mask_array_view(mode="read").copy_to_host().view("u1")[0],
+    )
+    assert pa.Array.equals(s2, gs2.to_arrow())
+
+
 def test_cuda_array_interface(numeric_and_bool_types_as_str):
     np_data = np.arange(10).astype(numeric_and_bool_types_as_str)
     cupy_data = cp.array(np_data)

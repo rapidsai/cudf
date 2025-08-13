@@ -2,6 +2,7 @@
 
 from contextlib import nullcontext as does_not_raise
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -221,3 +222,182 @@ def test_pandas_non_contiguious():
 
     gdf = cudf.DataFrame.from_pandas(df)
     assert_eq(gdf.to_pandas(), df)
+
+
+def test_from_records(numeric_types_as_str):
+    h_ary = np.ndarray(shape=(10, 4), dtype=numeric_types_as_str)
+    rec_ary = h_ary.view(np.recarray)
+
+    gdf = cudf.DataFrame.from_records(rec_ary, columns=["a", "b", "c", "d"])
+    df = pd.DataFrame.from_records(rec_ary, columns=["a", "b", "c", "d"])
+    assert isinstance(gdf, cudf.DataFrame)
+    assert_eq(df, gdf)
+
+    gdf = cudf.DataFrame.from_records(rec_ary)
+    df = pd.DataFrame.from_records(rec_ary)
+    assert isinstance(gdf, cudf.DataFrame)
+    assert_eq(df, gdf)
+
+
+@pytest.mark.parametrize("columns", [None, ["first", "second", "third"]])
+@pytest.mark.parametrize(
+    "index",
+    [
+        None,
+        ["first", "second"],
+        "name",
+        "age",
+        "weight",
+        [10, 11],
+        ["abc", "xyz"],
+    ],
+)
+def test_from_records_index(columns, index):
+    rec_ary = np.array(
+        [("Rex", 9, 81.0), ("Fido", 3, 27.0)],
+        dtype=[("name", "U10"), ("age", "i4"), ("weight", "f4")],
+    )
+    gdf = cudf.DataFrame.from_records(rec_ary, columns=columns, index=index)
+    df = pd.DataFrame.from_records(rec_ary, columns=columns, index=index)
+    assert isinstance(gdf, cudf.DataFrame)
+    assert_eq(df, gdf)
+
+
+def test_dataframe_construction_from_cupy_arrays():
+    h_ary = np.array([[1, 2, 3], [4, 5, 6]], np.int32)
+    d_ary = cp.asarray(h_ary)
+
+    gdf = cudf.DataFrame(d_ary, columns=["a", "b", "c"])
+    df = pd.DataFrame(h_ary, columns=["a", "b", "c"])
+    assert isinstance(gdf, cudf.DataFrame)
+
+    assert_eq(df, gdf)
+
+    gdf = cudf.DataFrame(d_ary)
+    df = pd.DataFrame(h_ary)
+    assert isinstance(gdf, cudf.DataFrame)
+
+    assert_eq(df, gdf)
+
+    gdf = cudf.DataFrame(d_ary, index=["a", "b"])
+    df = pd.DataFrame(h_ary, index=["a", "b"])
+    assert isinstance(gdf, cudf.DataFrame)
+
+    assert_eq(df, gdf)
+
+    gdf = cudf.DataFrame(d_ary)
+    gdf = gdf.set_index(keys=0, drop=False)
+    df = pd.DataFrame(h_ary)
+    df = df.set_index(keys=0, drop=False)
+    assert isinstance(gdf, cudf.DataFrame)
+
+    assert_eq(df, gdf)
+
+    gdf = cudf.DataFrame(d_ary)
+    gdf = gdf.set_index(keys=1, drop=False)
+    df = pd.DataFrame(h_ary)
+    df = df.set_index(keys=1, drop=False)
+    assert isinstance(gdf, cudf.DataFrame)
+
+    assert_eq(df, gdf)
+
+
+def test_dataframe_cupy_wrong_dimensions():
+    d_ary = cp.empty((2, 3, 4), dtype=np.int32)
+    with pytest.raises(
+        ValueError, match="records dimension expected 1 or 2 but found: 3"
+    ):
+        cudf.DataFrame(d_ary)
+
+
+def test_dataframe_cupy_array_wrong_index():
+    d_ary = cp.empty((2, 3), dtype=np.int32)
+
+    with pytest.raises(ValueError):
+        cudf.DataFrame(d_ary, index=["a"])
+
+    with pytest.raises(TypeError):
+        cudf.DataFrame(d_ary, index="a")
+
+
+def test_index_in_dataframe_constructor():
+    a = pd.DataFrame({"x": [1, 2, 3]}, index=[4.0, 5.0, 6.0])
+    b = cudf.DataFrame({"x": [1, 2, 3]}, index=[4.0, 5.0, 6.0])
+
+    assert_eq(a, b)
+    assert_eq(a.loc[4:], b.loc[4:])
+
+
+@pytest.mark.parametrize("nelem", [0, 2])
+def test_from_arrow(nelem, all_supported_types_as_str):
+    if all_supported_types_as_str in {"category", "str"}:
+        pytest.skip(f"Test not applicable with {all_supported_types_as_str}")
+    rng = np.random.default_rng(seed=0)
+    df = pd.DataFrame(
+        {
+            "a": rng.integers(0, 1000, nelem).astype(
+                all_supported_types_as_str
+            ),
+            "b": rng.integers(0, 1000, nelem).astype(
+                all_supported_types_as_str
+            ),
+        }
+    )
+    padf = pa.Table.from_pandas(
+        df, preserve_index=False
+    ).replace_schema_metadata(None)
+    gdf = cudf.DataFrame.from_arrow(padf)
+    assert isinstance(gdf, cudf.DataFrame)
+
+    assert_eq(df, gdf)
+
+    s = pa.Array.from_pandas(df.a)
+    gs = cudf.Series.from_arrow(s)
+    assert isinstance(gs, cudf.Series)
+
+    # For some reason PyArrow to_pandas() converts to numpy array and has
+    # better type compatibility
+    np.testing.assert_array_equal(s.to_pandas(), gs.to_numpy())
+
+
+def test_from_arrow_chunked_categories():
+    # Verify that categories are properly deduplicated across chunked arrays.
+    indices = pa.array([0, 1, 0, 1, 2, 0, None, 2])
+    dictionary = pa.array(["foo", "bar", "baz"])
+    dict_array = pa.DictionaryArray.from_arrays(indices, dictionary)
+    chunked_array = pa.chunked_array([dict_array, dict_array])
+    table = pa.table({"a": chunked_array})
+    df = cudf.DataFrame.from_arrow(table)
+    final_dictionary = df["a"].dtype.categories.to_arrow().to_pylist()
+    assert sorted(final_dictionary) == sorted(dictionary.to_pylist())
+
+
+def test_from_scalar_typing(request, all_supported_types_as_str):
+    if all_supported_types_as_str in {"category", "str"}:
+        pytest.skip(f"Test not applicable with {all_supported_types_as_str}")
+    request.applymarker(
+        pytest.mark.xfail(
+            all_supported_types_as_str
+            in {"timedelta64[ms]", "timedelta64[us]", "timedelta64[ns]"},
+            reason=f"{all_supported_types_as_str} incorrectly results in timedelta64[s]",
+        )
+    )
+    rng = np.random.default_rng(seed=0)
+    if all_supported_types_as_str == "datetime64[ms]":
+        scalar = (
+            np.dtype("int64").type(rng.integers(0, 5)).astype("datetime64[ms]")
+        )
+    elif all_supported_types_as_str.startswith("datetime64"):
+        scalar = np.datetime64("2020-01-01").astype("datetime64[ms]")
+        all_supported_types_as_str = "datetime64[ms]"
+    else:
+        scalar = np.dtype(all_supported_types_as_str).type(rng.integers(0, 5))
+
+    gdf = cudf.DataFrame(
+        {
+            "a": [1, 2, 3, 4, 5],
+            "b": scalar,
+        }
+    )
+    assert gdf["b"].dtype == np.dtype(all_supported_types_as_str)
+    assert len(gdf["b"]) == len(gdf["a"])
