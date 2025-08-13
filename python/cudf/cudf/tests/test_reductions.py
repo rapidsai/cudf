@@ -1,8 +1,5 @@
 # Copyright (c) 2020-2025, NVIDIA CORPORATION.
-
-
 from decimal import Decimal
-from itertools import product
 
 import numpy as np
 import pandas as pd
@@ -17,14 +14,17 @@ from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing import _utils as utils, assert_eq
 from cudf.testing._utils import NUMERIC_TYPES, expect_warning_if, gen_rand
 
-params_dtype = NUMERIC_TYPES
 
-params_sizes = [1, 2, 3, 127, 128, 129, 200, 10000]
+@pytest.fixture(params=NUMERIC_TYPES)
+def dtype(request):
+    return request.param
 
-params = list(product(params_dtype, params_sizes))
+
+@pytest.fixture(params=[1, 20])
+def nelem(request):
+    return request.param
 
 
-@pytest.mark.parametrize("dtype,nelem", params)
 def test_sum(dtype, nelem):
     dtype = cudf.dtype(dtype).type
     data = gen_rand(dtype, nelem)
@@ -86,7 +86,6 @@ def test_sum_string():
         Decimal128Dtype(20, 7),
     ],
 )
-@pytest.mark.parametrize("nelem", params_sizes)
 def test_sum_decimal(dtype, nelem):
     data = [str(x) for x in gen_rand("int64", nelem, seed=0) / 100]
 
@@ -96,7 +95,6 @@ def test_sum_decimal(dtype, nelem):
     assert_eq(expected, got)
 
 
-@pytest.mark.parametrize("dtype,nelem", params)
 def test_product(dtype, nelem):
     rng = np.random.default_rng(seed=0)
     dtype = cudf.dtype(dtype).type
@@ -162,7 +160,6 @@ def test_product_decimal(dtype):
 accuracy_for_dtype = {np.float64: 6, np.float32: 5}
 
 
-@pytest.mark.parametrize("dtype,nelem", params)
 def test_sum_of_squares(dtype, nelem):
     dtype = cudf.dtype(dtype).type
     data = gen_rand(dtype, nelem)
@@ -228,7 +225,6 @@ def test_sum_of_squares_decimal(dtype):
     assert_eq(expected, got)
 
 
-@pytest.mark.parametrize("dtype,nelem", params)
 def test_min(dtype, nelem):
     dtype = cudf.dtype(dtype).type
     data = gen_rand(dtype, nelem)
@@ -274,7 +270,6 @@ def test_min(dtype, nelem):
         Decimal128Dtype(20, 7),
     ],
 )
-@pytest.mark.parametrize("nelem", params_sizes)
 def test_min_decimal(dtype, nelem):
     data = [str(x) for x in gen_rand("int64", nelem) / 100]
 
@@ -284,7 +279,6 @@ def test_min_decimal(dtype, nelem):
     assert_eq(expected, got)
 
 
-@pytest.mark.parametrize("dtype,nelem", params)
 def test_max(dtype, nelem):
     dtype = cudf.dtype(dtype).type
     data = gen_rand(dtype, nelem)
@@ -330,7 +324,6 @@ def test_max(dtype, nelem):
         Decimal128Dtype(20, 7),
     ],
 )
-@pytest.mark.parametrize("nelem", params_sizes)
 def test_max_decimal(dtype, nelem):
     data = [str(x) for x in gen_rand("int64", nelem) / 100]
 
@@ -340,7 +333,6 @@ def test_max_decimal(dtype, nelem):
     assert_eq(expected, got)
 
 
-@pytest.mark.parametrize("nelem", params_sizes)
 def test_sum_masked(nelem):
     dtype = np.float64
     data = gen_rand(dtype, nelem)

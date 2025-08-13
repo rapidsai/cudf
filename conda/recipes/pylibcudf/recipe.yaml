@@ -52,7 +52,7 @@ requirements:
     - python =${{ py_version }}
     - pip
     - cython >=3.0.3
-    - rapids-build-backend >=0.3.0,<0.4.0.dev0
+    - rapids-build-backend >=0.4.0,<0.5.0.dev0
     - scikit-build-core >=0.10.0
     - dlpack >=0.8,<1.0
     - libcudf =${{ version }}
@@ -72,7 +72,7 @@ requirements:
     - libcudf =${{ version }}
     - ${{ pin_compatible("rmm", upper_bound="x.x") }}
     - fsspec >=0.6.0
-    - cuda-python >=12.6.2,<13.0a0
+    - cuda-python >=12.9.1,<13.0a0
     - nvtx >=0.2.1
     - packaging
   ignore_run_exports:

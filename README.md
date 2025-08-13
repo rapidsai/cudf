@@ -73,7 +73,7 @@ pip install cudf-cu12
 cuDF can be installed with conda (via [miniforge](https://github.com/conda-forge/miniforge)) from the `rapidsai` channel:
 
 ```bash
-conda install -c rapidsai -c conda-forge cudf=25.08
+conda install -c rapidsai -c conda-forge cudf=25.10
 ```
 
 We also provide [nightly Conda packages](https://anaconda.org/rapidsai-nightly) built from the HEAD

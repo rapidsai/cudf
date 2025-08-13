@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -8,7 +8,10 @@ from pylibcudf.libcudf.labeling cimport inclusive
 
 from pylibcudf.libcudf.labeling import inclusive as Inclusive  # no-cython-lint
 
+from rmm.pylibrmm.stream cimport Stream
+
 from .column cimport Column
+from .utils cimport _get_stream
 
 __all__ = ["Inclusive", "label_bins"]
 
@@ -17,7 +20,8 @@ cpdef Column label_bins(
     Column left_edges,
     inclusive left_inclusive,
     Column right_edges,
-    inclusive right_inclusive
+    inclusive right_inclusive,
+    Stream stream=None
 ):
     """Labels elements based on membership in the specified bins.
 
@@ -35,6 +39,8 @@ cpdef Column label_bins(
         Column of the right edge of each bin.
     right_inclusive : Inclusive
         Whether or not the right edge is inclusive.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -43,6 +49,8 @@ cpdef Column label_bins(
         according to the specified bins.
     """
     cdef unique_ptr[column] c_result
+    stream = _get_stream(stream)
+
     with nogil:
         c_result = cpp_labeling.label_bins(
             input.view(),
@@ -50,6 +58,9 @@ cpdef Column label_bins(
             left_inclusive,
             right_edges.view(),
             right_inclusive,
+            stream.view()
         )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream)
+
+Inclusive.__str__ = Inclusive.__repr__

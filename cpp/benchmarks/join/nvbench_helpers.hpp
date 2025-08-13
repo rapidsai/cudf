@@ -16,18 +16,37 @@
 
 #pragma once
 
-#include <benchmarks/join/join_common.hpp>
+#include <benchmarks/common/generate_input.hpp>
 
 #include <cudf/types.hpp>
 
 #include <nvbench/nvbench.cuh>
 
+enum class join_t { CONDITIONAL, MIXED, HASH, SORT_MERGE };
+
+enum class data_type : int32_t {
+  INT32   = static_cast<int32_t>(cudf::type_id::INT32),
+  INT64   = static_cast<int32_t>(cudf::type_id::INT64),
+  FLOAT32 = static_cast<int32_t>(cudf::type_id::FLOAT32),
+  FLOAT64 = static_cast<int32_t>(cudf::type_id::FLOAT64),
+  STRING  = static_cast<int32_t>(cudf::type_id::STRING),
+  LIST    = static_cast<int32_t>(cudf::type_id::LIST),
+  STRUCT  = static_cast<int32_t>(cudf::type_id::STRUCT),
+
+  INTEGRAL       = static_cast<int32_t>(type_group_id::INTEGRAL),
+  FLOATING_POINT = static_cast<int32_t>(type_group_id::FLOATING_POINT),
+  NUMERIC        = static_cast<int32_t>(type_group_id::NUMERIC),
+  DECIMAL        = static_cast<int32_t>(type_group_id::FIXED_POINT),
+  COMPOUND       = static_cast<int32_t>(type_group_id::COMPOUND),
+  NESTED         = static_cast<int32_t>(type_group_id::NESTED)
+};
+
 NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
   cudf::null_equality,
   [](auto value) {
     switch (value) {
-      case cudf::null_equality::EQUAL: return "EQUAL";
-      case cudf::null_equality::UNEQUAL: return "UNEQUAL";
+      case cudf::null_equality::EQUAL: return "NULLS_EQUAL";
+      case cudf::null_equality::UNEQUAL: return "NULLS_UNEQUAL";
       default: return "Unknown";
     }
   },
@@ -39,6 +58,32 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
     switch (value) {
       case join_t::HASH: return "HASH";
       case join_t::SORT_MERGE: return "SORT_MERGE";
+      case join_t::CONDITIONAL: return "CONDITIONAL";
+      case join_t::MIXED: return "MIXED";
+      default: return "Unknown";
+    }
+  },
+  [](auto) { return std::string{}; })
+
+NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
+  data_type,
+  [](data_type value) {
+    switch (value) {
+      case data_type::INT32: return "INT32";
+      case data_type::INT64: return "INT64";
+      case data_type::FLOAT32: return "FLOAT32";
+      case data_type::FLOAT64: return "FLOAT64";
+      case data_type::STRING: return "STRING";
+      case data_type::LIST: return "LIST";
+      case data_type::STRUCT: return "STRUCT";
+
+      case data_type::INTEGRAL: return "INTEGRAL";
+      case data_type::FLOATING_POINT: return "FLOATING_POINT";
+      case data_type::NUMERIC: return "NUMERIC";
+      case data_type::DECIMAL: return "DECIMAL";
+      case data_type::COMPOUND: return "COMPOUND";
+      case data_type::NESTED: return "NESTED";
+
       default: return "Unknown";
     }
   },
