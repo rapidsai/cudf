@@ -1093,7 +1093,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
 
   // Write list and/or string offsets and exit if the page does not need to be decoded
   if (not page_mask[page_idx]) {
-    auto const batch_size = pp->nesting[s->col.max_nesting_depth - 1].batch_size;
     //  Update offsets for all list depth levels
     if constexpr (has_lists_t) { update_list_offsets_for_pruned_pages<decode_block_size_t>(s); }
     // Update string offsets or write string sizes for small and large strings respectively
@@ -1102,7 +1101,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
         s, initial_str_offsets, pages[page_idx]);
     }
     // Must be set after computing above list and string offsets
-    pp->num_nulls = batch_size;
+    pp->num_nulls = pp->nesting[s->col.max_nesting_depth - 1].batch_size;
     if constexpr (not has_lists_t) { pp->num_nulls -= s->first_row; }
     pp->num_valids = 0;
 

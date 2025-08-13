@@ -97,6 +97,8 @@ aggregate_reader_metadata::aggregate_reader_metadata(cudf::host_span<uint8_t con
   // preserve list structures
   auto& schema = per_file_metadata.front().schema;
   std::for_each(schema.begin() + 1, schema.end(), [](auto& col) {
+    // TODO: Store information of whichever column schema we modified here and restore it to
+    // `REQUIRED` if we end up not pruning any pages out of it
     if (col.repetition_type == FieldRepetitionType::REQUIRED) {
       col.repetition_type = FieldRepetitionType::OPTIONAL;
     }
