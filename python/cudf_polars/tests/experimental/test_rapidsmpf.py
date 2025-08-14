@@ -8,6 +8,7 @@ import pytest
 import polars as pl
 
 from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.utils.config import ConfigOptions
 
 
 @pytest.mark.parametrize("rapidsmpf_spill", [False, True])
@@ -104,3 +105,17 @@ def test_join_rapidsmpf_single(max_rows_per_partition: int) -> None:
     q = left.join(right, on="y", how="inner")
 
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+def test_join_rapidsmpf_single_private_config() -> None:
+    # The user may not specify "rapidsmpf-single" directly
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "shuffle_method": "rapidsmpf-single",
+            "scheduler": "synchronous",
+        },
+    )
+    with pytest.raises(ValueError, match="not a supported shuffle method"):
+        ConfigOptions.from_polars_engine(engine)
