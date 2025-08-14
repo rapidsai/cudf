@@ -845,7 +845,7 @@ cpdef TableWithMetadata read_json_from_string_column(
 
     # Create a new source from the joined string data
     cdef SourceInfo joined_source = SourceInfo(
-            [DeviceBuffer.c_from_unique_ptr(move(c_contents.data))])
+            [DeviceBuffer.c_from_unique_ptr(move(c_contents.data), stream)])
 
     # Create new options using the joined string as source
     cdef JsonReaderOptions options = (
