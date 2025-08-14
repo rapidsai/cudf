@@ -354,11 +354,20 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.10
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cudf_pandas
     with:
-      matrix_filter: '[{"ARCH": "amd64", "PY_VER": "3.13", "CUDA_VER": "12.9.1", "LINUX_VER": "ubuntu24.04", "GPU": "l4", "DRIVER": "latest", "DEPENDENCIES": "newest"}]'
       build_type: pull-request
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      node_type: "gpu-l4-latest-1"
+      container_image: "rapidsai/ci-conda:25.10-latest"
       script: ci/cudf_pandas_scripts/pandas-tests/run.sh pr
-      # Hide test failures because they exceed the GITHUB_STEP_SUMMARY output limit.
-      test_summary_show: "none"
+      file_to_upload: pr-25.10.00-results.json
+    # with:
+    #   matrix_filter: '[{"ARCH": "amd64", "PY_VER": "3.13", "CUDA_VER": "12.9.1", "LINUX_VER": "ubuntu24.04", "GPU": "l4", "DRIVER": "latest", "DEPENDENCIES": "newest"}]'
+    #   build_type: pull-request
+    #   script: ci/cudf_pandas_scripts/pandas-tests/run.sh pr
+    #   # Hide test failures because they exceed the GITHUB_STEP_SUMMARY output limit.
+    #   test_summary_show: "none"
   pandas-tests-diff:
     # diff the results of running the Pandas unit tests and publish a job summary
     needs: pandas-tests
