@@ -184,6 +184,17 @@ class GroupedRollingWindow(Expr):
         self.children = tuple(by)
         self.is_pointwise = False
 
+        unsupported = [
+            type(named_expr.value).__name__
+            for named_expr in self.named_aggs
+            if not isinstance(named_expr.value, (expr.Len, expr.Agg))
+        ]
+        if unsupported:
+            kinds = ", ".join(sorted(set(unsupported)))
+            raise NotImplementedError(
+                f"Unsupported over(...) only expression: {kinds}="
+            )
+
     def do_evaluate(  # noqa: D102
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
@@ -237,10 +248,6 @@ class GroupedRollingWindow(Expr):
                 )
                 col = child.evaluate(df, context=ExecutionContext.FRAME).obj
                 gb_requests.append(plc.groupby.GroupByRequest(col, [val.agg_request]))
-            else:  # pragma: no cover
-                raise NotImplementedError(
-                    f"Unsupported expression inside over(...): {type(val)}"
-                )
 
         group_keys_tbl, value_tables = grouper.aggregate(gb_requests)
         out_cols = [t.columns()[0] for t in value_tables]
