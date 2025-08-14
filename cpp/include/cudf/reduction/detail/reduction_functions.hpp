@@ -57,10 +57,10 @@ std::unique_ptr<scalar> sum(column_view const& col,
  * Returns a struct scalar with {sum: int64_t, overflow: bool} fields.
  * Only supports int64_t input columns.
  *
- * @throw cudf::logic_error if input column type is not int64_t
+ * @throw std::invalid_argument if input column type is not int64_t
  *
  * @param col input column to compute sum with overflow detection (must be int64_t)
- * @param output_dtype data type of return type (must be struct)
+ * @param output_type data type of return type (must be struct)
  * @param init initial value of the sum
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned scalar's device memory

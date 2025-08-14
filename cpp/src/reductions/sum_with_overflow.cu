@@ -109,7 +109,8 @@ std::unique_ptr<cudf::scalar> sum_with_overflow(
 
   // SUM_WITH_OVERFLOW only supports int64_t input
   CUDF_EXPECTS(col.type().id() == cudf::type_id::INT64,
-               "SUM_WITH_OVERFLOW only supports int64_t input types");
+               "SUM_WITH_OVERFLOW only supports int64_t input types",
+               std::invalid_argument);
 
   // Handle empty column
   if (col.size() == 0 || col.size() == col.null_count()) {

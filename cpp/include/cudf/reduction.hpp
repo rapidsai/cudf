@@ -39,9 +39,9 @@ enum class scan_type : bool { INCLUSIVE, EXCLUSIVE };
 /**
  * @brief  Computes the reduction of the values in all rows of a column.
  *
- * This function does not detect overflows in reductions except for the `SUM_WITH_OVERFLOW` aggregation. When `output_type` does not match the `col.type()`, their values may be promoted to
- * `int64_t` or `double` for computing aggregations and then cast to
- * `output_type` before returning.
+ * This function does not detect overflows in reductions except for the `SUM_WITH_OVERFLOW`
+ * aggregation. When `output_type` does not match the `col.type()`, their values may be promoted to
+ * `int64_t` or `double` for computing aggregations and then cast to `output_type` before returning.
  *
  * The `SUM_WITH_OVERFLOW` aggregation is a special case that detects integer
  * overflow during summation of `int64_t` values and returns a struct containing
