@@ -55,10 +55,11 @@ void run_benchmark(nvbench::state& state,
   requests.back().values = values->view();
   if constexpr (Agg == cudf::aggregation::Kind::M2) {
     requests.back().aggregations.push_back(cudf::make_m2_aggregation<cudf::groupby_aggregation>());
+  } else if constexpr (Agg == cudf::aggregation::Kind::VARIANCE) {
+    requests.back().aggregations.push_back(
+      cudf::make_variance_aggregation<cudf::groupby_aggregation>());
   } else if constexpr (Agg == cudf::aggregation::Kind::STD) {
     requests.back().aggregations.push_back(cudf::make_std_aggregation<cudf::groupby_aggregation>());
-  } else if constexpr (Agg == cudf::aggregation::Kind::VARIANCE) {
-    requests.back().aggregations.push_back(cudf::make_variance_aggregation<cudf::groupby_aggregation>());
   } else {
     throw std::runtime_error("Unsupported aggregation kind.");
   }
