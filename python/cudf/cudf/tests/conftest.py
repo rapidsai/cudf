@@ -431,6 +431,50 @@ def all_supported_types_as_str(request):
     return request.param
 
 
+# pandas can raise warnings for some inputs to the following ufuncs:
+numpy_ufuncs = []
+for name in dir(np):
+    func = getattr(np, name)
+    if isinstance(func, np.ufunc) and hasattr(cp, name):
+        if func in {
+            np.arccos,
+            np.arccosh,
+            np.arcsin,
+            np.arctanh,
+            np.fmod,
+            np.log,
+            np.log10,
+            np.log2,
+            np.reciprocal,
+        }:
+            marks = [
+                pytest.mark.filterwarnings(
+                    "ignore:invalid value encountered:RuntimeWarning"
+                ),
+                pytest.mark.filterwarnings(
+                    "ignore:divide by zero:RuntimeWarning"
+                ),
+            ]
+            numpy_ufuncs.append(pytest.param(func, marks=marks))
+        elif func in {
+            np.bitwise_and,
+            np.bitwise_or,
+            np.bitwise_xor,
+        }:
+            marks = pytest.mark.filterwarnings(
+                "ignore:Operation between non boolean Series:FutureWarning"
+            )
+            numpy_ufuncs.append(pytest.param(func, marks=marks))
+        else:
+            numpy_ufuncs.append(func)
+
+
+@pytest.fixture(params=numpy_ufuncs)
+def numpy_ufunc(request):
+    """Numpy ufuncs also supported by cupy."""
+    return request.param
+
+
 @pytest.fixture(params=[True, False])
 def dropna(request):
     """Param for `dropna` argument"""
