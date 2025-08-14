@@ -72,7 +72,7 @@ if TYPE_CHECKING:
     from cudf.core.frame import Frame
     from cudf.core.multiindex import MultiIndex
     from cudf.core.series import Series
-    from cudf.core.tools.datetimes import DateOffset
+    from cudf.core.tools.datetimes import DateOffset, MonthEnd
 
 
 def ensure_index(index_like: Any) -> Index:
@@ -3499,6 +3499,7 @@ class DatetimeIndex(Index):
         name=None,
         nan_as_null=no_default,
     ):
+        self._freq = None
         # we should be more strict on what we accept here but
         # we'd have to go and figure out all the semantics around
         # pandas dtindex creation first which.  For now
@@ -3534,6 +3535,8 @@ class DatetimeIndex(Index):
                 freq = data.freq.freqstr
 
         name = _getdefault_name(data, name=name)
+
+        was_pd_index = isinstance(data, pd.DatetimeIndex)
         data = as_column(data)
 
         if dtype is not None:
@@ -3553,7 +3556,8 @@ class DatetimeIndex(Index):
             self, ColumnAccessor({name: data}, verify=False)
         )
         self._freq = _validate_freq(freq)
-        if self._freq is not None:
+        # existing pandas index needs no additional validation
+        if self._freq is not None and not was_pd_index:
             unique_vals = self.to_series().diff().unique()
             if self._freq == cudf.DateOffset(months=1):
                 possible = pd.Series(
@@ -3878,7 +3882,7 @@ class DatetimeIndex(Index):
         >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
         ...             periods=3, freq="M"))
         >>> datetime_index
-        DatetimeIndex(['2000-01-31', '2000-02-29', '2000-03-31'], dtype='datetime64[ns]', freq='M')
+        DatetimeIndex(['2000-01-31', '2000-02-29', '2000-03-31'], dtype='datetime64[ns]', freq='ME')
         >>> datetime_index.month
         Index([1, 2, 3], dtype='int16')
         """
@@ -5690,7 +5694,7 @@ def _get_nearest_indexer(
     return indexer
 
 
-def _validate_freq(freq: Any) -> DateOffset | None:
+def _validate_freq(freq: Any) -> DateOffset | MonthEnd | None:
     if isinstance(freq, str):
         return cudf.DateOffset._from_freqstr(freq)
     elif freq is None:

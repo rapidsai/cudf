@@ -417,6 +417,12 @@ def get_units(value):
     return value
 
 
+# for pandas compatibility
+class MonthEnd:
+    def _maybe_as_fast_pandas_offset(self):
+        return pd._libs.tslibs.offsets.MonthEnd()
+
+
 class DateOffset:
     """
     An object used for binary ops where calendrical arithmetic
@@ -703,7 +709,7 @@ class DateOffset:
         return repr_str
 
     @classmethod
-    def _from_freqstr(cls, freqstr: str) -> Self:
+    def _from_freqstr(cls, freqstr: str) -> Self | MonthEnd:
         """
         Parse a string and return a DateOffset object
         expects strings of the form 3D, 25W, 10ms, 42ns, etc.
@@ -718,10 +724,13 @@ class DateOffset:
             numeric_part = "1"
         freq_part = match.group(2)
 
-        #        # Certain frequency strings are deprecated in pandas
-        #        # and automatically swapped on construction
-        #        if freq_part == "M":
-        #            freq_part == "ME"
+        # Certain frequency strings are deprecated in pandas
+        # and automatically swapped on construction
+        if freq_part == "M":
+            freq_part == "ME"
+
+        if freq_part == "ME":
+            return MonthEnd()
 
         if freq_part not in cls._CODES_TO_UNITS:
             raise ValueError(f"Cannot interpret frequency str: {freqstr}")
