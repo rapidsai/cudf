@@ -20,7 +20,7 @@ def df():
         {
             "g": [1, 1, 2, 2, 2],
             "x": [1, 2, 3, 4, 5],
-            "x_alt": [1, 100, 3, 4, 50],
+            "x2": [1, 100, 3, 4, 50],
             "g2": ["a", "a", "b", "a", "a"],
             "g_null": [1, None, 1, None, 2],
         }
@@ -155,7 +155,7 @@ def test_rolling_inside_groupby_raises():
         pl.col("x").sum().over("g"),
         pl.len().over("g"),
         pl.col("x").cast(pl.Float64).mean().round(1).over("g"),
-        pl.col("x_alt").quantile(0.5, interpolation="lower").over("g"),
+        pl.col("x2").quantile(0.5, interpolation="lower").over("g"),
         pl.col("x").sum().over("g", "g2"),
         pl.col("x").sum().over(pl.col("g") % 2),
         pl.col("x").sum().over("g_null"),
@@ -175,7 +175,7 @@ def test_rolling_inside_groupby_raises():
     ],
 )
 def test_over_group_various(df, expr):
-    q = df.select(out=expr)
+    q = df.select(expr)
     assert_gpu_result_equal(q)
 
 
@@ -189,12 +189,17 @@ def test_window_over_group_sum_all_null_group_is_zero(df):
     assert_gpu_result_equal(q)
 
 
-def test_over_with_order_by_not_supported_translation(df):
-    q = df.select(s=pl.col("x").sum().over("g", order_by="x"))
+def test_over_with_order_by_unsupported(df):
+    q = df.select(pl.col("x").sum().over("g", order_by="x"))
     assert_ir_translation_raises(q, NotImplementedError)
 
 
 @pytest.mark.parametrize("strategy", ["explode", "join"], ids=["explode", "join"])
-def test_over_with_mapping_strategy_not_supported(df, strategy):
-    q = df.select(s=pl.col("x").sum().over("g", mapping_strategy=strategy))
+def test_over_with_mapping_strategy_unsupported(df, strategy):
+    q = df.select(pl.col("x").sum().over("g", mapping_strategy=strategy))
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_over_boolean_function_unsupported(df):
+    q = df.select(pl.col("x").not_().over("g"))
     assert_ir_translation_raises(q, NotImplementedError)

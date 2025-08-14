@@ -166,8 +166,8 @@ class GroupedRollingWindow(Expr):
       when polars supports that expression.
     """
 
-    __slots__ = ("named_aggs", "options", "post")
-    _non_child = ("dtype", "options", "named_aggs", "post")
+    __slots__ = ("by_count", "named_aggs", "options", "post")
+    _non_child = ("dtype", "options", "named_aggs", "post", "by_count")
 
     def __init__(
         self,
@@ -181,7 +181,6 @@ class GroupedRollingWindow(Expr):
         self.options = options
         self.named_aggs = tuple(named_aggs)
         self.post = post
-        self.children = tuple(by)
         self.is_pointwise = False
 
         unsupported = [
@@ -195,6 +194,11 @@ class GroupedRollingWindow(Expr):
                 f"Unsupported over(...) only expression: {kinds}="
             )
 
+        # Expose agg dependencies as children so the streaming
+        # executor retains required source columns
+        self.by_count = len(by)
+        self.children = tuple(by) + tuple(ne.value for ne in self.named_aggs)
+
     def do_evaluate(  # noqa: D102
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
@@ -202,12 +206,11 @@ class GroupedRollingWindow(Expr):
             raise RuntimeError(
                 "Window mapping (.over) can only be evaluated at the frame level"
             )  # pragma: no cover; translation raises first
+
+        by_exprs = self.children[: self.by_count]
         by_cols = list(
             broadcast(
-                *(
-                    b.evaluate(df, context=ExecutionContext.FRAME)
-                    for b in self.children
-                ),
+                *(b.evaluate(df, context=ExecutionContext.FRAME) for b in by_exprs),
                 target_length=df.num_rows,
             )
         )
