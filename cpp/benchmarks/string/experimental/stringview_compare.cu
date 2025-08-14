@@ -94,6 +94,9 @@ struct strings_to_binary_view {
 
 /**
  * Returns a string_view from an ArrowBinaryView.
+ * This helps in the comparison by both implementations using `cudf::string_view`
+ * as the base type so the actual operations are the same and only the
+ * format (how the data is organized) is different.
  */
 __device__ cudf::string_view get_string_view(ArrowBinaryView const& item, char const* d_chars)
 {
@@ -104,7 +107,7 @@ __device__ cudf::string_view get_string_view(ArrowBinaryView const& item, char c
 }
 
 /**
- * Hashes a string_view from an ArrowBinaryView.
+ * Hashes a string from an ArrowBinaryView.
  */
 struct hash_arrow_sv {
   ArrowBinaryView* d_items;
@@ -119,7 +122,7 @@ struct hash_arrow_sv {
 };
 
 /**
- * Checks if a string_view from an ArrowBinaryView starts with a target string.
+ * Checks if a string from an ArrowBinaryView starts with a target string.
  */
 struct starts_arrow_sv {
   ArrowBinaryView* d_items;
@@ -127,6 +130,7 @@ struct starts_arrow_sv {
   cudf::size_type tgt_size;
   __device__ bool operator()(cudf::size_type idx) const
   {
+    // note that this requires tgt_size <= 26
     auto const d_tgt = cudf::string_view("abcdefghijklmnopqrstuvwxyz", tgt_size);
     auto& item       = d_items[idx];
     auto const size  = item.inlined.size;
@@ -140,7 +144,7 @@ struct starts_arrow_sv {
 };
 
 /**
- * Compares two string_views from ArrowBinaryView objects.
+ * Compares two strings from ArrowBinaryView objects.
  */
 struct compare_arrow_sv {
   ArrowBinaryView* d_items;
@@ -158,7 +162,7 @@ struct compare_arrow_sv {
              cudf::hashing::detail::swap_endian(pv_rhs);
     }
 
-    // prefix matches so check how many bytes left to compare
+    // prefix matches so check how many bytes are left to compare
     constexpr auto prefix_size = static_cast<cudf::size_type>(sizeof(uint32_t));
     auto const size_lhs        = item_lhs.inlined.size;
     auto const size_rhs        = item_rhs.inlined.size;
@@ -270,7 +274,8 @@ static std::pair<rmm::device_uvector<ArrowBinaryView>, rmm::device_buffer> creat
   auto [first, last] = cudf::strings::detail::get_first_and_last_offset(longer_strings, stream);
   auto const longer_chars_size = last - first;
 
-  // make sure only one buffer is needed
+  // Make sure only one buffer is needed.
+  // Using a single data buffer makes the two formats more similar focusing on the layout.
   constexpr int64_t max_size = std::numeric_limits<int32_t>::max() / 2;
   auto const num_buffers     = cudf::util::div_rounding_up_safe(longer_chars_size, max_size);
   CUDF_EXPECTS(num_buffers <= 1, "num_buffers must be <= 1");
