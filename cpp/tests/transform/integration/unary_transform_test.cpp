@@ -813,8 +813,7 @@ TEST_F(NullTest, IsNull)
                                                              {false, false, true, false, true})
                  .release();
 
-  auto expected =
-    cudf::test::fixed_width_column_wrapper<bool>({true, true, false, true, false});
+  auto expected = cudf::test::fixed_width_column_wrapper<bool>({true, true, false, true, false});
 
   auto result = cudf::transform({*value},
                                 udf,
