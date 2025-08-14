@@ -1,13 +1,13 @@
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from libcpp cimport bool
-from pylibcudf.libcudf.types cimport bitmask_type, data_type
+from pylibcudf.libcudf.types cimport bitmask_type, data_type, null_aware
 from rmm.pylibrmm.stream cimport Stream
 
 from .column cimport Column
 from .expressions cimport Expression
 from .gpumemoryview cimport gpumemoryview
 from .table cimport Table
-from .types cimport DataType, NullAware
+from .types cimport DataType
 
 
 cpdef tuple[gpumemoryview, int] nans_to_nulls(Column input, Stream stream = *)
@@ -27,7 +27,7 @@ cpdef Column transform(list[Column] inputs,
                        str transform_udf,
                        DataType output_type,
                        bool is_ptx,
-                       NullAware is_null_aware = NullAware.NO,
+                       null_aware is_null_aware = null_aware::NO,
                        Stream stream = *)
 
 cpdef tuple[Table, Column] encode(Table input, Stream stream = *)
