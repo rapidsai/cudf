@@ -171,3 +171,15 @@ def test_index_hasnans(data):
         # Check type to avoid mixing Python bool and NumPy bool
         assert isinstance(gs.hasnans, bool)
         assert gs.hasnans == ps.hasnans
+
+
+@pytest.mark.parametrize("data", [[0, 1, 2], [1.1, 2.3, 4.5]])
+@pytest.mark.parametrize("needle", [0, 1, 2.3])
+def test_index_contains_float_int(data, numeric_types_as_str, needle):
+    gidx = cudf.Index(data=data, dtype=numeric_types_as_str)
+    pidx = gidx.to_pandas()
+
+    actual = needle in gidx
+    expected = needle in pidx
+
+    assert_eq(actual, expected)

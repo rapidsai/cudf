@@ -76,3 +76,10 @@ def test_rangeindex_apply_boolean_mask_user_option(default_integer_bitwidth):
     actual = idx[mask]
     expected = cudf.Index([0, 1, 2, 6], dtype=f"int{default_integer_bitwidth}")
     assert_eq(expected, actual)
+
+
+def test_df_slice_empty_index():
+    idx = cudf.RangeIndex(0)
+    assert isinstance(idx[:1], cudf.RangeIndex)
+    with pytest.raises(IndexError):
+        idx[1]

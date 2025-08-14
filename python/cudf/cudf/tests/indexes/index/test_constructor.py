@@ -5,6 +5,7 @@ import re
 import cupy as cp
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 
 import cudf
@@ -220,3 +221,90 @@ def test_empty_index_init():
     gidx = cudf.Index([])
 
     assert_eq(pidx, gidx)
+
+
+@pytest.mark.parametrize("data", [[1, 2, 3], range(0, 10)])
+def test_index_with_index_dtype(request, data, all_supported_types_as_str):
+    request.applymarker(
+        pytest.mark.xfail(
+            isinstance(data, list)
+            and all_supported_types_as_str
+            in {"timedelta64[us]", "timedelta64[ms]", "timedelta64[s]"},
+            reason=f"wrong result for {all_supported_types_as_str}",
+        )
+    )
+    request.applymarker(
+        pytest.mark.xfail(
+            all_supported_types_as_str == "category",
+            raises=AttributeError,
+            reason=f"cuDF bug in Column.astype with {all_supported_types_as_str}",
+        )
+    )
+    pidx = pd.Index(data)
+    gidx = cudf.Index(data)
+
+    expected = pd.Index(pidx, dtype=all_supported_types_as_str)
+    actual = cudf.Index(gidx, dtype=all_supported_types_as_str)
+
+    assert_eq(expected, actual)
+
+
+def test_period_index_error():
+    pidx = pd.PeriodIndex(data=[pd.Period("2020-01")])
+    with pytest.raises(NotImplementedError):
+        cudf.from_pandas(pidx)
+    with pytest.raises(NotImplementedError):
+        cudf.Index(pidx)
+    with pytest.raises(NotImplementedError):
+        cudf.Series(pidx)
+    with pytest.raises(NotImplementedError):
+        cudf.Series(pd.Series(pidx))
+    with pytest.raises(NotImplementedError):
+        cudf.Series(pd.array(pidx))
+
+
+@pytest.mark.parametrize("value", [cudf.DataFrame(range(1)), 11])
+def test_index_from_dataframe_scalar_raises(value):
+    with pytest.raises(TypeError):
+        cudf.Index(value)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        cp.ones(5, dtype=cp.float16),
+        np.ones(5, dtype="float16"),
+        pd.Series([0.1, 1.2, 3.3], dtype="float16"),
+        pytest.param(
+            pa.array(np.ones(5, dtype="float16")),
+            marks=pytest.mark.xfail(
+                reason="https://issues.apache.org/jira/browse/ARROW-13762"
+            ),
+        ),
+    ],
+)
+def test_index_raises_float16(data):
+    with pytest.raises(TypeError):
+        cudf.Index(data)
+
+
+def test_from_pandas_rangeindex_return_rangeindex():
+    pidx = pd.RangeIndex(start=3, stop=9, step=3, name="a")
+    result = cudf.Index.from_pandas(pidx)
+    expected = cudf.RangeIndex(start=3, stop=9, step=3, name="a")
+    assert_eq(result, expected, exact=True)
+
+
+def test_Index_init_with_nans():
+    with cudf.option_context("mode.pandas_compatible", True):
+        gi = cudf.Index([1, 2, 3, np.nan])
+    assert gi.dtype == np.dtype("float64")
+    pi = pd.Index([1, 2, 3, np.nan])
+    assert_eq(pi, gi)
+
+
+def test_roundtrip_index_plc_column():
+    index = cudf.Index([1])
+    expect = cudf.Index(index)
+    actual = cudf.Index.from_pylibcudf(*expect.to_pylibcudf())
+    assert_eq(expect, actual)
