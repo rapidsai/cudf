@@ -381,9 +381,6 @@ struct decomp_sum {
   __device__ inline decompression_info operator()(decompression_info const& a,
                                                   decompression_info const& b) const
   {
-    // Ignore uncompressed blocks: if either a or b is uncompressed, return the other
-    if (a.type == compression_type::NONE and b.type != compression_type::NONE) return b;
-    if (b.type == compression_type::NONE and a.type != compression_type::NONE) return a;
     return {a.type,
             a.num_pages + b.num_pages,
             cuda::std::max(a.max_page_decompressed_size, b.max_page_decompressed_size),
