@@ -18,6 +18,8 @@ PYTEST_XDIST_ARGS=(-n "${NUM_WORKERS}" --dist loadfile)
 # Support invoking run_cudf_polars_pytests.sh outside the script directory
 cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../python/cudf_polars/
 
+rapids-logger "Running tests with GPU: $GPU_ID and $NUM_WORKERS pytest-xdist workers"
+
 # Test the "in-memory" executor
 rapids-logger "Test the in-memory executor"
 python -m pytest --cache-clear "$@" "${PYTEST_XDIST_ARGS[@]}" tests --executor in-memory
