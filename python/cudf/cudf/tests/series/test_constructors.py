@@ -11,6 +11,7 @@ import pytest
 import cudf
 from cudf.core._compat import (
     PANDAS_CURRENT_SUPPORTED_VERSION,
+    PANDAS_GE_210,
     PANDAS_VERSION,
 )
 from cudf.core.column.column import as_column
@@ -110,6 +111,20 @@ def test_series_unitness_np_datetimelike_units():
         cudf.Series(data)
     with pytest.raises(TypeError):
         pd.Series(data)
+
+
+def test_from_numpyextensionarray_string_object_pandas_compat_mode():
+    NumpyExtensionArray = (
+        pd.arrays.NumpyExtensionArray
+        if PANDAS_GE_210
+        else pd.arrays.PandasArray
+    )
+
+    data = NumpyExtensionArray(np.array(["a", None], dtype=object))
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = cudf.Series(data)
+    expected = pd.Series(data)
+    assert_eq(result, expected)
 
 
 def test_list_category_like_maintains_dtype():
