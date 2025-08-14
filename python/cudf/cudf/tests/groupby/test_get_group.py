@@ -6,6 +6,7 @@ import pytest
 import cudf
 from cudf.core._compat import (
     PANDAS_CURRENT_SUPPORTED_VERSION,
+    PANDAS_GE_220,
     PANDAS_VERSION,
 )
 from cudf.testing import assert_eq, assert_groupby_results_equal
@@ -81,3 +82,26 @@ def test_groupby_get_group(pdf, group, name, obj):
     actual = gdf.iloc[ggb.indices.get(name)]
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.skipif(
+    not PANDAS_GE_220, reason="pandas behavior applicable in >=2.2"
+)
+def test_get_group_list_like():
+    df = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    result = df.groupby(["a"]).get_group((1,))
+    expected = df.to_pandas().groupby(["a"]).get_group((1,))
+    assert_eq(result, expected)
+
+    with pytest.raises(KeyError):
+        df.groupby(["a"]).get_group((1, 2))
+
+    with pytest.raises(KeyError):
+        df.groupby(["a"]).get_group([1])
+
+
+def test_get_group_list_like_len_2():
+    df = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [3, 2, 1]})
+    result = df.groupby(["a", "b"]).get_group((1, 4))
+    expected = df.to_pandas().groupby(["a", "b"]).get_group((1, 4))
+    assert_eq(result, expected)

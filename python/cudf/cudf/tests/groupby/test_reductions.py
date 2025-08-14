@@ -937,3 +937,51 @@ def test_group_by_empty_reduction(
         getattr(pg, groupby_reduction_methods)(),
         check_dtype=True,
     )
+
+
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Warning only given on newer versions.",
+)
+def test_categorical_grouping_pandas_compatibility():
+    gdf = cudf.DataFrame(
+        {
+            "key": cudf.Series([2, 1, 3, 1, 1], dtype="category"),
+            "a": [0, 1, 3, 2, 3],
+        }
+    )
+    pdf = gdf.to_pandas()
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        actual = gdf.groupby("key", sort=False).sum()
+    with pytest.warns(FutureWarning):
+        # observed param deprecation.
+        expected = pdf.groupby("key", sort=False).sum()
+    assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "by,data",
+    [
+        ("a", {"a": [1, 2, 3]}),
+        (["a", "id"], {"id": [0, 0, 1], "a": [1, 2, 3]}),
+        ("a", {"a": [1, 2, 3], "b": ["A", "B", "C"]}),
+        ("id", {"id": [0, 0, 1], "a": [1, 2, 3], "b": ["A", "B", "C"]}),
+        (["b", "id"], {"id": [0, 0, 1], "b": ["A", "B", "C"]}),
+        ("b", {"b": ["A", "B", "C"]}),
+    ],
+)
+def test_group_by_reduce_numeric_only(by, data, groupby_reduction_methods):
+    # Test that simple groupby reductions support numeric_only=True
+    if groupby_reduction_methods == "count":
+        pytest.skip(
+            f"{groupby_reduction_methods} doesn't support numeric_only"
+        )
+    df = cudf.DataFrame(data)
+    expected = getattr(
+        df.to_pandas().groupby(by, sort=True), groupby_reduction_methods
+    )(numeric_only=True)
+    result = getattr(df.groupby(by, sort=True), groupby_reduction_methods)(
+        numeric_only=True
+    )
+    assert_eq(expected, result)

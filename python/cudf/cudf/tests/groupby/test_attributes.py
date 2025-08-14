@@ -148,3 +148,28 @@ def test_groupby_dtypes(groups):
         actual = df.groupby(groups).dtypes
 
     assert_eq(expected, actual)
+
+
+def test_ngroups():
+    pdf = pd.DataFrame({"a": [1, 1, 3], "b": range(3)})
+    gdf = cudf.DataFrame.from_pandas(pdf)
+
+    pgb = pdf.groupby("a")
+    ggb = gdf.groupby("a")
+    assert pgb.ngroups == ggb.ngroups
+    assert len(pgb) == len(ggb)
+
+
+def test_ndim():
+    pdf = pd.DataFrame({"a": [1, 1, 3], "b": range(3)})
+    gdf = cudf.DataFrame.from_pandas(pdf)
+
+    pgb = pdf.groupby("a")
+    ggb = gdf.groupby("a")
+    assert pgb.ndim == ggb.ndim
+
+    pser = pd.Series(range(3))
+    gser = cudf.Series.from_pandas(pser)
+    pgb = pser.groupby([0, 0, 1])
+    ggb = gser.groupby(cudf.Series([0, 0, 1]))
+    assert pgb.ndim == ggb.ndim
