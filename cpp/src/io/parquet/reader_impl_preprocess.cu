@@ -497,6 +497,8 @@ void reader_impl::generate_list_column_row_counts(is_estimate_row_counts is_esti
 
 void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_limit)
 {
+  CUDF_FUNC_RANGE();
+
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
 
@@ -639,6 +641,8 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
 
 void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_rows)
 {
+  CUDF_FUNC_RANGE();
+
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
 

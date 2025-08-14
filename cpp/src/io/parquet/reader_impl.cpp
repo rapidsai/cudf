@@ -31,6 +31,7 @@
 #include <bitset>
 #include <limits>
 #include <numeric>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 namespace cudf::io::parquet::detail {
 
@@ -49,6 +50,8 @@ inline bool is_treat_fixed_length_as_string(std::optional<LogicalType> const& lo
 
 void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_rows)
 {
+  CUDF_FUNC_RANGE();
+
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
 
