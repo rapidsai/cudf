@@ -24,7 +24,7 @@ def transform(
     transform_udf: str,
     output_type: DataType,
     is_ptx: bool,
-    null_aware : NullAware = NullAware.NO,
+    null_aware: NullAware = NullAware.NO,
     stream: Stream | None = None,
 ) -> Column: ...
 def encode(
