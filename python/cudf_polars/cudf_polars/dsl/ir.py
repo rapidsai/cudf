@@ -1715,22 +1715,22 @@ class Join(IR):
         primary: Literal["left", "right"] = "left",
     ) -> list[plc.Column]:
         """
-        Reorder gather maps to satisfy Polars join order restrictions.
+        Reorder gather maps to satisfy polars join order restrictions.
 
         Parameters
         ----------
         left_rows
-            Number of rows in left table.
+            Number of rows in left table
         lg
-            Left gather map.
+            Left gather map
         left_policy
-            Nullify policy for left map.
+            Nullify policy for left map
         right_rows
-            Number of rows in right table.
+            Number of rows in right table
         rg
-            Right gather map.
+            Right gather map
         right_policy
-            Nullify policy for right map.
+            Nullify policy for right map
         primary
             Which input's row order to preserve first: "left" or "right".
             Defaults to "left".
@@ -1742,8 +1742,8 @@ class Join(IR):
 
         Notes
         -----
-        For a left join, the Polars result preserves the order of the
-        left keys and is stable with respect to the right keys. For all other
+        For a left join, the polars result preserves the order of the
+        left keys, and is stable wrt the right keys. For all other
         joins, there is no order obligation.
 
         When ``primary`` is specified, the pair of gather maps is stably sorted by
@@ -1838,24 +1838,19 @@ class Join(IR):
                 left, right = right, left
                 left_on, right_on = right_on, left_on
                 swapped = True
-            # If we swapped, interpret maintain_order from the swapped perspective
             if swapped:
-                map_order = {
+                effective_order = {
                     "none": "none",
                     "left": "right",
                     "right": "left",
                     "left_right": "right_left",
                     "right_left": "left_right",
-                }
-                maintain_effective = map_order.get(maintain_order, "none")
+                }.get(maintain_order, "none")
             else:
-                maintain_effective = maintain_order
+                effective_order = maintain_order
             lg, rg = join_fn(left_on.table, right_on.table, null_equality)
-            if (
-                how in ("Inner", "Left", "Right", "Full")
-                and maintain_effective != "none"
-            ):
-                if maintain_effective in ("left", "left_right"):
+            if how in ("Inner", "Left", "Right", "Full") and effective_order != "none":
+                if effective_order in ("left", "left_right"):
                     lg, rg = cls._reorder_maps(
                         left.num_rows,
                         lg,
@@ -1865,7 +1860,7 @@ class Join(IR):
                         right_policy,
                         primary="left",
                     )
-                elif maintain_effective in ("right", "right_left"):
+                elif effective_order in ("right", "right_left"):
                     lg, rg = cls._reorder_maps(
                         left.num_rows,
                         lg,
