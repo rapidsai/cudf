@@ -814,7 +814,7 @@ TEST_F(NullTest, IsNull)
                  .release();
 
   auto expected =
-    cudf::test::fixed_width_column_wrapper<bool>({true, true, false, true, false}).release();
+    cudf::test::fixed_width_column_wrapper<bool>({true, true, false, true, false});
 
   auto result = cudf::transform({*value},
                                 udf,
@@ -823,7 +823,7 @@ TEST_F(NullTest, IsNull)
                                 std::nullopt,
                                 cudf::null_aware::YES);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
 }
 
 TEST_F(NullTest, NullProject)
