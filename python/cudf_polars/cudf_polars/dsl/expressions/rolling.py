@@ -8,9 +8,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+import polars as pl
+
 import pylibcudf as plc
 
-from cudf_polars.containers import Column, DataFrame
+from cudf_polars.containers import Column, DataFrame, DataType
 from cudf_polars.dsl import expr
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.utils.reshape import broadcast
@@ -19,7 +21,6 @@ from cudf_polars.dsl.utils.windows import offsets_to_windows, range_window_bound
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from cudf_polars.containers import DataType
     from cudf_polars.typing import ClosedInterval, Duration
 
 __all__ = ["GroupedRollingWindow", "RollingWindow", "to_request"]
@@ -194,10 +195,24 @@ class GroupedRollingWindow(Expr):
                 f"Unsupported over(...) only expression: {kinds}="
             )
 
+        # Ensures every partition-by is an Expr
+        # Fixes over(1) cases with the streaming
+        # executor and a small blocksize
+        by_expr = [
+            (b if isinstance(b, Expr) else expr.Literal(DataType(pl.Int64()), b))
+            for b in by
+        ]
+
         # Expose agg dependencies as children so the streaming
         # executor retains required source columns
-        self.by_count = len(by)
-        self.children = tuple(by) + tuple(ne.value for ne in self.named_aggs)
+        child_deps = [
+            v.children[0]
+            for ne in self.named_aggs
+            for v in (ne.value,)
+            if isinstance(v, expr.Agg)
+        ]
+        self.by_count = len(by_expr)
+        self.children = tuple(by_expr) + tuple(child_deps)
 
     def do_evaluate(  # noqa: D102
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
