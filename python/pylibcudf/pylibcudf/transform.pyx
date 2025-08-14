@@ -163,6 +163,7 @@ cpdef Column transform(list[Column] inputs,
                        str transform_udf,
                        DataType output_type,
                        bool is_ptx,
+                       NullAware is_null_aware,
                        Stream stream=None):
     """Create a new column by applying a transform function against
        multiple input columns.
@@ -188,6 +189,7 @@ cpdef Column transform(list[Column] inputs,
     cdef unique_ptr[column] c_result
     cdef string c_transform_udf = transform_udf.encode()
     cdef bool c_is_ptx = is_ptx
+    cdef null_aware c_is_null_aware = is_null_aware
     cdef optional[void *] user_data
 
     stream = _get_stream(stream)
@@ -202,6 +204,7 @@ cpdef Column transform(list[Column] inputs,
             output_type.c_obj,
             c_is_ptx,
             user_data,
+            c_is_null_aware,
             stream.view(),
         )
 

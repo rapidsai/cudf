@@ -7,7 +7,7 @@ from .column cimport Column
 from .expressions cimport Expression
 from .gpumemoryview cimport gpumemoryview
 from .table cimport Table
-from .types cimport DataType
+from .types cimport DataType, NullAware
 
 
 cpdef tuple[gpumemoryview, int] nans_to_nulls(Column input, Stream stream = *)
@@ -27,6 +27,7 @@ cpdef Column transform(list[Column] inputs,
                        str transform_udf,
                        DataType output_type,
                        bool is_ptx,
+                       NullAware is_null_aware = NullAware.NO,
                        Stream stream = *)
 
 cpdef tuple[Table, Column] encode(Table input, Stream stream = *)
