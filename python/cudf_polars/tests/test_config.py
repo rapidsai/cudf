@@ -10,6 +10,7 @@ import pytest
 import polars as pl
 from polars.testing.asserts import assert_frame_equal
 
+import pylibcudf as plc
 import rmm
 
 import cudf_polars.utils.config
@@ -95,17 +96,21 @@ def test_invalid_memory_resource_raises(mr):
             q.collect(engine=pl.GPUEngine(memory_resource=mr))
 
 
-@pytest.mark.parametrize("disable_managed_memory", ["1", "0"])
-def test_cudf_polars_enable_disable_managed_memory(monkeypatch, disable_managed_memory):
+@pytest.mark.skipif(
+    not plc.utils._is_concurrent_managed_access_supported(),
+    reason="managed memory not supported",
+)
+@pytest.mark.parametrize("enable_managed_memory", ["1", "0"])
+def test_cudf_polars_enable_disable_managed_memory(monkeypatch, enable_managed_memory):
     q = pl.LazyFrame({"a": [1, 2, 3]})
 
     with monkeypatch.context() as monkeycontext:
         monkeycontext.setenv(
-            "POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY", disable_managed_memory
+            "POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY", enable_managed_memory
         )
         result = q.collect(engine=pl.GPUEngine())
-        mr = default_memory_resource(0, bool(disable_managed_memory == "1"))
-        if disable_managed_memory == "1":
+        mr = default_memory_resource(0, bool(enable_managed_memory == "1"))
+        if enable_managed_memory == "1":
             assert isinstance(mr, rmm.mr.PrefetchResourceAdaptor)
             assert isinstance(mr.upstream_mr, rmm.mr.PoolMemoryResource)
         else:
