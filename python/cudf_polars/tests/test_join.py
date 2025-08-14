@@ -225,14 +225,8 @@ def test_join_maintain_order_with_coalesce(left, right, maintain_order, how):
     ],
 )
 def test_join_maintain_order_with_slice(left, right, maintain_order, how, zlice):
-    # NOTE: Disable slice pushdown to make the test deterministic.
-    # Polars can push `.slice(..)` into the join. With `maintain_order`,
-    # pushing the slice may cause the CPU engine to "early-out" within the
-    # join (emitting matches for some left/right rows until the slice is
-    # satisfied). That can change WHICH rows appear in the prefix even if
-    # the *full* join order matches between engines. We want to compare
-    # "materialize full join in maintain_order order THEN slice", so we
-    # turn slice pushdown off to force post-join slicing on both sides.
+    # Needed to disable slice pushdown to make the test deterministic. We want to materialize
+    # the full join result and then slice
     q = left.join(right, on="a", how=how, maintain_order=maintain_order).slice(*zlice)
     assert_gpu_result_equal(
         q,
