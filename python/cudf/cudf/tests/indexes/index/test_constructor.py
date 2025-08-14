@@ -1,5 +1,7 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
 
+import re
+
 import cupy as cp
 import numpy as np
 import pandas as pd
@@ -144,3 +146,77 @@ def test_index_nan_as_null(data, nan_idx, NA_idx, nan_as_null):
 
     if NA_idx is not None:
         assert idx[NA_idx] is cudf.NA
+
+
+def test_index_constructor_integer(default_integer_bitwidth):
+    got = cudf.Index([1, 2, 3])
+    expect = cudf.Index([1, 2, 3], dtype=f"int{default_integer_bitwidth}")
+
+    assert_eq(expect, got)
+
+
+def test_index_constructor_float(default_float_bitwidth):
+    got = cudf.Index([1.0, 2.0, 3.0])
+    expect = cudf.Index(
+        [1.0, 2.0, 3.0], dtype=f"float{default_float_bitwidth}"
+    )
+
+    assert_eq(expect, got)
+
+
+def test_index_error_list_index():
+    s = cudf.Series([[1, 2], [2], [4]])
+    with pytest.raises(
+        NotImplementedError,
+        match=re.escape(
+            "Unsupported column type passed to create an "
+            "Index: <class 'cudf.core.column.lists.ListColumn'>"
+        ),
+    ):
+        cudf.Index(s)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [
+            pd.Timestamp("1970-01-01 00:00:00.000000001"),
+            pd.Timestamp("1970-01-01 00:00:00.000000002"),
+            12,
+            20,
+        ],
+        [
+            pd.Timedelta(10),
+            pd.Timedelta(20),
+            12,
+            20,
+        ],
+        [1, 2, 3, 4],
+    ],
+)
+def test_index_mixed_dtype_error(data):
+    pi = pd.Index(data, dtype="object")
+    with pytest.raises(TypeError):
+        cudf.Index(pi)
+
+
+@pytest.mark.parametrize("cls", [pd.DatetimeIndex, pd.TimedeltaIndex])
+def test_index_date_duration_freq_error(cls):
+    s = cls([1, 2, 3], freq="infer")
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            cudf.Index(s)
+
+
+def test_index_empty_from_pandas(all_supported_types_as_str):
+    pidx = pd.Index([], dtype=all_supported_types_as_str)
+    gidx = cudf.from_pandas(pidx)
+
+    assert_eq(pidx, gidx)
+
+
+def test_empty_index_init():
+    pidx = pd.Index([])
+    gidx = cudf.Index([])
+
+    assert_eq(pidx, gidx)

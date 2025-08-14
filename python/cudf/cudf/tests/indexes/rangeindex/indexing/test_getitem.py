@@ -66,3 +66,13 @@ def test_index_rangeindex_get_item_slices(start, stop, step, sl):
     gridx = cudf.RangeIndex(start, stop, step)
 
     assert_eq(pridx[sl], gridx[sl])
+
+
+def test_rangeindex_apply_boolean_mask_user_option(default_integer_bitwidth):
+    # Test that RangeIndex is materialized into 32 bit index under user
+    # configuration for apply boolean mask operation.
+    idx = cudf.RangeIndex(0, 8)
+    mask = [True, True, True, False, False, False, True, False]
+    actual = idx[mask]
+    expected = cudf.Index([0, 1, 2, 6], dtype=f"int{default_integer_bitwidth}")
+    assert_eq(expected, actual)

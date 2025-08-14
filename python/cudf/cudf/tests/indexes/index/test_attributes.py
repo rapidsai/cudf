@@ -130,3 +130,44 @@ def test_index_type_methods(data, func):
         assert_eq(False, actual)
     else:
         assert_eq(expected, actual)
+
+
+def test_index_values():
+    gidx = cudf.Index([1, 2, 3])
+    pidx = gidx.to_pandas()
+
+    assert_eq(pidx.values, gidx.values)
+
+
+def test_index_null_values():
+    gidx = cudf.Index([1.0, None, 3, 0, None])
+    with pytest.raises(ValueError):
+        gidx.values
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3],
+        pytest.param(
+            [np.nan, 10, 15, 16],
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/49818"
+            ),
+        ),
+        range(0, 10),
+        [np.nan, None, 10, 20],
+        ["ab", "zx", "pq"],
+        ["ab", "zx", None, "pq"],
+    ],
+)
+def test_index_hasnans(data):
+    gs = cudf.Index(data, nan_as_null=False)
+    if isinstance(gs, cudf.RangeIndex):
+        with pytest.raises(NotImplementedError):
+            gs.to_pandas(nullable=True)
+    else:
+        ps = gs.to_pandas(nullable=True)
+        # Check type to avoid mixing Python bool and NumPy bool
+        assert isinstance(gs.hasnans, bool)
+        assert gs.hasnans == ps.hasnans

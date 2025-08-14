@@ -283,3 +283,41 @@ def test_index_append_list(data, other):
         actual = gd_data.append(gd_other)
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "index",
+    [
+        range(np.random.default_rng(seed=0).integers(0, 100)),
+        range(0, 10, -2),
+        range(0, -10, 2),
+        range(0, -10, -2),
+        range(0, 1),
+        [1, 2, 3, 1, None, None],
+        [None, None, 3.2, 1, None, None],
+        [None, "a", "3.2", "z", None, None],
+        pd.Series(["a", "b", None], dtype="category"),
+        np.array([1, 2, 3, None], dtype="datetime64[s]"),
+    ],
+)
+@pytest.mark.parametrize(
+    "func",
+    [
+        "to_series",
+        "isna",
+        "notna",
+        "append",
+    ],
+)
+def test_index_methods(index, func):
+    gidx = cudf.Index(index)
+    pidx = gidx.to_pandas()
+
+    if func == "append":
+        expected = pidx.append(other=pidx)
+        actual = gidx.append(other=gidx)
+    else:
+        expected = getattr(pidx, func)()
+        actual = getattr(gidx, func)()
+
+    assert_eq(expected, actual)
