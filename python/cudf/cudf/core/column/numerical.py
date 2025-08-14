@@ -229,7 +229,11 @@ class NumericalColumn(NumericalBaseColumn):
         out_dtype = None
         if op in {"__truediv__", "__rtruediv__"}:
             # Division with integer types results in a suitable float.
-            if truediv_type := int_float_dtype_mapping.get(self.dtype.type):
+            if truediv_type := int_float_dtype_mapping.get(
+                self.dtype.numpy_dtype.type
+                if is_pandas_nullable_extension_dtype(self.dtype)
+                else self.dtype.type
+            ):
                 return self.astype(
                     get_dtype_of_same_kind(self.dtype, np.dtype(truediv_type))
                 )._binaryop(other, op)
@@ -336,6 +340,7 @@ class NumericalColumn(NumericalBaseColumn):
             lhs = pa_scalar_to_plc_scalar(lhs)
         elif isinstance(rhs, pa.Scalar):
             rhs = pa_scalar_to_plc_scalar(rhs)
+        # import pdb;pdb.set_trace()
         res = binaryop.binaryop(lhs, rhs, op, out_dtype)
         if (
             is_pandas_nullable_extension_dtype(out_dtype)
@@ -348,13 +353,16 @@ class NumericalColumn(NumericalBaseColumn):
             res = res.astype(
                 get_dtype_of_same_kind(out_dtype, np.dtype(np.int8))
             )
-        # elif (
-        #     op == "INT_POW"
-        #     and res.null_count and lhs.null_count
-        #     and not isinstance(rhs, plc.Scalar)
-        # ):
-        #     res = res.copy_if_else(lhs, res._get_mask_as_column())
-        #     pass
+        elif op == "INT_POW" and res.null_count:
+            if (
+                isinstance(lhs, plc.Scalar)
+                and lhs.to_py() == 1
+                and isinstance(rhs, ColumnBase)
+                and rhs.null_count > 0
+            ):
+                res = res.fillna(lhs.to_py())
+            # res = res.copy_if_else(lhs, res._get_mask_as_column())
+            # pass
         return res
 
     def nans_to_nulls(self: Self) -> Self:
