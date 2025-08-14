@@ -16,7 +16,7 @@
 
 #include "hash_compound_agg_finalizer.hpp"
 #include "helpers.cuh"
-#include "var_hash_functor.cuh"
+#include "m2_var_functor.cuh"
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
@@ -29,7 +29,6 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
 
 #include <memory>
 
@@ -148,6 +147,38 @@ void hash_compound_agg_finalizer<SetType>::visit(cudf::detail::mean_aggregation 
                                    stream,
                                    mr);
   dense_results->add_result(col, agg, std::move(result));
+}
+
+template <typename SetType>
+void hash_compound_agg_finalizer<SetType>::visit(cudf::detail::m2_aggregation const& agg)
+{
+  if (dense_results->has_result(col, agg)) { return; }
+
+  auto sum_agg   = make_sum_aggregation();
+  auto count_agg = make_count_aggregation();
+  this->visit(*sum_agg);
+  this->visit(*count_agg);
+  auto const sum_result   = sparse_results->get_result(col, *sum_agg);
+  auto const count_result = sparse_results->get_result(col, *count_agg);
+
+  auto const d_values_ptr = column_device_view::create(col, stream);
+  auto const d_sum_ptr    = column_device_view::create(sum_result, stream).release();
+  auto const d_count_ptr  = column_device_view::create(count_result, stream).release();
+
+  auto output = make_fixed_width_column(
+    cudf::detail::target_type(result_type, agg.kind), col.size(), mask_state::ALL_NULL, stream);
+  auto output_view  = mutable_column_device_view::create(output->mutable_view(), stream);
+  auto output_tview = mutable_table_view{{output->mutable_view()}};
+  cudf::detail::initialize_with_identity(
+    output_tview, host_span<cudf::aggregation::Kind const>(&agg.kind, 1), stream);
+
+  thrust::for_each_n(
+    rmm::exec_policy_nosync(stream),
+    thrust::make_counting_iterator(0),
+    col.size(),
+    m2_hash_functor{set, row_bitmask, *output_view, *d_values_ptr, *d_sum_ptr, *d_count_ptr});
+  sparse_results->add_result(col, agg, std::move(output));
+  dense_results->add_result(col, agg, to_dense_agg_result(agg));
 }
 
 template <typename SetType>
