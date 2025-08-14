@@ -109,3 +109,20 @@ def test_from_pandas_gen():
 )
 def test_range_index_from_range(data):
     assert_eq(pd.Index(data), cudf.Index(data))
+
+
+@pytest.mark.parametrize("data", [[1, 2, 3, 4], []])
+@pytest.mark.parametrize("name", [1, "a", None])
+def test_index_basic(data, all_supported_types_as_str, name, request):
+    request.applymarker(
+        pytest.mark.xfail(
+            len(data) > 0
+            and all_supported_types_as_str
+            in {"timedelta64[us]", "timedelta64[ms]", "timedelta64[s]"},
+            reason=f"wrong result for {all_supported_types_as_str}",
+        )
+    )
+    pdi = pd.Index(data, dtype=all_supported_types_as_str, name=name)
+    gdi = cudf.Index(data, dtype=all_supported_types_as_str, name=name)
+
+    assert_eq(pdi, gdi)
