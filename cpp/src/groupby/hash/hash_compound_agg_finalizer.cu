@@ -24,6 +24,7 @@
 #include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/detail/binaryop.hpp>
 #include <cudf/detail/gather.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
@@ -154,29 +155,24 @@ void hash_compound_agg_finalizer<SetType>::visit(cudf::detail::m2_aggregation co
 {
   if (dense_results->has_result(col, agg)) { return; }
 
-  auto sum_agg   = make_sum_aggregation();
-  auto count_agg = make_count_aggregation();
+  auto sum_sqr_agg = make_sum_of_squares_aggregation();
+  auto sum_agg     = make_sum_aggregation();
+  auto count_agg   = make_count_aggregation();
+  this->visit(*sum_sqr_agg);
   this->visit(*sum_agg);
   this->visit(*count_agg);
-  auto const sum_result   = sparse_results->get_result(col, *sum_agg);
-  auto const count_result = sparse_results->get_result(col, *count_agg);
+  auto const sum_sqr_result = sparse_results->get_result(col, *sum_sqr_agg);
+  auto const sum_result     = sparse_results->get_result(col, *sum_agg);
+  auto const count_result   = sparse_results->get_result(col, *count_agg);
 
-  auto const d_values_ptr = column_device_view::create(col, stream);
-  auto const d_sum_ptr    = column_device_view::create(sum_result, stream).release();
-  auto const d_count_ptr  = column_device_view::create(count_result, stream).release();
+  auto output = make_numeric_column(cudf::detail::target_type(result_type, agg.kind),
+                                    col.size(),
+                                    cudf::detail::copy_bitmask(sum_result, stream, mr),
+                                    sum_result.null_count(),
+                                    stream,
+                                    mr);
 
-  auto output = make_fixed_width_column(
-    cudf::detail::target_type(result_type, agg.kind), col.size(), mask_state::ALL_NULL, stream);
-  auto output_view  = mutable_column_device_view::create(output->mutable_view(), stream);
-  auto output_tview = mutable_table_view{{output->mutable_view()}};
-  cudf::detail::initialize_with_identity(
-    output_tview, host_span<cudf::aggregation::Kind const>(&agg.kind, 1), stream);
-
-  thrust::for_each_n(
-    rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator(0),
-    col.size(),
-    m2_hash_functor{set, row_bitmask, *output_view, *d_values_ptr, *d_sum_ptr, *d_count_ptr});
+  compute_m2(col.type(), output->mutable_view(), sum_sqr_result, sum_result, count_result, stream);
   sparse_results->add_result(col, agg, std::move(output));
   dense_results->add_result(col, agg, to_dense_agg_result(agg));
 }

@@ -24,6 +24,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <cuda/atomic>
+#include <thrust/tabulate.h>
 
 namespace cudf::groupby::detail::hash {
 
@@ -31,6 +32,68 @@ template <typename Source>
 __device__ constexpr static bool is_m2_var_supported()
 {
   return is_numeric<Source>() && !is_fixed_point<Source>();
+}
+
+struct m2_functor {
+  template <typename Source, typename... Args>
+  void operator()(Args...) requires(!is_m2_var_supported<Source>())
+  {
+    CUDF_FAIL("Invalid source type for M2 aggregation.");
+  }
+
+  template <typename Target, typename SumSqrType, typename SumType, typename CountType>
+  void evaluate(Target* target,
+                SumSqrType const* sum_sqr,
+                SumType const* sum,
+                CountType const* count,
+                size_type size,
+                rmm::cuda_stream_view stream) const noexcept
+  {
+    thrust::tabulate(rmm::exec_policy_nosync(stream),
+                     target,
+                     target + size,
+                     [sum_sqr, sum, count] __device__(size_type const idx) {
+                       auto const group_count = count[idx];
+                       if (group_count == 0) { return Target{}; }
+                       auto const group_sum_sqr = static_cast<Target>(sum_sqr[idx]);
+                       auto const group_sum     = static_cast<Target>(sum[idx]);
+                       auto const result = group_sum_sqr - group_sum * group_sum / group_count;
+                       return result;
+                     });
+  }
+
+  template <typename Source>
+  void operator()(mutable_column_view const& target,
+                  column_view const& sum_sqr,
+                  column_view const& sum,
+                  column_view const& count,
+                  rmm::cuda_stream_view stream) const noexcept
+    requires(is_m2_var_supported<Source>())
+  {
+    using Target     = cudf::detail::target_type_t<Source, aggregation::M2>;
+    using SumSqrType = cudf::detail::target_type_t<Source, aggregation::SUM_OF_SQUARES>;
+    using SumType    = cudf::detail::target_type_t<Source, aggregation::SUM>;
+    using CountType  = cudf::detail::target_type_t<Source, aggregation::COUNT_VALID>;
+
+    // Separate the implementation into another function, which has fewer instantiations since
+    // the data types (target/sum/count etc) are mostly the same.
+    evaluate(target.begin<Target>(),
+             sum_sqr.begin<SumSqrType>(),
+             sum.begin<SumType>(),
+             count.begin<CountType>(),
+             target.size(),
+             stream);
+  }
+};
+
+void compute_m2(data_type source_type,
+                mutable_column_view const& target,
+                column_view const& sum_sqr,
+                column_view const& sum,
+                column_view const& count,
+                rmm::cuda_stream_view stream)
+{
+  type_dispatcher(source_type, m2_functor{}, target, sum_sqr, sum, count, stream);
 }
 
 template <typename SetType>
