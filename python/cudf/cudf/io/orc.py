@@ -75,7 +75,7 @@ def read_orc_statistics(
         file_statistics = {
             column_name: column_stats
             for column_name, column_stats in zip(
-                column_names, parsed_file_statistics
+                column_names, parsed_file_statistics, strict=True
             )
             if columns is None or column_name in columns
         }
@@ -86,7 +86,7 @@ def read_orc_statistics(
             stripe_statistics = {
                 column_name: column_stats
                 for column_name, column_stats in zip(
-                    column_names, parsed_stripe_statistics
+                    column_names, parsed_stripe_statistics, strict=True
                 )
                 if columns is None or column_name in columns
             }
@@ -688,7 +688,7 @@ def _set_col_children_metadata(
 ) -> None:
     if isinstance(col.dtype, StructDtype):
         for i, (child_col, name) in enumerate(
-            zip(col.children, list(col.dtype.fields))
+            zip(col.children, list(col.dtype.fields), strict=True)
         ):
             col_meta.child(i).set_name(name)
             _set_col_children_metadata(

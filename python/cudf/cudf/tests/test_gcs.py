@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 import io
 import os
@@ -12,7 +12,6 @@ from cudf.testing import assert_eq
 
 gcsfs = pytest.importorskip("gcsfs")
 
-TEST_PROJECT = "cudf-gcs-test-project"
 TEST_BUCKET = "cudf-gcs-test-bucket"
 
 
@@ -27,7 +26,7 @@ def pdf(scope="module"):
     return df
 
 
-def test_read_csv(pdf, monkeypatch, tmpdir):
+def test_read_csv(pdf, monkeypatch):
     # Write to buffer
     fpath = TEST_BUCKET + "test_csv_reader.csv"
     buffer = pdf.to_csv(index=False)

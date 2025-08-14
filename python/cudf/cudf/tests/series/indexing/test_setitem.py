@@ -71,3 +71,48 @@ def test_series_setitem_mixed_bool_dtype():
     s = cudf.Series([True, False, True])
     with pytest.raises(TypeError):
         s[0] = 10
+
+
+@pytest.mark.parametrize(
+    "data, item",
+    [
+        (
+            [
+                {"a": "Hello world", "b": []},
+                {"a": "CUDF", "b": [1, 2, 3], "c": cudf.NA},
+                {"a": "abcde", "b": [4, 5, 6], "c": 9},
+            ],
+            {"a": "Hello world", "b": [], "c": cudf.NA},
+        ),
+        (
+            [
+                {"a": "Hello world", "b": []},
+                {"a": "CUDF", "b": [1, 2, 3], "c": cudf.NA},
+                {"a": "abcde", "b": [4, 5, 6], "c": 9},
+            ],
+            {},
+        ),
+        (
+            [
+                {"a": "Hello world", "b": []},
+                {"a": "CUDF", "b": [1, 2, 3], "c": cudf.NA},
+                {"a": "abcde", "b": [4, 5, 6], "c": 9},
+            ],
+            cudf.NA,
+        ),
+        (
+            [
+                {"a": "Hello world", "b": []},
+                {"a": "CUDF", "b": [1, 2, 3], "c": cudf.NA},
+                {"a": "abcde", "b": [4, 5, 6], "c": 9},
+            ],
+            {"a": "Second element", "b": [1, 2], "c": 1000},
+        ),
+    ],
+)
+def test_struct_setitem(data, item):
+    sr = cudf.Series(data)
+    sr[1] = item
+    data[1] = item
+    expected = cudf.Series(data)
+    assert sr.to_arrow() == expected.to_arrow()

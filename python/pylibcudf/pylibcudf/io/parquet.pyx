@@ -171,7 +171,7 @@ cdef class ParquetReaderOptions:
         -------
         None
         """
-        self.c_obj.set_filter(<expression &>dereference(filter.c_obj.get()))
+        self.c_obj.set_filter(<expression &>dereference(filter.c_obj))
 
 
 cdef class ParquetReaderOptionsBuilder:
@@ -239,6 +239,41 @@ cdef class ParquetReaderOptionsBuilder:
         ParquetReaderOptionsBuilder
         """
         self.c_obj.use_arrow_schema(val)
+        return self
+
+    cpdef ParquetReaderOptionsBuilder filter(self, Expression filter):
+        """
+        Sets AST based filter for predicate pushdown.
+
+        Parameters
+        ----------
+        filter : Expression
+            AST expression to use as filter
+
+        Returns
+        -------
+        ParquetReaderOptionsBuilder
+        """
+        self.c_obj.filter(<expression &>dereference(filter.c_obj))
+        return self
+
+    cpdef ParquetReaderOptionsBuilder columns(self, list col_names):
+        """
+        Sets names of the columns to be read.
+
+        Parameters
+        ----------
+        col_names : list[str]
+            List of column names
+
+        Returns
+        -------
+        ParquetReaderOptionsBuilder
+        """
+        cdef vector[string] vec
+        for name in col_names:
+            vec.push_back(<string>str(name).encode())
+        self.c_obj.columns(vec)
         return self
 
     cpdef build(self):

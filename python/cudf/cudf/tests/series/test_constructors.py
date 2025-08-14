@@ -1,4 +1,5 @@
 # Copyright (c) 2023-2025, NVIDIA CORPORATION.
+import datetime
 import decimal
 
 import cupy as cp
@@ -8,10 +9,74 @@ import pyarrow as pa
 import pytest
 
 import cudf
+from cudf.core._compat import (
+    PANDAS_CURRENT_SUPPORTED_VERSION,
+    PANDAS_VERSION,
+)
 from cudf.core.column.column import as_column
 from cudf.errors import MixedTypeError
 from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal
+
+
+@pytest.fixture(
+    params=[
+        [1000000, 200000, 3000000],
+        [1000000, 200000, None],
+        [],
+        [None],
+        [None, None, None, None, None],
+        [12, 12, 22, 343, 4353534, 435342],
+        np.array([10, 20, 30, None, 100]),
+        cp.asarray([10, 20, 30, 100]),
+        [1000000, 200000, 3000000],
+        [1000000, 200000, None],
+        [1],
+        [12, 11, 232, 223432411, 2343241, 234324, 23234],
+        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+        [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
+        [
+            136457654736252,
+            134736784364431,
+            245345345545332,
+            223432411,
+            2343241,
+            3634548734,
+            23234,
+        ],
+        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+    ]
+)
+def timedelta_data(request):
+    return request.param
+
+
+def test_timedelta_series_create(timedelta_data, timedelta_types_as_str):
+    if timedelta_types_as_str != "timedelta64[ns]":
+        pytest.skip(
+            "Bug in pandas : https://github.com/pandas-dev/pandas/issues/35465"
+        )
+    psr = pd.Series(
+        cp.asnumpy(timedelta_data)
+        if isinstance(timedelta_data, cp.ndarray)
+        else timedelta_data,
+        dtype=timedelta_types_as_str,
+    )
+    gsr = cudf.Series(timedelta_data, dtype=timedelta_types_as_str)
+
+    assert_eq(psr, gsr)
+
+
+def test_timedelta_from_pandas(timedelta_data, timedelta_types_as_str):
+    psr = pd.Series(
+        cp.asnumpy(timedelta_data)
+        if isinstance(timedelta_data, cp.ndarray)
+        else timedelta_data,
+        dtype=timedelta_types_as_str,
+    )
+    gsr = cudf.from_pandas(psr)
+
+    assert_eq(psr, gsr)
 
 
 def test_construct_int_series_with_nulls_compat_mode():
@@ -635,3 +700,159 @@ def test_to_dense_array():
     dense = sr.dropna().to_numpy()
     assert dense.size < filled.size
     assert filled.size == len(sr)
+
+
+def test_series_np_array_all_nan_object_raises():
+    with pytest.raises(MixedTypeError):
+        cudf.Series(np.array([np.nan, np.nan], dtype=object))
+
+
+@pytest.mark.parametrize(
+    "ps",
+    [
+        pd.Series([0, 1, 2, np.nan, 4, None, 6]),
+        pd.Series(
+            [0, 1, 2, np.nan, 4, None, 6],
+            index=["q", "w", "e", "r", "t", "y", "u"],
+            name="a",
+        ),
+        pd.Series([0, 1, 2, 3, 4]),
+        pd.Series(["a", "b", "u", "h", "d"]),
+        pd.Series([None, None, np.nan, None, np.inf, -np.inf]),
+        pd.Series([], dtype="float64"),
+        pd.Series(
+            [pd.NaT, pd.Timestamp("1939-05-27"), pd.Timestamp("1940-04-25")]
+        ),
+        pd.Series([np.nan]),
+        pd.Series([None]),
+        pd.Series(["a", "b", "", "c", None, "e"]),
+    ],
+)
+def test_roundtrip_series_plc_column(ps):
+    expect = cudf.Series(ps)
+    actual = cudf.Series.from_pylibcudf(*expect.to_pylibcudf())
+    assert_eq(expect, actual)
+
+
+def test_series_construction_with_nulls():
+    fields = [
+        pa.array([1], type=pa.int64()),
+        pa.array([None], type=pa.int64()),
+        pa.array([3], type=pa.int64()),
+    ]
+    expect = pa.StructArray.from_arrays(fields, ["a", "b", "c"])
+    got = cudf.Series(expect).to_arrow()
+
+    assert expect == got
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [{}],
+        [{"a": None}],
+        [{"a": 1}],
+        [{"a": "one"}],
+        [{"a": 1}, {"a": 2}],
+        [{"a": 1, "b": "one"}, {"a": 2, "b": "two"}],
+        [{"b": "two", "a": None}, None, {"a": "one", "b": "two"}],
+    ],
+)
+def test_create_struct_series(data):
+    expect = pd.Series(data)
+    got = cudf.Series(data)
+    assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pd.date_range("20010101", "20020215", freq="400h", name="times"),
+        pd.date_range(
+            "20010101", freq="243434324423423234ns", name="times", periods=10
+        ),
+    ],
+)
+def test_series_from_pandas_datetime_index(data):
+    pd_data = pd.Series(data)
+    gdf_data = cudf.Series(pd_data)
+    assert_eq(pd_data, gdf_data)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    ["datetime64[D]", "datetime64[W]", "datetime64[M]", "datetime64[Y]"],
+)
+def test_datetime_array_timeunit_cast(dtype):
+    testdata = np.array(
+        [
+            np.datetime64("2016-11-20"),
+            np.datetime64("2020-11-20"),
+            np.datetime64("2019-11-20"),
+            np.datetime64("1918-11-20"),
+            np.datetime64("2118-11-20"),
+        ],
+        dtype=dtype,
+    )
+
+    gs = cudf.Series(testdata)
+    ps = pd.Series(testdata)
+
+    assert_eq(ps, gs)
+
+    gdf = cudf.DataFrame()
+    gdf["a"] = np.arange(5)
+    gdf["b"] = testdata
+
+    pdf = pd.DataFrame()
+    pdf["a"] = np.arange(5)
+    pdf["b"] = testdata
+    assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize("timeunit", ["D", "W", "M", "Y"])
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
+)
+def test_datetime_scalar_timeunit_cast(timeunit):
+    testscalar = np.datetime64("2016-11-20", timeunit)
+
+    gs = cudf.Series(testscalar)
+    ps = pd.Series(testscalar)
+
+    assert_eq(ps, gs, check_dtype=False)
+
+    gdf = cudf.DataFrame()
+    gdf["a"] = np.arange(5)
+    gdf["b"] = testscalar
+
+    pdf = pd.DataFrame()
+    pdf["a"] = np.arange(5)
+    pdf["b"] = testscalar
+
+    assert gdf["b"].dtype == np.dtype("datetime64[s]")
+    assert_eq(pdf, gdf, check_dtype=True)
+
+
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
+)
+def test_datetime_string_to_datetime_resolution_loss_raises():
+    data = ["2020-01-01 00:00:00.00001"]
+    dtype = "datetime64[s]"
+    with pytest.raises(ValueError):
+        cudf.Series(data, dtype=dtype)
+    with pytest.raises(ValueError):
+        pd.Series(data, dtype=dtype)
+
+
+def test_timezone_pyarrow_array():
+    pa_array = pa.array(
+        [datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc)],
+        type=pa.timestamp("ns", "UTC"),
+    )
+    result = cudf.Series(pa_array)
+    expected = pa_array.to_pandas()
+    assert_eq(result, expected)

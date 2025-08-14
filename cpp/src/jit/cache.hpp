@@ -40,10 +40,10 @@ class program_cache {
   program_cache& operator=(program_cache&&)      = delete;
   ~program_cache()                               = default;
 
-  jitify2::ProgramCache<>& get(jitify2::PreprocessedProgramData preprog);
+  jitify2::ProgramCache<>& get(jitify2::PreprocessedProgramData const& preprog);
 };
 
-jitify2::ProgramCache<>& get_program_cache(jitify2::PreprocessedProgramData preprog);
+jitify2::ProgramCache<>& get_program_cache(jitify2::PreprocessedProgramData const& preprog);
 
 }  // namespace jit
 }  // namespace cudf
