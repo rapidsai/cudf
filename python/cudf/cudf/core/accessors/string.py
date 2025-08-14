@@ -535,8 +535,11 @@ class StringMethods(BaseAccessor):
     def _split_by_character(self) -> ListColumn:
         col = self._column.fillna("")  # sanitize nulls
         result_col = col.character_tokenize()
+        if isinstance(result_col.dtype, ListDtype) and (result_col.size > 0):
+            return result_col  # type: ignore
 
         offset_col = col.children[0]
+        child_col = result_col.children[1]
 
         return ListColumn(
             data=None,
@@ -545,7 +548,7 @@ class StringMethods(BaseAccessor):
             mask=col.mask,
             offset=0,
             null_count=0,
-            children=(offset_col, result_col),  # type: ignore[arg-type]
+            children=(offset_col, child_col),  # type: ignore[arg-type]
         )
 
     def extract(

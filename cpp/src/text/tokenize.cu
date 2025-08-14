@@ -186,7 +186,9 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
                              offsets, strings_column.offset() + strings_count, stream) -
                            offset;
   // no bytes -- this could happen in an all-empty column
-  if (chars_bytes == 0) { cudf::make_empty_lists_column(cudf::data_type{cudf::type_id::STRING}); }
+  if (chars_bytes == 0) {
+    return cudf::make_empty_lists_column(cudf::data_type{cudf::type_id::STRING});
+  }
   auto d_chars =
     strings_column.parent().data<uint8_t>();  // unsigned is necessary for checking bits
   d_chars += offset;
