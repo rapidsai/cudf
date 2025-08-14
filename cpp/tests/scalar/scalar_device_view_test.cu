@@ -59,7 +59,7 @@ TYPED_TEST(TypedScalarDeviceViewTest, Value)
 
   auto scalar_device_view  = cudf::get_scalar_device_view(s);
   auto scalar_device_view1 = cudf::get_scalar_device_view(s1);
-  rmm::device_scalar<bool> result{cudf::get_default_stream()};
+  cudf::detail::device_scalar<bool> result{cudf::get_default_stream()};
 
   test_set_value<<<1, 1, 0, cudf::get_default_stream().value()>>>(scalar_device_view,
                                                                   scalar_device_view1);
@@ -86,7 +86,7 @@ TYPED_TEST(TypedScalarDeviceViewTest, ConstructNull)
   TypeParam value = cudf::test::make_type_param_scalar<TypeParam>(5);
   cudf::scalar_type_t<TypeParam> s(value, false);
   auto scalar_device_view = cudf::get_scalar_device_view(s);
-  rmm::device_scalar<bool> result{cudf::get_default_stream()};
+  cudf::detail::device_scalar<bool> result{cudf::get_default_stream()};
 
   test_null<<<1, 1, 0, cudf::get_default_stream().value()>>>(scalar_device_view, result.data());
   CUDF_CHECK_CUDA(0);
@@ -130,7 +130,7 @@ TEST_F(StringScalarDeviceViewTest, Value)
   cudf::string_scalar s(value);
 
   auto scalar_device_view = cudf::get_scalar_device_view(s);
-  rmm::device_scalar<bool> result{cudf::get_default_stream()};
+  cudf::detail::device_scalar<bool> result{cudf::get_default_stream()};
   auto value_v = cudf::detail::make_device_uvector(
     value, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
