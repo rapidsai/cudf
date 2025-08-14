@@ -71,7 +71,7 @@ engine_type engine_from_string(std::string const& str)
   }
 }
 
-bool boolean_from_string(std::string const& str)
+bool boolean_from_string(std::string_view str)
 {
   if (str == "true") {
     return true;
