@@ -305,6 +305,14 @@ def signed_integer_types_as_str(request):
     return request.param
 
 
+@pytest.fixture(params=unsigned_integer_types)
+def unsigned_integer_types_as_str(request):
+    """
+    - "uint8", "uint16", "uint32", "uint64"
+    """
+    return request.param
+
+
 @pytest.fixture(params=signed_integer_types + unsigned_integer_types)
 def integer_types_as_str(request):
     """

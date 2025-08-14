@@ -126,3 +126,21 @@ def test_index_basic(data, all_supported_types_as_str, name, request):
     gdi = cudf.Index(data, dtype=all_supported_types_as_str, name=name)
 
     assert_eq(pdi, gdi)
+
+
+@pytest.mark.parametrize(
+    "data,nan_idx,NA_idx",
+    [([1, 2, 3, None], None, 3), ([2, 3, np.nan, None], 2, 3)],
+)
+def test_index_nan_as_null(data, nan_idx, NA_idx, nan_as_null):
+    idx = cudf.Index(data, nan_as_null=nan_as_null)
+
+    if nan_as_null is not False:
+        if nan_idx is not None:
+            assert idx[nan_idx] is cudf.NA
+    else:
+        if nan_idx is not None:
+            assert np.isnan(idx[nan_idx])
+
+    if NA_idx is not None:
+        assert idx[NA_idx] is cudf.NA
