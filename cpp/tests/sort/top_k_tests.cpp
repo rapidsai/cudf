@@ -104,19 +104,33 @@ TYPED_TEST(TopKTypes, TopKSegmented)
 
 struct TopK : public cudf::test::BaseFixture {};
 
+TEST_F(TopK, Empty)
+{
+  auto input = cudf::test::fixed_width_column_wrapper<int32_t>({0, 1, 2, 3});
+
+  auto result = cudf::top_k(input, 0);
+  EXPECT_EQ(result->size(), 0);
+  result = cudf::top_k_order(input, 0);
+  EXPECT_EQ(result->size(), 0);
+  result = cudf::top_k_segmented(input, input, 0);
+  EXPECT_EQ(result->size(), 0);
+  result = cudf::top_k_segmented_order(input, input, 0);
+  EXPECT_EQ(result->size(), 0);
+}
+
 TEST_F(TopK, Errors)
 {
   auto itr   = thrust::counting_iterator<int64_t>(0);
   auto input = cudf::test::fixed_width_column_wrapper<int64_t>(itr, itr + 100);
 
-  EXPECT_THROW(cudf::top_k(input, 0), std::invalid_argument);
+  EXPECT_THROW(cudf::top_k(input, -1), std::invalid_argument);
   EXPECT_THROW(cudf::top_k(input, 101), std::invalid_argument);
-  EXPECT_THROW(cudf::top_k_order(input, 0), std::invalid_argument);
+  EXPECT_THROW(cudf::top_k_order(input, -1), std::invalid_argument);
   EXPECT_THROW(cudf::top_k_order(input, 101), std::invalid_argument);
 
   auto offsets = cudf::test::fixed_width_column_wrapper<int32_t>({0, 15, 20, 23, 40, 42});
-  EXPECT_THROW(cudf::top_k_segmented(input, offsets, 0), std::invalid_argument);
-  EXPECT_THROW(cudf::top_k_segmented_order(input, offsets, 0), std::invalid_argument);
+  EXPECT_THROW(cudf::top_k_segmented(input, offsets, -1), std::invalid_argument);
+  EXPECT_THROW(cudf::top_k_segmented_order(input, offsets, -1), std::invalid_argument);
   offsets = cudf::test::fixed_width_column_wrapper<int32_t>({});
   EXPECT_THROW(cudf::top_k_segmented(input, offsets, 10), std::invalid_argument);
   EXPECT_THROW(cudf::top_k_segmented_order(input, offsets, 10), std::invalid_argument);

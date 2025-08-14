@@ -17,6 +17,7 @@
 #include "sort_column_impl.cuh"
 
 #include <cudf/column/column.hpp>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -37,10 +38,10 @@ std::unique_ptr<column> top_k(column_view const& col,
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(
-    k > 0 && k <= col.size(),
-    "k must greater than 0 and be less than or equal to the number of rows in the column",
-    std::invalid_argument);
+  CUDF_EXPECTS(k >= 0 && k <= col.size(),
+               "k must be non-negative and less than or equal to the number of input rows",
+               std::invalid_argument);
+  if (k == 0) { return empty_like(col); }
 
   // code will be specialized for fixed-width types once CUB topk function is available
   auto const nulls     = sort_order == order::ASCENDING ? null_order::AFTER : null_order::BEFORE;
@@ -61,10 +62,9 @@ std::unique_ptr<column> top_k_order(column_view const& col,
                                     rmm::cuda_stream_view stream,
                                     rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(
-    k > 0 && k <= col.size(),
-    "k must greater than 0 and be less than or equal to the number of rows in the column",
-    std::invalid_argument);
+  CUDF_EXPECTS(k >= 0 && k <= col.size(),
+               "k must be non-negative and less than or equal to the number of input rows",
+               std::invalid_argument);
 
   auto const nulls   = sort_order == order::ASCENDING ? null_order::AFTER : null_order::BEFORE;
   auto const indices = sorted_order<sort_method::STABLE>(col, sort_order, nulls, stream, mr);

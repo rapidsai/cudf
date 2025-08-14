@@ -69,11 +69,17 @@ std::unique_ptr<column> top_k_segmented_order(column_view const& col,
                                               rmm::cuda_stream_view stream,
                                               rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(k > 0, "k must be greater than 0", std::invalid_argument);
+  CUDF_EXPECTS(k >= 0, "k must be greater than or equal to 0", std::invalid_argument);
+
+  auto const size_data_type = data_type{type_to_id<size_type>()};
+  if (k == 0 || col.is_empty()) {
+    return cudf::make_empty_lists_column(size_data_type, stream, mr);
+  }
+
   CUDF_EXPECTS(segment_offsets.size() > 0,
                "segment_offsets must have at least one element",
                std::invalid_argument);
-  auto const size_data_type = data_type{type_to_id<size_type>()};
+
   CUDF_EXPECTS(segment_offsets.type() == size_data_type,
                "segment_offsets must be of type INT32",
                cudf::data_type_error);
@@ -85,9 +91,6 @@ std::unique_ptr<column> top_k_segmented_order(column_view const& col,
   auto const temp_mr = cudf::get_current_device_resource_ref();
   auto const indices = cudf::detail::segmented_sorted_order(
     cudf::table_view({col}), segment_offsets, {sort_order}, {nulls}, stream, temp_mr);
-  if (indices->view().is_empty()) {
-    return cudf::make_empty_lists_column(size_data_type, stream, mr);
-  }
 
   auto const d_indices = indices->mutable_view().begin<size_type>();
   auto segment_sizes   = rmm::device_uvector<size_type>(segment_offsets.size() - 1, stream);
