@@ -39,6 +39,18 @@ namespace cudf {
 namespace detail {
 namespace {
 
+/**
+ * @brief Resolves the k indices per segment
+ *
+ * Marks values outside the k range to -1 to be removed in a separate step.
+ * Also computes the total number of valid indices for each segment.
+ * All elements are used in a segment if it has less than k total elements.
+ *
+ * @param d_offsets Offsets for each segment
+ * @param k Number of values to keep in each segment
+ * @param d_indices Mark these indices to be removed
+ * @param d_segment_sizes Store actual sizes of each segment
+ */
 CUDF_KERNEL void resolve_segment_indices(device_span<size_type const> d_offsets,
                                          size_type k,
                                          device_span<size_type> d_indices,
@@ -91,20 +103,23 @@ std::unique_ptr<column> top_k_segmented_order(column_view const& col,
   auto const temp_mr = cudf::get_current_device_resource_ref();
   auto const indices = cudf::detail::segmented_sorted_order(
     cudf::table_view({col}), segment_offsets, {sort_order}, {nulls}, stream, temp_mr);
-
   auto const d_indices = indices->mutable_view().begin<size_type>();
-  auto segment_sizes   = rmm::device_uvector<size_type>(segment_offsets.size() - 1, stream);
-  auto span_indices = device_span<size_type>{d_indices, static_cast<std::size_t>(indices->size())};
-  auto const grid   = cudf::detail::grid_1d(indices->size(), 256);
+
+  auto segment_sizes = rmm::device_uvector<size_type>(segment_offsets.size() - 1, stream);
+  auto span_indices  = device_span<size_type>{d_indices, static_cast<std::size_t>(indices->size())};
+  auto const grid    = cudf::detail::grid_1d(indices->size(), 256);
   resolve_segment_indices<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
     segment_offsets, k, span_indices, segment_sizes);
-  auto [offsets, total] =
+  auto [offsets, total_elements] =
     cudf::detail::make_offsets_child_column(segment_sizes.begin(), segment_sizes.end(), stream, mr);
-  auto result =
-    cudf::make_fixed_width_column(size_data_type, total, mask_state::UNALLOCATED, stream, mr);
+
+  auto result = cudf::make_fixed_width_column(
+    size_data_type, total_elements, mask_state::UNALLOCATED, stream, mr);
   auto d_result = result->mutable_view().begin<size_type>();
+  // remove the indices marked by resolve_segment_indices
   thrust::remove_copy(
-    rmm::exec_policy(stream), d_indices, d_indices + indices->size(), d_result, -1);
+    rmm::exec_policy_nosync(stream), d_indices, d_indices + indices->size(), d_result, -1);
+
   auto const num_rows = static_cast<size_type>(offsets->size() - 1);
   return make_lists_column(
     num_rows, std::move(offsets), std::move(result), 0, rmm::device_buffer{}, stream, mr);

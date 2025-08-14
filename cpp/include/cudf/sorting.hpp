@@ -412,9 +412,9 @@ std::unique_ptr<column> top_k_order(
  *
  * @param col Column to compute top k
  * @param segment_offsets Start offset index for each contiguous segment
- * @param k Number of values to return
- * @param sort_order The desired sort order for the top k values.
- *                   Default is high to low.
+ * @param k Number of values to return for each segment
+ * @param sort_order DESCENDING is the largest k values (default).
+ *                   ASCENDING is the smallest k values.
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return A column with the top k values of the input column.
@@ -448,9 +448,9 @@ std::unique_ptr<column> top_k_segmented(
  *
  * @param col Column to compute top k
  * @param segment_offsets Start offset index for each contiguous segment
- * @param k Number of values to return
- * @param sort_order The desired sort order for the top k values.
- *                   Default is high to low.
+ * @param k Number of values to return for each segment
+ * @param sort_order DESCENDING is the indices of the largest k values (default).
+ *                   ASCENDING is the indices of the smallest k values.
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Indices of the top k values of the input column
