@@ -67,7 +67,7 @@ std::unique_ptr<scalar> sum(column_view const& col,
  * @return Struct scalar with sum and overflow flag
  */
 std::unique_ptr<scalar> sum_with_overflow(column_view const& col,
-                                          data_type const output_dtype,
+                                          data_type const output_type,
                                           std::optional<std::reference_wrapper<scalar const>> init,
                                           rmm::cuda_stream_view stream,
                                           rmm::device_async_resource_ref mr);
@@ -404,22 +404,6 @@ std::unique_ptr<scalar> nunique(column_view const& col,
                                 data_type const output_dtype,
                                 rmm::cuda_stream_view stream,
                                 rmm::device_async_resource_ref mr);
-
-/**
- * @brief Computes sum of int64_t column with overflow detection
- *
- * @param col Input column of int64_t values
- * @param output_dtype Output data type (must be STRUCT)
- * @param init Optional initial value for the reduction
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned scalar's device memory
- * @return Struct scalar containing {sum: int64_t, overflow: bool}
- */
-std::unique_ptr<scalar> sum_with_overflow(column_view const& col,
-                                          data_type const output_dtype,
-                                          std::optional<std::reference_wrapper<scalar const>> init,
-                                          rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr);
 
 }  // namespace reduction::detail
 }  // namespace CUDF_EXPORT cudf
