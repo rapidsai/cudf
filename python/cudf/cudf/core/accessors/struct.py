@@ -109,7 +109,7 @@ class StructMethods(BaseAccessor):
         data = {
             name: col.copy(deep=True)
             for name, col in zip(
-                self._column.dtype.fields, self._column.children
+                self._column.dtype.fields, self._column.children, strict=True
             )
         }
         rangeindex = len(data) == 0

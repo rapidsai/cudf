@@ -163,7 +163,7 @@ def assert_column_eq(
                 return _is_supported_for_pc_is_nan(arr_type.value_type)
             return True
 
-        for lh_arr, rh_arr in zip(lhs, rhs):
+        for lh_arr, rh_arr in zip(lhs, rhs, strict=True):
             # pc.is_nan does not support nested list
             # with float (eg. list<list<float>>)
             if not _is_supported_for_pc_is_nan(lh_arr.type):
@@ -213,7 +213,9 @@ def assert_table_eq(pa_table: pa.Table, plc_table: plc.Table) -> None:
     """Verify that a pylibcudf table and PyArrow table are equal."""
     assert plc_table.shape() == pa_table.shape
 
-    for plc_col, pa_col in zip(plc_table.columns(), pa_table.columns):
+    for plc_col, pa_col in zip(
+        plc_table.columns(), pa_table.columns, strict=True
+    ):
         assert_column_eq(pa_col, plc_col)
 
 
@@ -235,7 +237,9 @@ def assert_table_and_meta_eq(
     if not check_types_if_empty and plc_table.num_rows() == 0:
         return
 
-    for plc_col, pa_col in zip(plc_table.columns(), pa_table.columns):
+    for plc_col, pa_col in zip(
+        plc_table.columns(), pa_table.columns, strict=True
+    ):
         assert_column_eq(pa_col, plc_col, check_field_nullability)
 
     # Check column name equality
@@ -263,7 +267,9 @@ def nesting_level(typ) -> tuple[int, int]:
         list_, struct = nesting_level(typ.value_type)
         return list_ + 1, struct
     elif isinstance(typ, pa.StructType):
-        lists, structs = map(max, zip(*(nesting_level(t.type) for t in typ)))
+        lists, structs = map(
+            max, zip(*(nesting_level(t.type) for t in typ), strict=True)
+        )
         return lists, structs + 1
     else:
         return 0, 0

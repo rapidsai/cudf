@@ -1117,6 +1117,20 @@ TEST_F(ReductionEmptyTest, empty_column)
   result = cudf::reduce(col_nulls, *nunique_agg, size_data_type);
   EXPECT_EQ(result->is_valid(), true);
   EXPECT_EQ(dynamic_cast<cudf::numeric_scalar<cudf::size_type>*>(result.get())->value(), 1);
+
+  auto double_type = cudf::data_type{cudf::type_id::FLOAT64};
+  auto median_agg  = cudf::make_median_aggregation<cudf::reduce_aggregation>();
+  result           = cudf::reduce(col0, *median_agg, double_type);
+  EXPECT_EQ(result->is_valid(), false);
+  result = cudf::reduce(col_nulls, *median_agg, double_type);
+  EXPECT_EQ(result->is_valid(), false);
+
+  auto quantile_agg =
+    cudf::make_quantile_aggregation<cudf::reduce_aggregation>({0.0}, cudf::interpolation::LINEAR);
+  result = cudf::reduce(col0, *quantile_agg, double_type);
+  EXPECT_EQ(result->is_valid(), false);
+  result = cudf::reduce(col_nulls, *quantile_agg, double_type);
+  EXPECT_EQ(result->is_valid(), false);
 }
 
 TEST_F(ReductionEmptyTest, Errors)
@@ -1420,6 +1434,7 @@ TYPED_TEST(ReductionTest, Median)
   std::vector<int> int_values({6, -14, 13, 64, 0, -13, -20, 45});
   std::vector<bool> host_bools({true, true, true, false, true, true, true, true});
   std::vector<T> v = convert_values<T>(int_values);
+  auto output_type = cudf::data_type{cudf::type_to_id<double>()};
 
   // test without nulls
   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
@@ -1428,10 +1443,11 @@ TYPED_TEST(ReductionTest, Median)
     if (std::is_signed_v<T>) return 3.0;
     return 13.5;
   }();
-  EXPECT_EQ(
-    this->template reduction_test<double>(col, *cudf::make_median_aggregation<reduce_aggregation>())
-      .first,
-    expected_value);
+  EXPECT_EQ(this
+              ->template reduction_test<double>(
+                col, *cudf::make_median_aggregation<reduce_aggregation>(), output_type)
+              .first,
+            expected_value);
 
   auto col_odd              = cudf::split(col, {1})[1];
   double expected_value_odd = [] {
@@ -1441,7 +1457,7 @@ TYPED_TEST(ReductionTest, Median)
   }();
   EXPECT_EQ(this
               ->template reduction_test<double>(
-                col_odd, *cudf::make_median_aggregation<reduce_aggregation>())
+                col_odd, *cudf::make_median_aggregation<reduce_aggregation>(), output_type)
               .first,
             expected_value_odd);
 
@@ -1455,7 +1471,7 @@ TYPED_TEST(ReductionTest, Median)
 
   EXPECT_EQ(this
               ->template reduction_test<double>(
-                col_nulls, *cudf::make_median_aggregation<reduce_aggregation>())
+                col_nulls, *cudf::make_median_aggregation<reduce_aggregation>(), output_type)
               .first,
             expected_null_value);
 
@@ -1467,7 +1483,7 @@ TYPED_TEST(ReductionTest, Median)
   }();
   EXPECT_EQ(this
               ->template reduction_test<double>(
-                col_nulls_odd, *cudf::make_median_aggregation<reduce_aggregation>())
+                col_nulls_odd, *cudf::make_median_aggregation<reduce_aggregation>(), output_type)
               .first,
             expected_null_value_odd);
 }
@@ -1480,37 +1496,42 @@ TYPED_TEST(ReductionTest, Quantile)
   std::vector<bool> host_bools({true, true, true, false, true, true, true, true});
   std::vector<T> v = convert_values<T>(int_values);
   cudf::interpolation interp{cudf::interpolation::LINEAR};
+  auto output_type = cudf::data_type{cudf::type_to_id<double>()};
 
   // test without nulls
   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
   double expected_value0 = std::is_same_v<T, bool> || std::is_unsigned_v<T> ? v[4] : v[6];
-  EXPECT_EQ(this
-              ->template reduction_test<double>(
-                col, *cudf::make_quantile_aggregation<reduce_aggregation>({0.0}, interp))
-              .first,
-            expected_value0);
+  EXPECT_EQ(
+    this
+      ->template reduction_test<double>(
+        col, *cudf::make_quantile_aggregation<reduce_aggregation>({0.0}, interp), output_type)
+      .first,
+    expected_value0);
 
   double expected_value1 = v[3];
-  EXPECT_EQ(this
-              ->template reduction_test<double>(
-                col, *cudf::make_quantile_aggregation<reduce_aggregation>({1.0}, interp))
-              .first,
-            expected_value1);
+  EXPECT_EQ(
+    this
+      ->template reduction_test<double>(
+        col, *cudf::make_quantile_aggregation<reduce_aggregation>({1.0}, interp), output_type)
+      .first,
+    expected_value1);
 
   // test with nulls
   cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
   double expected_null_value1                         = v[7];
 
-  EXPECT_EQ(this
-              ->template reduction_test<double>(
-                col_nulls, *cudf::make_quantile_aggregation<reduce_aggregation>({0}, interp))
-              .first,
-            expected_value0);
-  EXPECT_EQ(this
-              ->template reduction_test<double>(
-                col_nulls, *cudf::make_quantile_aggregation<reduce_aggregation>({1}, interp))
-              .first,
-            expected_null_value1);
+  EXPECT_EQ(
+    this
+      ->template reduction_test<double>(
+        col_nulls, *cudf::make_quantile_aggregation<reduce_aggregation>({0}, interp), output_type)
+      .first,
+    expected_value0);
+  EXPECT_EQ(
+    this
+      ->template reduction_test<double>(
+        col_nulls, *cudf::make_quantile_aggregation<reduce_aggregation>({1}, interp), output_type)
+      .first,
+    expected_null_value1);
 }
 
 TYPED_TEST(ReductionTest, UniqueCount)
@@ -2576,20 +2597,22 @@ TYPED_TEST(DictionaryReductionTest, Median)
   using T = TypeParam;
   std::vector<int> int_values({6, -14, 13, 64, 0, -13, -20, 45});
   std::vector<T> v = convert_values<T>(int_values);
+  auto output_type = cudf::data_type{cudf::type_to_id<double>()};
 
   // test without nulls
   cudf::test::dictionary_column_wrapper<T> col(v.begin(), v.end());
-  EXPECT_EQ(
-    this->template reduction_test<double>(col, *cudf::make_median_aggregation<reduce_aggregation>())
-      .first,
-    (std::is_signed_v<T>) ? 3.0 : 13.5);
+  EXPECT_EQ(this
+              ->template reduction_test<double>(
+                col, *cudf::make_median_aggregation<reduce_aggregation>(), output_type)
+              .first,
+            (std::is_signed_v<T>) ? 3.0 : 13.5);
 
   // test with nulls
   std::vector<bool> validity({true, true, true, false, true, true, true, true});
   cudf::test::dictionary_column_wrapper<T> col_nulls(v.begin(), v.end(), validity.begin());
   EXPECT_EQ(this
               ->template reduction_test<double>(
-                col_nulls, *cudf::make_median_aggregation<reduce_aggregation>())
+                col_nulls, *cudf::make_median_aggregation<reduce_aggregation>(), output_type)
               .first,
             (std::is_signed_v<T>) ? 0.0 : 13.0);
 }
@@ -2600,35 +2623,40 @@ TYPED_TEST(DictionaryReductionTest, Quantile)
   std::vector<int> int_values({6, -14, 13, 64, 0, -13, -20, 45});
   std::vector<T> v = convert_values<T>(int_values);
   cudf::interpolation interp{cudf::interpolation::LINEAR};
+  auto output_type = cudf::data_type{cudf::type_to_id<double>()};
 
   // test without nulls
   cudf::test::dictionary_column_wrapper<T> col(v.begin(), v.end());
   double expected_value = std::is_same_v<T, bool> || std::is_unsigned_v<T> ? 0.0 : -20.0;
-  EXPECT_EQ(this
-              ->template reduction_test<double>(
-                col, *cudf::make_quantile_aggregation<reduce_aggregation>({0.0}, interp))
-              .first,
-            expected_value);
-  EXPECT_EQ(this
-              ->template reduction_test<double>(
-                col, *cudf::make_quantile_aggregation<reduce_aggregation>({1.0}, interp))
-              .first,
-            64.0);
+  EXPECT_EQ(
+    this
+      ->template reduction_test<double>(
+        col, *cudf::make_quantile_aggregation<reduce_aggregation>({0.0}, interp), output_type)
+      .first,
+    expected_value);
+  EXPECT_EQ(
+    this
+      ->template reduction_test<double>(
+        col, *cudf::make_quantile_aggregation<reduce_aggregation>({1.0}, interp), output_type)
+      .first,
+    64.0);
 
   // test with nulls
   std::vector<bool> validity({true, true, true, false, true, true, true, true});
   cudf::test::dictionary_column_wrapper<T> col_nulls(v.begin(), v.end(), validity.begin());
 
-  EXPECT_EQ(this
-              ->template reduction_test<double>(
-                col_nulls, *cudf::make_quantile_aggregation<reduce_aggregation>({0}, interp))
-              .first,
-            expected_value);
-  EXPECT_EQ(this
-              ->template reduction_test<double>(
-                col_nulls, *cudf::make_quantile_aggregation<reduce_aggregation>({1}, interp))
-              .first,
-            45.0);
+  EXPECT_EQ(
+    this
+      ->template reduction_test<double>(
+        col_nulls, *cudf::make_quantile_aggregation<reduce_aggregation>({0}, interp), output_type)
+      .first,
+    expected_value);
+  EXPECT_EQ(
+    this
+      ->template reduction_test<double>(
+        col_nulls, *cudf::make_quantile_aggregation<reduce_aggregation>({1}, interp), output_type)
+      .first,
+    45.0);
 }
 
 struct ListReductionTest : public cudf::test::BaseFixture {

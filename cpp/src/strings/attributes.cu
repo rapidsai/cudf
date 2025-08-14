@@ -152,8 +152,9 @@ std::unique_ptr<column> count_characters_parallel(strings_column_view const& inp
   auto const d_strings = cudf::column_device_view::create(input.parent(), stream);
 
   // fill in the lengths
-  constexpr int block_size = 256;
-  cudf::detail::grid_1d grid{input.size() * cudf::detail::warp_size, block_size};
+  constexpr thread_index_type block_size = 256;
+  constexpr thread_index_type warp_size  = cudf::detail::warp_size;
+  cudf::detail::grid_1d grid{input.size() * warp_size, block_size};
   count_characters_parallel_fn<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
     *d_strings, d_lengths);
 

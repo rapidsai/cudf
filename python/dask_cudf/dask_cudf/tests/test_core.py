@@ -136,7 +136,7 @@ def _fragmented_gdf(df, nsplit):
     subdivsize = n // nsplit
     starts = [i * subdivsize for i in range(nsplit)]
     ends = starts[1:] + [None]
-    frags = [df[s:e] for s, e in zip(starts, ends)]
+    frags = [df[s:e] for s, e in zip(starts, ends, strict=True)]
     return frags
 
 
