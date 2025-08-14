@@ -74,9 +74,13 @@ install(TARGETS cudf_strings_udf DESTINATION ./cudf/_lib/)
 # Create the shim library for each architecture.
 set(SHIM_CUDA_FLAGS --expt-relaxed-constexpr -rdc=true)
 
-# always build a default PTX file in case RAPIDS_NO_INITIALIZE is set and the device cc can't be
+# always build a default architecture in case RAPIDS_NO_INITIALIZE is set and the device cc can't be
 # safely queried through a context
-list(INSERT CMAKE_CUDA_ARCHITECTURES 0 "70")
+if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 13.0.0)
+  list(INSERT CMAKE_CUDA_ARCHITECTURES 0 "75")
+else()
+  list(INSERT CMAKE_CUDA_ARCHITECTURES 0 "70")
+endif()
 
 list(TRANSFORM CMAKE_CUDA_ARCHITECTURES REPLACE "-real" "")
 list(TRANSFORM CMAKE_CUDA_ARCHITECTURES REPLACE "-virtual" "")

@@ -40,6 +40,7 @@ from cudf.utils.dtypes import (
     cudf_dtype_from_pa_type,
     find_common_type,
     is_dtype_obj_numeric,
+    is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _array_ufunc, _warn_no_dask_cudf
@@ -92,7 +93,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
     def _column_labels_and_values(
         self,
     ) -> Iterable[tuple[Hashable, ColumnBase]]:
-        return zip(self._column_names, self._columns)
+        return zip(self._column_names, self._columns, strict=True)
 
     @property
     def _dtypes(self) -> Generator[tuple[Hashable, Dtype], None, None]:
@@ -128,7 +129,8 @@ class Frame(BinaryOperand, Scannable, Serializable):
                     if isinstance(cname, np.generic)
                     else (cname, "")
                     for cname in self._column_names
-                ]
+                ],
+                strict=True,
             )
             if self._column_names
             else ((), ())
@@ -173,11 +175,13 @@ class Frame(BinaryOperand, Scannable, Serializable):
         column_names = [
             getattr(np, cntype)(cname) if cntype != "" else cname
             for cname, cntype in zip(
-                header["column_names"], header["column_names_numpy_type"]
+                header["column_names"],
+                header["column_names_numpy_type"],
+                strict=True,
             )
         ]
         col_accessor = ColumnAccessor(
-            data=dict(zip(column_names, columns)), **kwargs
+            data=dict(zip(column_names, columns, strict=True)), **kwargs
         )
         return cls._from_data(col_accessor)
 
@@ -218,7 +222,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         """
         if column_names is None:
             column_names = self._column_names
-        data = dict(zip(column_names, columns))
+        data = dict(zip(column_names, columns, strict=True))
         frame = self.__class__._from_data(data)
         return frame._copy_type_metadata(self)
 
@@ -1076,7 +1080,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
             }
 
             for name, plc_codes in zip(
-                dict_indices_table.column_names, plc_indices.columns()
+                dict_indices_table.column_names,
+                plc_indices.columns(),
+                strict=True,
             ):
                 codes = ColumnBase.from_pylibcudf(plc_codes)
                 categories = cudf_dictionaries_columns[name]
@@ -1096,7 +1102,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
         cudf_non_category_frame = {
             name: ColumnBase.from_pylibcudf(plc_col)
             for name, plc_col in zip(
-                data.column_names, plc.Table.from_arrow(data).columns()
+                data.column_names,
+                plc.Table.from_arrow(data).columns(),
+                strict=True,
             )
         }
 
@@ -1198,7 +1206,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
         See `ColumnBase._with_type_metadata` for more information.
         """
         for (name, self_col), (_, other_col) in zip(
-            self._column_labels_and_values, other._column_labels_and_values
+            self._column_labels_and_values,
+            other._column_labels_and_values,
+            strict=True,
         ):
             self._data.set_by_label(
                 name,
@@ -1456,24 +1466,37 @@ class Frame(BinaryOperand, Scannable, Serializable):
             values = [*values._columns]
         if len(values) != self._num_columns:
             raise ValueError("Mismatch number of columns to search for.")
-
+        if cudf.get_option("mode.pandas_compatible"):
+            if any(
+                col.has_nulls()
+                and is_pandas_nullable_extension_dtype(col.dtype)
+                for col in self._columns
+            ):
+                raise ValueError(
+                    "searchsorted requires array to be sorted, which is impossible "
+                    "with NAs present."
+                )
         # TODO: Change behavior based on the decision in
         # https://github.com/pandas-dev/pandas/issues/54668
         common_dtype_list = [
             find_common_type([col.dtype, val.dtype])
-            for col, val in zip(self._columns, values)
+            for col, val in zip(self._columns, values, strict=True)
         ]
         sources = [
             col
             if is_dtype_equal(col.dtype, common_dtype)
             else col.astype(common_dtype)
-            for col, common_dtype in zip(self._columns, common_dtype_list)
+            for col, common_dtype in zip(
+                self._columns, common_dtype_list, strict=True
+            )
         ]
         values = [
             val
             if is_dtype_equal(val.dtype, common_dtype)
             else val.astype(common_dtype)
-            for val, common_dtype in zip(values, common_dtype_list)
+            for val, common_dtype in zip(
+                values, common_dtype_list, strict=True
+            )
         ]
 
         outcol = ColumnBase.from_pylibcudf(
@@ -1485,6 +1508,8 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 na_position=itertools.repeat(na_position, times=len(sources)),
             )
         )
+        if cudf.get_option("mode.pandas_compatible"):
+            outcol = outcol.astype(np.dtype("int64"))
 
         # Return result as cupy array if the values is non-scalar
         # If values is scalar, result is expected to be scalar.

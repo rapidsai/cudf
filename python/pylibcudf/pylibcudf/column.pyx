@@ -32,6 +32,7 @@ from pylibcudf.libcudf.strings.strings_column_view cimport strings_column_view
 from pylibcudf.libcudf.types cimport size_type, size_of as cpp_size_of, bitmask_type
 from pylibcudf.libcudf.utilities.traits cimport is_fixed_width
 from pylibcudf.libcudf.copying cimport get_element
+from pylibcudf.libcudf.utilities.default_stream cimport get_default_stream
 
 
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
@@ -719,7 +720,7 @@ cdef class Column:
         cdef unique_ptr[scalar] result
 
         with nogil:
-            result = get_element(cv, 0)
+            result = get_element(cv, 0, get_default_stream())
 
         return Scalar.from_libcudf(move(result))
 
