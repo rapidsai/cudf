@@ -91,15 +91,14 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
     return {std::move(null_mask_data), null_mask};
   }();
 
-  [[maybe_unused]] auto const [cached_hashes_data, cached_hashes_ptr] =
-    [&]() -> std::pair<rmm::device_uvector<hash_value_type>, hash_value_type const*> {
+  auto const cached_hashes = [&]() -> rmm::device_uvector<hash_value_type> {
     auto const num_columns =
       std::accumulate(keys.begin(), keys.end(), 0, [](int count, column_view const& col) {
         return count + count_nested_columns(col);
       });
 
     if (num_columns <= HASH_CACHING_THRESHOLD) {
-      return {rmm::device_uvector<hash_value_type>{0, stream}, nullptr};
+      return rmm::device_uvector<hash_value_type>{0, stream};
     }
 
     rmm::device_uvector<hash_value_type> hashes(num_keys, stream);
@@ -112,8 +111,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
                        }
                        return hash_value_type{0};  // dummy value, as it will be unused
                      });
-    auto hashes_data = hashes.data();
-    return {std::move(hashes), hashes_data};
+    return hashes;
   }();
 
   // Cache of sparse results where the location of aggregate value in each
@@ -125,7 +123,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
     cudf::detail::CUCO_DESIRED_LOAD_FACTOR,  // 50% load factor
     cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
     d_row_equal,
-    probing_scheme_t{row_hasher_with_cache_t{d_row_hash, cached_hashes_ptr}},
+    probing_scheme_t{row_hasher_with_cache_t{d_row_hash, cached_hashes.data()}},
     cuco::thread_scope_device,
     cuco::storage<GROUPBY_BUCKET_SIZE>{},
     cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
