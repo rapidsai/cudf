@@ -1,6 +1,5 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
 
-
 import pandas as pd
 import pytest
 
@@ -22,7 +21,6 @@ from cudf.testing._utils import (
         pd.CategoricalIndex(["a", "b", "c"]),
     ],
 )
-@pytest.mark.parametrize("deep", [True, False])
 @pytest.mark.parametrize("copy_on_write", [True, False])
 def test_index_copy(data, deep, copy_on_write):
     name = "x"

@@ -476,6 +476,18 @@ def numpy_ufunc(request):
 
 
 @pytest.fixture(params=[True, False])
+def copy(request):
+    """Param for `copy` argument"""
+    return request.param
+
+
+@pytest.fixture(params=[True, False])
+def deep(request):
+    """Param for `deep` argument"""
+    return request.param
+
+
+@pytest.fixture(params=[True, False])
 def dropna(request):
     """Param for `dropna` argument"""
     return request.param
