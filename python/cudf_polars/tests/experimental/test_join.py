@@ -209,7 +209,7 @@ def test_join_maintain_order_fallback_streaming(left, right, maintain_order):
             "max_rows_per_partition": 3,
             "broadcast_join_limit": 1,
             "shuffle_method": "tasks",
-            "fallback_mode": "warn",
+            "fallback_mode": "silent",
         },
     )
 
