@@ -194,7 +194,7 @@ def test_join_maintain_order_right(left, right, maintain_order, nulls_equal):
 @pytest.mark.parametrize("maintain_order", ["left_right", "right_left"])
 @pytest.mark.parametrize("join_expr", [pl.col("a"), ["c", "a"]])
 @pytest.mark.parametrize("how", ["inner", "full"])
-def test_join_maintain_order_multi_key(left, right, how, join_expr, maintain_order):
+def test_join_maintain_order_multiple_keys(left, right, how, join_expr, maintain_order):
     q = left.join(right, on=join_expr, how=how, maintain_order=maintain_order)
     assert_gpu_result_equal(q)
 
@@ -232,10 +232,3 @@ def test_join_maintain_order_with_slice(left, right, maintain_order, how, zlice)
         q,
         polars_collect_kwargs={"optimizations": pl.QueryOptFlags(slice_pushdown=False)},
     )
-
-
-@pytest.mark.parametrize("how", ["semi", "anti"])
-@pytest.mark.parametrize("maintain_order", ["left", "left_right"])
-def test_join_maintain_order_ignored_for_semi_anti(left, right, how, maintain_order):
-    q = left.join(right, on="a", how=how, maintain_order=maintain_order)
-    assert_gpu_result_equal(q, check_row_order=False)

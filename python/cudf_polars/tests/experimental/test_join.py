@@ -195,3 +195,24 @@ def test_join_and_slice(zlice):
     # Need sort to match order after a join
     q = left.join(right, on="a", how="inner").sort(pl.col("a")).slice(*zlice)
     assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize(
+    "maintain_order", ["left_right", "right_left", "left", "right"]
+)
+def test_join_maintain_order_fallback_streaming(left, right, maintain_order):
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "scheduler": DEFAULT_SCHEDULER,
+            "max_rows_per_partition": 3,
+            "broadcast_join_limit": 1,
+            "shuffle_method": "tasks",
+            "fallback_mode": "warn",
+        },
+    )
+
+    q = left.join(right, on="y", how="inner", maintain_order=maintain_order)
+
+    assert_gpu_result_equal(q, engine=engine)
