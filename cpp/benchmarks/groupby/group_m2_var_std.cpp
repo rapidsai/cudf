@@ -91,8 +91,8 @@ void bench_groupby_m2_var_std(nvbench::state& state,
 
 using Types    = nvbench::type_list<int32_t, double>;
 using AggKinds = nvbench::enum_type_list<cudf::aggregation::Kind::M2,
-                                         cudf::aggregation::Kind::STD,
-                                         cudf::aggregation::Kind::VARIANCE>;
+                                         cudf::aggregation::Kind::VARIANCE,
+                                         cudf::aggregation::Kind::STD>;
 
 NVBENCH_BENCH_TYPES(bench_groupby_m2_var_std, NVBENCH_TYPE_AXES(Types, AggKinds))
   .set_name("groupby_m2_var_std")
