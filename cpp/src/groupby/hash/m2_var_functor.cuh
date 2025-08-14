@@ -33,7 +33,8 @@ __device__ constexpr bool is_m2_var_supported()
 
 struct m2_functor {
   template <typename Source, typename... Args>
-  void operator()(Args...) requires(!is_m2_var_supported<Source>())
+  void operator()(Args...)  //
+    requires(!is_m2_var_supported<Source>())
   {
     CUDF_FAIL("Invalid source type for M2 aggregation.");
   }
@@ -83,60 +84,6 @@ struct m2_functor {
   }
 };
 
-struct variance_functor {
-  template <typename Source, typename... Args>
-  void operator()(Args...) requires(!is_m2_var_supported<Source>())
-  {
-    CUDF_FAIL("Invalid source type for VARIANCE aggregation.");
-  }
-
-  template <typename Target, typename M2Type, typename CountType>
-  void evaluate(Target* target,
-                M2Type const* m2,
-                CountType const* count,
-                bool* validity,
-                size_type size,
-                size_type ddof,
-                rmm::cuda_stream_view stream) const noexcept
-  {
-    auto const out_it = thrust::make_zip_iterator(target, validity);
-    thrust::tabulate(
-      rmm::exec_policy_nosync(stream),
-      out_it,
-      out_it + size,
-      [m2, count, ddof] __device__(size_type const idx) -> cuda::std::pair<Target, bool> {
-        auto const group_count = count[idx];
-        auto const df          = group_count - ddof;
-        if (group_count == 0 || df <= 0) { return {Target{}, false}; }
-        return {m2[idx] / df, true};
-      });
-  }
-
-  template <typename Source>
-  void operator()(mutable_column_view const& target,
-                  column_view const& m2,
-                  column_view const& count,
-                  bool* validity,
-                  size_type ddof,
-                  rmm::cuda_stream_view stream) const noexcept
-    requires(is_m2_var_supported<Source>())
-  {
-    using Target    = cudf::detail::target_type_t<Source, aggregation::VARIANCE>;
-    using M2Type    = cudf::detail::target_type_t<Source, aggregation::M2>;
-    using CountType = cudf::detail::target_type_t<Source, aggregation::COUNT_VALID>;
-
-    // Separate the implementation into another function, which has fewer instantiations since
-    // the data types (target/m2/count) should remain the same.
-    evaluate(target.begin<Target>(),
-             m2.begin<M2Type>(),
-             count.begin<CountType>(),
-             validity,
-             target.size(),
-             ddof,
-             stream);
-  }
-};
-
 }  // namespace
 
 inline void compute_m2(data_type source_type,
@@ -149,15 +96,35 @@ inline void compute_m2(data_type source_type,
   type_dispatcher(source_type, m2_functor{}, target, sum_sqr, sum, count, stream);
 }
 
-inline void compute_variance(data_type source_type,
-                             mutable_column_view const& target,
+inline void compute_variance(mutable_column_view const& target,
                              column_view const& m2,
                              column_view const& count,
                              bool* validity,
                              size_type ddof,
                              rmm::cuda_stream_view stream)
 {
-  type_dispatcher(source_type, variance_functor{}, target, m2, count, validity, ddof, stream);
+  using Target    = double;
+  using M2Type    = double;
+  using CountType = int32_t;
+
+  CUDF_EXPECTS(target.type().id() == cudf::type_to_id<Target>(),
+               "Data type of VARIANCE aggregation must be FLOAT64.");
+  CUDF_EXPECTS(m2.type().id() == cudf::type_to_id<M2Type>(),
+               "Data type of M2 aggregation must be FLOAT64.");
+  CUDF_EXPECTS(count.type().id() == cudf::type_to_id<CountType>(),
+               "Data type of COUNT_VALID aggregation must be INT32.");
+
+  auto const out_it = thrust::make_zip_iterator(target.begin<Target>(), validity);
+  thrust::tabulate(rmm::exec_policy_nosync(stream),
+                   out_it,
+                   out_it + target.size(),
+                   [m2 = m2.begin<M2Type>(), count = count.begin<CountType>(), ddof] __device__(
+                     size_type const idx) -> cuda::std::pair<Target, bool> {
+                     auto const group_count = count[idx];
+                     auto const df          = group_count - ddof;
+                     if (group_count == 0 || df <= 0) { return {Target{}, false}; }
+                     return {m2[idx] / df, true};
+                   });
 }
 
 }  // namespace cudf::groupby::detail::hash

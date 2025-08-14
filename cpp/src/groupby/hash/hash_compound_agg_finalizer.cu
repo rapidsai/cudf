@@ -198,13 +198,8 @@ void hash_compound_agg_finalizer<SetType>::visit(cudf::detail::var_aggregation c
   // Since we may have new null rows depending on the group count, we need to generate a new null
   // mask during evaluating variance.
   rmm::device_uvector<bool> validity(m2_result.size(), stream);
-  compute_variance(input_type,
-                   output->mutable_view(),
-                   m2_result,
-                   count_result,
-                   validity.begin(),
-                   agg._ddof,
-                   stream);
+  compute_variance(
+    output->mutable_view(), m2_result, count_result, validity.begin(), agg._ddof, stream);
   auto [null_mask, null_count] =
     cudf::detail::valid_if(validity.begin(), validity.end(), cuda::std::identity{}, stream, mr);
   if (null_count > 0) { output->set_null_mask(std::move(null_mask), null_count); }
