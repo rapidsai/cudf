@@ -58,7 +58,7 @@ struct benchmark_data<T> {
   static T filter_max() { return 64; }
 };
 
-enum class engine_type { AST = 0, JIT = 1 };
+enum class engine_type : uint8_t { AST = 0, JIT = 1 };
 
 engine_type engine_from_string(std::string const& str)
 {
