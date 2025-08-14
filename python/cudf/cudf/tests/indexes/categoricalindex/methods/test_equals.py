@@ -55,3 +55,17 @@ def test_index_categories_equal(data, other):
     expected = pd_other.equals(pd_data)
     actual = gd_other.equals(gd_data)
     assert_eq(expected, actual)
+
+
+def test_index_equals_categories():
+    lhs = cudf.CategoricalIndex(
+        ["a", "b", "c", "b", "a"], categories=["a", "b", "c"]
+    )
+    rhs = cudf.CategoricalIndex(
+        ["a", "b", "c", "b", "a"], categories=["a", "b", "c", "_"]
+    )
+
+    got = lhs.equals(rhs)
+    expect = lhs.to_pandas().equals(rhs.to_pandas())
+
+    assert got == expect
