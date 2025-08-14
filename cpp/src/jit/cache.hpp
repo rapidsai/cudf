@@ -15,6 +15,7 @@
  */
 
 #pragma once
+#pragma GCC diagnostic ignored "-Werror=ignored-attributes"  // Work-around for JITIFY2's false-positive warnings when compiled with GCC13
 
 #include <cudf/utilities/export.hpp>
 
