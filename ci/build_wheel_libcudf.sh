@@ -36,7 +36,6 @@ export SKBUILD_CMAKE_ARGS="-DUSE_NVCOMP_FROM_LIBKVIKIO_WHEEL=ON"
 
 # repair wheels and write to the location that artifact-uploading code expects to find them
 python -m auditwheel repair \
-    --exclude libnvcomp.so.* \
     --exclude libkvikio.so \
     --exclude librapids_logger.so \
     --exclude librmm.so \
