@@ -8,7 +8,6 @@ import polars as pl
 
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
-    assert_ir_translation_raises,
     get_default_engine,
 )
 
@@ -53,10 +52,10 @@ def right():
 @pytest.mark.parametrize(
     "maintain_order", ["left", "left_right", "right_left", "right"]
 )
-def test_join_maintain_order_param_unsupported(left, right, maintain_order):
+def test_join_maintain_order(left, right, maintain_order):
     q = left.join(right, on=pl.col("a"), how="inner", maintain_order=maintain_order)
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_gpu_result_equal(q)
 
 
 @pytest.mark.parametrize(
@@ -157,3 +156,92 @@ def test_join_where(left, right, conditions, zlice):
         # therefore we only check the length
 
         assert_gpu_result_equal(q_len)
+
+
+@pytest.mark.parametrize("maintain_order", ["left_right", "right_left"])
+@pytest.mark.parametrize("how", ["inner", "full"])
+def test_join_maintain_order_inner_full(left, right, how, maintain_order, nulls_equal):
+    q = left.join(
+        right, on="a", how=how, nulls_equal=nulls_equal, maintain_order=maintain_order
+    )
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("maintain_order", ["left", "left_right"])
+def test_join_maintain_order_left(left, right, maintain_order, nulls_equal):
+    q = left.join(
+        right,
+        on="a",
+        how="left",
+        nulls_equal=nulls_equal,
+        maintain_order=maintain_order,
+    )
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("maintain_order", ["right", "right_left"])
+def test_join_maintain_order_right(left, right, maintain_order, nulls_equal):
+    q = left.join(
+        right,
+        on="a",
+        how="right",
+        nulls_equal=nulls_equal,
+        maintain_order=maintain_order,
+    )
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("maintain_order", ["left_right", "right_left"])
+@pytest.mark.parametrize("join_expr", [pl.col("a"), ["c", "a"]])
+@pytest.mark.parametrize("how", ["inner", "full"])
+def test_join_maintain_order_multi_key(left, right, how, join_expr, maintain_order):
+    q = left.join(right, on=join_expr, how=how, maintain_order=maintain_order)
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "maintain_order,how",
+    [
+        ("left", "left"),
+        ("left_right", "left"),
+        ("right", "right"),
+        ("right_left", "right"),
+        ("left_right", "full"),
+        ("right_left", "full"),
+    ],
+)
+def test_join_maintain_order_with_coalesce(left, right, maintain_order, how):
+    q = left.join(right, on="a", how=how, coalesce=True, maintain_order=maintain_order)
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "maintain_order,how,zlice",
+    [
+        ("left_right", "inner", (0, 3)),
+        ("right_left", "inner", (1, 3)),
+        ("left_right", "full", (0, 4)),
+        ("right_left", "full", (2, 3)),
+    ],
+)
+def test_join_maintain_order_with_slice(left, right, maintain_order, how, zlice):
+    # NOTE: Disable slice pushdown to make the test deterministic.
+    # Polars can push `.slice(..)` into the join. With `maintain_order`,
+    # pushing the slice may cause the CPU engine to "early-out" within the
+    # join (emitting matches for some left/right rows until the slice is
+    # satisfied). That can change WHICH rows appear in the prefix even if
+    # the *full* join order matches between engines. We want to compare
+    # "materialize full join in maintain_order order THEN slice", so we
+    # turn slice pushdown off to force post-join slicing on both sides.
+    q = left.join(right, on="a", how=how, maintain_order=maintain_order).slice(*zlice)
+    assert_gpu_result_equal(
+        q,
+        polars_collect_kwargs={"optimizations": pl.QueryOptFlags(slice_pushdown=False)},
+    )
+
+
+@pytest.mark.parametrize("how", ["semi", "anti"])
+@pytest.mark.parametrize("maintain_order", ["left", "left_right"])
+def test_join_maintain_order_ignored_for_semi_anti(left, right, how, maintain_order):
+    q = left.join(right, on="a", how=how, maintain_order=maintain_order)
+    assert_gpu_result_equal(q, check_row_order=False)

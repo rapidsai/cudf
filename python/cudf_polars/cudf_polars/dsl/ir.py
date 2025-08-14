@@ -1663,9 +1663,6 @@ class Join(IR):
         self.options = options
         self.children = (left, right)
         self._non_child_args = (self.left_on, self.right_on, self.options)
-        # TODO: Implement maintain_order
-        if options[5] != "none":
-            raise NotImplementedError("maintain_order not implemented yet")
 
     @staticmethod
     @cache
@@ -1758,6 +1755,64 @@ class Join(IR):
             [plc.types.NullOrder.AFTER, plc.types.NullOrder.AFTER],
         ).columns()
 
+    @staticmethod
+    def _reorder_by(
+        primary: Literal["left", "right"],
+        left_rows: int,
+        lg: plc.Column,
+        left_policy: plc.copying.OutOfBoundsPolicy,
+        right_rows: int,
+        rg: plc.Column,
+        right_policy: plc.copying.OutOfBoundsPolicy,
+    ) -> tuple[plc.Column, plc.Column]:
+        """
+        Reorder the output gather maps to implement ``maintain_order``.
+
+        Parameters
+        ----------
+        primary
+            Which input's row order to preserve first: ``"left"`` or ``"right"``.
+        left_rows
+            Number of rows in left table
+        lg
+            Left gather map
+        left_policy
+            Nullify policy for left map
+        right_rows
+            Number of rows in right table
+        rg
+            Right gather map
+        right_policy
+            Nullify policy for right map
+
+        Returns
+        -------
+        tuple[plc.Column, plc.Column]
+            The reordered left and right gather maps.
+        """
+        init = plc.Scalar.from_py(0, plc.types.SIZE_TYPE)
+        step = plc.Scalar.from_py(1, plc.types.SIZE_TYPE)
+
+        left_seq_table = plc.Table([plc.filling.sequence(left_rows, init, step)])
+        right_seq_table = plc.Table([plc.filling.sequence(right_rows, init, step)])
+        (left_order,) = plc.copying.gather(left_seq_table, lg, left_policy).columns()
+        (right_order,) = plc.copying.gather(right_seq_table, rg, right_policy).columns()
+
+        keys = (
+            plc.Table([left_order, right_order])
+            if primary == "left"
+            else plc.Table([right_order, left_order])
+        )
+
+        return tuple(
+            plc.sorting.stable_sort_by_key(
+                plc.Table([lg, rg]),
+                keys,
+                [plc.types.Order.ASCENDING, plc.types.Order.ASCENDING],
+                [plc.types.NullOrder.AFTER, plc.types.NullOrder.AFTER],
+            ).columns()
+        )
+
     @classmethod
     @nvtx_annotate_cudf_polars(message="Join")
     def do_evaluate(
@@ -1776,7 +1831,7 @@ class Join(IR):
         right: DataFrame,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        how, nulls_equal, zlice, suffix, coalesce, _ = options
+        how, nulls_equal, zlice, suffix, coalesce, maintain_order = options
         if how == "Cross":
             # Separate implementation, since cross_join returns the
             # result, not the gather maps
@@ -1818,13 +1873,56 @@ class Join(IR):
             table = plc.copying.gather(left.table, lg, left_policy)
             result = DataFrame.from_table(table, left.column_names, left.dtypes)
         else:
+            swapped = False
             if how == "Right":
                 # Right join is a left join with the tables swapped
                 left, right = right, left
                 left_on, right_on = right_on, left_on
+                swapped = True
+            # If we swapped, interpret maintain_order from the swapped perspective
+            if swapped:
+                map_order = {
+                    "none": "none",
+                    "left": "right",
+                    "right": "left",
+                    "left_right": "right_left",
+                    "right_left": "left_right",
+                }
+                maintain_effective = map_order.get(maintain_order, "none")
+            else:
+                maintain_effective = maintain_order
             lg, rg = join_fn(left_on.table, right_on.table, null_equality)
-            if how == "Left" or how == "Right":
-                # Order of left table is preserved
+            # if how == "Left" or how == "Right":
+            #     # Order of left table is preserved
+            #     lg, rg = cls._reorder_maps(
+            #         left.num_rows, lg, left_policy, right.num_rows, rg, right_policy
+            #     )
+            if (
+                how in ("Inner", "Left", "Right", "Full")
+                and maintain_effective != "none"
+            ):
+                if maintain_effective in ("left", "left_right"):
+                    lg, rg = cls._reorder_by(
+                        "left",
+                        left.num_rows,
+                        lg,
+                        left_policy,
+                        right.num_rows,
+                        rg,
+                        right_policy,
+                    )
+                elif maintain_effective in ("right", "right_left"):
+                    lg, rg = cls._reorder_by(
+                        "right",
+                        left.num_rows,
+                        lg,
+                        left_policy,
+                        right.num_rows,
+                        rg,
+                        right_policy,
+                    )
+            elif how in ("Left", "Right"):
+                # preserve left order even when no explicit maintain_order is set.
                 lg, rg = cls._reorder_maps(
                     left.num_rows, lg, left_policy, right.num_rows, rg, right_policy
                 )
