@@ -21,15 +21,12 @@ from cudf.core._compat import (
     PANDAS_GE_220,
     PANDAS_VERSION,
 )
-from cudf.core.index import CategoricalIndex, DatetimeIndex, Index, RangeIndex
+from cudf.core.index import CategoricalIndex, Index, RangeIndex
 from cudf.testing import assert_eq
 from cudf.testing._utils import (
     ALL_TYPES,
     NUMERIC_TYPES,
     OTHER_TYPES,
-    SERIES_OR_INDEX_NAMES,
-    assert_column_memory_eq,
-    assert_column_memory_ne,
     assert_exceptions_equal,
     expect_warning_if,
 )
@@ -70,89 +67,6 @@ def test_df_slice_empty_index():
         df.index[1]
 
 
-def test_index_find_label_range_genericindex():
-    # Monotonic Index
-    idx = cudf.Index(np.asarray([4, 5, 6, 10]))
-    assert idx.find_label_range(slice(4, 6)) == slice(0, 3, 1)
-    assert idx.find_label_range(slice(5, 10)) == slice(1, 4, 1)
-    assert idx.find_label_range(slice(0, 6)) == slice(0, 3, 1)
-    assert idx.find_label_range(slice(4, 11)) == slice(0, 4, 1)
-
-    # Non-monotonic Index
-    idx_nm = cudf.Index(np.asarray([5, 4, 6, 10]))
-    assert idx_nm.find_label_range(slice(4, 6)) == slice(1, 3, 1)
-    assert idx_nm.find_label_range(slice(5, 10)) == slice(0, 4, 1)
-    # Last value not found
-    with pytest.raises(KeyError) as raises:
-        idx_nm.find_label_range(slice(0, 6))
-    raises.match("not in index")
-    # Last value not found
-    with pytest.raises(KeyError) as raises:
-        idx_nm.find_label_range(slice(4, 11))
-    raises.match("not in index")
-
-
-def test_index_find_label_range_rangeindex():
-    """Cudf specific"""
-    # step > 0
-    # 3, 8, 13, 18
-    ridx = RangeIndex(3, 20, 5)
-    assert ridx.find_label_range(slice(3, 8)) == slice(0, 2, 1)
-    assert ridx.find_label_range(slice(0, 7)) == slice(0, 1, 1)
-    assert ridx.find_label_range(slice(3, 19)) == slice(0, 4, 1)
-    assert ridx.find_label_range(slice(2, 21)) == slice(0, 4, 1)
-
-    # step < 0
-    # 20, 15, 10, 5
-    ridx = RangeIndex(20, 3, -5)
-    assert ridx.find_label_range(slice(15, 10)) == slice(1, 3, 1)
-    assert ridx.find_label_range(slice(10, 15, -1)) == slice(2, 0, -1)
-    assert ridx.find_label_range(slice(10, 0)) == slice(2, 4, 1)
-    assert ridx.find_label_range(slice(30, 13)) == slice(0, 2, 1)
-    assert ridx.find_label_range(slice(30, 0)) == slice(0, 4, 1)
-
-
-def test_index_comparision():
-    start, stop = 10, 34
-    rg = cudf.RangeIndex(start, stop)
-    gi = cudf.Index(np.arange(start, stop))
-    assert rg.equals(gi)
-    assert gi.equals(rg)
-    assert not rg[:-1].equals(gi)
-    assert rg[:-1].equals(gi[:-1])
-
-
-@pytest.mark.parametrize(
-    "func",
-    [
-        lambda x: x.min(),
-        lambda x: x.max(),
-        lambda x: x.any(),
-        lambda x: x.all(),
-    ],
-)
-def test_reductions(func):
-    x = np.asarray([4, 5, 6, 10])
-    idx = cudf.Index(np.asarray([4, 5, 6, 10]))
-
-    assert func(x) == func(idx)
-
-
-def test_name():
-    idx = cudf.Index(np.asarray([4, 5, 6, 10]), name="foo")
-    assert idx.name == "foo"
-
-
-def test_index_immutable():
-    start, stop = 10, 34
-    rg = RangeIndex(start, stop)
-    with pytest.raises(TypeError):
-        rg[1] = 5
-    gi = cudf.Index(np.arange(start, stop))
-    with pytest.raises(TypeError):
-        gi[1] = 5
-
-
 def test_categorical_index():
     pdf = pd.DataFrame()
     pdf["a"] = [1, 2, 3]
@@ -183,103 +97,6 @@ def test_categorical_index():
     )
 
 
-def test_pandas_as_index():
-    # Define Pandas Indexes
-    pdf_int_index = pd.Index([1, 2, 3, 4, 5])
-    pdf_uint_index = pd.Index([1, 2, 3, 4, 5])
-    pdf_float_index = pd.Index([1.0, 2.0, 3.0, 4.0, 5.0])
-    pdf_datetime_index = pd.DatetimeIndex(
-        [1000000, 2000000, 3000000, 4000000, 5000000]
-    )
-    pdf_category_index = pd.CategoricalIndex(["a", "b", "c", "b", "a"])
-
-    # Define cudf Indexes
-    gdf_int_index = Index(pdf_int_index)
-    gdf_uint_index = Index(pdf_uint_index)
-    gdf_float_index = Index(pdf_float_index)
-    gdf_datetime_index = Index(pdf_datetime_index)
-    gdf_category_index = Index(pdf_category_index)
-
-    # Check instance types
-    assert isinstance(gdf_int_index, Index)
-    assert isinstance(gdf_uint_index, Index)
-    assert isinstance(gdf_float_index, Index)
-    assert isinstance(gdf_datetime_index, DatetimeIndex)
-    assert isinstance(gdf_category_index, CategoricalIndex)
-
-    # Check equality
-    assert_eq(pdf_int_index, gdf_int_index)
-    assert_eq(pdf_uint_index, gdf_uint_index)
-    assert_eq(pdf_float_index, gdf_float_index)
-    assert_eq(pdf_datetime_index, gdf_datetime_index)
-    assert_eq(pdf_category_index, gdf_category_index)
-
-    assert_eq(
-        pdf_category_index.codes,
-        gdf_category_index.codes.astype(
-            pdf_category_index.codes.dtype
-        ).to_numpy(),
-    )
-
-
-@pytest.mark.parametrize("initial_name", SERIES_OR_INDEX_NAMES)
-@pytest.mark.parametrize("name", SERIES_OR_INDEX_NAMES)
-def test_index_rename(initial_name, name):
-    pds = pd.Index([1, 2, 3], name=initial_name)
-    gds = Index(pds)
-
-    assert_eq(pds, gds)
-
-    expect = pds.rename(name)
-    got = gds.rename(name)
-
-    assert_eq(expect, got)
-    """
-    From here on testing recursive creation
-    and if name is being handles in recursive creation.
-    """
-    pds = pd.Index(expect)
-    gds = Index(got)
-
-    assert_eq(pds, gds)
-
-    pds = pd.Index(pds, name="abc")
-    gds = Index(gds, name="abc")
-    assert_eq(pds, gds)
-
-
-def test_index_rename_inplace():
-    pds = pd.Index([1, 2, 3], name="asdf")
-    gds = Index(pds)
-
-    # inplace=False should yield a shallow copy
-    gds_renamed_deep = gds.rename("new_name", inplace=False)
-
-    assert gds_renamed_deep._column.data_ptr == gds._column.data_ptr
-
-    # inplace=True returns none
-    expected_ptr = gds._column.data_ptr
-    gds.rename("new_name", inplace=True)
-
-    assert expected_ptr == gds._column.data_ptr
-
-
-def test_index_rename_preserves_arg():
-    idx1 = cudf.Index([1, 2, 3], name="orig_name")
-
-    # this should be an entirely new object
-    idx2 = idx1.rename("new_name", inplace=False)
-
-    assert idx2.name == "new_name"
-    assert idx1.name == "orig_name"
-
-    # a new object but referencing the same data
-    idx3 = Index(idx1, name="last_name")
-
-    assert idx3.name == "last_name"
-    assert idx1.name == "orig_name"
-
-
 def test_set_index_as_property():
     cdf = cudf.DataFrame()
     col1 = np.arange(10)
@@ -304,102 +121,6 @@ def test_set_index_as_property():
 
     head = cdf.head().to_pandas()
     assert_eq(head.index, idx[:5])
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        range(1, 5),
-        [1, 2, 3, 4],
-        pd.DatetimeIndex(["2001", "2002", "2003"]),
-        ["a", "b", "c"],
-        pd.CategoricalIndex(["a", "b", "c"]),
-    ],
-)
-@pytest.mark.parametrize("deep", [True, False])
-@pytest.mark.parametrize("copy_on_write", [True, False])
-def test_index_copy(data, deep, copy_on_write):
-    name = "x"
-    cidx = cudf.Index(data)
-    pidx = cidx.to_pandas()
-
-    pidx_copy = pidx.copy(name=name, deep=deep)
-    cidx_copy = cidx.copy(name=name, deep=deep)
-
-    assert_eq(pidx_copy, cidx_copy)
-
-    with cudf.option_context("copy_on_write", copy_on_write):
-        if not isinstance(cidx, cudf.RangeIndex):
-            if (
-                isinstance(cidx._column, cudf.core.column.StringColumn)
-                or not deep
-                or (copy_on_write and not deep)
-            ):
-                # StringColumn is immutable hence, deep copies of a
-                # Index with string dtype will share the same StringColumn.
-
-                # When `copy_on_write` is turned on, Index objects will
-                # have unique column object but they all point to same
-                # data pointers.
-                assert_column_memory_eq(cidx._column, cidx_copy._column)
-            else:
-                assert_column_memory_ne(cidx._column, cidx_copy._column)
-
-
-def test_index_isna_notna():
-    idx = [1, None, 3, None, 5]
-    pidx = pd.Index(idx, name="idx")
-    gidx = cudf.Index(idx, name="idx")
-    assert_eq(gidx.isna(), pidx.isna())
-    assert_eq(gidx.notna(), pidx.notna())
-
-
-def test_rangeindex_slice_attr_name():
-    start, stop = 0, 10
-    rg = RangeIndex(start, stop, name="myindex")
-    sliced_rg = rg[0:9]
-    assert_eq(rg.name, sliced_rg.name)
-
-
-def test_from_pandas_str():
-    idx = ["a", "b", "c"]
-    pidx = pd.Index(idx, name="idx")
-    gidx_1 = cudf.Index(idx, name="idx")
-    gidx_2 = cudf.from_pandas(pidx)
-
-    assert_eq(gidx_1, gidx_2)
-
-
-def test_from_pandas_gen():
-    idx = [2, 4, 6]
-    pidx = pd.Index(idx, name="idx")
-    gidx_1 = cudf.Index(idx, name="idx")
-    gidx_2 = cudf.from_pandas(pidx)
-
-    assert_eq(gidx_1, gidx_2)
-
-
-def test_index_names():
-    idx = Index([1, 2, 3], name="idx")
-    assert idx.names == ("idx",)
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        range(0),
-        range(1),
-        range(0, 1),
-        range(0, 5),
-        range(1, 10),
-        range(1, 10, 1),
-        range(1, 10, 3),
-        range(10, 1, -3),
-        range(-5, 10),
-    ],
-)
-def test_range_index_from_range(data):
-    assert_eq(pd.Index(data), cudf.Index(data))
 
 
 @pytest.mark.parametrize(

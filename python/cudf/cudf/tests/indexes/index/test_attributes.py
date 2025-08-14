@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from cudf import Index
+import cudf
 
 
 @pytest.mark.parametrize(
@@ -26,9 +26,19 @@ from cudf import Index
     ],
 )
 def test_index_is_unique_monotonic(testlist):
-    index = Index(testlist)
+    index = cudf.Index(testlist)
     index_pd = pd.Index(testlist)
 
     assert index.is_unique == index_pd.is_unique
     assert index.is_monotonic_increasing == index_pd.is_monotonic_increasing
     assert index.is_monotonic_decreasing == index_pd.is_monotonic_decreasing
+
+
+def test_name():
+    idx = cudf.Index(np.asarray([4, 5, 6, 10]), name="foo")
+    assert idx.name == "foo"
+
+
+def test_index_names():
+    idx = cudf.Index([1, 2, 3], name="idx")
+    assert idx.names == ("idx",)

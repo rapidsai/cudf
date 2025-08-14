@@ -3,7 +3,7 @@
 import pandas as pd
 import pytest
 
-from cudf.core.index import CategoricalIndex
+import cudf
 
 
 @pytest.mark.parametrize(
@@ -12,7 +12,7 @@ from cudf.core.index import CategoricalIndex
 def test_categorical_index_is_unique_monotonic(testlist):
     # Assuming unordered categorical data cannot be "monotonic"
     raw_cat = pd.Categorical(testlist, ordered=True)
-    index = CategoricalIndex(raw_cat)
+    index = cudf.CategoricalIndex(raw_cat)
     index_pd = pd.CategoricalIndex(raw_cat)
 
     assert index.is_unique == index_pd.is_unique

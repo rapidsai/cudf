@@ -2,6 +2,7 @@
 
 import cupy as cp
 import numpy as np
+import pandas as pd
 import pytest
 
 import cudf
@@ -33,3 +34,78 @@ def test_infer_timedelta_index(data, timedelta_types_as_str):
     pdi = gdi.to_pandas()
 
     assert_eq(pdi, gdi)
+
+
+def test_pandas_as_index():
+    # Define Pandas Indexes
+    pdf_int_index = pd.Index([1, 2, 3, 4, 5])
+    pdf_uint_index = pd.Index([1, 2, 3, 4, 5])
+    pdf_float_index = pd.Index([1.0, 2.0, 3.0, 4.0, 5.0])
+    pdf_datetime_index = pd.DatetimeIndex(
+        [1000000, 2000000, 3000000, 4000000, 5000000]
+    )
+    pdf_category_index = pd.CategoricalIndex(["a", "b", "c", "b", "a"])
+
+    # Define cudf Indexes
+    gdf_int_index = cudf.Index(pdf_int_index)
+    gdf_uint_index = cudf.Index(pdf_uint_index)
+    gdf_float_index = cudf.Index(pdf_float_index)
+    gdf_datetime_index = cudf.Index(pdf_datetime_index)
+    gdf_category_index = cudf.Index(pdf_category_index)
+
+    # Check instance types
+    assert isinstance(gdf_int_index, cudf.Index)
+    assert isinstance(gdf_uint_index, cudf.Index)
+    assert isinstance(gdf_float_index, cudf.Index)
+    assert isinstance(gdf_datetime_index, cudf.DatetimeIndex)
+    assert isinstance(gdf_category_index, cudf.CategoricalIndex)
+
+    # Check equality
+    assert_eq(pdf_int_index, gdf_int_index)
+    assert_eq(pdf_uint_index, gdf_uint_index)
+    assert_eq(pdf_float_index, gdf_float_index)
+    assert_eq(pdf_datetime_index, gdf_datetime_index)
+    assert_eq(pdf_category_index, gdf_category_index)
+
+    assert_eq(
+        pdf_category_index.codes,
+        gdf_category_index.codes.astype(
+            pdf_category_index.codes.dtype
+        ).to_numpy(),
+    )
+
+
+def test_from_pandas_str():
+    idx = ["a", "b", "c"]
+    pidx = pd.Index(idx, name="idx")
+    gidx_1 = cudf.Index(idx, name="idx")
+    gidx_2 = cudf.from_pandas(pidx)
+
+    assert_eq(gidx_1, gidx_2)
+
+
+def test_from_pandas_gen():
+    idx = [2, 4, 6]
+    pidx = pd.Index(idx, name="idx")
+    gidx_1 = cudf.Index(idx, name="idx")
+    gidx_2 = cudf.from_pandas(pidx)
+
+    assert_eq(gidx_1, gidx_2)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        range(0),
+        range(1),
+        range(0, 1),
+        range(0, 5),
+        range(1, 10),
+        range(1, 10, 1),
+        range(1, 10, 3),
+        range(10, 1, -3),
+        range(-5, 10),
+    ],
+)
+def test_range_index_from_range(data):
+    assert_eq(pd.Index(data), cudf.Index(data))
