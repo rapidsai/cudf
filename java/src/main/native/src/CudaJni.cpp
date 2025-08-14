@@ -224,9 +224,8 @@ JNIEXPORT jbyteArray JNICALL Java_ai_rapids_cudf_Cuda_getNativeGpuUuid(JNIEnv* e
     CUDF_CUDA_TRY(cudaGetDevice(&device));
     cudaDeviceProp device_prop;
     CUDF_CUDA_TRY(cudaGetDeviceProperties(&device_prop, device));
-    jbyteArray result = env->NewByteArray(16);
-    env->SetByteArrayRegion(result, 0, 16, (jbyte*)(device_prop.uuid.bytes));
-    return result;
+    cudf::jni::native_jbyteArray jbytes{env, (jbyte*)device_prop.uuid.bytes, 16};
+    return jbytes.get_jArray();
   }
   CATCH_STD(env, nullptr);
 }
