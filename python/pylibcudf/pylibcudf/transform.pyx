@@ -21,7 +21,7 @@ from rmm.pylibrmm.stream cimport Stream
 
 from .column cimport Column
 from .gpumemoryview cimport gpumemoryview
-from .types cimport DataType
+from .types cimport DataType, null_aware
 from .utils cimport _get_stream
 
 __all__ = [
@@ -163,7 +163,7 @@ cpdef Column transform(list[Column] inputs,
                        str transform_udf,
                        DataType output_type,
                        bool is_ptx,
-                       NullAware is_null_aware,
+                       null_aware is_null_aware,
                        Stream stream=None):
     """Create a new column by applying a transform function against
        multiple input columns.
@@ -179,6 +179,9 @@ cpdef Column transform(list[Column] inputs,
     is_ptx : bool
         If `True`, the UDF is treated as PTX code.
         If `False`, the UDF is treated as CUDA code.
+    is_null_aware: NullAware
+        If `NO`, the UDF gets non-nullable parameters
+        If `YES`, the UDF gets nullable parameters
 
     Returns
     -------

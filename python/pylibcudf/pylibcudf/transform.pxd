@@ -27,7 +27,7 @@ cpdef Column transform(list[Column] inputs,
                        str transform_udf,
                        DataType output_type,
                        bool is_ptx,
-                       null_aware is_null_aware = null_aware::NO,
+                       null_aware is_null_aware,
                        Stream stream = *)
 
 cpdef tuple[Table, Column] encode(Table input, Stream stream = *)
