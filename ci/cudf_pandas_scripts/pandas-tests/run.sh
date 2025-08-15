@@ -11,6 +11,9 @@ EXITCODE=0
 trap "EXITCODE=1" ERR
 set +e
 
+rapids-logger "Check GPU usage"
+nvidia-smi
+
 PANDAS_TESTS_BRANCH=${1}
 RAPIDS_FULL_VERSION=$(<./VERSION)
 rapids-logger "Running Pandas tests using $PANDAS_TESTS_BRANCH branch and rapids-version $RAPIDS_FULL_VERSION"
@@ -34,7 +37,7 @@ RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
 mkdir -p "${RAPIDS_TESTS_DIR}"
 
 timeout 90m bash python/cudf/cudf/pandas/scripts/run-pandas-tests.sh \
-  --numprocesses 5 \
+  --numprocesses 3 \
   --tb=line \
   -vv \
   --disable-warnings \
