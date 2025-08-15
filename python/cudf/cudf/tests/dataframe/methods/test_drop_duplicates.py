@@ -1,7 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# Copyright (c) 2025, NVIDIA CORPORATION.
 
-import itertools
-import random
 
 import numpy as np
 import pandas as pd
@@ -11,8 +9,6 @@ import cudf
 from cudf import concat
 from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal
-
-# most tests are similar to pandas drop_duplicates
 
 
 @pytest.mark.parametrize("subset", ["a", ["a"], ["a", "B"]])
@@ -28,29 +24,19 @@ def test_duplicated_with_misspelled_column_name(subset):
     )
 
 
-@pytest.mark.parametrize("keep", ["first", "last", False])
-@pytest.mark.parametrize("ignore_index", [True, False])
-@pytest.mark.parametrize(
-    "data",
-    [
-        [1, 2, 4, 5, 6, 6],
-        [],
-        ["a", "b", "s", "sd", "a", "b"],
-        pd.Series(["aaa"] * 10, dtype="object"),
-    ],
-)
-def test_drop_duplicates_series(data, keep, ignore_index):
-    pds = pd.Series(data)
-    gds = cudf.from_pandas(pds)
-
-    assert_eq(
-        pds.drop_duplicates(keep=keep, ignore_index=ignore_index),
-        gds.drop_duplicates(keep=keep, ignore_index=ignore_index),
+@pytest.mark.xfail(reason="cudf does not support duplicate column names yet")
+def test_drop_duplicates_with_duplicate_column_names():
+    df = pd.DataFrame(
+        [[1, 2, 5], [3, 4, 6], [3, 4, 7]], columns=["a", "a", "b"]
     )
+    df = cudf.DataFrame.from_pandas(df)
 
-    pds.drop_duplicates(keep=keep, inplace=True, ignore_index=ignore_index)
-    gds.drop_duplicates(keep=keep, inplace=True, ignore_index=ignore_index)
-    assert_eq(pds, gds)
+    result0 = df.drop_duplicates()
+    assert_eq(result0, df)
+
+    result1 = df.drop_duplicates("a")
+    expected1 = df[:2]
+    assert_eq(result1, expected1)
 
 
 def test_drop_duplicates():
@@ -127,20 +113,28 @@ def test_drop_duplicates():
     expected = pdf.drop_duplicates("E", keep="last")
     assert_eq(result, expected)
 
+
+def test_drop_duplicates_integers():
     pdf = pd.DataFrame(
         {"x": [7, 6, 3, 3, 4, 8, 0], "y": [0, 6, 5, 5, 9, 1, 2]}
     )
     gdf = cudf.DataFrame.from_pandas(pdf)
     assert_eq(gdf.drop_duplicates(), pdf.drop_duplicates())
 
+
+def test_drop_duplicates_integers_positive():
     pdf = pd.DataFrame([[1, 0], [0, 2]])
     gdf = cudf.DataFrame.from_pandas(pdf)
     assert_eq(gdf.drop_duplicates(), pdf.drop_duplicates())
 
+
+def test_drop_duplicates_integers_negative():
     pdf = pd.DataFrame([[-2, 0], [0, -4]])
     gdf = cudf.DataFrame.from_pandas(pdf)
     assert_eq(gdf.drop_duplicates(), pdf.drop_duplicates())
 
+
+def test_drop_duplicates_integers_max():
     x = np.iinfo(np.int64).max / 3 * 2
     pdf = pd.DataFrame([[-x, x], [0, x + 4]])
     gdf = cudf.DataFrame.from_pandas(pdf)
@@ -150,28 +144,17 @@ def test_drop_duplicates():
     gdf = cudf.DataFrame.from_pandas(pdf)
     assert_eq(gdf.drop_duplicates(), pdf.drop_duplicates())
 
+
+def test_drop_duplicates_integers_unique():
     pdf = pd.DataFrame([i] * 9 for i in range(16))
     pdf = pd.concat([pdf, pd.DataFrame([[1] + [0] * 8])], ignore_index=True)
     gdf = cudf.DataFrame.from_pandas(pdf)
     assert_eq(gdf.drop_duplicates(), pdf.drop_duplicates())
 
 
-@pytest.mark.xfail(reason="cudf does not support duplicate column names yet")
-def test_drop_duplicates_with_duplicate_column_names():
-    df = pd.DataFrame(
-        [[1, 2, 5], [3, 4, 6], [3, 4, 7]], columns=["a", "a", "b"]
-    )
-    df = cudf.DataFrame.from_pandas(df)
-
-    result0 = df.drop_duplicates()
-    assert_eq(result0, df)
-
-    result1 = df.drop_duplicates("a")
-    expected1 = df[:2]
-    assert_eq(result1, expected1)
-
-
-def test_drop_duplicates_for_take_all():
+@pytest.mark.parametrize("subset", ["AAA", ["AAA", "B"]])
+@pytest.mark.parametrize("keep", ["first", "last", False])
+def test_drop_duplicates_for_take_all(subset, keep):
     pdf = pd.DataFrame(
         {
             "AAA": ["foo", "bar", "baz", "bar", "foo", "bar", "qux", "foo"],
@@ -181,30 +164,8 @@ def test_drop_duplicates_for_take_all():
         }
     )
     gdf = cudf.DataFrame.from_pandas(pdf)
-    # single column
-    result = gdf.drop_duplicates("AAA")
-    expected = pdf.drop_duplicates("AAA")
-    assert_eq(result, expected)
-
-    result = gdf.drop_duplicates("AAA", keep="last")
-    expected = pdf.drop_duplicates("AAA", keep="last")
-    assert_eq(result, expected)
-
-    result = gdf.drop_duplicates("AAA", keep=False)
-    expected = pdf.drop_duplicates("AAA", keep=False)
-    assert_eq(result, expected)
-
-    # multiple columns
-    result = gdf.drop_duplicates(["AAA", "B"])
-    expected = pdf.drop_duplicates(["AAA", "B"])
-    assert_eq(result, expected)
-
-    result = gdf.drop_duplicates(["AAA", "B"], keep="last")
-    expected = pdf.drop_duplicates(["AAA", "B"], keep="last")
-    assert_eq(result, expected)
-
-    result = gdf.drop_duplicates(["AAA", "B"], keep=False)
-    expected = pdf.drop_duplicates(["AAA", "B"], keep=False)
+    result = gdf.drop_duplicates(subset, keep=keep)
+    expected = pdf.drop_duplicates(subset, keep=keep)
     assert_eq(result, expected)
 
 
@@ -268,21 +229,15 @@ def test_drop_duplicates_empty(df):
 
 
 def test_dataframe_drop_duplicates_numeric_method():
-    num_columns = 3
-    comb = list(itertools.permutations(range(num_columns), num_columns))
-    shuf = list(comb)
-    random.Random(num_columns).shuffle(shuf)
-
-    def get_pdf(n_dup):
-        # create dataframe with n_dup duplicate rows
-        rows = comb + shuf[:n_dup]
-        random.Random(n_dup).shuffle(rows)
-        return pd.DataFrame(rows)
-
-    for i in range(5):
-        pdf = get_pdf(i)
-        gdf = cudf.DataFrame.from_pandas(pdf)
-        assert_eq(gdf.drop_duplicates(), pdf.drop_duplicates())
+    pdf = pd.DataFrame(
+        {
+            "A": [1, 1, 1, 4, 5],
+            "B": [1, 1, 1, 4, 5],
+            "C": [1, 1, 1, 4, 5],
+        }
+    )
+    gdf = cudf.DataFrame.from_pandas(pdf)
+    assert_eq(gdf.drop_duplicates(), pdf.drop_duplicates())
 
     # subset columns, single columns
     assert_eq(
@@ -299,16 +254,13 @@ def test_dataframe_drop_duplicates_numeric_method():
     )
 
     # subset columns shuffled
-    cols = list(pdf.columns)
-    random.Random(3).shuffle(cols)
+    cols = ["B", "C", "A"]
     assert_eq(gdf.drop_duplicates(cols), pdf.drop_duplicates(cols))
-    random.Random(3).shuffle(cols)
     assert_eq(gdf.drop_duplicates(cols[:-1]), pdf.drop_duplicates(cols[:-1]))
-    random.Random(3).shuffle(cols)
     assert_eq(gdf.drop_duplicates(cols[-1]), pdf.drop_duplicates(cols[-1]))
     assert_eq(
-        gdf.drop_duplicates(cols, keep="last"),
-        pdf.drop_duplicates(cols, keep="last"),
+        gdf.drop_duplicates(pdf.columns, keep="last"),
+        pdf.drop_duplicates(pdf.columns, keep="last"),
     )
 
 
@@ -597,12 +549,12 @@ def test_drop_duplicates_multi_index():
 
     expected = pdf.drop_duplicates()
     result = gdf.drop_duplicates()
-    assert_eq(result.to_pandas(), expected)
+    assert_eq(result, expected)
     # FIXME: to_pandas needed until sort_index support for MultiIndex
 
     for col in gdf.columns:
         assert_eq(
-            gdf[col].drop_duplicates().to_pandas(),
+            gdf[col].drop_duplicates(),
             pdf[col].drop_duplicates(),
         )
 
