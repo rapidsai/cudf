@@ -63,11 +63,19 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
   // allowing the page decoder to write string data directly to the column buffer, rather than
   // doing a gather operation later on.
   // TODO: This step is somewhat redundant if size info has already been calculated (nested schema,
-  // chunked reader).  
-  auto col_string_sizes  = cudf::detail::make_host_vector<size_t>(_input_columns.size(), _stream);
+  // chunked reader).
+  auto col_string_sizes = cudf::detail::make_host_vector<size_t>(_input_columns.size(), _stream);
   if (has_strings) {
     // Compute column string sizes (using page string offsets) for this output table chunk
     col_string_sizes = calculate_page_string_offsets();
+
+    /*
+      printf("CSS\n");
+      for(size_t idx=0; idx<col_string_sizes.size(); idx++){
+        printf("%d ", (int)col_string_sizes[idx]);
+      }
+      printf("\n");
+      */
 
     // Check for overflow in cumulative column string sizes of this pass so that the page string
     // offsets of overflowing (large) string columns are treated as 64-bit.
@@ -406,6 +414,14 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
   // Copy over initial string offsets from device
   auto h_initial_str_offsets = cudf::detail::make_host_vector_async(initial_str_offsets, _stream);
 
+  /*
+  _stream.synchronize();
+  for(size_t idx=0; idx<h_initial_str_offsets.size(); idx++){
+    printf("%d ", (int)h_initial_str_offsets[idx]);
+  }
+  printf("\n");
+  */
+
   if (auto const error = error_code.value_sync(_stream); error != 0) {
     CUDF_FAIL("Parquet data decode failed with code(s) " + kernel_error::to_string(error));
   }
@@ -590,25 +606,40 @@ void reader::impl::preprocess_chunk_strings(row_range const& read_info)
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
 
-  if(!(subpass.kernel_mask & STRINGS_MASK)){
-    return;
-  }
-  
+  if (!(subpass.kernel_mask & STRINGS_MASK)) { return; }
+
   // we may need to (re)compute string sizes.
-  // string sizes were computed in the page preprocess step for the subpass if we are doing an output chunked read, but contains the size for all strings,
-  // not necessarily just the rows that may have been selected for an output chunk.
+  // string sizes were computed in the page preprocess step for the subpass if we are doing an
+  // output chunked read, but contains the size for all strings, not necessarily just the rows that
+  // may have been selected for an output chunk.
   bool full_string_sizes_computed = _output_chunk_read_limit > 0;
-  bool const need_string_size_recompute =  (!full_string_sizes_computed) ||
-                                           ((subpass.skip_rows != read_info.skip_rows) || (subpass.num_rows != read_info.num_rows));
-  
+  bool const need_string_size_recompute =
+    (!full_string_sizes_computed) ||
+    ((subpass.skip_rows != read_info.skip_rows) || (subpass.num_rows != read_info.num_rows));
+
   ComputePageStringBounds(subpass.pages,
                           pass.chunks,
                           read_info.skip_rows,
                           read_info.num_rows,
                           pass.level_type_size,
                           _stream);
-  
-  if(need_string_size_recompute){
+  /*
+  {
+    auto h_pages = cudf::detail::make_std_vector(subpass.pages, _stream);
+    for(size_t idx=0; idx<h_pages.size(); idx++){
+      auto const& p = h_pages[idx];
+      if(BitAnd(p.kernel_mask, STRINGS_MASK)){
+        printf("P(%lu): %lu (%d %d) %d %d\n", idx, (size_t)p.str_bytes,
+                                             (int)p.start_val, (int)p.end_val,
+                                             (int)p.num_nulls,
+                                             (int)p.num_valids);
+      }
+    }
+  }
+  */
+
+  if (need_string_size_recompute) {
+    // printf("String size recompute\n");
     ComputePageStringSizesPass1(subpass.pages,
                                 pass.chunks,
                                 read_info.skip_rows,
@@ -630,7 +661,7 @@ void reader::impl::preprocess_chunk_strings(row_range const& read_info)
   }
   */
 
-  // 
+  //
   ComputePageStringSizesPass2(subpass.pages,
                               pass.chunks,
                               subpass.delta_temp_buf,
@@ -640,7 +671,7 @@ void reader::impl::preprocess_chunk_strings(row_range const& read_info)
                               subpass.kernel_mask,
                               _stream);
 
-  /*    
+  /*
     {
       auto h_pages = cudf::detail::make_std_vector(subpass.pages, _stream);
       for(size_t idx=0; idx<h_pages.size(); idx++){
@@ -658,7 +689,7 @@ table_with_metadata reader::impl::read_chunk_internal(read_mode mode)
   CUDF_FUNC_RANGE();
 
   // If `_output_metadata` has been constructed, just copy it over.
-  auto out_metadata = _output_metadata ? table_metadata{*_output_metadata} : table_metadata{};  
+  auto out_metadata = _output_metadata ? table_metadata{*_output_metadata} : table_metadata{};
   out_metadata.schema_info.resize(_output_buffers.size());
 
   // output cudf columns as determined by the top level schema

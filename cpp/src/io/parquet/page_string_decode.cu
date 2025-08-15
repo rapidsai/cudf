@@ -665,8 +665,12 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size) gpuComputeStringPageBo
  * @param min_rows crop all rows below min_row
  * @param num_rows Maximum number of rows to read
  */
-CUDF_KERNEL void __launch_bounds__(delta_preproc_block_size) gpuComputeDeltaPageStringSizes(
-  PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows, bool all_values)
+CUDF_KERNEL void __launch_bounds__(delta_preproc_block_size)
+  gpuComputeDeltaPageStringSizes(PageInfo* pages,
+                                 device_span<ColumnChunkDesc const> chunks,
+                                 size_t min_row,
+                                 size_t num_rows,
+                                 bool all_values)
 {
   __shared__ __align__(16) page_state_s state_g;
 
@@ -678,6 +682,8 @@ CUDF_KERNEL void __launch_bounds__(delta_preproc_block_size) gpuComputeDeltaPage
   // whether or not we have repetition levels (lists)
   bool const has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
 
+  if (t == 0) { pp->str_bytes = 0; }
+
   // setup page info
   if (!setup_local_page_info(s,
                              pp,
@@ -688,8 +694,8 @@ CUDF_KERNEL void __launch_bounds__(delta_preproc_block_size) gpuComputeDeltaPage
                              page_processing_stage::STRING_BOUNDS)) {
     return;
   }
-  
-  auto const start_value   = all_values ? 0 : pp->start_val;
+
+  auto const start_value = all_values ? 0 : pp->start_val;
 
   // if data size is known, can short circuit here
   if (chunks[pp->chunk_idx].physical_type == Type::FIXED_LEN_BYTE_ARRAY) {
@@ -746,8 +752,12 @@ CUDF_KERNEL void __launch_bounds__(delta_preproc_block_size) gpuComputeDeltaPage
  * @param min_rows crop all rows below min_row
  * @param num_rows Maximum number of rows to read
  */
-CUDF_KERNEL void __launch_bounds__(delta_length_block_size) gpuComputeDeltaLengthPageStringSizes(
-  PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows, bool all_values)
+CUDF_KERNEL void __launch_bounds__(delta_length_block_size)
+  gpuComputeDeltaLengthPageStringSizes(PageInfo* pages,
+                                       device_span<ColumnChunkDesc const> chunks,
+                                       size_t min_row,
+                                       size_t num_rows,
+                                       bool all_values)
 {
   using cudf::detail::warp_size;
   using WarpReduce = cub::WarpReduce<uleb128_t>;
@@ -762,6 +772,8 @@ CUDF_KERNEL void __launch_bounds__(delta_length_block_size) gpuComputeDeltaLengt
 
   // whether or not we have repetition levels (lists)
   bool const has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
+
+  if (t == 0) { pp->str_bytes = 0; }
 
   // setup page info
   if (!setup_local_page_info(s,
@@ -795,8 +807,8 @@ CUDF_KERNEL void __launch_bounds__(delta_length_block_size) gpuComputeDeltaLengt
   } else {
     // now process string info in the range [start_value, end_value)
     // set up for decoding strings...can be either plain or dictionary
-    auto const start_value   = all_values ? 0 : pp->start_val;
-    auto const end_value     = all_values ? pp->num_input_values : pp->end_val;
+    auto const start_value = all_values ? 0 : pp->start_val;
+    auto const end_value   = all_values ? pp->num_input_values : pp->end_val;
 
     if (t == 0) { string_lengths.init_binary_block(s->data_start, s->data_end); }
     __syncwarp();
@@ -848,8 +860,12 @@ CUDF_KERNEL void __launch_bounds__(delta_length_block_size) gpuComputeDeltaLengt
  * @param min_rows crop all rows below min_row
  * @param num_rows Maximum number of rows to read
  */
-CUDF_KERNEL void __launch_bounds__(preprocess_block_size) gpuComputePageStringSizes(
-  PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows, bool all_values)
+CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
+  gpuComputePageStringSizes(PageInfo* pages,
+                            device_span<ColumnChunkDesc const> chunks,
+                            size_t min_row,
+                            size_t num_rows,
+                            bool all_values)
 {
   __shared__ __align__(16) page_state_s state_g;
 
@@ -860,6 +876,8 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size) gpuComputePageStringSi
 
   // whether or not we have repetition levels (lists)
   bool const has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
+
+  if (t == 0) { pp->str_bytes = 0; }
 
   // setup page info
   if (!setup_local_page_info(s,
@@ -950,11 +968,11 @@ struct page_tform_functor {
 }  // anonymous namespace
 
 void ComputePageStringBounds(cudf::detail::hostdevice_span<PageInfo> pages,
-                              cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-                              size_t min_row,
-                              size_t num_rows,
-                              int level_type_size,
-                              rmm::cuda_stream_view stream)
+                             cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                             size_t min_row,
+                             size_t num_rows,
+                             int level_type_size,
+                             rmm::cuda_stream_view stream)
 {
   dim3 const dim_block(preprocess_block_size, 1);
   dim3 const dim_grid(pages.size(), 1);  // 1 threadblock per page
@@ -968,12 +986,12 @@ void ComputePageStringBounds(cudf::detail::hostdevice_span<PageInfo> pages,
 }
 
 void ComputePageStringSizesPass1(cudf::detail::hostdevice_span<PageInfo> pages,
-                                cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-                                size_t min_row,
-                                size_t num_rows,
-                                uint32_t kernel_mask,
-                                rmm::cuda_stream_view stream,
-                                bool all_values)
+                                 cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                                 size_t min_row,
+                                 size_t num_rows,
+                                 uint32_t kernel_mask,
+                                 rmm::cuda_stream_view stream,
+                                 bool all_values)
 {
   dim3 const dim_block(preprocess_block_size, 1);
   dim3 const dim_grid(pages.size(), 1);  // 1 threadblock per page
@@ -986,18 +1004,18 @@ void ComputePageStringSizesPass1(cudf::detail::hostdevice_span<PageInfo> pages,
   int s_idx = 0;
   if (BitAnd(kernel_mask, decode_kernel_mask::DELTA_BYTE_ARRAY) != 0) {
     dim3 dim_delta(delta_preproc_block_size, 1);
-    printf("PSS 1\n");
+    // printf("PSS 1\n");
     gpuComputeDeltaPageStringSizes<<<dim_grid, dim_delta, 0, streams[s_idx++].value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows, all_values);
   }
   if (BitAnd(kernel_mask, decode_kernel_mask::DELTA_LENGTH_BA) != 0) {
     dim3 dim_delta(delta_length_block_size, 1);
-    printf("PSS 2\n");
+    // printf("PSS 2\n");
     gpuComputeDeltaLengthPageStringSizes<<<dim_grid, dim_delta, 0, streams[s_idx++].value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows, all_values);
   }
   if (BitAnd(kernel_mask, STRINGS_MASK_NON_DELTA) != 0) {
-    printf("PSS 3\n");
+    // printf("PSS 3\n");
     gpuComputePageStringSizes<<<dim_grid, dim_block, 0, streams[s_idx++].value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows, all_values);
   }
@@ -1010,25 +1028,25 @@ void ComputePageStringSizesPass1(cudf::detail::hostdevice_span<PageInfo> pages,
  * @copydoc cudf::io::parquet::detail::ComputePageStringSizes
  */
 void ComputePageStringSizesPass2(cudf::detail::hostdevice_span<PageInfo> pages,
-                                cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-                                rmm::device_uvector<uint8_t>& temp_string_buf,
-                                size_t min_row,
-                                size_t num_rows,
-                                int level_type_size,
-                                uint32_t kernel_mask,
-                                rmm::cuda_stream_view stream)
+                                 cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                                 rmm::device_uvector<uint8_t>& temp_string_buf,
+                                 size_t min_row,
+                                 size_t num_rows,
+                                 int level_type_size,
+                                 uint32_t kernel_mask,
+                                 rmm::cuda_stream_view stream)
 {
-/*
-  dim3 const dim_block(preprocess_block_size, 1);
-  dim3 const dim_grid(pages.size(), 1);  // 1 threadblock per page  
-  if (level_type_size == 1) {
-    gpuComputeStringPageBounds<uint8_t>
-      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
-  } else {
-    gpuComputeStringPageBounds<uint16_t>
-      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
-  }
-  */
+  /*
+    dim3 const dim_block(preprocess_block_size, 1);
+    dim3 const dim_grid(pages.size(), 1);  // 1 threadblock per page
+    if (level_type_size == 1) {
+      gpuComputeStringPageBounds<uint8_t>
+        <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
+    } else {
+      gpuComputeStringPageBounds<uint16_t>
+        <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
+    }
+    */
 
   // kernel mask may contain other kernels we don't need to count
   /*

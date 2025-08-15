@@ -536,7 +536,7 @@ void reader::impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_li
   // in some cases we will need to do further preprocessing of pages.
   // - if we have lists, the num_rows field in PageInfo will be incorrect coming out of the file
   // - if we are doing a chunked read, we need to compute the size of all string data
-  if (has_lists/* || chunk_read_limit > 0*/) {
+  if (has_lists /* || chunk_read_limit > 0*/) {
     // computes:
     // PageNestingInfo::num_rows for each page. the true number of rows (taking repetition into
     // account), not just the number of values. PageNestingInfo::size for each level of nesting, for
@@ -550,12 +550,12 @@ void reader::impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_li
                        pass.chunks,
                        0,  // 0-max size_t. process all possible rows
                        std::numeric_limits<size_t>::max(),
-                       true,                  // compute num_rows
-                       false, // chunk_read_limit > 0,  // compute string sizes
+                       true,   // compute num_rows
+                       false,  // chunk_read_limit > 0,  // compute string sizes
                        _pass_itm_data->level_type_size,
                        _stream);
   }
-  
+
   /*
   {
       auto h_pages = cudf::detail::make_std_vector(subpass.pages, _stream);
@@ -567,17 +567,16 @@ void reader::impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_li
       }
     }*/
 
-
   // compute string sizes if necessary. if we are doing output, we need to know
   // the sizes of all strings so we can properly compute chunk boundaries.
-  auto const has_flba =
-    std::any_of(pass.chunks.begin(), pass.chunks.end(), [](auto const& chunk) {
-      return chunk.physical_type == Type::FIXED_LEN_BYTE_ARRAY and
-              is_treat_fixed_length_as_string(chunk.logical_type);
-    });  
-  if((chunk_read_limit > 0) && (subpass.kernel_mask & STRINGS_MASK)){
+  auto const has_flba = std::any_of(pass.chunks.begin(), pass.chunks.end(), [](auto const& chunk) {
+    return chunk.physical_type == Type::FIXED_LEN_BYTE_ARRAY and
+           is_treat_fixed_length_as_string(chunk.logical_type);
+  });
+  if ((chunk_read_limit > 0) && (subpass.kernel_mask & STRINGS_MASK)) {
     // if we have the page index, str_bytes will already be computed
     if (!_has_page_index /*|| uses_custom_row_bounds(mode) || has_flba*/) {
+      // printf("String size compute 1\n");
       ComputePageStringSizesPass1(subpass.pages,
                                   pass.chunks,
                                   pass.skip_rows,
@@ -587,7 +586,6 @@ void reader::impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_li
                                   true);
     }
   }
-  
   /*
   {
       auto h_pages = cudf::detail::make_std_vector(subpass.pages, _stream);
@@ -597,8 +595,8 @@ void reader::impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_li
           printf("P(%lu): %lu\n", idx, (size_t)p.str_bytes);
         }
       }
-    }*/
-
+    }
+    */
 
   auto iter = thrust::make_counting_iterator(0);
 
