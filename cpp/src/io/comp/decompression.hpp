@@ -48,13 +48,12 @@ struct decompression_info {
 };
 
 /**
- * @brief Functor which returns total scratch space required based on computed decompression_info
- * data.
+ * @brief Returns total scratch space required based on computed decompression_info data.
  */
 [[nodiscard]] size_t get_decompression_scratch_size(decompression_info const& di);
 
 /**
- * @brief Functor which returns total scratch space required based on the compressed input data.
+ * @brief Returns total scratch space required based on the compressed input data.
  *
  * Might launch a kernel. Should be used only if is_decompression_scratch_size_ex_supported returns
  * true.

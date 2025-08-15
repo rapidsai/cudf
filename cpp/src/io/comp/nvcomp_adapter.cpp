@@ -560,7 +560,6 @@ std::optional<std::string> is_decompression_disabled_impl(compression_type compr
 
 #if NVCOMP_VER_MAJOR >= 5
 // Dispatcher for nvcompBatched<format>DecompressGetTempSizeSync
-template <typename... Args>
 auto batched_decompress_get_temp_size_sync(compression_type compression,
                                            void const* const* device_compressed_chunk_ptrs,
                                            size_t const* device_compressed_chunk_bytes,
