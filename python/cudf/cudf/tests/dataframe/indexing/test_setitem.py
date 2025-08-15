@@ -21,6 +21,5 @@ def test_listcol_setitem_retain_dtype():
 
 
 def test_setitem_datetime():
-    df = cudf.DataFrame()
-    df["date"] = pd.date_range("20010101", "20010105").values
+    df = cudf.DataFrame({"date": pd.date_range("20010101", "20010105").values})
     assert df.date.dtype.kind == "M"
