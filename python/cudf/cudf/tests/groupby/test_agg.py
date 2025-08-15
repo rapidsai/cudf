@@ -633,3 +633,56 @@ def test_groupby_mix_agg_scan():
     gb.agg(func[1:])
     with pytest.raises(NotImplementedError, match=err_msg):
         gb.agg(func)
+
+
+@pytest.mark.parametrize(
+    "op", ["cummax", "cummin", "cumprod", "cumsum", "mean", "median"]
+)
+def test_group_by_raises_string_error(op):
+    df = cudf.DataFrame({"a": [1, 2, 3, 4, 5], "b": ["a", "b", "c", "d", "e"]})
+
+    with pytest.raises(TypeError):
+        df.groupby(df.a).agg(op)
+
+
+@pytest.mark.parametrize(
+    "op",
+    [
+        "cummax",
+        "cummin",
+        "cumprod",
+        "cumsum",
+        "mean",
+        "median",
+        "prod",
+        "sum",
+        list,
+    ],
+)
+def test_group_by_raises_category_error(op):
+    df = cudf.DataFrame(
+        {
+            "a": [1, 2, 3, 4, 5],
+            "b": cudf.Series(["a", "b", "c", "d", "e"], dtype="category"),
+        }
+    )
+
+    with pytest.raises(TypeError):
+        df.groupby(df.a).agg(op)
+
+
+def test_agg_duplicate_aggs_pandas_compat_raises():
+    agg = {"b": ["mean", "mean"]}
+    dfgb = cudf.DataFrame({"a": [1, 1, 2], "b": [4, 5, 6]}).groupby(["a"])
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            dfgb.agg(agg)
+
+    with pytest.warns(UserWarning):
+        result = dfgb.agg(agg)
+    expected = cudf.DataFrame(
+        [4.5, 6.0],
+        index=cudf.Index([1, 2], name="a"),
+        columns=pd.MultiIndex.from_tuples([("b", "mean")]),
+    )
+    assert_groupby_results_equal(result, expected)
