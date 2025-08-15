@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import decimal
 import pickle
 import warnings
 from collections.abc import Iterable, Iterator, MutableSequence, Sequence
@@ -2564,7 +2565,16 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 def _has_any_nan(arbitrary: pd.Series | np.ndarray) -> bool:
     """Check if an object dtype Series or array contains NaN."""
     return any(
-        isinstance(x, (float, np.floating)) and np.isnan(x)
+        (isinstance(x, (float, np.floating)) and np.isnan(x))
+        or (isinstance(x, decimal.Decimal) and x.is_nan())
+        for x in np.asarray(arbitrary)
+    )
+
+
+def _has_any_nat(arbitrary: pd.Series | np.ndarray) -> bool:
+    """Check if an object dtype Series or array contains NaT."""
+    return any(
+        isinstance(x, (type(pd.NaT), pd.Timestamp)) and x is pd.NaT
         for x in np.asarray(arbitrary)
     )
 
@@ -2865,6 +2875,7 @@ def as_column(
     * pandas.Categorical objects
     * range objects
     """
+    # import pdb;pdb.set_trace()
     if isinstance(arbitrary, (range, pd.RangeIndex, cudf.RangeIndex)):
         with acquire_spill_lock():
             column = ColumnBase.from_pylibcudf(
@@ -3036,6 +3047,7 @@ def as_column(
                 arbitrary, nan_as_null=nan_as_null, dtype=dtype, length=length
             )
         elif arbitrary.dtype.kind == "O":
+            # import pdb;pdb.set_trace()
             if isinstance(arbitrary, NumpyExtensionArray):
                 # infer_dtype does not handle NumpyExtensionArray
                 arbitrary = np.array(arbitrary, dtype=object)
@@ -3067,7 +3079,7 @@ def as_column(
             elif (
                 nan_as_null is False
                 and inferred_dtype not in ("decimal", "empty")
-                and _has_any_nan(arbitrary)
+                and (_has_any_nan(arbitrary) or _has_any_nat(arbitrary))
             ):
                 # Decimal can hold float("nan")
                 # All np.nan is not restricted by type
