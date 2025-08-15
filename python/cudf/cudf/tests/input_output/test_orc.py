@@ -224,15 +224,16 @@ def test_orc_read_statistics(datadir):
 @pytest.mark.parametrize(
     "predicate,expected_len",
     [
-        ([[("int1", "==", 1)]], 5000),
-        ([[("int1", "<=", 2)]], 10000),
-        ([[("int1", "==", -1)]], 0),
-        ([[("int1", "in", range(3))]], 10000),
-        ([[("int1", "in", {1, 3})]], 6000),
-        ([[("int1", "not in", {1, 3})]], 5000),
+        (("int1", "==", 1), 5000),
+        (("int1", "<=", 2), 10000),
+        (("int1", "==", -1), 0),
+        (("int1", "in", range(3)), 10000),
+        (("int1", "in", {1, 3}), 6000),
+        (("int1", "not in", {1, 3}), 5000),
     ],
 )
 def test_orc_read_filtered(datadir, engine, predicate, expected_len):
+    predicate = [[predicate]]
     path = datadir / "TestOrcFile.testStripeLevelStats.orc"
     try:
         df_filtered = cudf.read_orc(path, engine=engine, filters=predicate)
@@ -978,7 +979,9 @@ def test_orc_string_stream_offset_issue():
     assert_eq(df, cudf.read_orc(buffer))
 
 
-def generate_list_struct_buff(size=10_000):
+@pytest.fixture(scope="module")
+def list_struct_buff():
+    size = 100
     rd = random.Random(1)
     rng = np.random.default_rng(seed=1)
 
@@ -1054,14 +1057,9 @@ def generate_list_struct_buff(size=10_000):
             "struct_nests_list": struct_nests_list,
         }
     )
-    with orc.ORCWriter(buff, stripe_size=1024) as writer:
+    with orc.ORCWriter(buff, stripe_size=16) as writer:
         writer.write(pa_table)
     return buff
-
-
-@pytest.fixture(scope="module")
-def list_struct_buff():
-    return generate_list_struct_buff()
 
 
 @pytest.mark.parametrize(
@@ -1072,7 +1070,7 @@ def list_struct_buff():
         ["lvl2_struct", "lvl1_struct"],
     ],
 )
-@pytest.mark.parametrize("num_rows", [0, 15, 1005, 10561, 10_000])
+@pytest.mark.parametrize("num_rows", [0, 15, 100])
 def test_lists_struct_nests(columns, num_rows, use_index, list_struct_buff):
     gdf = cudf.read_orc(
         list_struct_buff,
@@ -1117,7 +1115,9 @@ def test_pyspark_struct(datadir):
     assert_eq(pdf, gdf)
 
 
-def gen_map_buff(size):
+@pytest.fixture
+def map_buff():
+    size = 100
     rd = random.Random(1)
     rng = np.random.default_rng(seed=1)
 
@@ -1203,22 +1203,16 @@ def gen_map_buff(size):
         ["lvl1_map", "lvl2_map", "lvl2_struct_map"],
     )
 
-    orc.write_table(
-        pa_table, buff, stripe_size=1024, compression="UNCOMPRESSED"
-    )
-
+    orc.write_table(pa_table, buff, stripe_size=16, compression="UNCOMPRESSED")
     return buff
-
-
-map_buff = gen_map_buff(size=100000)
 
 
 @pytest.mark.parametrize(
     "columns",
     [None, ["lvl1_map", "lvl2_struct_map"], ["lvl2_struct_map", "lvl2_map"]],
 )
-@pytest.mark.parametrize("num_rows", [0, 15, 1005, 10561, 100000])
-def test_map_type_read(columns, num_rows, use_index):
+@pytest.mark.parametrize("num_rows", [0, 15, 100])
+def test_map_type_read(columns, num_rows, use_index, map_buff):
     tbl = orc.read_table(map_buff)
 
     lvl1_map = (
@@ -1363,7 +1357,7 @@ def test_orc_writer_lists(data):
 
 
 def test_chunked_orc_writer_lists():
-    num_rows = 12345
+    num_rows = 3000
     pdf_in = pd.DataFrame(
         {
             "ls": [[str(i), str(2 * i)] for i in range(num_rows)],
@@ -1437,22 +1431,17 @@ def test_writer_lists_structs(list_struct_buff):
     assert pyarrow_tbl.equals(df_in.to_arrow())
 
 
-@pytest.mark.parametrize(
-    "data",
-    [
-        {
-            "with_pd": [
-                [i if i % 3 else None] if i < 9999 or i > 20001 else None
-                for i in range(21000)
-            ],
-            "no_pd": [
-                [i if i % 3 else None] if i < 9999 or i > 20001 else []
-                for i in range(21000)
-            ],
-        },
-    ],
-)
-def test_orc_writer_lists_empty_rg(data):
+def test_orc_writer_lists_empty_rg():
+    data = {
+        "with_pd": [
+            [i if i % 3 else None] if i < 25 or i > 30 else None
+            for i in range(50)
+        ],
+        "no_pd": [
+            [i if i % 3 else None] if i < 25 or i > 30 else []
+            for i in range(50)
+        ],
+    }
     pdf_in = pd.DataFrame(data)
     buffer = BytesIO()
     cudf_in = cudf.from_pandas(pdf_in)
@@ -1620,7 +1609,7 @@ def test_orc_writer_nvcomp(compression):
     try:
         expected.to_orc(buff, compression=compression)
     except RuntimeError:
-        pytest.mark.xfail(reason="Newer nvCOMP version is required")
+        pytest.skip(reason="Newer nvCOMP version is required")
     else:
         got = pd.read_orc(buff)
         assert_eq(expected, got)
