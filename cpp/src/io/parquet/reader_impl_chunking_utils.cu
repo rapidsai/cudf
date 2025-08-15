@@ -764,17 +764,23 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
       }
       page_spans.resize(end_iter - page_spans.begin(), stream);
 
+      auto const total_temp_size    = get_decompression_scratch_size(total_decomp_info);
       auto const total_temp_size_ex = cudf::io::detail::get_decompression_scratch_size_ex(
         total_decomp_info.type,
         page_spans,
         total_decomp_info.max_page_decompressed_size,
         total_decomp_info.total_decompressed_size,
         stream);
-      auto const total_temp_size = get_decompression_scratch_size(total_decomp_info);
 
+      // Make use of the extended API if it provides a more accurate estimate
       if (total_temp_size_ex < total_temp_size) {
-        // If the new (more accurate) API returns a smaller size, adjust the temp_costs
+        // The new extended API provides a more accurate (smaller) estimate than the legacy API.
+        // We cannot efficiently use the extended API to get per-page scratch sizes, so we adjust
+        // the per-page scratch sizes to on-average reflect the better estimate. This means that
+        // the scratch size might not be accurate for each page, but it will in aggregate.
         auto const adjustment_ratio = static_cast<double>(total_temp_size_ex) / total_temp_size;
+
+        // Apply the adjustment ratio to each page's temporary cost
         thrust::for_each(rmm::exec_policy_nosync(stream),
                          thrust::make_counting_iterator(size_t{0}),
                          thrust::make_counting_iterator(pages.size()),
@@ -785,9 +791,10 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
                           codec] __device__(size_t i) {
                            auto const page_codec =
                              parquet_compression_support(chunks[pages[i].chunk_idx].codec).first;
-                           // Only adjust the pages compressed with the current codec
+                           // Only adjust pages that use the current compression codec
                            if (page_codec == codec) {
                              auto const cost = d_temp_cost_ptr[i];
+                             // Scale down the cost and round up to ensure we don't underestimate
                              auto const adjusted =
                                static_cast<size_t>(cuda::std::ceil(cost * adjustment_ratio));
                              d_temp_cost_ptr[i] = adjusted;
