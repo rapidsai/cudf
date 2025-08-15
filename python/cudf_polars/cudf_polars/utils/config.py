@@ -505,6 +505,13 @@ class StreamingExecutor:
         if not isinstance(self.sink_to_directory, bool):
             raise TypeError("sink_to_directory must be bool")
 
+        # RapidsMPF spill is only supported for the distributed scheduler for now.
+        # This is because the spilling API is still within the RMPF-Dask integration.
+        if self.scheduler == "synchronous" and self.rapidsmpf_spill:
+            raise ValueError(
+                "rapidsmpf_spill is not supported for the synchronous scheduler."
+            )
+
     def __hash__(self) -> int:  # noqa: D105
         # cardinality factory, a dict, isn't natively hashable. We'll dump it
         # to json and hash that.

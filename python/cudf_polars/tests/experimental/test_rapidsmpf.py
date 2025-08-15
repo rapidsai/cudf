@@ -119,3 +119,18 @@ def test_join_rapidsmpf_single_private_config() -> None:
     )
     with pytest.raises(ValueError, match="not a supported shuffle method"):
         ConfigOptions.from_polars_engine(engine)
+
+
+def test_rapidsmpf_spill_synchronous_unsupported() -> None:
+    # rapidsmpf_spill=True is not yet supported with synchronous scheduler.
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "shuffle_method": "rapidsmpf",
+            "scheduler": "synchronous",
+            "rapidsmpf_spill": True,
+        },
+    )
+    with pytest.raises(ValueError, match="rapidsmpf_spill.*not supported.*synchronous"):
+        ConfigOptions.from_polars_engine(engine)
