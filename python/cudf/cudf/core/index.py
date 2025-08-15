@@ -3614,6 +3614,7 @@ class DatetimeIndex(Index):
         return result
 
     def __getitem__(self, index):
+        breakpoint()
         value = super().__getitem__(index)
         if cudf.get_option("mode.pandas_compatible") and isinstance(
             value, np.datetime64
@@ -3863,7 +3864,7 @@ class DatetimeIndex(Index):
         >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
         ...             periods=3, freq="Y"))
         >>> datetime_index
-        DatetimeIndex(['2000-12-31', '2001-12-31', '2002-12-31'], dtype='datetime64[ns]', freq='Y')
+        DatetimeIndex(['2000-12-31', '2001-12-31', '2002-12-31'], dtype='datetime64[ns]', freq='YE-DEC')
         >>> datetime_index.year
         Index([2000, 2001, 2002], dtype='int16')
         """

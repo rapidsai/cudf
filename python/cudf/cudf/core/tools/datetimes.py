@@ -422,6 +422,9 @@ class MonthEnd:
     def _maybe_as_fast_pandas_offset(self):
         return pd._libs.tslibs.offsets.MonthEnd()
 
+class YearEnd:
+    def _maybe_as_fast_pandas_offset(self):
+        return pd._libs.tslibs.offsets.YearEnd()
 
 class DateOffset:
     """
@@ -516,7 +519,6 @@ class DateOffset:
         "D": "days",
         "W": "weeks",
         "M": "months",
-        "ME": "months",
         "Y": "years",
     }
 
@@ -709,7 +711,7 @@ class DateOffset:
         return repr_str
 
     @classmethod
-    def _from_freqstr(cls, freqstr: str) -> Self | MonthEnd:
+    def _from_freqstr(cls, freqstr: str) -> Self | MonthEnd | YearEnd:
         """
         Parse a string and return a DateOffset object
         expects strings of the form 3D, 25W, 10ms, 42ns, etc.
@@ -728,9 +730,13 @@ class DateOffset:
         # and automatically swapped on construction
         if freq_part == "M":
             freq_part == "ME"
+        if freq_part == 'Y':
+            freq_part = "YE"
 
         if freq_part == "ME":
             return MonthEnd()
+        elif freq_part == "YE":
+            return YearEnd()
 
         if freq_part not in cls._CODES_TO_UNITS:
             raise ValueError(f"Cannot interpret frequency str: {freqstr}")

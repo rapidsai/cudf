@@ -1247,8 +1247,12 @@ class Series(SingleColumnFrame, IndexedFrame):
         This function performs no bounds-checking or massaging of the
         inputs.
         """
+        breakpoint()
         if isinstance(spec, indexing_utils.MapIndexer):
-            return self._gather(spec.key, keep_index=True)
+            result = self._gather(spec.key, keep_index=True)
+            if isinstance(result.index, cudf.DatetimeIndex):
+                result.index._freq = None
+            return result
         elif isinstance(spec, indexing_utils.MaskIndexer):
             return self._apply_boolean_mask(spec.key, keep_index=True)
         elif isinstance(spec, indexing_utils.SliceIndexer):
