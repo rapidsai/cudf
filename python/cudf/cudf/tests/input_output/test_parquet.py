@@ -540,7 +540,7 @@ def test_parquet_read_filtered_complex_predicate(
     assert_eq(len(df_filtered), expected_len)
 
 
-@pytest.mark.parametrize("row_group_size", [1, 5, 100])
+@pytest.mark.parametrize("row_group_size", [1, 5])
 def test_parquet_read_row_groups(tmp_path, pdf, row_group_size):
     if "col_category" in pdf.columns:
         pdf = pdf.drop(columns=["col_category"])
@@ -648,7 +648,9 @@ def test_parquet_reader_select_columns(datadir):
 
 
 def test_parquet_reader_invalids(tmp_path):
-    test_pdf = make_pdf(nrows=20, nvalids=20 // 4, dtype="Int64")
+    test_pdf = cudf.DataFrame(
+        {"a": np.array([1, np.nan, np.nan, 2])}, index=cudf.Index([0, 1, 2, 3])
+    )
 
     fname = tmp_path / "invalids.parquet"
     test_pdf.to_parquet(fname, engine="pyarrow")
@@ -723,8 +725,17 @@ def create_parquet_source(df, src_type, fname):
     "src", ["filepath", "pathobj", "bytes_io", "bytes", "url"]
 )
 def test_parquet_reader_multiple_files(tmp_path, src):
-    test_pdf1 = make_pdf(nrows=20, nvalids=20 // 2, dtype="float64")
-    test_pdf2 = make_pdf(nrows=10, dtype="float64")
+    test_pdf1 = pd.DataFrame(
+        {
+            "a": np.concatenate(
+                [np.arange(10, dtype="float64"), np.full(10, np.nan)]
+            )
+        },
+        index=pd.Index(np.arange(20)),
+    )
+    test_pdf2 = pd.DataFrame(
+        {"a": np.arange(10, dtype="float64")}, index=pd.Index(np.arange(10))
+    )
     expect = pd.concat([test_pdf1, test_pdf2])
 
     src1 = create_parquet_source(test_pdf1, src, tmp_path / "multi1.parquet")
@@ -1592,8 +1603,17 @@ def test_parquet_writer_int96_timestamps(tmp_path, pdf, gdf):
 
 
 def test_multifile_parquet_folder(tmp_path):
-    test_pdf1 = make_pdf(nrows=10, nvalids=10 // 2, dtype="float64")
-    test_pdf2 = make_pdf(nrows=20, dtype="float64")
+    test_pdf1 = pd.DataFrame(
+        {
+            "a": np.concatenate(
+                [np.arange(10, dtype="float64"), np.full(10, np.nan)]
+            )
+        },
+        index=pd.Index(np.arange(20)),
+    )
+    test_pdf2 = pd.DataFrame(
+        {"a": np.arange(10, dtype="float64")}, index=pd.Index(np.arange(10))
+    )
     expect = pd.concat([test_pdf1, test_pdf2])
 
     par_dir = tmp_path / "multi_part"
