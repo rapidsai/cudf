@@ -122,6 +122,9 @@ def test_join_rapidsmpf_single_private_config() -> None:
 
 
 def test_rapidsmpf_spill_synchronous_unsupported() -> None:
+    # check that we have a rapidsmpf cluster running
+    pytest.importorskip("rapidsmpf")
+
     # rapidsmpf_spill=True is not yet supported with synchronous scheduler.
     engine = pl.GPUEngine(
         raise_on_fail=True,
