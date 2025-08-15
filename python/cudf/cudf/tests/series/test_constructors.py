@@ -20,6 +20,124 @@ from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal
 
 
+@pytest.mark.parametrize(
+    "data1, data2",
+    [(1, 2), (1.0, 2.0), (3, 4.0)],
+)
+@pytest.mark.parametrize("data3, data4", [(6, 10), (5.0, 9.0), (2, 6.0)])
+def test_create_interval_series(data1, data2, data3, data4, interval_closed):
+    expect = pd.Series(
+        pd.Interval(data1, data2, interval_closed), dtype="interval"
+    )
+    got = cudf.Series(
+        pd.Interval(data1, data2, interval_closed), dtype="interval"
+    )
+    assert_eq(expect, got)
+
+    expect_two = pd.Series(
+        [
+            pd.Interval(data1, data2, interval_closed),
+            pd.Interval(data3, data4, interval_closed),
+        ],
+        dtype="interval",
+    )
+    got_two = cudf.Series(
+        [
+            pd.Interval(data1, data2, interval_closed),
+            pd.Interval(data3, data4, interval_closed),
+        ],
+        dtype="interval",
+    )
+    assert_eq(expect_two, got_two)
+
+    expect_three = pd.Series(
+        [
+            pd.Interval(data1, data2, interval_closed),
+            pd.Interval(data3, data4, interval_closed),
+            pd.Interval(data1, data2, interval_closed),
+        ],
+        dtype="interval",
+    )
+    got_three = cudf.Series(
+        [
+            pd.Interval(data1, data2, interval_closed),
+            pd.Interval(data3, data4, interval_closed),
+            pd.Interval(data1, data2, interval_closed),
+        ],
+        dtype="interval",
+    )
+    assert_eq(expect_three, got_three)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [[{"name": 123}]],
+        [
+            [
+                {
+                    "IsLeapYear": False,
+                    "data": {"Year": 1999, "Month": 7},
+                    "names": ["Mike", None],
+                },
+                {
+                    "IsLeapYear": True,
+                    "data": {"Year": 2004, "Month": 12},
+                    "names": None,
+                },
+                {
+                    "IsLeapYear": False,
+                    "data": {"Year": 1996, "Month": 2},
+                    "names": ["Rose", "Richard"],
+                },
+            ]
+        ],
+        [
+            [None, {"human?": True, "deets": {"weight": 2.4, "age": 27}}],
+            [
+                {"human?": None, "deets": {"weight": 5.3, "age": 25}},
+                {"human?": False, "deets": {"weight": 8.0, "age": 31}},
+                {"human?": False, "deets": None},
+            ],
+            [],
+            None,
+            [{"human?": None, "deets": {"weight": 6.9, "age": None}}],
+        ],
+        [
+            {
+                "name": "var0",
+                "val": [
+                    {"name": "var1", "val": None, "type": "optional<struct>"}
+                ],
+                "type": "list",
+            },
+            {},
+            {
+                "name": "var2",
+                "val": [
+                    {
+                        "name": "var3",
+                        "val": {"field": 42},
+                        "type": "optional<struct>",
+                    },
+                    {
+                        "name": "var4",
+                        "val": {"field": 3.14},
+                        "type": "optional<struct>",
+                    },
+                ],
+                "type": "list",
+            },
+            None,
+        ],
+    ],
+)
+def test_lists_of_structs_data(data):
+    got = cudf.Series(data)
+    expected = cudf.Series(pa.array(data))
+    assert_eq(got, expected)
+
+
 @pytest.fixture(
     params=[
         [1000000, 200000, 3000000],

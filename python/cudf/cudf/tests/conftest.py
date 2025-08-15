@@ -300,7 +300,6 @@ category_types = ["category"]
 def signed_integer_types_as_str(request):
     """
     - "int8", "int16", "int32", "int64"
-    - "uint8", "uint16", "uint32", "uint64"
     """
     return request.param
 
@@ -502,4 +501,22 @@ def ignore_index(request):
 @pytest.fixture(params=[True, False])
 def ascending(request):
     """Param for `ascending` argument"""
+    return request.param
+
+
+@pytest.fixture(params=[True, False])
+def numeric_only(request):
+    """Param for `numeric_only` argument"""
+    return request.param
+
+
+@pytest.fixture(params=[True, False, None])
+def categorical_ordered(request):
+    """Param for `ordered` argument for categorical types"""
+    return request.param
+
+
+@pytest.fixture(params=["left", "right", "both", "neither"])
+def interval_closed(request):
+    """Param for `closed` argument for interval types"""
     return request.param
