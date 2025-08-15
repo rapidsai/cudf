@@ -1,5 +1,8 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
 
+import datetime
+import zoneinfo
+
 import cupy as cp
 import numpy as np
 import pandas as pd
@@ -497,3 +500,25 @@ def test_datetime_infer_format(data, timezone, datetime_types_as_str):
             with pytest.raises(NotImplementedError):
                 # pandas doesn't allow parsing "Z" to naive type
                 sr.astype(datetime_types_as_str)
+
+
+@pytest.mark.parametrize("unit", ["ns", "us"])
+def test_astype_aware_to_aware(unit):
+    ser = cudf.Series(
+        [datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc)]
+    )
+    result = ser.astype(f"datetime64[{unit}, US/Pacific]")
+    expected = ser.to_pandas().astype(f"datetime64[{unit}, US/Pacific]")
+    zoneinfo_type = pd.DatetimeTZDtype(
+        expected.dtype.unit, zoneinfo.ZoneInfo(str(expected.dtype.tz))
+    )
+    expected = ser.astype(zoneinfo_type)
+    assert_eq(result, expected)
+
+
+def test_astype_naive_to_aware_raises():
+    ser = cudf.Series([datetime.datetime(2020, 1, 1)])
+    with pytest.raises(TypeError):
+        ser.astype("datetime64[ns, UTC]")
+    with pytest.raises(TypeError):
+        ser.to_pandas().astype("datetime64[ns, UTC]")
