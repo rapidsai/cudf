@@ -419,13 +419,15 @@ datasource (e.g. a Parquet dataset or in-memory `DataFrame`).
   redundant file-system access.
 - `ColumnStats`: This class is used to group together the "base"
 `DataSourceInfo` reference and the current `UniqueStats` estimates
-for a specific IR + column combination.
+for a specific IR + column combination. We bundle these references
+together to simplify the design and maintenance of `StatsCollector`.
 **NOTE:** The current `UniqueStats` estimates are not yet populated.
 - `StatsCollector`: This class is used to collect and store
-statistics for all IR nodes within a single query. This class is
-especially important, because it is used to organize **all**
-statistics within a logical plan. Each `StatsCollector` object
-has two important attributes:
+statistics for all IR nodes within a single query. The statistics
+attached to each IR node refer to the **output** columns of the
+IR node in question. The `StatsCollector` class is especially important,
+because it is used to organize **all** statistics within a logical plan.
+Each object has two important attributes:
   - `StatsCollector.row_count`: Returns a mapping between each IR
   node and the row-count `ColumnStat` estimate for that node.
   **NOTE:** This attribute is not yet populated.
@@ -463,7 +465,8 @@ Base `DataSourceInfo` references are currently used to calculate
 the partition count when a Parquet-based `Scan` node is lowered
 by the `cudf-polars` streaming executor.
 
-These statistics will also be used for other purposes in the future.
+In the future, these statistics will also be used for
+parallel-algorithm selection and intermediate repartitioning.
 
 # Containers
 
