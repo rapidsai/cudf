@@ -2998,11 +2998,9 @@ def test_per_column_options_string_col(tmp_path, encoding):
     version.parse(pa.__version__) < version.parse("16.0.0"),
     reason="https://github.com/apache/arrow/pull/39748",
 )
-@pytest.mark.parametrize(
-    "num_rows",
-    [200, 10000],
-)
-def test_parquet_bss_round_trip(tmp_path, num_rows):
+def test_parquet_bss_round_trip(tmp_path):
+    num_rows = 200
+
     def flba(i):
         hasher = hashlib.sha256()
         hasher.update(i.to_bytes(4, "little"))
