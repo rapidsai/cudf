@@ -60,7 +60,7 @@ struct benchmark_data<T> {
 
 enum class engine_type : uint8_t { AST = 0, JIT = 1 };
 
-engine_type engine_from_string(std::string const& str)
+engine_type engine_from_string(std::string_view str)
 {
   if (str == "ast") {
     return engine_type::AST;
