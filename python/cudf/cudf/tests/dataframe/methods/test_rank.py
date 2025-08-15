@@ -1,17 +1,18 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# Copyright (c) 2025, NVIDIA CORPORATION.
 import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
-from cudf import DataFrame
 from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal
 
 
-@pytest.fixture
-def pdf():
-    return pd.DataFrame(
+@pytest.mark.parametrize("method", ["average", "min", "max", "first", "dense"])
+@pytest.mark.parametrize("na_option", ["keep", "top", "bottom"])
+@pytest.mark.parametrize("pct", [True, False])
+def test_rank_all_arguments(ascending, method, na_option, pct, numeric_only):
+    pdf = pd.DataFrame(
         {
             "col1": np.array([5, 4, 3, 5, 8, 5, 2, 1, 6, 6]),
             "col2": np.array(
@@ -21,26 +22,11 @@ def pdf():
         index=np.array([5, 4, 3, 2, 1, 6, 7, 8, 9, 10]),
     )
 
-
-@pytest.mark.parametrize("dtype", ["O", "f8", "i4"])
-@pytest.mark.parametrize("ascending", [True, False])
-@pytest.mark.parametrize("method", ["average", "min", "max", "first", "dense"])
-@pytest.mark.parametrize("na_option", ["keep", "top", "bottom"])
-@pytest.mark.parametrize("pct", [True, False])
-@pytest.mark.parametrize("numeric_only", [True, False])
-def test_rank_all_arguments(
-    pdf, dtype, ascending, method, na_option, pct, numeric_only
-):
-    if method == "first" and dtype == "O":
-        # not supported by pandas
-        return
-
     if numeric_only:
-        pdf = pdf.copy(deep=True)  # for parallel pytest
         pdf["str"] = np.array(
             ["a", "b", "c", "d", "e", "1", "2", "3", "4", "5"]
         )
-    gdf = DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame.from_pandas(pdf)
 
     kwargs = {
         "method": method,
@@ -73,8 +59,17 @@ def test_rank_all_arguments(
     assert_eq(expected, actual)
 
 
-def test_rank_error_arguments(pdf):
-    gdf = DataFrame.from_pandas(pdf)
+def test_rank_error_arguments():
+    pdf = pd.DataFrame(
+        {
+            "col1": np.array([5, 4, 3, 5, 8, 5, 2, 1, 6, 6]),
+            "col2": np.array(
+                [5, 4, np.nan, 5, 8, 5, np.inf, np.nan, 6, -np.inf]
+            ),
+        },
+        index=np.array([5, 4, 3, 2, 1, 6, 7, 8, 9, 10]),
+    )
+    gdf = cudf.DataFrame.from_pandas(pdf)
 
     assert_exceptions_equal(
         lfunc=pdf["col1"].rank,
@@ -121,28 +116,3 @@ def test_rank_error_arguments(pdf):
             },
         ),
     )
-
-
-@pytest.mark.filterwarnings("ignore:invalid value encountered in cast")
-@pytest.mark.parametrize("elem1", [np.nan, np.inf, -np.inf, 1.43])
-@pytest.mark.parametrize("elem2", [np.nan, np.inf, -np.inf, 1.43])
-@pytest.mark.parametrize("dtype", [np.int32, np.int64, np.float32, np.float64])
-def test_series_rank_combinations(elem1, elem2, dtype):
-    aa = np.array([elem1, elem2], dtype=np.float64).astype(dtype)
-    gdf = DataFrame({"a": aa})
-    df = pd.DataFrame({"a": aa})
-    ranked_gs = gdf["a"].rank(method="first")
-    ranked_ps = df["a"].rank(method="first")
-    # Check
-    assert_eq(ranked_ps, ranked_gs)
-
-
-@pytest.mark.parametrize("klass", ["Series", "DataFrame"])
-def test_int_nan_pandas_compatible(klass):
-    data = [3, 6, 1, 1, None, 6]
-    pd_obj = getattr(pd, klass)(data)
-    cudf_obj = getattr(cudf, klass)(data)
-    with cudf.option_context("mode.pandas_compatible", True):
-        result = cudf_obj.rank()
-    expected = pd_obj.rank()
-    assert_eq(result, expected)
