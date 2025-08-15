@@ -202,3 +202,17 @@ def test_unsupported_agg():
         .agg(pl.col("values").n_unique())
     )
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_rolling_sum_all_null_window_returns_null():
+    df = pl.LazyFrame(
+        {
+            "orderby": [1, 2, 3, 4, 5, 6],
+            "null_windows": [None, None, 5, None, None, 1],
+        }
+    )
+    q = df.rolling("orderby", period="2i", closed="both").agg(
+        out=pl.col("null_windows").sum()
+    )
+    # Expected: [0, 0, 5, 5, 5, 1]
+    assert_gpu_result_equal(q)
