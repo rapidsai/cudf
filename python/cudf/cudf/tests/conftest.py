@@ -188,7 +188,7 @@ def _get_all_zones():
             continue
         else:
             zones.append(zone)
-    return zones
+    return sorted(zones)
 
 
 # NOTE: _get_all_zones is a very large list; we likely do NOT want to
