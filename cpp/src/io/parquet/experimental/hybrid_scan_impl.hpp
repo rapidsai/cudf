@@ -288,7 +288,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    */
   void prepare_data(read_mode mode,
                     cudf::host_span<std::vector<size_type> const> row_group_indices,
-                    std::vector<rmm::device_buffer> column_chunk_buffers,
+                    std::vector<rmm::device_buffer>&& column_chunk_buffers,
                     cudf::host_span<std::vector<bool> const> data_page_mask);
 
   /**
