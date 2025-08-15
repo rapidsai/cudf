@@ -1,8 +1,10 @@
 # Copyright (c) 2023-2025, NVIDIA CORPORATION.
 import datetime
 import decimal
+import types
 
 import cupy as cp
+import numba.cuda
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -14,6 +16,7 @@ from cudf.core._compat import (
     PANDAS_GE_210,
     PANDAS_VERSION,
 )
+from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.column.column import as_column
 from cudf.errors import MixedTypeError
 from cudf.testing import assert_eq
@@ -776,6 +779,195 @@ def test_series_arrow_decimal_types_roundtrip(pa_type):
     with cudf.option_context("mode.pandas_compatible", True):
         gdf = cudf.from_pandas(pdf)
         assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize("module", ["cupy", "numba"])
+def test_cuda_array_interface_interop_in(
+    numeric_and_temporal_types_as_str, module
+):
+    if module == "cupy":
+        module_constructor = cp.array
+        if numeric_and_temporal_types_as_str.startswith(
+            "datetime"
+        ) or numeric_and_temporal_types_as_str.startswith("timedelta"):
+            pytest.skip(
+                f"cupy doesn't support {numeric_and_temporal_types_as_str}"
+            )
+    elif module == "numba":
+        module_constructor = numba.cuda.to_device
+
+    np_data = np.arange(10).astype(numeric_and_temporal_types_as_str)
+    module_data = module_constructor(np_data)
+
+    pd_data = pd.Series(np_data)
+    # Test using a specific function for __cuda_array_interface__ here
+    cudf_data = cudf.Series(module_data)
+
+    assert_eq(pd_data, cudf_data)
+
+    gdf = cudf.DataFrame()
+    gdf["test"] = module_data
+    pd_data.name = "test"
+    assert_eq(pd_data, gdf["test"])
+
+
+@pytest.mark.parametrize("module", ["cupy", "numba"])
+def test_cuda_array_interface_interop_out(
+    numeric_and_temporal_types_as_str, module
+):
+    if module == "cupy":
+        module_constructor = cp.asarray
+
+        def to_host_function(x):
+            return cp.asnumpy(x)
+    elif module == "numba":
+        module_constructor = numba.cuda.as_cuda_array
+
+        def to_host_function(x):
+            return x.copy_to_host()
+
+    np_data = np.arange(10).astype(numeric_and_temporal_types_as_str)
+    cudf_data = cudf.Series(np_data)
+    assert isinstance(cudf_data.__cuda_array_interface__, dict)
+
+    module_data = module_constructor(cudf_data)
+    got = to_host_function(module_data)
+
+    expect = np_data
+
+    assert_eq(expect, got)
+
+
+def test_cuda_array_interface_interop_out_masked(
+    numeric_and_temporal_types_as_str,
+):
+    np_data = np.arange(10).astype("float64")
+    np_data[[0, 2, 4, 6, 8]] = np.nan
+
+    cudf_data = cudf.Series(np_data).astype(numeric_and_temporal_types_as_str)
+    cai = cudf_data.__cuda_array_interface__
+    assert isinstance(cai, dict)
+    assert "mask" in cai
+
+
+@pytest.mark.parametrize("nulls", ["all", "some", "bools", "none"])
+@pytest.mark.parametrize("mask_type", ["bits", "bools"])
+def test_cuda_array_interface_as_column(
+    numeric_and_temporal_types_as_str, nulls, mask_type
+):
+    sr = cudf.Series(np.arange(10))
+
+    if nulls == "some":
+        mask = [
+            True,
+            False,
+            True,
+            False,
+            False,
+            True,
+            True,
+            False,
+            True,
+            True,
+        ]
+        sr[sr[~np.asarray(mask)]] = None
+    elif nulls == "all":
+        sr[:] = None
+
+    sr = sr.astype(numeric_and_temporal_types_as_str)
+
+    obj = types.SimpleNamespace(
+        __cuda_array_interface__=sr.__cuda_array_interface__
+    )
+
+    if mask_type == "bools":
+        if nulls == "some":
+            obj.__cuda_array_interface__["mask"] = numba.cuda.to_device(mask)
+        elif nulls == "all":
+            obj.__cuda_array_interface__["mask"] = numba.cuda.to_device(
+                [False] * 10
+            )
+
+    expect = sr
+    got = cudf.Series(obj)
+
+    assert_eq(expect, got)
+
+
+def test_series_from_ephemeral_cupy():
+    # Test that we keep a reference to the ephemeral
+    # CuPy array. If we didn't, then `a` would end
+    # up referring to the same memory as `b` due to
+    # CuPy's caching allocator
+    a = cudf.Series(cp.asarray([1, 2, 3]))
+    b = cudf.Series(cp.asarray([1, 1, 1]))
+    assert_eq(pd.Series([1, 2, 3]), a)
+    assert_eq(pd.Series([1, 1, 1]), b)
+
+
+def test_column_from_ephemeral_cupy_try_lose_reference():
+    # Try to lose the reference we keep to the ephemeral
+    # CuPy array
+    a = cudf.Series(cp.asarray([1, 2, 3]))._column
+    a = cudf.core.column.as_column(a)
+    b = cp.asarray([1, 1, 1])
+    assert_eq(pd.Index([1, 2, 3]), a.to_pandas())
+
+    a = cudf.Series(cp.asarray([1, 2, 3]))._column
+    a.name = "b"
+    b = cp.asarray([1, 1, 1])  # noqa: F841
+    assert_eq(pd.Index([1, 2, 3]), a.to_pandas())
+
+
+@pytest.mark.xfail(
+    get_global_manager() is not None,
+    reason=(
+        "spilling doesn't support PyTorch, see "
+        "`cudf.core.buffer.spillable_buffer.DelayedPointerTuple`"
+    ),
+)
+def test_cuda_array_interface_pytorch():
+    torch = pytest.importorskip("torch", minversion="2.4.0")
+    if not torch.cuda.is_available():
+        pytest.skip("need gpu version of pytorch to be installed")
+
+    series = cudf.Series([1, -1, 10, -56])
+    tensor = torch.tensor(series)
+    got = cudf.Series(tensor)
+
+    assert_eq(got, series)
+    buffer = cudf.core.buffer.as_buffer(cp.ones(10, dtype=np.bool_))
+    tensor = torch.tensor(buffer)
+    got = cudf.Series(tensor, dtype=np.bool_)
+
+    assert_eq(got, cudf.Series(buffer, dtype=np.bool_))
+
+    index = cudf.Index([], dtype="float64")
+    tensor = torch.tensor(index)
+    got = cudf.Index(tensor)
+    assert_eq(got, index)
+
+    index = cudf.RangeIndex(start=0, stop=3)
+    tensor = torch.tensor(index)
+    got = cudf.Series(tensor)
+
+    assert_eq(got, cudf.Series(index))
+
+    index = cudf.Index([1, 2, 8, 6])
+    tensor = torch.tensor(index)
+    got = cudf.Index(tensor)
+
+    assert_eq(got, index)
+
+    str_series = cudf.Series(["a", "g"])
+
+    with pytest.raises(AttributeError):
+        str_series.__cuda_array_interface__
+
+    cat_series = str_series.astype("category")
+
+    with pytest.raises(TypeError):
+        cat_series.__cuda_array_interface__
 
 
 def test_series_arrow_struct_types_roundtrip():

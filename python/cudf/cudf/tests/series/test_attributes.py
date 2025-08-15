@@ -251,6 +251,14 @@ def test_timedelta_contains(data, timedelta_types_as_str, scalar):
     assert_eq(expected, actual)
 
 
+def test_cai_after_indexing():
+    df = cudf.DataFrame({"a": [1, 2, 3]})
+    cai1 = df["a"].__cuda_array_interface__
+    df[["a"]]
+    cai2 = df["a"].__cuda_array_interface__
+    assert cai1 == cai2
+
+
 @pytest.mark.parametrize(
     "data, expected",
     [
