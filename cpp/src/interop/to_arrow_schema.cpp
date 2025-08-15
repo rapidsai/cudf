@@ -79,9 +79,7 @@ struct dispatch_to_arrow_type {
 template <typename DeviceType>
 int decimals_to_arrow(column_view input, int32_t precision, ArrowSchema* out)
 {
-  if (precision < 1 || precision > 38) {
-    CUDF_FAIL("Precision must be between 1 and 38 inclusive", cudf::data_type_error);
-  }
+  CUDF_EXPECTS( precision >=1 and precision <= 38, "Precision must be between 1 and 38 inclusive", cudf::data_type_error);
   return ArrowSchemaSetTypeDecimal(
     out, id_to_arrow_type(input.type().id()), precision, -input.type().scale());
 }
