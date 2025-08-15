@@ -300,7 +300,6 @@ category_types = ["category"]
 def signed_integer_types_as_str(request):
     """
     - "int8", "int16", "int32", "int64"
-    - "uint8", "uint16", "uint32", "uint64"
     """
     return request.param
 
@@ -439,6 +438,12 @@ def all_supported_types_as_str(request):
     return request.param
 
 
+@pytest.fixture(params=[list, np.array])
+def one_dimensional_array_types(request):
+    """1D array containers commonly accepted by cuDF and pandas"""
+    return request.param
+
+
 # pandas can raise warnings for some inputs to the following ufuncs:
 numpy_ufuncs = []
 for name in dir(np):
@@ -522,4 +527,22 @@ def ignore_index(request):
 @pytest.fixture(params=[True, False])
 def ascending(request):
     """Param for `ascending` argument"""
+    return request.param
+
+
+@pytest.fixture(params=[True, False])
+def numeric_only(request):
+    """Param for `numeric_only` argument"""
+    return request.param
+
+
+@pytest.fixture(params=[True, False, None])
+def categorical_ordered(request):
+    """Param for `ordered` argument for categorical types"""
+    return request.param
+
+
+@pytest.fixture(params=["left", "right", "both", "neither"])
+def interval_closed(request):
+    """Param for `closed` argument for interval types"""
     return request.param

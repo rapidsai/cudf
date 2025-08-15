@@ -210,6 +210,13 @@ def test_series_hasnans(data):
     assert gs.hasnans == ps.hasnans
 
 
+def test_category_dtype_attribute():
+    psr = pd.Series(["a", "b", "a", "c"], dtype="category")
+    sr = cudf.Series(["a", "b", "a", "c"], dtype="category")
+    assert isinstance(sr.dtype, cudf.CategoricalDtype)
+    assert_eq(sr.dtype.categories, psr.dtype.categories)
+
+
 def test_dtype_dtypes_equal():
     ser = cudf.Series([0])
     assert ser.dtype is ser.dtypes
@@ -242,6 +249,14 @@ def test_timedelta_contains(data, timedelta_types_as_str, scalar):
     actual = scalar in psr
 
     assert_eq(expected, actual)
+
+
+def test_cai_after_indexing():
+    df = cudf.DataFrame({"a": [1, 2, 3]})
+    cai1 = df["a"].__cuda_array_interface__
+    df[["a"]]
+    cai2 = df["a"].__cuda_array_interface__
+    assert cai1 == cai2
 
 
 @pytest.mark.parametrize(
