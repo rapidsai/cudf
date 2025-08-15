@@ -31,7 +31,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC EXCLUDE_FROM_ALL ENABLE_P
           PARENT_SCOPE
       )
       set(ARROW_LIBRARIES
-          arrow_static
+          arrow_static arrow_compute_static
           PARENT_SCOPE
       )
       return()
@@ -43,7 +43,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC EXCLUDE_FROM_ALL ENABLE_P
           PARENT_SCOPE
       )
       set(ARROW_LIBRARIES
-          arrow_shared
+          arrow_shared arrow_compute_shared
           PARENT_SCOPE
       )
       return()
@@ -126,9 +126,9 @@ function(find_and_configure_arrow VERSION BUILD_STATIC EXCLUDE_FROM_ALL ENABLE_P
   )
 
   if(BUILD_STATIC)
-    set(ARROW_LIBRARIES arrow_static)
+    set(ARROW_LIBRARIES arrow_static arrow_compute_static)
   else()
-    set(ARROW_LIBRARIES arrow_shared)
+    set(ARROW_LIBRARIES arrow_shared arrow_compute_shared)
   endif()
 
   # Arrow_DIR:   set if CPM found Arrow on the system/conda/etc.
@@ -195,6 +195,12 @@ function(find_and_configure_arrow VERSION BUILD_STATIC EXCLUDE_FROM_ALL ENABLE_P
           if (TARGET cudf::arrow_static AND (NOT TARGET arrow_static))
               add_library(arrow_static ALIAS cudf::arrow_static)
           endif()
+          if (TARGET cudf::arrow_compute_shared AND (NOT TARGET arrow_compute_shared))
+              add_library(arrow_compute_shared ALIAS cudf::arrow_compute_shared)
+          endif()
+          if (TARGET cudf::arrow_compute_static AND (NOT TARGET arrow_compute_static))
+              add_library(arrow_compute_static ALIAS cudf::arrow_compute_static)
+          endif()
           if (NOT TARGET arrow::flatbuffers)
             add_library(arrow::flatbuffers INTERFACE IMPORTED)
           endif()
@@ -248,7 +254,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC EXCLUDE_FROM_ALL ENABLE_P
         BUILD Arrow
         VERSION ${VERSION}
         EXPORT_SET arrow_targets
-        GLOBAL_TARGETS arrow_shared arrow_static
+        GLOBAL_TARGETS arrow_shared arrow_static arrow_compute_static arrow_compute_shared
         NAMESPACE cudf::
         FINAL_CODE_BLOCK arrow_code_string
       )
