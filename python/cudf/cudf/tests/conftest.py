@@ -276,6 +276,16 @@ def reduction_methods(request):
     return request.param
 
 
+@pytest.fixture(params=["linear", "lower", "higher", "midpoint", "nearest"])
+def quantile_interpolation(request):
+    return request.param
+
+
+@pytest.fixture(params=["spearman", "pearson"])
+def corr_method(request):
+    return request.param
+
+
 signed_integer_types = ["int8", "int16", "int32", "int64"]
 unsigned_integer_types = ["uint8", "uint16", "uint32", "uint64"]
 float_types = ["float32", "float64"]
@@ -300,7 +310,6 @@ category_types = ["category"]
 def signed_integer_types_as_str(request):
     """
     - "int8", "int16", "int32", "int64"
-    - "uint8", "uint16", "uint32", "uint64"
     """
     return request.param
 
@@ -431,9 +440,65 @@ def all_supported_types_as_str(request):
     return request.param
 
 
+@pytest.fixture(params=[list, np.array])
+def one_dimensional_array_types(request):
+    """1D array containers commonly accepted by cuDF and pandas"""
+    return request.param
+
+
+# pandas can raise warnings for some inputs to the following ufuncs:
+numpy_ufuncs = []
+for name in dir(np):
+    func = getattr(np, name)
+    if isinstance(func, np.ufunc) and hasattr(cp, name):
+        if func in {
+            np.arccos,
+            np.arccosh,
+            np.arcsin,
+            np.arctanh,
+            np.fmod,
+            np.log,
+            np.log10,
+            np.log2,
+            np.reciprocal,
+        }:
+            marks = [
+                pytest.mark.filterwarnings(
+                    "ignore:invalid value encountered:RuntimeWarning"
+                ),
+                pytest.mark.filterwarnings(
+                    "ignore:divide by zero:RuntimeWarning"
+                ),
+            ]
+            numpy_ufuncs.append(pytest.param(func, marks=marks))
+        elif func in {
+            np.bitwise_and,
+            np.bitwise_or,
+            np.bitwise_xor,
+        }:
+            marks = pytest.mark.filterwarnings(
+                "ignore:Operation between non boolean Series:FutureWarning"
+            )
+            numpy_ufuncs.append(pytest.param(func, marks=marks))
+        else:
+            numpy_ufuncs.append(func)
+
+
+@pytest.fixture(params=numpy_ufuncs)
+def numpy_ufunc(request):
+    """Numpy ufuncs also supported by cupy."""
+    return request.param
+
+
 @pytest.fixture(params=[True, False])
 def dropna(request):
     """Param for `dropna` argument"""
+    return request.param
+
+
+@pytest.fixture(params=[True, False])
+def skipna(request):
+    """Param for `skipna` argument"""
     return request.param
 
 
@@ -450,6 +515,12 @@ def inplace(request):
 
 
 @pytest.fixture(params=[True, False])
+def drop(request):
+    """Param for `drop` argument"""
+    return request.param
+
+
+@pytest.fixture(params=[True, False])
 def ignore_index(request):
     """Param for `ignore_index` argument"""
     return request.param
@@ -458,4 +529,22 @@ def ignore_index(request):
 @pytest.fixture(params=[True, False])
 def ascending(request):
     """Param for `ascending` argument"""
+    return request.param
+
+
+@pytest.fixture(params=[True, False])
+def numeric_only(request):
+    """Param for `numeric_only` argument"""
+    return request.param
+
+
+@pytest.fixture(params=[True, False, None])
+def categorical_ordered(request):
+    """Param for `ordered` argument for categorical types"""
+    return request.param
+
+
+@pytest.fixture(params=["left", "right", "both", "neither"])
+def interval_closed(request):
+    """Param for `closed` argument for interval types"""
     return request.param
