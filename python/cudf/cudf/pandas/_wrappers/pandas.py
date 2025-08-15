@@ -298,6 +298,7 @@ DataFrame = make_final_proxy_type(
         "_accessors": set(),
         "_ipython_canary_method_should_not_exist_": ignore_ipython_canary_check,
         "dtypes": property(_DataFrame__dtypes),
+        "__iter__": custom_iter,
     },
 )
 
