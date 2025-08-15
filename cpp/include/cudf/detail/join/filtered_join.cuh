@@ -23,6 +23,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuco/bucket_storage.cuh>
 #include <cuco/extent.cuh>
@@ -35,7 +36,7 @@ class preprocessed_table;
 namespace CUDF_EXPORT cudf {
 namespace detail {
 
-struct left_join {
+struct filtered_join {
  public:
   using key = size_type;
 
@@ -51,7 +52,7 @@ struct left_join {
   using primitive_probing_scheme = cuco::linear_probing<1, primitive_row_hasher>;
   using primitive_row_comparator = cudf::row::primitive::row_equality_comparator;
 
-  using row_hasher            = cudf::experimental::row::hash::row_hasher;
+  using row_hasher            = cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash, nullate::DYNAMIC>;
   using nested_probing_scheme = cuco::linear_probing<4, row_hasher>;
   using simple_probing_scheme = cuco::linear_probing<1, row_hasher>;
   using row_comparator = cudf::experimental::row::equality::device_row_comparator<
@@ -59,12 +60,12 @@ struct left_join {
     cudf::nullate::DYNAMIC,
     cudf::experimental::row::equality::nan_equal_physical_equality_comparator>;
 
-  left_join()                            = delete;
-  ~left_join()                           = default;
-  left_join(left_join const&)            = delete;
-  left_join(left_join&&)                 = delete;
-  left_join& operator=(left_join const&) = delete;
-  left_join& operator=(left_join&&)      = delete;
+  filtered_join()                            = delete;
+  ~filtered_join()                           = default;
+  filtered_join(filtered_join const&)            = delete;
+  filtered_join(filtered_join&&)                 = delete;
+  filtered_join& operator=(filtered_join const&) = delete;
+  filtered_join& operator=(filtered_join&&)      = delete;
 
  private:
   bool _has_nested_columns;  ///< True if nested columns are present in build and probe tables
@@ -75,22 +76,22 @@ struct left_join {
   storage_type _bucket_storage;
 
  public:
-  left_join(cudf::table_view const& build,
+  filtered_join(cudf::table_view const& build,
             cudf::null_equality compare_nulls,
             rmm::cuda_stream_view stream);
 
   /**
-   * @copydoc left_join(cudf::table_view const&, bool, null_equality, rmm::cuda_stream_view)
+   * @copydoc filtered_join(cudf::table_view const&, bool, null_equality, rmm::cuda_stream_view)
    *
    * @param load_factor The hash table occupancy ratio in (0,1]. A value of 0.5 means 50% occupancy.
    */
-  left_join(cudf::table_view const& build,
+  filtered_join(cudf::table_view const& build,
             cudf::null_equality compare_nulls,
             double load_factor,
             rmm::cuda_stream_view stream);
 
-  std::unique_ptr<rmm::device_uvector<cudf::size_type>> semi_join(cudf::table_view const& probe, rmm::cuda_stream_view stream);
-  std::unique_ptr<rmm::device_uvector<cudf::size_type>> anti_join(cudf::table_view const& probe, rmm::cuda_stream_view stream);
+  std::unique_ptr<rmm::device_uvector<cudf::size_type>> semi_join(cudf::table_view const& probe, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
+  std::unique_ptr<rmm::device_uvector<cudf::size_type>> anti_join(cudf::table_view const& probe, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
 };
 }  // namespace detail
 }  // namespace CUDF_EXPORT cudf
