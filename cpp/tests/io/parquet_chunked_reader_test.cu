@@ -1951,33 +1951,46 @@ TEST_F(ParquetReaderTest, BooleanList)
     // Write to parquet buffer
     cudf::io::parquet_writer_options out_opts =
       cudf::io::parquet_writer_options::builder(cudf::io::sink_info{parquet_filepath}, table)
+        // Note: The following writer options have been chosen to work with the chunked reader's
+        // empirical memory limits. We may need to adjust them in the future.
         .row_group_size_rows(num_rows)
         .max_page_size_rows(page_size_for_ordered_tests)
         .compression(cudf::io::compression_type::SNAPPY)
         .dictionary_policy(cudf::io::dictionary_policy::ALWAYS);
+
     cudf::io::write_parquet(out_opts);
   }
 
-  // Read parquet using the chunked parquet reader
-
+  // Parquet reader options
   cudf::io::parquet_reader_options const options =
     cudf::io::parquet_reader_options::builder(cudf::io::source_info(parquet_filepath));
-  auto [expected_tbl, expected_meta] = cudf::io::read_parquet(options);
 
-  auto reader = cudf::io::chunked_parquet_reader(0, 102400, options);
-  auto tables = std::vector<std::unique_ptr<cudf::table>>();
-  while (reader.has_next()) {
-    auto chunk = reader.read_chunk();
-    tables.push_back(std::move(chunk.tbl));
-  }
-  auto out_tviews = std::vector<cudf::table_view>{};
-  for (auto const& tbl : tables) {
-    out_tviews.emplace_back(tbl->view());
-  }
+  // Read parquet using the chunked parquet reader
+  auto const read = [&]() {
+    // Note that this test relies on these empirically chosen memory limits to have the chunked
+    // reader create subpasses such that we end a subpass at `page.num_rows - 1` and let next
+    // subpass read that last row from that page. We may need to adjust these limits in the future.
+    auto constexpr input_mem_limit  = 102400;
+    auto constexpr output_mem_limit = 0;
+    auto reader = cudf::io::chunked_parquet_reader(output_mem_limit, input_mem_limit, options);
 
-  auto result = cudf::concatenate(out_tviews);
+    auto table_chunks = std::vector<std::unique_ptr<cudf::table>>();
+    while (reader.has_next()) {
+      auto chunk = reader.read_chunk();
+      table_chunks.push_back(std::move(chunk.tbl));
+    }
+    auto out_tviews = std::vector<cudf::table_view>{};
+    for (auto const& tbl : table_chunks) {
+      out_tviews.emplace_back(tbl->view());
+    }
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_tbl->view(), result->view());
+    return cudf::concatenate(out_tviews);
+  }();
+
+  // Read using the main parquet reader
+  auto const expected = cudf::io::read_parquet(options).tbl;
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), read->view());
 }
 
 TEST_F(ParquetReaderTest, ManyLargeLists)
@@ -2041,8 +2054,8 @@ TEST_F(ParquetReaderTest, ManyLargeLists)
       EXPECT_NO_THROW(std::ignore = reader.read_chunk());
       num_chunks++;
     }
-    // We will end up with exactly two chunks as the total number of leaf rows is just above 2B rows
-    // per table chunk limit and we haven't set any chunk or pass read limits
+    // We will end up with exactly two chunks as the total number of leaf rows is just above 2B
+    // rows per table chunk limit and we haven't set any chunk or pass read limits
     EXPECT_EQ(num_chunks, 2);
   };
 
