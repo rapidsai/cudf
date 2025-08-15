@@ -1907,6 +1907,79 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSourceEmptyTable)
     std::equal(expected_counts.cbegin(), expected_counts.cend(), num_rows_per_source.cbegin()));
 }
 
+TEST_F(ParquetReaderTest, BooleanList)
+{
+  std::mt19937 gen(0xcaffe);
+
+  // Parquet file
+  auto const parquet_filepath = temp_env->get_temp_filepath("BooleanList.parquet");
+  {
+    auto constexpr num_rows = num_ordered_rows;
+
+    // Validity helpers
+    std::bernoulli_distribution bn(0.7f);
+    auto valids =
+      cudf::detail::make_counting_transform_iterator(0, [&](int index) { return bn(gen); });
+    auto list_valids =
+      cudf::detail::make_counting_transform_iterator(0, [&](int index) { return index % 100; });
+
+    // str(non-nullable)
+    auto col0 = testdata::ascending<cudf::string_view>();
+
+    // list<bool(nullable)>(nullable)
+    auto bools_iter =
+      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+    auto bools_col =
+      cudf::test::fixed_width_column_wrapper<bool>(bools_iter, bools_iter + num_rows, valids);
+    auto offsets_iter = thrust::counting_iterator<cudf::size_type>(0);
+    auto offsets_col  = cudf::test::fixed_width_column_wrapper<cudf::size_type>(
+      offsets_iter, offsets_iter + num_rows + 1);
+    auto [null_mask, null_count] =
+      cudf::test::detail::make_null_mask(list_valids, list_valids + num_rows);
+    auto _col1 = cudf::make_lists_column(
+      num_rows, offsets_col.release(), bools_col.release(), null_count, std::move(null_mask));
+    auto col1 = cudf::purge_nonempty_nulls(*_col1);
+
+    // list<list<bool(nullable)>(nullable)>(nullable)
+    auto col2 = make_parquet_list_list_col<bool>(0, num_rows, 5, 8, true);
+
+    // Input table
+    auto constexpr num_concat = 3;
+    auto table                = cudf::table_view{{col0, *col1, *col2}};
+    auto expected             = cudf::concatenate(std::vector<table_view>(num_concat, table));
+    table                     = expected->view();
+    // Write to parquet buffer
+    cudf::io::parquet_writer_options out_opts =
+      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{parquet_filepath}, table)
+        .row_group_size_rows(num_rows)
+        .max_page_size_rows(page_size_for_ordered_tests)
+        .compression(cudf::io::compression_type::SNAPPY)
+        .dictionary_policy(cudf::io::dictionary_policy::ALWAYS);
+    cudf::io::write_parquet(out_opts);
+  }
+
+  // Read parquet using the chunked parquet reader
+
+  cudf::io::parquet_reader_options const options =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info(parquet_filepath));
+  auto [expected_tbl, expected_meta] = cudf::io::read_parquet(options);
+
+  auto reader = cudf::io::chunked_parquet_reader(0, 102400, options);
+  auto tables = std::vector<std::unique_ptr<cudf::table>>();
+  while (reader.has_next()) {
+    auto chunk = reader.read_chunk();
+    tables.push_back(std::move(chunk.tbl));
+  }
+  auto out_tviews = std::vector<cudf::table_view>{};
+  for (auto const& tbl : tables) {
+    out_tviews.emplace_back(tbl->view());
+  }
+
+  auto result = cudf::concatenate(out_tviews);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_tbl->view(), result->view());
+}
+
 TEST_F(ParquetReaderTest, ManyLargeLists)
 {
   auto const stream = cudf::get_default_stream();

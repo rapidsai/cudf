@@ -606,9 +606,9 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
     // subpass since we know that will safely completed.
     bool const is_list = last_chunk.max_level[level_type::REPETITION] > 0;
     // corner case: only decode up to the second-to-last row, except if this is the last page in the
-    // entire pass. this handles the case where we only have 1 chunk, 1 page, and potentially even
-    // just 1 row.
-    if (is_list && max_col_row < last_pass_row) {
+    // entire pass or if we have the page index. this handles the case where we only have 1 chunk, 1
+    // page, and potentially even just 1 row.
+    if (is_list and std::cmp_less(max_col_row, last_pass_row) and not _has_page_index) {
       // compute min row for this column in the subpass
       auto const& first_page  = subpass.pages[first_page_index];
       auto const& first_chunk = pass.chunks[first_page.chunk_idx];
