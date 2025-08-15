@@ -1969,7 +1969,8 @@ TEST_F(ParquetReaderTest, BooleanList)
   auto const read = [&]() {
     // Note that this test relies on these empirically chosen memory limits to have the chunked
     // reader create subpasses such that we end a subpass at `page.num_rows - 1` and let next
-    // subpass read that last row from that page. We may need to adjust these limits in the future.
+    // subpass read that last row from that page. We may need to adjust these limits in the future
+    // to hit this edge case in chunking.
     auto constexpr input_mem_limit  = 102400;
     auto constexpr output_mem_limit = 0;
     auto reader = cudf::io::chunked_parquet_reader(output_mem_limit, input_mem_limit, options);
@@ -1979,6 +1980,10 @@ TEST_F(ParquetReaderTest, BooleanList)
       auto chunk = reader.read_chunk();
       table_chunks.push_back(std::move(chunk.tbl));
     }
+
+    // Commented as future changes to chunking logic may change the number of table_chunks
+    // EXPECT_GT(table_chunks.size(), 1);
+
     auto out_tviews = std::vector<cudf::table_view>{};
     for (auto const& tbl : table_chunks) {
       out_tviews.emplace_back(tbl->view());
