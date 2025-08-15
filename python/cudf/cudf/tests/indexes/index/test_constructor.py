@@ -2,10 +2,24 @@
 
 import cupy as cp
 import numpy as np
+import pandas as pd
 import pytest
 
 import cudf
 from cudf.testing import assert_eq
+
+
+def test_create_interval_index_from_list():
+    interval_list = [
+        np.nan,
+        pd.Interval(2.0, 3.0, closed="right"),
+        pd.Interval(3.0, 4.0, closed="right"),
+    ]
+
+    expected = pd.Index(interval_list)
+    actual = cudf.Index(interval_list)
+
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize(
