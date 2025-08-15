@@ -276,6 +276,16 @@ def reduction_methods(request):
     return request.param
 
 
+@pytest.fixture(params=["linear", "lower", "higher", "midpoint", "nearest"])
+def quantile_interpolation(request):
+    return request.param
+
+
+@pytest.fixture(params=["spearman", "pearson"])
+def corr_method(request):
+    return request.param
+
+
 signed_integer_types = ["int8", "int16", "int32", "int64"]
 unsigned_integer_types = ["uint8", "uint16", "uint32", "uint64"]
 float_types = ["float32", "float64"]
@@ -483,6 +493,12 @@ def numpy_ufunc(request):
 @pytest.fixture(params=[True, False])
 def dropna(request):
     """Param for `dropna` argument"""
+    return request.param
+
+
+@pytest.fixture(params=[True, False])
+def skipna(request):
+    """Param for `skipna` argument"""
     return request.param
 
 
