@@ -639,6 +639,7 @@ add_library(
   src/reductions/nth_element.cu
   src/reductions/nunique.cu
   src/reductions/product.cu
+  src/reductions/quantile.cu
   src/reductions/reductions.cpp
   src/reductions/scan/rank_scan.cu
   src/reductions/scan/ewm.cu

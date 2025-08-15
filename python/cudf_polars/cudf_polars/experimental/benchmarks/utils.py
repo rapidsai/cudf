@@ -16,7 +16,6 @@ import textwrap
 import time
 from collections import defaultdict
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, assert_never
 
 import nvtx
@@ -41,6 +40,7 @@ except ImportError:
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
+    from pathlib import Path
 
 
 ExecutorType = Literal["in-memory", "streaming", "cpu"]
@@ -155,9 +155,7 @@ class HardwareInfo:
         return cls(gpus=gpus)
 
 
-def _infer_scale_factor(path: str | Path, suffix: str) -> int | float:
-    name = Path(sys.argv[0]).name
-
+def _infer_scale_factor(name: str, path: str | Path, suffix: str) -> int | float:
     if "pdsh" in name:
         supplier = get_data(path, "supplier", suffix)
         num_rows = supplier.select(pl.len()).collect().item(0, 0)
@@ -176,7 +174,7 @@ def _infer_scale_factor(path: str | Path, suffix: str) -> int | float:
 
 @dataclasses.dataclass(kw_only=True)
 class RunConfig:
-    """Results for a PDS-H query run."""
+    """Results for a PDS-H or PDS-DS query run."""
 
     queries: list[int]
     suffix: str
@@ -203,6 +201,7 @@ class RunConfig:
     rapidsmpf_oom_protection: bool
     rapidsmpf_spill: bool
     spill_device: float
+    query_set: str
 
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> RunConfig:
@@ -214,12 +213,21 @@ class RunConfig:
             scheduler = None
 
         path = args.path
-        if (scale_factor := args.scale) is None:
+        name = args.query_set
+        scale_factor = args.scale
+
+        if scale_factor is None:
+            if "pdsds" in name:
+                raise ValueError(
+                    "--scale is required for PDS-DS benchmarks.\n"
+                    "TODO: This will be inferred once we maintain a map of scale factors to row counts."
+                )
             if path is None:
                 raise ValueError(
                     "Must specify --root and --scale if --path is not specified."
                 )
-            scale_factor = _infer_scale_factor(path, args.suffix)
+            # For PDS-H, infer scale factor based on row count
+            scale_factor = _infer_scale_factor(name, path, args.suffix)
         if path is None:
             path = f"{args.root}/scale-{scale_factor}"
         try:
@@ -229,7 +237,7 @@ class RunConfig:
 
         if args.scale is not None:
             # Validate the user-supplied scale factor
-            sf_inf = _infer_scale_factor(path, args.suffix)
+            sf_inf = _infer_scale_factor(name, path, args.suffix)
             rel_error = abs((scale_factor - sf_inf) / sf_inf)
             if rel_error > 0.01:
                 raise ValueError(
@@ -255,6 +263,7 @@ class RunConfig:
             spill_device=args.spill_device,
             rapidsmpf_spill=args.rapidsmpf_spill,
             max_rows_per_partition=args.max_rows_per_partition,
+            query_set=args.query_set,
         )
 
     def serialize(self, engine: pl.GPUEngine | None) -> dict:
@@ -681,6 +690,7 @@ def run_polars(
 ) -> None:
     """Run the queries using the given benchmark and executor options."""
     args = parse_args(options, num_queries=num_queries)
+    vars(args).update({"query_set": benchmark.name})
     run_config = RunConfig.from_args(args)
     validation_failures: list[int] = []
 
