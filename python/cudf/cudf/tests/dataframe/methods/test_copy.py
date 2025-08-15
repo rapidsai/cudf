@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# Copyright (c) 2025, NVIDIA CORPORATION.
 from copy import copy, deepcopy
 
 import cupy as cp
@@ -8,7 +8,6 @@ import pytest
 
 from cudf.core.dataframe import DataFrame
 from cudf.testing import assert_eq, assert_neq
-from cudf.testing._utils import ALL_TYPES
 
 """
 DataFrame copy expectations
@@ -22,22 +21,31 @@ DataFrame copy expectations
 """
 
 
-@pytest.mark.parametrize(
-    "fn",
-    [
-        lambda x: x.copy(),
+@pytest.fixture(
+    params=[
+        lambda x: x.copy(deep=False),
         lambda x: x.copy(deep=True),
-        lambda x: copy(x),
-        lambda x: deepcopy(x),
+        copy,
+        deepcopy,
+    ],
+    ids=[
+        "DatFrame.copy(deep=False)",
+        "DataFrame.copy(deep=True)",
+        "copy.copy()",
+        "copy.deepcopy()",
     ],
 )
-def test_dataframe_deep_copy(fn):
+def copy_fn(request):
+    return request.param
+
+
+def test_dataframe_deep_copy(copy_fn):
     pdf = pd.DataFrame(
         [[1, 2, 3], [4, 5, 6], [7, 8, 9]], columns=["a", "b", "c"]
     )
     gdf = DataFrame.from_pandas(pdf)
-    copy_pdf = fn(pdf)
-    copy_gdf = fn(gdf)
+    copy_pdf = copy_fn(pdf)
+    copy_gdf = copy_fn(gdf)
     copy_pdf["b"] = [0, 0, 0]
     copy_gdf["b"] = [0, 0, 0]
     pdf_is_equal = np.array_equal(pdf["b"].values, copy_pdf["b"].values)
@@ -48,30 +56,13 @@ def test_dataframe_deep_copy(fn):
     assert not gdf_is_equal
 
 
-"""
-DataFrame copy bounds checking - sizes 0 through 10 perform as
-expected_equality
-"""
-
-
-@pytest.mark.parametrize(
-    "copy_fn",
-    [
-        lambda x: x.copy(),
-        lambda x: x.copy(deep=True),
-        lambda x: copy(x),
-        lambda x: deepcopy(x),
-        lambda x: x.copy(deep=False),
-    ],
-)
-@pytest.mark.parametrize("ncols", [0, 1, 10])
-@pytest.mark.parametrize("data_type", ALL_TYPES)
-def test_cudf_dataframe_copy(copy_fn, ncols, data_type):
+@pytest.mark.parametrize("ncols", [0, 2])
+def test_cudf_dataframe_copy(copy_fn, ncols, all_supported_types_as_str):
     rng = np.random.default_rng(seed=0)
     pdf = pd.DataFrame(
         {
             chr(i + ord("a")): pd.Series(rng.integers(0, 1000, 20)).astype(
-                data_type
+                all_supported_types_as_str
             )
             for i in range(ncols)
         }
@@ -81,24 +72,15 @@ def test_cudf_dataframe_copy(copy_fn, ncols, data_type):
     assert_eq(df, copy_df)
 
 
-@pytest.mark.parametrize(
-    "copy_fn",
-    [
-        lambda x: x.copy(),
-        lambda x: x.copy(deep=True),
-        lambda x: copy(x),
-        lambda x: deepcopy(x),
-        lambda x: x.copy(deep=False),
-    ],
-)
-@pytest.mark.parametrize("ncols", [0, 1, 10])
-@pytest.mark.parametrize("data_type", ALL_TYPES)
-def test_cudf_dataframe_copy_then_insert(copy_fn, ncols, data_type):
+@pytest.mark.parametrize("ncols", [0, 2])
+def test_cudf_dataframe_copy_then_insert(
+    copy_fn, ncols, all_supported_types_as_str
+):
     rng = np.random.default_rng(seed=0)
     pdf = pd.DataFrame(
         {
             chr(i + ord("a")): pd.Series(rng.integers(0, 1000, 20)).astype(
-                data_type
+                all_supported_types_as_str
             )
             for i in range(ncols)
         }
@@ -106,8 +88,12 @@ def test_cudf_dataframe_copy_then_insert(copy_fn, ncols, data_type):
     df = DataFrame.from_pandas(pdf)
     copy_df = copy_fn(df)
     copy_pdf = copy_fn(pdf)
-    copy_df["aa"] = pd.Series(rng.integers(0, 1000, 20)).astype(data_type)
-    copy_pdf["aa"] = pd.Series(rng.integers(0, 1000, 20)).astype(data_type)
+    copy_df["aa"] = pd.Series(rng.integers(0, 1000, 20)).astype(
+        all_supported_types_as_str
+    )
+    copy_pdf["aa"] = pd.Series(rng.integers(0, 1000, 20)).astype(
+        all_supported_types_as_str
+    )
     assert not copy_pdf.to_string().split() == pdf.to_string().split()
     assert not copy_df.to_string().split() == df.to_string().split()
 
