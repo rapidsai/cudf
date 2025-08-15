@@ -132,6 +132,23 @@ def test_decimal_respect_metadata_precision(plc_type, request):
     assert result.equals(expected)
 
 
+@pytest.mark.parametrize("precision", [0, 39])
+def test_decimal_precision_metadata_out_of_range(precision):
+    scale = 2
+    expected = pa.array(
+        [decimal.Decimal("1.23"), None], type=pa.decimal128(3, scale)
+    )
+    plc_column = plc.unary.cast(
+        plc.Column.from_arrow(expected),
+        plc.DataType(plc.TypeId.DECIMAL128, scale=-scale),
+    )
+    with pytest.raises(TypeError):
+        plc.interop.to_arrow(
+            plc_column,
+            metadata=plc.interop.ColumnMetadata(precision=precision),
+        )
+
+
 def test_round_trip_dlpack_plc_table():
     expected = pa.table({"a": [1, 2, 3], "b": [5, 6, 7]})
     plc_table = plc.Table.from_arrow(expected)

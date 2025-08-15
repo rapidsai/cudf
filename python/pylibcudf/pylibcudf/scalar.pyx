@@ -78,10 +78,42 @@ except ImportError as err:
 __all__ = ["Scalar"]
 
 
-# The DeviceMemoryResource attribute could be released prematurely
-# by the gc if the Scalar is in a reference cycle. Removing the tp_clear
-# function with the no_gc_clear decoration prevents that. See
-# https://github.com/rapidsai/rmm/pull/931 for details.
+# The no_gc_clear decorator on this class is necessary for the following reason:
+#
+# The object underlying a Scalar is a libcudf scalar. The underlying storage
+# type within the scalar depends on the scalar's data type, but regardless of
+# the proximate storage class all of the types ultimately store their data in
+# an rmm::device_buffer that has an associated rmm memory resource used for
+# allocation and deallocation. That memory resource must therefore still be
+# alive when the Scalar is destroyed. With the current architecture of cudf we
+# do not know exactly what mr was used to construct the scalar, so until then
+# the best we can do is to grab the current memory resource at the time of
+# construction and keep it alive until the Scalar is destroyed (for potential
+# problems with this approach, see https://github.com/rapidsai/rmm/issues/1515;
+# the solution will be to address https://github.com/rapidsai/cudf/issues/15170
+# and also pass mrs all the way down to every rmm Python API to avoid its
+# default mrs). This is done in the `__cinit__` method below.
+#
+# However, even in the most common case where this approach gives us the
+# correct mr, we still have a problem. If a Scalar participates in a reference
+# cycle, then when the garbage collector goes to clear that cycle its default
+# behavior will be to clear all attributes of the object, including the mr
+# attribute (see
+# https://cython.readthedocs.io/en/latest/src/userguide/extension_types.html#dealloc-intro).
+# This is fine in the immediate Cython code because Scalar does not define a
+# `__dealloc__` method, so there is no need for the mr in the Cython code.
+# However, if after the Scalar was created some other code called
+# `set_current_device_resource`, then there may be no other references left to
+# the mr used to create the scalar. In that case, the reference count of the
+# Python DeviceMemoryResource will drop to zero and it will immediately be
+# destroyed, resulting in the destruction of the underlying C++ memory resource
+# as well (rmm::device_buffer only has a non-owning reference to it because all
+# mrs in rmm are managed with unique_ptr semantics). That will result in a
+# segmentation fault when the device_buffer goes to deallocate its memory using
+# a freed memory resources. To prevent this, we use the `no_gc_clear` decorator
+# to prevent the garbage collector from clearing the `mr` attribute when it
+# clears the Scalar object as described in
+# https://cython.readthedocs.io/en/latest/src/userguide/extension_types.html#disabling-cycle-breaking-tp-clear.
 @no_gc_clear
 cdef class Scalar:
     """A scalar value in device memory.

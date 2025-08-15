@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import cudf
 from cudf import DataFrame, option_context
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing import assert_eq
@@ -192,3 +193,28 @@ def test_sort_values_by_ambiguous():
         lfunc_args_and_kwargs=(["a"], {}),
         rfunc_args_and_kwargs=(["a"], {}),
     )
+
+
+def test_sort_values_datetime():
+    rng = np.random.default_rng(seed=0)
+    df = pd.DataFrame(
+        {
+            "date": np.array(
+                [
+                    np.datetime64("2016-11-20"),
+                    np.datetime64("2020-11-20"),
+                    np.datetime64("2019-11-20"),
+                    np.datetime64("1918-11-20"),
+                    np.datetime64("2118-11-20"),
+                ]
+            ),
+            "vals": rng.random(5),
+        }
+    )
+
+    gdf = cudf.from_pandas(df)
+
+    s_df = df.sort_values(by="date")
+    s_gdf = gdf.sort_values(by="date")
+
+    assert_eq(s_df, s_gdf)

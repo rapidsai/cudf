@@ -72,7 +72,7 @@ requirements:
     - libcudf =${{ version }}
     - ${{ pin_compatible("rmm", upper_bound="x.x") }}
     - fsspec >=0.6.0
-    - cuda-python >=12.6.2,<13.0a0
+    - cuda-python >=12.9.1,<13.0a0
     - nvtx >=0.2.1
     - packaging
   ignore_run_exports:
