@@ -515,6 +515,12 @@ def inplace(request):
 
 
 @pytest.fixture(params=[True, False])
+def drop(request):
+    """Param for `drop` argument"""
+    return request.param
+
+
+@pytest.fixture(params=[True, False])
 def ignore_index(request):
     """Param for `ignore_index` argument"""
     return request.param
