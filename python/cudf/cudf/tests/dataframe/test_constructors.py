@@ -46,7 +46,6 @@ def test_serialize_list_columns(data):
 
 
 @pytest.mark.parametrize(
-    "data",
     "data1, data2",
     [(1, 2), (1.0, 2.0), (3, 4.0)],
 )
