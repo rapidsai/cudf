@@ -412,10 +412,9 @@ def test_chunked_orc_writer_statistics_frequency(
     gdf = cudf.from_pandas(pdf)
     expect = pd.concat([pdf, pdf]).reset_index(drop=True)
 
-    writer = ORCWriter(gdf_fname, statistics=stats_freq)
-    writer.write_table(gdf)
-    writer.write_table(gdf)
-    writer.close()
+    with ORCWriter(gdf_fname, statistics=stats_freq) as writer:
+        writer.write_table(gdf)
+        writer.write_table(gdf)
 
     got = pd.read_orc(gdf_fname)
 
@@ -451,10 +450,9 @@ def test_chunked_orc_writer(
     gdf = cudf.from_pandas(pdf)
     expect = pd.concat([pdf, pdf]).reset_index(drop=True)
 
-    writer = ORCWriter(gdf_fname, compression=compression)
-    writer.write_table(gdf)
-    writer.write_table(gdf)
-    writer.close()
+    with ORCWriter(gdf_fname, compression=compression) as writer:
+        writer.write_table(gdf)
+        writer.write_table(gdf)
 
     got = pd.read_orc(gdf_fname, columns=columns)
     assert_frame_equal(cudf.from_pandas(expect), cudf.from_pandas(got))
@@ -469,8 +467,8 @@ def test_chunked_orc_writer(
         {"c": str, "a": object},
     ],
 )
-def test_orc_writer_strings(tmpdir, dtypes):
-    gdf_fname = tmpdir.join("gdf_strings.orc")
+def test_orc_writer_strings(tmp_path, dtypes):
+    gdf_fname = tmp_path / "gdf_strings.orc"
 
     expect = cudf.datasets.randomdata(nrows=10, dtypes=dtypes, seed=1)
     expect.to_orc(gdf_fname)
@@ -488,24 +486,23 @@ def test_orc_writer_strings(tmpdir, dtypes):
         {"c": str, "a": object},
     ],
 )
-def test_chunked_orc_writer_strings(tmpdir, dtypes):
-    gdf_fname = tmpdir.join("chunked_gdf_strings.orc")
+def test_chunked_orc_writer_strings(tmp_path, dtypes):
+    gdf_fname = tmp_path / "chunked_gdf_strings.orc"
 
     gdf = cudf.datasets.randomdata(nrows=10, dtypes=dtypes, seed=1)
     pdf = gdf.to_pandas()
     expect = pd.concat([pdf, pdf]).reset_index(drop=True)
-    writer = ORCWriter(gdf_fname)
-    writer.write_table(gdf)
-    writer.write_table(gdf)
-    writer.close()
+    with ORCWriter(gdf_fname) as writer:
+        writer.write_table(gdf)
+        writer.write_table(gdf)
 
     got = pd.read_orc(gdf_fname)
 
     assert_eq(expect, got)
 
 
-def test_orc_writer_sliced(tmpdir):
-    cudf_path = tmpdir.join("cudf.orc")
+def test_orc_writer_sliced(tmp_path):
+    cudf_path = tmp_path / "cudf.orc"
 
     df = pd.DataFrame()
     df["String"] = np.array(["Alpha", "Beta", "Gamma", "Delta"])
@@ -574,8 +571,8 @@ def test_orc_reader_tzif_timestamps(datadir):
     assert_eq(pdf, gdf)
 
 
-def test_int_overflow(tmpdir):
-    file_path = tmpdir.join("gdf_overflow.orc")
+def test_int_overflow(tmp_path):
+    file_path = tmp_path / "gdf_overflow.orc"
 
     # The number of rows and the large element trigger delta encoding
     num_rows = 513
@@ -608,7 +605,7 @@ def normalized_equals(value1, value2):
 
 @pytest.mark.parametrize("stats_freq", ["STRIPE", "ROWGROUP"])
 @pytest.mark.parametrize("nrows", [1, 100, 100000])
-def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
+def test_orc_write_statistics(tmp_path, datadir, nrows, stats_freq):
     supported_stat_types = [*supported_numpy_dtypes, "str"]
     # Writing bool columns to multiple row groups is disabled
     # until #6763 is fixed
@@ -622,10 +619,10 @@ def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
             for dtype in supported_stat_types
         }
     )
-    fname = tmpdir.join("gdf.orc")
+    fname = tmp_path / "gdf.orc"
 
     # Write said dataframe to ORC with cuDF
-    gdf.to_orc(fname.strpath, statistics=stats_freq, stripe_size_rows=30000)
+    gdf.to_orc(fname, statistics=stats_freq, stripe_size_rows=30000)
 
     # Read back written ORC's statistics
     orc_file = orc.ORCFile(fname)
@@ -681,53 +678,53 @@ def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
 
 @pytest.mark.parametrize("stats_freq", ["STRIPE", "ROWGROUP"])
 @pytest.mark.parametrize("nrows", [2, 100, 1024])
-def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
+def test_orc_chunked_write_statistics(tmp_path, datadir, nrows, stats_freq):
     supported_stat_types = [*supported_numpy_dtypes, "str"]
     # Writing bool columns to multiple row groups is disabled
     # until #6763 is fixed
     if nrows == 1024:
         supported_stat_types.remove("bool")
 
-    gdf_fname = tmpdir.join("chunked_stats.orc")
-    writer = ORCWriter(gdf_fname, statistics=stats_freq, stripe_size_rows=512)
+    gdf_fname = tmp_path / "chunked_stats.orc"
+    with ORCWriter(
+        gdf_fname, statistics=stats_freq, stripe_size_rows=512
+    ) as writer:
+        max_char_length = 100 if nrows < 1000 else 10
 
-    max_char_length = 100 if nrows < 1000 else 10
+        # Make a dataframe
+        gdf = cudf.DataFrame(
+            {
+                "col_" + str(dtype): gen_rand_series(
+                    dtype,
+                    nrows // 2,
+                    has_nulls=True,
+                    low=0,
+                    high=max_char_length,
+                    seed=0,
+                )
+                for dtype in supported_stat_types
+            }
+        )
 
-    # Make a dataframe
-    gdf = cudf.DataFrame(
-        {
-            "col_" + str(dtype): gen_rand_series(
-                dtype,
-                nrows // 2,
-                has_nulls=True,
-                low=0,
-                high=max_char_length,
-                seed=0,
-            )
-            for dtype in supported_stat_types
-        }
-    )
-
-    pdf1 = gdf.to_pandas()
-    writer.write_table(gdf)
-    # gdf is specifically being reused here to ensure the data is destroyed
-    # before the next write_table call to ensure the data is persisted inside
-    # write and no pointers are saved into the original table
-    gdf = cudf.DataFrame(
-        {
-            "col_" + str(dtype): gen_rand_series(
-                dtype,
-                nrows // 2,
-                has_nulls=True,
-                low=0,
-                high=max_char_length,
-            )
-            for dtype in supported_stat_types
-        }
-    )
-    pdf2 = gdf.to_pandas()
-    writer.write_table(gdf)
-    writer.close()
+        pdf1 = gdf.to_pandas()
+        writer.write_table(gdf)
+        # gdf is specifically being reused here to ensure the data is destroyed
+        # before the next write_table call to ensure the data is persisted inside
+        # write and no pointers are saved into the original table
+        gdf = cudf.DataFrame(
+            {
+                "col_" + str(dtype): gen_rand_series(
+                    dtype,
+                    nrows // 2,
+                    has_nulls=True,
+                    low=0,
+                    high=max_char_length,
+                )
+                for dtype in supported_stat_types
+            }
+        )
+        pdf2 = gdf.to_pandas()
+        writer.write_table(gdf)
 
     # pandas is unable to handle min/max of string col with nulls
     expect = cudf.DataFrame(pd.concat([pdf1, pdf2]).reset_index(drop=True))
@@ -785,13 +782,13 @@ def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
 
 
 @pytest.mark.parametrize("nrows", [1, 100, 100000])
-def test_orc_write_bool_statistics(tmpdir, datadir, nrows):
+def test_orc_write_bool_statistics(tmp_path, datadir, nrows):
     # Make a dataframe
     gdf = cudf.DataFrame({"col_bool": gen_rand_series("bool", nrows)})
-    fname = tmpdir.join("gdf.orc")
+    fname = tmp_path / "gdf.orc"
 
     # Write said dataframe to ORC with cuDF
-    gdf.to_orc(fname.strpath, stripe_size_rows=30000)
+    gdf.to_orc(fname, stripe_size_rows=30000)
 
     # Read back written ORC's statistics
     orc_file = orc.ORCFile(fname)
@@ -922,8 +919,8 @@ def test_empty_string_columns(data):
     "decimal_type",
     [cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype],
 )
-def test_orc_writer_decimal(tmpdir, scale, decimal_type):
-    fname = tmpdir / "decimal.orc"
+def test_orc_writer_decimal(tmp_path, scale, decimal_type):
+    fname = tmp_path / "decimal.orc"
 
     expected = cudf.DataFrame({"dec_val": gen_rand_series("i", 100)})
     expected["dec_val"] = expected["dec_val"].astype(decimal_type(7, scale))
@@ -1378,21 +1375,20 @@ def test_chunked_orc_writer_lists():
     expect = pd.concat([pdf_in, pdf_in]).reset_index(drop=True)
 
     buffer = BytesIO()
-    writer = ORCWriter(buffer)
-    writer.write_table(gdf)
-    writer.write_table(gdf)
-    writer.close()
+    with ORCWriter(buffer) as writer:
+        writer.write_table(gdf)
+        writer.write_table(gdf)
 
     got = pd.read_orc(buffer)
     assert_eq(expect, got)
 
 
-def test_writer_timestamp_stream_size(datadir, tmpdir):
+def test_writer_timestamp_stream_size(datadir, tmp_path):
     pdf_fname = datadir / "TestOrcFile.largeTimestamps.orc"
-    gdf_fname = tmpdir.join("gdf.orc")
+    gdf_fname = tmp_path / "gdf.orc"
 
     expect = pd.read_orc(pdf_fname)
-    cudf.from_pandas(expect).to_orc(gdf_fname.strpath)
+    cudf.from_pandas(expect).to_orc(gdf_fname)
     got = pd.read_orc(gdf_fname)
 
     assert_eq(expect, got)
@@ -1560,9 +1556,9 @@ def test_select_nested(list_struct_buff, equivalent_columns):
     assert_eq(df_cols1, df_cols2)
 
 
-def test_orc_writer_rle_stream_size(datadir, tmpdir):
+def test_orc_writer_rle_stream_size(datadir, tmp_path):
     original = datadir / "TestOrcFile.int16.rle.size.orc"
-    reencoded = tmpdir.join("int16_map.orc")
+    reencoded = tmp_path / "int16_map.orc"
 
     df = cudf.read_orc(original)
     df.to_orc(reencoded)
@@ -1891,17 +1887,15 @@ def test_orc_chunked_writer_stripe_size(datadir):
     df = cudf.DataFrame({"col": gen_rand_series("int", 100000)})
 
     buffer = BytesIO()
-    writer = ORCWriter(buffer, stripe_size_bytes=64 * 1024)
-    writer.write_table(df)
-    writer.close()
+    with ORCWriter(buffer, stripe_size_bytes=64 * 1024) as writer:
+        writer.write_table(df)
 
     orc_file = orc.ORCFile(buffer)
     assert_eq(orc_file.nstripes, 10)
 
     buffer = BytesIO()
-    writer = ORCWriter(buffer, stripe_size_rows=20000)
-    writer.write_table(df)
-    writer.close()
+    with ORCWriter(buffer, stripe_size_rows=20000) as writer:
+        writer.write_table(df)
 
     orc_file = orc.ORCFile(buffer)
     assert_eq(orc_file.nstripes, 5)
@@ -1912,9 +1906,8 @@ def test_reader_lz4():
     pa_table = pa.Table.from_pandas(pdf)
 
     buffer = BytesIO()
-    writer = orc.ORCWriter(buffer, compression="LZ4")
-    writer.write(pa_table)
-    writer.close()
+    with orc.ORCWriter(buffer, compression="LZ4") as writer:
+        writer.write(pa_table)
 
     got = cudf.read_orc(buffer)
     assert_eq(pdf, got)
