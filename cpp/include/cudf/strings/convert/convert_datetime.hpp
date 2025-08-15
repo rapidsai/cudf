@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@ namespace strings {
  * @brief Returns a new timestamp column converting a strings column into
  * timestamps using the provided format pattern.
  *
- * The format pattern can include the following specifiers: "%Y,%y,%m,%d,%H,%I,%p,%M,%S,%f,%z"
+ * The format pattern can include the following specifiers:
  *
  * | Specifier | Description |
  * | :-------: | ----------- |
@@ -94,7 +94,7 @@ std::unique_ptr<column> to_timestamps(
  * @brief Verifies the given strings column can be parsed to timestamps using the provided format
  * pattern.
  *
- * The format pattern can include the following specifiers: "%Y,%y,%m,%d,%H,%I,%p,%M,%S,%f,%z"
+ * The format pattern can include the following specifiers:
  *
  * | Specifier | Description |
  * | :-------: | ----------- |
@@ -125,6 +125,9 @@ std::unique_ptr<column> to_timestamps(
  * This will return a column of type BOOL8 where a `true` row indicates the corresponding
  * input string can be parsed correctly with the given format.
  *
+ * @throw std::invalid_argument if the `format` string is empty
+ * @throw std::invalid_argument if a specifier is not supported
+ *
  * @param input Strings instance for this operation
  * @param format String specifying the timestamp format in strings
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -141,7 +144,7 @@ std::unique_ptr<column> is_timestamp(
  * @brief Returns a new strings column converting a timestamp column into
  * strings using the provided format pattern.
  *
- * The format pattern can include the following specifiers: "%Y,%y,%m,%d,%H,%I,%p,%M,%S,%f,%z,%Z"
+ * The format pattern can include the following specifiers:
  *
  * | Specifier | Description |
  * | :-------: | ----------- |
@@ -230,9 +233,10 @@ std::unique_ptr<column> is_timestamp(
  * }
  * @endcode
  *
- * @throw cudf::logic_error if `timestamps` column parameter is not a timestamp type.
- * @throw cudf::logic_error if the `format` string is empty
- * @throw cudf::logic_error if `names.size()` is an invalid size. Must be 0 or 40 strings.
+ * @throw std::invalid_argument if `timestamps` column parameter is not a timestamp type.
+ * @throw std::invalid_argument if the `format` string is empty
+ * @throw std::invalid_argument if `names.size()` is an invalid size. Must be 0 or 40 strings.
+ * @throw std::invalid_argument if a specifier is not supported
  *
  * @param timestamps Timestamp values to convert
  * @param format The string specifying output format.

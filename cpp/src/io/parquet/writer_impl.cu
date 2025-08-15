@@ -2497,8 +2497,8 @@ void writer::impl::write_parquet_data_to_sink(
         if (i == 0) { row_group.file_offset = chunk_offset; }
       }
     }
-    for (auto const& task : write_tasks) {
-      task.wait();
+    for (auto& task : write_tasks) {
+      task.get();
     }
   }
 

@@ -40,3 +40,11 @@ def test_dataframe_list_round_trip():
 
         table = pa.Table.from_pydict(data, schema=schema)
         assert_eq(table.to_pandas(), pd.DataFrame(data))
+
+
+def test_datetime_to_arrow(datetime_types_as_str):
+    data = pd.date_range("2000-01-01", "2000-01-02", freq="3600s")
+    gdf = cudf.DataFrame({"timestamp": data.astype(datetime_types_as_str)})
+    assert_eq(
+        gdf, cudf.DataFrame.from_arrow(gdf.to_arrow(preserve_index=False))
+    )

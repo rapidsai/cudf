@@ -346,3 +346,186 @@ def test_timedelta_str_roundtrip(sr_data, sr_dtype, exp_data, exp_dtype):
     assert_eq(expected_series, actual_series)
 
     assert_eq(gsr, actual_series.astype(gsr.dtype))
+
+
+def test_typecast_from_datetime(numeric_types_as_str):
+    data = pd.date_range(
+        "2019-07-16 00:00:00",
+        "2019-07-16 00:00:01",
+        freq="5555us",
+        name="times",
+    )
+    pd_data = pd.Series(data)
+    np_data = np.array(pd_data)
+    gdf_data = cudf.Series(pd_data)
+
+    np_casted = np_data.astype(numeric_types_as_str)
+    gdf_casted = gdf_data.astype(numeric_types_as_str)
+
+    np.testing.assert_equal(np_casted, gdf_casted.to_numpy())
+
+
+def test_typecast_from_datetime_to_int64_to_datetime(datetime_types_as_str):
+    data = pd.date_range(
+        "2019-07-16 00:00:00",
+        "2019-07-16 00:00:01",
+        freq="5555us",
+        name="times",
+    )
+    pd_data = pd.Series(data)
+    np_data = np.array(pd_data)
+    gdf_data = cudf.Series(pd_data)
+
+    np_casted = np_data.astype(np.int64).astype(datetime_types_as_str)
+    gdf_casted = gdf_data.astype(np.int64).astype(datetime_types_as_str)
+
+    np.testing.assert_equal(np_casted, gdf_casted.to_numpy())
+
+
+def test_typecast_to_different_datetime_resolutions(datetime_types_as_str):
+    data = pd.date_range(
+        "2019-07-16 00:00:00",
+        "2019-07-16 00:00:01",
+        freq="5555us",
+        name="times",
+    )
+    pd_data = pd.Series(data)
+    np_data = np.array(pd_data).astype(datetime_types_as_str)
+    gdf_series = cudf.Series(pd_data).astype(datetime_types_as_str)
+    np.testing.assert_equal(np_data, gdf_series.to_numpy())
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [
+            "2019-07-16 00:00:00.333",
+            "2019-07-16 00:00:00.666",
+            "2019-07-16 00:00:00.888",
+        ],
+        [
+            "2019-07-16 00:00:00.333333",
+            "2019-07-16 00:00:00.666666",
+            "2019-07-16 00:00:00.888888",
+        ],
+        [
+            "2019-07-16 00:00:00.333333333",
+            "2019-07-16 00:00:00.666666666",
+            "2019-07-16 00:00:00.888888888",
+        ],
+    ],
+    ids=["ms_data", "us_data", "ns_data"],
+)
+def test_string_timstamp_typecast_to_different_datetime_resolutions(
+    data, datetime_types_as_str
+):
+    pd_sr = pd.Series(data)
+    gdf_sr = cudf.Series.from_pandas(pd_sr)
+
+    expect = pd_sr.values.astype(datetime_types_as_str)
+    got = gdf_sr.astype(datetime_types_as_str).values_host
+
+    np.testing.assert_equal(expect, got)
+
+
+def test_typecast_to_datetime(numeric_types_as_str, datetime_types_as_str):
+    data = np.arange(1, 10)
+    np_data = data.astype(numeric_types_as_str)
+    gdf_data = cudf.Series(np_data)
+
+    np_casted = np_data.astype(datetime_types_as_str)
+    gdf_casted = gdf_data.astype(datetime_types_as_str)
+
+    np.testing.assert_equal(np_casted, gdf_casted.to_numpy())
+
+
+def test_typecast_to_from_datetime(
+    numeric_types_as_str, datetime_types_as_str
+):
+    data = np.arange(1, 10)
+    np_data = data.astype(numeric_types_as_str)
+    gdf_data = cudf.Series(np_data)
+
+    np_casted = np_data.astype(datetime_types_as_str).astype(
+        numeric_types_as_str
+    )
+    gdf_casted = gdf_data.astype(datetime_types_as_str).astype(
+        numeric_types_as_str
+    )
+
+    np.testing.assert_equal(np_casted, gdf_casted.to_numpy())
+
+
+@pytest.fixture
+def datetime_types_as_str2(datetime_types_as_str):
+    return datetime_types_as_str
+
+
+def test_typecast_from_datetime_to_datetime(
+    datetime_types_as_str, datetime_types_as_str2
+):
+    data = np.arange(1, 10)
+    np_data = data.astype(datetime_types_as_str)
+    ser = cudf.Series(np_data)
+
+    np_casted = np_data.astype(datetime_types_as_str2)
+    ser_casted = ser.astype(datetime_types_as_str2)
+
+    np.testing.assert_equal(np_casted, ser_casted.to_numpy())
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["2001-01-01", "2002-02-02", "2000-01-05", "NaT"],
+        ["2001-01-01", "2002-02-02", "2000-01-05", None],
+        [None, None, None, None, None],
+    ],
+)
+def test_str_null_to_datetime(data, datetime_types_as_str):
+    psr = pd.Series(data)
+    gsr = cudf.Series(data)
+
+    assert_eq(
+        psr.astype(datetime_types_as_str), gsr.astype(datetime_types_as_str)
+    )
+
+
+def test_str_to_datetime_error():
+    psr = pd.Series(["2001-01-01", "2002-02-02", "2000-01-05", "None"])
+    gsr = cudf.Series(["2001-01-01", "2002-02-02", "2000-01-05", "None"])
+
+    assert_exceptions_equal(
+        lfunc=psr.astype,
+        rfunc=gsr.astype,
+        lfunc_args_and_kwargs=(["datetime64[s]"],),
+        rfunc_args_and_kwargs=(["datetime64[s]"],),
+        check_exception_type=False,
+    )
+
+
+@pytest.mark.parametrize("timezone", ["", "Z"])
+@pytest.mark.parametrize(
+    "data",
+    [
+        "2002-10-27T04:30",
+        "2002-10-27T04:30:00",
+        "2002-10-27T04:30:00.000",
+        "2002-10-27T04:30:00.000000",
+        "2002-10-27T04:30:00.000000000",
+    ],
+)
+def test_datetime_infer_format(data, timezone, datetime_types_as_str):
+    ts_data = [data + timezone]
+    sr = cudf.Series(ts_data)
+    psr = pd.Series(ts_data)
+    if not timezone:
+        expected = psr.astype(datetime_types_as_str)
+        actual = sr.astype(datetime_types_as_str)
+
+        assert_eq(expected, actual)
+    else:
+        with cudf.option_context("mode.pandas_compatible", True):
+            with pytest.raises(NotImplementedError):
+                # pandas doesn't allow parsing "Z" to naive type
+                sr.astype(datetime_types_as_str)

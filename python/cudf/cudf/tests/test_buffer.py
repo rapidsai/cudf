@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 import cupy as cp
 import pytest
@@ -7,22 +7,30 @@ from cudf.core.buffer import Buffer, as_buffer
 
 pytestmark = pytest.mark.spilling
 
-arr_len = 10
+
+@pytest.fixture
+def arr_len():
+    return 10
 
 
 @pytest.mark.parametrize(
-    "data",
+    "data, expect_success",
     [
-        (cp.zeros(arr_len), True),
-        (cp.zeros((1, arr_len)), True),
-        (cp.zeros((1, arr_len, 1)), True),
-        (cp.zeros((arr_len, arr_len)), True),
-        (cp.zeros((arr_len, arr_len)).reshape(arr_len * arr_len), True),
-        (cp.zeros((arr_len, arr_len))[:, 0], False),
+        (lambda arr_len: cp.zeros(arr_len), True),
+        (lambda arr_len: cp.zeros((1, arr_len)), True),
+        (lambda arr_len: cp.zeros((1, arr_len, 1)), True),
+        (lambda arr_len: cp.zeros((arr_len, arr_len)), True),
+        (
+            lambda arr_len: cp.zeros((arr_len, arr_len)).reshape(
+                arr_len * arr_len
+            ),
+            True,
+        ),
+        (lambda arr_len: cp.zeros((arr_len, arr_len))[:, 0], False),
     ],
 )
-def test_buffer_from_cuda_iface_contiguous(data):
-    data, expect_success = data
+def test_buffer_from_cuda_iface_contiguous(data, expect_success, arr_len):
+    data = data(arr_len)
     if expect_success:
         as_buffer(data.view("|u1"))
     else:
@@ -33,14 +41,15 @@ def test_buffer_from_cuda_iface_contiguous(data):
 @pytest.mark.parametrize(
     "data",
     [
-        cp.arange(arr_len),
-        cp.arange(arr_len).reshape(1, arr_len),
-        cp.arange(arr_len).reshape(1, arr_len, 1),
-        cp.arange(arr_len**2).reshape(arr_len, arr_len),
+        lambda arr_len: cp.arange(arr_len),
+        lambda arr_len: cp.arange(arr_len).reshape(1, arr_len),
+        lambda arr_len: cp.arange(arr_len).reshape(1, arr_len, 1),
+        lambda arr_len: cp.arange(arr_len**2).reshape(arr_len, arr_len),
     ],
 )
 @pytest.mark.parametrize("dtype", ["uint8", "int8", "float32", "int32"])
-def test_buffer_from_cuda_iface_dtype(data, dtype):
+def test_buffer_from_cuda_iface_dtype(data, dtype, arr_len):
+    data = data(arr_len)
     data = data.astype(dtype)
     buf = as_buffer(data)
     got = cp.array(buf).reshape(-1).view("uint8")
@@ -48,7 +57,7 @@ def test_buffer_from_cuda_iface_dtype(data, dtype):
     assert (expect == got).all()
 
 
-def test_buffer_creation_from_any():
+def test_buffer_creation_from_any(arr_len):
     ary = cp.arange(arr_len)
     b = as_buffer(ary, exposed=True)
     assert isinstance(b, Buffer)
@@ -89,12 +98,12 @@ def test_buffer_repr(size, expect):
         slice(0, 0),
         slice(0, 1),
         slice(-2, -1),
-        slice(0, arr_len),
+        slice(0, 10),
         slice(2, 3),
         slice(2, -1),
     ],
 )
-def test_buffer_slice(idx):
+def test_buffer_slice(idx, arr_len):
     ary = cp.arange(arr_len, dtype="uint8")
     buf = as_buffer(ary)
     expect = ary[idx]
@@ -112,7 +121,7 @@ def test_buffer_slice(idx):
         (slice(3, 2, -1), ValueError, "slice must be C-contiguous"),
     ],
 )
-def test_buffer_slice_fail(idx, err_type, err_msg):
+def test_buffer_slice_fail(idx, err_type, err_msg, arr_len):
     ary = cp.arange(arr_len, dtype="uint8")
     buf = as_buffer(ary)
 

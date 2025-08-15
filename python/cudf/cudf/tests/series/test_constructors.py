@@ -1,17 +1,144 @@
 # Copyright (c) 2023-2025, NVIDIA CORPORATION.
+import datetime
 import decimal
+import types
 
 import cupy as cp
+import numba.cuda
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
 
 import cudf
+from cudf.core._compat import (
+    PANDAS_CURRENT_SUPPORTED_VERSION,
+    PANDAS_GE_210,
+    PANDAS_VERSION,
+)
+from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.column.column import as_column
 from cudf.errors import MixedTypeError
 from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal
+
+
+@pytest.mark.parametrize(
+    "data1, data2",
+    [(1, 2), (1.0, 2.0), (3, 4.0)],
+)
+@pytest.mark.parametrize("data3, data4", [(6, 10), (5.0, 9.0), (2, 6.0)])
+def test_create_interval_series(data1, data2, data3, data4, interval_closed):
+    expect = pd.Series(
+        pd.Interval(data1, data2, interval_closed), dtype="interval"
+    )
+    got = cudf.Series(
+        pd.Interval(data1, data2, interval_closed), dtype="interval"
+    )
+    assert_eq(expect, got)
+
+    expect_two = pd.Series(
+        [
+            pd.Interval(data1, data2, interval_closed),
+            pd.Interval(data3, data4, interval_closed),
+        ],
+        dtype="interval",
+    )
+    got_two = cudf.Series(
+        [
+            pd.Interval(data1, data2, interval_closed),
+            pd.Interval(data3, data4, interval_closed),
+        ],
+        dtype="interval",
+    )
+    assert_eq(expect_two, got_two)
+
+    expect_three = pd.Series(
+        [
+            pd.Interval(data1, data2, interval_closed),
+            pd.Interval(data3, data4, interval_closed),
+            pd.Interval(data1, data2, interval_closed),
+        ],
+        dtype="interval",
+    )
+    got_three = cudf.Series(
+        [
+            pd.Interval(data1, data2, interval_closed),
+            pd.Interval(data3, data4, interval_closed),
+            pd.Interval(data1, data2, interval_closed),
+        ],
+        dtype="interval",
+    )
+    assert_eq(expect_three, got_three)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [[{"name": 123}]],
+        [
+            [
+                {
+                    "IsLeapYear": False,
+                    "data": {"Year": 1999, "Month": 7},
+                    "names": ["Mike", None],
+                },
+                {
+                    "IsLeapYear": True,
+                    "data": {"Year": 2004, "Month": 12},
+                    "names": None,
+                },
+                {
+                    "IsLeapYear": False,
+                    "data": {"Year": 1996, "Month": 2},
+                    "names": ["Rose", "Richard"],
+                },
+            ]
+        ],
+        [
+            [None, {"human?": True, "deets": {"weight": 2.4, "age": 27}}],
+            [
+                {"human?": None, "deets": {"weight": 5.3, "age": 25}},
+                {"human?": False, "deets": {"weight": 8.0, "age": 31}},
+                {"human?": False, "deets": None},
+            ],
+            [],
+            None,
+            [{"human?": None, "deets": {"weight": 6.9, "age": None}}],
+        ],
+        [
+            {
+                "name": "var0",
+                "val": [
+                    {"name": "var1", "val": None, "type": "optional<struct>"}
+                ],
+                "type": "list",
+            },
+            {},
+            {
+                "name": "var2",
+                "val": [
+                    {
+                        "name": "var3",
+                        "val": {"field": 42},
+                        "type": "optional<struct>",
+                    },
+                    {
+                        "name": "var4",
+                        "val": {"field": 3.14},
+                        "type": "optional<struct>",
+                    },
+                ],
+                "type": "list",
+            },
+            None,
+        ],
+    ],
+)
+def test_lists_of_structs_data(data):
+    got = cudf.Series(data)
+    expected = cudf.Series(pa.array(data))
+    assert_eq(got, expected)
 
 
 @pytest.fixture(
@@ -140,6 +267,20 @@ def test_series_unitness_np_datetimelike_units():
         cudf.Series(data)
     with pytest.raises(TypeError):
         pd.Series(data)
+
+
+def test_from_numpyextensionarray_string_object_pandas_compat_mode():
+    NumpyExtensionArray = (
+        pd.arrays.NumpyExtensionArray
+        if PANDAS_GE_210
+        else pd.arrays.PandasArray
+    )
+
+    data = NumpyExtensionArray(np.array(["a", None], dtype=object))
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = cudf.Series(data)
+    expected = pd.Series(data)
+    assert_eq(result, expected)
 
 
 def test_list_category_like_maintains_dtype():
@@ -675,6 +816,195 @@ def test_series_arrow_decimal_types_roundtrip(pa_type):
         assert_eq(pdf, gdf)
 
 
+@pytest.mark.parametrize("module", ["cupy", "numba"])
+def test_cuda_array_interface_interop_in(
+    numeric_and_temporal_types_as_str, module
+):
+    if module == "cupy":
+        module_constructor = cp.array
+        if numeric_and_temporal_types_as_str.startswith(
+            "datetime"
+        ) or numeric_and_temporal_types_as_str.startswith("timedelta"):
+            pytest.skip(
+                f"cupy doesn't support {numeric_and_temporal_types_as_str}"
+            )
+    elif module == "numba":
+        module_constructor = numba.cuda.to_device
+
+    np_data = np.arange(10).astype(numeric_and_temporal_types_as_str)
+    module_data = module_constructor(np_data)
+
+    pd_data = pd.Series(np_data)
+    # Test using a specific function for __cuda_array_interface__ here
+    cudf_data = cudf.Series(module_data)
+
+    assert_eq(pd_data, cudf_data)
+
+    gdf = cudf.DataFrame()
+    gdf["test"] = module_data
+    pd_data.name = "test"
+    assert_eq(pd_data, gdf["test"])
+
+
+@pytest.mark.parametrize("module", ["cupy", "numba"])
+def test_cuda_array_interface_interop_out(
+    numeric_and_temporal_types_as_str, module
+):
+    if module == "cupy":
+        module_constructor = cp.asarray
+
+        def to_host_function(x):
+            return cp.asnumpy(x)
+    elif module == "numba":
+        module_constructor = numba.cuda.as_cuda_array
+
+        def to_host_function(x):
+            return x.copy_to_host()
+
+    np_data = np.arange(10).astype(numeric_and_temporal_types_as_str)
+    cudf_data = cudf.Series(np_data)
+    assert isinstance(cudf_data.__cuda_array_interface__, dict)
+
+    module_data = module_constructor(cudf_data)
+    got = to_host_function(module_data)
+
+    expect = np_data
+
+    assert_eq(expect, got)
+
+
+def test_cuda_array_interface_interop_out_masked(
+    numeric_and_temporal_types_as_str,
+):
+    np_data = np.arange(10).astype("float64")
+    np_data[[0, 2, 4, 6, 8]] = np.nan
+
+    cudf_data = cudf.Series(np_data).astype(numeric_and_temporal_types_as_str)
+    cai = cudf_data.__cuda_array_interface__
+    assert isinstance(cai, dict)
+    assert "mask" in cai
+
+
+@pytest.mark.parametrize("nulls", ["all", "some", "bools", "none"])
+@pytest.mark.parametrize("mask_type", ["bits", "bools"])
+def test_cuda_array_interface_as_column(
+    numeric_and_temporal_types_as_str, nulls, mask_type
+):
+    sr = cudf.Series(np.arange(10))
+
+    if nulls == "some":
+        mask = [
+            True,
+            False,
+            True,
+            False,
+            False,
+            True,
+            True,
+            False,
+            True,
+            True,
+        ]
+        sr[sr[~np.asarray(mask)]] = None
+    elif nulls == "all":
+        sr[:] = None
+
+    sr = sr.astype(numeric_and_temporal_types_as_str)
+
+    obj = types.SimpleNamespace(
+        __cuda_array_interface__=sr.__cuda_array_interface__
+    )
+
+    if mask_type == "bools":
+        if nulls == "some":
+            obj.__cuda_array_interface__["mask"] = numba.cuda.to_device(mask)
+        elif nulls == "all":
+            obj.__cuda_array_interface__["mask"] = numba.cuda.to_device(
+                [False] * 10
+            )
+
+    expect = sr
+    got = cudf.Series(obj)
+
+    assert_eq(expect, got)
+
+
+def test_series_from_ephemeral_cupy():
+    # Test that we keep a reference to the ephemeral
+    # CuPy array. If we didn't, then `a` would end
+    # up referring to the same memory as `b` due to
+    # CuPy's caching allocator
+    a = cudf.Series(cp.asarray([1, 2, 3]))
+    b = cudf.Series(cp.asarray([1, 1, 1]))
+    assert_eq(pd.Series([1, 2, 3]), a)
+    assert_eq(pd.Series([1, 1, 1]), b)
+
+
+def test_column_from_ephemeral_cupy_try_lose_reference():
+    # Try to lose the reference we keep to the ephemeral
+    # CuPy array
+    a = cudf.Series(cp.asarray([1, 2, 3]))._column
+    a = cudf.core.column.as_column(a)
+    b = cp.asarray([1, 1, 1])
+    assert_eq(pd.Index([1, 2, 3]), a.to_pandas())
+
+    a = cudf.Series(cp.asarray([1, 2, 3]))._column
+    a.name = "b"
+    b = cp.asarray([1, 1, 1])  # noqa: F841
+    assert_eq(pd.Index([1, 2, 3]), a.to_pandas())
+
+
+@pytest.mark.xfail(
+    get_global_manager() is not None,
+    reason=(
+        "spilling doesn't support PyTorch, see "
+        "`cudf.core.buffer.spillable_buffer.DelayedPointerTuple`"
+    ),
+)
+def test_cuda_array_interface_pytorch():
+    torch = pytest.importorskip("torch", minversion="2.4.0")
+    if not torch.cuda.is_available():
+        pytest.skip("need gpu version of pytorch to be installed")
+
+    series = cudf.Series([1, -1, 10, -56])
+    tensor = torch.tensor(series)
+    got = cudf.Series(tensor)
+
+    assert_eq(got, series)
+    buffer = cudf.core.buffer.as_buffer(cp.ones(10, dtype=np.bool_))
+    tensor = torch.tensor(buffer)
+    got = cudf.Series(tensor, dtype=np.bool_)
+
+    assert_eq(got, cudf.Series(buffer, dtype=np.bool_))
+
+    index = cudf.Index([], dtype="float64")
+    tensor = torch.tensor(index)
+    got = cudf.Index(tensor)
+    assert_eq(got, index)
+
+    index = cudf.RangeIndex(start=0, stop=3)
+    tensor = torch.tensor(index)
+    got = cudf.Series(tensor)
+
+    assert_eq(got, cudf.Series(index))
+
+    index = cudf.Index([1, 2, 8, 6])
+    tensor = torch.tensor(index)
+    got = cudf.Index(tensor)
+
+    assert_eq(got, index)
+
+    str_series = cudf.Series(["a", "g"])
+
+    with pytest.raises(AttributeError):
+        str_series.__cuda_array_interface__
+
+    cat_series = str_series.astype("category")
+
+    with pytest.raises(TypeError):
+        cat_series.__cuda_array_interface__
+
+
 def test_series_arrow_struct_types_roundtrip():
     ps = pd.Series(
         [{"a": 1}, {"b": "abc"}],
@@ -792,3 +1122,97 @@ def test_create_struct_series(data):
     expect = pd.Series(data)
     got = cudf.Series(data)
     assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pd.date_range("20010101", "20020215", freq="400h", name="times"),
+        pd.date_range(
+            "20010101", freq="243434324423423234ns", name="times", periods=10
+        ),
+    ],
+)
+def test_series_from_pandas_datetime_index(data):
+    pd_data = pd.Series(data)
+    gdf_data = cudf.Series(pd_data)
+    assert_eq(pd_data, gdf_data)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    ["datetime64[D]", "datetime64[W]", "datetime64[M]", "datetime64[Y]"],
+)
+def test_datetime_array_timeunit_cast(dtype):
+    testdata = np.array(
+        [
+            np.datetime64("2016-11-20"),
+            np.datetime64("2020-11-20"),
+            np.datetime64("2019-11-20"),
+            np.datetime64("1918-11-20"),
+            np.datetime64("2118-11-20"),
+        ],
+        dtype=dtype,
+    )
+
+    gs = cudf.Series(testdata)
+    ps = pd.Series(testdata)
+
+    assert_eq(ps, gs)
+
+    gdf = cudf.DataFrame()
+    gdf["a"] = np.arange(5)
+    gdf["b"] = testdata
+
+    pdf = pd.DataFrame()
+    pdf["a"] = np.arange(5)
+    pdf["b"] = testdata
+    assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize("timeunit", ["D", "W", "M", "Y"])
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
+)
+def test_datetime_scalar_timeunit_cast(timeunit):
+    testscalar = np.datetime64("2016-11-20", timeunit)
+
+    gs = cudf.Series(testscalar)
+    ps = pd.Series(testscalar)
+
+    assert_eq(ps, gs, check_dtype=False)
+
+    gdf = cudf.DataFrame()
+    gdf["a"] = np.arange(5)
+    gdf["b"] = testscalar
+
+    pdf = pd.DataFrame()
+    pdf["a"] = np.arange(5)
+    pdf["b"] = testscalar
+
+    assert gdf["b"].dtype == np.dtype("datetime64[s]")
+    assert_eq(pdf, gdf, check_dtype=True)
+
+
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
+)
+def test_datetime_string_to_datetime_resolution_loss_raises():
+    data = ["2020-01-01 00:00:00.00001"]
+    dtype = "datetime64[s]"
+    with pytest.raises(ValueError):
+        cudf.Series(data, dtype=dtype)
+    with pytest.raises(ValueError):
+        pd.Series(data, dtype=dtype)
+
+
+def test_timezone_pyarrow_array():
+    pa_array = pa.array(
+        [datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc)],
+        type=pa.timestamp("ns", "UTC"),
+    )
+    result = cudf.Series(pa_array)
+    expected = pa_array.to_pandas()
+    assert_eq(result, expected)
