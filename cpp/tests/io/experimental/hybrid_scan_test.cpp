@@ -201,10 +201,11 @@ auto hybrid_scan(std::vector<char>& buffer,
     fetch_byte_ranges(file_buffer_span, filter_column_chunk_byte_ranges, stream, mr);
 
   // Materialize the table with only the filter columns
+  auto row_mask_mutable_view = row_mask->mutable_view();
   auto [filter_table, filter_metadata] =
     reader->materialize_filter_columns(current_row_group_indices,
                                        std::move(filter_column_chunk_buffers),
-                                       row_mask->mutable_view(),
+                                       row_mask_mutable_view,
                                        cudf::io::parquet::experimental::use_data_page_mask::YES,
                                        options,
                                        stream);
@@ -293,8 +294,9 @@ auto chunked_hybrid_scan(
         options,
         stream);
 
+      auto row_mask_mutable_view = row_mask->mutable_view();
       while (reader->has_next_table_chunk()) {
-        auto chunk = reader->materialize_filter_columns_chunk(row_mask->mutable_view(), stream);
+        auto chunk = reader->materialize_filter_columns_chunk(row_mask_mutable_view, stream);
         tables.push_back(std::move(chunk.tbl));
         filter_metadata = std::move(chunk.metadata);
       }

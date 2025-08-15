@@ -309,8 +309,8 @@ hybrid_scan_reader_impl::prepare_dictionaries(
   return {has_compressed_data, std::move(chunks), std::move(pages)};
 }
 
-void hybrid_scan_reader_impl::update_row_mask(cudf::column_view in_row_mask,
-                                              cudf::mutable_column_view out_row_mask,
+void hybrid_scan_reader_impl::update_row_mask(cudf::column_view const& in_row_mask,
+                                              cudf::mutable_column_view& out_row_mask,
                                               cudf::size_type out_row_mask_offset,
                                               rmm::cuda_stream_view stream)
 {

@@ -442,8 +442,8 @@ class hybrid_scan_reader {
    */
   [[nodiscard]] table_with_metadata materialize_filter_columns(
     cudf::host_span<size_type const> row_group_indices,
-    std::vector<rmm::device_buffer> column_chunk_buffers,
-    cudf::mutable_column_view row_mask,
+    std::vector<rmm::device_buffer>&& column_chunk_buffers,
+    cudf::mutable_column_view& row_mask,
     use_data_page_mask mask_data_pages,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream) const;
@@ -472,8 +472,8 @@ class hybrid_scan_reader {
    */
   [[nodiscard]] table_with_metadata materialize_payload_columns(
     cudf::host_span<size_type const> row_group_indices,
-    std::vector<rmm::device_buffer> column_chunk_buffers,
-    cudf::column_view row_mask,
+    std::vector<rmm::device_buffer>&& column_chunk_buffers,
+    cudf::column_view const& row_mask,
     use_data_page_mask mask_data_pages,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream) const;
@@ -497,7 +497,7 @@ class hybrid_scan_reader {
                                          cudf::host_span<size_type const> row_group_indices,
                                          cudf::column_view const& row_mask,
                                          use_data_page_mask mask_data_pages,
-                                         std::vector<rmm::device_buffer> && column_chunk_buffers,
+                                         std::vector<rmm::device_buffer>&& column_chunk_buffers,
                                          parquet_reader_options const& options,
                                          rmm::cuda_stream_view stream) const;
 
@@ -532,7 +532,7 @@ class hybrid_scan_reader {
                                           cudf::host_span<size_type const> row_group_indices,
                                           cudf::column_view const& row_mask,
                                           use_data_page_mask mask_data_pages,
-                                          std::vector<rmm::device_buffer> &&  column_chunk_buffers,
+                                          std::vector<rmm::device_buffer>&& column_chunk_buffers,
                                           parquet_reader_options const& options,
                                           rmm::cuda_stream_view stream) const;
 
