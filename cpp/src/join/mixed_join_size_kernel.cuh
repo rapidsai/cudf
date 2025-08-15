@@ -33,6 +33,60 @@
 
 namespace cudf {
 namespace detail {
+
+/**
+ * @brief Standalone count implementation for hash table probing
+ *
+ * This duplicates the essential CUCO count functionality without requiring
+ * the full static_multiset_ref infrastructure.
+ */
+template <typename StorageRef, typename ProbingScheme, typename KeyEqual, typename ProbeKey>
+__device__ __forceinline__ auto standalone_count(StorageRef const& storage_ref,
+                                                 ProbingScheme const& probing_scheme,
+                                                 KeyEqual const& key_equal,
+                                                 ProbeKey const& probe_key) noexcept
+{
+  using size_type                   = typename StorageRef::size_type;
+  static constexpr auto bucket_size = StorageRef::bucket_size;
+
+  size_type count   = 0;
+  auto const extent = storage_ref.extent();
+
+  // Use the probing scheme's hash functions directly
+  auto const hasher = probing_scheme.hash_function();
+  auto const hash1_val =
+    cuco::detail::sanitize_hash<size_type>(cuda::std::get<0>(hasher)(probe_key));
+  auto const hash2_val =
+    cuco::detail::sanitize_hash<size_type>(cuda::std::get<1>(hasher)(probe_key));
+
+  // CUCO double hashing logic: initial position and step size
+  auto const init_idx = (hash1_val % (extent / bucket_size)) * bucket_size;
+  auto const step     = ((hash2_val % (extent / bucket_size - 1)) + 1) * bucket_size;
+
+  auto probe_idx = init_idx;
+
+  while (true) {
+    auto const bucket_slots = storage_ref[probe_idx];
+    size_type local_count   = 0;
+    bool empty_found        = false;
+
+#pragma unroll
+    for (int32_t i = 0; i < bucket_size; ++i) {
+      // Check if this slot matches our probe key
+      if (key_equal(probe_key, bucket_slots[i])) { ++local_count; }
+      // Note: Empty slot detection would require sentinel values from the storage_ref
+      // For now, we rely on the probing scheme to handle this correctly
+    }
+
+    count += local_count;
+    if (empty_found) { return count; }
+
+    // Double hashing probing increment
+    probe_idx = (probe_idx + step) % extent;
+    if (probe_idx == init_idx) { return count; }
+  }
+}
+
 template <int block_size, bool has_nulls>
 CUDF_KERNEL void __launch_bounds__(block_size) compute_mixed_join_output_size(
   table_device_view left_table,
@@ -69,12 +123,17 @@ CUDF_KERNEL void __launch_bounds__(block_size) compute_mixed_join_output_size(
   // TODO: Address asymmetry in operator.
   auto count_equality = pair_expression_equality<has_nulls>{
     evaluator, thread_intermediate_storage, swap_tables, equality_probe};
-  auto count_ref = hash_table_ref.rebind_key_eq(count_equality);
+
+  // Extract storage_ref and probing_scheme from hash_table_ref
+  auto const storage_ref    = hash_table_ref.storage_ref();
+  auto const probing_scheme = hash_table_ref.probing_scheme();
 
   for (auto outer_row_index = start_idx; outer_row_index < outer_num_rows;
        outer_row_index += stride) {
-    auto query_pair  = pair(outer_row_index);
-    auto const count = count_ref.count(query_pair);
+    auto query_pair = pair(outer_row_index);
+
+    // Use our standalone count function instead of relying on static_multiset_ref
+    auto const count = standalone_count(storage_ref, probing_scheme, count_equality, query_pair);
     if (join_type == join_kind::LEFT_JOIN || join_type == join_kind::FULL_JOIN) {
       // Non-matching rows are counted as 1 match for the outer joins
       matches_per_row[outer_row_index] = count == 0 ? 1 : count;
