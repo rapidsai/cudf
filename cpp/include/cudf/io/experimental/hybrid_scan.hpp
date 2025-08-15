@@ -495,9 +495,9 @@ class hybrid_scan_reader {
   void setup_chunking_for_filter_columns(std::size_t chunk_read_limit,
                                          std::size_t pass_read_limit,
                                          cudf::host_span<size_type const> row_group_indices,
-                                         cudf::column_view row_mask,
+                                         cudf::column_view const& row_mask,
                                          use_data_page_mask mask_data_pages,
-                                         std::vector<rmm::device_buffer> column_chunk_buffers,
+                                         std::vector<rmm::device_buffer> && column_chunk_buffers,
                                          parquet_reader_options const& options,
                                          rmm::cuda_stream_view stream) const;
 
@@ -511,7 +511,7 @@ class hybrid_scan_reader {
    * @return Table chunk of materialized filter columns and metadata
    */
   [[nodiscard]] table_with_metadata materialize_filter_columns_chunk(
-    cudf::mutable_column_view row_mask, rmm::cuda_stream_view stream) const;
+    cudf::mutable_column_view& row_mask, rmm::cuda_stream_view stream) const;
 
   /**
    * @brief Setup chunking information for payload columns and preprocess the input data pages
@@ -530,9 +530,9 @@ class hybrid_scan_reader {
   void setup_chunking_for_payload_columns(std::size_t chunk_read_limit,
                                           std::size_t pass_read_limit,
                                           cudf::host_span<size_type const> row_group_indices,
-                                          cudf::column_view row_mask,
+                                          cudf::column_view const& row_mask,
                                           use_data_page_mask mask_data_pages,
-                                          std::vector<rmm::device_buffer> column_chunk_buffers,
+                                          std::vector<rmm::device_buffer> &&  column_chunk_buffers,
                                           parquet_reader_options const& options,
                                           rmm::cuda_stream_view stream) const;
 
@@ -546,7 +546,7 @@ class hybrid_scan_reader {
    * @return Table chunk of materialized filter columns and metadata
    */
   [[nodiscard]] table_with_metadata materialize_payload_columns_chunk(
-    cudf::column_view row_mask, rmm::cuda_stream_view stream) const;
+    cudf::column_view const& row_mask, rmm::cuda_stream_view stream) const;
 
   /**
    * @brief Check if there is any parquet data left to read for the current setup
