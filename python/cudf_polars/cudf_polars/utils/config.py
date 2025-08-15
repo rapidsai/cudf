@@ -507,6 +507,7 @@ class StreamingExecutor:
 
         # RapidsMPF spill is only supported for the distributed scheduler for now.
         # This is because the spilling API is still within the RMPF-Dask integration.
+        # (See https://github.com/rapidsai/rapidsmpf/issues/439)
         if self.scheduler == "synchronous" and self.rapidsmpf_spill:
             raise ValueError(
                 "rapidsmpf_spill is not supported for the synchronous scheduler."
