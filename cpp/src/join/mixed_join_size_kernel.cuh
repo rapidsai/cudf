@@ -53,11 +53,9 @@ __device__ __forceinline__ auto standalone_count(StorageRef const& storage_ref,
   auto const extent = storage_ref.extent();
 
   // Use the probing scheme's hash functions directly
-  auto const hasher = probing_scheme.hash_function();
-  auto const hash1_val =
-    cuco::detail::sanitize_hash<size_type>(cuda::std::get<0>(hasher)(probe_key));
-  auto const hash2_val =
-    cuco::detail::sanitize_hash<size_type>(cuda::std::get<1>(hasher)(probe_key));
+  auto const hasher    = probing_scheme.hash_function();
+  auto const hash1_val = cuda::std::get<0>(hasher)(probe_key);
+  auto const hash2_val = cuda::std::get<1>(hasher)(probe_key);
 
   // CUCO double hashing logic: initial position and step size
   auto const init_idx = (hash1_val % (extent / bucket_size)) * bucket_size;
@@ -67,23 +65,19 @@ __device__ __forceinline__ auto standalone_count(StorageRef const& storage_ref,
 
   while (true) {
     auto const bucket_slots = storage_ref[probe_idx];
-    size_type local_count   = 0;
-    bool empty_found        = false;
 
-#pragma unroll
-    for (int32_t i = 0; i < bucket_size; ++i) {
-      // Check if this slot matches our probe key
-      if (key_equal(probe_key, bucket_slots[i])) { ++local_count; }
-      // Note: Empty slot detection would require sentinel values from the storage_ref
-      // For now, we rely on the probing scheme to handle this correctly
-    }
+    auto const first_slot_is_empty  = bucket_slots[0].second == cudf::detail::JoinNoneValue;
+    auto const second_slot_is_empty = bucket_slots[1].second == cudf::detail::JoinNoneValue;
+    auto const first_slot_equals =
+      (not first_slot_is_empty and key_equal(probe_key, bucket_slots[0]));
+    auto const second_slot_equals =
+      (not second_slot_is_empty and key_equal(probe_key, bucket_slots[1]));
 
-    count += local_count;
-    if (empty_found) { return count; }
+    count += (first_slot_equals + second_slot_equals);
 
-    // Double hashing probing increment
+    if (first_slot_is_empty or second_slot_is_empty) { return count; }
+
     probe_idx = (probe_idx + step) % extent;
-    if (probe_idx == init_idx) { return count; }
   }
 }
 
