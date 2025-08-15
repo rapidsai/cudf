@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -9,12 +9,14 @@ from pylibcudf.libcudf.strings.convert cimport (
     convert_booleans as cpp_convert_booleans,
 )
 from pylibcudf.scalar cimport Scalar
+from pylibcudf.utils cimport _get_stream
 
 from cython.operator import dereference
+from rmm.pylibrmm.stream cimport Stream
 
 __all__ = ["from_booleans", "to_booleans"]
 
-cpdef Column to_booleans(Column input, Scalar true_string):
+cpdef Column to_booleans(Column input, Scalar true_string, Stream stream=None):
     """
     Returns a new bool column by parsing boolean values from the strings
     in the provided strings column.
@@ -29,6 +31,9 @@ cpdef Column to_booleans(Column input, Scalar true_string):
     true_string : Scalar
         String to expect for true. Non-matching strings are false
 
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
+
     Returns
     -------
     Column
@@ -38,16 +43,20 @@ cpdef Column to_booleans(Column input, Scalar true_string):
     cdef const string_scalar* c_true_string = <const string_scalar*>(
         true_string.c_obj.get()
     )
+    stream = _get_stream(stream)
 
     with nogil:
         c_result = cpp_convert_booleans.to_booleans(
             input.view(),
-            dereference(c_true_string)
+            dereference(c_true_string),
+            stream.view()
         )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream)
 
-cpdef Column from_booleans(Column booleans, Scalar true_string, Scalar false_string):
+cpdef Column from_booleans(
+    Column booleans, Scalar true_string, Scalar false_string, Stream stream=None
+):
     """
     Returns a new strings column converting the boolean values from the
     provided column into strings.
@@ -65,6 +74,9 @@ cpdef Column from_booleans(Column booleans, Scalar true_string, Scalar false_str
     false_string : Scalar
         String to use for false in the output column.
 
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
+
     Returns
     -------
     Column
@@ -77,12 +89,14 @@ cpdef Column from_booleans(Column booleans, Scalar true_string, Scalar false_str
     cdef const string_scalar* c_false_string = <const string_scalar*>(
         false_string.c_obj.get()
     )
+    stream = _get_stream(stream)
 
     with nogil:
         c_result = cpp_convert_booleans.from_booleans(
             booleans.view(),
             dereference(c_true_string),
             dereference(c_false_string),
+            stream.view()
         )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream)
