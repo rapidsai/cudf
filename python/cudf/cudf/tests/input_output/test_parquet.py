@@ -183,31 +183,6 @@ def gdf_day_timestamps(pdf_day_timestamps):
     return cudf.DataFrame.from_pandas(pdf_day_timestamps)
 
 
-@pytest.fixture(params=["snappy", "gzip", "brotli", None, np.str_("snappy")])
-def parquet_file(request, tmp_path, pdf):
-    fname = tmp_path / f"{request.param}_test.parquet"
-    pdf.to_parquet(fname, engine="pyarrow", compression=request.param)
-    return fname
-
-
-def make_pdf(nrows, nvalids=0, dtype=np.int64):
-    test_pdf = pd.DataFrame(
-        {"foo": np.arange(nrows)},
-        # Need to ensure that this index is not a RangeIndex to get the
-        # expected round-tripping behavior from Parquet reader/writer.
-        index=pd.Index(list(range(nrows))),
-    )
-
-    if nvalids:
-        # Randomly but reproducibly mark subset of rows as invalid
-        mask = random.Random(1337).sample(range(nrows), nvalids)
-        test_pdf[test_pdf.index.isin(mask)] = np.nan
-    if dtype:
-        test_pdf = test_pdf.astype(dtype)
-
-    return test_pdf
-
-
 @pytest.fixture
 def parquet_path_or_buf(datadir):
     fname = datadir / "spark_timestamp.snappy.parquet"
@@ -241,8 +216,15 @@ def large_int64_gdf():
     return cudf.DataFrame.from_pandas(pd.DataFrame({"col": range(0, 1 << 20)}))
 
 
+@pytest.fixture(params=["pyarrow", "cudf"])
+def engine(request):
+    return request.param
+
+
 @pytest.mark.filterwarnings("ignore:Using CPU")
-@pytest.mark.parametrize("engine", ["pyarrow", "cudf"])
+@pytest.mark.parametrize(
+    "compression", ["snappy", "gzip", "brotli", None, np.str_("snappy")]
+)
 @pytest.mark.parametrize(
     "columns",
     [
@@ -253,7 +235,9 @@ def large_int64_gdf():
         None,
     ],
 )
-def test_parquet_reader_basic(parquet_file, columns, engine):
+def test_parquet_reader_basic(tmp_path, pdf, columns, engine, compression):
+    parquet_file = tmp_path / f"{compression}_test.parquet"
+    pdf.to_parquet(parquet_file, engine="pyarrow", compression=compression)
     expect = pd.read_parquet(parquet_file, columns=columns)
     got = cudf.read_parquet(parquet_file, engine=engine, columns=columns)
 
@@ -1287,34 +1271,27 @@ def test_parquet_delta_byte_array(datadir):
 #  129 - one full block
 #  130 - one full block plus one value in new block
 # 129 * 3 - multiple blocks
-def delta_num_rows():
-    return [1, 2, 23, 32, 33, 34, 128, 129, 130, 129 * 3]
+@pytest.fixture(params=[1, 2, 23, 32, 33, 34, 128, 129, 130, 129 * 3])
+def delta_num_rows(request):
+    return request.param
 
 
-@pytest.mark.parametrize("nrows", delta_num_rows())
 @pytest.mark.parametrize("add_nulls", [True, False])
-@pytest.mark.parametrize(
-    "dtype",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-    ],
-)
-def test_delta_binary(nrows, add_nulls, dtype, tmp_path):
+def test_delta_binary(
+    delta_num_rows, add_nulls, signed_integer_types_as_str, tmp_path
+):
     null_frequency = 0.25 if add_nulls else 0
 
     # Create a pandas dataframe with random data of mixed types
     arrow_table = dg.rand_dataframe(
         dtypes_meta=[
             {
-                "dtype": dtype,
+                "dtype": signed_integer_types_as_str,
                 "null_frequency": null_frequency,
-                "cardinality": nrows,
+                "cardinality": delta_num_rows,
             },
         ],
-        rows=nrows,
+        rows=delta_num_rows,
         seed=0,
         use_threads=False,
     )
@@ -1348,14 +1325,13 @@ def test_delta_binary(nrows, add_nulls, dtype, tmp_path):
     assert_eq(cdf2, cdf)
 
 
-@pytest.mark.parametrize("nrows", delta_num_rows())
 @pytest.mark.parametrize("add_nulls", [True, False])
 @pytest.mark.parametrize("max_string_length", [12, 48, 96, 128])
 @pytest.mark.parametrize(
     "str_encoding", ["DELTA_BYTE_ARRAY", "DELTA_LENGTH_BYTE_ARRAY"]
 )
 def test_delta_byte_array_roundtrip(
-    nrows, add_nulls, max_string_length, str_encoding, tmp_path
+    delta_num_rows, add_nulls, max_string_length, str_encoding, tmp_path
 ):
     null_frequency = 0.25 if add_nulls else 0
 
@@ -1365,11 +1341,11 @@ def test_delta_byte_array_roundtrip(
             {
                 "dtype": "str",
                 "null_frequency": null_frequency,
-                "cardinality": nrows,
+                "cardinality": delta_num_rows,
                 "max_string_length": max_string_length,
             },
         ],
-        rows=nrows,
+        rows=delta_num_rows,
         seed=0,
         use_threads=False,
     ).to_pandas()
@@ -1400,16 +1376,15 @@ def test_delta_byte_array_roundtrip(
     assert_eq(cdf2, cdf)
 
 
-@pytest.mark.parametrize("nrows", delta_num_rows())
 @pytest.mark.parametrize("add_nulls", [True, False])
 @pytest.mark.parametrize(
     "str_encoding", ["DELTA_BYTE_ARRAY", "DELTA_LENGTH_BYTE_ARRAY"]
 )
-def test_delta_struct_list(tmp_path, nrows, add_nulls, str_encoding):
+def test_delta_struct_list(tmp_path, delta_num_rows, add_nulls, str_encoding):
     # Struct<List<List>>
     lists_per_row = 3
     list_size = 4
-    num_rows = nrows
+    num_rows = delta_num_rows
     include_validity = add_nulls
 
     def list_gen_wrapped(x, y):
@@ -2431,7 +2406,6 @@ def test_parquet_writer_list_chunked(tmp_path, store_schema):
     assert expect.to_arrow().equals(got)
 
 
-@pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
 def test_parquet_nullable_boolean(tmp_path, engine):
     pandas_path = tmp_path / "pandas_bools.parquet"
 
@@ -2542,7 +2516,6 @@ def test_parquet_no_index_empty():
     run_parquet_index(pdf, index=False)
 
 
-@pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
 def test_parquet_allnull_str(tmp_path, engine):
     pandas_path = tmp_path / "pandas_allnulls.parquet"
 
@@ -3171,7 +3144,7 @@ def test_parquet_reader_zstd_compression(datadir):
         pdf = pd.read_parquet(fname)
         assert_eq(df, pdf)
     except RuntimeError:
-        pytest.mark.xfail(reason="zstd support is not enabled")
+        pytest.skip(reason="zstd support is not enabled")
 
 
 def test_read_parquet_multiple_files(tmp_path):
