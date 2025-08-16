@@ -23,28 +23,22 @@
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <cub/cub.cuh>
-
-namespace cudf {
-namespace detail {
+namespace cudf::detail {
 
 namespace cg = cooperative_groups;
 
-template <cudf::size_type block_size, bool has_nulls>
-CUDF_KERNEL void __launch_bounds__(block_size)
+template <bool has_nulls>
+CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
   mixed_join_semi(table_device_view left_table,
                   table_device_view right_table,
                   table_device_view probe,
                   table_device_view build,
-                  row_equality const equality_probe,
-                  hash_set_ref_type set_ref,
+                  row_equality equality_probe,
+                  typename hash_set_type<double_row_equality_comparator,
+                                         row_hash>::template ref_type<cuco::contains_tag> set_ref,
                   cudf::device_span<bool> left_table_keep_mask,
                   cudf::ast::detail::expression_device_view device_expression_data)
 {
-  auto constexpr cg_size = hash_set_ref_type::cg_size;
-
-  auto const tile = cg::tiled_partition<cg_size>(cg::this_thread_block());
-
   // Normally the casting of a shared memory array is used to create multiple
   // arrays of different types from the shared memory buffer, but here it is
   // used to circumvent conflicts between arrays of different types between
@@ -53,7 +47,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   auto intermediate_storage =
     reinterpret_cast<cudf::ast::detail::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
   auto thread_intermediate_storage =
-    intermediate_storage + (tile.meta_group_rank() * device_expression_data.num_intermediates);
+    intermediate_storage +
+    (cg::this_thread_block().thread_rank() * device_expression_data.num_intermediates);
 
   // Equality evaluator to use
   auto const evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
@@ -69,33 +64,82 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 
   // Total number of rows to query the set
   auto const outer_num_rows = left_table.num_rows();
-  // Grid stride for the tile
-  auto const cg_grid_stride = cudf::detail::grid_1d::grid_stride<block_size>() / cg_size;
+  // Grid stride for the thread block
+  auto const cg_grid_stride = cudf::detail::grid_1d::grid_stride<DEFAULT_JOIN_BLOCK_SIZE>();
 
   // Find all the rows in the left table that are in the hash table
-  for (auto outer_row_index = cudf::detail::grid_1d::global_thread_id<block_size>() / cg_size;
+  for (auto outer_row_index = cudf::detail::grid_1d::global_thread_id<DEFAULT_JOIN_BLOCK_SIZE>();
        outer_row_index < outer_num_rows;
        outer_row_index += cg_grid_stride) {
-    auto const result = set_ref_equality.contains(tile, outer_row_index);
-    if (tile.thread_rank() == 0) { left_table_keep_mask[outer_row_index] = result; }
+    left_table_keep_mask[outer_row_index] = set_ref_equality.contains(outer_row_index);
   }
 }
 
-void launch_mixed_join_semi(bool has_nulls,
-                            table_device_view left_table,
-                            table_device_view right_table,
-                            table_device_view probe,
-                            table_device_view build,
-                            row_equality const equality_probe,
-                            hash_set_ref_type set_ref,
-                            cudf::device_span<bool> left_table_keep_mask,
-                            cudf::ast::detail::expression_device_view device_expression_data,
-                            detail::grid_1d const config,
-                            int64_t shmem_size_per_block,
-                            rmm::cuda_stream_view stream)
+template <bool has_nulls>
+CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) mixed_join_semi(
+  table_device_view left_table,
+  table_device_view right_table,
+  table_device_view probe,
+  table_device_view build,
+  cudf::row::primitive::row_equality_comparator equality_probe,
+  typename hash_set_type<primitive_double_row_equality_comparator,
+                         primitive_row_hash>::template ref_type<cuco::contains_tag> set_ref,
+  cudf::device_span<bool> left_table_keep_mask,
+  cudf::ast::detail::expression_device_view device_expression_data)
+{
+  // Normally the casting of a shared memory array is used to create multiple
+  // arrays of different types from the shared memory buffer, but here it is
+  // used to circumvent conflicts between arrays of different types between
+  // different template instantiations due to the extern specifier.
+  extern __shared__ char raw_intermediate_storage[];
+  auto intermediate_storage =
+    reinterpret_cast<cudf::ast::detail::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
+  auto thread_intermediate_storage =
+    intermediate_storage +
+    (cg::this_thread_block().thread_rank() * device_expression_data.num_intermediates);
+
+  // Equality evaluator to use
+  auto const evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
+    left_table, right_table, device_expression_data);
+
+  // Make sure to swap_tables here as hash_set will use probe table as the left one
+  auto constexpr swap_tables = true;
+  auto const equality        = primitive_single_expression_equality<has_nulls>{
+    evaluator, thread_intermediate_storage, swap_tables, equality_probe};
+
+  // Create set ref with the new equality comparator
+  auto const set_ref_equality = set_ref.rebind_key_eq(equality);
+
+  // Total number of rows to query the set
+  auto const outer_num_rows = left_table.num_rows();
+  // Grid stride for the thread block
+  auto const cg_grid_stride = cudf::detail::grid_1d::grid_stride<DEFAULT_JOIN_BLOCK_SIZE>();
+
+  // Find all the rows in the left table that are in the hash table
+  for (auto outer_row_index = cudf::detail::grid_1d::global_thread_id<DEFAULT_JOIN_BLOCK_SIZE>();
+       outer_row_index < outer_num_rows;
+       outer_row_index += cg_grid_stride) {
+    left_table_keep_mask[outer_row_index] = set_ref_equality.contains(outer_row_index);
+  }
+}
+
+void launch_mixed_join_semi(
+  bool has_nulls,
+  table_device_view left_table,
+  table_device_view right_table,
+  table_device_view probe,
+  table_device_view build,
+  row_equality equality_probe,
+  typename hash_set_type<double_row_equality_comparator,
+                         row_hash>::template ref_type<cuco::contains_tag> set_ref,
+  cudf::device_span<bool> left_table_keep_mask,
+  cudf::ast::detail::expression_device_view device_expression_data,
+  detail::grid_1d const config,
+  int64_t shmem_size_per_block,
+  rmm::cuda_stream_view stream)
 {
   if (has_nulls) {
-    mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, true>
+    mixed_join_semi<true>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
         left_table,
         right_table,
@@ -106,7 +150,7 @@ void launch_mixed_join_semi(bool has_nulls,
         left_table_keep_mask,
         device_expression_data);
   } else {
-    mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, false>
+    mixed_join_semi<false>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
         left_table,
         right_table,
@@ -119,5 +163,45 @@ void launch_mixed_join_semi(bool has_nulls,
   }
 }
 
-}  // namespace detail
-}  // namespace cudf
+// Overload for primitive row operators case
+void launch_mixed_join_semi(
+  bool has_nulls,
+  table_device_view left_table,
+  table_device_view right_table,
+  table_device_view probe,
+  table_device_view build,
+  cudf::row::primitive::row_equality_comparator equality_probe,
+  typename hash_set_type<primitive_double_row_equality_comparator,
+                         primitive_row_hash>::template ref_type<cuco::contains_tag> set_ref,
+  cudf::device_span<bool> left_table_keep_mask,
+  cudf::ast::detail::expression_device_view device_expression_data,
+  detail::grid_1d const config,
+  int64_t shmem_size_per_block,
+  rmm::cuda_stream_view stream)
+{
+  if (has_nulls) {
+    mixed_join_semi<true>
+      <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
+        left_table,
+        right_table,
+        probe,
+        build,
+        equality_probe,
+        set_ref,
+        left_table_keep_mask,
+        device_expression_data);
+  } else {
+    mixed_join_semi<false>
+      <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
+        left_table,
+        right_table,
+        probe,
+        build,
+        equality_probe,
+        set_ref,
+        left_table_keep_mask,
+        device_expression_data);
+  }
+}
+
+}  // namespace cudf::detail

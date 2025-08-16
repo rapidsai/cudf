@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,8 +27,7 @@
 #include <cub/cub.cuh>
 #include <cuco/static_set.cuh>
 
-namespace cudf {
-namespace detail {
+namespace cudf::detail {
 
 using row_hash =
   cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
@@ -97,7 +96,8 @@ struct single_expression_equality : expression_equality<has_nulls> {
     // 1. The contents of the columns involved in the equality condition are equal.
     // 2. The predicate evaluated on the relevant columns (already encoded in the evaluator)
     // evaluates to true.
-    if (this->equality_probe(lhs_index_type{probe_row_index}, rhs_index_type{build_row_index})) {
+    if (this->equality_probe(lhs_index_type{static_cast<size_type>(probe_row_index)},
+                             rhs_index_type{static_cast<size_type>(build_row_index)})) {
       auto const lrow_idx = this->swap_tables ? build_row_index : probe_row_index;
       auto const rrow_idx = this->swap_tables ? probe_row_index : build_row_index;
       this->evaluator.evaluate(output_dest,
@@ -182,18 +182,18 @@ struct double_row_equality_comparator {
 auto constexpr DEFAULT_MIXED_SEMI_JOIN_CG_SIZE = 1;
 
 // The hash set type used by mixed_semi_join with the build_table.
-using hash_set_type =
-  cuco::static_set<size_type,
-                   cuco::extent<size_t>,
-                   cuda::thread_scope_device,
-                   double_row_equality_comparator,
-                   cuco::linear_probing<DEFAULT_MIXED_SEMI_JOIN_CG_SIZE, row_hash>,
-                   cudf::detail::cuco_allocator<char>,
-                   cuco::storage<1>>;
+template <typename Equality = double_row_equality_comparator, typename Hash = row_hash>
+using hash_set_type = cuco::static_set<size_type,
+                                       cuco::extent<size_t>,
+                                       cuda::thread_scope_device,
+                                       Equality,
+                                       cuco::linear_probing<DEFAULT_MIXED_SEMI_JOIN_CG_SIZE, Hash>,
+                                       cudf::detail::cuco_allocator<char>,
+                                       cuco::storage<1>>;
 
 // The hash_set_ref_type used by mixed_semi_join kerenels for probing.
-using hash_set_ref_type = hash_set_type::ref_type<cuco::contains_tag>;
+template <typename Equality = double_row_equality_comparator, typename Hash = row_hash>
+using hash_set_ref_type =
+  typename hash_set_type<Equality, Hash>::template ref_type<cuco::contains_tag>;
 
-}  // namespace detail
-
-}  // namespace cudf
+}  // namespace cudf::detail
