@@ -358,7 +358,7 @@ jobs:
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
-      node_type: "linux-amd64-gpu-a100-latest-1"
+      node_type: "linux-amd64-gpu-h100-latest-1"
       container_image: "rapidsai/citestwheel:25.10-cuda12.9.1-ubuntu24.04-py3.13"
       script: ci/cudf_pandas_scripts/pandas-tests/run.sh pr
       file_to_upload: pr-25.10.00-results.json
