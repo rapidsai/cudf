@@ -663,7 +663,7 @@ size_t get_uncompressed_size(compression_type compression, host_span<uint8_t con
   }
 
   auto const nvcomp_type = to_nvcomp_compression(compression);
-  auto nvcomp_disabled   = nvcomp_type.has_value() ? nvcomp::is_decompression_disabled(*nvcomp_type)
+  auto const nvcomp_disabled   = nvcomp_type.has_value() ? nvcomp::is_decompression_disabled(*nvcomp_type)
                                                    : "invalid compression type";
   if (nvcomp_disabled) {
     CUDF_FAIL("Cannot compute decompression scratch size for " +
