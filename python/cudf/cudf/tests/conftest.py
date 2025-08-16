@@ -532,6 +532,34 @@ def ascending(request):
     return request.param
 
 
+axis_0s = [0, "index"]
+axis_1s = [1, "columns"]
+
+
+@pytest.fixture(params=axis_0s)
+def axis_0(request):
+    """Param for `axis=0` argument"""
+    return request.param
+
+
+@pytest.fixture(params=axis_1s)
+def axis_1(request):
+    """Param for `axis=1` argument"""
+    return request.param
+
+
+@pytest.fixture(params=axis_0s + axis_1s)
+def axis(request):
+    """Param for `axis` argument"""
+    return request.param
+
+
+@pytest.fixture(params=[True, False])
+def sort(request):
+    """Param for `sort` argument"""
+    return request.param
+
+
 @pytest.fixture(params=[True, False])
 def numeric_only(request):
     """Param for `numeric_only` argument"""
