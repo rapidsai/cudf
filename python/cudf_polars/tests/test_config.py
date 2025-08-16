@@ -276,10 +276,11 @@ def test_validate_shuffle_method_defaults(rapidsmpf_available) -> None:
         "groupby_n_ary",
         "broadcast_join_limit",
         "rapidsmpf_spill",
+        "use_concat_insert",
         "sink_to_directory",
     ],
 )
-def test_validate_max_rows_per_partition(option: str) -> None:
+def test_validate_options(option: str) -> None:
     with pytest.raises(TypeError, match=f"{option} must be"):
         ConfigOptions.from_polars_engine(
             pl.GPUEngine(
@@ -345,6 +346,7 @@ def test_config_option_from_env(
 
         if rapidsmpf_available:
             m.setenv("CUDF_POLARS__EXECUTOR__SHUFFLE_METHOD", "rapidsmpf")
+            m.setenv("CUDF_POLARS__EXECUTOR__USE_CONCAT_INSERT", "1")
         else:
             m.setenv("CUDF_POLARS__EXECUTOR__SHUFFLE_METHOD", "tasks")
 
@@ -363,6 +365,7 @@ def test_config_option_from_env(
 
         if rapidsmpf_available:
             assert config.executor.shuffle_method == "rapidsmpf"
+            assert config.executor.use_concat_insert is True
         else:
             assert config.executor.shuffle_method == "tasks"
 

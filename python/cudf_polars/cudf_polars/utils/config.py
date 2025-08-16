@@ -340,6 +340,13 @@ class StreamingExecutor:
         The method to use for shuffling data between workers. Defaults to
         'rapidsmpf' for distributed scheduler if available (otherwise 'tasks'),
         and 'tasks' for synchronous scheduler.
+    use_concat_insert
+        Whether to use the ``concat_insertion`` method when inserting chunks to
+        the shuffle. Only applicable when ``shuffle_method`` is ``"rapidsmpf"``.
+
+        By default, ``insert_chunks`` is used, and so chunks are not
+        concatenated by destination rank during insertion. Setting this to ``True``
+        may improve performance, at the cost of higher memory usage on the device.
     rapidsmpf_spill
         Whether to wrap task arguments and output in objects that are
         spillable by 'rapidsmpf'.
@@ -404,6 +411,11 @@ class StreamingExecutor:
             f"{_env_prefix}__SHUFFLE_METHOD",
             ShuffleMethod.__call__,
             default=ShuffleMethod.TASKS,
+        )
+    )
+    use_concat_insert: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__USE_CONCAT_INSERT", _bool_converter, default=False
         )
     )
     rapidsmpf_spill: bool = dataclasses.field(
@@ -481,6 +493,8 @@ class StreamingExecutor:
             raise TypeError("rapidsmpf_spill must be bool")
         if not isinstance(self.sink_to_directory, bool):
             raise TypeError("sink_to_directory must be bool")
+        if not isinstance(self.use_concat_insert, bool):
+            raise TypeError("use_concat_insert must be bool")
 
     def __hash__(self) -> int:  # noqa: D105
         # cardinality factory, a dict, isn't natively hashable. We'll dump it

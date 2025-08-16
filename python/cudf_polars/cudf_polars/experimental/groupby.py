@@ -227,6 +227,7 @@ def _(
             child.schema,
             ir.keys,
             config_options.executor.shuffle_method,
+            config_options.executor.use_concat_insert,
             child,
         )
         partition_info[child] = PartitionInfo(
@@ -269,6 +270,7 @@ def _(
             gb_pwise.schema,
             grouped_keys,
             config_options.executor.shuffle_method,
+            config_options.executor.use_concat_insert,
             gb_pwise,
         )
         partition_info[gb_inter] = PartitionInfo(count=post_aggregation_count)

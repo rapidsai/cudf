@@ -12,9 +12,12 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 @pytest.mark.parametrize("rapidsmpf_spill", [False, True])
 @pytest.mark.parametrize("max_rows_per_partition", [1, 5])
+@pytest.mark.parametrize("use_concat_insert", [False, True])
 def test_join_rapidsmpf(
     max_rows_per_partition: int,
-    rapidsmpf_spill: bool,  # noqa: FBT001
+    *,
+    rapidsmpf_spill: bool,
+    use_concat_insert: bool,
 ) -> None:
     # Check that we have a distributed cluster running.
     # This tests must be run with:
@@ -48,6 +51,7 @@ def test_join_rapidsmpf(
             "shuffle_method": "rapidsmpf",
             "scheduler": "distributed",
             "rapidsmpf_spill": rapidsmpf_spill,
+            "use_concat_insert": use_concat_insert,
         },
     )
 

@@ -30,6 +30,8 @@ def _maybe_shuffle_frame(
     partition_info: MutableMapping[IR, PartitionInfo],
     shuffle_method: ShuffleMethod,
     output_count: int,
+    *,
+    use_concat_insert: bool,
 ) -> IR:
     # Shuffle `frame` if it isn't already shuffled.
     if (
@@ -44,6 +46,7 @@ def _maybe_shuffle_frame(
             frame.schema,
             on,
             shuffle_method,
+            use_concat_insert,
             frame,
         )
         partition_info[frame] = PartitionInfo(
@@ -60,6 +63,8 @@ def _make_hash_join(
     left: IR,
     right: IR,
     shuffle_method: ShuffleMethod,
+    *,
+    use_concat_insert: bool,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     # Shuffle left and right dataframes (if necessary)
     new_left = _maybe_shuffle_frame(
@@ -68,6 +73,7 @@ def _make_hash_join(
         partition_info,
         shuffle_method,
         output_count,
+        use_concat_insert=use_concat_insert,
     )
     new_right = _maybe_shuffle_frame(
         right,
@@ -75,6 +81,7 @@ def _make_hash_join(
         partition_info,
         shuffle_method,
         output_count,
+        use_concat_insert=use_concat_insert,
     )
     if left != new_left or right != new_right:
         ir = ir.reconstruct([new_left, new_right])
@@ -144,6 +151,8 @@ def _make_bcast_join(
     left: IR,
     right: IR,
     shuffle_method: ShuffleMethod,
+    *,
+    use_concat_insert: bool,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     if ir.options[0] != "Inner":
         left_count = partition_info[left].count
@@ -169,6 +178,7 @@ def _make_bcast_join(
                 partition_info,
                 shuffle_method,
                 right_count,
+                use_concat_insert=use_concat_insert,
             )
         else:
             left = _maybe_shuffle_frame(
@@ -177,6 +187,7 @@ def _make_bcast_join(
                 partition_info,
                 shuffle_method,
                 left_count,
+                use_concat_insert=use_concat_insert,
             )
 
     new_node = ir.reconstruct([left, right])
@@ -279,6 +290,7 @@ def _(
             left,
             right,
             config_options.executor.shuffle_method,
+            use_concat_insert=config_options.executor.use_concat_insert,
         )
     else:
         # Create a hash join
@@ -289,6 +301,7 @@ def _(
             left,
             right,
             config_options.executor.shuffle_method,
+            use_concat_insert=config_options.executor.use_concat_insert,
         )
 
 
