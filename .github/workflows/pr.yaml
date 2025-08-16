@@ -319,6 +319,8 @@ jobs:
       node_type: "cpu32"
       arch: '["amd64"]'
       cuda: '["12.9"]'
+      env: |
+        CONDA_ENV_CREATE_QUIET=1
       build_command: |
         sccache -z;
         build-all -DBUILD_BENCHMARKS=ON --verbose;
