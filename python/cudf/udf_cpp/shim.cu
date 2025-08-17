@@ -75,6 +75,14 @@ __device__ NRT_MemInfo* make_meminfo_for_new_udf_string(udf_string* udf_str)
   }
 }
 
+// Special decref called only by python after transferring ownership of output strings
+// Must reset dtor with one that is part of the current module
+extern "C" __device__ void NRT_decref_managed_string(NRT_MemInfo* mi)
+{
+  mi->dtor = udf_str_dtor;
+  NRT_decref(mi);
+}
+
 extern "C" __device__ int len(int* nb_retval, void const* str)
 {
   auto sv    = reinterpret_cast<cudf::string_view const*>(str);
