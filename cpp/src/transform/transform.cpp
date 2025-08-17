@@ -14,12 +14,6 @@
  * limitations under the License.
  */
 
-#include "jit/cache.hpp"
-#include "jit/helpers.hpp"
-#include "jit/parser.hpp"
-#include "jit/span.cuh"
-#include "jit/util.hpp"
-
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -32,6 +26,11 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <jit/cache.hpp>
+#include <jit/helpers.hpp>
+#include <jit/parser.hpp>
+#include <jit/span.cuh>
+#include <jit/util.hpp>
 #include <jit_preprocessed_files/transform/jit/kernel.cu.jit.hpp>
 
 namespace cudf {
@@ -125,7 +124,7 @@ void launch_column_output_kernel(jitify2::ConfiguredKernel& kernel,
 
   std::array<void*, 3> args{&outputs_ptr, &inputs_ptr, &p_user_data};
 
-  kernel->launch(args.data());
+  kernel->launch_raw(args.data());
 }
 
 template <typename T>
@@ -152,7 +151,7 @@ void launch_span_kernel(jitify2::ConfiguredKernel& kernel,
 
   std::array<void*, 3> args{&outputs_ptr, &inputs_ptr, &p_user_data};
 
-  kernel->launch(args.data());
+  kernel->launch_raw(args.data());
 }
 
 std::tuple<rmm::device_buffer, size_type> make_transform_null_mask(

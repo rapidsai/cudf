@@ -155,7 +155,7 @@ PYTEST_IGNORES=("--ignore=tests/io/parser/common/test_read_errors.py"
 )
 
 
-PANDAS_CI="1" timeout 90m python -m pytest -p cudf.pandas \
+PANDAS_CI="1" python -m pytest -p cudf.pandas \
     --import-mode=importlib \
     -k "$TEST_THAT_NEED_MOTO_SERVER and $TEST_THAT_CRASH_PYTEST_WORKERS and $TEST_THAT_NEED_REASON_TO_SKIP and $TEST_THAT_USE_STRING_DTYPE_GROUPBY and $TEST_THAT_USE_WEAKREFS" \
     "${PYTEST_IGNORES[@]}" \

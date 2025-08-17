@@ -20,6 +20,7 @@
 #include "io/parquet/reader_impl_helpers.hpp"
 #include "io/utilities/row_selection.hpp"
 
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/logger.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
@@ -72,6 +73,8 @@ namespace {
 
 metadata::metadata(cudf::host_span<uint8_t const> footer_bytes)
 {
+  CUDF_FUNC_RANGE();
+
   CompactProtocolReader cp(footer_bytes.data(), footer_bytes.size());
   cp.read(this);
   CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
@@ -90,10 +93,13 @@ aggregate_reader_metadata::aggregate_reader_metadata(cudf::host_span<uint8_t con
   num_rows          = calc_num_rows();
   num_row_groups    = calc_num_row_groups();
 
-  // Force all columns to be nullable
+  // Force all leaf columns to be nullable
   auto& schema = per_file_metadata.front().schema;
   std::for_each(schema.begin(), schema.end(), [](auto& col) {
-    col.repetition_type = FieldRepetitionType::OPTIONAL;
+    // Modifying the repetition type of lists converts them to structs, so we must skip that
+    auto const is_leaf_col =
+      not(col.type == Type::UNDEFINED or col.is_stub() or col.is_list() or col.is_struct());
+    if (is_leaf_col) { col.repetition_type = FieldRepetitionType::OPTIONAL; }
   });
 
   // Collect and apply arrow:schema from Parquet's key value metadata section
@@ -239,15 +245,9 @@ aggregate_reader_metadata::select_payload_columns(
                                                               int schema_idx) {
     auto const& schema_elem     = get_schema(schema_idx);
     std::string const curr_path = path_till_now + schema_elem.name;
-    // If the current path is not a filter column, then add it and its children to the list of valid
-    // payload columns
-    if (filter_columns_set.count(curr_path) == 0) {
-      valid_payload_columns.push_back(curr_path);
-      // Add all children as well
-      for (auto const& child_idx : schema_elem.children_idx) {
-        add_column_path(curr_path + ".", child_idx);
-      }
-    }
+    // Add the current path to the list of valid payload columns if it is not a filter column
+    // TODO: Add children when AST filter expressions start supporting nested struct columns
+    if (filter_columns_set.count(curr_path) == 0) { valid_payload_columns.push_back(curr_path); }
   };
 
   // Add all but filter columns to valid payload columns

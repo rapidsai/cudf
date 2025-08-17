@@ -10,8 +10,7 @@ files:
       - build_all
       - build_cpp
       - build_python_common
-      - clang_format
-      - clang_tidy
+      - clang
       - cuda
       - cuda_version
       - depends_on_cupy
@@ -22,7 +21,9 @@ files:
       - depends_on_rmm
       - develop
       - docs
+      - iwyu
       - notebooks
+      - numpy_run
       - py_version
       - pyarrow_run
       - rapids_build_skbuild
@@ -69,6 +70,7 @@ files:
       - test_python_common
       - test_python_cudf_common
       - test_python_cudf
+      - numpy_run
       - test_python_pylibcudf
       - depends_on_cudf
       - depends_on_pylibcudf
@@ -77,6 +79,7 @@ files:
     output: none
     includes:
       - cuda_version
+      - numpy_run
       - py_version
       - test_python_common
       - test_python_pylibcudf
@@ -86,6 +89,7 @@ files:
     output: none
     includes:
       - cuda_version
+      - numpy_run
       - py_version
       - test_python_common
       - test_python_cudf_common
@@ -124,10 +128,11 @@ files:
     includes:
       - build_all
       - build_base
-      - clang_tidy
+      - clang
       - cuda
       - cuda_version
       - develop
+      - iwyu
       - py_version
   docs:
     output: none
@@ -168,6 +173,7 @@ files:
     extras:
       table: project
     includes:
+      - numpy_run
       - run_common
       - run_cudf
       - pyarrow_run
@@ -245,6 +251,14 @@ files:
       - depends_on_libcudf
       - depends_on_rmm
       - run_pylibcudf
+  py_run_pylibcudf_numpy:
+    output: pyproject
+    pyproject_dir: python/pylibcudf
+    extras:
+      table: project.optional-dependencies
+      key: numpy
+    includes:
+      - numpy_run
   py_run_pylibcudf_pyarrow:
     output: pyproject
     pyproject_dir: python/pylibcudf
@@ -260,6 +274,7 @@ files:
       table: project.optional-dependencies
       key: test
     includes:
+      - depends_on_cupy
       - pyarrow_run
       - test_python_common
       - test_python_cudf_common
@@ -310,6 +325,7 @@ files:
       table: project.optional-dependencies
       key: test
     includes:
+      - numpy_run
       - test_python_common
       - test_python_cudf_polars
   py_build_dask_cudf:
@@ -325,6 +341,7 @@ files:
     extras:
       table: project
     includes:
+      - numpy_run
       - run_common
       - run_dask_cudf
       - depends_on_cudf
@@ -434,13 +451,13 @@ dependencies:
               arch: x86_64
               cuda: "12.*"
             packages:
-              - gcc_linux-64=13.*
+              - gcc_linux-64=14.*
               - sysroot_linux-64==2.28
           - matrix:
               arch: aarch64
               cuda: "12.*"
             packages:
-              - gcc_linux-aarch64=13.*
+              - gcc_linux-aarch64=14.*
               - sysroot_linux-aarch64==2.28
       - output_types: conda
         matrices:
@@ -464,7 +481,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - &rapids_build_backend rapids-build-backend>=0.3.0,<0.4.0.dev0
+          - &rapids_build_backend rapids-build-backend>=0.4.0,<0.5.0.dev0
       - output_types: conda
         packages:
           - scikit-build-core>=0.10.0
@@ -485,9 +502,24 @@ dependencies:
           - cython>=3.0.3
   build_python_cudf:
     common:
+      - output_types: [conda]
+        packages:
+        - &numba_cuda numba-cuda>=0.18.0,<0.19.0a0
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+            packages:
+              - &numba_cuda_cu12 numba-cuda[cu12]>=0.18.0,<0.19.0a0
+          - matrix: # Fallback for no matrix
+            packages:
+              - *numba_cuda_cu12
+  numpy_run:
+    common:
       - output_types: [conda, requirements, pyproject]
         packages:
-        - &numba-cuda-dep numba-cuda>=0.14.0,<0.15.0a0
+          - numpy>=1.23,<3.0a0
   pyarrow_run:
     common:
       - output_types: [conda]
@@ -537,6 +569,7 @@ dependencies:
               - cuda-nvrtc-dev
               - cuda-nvtx-dev
               - libcurand-dev
+              - libnvjitlink-dev
       - output_types: conda
         matrices:
           - matrix:
@@ -558,18 +591,16 @@ dependencies:
       - output_types: conda
         packages:
           - &doxygen doxygen=1.9.1 # pre-commit hook needs a specific version.
-  clang_format:
-    common:
-      - output_types: conda
-        packages:
-          - clang==20.1.4
-          - clang-tools=20.1.4
-  clang_tidy:
+  clang:
     common:
       - output_types: conda
         packages:
           - clang==20.1.4
           - clang-tools==20.1.4
+  iwyu:
+    common:
+      - output_types: conda
+        packages:
           - include-what-you-use==0.24.0
   docs:
     common:
@@ -633,7 +664,6 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - fsspec>=0.6.0
-          - &numpy numpy>=1.23,<3.0a0
           - pandas>=2.0,<2.4.0dev0
   run_pylibcudf:
     common:
@@ -647,21 +677,21 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages: &run_pylibcudf_packages_all_cu12
-              - cuda-python>=12.6.2,<13.0a0
+              - cuda-python>=12.9.1,<13.0a0
           - {matrix: null, packages: *run_pylibcudf_packages_all_cu12}
   run_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cachetools
-          - &numba-dep numba>=0.59.1,<0.62.0a0
+          - &numba numba>=0.60.0,<0.62.0a0
           - nvtx>=0.2.1
           - packaging
           - rich
           - typing_extensions>=4.0.0
       - output_types: [conda]
         packages:
-          - *numba-cuda-dep
+          - *numba_cuda
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -672,41 +702,31 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages: &run_cudf_packages_all_cu12
-              - cuda-python>=12.6.2,<13.0a0
+              - cuda-python>=12.9.1,<13.0a0
           - {matrix: null, packages: *run_cudf_packages_all_cu12}
-      - output_types: conda
-        matrices:
-          - matrix: {cuda: "12.*"}
-            packages:
-              - &pynvjitlink_unsuffixed pynvjitlink>=0.0.0a0
       - output_types: [requirements, pyproject]
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
-              - &numba-cuda-cu12-dep numba-cuda[cu12]>=0.14.0,<0.15.0a0
+              - *numba_cuda_cu12
           - matrix: # Fallback for no matrix
             packages:
-              - *numba-cuda-cu12-dep
+              - *numba_cuda_cu12
       - output_types: [requirements, pyproject]
         matrices:
           - matrix:
               cuda: "12.*"
               cuda_suffixed: "true"
             packages:
-              - pynvjitlink-cu12>=0.0.0a0
               - nvidia-cuda-nvcc-cu12
               - nvidia-cuda-nvrtc-cu12
-          - matrix:
-              cuda: "12.*"
-              cuda_suffixed: "false"
-            packages: &run_cudf_cu12_unsuffixed
-              - *pynvjitlink_unsuffixed
-          - {matrix: null, packages: *run_cudf_cu12_unsuffixed}
+          - {matrix: null, packages: []}
   run_cudf_polars:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
           - nvidia-ml-py
+          - packaging
           - polars>=1.28,<1.32
     specific:
       - output_types: [requirements, pyproject]
@@ -783,9 +803,9 @@ dependencies:
         matrices:
           - matrix: {dependencies: "oldest"}
             packages:
-              - numba==0.59.1
-              - numba-cuda==0.14.0
+              - numba==0.60.0
               - pandas==2.0.*
+              - numba-cuda==0.18.0
           - matrix: {dependencies: "latest"}
             packages:
               - pandas==2.3.1
@@ -817,14 +837,16 @@ dependencies:
           - mmh3
           - nanoarrow
           - hypothesis>=6.131.7
-          - *numpy
+          - *numba
           - pandas
       - output_types: conda
         packages:
           - python-xxhash
+          - *numba_cuda
       - output_types: [pyproject, requirements]
         packages:
           - xxhash
+          - *numba_cuda_cu12
   test_python_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -890,7 +912,6 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - dask-cuda==25.10.*,>=0.0.0a0
-          - *numpy
           - rich
   test_python_narwhals:
     common:
@@ -1121,4 +1142,4 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - narwhals==1.41
+          - narwhals==1.47
