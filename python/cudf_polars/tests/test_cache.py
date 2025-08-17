@@ -16,7 +16,7 @@ from cudf_polars.utils.versions import POLARS_VERSION_LT_1323
 def test_cache(request):
     request.applymarker(
         pytest.mark.xfail(
-            ccondition=not POLARS_VERSION_LT_1323,
+            condition=not POLARS_VERSION_LT_1323,
             reason="python no longer manages cache hits",
         )
     )
