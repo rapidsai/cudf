@@ -217,7 +217,7 @@ ConfigureNVBench(STRUCT_CREATION_NVBENCH structs/create_structs.cpp)
 # ##################################################################################################
 # * quantiles benchmark
 # --------------------------------------------------------------------------------
-ConfigureBench(QUANTILES_BENCH quantiles/quantiles.cpp)
+ConfigureNVBench(QUANTILES_NVBENCH quantiles/quantiles.cpp)
 
 # ##################################################################################################
 # * tdigest benchmark
@@ -262,6 +262,7 @@ ConfigureBench(
 ConfigureNVBench(
   GROUPBY_NVBENCH
   groupby/group_histogram.cpp
+  groupby/group_m2.cpp
   groupby/group_max.cpp
   groupby/group_max_multithreaded.cpp
   groupby/group_nunique.cpp
