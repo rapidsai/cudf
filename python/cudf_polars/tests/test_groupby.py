@@ -157,7 +157,8 @@ def test_groupby_len(df, keys):
             .otherwise(None)
             .sum()
         ),
-        (pl.when(pl.col("int") > 5).then(pl.col("float")).otherwise(pl.lit(0.0)),),
+        (pl.when(pl.col("int") > 5).then(pl.col("float")).otherwise(pl.lit(0.0))),
+        (pl.when(pl.col("int").min() >= 3).then(pl.col("float"))),
     ],
 )
 def test_groupby_unsupported(df: pl.LazyFrame, expr: pl.Expr) -> None:
