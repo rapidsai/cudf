@@ -14,6 +14,7 @@ from polars.testing.asserts import assert_frame_equal
 
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.utils.config import ConfigOptions, StreamingFallbackMode
+from cudf_polars.utils.versions import POLARS_VERSION_LT_1323
 
 if TYPE_CHECKING:
     from cudf_polars.typing import OptimizationArgs
@@ -112,16 +113,26 @@ def assert_gpu_result_equal(
     # the 'misc' is for 'error: Keywords must be strings'
     expect = lazydf.collect(**final_polars_collect_kwargs)  # type: ignore[call-overload,misc]
     got = lazydf.collect(**final_cudf_collect_kwargs, engine=engine)  # type: ignore[call-overload,misc]
+
+    assert_kwargs_bool: dict[str, bool] = {
+        "check_row_order": check_row_order,
+        "check_column_order": check_column_order,
+        "check_dtypes": check_dtypes,
+        "check_exact": check_exact,
+        "categorical_as_str": categorical_as_str,
+    }
+
+    tol_kwargs: dict[str, float]
+    if POLARS_VERSION_LT_1323:
+        tol_kwargs = {"rtol": rtol, "atol": atol}
+    else:
+        tol_kwargs = {"rel_tol": rtol, "abs_tol": atol}
+
     assert_frame_equal(
         expect,
         got,
-        check_row_order=check_row_order,
-        check_column_order=check_column_order,
-        check_dtypes=check_dtypes,
-        check_exact=check_exact,
-        rtol=rtol,
-        atol=atol,
-        categorical_as_str=categorical_as_str,
+        **assert_kwargs_bool,
+        **tol_kwargs,
     )
 
 

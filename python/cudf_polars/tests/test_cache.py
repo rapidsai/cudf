@@ -2,15 +2,24 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import pytest
+
 import polars as pl
 
 from cudf_polars import Translator
 from cudf_polars.dsl import ir
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.utils.versions import POLARS_VERSION_LT_1323
 
 
-def test_cache():
+def test_cache(request):
+    request.applymarker(
+        pytest.mark.xfail(
+            ccondition=not POLARS_VERSION_LT_1323,
+            reason="python no longer manages cache hits",
+        )
+    )
     df1 = pl.LazyFrame(
         {
             "a": [1, 2, 3, 4, 5, 6, 7],

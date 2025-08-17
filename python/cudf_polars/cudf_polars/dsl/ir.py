@@ -964,10 +964,10 @@ class Cache(IR):
     _non_child = ("schema", "key", "refcount")
     key: int
     """The cache key."""
-    refcount: int
+    refcount: int | None
     """The number of cache hits."""
 
-    def __init__(self, schema: Schema, key: int, refcount: int, value: IR):
+    def __init__(self, schema: Schema, key: int, refcount: int | None, value: IR):
         self.schema = schema
         self.key = key
         self.refcount = refcount
@@ -989,7 +989,7 @@ class Cache(IR):
     @classmethod
     @nvtx_annotate_cudf_polars(message="Cache")
     def do_evaluate(
-        cls, key: int, refcount: int, df: DataFrame
+        cls, key: int, refcount: int | None, df: DataFrame
     ) -> DataFrame:  # pragma: no cover; basic evaluation never calls this
         """Evaluate and return a dataframe."""
         # Our value has already been computed for us, so let's just
@@ -1008,12 +1008,15 @@ class Cache(IR):
             cache[self.key] = (result, 0)
             return result
         else:
-            hits += 1
-            if hits == self.refcount:
+            if self.refcount is None:
+                return result
+
+            hits += 1  # pragma: no cover
+            if hits == self.refcount:  # pragma: no cover
                 del cache[self.key]
-            else:
+            else:  # pragma: no cover
                 cache[self.key] = (result, hits)
-            return result
+            return result  # pragma: no cover
 
 
 class DataFrameScan(IR):

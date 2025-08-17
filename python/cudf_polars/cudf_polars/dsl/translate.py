@@ -30,7 +30,11 @@ from cudf_polars.dsl.utils.replace import replace
 from cudf_polars.dsl.utils.rolling import rewrite_rolling
 from cudf_polars.typing import Schema
 from cudf_polars.utils import config, sorting
-from cudf_polars.utils.versions import POLARS_VERSION_LT_131, POLARS_VERSION_LT_132
+from cudf_polars.utils.versions import (
+    POLARS_VERSION_LT_131,
+    POLARS_VERSION_LT_132,
+    POLARS_VERSION_LT_1323,
+)
 
 if TYPE_CHECKING:
     from polars import GPUEngine
@@ -91,7 +95,7 @@ class Translator:
         # IR is versioned with major.minor, minor is bumped for backwards
         # compatible changes (e.g. adding new nodes), major is bumped for
         # incompatible changes (e.g. renaming nodes).
-        if (version := self.visitor.version()) >= (9, 1):
+        if (version := self.visitor.version()) >= (10, 1):
             e = NotImplementedError(
                 f"No support for polars IR {version=}"
             )  # pragma: no cover; no such version for now.
@@ -270,8 +274,15 @@ def _(node: pl_ir.Scan, translator: Translator, schema: Schema) -> ir.IR:
 
 @_translate_ir.register
 def _(node: pl_ir.Cache, translator: Translator, schema: Schema) -> ir.IR:
+    if POLARS_VERSION_LT_1323:
+        refcount = node.cache_hits
+    else:
+        refcount = None
     return ir.Cache(
-        schema, node.id_, node.cache_hits, translator.translate_ir(n=node.input)
+        schema,
+        node.id_,
+        refcount,
+        translator.translate_ir(n=node.input),
     )
 
 
