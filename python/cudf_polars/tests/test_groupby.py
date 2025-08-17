@@ -317,6 +317,18 @@ def test_groupby_mean_type_promotion(df: pl.LazyFrame) -> None:
     assert_gpu_result_equal(q, check_row_order=False)
 
 
+def test_groupby_sum_all_null_group_returns_null():
+    df = pl.LazyFrame(
+        {
+            "key": ["a", "a", "b", "b", "c"],
+            "null_groups": [None, None, None, 2, None],
+        }
+    )
+
+    q = df.group_by("key").agg(out=pl.col("null_groups").sum())
+    assert_gpu_result_equal(q, check_row_order=False)
+
+
 @pytest.mark.parametrize(
     "expr",
     [
