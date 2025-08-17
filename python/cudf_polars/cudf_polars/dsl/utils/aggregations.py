@@ -164,7 +164,7 @@ def decompose_single_agg(
                 return [(named_expr, True)], expr.NamedExpr(
                     name, replace_nulls(col, 0, is_top=is_top)
                 )
-            else:
+            else:  # pragma: no cover
                 # ROLLING:
                 # Add a second rolling agg to compute the window size, then only
                 # replace nulls with 0 when the window size is 0 (ie. empty window).

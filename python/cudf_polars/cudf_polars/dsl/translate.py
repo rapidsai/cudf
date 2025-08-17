@@ -274,7 +274,7 @@ def _(node: pl_ir.Scan, translator: Translator, schema: Schema) -> ir.IR:
 
 @_translate_ir.register
 def _(node: pl_ir.Cache, translator: Translator, schema: Schema) -> ir.IR:
-    if POLARS_VERSION_LT_1323:
+    if POLARS_VERSION_LT_1323:  # pragma: no cover
         refcount = node.cache_hits
     else:
         refcount = None

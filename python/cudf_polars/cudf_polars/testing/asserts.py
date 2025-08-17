@@ -123,7 +123,7 @@ def assert_gpu_result_equal(
     }
 
     tol_kwargs: dict[str, float]
-    if POLARS_VERSION_LT_1323:
+    if POLARS_VERSION_LT_1323:  # pragma: no cover
         tol_kwargs = {"rtol": rtol, "atol": atol}
     else:
         tol_kwargs = {"rel_tol": rtol, "abs_tol": atol}
