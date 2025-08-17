@@ -504,14 +504,14 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
-        - &numba_cuda numba-cuda>=0.18.0,<0.19.0a0
+        - &numba_cuda numba-cuda>=0.19.0,<0.20.0a0
     specific:
       - output_types: [requirements, pyproject]
         matrices:
           - matrix:
               cuda: "12.*"
             packages:
-              - &numba_cuda_cu12 numba-cuda[cu12]>=0.18.0,<0.19.0a0
+              - &numba_cuda_cu12 numba-cuda[cu12]>=0.19.0,<0.20.0a0
           - matrix: # Fallback for no matrix
             packages:
               - *numba_cuda_cu12
@@ -804,7 +804,7 @@ dependencies:
             packages:
               - numba==0.60.0
               - pandas==2.0.*
-              - numba-cuda==0.18.0
+              - numba-cuda==0.19.0
           - matrix: {dependencies: "latest"}
             packages:
               - pandas==2.3.1
