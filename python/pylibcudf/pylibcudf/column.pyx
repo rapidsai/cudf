@@ -1030,40 +1030,6 @@ cdef class Column:
 
         return Column.from_array_interface(ArrayInterfaceWrapper(iface))
 
-    cpdef list to_pylist_slow(self, Stream stream = None):
-        """
-        Convert the Column to a Python list.
-
-        Only supports fixed-width and string columns.
-
-        Returns
-        -------
-        list
-            A list of Python objects representing the column data.
-
-        Raises
-        ------
-        NotImplementedError
-            If the column type is not fixed-width or string.
-        """
-        cdef unique_ptr[scalar] s
-
-        if not plc_is_fixed_width(self.type()) and self.type().id() != type_id.STRING:
-            raise NotImplementedError(
-                "Only fixed-width and string columns are supported"
-            )
-
-        cdef column_view cv = self.view()
-        cdef Stream s_ = _get_stream(stream)
-        result = []
-
-        for i in range(self._size):
-            with nogil:
-                s = get_element(cv, i, s_.view())
-            result.append(Scalar.from_libcudf(move(s)).to_py())
-
-        return result
-
     cpdef list to_pylist(self):
         """
         Convert the Column to a Python list.

@@ -26,8 +26,6 @@ from libc.stdint cimport (
     int8_t,
 )
 
-from cpython.ref cimport PyObject
-
 from rmm.librmm.device_buffer cimport device_buffer
 from rmm.pylibrmm.stream cimport Stream
 from pylibcudf.libcudf.column.column cimport column
@@ -37,7 +35,6 @@ from pylibcudf.libcudf.column.column_view cimport (
 )
 from pylibcudf.libcudf.lists.lists_column_view cimport lists_column_view
 from pylibcudf.libcudf.types cimport bitmask_type, size_type
-from pylibcudf.libcudf.interop cimport ArrowArray
 
 from .gpumemoryview cimport gpumemoryview
 from .types cimport DataType
@@ -98,7 +95,6 @@ cdef class Column:
     )
 
     cpdef Scalar to_scalar(self)
-    cpdef list to_pylist_slow(self, Stream stream = *)
     cpdef list to_pylist(self)
     cpdef DataType type(self)
     cpdef Column child(self, size_type index)
