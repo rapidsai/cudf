@@ -1,5 +1,16 @@
 # Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
+from cpython.ref cimport PyObject, Py_INCREF
+from cpython.list cimport PyList_New, PyList_SET_ITEM
+from cpython.long cimport (
+    PyLong_FromLongLong,
+    PyLong_FromLong,
+    PyLong_FromUnsignedLong,
+    PyLong_FromUnsignedLongLong,
+)
+from cpython.float cimport PyFloat_FromDouble
+from cpython.unicode cimport PyUnicode_DecodeUTF8
+
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 from libcpp.string cimport string
@@ -31,34 +42,6 @@ from pylibcudf.libcudf.interop cimport ArrowArray
 from .gpumemoryview cimport gpumemoryview
 from .types cimport DataType
 from .scalar cimport Scalar
-
-
-cdef extern from "Python.h":
-    # Need the C functions/macros that return PyObject*
-    # otherwise we'd get errors like "Cannot convert Python object to 'PyObject *'"
-    ctypedef Py_ssize_t Py_ssize_t
-    cdef PyObject* PyList_New(Py_ssize_t size)
-    void PyList_SET_ITEM(
-        PyObject* list,
-        Py_ssize_t index,
-        PyObject* item
-    )
-    cdef PyObject* PyLong_FromLongLong(long long val)
-    cdef PyObject* PyLong_FromLong(long val)
-    cdef PyObject* PyLong_FromUnsignedLong(unsigned long val)
-    cdef PyObject* PyLong_FromUnsignedLongLong(
-        unsigned long long val
-    )
-    cdef PyObject* PyFloat_FromDouble(double val)
-    cdef PyObject* PyUnicode_DecodeUTF8(
-        const char* s,
-        Py_ssize_t size,
-        const char* errors
-    )
-    void Py_INCREF(PyObject* obj)
-    cdef PyObject* Py_None
-    cdef PyObject* Py_True
-    cdef PyObject* Py_False
 
 
 cdef class OwnerWithCAI:
