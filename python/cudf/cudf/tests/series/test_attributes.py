@@ -308,3 +308,9 @@ def test_error_values_datetime():
     s = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
     with pytest.raises(NotImplementedError, match="cupy does not support"):
         s.values
+
+
+def test_ndim():
+    s = pd.Series(dtype="float64")
+    gs = cudf.Series()
+    assert s.ndim == gs.ndim
