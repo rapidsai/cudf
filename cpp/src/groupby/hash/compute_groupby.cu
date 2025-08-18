@@ -31,6 +31,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuco/static_set.cuh>
+#include <thrust/tabulate.h>
 
 #include <memory>
 
@@ -90,8 +91,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
     return {std::move(null_mask_data), null_mask};
   }();
 
-  // The buffer to store cached hash values.
-  auto hash_buffer = [&]() -> rmm::device_uvector<hash_value_type> {
+  auto const cached_hashes = [&]() -> rmm::device_uvector<hash_value_type> {
     auto const num_columns =
       std::accumulate(keys.begin(), keys.end(), 0, [](int count, column_view const& col) {
         return count + count_nested_columns(col);
@@ -101,10 +101,17 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
       return rmm::device_uvector<hash_value_type>{0, stream};
     }
 
-    auto buffer = rmm::device_uvector<hash_value_type>(num_keys, stream);
-    CUDF_CUDA_TRY(
-      cudaMemsetAsync(buffer.begin(), 0, num_keys * sizeof(hash_value_type), stream.value()));
-    return buffer;
+    rmm::device_uvector<hash_value_type> hashes(num_keys, stream);
+    thrust::tabulate(rmm::exec_policy_nosync(stream),
+                     hashes.begin(),
+                     hashes.end(),
+                     [d_row_hash, row_bitmask] __device__(size_type const idx) {
+                       if (!row_bitmask || cudf::bit_is_set(row_bitmask, idx)) {
+                         return d_row_hash(idx);
+                       }
+                       return hash_value_type{0};  // dummy value, as it will be unused
+                     });
+    return hashes;
   }();
 
   // Cache of sparse results where the location of aggregate value in each
@@ -116,7 +123,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
     cudf::detail::CUCO_DESIRED_LOAD_FACTOR,  // 50% load factor
     cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
     d_row_equal,
-    probing_scheme_t{row_hasher_with_cache_t{d_row_hash, hash_buffer.data()}},
+    probing_scheme_t{row_hasher_with_cache_t{d_row_hash, cached_hashes.data()}},
     cuco::thread_scope_device,
     cuco::storage<GROUPBY_BUCKET_SIZE>{},
     cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
