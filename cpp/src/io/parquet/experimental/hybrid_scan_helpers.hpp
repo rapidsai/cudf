@@ -46,6 +46,7 @@ using parquet::detail::row_group_info;
  */
 struct metadata : private metadata_base {
   explicit metadata(cudf::host_span<uint8_t const> footer_bytes);
+  explicit metadata(FileMetaData const& other) { static_cast<FileMetaData&>(*this) = other; }
   metadata_base get_file_metadata() && { return std::move(*this); }
 };
 
@@ -91,6 +92,22 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
   aggregate_reader_metadata(cudf::host_span<uint8_t const> footer_bytes,
                             bool use_arrow_schema,
                             bool has_cols_from_mismatched_srcs);
+
+  /**
+   * @brief Constructor for aggregate_reader_metadata
+   *
+   * @param parquet_metadata Pre-populated Parquet file metadata
+   * @param use_arrow_schema Whether to use Arrow schema
+   * @param has_cols_from_mismatched_srcs Whether to have columns from mismatched sources
+   */
+  aggregate_reader_metadata(FileMetaData const& parquet_metadata,
+                            bool use_arrow_schema,
+                            bool has_cols_from_mismatched_srcs);
+
+  /**
+   * @brief Initialize the internal variables
+   */
+  void initialize_internals(bool use_arrow_schema, bool has_cols_from_mismatched_srcs);
 
   /**
    * @brief Fetch the byte range of the page index in the Parquet file

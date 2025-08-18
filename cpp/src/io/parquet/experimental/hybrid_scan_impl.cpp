@@ -87,6 +87,16 @@ hybrid_scan_reader_impl::hybrid_scan_reader_impl(cudf::host_span<uint8_t const> 
   _extended_metadata = static_cast<aggregate_reader_metadata*>(_metadata.get());
 }
 
+hybrid_scan_reader_impl::hybrid_scan_reader_impl(FileMetaData const& parquet_metadata,
+                                                 parquet_reader_options const& options)
+{
+  _metadata = std::make_unique<aggregate_reader_metadata>(
+    parquet_metadata,
+    options.is_enabled_use_arrow_schema(),
+    options.get_columns().has_value() and options.is_enabled_allow_mismatched_pq_schemas());
+  _extended_metadata = static_cast<aggregate_reader_metadata*>(_metadata.get());
+}
+
 FileMetaData hybrid_scan_reader_impl::parquet_metadata() const
 {
   return _extended_metadata->parquet_metadata();

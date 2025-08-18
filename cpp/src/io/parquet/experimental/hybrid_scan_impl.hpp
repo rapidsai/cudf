@@ -61,6 +61,15 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
                                    parquet_reader_options const& options);
 
   /**
+   * @brief Constructor for the experimental parquet reader implementation to optimally read
+   * Parquet files subject to highly selective filters
+   *
+   * @param parquet_metadata Pre-populated Parquet file metadata
+   */
+  explicit hybrid_scan_reader_impl(FileMetaData const& parquet_metadata,
+                                   parquet_reader_options const& options);
+
+  /**
    * @copydoc cudf::io::experimental::hybrid_scan::parquet_metadata
    */
   [[nodiscard]] FileMetaData parquet_metadata() const;
