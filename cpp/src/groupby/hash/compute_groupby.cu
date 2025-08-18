@@ -16,6 +16,7 @@
 
 #include "compute_aggregations.hpp"
 #include "compute_groupby.hpp"
+#include "hash_compound_agg_finalizer.hpp"
 #include "helpers.cuh"
 
 #include <cudf/detail/aggregation/aggregation.cuh>
@@ -73,14 +74,19 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
     auto const& col   = request.values;
 
     auto finalizer =
-      hash_compound_agg_finalizer(col, output_index_map, cache, set, row_bitmask, stream, mr);
+      hash_compound_agg_finalizer(col,
+                                  cache,
+                                  output_index_map.begin(),
+                                  static_cast<bitmask_type const*>(row_bitmask.data()),
+                                  stream,
+                                  mr);
     for (auto&& agg : agg_v) {
       agg->finalize(finalizer);
     }
   }
 
   return cudf::detail::gather(keys,
-                              gather_map,
+                              key_gather_map,
                               out_of_bounds_policy::DONT_CHECK,
                               cudf::detail::negative_index_policy::NOT_ALLOWED,
                               stream,

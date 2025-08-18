@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,16 +28,16 @@
 #include <vector>
 
 namespace cudf::groupby::detail::hash {
-template <typename SetType>
+
 rmm::device_uvector<cudf::size_type> compute_global_memory_aggs(
   cudf::size_type num_rows,
+  size_type const* key_indices,
   bool skip_rows_with_nulls,
   bitmask_type const* row_bitmask,
   cudf::table_view const& flattened_values,
   cudf::aggregation::Kind const* d_agg_kinds,
   host_span<cudf::aggregation::Kind const> agg_kinds,
-  SetType& global_set,
   std::vector<std::unique_ptr<aggregation>>& aggregations,
-  cudf::detail::result_cache* sparse_results,
+  cudf::detail::result_cache* cache,
   rmm::cuda_stream_view stream);
 }  // namespace cudf::groupby::detail::hash

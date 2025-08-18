@@ -59,9 +59,8 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
 {
   // Collect the single-pass aggregations that can be processed separately before we can calculate
   // the compound aggregations.
-  auto const [spass_values, spass_agg_kinds, spass_aggs] =
-    flatten_single_pass_aggs(requests, stream);
-  auto const d_spass_agg_kinds = cudf::detail::make_device_uvector_async(
+  auto [spass_values, spass_agg_kinds, spass_aggs] = flatten_single_pass_aggs(requests, stream);
+  auto const d_spass_agg_kinds                     = cudf::detail::make_device_uvector_async(
     spass_agg_kinds, stream, rmm::mr::get_current_device_resource());
 
   auto const grid_size =
@@ -103,7 +102,7 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
     thrust::tabulate(rmm::exec_policy_nosync(stream),
                      key_indices.begin(),
                      key_indices.end(),
-                     [global_set_ref] __device__(auto const idx) {
+                     [global_set_ref] __device__(auto const idx) mutable {
                        return *global_set_ref.insert_and_find(idx).first;
                      });
 
@@ -111,16 +110,17 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
     find_output_indices(key_indices, populated_keys, stream);
 
     // TODO
-    return compute_global_memory_aggs(num_rows,
-                                      skip_rows_with_nulls,
-                                      row_bitmask,
-                                      spass_values,
-                                      d_spass_agg_kinds.data(),
-                                      spass_agg_kinds,
-                                      global_set,
-                                      spass_aggs,
-                                      cache,
-                                      stream);
+    compute_global_memory_aggs(num_rows,
+                               key_indices.begin(),
+                               skip_rows_with_nulls,
+                               row_bitmask,
+                               spass_values,
+                               d_spass_agg_kinds.data(),
+                               spass_agg_kinds,
+                               spass_aggs,
+                               cache,
+                               stream);
+    return std::pair{std::move(populated_keys), std::move(key_indices)};
   }
 
   // 'local_mapping_index' maps from the global row index of the input table to its block-wise rank
@@ -215,7 +215,7 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
     thrust::tabulate(rmm::exec_policy_nosync(stream),
                      key_indices.begin(),
                      key_indices.end(),
-                     [global_set_ref] __device__(auto const idx) {
+                     [global_set_ref] __device__(auto const idx) mutable {
                        return *global_set_ref.insert_and_find(idx).first;
                      });
 
@@ -225,13 +225,7 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
   find_output_indices(key_indices, populated_keys, stream);
 
   // make table that will hold sparse results
-  cudf::table result_table = create_results_table(spass_values,
-                                                  d_spass_agg_kinds.data(),
-                                                  spass_agg_kinds,
-                                                  needs_fallback,
-                                                  global_set,
-                                                  populated_keys,
-                                                  stream);
+  cudf::table result_table = create_results_table(spass_values, spass_agg_kinds, stream);
   // prepare to launch kernel to do the actual aggregation
   auto d_values       = table_device_view::create(spass_values, stream);
   auto d_sparse_table = mutable_table_device_view::create(result_table, stream);
@@ -258,7 +252,7 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
     thrust::for_each_n(rmm::exec_policy_nosync(stream),
                        thrust::counting_iterator{0},
                        num_rows,
-                       global_memory_fallback_fn{global_set_ref,
+                       global_memory_fallback_fn{key_indices.begin(),
                                                  *d_values,
                                                  *d_sparse_table,
                                                  d_spass_agg_kinds.data(),

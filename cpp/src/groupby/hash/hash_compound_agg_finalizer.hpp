@@ -32,7 +32,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
   data_type result_type;
 
  public:
-  // using cudf::detail::aggregation_finalizer::visit;
+  using cudf::detail::aggregation_finalizer::visit;
 
   hash_compound_agg_finalizer(column_view col,
                               cudf::detail::result_cache* cache,
@@ -41,6 +41,8 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr);
   virtual ~hash_compound_agg_finalizer() = default;
+
+  void visit(aggregation const&) override {}
 
   // Enables conversion of ARGMIN/ARGMAX into MIN/MAX
   auto gather_argminmax(cudf::aggregation const& agg);
@@ -57,4 +59,5 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
 
   void visit(cudf::detail::std_aggregation const& agg) override;
 };
+
 }  // namespace cudf::groupby::detail::hash

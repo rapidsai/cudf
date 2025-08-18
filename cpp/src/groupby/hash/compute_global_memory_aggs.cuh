@@ -16,6 +16,7 @@
 #pragma once
 
 #include "compute_global_memory_aggs.hpp"
+#include "create_results_table.hpp"
 #include "helpers.cuh"
 #include "single_pass_functors.cuh"
 
@@ -33,53 +34,44 @@
 #include <thrust/for_each.h>
 
 namespace cudf::groupby::detail::hash {
-template <typename SetType>
 rmm::device_uvector<size_type> compute_global_memory_aggs(
   size_type num_rows,
+  size_type const* key_indices,
   bool skip_rows_with_nulls,
   bitmask_type const* row_bitmask,
   table_view const& flattened_values,
   aggregation::Kind const* d_agg_kinds,
   host_span<aggregation::Kind const> agg_kinds,
-  SetType& global_set,
   std::vector<std::unique_ptr<aggregation>>& aggregations,
   cudf::detail::result_cache* cache,
   rmm::cuda_stream_view stream)
 {
-  auto constexpr uses_global_memory_aggs = true;
+  // auto constexpr uses_global_memory_aggs = true;
   // 'populated_keys' contains inserted row_indices (keys) of global hash set
   rmm::device_uvector<cudf::size_type> populated_keys(num_rows, stream);
 
   // make table that will hold sparse results
-  cudf::table sparse_table = create_sparse_results_table(flattened_values,
-                                                         d_agg_kinds,
-                                                         agg_kinds,
-                                                         uses_global_memory_aggs,
-                                                         global_set,
-                                                         populated_keys,
-                                                         stream);
+  cudf::table result_table = create_results_table(flattened_values, agg_kinds, stream);
 
   // prepare to launch kernel to do the actual aggregation
   auto d_values       = table_device_view::create(flattened_values, stream);
-  auto d_sparse_table = mutable_table_device_view::create(sparse_table, stream);
-  auto global_set_ref = global_set.ref(cuco::op::insert_and_find);
+  auto d_result_table = mutable_table_device_view::create(result_table, stream);
 
   thrust::for_each_n(
     rmm::exec_policy_nosync(stream),
     thrust::counting_iterator{0},
     num_rows,
     hash::compute_single_pass_aggs_fn{
-      global_set_ref, *d_values, *d_sparse_table, d_agg_kinds, row_bitmask, skip_rows_with_nulls});
-  extract_populated_keys(global_set, populated_keys, stream);
+      key_indices, *d_values, *d_result_table, d_agg_kinds, row_bitmask, skip_rows_with_nulls});
 
   // Add results back to sparse_results cache
-  auto sparse_result_cols = sparse_table.release();
+  auto result_cols = result_table.release();
   for (size_t i = 0; i < aggregations.size(); i++) {
     // Note that the cache will make a copy of this temporary aggregation
-    sparse_results->add_result(
-      flattened_values.column(i), *aggregations[i], std::move(sparse_result_cols[i]));
+    cache->add_result(flattened_values.column(i), *aggregations[i], std::move(result_cols[i]));
   }
 
+  // TODO: compute this
   return populated_keys;
 }
 }  // namespace cudf::groupby::detail::hash
