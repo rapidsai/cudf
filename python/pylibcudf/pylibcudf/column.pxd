@@ -2,7 +2,20 @@
 
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
-from libc.stdint cimport uint64_t
+from libcpp.string cimport string
+from libc.stdint cimport (
+    uintptr_t,
+    uint64_t,
+    uint32_t,
+    uint16_t,
+    uint8_t,
+    int64_t,
+    int32_t,
+    int16_t,
+    int8_t,
+)
+
+from cpython.ref cimport PyObject
 
 from rmm.librmm.device_buffer cimport device_buffer
 from rmm.pylibrmm.stream cimport Stream
@@ -13,10 +26,39 @@ from pylibcudf.libcudf.column.column_view cimport (
 )
 from pylibcudf.libcudf.lists.lists_column_view cimport lists_column_view
 from pylibcudf.libcudf.types cimport bitmask_type, size_type
+from pylibcudf.libcudf.interop cimport ArrowArray
 
 from .gpumemoryview cimport gpumemoryview
 from .types cimport DataType
 from .scalar cimport Scalar
+
+
+cdef extern from "Python.h":
+    # Need the C functions/macros that return PyObject*
+    # otherwise we'd get errors like "Cannot convert Python object to 'PyObject *'"
+    ctypedef Py_ssize_t Py_ssize_t
+    cdef PyObject* PyList_New(Py_ssize_t size)
+    void PyList_SET_ITEM(
+        PyObject* list,
+        Py_ssize_t index,
+        PyObject* item
+    )
+    cdef PyObject* PyLong_FromLongLong(long long val)
+    cdef PyObject* PyLong_FromLong(long val)
+    cdef PyObject* PyLong_FromUnsignedLong(unsigned long val)
+    cdef PyObject* PyLong_FromUnsignedLongLong(
+        unsigned long long val
+    )
+    cdef PyObject* PyFloat_FromDouble(double val)
+    cdef PyObject* PyUnicode_DecodeUTF8(
+        const char* s,
+        Py_ssize_t size,
+        const char* errors
+    )
+    void Py_INCREF(PyObject* obj)
+    cdef PyObject* Py_None
+    cdef PyObject* Py_True
+    cdef PyObject* Py_False
 
 
 cdef class OwnerWithCAI:
@@ -73,6 +115,8 @@ cdef class Column:
     )
 
     cpdef Scalar to_scalar(self)
+    cpdef list to_pylist_slow(self, Stream stream = *)
+    cpdef list to_pylist(self)
     cpdef DataType type(self)
     cpdef Column child(self, size_type index)
     cpdef size_type num_children(self)

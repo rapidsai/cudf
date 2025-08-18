@@ -7,7 +7,7 @@ from cpython.pycapsule cimport (
     PyCapsule_New,
 )
 
-from libc.stdint cimport uintptr_t
+from libc.stddef cimport size_t
 
 from libcpp.limits cimport numeric_limits
 from libcpp.memory cimport make_unique, unique_ptr
@@ -25,6 +25,7 @@ from pylibcudf.libcudf.interop cimport (
     to_arrow_host_raw,
     to_arrow_device_raw,
     to_arrow_schema_raw,
+    release_arrow_array_raw,
 )
 from pylibcudf.libcudf.null_mask cimport bitmask_allocation_size_bytes
 from pylibcudf.libcudf.scalar.scalar cimport scalar
@@ -1029,7 +1030,7 @@ cdef class Column:
 
         return Column.from_array_interface(ArrayInterfaceWrapper(iface))
 
-    def to_pylist(self):
+    cpdef list to_pylist_slow(self, Stream stream = None):
         """
         Convert the Column to a Python list.
 
@@ -1053,14 +1054,42 @@ cdef class Column:
             )
 
         cdef column_view cv = self.view()
+        cdef Stream s_ = _get_stream(stream)
         result = []
 
         for i in range(self._size):
             with nogil:
-                s = get_element(cv, i)
+                s = get_element(cv, i, s_.view())
             result.append(Scalar.from_libcudf(move(s)).to_py())
 
         return result
+
+    cpdef list to_pylist(self):
+        """
+        Convert the Column to a Python list.
+
+        Only supports fixed-width and string columns.
+
+        Returns
+        -------
+        list
+            A list of Python objects representing the column data.
+
+        Raises
+        ------
+        NotImplementedError
+            If the column type is not fixed-width or string.
+        """
+        cdef type_id dtype = self.type().id()
+        cdef ArrowArray* raw_host_array_ptr = NULL
+        with nogil:
+            raw_host_array_ptr = to_arrow_host_raw(self.view())
+        try:
+            return _arrow_to_pylist(dtype, raw_host_array_ptr)
+        finally:
+            if raw_host_array_ptr != NULL:
+                with nogil:
+                    release_arrow_array_raw(raw_host_array_ptr)
 
     @classmethod
     def struct_from_children(cls, children: Iterable[Column]):
@@ -1312,3 +1341,802 @@ def is_c_contiguous(
             return False
         cumulative_stride *= dim
     return True
+
+
+cdef list _arrow_to_pylist_bool8(ArrowArray* arr):
+    cdef size_t n = <size_t>arr.length
+    cdef PyObject* list_ = PyList_New(<Py_ssize_t>n)
+    if list_ is NULL:
+        raise MemoryError("Unable to create new python List")
+    cdef list result = <list>list_
+
+    cdef const void** bufs = arr.buffers
+    cdef int64_t offset = arr.offset
+    cdef const uint8_t* null_bitmap = NULL
+    cdef const uint8_t* data_bitmap = NULL
+    cdef size_t i, bit_index
+
+    if n == 0:
+        return result
+
+    if arr.n_buffers >= 1 and bufs[0] != NULL and arr.null_count != 0:
+        null_bitmap = <const uint8_t*>bufs[0]
+
+    if arr.n_buffers < 2 or bufs[1] == NULL:
+        # All nulls
+        for i in range(n):
+            Py_INCREF(Py_None)
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, Py_None)
+        return result
+
+    data_bitmap = <const uint8_t*>bufs[1]
+
+    for i in range(n):
+        bit_index = <size_t>(offset + <int64_t>i)
+
+        # Null check first
+        if null_bitmap != NULL:
+            if (
+                (null_bitmap[bit_index >> 3] >> (bit_index & 7)) & 1
+            ) == 0:
+                Py_INCREF(Py_None)
+                PyList_SET_ITEM(list_, <Py_ssize_t>i, Py_None)
+                continue
+
+        if ((data_bitmap[bit_index >> 3] >> (bit_index & 7)) & 1) != 0:
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, <PyObject*>Py_True)
+            Py_INCREF(Py_True)
+        else:
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, <PyObject*>Py_False)
+            Py_INCREF(Py_False)
+
+    return result
+
+cdef list _arrow_to_pylist_int8(ArrowArray* arr):
+    cdef size_t n = <size_t>arr.length
+    cdef PyObject* list_ = PyList_New(<Py_ssize_t>n)
+    if list_ is NULL:
+        raise MemoryError("Unable to create new python List")
+    cdef list result = <list>list_
+
+    cdef const void** bufs = arr.buffers
+    cdef int64_t offset = arr.offset
+    cdef const uint8_t* null_bitmap = NULL
+    cdef const char* base_ptr
+    cdef const int8_t* arr_buf_ptr
+    cdef size_t i, bit_index
+
+    if n == 0:
+        return result
+
+    if arr.n_buffers >= 1 and bufs[0] != NULL and arr.null_count != 0:
+        null_bitmap = <const uint8_t*>bufs[0]
+
+    if arr.n_buffers < 2 or bufs[1] == NULL:
+        # All nulls
+        for i in range(n):
+            # SET_ITEM macro "steals" a reference to item
+            # so INCREF first
+            Py_INCREF(Py_None)
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, Py_None)
+        return result
+
+    base_ptr = <const char*>bufs[1] + (<size_t>sizeof(int8_t)) * <size_t>offset
+    arr_buf_ptr = <const int8_t*>base_ptr
+
+    cdef PyObject* element_ptr
+
+    if null_bitmap == NULL:
+        # No nulls
+        for i in range(n):
+            element_ptr = PyLong_FromLong(<long>arr_buf_ptr[i])
+            if element_ptr is NULL:
+                raise MemoryError(
+                    "Unable to create a python long long from a C long long"
+                )
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, element_ptr)
+        return result
+
+    # With nulls, need to check null bitmap
+    for i in range(n):
+        # Check the validity bitmap to see if element i is null.
+        # Each bit in null_bitmap marks whether a row is valid (1) or null (0).
+        # Ex: if bit_index = 5, then we look at byte = null_bitmap[0],
+        # and the 5th bit tells us if row 5 is valid.
+        bit_index = <size_t>(offset + <int64_t>i)
+        if ((null_bitmap[bit_index >> 3] >> (bit_index & 7)) & 1) == 0:
+            Py_INCREF(Py_None)
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, Py_None)
+        else:
+            element_ptr = PyLong_FromLong(<long>arr_buf_ptr[i])
+            if element_ptr is NULL:
+                raise MemoryError(
+                    "Unable to create a python long long from a C long long"
+                )
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, element_ptr)
+    return result
+
+cdef list _arrow_to_pylist_int16(ArrowArray* arr):
+    cdef size_t n = <size_t>arr.length
+    cdef PyObject* list_ = PyList_New(<Py_ssize_t>n)
+    if list_ is NULL:
+        raise MemoryError("Unable to create new python List")
+    cdef list result = <list>list_
+
+    cdef const void** bufs = arr.buffers
+    cdef int64_t offset = arr.offset
+    cdef const uint8_t* null_bitmap = NULL
+    cdef const char* base_ptr
+    cdef const int16_t* arr_buf_ptr
+    cdef size_t i, bit_index
+
+    if n == 0:
+        return result
+
+    if arr.n_buffers >= 1 and bufs[0] != NULL and arr.null_count != 0:
+        null_bitmap = <const uint8_t*>bufs[0]
+
+    if arr.n_buffers < 2 or bufs[1] == NULL:
+        # All nulls
+        for i in range(n):
+            # SET_ITEM macro "steals" a reference to item
+            # so INCREF first
+            Py_INCREF(Py_None)
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, Py_None)
+        return result
+
+    base_ptr = <const char*>bufs[1] + (<size_t>sizeof(int16_t)) * <size_t>offset
+    arr_buf_ptr = <const int16_t*>base_ptr
+
+    cdef PyObject* element_ptr
+
+    if null_bitmap == NULL:
+        # No nulls
+        for i in range(n):
+            element_ptr = PyLong_FromLong(<long>arr_buf_ptr[i])
+            if element_ptr is NULL:
+                raise MemoryError(
+                    "Unable to create a python long long from a C long long"
+                )
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, element_ptr)
+        return result
+
+    # With nulls, need to check null bitmap
+    for i in range(n):
+        # Check the validity bitmap to see if element i is null.
+        # Each bit in null_bitmap marks whether a row is valid (1) or null (0).
+        # Ex: if bit_index = 5, then we look at byte = null_bitmap[0],
+        # and the 5th bit tells us if row 5 is valid.
+        bit_index = <size_t>(offset + <int64_t>i)
+        if ((null_bitmap[bit_index >> 3] >> (bit_index & 7)) & 1) == 0:
+            Py_INCREF(Py_None)
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, Py_None)
+        else:
+            element_ptr = PyLong_FromLong(<long>arr_buf_ptr[i])
+            if element_ptr is NULL:
+                raise MemoryError(
+                    "Unable to create a python long long from a C long long"
+                )
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, element_ptr)
+    return result
+
+cdef list _arrow_to_pylist_int32(ArrowArray* arr):
+    cdef size_t n = <size_t>arr.length
+    cdef PyObject* list_ = PyList_New(<Py_ssize_t>n)
+    if list_ is NULL:
+        raise MemoryError("Unable to create new python List")
+    cdef list result = <list>list_
+
+    cdef const void** bufs = arr.buffers
+    cdef int64_t offset = arr.offset
+    cdef const uint8_t* null_bitmap = NULL
+    cdef const char* base_ptr
+    cdef const int32_t* arr_buf_ptr
+    cdef size_t i, bit_index
+
+    if n == 0:
+        return result
+
+    if arr.n_buffers >= 1 and bufs[0] != NULL and arr.null_count != 0:
+        null_bitmap = <const uint8_t*>bufs[0]
+
+    if arr.n_buffers < 2 or bufs[1] == NULL:
+        # All nulls
+        for i in range(n):
+            # SET_ITEM macro "steals" a reference to item
+            # so INCREF first
+            Py_INCREF(Py_None)
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, Py_None)
+        return result
+
+    base_ptr = <const char*>bufs[1] + (<size_t>sizeof(int32_t)) * <size_t>offset
+    arr_buf_ptr = <const int32_t*>base_ptr
+
+    cdef PyObject* element_ptr
+
+    if null_bitmap == NULL:
+        # No nulls
+        for i in range(n):
+            element_ptr = PyLong_FromLong(<long>arr_buf_ptr[i])
+            if element_ptr is NULL:
+                raise MemoryError(
+                    "Unable to create a python long from a C long"
+                )
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, element_ptr)
+        return result
+
+    # With nulls, need to check null bitmap
+    for i in range(n):
+        # Check the validity bitmap to see if element i is null.
+        # Each bit in null_bitmap marks whether a row is valid (1) or null (0).
+        # Ex: if bit_index = 5, then we look at byte = null_bitmap[0],
+        # and the 5th bit tells us if row 5 is valid.
+        bit_index = <size_t>(offset + <int64_t>i)
+        if ((null_bitmap[bit_index >> 3] >> (bit_index & 7)) & 1) == 0:
+            Py_INCREF(Py_None)
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, Py_None)
+        else:
+            element_ptr = PyLong_FromLong(<long>arr_buf_ptr[i])
+            if element_ptr is NULL:
+                raise MemoryError(
+                    "Unable to create a python long from a C long"
+                )
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, element_ptr)
+    return result
+
+cdef list _arrow_to_pylist_int64(ArrowArray* arr):
+    cdef size_t n = <size_t>arr.length
+    cdef PyObject* list_ = PyList_New(<Py_ssize_t>n)
+    if list_ is NULL:
+        raise MemoryError("Unable to create new python List")
+    cdef list result = <list>list_
+
+    cdef const void** bufs = arr.buffers
+    cdef int64_t offset = arr.offset
+    cdef const uint8_t* null_bitmap = NULL
+    cdef const char* base_ptr
+    cdef const int64_t* arr_buf_ptr
+    cdef size_t i, bit_index
+
+    if n == 0:
+        return result
+
+    if arr.n_buffers >= 1 and bufs[0] != NULL and arr.null_count != 0:
+        null_bitmap = <const uint8_t*>bufs[0]
+
+    if arr.n_buffers < 2 or bufs[1] == NULL:
+        # All nulls
+        for i in range(n):
+            # SET_ITEM macro "steals" a reference to item
+            # so INCREF first
+            Py_INCREF(Py_None)
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, Py_None)
+        return result
+
+    base_ptr = <const char*>bufs[1] + (<size_t>sizeof(int64_t)) * <size_t>offset
+    arr_buf_ptr = <const int64_t*>base_ptr
+
+    cdef PyObject* element_ptr
+
+    if null_bitmap == NULL:
+        # No nulls
+        for i in range(n):
+            element_ptr = PyLong_FromLongLong(<long long>arr_buf_ptr[i])
+            if element_ptr is NULL:
+                raise MemoryError(
+                    "Unable to create a python long long from a C long long"
+                )
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, element_ptr)
+        return result
+
+    # With nulls, need to check null bitmap
+    for i in range(n):
+        # Check the validity bitmap to see if element i is null.
+        # Each bit in null_bitmap marks whether a row is valid (1) or null (0).
+        # Ex: if bit_index = 5, then we look at byte = null_bitmap[0],
+        # and the 5th bit tells us if row 5 is valid.
+        bit_index = <size_t>(offset + <int64_t>i)
+        if ((null_bitmap[bit_index >> 3] >> (bit_index & 7)) & 1) == 0:
+            Py_INCREF(Py_None)
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, Py_None)
+        else:
+            element_ptr = PyLong_FromLongLong(<long long>arr_buf_ptr[i])
+            if element_ptr is NULL:
+                raise MemoryError(
+                    "Unable to create a python long long from a C long long"
+                )
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, element_ptr)
+    return result
+
+cdef list _arrow_to_pylist_uint8(ArrowArray* arr):
+    cdef size_t n = <size_t>arr.length
+    cdef PyObject* list_ = PyList_New(<Py_ssize_t>n)
+    if list_ is NULL:
+        raise MemoryError("Unable to create new python List")
+    cdef list result = <list>list_
+
+    cdef const void** bufs = arr.buffers
+    cdef int64_t offset = arr.offset
+    cdef const uint8_t* null_bitmap = NULL
+    cdef const char* base_ptr
+    cdef const uint8_t* arr_buf_ptr
+    cdef size_t i, bit_index
+
+    if n == 0:
+        return result
+
+    if arr.n_buffers >= 1 and bufs[0] != NULL and arr.null_count != 0:
+        null_bitmap = <const uint8_t*>bufs[0]
+
+    if arr.n_buffers < 2 or bufs[1] == NULL:
+        # All nulls
+        for i in range(n):
+            # SET_ITEM macro "steals" a reference to item
+            # so INCREF first
+            Py_INCREF(Py_None)
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, Py_None)
+        return result
+
+    base_ptr = <const char*>bufs[1] + (<size_t>sizeof(uint8_t)) * <size_t>offset
+    arr_buf_ptr = <const uint8_t*>base_ptr
+
+    cdef PyObject* element_ptr
+
+    if null_bitmap == NULL:
+        # No nulls
+        for i in range(n):
+            element_ptr = PyLong_FromUnsignedLong(<unsigned long>arr_buf_ptr[i])
+            if element_ptr is NULL:
+                raise MemoryError(
+                    "Unable to create a python long long from a C long long"
+                )
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, element_ptr)
+        return result
+
+    # With nulls, need to check null bitmap
+    for i in range(n):
+        # Check the validity bitmap to see if element i is null.
+        # Each bit in null_bitmap marks whether a row is valid (1) or null (0).
+        # Ex: if bit_index = 5, then we look at byte = null_bitmap[0],
+        # and the 5th bit tells us if row 5 is valid.
+        bit_index = <size_t>(offset + <int64_t>i)
+        if ((null_bitmap[bit_index >> 3] >> (bit_index & 7)) & 1) == 0:
+            Py_INCREF(Py_None)
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, Py_None)
+        else:
+            element_ptr = PyLong_FromUnsignedLong(<unsigned long>arr_buf_ptr[i])
+            if element_ptr is NULL:
+                raise MemoryError(
+                    "Unable to create a python long long from a C long long"
+                )
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, element_ptr)
+    return result
+
+cdef list _arrow_to_pylist_uint16(ArrowArray* arr):
+    cdef size_t n = <size_t>arr.length
+    cdef PyObject* list_ = PyList_New(<Py_ssize_t>n)
+    if list_ is NULL:
+        raise MemoryError("Unable to create new python List")
+    cdef list result = <list>list_
+
+    cdef const void** bufs = arr.buffers
+    cdef int64_t offset = arr.offset
+    cdef const uint8_t* null_bitmap = NULL
+    cdef const char* base_ptr
+    cdef const uint16_t* arr_buf_ptr
+    cdef size_t i, bit_index
+
+    if n == 0:
+        return result
+
+    if arr.n_buffers >= 1 and bufs[0] != NULL and arr.null_count != 0:
+        null_bitmap = <const uint8_t*>bufs[0]
+
+    if arr.n_buffers < 2 or bufs[1] == NULL:
+        # All nulls
+        for i in range(n):
+            # SET_ITEM macro "steals" a reference to item
+            # so INCREF first
+            Py_INCREF(Py_None)
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, Py_None)
+        return result
+
+    base_ptr = <const char*>bufs[1] + (<size_t>sizeof(uint16_t)) * <size_t>offset
+    arr_buf_ptr = <const uint16_t*>base_ptr
+
+    cdef PyObject* element_ptr
+
+    if null_bitmap == NULL:
+        # No nulls
+        for i in range(n):
+            element_ptr = PyLong_FromUnsignedLong(<unsigned long>arr_buf_ptr[i])
+            if element_ptr is NULL:
+                raise MemoryError(
+                    "Unable to create a python unsigned long from a C unsigned long"
+                )
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, element_ptr)
+        return result
+
+    # With nulls, need to check null bitmap
+    for i in range(n):
+        # Check the validity bitmap to see if element i is null.
+        # Each bit in null_bitmap marks whether a row is valid (1) or null (0).
+        # Ex: if bit_index = 5, then we look at byte = null_bitmap[0],
+        # and the 5th bit tells us if row 5 is valid.
+        bit_index = <size_t>(offset + <int64_t>i)
+        if ((null_bitmap[bit_index >> 3] >> (bit_index & 7)) & 1) == 0:
+            Py_INCREF(Py_None)
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, Py_None)
+        else:
+            element_ptr = PyLong_FromUnsignedLong(<unsigned long>arr_buf_ptr[i])
+            if element_ptr is NULL:
+                raise MemoryError(
+                    "Unable to create a python unsigned long from a C unsigned long"
+                )
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, element_ptr)
+    return result
+
+cdef list _arrow_to_pylist_uint32(ArrowArray* arr):
+    cdef size_t n = <size_t>arr.length
+    cdef PyObject* list_ = PyList_New(<Py_ssize_t>n)
+    if list_ is NULL:
+        raise MemoryError("Unable to create new python List")
+    cdef list result = <list>list_
+
+    cdef const void** bufs = arr.buffers
+    cdef int64_t offset = arr.offset
+    cdef const uint8_t* null_bitmap = NULL
+    cdef const char* base_ptr
+    cdef const uint32_t* arr_buf_ptr
+    cdef size_t i, bit_index
+
+    if n == 0:
+        return result
+
+    if arr.n_buffers >= 1 and bufs[0] != NULL and arr.null_count != 0:
+        null_bitmap = <const uint8_t*>bufs[0]
+
+    if arr.n_buffers < 2 or bufs[1] == NULL:
+        # All nulls
+        for i in range(n):
+            # SET_ITEM macro "steals" a reference to item
+            # so INCREF first
+            Py_INCREF(Py_None)
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, Py_None)
+        return result
+
+    base_ptr = <const char*>bufs[1] + (<size_t>sizeof(uint32_t)) * <size_t>offset
+    arr_buf_ptr = <const uint32_t*>base_ptr
+
+    cdef PyObject* element_ptr
+
+    if null_bitmap == NULL:
+        # No nulls
+        for i in range(n):
+            element_ptr = PyLong_FromUnsignedLong(<unsigned long>arr_buf_ptr[i])
+            if element_ptr is NULL:
+                raise MemoryError(
+                    "Unable to create a python ulong from a C ulong"
+                )
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, element_ptr)
+        return result
+
+    # With nulls, need to check null bitmap
+    for i in range(n):
+        # Check the validity bitmap to see if element i is null.
+        # Each bit in null_bitmap marks whether a row is valid (1) or null (0).
+        # Ex: if bit_index = 5, then we look at byte = null_bitmap[0],
+        # and the 5th bit tells us if row 5 is valid.
+        bit_index = <size_t>(offset + <int64_t>i)
+        if ((null_bitmap[bit_index >> 3] >> (bit_index & 7)) & 1) == 0:
+            Py_INCREF(Py_None)
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, Py_None)
+        else:
+            element_ptr = PyLong_FromUnsignedLong(<unsigned long>arr_buf_ptr[i])
+            if element_ptr is NULL:
+                raise MemoryError(
+                    "Unable to create a python ulong from a C ulong"
+                )
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, element_ptr)
+    return result
+
+cdef list _arrow_to_pylist_uint64(ArrowArray* arr):
+    cdef size_t n = <size_t>arr.length
+    cdef PyObject* list_ = PyList_New(<Py_ssize_t>n)
+    if list_ is NULL:
+        raise MemoryError("Unable to create new python List")
+    cdef list result = <list>list_
+
+    cdef const void** bufs = arr.buffers
+    cdef int64_t offset = arr.offset
+    cdef const uint8_t* null_bitmap = NULL
+    cdef const char* base_ptr
+    cdef const uint64_t* arr_buf_ptr
+    cdef size_t i, bit_index
+
+    if n == 0:
+        return result
+
+    if arr.n_buffers >= 1 and bufs[0] != NULL and arr.null_count != 0:
+        null_bitmap = <const uint8_t*>bufs[0]
+
+    if arr.n_buffers < 2 or bufs[1] == NULL:
+        # All nulls
+        for i in range(n):
+            # SET_ITEM macro "steals" a reference to item
+            # so INCREF first
+            Py_INCREF(Py_None)
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, Py_None)
+        return result
+
+    base_ptr = <const char*>bufs[1] + (<size_t>sizeof(uint64_t)) * <size_t>offset
+    arr_buf_ptr = <const uint64_t*>base_ptr
+
+    cdef PyObject* element_ptr
+
+    if null_bitmap == NULL:
+        # No nulls
+        for i in range(n):
+            element_ptr = PyLong_FromUnsignedLongLong(
+                <unsigned long long>arr_buf_ptr[i]
+            )
+            if element_ptr is NULL:
+                raise MemoryError(
+                    "Unable to create a python ulong long from a C ulong long"
+                )
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, element_ptr)
+        return result
+
+    # With nulls, need to check null bitmap
+    for i in range(n):
+        # Check the validity bitmap to see if element i is null.
+        # Each bit in null_bitmap marks whether a row is valid (1) or null (0).
+        # Ex: if bit_index = 5, then we look at byte = null_bitmap[0],
+        # and the 5th bit tells us if row 5 is valid.
+        bit_index = <size_t>(offset + <int64_t>i)
+        if ((null_bitmap[bit_index >> 3] >> (bit_index & 7)) & 1) == 0:
+            Py_INCREF(Py_None)
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, Py_None)
+        else:
+            element_ptr = PyLong_FromUnsignedLongLong(
+                <unsigned long long>arr_buf_ptr[i]
+            )
+            if element_ptr is NULL:
+                raise MemoryError(
+                    "Unable to create a python ulong long from a C ulong long"
+                )
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, element_ptr)
+    return result
+
+cdef list _arrow_to_pylist_float32(ArrowArray* arr):
+    cdef size_t n = <size_t>arr.length
+    cdef PyObject* list_ = PyList_New(<Py_ssize_t>n)
+    if list_ is NULL:
+        raise MemoryError("Unable to create new python List")
+    cdef list result = <list>list_
+
+    cdef const void** bufs = arr.buffers
+    cdef int64_t offset = arr.offset
+    cdef const uint8_t* null_bitmap = NULL
+    cdef const char* base_ptr
+    cdef const float* arr_buf_ptr
+    cdef size_t i, bit_index
+
+    if n == 0:
+        return result
+
+    if arr.n_buffers >= 1 and bufs[0] != NULL and arr.null_count != 0:
+        null_bitmap = <const uint8_t*>bufs[0]
+
+    if arr.n_buffers < 2 or bufs[1] == NULL:
+        # All nulls
+        for i in range(n):
+            # SET_ITEM macro "steals" a reference to item
+            # so INCREF first
+            Py_INCREF(Py_None)
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, Py_None)
+        return result
+
+    base_ptr = <const char*>bufs[1] + (<size_t>sizeof(float)) * <size_t>offset
+    arr_buf_ptr = <const float*>base_ptr
+
+    cdef PyObject* element_ptr
+
+    if null_bitmap == NULL:
+        # No nulls
+        for i in range(n):
+            element_ptr = PyFloat_FromDouble(<double>arr_buf_ptr[i])
+            if element_ptr is NULL:
+                raise MemoryError(
+                    "Unable to create a python double from a C double"
+                )
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, element_ptr)
+        return result
+
+    # With nulls, need to check null bitmap
+    for i in range(n):
+        # Check the validity bitmap to see if element i is null.
+        # Each bit in null_bitmap marks whether a row is valid (1) or null (0).
+        # Ex: if bit_index = 5, then we look at byte = null_bitmap[0],
+        # and the 5th bit tells us if row 5 is valid.
+        bit_index = <size_t>(offset + <int64_t>i)
+        if ((null_bitmap[bit_index >> 3] >> (bit_index & 7)) & 1) == 0:
+            Py_INCREF(Py_None)
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, Py_None)
+        else:
+            element_ptr = PyFloat_FromDouble(<double>arr_buf_ptr[i])
+            if element_ptr is NULL:
+                raise MemoryError(
+                    "Unable to create a python double from a C double"
+                )
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, element_ptr)
+    return result
+
+cdef list _arrow_to_pylist_float64(ArrowArray* arr):
+    cdef size_t n = <size_t>arr.length
+    cdef PyObject* list_ = PyList_New(<Py_ssize_t>n)
+    if list_ is NULL:
+        raise MemoryError("Unable to create new python List")
+    cdef list result = <list>list_
+
+    cdef const void** bufs = arr.buffers
+    cdef int64_t offset = arr.offset
+    cdef const uint8_t* null_bitmap = NULL
+    cdef const char* base_ptr
+    cdef const double* arr_buf_ptr
+    cdef size_t i, bit_index
+
+    if n == 0:
+        return result
+
+    if arr.n_buffers >= 1 and bufs[0] != NULL and arr.null_count != 0:
+        null_bitmap = <const uint8_t*>bufs[0]
+
+    if arr.n_buffers < 2 or bufs[1] == NULL:
+        # All nulls
+        for i in range(n):
+            # SET_ITEM macro "steals" a reference to item
+            # so INCREF first
+            Py_INCREF(Py_None)
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, Py_None)
+        return result
+
+    base_ptr = <const char*>bufs[1] + (<size_t>sizeof(double)) * <size_t>offset
+    arr_buf_ptr = <const double*>base_ptr
+
+    cdef PyObject* element_ptr
+
+    if null_bitmap == NULL:
+        # No nulls
+        for i in range(n):
+            element_ptr = PyFloat_FromDouble(arr_buf_ptr[i])
+            if element_ptr is NULL:
+                raise MemoryError(
+                    "Unable to create a python double from a C double"
+                )
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, element_ptr)
+        return result
+
+    # With nulls, need to check null bitmap
+    for i in range(n):
+        # Check the validity bitmap to see if element i is null.
+        # Each bit in null_bitmap marks whether a row is valid (1) or null (0).
+        # Ex: if bit_index = 5, then we look at byte = null_bitmap[0],
+        # and the 5th bit tells us if row 5 is valid.
+        bit_index = <size_t>(offset + <int64_t>i)
+        if ((null_bitmap[bit_index >> 3] >> (bit_index & 7)) & 1) == 0:
+            Py_INCREF(Py_None)
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, Py_None)
+        else:
+            element_ptr = PyFloat_FromDouble(arr_buf_ptr[i])
+            if element_ptr is NULL:
+                raise MemoryError(
+                    "Unable to create a python long long from a C long long"
+                )
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, element_ptr)
+    return result
+
+cdef list _arrow_to_pylist_string(ArrowArray* arr):
+    cdef size_t n = <size_t>arr.length
+    cdef PyObject* list_ = PyList_New(<Py_ssize_t>n)
+    if list_ is NULL:
+        raise MemoryError("Unable to create new python List")
+    cdef list result = <list>list_
+
+    #   buffers[0]: null bitmap (optional)
+    #   buffers[1]: offsets (int32_t)
+    #   buffers[2]: data (char*)
+    cdef const void** bufs = arr.buffers
+    cdef int64_t offset = arr.offset
+    cdef const uint8_t* null_bitmap = NULL
+    cdef const int32_t* offs = NULL
+    cdef const char* data = NULL
+    cdef size_t i, bit_index
+    cdef PyObject* element_ptr
+
+    if n == 0:
+        return result
+
+    if arr.n_buffers >= 1 and bufs[0] != NULL and arr.null_count != 0:
+        null_bitmap = <const uint8_t*>bufs[0]
+
+    # Need at least offsets and data buffers
+    if arr.n_buffers < 3 or bufs[1] == NULL or bufs[2] == NULL:
+        # All nulls
+        for i in range(n):
+            # SET_ITEM macro "steals" a reference to item
+            # so INCREF first
+            Py_INCREF(Py_None)
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, Py_None)
+        return result
+
+    offs = <const int32_t*>bufs[1]
+    data = <const char*>bufs[2]
+
+    # Advance offsets pointer by logical offset
+    offs = offs + <Py_ssize_t>offset
+
+    if null_bitmap == NULL:
+        # No nulls
+        for i in range(n):
+            element_ptr = PyUnicode_DecodeUTF8(
+                data + offs[i],
+                <Py_ssize_t>(offs[i + 1] - offs[i]),
+                NULL
+            )
+            if element_ptr is NULL:
+                raise MemoryError(
+                    "Unable to create a python long long from a C long long"
+                )
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, element_ptr)
+        return result
+
+    # With nulls, need to check null bitmap
+    for i in range(n):
+        # Check the validity bitmap to see if element i is null.
+        # Each bit in null_bitmap marks whether a row is valid (1) or null (0).
+        # Ex: if bit_index = 5, then we look at byte = null_bitmap[0],
+        # and the 5th bit tells us if row 5 is valid.
+        bit_index = <size_t>(offset + <int64_t>i)
+        if ((null_bitmap[bit_index >> 3] >> (bit_index & 7)) & 1) == 0:
+            Py_INCREF(Py_None)
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, Py_None)
+        else:
+            element_ptr = PyUnicode_DecodeUTF8(
+                data + offs[i],
+                <Py_ssize_t>(offs[i + 1] - offs[i]),
+                NULL
+            )
+            if element_ptr is NULL:
+                raise MemoryError(
+                    "Unable to create a python long long from a C long long"
+                )
+            PyList_SET_ITEM(list_, <Py_ssize_t>i, element_ptr)
+    return result
+
+cdef list _arrow_to_pylist(type_id dtype, ArrowArray* arr):
+    if dtype == type_id.BOOL8:
+        return _arrow_to_pylist_bool8(arr)
+    if dtype == type_id.INT8:
+        return _arrow_to_pylist_int8(arr)
+    if dtype == type_id.INT16:
+        return _arrow_to_pylist_int16(arr)
+    if dtype == type_id.INT32:
+        return _arrow_to_pylist_int32(arr)
+    if dtype == type_id.INT64:
+        return _arrow_to_pylist_int64(arr)
+    if dtype == type_id.UINT8:
+        return _arrow_to_pylist_uint8(arr)
+    if dtype == type_id.UINT16:
+        return _arrow_to_pylist_uint16(arr)
+    if dtype == type_id.UINT32:
+        return _arrow_to_pylist_uint32(arr)
+    if dtype == type_id.UINT64:
+        return _arrow_to_pylist_uint64(arr)
+    if dtype == type_id.FLOAT32:
+        return _arrow_to_pylist_float32(arr)
+    if dtype == type_id.FLOAT64:
+        return _arrow_to_pylist_float64(arr)
+    if dtype == type_id.STRING:
+        return _arrow_to_pylist_string(arr)
+    raise NotImplementedError(f"Column with {dtype=} not supported")

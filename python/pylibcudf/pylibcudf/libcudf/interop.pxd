@@ -1,5 +1,5 @@
 # Copyright (c) 2020-2025, NVIDIA CORPORATION.
-from libc.stdint cimport int32_t
+from libc.stdint cimport int32_t, int64_t
 from libcpp.memory cimport shared_ptr, unique_ptr
 from libcpp.string cimport string
 from libcpp.optional cimport optional
@@ -21,15 +21,34 @@ cdef extern from "dlpack/dlpack.h" nogil:
 
 # The Arrow structs are not namespaced.
 cdef extern from "cudf/interop.hpp" nogil:
+    # https://arrow.apache.org/docs/format/CDataInterface.html#structure-definitions
     cdef struct ArrowSchema:
+        const char* format
+        const char* name
+        const char* metadata
+        int64_t flags
+        int64_t n_children
+        ArrowSchema** children
+        ArrowSchema* dictionary
         void (*release)(ArrowSchema*) noexcept
+        void* private_data
 
     cdef struct ArrowArray:
+        int64_t length
+        int64_t null_count
+        int64_t offset
+        int64_t n_buffers
+        int64_t n_children
+        const void** buffers
+        ArrowArray** children
+        ArrowArray* dictionary
         void (*release)(ArrowArray*) noexcept
+        void* private_data
 
     cdef struct ArrowArrayStream:
         void (*release)(ArrowArrayStream*) noexcept
 
+    # https://arrow.apache.org/docs/format/CDeviceDataInterface.html#structure-definitions
     cdef struct ArrowDeviceArray:
         ArrowArray array
 
@@ -91,8 +110,60 @@ cdef extern from *:
     # support other data sources (e.g. cupy), so we must use the view-based
     # C++ APIs and handle ownership in Python.
     """
-    #include <nanoarrow/nanoarrow.h>
-    #include <nanoarrow/nanoarrow_device.h>
+    #include <cudf/interop.hpp>
+
+    struct ArrowSchema {
+      const char*  format;
+      const char*  name;
+      const char*  metadata;
+      int64_t      flags;
+      int64_t      n_children;
+      ArrowSchema** children;
+      ArrowSchema*  dictionary;
+      void (*release)(ArrowSchema*);
+      void*        private_data;
+    };
+
+    struct ArrowArray {
+      int64_t      length;
+      int64_t      null_count;
+      int64_t      offset;
+      int64_t      n_buffers;
+      int64_t      n_children;
+      const void** buffers;
+      ArrowArray** children;
+      ArrowArray*  dictionary;
+      void (*release)(ArrowArray*);
+      void*        private_data;
+    };
+
+    struct ArrowDeviceArray {
+      ArrowArray   array;
+      int64_t      device_id;
+      int32_t      device_type;
+      void*        sync_event;
+      void       (*release)(ArrowDeviceArray*);
+      void*        reserved[3];
+    };
+
+    inline void ArrowArrayMove(ArrowArray* src, ArrowArray* dst) {
+      if (dst && dst->release) { dst->release(dst); }
+      std::memcpy(dst, src, sizeof(ArrowArray));
+      src->release = nullptr;
+      src->private_data = nullptr;
+      src->buffers = nullptr;
+      src->children = nullptr;
+      src->dictionary = nullptr;
+    }
+
+    inline void ArrowSchemaMove(ArrowSchema* src, ArrowSchema* dst) {
+      if (dst && dst->release) { dst->release(dst); }
+      std::memcpy(dst, src, sizeof(ArrowSchema));
+      src->release = nullptr;
+      src->private_data = nullptr;
+      src->children = nullptr;
+      src->dictionary = nullptr;
+    }
 
     ArrowSchema* to_arrow_schema_raw(
       cudf::table_view const& input,

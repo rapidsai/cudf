@@ -219,23 +219,32 @@ def test_from_nested_list_of_large_strings(dummy_large_string_type):
 
 
 @pytest.mark.parametrize(
-    "expect",
+    "expect, dtype",
     [
-        [1, 2, 3],
-        [1.23, 4.56, 7.89],
-        [True, False, True],
-        ["foo", "bar", "baz"],
+        ([-1, 2, 3], plc.DataType(plc.TypeId.INT8)),
+        ([-1, 2, 3], plc.DataType(plc.TypeId.INT16)),
+        ([-1, 2, 3], plc.DataType(plc.TypeId.INT32)),
+        ([-1, 2, 3], plc.DataType(plc.TypeId.INT64)),
+        ([1, 2, 3], plc.DataType(plc.TypeId.UINT8)),
+        ([1, 2, 3], plc.DataType(plc.TypeId.UINT16)),
+        ([1, 2, 3], plc.DataType(plc.TypeId.UINT32)),
+        ([1, 2, 3], plc.DataType(plc.TypeId.UINT64)),
+        ([1.25, 4.5, 7.75], plc.DataType(plc.TypeId.FLOAT32)),
+        ([1.25, 4.5, 7.75], plc.DataType(plc.TypeId.FLOAT64)),
+        ([True, False, True], plc.DataType(plc.TypeId.BOOL8)),
+        (["foo", "bar", "baz"], plc.DataType(plc.TypeId.STRING)),
     ],
 )
-def test_to_pylist(expect):
-    got = plc.Column.from_iterable_of_py(expect).to_pylist()
-    assert expect == got
+def test_to_pylist(expect, dtype):
+    col = plc.Column.from_iterable_of_py(expect, dtype=dtype)
+    got = col.to_pylist()
+    assert got == expect
 
 
 def test_to_pylist_unsupported():
     with pytest.raises(
         NotImplementedError,
-        match="Only fixed-width and string columns are supported",
+        match="Column with dtype",
     ):
         plc.Column.from_iterable_of_py(
             [[1, 2], [3, 4]], dtype=plc.DataType(plc.TypeId.INT32)
