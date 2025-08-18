@@ -110,8 +110,6 @@ cdef extern from *:
     # support other data sources (e.g. cupy), so we must use the view-based
     # C++ APIs and handle ownership in Python.
     """
-    #include <cudf/interop.hpp>
-
     struct ArrowSchema {
       const char*  format;
       const char*  name;

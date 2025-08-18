@@ -63,19 +63,11 @@ rapids_cython_create_modules(
 )
 
 include(${rapids-cmake-dir}/export/find_package_root.cmake)
-include(../../../cpp/cmake/thirdparty/get_dlpack.cmake)
 include(../../../cpp/cmake/thirdparty/get_nanoarrow.cmake)
 
 foreach(source interop _interop_helpers table column)
   target_include_directories(pylibcudf_${source} PUBLIC "$<BUILD_INTERFACE:${DLPACK_INCLUDE_DIR}>")
   target_link_libraries(pylibcudf_${source} PUBLIC nanoarrow)
-endforeach()
-
-foreach(src ${cython_sources})
-  get_filename_component(name "${src}" NAME_WE)
-  if(TARGET pylibcudf_${name})
-    target_include_directories(pylibcudf_${name} PUBLIC "$<BUILD_INTERFACE:${DLPACK_INCLUDE_DIR}>")
-  endif()
 endforeach()
 
 add_subdirectory(libcudf)
