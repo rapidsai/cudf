@@ -452,6 +452,98 @@ def test_as_column_buffer(box, data):
     )
 
 
+def test_can_cast_safely_same_kind():
+    # 'i' -> 'i'
+    data = cudf.Series([1, 2, 3], dtype="int32")._column
+    to_dtype = np.dtype("int64")
+
+    assert data.can_cast_safely(to_dtype)
+
+    data = cudf.Series([1, 2, 3], dtype="int64")._column
+    to_dtype = np.dtype("int32")
+
+    assert data.can_cast_safely(to_dtype)
+
+    data = cudf.Series([1, 2, 2**31], dtype="int64")._column
+    assert not data.can_cast_safely(to_dtype)
+
+    # 'u' -> 'u'
+    data = cudf.Series([1, 2, 3], dtype="uint32")._column
+    to_dtype = np.dtype("uint64")
+
+    assert data.can_cast_safely(to_dtype)
+
+    data = cudf.Series([1, 2, 3], dtype="uint64")._column
+    to_dtype = np.dtype("uint32")
+
+    assert data.can_cast_safely(to_dtype)
+
+    data = cudf.Series([1, 2, 2**33], dtype="uint64")._column
+    assert not data.can_cast_safely(to_dtype)
+
+    # 'f' -> 'f'
+    data = cudf.Series([np.inf, 1.0], dtype="float64")._column
+    to_dtype = np.dtype("float32")
+    assert data.can_cast_safely(to_dtype)
+
+    data = cudf.Series(
+        [float(np.finfo("float32").max) * 2, 1.0], dtype="float64"
+    )._column
+    to_dtype = np.dtype("float32")
+    assert not data.can_cast_safely(to_dtype)
+
+
+def test_can_cast_safely_mixed_kind():
+    data = cudf.Series([1, 2, 3], dtype="int32")._column
+    to_dtype = np.dtype("float32")
+    assert data.can_cast_safely(to_dtype)
+
+    # too big to fit into f32 exactly
+    data = cudf.Series([1, 2, 2**24 + 1], dtype="int32")._column
+    assert not data.can_cast_safely(to_dtype)
+
+    data = cudf.Series([1, 2, 3], dtype="uint32")._column
+    to_dtype = np.dtype("float32")
+    assert data.can_cast_safely(to_dtype)
+
+    # too big to fit into f32 exactly
+    data = cudf.Series([1, 2, 2**24 + 1], dtype="uint32")._column
+    assert not data.can_cast_safely(to_dtype)
+
+    to_dtype = np.dtype("float64")
+    assert data.can_cast_safely(to_dtype)
+
+    data = cudf.Series([1.0, 2.0, 3.0], dtype="float32")._column
+    to_dtype = np.dtype("int32")
+    assert data.can_cast_safely(to_dtype)
+
+    # not integer float
+    data = cudf.Series([1.0, 2.0, 3.5], dtype="float32")._column
+    assert not data.can_cast_safely(to_dtype)
+
+    data = cudf.Series([10.0, 11.0, 2000.0], dtype="float64")._column
+    assert data.can_cast_safely(to_dtype)
+
+    # float out of int range
+    data = cudf.Series([1.0, 2.0, 1.0 * (2**31)], dtype="float32")._column
+    assert not data.can_cast_safely(to_dtype)
+
+    # negative signed integers casting to unsigned integers
+    data = cudf.Series([-1, 0, 1], dtype="int32")._column
+    to_dtype = np.dtype("uint32")
+    assert not data.can_cast_safely(to_dtype)
+
+
+def test_can_cast_safely_has_nulls():
+    data = cudf.Series([1, 2, 3, None], dtype="float32")._column
+    to_dtype = np.dtype("int64")
+
+    assert data.can_cast_safely(to_dtype)
+
+    data = cudf.Series([1, 2, 3.1, None], dtype="float32")._column
+    assert not data.can_cast_safely(to_dtype)
+
+
 @pytest.mark.parametrize(
     "data,pyarrow_kwargs,cudf_kwargs",
     [
