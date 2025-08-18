@@ -788,19 +788,15 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask
 
   // Iterator for row mask validity
   auto is_row_valid = cudf::detail::make_counting_transform_iterator(
-    0,
-    [is_nullable      = row_mask.nullable(),
-     nullmask         = host_row_mask_validity.data(),
-     first_bit_offset = first_bit_offset](auto bit_index) {
+    first_bit_offset,
+    [is_nullable = row_mask.nullable(), nullmask = host_row_mask_validity.data()](auto bit_index) {
       // Always valid if row mask is not nullable or check if the corresponding bit is set
-      return not is_nullable or bit_is_set(nullmask, first_bit_offset + bit_index);
+      return not is_nullable or bit_is_set(nullmask, bit_index);
     });
 
   // Host row mask data
   auto const is_row_required = cudf::detail::make_host_vector(
-    device_span<uint8_t const>(row_mask.data<uint8_t>() + row_mask_offset,
-                               row_mask.size() - row_mask_offset),
-    stream);
+    device_span<uint8_t const>(row_mask.data<uint8_t>() + row_mask_offset, total_rows), stream);
 
   // For all columns, look up which pages contain at least one required row. i.e.
   // !validity_it[row_idx] or is_row_required[row_idx] satisfies, and add its byte range to the
@@ -819,7 +815,7 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask
           // For all rows
           for (auto row_idx = 0; row_idx < total_rows; ++row_idx) {
             // If this row is required or invalid, add its page index to the output list.
-            if (not is_row_valid[row_idx + row_mask_offset] or is_row_required[row_idx]) {
+            if (not is_row_valid[row_idx] or is_row_required[row_idx]) {
               // binary search to find the page index this row_idx belongs to and set the
               // page index to true page_indices
               auto const& offsets = page_row_offsets[col_idx];
