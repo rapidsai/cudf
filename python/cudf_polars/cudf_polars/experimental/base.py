@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from collections.abc import Generator, Iterator
 
     from cudf_polars.dsl.expr import NamedExpr
+    from cudf_polars.dsl.ir import IR
     from cudf_polars.dsl.nodebase import Node
 
 
@@ -124,7 +125,9 @@ class ColumnStats:
     ----------
     name
         Column name.
-    source
+    children
+        Child ColumnStats objects.
+    source_info
         Datasource information.
     source_name
         Source-column name.
@@ -132,9 +135,10 @@ class ColumnStats:
         Unique-value statistics.
     """
 
-    __slots__ = ("name", "source_info", "source_name", "unique_stats")
+    __slots__ = ("children", "name", "source_info", "source_name", "unique_stats")
 
     name: str
+    children: tuple[ColumnStats, ...]
     source_info: DataSourceInfo
     source_name: str
     unique_stats: UniqueStats
@@ -143,11 +147,54 @@ class ColumnStats:
         self,
         name: str,
         *,
+        children: tuple[ColumnStats, ...] = (),
         source_info: DataSourceInfo | None = None,
         source_name: str | None = None,
         unique_stats: UniqueStats | None = None,
     ) -> None:
         self.name = name
+        self.children = children
         self.source_info = source_info or DataSourceInfo()
         self.source_name = source_name or name
         self.unique_stats = unique_stats or UniqueStats()
+
+    def new_parent(
+        self,
+        *,
+        name: str | None = None,
+    ) -> ColumnStats:
+        """
+        Initialize a new parent ColumnStats object.
+
+        Parameters
+        ----------
+        name
+            The new column name.
+
+        Returns
+        -------
+        A new ColumnStats object.
+
+        Notes
+        -----
+        This API preserves the original DataSourceInfo reference.
+        """
+        return ColumnStats(
+            name=name or self.name,
+            children=(self,),
+            # Want to reference the same DataSourceInfo
+            source_info=self.source_info,
+            source_name=self.source_name,
+            # Want fresh UniqueStats so we can mutate in place
+            unique_stats=UniqueStats(),
+        )
+
+
+class StatsCollector:
+    """Column statistics collector."""
+
+    __slots__ = ("column_stats", "row_count")
+
+    def __init__(self) -> None:
+        self.row_count: dict[IR, ColumnStat[int]] = {}
+        self.column_stats: dict[IR, dict[str, ColumnStats]] = {}
