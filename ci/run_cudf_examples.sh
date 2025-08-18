@@ -9,14 +9,19 @@ trap "EXITCODE=1" ERR
 # Support customizing the examples' install location
 cd "${INSTALL_PREFIX:-${CONDA_PREFIX:-/usr}}/bin/examples/libcudf/" || exit
 
-compute-sanitizer --tool memcheck basic/basic_example
+cd basic || exit
+compute-sanitizer --tool memcheck basic_example
+cd ..
 
-compute-sanitizer --tool memcheck nested_types/deduplication
+cd nested_types || exit
+compute-sanitizer --tool memcheck deduplication
+cd ..
 
-compute-sanitizer --tool memcheck strings/custom_optimized strings/names.csv
-compute-sanitizer --tool memcheck strings/custom_prealloc strings/names.csv
-compute-sanitizer --tool memcheck strings/custom_with_malloc strings/names.csv
-
+cd strings || exit
+compute-sanitizer --tool memcheck custom_optimized names.csv
+compute-sanitizer --tool memcheck custom_prealloc names.csv
+compute-sanitizer --tool memcheck custom_with_malloc names.csv
+cd ..
 
 cd string_transformers || exit
 compute-sanitizer --tool memcheck compute_checksum_jit info.csv output.csv
