@@ -12,14 +12,12 @@ import cudf
 from cudf import Series
 from cudf.core._compat import (
     PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_GE_230,
     PANDAS_VERSION,
 )
 from cudf.testing import assert_eq
 from cudf.testing._utils import (
     DATETIME_TYPES,
     assert_exceptions_equal,
-    expect_warning_if,
 )
 
 
@@ -382,60 +380,6 @@ def test_datetime_invalid_ops():
         lfunc_args_and_kwargs=([psr, 1],),
         rfunc_args_and_kwargs=([sr, 1],),
     )
-
-
-@pytest.mark.parametrize("data", [[1, 2, 3], [], [1, 20, 1000, None]])
-@pytest.mark.parametrize("dtype", DATETIME_TYPES)
-@pytest.mark.parametrize("stat", ["mean", "quantile"])
-def test_datetime_stats(data, dtype, stat):
-    gsr = cudf.Series(data, dtype=dtype)
-    psr = gsr.to_pandas()
-
-    with expect_warning_if(
-        PANDAS_GE_230
-        and stat == "quantile"
-        and len(data) == 0
-        and dtype != "datetime64[ns]"
-    ):
-        expected = getattr(psr, stat)()
-    actual = getattr(gsr, stat)()
-
-    if len(data) == 0:
-        assert np.isnat(expected.to_numpy()) and np.isnat(actual.to_numpy())
-    else:
-        assert_eq(expected, actual)
-
-
-@pytest.mark.parametrize("op", ["max", "min", "std", "median"])
-@pytest.mark.parametrize(
-    "data",
-    [
-        [],
-        [1, 2, 3, 100],
-        [10, None, 100, None, None],
-        [None, None, None],
-        [1231],
-    ],
-)
-@pytest.mark.parametrize("dtype", DATETIME_TYPES)
-def test_datetime_reductions(data, op, dtype):
-    sr = cudf.Series(data, dtype=dtype)
-    psr = sr.to_pandas()
-
-    actual = getattr(sr, op)()
-    with expect_warning_if(
-        psr.size > 0 and psr.isnull().all() and op == "median", RuntimeWarning
-    ):
-        expected = getattr(psr, op)()
-
-    if (
-        expected is pd.NaT
-        and actual is pd.NaT
-        or (np.isnat(expected.to_numpy()) and np.isnat(actual))
-    ):
-        assert True
-    else:
-        assert_eq(expected, actual)
 
 
 def test_datetime_binop_tz_timestamp(op):

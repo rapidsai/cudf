@@ -15,12 +15,11 @@
  */
 #pragma once
 
-#include "jit/span.cuh"
-
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
 
+#include <jit/span.cuh>
 #include <jit_preprocessed_files/transform/jit/kernel.cu.jit.hpp>
 
 namespace cudf {
