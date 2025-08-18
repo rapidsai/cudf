@@ -69,6 +69,30 @@ def str_host_view(list_of_str, to_dtype):
     )
 
 
+def test_column_set_equal_length_object_by_mask():
+    # Series.__setitem__ might bypass some of the cases
+    # handled in column.__setitem__ so this test is needed
+
+    data = cudf.Series([0, 0, 1, 1, 1])._column
+    replace_data = cudf.Series([100, 200, 300, 400, 500])._column
+    bool_col = cudf.Series([True, True, True, True, True])._column
+
+    data[bool_col] = replace_data
+    assert_eq(
+        cudf.Series._from_column(data),
+        cudf.Series._from_column(replace_data),
+    )
+
+    data = cudf.Series([0, 0, 1, 1, 1])._column
+    bool_col = cudf.Series([True, False, True, False, True])._column
+    data[bool_col] = replace_data
+
+    assert_eq(
+        cudf.Series._from_column(data),
+        cudf.Series([100, 0, 300, 1, 500]),
+    )
+
+
 @pytest.mark.parametrize("offset", [0, 1, 15])
 @pytest.mark.parametrize("size", [50, 10, 0])
 def test_column_offset_and_size(pandas_input, offset, size):
