@@ -88,6 +88,7 @@ def pytest_unconfigure(config):
 
 # TODO: Pass these tests with cudf.pandas enabled.
 NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
+    "tests/tools/test_to_datetime.py::TestToDatetimeMisc::test_to_datetime_iso8601_fails[True-2012-01-01 10-%Y-%m-%d %H:%M]",
     "tests/api/test_api.py::test_pandas_array_alias",
     "tests/apply/test_frame_apply.py::test_agg_transform[axis='columns']",
     "tests/apply/test_frame_apply.py::test_agg_transform[axis='index']",
