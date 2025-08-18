@@ -8,6 +8,7 @@ import pytest
 import polars as pl
 
 from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.utils.config import ConfigOptions
 
 
 @pytest.mark.parametrize("rapidsmpf_spill", [False, True])
@@ -68,3 +69,71 @@ def test_join_rapidsmpf(
     q = left.join(right, on="y", how="inner")
 
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+@pytest.mark.parametrize("max_rows_per_partition", [1, 5])
+def test_join_rapidsmpf_single(max_rows_per_partition: int) -> None:
+    # check that we have a rapidsmpf cluster running
+    pytest.importorskip("rapidsmpf")
+
+    # Setup the GPUEngine config
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "max_rows_per_partition": max_rows_per_partition,
+            "broadcast_join_limit": 2,
+            "shuffle_method": "rapidsmpf",
+            "scheduler": "synchronous",
+        },
+    )
+
+    left = pl.LazyFrame(
+        {
+            "x": range(15),
+            "y": [1, 2, 3] * 5,
+            "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 3,
+        }
+    )
+    right = pl.LazyFrame(
+        {
+            "xx": range(6),
+            "y": [2, 4, 3] * 2,
+            "zz": [1, 2] * 3,
+        }
+    )
+    q = left.join(right, on="y", how="inner")
+
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+def test_join_rapidsmpf_single_private_config() -> None:
+    # The user may not specify "rapidsmpf-single" directly
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "shuffle_method": "rapidsmpf-single",
+            "scheduler": "synchronous",
+        },
+    )
+    with pytest.raises(ValueError, match="not a supported shuffle method"):
+        ConfigOptions.from_polars_engine(engine)
+
+
+def test_rapidsmpf_spill_synchronous_unsupported() -> None:
+    # check that we have a rapidsmpf cluster running
+    pytest.importorskip("rapidsmpf")
+
+    # rapidsmpf_spill=True is not yet supported with synchronous scheduler.
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "shuffle_method": "rapidsmpf",
+            "scheduler": "synchronous",
+            "rapidsmpf_spill": True,
+        },
+    )
+    with pytest.raises(ValueError, match="rapidsmpf_spill.*not supported.*synchronous"):
+        ConfigOptions.from_polars_engine(engine)
