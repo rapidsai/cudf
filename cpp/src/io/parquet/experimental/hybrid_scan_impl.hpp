@@ -65,6 +65,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    * Parquet files subject to highly selective filters
    *
    * @param parquet_metadata Pre-populated Parquet file metadata
+   * @param options Parquet reader options
    */
   explicit hybrid_scan_reader_impl(FileMetaData const& parquet_metadata,
                                    parquet_reader_options const& options);
