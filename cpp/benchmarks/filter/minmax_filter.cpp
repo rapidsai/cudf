@@ -29,13 +29,13 @@
 #include <nvbench/nvbench.cuh>
 #include <nvbench/types.cuh>
 
+#include <concepts>
 #include <vector>
 
 template <typename T>
 struct benchmark_data;
 
-template <typename T>
-  requires(std::is_floating_point_v<T>)
+template <std::floating_point T>
 struct benchmark_data<T> {
   static T dist_min() { return 0; }
 
@@ -46,8 +46,7 @@ struct benchmark_data<T> {
   static T filter_max() { return 0.07; }
 };
 
-template <typename T>
-  requires(std::is_integral_v<T>)
+template <std::integral T>
 struct benchmark_data<T> {
   static T dist_min() { return -128; }
 
@@ -67,7 +66,7 @@ engine_type engine_from_string(std::string_view str)
   } else if (str == "jit") {
     return engine_type::JIT;
   } else {
-    CUDF_FAIL("unrecognized engine enum: " + str);
+    CUDF_FAIL("unrecognized engine enum: " + std::string(str));
   }
 }
 
@@ -78,7 +77,7 @@ bool boolean_from_string(std::string_view str)
   } else if (str == "false") {
     return false;
   } else {
-    CUDF_FAIL("unrecognized boolean value: " + str);
+    CUDF_FAIL("unrecognized boolean value: " + std::string(str));
   }
 }
 
@@ -151,7 +150,7 @@ static void BM_filter_min_max(nvbench::state& state)
         auto result = cudf::filter(
           filter_inputs, udf, false, std::nullopt, std::vector{true, false, false}, stream, mr);
       } break;
-      default: break;
+      default: CUDF_UNREACHABLE();
     }
   });
 }
