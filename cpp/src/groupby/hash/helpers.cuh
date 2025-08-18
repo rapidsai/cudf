@@ -59,19 +59,27 @@ using row_hash_t =
 /// Adapter to cudf row hasher with caching support.
 class row_hasher_with_cache_t {
   row_hash_t hasher;
-  hash_value_type const* values;
+  hash_value_type* values;
 
  public:
-  row_hasher_with_cache_t(row_hash_t const& hasher,
-                          hash_value_type const* values = nullptr) noexcept
+  row_hasher_with_cache_t(row_hash_t const& hasher, hash_value_type* values = nullptr) noexcept
     : hasher(hasher), values(values)
   {
   }
 
   __device__ hash_value_type operator()(size_type const idx) const noexcept
   {
-    if (values) { return values[idx]; }
-    return hasher(idx);
+    if (!values) { return hasher(idx); }
+
+    // We do not have a sentinel value reserved for uninitialized value thus have to use zero here.
+    // There is still situations when the hash value may have been computed before to a zero value,
+    // but the chance of having zero hash value is very rare in reality.
+    auto val = values[idx];
+    if (val == hash_value_type{0}) {
+      val         = hasher(idx);
+      values[idx] = val;
+    }
+    return val;
   }
 };
 
