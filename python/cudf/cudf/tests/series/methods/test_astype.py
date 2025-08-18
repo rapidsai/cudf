@@ -1,4 +1,5 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
+from decimal import Decimal
 
 import cupy as cp
 import numpy as np
@@ -497,3 +498,170 @@ def test_datetime_infer_format(data, timezone, datetime_types_as_str):
             with pytest.raises(NotImplementedError):
                 # pandas doesn't allow parsing "Z" to naive type
                 sr.astype(datetime_types_as_str)
+
+
+def test_string_astype(all_supported_types_as_str):
+    if all_supported_types_as_str.startswith(
+        "int"
+    ) or all_supported_types_as_str.startswith("uint"):
+        data = ["1", "2", "3", "4", "5"]
+    elif all_supported_types_as_str.startswith("float"):
+        data = [
+            "1.0",
+            "2.0",
+            "3.0",
+            "4.0",
+            None,
+            "5.0",
+            "nan",
+            "-INF",
+            "NaN",
+            "inF",
+            "NAn",
+        ]
+    elif all_supported_types_as_str.startswith("bool"):
+        data = ["True", "False", "True", "False", "False"]
+    elif all_supported_types_as_str.startswith("datetime64"):
+        data = [
+            "2019-06-04T00:00:00",
+            "2019-06-04T12:12:12",
+            "2019-06-03T00:00:00",
+            "2019-05-04T00:00:00",
+            "2018-06-04T00:00:00",
+            "1922-07-21T01:02:03",
+        ]
+    elif all_supported_types_as_str.startswith("timedelta64"):
+        data = [
+            "1 days 00:00:00",
+            "2 days 00:00:00",
+            "3 days 00:00:00",
+        ]
+    elif all_supported_types_as_str in {"str", "category"}:
+        data = ["ab", "cd", "ef", "gh", "ij"]
+    ps = pd.Series(data)
+    gs = cudf.Series(data)
+
+    expect = ps.astype(all_supported_types_as_str)
+    got = gs.astype(all_supported_types_as_str)
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data, scale, precision",
+    [
+        (["1.11", "2.22", "3.33"], 2, 3),
+        (["111", "222", "33"], 0, 3),
+        (["111000", "22000", "3000"], -3, 3),
+        ([None, None, None], 0, 5),
+        ([None, "-2345", None], 0, 5),
+        ([], 0, 5),
+    ],
+)
+@pytest.mark.parametrize(
+    "decimal_dtype",
+    [cudf.Decimal128Dtype, cudf.Decimal64Dtype, cudf.Decimal32Dtype],
+)
+def test_string_to_decimal(data, scale, precision, decimal_dtype):
+    gs = cudf.Series(data, dtype="str")
+    fp = gs.astype(decimal_dtype(scale=scale, precision=precision))
+    got = fp.astype("str")
+    assert_eq(gs, got)
+
+
+def test_string_empty_to_decimal():
+    gs = cudf.Series(["", "-85", ""], dtype="str")
+    got = gs.astype(cudf.Decimal64Dtype(scale=0, precision=5))
+    expected = cudf.Series(
+        [0, -85, 0],
+        dtype=cudf.Decimal64Dtype(scale=0, precision=5),
+    )
+    assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "data, scale, precision",
+    [
+        (["1.23", "-2.34", "3.45"], 2, 3),
+        (["123", "-234", "345"], 0, 3),
+        (["12300", "-400", "5000.0"], -2, 5),
+        ([None, None, None], 0, 5),
+        ([None, "-100", None], 0, 5),
+        ([], 0, 5),
+    ],
+)
+@pytest.mark.parametrize(
+    "decimal_dtype",
+    [cudf.Decimal128Dtype, cudf.Decimal32Dtype, cudf.Decimal64Dtype],
+)
+def test_string_from_decimal(data, scale, precision, decimal_dtype):
+    decimal_data = []
+    for d in data:
+        if d is None:
+            decimal_data.append(None)
+        else:
+            decimal_data.append(Decimal(d))
+    fp = cudf.Series(
+        decimal_data,
+        dtype=decimal_dtype(scale=scale, precision=precision),
+    )
+    gs = fp.astype("str")
+    got = gs.astype(decimal_dtype(scale=scale, precision=precision))
+    assert_eq(fp, got)
+
+
+def test_string_empty_astype(all_supported_types_as_str):
+    data = []
+    ps = pd.Series(data, dtype="str")
+    gs = cudf.Series(data, dtype="str")
+
+    expect = ps.astype(all_supported_types_as_str)
+    got = gs.astype(all_supported_types_as_str)
+
+    assert_eq(expect, got)
+
+
+def test_string_numeric_astype(numeric_and_temporal_types_as_str):
+    if numeric_and_temporal_types_as_str.startswith("timedelta64"):
+        pytest.skip(
+            f"Test not applicable for {numeric_and_temporal_types_as_str}"
+        )
+    if numeric_and_temporal_types_as_str.startswith("bool"):
+        data = [1, 0, 1, 0, 1]
+    elif numeric_and_temporal_types_as_str.startswith(
+        "int"
+    ) or numeric_and_temporal_types_as_str.startswith("uint"):
+        data = [1, 2, 3, 4, 5]
+    elif numeric_and_temporal_types_as_str.startswith("float"):
+        data = [1.0, 2.0, 3.0, 4.0, 5.0]
+    elif numeric_and_temporal_types_as_str.startswith("datetime64"):
+        # pandas rounds the output format based on the data
+        # Use numpy instead
+        # but fix '2011-01-01T00:00:00' -> '2011-01-01 00:00:00'
+        data = [1000000001, 2000000001, 3000000001, 4000000001, 5000000001]
+        ps = np.asarray(data, dtype=numeric_and_temporal_types_as_str).astype(
+            str
+        )
+        ps = np.array([i.replace("T", " ") for i in ps])
+
+    if not numeric_and_temporal_types_as_str.startswith("datetime64"):
+        ps = pd.Series(data, dtype=numeric_and_temporal_types_as_str)
+
+    gs = cudf.Series(data, dtype=numeric_and_temporal_types_as_str)
+
+    expect = pd.Series(ps.astype("str"))
+    got = gs.astype("str")
+
+    assert_eq(expect, got)
+
+
+def test_string_empty_numeric_astype(numeric_and_temporal_types_as_str):
+    data = []
+
+    ps = pd.Series(data, dtype=numeric_and_temporal_types_as_str)
+    gs = cudf.Series(data, dtype=numeric_and_temporal_types_as_str)
+
+    expect = ps.astype("str")
+    got = gs.astype("str")
+
+    assert_eq(expect, got)

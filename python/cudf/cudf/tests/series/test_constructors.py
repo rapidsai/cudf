@@ -1290,3 +1290,13 @@ def test_timezone_pyarrow_array():
     result = cudf.Series(pa_array)
     expected = pa_array.to_pandas()
     assert_eq(result, expected)
+
+
+def test_string_ingest(one_dimensional_array_types):
+    expect = ["a", "a", "b", "c", "a"]
+    data = one_dimensional_array_types(expect)
+    got = cudf.Series(data)
+    assert got.dtype == np.dtype("object")
+    assert len(got) == 5
+    for idx, val in enumerate(expect):
+        assert expect[idx] == got[idx]
