@@ -7,8 +7,10 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+from numba import cuda
 
 import cudf
+from cudf.core.column.column import as_column
 from cudf.testing import assert_eq
 
 
@@ -263,7 +265,7 @@ def test_from_records_index(columns, index):
     assert_eq(df, gdf)
 
 
-def test_dataframe_construction_from_cupy_arrays():
+def test_dataframe_construction_from_cp_arrays():
     h_ary = np.array([[1, 2, 3], [4, 5, 6]], np.int32)
     d_ary = cp.asarray(h_ary)
 
@@ -302,7 +304,7 @@ def test_dataframe_construction_from_cupy_arrays():
     assert_eq(df, gdf)
 
 
-def test_dataframe_cupy_wrong_dimensions():
+def test_dataframe_cp_wrong_dimensions():
     d_ary = cp.empty((2, 3, 4), dtype=np.int32)
     with pytest.raises(
         ValueError, match="records dimension expected 1 or 2 but found: 3"
@@ -310,7 +312,7 @@ def test_dataframe_cupy_wrong_dimensions():
         cudf.DataFrame(d_ary)
 
 
-def test_dataframe_cupy_array_wrong_index():
+def test_dataframe_cp_array_wrong_index():
     d_ary = cp.empty((2, 3), dtype=np.int32)
 
     with pytest.raises(ValueError):
@@ -432,6 +434,428 @@ def test_dataframe_constructor_nan_as_null(data, nan_as_null):
     else:
         actual = actual.select_dtypes(exclude=["object"])
         assert (actual.replace(np.nan, -1) == -1).any().any()
+
+
+@pytest.mark.parametrize(
+    "data,columns,index",
+    [
+        (pd.Series([1, 2, 3]), None, None),
+        (pd.Series(["a", "b", None, "c"], name="abc"), None, None),
+        (
+            pd.Series(["a", "b", None, "c"], name="abc"),
+            ["abc", "b"],
+            [1, 2, 3],
+        ),
+    ],
+)
+def test_dataframe_init_from_series(data, columns, index):
+    expected = pd.DataFrame(data, columns=columns, index=index)
+    actual = cudf.DataFrame(data, columns=columns, index=index)
+
+    assert_eq(
+        expected,
+        actual,
+        check_index_type=len(expected) != 0,
+    )
+
+
+@pytest.mark.parametrize(
+    "dtype,expected_upcast_type,error",
+    [
+        (
+            "float32",
+            np.dtype("float32"),
+            None,
+        ),
+        (
+            "float16",
+            None,
+            TypeError,
+        ),
+        (
+            "float64",
+            np.dtype("float64"),
+            None,
+        ),
+        (
+            "float128",
+            None,
+            ValueError,
+        ),
+    ],
+)
+def test_from_pandas_unsupported_types(dtype, expected_upcast_type, error):
+    data = pd.Series([1.1, 0.55, -1.23], dtype=dtype)
+    pdf = pd.DataFrame({"one_col": data})
+    if error is not None:
+        with pytest.raises(error):
+            cudf.from_pandas(data)
+
+        with pytest.raises(error):
+            cudf.Series(data)
+
+        with pytest.raises(error):
+            cudf.from_pandas(pdf)
+
+        with pytest.raises(error):
+            cudf.DataFrame(pdf)
+    else:
+        df = cudf.from_pandas(data)
+
+        assert_eq(data, df, check_dtype=False)
+        assert df.dtype == expected_upcast_type
+
+        df = cudf.Series(data)
+        assert_eq(data, df, check_dtype=False)
+        assert df.dtype == expected_upcast_type
+
+        df = cudf.from_pandas(pdf)
+        assert_eq(pdf, df, check_dtype=False)
+        assert df["one_col"].dtype == expected_upcast_type
+
+        df = cudf.DataFrame(pdf)
+        assert_eq(pdf, df, check_dtype=False)
+        assert df["one_col"].dtype == expected_upcast_type
+
+
+@pytest.mark.parametrize("index", [None, "a", ["a", "b"]])
+def test_from_pandas_nan_as_null(nan_as_null, index):
+    data = [np.nan, 2.0, 3.0]
+
+    if index is None:
+        pdf = pd.DataFrame({"a": data, "b": data})
+        expected = cudf.DataFrame(
+            {
+                "a": as_column(data, nan_as_null=nan_as_null),
+                "b": as_column(data, nan_as_null=nan_as_null),
+            }
+        )
+    else:
+        pdf = pd.DataFrame({"a": data, "b": data}).set_index(index)
+        expected = cudf.DataFrame(
+            {
+                "a": as_column(data, nan_as_null=nan_as_null),
+                "b": as_column(data, nan_as_null=nan_as_null),
+            }
+        )
+        expected = cudf.DataFrame(
+            {
+                "a": as_column(data, nan_as_null=nan_as_null),
+                "b": as_column(data, nan_as_null=nan_as_null),
+            }
+        )
+        expected = expected.set_index(index)
+
+    got = cudf.from_pandas(pdf, nan_as_null=nan_as_null)
+
+    assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "data,columns",
+    [
+        ([1, 2, 3, 100, 112, 35464], ["a"]),
+        (range(100), None),
+        (
+            [],
+            None,
+        ),
+        ((-10, 21, 32, 32, 1, 2, 3), ["p"]),
+        (
+            (),
+            None,
+        ),
+        ([[1, 2, 3], [1, 2, 3]], ["col1", "col2", "col3"]),
+        ([range(100), range(100)], ["range" + str(i) for i in range(100)]),
+        (((1, 2, 3), (1, 2, 3)), ["tuple0", "tuple1", "tuple2"]),
+        ([[1, 2, 3]], ["list col1", "list col2", "list col3"]),
+        ([[1, 2, 3]], pd.Index(["col1", "col2", "col3"], name="rapids")),
+        ([range(100)], ["range" + str(i) for i in range(100)]),
+        (((1, 2, 3),), ["k1", "k2", "k3"]),
+    ],
+)
+def test_dataframe_init_1d_list(data, columns):
+    expect = pd.DataFrame(data, columns=columns)
+    actual = cudf.DataFrame(data, columns=columns)
+
+    assert_eq(
+        expect,
+        actual,
+        check_index_type=len(data) != 0,
+    )
+
+    expect = pd.DataFrame(data, columns=None)
+    actual = cudf.DataFrame(data, columns=None)
+
+    assert_eq(
+        expect,
+        actual,
+        check_index_type=len(data) != 0,
+    )
+
+
+@pytest.mark.parametrize("dtype", ["int64", "str"])
+def test_dataframe_from_dictionary_series_same_name_index(dtype):
+    pd_idx1 = pd.Index([1, 2, 0], name="test_index").astype(dtype)
+    pd_idx2 = pd.Index([2, 0, 1], name="test_index").astype(dtype)
+    pd_series1 = pd.Series([1, 2, 3], index=pd_idx1)
+    pd_series2 = pd.Series([1, 2, 3], index=pd_idx2)
+
+    gd_idx1 = cudf.from_pandas(pd_idx1)
+    gd_idx2 = cudf.from_pandas(pd_idx2)
+    gd_series1 = cudf.Series([1, 2, 3], index=gd_idx1)
+    gd_series2 = cudf.Series([1, 2, 3], index=gd_idx2)
+
+    expect = pd.DataFrame({"a": pd_series1, "b": pd_series2})
+    got = cudf.DataFrame({"a": gd_series1, "b": gd_series2})
+
+    if dtype == "str":
+        # Pandas actually loses its index name erroneously here...
+        expect.index.name = "test_index"
+
+    assert_eq(expect, got)
+    assert expect.index.names == got.index.names
+
+
+def test_init_multiindex_from_dict():
+    pdf = pd.DataFrame({("a", "b"): [1]})
+    gdf = cudf.DataFrame({("a", "b"): [1]})
+    assert_eq(pdf, gdf)
+    assert_eq(pdf.columns, gdf.columns)
+
+
+def test_change_column_dtype_in_empty():
+    pdf = pd.DataFrame({"a": [], "b": []})
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(pdf, gdf)
+    pdf["b"] = pdf["b"].astype("int64")
+    gdf["b"] = gdf["b"].astype("int64")
+    assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize(
+    "data,cols,index",
+    [
+        (
+            np.ndarray(shape=(4, 2), dtype=float, order="F"),
+            ["a", "b"],
+            ["a", "b", "c", "d"],
+        ),
+        (
+            np.ndarray(shape=(4, 2), dtype=float, order="F"),
+            ["a", "b"],
+            [0, 20, 30, 10],
+        ),
+        (
+            np.ndarray(shape=(4, 2), dtype=float, order="F"),
+            ["a", "b"],
+            [0, 1, 2, 3],
+        ),
+        (np.array([11, 123, -2342, 232]), ["a"], [1, 2, 11, 12]),
+        (np.array([11, 123, -2342, 232]), ["a"], ["khsdjk", "a", "z", "kk"]),
+        (
+            cp.ndarray(shape=(4, 2), dtype=float, order="F"),
+            ["a", "z"],
+            ["a", "z", "a", "z"],
+        ),
+        (cp.array([11, 123, -2342, 232]), ["z"], [0, 1, 1, 0]),
+        (cp.array([11, 123, -2342, 232]), ["z"], [1, 2, 3, 4]),
+        (cp.array([11, 123, -2342, 232]), ["z"], ["a", "z", "d", "e"]),
+        (
+            np.random.default_rng(seed=0).standard_normal(size=(2, 4)),
+            ["a", "b", "c", "d"],
+            ["a", "b"],
+        ),
+        (
+            np.random.default_rng(seed=0).standard_normal(size=(2, 4)),
+            ["a", "b", "c", "d"],
+            [1, 0],
+        ),
+        (cp.random.randn(2, 4), ["a", "b", "c", "d"], ["a", "b"]),
+        (cp.random.randn(2, 4), ["a", "b", "c", "d"], [1, 0]),
+    ],
+)
+def test_dataframe_init_from_arrays_cols(data, cols, index):
+    gd_data = data
+    if isinstance(data, cp.ndarray):
+        # pandas can't handle cp arrays in general
+        pd_data = data.get()
+
+        # additional test for building DataFrame with gpu array whose
+        # cuda array interface has no `descr` attribute
+        numba_data = cuda.as_cuda_array(data)
+    else:
+        pd_data = data
+        numba_data = None
+
+    # verify with columns & index
+    pdf = pd.DataFrame(pd_data, columns=cols, index=index)
+    gdf = cudf.DataFrame(gd_data, columns=cols, index=index)
+
+    assert_eq(pdf, gdf, check_dtype=False)
+
+    # verify with columns
+    pdf = pd.DataFrame(pd_data, columns=cols)
+    gdf = cudf.DataFrame(gd_data, columns=cols)
+
+    assert_eq(pdf, gdf, check_dtype=False)
+
+    pdf = pd.DataFrame(pd_data)
+    gdf = cudf.DataFrame(gd_data)
+
+    assert_eq(pdf, gdf, check_dtype=False)
+
+    if numba_data is not None:
+        gdf = cudf.DataFrame(numba_data)
+        assert_eq(pdf, gdf, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "data, orient, dtype, columns",
+    [
+        (
+            {"col_1": [3, 2, 1, 0], "col_2": [3, 2, 1, 0]},
+            "columns",
+            None,
+            None,
+        ),
+        ({"col_1": [3, 2, 1, 0], "col_2": [3, 2, 1, 0]}, "index", None, None),
+        (
+            {"col_1": [None, 2, 1, 0], "col_2": [3, None, 1, 0]},
+            "index",
+            None,
+            ["A", "B", "C", "D"],
+        ),
+        (
+            {
+                "col_1": ["ab", "cd", "ef", "gh"],
+                "col_2": ["zx", "one", "two", "three"],
+            },
+            "index",
+            None,
+            ["A", "B", "C", "D"],
+        ),
+        (
+            {
+                "index": [("a", "b"), ("a", "c")],
+                "columns": [("x", 1), ("y", 2)],
+                "data": [[1, 3], [2, 4]],
+                "index_names": ["n1", "n2"],
+                "column_names": ["z1", "z2"],
+            },
+            "tight",
+            "float64",
+            None,
+        ),
+    ],
+)
+def test_dataframe_from_dict(data, orient, dtype, columns):
+    expected = pd.DataFrame.from_dict(
+        data=data, orient=orient, dtype=dtype, columns=columns
+    )
+
+    actual = cudf.DataFrame.from_dict(
+        data=data, orient=orient, dtype=dtype, columns=columns
+    )
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("dtype", ["int64", "str", None])
+def test_dataframe_from_dict_transposed(dtype):
+    pd_data = {"a": [3, 2, 1, 0], "col_2": [3, 2, 1, 0]}
+    gd_data = {key: cudf.Series(val) for key, val in pd_data.items()}
+
+    expected = pd.DataFrame.from_dict(pd_data, orient="index", dtype=dtype)
+    actual = cudf.DataFrame.from_dict(gd_data, orient="index", dtype=dtype)
+
+    gd_data = {key: cp.asarray(val) for key, val in pd_data.items()}
+    actual = cudf.DataFrame.from_dict(gd_data, orient="index", dtype=dtype)
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "pd_data, gd_data, orient, dtype, columns",
+    [
+        (
+            {"col_1": np.array([3, 2, 1, 0]), "col_2": np.array([3, 2, 1, 0])},
+            {
+                "col_1": cp.array([3, 2, 1, 0]),
+                "col_2": cp.array([3, 2, 1, 0]),
+            },
+            "columns",
+            None,
+            None,
+        ),
+        (
+            {"col_1": np.array([3, 2, 1, 0]), "col_2": np.array([3, 2, 1, 0])},
+            {
+                "col_1": cp.array([3, 2, 1, 0]),
+                "col_2": cp.array([3, 2, 1, 0]),
+            },
+            "index",
+            None,
+            None,
+        ),
+        (
+            {
+                "col_1": np.array([None, 2, 1, 0]),
+                "col_2": np.array([3, None, 1, 0]),
+            },
+            {
+                "col_1": cp.array([np.nan, 2, 1, 0]),
+                "col_2": cp.array([3, np.nan, 1, 0]),
+            },
+            "index",
+            None,
+            ["A", "B", "C", "D"],
+        ),
+        (
+            {
+                "col_1": np.array(["ab", "cd", "ef", "gh"]),
+                "col_2": np.array(["zx", "one", "two", "three"]),
+            },
+            {
+                "col_1": np.array(["ab", "cd", "ef", "gh"]),
+                "col_2": np.array(["zx", "one", "two", "three"]),
+            },
+            "index",
+            None,
+            ["A", "B", "C", "D"],
+        ),
+        (
+            {
+                "index": [("a", "b"), ("a", "c")],
+                "columns": [("x", 1), ("y", 2)],
+                "data": [np.array([1, 3]), np.array([2, 4])],
+                "index_names": ["n1", "n2"],
+                "column_names": ["z1", "z2"],
+            },
+            {
+                "index": [("a", "b"), ("a", "c")],
+                "columns": [("x", 1), ("y", 2)],
+                "data": [cp.array([1, 3]), cp.array([2, 4])],
+                "index_names": ["n1", "n2"],
+                "column_names": ["z1", "z2"],
+            },
+            "tight",
+            "float64",
+            None,
+        ),
+    ],
+)
+def test_dataframe_from_dict_cp_np_arrays(
+    pd_data, gd_data, orient, dtype, columns
+):
+    expected = pd.DataFrame.from_dict(
+        data=pd_data, orient=orient, dtype=dtype, columns=columns
+    )
+
+    actual = cudf.DataFrame.from_dict(
+        data=gd_data, orient=orient, dtype=dtype, columns=columns
+    )
+
+    assert_eq(expected, actual, check_dtype=dtype is not None)
 
 
 @pytest.mark.parametrize(
