@@ -150,7 +150,7 @@ static void BM_filter_min_max(nvbench::state& state)
         auto result = cudf::filter(
           filter_inputs, udf, false, std::nullopt, std::vector{true, false, false}, stream, mr);
       } break;
-      default: CUDF_UNREACHABLE();
+      default: CUDF_UNREACHABLE("Unrecognised engine type requested");
     }
   });
 }
