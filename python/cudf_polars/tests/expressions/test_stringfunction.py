@@ -543,10 +543,10 @@ def test_string_zfill(fill, input_strings):
     "fill",
     [
         5
-        if not POLARS_VERSION_LT_130
+        if not POLARS_VERSION_LT_131
         else pytest.param(5, marks=pytest.mark.xfail(reason="fixed in Polars 1.30")),
         999
-        if not POLARS_VERSION_LT_130
+        if not POLARS_VERSION_LT_131
         else pytest.param(999, marks=pytest.mark.xfail(reason="fixed in Polars 1.30")),
     ],
 )
@@ -563,10 +563,10 @@ def test_string_zfill_pl_129(fill):
         1,
         2,
         5
-        if not POLARS_VERSION_LT_130
+        if not POLARS_VERSION_LT_131
         else pytest.param(5, marks=pytest.mark.xfail(reason="fixed in Polars 1.30")),
         999
-        if not POLARS_VERSION_LT_130
+        if not POLARS_VERSION_LT_131
         else pytest.param(999, marks=pytest.mark.xfail(reason="fixed in Polars 1.30")),
         -1,
         pytest.param(None, marks=pytest.mark.xfail(reason="None dtype")),
