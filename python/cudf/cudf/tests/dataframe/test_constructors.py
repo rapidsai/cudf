@@ -534,3 +534,47 @@ def test_from_pandas_with_index():
     assert_eq(df.index.values, pdf.index.values)
     # Check again using pandas testing tool on frames
     assert_eq(df, pdf)
+
+
+@pytest.mark.parametrize("columns", [None, ("a", "b"), ("a",), ("b",)])
+def test_from_records_noindex(columns):
+    recdtype = np.dtype([("a", np.int32), ("b", np.float64)])
+    rec = np.recarray(10, dtype=recdtype)
+    rec.a = aa = np.arange(10, dtype=np.int32)
+    rec.b = bb = np.arange(10, 20, dtype=np.float64)
+    df = cudf.DataFrame.from_records(rec, columns=columns)
+
+    if columns and "a" in columns:
+        assert_eq(aa, df["a"].values)
+    if columns and "b" in columns:
+        assert_eq(bb, df["b"].values)
+    assert_eq(np.arange(10), df.index.values)
+
+
+@pytest.mark.parametrize("columns", [None, ("a", "b"), ("a",), ("b",)])
+def test_from_records_withindex(columns):
+    recdtype = np.dtype(
+        [("index", np.int64), ("a", np.int32), ("b", np.float64)]
+    )
+    rec = np.recarray(10, dtype=recdtype)
+    rec.index = ii = np.arange(30, 40)
+    rec.a = aa = np.arange(10, dtype=np.int32)
+    rec.b = bb = np.arange(10, 20, dtype=np.float64)
+    df = cudf.DataFrame.from_records(rec, index="index")
+
+    if columns and "a" in columns:
+        assert_eq(aa, df["a"].values)
+    if columns and "b" in columns:
+        assert_eq(bb, df["b"].values)
+    assert_eq(ii, df.index.values)
+
+
+def test_numpy_non_contiguious():
+    recdtype = np.dtype([("index", np.int64), ("a", np.int32)])
+    rec = np.recarray(10, dtype=recdtype)
+    rec.index = np.arange(30, 40)
+    rec.a = aa = np.arange(20, dtype=np.int32)[::2]
+    assert rec.a.flags["C_CONTIGUOUS"] is False
+
+    gdf = cudf.DataFrame.from_records(rec, index="index")
+    assert_eq(aa, gdf["a"].values)
