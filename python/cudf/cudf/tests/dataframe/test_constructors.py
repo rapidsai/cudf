@@ -488,3 +488,49 @@ def test_create_interval_df(data1, data2, data3, data4, interval_closed):
         dtype="interval",
     )
     assert_eq(expect_three, got_three)
+
+
+def test_from_pandas():
+    pdf = pd.DataFrame(
+        {
+            "a": np.arange(10, dtype=np.int32),
+            "b": np.arange(10, 20, dtype=np.float64),
+        }
+    )
+
+    df = cudf.DataFrame.from_pandas(pdf)
+
+    assert tuple(df.columns) == tuple(pdf.columns)
+
+    assert df["a"].dtype == pdf["a"].dtype
+    assert df["b"].dtype == pdf["b"].dtype
+
+    assert len(df["a"]) == len(pdf["a"])
+    assert len(df["b"]) == len(pdf["b"])
+
+
+def test_from_pandas_ex1():
+    pdf = pd.DataFrame({"a": [0, 1, 2, 3], "b": [0.1, 0.2, None, 0.3]})
+    df = cudf.DataFrame.from_pandas(pdf)
+
+    assert tuple(df.columns) == tuple(pdf.columns)
+    assert np.all(df["a"].to_numpy() == pdf["a"])
+    matches = df["b"].to_numpy(na_value=np.nan) == pdf["b"]
+    # the 3d element is False due to (nan == nan) == False
+    assert np.all(matches == [True, True, False, True])
+    assert np.isnan(df["b"].to_numpy(na_value=np.nan)[2])
+    assert np.isnan(pdf["b"][2])
+
+
+def test_from_pandas_with_index():
+    pdf = pd.DataFrame({"a": [0, 1, 2, 3], "b": [0.1, 0.2, None, 0.3]})
+    pdf = pdf.set_index(np.asarray([4, 3, 2, 1]))
+    df = cudf.DataFrame.from_pandas(pdf)
+
+    # Check columns
+    assert_eq(df.a, pdf.a)
+    assert_eq(df.b, pdf.b)
+    # Check index
+    assert_eq(df.index.values, pdf.index.values)
+    # Check again using pandas testing tool on frames
+    assert_eq(df, pdf)
