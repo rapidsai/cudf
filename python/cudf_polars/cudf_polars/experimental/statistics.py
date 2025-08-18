@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import itertools
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar
 
 from cudf_polars.dsl.ir import (
     IR,
@@ -21,12 +21,13 @@ from cudf_polars.dsl.ir import (
 from cudf_polars.dsl.traversal import post_traversal
 from cudf_polars.experimental.base import (
     ColumnStats,
+    JoinKey,
     StatsCollector,
 )
 from cudf_polars.experimental.dispatch import initialize_column_stats
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
 
     from cudf_polars.utils.config import ConfigOptions
 
@@ -48,8 +49,53 @@ def collect_base_stats(root: IR, config_options: ConfigOptions) -> StatsCollecto
     """
     stats: StatsCollector = StatsCollector()
     for node in post_traversal([root]):
+        # Initialize column statistics from datasource information
         stats.column_stats[node] = initialize_column_stats(node, stats, config_options)
+        # Populate Join-key information
+        stats = update_join_key_info(node, stats, config_options)
     return stats
+
+
+def update_join_key_info(
+    node: IR, stats: StatsCollector, config_options: ConfigOptions
+) -> StatsCollector:
+    """Update join-key information for the given node."""
+    if isinstance(node, Join):
+        left, right = node.children
+        left_keys = [stats.column_stats[left][n.name] for n in node.left_on]
+        right_keys = [stats.column_stats[right][n.name] for n in node.right_on]
+        lkey = JoinKey(*left_keys)
+        rkey = JoinKey(*right_keys)
+        stats.key_joins[lkey].add(rkey)
+        stats.key_joins[rkey].add(lkey)
+        for u, v in zip(left_keys, right_keys, strict=True):
+            stats.col_joins[u].add(v)
+            stats.col_joins[v].add(u)
+    return stats
+
+
+T = TypeVar("T")
+
+
+def find_equivalence_sets(
+    joins: Mapping[T, set[T]],
+) -> list[set[T]]:
+    """Find equivalence sets in a join graph."""
+    seen = set()
+    components = []
+    for v in joins:
+        if v not in seen:
+            cluster = {v}
+            stack = [v]
+            while stack:
+                node = stack.pop()
+                for n in joins[node]:
+                    if n not in cluster:
+                        cluster.add(n)
+                        stack.append(n)
+            components.append(cluster)
+            seen.update(cluster)
+    return components
 
 
 def _update_unique_stats_columns(
@@ -66,9 +112,8 @@ def _update_unique_stats_columns(
         if (
             name not in unique_fraction
             and (column_stats := child_column_stats.get(name)) is not None
-            and (source_stats := column_stats.source_info) is not None
         ):
-            source_stats.add_unique_stats_column(column_stats.source_name or name)
+            column_stats.source_info.add_unique_stats_column()
 
 
 @initialize_column_stats.register(IR)
