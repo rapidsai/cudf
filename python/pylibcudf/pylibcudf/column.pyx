@@ -415,15 +415,18 @@ cdef class Column:
 
             return Column.from_column_view_of_arbitrary(result.col.get().view(), result)
         elif hasattr(obj, "__arrow_c_stream__"):
-            stream = obj.__arrow_c_stream__()
-            c_stream = (
-                <ArrowArrayStream*>PyCapsule_GetPointer(stream, "arrow_array_stream")
+            arrow_stream = obj.__arrow_c_stream__()
+            c_arrow_stream = (
+                <ArrowArrayStream*>PyCapsule_GetPointer(
+                    arrow_stream,
+                    "arrow_array_stream",
+                )
             )
 
             result = _ArrowColumnHolder()
             with nogil:
                 c_result = make_unique[arrow_column](
-                    move(dereference(c_stream)), stream.view()
+                    move(dereference(c_arrow_stream)), stream.view()
                 )
             result.col.swap(c_result)
 
