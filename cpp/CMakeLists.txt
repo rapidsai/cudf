@@ -638,6 +638,7 @@ add_library(
   src/reductions/nth_element.cu
   src/reductions/nunique.cu
   src/reductions/product.cu
+  src/reductions/quantile.cu
   src/reductions/reductions.cpp
   src/reductions/scan/rank_scan.cu
   src/reductions/scan/ewm.cu
@@ -798,10 +799,6 @@ add_library(
   src/text/stemmer.cu
   src/text/bpe/byte_pair_encoding.cu
   src/text/bpe/load_merge_pairs.cu
-  src/text/subword/data_normalizer.cu
-  src/text/subword/load_hash_file.cu
-  src/text/subword/subword_tokenize.cu
-  src/text/subword/wordpiece_tokenizer.cu
   src/text/tokenize.cu
   src/text/vocabulary_tokenize.cu
   src/text/wordpiece_tokenize.cu
