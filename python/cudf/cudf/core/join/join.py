@@ -295,7 +295,6 @@ class Merge:
         ]
 
     def perform_merge(self) -> DataFrame:
-        # import pdb;pdb.set_trace()
         left_join_cols = []
         right_join_cols = []
 

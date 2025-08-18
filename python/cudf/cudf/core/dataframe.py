@@ -265,7 +265,6 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
 
     @_performance_tracking
     def __getitem__(self, arg):
-        # import pdb;pdb.set_trace()
         if isinstance(self._frame.index, MultiIndex):
             # This try/except block allows the use of pandas-like
             # tuple arguments to index into MultiIndex dataframes.
@@ -454,7 +453,6 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
     """
 
     def __getitem__(self, arg):
-        # import pdb;pdb.set_trace()
         (
             row_key,
             (
@@ -1460,7 +1458,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         6  6  6  6
         8  8  8  8
         """
-        # import pdb;pdb.set_trace()
         if _is_scalar_or_zero_d_array(arg) or isinstance(arg, tuple):
             out = self._get_columns_by_label(arg)
             if is_scalar(arg):
@@ -7019,16 +7016,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         if skipna is not False and method in _cupy_nan_methods_map:
             method = _cupy_nan_methods_map[method]
-        # import pdb;pdb.set_trace()
-        # if method in {"any", "all"} and arr.dtype.kind == "f":
-        #     if skipna:
-        #         arr[cupy.isnan(arr)] = 0
-        #     else:
-        #         arr[cupy.isnan(arr)] = 1
+
         if len(arr) == 0 and method == "nanmedian":
             method = "median"
         result = getattr(cupy, method)(arr, axis=1, **kwargs)
-        # import pdb;pdb.set_trace()
+
         if result.ndim == 1:
             type_coerced_methods = {
                 "count",
@@ -7052,7 +7044,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 or (common_dtype is not None and common_dtype.kind == "M")
                 else None
             )
-            # import pdb;pdb.set_trace()
+
             if (
                 cudf.get_option("mode.pandas_compatible")
                 and result_dtype is None
@@ -7678,7 +7670,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 for i in column_idx
             ]
 
-            # import pdb;pdb.set_trace()
             # Collect datatypes and cast columns as that type
             common_type = find_common_type(
                 [col.dtype for col in columns if col is not None]

@@ -816,7 +816,6 @@ class _FastSlowAttribute:
         self._dir = None
 
     def __get__(self, instance, owner) -> Any:
-        # import pdb;pdb.set_trace()
         from .module_accelerator import disable_module_accelerator
 
         if self._attr is None:
@@ -894,7 +893,6 @@ class _FastSlowAttribute:
 
 class _MethodProxy(_FunctionProxy):
     def __init__(self, fast, slow, bypass=False):
-        # import pdb;pdb.set_trace()
         super().__init__(
             fast,
             slow,
@@ -932,7 +930,6 @@ class _MethodProxy(_FunctionProxy):
         """
         Call the method with the given arguments and keyword arguments.
         """
-        # import pdb;pdb.set_trace()
         result, _ = _fast_slow_function_call(
             call_operator,
             self,

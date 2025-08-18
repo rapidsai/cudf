@@ -201,7 +201,6 @@ class NumericalColumn(NumericalBaseColumn):
             return super().__invert__()
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
-        # import pdb;pdb.set_trace()
         int_float_dtype_mapping = {
             np.int8: np.float32,
             np.int16: np.float32,
@@ -340,7 +339,7 @@ class NumericalColumn(NumericalBaseColumn):
             lhs = pa_scalar_to_plc_scalar(lhs)
         elif isinstance(rhs, pa.Scalar):
             rhs = pa_scalar_to_plc_scalar(rhs)
-        # import pdb;pdb.set_trace()
+
         res = binaryop.binaryop(lhs, rhs, op, out_dtype)
         if (
             is_pandas_nullable_extension_dtype(out_dtype)
@@ -361,8 +360,6 @@ class NumericalColumn(NumericalBaseColumn):
                 and rhs.null_count > 0
             ):
                 res = res.fillna(lhs.to_py())
-            # res = res.copy_if_else(lhs, res._get_mask_as_column())
-            # pass
         return res
 
     def nans_to_nulls(self: Self) -> Self:
@@ -405,7 +402,6 @@ class NumericalColumn(NumericalBaseColumn):
             #   => np.int64
             # np.promote_types(np.asarray([0], dtype=np.int64).dtype, np.uint8)
             #   => np.int64
-            # import pdb;pdb.set_trace()
             if is_pandas_nullable_extension_dtype(self.dtype):
                 if isinstance(self.dtype, pd.ArrowDtype):
                     common_dtype = cudf.utils.dtypes.find_common_type(

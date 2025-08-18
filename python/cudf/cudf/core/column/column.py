@@ -817,7 +817,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         """
         if len(self) == 0:
             return np.array([], dtype=self.dtype)
-        # import pdb;pdb.set_trace()
+
         if cudf.get_option(
             "mode.pandas_compatible"
         ) and is_pandas_nullable_extension_dtype(self.dtype):
@@ -1264,7 +1264,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         If ``value`` and ``self`` are of different types, ``value`` is coerced
         to ``self.dtype``. Assumes ``self`` and ``value`` are index-aligned.
         """
-        # import pdb;pdb.set_trace()
         value_normalized = self._cast_setitem_value(value)
         if isinstance(key, slice):
             out: ColumnBase | None = self._scatter_by_slice(
@@ -1880,8 +1879,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         if copy and result is self:
             return result.copy(deep=copy)
-        elif copy is False and result is self:
-            return result  # .copy(deep=False)
         return result
 
     def as_categorical_column(
@@ -2875,7 +2872,6 @@ def as_column(
     * pandas.Categorical objects
     * range objects
     """
-    # import pdb;pdb.set_trace()
     if isinstance(arbitrary, (range, pd.RangeIndex, cudf.RangeIndex)):
         with acquire_spill_lock():
             column = ColumnBase.from_pylibcudf(
@@ -3047,7 +3043,6 @@ def as_column(
                 arbitrary, nan_as_null=nan_as_null, dtype=dtype, length=length
             )
         elif arbitrary.dtype.kind == "O":
-            # import pdb;pdb.set_trace()
             if isinstance(arbitrary, NumpyExtensionArray):
                 # infer_dtype does not handle NumpyExtensionArray
                 arbitrary = np.array(arbitrary, dtype=object)

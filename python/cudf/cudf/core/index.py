@@ -2415,7 +2415,6 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
 
     @_performance_tracking
     def where(self, cond, other=None, inplace: bool = False) -> Self:
-        # import pdb;pdb.set_trace()
         if getattr(other, "ndim", 1) > 1:
             raise NotImplementedError(
                 "Only 1 dimensional other is currently supported"

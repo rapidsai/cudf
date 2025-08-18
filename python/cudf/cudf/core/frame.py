@@ -577,8 +577,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
             if isinstance(col.dtype, cudf.CategoricalDtype):
                 col = col._get_decategorized_column()  # type: ignore[attr-defined]
+
             array = get_array(col)
-            # import pdb;pdb.set_trace()
+
             if (
                 cudf.get_option("mode.pandas_compatible")
                 and is_pandas_nullable_extension_dtype(col.dtype)
@@ -614,7 +615,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 dtype=numpy.dtype("float64"),
                 order="F",
             )
-        # import pdb;pdb.set_trace()
+
         if dtype is None:
             if ncol == 1:
                 to_dtype = next(self._dtypes)[1]
