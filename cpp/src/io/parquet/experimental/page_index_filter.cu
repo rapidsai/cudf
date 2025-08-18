@@ -583,7 +583,6 @@ struct page_stats_caster : public stats_caster_base {
  *
  * The row is required if the row mask value at row_index is either invalid or a valid `true`
  *
- * @param row_mask_offset Offset of the current row in the row mask
  * @param is_nullable Whether the row mask is nullable
  * @param nullmask The nullmask of the row mask
  * @param row_mask_data The row mask data values
@@ -591,15 +590,14 @@ struct page_stats_caster : public stats_caster_base {
  * @return True if the row is valid, false otherwise.
  */
 struct is_row_required_fn {
-  size_type row_mask_offset;
   bool is_nullable;
   bitmask_type const* nullmask;
   bool const* row_mask_data;
 
   __device__ bool operator()(size_type row_index) const
   {
-    auto const is_invalid = is_nullable and not bit_is_set(nullmask, row_index + row_mask_offset);
-    return is_invalid or row_mask_data[row_index + row_mask_offset];
+    auto const is_invalid = is_nullable and not bit_is_set(nullmask, row_index);
+    return is_invalid or row_mask_data[row_index];
   }
 };
 
@@ -801,10 +799,9 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask
         rmm::exec_policy_nosync(stream),
         page_indices.begin(),
         page_indices.end(),
-        thrust::counting_iterator<size_type>(0),
+        thrust::counting_iterator<size_type>(row_mask_offset),
         select_page_indices.begin(),
-        is_row_required_fn{
-          row_mask_offset, row_mask.nullable(), row_mask.null_mask(), row_mask.data<bool>()});
+        is_row_required_fn{row_mask.nullable(), row_mask.null_mask(), row_mask.data<bool>()});
 
       // Remove duplicate page indices across (presorted) rows
       auto const filtered_uniq_page_end_iter = thrust::unique(
