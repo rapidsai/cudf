@@ -545,6 +545,13 @@ class NumericalColumn(NumericalBaseColumn):
                     self._dtype = dtype
                     return self
             if self.dtype.kind == "f" and dtype.kind in "iu":  # type: ignore[union-attr]
+                if (
+                    not is_pandas_nullable_extension_dtype(dtype)
+                    and self.nan_count > 0
+                ):
+                    raise TypeError(
+                        "Cannot convert non-finite values (NA or inf) to integer"
+                    )
                 # If casting from float to int, we need to convert nans to nulls
                 res = self.nans_to_nulls().cast(dtype=dtype)  # type: ignore[return-value]
                 res._dtype = dtype
