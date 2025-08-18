@@ -7025,6 +7025,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         #         arr[cupy.isnan(arr)] = 0
         #     else:
         #         arr[cupy.isnan(arr)] = 1
+        if len(arr) == 0 and method == "nanmedian":
+            method = "median"
         result = getattr(cupy, method)(arr, axis=1, **kwargs)
         # import pdb;pdb.set_trace()
         if result.ndim == 1:
