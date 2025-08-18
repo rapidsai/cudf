@@ -536,10 +536,10 @@ void device_decompress(compression_type compression,
   CUDF_FUNC_RANGE();
   if (compression == compression_type::NONE or inputs.empty()) { return; }
 
-  auto const nvcomp_type      = to_nvcomp_compression(compression);
-  auto nvcomp_disabled_reason = nvcomp_type.has_value()
-                                  ? nvcomp::is_decompression_disabled(*nvcomp_type)
-                                  : "invalid compression type";
+  auto const nvcomp_type            = to_nvcomp_compression(compression);
+  auto const nvcomp_disabled_reason = nvcomp_type.has_value()
+                                        ? nvcomp::is_decompression_disabled(*nvcomp_type)
+                                        : "invalid compression type";
   if (not nvcomp_disabled_reason) {
     return nvcomp::batched_decompress(
       *nvcomp_type, inputs, outputs, results, max_uncomp_chunk_size, max_total_uncomp_size, stream);
@@ -637,9 +637,10 @@ size_t get_uncompressed_size(compression_type compression, host_span<uint8_t con
     return 0;
   }
 
-  auto const nvcomp_type = to_nvcomp_compression(di.type);
-  auto nvcomp_disabled   = nvcomp_type.has_value() ? nvcomp::is_decompression_disabled(*nvcomp_type)
-                                                   : "invalid compression type";
+  auto const nvcomp_type     = to_nvcomp_compression(di.type);
+  auto const nvcomp_disabled = nvcomp_type.has_value()
+                                 ? nvcomp::is_decompression_disabled(*nvcomp_type)
+                                 : "invalid compression type";
   if (not nvcomp_disabled) {
     return nvcomp::batched_decompress_temp_size(
       nvcomp_type.value(), di.num_pages, di.max_page_decompressed_size, di.total_decompressed_size);
@@ -662,9 +663,10 @@ size_t get_uncompressed_size(compression_type compression, host_span<uint8_t con
     return 0;
   }
 
-  auto const nvcomp_type = to_nvcomp_compression(compression);
-  auto const nvcomp_disabled   = nvcomp_type.has_value() ? nvcomp::is_decompression_disabled(*nvcomp_type)
-                                                   : "invalid compression type";
+  auto const nvcomp_type     = to_nvcomp_compression(compression);
+  auto const nvcomp_disabled = nvcomp_type.has_value()
+                                 ? nvcomp::is_decompression_disabled(*nvcomp_type)
+                                 : "invalid compression type";
   if (nvcomp_disabled) {
     CUDF_FAIL("Cannot compute decompression scratch size for " +
               compression_type_name(compression));
