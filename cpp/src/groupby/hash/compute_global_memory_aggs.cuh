@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,6 @@
 #pragma once
 
 #include "compute_global_memory_aggs.hpp"
-#include "create_sparse_results_table.hpp"
-#include "flatten_single_pass_aggs.hpp"
 #include "helpers.cuh"
 #include "single_pass_functors.cuh"
 
@@ -34,21 +32,18 @@
 #include <cuco/static_set.cuh>
 #include <thrust/for_each.h>
 
-#include <memory>
-#include <vector>
-
 namespace cudf::groupby::detail::hash {
 template <typename SetType>
-rmm::device_uvector<cudf::size_type> compute_global_memory_aggs(
-  cudf::size_type num_rows,
+rmm::device_uvector<size_type> compute_global_memory_aggs(
+  size_type num_rows,
   bool skip_rows_with_nulls,
   bitmask_type const* row_bitmask,
-  cudf::table_view const& flattened_values,
-  cudf::aggregation::Kind const* d_agg_kinds,
-  host_span<cudf::aggregation::Kind const> agg_kinds,
+  table_view const& flattened_values,
+  aggregation::Kind const* d_agg_kinds,
+  host_span<aggregation::Kind const> agg_kinds,
   SetType& global_set,
   std::vector<std::unique_ptr<aggregation>>& aggregations,
-  cudf::detail::result_cache* sparse_results,
+  cudf::detail::result_cache* cache,
   rmm::cuda_stream_view stream)
 {
   auto constexpr uses_global_memory_aggs = true;

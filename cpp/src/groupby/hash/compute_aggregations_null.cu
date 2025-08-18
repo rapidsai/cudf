@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,12 +18,12 @@
 #include "compute_aggregations.hpp"
 
 namespace cudf::groupby::detail::hash {
-template rmm::device_uvector<cudf::size_type> compute_aggregations<nullable_global_set_t>(
-  int64_t num_rows,
-  bool skip_rows_with_nulls,
-  bitmask_type const* row_bitmask,
-  nullable_global_set_t& global_set,
-  cudf::host_span<cudf::groupby::aggregation_request const> requests,
-  cudf::detail::result_cache* sparse_results,
-  rmm::cuda_stream_view stream);
+template std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
+compute_aggregations<nullable_global_set_t>(int64_t num_rows,
+                                            bool skip_rows_with_nulls,
+                                            bitmask_type const* row_bitmask,
+                                            nullable_global_set_t& global_set,
+                                            host_span<aggregation_request const> requests,
+                                            cudf::detail::result_cache* cache,
+                                            rmm::cuda_stream_view stream);
 }  // namespace cudf::groupby::detail::hash

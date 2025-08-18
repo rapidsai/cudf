@@ -19,8 +19,9 @@
 #include "compute_global_memory_aggs.hpp"
 #include "compute_mapping_indices.hpp"
 #include "compute_shared_memory_aggs.hpp"
-#include "create_sparse_results_table.hpp"
+#include "create_results_table.hpp"
 #include "flatten_single_pass_aggs.hpp"
+#include "hash_compound_agg_finalizer.hpp"
 #include "helpers.cuh"
 #include "single_pass_functors.cuh"
 
@@ -36,77 +37,92 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cub/device/device_select.cuh>
 #include <cuco/static_set.cuh>
 #include <cuda/std/atomic>
 #include <thrust/for_each.h>
-
-#include <algorithm>
-#include <memory>
-#include <vector>
+#include <thrust/gather.h>
+#include <thrust/scatter.h>
+#include <thrust/tabulate.h>
 
 namespace cudf::groupby::detail::hash {
-/**
- * @brief Computes all aggregations from `requests` that require a single pass
- * over the data and stores the results in `sparse_results`
- */
+
 template <typename SetType>
-rmm::device_uvector<cudf::size_type> compute_aggregations(
+std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> compute_aggregations(
   int64_t num_rows,
   bool skip_rows_with_nulls,
   bitmask_type const* row_bitmask,
   SetType& global_set,
-  cudf::host_span<cudf::groupby::aggregation_request const> requests,
-  cudf::detail::result_cache* sparse_results,
+  host_span<aggregation_request const> requests,
+  cudf::detail::result_cache* cache,
   rmm::cuda_stream_view stream)
 {
-  // flatten the aggs to a table that can be operated on by aggregate_row
-  auto [flattened_values, agg_kinds, aggs] = flatten_single_pass_aggs(requests, stream);
-  auto const d_agg_kinds                   = cudf::detail::make_device_uvector_async(
-    agg_kinds, stream, rmm::mr::get_current_device_resource());
+  // Collect the single-pass aggregations that can be processed separately before we can calculate
+  // the compound aggregations.
+  auto const [spass_values, spass_agg_kinds, spass_aggs] =
+    flatten_single_pass_aggs(requests, stream);
+  auto const d_spass_agg_kinds = cudf::detail::make_device_uvector_async(
+    spass_agg_kinds, stream, rmm::mr::get_current_device_resource());
 
   auto const grid_size =
     max_occupancy_grid_size<typename SetType::ref_type<cuco::insert_and_find_tag>>(num_rows);
   auto const available_shmem_size = get_available_shared_memory_size(grid_size);
-  auto const offsets_buffer_size  = compute_shmem_offsets_size(flattened_values.num_columns()) * 2;
+  auto const offsets_buffer_size  = compute_shmem_offsets_size(spass_values.num_columns()) * 2;
   auto const data_buffer_size     = available_shmem_size - offsets_buffer_size;
 
   // Check if any aggregation is SUM_WITH_OVERFLOW, which should always use global memory
   auto const has_sum_with_overflow =
-    std::any_of(agg_kinds.begin(), agg_kinds.end(), [](aggregation::Kind k) {
+    std::any_of(spass_agg_kinds.begin(), spass_agg_kinds.end(), [](aggregation::Kind k) {
       return k == aggregation::SUM_WITH_OVERFLOW;
     });
 
   auto const is_shared_memory_compatible =
     !has_sum_with_overflow &&
-    std::all_of(
-      requests.begin(), requests.end(), [&](cudf::groupby::aggregation_request const& request) {
-        if (cudf::is_dictionary(request.values.type())) { return false; }
-        // Ensure there is enough buffer space to store local aggregations up to the max cardinality
-        // for shared memory aggregations
-        auto const size = cudf::type_dispatcher<cudf::dispatch_storage_type>(request.values.type(),
-                                                                             size_of_functor{});
-        return data_buffer_size >= (size * GROUPBY_CARDINALITY_THRESHOLD);
-      });
+    std::all_of(requests.begin(), requests.end(), [&](aggregation_request const& request) {
+      if (is_dictionary(request.values.type())) { return false; }
+      // Ensure there is enough buffer space to store local aggregations up to the max cardinality
+      // for shared memory aggregations
+      auto const size =
+        type_dispatcher<dispatch_storage_type>(request.values.type(), size_of_functor{});
+      return data_buffer_size >= size * GROUPBY_CARDINALITY_THRESHOLD;
+    });
+
+  // 'populated_keys' contains inserted row_indices (keys) of global hash set
+  rmm::device_uvector<cudf::size_type> populated_keys(num_rows, stream);
+
+  // TODO
+  rmm::device_uvector<cudf::size_type> key_indices(num_rows, stream);
+
+  auto global_set_ref = global_set.ref(cuco::op::insert_and_find);
 
   // Performs naive global memory aggregations when the workload is not compatible with shared
   // memory, such as when aggregating dictionary columns, when there is insufficient dynamic
   // shared memory for shared memory aggregations, or when SUM_WITH_OVERFLOW aggregations are
   // present.
   if (!is_shared_memory_compatible) {
+    thrust::tabulate(rmm::exec_policy_nosync(stream),
+                     key_indices.begin(),
+                     key_indices.end(),
+                     [global_set_ref] __device__(auto const idx) {
+                       return *global_set_ref.insert_and_find(idx).first;
+                     });
+
+    extract_populated_keys(global_set, populated_keys, stream);
+    find_output_indices(key_indices, populated_keys, stream);
+
+    // TODO
     return compute_global_memory_aggs(num_rows,
                                       skip_rows_with_nulls,
                                       row_bitmask,
-                                      flattened_values,
-                                      d_agg_kinds.data(),
-                                      agg_kinds,
+                                      spass_values,
+                                      d_spass_agg_kinds.data(),
+                                      spass_agg_kinds,
                                       global_set,
-                                      aggs,
-                                      sparse_results,
+                                      spass_aggs,
+                                      cache,
                                       stream);
   }
 
-  // 'populated_keys' contains inserted row_indices (keys) of global hash set
-  rmm::device_uvector<cudf::size_type> populated_keys(num_rows, stream);
   // 'local_mapping_index' maps from the global row index of the input table to its block-wise rank
   rmm::device_uvector<cudf::size_type> local_mapping_index(num_rows, stream);
   // 'global_mapping_index' maps from the block-wise rank to the row index of global aggregate table
@@ -116,8 +132,6 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
 
   // Flag indicating whether a global memory aggregation fallback is required or not
   rmm::device_scalar<cuda::std::atomic_flag> needs_global_memory_fallback(stream);
-
-  auto global_set_ref = global_set.ref(cuco::op::insert_and_find);
 
   compute_mapping_indices(grid_size,
                           num_rows,
@@ -130,6 +144,35 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
                           needs_global_memory_fallback.data(),
                           stream);
 
+  // For the thread blocks that need fallback to the code path using global memory aggregation,
+  // we need to collect these block ids.
+  rmm::device_uvector<cudf::size_type> fallback_block_ids(grid_size, stream);
+  rmm::device_scalar<cudf::size_type> d_num_fallback_blocks(stream);
+  size_type num_fallback_blocks = 0;
+  {
+    auto const select_cond = [block_cardinality =
+                                block_cardinality.begin()] __device__(auto const idx) {
+      return block_cardinality[idx] >= GROUPBY_CARDINALITY_THRESHOLD;
+    };
+
+    size_t storage_bytes = 0;
+    cub::DeviceSelect::If(nullptr,
+                          storage_bytes,
+                          thrust::make_counting_iterator(0),
+                          fallback_block_ids.begin(),
+                          d_num_fallback_blocks.data(),
+                          grid_size,
+                          select_cond);
+    rmm::device_buffer tmp_storage(storage_bytes, stream);
+    cub::DeviceSelect::If(tmp_storage.data(),
+                          storage_bytes,
+                          thrust::make_counting_iterator(0),
+                          fallback_block_ids.begin(),
+                          d_num_fallback_blocks.data(),
+                          grid_size,
+                          select_cond);
+  }
+
   cuda::std::atomic_flag h_needs_fallback;
   // Cannot use `device_scalar::value` as it requires a copy constructor, which
   // `atomic_flag` doesn't have.
@@ -138,20 +181,60 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
                                 sizeof(cuda::std::atomic_flag),
                                 cudaMemcpyDefault,
                                 stream.value()));
+
+  CUDF_CUDA_TRY(cudaMemcpyAsync(&num_fallback_blocks,
+                                d_num_fallback_blocks.data(),
+                                sizeof(cudf::size_type),
+                                cudaMemcpyDefault,
+                                stream.value()));
+
   stream.synchronize();
   auto const needs_fallback = h_needs_fallback.test();
 
+  // TODO
+  if (needs_fallback) {
+#if 0
+    auto const strides = util::div_rounding_up_safe(static_cast<size_type>(num_rows),
+                                                    GROUPBY_BLOCK_SIZE * num_fallback_blocks);
+    thrust::for_each_n(rmm::exec_policy_nosync(stream),
+                       thrust::make_counting_iterator(0),
+                       GROUPBY_BLOCK_SIZE * num_fallback_blocks * strides,
+                       [full_stride = GROUPBY_BLOCK_SIZE * grid_size,
+                        stride      = GROUPBY_BLOCK_SIZE * num_fallback_blocks,
+                        num_rows    = static_cast<size_type>(num_rows),
+                        global_set_ref,
+                        key_indices = key_indices.begin(),
+                        block_ids   = fallback_block_ids.begin()] __device__(auto const idx) {
+                         auto const block_idx = block_ids[(idx % stride) / GROUPBY_BLOCK_SIZE];
+                         auto const local_idx = (idx % stride) % GROUPBY_BLOCK_SIZE;
+                         auto const row_idx   = GROUPBY_BLOCK_SIZE * full_stride * (idx / stride) +
+                                              block_idx * GROUPBY_BLOCK_SIZE + local_idx;
+                         key_indices[row_idx] = *global_set_ref.insert_and_find(row_idx).first;
+                       });
+#else
+    thrust::tabulate(rmm::exec_policy_nosync(stream),
+                     key_indices.begin(),
+                     key_indices.end(),
+                     [global_set_ref] __device__(auto const idx) {
+                       return *global_set_ref.insert_and_find(idx).first;
+                     });
+
+#endif
+  }
+  extract_populated_keys(global_set, populated_keys, stream);
+  find_output_indices(key_indices, populated_keys, stream);
+
   // make table that will hold sparse results
-  cudf::table sparse_table = create_sparse_results_table(flattened_values,
-                                                         d_agg_kinds.data(),
-                                                         agg_kinds,
-                                                         needs_fallback,
-                                                         global_set,
-                                                         populated_keys,
-                                                         stream);
+  cudf::table result_table = create_results_table(spass_values,
+                                                  d_spass_agg_kinds.data(),
+                                                  spass_agg_kinds,
+                                                  needs_fallback,
+                                                  global_set,
+                                                  populated_keys,
+                                                  stream);
   // prepare to launch kernel to do the actual aggregation
-  auto d_values       = table_device_view::create(flattened_values, stream);
-  auto d_sparse_table = mutable_table_device_view::create(sparse_table, stream);
+  auto d_values       = table_device_view::create(spass_values, stream);
+  auto d_sparse_table = mutable_table_device_view::create(result_table, stream);
 
   compute_shared_memory_aggs(grid_size,
                              available_shmem_size,
@@ -163,7 +246,7 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
                              block_cardinality.data(),
                              *d_values,
                              *d_sparse_table,
-                             d_agg_kinds.data(),
+                             d_spass_agg_kinds.data(),
                              stream);
 
   // The shared memory groupby is designed so that each thread block can handle up to 128 unique
@@ -178,22 +261,20 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
                        global_memory_fallback_fn{global_set_ref,
                                                  *d_values,
                                                  *d_sparse_table,
-                                                 d_agg_kinds.data(),
+                                                 d_spass_agg_kinds.data(),
                                                  block_cardinality.data(),
                                                  stride,
                                                  row_bitmask,
                                                  skip_rows_with_nulls});
-    extract_populated_keys(global_set, populated_keys, stream);
   }
 
   // Add results back to sparse_results cache
-  auto sparse_result_cols = sparse_table.release();
-  for (size_t i = 0; i < aggs.size(); i++) {
+  auto result_cols = result_table.release();
+  for (size_t i = 0; i < spass_aggs.size(); i++) {
     // Note that the cache will make a copy of this temporary aggregation
-    sparse_results->add_result(
-      flattened_values.column(i), *aggs[i], std::move(sparse_result_cols[i]));
+    cache->add_result(spass_values.column(i), *spass_aggs[i], std::move(result_cols[i]));
   }
 
-  return populated_keys;
+  return std::pair{std::move(populated_keys), std::move(key_indices)};
 }
 }  // namespace cudf::groupby::detail::hash

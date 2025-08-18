@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,24 +17,16 @@
 #include "compute_aggregations.hpp"
 #include "compute_groupby.hpp"
 #include "helpers.cuh"
-#include "sparse_to_dense_results.hpp"
 
 #include <cudf/detail/aggregation/aggregation.cuh>
-#include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/gather.hpp>
-#include <cudf/groupby.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
 
 #include <cuco/static_set.cuh>
-
-#include <iterator>
-#include <memory>
 
 namespace cudf::groupby::detail::hash {
 template <typename Equal, typename Hash>
@@ -49,10 +41,6 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
 {
   // convert to int64_t to avoid potential overflow with large `keys`
   auto const num_keys = static_cast<int64_t>(keys.num_rows());
-
-  // Cache of sparse results where the location of aggregate value in each
-  // column is indexed by the hash set
-  cudf::detail::result_cache sparse_results(requests.size());
 
   auto set = cuco::static_set{
     cuco::extent<int64_t>{num_keys},
@@ -71,23 +59,25 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
       : rmm::device_buffer{};
 
   // Compute all single pass aggs first
-  auto gather_map = compute_aggregations(num_keys,
-                                         skip_rows_with_nulls,
-                                         static_cast<bitmask_type*>(row_bitmask.data()),
-                                         set,
-                                         requests,
-                                         &sparse_results,
-                                         stream);
+  auto const [key_gather_map, output_index_map] =
+    compute_aggregations(num_keys,
+                         skip_rows_with_nulls,
+                         static_cast<bitmask_type*>(row_bitmask.data()),
+                         set,
+                         requests,
+                         cache,
+                         stream);
 
-  // Compact all results from sparse_results and insert into cache
-  sparse_to_dense_results(requests,
-                          &sparse_results,
-                          cache,
-                          gather_map,
-                          set.ref(cuco::find),
-                          static_cast<bitmask_type*>(row_bitmask.data()),
-                          stream,
-                          mr);
+  for (auto const& request : requests) {
+    auto const& agg_v = request.aggregations;
+    auto const& col   = request.values;
+
+    auto finalizer =
+      hash_compound_agg_finalizer(col, output_index_map, cache, set, row_bitmask, stream, mr);
+    for (auto&& agg : agg_v) {
+      agg->finalize(finalizer);
+    }
+  }
 
   return cudf::detail::gather(keys,
                               gather_map,

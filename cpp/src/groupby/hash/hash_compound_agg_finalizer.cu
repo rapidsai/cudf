@@ -33,46 +33,27 @@
 #include <memory>
 
 namespace cudf::groupby::detail::hash {
-template <typename SetType>
-hash_compound_agg_finalizer<SetType>::hash_compound_agg_finalizer(
-  column_view col,
-  cudf::detail::result_cache* sparse_results,
-  cudf::detail::result_cache* dense_results,
-  device_span<size_type const> gather_map,
-  SetType set,
-  bitmask_type const* row_bitmask,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
-  : col(col),
-    sparse_results(sparse_results),
-    dense_results(dense_results),
-    gather_map(gather_map),
-    set(set),
-    row_bitmask(row_bitmask),
-    stream(stream),
-    mr(mr)
+
+hash_compound_agg_finalizer::hash_compound_agg_finalizer(column_view col,
+                                                         cudf::detail::result_cache* cache,
+                                                         size_type const* d_output_index_map,
+                                                         bitmask_type const* d_row_bitmask,
+                                                         rmm::cuda_stream_view stream,
+                                                         rmm::device_async_resource_ref mr)
+  : col{col},
+    cache{cache},
+    d_output_index_map{d_output_index_map},
+    d_row_bitmask{d_row_bitmask},
+    stream{stream},
+    mr{mr},
+    result_type{cudf::is_dictionary(col.type()) ? cudf::dictionary_column_view(col).keys().type()
+                                                : col.type()}
 {
-  result_type =
-    cudf::is_dictionary(col.type()) ? cudf::dictionary_column_view(col).keys().type() : col.type();
 }
 
-template <typename SetType>
-auto hash_compound_agg_finalizer<SetType>::to_dense_agg_result(cudf::aggregation const& agg)
+auto hash_compound_agg_finalizer::gather_argminmax(aggregation const& agg)
 {
-  auto s                  = sparse_results->get_result(col, agg);
-  auto dense_result_table = cudf::detail::gather(table_view({std::move(s)}),
-                                                 gather_map,
-                                                 out_of_bounds_policy::DONT_CHECK,
-                                                 cudf::detail::negative_index_policy::NOT_ALLOWED,
-                                                 stream,
-                                                 mr);
-  return std::move(dense_result_table->release()[0]);
-}
-
-template <typename SetType>
-auto hash_compound_agg_finalizer<SetType>::gather_argminmax(aggregation const& agg)
-{
-  auto arg_result = to_dense_agg_result(agg);
+  auto arg_result = cache->get_result(col, agg);
   // We make a view of ARG(MIN/MAX) result without a null mask and gather
   // using this map. The values in data buffer of ARG(MIN/MAX) result
   // corresponding to null values was initialized to ARG(MIN/MAX)_SENTINEL
@@ -80,64 +61,49 @@ auto hash_compound_agg_finalizer<SetType>::gather_argminmax(aggregation const& a
   // value to be null.
   column_view null_removed_map(
     data_type(type_to_id<size_type>()),
-    arg_result->size(),
-    static_cast<void const*>(arg_result->view().template data<size_type>()),
+    arg_result.size(),
+    static_cast<void const*>(arg_result.view().template data<size_type>()),
     nullptr,
     0);
   auto gather_argminmax =
     cudf::detail::gather(table_view({col}),
                          null_removed_map,
-                         arg_result->nullable() ? cudf::out_of_bounds_policy::NULLIFY
-                                                : cudf::out_of_bounds_policy::DONT_CHECK,
+                         arg_result.nullable() ? cudf::out_of_bounds_policy::NULLIFY
+                                               : cudf::out_of_bounds_policy::DONT_CHECK,
                          cudf::detail::negative_index_policy::NOT_ALLOWED,
                          stream,
                          mr);
   return std::move(gather_argminmax->release()[0]);
 }
 
-template <typename SetType>
-void hash_compound_agg_finalizer<SetType>::visit(cudf::aggregation const& agg)
+void hash_compound_agg_finalizer::visit(cudf::detail::min_aggregation const& agg)
 {
-  if (dense_results->has_result(col, agg)) return;
-  dense_results->add_result(col, agg, to_dense_agg_result(agg));
-}
-
-template <typename SetType>
-void hash_compound_agg_finalizer<SetType>::visit(cudf::detail::min_aggregation const& agg)
-{
-  if (dense_results->has_result(col, agg)) return;
   if (result_type.id() == type_id::STRING) {
+    if (cache->has_result(col, agg)) { return; }
     auto transformed_agg = make_argmin_aggregation();
-    dense_results->add_result(col, agg, gather_argminmax(*transformed_agg));
-  } else {
-    dense_results->add_result(col, agg, to_dense_agg_result(agg));
-  }
+    cache->add_result(col, agg, gather_argminmax(*transformed_agg));
+  }  // else: no-op, since this is only relevant for compound aggregations
+  // TODO: support other nested types.
 }
 
-template <typename SetType>
-void hash_compound_agg_finalizer<SetType>::visit(cudf::detail::max_aggregation const& agg)
+void hash_compound_agg_finalizer::visit(cudf::detail::max_aggregation const& agg)
 {
-  if (dense_results->has_result(col, agg)) return;
-
   if (result_type.id() == type_id::STRING) {
+    if (cache->has_result(col, agg)) { return; }
     auto transformed_agg = make_argmax_aggregation();
-    dense_results->add_result(col, agg, gather_argminmax(*transformed_agg));
-  } else {
-    dense_results->add_result(col, agg, to_dense_agg_result(agg));
-  }
+    cache->add_result(col, agg, gather_argminmax(*transformed_agg));
+  }  // else: no-op, since this is only relevant for compound aggregations
+  // TODO: support other nested types.
 }
 
-template <typename SetType>
-void hash_compound_agg_finalizer<SetType>::visit(cudf::detail::mean_aggregation const& agg)
+void hash_compound_agg_finalizer::visit(cudf::detail::mean_aggregation const& agg)
 {
-  if (dense_results->has_result(col, agg)) return;
+  if (cache->has_result(col, agg)) { return; }
 
-  auto sum_agg   = make_sum_aggregation();
-  auto count_agg = make_count_aggregation();
-  this->visit(*sum_agg);
-  this->visit(*count_agg);
-  column_view sum_result   = dense_results->get_result(col, *sum_agg);
-  column_view count_result = dense_results->get_result(col, *count_agg);
+  auto const sum_agg      = make_sum_aggregation();
+  auto const count_agg    = make_count_aggregation();
+  auto const sum_result   = cache->get_result(col, *sum_agg);
+  auto const count_result = cache->get_result(col, *count_agg);
 
   auto result =
     cudf::detail::binary_operation(sum_result,
@@ -146,20 +112,17 @@ void hash_compound_agg_finalizer<SetType>::visit(cudf::detail::mean_aggregation 
                                    cudf::detail::target_type(result_type, aggregation::MEAN),
                                    stream,
                                    mr);
-  dense_results->add_result(col, agg, std::move(result));
+  cache->add_result(col, agg, std::move(result));
 }
 
-template <typename SetType>
-void hash_compound_agg_finalizer<SetType>::visit(cudf::detail::m2_aggregation const& agg)
+void hash_compound_agg_finalizer::visit(cudf::detail::m2_aggregation const& agg)
 {
-  if (dense_results->has_result(col, agg)) { return; }
+  if (cache->has_result(col, agg)) { return; }
 
-  auto sum_agg   = make_sum_aggregation();
-  auto count_agg = make_count_aggregation();
-  this->visit(*sum_agg);
-  this->visit(*count_agg);
-  auto const sum_result   = sparse_results->get_result(col, *sum_agg);
-  auto const count_result = sparse_results->get_result(col, *count_agg);
+  auto const sum_agg      = make_sum_aggregation();
+  auto const count_agg    = make_count_aggregation();
+  auto const sum_result   = cache->get_result(col, *sum_agg);
+  auto const count_result = cache->get_result(col, *count_agg);
 
   auto const d_values_ptr = column_device_view::create(col, stream);
   auto const d_sum_ptr    = column_device_view::create(sum_result, stream).release();
@@ -176,22 +139,19 @@ void hash_compound_agg_finalizer<SetType>::visit(cudf::detail::m2_aggregation co
     rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator(0),
     col.size(),
-    m2_hash_functor{set, row_bitmask, *output_view, *d_values_ptr, *d_sum_ptr, *d_count_ptr});
-  sparse_results->add_result(col, agg, std::move(output));
-  dense_results->add_result(col, agg, to_dense_agg_result(agg));
+    m2_hash_functor{
+      d_output_index_map, d_row_bitmask, *output_view, *d_values_ptr, *d_sum_ptr, *d_count_ptr});
+  cache->add_result(col, agg, std::move(output));
 }
 
-template <typename SetType>
-void hash_compound_agg_finalizer<SetType>::visit(cudf::detail::var_aggregation const& agg)
+void hash_compound_agg_finalizer::visit(cudf::detail::var_aggregation const& agg)
 {
-  if (dense_results->has_result(col, agg)) return;
+  if (cache->has_result(col, agg)) { return; }
 
-  auto sum_agg   = make_sum_aggregation();
-  auto count_agg = make_count_aggregation();
-  this->visit(*sum_agg);
-  this->visit(*count_agg);
-  column_view sum_result   = sparse_results->get_result(col, *sum_agg);
-  column_view count_result = sparse_results->get_result(col, *count_agg);
+  auto const sum_agg      = make_sum_aggregation();
+  auto const count_agg    = make_count_aggregation();
+  auto const sum_result   = cache->get_result(col, *sum_agg);
+  auto const count_result = cache->get_result(col, *count_agg);
 
   auto values_view = column_device_view::create(col, stream);
   auto sum_view    = column_device_view::create(sum_result, stream);
@@ -204,28 +164,28 @@ void hash_compound_agg_finalizer<SetType>::visit(cudf::detail::var_aggregation c
   cudf::detail::initialize_with_identity(
     var_table_view, host_span<cudf::aggregation::Kind const>(&agg.kind, 1), stream);
 
-  thrust::for_each_n(
-    rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator(0),
-    col.size(),
-    var_hash_functor{
-      set, row_bitmask, *var_result_view, *values_view, *sum_view, *count_view, agg._ddof});
-  sparse_results->add_result(col, agg, std::move(var_result));
-  dense_results->add_result(col, agg, to_dense_agg_result(agg));
+  thrust::for_each_n(rmm::exec_policy_nosync(stream),
+                     thrust::make_counting_iterator(0),
+                     col.size(),
+                     var_hash_functor{d_output_index_map,
+                                      d_row_bitmask,
+                                      *var_result_view,
+                                      *values_view,
+                                      *sum_view,
+                                      *count_view,
+                                      agg._ddof});
+  cache->add_result(col, agg, std::move(var_result));
 }
 
-template <typename SetType>
-void hash_compound_agg_finalizer<SetType>::visit(cudf::detail::std_aggregation const& agg)
+void hash_compound_agg_finalizer::visit(cudf::detail::std_aggregation const& agg)
 {
-  if (dense_results->has_result(col, agg)) return;
-  auto var_agg = make_variance_aggregation(agg._ddof);
-  this->visit(*dynamic_cast<cudf::detail::var_aggregation*>(var_agg.get()));
-  column_view variance = dense_results->get_result(col, *var_agg);
+  if (cache->has_result(col, agg)) { return; }
+
+  auto const var_agg  = make_variance_aggregation(agg._ddof);
+  auto const variance = cache->get_result(col, *var_agg);
 
   auto result = cudf::detail::unary_operation(variance, unary_operator::SQRT, stream, mr);
-  dense_results->add_result(col, agg, std::move(result));
+  cache->add_result(col, agg, std::move(result));
 }
 
-template class hash_compound_agg_finalizer<hash_set_ref_t<cuco::find_tag>>;
-template class hash_compound_agg_finalizer<nullable_hash_set_ref_t<cuco::find_tag>>;
 }  // namespace cudf::groupby::detail::hash

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 #pragma once
 
 #include <cudf/aggregation.hpp>
-#include <cudf/groupby.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -26,6 +25,12 @@
 #include <rmm/device_uvector.hpp>
 
 namespace cudf::groupby::detail::hash {
+
+// TODO
+void find_output_indices(device_span<size_type> key_indices,
+                         device_span<size_type const> unique_indices,
+                         rmm::cuda_stream_view stream);
+
 /**
  * @brief Computes and returns a device vector containing all populated keys in
  * `key_set`.
@@ -39,16 +44,10 @@ namespace cudf::groupby::detail::hash {
  */
 template <typename SetType>
 void extract_populated_keys(SetType const& key_set,
-                            rmm::device_uvector<cudf::size_type>& populated_keys,
+                            rmm::device_uvector<size_type>& populated_keys,
                             rmm::cuda_stream_view stream);
 
-// make table that will hold sparse results
-template <typename GlobalSetType>
-cudf::table create_sparse_results_table(cudf::table_view const& flattened_values,
-                                        cudf::aggregation::Kind const* d_agg_kinds,
-                                        host_span<cudf::aggregation::Kind const> agg_kinds,
-                                        bool direct_aggregations,
-                                        GlobalSetType const& global_set,
-                                        rmm::device_uvector<cudf::size_type>& populated_keys,
-                                        rmm::cuda_stream_view stream);
+table create_results_table(table_view const& flattened_values,
+                           host_span<aggregation::Kind const> agg_kinds,
+                           rmm::cuda_stream_view stream);
 }  // namespace cudf::groupby::detail::hash

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "create_sparse_results_table.hpp"
+#include "create_results_table.hpp"
 #include "helpers.cuh"
 #include "single_pass_functors.cuh"
 
@@ -36,6 +36,26 @@
 #include <vector>
 
 namespace cudf::groupby::detail::hash {
+
+void find_output_indices(device_span<size_type> key_indices,
+                         device_span<size_type const> unique_indices,
+                         rmm::cuda_stream_view stream)
+{
+  rmm::device_uvector<cudf::size_type> new_indices(key_indices.size(), stream);
+  thrust::scatter(rmm::exec_policy_nosync(stream),
+                  thrust::make_counting_iterator(0),
+                  thrust::make_counting_iterator(static_cast<size_type>(unique_indices.size())),
+                  unique_indices.begin(),
+                  new_indices.begin());
+
+  thrust::for_each_n(
+    rmm::exec_policy_nosync(stream),
+    thrust::make_counting_iterator(0),
+    static_cast<size_type>(key_indices.size()),
+    [new_indices = new_indices.begin(), key_indices = key_indices.begin()] __device__(
+      size_type const idx) { key_indices[idx] = new_indices[key_indices[idx]]; });
+}
+
 namespace {
 /**
  * @brief Functor to create sparse result columns for hash-based groupby aggregations
@@ -120,41 +140,21 @@ void extract_populated_keys(SetType const& key_set,
   populated_keys.resize(std::distance(populated_keys.begin(), keys_end), stream);
 }
 
-// make table that will hold sparse results
-template <typename GlobalSetType>
-cudf::table create_sparse_results_table(cudf::table_view const& flattened_values,
-                                        cudf::aggregation::Kind const* d_agg_kinds,
-                                        host_span<cudf::aggregation::Kind const> agg_kinds,
-                                        bool direct_aggregations,
-                                        GlobalSetType const& global_set,
-                                        rmm::device_uvector<cudf::size_type>& populated_keys,
-                                        rmm::cuda_stream_view stream)
+cudf::table create_results_table(cudf::table_view const& flattened_values,
+                                 host_span<cudf::aggregation::Kind const> agg_kinds,
+                                 rmm::cuda_stream_view stream)
 {
-  // TODO single allocation - room for performance improvement
-  std::vector<std::unique_ptr<cudf::column>> sparse_columns;
+  std::vector<std::unique_ptr<cudf::column>> output_cols;
   std::transform(flattened_values.begin(),
                  flattened_values.end(),
                  agg_kinds.begin(),
-                 std::back_inserter(sparse_columns),
+                 std::back_inserter(output_cols),
                  sparse_column_creator{stream});
-  cudf::table sparse_table(std::move(sparse_columns));
-  // If no direct aggregations, initialize the sparse table
-  // only for the keys inserted in global hash set
-  if (!direct_aggregations) {
-    auto d_sparse_table = cudf::mutable_table_device_view::create(sparse_table, stream);
-    extract_populated_keys(global_set, populated_keys, stream);
-    thrust::for_each_n(
-      rmm::exec_policy(stream),
-      thrust::make_counting_iterator(0),
-      populated_keys.size(),
-      initialize_sparse_table{populated_keys.data(), *d_sparse_table, d_agg_kinds});
-  }
-  // Else initialize the whole table
-  else {
-    cudf::mutable_table_view sparse_table_view = sparse_table.mutable_view();
-    cudf::detail::initialize_with_identity(sparse_table_view, agg_kinds, stream);
-  }
-  return sparse_table;
+  cudf::table result_table(std::move(output_cols));
+  cudf::mutable_table_view result_table_view = result_table.mutable_view();
+  cudf::detail::initialize_with_identity(result_table_view, agg_kinds, stream);
+
+  return result_table;
 }
 
 template void extract_populated_keys<global_set_t>(
@@ -167,21 +167,4 @@ template void extract_populated_keys<nullable_global_set_t>(
   rmm::device_uvector<cudf::size_type>& populated_keys,
   rmm::cuda_stream_view stream);
 
-template cudf::table create_sparse_results_table<global_set_t>(
-  cudf::table_view const& flattened_values,
-  cudf::aggregation::Kind const* d_agg_kinds,
-  host_span<cudf::aggregation::Kind const> agg_kinds,
-  bool direct_aggregations,
-  global_set_t const& global_set,
-  rmm::device_uvector<cudf::size_type>& populated_keys,
-  rmm::cuda_stream_view stream);
-
-template cudf::table create_sparse_results_table<nullable_global_set_t>(
-  cudf::table_view const& flattened_values,
-  cudf::aggregation::Kind const* d_agg_kinds,
-  host_span<cudf::aggregation::Kind const> agg_kinds,
-  bool direct_aggregations,
-  nullable_global_set_t const& global_set,
-  rmm::device_uvector<cudf::size_type>& populated_keys,
-  rmm::cuda_stream_view stream);
 }  // namespace cudf::groupby::detail::hash
