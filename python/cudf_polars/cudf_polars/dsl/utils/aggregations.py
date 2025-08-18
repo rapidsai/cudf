@@ -145,11 +145,11 @@ def decompose_single_agg(
                 named_expr.reconstruct(expr.Col(agg.dtype, name)),
             )
         elif agg.name in ("mean", "median", "quantile", "std", "var"):
-            # libcudf promotes these to float64; for mean on Float32 inputs,
-            # Polars keeps Float32, so cast back in post-processing.
+            # libcudf promotes these to float64; but polars
+            # keeps Float32, so cast back in post-processing.
             named = expr.NamedExpr(name, agg)
             post_col: expr.Expr = expr.Col(DataType(pl.Float64()), name)
-            if agg.name == "mean" and agg.dtype.plc.id() == plc.TypeId.FLOAT32:
+            if agg.dtype.plc.id() == plc.TypeId.FLOAT32:
                 post_col = expr.Cast(agg.dtype, post_col)
             return [(named, True)], expr.NamedExpr(name, post_col)
         elif agg.name == "sum":
