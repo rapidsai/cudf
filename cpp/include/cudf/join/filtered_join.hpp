@@ -75,9 +75,13 @@ class filtered_join {
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
   filtered_join(cudf::table_view const& build,
-                     null_equality compare_nulls  = null_equality::EQUAL,
-                     double load_factor           = 0.5,
-                     rmm::cuda_stream_view stream = cudf::get_default_stream());
+                null_equality compare_nulls  = null_equality::EQUAL,
+                double load_factor           = 0.5,
+                rmm::cuda_stream_view stream = cudf::get_default_stream());
+
+  filtered_join(cudf::table_view const& build,
+                cudf::null_equality compare_nulls,
+                rmm::cuda_stream_view stream);
 
   /**
    * @brief Returns the row indices that can be used to construct the result of performing
@@ -91,10 +95,10 @@ class filtered_join {
    * construct the result of performing an inner join between two tables
    * with `build` and `probe` as the join keys.
    */
-  [[nodiscard]] std::unique_ptr<rmm::device_uvector<size_type>>
-  semi_join(cudf::table_view const& probe,
-             rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-             rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
+  [[nodiscard]] std::unique_ptr<rmm::device_uvector<size_type>> semi_join(
+    cudf::table_view const& probe,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
   /**
    * @brief Returns the build table indices that can be used to construct the result of performing
