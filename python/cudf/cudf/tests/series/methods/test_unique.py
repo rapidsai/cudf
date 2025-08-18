@@ -84,3 +84,23 @@ def test_series_nunique(request, nan_as_null, dropna):
     expect = pd_series.nunique(dropna=dropna)
     got = cudf_series.nunique(dropna=dropna)
     assert expect == got
+
+
+@pytest.mark.parametrize(
+    "item",
+    [
+        ["Cbe", "cbe", "CbeD", "Cb", "ghi", "Cb"],
+        ["a", "a", "a", "a", "A"],
+        ["A"],
+        ["abc", "xyz", None, "ab", "123"],
+        [None, None, "abc", None, "abc"],
+    ],
+)
+def test_string_unique(item):
+    ps = pd.Series(item)
+    gs = cudf.Series(item)
+    # Pandas `unique` returns a numpy array
+    pres = pd.Series(ps.unique())
+    # cudf returns a cudf.Series
+    gres = gs.unique()
+    assert_eq(pres, gres)

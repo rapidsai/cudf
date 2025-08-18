@@ -435,3 +435,52 @@ def test_timedelta_series_cmpops_pandas_compatibility(comparison_op):
         got = comparison_op(gsr1, gsr2)
 
     assert_eq(expect, got)
+
+
+def test_string_equality():
+    data1 = ["b", "c", "d", "a", "c"]
+    data2 = ["a", None, "c", "a", "c"]
+
+    ps1 = pd.Series(data1)
+    ps2 = pd.Series(data2)
+    gs1 = cudf.Series(data1)
+    gs2 = cudf.Series(data2)
+
+    expect = ps1 == ps2
+    got = gs1 == gs2
+
+    assert_eq(expect, got.fillna(False))
+
+    expect = ps1 == "m"
+    got = gs1 == "m"
+
+    assert_eq(expect, got.fillna(False))
+
+    ps1 = pd.Series(["a"])
+    gs1 = cudf.Series(["a"])
+
+    expect = ps1 == "m"
+    got = gs1 == "m"
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "lhs",
+    [
+        ["Cbe", "cbe", "CbeD", "Cb", "ghi", "Cb"],
+        ["abc", "xyz", "a", "ab", "123", "097"],
+    ],
+)
+@pytest.mark.parametrize(
+    "rhs",
+    [
+        ["Cbe", "cbe", "CbeD", "Cb", "ghi", "Cb"],
+        ["a", "a", "a", "a", "A", "z"],
+    ],
+)
+def test_string_binary_op_add(lhs, rhs):
+    pds = pd.Series(lhs) + pd.Series(rhs)
+    gds = cudf.Series(lhs) + cudf.Series(rhs)
+
+    assert_eq(pds, gds)

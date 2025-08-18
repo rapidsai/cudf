@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2025, NVIDIA CORPORATION.
+import sys
 
 import cupy as cp
 import numpy as np
@@ -6,7 +7,10 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 
+import rmm
+
 import cudf
+from cudf.core.buffer import as_buffer
 from cudf.core.column.column import _can_values_be_equal, as_column
 from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal
@@ -570,3 +574,41 @@ def test_astype_with_aliases(alias, expect_dtype):
 def test__can_values_be_equal(left, right, expected):
     assert _can_values_be_equal(left, right) is expected
     assert _can_values_be_equal(right, left) is expected
+
+
+def test_string_no_children_properties():
+    empty_col = cudf.core.column.StringColumn(
+        as_buffer(rmm.DeviceBuffer(size=0)),
+        size=0,
+        dtype=np.dtype("object"),
+        children=(),
+    )
+    assert empty_col.base_children == ()
+    assert empty_col.base_size == 0
+
+    assert empty_col.children == ()
+    assert empty_col.size == 0
+
+    assert sys.getsizeof(empty_col) >= 0  # Accounts for Python GC overhead
+
+
+def test_string_int_to_ipv4():
+    gsr = cudf.Series([0, None, 0, 698875905, 2130706433, 700776449]).astype(
+        "uint32"
+    )
+    expected = cudf.Series(
+        ["0.0.0.0", None, "0.0.0.0", "41.168.0.1", "127.0.0.1", "41.197.0.1"]
+    )
+
+    got = cudf.Series._from_column(gsr._column.int2ip())
+
+    assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "dtype", sorted(list(dtypeutils.NUMERIC_TYPES - {"uint32"}))
+)
+def test_string_int_to_ipv4_dtype_fail(dtype):
+    gsr = cudf.Series([1, 2, 3, 4, 5]).astype(dtype)
+    with pytest.raises(TypeError):
+        gsr._column.int2ip()

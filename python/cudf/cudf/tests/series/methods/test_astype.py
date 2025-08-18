@@ -665,3 +665,67 @@ def test_string_empty_numeric_astype(numeric_and_temporal_types_as_str):
     got = gs.astype("str")
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data,dtype",
+    [
+        (["0.1", "10.2", "10.876"], "float"),
+        (["-0.1", "10.2", "+10.876"], "float"),
+        (["1", "10.2", "10.876"], "float32"),
+        (["+123", "6344556789", "0"], "int"),
+        (["+123", "6344556789", "0"], "uint64"),
+        (["+123", "6344556789", "0"], "float"),
+        (["0.1", "-10.2", "10.876", None], "float"),
+    ],
+)
+@pytest.mark.parametrize("obj_type", [None, "str", "category"])
+def test_string_typecast(data, obj_type, dtype):
+    psr = pd.Series(data, dtype=obj_type)
+    gsr = cudf.Series(data, dtype=obj_type)
+
+    expect = psr.astype(dtype=dtype)
+    actual = gsr.astype(dtype=dtype)
+    assert_eq(expect, actual)
+
+
+@pytest.mark.parametrize(
+    "data,dtype",
+    [
+        (["0.1", "10.2", "10.876"], "int"),
+        (["1", "10.2", "+10.876"], "int"),
+        (["abc", "1", "2", " "], "int"),
+        (["0.1", "10.2", "10.876"], "uint64"),
+        (["1", "10.2", "+10.876"], "uint64"),
+        (["abc", "1", "2", " "], "uint64"),
+        ([" ", "0.1", "2"], "float"),
+        ([""], "int"),
+        ([""], "uint64"),
+        ([" "], "float"),
+        (["\n"], "int"),
+        (["\n"], "uint64"),
+        (["0.1", "-10.2", "10.876", None], "int"),
+        (["0.1", "-10.2", "10.876", None], "uint64"),
+        (["0.1", "-10.2", "10.876", None, "ab"], "float"),
+        (["+", "-"], "float"),
+        (["+", "-"], "int"),
+        (["+", "-"], "uint64"),
+        (["1++++", "--2"], "float"),
+        (["1++++", "--2"], "int"),
+        (["1++++", "--2"], "uint64"),
+        (["++++1", "--2"], "float"),
+        (["++++1", "--2"], "int"),
+        (["++++1", "--2"], "uint64"),
+    ],
+)
+@pytest.mark.parametrize("obj_type", [None, "str", "category"])
+def test_string_typecast_error(data, obj_type, dtype):
+    psr = pd.Series(data, dtype=obj_type)
+    gsr = cudf.Series(data, dtype=obj_type)
+
+    assert_exceptions_equal(
+        lfunc=psr.astype,
+        rfunc=gsr.astype,
+        lfunc_args_and_kwargs=([dtype],),
+        rfunc_args_and_kwargs=([dtype],),
+    )
