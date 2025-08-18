@@ -386,3 +386,39 @@ def test_datetime_from_integer(datetime_dtype, integer_dtype):
         )
     else:
         assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "datetime_dtype",
+    [
+        pl.Datetime("ms"),
+        pl.Datetime("us"),
+        pl.Datetime("ns"),
+    ],
+)
+@pytest.mark.parametrize(
+    "integer_dtype",
+    [
+        pl.Int64(),
+        pytest.param(
+            pl.UInt64(), marks=pytest.mark.xfail(reason="INT64 can not fit max(UINT64)")
+        ),
+        pl.Int32(),
+        pl.UInt32(),
+        pl.Int16(),
+        pl.UInt16(),
+        pl.Int8(),
+        pl.UInt8(),
+    ],
+)
+def test_integer_from_datetime(datetime_dtype, integer_dtype):
+    values = [
+        0,
+        1,
+        100,
+        pl.select(integer_dtype.max()).item(),
+        pl.select(integer_dtype.min()).item(),
+    ]
+    df = pl.LazyFrame({"data": pl.Series(values, dtype=datetime_dtype)})
+    q = df.select(pl.col("data").cast(integer_dtype).alias("int_from_datetime"))
+    assert_gpu_result_equal(q)
