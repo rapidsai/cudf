@@ -52,7 +52,6 @@ from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
-    _dtype_pandas_compatible,
     _maybe_convert_to_default_type,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
@@ -918,6 +917,7 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
                     (1, 'Blue')],
                 )
         """
+
         if not isinstance(other, Index):
             other = Index(
                 other,
@@ -930,10 +930,16 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
                 f"[None, False, True]; {sort} was passed."
             )
 
-        if not len(self) or not len(other) or self.equals(other):
-            common_dtype = _dtype_pandas_compatible(
-                find_common_type([self.dtype, other.dtype])
-            )
+        if self.equals(other):
+            if self.has_duplicates:
+                result = self.unique()._get_reconciled_name_object(other)
+            else:
+                result = self._get_reconciled_name_object(other)
+            if sort is True:
+                result = result.sort_values()  # type: ignore[assignment]
+            return result
+        if not len(self) or not len(other):
+            common_dtype = find_common_type([self.dtype, other.dtype])
 
             lhs = self.unique() if self.has_duplicates else self
             rhs = other
@@ -1870,6 +1876,8 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
             result = _concat_range_index(non_empties)
         else:
             data = concat_columns([o._column for o in non_empties])
+            if cls is IntervalIndex:
+                data = data._with_type_metadata(non_empties[0]._column.dtype)
             result = Index._from_column(data)
 
         names = {obj.name for obj in objs}
@@ -2637,7 +2645,7 @@ class RangeIndex(Index):
     def _column_labels_and_values(
         self,
     ) -> Iterable[tuple[Hashable, ColumnBase]]:
-        return zip(self._column_names, self._columns)
+        return zip(self._column_names, self._columns, strict=True)
 
     @_performance_tracking
     def _as_int_index(self) -> Index:
@@ -5230,6 +5238,12 @@ class IntervalIndex(Index):
         IntervalIndex([(0, 1], (1, 2], (2, 3]], dtype='interval[int64, right]')
         """
         breaks = as_column(breaks, dtype=dtype)
+        if (
+            len(breaks) == 0
+            and dtype is None
+            and breaks.dtype == CUDF_STRING_DTYPE
+        ):
+            breaks = breaks.astype(np.dtype(np.int64))
         if copy:
             breaks = breaks.copy()
         left_col = breaks.slice(0, len(breaks) - 1)

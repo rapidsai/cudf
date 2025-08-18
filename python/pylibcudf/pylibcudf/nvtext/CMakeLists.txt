@@ -24,7 +24,6 @@ set(cython_sources
     replace.pyx
     stemmer.pyx
     tokenize.pyx
-    subword_tokenize.pyx
     wordpiece_tokenize.pyx
 )
 

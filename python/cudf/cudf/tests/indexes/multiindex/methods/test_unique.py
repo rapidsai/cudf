@@ -1,0 +1,16 @@
+# Copyright (c) 2025, NVIDIA CORPORATION.
+
+
+import pandas as pd
+
+import cudf
+from cudf.testing import assert_eq
+
+
+def test_unique_level():
+    pd_mi = pd.MultiIndex.from_arrays([[1, 1, 2], [3, 3, 2]])
+    cudf_mi = cudf.MultiIndex.from_pandas(pd_mi)
+
+    result = pd_mi.unique(level=1)
+    expected = cudf_mi.unique(level=1)
+    assert_eq(result, expected)
