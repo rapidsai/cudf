@@ -255,7 +255,7 @@ class GroupedRollingWindow(Expr):
             if isinstance(val, expr.Len):
                 # Count rows per group via sum(1).
                 ones = plc.Column.from_scalar(
-                    plc.Scalar.from_py(1, plc.DataType(plc.TypeId.INT32)), df.num_rows
+                    plc.Scalar.from_py(1, plc.DataType(plc.TypeId.INT8)), df.num_rows
                 )
                 gb_requests.append(
                     plc.groupby.GroupByRequest(ones, [plc.aggregation.sum()])
@@ -268,7 +268,7 @@ class GroupedRollingWindow(Expr):
                 gb_requests.append(plc.groupby.GroupByRequest(col, [val.agg_request]))
 
         group_keys_tbl, value_tables = grouper.aggregate(gb_requests)
-        out_cols = [t.columns()[0] for t in value_tables]
+        out_cols = (t.columns()[0] for t in value_tables)
 
         # Build gather maps to broadcast per-group results to all rows.
         # Also left-join input keys to group-keys so every input row appears exactly once.

@@ -15,6 +15,7 @@ import pylibcudf as plc
 
 from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr, ir
+from cudf_polars.dsl.expressions.base import ExecutionContext
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable, Sequence
@@ -53,6 +54,7 @@ def decompose_single_agg(
     name_generator: Generator[str, None, None],
     *,
     is_top: bool,
+    context: ExecutionContext,
 ) -> tuple[list[tuple[expr.NamedExpr, bool]], expr.NamedExpr]:
     """
     Decompose a single named aggregation.
@@ -65,6 +67,8 @@ def decompose_single_agg(
         Generator of unique names for temporaries introduced during decomposition.
     is_top
         Is this the top of an aggregation expression?
+    context
+        ExecutionContext in which the aggregation will run.
 
     Returns
     -------
@@ -94,7 +98,10 @@ def decompose_single_agg(
         # Special case to fill nulls with zeros for empty group length calculations
         (child,) = agg.children
         child_agg, post = decompose_single_agg(
-            expr.NamedExpr(next(name_generator), child), name_generator, is_top=True
+            expr.NamedExpr(next(name_generator), child),
+            name_generator,
+            is_top=True,
+            context=context,
         )
         return child_agg, named_expr.reconstruct(
             replace_nulls(
@@ -121,7 +128,10 @@ def decompose_single_agg(
             # pl.col("a").nan_max or nan_min
             raise NotImplementedError("Nan propagation in groupby for min/max")
         aggs, _ = decompose_single_agg(
-            expr.NamedExpr(next(name_generator), child), name_generator, is_top=False
+            expr.NamedExpr(next(name_generator), child),
+            name_generator,
+            is_top=False,
+            context=context,
         )
         if any(has_agg for _, has_agg in aggs):
             raise NotImplementedError("Nested aggs in groupby not supported")
@@ -134,6 +144,14 @@ def decompose_single_agg(
                 [(named_expr.reconstruct(agg.reconstruct([child])), True)],
                 named_expr.reconstruct(expr.Col(agg.dtype, name)),
             )
+        elif agg.name in ("mean", "median", "quantile", "std", "var"):
+            # libcudf promotes these to float64; for mean on Float32 inputs,
+            # Polars keeps Float32, so cast back in post-processing.
+            named = expr.NamedExpr(name, agg)
+            post_col: expr.Expr = expr.Col(DataType(pl.Float64()), name)
+            if agg.name == "mean" and agg.dtype.plc.id() == plc.TypeId.FLOAT32:
+                post_col = expr.Cast(agg.dtype, post_col)
+            return [(named, True)], expr.NamedExpr(name, post_col)
         elif agg.name == "sum":
             col = (
                 expr.Cast(agg.dtype, expr.Col(DataType(pl.datatypes.Int64()), name))
@@ -143,21 +161,43 @@ def decompose_single_agg(
                 )
                 else expr.Col(agg.dtype, name)
             )
-            return [(named_expr, True)], expr.NamedExpr(
-                name,
-                # In polars sum(empty_group) => 0, but in libcudf
-                # sum(empty_group) => null So must post-process by
-                # replacing nulls, but only if we're a "top-level"
-                # agg.
-                replace_nulls(col, 0, is_top=is_top),
-            )
-        elif agg.name in ("mean", "median", "quantile", "std", "var"):
-            # libcudf promotes to float64
-            named = expr.NamedExpr(name, agg)
-            post_col: expr.Expr = expr.Col(DataType(pl.Float64()), name)
-            if agg.dtype.plc.id() == plc.TypeId.FLOAT32:
-                post_col = expr.Cast(agg.dtype, post_col)
-            return [(named, True)], expr.NamedExpr(name, post_col)
+            # Polars semantics for sum differ by context:
+            # - GROUPBY: sum(all-null group) => 0; sum(empty group) => 0  (fill-null)
+            # - ROLLING: sum(all-null window) => null; sum(empty window) => 0 (fill only if empty)
+            #
+            # Must post-process because libcudf returns null for both empty and all-null windows/groups
+            if context == ExecutionContext.GROUPBY:
+                # GROUPBY: always fill top-level nulls with 0
+                return [(named_expr, True)], expr.NamedExpr(
+                    name, replace_nulls(col, 0, is_top=is_top)
+                )
+            else:
+                # ROLLING:
+                # Add a second rolling agg to compute the window size, then only
+                # replace nulls with 0 when the window size is 0 (ie. empty window).
+                win_len_name = next(name_generator)
+                win_len = expr.NamedExpr(
+                    win_len_name,
+                    expr.Len(DataType(pl.Int32())),
+                )
+
+                win_len_col = expr.Col(DataType(pl.Int32()), win_len_name)
+                win_len_filled = replace_nulls(win_len_col, 0, is_top=True)
+
+                is_empty = expr.BinOp(
+                    DataType(pl.Boolean()),
+                    plc.binaryop.BinaryOperator.EQUAL,
+                    win_len_filled,
+                    expr.Literal(DataType(pl.Int32()), 0),
+                )
+
+                # If empty -> fill 0; else keep libcudf's semantics for all-null windows.
+                filled = replace_nulls(col, 0, is_top=is_top)
+                post_ternary_expr = expr.Ternary(agg.dtype, is_empty, filled, col)
+
+                return [(named_expr, True), (win_len, True)], expr.NamedExpr(
+                    name, post_ternary_expr
+                )
         else:
             return [(named_expr, True)], named_expr.reconstruct(
                 expr.Col(agg.dtype, name)
@@ -173,6 +213,7 @@ def decompose_single_agg(
             (expr.NamedExpr(next(name_generator), child) for child in agg.children),
             name_generator,
             is_top=False,
+            context=context,
         )
         if any(has_agg for _, has_agg in aggs):
             if not all(
@@ -201,16 +242,23 @@ def _decompose_aggs(
     name_generator: Generator[str, None, None],
     *,
     is_top: bool,
+    context: ExecutionContext,
 ) -> tuple[list[tuple[expr.NamedExpr, bool]], Sequence[expr.NamedExpr]]:
     new_aggs, post = zip(
-        *(decompose_single_agg(agg, name_generator, is_top=is_top) for agg in aggs),
+        *(
+            decompose_single_agg(agg, name_generator, is_top=is_top, context=context)
+            for agg in aggs
+        ),
         strict=True,
     )
     return list(itertools.chain.from_iterable(new_aggs)), post
 
 
 def decompose_aggs(
-    aggs: Iterable[expr.NamedExpr], name_generator: Generator[str, None, None]
+    aggs: Iterable[expr.NamedExpr],
+    name_generator: Generator[str, None, None],
+    *,
+    context: ExecutionContext,
 ) -> tuple[list[expr.NamedExpr], Sequence[expr.NamedExpr]]:
     """
     Process arbitrary aggregations into a form we can handle in grouped aggregations.
@@ -221,6 +269,8 @@ def decompose_aggs(
         List of aggregation expressions
     name_generator
         Generator of unique names for temporaries introduced during decomposition.
+    context
+        ExecutionContext in which the aggregation will run.
 
     Returns
     -------
@@ -240,7 +290,7 @@ def decompose_aggs(
     NotImplementedError
         For unsupported aggregation combinations.
     """
-    new_aggs, post = _decompose_aggs(aggs, name_generator, is_top=True)
+    new_aggs, post = _decompose_aggs(aggs, name_generator, is_top=True, context=context)
     return [agg for agg, _ in new_aggs], post
 
 
@@ -249,6 +299,7 @@ def apply_pre_evaluation(
     keys: Sequence[expr.NamedExpr],
     original_aggs: Sequence[expr.NamedExpr],
     name_generator: Generator[str, None, None],
+    context: ExecutionContext,
     *extra_columns: expr.NamedExpr,
 ) -> tuple[Sequence[expr.NamedExpr], Schema, Callable[[ir.IR], ir.IR]]:
     """
@@ -264,6 +315,8 @@ def apply_pre_evaluation(
         Aggregation expressions to rewrite.
     name_generator
         Generator of unique names for temporaries introduced during decomposition.
+    context
+        ExecutionContext in which the aggregation will run.
     extra_columns
         Any additional columns to be included in the output (only
         relevant for rolling aggregations). Columns will appear in the
@@ -284,7 +337,7 @@ def apply_pre_evaluation(
     NotImplementedError
         If the aggregations are somehow unsupported.
     """
-    aggs, post = decompose_aggs(original_aggs, name_generator)
+    aggs, post = decompose_aggs(original_aggs, name_generator, context=context)
     assert len(post) == len(original_aggs), (
         f"Unexpected number of post-aggs {len(post)=} {len(original_aggs)=}"
     )

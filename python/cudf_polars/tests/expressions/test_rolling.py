@@ -51,7 +51,7 @@ def test_rolling_datetime(time_unit):
     assert_gpu_result_equal(q)
 
 
-def test_rolling_date_raises():
+def test_rolling_date():
     dates = [
         "2020-01-01",
         "2020-01-01",
@@ -69,7 +69,7 @@ def test_rolling_date_raises():
         max_a=pl.max("a").rolling(index_column="dt", period="10d", offset="2d"),
     )
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_gpu_result_equal(q)
 
 
 @pytest.mark.parametrize("dtype", [pl.Int32, pl.UInt32, pl.Int64, pl.UInt64])
@@ -147,6 +147,20 @@ def test_rolling_inside_groupby_raises():
         q.collect(engine="in-memory")
 
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_rolling_sum_all_null_window_returns_null():
+    df = pl.LazyFrame(
+        {
+            "orderby": [1, 2, 3, 4, 5, 6],
+            "null_windows": [None, None, 5, None, None, 1],
+        }
+    )
+    q = df.select(
+        out=pl.col("null_windows").sum().rolling("orderby", period="2i", closed="both")
+    )
+    # Expected: [null, null, 5, 5, 5, 1]
+    assert_gpu_result_equal(q)
 
 
 @pytest.mark.parametrize(
