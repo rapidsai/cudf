@@ -404,6 +404,37 @@ def test_from_scalar_typing(request, all_supported_types_as_str):
 
 
 @pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [np.nan, 1, 2], "b": [None, None, None]},
+        {"a": [1, 2, np.nan, 2], "b": [np.nan, np.nan, np.nan, np.nan]},
+        {
+            "a": [1, 2, np.nan, 2, None],
+            "b": [np.nan, np.nan, None, np.nan, np.nan],
+        },
+        {"a": [1, 2, 2, None, 1.1], "b": [1, 2.2, 3, None, 5]},
+    ],
+)
+def test_dataframe_constructor_nan_as_null(data, nan_as_null):
+    actual = cudf.DataFrame(data, nan_as_null=nan_as_null)
+
+    if nan_as_null:
+        assert (
+            not (
+                actual.astype("float").replace(
+                    cudf.Series([np.nan], nan_as_null=False), cudf.Series([-1])
+                )
+                == -1
+            )
+            .any()
+            .any()
+        )
+    else:
+        actual = actual.select_dtypes(exclude=["object"])
+        assert (actual.replace(np.nan, -1) == -1).any().any()
+
+
+@pytest.mark.parametrize(
     "data1, data2",
     [(1, 2), (1.0, 2.0), (3, 4.0)],
 )
