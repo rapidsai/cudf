@@ -34,7 +34,7 @@ python -m pytest --cache-clear "$@" "${PYTEST_XDIST_ARGS[@]}" tests --executor s
 
 # Run experimental tests with Distributed cluster
 rapids-logger "Run the experimental tests with the distributed scheduler"
-python -m pytest --cache-clear "$@" "${PYTEST_XDIST_ARGS[@]}" "tests/experimental" \
+python -m pytest --cache-clear "$@" "tests/experimental" \
     --executor streaming \
     --scheduler distributed \
     --cov-fail-under=0  # No code-coverage requirement for these tests.
