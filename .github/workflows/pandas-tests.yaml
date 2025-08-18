@@ -22,7 +22,7 @@ jobs:
   pandas-tests:
       # run the Pandas unit tests
       secrets: inherit
-      uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-25.08
+      uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-25.10
       with:
         matrix_filter: '[{"ARCH": "amd64", "PY_VER": "3.13", "CUDA_VER": "12.9.1", "LINUX_VER": "ubuntu24.04", "GPU": "l4", "DRIVER": "latest", "DEPENDENCIES": "newest"}]'
         build_type: nightly

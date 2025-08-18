@@ -15,12 +15,12 @@
  */
 
 #pragma once
-#include "jit/span.cuh"
-
 #include <cudf/column/column_device_view_base.cuh>
 #include <cudf/types.hpp>
 
 #include <cuda/std/cstddef>
+
+#include <jit/span.cuh>
 
 #include <cstddef>
 

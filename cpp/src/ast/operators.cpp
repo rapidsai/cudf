@@ -272,6 +272,63 @@ cudf::size_type ast_operator_arity(ast_operator op)
   return result;
 }
 
+std::string_view ast_operator_string(ast_operator op)
+{
+  switch (op) {
+    case ast_operator::ADD: return "ADD";
+    case ast_operator::SUB: return "SUB";
+    case ast_operator::MUL: return "MUL";
+    case ast_operator::DIV: return "DIV";
+    case ast_operator::TRUE_DIV: return "TRUE_DIV";
+    case ast_operator::FLOOR_DIV: return "FLOOR_DIV";
+    case ast_operator::MOD: return "MOD";
+    case ast_operator::PYMOD: return "PYMOD";
+    case ast_operator::POW: return "POW";
+    case ast_operator::EQUAL: return "EQUAL";
+    case ast_operator::NULL_EQUAL: return "NULL_EQUAL";
+    case ast_operator::NOT_EQUAL: return "NOT_EQUAL";
+    case ast_operator::LESS: return "LESS";
+    case ast_operator::GREATER: return "GREATER";
+    case ast_operator::LESS_EQUAL: return "LESS_EQUAL";
+    case ast_operator::GREATER_EQUAL: return "GREATER_EQUAL";
+    case ast_operator::BITWISE_AND: return "BITWISE_AND";
+    case ast_operator::BITWISE_OR: return "BITWISE_OR";
+    case ast_operator::BITWISE_XOR: return "BITWISE_XOR";
+    case ast_operator::LOGICAL_AND: return "LOGICAL_AND";
+    case ast_operator::NULL_LOGICAL_AND: return "NULL_LOGICAL_AND";
+    case ast_operator::LOGICAL_OR: return "LOGICAL_OR";
+    case ast_operator::NULL_LOGICAL_OR: return "NULL_LOGICAL_OR";
+    case ast_operator::IDENTITY: return "IDENTITY";
+    case ast_operator::IS_NULL: return "IS_NULL";
+    case ast_operator::SIN: return "SIN";
+    case ast_operator::COS: return "COS";
+    case ast_operator::TAN: return "TAN";
+    case ast_operator::ARCSIN: return "ARCSIN";
+    case ast_operator::ARCCOS: return "ARCCOS";
+    case ast_operator::ARCTAN: return "ARCTAN";
+    case ast_operator::SINH: return "SINH";
+    case ast_operator::COSH: return "COSH";
+    case ast_operator::TANH: return "TANH";
+    case ast_operator::ARCSINH: return "ARCSINH";
+    case ast_operator::ARCCOSH: return "ARCCOSH";
+    case ast_operator::ARCTANH: return "ARCTANH";
+    case ast_operator::EXP: return "EXP";
+    case ast_operator::LOG: return "LOG";
+    case ast_operator::SQRT: return "SQRT";
+    case ast_operator::CBRT: return "CBRT";
+    case ast_operator::CEIL: return "CEIL";
+    case ast_operator::FLOOR: return "FLOOR";
+    case ast_operator::ABS: return "ABS";
+    case ast_operator::RINT: return "RINT";
+    case ast_operator::BIT_INVERT: return "BIT_INVERT";
+    case ast_operator::NOT: return "NOT";
+    case ast_operator::CAST_TO_INT64: return "CAST_TO_INT64";
+    case ast_operator::CAST_TO_UINT64: return "CAST_TO_UINT64";
+    case ast_operator::CAST_TO_FLOAT64: return "CAST_TO_FLOAT64";
+    default: CUDF_FAIL("Unrecognized operator type.");
+  }
+}
+
 }  // namespace detail
 
 }  // namespace ast

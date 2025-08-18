@@ -21,6 +21,7 @@ import pylibcudf as plc
 
 from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr, ir
+from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.to_ast import insert_colrefs
 from cudf_polars.dsl.utils.aggregations import decompose_single_agg
 from cudf_polars.dsl.utils.groupby import rewrite_groupby
@@ -523,6 +524,7 @@ def _(node: pl_ir.Sink, translator: Translator, schema: Schema) -> ir.IR:
         schema=schema,
         kind=sink_kind,
         path=file["target"],
+        parquet_options=translator.config_options.parquet_options,
         options=options,
         cloud_options=cloud_options,
         df=translator.translate_ir(n=node.input),
@@ -675,17 +677,6 @@ def _(
             )
         elif name == "pow":
             return expr.BinOp(dtype, plc.binaryop.BinaryOperator.POW, *children)
-        elif name in "top_k":
-            (col, k) = children
-            assert isinstance(k, expr.Literal)
-            (descending,) = options
-            return expr.Slice(
-                dtype,
-                0,
-                k.value,
-                expr.Sort(dtype, (False, True, not descending), col),
-            )
-
         return expr.UnaryFunction(dtype, name, options, *children)
     raise NotImplementedError(
         f"No handler for Expr function node with {name=}"
@@ -701,7 +692,10 @@ def _(
         agg = translator.translate_expr(n=node.function, schema=schema)
         name_generator = unique_names(schema)
         aggs, named_post_agg = decompose_single_agg(
-            expr.NamedExpr(next(name_generator), agg), name_generator, is_top=True
+            expr.NamedExpr(next(name_generator), agg),
+            name_generator,
+            is_top=True,
+            context=ExecutionContext.ROLLING,
         )
         named_aggs = [agg for agg, _ in aggs]
         orderby = node.options.index_column
@@ -874,6 +868,8 @@ def _(
     dtype: DataType,
     schema: Schema,
 ) -> expr.Expr:
+    if plc.traits.is_boolean(dtype.plc) and node.op == pl_expr.Operator.TrueDivide:
+        dtype = DataType(pl.Float64())
     return expr.BinOp(
         dtype,
         expr.BinOp._MAPPING[node.op],

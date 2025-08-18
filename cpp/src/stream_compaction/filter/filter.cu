@@ -14,16 +14,10 @@
  * limitations under the License.
  */
 
-#include "jit/cache.hpp"
-#include "jit/helpers.hpp"
-#include "jit/parser.hpp"
-#include "jit/span.cuh"
-
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/jit/runtime_support.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/reshape.hpp>
 #include <cudf/stream_compaction.hpp>
@@ -38,6 +32,10 @@
 #include <cuda/std/iterator>
 #include <thrust/copy.h>
 
+#include <jit/cache.hpp>
+#include <jit/helpers.hpp>
+#include <jit/parser.hpp>
+#include <jit/span.cuh>
 #include <jit_preprocessed_files/stream_compaction/filter/jit/kernel.cu.jit.hpp>
 
 #include <utility>
@@ -176,14 +174,13 @@ void launch_filter_kernel(jitify2::ConfiguredKernel& kernel,
 
   std::array<void*, 3> args{&outputs_ptr, &inputs_ptr, &p_user_data};
 
-  kernel->launch(args.data());
+  kernel->launch_raw(args.data());
 }
 
 void perform_checks(column_view base_column,
                     std::vector<column_view> const& columns,
                     std::optional<std::vector<bool>> copy_mask)
 {
-  CUDF_EXPECTS(is_runtime_jit_supported(), "Runtime JIT is only supported on CUDA Runtime 11.5+");
   CUDF_EXPECTS(std::all_of(columns.begin(),
                            columns.end(),
                            [](auto& input) {
@@ -213,13 +210,7 @@ jitify2::Kernel get_kernel(std::string const& kernel_name, std::string const& cu
     .get_kernel(kernel_name,
                 {},
                 {{"cudf/detail/operation-udf.hpp", cuda_source}},
-                {"-arch=sm_.",
-                 "--device-int128",
-                 // TODO: remove when we upgrade to CCCL >= 3.0
-
-                 // CCCL WAR for not using the correct INT128 feature macro:
-                 // https://github.com/NVIDIA/cccl/issues/3801
-                 "-D__SIZEOF_INT128__=16"});
+                {"-arch=sm_.", "--device-int128"});
 }
 
 jitify2::ConfiguredKernel build_kernel(std::string const& kernel_name,
