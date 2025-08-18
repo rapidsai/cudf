@@ -625,3 +625,9 @@ def categorical_ordered(request):
 def interval_closed(request):
     """Param for `closed` argument for interval types"""
     return request.param
+
+
+@pytest.fixture(params=["all", "any"])
+def dropna_how(request):
+    """Param for `how` argument"""
+    return request.param
