@@ -14,9 +14,6 @@
  * limitations under the License.
  */
 
-#include "jit/accessors.cuh"
-#include "jit/span.cuh"
-
 #include <cudf/column/column_device_view_base.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/strings/string_view.cuh>
@@ -25,6 +22,9 @@
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <cuda/std/cstddef>
+
+#include <jit/accessors.cuh>
+#include <jit/span.cuh>
 
 // clang-format off
 // This header is an inlined header that defines the GENERIC_FILTER_OP function. It is placed here
