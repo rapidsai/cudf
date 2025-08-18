@@ -3,8 +3,8 @@
 
 set -euo pipefail
 
-# Select the best GPU to use by free memory and compute the pytest-xdist worker count.
-eval "$("$(dirname "$(realpath "${BASH_SOURCE[0]}")")/utils/get_device_and_worker_count.py" | sed 's/^/export /')"
+HELPER="$(dirname "$(realpath "${BASH_SOURCE[0]}")")/utils/get_device_and_worker_count.py"
+eval "$(python "$HELPER" | sed 's/^/export /')"
 
 # Set the GPU to use, if one was selected
 if [[ -n "${GPU_ID:-}" ]]; then
@@ -26,7 +26,7 @@ python -m pytest --cache-clear "$@" "${PYTEST_XDIST_ARGS[@]}" tests --executor i
 
 # Test the default "streaming" executor
 rapids-logger "Test the streaming executor"
-python -m pytest --cache-clear "$@" "${PYTEST_XDIST_ARGS[@]}" tests
+python -m pytest --cache-clear "$@" "${PYTEST_XDIST_ARGS[@]}" tests --executor streaming
 
 # Test the "streaming" executor with small blocksize
 rapids-logger "Test the streaming executor with a small blocksize"
