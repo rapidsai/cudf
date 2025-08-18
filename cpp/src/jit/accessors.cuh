@@ -33,16 +33,10 @@ struct column_accessor {
   using type                     = T;
   static constexpr int32_t index = Index;
 
-  static __device__ decltype(auto) element(cudf::mutable_column_device_view_core const* outputs,
-                                           cudf::size_type row)
+  template <typename ColumnView>
+  static __device__ decltype(auto) element(ColumnView const* columns, cudf::size_type row)
   {
-    return outputs[index].element<T>(row);
-  }
-
-  static __device__ decltype(auto) element(cudf::column_device_view_core const* inputs,
-                                           cudf::size_type row)
-  {
-    return inputs[index].element<T>(row);
+    return columns[index].template element<T>(row);
   }
 
   static __device__ void assign(cudf::mutable_column_device_view_core const* outputs,
@@ -52,29 +46,18 @@ struct column_accessor {
     outputs[index].assign<T>(row, value);
   }
 
-  static __device__ bool is_null(cudf::column_device_view_core const* inputs, cudf::size_type row)
+  template <typename ColumnView>
+  static __device__ bool is_null(ColumnView const* inputs, cudf::size_type row)
   {
     return inputs[index].is_null(row);
   }
 
-  static __device__ bool is_null(cudf::mutable_column_device_view_core const* inputs,
-                                 cudf::size_type row)
-  {
-    return inputs[index].is_null(row);
-  }
-
-  static __device__ cuda::std::optional<T> nullable_element(
-    cudf::mutable_column_device_view_core const* outputs, cudf::size_type row)
+  template <typename ColumnView>
+  static __device__ cuda::std::optional<T> nullable_element(ColumnView const* outputs,
+                                                            cudf::size_type row)
   {
     if (is_null(outputs, row)) { return cuda::std::nullopt; }
-    return outputs[index].element<T>(row);
-  }
-
-  static __device__ cuda::std::optional<T> nullable_element(
-    cudf::column_device_view_core const* inputs, cudf::size_type row)
-  {
-    if (is_null(inputs, row)) { return cuda::std::nullopt; }
-    return inputs[index].element<T>(row);
+    return outputs[index].template element<T>(row);
   }
 };
 
@@ -115,16 +98,10 @@ struct scalar_accessor {
   using type                     = typename Accessor::type;
   static constexpr int32_t index = Accessor::index;
 
-  static __device__ decltype(auto) element(cudf::mutable_column_device_view_core const* outputs,
-                                           cudf::size_type)
+  template <typename ColumnView>
+  static __device__ decltype(auto) element(ColumnView const* outputs, cudf::size_type)
   {
     return Accessor::element(outputs, 0);
-  }
-
-  static __device__ decltype(auto) element(cudf::column_device_view_core const* inputs,
-                                           cudf::size_type)
-  {
-    return Accessor::element(inputs, 0);
   }
 
   static __device__ void assign(cudf::mutable_column_device_view_core const* outputs,
@@ -134,27 +111,16 @@ struct scalar_accessor {
     return Accessor::assign(outputs, 0, value);
   }
 
-  static __device__ bool is_null(cudf::column_device_view_core const* inputs, cudf::size_type)
+  template <typename ColumnView>
+  static __device__ bool is_null(ColumnView const* inputs, cudf::size_type)
   {
     return Accessor::is_null(inputs, 0);
   }
 
-  static __device__ bool is_null(cudf::mutable_column_device_view_core const* inputs,
-                                 cudf::size_type)
-  {
-    return Accessor::is_null(inputs, 0);
-  }
-
-  static __device__ decltype(auto) nullable_element(
-    cudf::mutable_column_device_view_core const* outputs, cudf::size_type)
+  template <typename ColumnView>
+  static __device__ decltype(auto) nullable_element(ColumnView const* outputs, cudf::size_type)
   {
     return Accessor::nullable_element(outputs, 0);
-  }
-
-  static __device__ decltype(auto) nullable_element(cudf::column_device_view_core const* inputs,
-                                                    cudf::size_type)
-  {
-    return Accessor::nullable_element(inputs, 0);
   }
 };
 
