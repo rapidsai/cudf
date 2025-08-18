@@ -437,11 +437,9 @@ table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns(
 
   select_columns(read_columns_mode::FILTER_COLUMNS, options);
 
-  auto output_dtypes = get_output_types(_output_buffers_template);
-
   auto data_page_mask = (mask_data_pages == use_data_page_mask::YES)
                           ? _extended_metadata->compute_data_page_mask(
-                              row_mask, row_group_indices, output_dtypes, _input_columns, stream)
+                              row_mask, row_group_indices, _input_columns, 0, stream)
                           : std::vector<std::vector<bool>>{};
 
   prepare_data(row_group_indices, std::move(column_chunk_buffers), data_page_mask, options);
@@ -467,11 +465,9 @@ table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns(
 
   select_columns(read_columns_mode::PAYLOAD_COLUMNS, options);
 
-  auto output_dtypes = get_output_types(_output_buffers_template);
-
   auto data_page_mask = (mask_data_pages == use_data_page_mask::YES)
                           ? _extended_metadata->compute_data_page_mask(
-                              row_mask, row_group_indices, output_dtypes, _input_columns, stream)
+                              row_mask, row_group_indices, _input_columns, 0, stream)
                           : std::vector<std::vector<bool>>{};
 
   prepare_data(row_group_indices, std::move(column_chunk_buffers), data_page_mask, options);
