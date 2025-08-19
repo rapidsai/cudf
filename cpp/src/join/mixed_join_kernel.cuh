@@ -97,11 +97,11 @@ __device__ __forceinline__ void standalone_retrieve(cooperative_groups::thread_b
   auto constexpr buffer_size          = max_matches_per_step + flushing_cg_size;
 
   auto const flushing_cg = cg::tiled_partition<flushing_cg_size>(block);
-  auto const probing_cg  = cg::tiled_partition<probing_cg_size>(block);
+  // Since probing_cg_size is 1, we can work with individual threads
 
   auto const flushing_cg_id = flushing_cg.meta_group_rank();
-  auto const stride         = probing_cg.meta_group_size();
-  auto idx                  = probing_cg.meta_group_rank();
+  auto const stride         = BlockSize;  // Each thread processes its own keys
+  auto idx = threadIdx.x;  // Direct thread index since each thread works independently
 
   __shared__ cuco::pair<probe_type, typename StorageRef::value_type> output_buffer[num_flushing_cgs]
                                                                                   [buffer_size];
@@ -157,49 +157,36 @@ __device__ __forceinline__ void standalone_retrieve(cooperative_groups::thread_b
           auto const second_equals =
             (not second_slot_is_empty and key_equal(probe_key, bucket_slots[1]));
 
-          auto const first_exists  = probing_cg.ballot(first_equals);
-          auto const second_exists = probing_cg.ballot(second_equals);
+          // Since probing CG size is 1, we don't need ballot operations
+          // Just process matches directly for this single thread
+          if (first_equals or second_equals) {
+            if constexpr (is_outer) { found_match = true; }
 
-          // Fill the buffer if any matching keys are found
-          auto const cg_lane_id = probing_cg.thread_rank();
-          if (first_exists or second_exists) {
-            if constexpr (is_outer) {
-              found_match = true;
-            }  // Mark that we found a match for outer joins
-
-            auto const num_first_matches  = __popc(first_exists);
-            auto const num_second_matches = __popc(second_exists);
-
-            uint32_t output_idx;
-            if (cg_lane_id == 0) {
-              output_idx = atomicAdd(&flushing_cg_counter[flushing_cg_id],
-                                     (num_first_matches + num_second_matches));
-            }
-            output_idx = probing_cg.shfl(output_idx, 0);
+            uint32_t num_matches = (first_equals ? 1 : 0) + (second_equals ? 1 : 0);
+            uint32_t output_idx  = atomicAdd(&flushing_cg_counter[flushing_cg_id], num_matches);
 
             if (first_equals) {
-              auto const lane_offset = count_least_significant_bits(first_exists, cg_lane_id);
-              output_buffer[flushing_cg_id][output_idx + lane_offset] = {probe_key,
-                                                                         bucket_slots[0]};
-            }
-            if (second_equals) {
-              auto const lane_offset = count_least_significant_bits(second_exists, cg_lane_id);
-              output_buffer[flushing_cg_id][output_idx + num_first_matches + lane_offset] = {
-                probe_key, bucket_slots[1]};
+              output_buffer[flushing_cg_id][output_idx] = {probe_key, bucket_slots[0]};
+              if (second_equals) {
+                output_buffer[flushing_cg_id][output_idx + 1] = {probe_key, bucket_slots[1]};
+              }
+            } else if (second_equals) {
+              output_buffer[flushing_cg_id][output_idx] = {probe_key, bucket_slots[1]};
             }
           }
 
-          if (probing_cg.any(first_slot_is_empty or second_slot_is_empty)) {
+          // Check for empty slots - simplified since single thread
+          if (first_slot_is_empty or second_slot_is_empty) {
             running = false;
 
             // Handle outer join case where no match was found
             if constexpr (is_outer) {
-              if (not found_match and cg_lane_id == 0) {
+              if (not found_match) {
                 auto const output_idx = atomicAdd(&flushing_cg_counter[flushing_cg_id], 1);
                 // Use proper empty sentinel for outer join
                 output_buffer[flushing_cg_id][output_idx] = {
                   probe_key,
-                  cuco::pair<cudf::hash_value_type, cudf::size_type>{0,
+                  cuco::pair<cudf::hash_value_type, cudf::size_type>{cudf::hash_value_type{0},
                                                                      cudf::detail::JoinNoneValue}};
               }
             }
