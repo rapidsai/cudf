@@ -58,10 +58,8 @@ __device__ __forceinline__ auto standalone_count(StorageRef const& storage_ref,
   auto const hash2_val = cuda::std::get<1>(hasher)(probe_key);
 
   // Double hashing logic: initial position and step size
-  auto const init_idx = (hash1_val % (extent / bucket_size)) * bucket_size;
-  auto const step     = ((hash2_val % (extent / bucket_size - 1)) + 1) * bucket_size;
-
-  auto probe_idx = init_idx;
+  auto probe_idx  = (hash1_val % (extent / bucket_size)) * bucket_size;
+  auto const step = ((hash2_val % (extent / bucket_size - 1)) + 1) * bucket_size;
 
   while (true) {
     auto const bucket_slots = storage_ref[probe_idx];
@@ -81,9 +79,6 @@ __device__ __forceinline__ auto standalone_count(StorageRef const& storage_ref,
 
     // Move to next bucket using double hashing
     probe_idx = (probe_idx + step) % extent;
-
-    // Detect full cycle completion
-    if (probe_idx == init_idx) { return count; }
   }
 }
 
