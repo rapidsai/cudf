@@ -38,21 +38,5 @@ template std::size_t launch_compute_mixed_join_output_size<false>(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 
-// Backward compatibility template instantiation
-template std::size_t launch_compute_mixed_join_output_size<false>(
-  table_device_view left_table,
-  table_device_view right_table,
-  cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
-  row_equality const equality_probe,
-  join_kind const join_type,
-  cudf::detail::mixed_join_hash_table_ref_t<cuco::count_tag> hash_table_ref,
-  ast::detail::expression_device_view device_expression_data,
-  bool const swap_tables,
-  cudf::device_span<cudf::size_type> matches_per_row,
-  detail::grid_1d const config,
-  int64_t shmem_size_per_block,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);
-
 }  // namespace detail
 }  // namespace cudf
