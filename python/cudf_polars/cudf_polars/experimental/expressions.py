@@ -419,7 +419,7 @@ def _decompose_expr_node(
         # For Literal nodes, we don't actually want an
         # input IR with real columns, because it will
         # mess up the result of ``HConcat``.
-        input_ir = Empty()
+        input_ir = Empty({})
         partition_info[input_ir] = PartitionInfo(count=1)
 
     partition_count = partition_info[input_ir].count

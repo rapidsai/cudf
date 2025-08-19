@@ -1,10 +1,13 @@
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
+import decimal
+
 import cupy as cp
 import nanoarrow
 import nanoarrow.device
 import numpy as np
 import pyarrow as pa
+import pyarrow.compute as pc
 import pytest
 from packaging.version import parse
 from utils import assert_column_eq, assert_table_eq
@@ -95,6 +98,55 @@ def test_decimal_other(data_type):
 
     arrow_type = plc.interop.to_arrow(data_type, precision=precision)
     assert arrow_type == pa.decimal128(precision, 0)
+
+
+@pytest.mark.parametrize(
+    "plc_type",
+    [plc.TypeId.DECIMAL128, plc.TypeId.DECIMAL64, plc.TypeId.DECIMAL32],
+)
+def test_decimal_respect_metadata_precision(plc_type, request):
+    request.applymarker(
+        pytest.mark.xfail(
+            parse(pa.__version__) < parse("19.0.0")
+            and plc_type in {plc.TypeId.DECIMAL64, plc.TypeId.DECIMAL32},
+            reason=(
+                "pyarrow does not interpret Arrow schema decimal type string correctly"
+            ),
+        )
+    )
+    precision, scale = 3, 2
+    expected = pa.array(
+        [decimal.Decimal("1.23"), None], type=pa.decimal128(precision, scale)
+    )
+    plc_column = plc.unary.cast(
+        plc.Column.from_arrow(expected), plc.DataType(plc_type, scale=-scale)
+    )
+    result = plc.interop.to_arrow(
+        plc_column, metadata=plc.interop.ColumnMetadata(precision=precision)
+    )
+    if parse(pa.__version__) >= parse("19.0.0"):
+        if plc_type == plc.TypeId.DECIMAL64:
+            expected = pc.cast(expected, pa.decimal64(precision, scale))
+        elif plc_type == plc.TypeId.DECIMAL32:
+            expected = pc.cast(expected, pa.decimal32(precision, scale))
+    assert result.equals(expected)
+
+
+@pytest.mark.parametrize("precision", [0, 39])
+def test_decimal_precision_metadata_out_of_range(precision):
+    scale = 2
+    expected = pa.array(
+        [decimal.Decimal("1.23"), None], type=pa.decimal128(3, scale)
+    )
+    plc_column = plc.unary.cast(
+        plc.Column.from_arrow(expected),
+        plc.DataType(plc.TypeId.DECIMAL128, scale=-scale),
+    )
+    with pytest.raises(TypeError):
+        plc.interop.to_arrow(
+            plc_column,
+            metadata=plc.interop.ColumnMetadata(precision=precision),
+        )
 
 
 def test_round_trip_dlpack_plc_table():
