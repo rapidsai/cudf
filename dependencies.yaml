@@ -877,7 +877,10 @@ dependencies:
         matrices:
           - matrix: {dependencies: "oldest"}
             packages:
-              - numpy==1.23.*
+              # TODO: Revert to numpy==1.23.* once
+              # https://github.com/NVIDIA/numba-cuda/pull/403 is released and
+              # we revert to an oldest pinning of numba==0.60.0.
+              - numpy==1.24.*
               # pyarrow 14 is fine in some circumstances but we require pyarrow
               # 15 in our CI tests in order to get a lz4-c that is compatible
               # with cudf_kafka's dependencies.
