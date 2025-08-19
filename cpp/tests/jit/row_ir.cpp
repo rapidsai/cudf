@@ -140,7 +140,7 @@ TEST_F(RowIRCudaCodeGenTest, UnaryOperation)
     auto expected_null_code =
       "numeric::decimal32 tmp_0 = in_1;\n"
       "numeric::decimal32 tmp_1 = "
-      "cudf::ast::detail::operator_functor<cudf::ast::ast_operator::IDENTITY, true>{}(tmp_0);";
+      "cudf::ast::detail::operator_functor<cudf::ast::ast_operator::IDENTITY, false>{}(tmp_0);";
 
     EXPECT_EQ(null_code, expected_null_code);
   }
@@ -185,7 +185,7 @@ TEST_F(RowIRCudaCodeGenTest, BinaryOperation)
       "numeric::decimal32 tmp_0 = in_1;\n"
       "numeric::decimal32 tmp_1 = in_1;\n"
       "numeric::decimal32 tmp_2 = "
-      "cudf::ast::detail::operator_functor<cudf::ast::ast_operator::ADD, true>{}(tmp_0, tmp_1);";
+      "cudf::ast::detail::operator_functor<cudf::ast::ast_operator::ADD, false>{}(tmp_0, tmp_1);";
 
     EXPECT_EQ(null_code, expected_null_code);
   }
