@@ -504,14 +504,14 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
-        - &numba_cuda numba-cuda>=0.18.0,<0.19.0a0
+        - &numba_cuda numba-cuda>=0.19.0,<0.20.0a0
     specific:
       - output_types: [requirements, pyproject]
         matrices:
           - matrix:
               cuda: "12.*"
             packages:
-              - &numba_cuda_cu12 numba-cuda[cu12]>=0.18.0,<0.19.0a0
+              - &numba_cuda_cu12 numba-cuda[cu12]>=0.19.0,<0.20.0a0
           - matrix: # Fallback for no matrix
             packages:
               - *numba_cuda_cu12
@@ -684,7 +684,8 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cachetools
-          - &numba numba>=0.60.0,<0.62.0a0
+          # TODO: Revert to numba>=0.60.0,<0.62.0a0 once https://github.com/NVIDIA/numba-cuda/pull/403 is released.
+          - &numba numba>=0.61.0,<0.62.0a0
           - nvtx>=0.2.1
           - packaging
           - rich
@@ -727,7 +728,7 @@ dependencies:
         packages:
           - nvidia-ml-py
           - packaging
-          - polars>=1.28,<1.32
+          - polars>=1.28,<1.33
     specific:
       - output_types: [requirements, pyproject]
         matrices:
@@ -803,9 +804,10 @@ dependencies:
         matrices:
           - matrix: {dependencies: "oldest"}
             packages:
-              - numba==0.60.0
+              # TODO: Revert to numba==0.60.0 once https://github.com/NVIDIA/numba-cuda/pull/403 is released.
+              - numba==0.61.0
               - pandas==2.0.*
-              - numba-cuda==0.18.0
+              - numba-cuda==0.19.0
           - matrix: {dependencies: "latest"}
             packages:
               - pandas==2.3.1
@@ -875,7 +877,10 @@ dependencies:
         matrices:
           - matrix: {dependencies: "oldest"}
             packages:
-              - numpy==1.23.*
+              # TODO: Revert to numpy==1.23.* once
+              # https://github.com/NVIDIA/numba-cuda/pull/403 is released and
+              # we revert to an oldest pinning of numba==0.60.0.
+              - numpy==1.24.*
               # pyarrow 14 is fine in some circumstances but we require pyarrow
               # 15 in our CI tests in order to get a lz4-c that is compatible
               # with cudf_kafka's dependencies.
@@ -1142,4 +1147,4 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - narwhals==1.47
+          - narwhals==2.0.1

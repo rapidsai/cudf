@@ -2,6 +2,7 @@
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 
 import cudf
@@ -9,6 +10,72 @@ from cudf.testing import assert_eq
 from cudf.testing._utils import (
     assert_exceptions_equal,
 )
+
+
+@pytest.mark.parametrize(
+    "data,item",
+    [
+        (
+            # basic list into a list column
+            [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+            [0, 0, 0],
+        ),
+        (
+            # nested list into nested list column
+            [
+                [[1, 2, 3], [4, 5, 6]],
+                [[1, 2, 3], [4, 5, 6]],
+                [[1, 2, 3], [4, 5, 6]],
+            ],
+            [[0, 0, 0], [0, 0, 0]],
+        ),
+        (
+            # NA into a list column
+            [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+            pd.NA,
+        ),
+        (
+            # NA into nested list column
+            [
+                [[1, 2, 3], [4, 5, 6]],
+                [[1, 2, 3], [4, 5, 6]],
+                [[1, 2, 3], [4, 5, 6]],
+            ],
+            pd.NA,
+        ),
+    ],
+)
+def test_listcol_setitem(data, item):
+    sr = cudf.Series(data)
+
+    sr[1] = item
+    data[1] = item
+    expect = cudf.Series(data)
+
+    assert_eq(expect, sr)
+
+
+@pytest.mark.parametrize(
+    "data,item,error_msg,error_type",
+    [
+        (
+            [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+            [[1, 2, 3], [4, 5, 6]],
+            "Could not convert .* with type list: tried to convert to int64",
+            pa.ArrowInvalid,
+        ),
+        (
+            [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+            0,
+            "Can not set 0 into ListColumn",
+            ValueError,
+        ),
+    ],
+)
+def test_listcol_setitem_error_cases(data, item, error_msg, error_type):
+    sr = cudf.Series(data)
+    with pytest.raises(error_type, match=error_msg):
+        sr[1] = item
 
 
 def test_fill_new_category():
