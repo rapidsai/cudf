@@ -256,7 +256,7 @@ def test_series_arith_masked_vs_constant_reflected(
     request.applymarker(
         pytest.mark.xfail(
             condition=(
-                constant == 1
+                constant in {1}
                 and arithmetic_op in {operator.pow, operator.ipow}
             ),
             reason="https://github.com/rapidsai/cudf/issues/7478",
