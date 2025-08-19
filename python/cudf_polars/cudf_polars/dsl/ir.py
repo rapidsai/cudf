@@ -47,6 +47,7 @@ if TYPE_CHECKING:
 
     from polars.polars import _expr_nodes as pl_expr
 
+    from cudf_polars.containers.dataframe import NamedColumn
     from cudf_polars.typing import CSECache, ClosedInterval, Schema, Slice as Zlice
     from cudf_polars.utils.config import ParquetOptions
     from cudf_polars.utils.timer import Timer
@@ -324,8 +325,17 @@ class Scan(IR):
             raise NotImplementedError(
                 "Read from cloud storage"
             )  # pragma: no cover; no test yet
-        if any(str(p).startswith("https:/") for p in self.paths):
+        if any(
+            str(p).startswith("https:/" if POLARS_VERSION_LT_131 else "https://")
+            for p in self.paths
+        ):
             raise NotImplementedError("Read from https")
+        if any(
+            str(p).startswith("file:/" if POLARS_VERSION_LT_131 else "file://")
+            for p in self.paths
+        ):
+            # TODO: removing the file:// may work
+            raise NotImplementedError("Read from file URI")
         if self.typ == "csv":
             if self.reader_options["skip_rows_after_header"] != 0:
                 raise NotImplementedError("Skipping rows after header in CSV reader")
@@ -954,10 +964,10 @@ class Cache(IR):
     _non_child = ("schema", "key", "refcount")
     key: int
     """The cache key."""
-    refcount: int
+    refcount: int | None
     """The number of cache hits."""
 
-    def __init__(self, schema: Schema, key: int, refcount: int, value: IR):
+    def __init__(self, schema: Schema, key: int, refcount: int | None, value: IR):
         self.schema = schema
         self.key = key
         self.refcount = refcount
@@ -979,7 +989,7 @@ class Cache(IR):
     @classmethod
     @nvtx_annotate_cudf_polars(message="Cache")
     def do_evaluate(
-        cls, key: int, refcount: int, df: DataFrame
+        cls, key: int, refcount: int | None, df: DataFrame
     ) -> DataFrame:  # pragma: no cover; basic evaluation never calls this
         """Evaluate and return a dataframe."""
         # Our value has already been computed for us, so let's just
@@ -998,12 +1008,15 @@ class Cache(IR):
             cache[self.key] = (result, 0)
             return result
         else:
-            hits += 1
-            if hits == self.refcount:
+            if self.refcount is None:
+                return result
+
+            hits += 1  # pragma: no cover
+            if hits == self.refcount:  # pragma: no cover
                 del cache[self.key]
-            else:
+            else:  # pragma: no cover
                 cache[self.key] = (result, hits)
-            return result
+            return result  # pragma: no cover
 
 
 class DataFrameScan(IR):
@@ -1758,6 +1771,38 @@ class Join(IR):
             [plc.types.NullOrder.AFTER, plc.types.NullOrder.AFTER],
         ).columns()
 
+    @staticmethod
+    def _build_columns(
+        columns: Iterable[plc.Column],
+        template: Iterable[NamedColumn],
+        *,
+        left: bool = True,
+        empty: bool = False,
+        rename: Callable[[str], str] = lambda name: name,
+    ) -> list[Column]:
+        if empty:
+            return [
+                Column(
+                    plc.column_factories.make_empty_column(col.dtype.plc),
+                    col.dtype,
+                    name=rename(col.name),
+                )
+                for col in template
+            ]
+
+        columns = [
+            Column(new, col.dtype, name=rename(col.name))
+            for new, col in zip(columns, template, strict=True)
+        ]
+
+        if left:
+            columns = [
+                col.sorted_like(orig)
+                for col, orig in zip(columns, template, strict=True)
+            ]
+
+        return columns
+
     @classmethod
     @nvtx_annotate_cudf_polars(message="Join")
     def do_evaluate(
@@ -1780,28 +1825,32 @@ class Join(IR):
         if how == "Cross":
             # Separate implementation, since cross_join returns the
             # result, not the gather maps
-            columns = plc.join.cross_join(left.table, right.table).columns()
-            left_cols = [
-                Column(new, name=old.name, dtype=old.dtype).sorted_like(old)
-                for new, old in zip(
-                    columns[: left.num_columns], left.columns, strict=True
-                )
-            ]
-            right_cols = [
-                Column(
-                    new,
-                    name=name
+            if right.num_rows == 0:
+                left_cols = Join._build_columns([], left.columns, empty=True)
+                right_cols = Join._build_columns(
+                    [],
+                    right.columns,
+                    left=False,
+                    empty=True,
+                    rename=lambda name: name
                     if name not in left.column_names_set
                     else f"{name}{suffix}",
-                    dtype=old.dtype,
                 )
-                for new, name, old in zip(
-                    columns[left.num_columns :],
-                    right.column_names,
-                    right.columns,
-                    strict=True,
-                )
-            ]
+                return DataFrame([*left_cols, *right_cols])
+
+            columns = plc.join.cross_join(left.table, right.table).columns()
+            left_cols = Join._build_columns(
+                columns[: left.num_columns],
+                left.columns,
+            )
+            right_cols = Join._build_columns(
+                columns[left.num_columns :],
+                right.columns,
+                rename=lambda name: name
+                if name not in left.column_names_set
+                else f"{name}{suffix}",
+                left=False,
+            )
             return DataFrame([*left_cols, *right_cols]).slice(zlice)
         # TODO: Waiting on clarity based on https://github.com/pola-rs/polars/issues/17184
         left_on = DataFrame(broadcast(*(e.evaluate(left) for e in left_on_exprs)))
@@ -2485,18 +2534,27 @@ class HConcat(IR):
 
 
 class Empty(IR):
-    """Represents an empty DataFrame."""
+    """Represents an empty DataFrame with a known schema."""
 
-    __slots__ = ()
-    _non_child = ()
+    __slots__ = ("schema",)
+    _non_child = ("schema",)
 
-    def __init__(self) -> None:
-        self.schema = {}
-        self._non_child_args = ()
+    def __init__(self, schema: Schema):
+        self.schema = schema
+        self._non_child_args = (schema,)
         self.children = ()
 
     @classmethod
     @nvtx_annotate_cudf_polars(message="Empty")
-    def do_evaluate(cls) -> DataFrame:  # pragma: no cover
+    def do_evaluate(cls, schema: Schema) -> DataFrame:  # pragma: no cover
         """Evaluate and return a dataframe."""
-        return DataFrame([])
+        return DataFrame(
+            [
+                Column(
+                    plc.column_factories.make_empty_column(dtype.plc),
+                    dtype=dtype,
+                    name=name,
+                )
+                for name, dtype in schema.items()
+            ]
+        )
