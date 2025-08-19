@@ -35,9 +35,6 @@ if(NOT _rapids_branch)
   )
 endif()
 
-set(rapids-cmake-repo vuule/rapids-cmake)
-set(rapids-cmake-branch fea-nvcomp-5)
-
 if(NOT rapids-cmake-version)
   set(rapids-cmake-version "${RAPIDS_VERSION_MAJOR_MINOR}")
 endif()
