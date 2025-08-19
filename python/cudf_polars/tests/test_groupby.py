@@ -14,6 +14,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+from cudf_polars.utils.versions import POLARS_VERSION_LT_1321
 
 
 @pytest.fixture
@@ -213,7 +214,13 @@ def test_groupby_nan_minmax_raises(op):
             pl.lit([[4, 5, 6]]).alias("value"),
             marks=pytest.mark.xfail(reason="Need to expose OtherScalar in rust IR"),
         ),
-        pl.Series("value", [[4, 5, 6]], dtype=pl.List(pl.Int32)),
+        pytest.param(
+            pl.Series("value", [[4, 5, 6]], dtype=pl.List(pl.Int32)),
+            marks=pytest.mark.xfail(
+                condition=not POLARS_VERSION_LT_1321,
+                reason="https://github.com/rapidsai/cudf/issues/19610",
+            ),
+        ),
         pl.col("float") * (1 - pl.col("int")),
         [pl.lit(2).alias("value"), pl.col("float") * 2],
     ],
@@ -310,6 +317,18 @@ def test_groupby_mean_type_promotion(df: pl.LazyFrame) -> None:
 
     q = df.group_by("key1").agg(pl.col("float").mean())
 
+    assert_gpu_result_equal(q, check_row_order=False)
+
+
+def test_groupby_sum_all_null_group_returns_null():
+    df = pl.LazyFrame(
+        {
+            "key": ["a", "a", "b", "b", "c"],
+            "null_groups": [None, None, None, 2, None],
+        }
+    )
+
+    q = df.group_by("key").agg(out=pl.col("null_groups").sum())
     assert_gpu_result_equal(q, check_row_order=False)
 
 
