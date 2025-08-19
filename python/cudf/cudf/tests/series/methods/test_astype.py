@@ -12,6 +12,38 @@ from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal
 
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+        [
+            [[1, 2, 3], [4, 5, 6]],
+            [[1, 2, 3], [4, 5, 6]],
+            [[1, 2, 3], [4, 5, 6]],
+        ],
+        [[[1, 2, 3], [4, None, 6]], [], None, [[7, 8], [], None, [9]]],
+        [[1, 2, 3], [4, None, 6], [7, 8], [], None, [9]],
+        [[1.0, 2.0, 3.0], [4.0, None, 6.0], [7.0, 8.0], [], None, [9.0]],
+    ],
+)
+def test_listcol_as_string(data):
+    got = cudf.Series(data).astype("str")
+    expect = pd.Series(data).astype("str")
+    assert_eq(expect, got)
+
+
+def test_list_astype():
+    s = cudf.Series([[1, 2], [3, 4]])
+    s2 = s.list.astype("float64")
+    assert s2.dtype == cudf.ListDtype("float64")
+    assert_eq(s.list.leaves.astype("float64"), s2.list.leaves)
+
+    s = cudf.Series([[[1, 2], [3]], [[5, 6], None]])
+    s2 = s.list.astype("string")
+    assert s2.dtype == cudf.ListDtype(cudf.ListDtype("string"))
+    assert_eq(s.list.leaves.astype("string"), s2.list.leaves)
+
+
 def test_series_typecast_to_object_error():
     actual = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
     with cudf.option_context("mode.pandas_compatible", True):
