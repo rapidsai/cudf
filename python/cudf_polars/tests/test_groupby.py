@@ -285,10 +285,10 @@ def test_groupby_nunique(df: pl.LazyFrame, column):
     assert_gpu_result_equal(q, check_row_order=False)
 
 
-def test_groupby_null_count_raises(df: pl.LazyFrame):
-    q = df.group_by("key1").agg(pl.col("int") + pl.col("uint16_with_null").null_count())
+def test_groupby_null_count(df: pl.LazyFrame):
+    q = df.group_by("key1").agg(pl.col("uint16_with_null").null_count())
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_gpu_result_equal(q, check_row_order=False)
 
 
 @pytest.mark.parametrize(
