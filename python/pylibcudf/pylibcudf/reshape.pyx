@@ -25,7 +25,7 @@ from .utils cimport _get_stream
 
 __all__ = ["interleave_columns", "tile", "table_to_array"]
 
-cpdef Column interleave_columns(Table source_table):
+cpdef Column interleave_columns(Table source_table, Stream stream=None):
     """Interleave columns of a table into a single column.
 
     Converts the column major table `input` into a row major column.
@@ -40,6 +40,8 @@ cpdef Column interleave_columns(Table source_table):
     ----------
     source_table: Table
         The input table to interleave
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -47,14 +49,15 @@ cpdef Column interleave_columns(Table source_table):
         A new column which is the result of interleaving the input columns
     """
     cdef unique_ptr[column] c_result
+    stream = _get_stream(stream)
 
     with nogil:
-        c_result = cpp_interleave_columns(source_table.view())
+        c_result = cpp_interleave_columns(source_table.view(), stream.view())
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream)
 
 
-cpdef Table tile(Table source_table, size_type count):
+cpdef Table tile(Table source_table, size_type count, Stream stream=None):
     """Repeats the rows from input table count times to form a new table.
 
     For details, see :cpp:func:`tile`.
@@ -65,6 +68,8 @@ cpdef Table tile(Table source_table, size_type count):
         The input table containing rows to be repeated
     count: size_type
         The number of times to tile "rows". Must be non-negative
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -72,11 +77,12 @@ cpdef Table tile(Table source_table, size_type count):
         The table containing the tiled "rows"
     """
     cdef unique_ptr[table] c_result
+    stream = _get_stream(stream)
 
     with nogil:
-        c_result = cpp_tile(source_table.view(), count)
+        c_result = cpp_tile(source_table.view(), count, stream.view())
 
-    return Table.from_libcudf(move(c_result))
+    return Table.from_libcudf(move(c_result), stream)
 
 
 cpdef void table_to_array(

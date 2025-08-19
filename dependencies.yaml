@@ -569,6 +569,7 @@ dependencies:
               - cuda-nvrtc-dev
               - cuda-nvtx-dev
               - libcurand-dev
+              - libnvjitlink-dev
       - output_types: conda
         matrices:
           - matrix:
@@ -725,7 +726,8 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - nvidia-ml-py
-          - polars>=1.28,<1.32
+          - packaging
+          - polars>=1.28,<1.33
     specific:
       - output_types: [requirements, pyproject]
         matrices:
@@ -1140,4 +1142,4 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - narwhals==1.47
+          - narwhals==2.0.1
