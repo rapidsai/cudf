@@ -37,8 +37,8 @@ namespace detail {
 /**
  * @brief Standalone count implementation for hash table probing
  *
- * This duplicates the essential CUCO count functionality without requiring
- * the full static_multiset_ref infrastructure.
+ * This implementation provides essential count functionality for mixed joins
+ * without requiring external dependencies.
  */
 template <typename StorageRef, typename ProbingScheme, typename KeyEqual, typename ProbeKey>
 __device__ __forceinline__ auto standalone_count(StorageRef const& storage_ref,
@@ -52,12 +52,12 @@ __device__ __forceinline__ auto standalone_count(StorageRef const& storage_ref,
   size_type count   = 0;
   auto const extent = storage_ref.extent();
 
-  // Use the probing scheme's hash functions directly
+  // Use the probing scheme's hash functions for double hashing
   auto const hasher    = probing_scheme.hash_function();
   auto const hash1_val = cuda::std::get<0>(hasher)(probe_key);
   auto const hash2_val = cuda::std::get<1>(hasher)(probe_key);
 
-  // CUCO double hashing logic: initial position and step size
+  // Double hashing logic: initial position and step size
   auto const init_idx = (hash1_val % (extent / bucket_size)) * bucket_size;
   auto const step     = ((hash2_val % (extent / bucket_size - 1)) + 1) * bucket_size;
 
@@ -66,6 +66,7 @@ __device__ __forceinline__ auto standalone_count(StorageRef const& storage_ref,
   while (true) {
     auto const bucket_slots = storage_ref[probe_idx];
 
+    // Check for empty slots and key equality
     auto const first_slot_is_empty  = bucket_slots[0].second == cudf::detail::JoinNoneValue;
     auto const second_slot_is_empty = bucket_slots[1].second == cudf::detail::JoinNoneValue;
     auto const first_slot_equals =
@@ -75,9 +76,14 @@ __device__ __forceinline__ auto standalone_count(StorageRef const& storage_ref,
 
     count += (first_slot_equals + second_slot_equals);
 
+    // Exit if we find an empty slot
     if (first_slot_is_empty or second_slot_is_empty) { return count; }
 
+    // Move to next bucket using double hashing
     probe_idx = (probe_idx + step) % extent;
+
+    // Detect full cycle completion
+    if (probe_idx == init_idx) { return count; }
   }
 }
 
