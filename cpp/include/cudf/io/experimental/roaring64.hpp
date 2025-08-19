@@ -15,7 +15,7 @@
  */
 #pragma once
 
-// Explicity disable platform-specific acceleration code
+// Explicitly disable platform-specific acceleration code
 #define DISABLENEON                       1
 #define ROARING_DISABLE_X64               1
 #define ROARING_DISABLE_AVX               1
