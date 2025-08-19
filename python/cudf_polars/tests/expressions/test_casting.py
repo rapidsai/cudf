@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from cudf_polars.testing.asserts import (
 _supported_dtypes = [(pl.Int8(), pl.Int64())]
 
 _unsupported_dtypes = [
-    (pl.Datetime("ns"), pl.Int64()),
+    (pl.Boolean(), pl.Datetime("ns")),
 ]
 
 
@@ -28,6 +28,8 @@ def tests(dtypes):
     fromtype, totype = dtypes
     if fromtype == pl.String():
         data = ["a", "b", "c"]
+    elif fromtype == pl.Boolean():
+        data = [True, False, True]
     else:
         data = [1, 2, 3]
     return pl.DataFrame(
