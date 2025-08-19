@@ -143,6 +143,19 @@ class row_equality_comparator {
                                                           rhs_row_index);
   }
 
+  /**
+   * @brief Compares the specified rows for equality.
+   *
+   * @param lhs_index The index of the first row to compare (in the lhs table)
+   * @param rhs_index The index of the second row to compare (in the rhs table)
+   * @return Boolean indicating if both rows are equal
+   */
+  __device__ bool operator()(cudf::experimental::row::lhs_index_type lhs_index,
+                             cudf::experimental::row::rhs_index_type rhs_index) const
+  {
+    return (*this)(static_cast<size_type>(lhs_index), static_cast<size_type>(rhs_index));
+  }
+
  private:
   cudf::nullate::DYNAMIC _has_nulls;
   table_device_view _lhs;

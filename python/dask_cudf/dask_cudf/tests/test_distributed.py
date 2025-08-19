@@ -1,6 +1,5 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
-import numba.cuda
 import pytest
 
 import dask
@@ -9,6 +8,7 @@ from dask.distributed import Client
 from distributed.utils_test import cleanup, loop, loop_in_thread  # noqa: F401
 
 import cudf
+import rmm
 from cudf.testing import assert_eq
 
 import dask_cudf
@@ -17,7 +17,7 @@ dask_cuda = pytest.importorskip("dask_cuda")
 
 
 def at_least_n_gpus(n):
-    ngpus = len(numba.cuda.gpus)
+    ngpus = rmm._cuda.gpu.getDeviceCount()
     return ngpus >= n
 
 

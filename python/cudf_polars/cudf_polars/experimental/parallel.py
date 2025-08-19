@@ -33,6 +33,7 @@ from cudf_polars.experimental.dispatch import (
     generate_ir_tasks,
     lower_ir_node,
 )
+from cudf_polars.experimental.io import _clear_source_info_cache
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.utils import _concat, _lower_ir_fallback
 
@@ -228,6 +229,9 @@ def evaluate_streaming(
     -------
     A cudf-polars DataFrame object.
     """
+    # Clear source info cache in case data was overwritten
+    _clear_source_info_cache()
+
     ir, partition_info = lower_ir_graph(ir, config_options)
 
     graph, key = task_graph(ir, partition_info, config_options)
@@ -261,9 +265,13 @@ def _(
     ir: Union, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     # Check zlice
-    if ir.zlice is not None:  # pragma: no cover
-        return _lower_ir_fallback(
-            ir, rec, msg="zlice is not supported for multiple partitions."
+    if ir.zlice is not None:
+        return rec(
+            Slice(
+                ir.schema,
+                *ir.zlice,
+                Union(ir.schema, None, *ir.children),
+            )
         )
 
     # Lower children

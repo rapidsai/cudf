@@ -367,5 +367,44 @@ std::unique_ptr<scalar> bitwise_reduction(bitwise_op bit_op,
                                           rmm::cuda_stream_view stream,
                                           rmm::device_async_resource_ref mr);
 
+/**
+ * @brief Computes quantile value of the elements in the input column
+ *
+ * @see cudf::quantile for additional details
+ *
+ * @throw std::invalid_argument if the input column type is not an arithmetic type
+ *
+ * @param col Input column to compute quantile
+ * @param quantile_value Quantile value in range [0,1]
+ * @param interpolation Interpolation method
+ * @param output_type Data type of return type
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return Quantile as scalar of type `output_type`
+ */
+std::unique_ptr<cudf::scalar> quantile(column_view const& col,
+                                       double quantile_value,
+                                       cudf::interpolation interpolation,
+                                       cudf::data_type const output_type,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::device_async_resource_ref mr);
+
+/**
+ * @brief Computes the number of unique elements in the input column
+ *
+ * @param col Input column to compute the number of unique elements
+ * @param null_handling Indicates if null values will be counted while computing the number of
+ * unique elements
+ * @param output_dtype Data type of return type
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return Number of unique elements as scalar of type `output_dtype`
+ */
+std::unique_ptr<scalar> nunique(column_view const& col,
+                                null_policy null_handling,
+                                data_type const output_dtype,
+                                rmm::cuda_stream_view stream,
+                                rmm::device_async_resource_ref mr);
+
 }  // namespace reduction::detail
 }  // namespace CUDF_EXPORT cudf

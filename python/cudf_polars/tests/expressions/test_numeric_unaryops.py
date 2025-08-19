@@ -101,6 +101,22 @@ def test_negate(ldf, col):
     assert_gpu_result_equal(q)
 
 
+def test_null_count():
+    lf = pl.LazyFrame(
+        {
+            "foo": [1, None, 3],
+            "bar": [None, None, 1],
+            "baz": [1, 2, 3],
+        }
+    )
+    q = lf.select(
+        pl.col("foo").is_null().sum(),
+        pl.col("bar").is_null().sum(),
+        pl.col("baz").is_null().sum(),
+    )
+    assert_gpu_result_equal(q)
+
+
 @pytest.mark.parametrize("method", ["average", "min", "max", "dense"])
 @pytest.mark.parametrize("descending", [False, True])
 def test_rank_supported(ldf, method, descending):
@@ -109,8 +125,9 @@ def test_rank_supported(ldf, method, descending):
     assert_gpu_result_equal(q)
 
 
-@pytest.mark.parametrize("method", ["ordinal", "random"])
-def test_rank_unsupported(ldf, method):
-    expr = pl.col("a").rank(method=method)
+@pytest.mark.parametrize("seed", [42])
+@pytest.mark.parametrize("method", ["random"])
+def test_rank_unsupported(ldf, method, seed):
+    expr = pl.col("a").rank(method=method, seed=seed)
     q = ldf.select(expr)
     assert_ir_translation_raises(q, NotImplementedError)
