@@ -76,6 +76,12 @@ std::unique_ptr<scalar> reduce_aggregate_impl(
                    std::invalid_argument);
       return quantile(col, qagg._quantiles.front(), qagg._interpolation, output_dtype, stream, mr);
     }
+    case aggregation::COUNT_ALL:
+    case aggregation::COUNT_VALID: {
+      auto null_handling =
+        agg.kind == aggregation::COUNT_VALID ? null_policy::EXCLUDE : null_policy::INCLUDE;
+      return count(col, null_handling, output_dtype, stream, mr);
+    }
     case aggregation::NUNIQUE: {
       auto nunique_agg = static_cast<cudf::detail::nunique_aggregation const&>(agg);
       return nunique(col, nunique_agg._null_handling, output_dtype, stream, mr);
@@ -167,6 +173,12 @@ std::unique_ptr<scalar> reduce_no_data_impl(reduce_aggregation const& agg,
     case aggregation::ANY: [[fallthrough]];
     case aggregation::ALL: {
       return std::make_unique<numeric_scalar<bool>>(agg.kind == aggregation::ALL, true, stream, mr);
+    }
+    case aggregation::COUNT_ALL:
+    case aggregation::COUNT_VALID: {
+      auto null_handling =
+        agg.kind == aggregation::COUNT_VALID ? null_policy::EXCLUDE : null_policy::INCLUDE;
+      return count(col, null_handling, output_dtype, stream, mr);
     }
     case aggregation::NUNIQUE: {
       auto nunique_agg = static_cast<cudf::detail::nunique_aggregation const&>(agg);

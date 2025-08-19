@@ -630,13 +630,14 @@ add_library(
   src/reductions/any.cu
   src/reductions/bitwise.cu
   src/reductions/collect_ops.cu
+  src/reductions/count.cpp
   src/reductions/histogram.cu
   src/reductions/max.cu
   src/reductions/mean.cu
   src/reductions/min.cu
   src/reductions/minmax.cu
   src/reductions/nth_element.cu
-  src/reductions/nunique.cu
+  src/reductions/nunique.cpp
   src/reductions/product.cu
   src/reductions/quantile.cu
   src/reductions/reductions.cpp
