@@ -407,10 +407,10 @@ struct ast_converter {
   void clear();
 
   void generate_code(target target,
-                           ast::expression const& expr,
-                           ast_args const& args,
-                           rmm::cuda_stream_view stream,
-                           rmm::device_async_resource_ref const& resource_ref);
+                     ast::expression const& expr,
+                     ast_args const& args,
+                     rmm::cuda_stream_view stream,
+                     rmm::device_async_resource_ref const& resource_ref);
 
  public:
   /// @brief Convert an AST `compute_column` expression to a `cudf::transform`
