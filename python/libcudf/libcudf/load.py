@@ -62,12 +62,16 @@ def load_library():
         # we assume the library is discoverable on system paths.
         pass
 
+    _load_library("libnvcomp.so.4")
+    return _load_library("libcudf.so")
+
+
+def _load_library(soname):
     prefer_system_installation = (
         os.getenv("RAPIDS_LIBCUDF_PREFER_SYSTEM_LIBRARY", "false").lower()
         != "false"
     )
 
-    soname = "libcudf.so"
     libcudf_lib = None
     if prefer_system_installation:
         # Prefer a system library if one is present to

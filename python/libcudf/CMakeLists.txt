@@ -15,6 +15,8 @@
 cmake_minimum_required(VERSION 3.30.4 FATAL_ERROR)
 
 include(../../cmake/rapids_config.cmake)
+include(rapids-cpm)
+rapids_cpm_init()
 
 project(
   libcudf-python
@@ -23,10 +25,6 @@ project(
 )
 
 option(USE_NVCOMP_RUNTIME_WHEEL "Use the nvcomp wheel at runtime instead of the system library" OFF)
-
-# TODO(nvcomp): when `nvcomp` supports Python 3.13 and we de-vendor `nvcomp` from `kvikio` this
-# option should be removed https://github.com/rapidsai/build-planning/issues/171
-option(USE_NVCOMP_FROM_LIBKVIKIO_WHEEL "Use nvcomp bundled with libkvikio" OFF)
 
 # Check if cudf is already available. If so, it is the user's responsibility to ensure that the
 # CMake package is also available at build time of the Python cudf package.
@@ -43,11 +41,16 @@ set(BUILD_BENCHMARKS OFF)
 set(CUDF_BUILD_TESTUTIL OFF)
 set(CUDF_BUILD_STREAMS_TEST_UTIL OFF)
 
-# TODO(nvcomp): when `nvcomp` supports Python 3.13 and we de-vendor `nvcomp` from `kvikio` the
-# libkvikio branch should be removed
-if(USE_NVCOMP_RUNTIME_WHEEL OR USE_NVCOMP_FROM_LIBKVIKIO_WHEEL)
+if(USE_NVCOMP_RUNTIME_WHEEL)
   set(CUDF_EXPORT_NVCOMP OFF)
 endif()
+
+include(../../cpp/cmake/thirdparty/get_nvcomp.cmake)
+include(cmake/Modules/WheelHelpers.cmake)
+install_aliased_imported_targets(
+  TARGETS nvcomp::nvcomp DESTINATION ${SKBUILD_PLATLIB_DIR}/libcudf/lib64/
+)
+
 set(CUDA_STATIC_RUNTIME ON)
 
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
@@ -56,17 +59,6 @@ add_subdirectory(../../cpp cudf-cpp)
 
 if(USE_NVCOMP_RUNTIME_WHEEL)
   set(rpaths "$ORIGIN/../../nvidia/nvcomp")
-  set_property(
-    TARGET cudf
-    PROPERTY INSTALL_RPATH ${rpaths}
-    APPEND
-  )
-endif()
-
-# TODO(nvcomp): when `nvcomp` supports Python 3.13 and we de-vendor `nvcomp` from `kvikio` this
-# block should be removed
-if(USE_NVCOMP_FROM_LIBKVIKIO_WHEEL)
-  set(rpaths "$ORIGIN/../../libkvikio/lib64")
   set_property(
     TARGET cudf
     PROPERTY INSTALL_RPATH ${rpaths}
