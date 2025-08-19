@@ -19,7 +19,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 
-def add_nulls_to_column(column_data, null_probability=0.1):
+def add_nulls_to_column(column_data, null_probability=0.25):
     """Add nulls to a column at the specified percentage."""
     if null_probability <= 0:
         return column_data
@@ -36,7 +36,7 @@ def add_nulls_to_column(column_data, null_probability=0.1):
     return column_data
 
 
-def add_nulls_to_list_column(list_column_data, null_probability=0.1):
+def add_nulls_to_list_column(list_column_data, null_probability=0.25):
     """Add nulls to a list column at all depths."""
     if null_probability <= 0:
         return list_column_data
