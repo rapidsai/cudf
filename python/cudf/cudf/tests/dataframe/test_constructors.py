@@ -650,6 +650,101 @@ def test_series_data_with_name_with_columns_matching_align():
     assert_eq(gdf, pdf)
 
 
+def test_generated_column():
+    gdf = cudf.DataFrame({"a": (i for i in range(5))})
+    assert len(gdf) == 5
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        (
+            pd.Series([3, 3.0]),
+            pd.Series([2.3, 3.9]),
+            pd.Series([1.5, 3.9]),
+            pd.Series([1.0, 2]),
+        ),
+        [
+            pd.Series([3, 3.0]),
+            pd.Series([2.3, 3.9]),
+            pd.Series([1.5, 3.9]),
+            pd.Series([1.0, 2]),
+        ],
+    ],
+)
+def test_create_dataframe_from_list_like(data):
+    pdf = pd.DataFrame(data, index=["count", "mean", "std", "min"])
+    gdf = cudf.DataFrame(data, index=["count", "mean", "std", "min"])
+
+    assert_eq(pdf, gdf)
+
+    pdf = pd.DataFrame(data)
+    gdf = cudf.DataFrame(data)
+
+    assert_eq(pdf, gdf)
+
+
+def test_create_dataframe_column():
+    pdf = pd.DataFrame(columns=["a", "b", "c"], index=["A", "Z", "X"])
+    gdf = cudf.DataFrame(columns=["a", "b", "c"], index=["A", "Z", "X"])
+
+    assert_eq(pdf, gdf)
+
+    pdf = pd.DataFrame(
+        {"a": [1, 2, 3], "b": [2, 3, 5]},
+        columns=["a", "b", "c"],
+        index=["A", "Z", "X"],
+    )
+    gdf = cudf.DataFrame(
+        {"a": [1, 2, 3], "b": [2, 3, 5]},
+        columns=["a", "b", "c"],
+        index=["A", "Z", "X"],
+    )
+
+    assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pd.DataFrame(np.eye(2)),
+        cudf.DataFrame(np.eye(2)),
+        np.eye(2),
+        cp.eye(2),
+        None,
+        [[1, 0], [0, 1]],
+        [cudf.Series([0, 1]), cudf.Series([1, 0])],
+    ],
+)
+@pytest.mark.parametrize(
+    "columns",
+    [None, range(2), pd.RangeIndex(2), cudf.RangeIndex(2)],
+)
+def test_dataframe_columns_returns_rangeindex(data, columns):
+    if data is None and columns is None:
+        pytest.skip(f"{data=} and {columns=} not relevant.")
+    result = cudf.DataFrame(data=data, columns=columns).columns
+    expected = pd.RangeIndex(range(2))
+    assert_eq(result, expected)
+
+
+def test_dataframe_columns_returns_rangeindex_single_col():
+    result = cudf.DataFrame([1, 2, 3]).columns
+    expected = pd.RangeIndex(range(1))
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("dtype", ["int64", "datetime64[ns]", "int8"])
+@pytest.mark.parametrize("idx_data", [[], [1, 2]])
+@pytest.mark.parametrize("data", [None, [], {}])
+def test_dataframe_columns_empty_data_preserves_dtype(dtype, idx_data, data):
+    result = cudf.DataFrame(
+        data, columns=cudf.Index(idx_data, dtype=dtype)
+    ).columns
+    expected = pd.Index(idx_data, dtype=dtype)
+    assert_eq(result, expected)
+
+
 def test_dataframe_init_from_nested_dict():
     ordered_dict = collections.OrderedDict(
         [
