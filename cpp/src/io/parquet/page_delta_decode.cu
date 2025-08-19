@@ -344,11 +344,12 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
 
   // Write list offsets and exit if the page does not need to be decoded
   if (not page_mask[page_idx]) {
-    auto& page      = pages[page_idx];
-    page.num_nulls  = page.num_rows;
-    page.num_valids = 0;
+    auto& page = pages[page_idx];
     // Update offsets for all list depth levels
     if (has_repetition) { update_list_offsets_for_pruned_pages<decode_delta_binary_block_size>(s); }
+    page.num_nulls = page.nesting[s->col.max_nesting_depth - 1].batch_size;
+    page.num_nulls -= (not has_repetition) ? s->first_row : 0;
+    page.num_valids = 0;
     return;
   }
 
@@ -490,10 +491,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   // Write list/string offsets and exit if the page does not need to be decoded
   if (not page_mask[page_idx]) {
-    auto page        = &pages[page_idx];
-    page->num_nulls  = page->num_rows;
-    page->num_valids = 0;
-
+    auto page = &pages[page_idx];
     // Update list offsets and string offsets or sizes depending on the large-string property
     if (has_repetition) {
       // Update list offsets
@@ -506,6 +504,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       update_string_offsets_for_pruned_pages<decode_block_size, false>(
         s, initial_str_offsets, pages[page_idx]);
     }
+    page->num_nulls = page->nesting[s->col.max_nesting_depth - 1].batch_size;
+    page->num_nulls -= (not has_repetition) ? s->first_row : 0;
+    page->num_valids = 0;
 
     return;
   }
@@ -686,10 +687,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   // Write list/string offsets and exit if the page does not need to be decoded
   if (not page_mask[page_idx]) {
-    auto page        = &pages[page_idx];
-    page->num_nulls  = page->num_rows;
-    page->num_valids = 0;
-
+    auto page = &pages[page_idx];
     // Update list offsets and string offsets or sizes depending on the large-string property
     if (has_repetition) {
       // Update list offsets
@@ -702,6 +700,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       update_string_offsets_for_pruned_pages<decode_block_size, false>(
         s, initial_str_offsets, pages[page_idx]);
     }
+    page->num_nulls = page->nesting[s->col.max_nesting_depth - 1].batch_size;
+    page->num_nulls -= (not has_repetition) ? s->first_row : 0;
+    page->num_valids = 0;
 
     return;
   }

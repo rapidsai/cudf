@@ -181,6 +181,9 @@ template std::unique_ptr<cudf::column> make_parquet_list_list_col<int>(
 template std::unique_ptr<cudf::column> make_parquet_list_list_col<bool>(
   int skip_rows, int num_rows, int lists_per_row, int list_size, bool include_validity);
 
+template std::unique_ptr<cudf::column> make_parquet_list_list_col<bool>(
+  int skip_rows, int num_rows, int lists_per_row, int list_size, bool include_validity);
+
 template <typename T>
 std::vector<T> random_values(size_t size)
 {
@@ -597,6 +600,10 @@ template std::unique_ptr<cudf::column> make_parquet_list_col<int64_t>(std::mt199
                                                                       int num_rows,
                                                                       int max_vals_per_row,
                                                                       bool include_validity);
+template std::unique_ptr<cudf::column> make_parquet_list_col<bool>(std::mt19937& engine,
+                                                                   int num_rows,
+                                                                   int max_vals_per_row,
+                                                                   bool include_validity);
 
 std::vector<std::string> string_values(std::mt19937& engine, int num_rows, int max_string_len)
 {
