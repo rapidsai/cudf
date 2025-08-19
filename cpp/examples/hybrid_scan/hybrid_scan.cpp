@@ -20,6 +20,7 @@
 #include "io_source.hpp"
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/experimental/hybrid_scan.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
@@ -92,11 +93,11 @@ void write_parquet(cudf::table_view input,
  * @brief Enum to represent the available parquet filters
  */
 enum class parquet_filter_type : uint8_t {
-  ROW_GROUPS_WITH_STATS                = 0,
-  ROW_GROUPS_WITH_DICT_PAGES           = 1,
-  ROW_GROUPS_WITH_BLOOM_FILTERS        = 2,
-  FILTER_COLUMN_PAGES_WITH_PAGE_INDEX  = 3,
-  PAYLOAD_COLUMN_PAGES_WITH_PAGE_INDEX = 4,
+  ROW_GROUPS_WITH_STATS               = 0,
+  ROW_GROUPS_WITH_DICT_PAGES          = 1,
+  ROW_GROUPS_WITH_BLOOM_FILTERS       = 2,
+  FILTER_COLUMN_PAGES_WITH_PAGE_INDEX = 3,
+  PAYLOAD_COLUMN_PAGES_WITH_ROW_MASK  = 4,
 };
 
 /**
@@ -107,6 +108,8 @@ enum class parquet_filter_type : uint8_t {
  */
 cudf::host_span<uint8_t const> fetch_footer_bytes(cudf::host_span<uint8_t const> buffer)
 {
+  CUDF_FUNC_RANGE();
+
   using namespace cudf::io::parquet;
 
   constexpr auto header_len = sizeof(file_header_s);
@@ -160,6 +163,8 @@ std::vector<rmm::device_buffer> fetch_byte_ranges(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
+  CUDF_FUNC_RANGE();
+
   std::vector<rmm::device_buffer> buffers{};
   buffers.reserve(byte_ranges.size());
 
@@ -198,6 +203,8 @@ auto hybrid_scan(io_source const& io_source,
                  rmm::cuda_stream_view stream,
                  rmm::device_async_resource_ref mr)
 {
+  CUDF_FUNC_RANGE();
+
   auto options = cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
 
   // Input file buffer span
@@ -339,7 +346,7 @@ auto hybrid_scan(io_source const& io_source,
 
   // Check whether to prune payload column data pages
   auto const prune_payload_data_pages =
-    filters.contains(parquet_filter_type::PAYLOAD_COLUMN_PAGES_WITH_PAGE_INDEX);
+    filters.contains(parquet_filter_type::PAYLOAD_COLUMN_PAGES_WITH_ROW_MASK);
 
   if (prune_payload_data_pages) {
     std::cout << "READER: Filter data pages of payload columns with page index stats...\n";
@@ -462,7 +469,7 @@ int main(int argc, char const** argv)
     filters.insert(parquet_filter_type::ROW_GROUPS_WITH_BLOOM_FILTERS);
     // Deliberately disabled as it has low cost to benefit ratio
     // filters.insert(parquet_filter_type::FILTER_COLUMN_PAGES_WITH_PAGE_INDEX);
-    filters.insert(parquet_filter_type::PAYLOAD_COLUMN_PAGES_WITH_PAGE_INDEX);
+    filters.insert(parquet_filter_type::PAYLOAD_COLUMN_PAGES_WITH_ROW_MASK);
   }
 
   cudf::examples::timer timer;
