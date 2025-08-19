@@ -139,7 +139,7 @@ std::unique_ptr<column> compute_variance_std(column_view const& m2,
     data_type(type_to_id<TargetType>()), m2.size(), mask_state::UNALLOCATED, stream, mr);
 
   // Since we may have new null rows depending on the group count, we need to generate a new null
-  // mask during evaluating variance.
+  // mask from scratch.
   rmm::device_uvector<bool> validity(m2.size(), stream);
 
   auto const out_it =
@@ -149,6 +149,7 @@ std::unique_ptr<column> compute_variance_std(column_view const& m2,
   auto [null_mask, null_count] =
     cudf::detail::valid_if(validity.begin(), validity.end(), cuda::std::identity{}, stream, mr);
   if (null_count > 0) { output->set_null_mask(std::move(null_mask), null_count); }
+
   return output;
 }
 
