@@ -407,12 +407,10 @@ class UnaryFunction(Expr):
                 src = ranked.type().id()
                 if dest == plc.TypeId.UINT32 and src != plc.TypeId.UINT32:
                     ranked = plc.unary.cast(ranked, plc.DataType(plc.TypeId.UINT32))
-                elif dest == plc.TypeId.UINT64 and src != plc.TypeId.UINT64:
+                elif (
+                    dest == plc.TypeId.UINT64 and src != plc.TypeId.UINT64
+                ):  # pragma: no cover
                     ranked = plc.unary.cast(ranked, plc.DataType(plc.TypeId.UINT64))
-                elif dest == plc.TypeId.INT32 and src != plc.TypeId.INT32:
-                    ranked = plc.unary.cast(ranked, plc.DataType(plc.TypeId.INT32))
-                elif dest == plc.TypeId.INT64 and src != plc.TypeId.INT64:
-                    ranked = plc.unary.cast(ranked, plc.DataType(plc.TypeId.INT64))
 
             return Column(ranked, dtype=self.dtype)
         elif self.name == "top_k":
