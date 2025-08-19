@@ -30,23 +30,13 @@
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <thrust/iterator/transform_output_iterator.h>
-
 namespace cudf::detail {
 
 /**
- * @brief Helper function to count least significant bits
- */
-__device__ __forceinline__ int32_t count_least_significant_bits(uint32_t x, int32_t n)
-{
-  return __popc(x & ((1U << n) - 1U));
-}
-
-/**
- * @brief Templated standalone retrieve implementation for hash table probing
+ * @brief Optimized standalone retrieve implementation for hash table probing
  *
- * This implementation handles hash table retrieval for mixed joins without requiring
- * external dependencies. Uses template parameter to handle both inner and outer join semantics.
+ * This implementation uses precomputed hash indices and storage references
+ * for efficient mixed join operations with minimal overhead.
  *
  * @tparam is_outer Boolean flag indicating whether outer join semantics should be used
  */
@@ -69,8 +59,7 @@ __device__ __forceinline__ void standalone_retrieve(
 
   auto const n = cuda::std::distance(input_probe_begin, input_probe_end);
 
-  // Use cooperative group design optimized for mixed join workloads
-  auto constexpr flushing_cg_size = cudf::detail::warp_size;  // Warp size for flushing
+  auto constexpr flushing_cg_size = cudf::detail::warp_size;
 
   auto constexpr num_flushing_cgs     = block_size / flushing_cg_size;
   auto constexpr max_matches_per_step = flushing_cg_size * bucket_size;
@@ -79,10 +68,9 @@ __device__ __forceinline__ void standalone_retrieve(
   auto const flushing_cg = cg::tiled_partition<flushing_cg_size>(block);
 
   auto const flushing_cg_id = flushing_cg.meta_group_rank();
-  auto const stride         = block_size;  // Each thread processes its own keys
-  auto idx = threadIdx.x;  // Direct thread index since each thread works independently
+  auto const stride         = block_size;
+  auto idx                  = threadIdx.x;
 
-  // Simplified buffers: store row indices directly instead of pairs
   __shared__ cudf::size_type probe_output_buffer[num_flushing_cgs][buffer_size];
   __shared__ cudf::size_type match_output_buffer[num_flushing_cgs][buffer_size];
   __shared__ cudf::size_type flushing_cg_counter[num_flushing_cgs];
@@ -90,7 +78,6 @@ __device__ __forceinline__ void standalone_retrieve(
   if (flushing_cg.thread_rank() == 0) { flushing_cg_counter[flushing_cg_id] = 0; }
   flushing_cg.sync();
 
-  // Buffer flushing function for efficient output
   auto flush_output_buffer = [&](auto const& tile) {
     size_type offset = 0;
     auto const count = flushing_cg_counter[flushing_cg_id];
@@ -113,19 +100,17 @@ __device__ __forceinline__ void standalone_retrieve(
       auto const& probe_key = *(input_probe_begin + idx);
       auto const& hash_idx  = *(input_hash_begin + idx);
 
-      // Use precomputed hash indices instead of computing them
       auto const extent     = storage_ref.extent();
-      auto current_slot_idx = static_cast<std::size_t>(hash_idx.first);   // initial probe index
-      auto const step       = static_cast<std::size_t>(hash_idx.second);  // step size
+      auto current_slot_idx = static_cast<std::size_t>(hash_idx.first);
+      auto const step       = static_cast<std::size_t>(hash_idx.second);
 
       bool running                      = true;
-      [[maybe_unused]] bool found_match = false;  // Only used for outer joins
+      [[maybe_unused]] bool found_match = false;
 
       while (active_flushing_cg.any(running)) {
         if (running) {
           auto const bucket_slots = storage_ref[current_slot_idx];
 
-          // Check slot contents and compare for equality
           auto const first_slot_is_empty  = bucket_slots[0].second == cudf::detail::JoinNoneValue;
           auto const second_slot_is_empty = bucket_slots[1].second == cudf::detail::JoinNoneValue;
           auto const first_equals =
@@ -133,8 +118,6 @@ __device__ __forceinline__ void standalone_retrieve(
           auto const second_equals =
             (not second_slot_is_empty and key_equal(probe_key, bucket_slots[1]));
 
-          // Since probing CG size is 1, we don't need ballot operations
-          // Just process matches directly for this single thread
           if (first_equals or second_equals) {
             if constexpr (is_outer) { found_match = true; }
 
@@ -142,9 +125,7 @@ __device__ __forceinline__ void standalone_retrieve(
             cudf::size_type output_idx =
               atomicAdd(&flushing_cg_counter[flushing_cg_id], num_matches);
 
-            // Extract row indices directly from the probe key and bucket slots
-            auto const probe_row_index =
-              probe_key.second;  // Probe key is also a pair with row index
+            auto const probe_row_index = probe_key.second;
 
             if (first_equals) {
               probe_output_buffer[flushing_cg_id][output_idx] = probe_row_index;
@@ -159,48 +140,38 @@ __device__ __forceinline__ void standalone_retrieve(
             }
           }
 
-          // Check for empty slots - simplified since single thread
           if (first_slot_is_empty or second_slot_is_empty) {
             running = false;
 
-            // Handle outer join case where no match was found
             if constexpr (is_outer) {
               if (not found_match) {
                 auto const output_idx      = atomicAdd(&flushing_cg_counter[flushing_cg_id], 1);
                 auto const probe_row_index = probe_key.second;
                 probe_output_buffer[flushing_cg_id][output_idx] = probe_row_index;
-                match_output_buffer[flushing_cg_id][output_idx] =
-                  cudf::detail::JoinNoneValue;  // Empty sentinel
+                match_output_buffer[flushing_cg_id][output_idx] = cudf::detail::JoinNoneValue;
               }
             }
           }
-        }  // if running
+        }
 
         active_flushing_cg.sync();
-        // Check if buffer needs flushing
         if (flushing_cg_counter[flushing_cg_id] > (buffer_size - max_matches_per_step)) {
           flush_output_buffer(active_flushing_cg);
           active_flushing_cg.sync();
 
-          // Reset buffer counter
           if (active_flushing_cg.thread_rank() == 0) { flushing_cg_counter[flushing_cg_id] = 0; }
           active_flushing_cg.sync();
         }
 
-        // Move to next probing bucket using precomputed step
         current_slot_idx = (current_slot_idx + step) % extent;
-        if (current_slot_idx == static_cast<std::size_t>(hash_idx.first)) {
-          running = false;
-        }  // Detect cycle completion
-      }  // while running
-    }  // if active_flag
+        if (current_slot_idx == static_cast<std::size_t>(hash_idx.first)) { running = false; }
+      }
+    }
 
-    // Move to next key
     idx += stride;
   }
 
   flushing_cg.sync();
-  // Final flush of remaining elements
   if (flushing_cg_counter[flushing_cg_id] > 0) { flush_output_buffer(flushing_cg); }
 }
 
@@ -221,10 +192,6 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) mixed_join(
   cudf::ast::detail::expression_device_view device_expression_data,
   bool const swap_tables)
 {
-  // Normally the casting of a shared memory array is used to create multiple
-  // arrays of different types from the shared memory buffer, but here it is
-  // used to circumvent conflicts between arrays of different types between
-  // different template instantiations due to the extern specifier.
   extern __shared__ char raw_intermediate_storage[];
   auto intermediate_storage =
     reinterpret_cast<cudf::ast::detail::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
