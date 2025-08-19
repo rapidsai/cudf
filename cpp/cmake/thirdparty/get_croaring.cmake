@@ -30,18 +30,10 @@ function(find_and_configure_croaring VERSION)
             "ROARING_DISABLE_AVX2 ON"
             "ROARING_DISABLE_AVX512 ON"
   )
-
-  if(DEFINED croaring_SOURCE_DIR)
-    set(croaring_CPP_INCLUDE_DIR
-        "${croaring_SOURCE_DIR}/cpp"
-        PARENT_SCOPE
-    )
-    set(croaring_C_INCLUDE_DIR
-        "${croaring_SOURCE_DIR}/include"
-        PARENT_SCOPE
-    )
-  endif()
-
+  set(croaring_INCLUDE_DIR
+      "${croaring_SOURCE_DIR}"
+      PARENT_SCOPE
+  )
 endfunction()
 
 set(croaring_VERSION_cudf "4.3.6")

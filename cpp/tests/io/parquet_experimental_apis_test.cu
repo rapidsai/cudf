@@ -20,7 +20,6 @@
 #include <cudf_test/table_utilities.hpp>
 
 #include <cudf/io/experimental/hybrid_scan.hpp>
-#include <cudf/io/experimental/roaring64.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -32,6 +31,8 @@
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/sequence.h>
+
+#include <roaring/roaring64.h>
 
 #include <functional>
 #include <numeric>
