@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -11,6 +11,8 @@
 # or implied. See the License for the specific language governing permissions and limitations under
 # the License.
 # =============================================================================
+
+set(CUDF_USE_PROPRIETARY_NVCOMP ON)
 
 # This function finds nvcomp and sets any additional necessary environment variables.
 function(find_and_configure_nvcomp)
