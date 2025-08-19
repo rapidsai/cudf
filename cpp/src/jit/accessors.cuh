@@ -23,6 +23,8 @@
 
 #include <jit/span.cuh>
 
+#include <jit/span.cuh>
+
 #include <cstddef>
 
 namespace cudf {
