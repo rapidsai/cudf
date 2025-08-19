@@ -16,6 +16,7 @@ import pylibcudf as plc
 from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr, ir
 from cudf_polars.dsl.expressions.base import ExecutionContext
+from cudf_polars.utils.versions import POLARS_VERSION_LT_1323
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable, Sequence
@@ -135,6 +136,21 @@ def decompose_single_agg(
         )
         if any(has_agg for _, has_agg in aggs):
             raise NotImplementedError("Nested aggs in groupby not supported")
+
+        child_dtype = child.dtype.plc
+        req = agg.agg_request
+        is_median = agg.name == "median"
+        is_quantile = agg.name == "quantile"
+
+        is_group_quantile_supported = plc.traits.is_integral(
+            child_dtype
+        ) or plc.traits.is_floating_point(child_dtype)
+
+        unsupported = (
+            (is_median or is_quantile) and not is_group_quantile_supported
+        ) or (not plc.aggregation.is_valid_aggregation(child_dtype, req))
+        if unsupported:
+            return [], named_expr.reconstruct(expr.Literal(child.dtype, None))
         if needs_masking:
             child = expr.UnaryFunction(child.dtype, "mask_nans", (), child)
             # The aggregation is just reconstructed with the new
@@ -158,12 +174,12 @@ def decompose_single_agg(
             # - ROLLING: sum(all-null window) => null; sum(empty window) => 0 (fill only if empty)
             #
             # Must post-process because libcudf returns null for both empty and all-null windows/groups
-            if context == ExecutionContext.GROUPBY:
+            if not POLARS_VERSION_LT_1323 or context == ExecutionContext.GROUPBY:
                 # GROUPBY: always fill top-level nulls with 0
                 return [(named_expr, True)], expr.NamedExpr(
                     name, replace_nulls(col, 0, is_top=is_top)
                 )
-            else:
+            else:  # pragma: no cover
                 # ROLLING:
                 # Add a second rolling agg to compute the window size, then only
                 # replace nulls with 0 when the window size is 0 (ie. empty window).
