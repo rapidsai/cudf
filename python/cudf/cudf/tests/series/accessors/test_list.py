@@ -136,22 +136,14 @@ def test_unique(data, expected):
     """
     gs = cudf.Series(data, nan_as_null=False)
 
-    got = gs.list.unique()
+    got = gs.list.unique().list.sort_values()
     expected = cudf.Series(expected, nan_as_null=False).list.sort_values()
-
-    got = got.list.sort_values()
 
     assert_eq(expected, got)
 
 
 def key_func_builder(x, na_position):
-    if x is None:
-        if na_position == "first":
-            return -1e8
-        else:
-            return 1e8
-    else:
-        return x
+    return x if x is not None else -1e8 if na_position == "first" else 1e8
 
 
 @pytest.mark.parametrize(
@@ -524,13 +516,16 @@ def test_concat_elements(row, dropna):
 
 def test_concat_elements_raise():
     s = cudf.Series([[1, 2, 3]])  # no nesting
-    with pytest.raises(ValueError):
+    with pytest.raises(
+        ValueError,
+        match=".*Child of the input lists column must also be a lists column",
+    ):
         s.list.concat()
 
 
 def test_list_iterate_error():
     s = cudf.Series([[[[1, 2]], [[2], [3]]], [[[2]]], [[[3]]]])
-    with pytest.raises(TypeError):
+    with pytest.raises(TypeError, match="ListMethods object is not iterable"):
         iter(s.list)
 
 
