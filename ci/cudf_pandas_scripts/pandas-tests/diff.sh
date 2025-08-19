@@ -22,12 +22,13 @@ rapids-logger "Latest available results from nightly: ${COMPARE_ENV}"
 
 aws s3 cp "s3://rapids-downloads/${COMPARE_ENV}" main-results.json
 # aws s3 cp "$PR_ARTIFACT" pr-results.json
+
 # gh run download $GITHUB_RUN_ID -n pr-results.json
 gh run download 17074762834 -n pr-results.json
 
 ls -al
 head -n 5 pr-25.10.00-results.json
-
+rapids-logger "GITHUB RUN ID: {$GITHUB_RUN_ID}"
 # Compute the diff and prepare job summary:
 python -m pip install pandas tabulate
 python ci/cudf_pandas_scripts/pandas-tests/job-summary.py main-results.json pr-results.json | tee summary.txt >> "$GITHUB_STEP_SUMMARY"
