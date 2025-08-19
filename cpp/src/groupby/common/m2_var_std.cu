@@ -106,7 +106,6 @@ std::unique_ptr<column> compute_m2(data_type source_type,
                                     sum.null_count(),
                                     stream,
                                     mr);
-
   type_dispatcher(source_type, m2_functor{}, output->mutable_view(), sum_sqr, sum, count, stream);
   return output;
 }
