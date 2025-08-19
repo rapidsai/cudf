@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/io/experimental/roaring64.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
@@ -24,8 +25,6 @@
 #include <cudf/utilities/export.hpp>
 
 #include <thrust/host_vector.h>
-
-#include <roaring/roaring64.h>
 
 #include <memory>
 #include <utility>

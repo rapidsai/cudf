@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-#include "cudf/detail/iterator.cuh"
 #include "parquet_common.hpp"
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/table_utilities.hpp>
 
 #include <cudf/io/experimental/hybrid_scan.hpp>
+#include <cudf/io/experimental/roaring64.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -30,9 +30,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/sequence.h>
-
-#include <roaring/roaring64.h>
 
 #include <functional>
 #include <numeric>
