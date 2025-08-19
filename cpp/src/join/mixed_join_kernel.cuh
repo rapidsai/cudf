@@ -93,7 +93,7 @@ __device__ __forceinline__ void standalone_retrieve(cooperative_groups::thread_b
   // Simplified buffers: store row indices directly instead of pairs
   __shared__ cudf::size_type probe_output_buffer[num_flushing_cgs][buffer_size];
   __shared__ cudf::size_type match_output_buffer[num_flushing_cgs][buffer_size];
-  __shared__ uint32_t flushing_cg_counter[num_flushing_cgs];
+  __shared__ cudf::size_type flushing_cg_counter[num_flushing_cgs];
 
   if (flushing_cg.thread_rank() == 0) { flushing_cg_counter[flushing_cg_id] = 0; }
   flushing_cg.sync();
