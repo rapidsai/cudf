@@ -13,7 +13,8 @@ from polars import GPUEngine
 from polars.testing.asserts import assert_frame_equal
 
 from cudf_polars.dsl.translate import Translator
-from cudf_polars.utils.config import StreamingFallbackMode
+from cudf_polars.utils.config import ConfigOptions, StreamingFallbackMode
+from cudf_polars.utils.versions import POLARS_VERSION_LT_1323
 
 if TYPE_CHECKING:
     from cudf_polars.typing import OptimizationArgs
@@ -112,16 +113,26 @@ def assert_gpu_result_equal(
     # the 'misc' is for 'error: Keywords must be strings'
     expect = lazydf.collect(**final_polars_collect_kwargs)  # type: ignore[call-overload,misc]
     got = lazydf.collect(**final_cudf_collect_kwargs, engine=engine)  # type: ignore[call-overload,misc]
+
+    assert_kwargs_bool: dict[str, bool] = {
+        "check_row_order": check_row_order,
+        "check_column_order": check_column_order,
+        "check_dtypes": check_dtypes,
+        "check_exact": check_exact,
+        "categorical_as_str": categorical_as_str,
+    }
+
+    tol_kwargs: dict[str, float]
+    if POLARS_VERSION_LT_1323:  # pragma: no cover
+        tol_kwargs = {"rtol": rtol, "atol": atol}
+    else:
+        tol_kwargs = {"rel_tol": rtol, "abs_tol": atol}
+
     assert_frame_equal(
         expect,
         got,
-        check_row_order=check_row_order,
-        check_column_order=check_column_order,
-        check_dtypes=check_dtypes,
-        check_exact=check_exact,
-        rtol=rtol,
-        atol=atol,
-        categorical_as_str=categorical_as_str,
+        **assert_kwargs_bool,
+        **tol_kwargs,
     )
 
 
@@ -246,10 +257,10 @@ def assert_collect_raises(
         Useful for controlling optimization settings.
     polars_except
         Exception or exceptions polars CPU is expected to raise. If
-        None, CPU is not expected to raise an exception.
+        an empty tuple ``()``, CPU is expected to succeed without raising.
     cudf_except
         Exception or exceptions polars GPU is expected to raise. If
-        None, GPU is not expected to raise an exception.
+        an empty tuple ``()``, GPU is expected to succeed without raising.
     collect_kwargs
         Common keyword arguments to pass to collect for both polars CPU and
         cudf-polars.
@@ -381,9 +392,9 @@ def assert_sink_result_equal(
     # the multi-partition executor might produce multiple files, one per partition.
     if (
         isinstance(engine, GPUEngine)
-        and engine.config["executor"] == "streaming"
+        and ConfigOptions.from_polars_engine(engine).executor.name == "streaming"
         and gpu_path.is_dir()
-    ):
+    ):  # pragma: no cover
         result = read_fn(gpu_path.joinpath("*"), **read_kwargs)
     else:
         result = read_fn(gpu_path, **read_kwargs)

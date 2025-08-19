@@ -15,6 +15,7 @@
  */
 
 #include "compression_common.hpp"
+#include "io_test_utils.hpp"
 #include "parquet_common.hpp"
 
 #include <cudf_test/base_fixture.hpp>
@@ -33,6 +34,7 @@
 #include <src/io/parquet/parquet_gpu.hpp>
 
 #include <array>
+#include <memory>
 
 using ParquetDecompressionTest = DecompressionTest<ParquetReaderTest>;
 
@@ -2926,6 +2928,9 @@ TEST_F(ParquetReaderTest, DISABLED_ListsWideTable)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result->view());
 }
 
+//////////////////////////////////////////
+// row bounds and predicate pushdown tests
+
 TEST_F(ParquetReaderTest, RowBoundsAndFilter)
 {
   auto constexpr num_files                = 3;
@@ -3160,5 +3165,58 @@ TEST_F(ParquetReaderTest, RowBoundsAndFilter)
     EXPECT_EQ(metadata.num_input_row_groups, 5);  // RGs: {}, {0,1,2,3,4}, {}
     EXPECT_TRUE(metadata.num_row_groups_after_stats_filter.has_value() and
                 metadata.num_row_groups_after_stats_filter.value() == 3);  // RGs: {},{0,1,4},{}
+  }
+}
+
+TEST_F(ParquetReaderTest, DeviceReadAsyncThrows)
+{
+  // Create a simple parquet file in memory
+  auto col0           = cudf::test::fixed_width_column_wrapper<int>{{1, 2, 3, 4, 5}};
+  auto table_to_write = table_view{{col0}};
+
+  std::vector<char> out_buffer;
+  cudf::io::parquet_writer_options write_args =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&out_buffer}, table_to_write);
+  cudf::io::write_parquet(write_args);
+
+  // Create our throwing datasource
+  auto throwing_source = std::make_unique<cudf::test::ThrowingDeviceReadDatasource>(out_buffer);
+  cudf::io::source_info source_info(throwing_source.get());
+
+  // Try to read the parquet file - this should either succeed or propagate AsyncException
+  // from device_read_async.
+  cudf::io::parquet_reader_options read_args =
+    cudf::io::parquet_reader_options::builder(source_info);
+  try {
+    cudf::io::read_parquet(read_args);
+    // Test passes if no exception is thrown
+  } catch (const cudf::test::AsyncException&) {
+    // Test passes if AsyncException is thrown (expected test exception)
+  } catch (const std::exception& e) {
+    // Test fails if any other exception is thrown
+    FAIL() << "Unexpected exception thrown: " << e.what();
+  }
+}
+
+TEST_F(ParquetReaderTest, DeviceWriteAsyncThrows)
+{
+  // Create a simple table to write
+  auto col0           = cudf::test::fixed_width_column_wrapper<int>{{1, 2, 3, 4, 5}};
+  auto table_to_write = table_view{{col0}};
+
+  auto throwing_sink = std::make_unique<cudf::test::ThrowingDeviceWriteDataSink>();
+
+  cudf::io::parquet_writer_options write_args = cudf::io::parquet_writer_options::builder(
+    cudf::io::sink_info{throwing_sink.get()}, table_to_write);
+
+  // The write_parquet call should either succeed or throw AsyncException.
+  try {
+    cudf::io::write_parquet(write_args);
+    // Test passes if no exception is thrown
+  } catch (const cudf::test::AsyncException&) {
+    // Test passes if AsyncException is thrown (expected test exception)
+  } catch (const std::exception& e) {
+    // Test fails if any other exception is thrown
+    FAIL() << "Unexpected exception thrown: " << e.what();
   }
 }

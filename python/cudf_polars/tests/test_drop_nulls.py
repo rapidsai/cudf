@@ -46,6 +46,11 @@ def test_fill_null(null_data, value):
     assert_gpu_result_equal(q)
 
 
+def test_fill_null_with_string():
+    q = pl.LazyFrame({"a": [None, "a"]}).select(pl.col("a").fill_null("b"))
+    assert_gpu_result_equal(q)
+
+
 @pytest.mark.parametrize(
     "strategy", ["forward", "backward", "min", "max", "mean", "zero", "one"]
 )

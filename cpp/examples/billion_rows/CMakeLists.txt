@@ -18,6 +18,11 @@ include(../fetch_dependencies.cmake)
 include(rapids-cmake)
 rapids_cmake_build_type("Release")
 
+# For now, disable CMake's automatic module scanning for C++ files. There is an sccache bug in the
+# version RAPIDS uses in CI that causes it to handle the resulting -M* flags incorrectly with
+# gcc>=14. We can remove this once we upgrade to a newer sccache version.
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
+
 list(APPEND CUDF_CUDA_FLAGS --expt-extended-lambda --expt-relaxed-constexpr)
 
 add_library(groupby_results OBJECT groupby_results.cpp)
@@ -30,7 +35,7 @@ target_link_libraries(
               $<TARGET_OBJECTS:groupby_results>
 )
 target_compile_features(brc PRIVATE cxx_std_20)
-install(TARGETS brc DESTINATION bin/examples/libcudf)
+install(TARGETS brc DESTINATION bin/examples/libcudf/billion_rows)
 
 add_executable(brc_chunks brc_chunks.cpp)
 target_link_libraries(
@@ -38,7 +43,7 @@ target_link_libraries(
                      $<TARGET_OBJECTS:groupby_results>
 )
 target_compile_features(brc_chunks PRIVATE cxx_std_20)
-install(TARGETS brc_chunks DESTINATION bin/examples/libcudf)
+install(TARGETS brc_chunks DESTINATION bin/examples/libcudf/billion_rows)
 
 add_executable(brc_pipeline brc_pipeline.cpp)
 target_link_libraries(
@@ -46,4 +51,4 @@ target_link_libraries(
                        $<TARGET_OBJECTS:groupby_results>
 )
 target_compile_features(brc_pipeline PRIVATE cxx_std_20)
-install(TARGETS brc_pipeline DESTINATION bin/examples/libcudf)
+install(TARGETS brc_pipeline DESTINATION bin/examples/libcudf/billion_rows)

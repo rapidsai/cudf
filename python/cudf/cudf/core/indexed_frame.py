@@ -27,21 +27,25 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
+from cudf._lib import strings_udf
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     is_dict_like,
     is_list_like,
     is_scalar,
+    is_string_dtype,
 )
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core._internals import copying, stream_compaction
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
+    CategoricalColumn,
     ColumnBase,
     NumericalColumn,
     as_column,
     column_empty,
 )
+from cudf.core.column.column import concat_columns
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.common import pipe
 from cudf.core.copy_types import BooleanMask, GatherMap
@@ -54,10 +58,11 @@ from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import _Resampler
 from cudf.core.udf.utils import (
     _get_input_args_from_frame,
-    _post_process_output_col,
+    _make_free_string_kernel,
     _return_arr_from_dtype,
 )
 from cudf.core.window import ExponentialMovingWindow, Rolling
+from cudf.errors import MixedTypeError
 from cudf.utils import docutils, ioutils
 from cudf.utils._numba import _CUDFNumbaConfig
 from cudf.utils.docutils import copy_docstring
@@ -65,9 +70,12 @@ from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     can_convert_to_column,
+    find_common_type,
     get_dtype_of_same_kind,
     is_column_like,
     is_dtype_obj_numeric,
+    is_mixed_with_object_dtype,
+    is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
@@ -88,6 +96,7 @@ if TYPE_CHECKING:
         Dtype,
         DtypeObj,
         NotImplementedType,
+        ScalarLike,
     )
     from cudf.core.series import Series
 
@@ -203,6 +212,36 @@ class _FrameIndexer:
 
     def __init__(self, frame):
         self._frame = frame
+
+    def append_new_row(self, key, value, columns_df=None, column=None):
+        idx = self._frame.index
+
+        # Normalize key for tuple/list or int
+        key_val = key[0] if isinstance(key, (tuple, list)) else key
+
+        if isinstance(idx, RangeIndex):
+            if isinstance(key_val, int) and (key_val == idx[-1] + idx.step):
+                idx_copy = cudf.RangeIndex(
+                    start=idx.start,
+                    stop=idx.stop + idx.step,
+                    step=idx.step,
+                    name=idx.name,
+                )
+            else:
+                idx_copy = idx._as_int_index()
+                _append_new_row_inplace(idx_copy._column, key_val)
+        else:
+            idx_copy = idx.copy(deep=True)
+            _append_new_row_inplace(idx_copy._column, key_val)
+
+        # Append value(s) to column(s)
+        if columns_df is not None:
+            for col in columns_df._column_names:
+                _append_new_row_inplace(self._frame._data[col], value)
+        elif column is not None:
+            _append_new_row_inplace(self._frame._column, value)
+
+        self._frame._index = idx_copy
 
 
 _LocIndexerClass = TypeVar("_LocIndexerClass", bound="_FrameIndexer")
@@ -333,7 +372,7 @@ class IndexedFrame(Frame):
             else:
                 index.name = index_names[0]
 
-        data = dict(zip(column_names, data_columns))
+        data = dict(zip(column_names, data_columns, strict=True))
         frame = type(self)._from_data(data, index)
         return frame._copy_type_metadata(self)
 
@@ -937,7 +976,7 @@ class IndexedFrame(Frame):
 
         data = (
             col.clip(low, high)
-            for col, low, high in zip(self._columns, lower, upper)
+            for col, low, high in zip(self._columns, lower, upper, strict=True)
         )
         output = self._from_data_like_self(
             self._data._from_columns_like_self(data)
@@ -2658,7 +2697,7 @@ class IndexedFrame(Frame):
                 )
             else:
                 ca = ColumnAccessor(
-                    dict(zip(labels, result_columns)),
+                    dict(zip(labels, result_columns, strict=True)),
                     rangeindex=self._data.rangeindex,
                     multiindex=self._data.multiindex,
                     level_names=self._data.level_names,
@@ -3409,7 +3448,15 @@ class IndexedFrame(Frame):
         except Exception as e:
             raise RuntimeError("UDF kernel execution failed.") from e
 
-        col = _post_process_output_col(ans_col, retty)
+        if retty == CUDF_STRING_DTYPE:
+            col = ColumnBase.from_pylibcudf(
+                strings_udf.column_from_managed_udf_string_array(ans_col)
+            )
+            free_kernel = _make_free_string_kernel()
+            with _CUDFNumbaConfig():
+                free_kernel.forall(len(col))(ans_col, len(col))
+        else:
+            col = as_column(ans_col, retty)
 
         col.set_base_mask(ans_mask.as_mask())
         result = cudf.Series._from_column(col, index=self.index)
@@ -3696,6 +3743,7 @@ class IndexedFrame(Frame):
                 for left_dtype, right_dtype in zip(
                     (dtype for _, dtype in df.index._dtypes),
                     (dtype for _, dtype in index._dtypes),
+                    strict=True,
                 )
             )
 
@@ -5273,12 +5321,18 @@ class IndexedFrame(Frame):
             if i == column_index
             else new_column._with_type_metadata(old_column.dtype)
             for i, (new_column, old_column) in enumerate(
-                zip(exploded, itertools.chain(idx_cols, self._columns))
+                zip(
+                    exploded,
+                    itertools.chain(idx_cols, self._columns),
+                    strict=True,
+                )
             )
         ]
 
         data = type(self._data)(
-            dict(zip(self._column_names, exploded[len(idx_cols) :])),
+            dict(
+                zip(self._column_names, exploded[len(idx_cols) :], strict=True)
+            ),
             multiindex=self._data.multiindex,
             level_names=self._data.level_names,
             rangeindex=self._data.rangeindex,
@@ -6364,7 +6418,9 @@ class IndexedFrame(Frame):
         if dropped_cols:
             result = type(source)._from_data(
                 ColumnAccessor(
-                    dict(zip(source._column_names, result_columns)),
+                    dict(
+                        zip(source._column_names, result_columns, strict=True)
+                    ),
                     multiindex=source._data.multiindex,
                     level_names=source._data.level_names,
                     label_dtype=source._data.label_dtype,
@@ -6759,3 +6815,46 @@ def _is_same_dtype(lhs_dtype, rhs_dtype):
         return True
     else:
         return False
+
+
+def _append_new_row_inplace(col: ColumnBase, value: ScalarLike) -> None:
+    """Append a scalar `value` to the end of `col` inplace.
+    Cast to common type if possible
+    """
+    val_col = as_column(value, dtype=col.dtype if value is None else None)
+    if (
+        cudf.get_option("mode.pandas_compatible")
+        and is_pandas_nullable_extension_dtype(col.dtype)
+        and val_col.dtype.kind == "f"
+    ):
+        # If the column is a pandas nullable extension type, we need to
+        # convert the nans to a nullable type as well.
+        val_col = val_col.nans_to_nulls()
+        if len(val_col) == val_col.null_count:
+            # If the column is all nulls, we can use the column dtype
+            # to avoid unnecessary casting.
+            val_col = val_col.astype(col.dtype)
+    to_type = find_common_type([val_col.dtype, col.dtype])
+    if (
+        cudf.get_option("mode.pandas_compatible")
+        and is_string_dtype(to_type)
+        and is_mixed_with_object_dtype(val_col, col)
+    ):
+        raise MixedTypeError("Cannot append mixed types")
+    if cudf.get_option("mode.pandas_compatible") and val_col.can_cast_safely(
+        col.dtype
+    ):
+        to_type = col.dtype
+    val_col = val_col.astype(to_type)
+    old_col = col.astype(to_type)
+    res_col = concat_columns([old_col, val_col])._with_type_metadata(to_type)
+    if (
+        cudf.get_option("mode.pandas_compatible")
+        and res_col.dtype != col.dtype
+        and isinstance(col, CategoricalColumn)
+    ):
+        raise MixedTypeError(
+            "Cannot append mixed types: "
+            f"Column dtype {col.dtype} is not compatible with {res_col.dtype}"
+        )
+    col._mimic_inplace(res_col, inplace=True)

@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
-# TODO: remove need for this
+# TODO: Document TemporalFunction to remove noqa
 # ruff: noqa: D101
 """DSL nodes for datetime operations."""
 
@@ -38,6 +38,7 @@ class TemporalFunction(Expr):
         Datetime = auto()
         DatetimeFunction = auto()
         Day = auto()
+        DaysInMonth = auto()
         Duration = auto()
         Hour = auto()
         IsLeapYear = auto()

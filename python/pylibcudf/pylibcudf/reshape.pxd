@@ -14,8 +14,8 @@ from .table cimport Table
 from .types cimport DataType
 
 
-cpdef Column interleave_columns(Table source_table)
-cpdef Table tile(Table source_table, size_type count)
+cpdef Column interleave_columns(Table source_table, Stream stream=*)
+cpdef Table tile(Table source_table, size_type count, Stream stream=*)
 cpdef void table_to_array(
     Table input_table,
     uintptr_t ptr,

@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import decimal
 import itertools
 import random
 from datetime import date
@@ -14,6 +15,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+from cudf_polars.utils.versions import POLARS_VERSION_LT_1321
 
 
 @pytest.fixture
@@ -24,6 +26,7 @@ def df():
             "key2": [2, 2, 2, 2, 6, 1, 4, 6, 8],
             "int": [1, 2, 3, 4, 5, 6, 7, 8, 9],
             "int32": pl.Series([1, 2, 3, 4, 5, 6, 7, 8, 9], dtype=pl.Int32()),
+            "decimal": [decimal.Decimal("1.23"), None, decimal.Decimal("-0.23")] * 3,
             "uint16_with_null": pl.Series(
                 [1, None, 2, None, None, None, 4, 5, 6], dtype=pl.UInt16()
             ),
@@ -88,6 +91,7 @@ def keys(request):
         [pl.col("float").quantile(0.3, interpolation="lower")],
         [pl.col("float").quantile(0.3, interpolation="midpoint")],
         [pl.col("float").quantile(0.3, interpolation="linear")],
+        [pl.col("decimal").median()],
         [
             pl.col("datetime").max(),
             pl.col("datetime").max().dt.is_leap_year().alias("leapyear"),
@@ -213,7 +217,13 @@ def test_groupby_nan_minmax_raises(op):
             pl.lit([[4, 5, 6]]).alias("value"),
             marks=pytest.mark.xfail(reason="Need to expose OtherScalar in rust IR"),
         ),
-        pl.Series("value", [[4, 5, 6]], dtype=pl.List(pl.Int32)),
+        pytest.param(
+            pl.Series("value", [[4, 5, 6]], dtype=pl.List(pl.Int32)),
+            marks=pytest.mark.xfail(
+                condition=not POLARS_VERSION_LT_1321,
+                reason="https://github.com/rapidsai/cudf/issues/19610",
+            ),
+        ),
         pl.col("float") * (1 - pl.col("int")),
         [pl.lit(2).alias("value"), pl.col("float") * 2],
     ],
@@ -273,6 +283,72 @@ def test_groupby_nunique(df: pl.LazyFrame, column):
     q = df.group_by("key1").agg(pl.col(column).n_unique())
 
     assert_gpu_result_equal(q, check_row_order=False)
+
+
+def test_groupby_null_count_raises(df: pl.LazyFrame):
+    q = df.group_by("key1").agg(pl.col("int") + pl.col("uint16_with_null").null_count())
+
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.col("int").all(),
+        pl.col("int").any(),
+        pl.col("int").is_duplicated(),
+        pl.col("int").is_first_distinct(),
+        pl.col("int").is_last_distinct(),
+        pl.col("int").is_unique(),
+    ],
+    ids=[
+        "all_horizontal",
+        "any_horizontal",
+        "is_duplicated",
+        "is_first_distinct",
+        "is_last_distinct",
+        "is_unique",
+    ],
+)
+def test_groupby_unsupported_non_pointwise_boolean_function(df: pl.LazyFrame, expr):
+    q = df.group_by("key1").agg(expr)
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_groupby_mean_type_promotion(df: pl.LazyFrame) -> None:
+    df = df.with_columns(pl.col("float").cast(pl.Float32))
+
+    q = df.group_by("key1").agg(pl.col("float").mean())
+
+    assert_gpu_result_equal(q, check_row_order=False)
+
+
+def test_groupby_sum_all_null_group_returns_null():
+    df = pl.LazyFrame(
+        {
+            "key": ["a", "a", "b", "b", "c"],
+            "null_groups": [None, None, None, 2, None],
+        }
+    )
+
+    q = df.group_by("key").agg(out=pl.col("null_groups").sum())
+    assert_gpu_result_equal(q, check_row_order=False)
+
+
+@pytest.mark.parametrize(
+    "agg_expr",
+    [
+        pl.all().sum(),
+        pl.all().mean(),
+        pl.all().median(),
+        pl.all().quantile(0.5),
+    ],
+    ids=["sum", "mean", "median", "quantile-0.5"],
+)
+def test_groupby_aggs_keep_unsupported_as_null(df: pl.LazyFrame, agg_expr) -> None:
+    lf = df.filter(pl.col("datetime") == date(2004, 12, 1))
+    q = lf.group_by("datetime").agg(agg_expr)
+    assert_gpu_result_equal(q)
 
 
 @pytest.mark.parametrize(
