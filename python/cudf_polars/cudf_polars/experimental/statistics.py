@@ -51,12 +51,12 @@ def collect_base_stats(root: IR, config_options: ConfigOptions) -> StatsCollecto
     for node in post_traversal([root]):
         # Initialize column statistics from datasource information
         stats.column_stats[node] = initialize_column_stats(node, stats, config_options)
-        # Populate Join-key information
-        stats = update_join_key_info(node, stats, config_options)
+        # Initialize Join-key information
+        stats = initialize_join_key_info(node, stats, config_options)
     return stats
 
 
-def update_join_key_info(
+def initialize_join_key_info(
     node: IR, stats: StatsCollector, config_options: ConfigOptions
 ) -> StatsCollector:
     """
