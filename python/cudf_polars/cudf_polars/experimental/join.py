@@ -269,7 +269,7 @@ def _(
         return _lower_ir_fallback(
             ir,
             rec,
-            msg="Join(maintain_order=...) not supported for multiple partitions.",
+            msg=f"Join({maintain_order=}) not supported for multiple partitions.",
         )
 
     if _should_bcast_join(

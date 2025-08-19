@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import operator
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
 import pylibcudf as plc
 from rmm.pylibrmm.stream import DEFAULT_STREAM
@@ -39,6 +39,7 @@ class ShuffleOptions(TypedDict):
     on: Sequence[str]
     column_names: Sequence[str]
     dtypes: Sequence[DataType]
+    cluster_kind: str
 
 
 # Experimental rapidsmpf shuffler integration
@@ -57,7 +58,12 @@ class RMPFIntegration:  # pragma: no cover
     ) -> None:
         """Add cudf-polars DataFrame chunks to an RMP shuffler."""
         from rapidsmpf.integrations.cudf.partition import partition_and_pack
-        from rapidsmpf.integrations.dask.core import get_worker_context
+
+        if options["cluster_kind"] == "dask":
+            from rapidsmpf.integrations.dask import get_worker_context
+
+        else:
+            from rapidsmpf.integrations.single import get_worker_context
 
         context = get_worker_context()
 
@@ -90,7 +96,12 @@ class RMPFIntegration:  # pragma: no cover
             unpack_and_concat,
             unspill_partitions,
         )
-        from rapidsmpf.integrations.dask.core import get_worker_context
+
+        if options["cluster_kind"] == "dask":
+            from rapidsmpf.integrations.dask import get_worker_context
+
+        else:
+            from rapidsmpf.integrations.single import get_worker_context
 
         context = get_worker_context()
         if context.br is None:  # pragma: no cover
@@ -286,10 +297,18 @@ def _(
     # Try using rapidsmpf shuffler if we have "simple" shuffle
     # keys, and the "shuffle_method" config is set to "rapidsmpf"
     _keys: list[Col]
-    if shuffle_method == "rapidsmpf" and len(
+    if shuffle_method in ("rapidsmpf", "rapidsmpf-single") and len(
         _keys := [ne.value for ne in ir.keys if isinstance(ne.value, Col)]
     ) == len(ir.keys):  # pragma: no cover
-        from rapidsmpf.integrations.dask import rapidsmpf_shuffle_graph
+        cluster_kind: Literal["dask", "single"]
+        if shuffle_method == "rapidsmpf-single":
+            from rapidsmpf.integrations.single import rapidsmpf_shuffle_graph
+
+            cluster_kind = "single"
+        else:
+            from rapidsmpf.integrations.dask import rapidsmpf_shuffle_graph
+
+            cluster_kind = "dask"
 
         shuffle_on = [k.name for k in _keys]
 
@@ -304,6 +323,7 @@ def _(
                     "on": shuffle_on,
                     "column_names": list(ir.schema.keys()),
                     "dtypes": list(ir.schema.values()),
+                    "cluster_kind": cluster_kind,
                 },
             )
         except ValueError as err:

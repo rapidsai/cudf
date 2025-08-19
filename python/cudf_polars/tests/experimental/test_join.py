@@ -209,10 +209,14 @@ def test_join_maintain_order_fallback_streaming(left, right, maintain_order):
             "max_rows_per_partition": 3,
             "broadcast_join_limit": 1,
             "shuffle_method": "tasks",
-            "fallback_mode": "silent",
+            "fallback_mode": "warn",
         },
     )
 
     q = left.join(right, on="y", how="inner", maintain_order=maintain_order)
 
-    assert_gpu_result_equal(q, engine=engine)
+    with pytest.warns(
+        UserWarning,
+        match=r"Join\(maintain_order=.*\) not supported for multiple partitions\.",
+    ):
+        assert_gpu_result_equal(q, engine=engine)

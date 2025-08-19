@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.testing import assert_groupby_results_equal
+from cudf.testing import assert_eq, assert_groupby_results_equal
 
 
 @pytest.mark.parametrize("index", [None, [1, 2, 3, 4]])
@@ -93,3 +93,14 @@ def test_groupby_scan_null_keys(with_nan, dropna, duplicate_index):
     expect = df.groupby("key", dropna=dropna).cumsum()
     got = cdf.groupby("key", dropna=dropna).cumsum()
     assert_groupby_results_equal(expect, got)
+
+
+@pytest.mark.parametrize("op", ["cumsum", "cumprod", "cummin", "cummax"])
+def test_scan_int_null_pandas_compatible(op):
+    data = {"a": [1, 2, None, 3], "b": ["x"] * 4}
+    df_pd = pd.DataFrame(data)
+    df_cudf = cudf.DataFrame(data)
+    expected = getattr(df_pd.groupby("b")["a"], op)()
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = getattr(df_cudf.groupby("b")["a"], op)()
+    assert_eq(result, expected)
