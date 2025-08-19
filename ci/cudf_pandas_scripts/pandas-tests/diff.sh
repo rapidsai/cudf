@@ -13,7 +13,7 @@ rapids-logger "Github job name: ${GH_JOB_NAME}"
 rapids-logger "Rapids version: ${RAPIDS_FULL_VERSION}"
 
 PY_VER="313"
-PR_ARTIFACT=$(rapids-s3-path)cuda12_$(arch)_py${PY_VER}.pr-${RAPIDS_FULL_VERSION}-results.json
+#PR_ARTIFACT=$(rapids-s3-path)cuda12_$(arch)_py${PY_VER}.pr-${RAPIDS_FULL_VERSION}-results.json
 
 rapids-logger "Fetching latest available results from nightly"
 aws s3api list-objects-v2 --bucket rapids-downloads --prefix "nightly/cudf/" --query "sort_by(Contents[?ends_with(Key, '_py${PY_VER}.main-${RAPIDS_FULL_VERSION}-results.json')], &LastModified)[::].[Key]" --output text  | tee s3_output.txt
@@ -21,7 +21,10 @@ COMPARE_ENV=$(tail -n 1 s3_output.txt)
 rapids-logger "Latest available results from nightly: ${COMPARE_ENV}"
 
 aws s3 cp "s3://rapids-downloads/${COMPARE_ENV}" main-results.json
-aws s3 cp "$PR_ARTIFACT" pr-results.json
+# aws s3 cp "$PR_ARTIFACT" pr-results.json
+gh run download $GITHUB_RUN_ID -n pr-results.json
+ls -al
+head -n 5 pr-results.json
 
 # Compute the diff and prepare job summary:
 python -m pip install pandas tabulate
