@@ -394,15 +394,9 @@ class UnaryFunction(Expr):
                     rank_dtype,
                 )
 
-            # Match polars dtypes
-            #  - Average  -> Float64
-            #  - Min/Max/Dense/Ordinal -> IDX_DTYPE
-            # See
-            # https://github.com/pola-rs/polars/blob/main/crates/polars-ops/src/series/ops/rank.rs
-            if method_str == "average":
-                if ranked.type().id() != plc.TypeId.FLOAT64:
-                    ranked = plc.unary.cast(ranked, plc.DataType(plc.TypeId.FLOAT64))
-            else:
+            # Min/Max/Dense/Ordinal -> IDX_DTYPE
+            # See https://github.com/pola-rs/polars/blob/main/crates/polars-ops/src/series/ops/rank.rs
+            if method_str in {"min", "max", "dense", "ordinal"}:
                 dest = self.dtype.plc.id()
                 src = ranked.type().id()
                 if dest == plc.TypeId.UINT32 and src != plc.TypeId.UINT32:

@@ -12,6 +12,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+from cudf_polars.utils.versions import POLARS_VERSION_LT_132
 
 
 @pytest.fixture(
@@ -119,7 +120,10 @@ def test_null_count():
 
 @pytest.mark.parametrize("method", ["average", "min", "max", "dense"])
 @pytest.mark.parametrize("descending", [False, True])
-def test_rank_supported(ldf, method, descending):
+def test_rank_supported(request, ldf, method, descending):
+    request.applymarker(
+        pytest.mark.xfail(condition=POLARS_VERSION_LT_132, reason="nested loop join")
+    )
     expr = pl.col("a").rank(method=method, descending=descending)
     q = ldf.select(expr)
     assert_gpu_result_equal(q)
