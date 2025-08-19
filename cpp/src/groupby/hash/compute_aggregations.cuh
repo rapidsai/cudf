@@ -44,6 +44,7 @@
 #include <thrust/gather.h>
 #include <thrust/scatter.h>
 #include <thrust/tabulate.h>
+#include <thrust/uninitialized_fill.h>
 
 namespace cudf::groupby::detail::hash {
 
@@ -91,6 +92,10 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
 
   // TODO
   rmm::device_uvector<cudf::size_type> key_indices(num_rows, stream);
+  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
+                             key_indices.begin(),
+                             key_indices.end(),
+                             cudf::detail::CUDF_SIZE_TYPE_SENTINEL);
 
   auto global_set_ref = global_set.ref(cuco::op::insert_and_find);
 
@@ -102,8 +107,13 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
     thrust::tabulate(rmm::exec_policy_nosync(stream),
                      key_indices.begin(),
                      key_indices.end(),
-                     [global_set_ref] __device__(auto const idx) mutable {
-                       return *global_set_ref.insert_and_find(idx).first;
+                     [global_set_ref,
+                      row_bitmask = static_cast<bitmask_type const*>(row_bitmask),
+                      skip_rows_with_nulls] __device__(auto const idx) mutable {
+                       if (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, idx)) {
+                         return *global_set_ref.insert_and_find(idx).first;
+                       }
+                       return cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
                      });
 
     extract_populated_keys(global_set, populated_keys, stream);
@@ -215,14 +225,47 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
     thrust::tabulate(rmm::exec_policy_nosync(stream),
                      key_indices.begin(),
                      key_indices.end(),
-                     [global_set_ref] __device__(auto const idx) mutable {
-                       return *global_set_ref.insert_and_find(idx).first;
+                     [global_set_ref,
+                      row_bitmask = static_cast<bitmask_type const*>(row_bitmask),
+                      skip_rows_with_nulls] __device__(auto const idx) mutable {
+                       if (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, idx)) {
+                         return *global_set_ref.insert_and_find(idx).first;
+                       }
+                       return cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
                      });
 
 #endif
   }
   extract_populated_keys(global_set, populated_keys, stream);
-  find_output_indices(key_indices, populated_keys, stream);
+  printf("populated_keys size: %zu\n", populated_keys.size());
+
+  // TODO: update global_mapping_index with the new indices
+  auto const new_key_indices = find_output_indices(key_indices, populated_keys, stream);
+
+  thrust::for_each_n(
+    rmm::exec_policy_nosync(stream),
+    thrust::make_counting_iterator(0),
+    grid_size * GROUPBY_BLOCK_SIZE,
+    [new_key_indices      = new_key_indices.begin(),
+     block_cardinality    = block_cardinality.begin(),
+     global_mapping_index = global_mapping_index.begin()] __device__(auto const idx) {
+      auto const block_id = idx / GROUPBY_BLOCK_SIZE;
+      if (auto const cardinality = block_cardinality[block_id];
+          cardinality < GROUPBY_CARDINALITY_THRESHOLD) {
+        auto const local_idx = idx % GROUPBY_BLOCK_SIZE;
+        if (local_idx < cardinality) {
+          auto const old_idx =
+            global_mapping_index[block_id * GROUPBY_SHM_MAX_ELEMENTS + local_idx];
+          global_mapping_index[block_id * GROUPBY_SHM_MAX_ELEMENTS + local_idx] =
+            new_key_indices[old_idx];
+          printf("update global_mapping_index[%d] = %d, block id: %d, local idx: %d\n",
+                 (int)(block_id * GROUPBY_SHM_MAX_ELEMENTS + local_idx),
+                 new_key_indices[old_idx],
+                 block_id,
+                 local_idx);
+        }
+      }
+    });
 
   // make table that will hold sparse results
   cudf::table result_table = create_results_table(spass_values, spass_agg_kinds, stream);

@@ -27,9 +27,9 @@
 namespace cudf::groupby::detail::hash {
 
 // TODO
-void find_output_indices(device_span<size_type> key_indices,
-                         device_span<size_type const> unique_indices,
-                         rmm::cuda_stream_view stream);
+rmm::device_uvector<size_type> find_output_indices(device_span<size_type> key_indices,
+                                                   device_span<size_type const> unique_indices,
+                                                   rmm::cuda_stream_view stream);
 
 /**
  * @brief Computes and returns a device vector containing all populated keys in
