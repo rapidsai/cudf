@@ -86,7 +86,9 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) compute_mixed_join_o
   cuda::std::pair<cudf::size_type, cudf::size_type> const* hash_indices,
   row_equality const equality_probe,
   join_kind const join_type,
-  cudf::detail::mixed_join_hash_table_ref_t<cuco::count_tag> hash_table_ref,
+  cuco::bucket_storage_ref<cuco::pair<hash_value_type, cudf::size_type>,
+                           2,
+                           cuco::valid_extent<std::size_t, 18446744073709551615UL>> storage_ref,
   ast::detail::expression_device_view device_expression_data,
   bool const swap_tables,
   cudf::device_span<cudf::size_type> matches_per_row)
@@ -115,8 +117,7 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) compute_mixed_join_o
   auto count_equality = pair_expression_equality<has_nulls>{
     evaluator, thread_intermediate_storage, swap_tables, equality_probe};
 
-  // Extract storage_ref from hash_table_ref
-  auto const storage_ref = hash_table_ref.storage_ref();
+  // storage_ref is now passed directly as parameter
 
   for (auto outer_row_index = start_idx; outer_row_index < outer_num_rows;
        outer_row_index += stride) {
@@ -143,7 +144,9 @@ std::size_t launch_compute_mixed_join_output_size(
   cuda::std::pair<cudf::size_type, cudf::size_type> const* hash_indices,
   row_equality const equality_probe,
   join_kind const join_type,
-  cudf::detail::mixed_join_hash_table_ref_t<cuco::count_tag> hash_table_ref,
+  cuco::bucket_storage_ref<cuco::pair<hash_value_type, cudf::size_type>,
+                           2,
+                           cuco::valid_extent<std::size_t, 18446744073709551615UL>> storage_ref,
   ast::detail::expression_device_view device_expression_data,
   bool const swap_tables,
   cudf::device_span<cudf::size_type> matches_per_row,
@@ -160,7 +163,7 @@ std::size_t launch_compute_mixed_join_output_size(
       hash_indices,
       equality_probe,
       join_type,
-      hash_table_ref,
+      storage_ref,
       device_expression_data,
       swap_tables,
       matches_per_row);
@@ -238,7 +241,7 @@ std::size_t launch_compute_mixed_join_output_size(
                                                           hash_indices.data(),
                                                           equality_probe,
                                                           join_type,
-                                                          hash_table_ref,
+                                                          hash_table_ref.storage_ref(),
                                                           device_expression_data,
                                                           swap_tables,
                                                           matches_per_row,

@@ -205,19 +205,21 @@ __device__ __forceinline__ void standalone_retrieve(
 }
 
 template <bool has_nulls>
-CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
-  mixed_join(table_device_view left_table,
-             table_device_view right_table,
-             cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
-             cuda::std::pair<cudf::size_type, cudf::size_type> const* hash_indices,
-             row_equality const equality_probe,
-             join_kind const join_type,
-             cudf::detail::mixed_join_hash_table_ref_t<cuco::retrieve_tag> hash_table_ref,
-             size_type* join_output_l,
-             size_type* join_output_r,
-             size_t* size,
-             cudf::ast::detail::expression_device_view device_expression_data,
-             bool const swap_tables)
+CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) mixed_join(
+  table_device_view left_table,
+  table_device_view right_table,
+  cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
+  cuda::std::pair<cudf::size_type, cudf::size_type> const* hash_indices,
+  row_equality const equality_probe,
+  join_kind const join_type,
+  cuco::bucket_storage_ref<cuco::pair<hash_value_type, cudf::size_type>,
+                           2,
+                           cuco::valid_extent<std::size_t, 18446744073709551615UL>> storage_ref,
+  size_type* join_output_l,
+  size_type* join_output_r,
+  size_t* size,
+  cudf::ast::detail::expression_device_view device_expression_data,
+  bool const swap_tables)
 {
   // Normally the casting of a shared memory array is used to create multiple
   // arrays of different types from the shared memory buffer, but here it is
@@ -238,8 +240,7 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
   auto const equality = pair_expression_equality<has_nulls>{
     evaluator, thread_intermediate_storage, swap_tables, equality_probe};
 
-  // Extract storage_ref from hash_table_ref
-  auto const storage_ref = hash_table_ref.storage_ref();
+  // storage_ref is now passed directly as parameter
 
   namespace cg = cooperative_groups;
 
@@ -276,20 +277,23 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
 }
 
 template <bool has_nulls>
-void launch_mixed_join(table_device_view left_table,
-                       table_device_view right_table,
-                       cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
-                       cuda::std::pair<cudf::size_type, cudf::size_type> const* hash_indices,
-                       row_equality const equality_probe,
-                       join_kind const join_type,
-                       cudf::detail::mixed_join_hash_table_ref_t<cuco::retrieve_tag> hash_table_ref,
-                       size_type* join_output_l,
-                       size_type* join_output_r,
-                       cudf::ast::detail::expression_device_view device_expression_data,
-                       bool const swap_tables,
-                       detail::grid_1d const config,
-                       int64_t shmem_size_per_block,
-                       rmm::cuda_stream_view stream)
+void launch_mixed_join(
+  table_device_view left_table,
+  table_device_view right_table,
+  cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
+  cuda::std::pair<cudf::size_type, cudf::size_type> const* hash_indices,
+  row_equality const equality_probe,
+  join_kind const join_type,
+  cuco::bucket_storage_ref<cuco::pair<hash_value_type, cudf::size_type>,
+                           2,
+                           cuco::valid_extent<std::size_t, 18446744073709551615UL>> storage_ref,
+  size_type* join_output_l,
+  size_type* join_output_r,
+  cudf::ast::detail::expression_device_view device_expression_data,
+  bool const swap_tables,
+  detail::grid_1d const config,
+  int64_t shmem_size_per_block,
+  rmm::cuda_stream_view stream)
 {
   cudf::detail::device_scalar<size_t> size(0, stream);
 
@@ -301,7 +305,7 @@ void launch_mixed_join(table_device_view left_table,
       hash_indices,
       equality_probe,
       join_type,
-      hash_table_ref,
+      storage_ref,
       join_output_l,
       join_output_r,
       size.data(),

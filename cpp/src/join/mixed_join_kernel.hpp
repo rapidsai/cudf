@@ -57,20 +57,23 @@ namespace detail {
  * the kernel needs to internally loop over left rows. Otherwise, loop over right rows.
  */
 template <bool has_nulls>
-void launch_mixed_join(table_device_view left_table,
-                       table_device_view right_table,
-                       cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
-                       cuda::std::pair<cudf::size_type, cudf::size_type> const* hash_indices,
-                       row_equality const equality_probe,
-                       join_kind const join_type,
-                       cudf::detail::mixed_join_hash_table_ref_t<cuco::retrieve_tag> hash_table_ref,
-                       size_type* join_output_l,
-                       size_type* join_output_r,
-                       cudf::ast::detail::expression_device_view device_expression_data,
-                       bool const swap_tables,
-                       detail::grid_1d const config,
-                       int64_t shmem_size_per_block,
-                       rmm::cuda_stream_view stream);
+void launch_mixed_join(
+  cudf::table_device_view left_table,
+  cudf::table_device_view right_table,
+  cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
+  cuda::std::pair<cudf::size_type, cudf::size_type> const* hash_indices,
+  row_equality const equality_probe,
+  join_kind const join_type,
+  cuco::bucket_storage_ref<cuco::pair<hash_value_type, cudf::size_type>,
+                           2,
+                           cuco::valid_extent<std::size_t, 18446744073709551615UL>> storage_ref,
+  cudf::size_type* join_output_l,
+  cudf::size_type* join_output_r,
+  cudf::ast::detail::expression_device_view device_expression_data,
+  bool const swap_tables,
+  detail::grid_1d const config,
+  int64_t shmem_size_per_block,
+  rmm::cuda_stream_view stream);
 
 }  // namespace detail
 
