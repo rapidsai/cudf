@@ -26,7 +26,7 @@ aws s3 cp "s3://rapids-downloads/${COMPARE_ENV}" main-results.json
 gh run download 17074762834 -n pr-results.json
 
 ls -al
-head -n 5 pr-results.json
+head -n 5 pr-25.10.00-results.json
 
 # Compute the diff and prepare job summary:
 python -m pip install pandas tabulate
