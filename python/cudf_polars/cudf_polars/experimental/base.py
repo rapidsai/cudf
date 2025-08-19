@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import dataclasses
 from collections import defaultdict
+from functools import cached_property
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 if TYPE_CHECKING:
@@ -235,24 +236,43 @@ class ColumnStats:
 class JoinKey:
     """Join-key information."""
 
-    __slots__ = ("columns",)
-    columns: tuple[ColumnStats, ...]
+    column_stats: tuple[ColumnStats, ...]
+    unique_count_estimate: int | None
+    """Estimated unique-value count from join heuristics."""
 
-    def __init__(self, *columns: ColumnStats) -> None:
-        self.columns = columns
+    def __init__(self, *column_stats: ColumnStats) -> None:
+        self.column_stats = column_stats
+        self.unique_count_estimate = None
+
+    @cached_property
+    def source_row_count(self) -> int | None:
+        """Return the estimated number of rows in the join key."""
+        return min(
+            (
+                cs.source_info.row_count.value
+                for cs in self.column_stats
+                if cs.source_info.row_count.value is not None
+            ),
+            default=None,
+        )
+
+    def names(self) -> list[str]:
+        """Return the names of the columns in the join key."""
+        return sorted(cs.name for cs in self.column_stats)
 
 
 class StatsCollector:
     """Column statistics collector."""
 
-    __slots__ = ("col_joins", "column_stats", "key_joins", "row_count")
+    __slots__ = ("column_stats", "join_keys", "joins", "row_count")
 
     def __init__(self) -> None:
         self.row_count: dict[IR, ColumnStat[int]] = {}
         self.column_stats: dict[IR, dict[str, ColumnStats]] = {}
-        self.key_joins: MutableMapping[JoinKey, set[JoinKey]] = defaultdict(
+        self.join_keys: MutableMapping[JoinKey, set[JoinKey]] = defaultdict(
             set[JoinKey]
         )
-        self.col_joins: MutableMapping[ColumnStats, set[ColumnStats]] = defaultdict(
-            set[ColumnStats]
-        )
+        # self.join_cols: MutableMapping[ColumnStats, set[ColumnStats]] = defaultdict(
+        #     set[ColumnStats]
+        # )
+        self.joins: dict[IR, list[JoinKey]] = {}

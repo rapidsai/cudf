@@ -66,11 +66,12 @@ def update_join_key_info(
         right_keys = [stats.column_stats[right][n.name] for n in node.right_on]
         lkey = JoinKey(*left_keys)
         rkey = JoinKey(*right_keys)
-        stats.key_joins[lkey].add(rkey)
-        stats.key_joins[rkey].add(lkey)
-        for u, v in zip(left_keys, right_keys, strict=True):
-            stats.col_joins[u].add(v)
-            stats.col_joins[v].add(u)
+        stats.join_keys[lkey].add(rkey)
+        stats.join_keys[rkey].add(lkey)
+        stats.joins[node] = [lkey, rkey]
+        # for u, v in zip(left_keys, right_keys, strict=True):
+        #     stats.join_cols[u].add(v)
+        #     stats.join_cols[v].add(u)
     return stats
 
 
@@ -96,6 +97,54 @@ def find_equivalence_sets(
             components.append(cluster)
             seen.update(cluster)
     return components
+
+
+def apply_pkfk_heuristics(
+    stats: StatsCollector,
+    config_options: ConfigOptions,
+) -> StatsCollector:
+    """Apply PK-FK join heuristics to the given stats."""
+    # This applies the foreign-key -- primary-key matching scheme of
+    # https://blobs.duckdb.org/papers/tom-ebergen-msc-thesis-join-order-optimization-with-almost-no-statistics.pdf
+    # See section 3.2
+
+    # We separately track equivalence sets of join "keys" (which might
+    # use multiple columns) and columns. This way we can deduce
+    # cardinality estimates for join keys separately from the
+    # individual columns we join on.
+    key_clusters = find_equivalence_sets(stats.join_keys)
+    for keys in key_clusters:
+        unique_count_estimate = max(
+            (
+                c.unique_count_estimate
+                for c in keys
+                if c.unique_count_estimate is not None
+            ),
+            default=min(
+                (c.source_row_count for c in keys if c.source_row_count is not None),
+                default=None,
+            ),
+        )
+        for key in keys:
+            key.unique_count_estimate = unique_count_estimate
+
+    # col_clusters = find_equivalence_sets(stats.join_cols)
+    # for cols in col_clusters:
+    #     unique_count_estimate = max(
+    #         (c.unique_count_estimate for c in cols if c.unique_count_estimate is not None),
+    #         default=min(
+    #             (
+    #                 c.source_info.row_count.value
+    #                 for c in cols
+    #                 if c.source_info.row_count.value is not None
+    #             ),
+    #             default=None,
+    #         ),
+    #     )
+    #     for col in cols:
+    #         col.update(unique_count_estimate)
+
+    return stats
 
 
 def _update_unique_stats_columns(

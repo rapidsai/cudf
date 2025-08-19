@@ -11,7 +11,11 @@ import polars as pl
 
 from cudf_polars import Translator
 from cudf_polars.experimental.io import _clear_source_info_cache
-from cudf_polars.experimental.statistics import collect_base_stats
+from cudf_polars.experimental.statistics import (
+    apply_pkfk_heuristics,
+    collect_base_stats,
+    find_equivalence_sets,
+)
 from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
 from cudf_polars.testing.io import make_partitioned_source
 from cudf_polars.utils.config import ConfigOptions
@@ -354,3 +358,79 @@ def test_base_stats_distinct(df):
     source_info_y = column_stats["y"].source_info
     assert source_info_y.row_count.value == row_count
     assert source_info_y.row_count.exact
+
+
+def test_base_stats_join_key_info():
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "scheduler": DEFAULT_SCHEDULER,
+            "shuffle_method": "tasks",
+        },
+    )
+
+    # Customers table (PK: cust_id)
+    customers = pl.LazyFrame(
+        {
+            "cust_id": [1, 2],
+            "cust_name": ["Alice", "Bob"],
+        }
+    )
+
+    # Orders table (PK: order_id)
+    orders = pl.LazyFrame(
+        {
+            "order_id": [100, 101, 102],
+            "cust_id": [1, 2, 1],
+            "prod_id": [10, 20, 10],
+            "loc_id": [501, 501, 502],
+            "quant": [2, 1, 4],
+        }
+    )
+
+    # locations table (PK: prod_id, loc_id)
+    locations = pl.LazyFrame(
+        {
+            "prod_id": [10, 20, 10],
+            "loc_id": [501, 501, 502],
+            "price": [50, 60, 55],
+        }
+    )
+
+    # Step 1: Multi-key join orders and locations on prod_id & loc_id
+    orders_with_price = orders.join(locations, on=["prod_id", "loc_id"], how="inner")
+
+    # Step 2: Join result to customers on cust_id
+    q = orders_with_price.join(customers, on="cust_id", how="inner")
+
+    ir = Translator(q._ldf.visit(), engine).translate_ir()
+    config_options = ConfigOptions.from_polars_engine(engine)
+    stats = collect_base_stats(ir, config_options)
+
+    # Check find_equivalence_sets
+    key_sets = sorted(
+        sorted(k.names() for k in group)
+        for group in find_equivalence_sets(stats.join_keys)
+    )
+    assert len(key_sets) == 2
+    assert key_sets[0] == [["cust_id"], ["cust_id"]]
+    assert key_sets[1] == [["loc_id", "prod_id"], ["loc_id", "prod_id"]]
+
+    # # Check column sets
+    # col_sets = sorted(
+    #     sorted(cs.name for cs in group)
+    #     for group in find_equivalence_sets(stats.join_cols)
+    # )
+    # assert len(col_sets) == 3
+    # assert col_sets[0] == ['i1', 'j1']
+    # assert col_sets[1] == ['i2', 'j2']
+    # assert col_sets[2] == ['x1', 'x2']
+
+    # Check basic PK-FK unique-count heuristics
+    stats = apply_pkfk_heuristics(stats, config_options)
+    unique_count_estimate = stats.joins[ir][0].unique_count_estimate
+    assert unique_count_estimate == stats.joins[ir][1].unique_count_estimate
+    assert (
+        q.select(pl.col("cust_id").n_unique()).collect().item() == unique_count_estimate
+    )
