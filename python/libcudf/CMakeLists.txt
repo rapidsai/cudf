@@ -23,7 +23,7 @@ rapids_cpm_init()
 project(
   libcudf-python
   VERSION "${RAPIDS_VERSION}"
-  LANGUAGES CXX
+  LANGUAGES CXX CUDA
 )
 
 option(USE_NVCOMP_RUNTIME_WHEEL "Use the nvcomp wheel at runtime instead of the system library" OFF)
