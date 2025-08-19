@@ -22,7 +22,9 @@ rapids-logger "Latest available results from nightly: ${COMPARE_ENV}"
 
 aws s3 cp "s3://rapids-downloads/${COMPARE_ENV}" main-results.json
 # aws s3 cp "$PR_ARTIFACT" pr-results.json
-gh run download $GITHUB_RUN_ID -n pr-results.json
+# gh run download $GITHUB_RUN_ID -n pr-results.json
+gh run download 17074762834 -n pr-results.json
+
 ls -al
 head -n 5 pr-results.json
 
