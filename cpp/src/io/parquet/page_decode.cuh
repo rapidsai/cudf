@@ -1535,8 +1535,8 @@ __device__ void zero_fill_null_positions_shared(
   auto const data_out = ni.data_out;
 
   constexpr int bits_per_mask = sizeof(cudf::bitmask_type) * 8;
-  constexpr int warp_size = 32;
-  constexpr int num_warps = block_size / warp_size;
+  constexpr int warp_size     = 32;
+  constexpr int num_warps     = block_size / warp_size;
 
   // Calculate the range of validity blocks we need to process
   int const start_bit_idx = valid_map_offset;
@@ -1553,18 +1553,18 @@ __device__ void zero_fill_null_positions_shared(
     static_assert(bits_per_mask == warp_size, "if 64bit mask, use 2 warps per mask");
 
     cudf::bitmask_type validity_word = ni.valid_map[block_idx];
-    int const block_start_bit = block_idx * bits_per_mask;
-    
+    int const block_start_bit        = block_idx * bits_per_mask;
+
     // Each thread in the warp processes one bit
     int const bit_idx = block_start_bit + lane_id;
     int const dst_pos = bit_idx - valid_map_offset;
-    
+
     // Check if this bit is within our range
     bool in_range = (bit_idx >= start_bit_idx && bit_idx < end_bit_idx);
-    
+
     // Check if this bit is null (0 in validity mask)
     bool is_null = ((validity_word >> lane_id) & 1) == 0;
-    
+
     if (in_range && is_null) {
       void* const dst = data_out + (static_cast<size_t>(dst_pos) * dtype_len);
       cuda::std::memset(dst, 0, dtype_len);
@@ -1573,17 +1573,17 @@ __device__ void zero_fill_null_positions_shared(
 
   // Helper lambda for sequential bit processing (fallback for remaining blocks)
   auto process_block_sequential = [&](int block_idx) {
-    cudf::bitmask_type validity_word = ni.valid_map[block_idx];
+    cudf::bitmask_type validity_word  = ni.valid_map[block_idx];
     cudf::bitmask_type null_positions = ~validity_word;
-    int const dst_pos_first_bit = block_idx * bits_per_mask - valid_map_offset;
-    
+    int const dst_pos_first_bit       = block_idx * bits_per_mask - valid_map_offset;
+
     while (null_positions != 0) {
       int const bit_pos = __ffs(null_positions) - 1;
       int const dst_pos = dst_pos_first_bit + bit_pos;
-      
+
       void* const dst = data_out + (static_cast<size_t>(dst_pos) * dtype_len);
       cuda::std::memset(dst, 0, dtype_len);
-      
+
       null_positions &= (null_positions - 1);
     }
   };
@@ -1598,15 +1598,13 @@ __device__ void zero_fill_null_positions_shared(
   } else if (warp_id >= 2) {
     // Warps 2+: Process additional blocks from the beginning
     int const block_idx = start_block + (warp_id - 1);
-    if (block_idx < (end_block - 1)) {
-      process_block_parallel(block_idx);
-    }
+    if (block_idx < (end_block - 1)) { process_block_parallel(block_idx); }
   }
 
   // Phase 2: All warps cooperatively process remaining middle blocks
   auto const last_block_processed = static_cast<int>(num_blocks > 1);
-  int const remaining_start = start_block + num_warps - last_block_processed;
-  int const remaining_end = end_block - last_block_processed;
+  int const remaining_start       = start_block + num_warps - last_block_processed;
+  int const remaining_end         = end_block - last_block_processed;
   for (int block_idx = remaining_start + t; block_idx < remaining_end; block_idx += block_size) {
     process_block_sequential(block_idx);
   }

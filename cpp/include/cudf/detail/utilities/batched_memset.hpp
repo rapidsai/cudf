@@ -17,9 +17,9 @@
 #pragma once
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/memory_resource.hpp>
-#include <cudf/detail/nvtx/ranges.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>

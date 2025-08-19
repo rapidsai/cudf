@@ -18,8 +18,8 @@
 #include "io/utilities/column_buffer.hpp"
 #include "page_decode.cuh"
 
-#include <cudf/hashing/detail/default_hash.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/hashing/detail/default_hash.cuh>
 
 #include <rmm/exec_policy.hpp>
 

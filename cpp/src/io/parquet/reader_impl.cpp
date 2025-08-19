@@ -18,6 +18,7 @@
 
 #include "error.hpp"
 
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/transform.hpp>
@@ -31,7 +32,6 @@
 #include <bitset>
 #include <limits>
 #include <numeric>
-#include <cudf/detail/nvtx/ranges.hpp>
 
 namespace cudf::io::parquet::detail {
 
