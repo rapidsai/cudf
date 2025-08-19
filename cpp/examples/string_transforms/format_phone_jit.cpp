@@ -132,6 +132,7 @@ __device__ void e164_format(void* scratch,
                     cudf::data_type{cudf::type_id::STRING},
                     false,
                     scratch.data(),
+                    cudf::null_aware::NO,
                     stream,
                     mr);
 
