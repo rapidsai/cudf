@@ -332,6 +332,22 @@ def test_groupby_sum_all_null_group_returns_null():
     assert_gpu_result_equal(q, check_row_order=False)
 
 
+@pytest.mark.parametrize(
+    "agg_expr",
+    [
+        pl.all().sum(),
+        pl.all().mean(),
+        pl.all().median(),
+        pl.all().quantile(0.5),
+    ],
+    ids=["sum", "mean", "median", "quantile-0.5"],
+)
+def test_groupby_aggs_keep_unsupported_as_null(df: pl.LazyFrame, agg_expr) -> None:
+    lf = df.filter(pl.col("datetime") == date(2004, 12, 1))
+    q = lf.group_by("datetime").agg(agg_expr)
+    assert_gpu_result_equal(q)
+
+
 def test_groupby_rank_raises(df: pl.LazyFrame) -> None:
     q = df.group_by("key1").agg(pl.col("int").rank())
 
