@@ -46,6 +46,77 @@
 namespace cudf {
 namespace detail {
 
+namespace {
+
+/**
+ * @brief Precompute input pairs and hash indices for mixed join operations
+ *
+ * This function eliminates code duplication by providing a common implementation
+ * for precomputing both input pairs and hash indices in a single pass, which can
+ * be reused by both mixed_join and compute_mixed_join_output_size functions.
+ *
+ * @tparam HashProbe Type of the device hasher for computing probe keys
+ * @param hash_table The hash table to get probing information from
+ * @param hash_probe Device hasher for computing probe keys
+ * @param outer_num_rows Number of rows in the outer table
+ * @param stream CUDA stream
+ * @param mr Memory resource
+ * @return A pair of device vectors containing precomputed input pairs and hash indices
+ */
+template <typename HashProbe>
+std::pair<rmm::device_uvector<cuco::pair<hash_value_type, size_type>>,
+          rmm::device_uvector<cuda::std::pair<size_type, size_type>>>
+precompute_mixed_join_data(mixed_multimap_type const& hash_table,
+                           HashProbe const& hash_probe,
+                           size_type outer_num_rows,
+                           rmm::cuda_stream_view stream,
+                           rmm::device_async_resource_ref mr)
+{
+  // Create output arrays
+  auto input_pairs =
+    rmm::device_uvector<cuco::pair<hash_value_type, size_type>>(outer_num_rows, stream, mr);
+  auto hash_indices =
+    rmm::device_uvector<cuda::std::pair<size_type, size_type>>(outer_num_rows, stream, mr);
+
+  // Get hash table info for computing indices
+  auto retrieve_ref                        = hash_table.ref(cuco::retrieve);
+  auto const storage_ref                   = retrieve_ref.storage_ref();
+  auto const probing_scheme                = retrieve_ref.probing_scheme();
+  auto const probe_hash_fn                 = probing_scheme.hash_function();
+  auto const extent                        = storage_ref.extent();
+  static constexpr std::size_t bucket_size = 2;
+
+  // Create dual functor to compute both pairs and hash indices
+  auto precompute_fn = [=] __device__(size_type i) {
+    auto const probe_key = cuco::pair<hash_value_type, size_type>{hash_probe(i), i};
+
+    // Use the probing scheme's hash functions for proper double hashing
+    auto const hash1_val = cuda::std::get<0>(probe_hash_fn)(probe_key);
+    auto const hash2_val = cuda::std::get<1>(probe_hash_fn)(probe_key);
+
+    // Double hashing logic: initial position and step size
+    auto const init_idx = (hash1_val % (extent / bucket_size)) * bucket_size;
+    auto const step_val =
+      ((hash2_val % (extent / bucket_size - std::size_t{1})) + std::size_t{1}) * bucket_size;
+
+    return cuda::std::make_pair(
+      probe_key,
+      cuda::std::make_pair(static_cast<size_type>(init_idx), static_cast<size_type>(step_val)));
+  };
+
+  // Single transform to fill both arrays using zip iterator
+  thrust::transform(
+    rmm::exec_policy_nosync(stream),
+    thrust::counting_iterator<size_type>(0),
+    thrust::counting_iterator<size_type>(outer_num_rows),
+    thrust::make_zip_iterator(thrust::make_tuple(input_pairs.begin(), hash_indices.begin())),
+    precompute_fn);
+
+  return std::make_pair(std::move(input_pairs), std::move(hash_indices));
+}
+
+}  // anonymous namespace
+
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 mixed_join(
@@ -183,45 +254,12 @@ mixed_join(
     cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
   auto const equality_probe = row_comparator.equal_to<false>(has_nulls, compare_nulls);
 
-  // Precompute input pairs and hash indices in two separate arrays for reuse in both kernels
-  auto input_pairs =
-    rmm::device_uvector<cuco::pair<hash_value_type, size_type>>(outer_num_rows, stream, mr);
-  auto hash_indices =
-    rmm::device_uvector<cuda::std::pair<size_type, size_type>>(outer_num_rows, stream, mr);
+  // Precompute input pairs and hash indices using common utility function
+  auto [input_pairs, hash_indices] =
+    precompute_mixed_join_data(hash_table, hash_probe, outer_num_rows, stream, mr);
 
-  // Get hash table info for computing indices
-  auto retrieve_ref                        = hash_table.ref(cuco::retrieve);
-  auto const storage_ref                   = retrieve_ref.storage_ref();
-  auto const probing_scheme                = retrieve_ref.probing_scheme();
-  auto const probe_hash_fn                 = probing_scheme.hash_function();
-  auto const extent                        = storage_ref.extent();
-  static constexpr std::size_t bucket_size = 2;
-
-  // Create dual functor to compute both pairs and hash indices
-  auto precompute_fn = [=] __device__(size_type i) {
-    auto const probe_key = cuco::pair<hash_value_type, size_type>{hash_probe(i), i};
-
-    // Use the probing scheme's hash functions for proper double hashing
-    auto const hash1_val = cuda::std::get<0>(probe_hash_fn)(probe_key);
-    auto const hash2_val = cuda::std::get<1>(probe_hash_fn)(probe_key);
-
-    // Double hashing logic: initial position and step size
-    auto const init_idx = (hash1_val % (extent / bucket_size)) * bucket_size;
-    auto const step_val =
-      ((hash2_val % (extent / bucket_size - std::size_t{1})) + std::size_t{1}) * bucket_size;
-
-    return cuda::std::make_pair(
-      probe_key,
-      cuda::std::make_pair(static_cast<size_type>(init_idx), static_cast<size_type>(step_val)));
-  };
-
-  // Single transform to fill both arrays using zip iterator
-  thrust::transform(
-    rmm::exec_policy_nosync(stream),
-    thrust::counting_iterator<size_type>(0),
-    thrust::counting_iterator<size_type>(outer_num_rows),
-    thrust::make_zip_iterator(thrust::make_tuple(input_pairs.begin(), hash_indices.begin())),
-    precompute_fn);
+  // Get retrieve reference for storage_ref needed by launch functions
+  auto retrieve_ref = hash_table.ref(cuco::retrieve);
 
   if (output_size_data.has_value()) {
     join_size            = output_size_data->first;
@@ -472,45 +510,9 @@ compute_mixed_join_output_size(table_view const& left_equality,
     cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
   auto const equality_probe = row_comparator.equal_to<false>(has_nulls, compare_nulls);
 
-  // Precompute input pairs and hash indices in two separate arrays for reuse
-  auto input_pairs =
-    rmm::device_uvector<cuco::pair<hash_value_type, size_type>>(outer_num_rows, stream, mr);
-  auto hash_indices =
-    rmm::device_uvector<cuda::std::pair<size_type, size_type>>(outer_num_rows, stream, mr);
-
-  // Get hash table info for computing indices
-  auto retrieve_ref                        = hash_table.ref(cuco::retrieve);
-  auto const storage_ref                   = retrieve_ref.storage_ref();
-  auto const probing_scheme                = retrieve_ref.probing_scheme();
-  auto const probe_hash_fn                 = probing_scheme.hash_function();
-  auto const extent                        = storage_ref.extent();
-  static constexpr std::size_t bucket_size = 2;
-
-  // Create dual functor to compute both pairs and hash indices
-  auto precompute_fn = [=] __device__(size_type i) {
-    auto const probe_key = cuco::pair<hash_value_type, size_type>{hash_probe(i), i};
-
-    // Use the probing scheme's hash functions for proper double hashing
-    auto const hash1_val = cuda::std::get<0>(probe_hash_fn)(probe_key);
-    auto const hash2_val = cuda::std::get<1>(probe_hash_fn)(probe_key);
-
-    // Double hashing logic: initial position and step size
-    auto const init_idx = (hash1_val % (extent / bucket_size)) * bucket_size;
-    auto const step_val =
-      ((hash2_val % (extent / bucket_size - std::size_t{1})) + std::size_t{1}) * bucket_size;
-
-    return cuda::std::make_pair(
-      probe_key,
-      cuda::std::make_pair(static_cast<size_type>(init_idx), static_cast<size_type>(step_val)));
-  };
-
-  // Single transform to fill both arrays using zip iterator
-  thrust::transform(
-    rmm::exec_policy_nosync(stream),
-    thrust::counting_iterator<size_type>(0),
-    thrust::counting_iterator<size_type>(outer_num_rows),
-    thrust::make_zip_iterator(thrust::make_tuple(input_pairs.begin(), hash_indices.begin())),
-    precompute_fn);
+  // Precompute input pairs and hash indices using common utility function
+  auto [input_pairs, hash_indices] =
+    precompute_mixed_join_data(hash_table, hash_probe, outer_num_rows, stream, mr);
 
   // Determine number of output rows without actually building the output to simply
   // find what the size of the output will be.
