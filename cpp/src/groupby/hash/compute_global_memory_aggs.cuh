@@ -37,7 +37,6 @@ namespace cudf::groupby::detail::hash {
 rmm::device_uvector<size_type> compute_global_memory_aggs(
   size_type num_rows,
   size_type const* key_indices,
-  bool skip_rows_with_nulls,
   bitmask_type const* row_bitmask,
   table_view const& flattened_values,
   aggregation::Kind const* d_agg_kinds,
@@ -57,12 +56,11 @@ rmm::device_uvector<size_type> compute_global_memory_aggs(
   auto d_values       = table_device_view::create(flattened_values, stream);
   auto d_result_table = mutable_table_device_view::create(result_table, stream);
 
-  thrust::for_each_n(
-    rmm::exec_policy_nosync(stream),
-    thrust::counting_iterator{0},
-    num_rows,
-    hash::compute_single_pass_aggs_fn{
-      key_indices, *d_values, *d_result_table, d_agg_kinds, row_bitmask, skip_rows_with_nulls});
+  thrust::for_each_n(rmm::exec_policy_nosync(stream),
+                     thrust::counting_iterator{0},
+                     num_rows,
+                     hash::compute_single_pass_aggs_fn{
+                       key_indices, *d_values, *d_result_table, d_agg_kinds, row_bitmask});
 
   // Add results back to sparse_results cache
   auto result_cols = result_table.release();

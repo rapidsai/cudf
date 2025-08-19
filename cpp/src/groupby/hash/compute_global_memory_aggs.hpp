@@ -32,7 +32,6 @@ namespace cudf::groupby::detail::hash {
 rmm::device_uvector<cudf::size_type> compute_global_memory_aggs(
   cudf::size_type num_rows,
   size_type const* key_indices,
-  bool skip_rows_with_nulls,
   bitmask_type const* row_bitmask,
   cudf::table_view const& flattened_values,
   cudf::aggregation::Kind const* d_agg_kinds,

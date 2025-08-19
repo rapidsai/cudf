@@ -34,7 +34,6 @@ namespace cudf::groupby::detail::hash {
 template <typename SetType>
 std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> compute_aggregations(
   int64_t num_rows,
-  bool skip_rows_with_nulls,
   bitmask_type const* row_bitmask,
   SetType& global_set,
   host_span<aggregation_request const> requests,

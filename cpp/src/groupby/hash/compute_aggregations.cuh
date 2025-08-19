@@ -26,6 +26,7 @@
 #include "single_pass_functors.cuh"
 
 #include <cudf/detail/aggregation/result_cache.hpp>
+#include <cudf/detail/utilities/cuda.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -48,10 +49,13 @@
 
 namespace cudf::groupby::detail::hash {
 
+/**
+ * @brief Computes all aggregations from `requests` that require a single pass
+ * over the data and stores the results in `sparse_results`
+ */
 template <typename SetType>
 std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> compute_aggregations(
   int64_t num_rows,
-  bool skip_rows_with_nulls,
   bitmask_type const* row_bitmask,
   SetType& global_set,
   host_span<aggregation_request const> requests,
@@ -64,8 +68,17 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
   auto const d_spass_agg_kinds                     = cudf::detail::make_device_uvector_async(
     spass_agg_kinds, stream, rmm::mr::get_current_device_resource());
 
-  auto const grid_size =
-    max_occupancy_grid_size<typename SetType::ref_type<cuco::insert_and_find_tag>>(num_rows);
+  auto const grid_size = [&] {
+    auto const max_blocks_mapping =
+      max_active_blocks_mapping_kernel<typename SetType::ref_type<cuco::insert_and_find_tag>>();
+    auto const max_blocks_aggs = max_active_blocks_shmem_aggs_kernel();
+    // We launch the same grid size for both kernels, thus we need to take the minimum of the two.
+    auto const max_blocks    = std::min(max_blocks_mapping, max_blocks_aggs);
+    auto const max_grid_size = max_blocks * cudf::detail::num_multiprocessors();
+    auto const num_blocks =
+      cudf::util::div_rounding_up_safe(static_cast<size_type>(num_rows), GROUPBY_BLOCK_SIZE);
+    return std::min(max_grid_size, num_blocks);
+  }();
   auto const available_shmem_size = get_available_shared_memory_size(grid_size);
   auto const offsets_buffer_size  = compute_shmem_offsets_size(spass_values.num_columns()) * 2;
   auto const data_buffer_size     = available_shmem_size - offsets_buffer_size;
@@ -107,10 +120,8 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
     thrust::tabulate(rmm::exec_policy_nosync(stream),
                      key_indices.begin(),
                      key_indices.end(),
-                     [global_set_ref,
-                      row_bitmask = static_cast<bitmask_type const*>(row_bitmask),
-                      skip_rows_with_nulls] __device__(auto const idx) mutable {
-                       if (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, idx)) {
+                     [global_set_ref, row_bitmask] __device__(auto const idx) mutable {
+                       if (!row_bitmask || cudf::bit_is_set(row_bitmask, idx)) {
                          return *global_set_ref.insert_and_find(idx).first;
                        }
                        return cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
@@ -122,7 +133,6 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
     // TODO
     compute_global_memory_aggs(num_rows,
                                key_indices.begin(),
-                               skip_rows_with_nulls,
                                row_bitmask,
                                spass_values,
                                d_spass_agg_kinds.data(),
@@ -147,7 +157,6 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
                           num_rows,
                           global_set_ref,
                           row_bitmask,
-                          skip_rows_with_nulls,
                           local_mapping_index.data(),
                           global_mapping_index.data(),
                           block_cardinality.data(),
@@ -225,10 +234,8 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
     thrust::tabulate(rmm::exec_policy_nosync(stream),
                      key_indices.begin(),
                      key_indices.end(),
-                     [global_set_ref,
-                      row_bitmask = static_cast<bitmask_type const*>(row_bitmask),
-                      skip_rows_with_nulls] __device__(auto const idx) mutable {
-                       if (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, idx)) {
+                     [global_set_ref, row_bitmask] __device__(auto const idx) mutable {
+                       if (!row_bitmask || cudf::bit_is_set(row_bitmask, idx)) {
                          return *global_set_ref.insert_and_find(idx).first;
                        }
                        return cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
@@ -277,7 +284,6 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
                              available_shmem_size,
                              num_rows,
                              row_bitmask,
-                             skip_rows_with_nulls,
                              local_mapping_index.data(),
                              global_mapping_index.data(),
                              block_cardinality.data(),
@@ -301,8 +307,7 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
                                                  d_spass_agg_kinds.data(),
                                                  block_cardinality.data(),
                                                  stride,
-                                                 row_bitmask,
-                                                 skip_rows_with_nulls});
+                                                 row_bitmask});
   }
 
   // Add results back to sparse_results cache

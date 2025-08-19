@@ -18,12 +18,13 @@
 #include "compute_aggregations.hpp"
 
 namespace cudf::groupby::detail::hash {
+
 template std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
 compute_aggregations<global_set_t>(int64_t num_rows,
-                                   bool skip_rows_with_nulls,
                                    bitmask_type const* row_bitmask,
                                    global_set_t& global_set,
                                    host_span<aggregation_request const> requests,
                                    cudf::detail::result_cache* cache,
                                    rmm::cuda_stream_view stream);
+
 }  // namespace cudf::groupby::detail::hash
