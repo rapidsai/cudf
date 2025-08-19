@@ -234,7 +234,20 @@ class ColumnStats:
 
 
 class JoinKey:
-    """Join-key information."""
+    """
+    Join-key information.
+
+    Parameters
+    ----------
+    column_stats
+        Column statistics for the join key.
+
+    Notes
+    -----
+    This class is used to track join-key information.
+    It is used to track the columns being joined on
+    and the estimated unique-value count for the join key.
+    """
 
     column_stats: tuple[ColumnStats, ...]
     unique_count_estimate: int | None
@@ -256,9 +269,9 @@ class JoinKey:
             default=None,
         )
 
-    def names(self) -> list[str]:
+    def names(self) -> tuple[str, ...]:
         """Return the names of the columns in the join key."""
-        return sorted(cs.name for cs in self.column_stats)
+        return tuple(cs.name for cs in self.column_stats)
 
 
 class StatsCollector:
@@ -266,13 +279,19 @@ class StatsCollector:
 
     __slots__ = ("column_stats", "join_keys", "joins", "row_count")
 
+    row_count: dict[IR, ColumnStat[int]]
+    """Estimated row count for each IR node."""
+    column_stats: dict[IR, dict[str, ColumnStats]]
+    """Column statistics for each IR node."""
+    join_keys: MutableMapping[JoinKey, set[JoinKey]]
+    """Join-key mappings."""
+    joins: dict[IR, list[JoinKey]]
+    """Join keys associated with each IR node."""
+
     def __init__(self) -> None:
         self.row_count: dict[IR, ColumnStat[int]] = {}
         self.column_stats: dict[IR, dict[str, ColumnStats]] = {}
         self.join_keys: MutableMapping[JoinKey, set[JoinKey]] = defaultdict(
             set[JoinKey]
         )
-        # self.join_cols: MutableMapping[ColumnStats, set[ColumnStats]] = defaultdict(
-        #     set[ColumnStats]
-        # )
         self.joins: dict[IR, list[JoinKey]] = {}

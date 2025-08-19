@@ -408,24 +408,14 @@ def test_base_stats_join_key_info():
     config_options = ConfigOptions.from_polars_engine(engine)
     stats = collect_base_stats(ir, config_options)
 
-    # Check find_equivalence_sets
+    # Check equivalence sets
     key_sets = sorted(
         sorted(k.names() for k in group)
         for group in find_equivalence_sets(stats.join_keys)
     )
     assert len(key_sets) == 2
-    assert key_sets[0] == [["cust_id"], ["cust_id"]]
-    assert key_sets[1] == [["loc_id", "prod_id"], ["loc_id", "prod_id"]]
-
-    # # Check column sets
-    # col_sets = sorted(
-    #     sorted(cs.name for cs in group)
-    #     for group in find_equivalence_sets(stats.join_cols)
-    # )
-    # assert len(col_sets) == 3
-    # assert col_sets[0] == ['i1', 'j1']
-    # assert col_sets[1] == ['i2', 'j2']
-    # assert col_sets[2] == ['x1', 'x2']
+    assert key_sets[0] == [("cust_id",), ("cust_id",)]
+    assert key_sets[1] == [("prod_id", "loc_id"), ("prod_id", "loc_id")]
 
     # Check basic PK-FK unique-count heuristics
     stats = apply_pkfk_heuristics(stats, config_options)

@@ -59,7 +59,26 @@ def collect_base_stats(root: IR, config_options: ConfigOptions) -> StatsCollecto
 def update_join_key_info(
     node: IR, stats: StatsCollector, config_options: ConfigOptions
 ) -> StatsCollector:
-    """Update join-key information for the given node."""
+    """
+    Update join-key information for the given node.
+
+    Parameters
+    ----------
+    node
+        IR node to update join-key information for.
+    stats
+        StatsCollector object to update.
+    config_options
+        GPUEngine configuration options.
+
+    Returns
+    -------
+    Updated StatsCollector object.
+
+    Notes
+    -----
+    This function updates ``stats.joins`` and ``stats.join_keys``.
+    """
     if isinstance(node, Join):
         left, right = node.children
         left_keys = [stats.column_stats[left][n.name] for n in node.left_on]
@@ -69,9 +88,6 @@ def update_join_key_info(
         stats.join_keys[lkey].add(rkey)
         stats.join_keys[rkey].add(lkey)
         stats.joins[node] = [lkey, rkey]
-        # for u, v in zip(left_keys, right_keys, strict=True):
-        #     stats.join_cols[u].add(v)
-        #     stats.join_cols[v].add(u)
     return stats
 
 
@@ -81,7 +97,18 @@ T = TypeVar("T")
 def find_equivalence_sets(
     joins: Mapping[T, set[T]],
 ) -> list[set[T]]:
-    """Find equivalence sets in a join graph."""
+    """
+    Find equivalence sets in a join-key mapping.
+
+    Parameters
+    ----------
+    joins
+        Join-key mapping to find equivalence sets in.
+
+    Returns
+    -------
+    List of equivalence sets.
+    """
     seen = set()
     components = []
     for v in joins:
@@ -103,47 +130,44 @@ def apply_pkfk_heuristics(
     stats: StatsCollector,
     config_options: ConfigOptions,
 ) -> StatsCollector:
-    """Apply PK-FK join heuristics to the given stats."""
-    # This applies the foreign-key -- primary-key matching scheme of
+    """
+    Apply PK-FK join heuristics to the given stats.
+
+    Parameters
+    ----------
+    stats
+        StatsCollector object to update.
+    config_options
+        GPUEngine configuration options.
+
+    Returns
+    -------
+    Updated StatsCollector object.
+
+    Notes
+    -----
+    This function modifies the ``JoinKey`` objects being tracked
+    in ``StatsCollector.joins`` and ``StatsCollector.join_keys``.
+    """
+    # This applies the PK-FK matching scheme of
     # https://blobs.duckdb.org/papers/tom-ebergen-msc-thesis-join-order-optimization-with-almost-no-statistics.pdf
     # See section 3.2
-
-    # We separately track equivalence sets of join "keys" (which might
-    # use multiple columns) and columns. This way we can deduce
-    # cardinality estimates for join keys separately from the
-    # individual columns we join on.
-    key_clusters = find_equivalence_sets(stats.join_keys)
-    for keys in key_clusters:
+    for keys in find_equivalence_sets(stats.join_keys):
         unique_count_estimate = max(
             (
                 c.unique_count_estimate
                 for c in keys
                 if c.unique_count_estimate is not None
             ),
+            # Default unique-count estimate is the minimum source row count
             default=min(
                 (c.source_row_count for c in keys if c.source_row_count is not None),
                 default=None,
             ),
         )
         for key in keys:
+            # Update unique-count estimate for each join key
             key.unique_count_estimate = unique_count_estimate
-
-    # col_clusters = find_equivalence_sets(stats.join_cols)
-    # for cols in col_clusters:
-    #     unique_count_estimate = max(
-    #         (c.unique_count_estimate for c in cols if c.unique_count_estimate is not None),
-    #         default=min(
-    #             (
-    #                 c.source_info.row_count.value
-    #                 for c in cols
-    #                 if c.source_info.row_count.value is not None
-    #             ),
-    #             default=None,
-    #         ),
-    #     )
-    #     for col in cols:
-    #         col.update(unique_count_estimate)
-
     return stats
 
 
