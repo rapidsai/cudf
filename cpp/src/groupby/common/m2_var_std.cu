@@ -33,7 +33,7 @@ namespace cudf::groupby::detail {
 namespace {
 
 template <typename Source>
-__device__ constexpr bool is_m2_var_supported()
+__device__ constexpr bool is_m2_supported()
 {
   return is_numeric<Source>() && !is_fixed_point<Source>();
 }
@@ -41,7 +41,7 @@ __device__ constexpr bool is_m2_var_supported()
 struct m2_functor {
   template <typename Source, typename... Args>
   void operator()(Args...)  //
-    requires(!is_m2_var_supported<Source>())
+    requires(!is_m2_supported<Source>())
   {
     CUDF_FAIL("Invalid source type for M2 aggregation.");
   }
@@ -72,8 +72,8 @@ struct m2_functor {
                   column_view const& sum_sqr,
                   column_view const& sum,
                   column_view const& count,
-                  rmm::cuda_stream_view stream) const noexcept
-    requires(is_m2_var_supported<Source>())
+                  rmm::cuda_stream_view stream) const noexcept  //
+    requires(is_m2_supported<Source>())
   {
     using Target     = cudf::detail::target_type_t<Source, aggregation::M2>;
     using SumSqrType = cudf::detail::target_type_t<Source, aggregation::SUM_OF_SQUARES>;
