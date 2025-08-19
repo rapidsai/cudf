@@ -28,5 +28,5 @@ add_executable(basic_example src/process_csv.cpp)
 target_link_libraries(basic_example PRIVATE cudf::cudf)
 target_compile_features(basic_example PRIVATE cxx_std_20)
 
-install(TARGETS basic_example DESTINATION bin/examples/libcudf)
-install(FILES ${CMAKE_CURRENT_LIST_DIR}/4stock_5day.csv DESTINATION bin/examples/libcudf)
+install(TARGETS basic_example DESTINATION bin/examples/libcudf/basic)
+install(FILES ${CMAKE_CURRENT_LIST_DIR}/4stock_5day.csv DESTINATION bin/examples/libcudf/basic)
