@@ -14,31 +14,25 @@
  * limitations under the License.
  */
 
+#include "groupby/common/m2_var_std.hpp"
 #include "hash_compound_agg_finalizer.hpp"
 #include "helpers.cuh"
-#include "m2_var_functor.cuh"
 
-#include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/detail/binaryop.hpp>
 #include <cudf/detail/gather.hpp>
-#include <cudf/detail/null_mask.hpp>
-#include <cudf/detail/unary.hpp>
-#include <cudf/detail/valid_if.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <memory>
-
 namespace cudf::groupby::detail::hash {
 template <typename SetType>
 hash_compound_agg_finalizer<SetType>::hash_compound_agg_finalizer(
-  column_view col,
+  column_view const& col,
   cudf::detail::result_cache* sparse_results,
   cudf::detail::result_cache* dense_results,
   device_span<size_type const> gather_map,
@@ -167,14 +161,7 @@ void hash_compound_agg_finalizer<SetType>::visit(cudf::detail::m2_aggregation co
   auto const sum_result     = dense_results->get_result(col, *sum_agg);
   auto const count_result   = dense_results->get_result(col, *count_agg);
 
-  auto output = make_numeric_column(cudf::detail::target_type(input_type, agg.kind),
-                                    sum_result.size(),
-                                    cudf::detail::copy_bitmask(sum_result, stream, mr),
-                                    sum_result.null_count(),
-                                    stream,
-                                    mr);
-
-  compute_m2(input_type, output->mutable_view(), sum_sqr_result, sum_result, count_result, stream);
+  auto output = compute_m2(input_type, sum_sqr_result, sum_result, count_result, stream, mr);
   dense_results->add_result(col, agg, std::move(output));
 }
 
@@ -190,19 +177,7 @@ void hash_compound_agg_finalizer<SetType>::visit(cudf::detail::var_aggregation c
   auto const m2_result    = dense_results->get_result(col, *m2_agg);
   auto const count_result = dense_results->get_result(col, *count_agg);
 
-  auto output = make_numeric_column(cudf::detail::target_type(input_type, agg.kind),
-                                    m2_result.size(),
-                                    mask_state::UNALLOCATED,
-                                    stream,
-                                    mr);
-  // Since we may have new null rows depending on the group count, we need to generate a new null
-  // mask during evaluating variance.
-  rmm::device_uvector<bool> validity(m2_result.size(), stream);
-  compute_variance(
-    output->mutable_view(), m2_result, count_result, validity.begin(), agg._ddof, stream);
-  auto [null_mask, null_count] =
-    cudf::detail::valid_if(validity.begin(), validity.end(), cuda::std::identity{}, stream, mr);
-  if (null_count > 0) { output->set_null_mask(std::move(null_mask), null_count); }
+  auto output = compute_variance(m2_result, count_result, agg._ddof, stream, mr);
   dense_results->add_result(col, agg, std::move(output));
 }
 
@@ -211,11 +186,14 @@ void hash_compound_agg_finalizer<SetType>::visit(cudf::detail::std_aggregation c
 {
   if (dense_results->has_result(col, agg)) { return; }
 
-  auto const var_agg = make_variance_aggregation(agg._ddof);
-  this->visit(*dynamic_cast<cudf::detail::var_aggregation*>(var_agg.get()));
-  auto const variance = dense_results->get_result(col, *var_agg);
+  auto const m2_agg    = make_m2_aggregation();
+  auto const count_agg = make_count_aggregation();
+  this->visit(*dynamic_cast<cudf::detail::m2_aggregation*>(m2_agg.get()));
+  this->visit(*count_agg);
+  auto const m2_result    = dense_results->get_result(col, *m2_agg);
+  auto const count_result = dense_results->get_result(col, *count_agg);
 
-  auto output = cudf::detail::unary_operation(variance, unary_operator::SQRT, stream, mr);
+  auto output = compute_std(m2_result, count_result, agg._ddof, stream, mr);
   dense_results->add_result(col, agg, std::move(output));
 }
 

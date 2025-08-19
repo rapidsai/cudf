@@ -38,7 +38,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
  public:
   using cudf::detail::aggregation_finalizer::visit;
 
-  hash_compound_agg_finalizer(column_view col,
+  hash_compound_agg_finalizer(column_view const& col,
                               cudf::detail::result_cache* sparse_results,
                               cudf::detail::result_cache* dense_results,
                               device_span<size_type const> gather_map,
