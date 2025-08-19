@@ -28,7 +28,7 @@
 #include <cuda/std/type_traits>
 
 // clang-format off
-#include "binaryop/jit/operation-udf.hpp"
+#include <binaryop/jit/operation-udf.hpp>
 // clang-format on
 
 namespace cudf {

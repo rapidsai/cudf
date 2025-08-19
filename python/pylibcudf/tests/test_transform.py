@@ -102,5 +102,6 @@ def test_transform_udf():
         transform_udf=ptx,
         output_type=plc.DataType(plc.TypeId.FLOAT64),
         is_ptx=True,
+        is_null_aware=plc.types.NullAware.NO,
     )
     assert_column_eq(expect, got)
