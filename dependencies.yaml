@@ -727,7 +727,7 @@ dependencies:
         packages:
           - nvidia-ml-py
           - packaging
-          - polars>=1.28,<1.32
+          - polars>=1.28,<1.33
     specific:
       - output_types: [requirements, pyproject]
         matrices:
@@ -1142,4 +1142,4 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - narwhals==1.47
+          - narwhals==2.0.1
