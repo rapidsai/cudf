@@ -36,7 +36,7 @@ namespace cudf {
 namespace filtering {
 namespace jit {
 
-template <bool has_user_data, typename Out, typename... In>
+template <bool has_user_data, bool is_null_aware, typename Out, typename... In>
 CUDF_KERNEL void kernel(cudf::jit::device_optional_span<typename Out::type> const* outputs,
                         cudf::column_device_view_core const* inputs,
                         void* user_data)
@@ -51,15 +51,23 @@ CUDF_KERNEL void kernel(cudf::jit::device_optional_span<typename Out::type> cons
   auto const size   = output.size();
 
   for (auto i = start; i < size; i += stride) {
-    auto const any_null = (false || ... || In::is_null(inputs, i));
-
     bool applies = false;
 
-    if (!any_null) {
+    if constexpr (!is_null_aware) {
+      auto const any_null = (false || ... || In::is_null(inputs, i));
+
+      if (!any_null) {
+        if constexpr (has_user_data) {
+          GENERIC_FILTER_OP(user_data, i, &applies, In::element(inputs, i)...);
+        } else {
+          GENERIC_FILTER_OP(&applies, In::element(inputs, i)...);
+        }
+      }
+    } else {
       if constexpr (has_user_data) {
-        GENERIC_FILTER_OP(user_data, i, &applies, In::element(inputs, i)...);
+        GENERIC_FILTER_OP(user_data, i, &applies, In::nullable_element(inputs, i)...);
       } else {
-        GENERIC_FILTER_OP(&applies, In::element(inputs, i)...);
+        GENERIC_FILTER_OP(&applies, In::nullable_element(inputs, i)...);
       }
     }
 

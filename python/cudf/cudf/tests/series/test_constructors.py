@@ -227,6 +227,41 @@ def test_series_init_dict(data):
     assert_eq(pandas_series, cudf_series)
 
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        [[]],
+        [[[]]],
+        [[0]],
+        [[0, 1]],
+        [[0, 1], [2, 3]],
+        [[[0, 1], [2]], [[3, 4]]],
+        [[None]],
+        [[[None]]],
+        [[None], None],
+        [[1, None], [1]],
+        [[1, None], None],
+        [[[1, None], None], None],
+    ],
+)
+def test_create_list_series(data):
+    expect = pd.Series(data)
+    got = cudf.Series(data)
+    assert_eq(expect, got)
+    assert isinstance(got[0], type(expect[0]))
+    assert isinstance(got.to_pandas()[0], type(expect[0]))
+
+
+@pytest.mark.parametrize(
+    "input_obj", [[[1, pd.NA, 3]], [[1, pd.NA, 3], [4, 5, pd.NA]]]
+)
+def test_construction_series_with_nulls(input_obj):
+    expect = pa.array(input_obj, from_pandas=True)
+    got = cudf.Series(input_obj).to_arrow()
+
+    assert expect == got
+
+
 def test_series_unitness_np_datetimelike_units():
     data = np.array([np.timedelta64(1)])
     with pytest.raises(TypeError):
