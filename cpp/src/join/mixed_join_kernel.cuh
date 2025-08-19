@@ -43,15 +43,6 @@ __device__ __forceinline__ int32_t count_least_significant_bits(uint32_t x, int3
 }
 
 /**
- * @brief Helper function to compute distance between iterators
- */
-template <typename Iterator>
-__device__ __forceinline__ auto iterator_distance(Iterator begin, Iterator end) noexcept
-{
-  return cuda::std::distance(begin, end);
-}
-
-/**
  * @brief Templated standalone retrieve implementation for hash table probing
  *
  * This implementation handles hash table retrieval for mixed joins without requiring
@@ -82,29 +73,26 @@ __device__ __forceinline__ void standalone_retrieve(cooperative_groups::thread_b
   static constexpr auto bucket_size = StorageRef::bucket_size;
   namespace cg                      = cooperative_groups;
 
-  auto const n = iterator_distance(input_probe_begin, input_probe_end);
-  if (n == 0) { return; }
+  auto const n = cuda::std::distance(input_probe_begin, input_probe_end);
 
   using probe_type = typename cuda::std::iterator_traits<ProbeIterator>::value_type;
 
   // Use cooperative group design optimized for mixed join workloads
   auto constexpr flushing_cg_size = 32;  // Warp size for flushing
-  auto constexpr probing_cg_size  = 1;   // Single thread probing for mixed join
-  static_assert(flushing_cg_size >= probing_cg_size);
 
   auto constexpr num_flushing_cgs     = BlockSize / flushing_cg_size;
   auto constexpr max_matches_per_step = flushing_cg_size * bucket_size;
   auto constexpr buffer_size          = max_matches_per_step + flushing_cg_size;
 
   auto const flushing_cg = cg::tiled_partition<flushing_cg_size>(block);
-  // Since probing_cg_size is 1, we can work with individual threads
 
   auto const flushing_cg_id = flushing_cg.meta_group_rank();
   auto const stride         = BlockSize;  // Each thread processes its own keys
   auto idx = threadIdx.x;  // Direct thread index since each thread works independently
 
-  __shared__ cuco::pair<probe_type, typename StorageRef::value_type> output_buffer[num_flushing_cgs]
-                                                                                  [buffer_size];
+  // Simplified buffers: store row indices directly instead of pairs
+  __shared__ cudf::size_type probe_output_buffer[num_flushing_cgs][buffer_size];
+  __shared__ cudf::size_type match_output_buffer[num_flushing_cgs][buffer_size];
   __shared__ uint32_t flushing_cg_counter[num_flushing_cgs];
 
   if (flushing_cg.thread_rank() == 0) { flushing_cg_counter[flushing_cg_id] = 0; }
@@ -119,8 +107,8 @@ __device__ __forceinline__ void standalone_retrieve(cooperative_groups::thread_b
     offset = tile.shfl(offset, 0);
 
     for (auto i = rank; i < count; i += tile.size()) {
-      *(output_probe + offset + i) = output_buffer[flushing_cg_id][i].first;
-      *(output_match + offset + i) = output_buffer[flushing_cg_id][i].second;
+      *(output_probe + offset + i) = probe_output_buffer[flushing_cg_id][i];
+      *(output_match + offset + i) = match_output_buffer[flushing_cg_id][i];
     }
   };
 
@@ -165,13 +153,20 @@ __device__ __forceinline__ void standalone_retrieve(cooperative_groups::thread_b
             uint32_t num_matches = (first_equals ? 1 : 0) + (second_equals ? 1 : 0);
             uint32_t output_idx  = atomicAdd(&flushing_cg_counter[flushing_cg_id], num_matches);
 
+            // Extract row indices directly from the probe key and bucket slots
+            auto const probe_row_index =
+              probe_key.second;  // Probe key is also a pair with row index
+
             if (first_equals) {
-              output_buffer[flushing_cg_id][output_idx] = {probe_key, bucket_slots[0]};
+              probe_output_buffer[flushing_cg_id][output_idx] = probe_row_index;
+              match_output_buffer[flushing_cg_id][output_idx] = bucket_slots[0].second;
               if (second_equals) {
-                output_buffer[flushing_cg_id][output_idx + 1] = {probe_key, bucket_slots[1]};
+                probe_output_buffer[flushing_cg_id][output_idx + 1] = probe_row_index;
+                match_output_buffer[flushing_cg_id][output_idx + 1] = bucket_slots[1].second;
               }
             } else if (second_equals) {
-              output_buffer[flushing_cg_id][output_idx] = {probe_key, bucket_slots[1]};
+              probe_output_buffer[flushing_cg_id][output_idx] = probe_row_index;
+              match_output_buffer[flushing_cg_id][output_idx] = bucket_slots[1].second;
             }
           }
 
@@ -182,12 +177,11 @@ __device__ __forceinline__ void standalone_retrieve(cooperative_groups::thread_b
             // Handle outer join case where no match was found
             if constexpr (is_outer) {
               if (not found_match) {
-                auto const output_idx = atomicAdd(&flushing_cg_counter[flushing_cg_id], 1);
-                // Use proper empty sentinel for outer join
-                output_buffer[flushing_cg_id][output_idx] = {
-                  probe_key,
-                  cuco::pair<cudf::hash_value_type, cudf::size_type>{cudf::hash_value_type{0},
-                                                                     cudf::detail::JoinNoneValue}};
+                auto const output_idx      = atomicAdd(&flushing_cg_counter[flushing_cg_id], 1);
+                auto const probe_row_index = probe_key.second;
+                probe_output_buffer[flushing_cg_id][output_idx] = probe_row_index;
+                match_output_buffer[flushing_cg_id][output_idx] =
+                  cudf::detail::JoinNoneValue;  // Empty sentinel
               }
             }
           }
@@ -219,14 +213,6 @@ __device__ __forceinline__ void standalone_retrieve(cooperative_groups::thread_b
   if (flushing_cg_counter[flushing_cg_id] > 0) { flush_output_buffer(flushing_cg); }
 }
 
-struct output_fn {
-  __device__ constexpr cudf::size_type operator()(
-    cuco::pair<hash_value_type, cudf::size_type> const& slot) const
-  {
-    return slot.second;
-  }
-};
-
 template <cudf::size_type block_size, bool has_nulls>
 CUDF_KERNEL void __launch_bounds__(block_size)
   mixed_join(table_device_view left_table,
@@ -235,8 +221,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
              row_equality const equality_probe,
              join_kind const join_type,
              cudf::detail::mixed_join_hash_table_ref_t<cuco::retrieve_tag> hash_table_ref,
-             thrust::transform_output_iterator<output_fn, size_type*> join_output_l,
-             thrust::transform_output_iterator<output_fn, size_type*> join_output_r,
+             size_type* join_output_l,
+             size_type* join_output_r,
              size_t* size,
              cudf::ast::detail::expression_device_view device_expression_data,
              bool const swap_tables)
@@ -326,8 +312,8 @@ void launch_mixed_join(table_device_view left_table,
       equality_probe,
       join_type,
       hash_table_ref,
-      thrust::make_transform_output_iterator(join_output_l, output_fn{}),
-      thrust::make_transform_output_iterator(join_output_r, output_fn{}),
+      join_output_l,
+      join_output_r,
       size.data(),
       device_expression_data,
       swap_tables);
