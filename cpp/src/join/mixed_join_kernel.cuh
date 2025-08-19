@@ -51,26 +51,24 @@ __device__ __forceinline__ int32_t count_least_significant_bits(uint32_t x, int3
  * @tparam is_outer Boolean flag indicating whether outer join semantics should be used
  */
 template <bool is_outer,
-          int32_t BlockSize,
           typename StorageRef,
           typename ProbingScheme,
           typename KeyEqual,
-          typename ProbeIterator,
-          typename OutputProbeIterator,
-          typename OutputMatchIterator,
-          typename AtomicCounter>
-__device__ __forceinline__ void standalone_retrieve(cooperative_groups::thread_block const& block,
-                                                    StorageRef const& storage_ref,
-                                                    ProbingScheme const& probing_scheme,
-                                                    KeyEqual const& key_equal,
-                                                    ProbeIterator input_probe_begin,
-                                                    ProbeIterator input_probe_end,
-                                                    OutputProbeIterator output_probe,
-                                                    OutputMatchIterator output_match,
-                                                    AtomicCounter& atomic_counter) noexcept
+          typename ProbeIterator>
+__device__ __forceinline__ void standalone_retrieve(
+  cooperative_groups::thread_block const& block,
+  StorageRef const& storage_ref,
+  ProbingScheme const& probing_scheme,
+  KeyEqual const& key_equal,
+  ProbeIterator input_probe_begin,
+  ProbeIterator input_probe_end,
+  cudf::size_type* output_probe,
+  cudf::size_type* output_match,
+  cuda::atomic<size_t, cuda::thread_scope_device>& atomic_counter) noexcept
 {
   using size_type                   = typename StorageRef::size_type;
   static constexpr auto bucket_size = StorageRef::bucket_size;
+  static constexpr auto block_size  = DEFAULT_JOIN_BLOCK_SIZE;
   namespace cg                      = cooperative_groups;
 
   auto const n = cuda::std::distance(input_probe_begin, input_probe_end);
@@ -78,16 +76,17 @@ __device__ __forceinline__ void standalone_retrieve(cooperative_groups::thread_b
   using probe_type = typename cuda::std::iterator_traits<ProbeIterator>::value_type;
 
   // Use cooperative group design optimized for mixed join workloads
-  auto constexpr flushing_cg_size = 32;  // Warp size for flushing
+  auto constexpr flushing_cg_size = cudf::detail::warp_size;  // Warp size for flushing
 
-  auto constexpr num_flushing_cgs     = BlockSize / flushing_cg_size;
+  auto constexpr num_flushing_cgs     = block_size / flushing_cg_size;
   auto constexpr max_matches_per_step = flushing_cg_size * bucket_size;
   auto constexpr buffer_size          = max_matches_per_step + flushing_cg_size;
 
   auto const flushing_cg = cg::tiled_partition<flushing_cg_size>(block);
+  // Since probing_cg_size is 1, we can work with individual threads
 
   auto const flushing_cg_id = flushing_cg.meta_group_rank();
-  auto const stride         = BlockSize;  // Each thread processes its own keys
+  auto const stride         = block_size;  // Each thread processes its own keys
   auto idx = threadIdx.x;  // Direct thread index since each thread works independently
 
   // Simplified buffers: store row indices directly instead of pairs
@@ -126,11 +125,9 @@ __device__ __forceinline__ void standalone_retrieve(cooperative_groups::thread_b
       auto const hash2_val = cuda::std::get<1>(hasher)(probe_key);
       auto const extent    = storage_ref.extent();
 
-      auto const init_idx   = (hash1_val % (extent / bucket_size)) * bucket_size;
+      auto current_slot_idx = (hash1_val % (extent / bucket_size)) * bucket_size;
       auto const step       = ((hash2_val % (extent / bucket_size - 1)) + 1) * bucket_size;
-      auto current_slot_idx = init_idx;
-
-      bool running                      = true;
+      bool running          = true;
       [[maybe_unused]] bool found_match = false;  // Only used for outer joins
 
       while (active_flushing_cg.any(running)) {
@@ -150,8 +147,9 @@ __device__ __forceinline__ void standalone_retrieve(cooperative_groups::thread_b
           if (first_equals or second_equals) {
             if constexpr (is_outer) { found_match = true; }
 
-            uint32_t num_matches = (first_equals ? 1 : 0) + (second_equals ? 1 : 0);
-            uint32_t output_idx  = atomicAdd(&flushing_cg_counter[flushing_cg_id], num_matches);
+            cudf::size_type num_matches = (first_equals ? 1 : 0) + (second_equals ? 1 : 0);
+            cudf::size_type output_idx =
+              atomicAdd(&flushing_cg_counter[flushing_cg_id], num_matches);
 
             // Extract row indices directly from the probe key and bucket slots
             auto const probe_row_index =
@@ -200,7 +198,6 @@ __device__ __forceinline__ void standalone_retrieve(cooperative_groups::thread_b
 
         // Move to next probing bucket
         current_slot_idx = (current_slot_idx + step) % extent;
-        if (current_slot_idx == init_idx) { running = false; }
       }  // while running
     }  // if active_flag
 
@@ -213,8 +210,8 @@ __device__ __forceinline__ void standalone_retrieve(cooperative_groups::thread_b
   if (flushing_cg_counter[flushing_cg_id] > 0) { flush_output_buffer(flushing_cg); }
 }
 
-template <cudf::size_type block_size, bool has_nulls>
-CUDF_KERNEL void __launch_bounds__(block_size)
+template <bool has_nulls>
+CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
   mixed_join(table_device_view left_table,
              table_device_view right_table,
              row_hash const hash_probe,
@@ -258,31 +255,31 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   auto const block = cg::this_thread_block();
   auto counter_ref = cuda::atomic<size_t, cuda::thread_scope_device>(*size);
 
-  auto const block_begin_offset = block.group_index().x * block_size;
-  auto const block_end_offset =
-    cuda::std::min(outer_num_rows, static_cast<cudf::size_type>(block_begin_offset + block_size));
+  auto const block_begin_offset = block.group_index().x * DEFAULT_JOIN_BLOCK_SIZE;
+  auto const block_end_offset   = cuda::std::min(
+    outer_num_rows, static_cast<cudf::size_type>(block_begin_offset + DEFAULT_JOIN_BLOCK_SIZE));
 
   if (block_begin_offset < block_end_offset) {
     if (join_type == join_kind::LEFT_JOIN || join_type == join_kind::FULL_JOIN) {
-      standalone_retrieve<true, block_size>(block,
-                                            storage_ref,
-                                            probing_scheme,
-                                            equality,
-                                            pair_iter + block_begin_offset,
-                                            pair_iter + block_end_offset,
-                                            swap_tables ? join_output_r : join_output_l,
-                                            swap_tables ? join_output_l : join_output_r,
-                                            counter_ref);
+      standalone_retrieve<true>(block,
+                                storage_ref,
+                                probing_scheme,
+                                equality,
+                                pair_iter + block_begin_offset,
+                                pair_iter + block_end_offset,
+                                swap_tables ? join_output_r : join_output_l,
+                                swap_tables ? join_output_l : join_output_r,
+                                counter_ref);
     } else {
-      standalone_retrieve<false, block_size>(block,
-                                             storage_ref,
-                                             probing_scheme,
-                                             equality,
-                                             pair_iter + block_begin_offset,
-                                             pair_iter + block_end_offset,
-                                             swap_tables ? join_output_r : join_output_l,
-                                             swap_tables ? join_output_l : join_output_r,
-                                             counter_ref);
+      standalone_retrieve<false>(block,
+                                 storage_ref,
+                                 probing_scheme,
+                                 equality,
+                                 pair_iter + block_begin_offset,
+                                 pair_iter + block_end_offset,
+                                 swap_tables ? join_output_r : join_output_l,
+                                 swap_tables ? join_output_l : join_output_r,
+                                 counter_ref);
     }
   }
 }
@@ -304,7 +301,7 @@ void launch_mixed_join(table_device_view left_table,
 {
   cudf::detail::device_scalar<size_t> size(0, stream);
 
-  mixed_join<DEFAULT_JOIN_BLOCK_SIZE, has_nulls>
+  mixed_join<has_nulls>
     <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
       left_table,
       right_table,

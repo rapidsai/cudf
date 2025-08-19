@@ -87,8 +87,8 @@ __device__ __forceinline__ auto standalone_count(StorageRef const& storage_ref,
   }
 }
 
-template <int block_size, bool has_nulls>
-CUDF_KERNEL void __launch_bounds__(block_size) compute_mixed_join_output_size(
+template <bool has_nulls>
+CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) compute_mixed_join_output_size(
   table_device_view left_table,
   table_device_view right_table,
   row_hash const hash_probe,
@@ -159,7 +159,7 @@ std::size_t launch_compute_mixed_join_output_size(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  compute_mixed_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, has_nulls>
+  compute_mixed_join_output_size<has_nulls>
     <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
       left_table,
       right_table,
