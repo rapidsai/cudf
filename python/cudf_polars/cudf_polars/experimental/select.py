@@ -138,7 +138,7 @@ def _(
         isinstance(expr, (Col, Len)) for expr in traversal([e.value for e in ir.exprs])
     ):
         # Special Case: Selection does not depend on any columns.
-        new_node = ir.reconstruct([input_ir := Empty()])
+        new_node = ir.reconstruct([input_ir := Empty({})])
         partition_info[input_ir] = partition_info[new_node] = PartitionInfo(count=1)
         return new_node, partition_info
 

@@ -467,7 +467,14 @@ def test_scan_with_row_index(tmp_path: Path) -> None:
     df.write_csv(tmp_path / "test-0.csv")
     df.write_csv(tmp_path / "test-1.csv")
 
-    result = pl.scan_csv(
-        tmp_path / "test-*.csv", row_index_name="index", row_index_offset=0
-    )
-    assert_gpu_result_equal(result)
+    q = pl.scan_csv(tmp_path / "test-*.csv", row_index_name="index", row_index_offset=0)
+    assert_gpu_result_equal(q)
+
+
+def test_scan_from_file_uri(tmp_path: Path) -> None:
+    tmp_path.mkdir(exist_ok=True)
+    path = tmp_path / "out.parquet"
+    df = pl.DataFrame({"a": 1})
+    df.write_parquet(path)
+    q = pl.scan_parquet(f"file://{path}")
+    assert_ir_translation_raises(q, NotImplementedError)
