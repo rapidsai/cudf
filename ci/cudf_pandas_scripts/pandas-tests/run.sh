@@ -57,5 +57,6 @@ ls -al "${RAPIDS_ARTIFACTS_DIR}"
 ls -al
 pwd
 rapids-upload-to-s3 "${RAPIDS_ARTIFACTS_DIR}"/"${SUMMARY_FILE_NAME}" "${RAPIDS_ARTIFACTS_DIR}"
+mv "${RAPIDS_ARTIFACTS_DIR}"/"${SUMMARY_FILE_NAME}" "${RAPIDS_ARTIFACTS_DIR}"/${PANDAS_TESTS_BRANCH}-results.json
 rapids-logger "Test script exiting with value: $EXITCODE"
 exit ${EXITCODE}
