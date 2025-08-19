@@ -27,11 +27,11 @@ def test_dataframe_list_round_trip():
     cudf_arrow = cudf.DataFrame(data).to_arrow()
     pdf_arrow = pa.Table.from_pandas(pd.DataFrame(data))
 
-    for metadata in [
+    for metadata in (
         None,
         pdf_arrow.schema.metadata,
         cudf_arrow.schema.metadata,
-    ]:
+    ):
         schema = pa.schema(
             [
                 pa.field("text", pa.string()),

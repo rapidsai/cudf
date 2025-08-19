@@ -437,8 +437,8 @@ def test_df_list_dtypes(data):
 )
 def test_serialize_list_columns(data):
     df = cudf.DataFrame(data)
-    recreated = df.__class__.deserialize(*df.serialize())
-    assert_eq(recreated, df)
+    reconstructed = df.__class__.deserialize(*df.serialize())
+    assert_eq(reconstructed, df)
 
 
 @pytest.mark.parametrize(

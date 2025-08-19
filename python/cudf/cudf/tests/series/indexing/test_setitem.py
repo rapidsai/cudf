@@ -2,6 +2,7 @@
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 
 import cudf
@@ -55,23 +56,25 @@ def test_listcol_setitem(data, item):
 
 
 @pytest.mark.parametrize(
-    "data,item,error",
+    "data,item,error_msg,error_type",
     [
         (
             [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
             [[1, 2, 3], [4, 5, 6]],
             "Could not convert .* with type list: tried to convert to int64",
+            pa.ArrowInvalid,
         ),
         (
             [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
             0,
             "Can not set 0 into ListColumn",
+            ValueError,
         ),
     ],
 )
-def test_listcol_setitem_error_cases(data, item, error):
+def test_listcol_setitem_error_cases(data, item, error_msg, error_type):
     sr = cudf.Series(data)
-    with pytest.raises(BaseException, match=error):
+    with pytest.raises(error_type, match=error_msg):
         sr[1] = item
 
 
