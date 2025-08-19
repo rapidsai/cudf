@@ -110,6 +110,27 @@ std::unique_ptr<column> compute_column(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
+ * @brief Compute a new column by evaluating an expression tree on a table using a JIT-compiled
+ * kernel.
+ *
+ * This evaluates an expression over a table to produce a new column. Also called an n-ary
+ * transform.
+ *
+ * @throws cudf::logic_error if passed an expression operating on table_reference::RIGHT.
+ *
+ * @param table The table used for expression evaluation
+ * @param expr The root of the expression tree
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource
+ * @return Output column
+ */
+std::unique_ptr<column> compute_column_jit(
+  table_view const& table,
+  ast::expression const& expr,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
  * @brief Creates a bitmask from a column of boolean elements.
  *
  * If element `i` in `input` is `true`, bit `i` in the resulting mask is set (`1`). Else,

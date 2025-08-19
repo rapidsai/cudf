@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "jit/row_ir.hpp"
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -347,6 +349,27 @@ std::vector<std::unique_ptr<column>> filter(std::vector<column_view> const& colu
   CUDF_FUNC_RANGE();
   return detail::filter(
     columns, predicate_udf, is_ptx, user_data, copy_mask, is_null_aware, stream, mr);
+}
+
+std::vector<std::unique_ptr<column>> filter(table_view const& table,
+                                            ast::expression const& expr,
+                                            std::optional<std::vector<bool>> copy_mask,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::device_async_resource_ref mr)
+{
+  row_ir::ast_converter converter;
+  row_ir::ast_args ast_args{.table = table, .table_column_names = {}};
+  // TODO(lamarrr): get column names
+  auto args = converter.filter(row_ir::target::CUDA, expr, ast_args, copy_mask, stream, mr);
+
+  return cudf::filter(args.columns,
+                      args.predicate_udf,
+                      args.is_ptx,
+                      args.user_data,
+                      args.copy_mask,
+                      args.is_null_aware,
+                      stream,
+                      mr);
 }
 
 }  // namespace cudf
