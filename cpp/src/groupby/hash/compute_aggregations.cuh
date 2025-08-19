@@ -43,7 +43,6 @@
 #include <cuda/std/atomic>
 #include <thrust/for_each.h>
 #include <thrust/gather.h>
-#include <thrust/scatter.h>
 #include <thrust/tabulate.h>
 #include <thrust/uninitialized_fill.h>
 
@@ -152,6 +151,8 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
 
   // Flag indicating whether a global memory aggregation fallback is required or not
   rmm::device_scalar<cuda::std::atomic_flag> needs_global_memory_fallback(stream);
+  CUDF_CUDA_TRY(cudaMemsetAsync(
+    needs_global_memory_fallback.data(), 0, sizeof(cuda::std::atomic_flag), stream.value()));
 
   compute_mapping_indices(grid_size,
                           num_rows,
@@ -171,9 +172,11 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
   {
     auto const select_cond = [block_cardinality =
                                 block_cardinality.begin()] __device__(auto const idx) {
+      printf("check block %d, cardinality: %d\n", idx, block_cardinality[idx]);
       return block_cardinality[idx] >= GROUPBY_CARDINALITY_THRESHOLD;
     };
 
+    printf("total num blocks: %d\n", grid_size);
     size_t storage_bytes = 0;
     cub::DeviceSelect::If(nullptr,
                           storage_bytes,
@@ -181,7 +184,8 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
                           fallback_block_ids.begin(),
                           d_num_fallback_blocks.data(),
                           grid_size,
-                          select_cond);
+                          select_cond,
+                          stream.value());
     rmm::device_buffer tmp_storage(storage_bytes, stream);
     cub::DeviceSelect::If(tmp_storage.data(),
                           storage_bytes,
@@ -189,7 +193,8 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
                           fallback_block_ids.begin(),
                           d_num_fallback_blocks.data(),
                           grid_size,
-                          select_cond);
+                          select_cond,
+                          stream.value());
   }
 
   cuda::std::atomic_flag h_needs_fallback;
@@ -212,24 +217,44 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
 
   // TODO
   if (needs_fallback) {
-#if 0
+    printf("num_fallback_blocks: %d\n", num_fallback_blocks);
+    fflush(stdout);
+
     auto const strides = util::div_rounding_up_safe(static_cast<size_type>(num_rows),
                                                     GROUPBY_BLOCK_SIZE * num_fallback_blocks);
-    thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                       thrust::make_counting_iterator(0),
-                       GROUPBY_BLOCK_SIZE * num_fallback_blocks * strides,
-                       [full_stride = GROUPBY_BLOCK_SIZE * grid_size,
-                        stride      = GROUPBY_BLOCK_SIZE * num_fallback_blocks,
-                        num_rows    = static_cast<size_type>(num_rows),
-                        global_set_ref,
-                        key_indices = key_indices.begin(),
-                        block_ids   = fallback_block_ids.begin()] __device__(auto const idx) {
-                         auto const block_idx = block_ids[(idx % stride) / GROUPBY_BLOCK_SIZE];
-                         auto const local_idx = (idx % stride) % GROUPBY_BLOCK_SIZE;
-                         auto const row_idx   = GROUPBY_BLOCK_SIZE * full_stride * (idx / stride) +
-                                              block_idx * GROUPBY_BLOCK_SIZE + local_idx;
-                         key_indices[row_idx] = *global_set_ref.insert_and_find(row_idx).first;
-                       });
+
+    printf(
+      " total row: %d, num strides: %d, num fallback blocks: %d, total blocks: %d, "
+      "strides = %d, full stride = %d\n",
+      (int)num_rows,
+      (int)strides,
+      num_fallback_blocks,
+      grid_size,
+      (int)GROUPBY_BLOCK_SIZE * num_fallback_blocks,
+      (int)GROUPBY_BLOCK_SIZE * num_fallback_blocks * strides);
+    fflush(stdout);
+
+#if 1
+    thrust::for_each_n(
+      rmm::exec_policy_nosync(stream),
+      thrust::make_counting_iterator(0),
+      GROUPBY_BLOCK_SIZE * num_fallback_blocks * strides,
+      [full_stride = GROUPBY_BLOCK_SIZE * grid_size,
+       stride      = GROUPBY_BLOCK_SIZE * num_fallback_blocks,
+       num_rows    = static_cast<size_type>(num_rows),
+       global_set_ref,
+       key_indices = key_indices.begin(),
+       block_ids   = fallback_block_ids.begin()] __device__(auto const idx) mutable {
+        auto const block_idx = block_ids[(idx % stride) / GROUPBY_BLOCK_SIZE];
+        auto const local_idx = (idx % stride) % GROUPBY_BLOCK_SIZE;
+        auto const row_idx   = GROUPBY_BLOCK_SIZE * full_stride * (idx / stride) +
+                             block_idx * GROUPBY_BLOCK_SIZE + local_idx;
+
+        printf(
+          "block id: %d, local id: %d, row id: %d\n", (int)block_idx, (int)local_idx, (int)row_idx);
+
+        key_indices[row_idx] = *global_set_ref.insert_and_find(row_idx).first;
+      });
 #else
     thrust::tabulate(rmm::exec_policy_nosync(stream),
                      key_indices.begin(),
@@ -245,6 +270,7 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
   }
   extract_populated_keys(global_set, populated_keys, stream);
   printf("populated_keys size: %zu\n", populated_keys.size());
+  fflush(stdout);
 
   // TODO: update global_mapping_index with the new indices
   auto const new_key_indices = find_output_indices(key_indices, populated_keys, stream);
