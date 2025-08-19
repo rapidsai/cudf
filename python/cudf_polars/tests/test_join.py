@@ -10,7 +10,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     get_default_engine,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_132
+from cudf_polars.utils.versions import POLARS_VERSION_LT_130, POLARS_VERSION_LT_132
 
 
 @pytest.fixture(params=[False, True], ids=["nulls_not_equal", "nulls_equal"])
@@ -245,5 +245,7 @@ def test_join_maintain_order_with_slice(left, right, maintain_order, how, zlice)
     q = left.join(right, on="a", how=how, maintain_order=maintain_order).slice(*zlice)
     assert_gpu_result_equal(
         q,
-        polars_collect_kwargs={"optimizations": pl.QueryOptFlags(slice_pushdown=False)},
+        polars_collect_kwargs={"slice_pushdown": False}
+        if POLARS_VERSION_LT_130
+        else {"optimizations": pl.QueryOptFlags(slice_pushdown=False)},
     )

@@ -175,6 +175,8 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/io/test_lazy_parquet.py::test_parquet_schema_arg[False-row_groups]": "allow_missing_columns argument in read_parquet not translated in IR",
     "tests/unit/io/test_lazy_parquet.py::test_parquet_schema_arg[False-prefiltered]": "allow_missing_columns argument in read_parquet not translated in IR",
     "tests/unit/io/test_lazy_parquet.py::test_parquet_schema_arg[False-none]": "allow_missing_columns argument in read_parquet not translated in IR",
+    "tests/unit/datatypes/test_decimal.py::test_decimal_aggregations": "https://github.com/pola-rs/polars/issues/23899",
+    "tests/unit/datatypes/test_decimal.py::test_decimal_arithmetic_schema": "https://github.com/pola-rs/polars/issues/23899",
     "tests/unit/operations/test_join.py::test_join_rewrite_null_preserving_exprs[expr_first_input11-<lambda>]": "https://github.com/rapidsai/cudf/issues/19741",
     "tests/unit/operations/test_join.py::test_join_rewrite_null_preserving_exprs[expr_first_input12-<lambda>]": "https://github.com/rapidsai/cudf/issues/19741",
     "tests/unit/operations/test_join.py::test_join_rewrite_null_preserving_exprs[expr_first_input13-<lambda>]": "https://github.com/rapidsai/cudf/issues/19741",
