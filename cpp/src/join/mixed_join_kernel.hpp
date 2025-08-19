@@ -21,8 +21,11 @@
 
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/hashing.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/span.hpp>
+
+#include <cuco/pair.cuh>
 
 namespace CUDF_EXPORT cudf {
 namespace detail {
@@ -56,7 +59,7 @@ namespace detail {
 template <bool has_nulls>
 void launch_mixed_join(table_device_view left_table,
                        table_device_view right_table,
-                       row_hash const hash_probe,
+                       cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
                        row_equality const equality_probe,
                        join_kind const join_type,
                        cudf::detail::mixed_join_hash_table_ref_t<cuco::retrieve_tag> hash_table_ref,

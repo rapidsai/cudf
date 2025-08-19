@@ -91,7 +91,7 @@ template <bool has_nulls>
 CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) compute_mixed_join_output_size(
   table_device_view left_table,
   table_device_view right_table,
-  row_hash const hash_probe,
+  cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
   row_equality const equality_probe,
   join_kind const join_type,
   cudf::detail::mixed_join_hash_table_ref_t<cuco::count_tag> hash_table_ref,
@@ -117,7 +117,6 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) compute_mixed_join_o
 
   auto const evaluator = cudf::ast::detail::expression_evaluator<has_nulls>{
     left_table, right_table, device_expression_data};
-  auto const pair = pair_fn{hash_probe};
 
   // Figure out the number of elements for this key.
   // TODO: Address asymmetry in operator.
@@ -130,7 +129,7 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) compute_mixed_join_o
 
   for (auto outer_row_index = start_idx; outer_row_index < outer_num_rows;
        outer_row_index += stride) {
-    auto query_pair = pair(outer_row_index);
+    auto query_pair = input_pairs[outer_row_index];
 
     // Use our standalone count function instead of relying on static_multiset_ref
     auto const count = standalone_count(storage_ref, probing_scheme, count_equality, query_pair);
@@ -147,7 +146,7 @@ template <bool has_nulls>
 std::size_t launch_compute_mixed_join_output_size(
   table_device_view left_table,
   table_device_view right_table,
-  row_hash const hash_probe,
+  cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
   row_equality const equality_probe,
   join_kind const join_type,
   cudf::detail::mixed_join_hash_table_ref_t<cuco::count_tag> hash_table_ref,
@@ -163,7 +162,7 @@ std::size_t launch_compute_mixed_join_output_size(
     <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
       left_table,
       right_table,
-      hash_probe,
+      input_pairs,
       equality_probe,
       join_type,
       hash_table_ref,

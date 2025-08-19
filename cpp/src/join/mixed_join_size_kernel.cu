@@ -23,7 +23,7 @@ namespace detail {
 template std::size_t launch_compute_mixed_join_output_size<false>(
   table_device_view left_table,
   table_device_view right_table,
-  row_hash const hash_probe,
+  cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
   row_equality const equality_probe,
   join_kind const join_type,
   cudf::detail::mixed_join_hash_table_ref_t<cuco::count_tag> hash_table_ref,

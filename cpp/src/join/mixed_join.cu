@@ -183,6 +183,16 @@ mixed_join(
     cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
   auto const equality_probe = row_comparator.equal_to<false>(has_nulls, compare_nulls);
 
+  // Precompute the input pairs once for reuse in both size and join kernels
+  auto input_pairs =
+    rmm::device_uvector<cuco::pair<hash_value_type, size_type>>(outer_num_rows, stream, mr);
+  auto const pair_fn_instance = pair_fn{hash_probe};
+  thrust::transform(rmm::exec_policy_nosync(stream),
+                    thrust::counting_iterator<size_type>(0),
+                    thrust::counting_iterator<size_type>(outer_num_rows),
+                    input_pairs.begin(),
+                    pair_fn_instance);
+
   if (output_size_data.has_value()) {
     join_size            = output_size_data->first;
     matches_per_row_span = output_size_data->second;
@@ -198,7 +208,7 @@ mixed_join(
     if (has_nulls) {
       join_size = launch_compute_mixed_join_output_size<true>(*left_conditional_view,
                                                               *right_conditional_view,
-                                                              hash_probe,
+                                                              input_pairs.data(),
                                                               equality_probe,
                                                               kernel_join_type,
                                                               count_ref,
@@ -212,7 +222,7 @@ mixed_join(
     } else {
       join_size = launch_compute_mixed_join_output_size<false>(*left_conditional_view,
                                                                *right_conditional_view,
-                                                               hash_probe,
+                                                               input_pairs.data(),
                                                                equality_probe,
                                                                kernel_join_type,
                                                                count_ref,
@@ -247,7 +257,7 @@ mixed_join(
   if (has_nulls) {
     launch_mixed_join<true>(*left_conditional_view,
                             *right_conditional_view,
-                            hash_probe,
+                            input_pairs.data(),
                             equality_probe,
                             kernel_join_type,
                             retrieve_ref,
@@ -261,7 +271,7 @@ mixed_join(
   } else {
     launch_mixed_join<false>(*left_conditional_view,
                              *right_conditional_view,
-                             hash_probe,
+                             input_pairs.data(),
                              equality_probe,
                              kernel_join_type,
                              retrieve_ref,
@@ -429,13 +439,23 @@ compute_mixed_join_output_size(table_view const& left_equality,
     cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
   auto const equality_probe = row_comparator.equal_to<false>(has_nulls, compare_nulls);
 
+  // Precompute the input pairs once for reuse in both size and join kernels
+  auto input_pairs =
+    rmm::device_uvector<cuco::pair<hash_value_type, size_type>>(outer_num_rows, stream, mr);
+  auto const pair_fn_instance = pair_fn{hash_probe};
+  thrust::transform(rmm::exec_policy_nosync(stream),
+                    thrust::counting_iterator<size_type>(0),
+                    thrust::counting_iterator<size_type>(outer_num_rows),
+                    input_pairs.begin(),
+                    pair_fn_instance);
+
   // Determine number of output rows without actually building the output to simply
   // find what the size of the output will be.
   std::size_t const size = [&]() {
     if (has_nulls) {
       return launch_compute_mixed_join_output_size<true>(*left_conditional_view,
                                                          *right_conditional_view,
-                                                         hash_probe,
+                                                         input_pairs.data(),
                                                          equality_probe,
                                                          join_type,
                                                          hash_table_ref,
@@ -449,7 +469,7 @@ compute_mixed_join_output_size(table_view const& left_equality,
     } else {
       return launch_compute_mixed_join_output_size<false>(*left_conditional_view,
                                                           *right_conditional_view,
-                                                          hash_probe,
+                                                          input_pairs.data(),
                                                           equality_probe,
                                                           join_type,
                                                           hash_table_ref,

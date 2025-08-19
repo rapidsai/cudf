@@ -214,7 +214,7 @@ template <bool has_nulls>
 CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
   mixed_join(table_device_view left_table,
              table_device_view right_table,
-             row_hash const hash_probe,
+             cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
              row_equality const equality_probe,
              join_kind const join_type,
              cudf::detail::mixed_join_hash_table_ref_t<cuco::retrieve_tag> hash_table_ref,
@@ -247,9 +247,6 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
   auto const storage_ref    = hash_table_ref.storage_ref();
   auto const probing_scheme = hash_table_ref.probing_scheme();
 
-  auto const pair_iter =
-    thrust::make_transform_iterator(thrust::counting_iterator(0), pair_fn{hash_probe});
-
   namespace cg = cooperative_groups;
 
   auto const block = cg::this_thread_block();
@@ -265,8 +262,8 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
                                 storage_ref,
                                 probing_scheme,
                                 equality,
-                                pair_iter + block_begin_offset,
-                                pair_iter + block_end_offset,
+                                input_pairs + block_begin_offset,
+                                input_pairs + block_end_offset,
                                 swap_tables ? join_output_r : join_output_l,
                                 swap_tables ? join_output_l : join_output_r,
                                 counter_ref);
@@ -275,8 +272,8 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
                                  storage_ref,
                                  probing_scheme,
                                  equality,
-                                 pair_iter + block_begin_offset,
-                                 pair_iter + block_end_offset,
+                                 input_pairs + block_begin_offset,
+                                 input_pairs + block_end_offset,
                                  swap_tables ? join_output_r : join_output_l,
                                  swap_tables ? join_output_l : join_output_r,
                                  counter_ref);
@@ -287,7 +284,7 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
 template <bool has_nulls>
 void launch_mixed_join(table_device_view left_table,
                        table_device_view right_table,
-                       row_hash const hash_probe,
+                       cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
                        row_equality const equality_probe,
                        join_kind const join_type,
                        cudf::detail::mixed_join_hash_table_ref_t<cuco::retrieve_tag> hash_table_ref,
@@ -305,7 +302,7 @@ void launch_mixed_join(table_device_view left_table,
     <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
       left_table,
       right_table,
-      hash_probe,
+      input_pairs,
       equality_probe,
       join_type,
       hash_table_ref,
