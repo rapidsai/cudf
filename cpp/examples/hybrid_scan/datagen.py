@@ -4,7 +4,7 @@
 AI generated script to generate a parquet file with 50 columns of various
 data types such as strings, numbers, timestamps, booleans, lists, etc.
 The first column in the generated data is called `string_col` and contains
-strings of 9-digit ascending numbers like "00000000", "00000001" for half
+strings of 7-digit ascending numbers like "0000000", "0000001" for half
 the rows and then repeats itself
 """
 
@@ -302,7 +302,6 @@ def generate_parquet_data(
     num_rows=1000,
     output_file="generated_data_50.parquet",
     null_probability=0.1,
-    num_threads=4,
     row_group_size=6000,
     data_page_size=2000,
 ):
@@ -537,12 +536,6 @@ def main():
         help="Probability of nulls in columns (0.0 to 1.0, default: 0.25)",
     )
     parser.add_argument(
-        "--threads",
-        type=int,
-        default=4,
-        help="Number of threads to use for column generation (default: 4)",
-    )
-    parser.add_argument(
         "--row-group-size",
         type=int,
         default=6000,
@@ -557,22 +550,11 @@ def main():
 
     args = parser.parse_args()
 
-    # Validate thread count
-    if args.threads < 1:
-        print("Warning: Thread count must be at least 1. Using 1 thread.")
-        args.threads = 1
-    elif args.threads > 50:
-        print(
-            "Warning: Thread count cannot exceed 50 (number of columns). Using 50 threads."
-        )
-        args.threads = 50
-
     Path(args.output).parent.mkdir(parents=True, exist_ok=True)
     generate_parquet_data(
         args.rows,
         args.output,
         args.nulls,
-        args.threads,
         args.row_group_size,
         args.data_page_size,
     )
