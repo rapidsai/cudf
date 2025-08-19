@@ -183,15 +183,45 @@ mixed_join(
     cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
   auto const equality_probe = row_comparator.equal_to<false>(has_nulls, compare_nulls);
 
-  // Precompute the input pairs once for reuse in both size and join kernels
+  // Precompute input pairs and hash indices in two separate arrays for reuse in both kernels
   auto input_pairs =
     rmm::device_uvector<cuco::pair<hash_value_type, size_type>>(outer_num_rows, stream, mr);
-  auto const pair_fn_instance = pair_fn{hash_probe};
-  thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::counting_iterator<size_type>(0),
-                    thrust::counting_iterator<size_type>(outer_num_rows),
-                    input_pairs.begin(),
-                    pair_fn_instance);
+  auto hash_indices =
+    rmm::device_uvector<cuda::std::pair<size_type, size_type>>(outer_num_rows, stream, mr);
+
+  // Get hash table info for computing indices
+  auto retrieve_ref                        = hash_table.ref(cuco::retrieve);
+  auto const storage_ref                   = retrieve_ref.storage_ref();
+  auto const probing_scheme                = retrieve_ref.probing_scheme();
+  auto const probe_hash_fn                 = probing_scheme.hash_function();
+  auto const extent                        = storage_ref.extent();
+  static constexpr std::size_t bucket_size = 2;
+
+  // Create dual functor to compute both pairs and hash indices
+  auto precompute_fn = [=] __device__(size_type i) {
+    auto const probe_key = cuco::pair<hash_value_type, size_type>{hash_probe(i), i};
+
+    // Use the probing scheme's hash functions for proper double hashing
+    auto const hash1_val = cuda::std::get<0>(probe_hash_fn)(probe_key);
+    auto const hash2_val = cuda::std::get<1>(probe_hash_fn)(probe_key);
+
+    // Double hashing logic: initial position and step size
+    auto const init_idx = (hash1_val % (extent / bucket_size)) * bucket_size;
+    auto const step_val =
+      ((hash2_val % (extent / bucket_size - std::size_t{1})) + std::size_t{1}) * bucket_size;
+
+    return cuda::std::make_pair(
+      probe_key,
+      cuda::std::make_pair(static_cast<size_type>(init_idx), static_cast<size_type>(step_val)));
+  };
+
+  // Single transform to fill both arrays using zip iterator
+  thrust::transform(
+    rmm::exec_policy_nosync(stream),
+    thrust::counting_iterator<size_type>(0),
+    thrust::counting_iterator<size_type>(outer_num_rows),
+    thrust::make_zip_iterator(thrust::make_tuple(input_pairs.begin(), hash_indices.begin())),
+    precompute_fn);
 
   if (output_size_data.has_value()) {
     join_size            = output_size_data->first;
@@ -209,6 +239,7 @@ mixed_join(
       join_size = launch_compute_mixed_join_output_size<true>(*left_conditional_view,
                                                               *right_conditional_view,
                                                               input_pairs.data(),
+                                                              hash_indices.data(),
                                                               equality_probe,
                                                               kernel_join_type,
                                                               count_ref,
@@ -223,6 +254,7 @@ mixed_join(
       join_size = launch_compute_mixed_join_output_size<false>(*left_conditional_view,
                                                                *right_conditional_view,
                                                                input_pairs.data(),
+                                                               hash_indices.data(),
                                                                equality_probe,
                                                                kernel_join_type,
                                                                count_ref,
@@ -252,12 +284,12 @@ mixed_join(
 
   auto const& join_output_l = left_indices->data();
   auto const& join_output_r = right_indices->data();
-  auto retrieve_ref         = hash_table.ref(cuco::retrieve);
 
   if (has_nulls) {
     launch_mixed_join<true>(*left_conditional_view,
                             *right_conditional_view,
                             input_pairs.data(),
+                            hash_indices.data(),
                             equality_probe,
                             kernel_join_type,
                             retrieve_ref,
@@ -272,6 +304,7 @@ mixed_join(
     launch_mixed_join<false>(*left_conditional_view,
                              *right_conditional_view,
                              input_pairs.data(),
+                             hash_indices.data(),
                              equality_probe,
                              kernel_join_type,
                              retrieve_ref,

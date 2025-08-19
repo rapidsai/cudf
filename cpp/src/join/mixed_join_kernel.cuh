@@ -52,16 +52,16 @@ __device__ __forceinline__ int32_t count_least_significant_bits(uint32_t x, int3
  */
 template <bool is_outer,
           typename StorageRef,
-          typename ProbingScheme,
           typename KeyEqual,
-          typename ProbeIterator>
+          typename ProbeIterator,
+          typename HashIterator>
 __device__ __forceinline__ void standalone_retrieve(
   cooperative_groups::thread_block const& block,
   StorageRef const& storage_ref,
-  ProbingScheme const& probing_scheme,
   KeyEqual const& key_equal,
   ProbeIterator input_probe_begin,
   ProbeIterator input_probe_end,
+  HashIterator input_hash_begin,
   cudf::size_type* output_probe,
   cudf::size_type* output_match,
   cuda::atomic<size_t, cuda::thread_scope_device>& atomic_counter) noexcept
@@ -83,7 +83,6 @@ __device__ __forceinline__ void standalone_retrieve(
   auto constexpr buffer_size          = max_matches_per_step + flushing_cg_size;
 
   auto const flushing_cg = cg::tiled_partition<flushing_cg_size>(block);
-  // Since probing_cg_size is 1, we can work with individual threads
 
   auto const flushing_cg_id = flushing_cg.meta_group_rank();
   auto const stride         = block_size;  // Each thread processes its own keys
@@ -117,17 +116,15 @@ __device__ __forceinline__ void standalone_retrieve(
       cg::binary_partition<flushing_cg_size>(flushing_cg, active_flag);
 
     if (active_flag) {
-      auto const probe_key = *(input_probe_begin + idx);
+      auto const& probe_key = *(input_probe_begin + idx);
+      auto const& hash_idx  = *(input_hash_begin + idx);
 
-      // Use the probing scheme to get initial slot for hash table traversal
-      auto const hasher    = probing_scheme.hash_function();
-      auto const hash1_val = cuda::std::get<0>(hasher)(probe_key);
-      auto const hash2_val = cuda::std::get<1>(hasher)(probe_key);
-      auto const extent    = storage_ref.extent();
+      // Use precomputed hash indices instead of computing them
+      auto const extent     = storage_ref.extent();
+      auto current_slot_idx = static_cast<std::size_t>(hash_idx.first);   // initial probe index
+      auto const step       = static_cast<std::size_t>(hash_idx.second);  // step size
 
-      auto current_slot_idx = (hash1_val % (extent / bucket_size)) * bucket_size;
-      auto const step       = ((hash2_val % (extent / bucket_size - 1)) + 1) * bucket_size;
-      bool running          = true;
+      bool running                      = true;
       [[maybe_unused]] bool found_match = false;  // Only used for outer joins
 
       while (active_flushing_cg.any(running)) {
@@ -196,8 +193,11 @@ __device__ __forceinline__ void standalone_retrieve(
           active_flushing_cg.sync();
         }
 
-        // Move to next probing bucket
+        // Move to next probing bucket using precomputed step
         current_slot_idx = (current_slot_idx + step) % extent;
+        if (current_slot_idx == static_cast<std::size_t>(hash_idx.first)) {
+          running = false;
+        }  // Detect cycle completion
       }  // while running
     }  // if active_flag
 
@@ -215,6 +215,7 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
   mixed_join(table_device_view left_table,
              table_device_view right_table,
              cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
+             cuda::std::pair<cudf::size_type, cudf::size_type> const* hash_indices,
              row_equality const equality_probe,
              join_kind const join_type,
              cudf::detail::mixed_join_hash_table_ref_t<cuco::retrieve_tag> hash_table_ref,
@@ -243,9 +244,8 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
   auto const equality = pair_expression_equality<has_nulls>{
     evaluator, thread_intermediate_storage, swap_tables, equality_probe};
 
-  // Extract storage_ref and probing_scheme from hash_table_ref
-  auto const storage_ref    = hash_table_ref.storage_ref();
-  auto const probing_scheme = hash_table_ref.probing_scheme();
+  // Extract storage_ref from hash_table_ref
+  auto const storage_ref = hash_table_ref.storage_ref();
 
   namespace cg = cooperative_groups;
 
@@ -260,20 +260,20 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
     if (join_type == join_kind::LEFT_JOIN || join_type == join_kind::FULL_JOIN) {
       standalone_retrieve<true>(block,
                                 storage_ref,
-                                probing_scheme,
                                 equality,
                                 input_pairs + block_begin_offset,
                                 input_pairs + block_end_offset,
+                                hash_indices + block_begin_offset,
                                 swap_tables ? join_output_r : join_output_l,
                                 swap_tables ? join_output_l : join_output_r,
                                 counter_ref);
     } else {
       standalone_retrieve<false>(block,
                                  storage_ref,
-                                 probing_scheme,
                                  equality,
                                  input_pairs + block_begin_offset,
                                  input_pairs + block_end_offset,
+                                 hash_indices + block_begin_offset,
                                  swap_tables ? join_output_r : join_output_l,
                                  swap_tables ? join_output_l : join_output_r,
                                  counter_ref);
@@ -285,6 +285,7 @@ template <bool has_nulls>
 void launch_mixed_join(table_device_view left_table,
                        table_device_view right_table,
                        cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
+                       cuda::std::pair<cudf::size_type, cudf::size_type> const* hash_indices,
                        row_equality const equality_probe,
                        join_kind const join_type,
                        cudf::detail::mixed_join_hash_table_ref_t<cuco::retrieve_tag> hash_table_ref,
@@ -303,6 +304,7 @@ void launch_mixed_join(table_device_view left_table,
       left_table,
       right_table,
       input_pairs,
+      hash_indices,
       equality_probe,
       join_type,
       hash_table_ref,

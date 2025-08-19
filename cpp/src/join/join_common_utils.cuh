@@ -240,4 +240,5 @@ struct valid_range {
     return ((index >= start) && (index < stop));
   }
 };
+
 }  // namespace cudf::detail

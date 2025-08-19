@@ -60,6 +60,7 @@ template <bool has_nulls>
 void launch_mixed_join(table_device_view left_table,
                        table_device_view right_table,
                        cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
+                       cuda::std::pair<cudf::size_type, cudf::size_type> const* hash_indices,
                        row_equality const equality_probe,
                        join_kind const join_type,
                        cudf::detail::mixed_join_hash_table_ref_t<cuco::retrieve_tag> hash_table_ref,

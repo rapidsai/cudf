@@ -35,31 +35,24 @@ namespace cudf {
 namespace detail {
 
 /**
- * @brief Standalone count implementation for hash table probing
+ * @brief Standalone count implementation using precomputed hash indices
  *
  * This implementation provides essential count functionality for mixed joins
- * without requiring external dependencies.
+ * using precomputed probe indices and step sizes.
  */
-template <typename StorageRef, typename ProbingScheme, typename KeyEqual, typename ProbeKey>
-__device__ __forceinline__ auto standalone_count(StorageRef const& storage_ref,
-                                                 ProbingScheme const& probing_scheme,
-                                                 KeyEqual const& key_equal,
-                                                 ProbeKey const& probe_key) noexcept
+template <typename StorageRef, typename KeyEqual>
+__device__ __forceinline__ auto standalone_count_with_indices(
+  StorageRef const& storage_ref,
+  KeyEqual const& key_equal,
+  cuco::pair<hash_value_type, cudf::size_type> const& probe_key,
+  cuda::std::pair<cudf::size_type, cudf::size_type> const& hash_idx) noexcept
 {
-  using size_type                   = typename StorageRef::size_type;
-  static constexpr auto bucket_size = StorageRef::bucket_size;
+  using size_type = typename StorageRef::size_type;
 
   size_type count   = 0;
   auto const extent = storage_ref.extent();
-
-  // Use the probing scheme's hash functions for double hashing
-  auto const hasher    = probing_scheme.hash_function();
-  auto const hash1_val = cuda::std::get<0>(hasher)(probe_key);
-  auto const hash2_val = cuda::std::get<1>(hasher)(probe_key);
-
-  // Double hashing logic: initial position and step size
-  auto probe_idx  = (hash1_val % (extent / bucket_size)) * bucket_size;
-  auto const step = ((hash2_val % (extent / bucket_size - 1)) + 1) * bucket_size;
+  auto probe_idx    = static_cast<std::size_t>(hash_idx.first);   // initial probe index
+  auto const step   = static_cast<std::size_t>(hash_idx.second);  // step size
 
   while (true) {
     auto const bucket_slots = storage_ref[probe_idx];
@@ -77,8 +70,11 @@ __device__ __forceinline__ auto standalone_count(StorageRef const& storage_ref,
     // Exit if we find an empty slot
     if (first_slot_is_empty or second_slot_is_empty) { return count; }
 
-    // Move to next bucket using double hashing
+    // Move to next bucket using precomputed step
     probe_idx = (probe_idx + step) % extent;
+
+    // Detect full cycle completion
+    if (probe_idx == static_cast<std::size_t>(hash_idx.first)) { return count; }
   }
 }
 
@@ -87,6 +83,7 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) compute_mixed_join_o
   table_device_view left_table,
   table_device_view right_table,
   cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
+  cuda::std::pair<cudf::size_type, cudf::size_type> const* hash_indices,
   row_equality const equality_probe,
   join_kind const join_type,
   cudf::detail::mixed_join_hash_table_ref_t<cuco::count_tag> hash_table_ref,
@@ -118,16 +115,17 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) compute_mixed_join_o
   auto count_equality = pair_expression_equality<has_nulls>{
     evaluator, thread_intermediate_storage, swap_tables, equality_probe};
 
-  // Extract storage_ref and probing_scheme from hash_table_ref
-  auto const storage_ref    = hash_table_ref.storage_ref();
-  auto const probing_scheme = hash_table_ref.probing_scheme();
+  // Extract storage_ref from hash_table_ref
+  auto const storage_ref = hash_table_ref.storage_ref();
 
   for (auto outer_row_index = start_idx; outer_row_index < outer_num_rows;
        outer_row_index += stride) {
-    auto query_pair = input_pairs[outer_row_index];
+    auto const& probe_key = input_pairs[outer_row_index];
+    auto const& hash_idx  = hash_indices[outer_row_index];
 
-    // Use our standalone count function instead of relying on static_multiset_ref
-    auto const count = standalone_count(storage_ref, probing_scheme, count_equality, query_pair);
+    // Use our standalone count function with precomputed indices
+    auto const count =
+      standalone_count_with_indices(storage_ref, count_equality, probe_key, hash_idx);
     if (join_type == join_kind::LEFT_JOIN || join_type == join_kind::FULL_JOIN) {
       // Non-matching rows are counted as 1 match for the outer joins
       matches_per_row[outer_row_index] = count == 0 ? 1 : count;
@@ -142,6 +140,7 @@ std::size_t launch_compute_mixed_join_output_size(
   table_device_view left_table,
   table_device_view right_table,
   cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
+  cuda::std::pair<cudf::size_type, cudf::size_type> const* hash_indices,
   row_equality const equality_probe,
   join_kind const join_type,
   cudf::detail::mixed_join_hash_table_ref_t<cuco::count_tag> hash_table_ref,
@@ -158,6 +157,7 @@ std::size_t launch_compute_mixed_join_output_size(
       left_table,
       right_table,
       input_pairs,
+      hash_indices,
       equality_probe,
       join_type,
       hash_table_ref,
@@ -166,6 +166,86 @@ std::size_t launch_compute_mixed_join_output_size(
       matches_per_row);
   return thrust::reduce(
     rmm::exec_policy_nosync(stream), matches_per_row.begin(), matches_per_row.end());
+}
+
+// Backward compatibility overload - computes hash indices on the fly
+template <bool has_nulls>
+std::size_t launch_compute_mixed_join_output_size(
+  table_device_view left_table,
+  table_device_view right_table,
+  cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
+  row_equality const equality_probe,
+  join_kind const join_type,
+  cudf::detail::mixed_join_hash_table_ref_t<cuco::count_tag> hash_table_ref,
+  ast::detail::expression_device_view device_expression_data,
+  bool const swap_tables,
+  cudf::device_span<cudf::size_type> matches_per_row,
+  detail::grid_1d const config,
+  int64_t shmem_size_per_block,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  // For backward compatibility, we'll use the old compute kernel that calculates
+  // hash indices on the fly. This is less efficient but maintains API compatibility.
+  // TODO: Consider deprecating this overload in favor of the optimized version.
+
+  // Since we don't have precomputed hash indices, we need to use an older version
+  // of the kernel or implement a simple wrapper. For now, let's delegate to the
+  // optimized version by computing the hash indices on the fly.
+
+  cudf::size_type const left_num_rows  = left_table.num_rows();
+  cudf::size_type const right_num_rows = right_table.num_rows();
+  auto const outer_num_rows            = (swap_tables ? right_num_rows : left_num_rows);
+
+  // Create temporary hash indices array
+  auto hash_indices =
+    rmm::device_uvector<cuda::std::pair<cudf::size_type, cudf::size_type>>(outer_num_rows, stream);
+
+  // Get hash table info for computing indices
+  auto const storage_ref                   = hash_table_ref.storage_ref();
+  auto const probing_scheme                = hash_table_ref.probing_scheme();
+  auto const extent                        = storage_ref.extent();
+  static constexpr std::size_t bucket_size = 2;
+
+  // Compute hash indices on the fly using the pairs we already have
+  auto hash_idx_fn = [=] __device__(cudf::size_type i) {
+    auto const& probe_key = input_pairs[i];
+
+    // Use the probing scheme's hash functions for proper double hashing
+    auto const hasher    = probing_scheme.hash_function();
+    auto const hash1_val = cuda::std::get<0>(hasher)(probe_key);
+    auto const hash2_val = cuda::std::get<1>(hasher)(probe_key);
+
+    // Double hashing logic: initial position and step size
+    auto const init_idx = (hash1_val % (extent / bucket_size)) * bucket_size;
+    auto const step_val =
+      ((hash2_val % (extent / bucket_size - std::size_t{1})) + std::size_t{1}) * bucket_size;
+
+    return cuda::std::make_pair(static_cast<cudf::size_type>(init_idx),
+                                static_cast<cudf::size_type>(step_val));
+  };
+
+  thrust::transform(rmm::exec_policy_nosync(stream),
+                    thrust::counting_iterator<cudf::size_type>(0),
+                    thrust::counting_iterator<cudf::size_type>(outer_num_rows),
+                    hash_indices.begin(),
+                    hash_idx_fn);
+
+  // Now call the optimized version with the computed hash indices
+  return launch_compute_mixed_join_output_size<has_nulls>(left_table,
+                                                          right_table,
+                                                          input_pairs,
+                                                          hash_indices.data(),
+                                                          equality_probe,
+                                                          join_type,
+                                                          hash_table_ref,
+                                                          device_expression_data,
+                                                          swap_tables,
+                                                          matches_per_row,
+                                                          config,
+                                                          shmem_size_per_block,
+                                                          stream,
+                                                          mr);
 }
 
 }  // namespace detail
