@@ -5,7 +5,7 @@ from pylibcudf.column import Column
 from pylibcudf.expressions import Expression
 from pylibcudf.gpumemoryview import gpumemoryview
 from pylibcudf.table import Table
-from pylibcudf.types import DataType
+from pylibcudf.types import DataType, NullAware
 
 def nans_to_nulls(
     input: Column, stream: Stream | None = None
@@ -24,6 +24,7 @@ def transform(
     transform_udf: str,
     output_type: DataType,
     is_ptx: bool,
+    null_aware: NullAware = NullAware.NO,
     stream: Stream | None = None,
 ) -> Column: ...
 def encode(
