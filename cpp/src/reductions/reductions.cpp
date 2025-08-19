@@ -67,33 +67,14 @@ std::unique_ptr<scalar> reduce_aggregate_impl(
       return standard_deviation(col, output_dtype, var_agg._ddof, stream, mr);
     }
     case aggregation::MEDIAN: {
-      auto current_mr = cudf::get_current_device_resource_ref();
-      auto sorted_indices =
-        cudf::detail::sorted_order(table_view{{col}}, {}, {null_order::AFTER}, stream, current_mr);
-      auto valid_sorted_indices =
-        cudf::detail::split(*sorted_indices, {col.size() - col.null_count()}, stream)[0];
-      auto col_ptr = cudf::detail::quantile(
-        col, {0.5}, interpolation::LINEAR, valid_sorted_indices, true, stream, current_mr);
-      return cudf::detail::get_element(*col_ptr, 0, stream, mr);
+      return quantile(col, 0.5, interpolation::LINEAR, output_dtype, stream, mr);
     }
     case aggregation::QUANTILE: {
-      auto quantile_agg = static_cast<cudf::detail::quantile_aggregation const&>(agg);
-      CUDF_EXPECTS(quantile_agg._quantiles.size() == 1,
-                   "Reduction quantile accepts only one quantile value");
-      auto current_mr = cudf::get_current_device_resource_ref();
-      auto sorted_indices =
-        cudf::detail::sorted_order(table_view{{col}}, {}, {null_order::AFTER}, stream, current_mr);
-      auto valid_sorted_indices =
-        cudf::detail::split(*sorted_indices, {col.size() - col.null_count()}, stream)[0];
-
-      auto col_ptr = cudf::detail::quantile(col,
-                                            quantile_agg._quantiles,
-                                            quantile_agg._interpolation,
-                                            valid_sorted_indices,
-                                            true,
-                                            stream,
-                                            current_mr);
-      return cudf::detail::get_element(*col_ptr, 0, stream, mr);
+      auto qagg = static_cast<cudf::detail::quantile_aggregation const&>(agg);
+      CUDF_EXPECTS(qagg._quantiles.size() == 1,
+                   "Reduction quantile accepts only one quantile value",
+                   std::invalid_argument);
+      return quantile(col, qagg._quantiles.front(), qagg._interpolation, output_dtype, stream, mr);
     }
     case aggregation::NUNIQUE: {
       auto nunique_agg = static_cast<cudf::detail::nunique_aggregation const&>(agg);
@@ -121,13 +102,15 @@ std::unique_ptr<scalar> reduce_aggregate_impl(
     }
     case aggregation::TDIGEST: {
       CUDF_EXPECTS(output_dtype.id() == type_id::STRUCT,
-                   "Tdigest aggregations expect output type to be STRUCT");
+                   "Tdigest aggregations expect output type to be STRUCT",
+                   std::invalid_argument);
       auto td_agg = static_cast<cudf::detail::tdigest_aggregation const&>(agg);
       return tdigest::detail::reduce_tdigest(col, td_agg.max_centroids, stream, mr);
     }
     case aggregation::MERGE_TDIGEST: {
       CUDF_EXPECTS(output_dtype.id() == type_id::STRUCT,
-                   "Tdigest aggregations expect output type to be STRUCT");
+                   "Tdigest aggregations expect output type to be STRUCT",
+                   std::invalid_argument);
       auto td_agg = static_cast<cudf::detail::merge_tdigest_aggregation const&>(agg);
       return tdigest::detail::reduce_merge_tdigest(col, td_agg.max_centroids, stream, mr);
     }
@@ -135,14 +118,15 @@ std::unique_ptr<scalar> reduce_aggregate_impl(
       auto const& udf_base_ptr =
         dynamic_cast<cudf::detail::host_udf_aggregation const&>(agg).udf_ptr;
       auto const udf_ptr = dynamic_cast<reduce_host_udf const*>(udf_base_ptr.get());
-      CUDF_EXPECTS(udf_ptr != nullptr, "Invalid HOST_UDF instance for reduction.");
+      CUDF_EXPECTS(
+        udf_ptr != nullptr, "Invalid HOST_UDF instance for reduction.", std::invalid_argument);
       return (*udf_ptr)(col, output_dtype, init, stream, mr);
     }
     case aggregation::BITWISE_AGG: {
       auto const bitwise_agg = static_cast<cudf::detail::bitwise_aggregation const&>(agg);
       return bitwise_reduction(bitwise_agg.bit_op, col, stream, mr);
     }
-    default: CUDF_FAIL("Unsupported reduction operator");
+    default: CUDF_FAIL("Unsupported reduction operator", std::invalid_argument);
   }
 }
 
@@ -214,7 +198,8 @@ std::unique_ptr<scalar> reduce(column_view const& col,
                             agg.kind == aggregation::HOST_UDF)) {
     CUDF_FAIL(
       "Initial value is only supported for SUM, PRODUCT, MIN, MAX, ANY, ALL, and HOST_UDF "
-      "aggregation types");
+      "aggregation types",
+      std::invalid_argument);
   }
 
   // Returns default scalar if input column is empty or all null
