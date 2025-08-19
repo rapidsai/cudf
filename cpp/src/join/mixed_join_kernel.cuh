@@ -50,18 +50,14 @@ __device__ __forceinline__ int32_t count_least_significant_bits(uint32_t x, int3
  *
  * @tparam is_outer Boolean flag indicating whether outer join semantics should be used
  */
-template <bool is_outer,
-          typename StorageRef,
-          typename KeyEqual,
-          typename ProbeIterator,
-          typename HashIterator>
+template <bool is_outer, typename StorageRef, typename KeyEqual>
 __device__ __forceinline__ void standalone_retrieve(
   cooperative_groups::thread_block const& block,
   StorageRef const& storage_ref,
   KeyEqual const& key_equal,
-  ProbeIterator input_probe_begin,
-  ProbeIterator input_probe_end,
-  HashIterator input_hash_begin,
+  cuco::pair<hash_value_type, cudf::size_type> const* input_probe_begin,
+  cuco::pair<hash_value_type, cudf::size_type> const* input_probe_end,
+  cuda::std::pair<cudf::size_type, cudf::size_type> const* input_hash_begin,
   cudf::size_type* output_probe,
   cudf::size_type* output_match,
   cuda::atomic<size_t, cuda::thread_scope_device>& atomic_counter) noexcept
@@ -72,8 +68,6 @@ __device__ __forceinline__ void standalone_retrieve(
   namespace cg                      = cooperative_groups;
 
   auto const n = cuda::std::distance(input_probe_begin, input_probe_end);
-
-  using probe_type = typename cuda::std::iterator_traits<ProbeIterator>::value_type;
 
   // Use cooperative group design optimized for mixed join workloads
   auto constexpr flushing_cg_size = cudf::detail::warp_size;  // Warp size for flushing
