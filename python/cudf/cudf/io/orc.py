@@ -544,6 +544,13 @@ class ORCWriter:
         self.stripe_size_rows = stripe_size_rows
         self.row_index_stride = row_index_stride
         self.initialized = False
+        self.writer = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
 
     def write_table(self, table):
         """Writes a single table to the file"""
