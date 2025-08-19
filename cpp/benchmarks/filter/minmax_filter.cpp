@@ -147,8 +147,14 @@ static void BM_filter_min_max(nvbench::state& state)
           cudf::apply_boolean_mask(input_table, filter_boolean->view(), stream, mr);
       } break;
       case engine_type::JIT: {
-        auto result = cudf::filter(
-          filter_inputs, udf, false, std::nullopt, std::vector{true, false, false}, stream, mr);
+        auto result = cudf::filter(filter_inputs,
+                                   udf,
+                                   false,
+                                   std::nullopt,
+                                   std::vector{true, false, false},
+                                   cudf::null_aware::NO,
+                                   stream,
+                                   mr);
       } break;
       default: CUDF_UNREACHABLE("Unrecognised engine type requested");
     }
