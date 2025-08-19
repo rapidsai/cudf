@@ -261,11 +261,11 @@ TEST_F(RowIRCudaCodeGenTest, AstConversionBasic)
   row_ir::ast_converter converter;
 
   ast::tree ast_tree;
-  auto fourty_two          = cudf::numeric_scalar(42);
-  auto& column_ref         = ast_tree.push(ast::column_reference{0, ast::table_reference::LEFT});
-  auto& fourty_two_literal = ast_tree.push(ast::literal{fourty_two});
+  auto forty_two          = cudf::numeric_scalar(42);
+  auto& column_ref        = ast_tree.push(ast::column_reference{0, ast::table_reference::LEFT});
+  auto& forty_two_literal = ast_tree.push(ast::literal{forty_two});
   auto& add_op =
-    ast_tree.push(ast::operation{ast::ast_operator::ADD, fourty_two_literal, column_ref});
+    ast_tree.push(ast::operation{ast::ast_operator::ADD, forty_two_literal, column_ref});
 
   auto column = cudf::test::fixed_width_column_wrapper<int32_t>({69, 69, 69, 69, 69, 69}).release();
 
