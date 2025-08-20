@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import decimal
 import itertools
 import random
 from datetime import date
@@ -25,6 +26,7 @@ def df():
             "key2": [2, 2, 2, 2, 6, 1, 4, 6, 8],
             "int": [1, 2, 3, 4, 5, 6, 7, 8, 9],
             "int32": pl.Series([1, 2, 3, 4, 5, 6, 7, 8, 9], dtype=pl.Int32()),
+            "decimal": [decimal.Decimal("1.23"), None, decimal.Decimal("-0.23")] * 3,
             "uint16_with_null": pl.Series(
                 [1, None, 2, None, None, None, 4, 5, 6], dtype=pl.UInt16()
             ),
@@ -89,6 +91,7 @@ def keys(request):
         [pl.col("float").quantile(0.3, interpolation="lower")],
         [pl.col("float").quantile(0.3, interpolation="midpoint")],
         [pl.col("float").quantile(0.3, interpolation="linear")],
+        [pl.col("decimal").median()],
         [
             pl.col("datetime").max(),
             pl.col("datetime").max().dt.is_leap_year().alias("leapyear"),
@@ -282,10 +285,10 @@ def test_groupby_nunique(df: pl.LazyFrame, column):
     assert_gpu_result_equal(q, check_row_order=False)
 
 
-def test_groupby_null_count_raises(df: pl.LazyFrame):
-    q = df.group_by("key1").agg(pl.col("int") + pl.col("uint16_with_null").null_count())
+def test_groupby_null_count(df: pl.LazyFrame):
+    q = df.group_by("key1").agg(pl.col("uint16_with_null").null_count())
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_gpu_result_equal(q, check_row_order=False)
 
 
 @pytest.mark.parametrize(
@@ -330,3 +333,19 @@ def test_groupby_sum_all_null_group_returns_null():
 
     q = df.group_by("key").agg(out=pl.col("null_groups").sum())
     assert_gpu_result_equal(q, check_row_order=False)
+
+
+@pytest.mark.parametrize(
+    "agg_expr",
+    [
+        pl.all().sum(),
+        pl.all().mean(),
+        pl.all().median(),
+        pl.all().quantile(0.5),
+    ],
+    ids=["sum", "mean", "median", "quantile-0.5"],
+)
+def test_groupby_aggs_keep_unsupported_as_null(df: pl.LazyFrame, agg_expr) -> None:
+    lf = df.filter(pl.col("datetime") == date(2004, 12, 1))
+    q = lf.group_by("datetime").agg(agg_expr)
+    assert_gpu_result_equal(q)
