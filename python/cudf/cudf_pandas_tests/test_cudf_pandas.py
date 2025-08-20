@@ -719,10 +719,6 @@ def test_rolling_win_type():
     tm.assert_equal(result, expected)
 
 
-@pytest.mark.skipif(
-    version.parse(numba_version) < version.parse("0.59"),
-    reason="Requires Numba 0.59 to fix segfaults on ARM. See https://github.com/numba/llvmlite/pull/1009",
-)
 @pytest.mark.xfail(
     version.parse(numba_version) >= version.parse("0.59")
     and PANDAS_VERSION < version.parse("2.1"),
