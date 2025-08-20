@@ -218,12 +218,11 @@ struct global_memory_fallback_fn {
   {
     auto const agg_idx       = static_cast<size_type>(idx / num_processing_rows);
     auto const local_agg_idx = static_cast<size_type>(idx % num_processing_rows);
-
-    auto const block_idx = fallback_block_ids[(local_agg_idx % stride) / GROUPBY_BLOCK_SIZE];
-    auto const local_idx = (local_agg_idx % stride) % GROUPBY_BLOCK_SIZE;
-
-    auto const row_idx = GROUPBY_BLOCK_SIZE * full_stride * (local_agg_idx / stride) +
-                         block_idx * GROUPBY_BLOCK_SIZE + local_idx;
+    auto const idx_in_agg    = local_agg_idx % stride;
+    auto const thread_rank   = idx_in_agg % GROUPBY_BLOCK_SIZE;
+    auto const block_idx     = fallback_block_ids[idx_in_agg / GROUPBY_BLOCK_SIZE];
+    auto const row_idx =
+      GROUPBY_BLOCK_SIZE * (full_stride * (local_agg_idx / stride) + block_idx) + thread_rank;
 
     if (auto const target_idx = key_indices[row_idx];
         target_idx != cudf::detail::CUDF_SIZE_TYPE_SENTINEL) {

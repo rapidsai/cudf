@@ -147,6 +147,11 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
   // 'global_mapping_index' maps from the block-wise rank to the row index of global aggregate table
   rmm::device_uvector<cudf::size_type> global_mapping_index(grid_size * GROUPBY_SHM_MAX_ELEMENTS,
                                                             stream);
+  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
+                             global_mapping_index.begin(),
+                             global_mapping_index.end(),
+                             cudf::detail::CUDF_SIZE_TYPE_SENTINEL);
+
   rmm::device_uvector<cudf::size_type> block_cardinality(grid_size, stream);
 
   // Flag indicating whether a global memory aggregation fallback is required or not
@@ -237,33 +242,36 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
     fflush(stdout);
 
 #if 1
-    thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                       thrust::make_counting_iterator(0),
-                       GROUPBY_BLOCK_SIZE * num_fallback_blocks * num_strides,
-                       [full_stride = GROUPBY_BLOCK_SIZE * grid_size,
-                        stride      = GROUPBY_BLOCK_SIZE * num_fallback_blocks,
-                        global_set_ref,
-                        key_indices = key_indices.begin(),
-                        block_ids   = fallback_block_ids.begin(),
-                        row_bitmask] __device__(auto const idx) mutable {
-                         auto const block_idx = block_ids[(idx % stride) / GROUPBY_BLOCK_SIZE];
-                         auto const local_idx = (idx % stride) % GROUPBY_BLOCK_SIZE;
-                         auto const row_idx   = GROUPBY_BLOCK_SIZE * full_stride * (idx / stride) +
-                                              block_idx * GROUPBY_BLOCK_SIZE + local_idx;
+    thrust::for_each_n(
+      rmm::exec_policy_nosync(stream),
+      thrust::make_counting_iterator(0),
+      GROUPBY_BLOCK_SIZE * num_fallback_blocks * num_strides,
+      [full_stride = GROUPBY_BLOCK_SIZE * grid_size,
+       stride      = GROUPBY_BLOCK_SIZE * num_fallback_blocks,
+       global_set_ref,
+       key_indices        = key_indices.begin(),
+       fallback_block_ids = fallback_block_ids.begin(),
+       row_bitmask] __device__(auto const idx) mutable {
+        auto const idx_in_stride = idx % stride;
+        auto const thread_rank   = idx_in_stride % GROUPBY_BLOCK_SIZE;
+        auto const block_idx     = fallback_block_ids[idx_in_stride / GROUPBY_BLOCK_SIZE];
+        auto const row_idx =
+          GROUPBY_BLOCK_SIZE * (full_stride * (idx / stride) + block_idx) + thread_rank;
 
-                         // if (idx % 128 == 0)
-                         {
-                           printf("idx: %d, block id: %d, local id: %d, row id: %d\n",
-                                  idx,
-                                  (int)block_idx,
-                                  (int)local_idx,
-                                  (int)row_idx);
-                         }
+        // if (idx % 128 == 0)
+        {
+          printf("idx: %d, block id: %d, local id: %d, row id: %d\n",
+                 idx,
+                 (int)block_idx,
+                 (int)thread_rank,
+                 (int)row_idx);
+        }
 
-                         if (!row_bitmask || cudf::bit_is_set(row_bitmask, row_idx)) {
-                           key_indices[row_idx] = *global_set_ref.insert_and_find(row_idx).first;
-                         }
-                       });
+        if (!row_bitmask || cudf::bit_is_set(row_bitmask, row_idx)) {
+          key_indices[row_idx] = *global_set_ref.insert_and_find(row_idx).first;
+        }
+      });
+
 #else
     thrust::tabulate(rmm::exec_policy_nosync(stream),
                      key_indices.begin(),
@@ -289,23 +297,18 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
     thrust::make_counting_iterator(0),
     grid_size * GROUPBY_BLOCK_SIZE,
     [new_key_indices      = new_key_indices.begin(),
-     block_cardinality    = block_cardinality.begin(),
      global_mapping_index = global_mapping_index.begin()] __device__(auto const idx) {
-      auto const block_id = idx / GROUPBY_BLOCK_SIZE;
-      if (auto const cardinality = block_cardinality[block_id];
-          cardinality < GROUPBY_CARDINALITY_THRESHOLD) {
-        auto const local_idx = idx % GROUPBY_BLOCK_SIZE;
-        if (local_idx < cardinality) {
-          auto const old_idx =
-            global_mapping_index[block_id * GROUPBY_SHM_MAX_ELEMENTS + local_idx];
-          global_mapping_index[block_id * GROUPBY_SHM_MAX_ELEMENTS + local_idx] =
-            new_key_indices[old_idx];
-          printf("update global_mapping_index[%d] = %d, block id: %d, local idx: %d\n",
-                 (int)(block_id * GROUPBY_SHM_MAX_ELEMENTS + local_idx),
-                 new_key_indices[old_idx],
-                 block_id,
-                 local_idx);
-        }
+      auto const block_id    = idx / GROUPBY_BLOCK_SIZE;
+      auto const thread_rank = idx % GROUPBY_BLOCK_SIZE;
+      auto const mapping_idx = block_id * GROUPBY_SHM_MAX_ELEMENTS + thread_rank;
+      auto const old_idx     = global_mapping_index[mapping_idx];
+      if (old_idx != cudf::detail::CUDF_SIZE_TYPE_SENTINEL) {
+        global_mapping_index[mapping_idx] = new_key_indices[old_idx];
+        printf("update global_mapping_index[%d] = %d, block id: %d, local idx: %d\n",
+               (int)(block_id * GROUPBY_SHM_MAX_ELEMENTS + thread_rank),
+               new_key_indices[old_idx],
+               block_id,
+               thread_rank);
       }
     });
 
