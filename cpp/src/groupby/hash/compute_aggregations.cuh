@@ -172,7 +172,9 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
   {
     auto const select_cond = [block_cardinality =
                                 block_cardinality.begin()] __device__(auto const idx) {
-      printf("check block %d, cardinality: %d\n", idx, block_cardinality[idx]);
+      if (block_cardinality[idx] >= GROUPBY_CARDINALITY_THRESHOLD) {
+        printf("fallback: %d\n", idx);
+      }
       return block_cardinality[idx] >= GROUPBY_CARDINALITY_THRESHOLD;
     };
 
@@ -220,41 +222,46 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
     printf("num_fallback_blocks: %d\n", num_fallback_blocks);
     fflush(stdout);
 
-    auto const strides = util::div_rounding_up_safe(static_cast<size_type>(num_rows),
-                                                    GROUPBY_BLOCK_SIZE * num_fallback_blocks);
+    auto const num_strides =
+      util::div_rounding_up_safe(static_cast<size_type>(num_rows), GROUPBY_BLOCK_SIZE * grid_size);
 
     printf(
       " total row: %d, num strides: %d, num fallback blocks: %d, total blocks: %d, "
       "strides = %d, full stride = %d\n",
       (int)num_rows,
-      (int)strides,
+      (int)num_strides,
       num_fallback_blocks,
       grid_size,
       (int)GROUPBY_BLOCK_SIZE * num_fallback_blocks,
-      (int)GROUPBY_BLOCK_SIZE * num_fallback_blocks * strides);
+      (int)GROUPBY_BLOCK_SIZE * grid_size * num_strides);
     fflush(stdout);
 
 #if 1
-    thrust::for_each_n(
-      rmm::exec_policy_nosync(stream),
-      thrust::make_counting_iterator(0),
-      GROUPBY_BLOCK_SIZE * num_fallback_blocks * strides,
-      [full_stride = GROUPBY_BLOCK_SIZE * grid_size,
-       stride      = GROUPBY_BLOCK_SIZE * num_fallback_blocks,
-       num_rows    = static_cast<size_type>(num_rows),
-       global_set_ref,
-       key_indices = key_indices.begin(),
-       block_ids   = fallback_block_ids.begin()] __device__(auto const idx) mutable {
-        auto const block_idx = block_ids[(idx % stride) / GROUPBY_BLOCK_SIZE];
-        auto const local_idx = (idx % stride) % GROUPBY_BLOCK_SIZE;
-        auto const row_idx   = GROUPBY_BLOCK_SIZE * full_stride * (idx / stride) +
-                             block_idx * GROUPBY_BLOCK_SIZE + local_idx;
+    thrust::for_each_n(rmm::exec_policy_nosync(stream),
+                       thrust::make_counting_iterator(0),
+                       GROUPBY_BLOCK_SIZE * num_fallback_blocks * num_strides,
+                       [full_stride = GROUPBY_BLOCK_SIZE * grid_size,
+                        stride      = GROUPBY_BLOCK_SIZE * num_fallback_blocks,
+                        num_rows    = static_cast<size_type>(num_rows),
+                        global_set_ref,
+                        key_indices = key_indices.begin(),
+                        block_ids = fallback_block_ids.begin()] __device__(auto const idx) mutable {
+                         auto const block_idx = block_ids[(idx % stride) / GROUPBY_BLOCK_SIZE];
+                         auto const local_idx = (idx % stride) % GROUPBY_BLOCK_SIZE;
+                         auto const row_idx   = GROUPBY_BLOCK_SIZE * full_stride * (idx / stride) +
+                                              block_idx * GROUPBY_BLOCK_SIZE + local_idx;
 
-        printf(
-          "block id: %d, local id: %d, row id: %d\n", (int)block_idx, (int)local_idx, (int)row_idx);
+                         // if (idx % 128 == 0)
+                         {
+                           printf("idx: %d, block id: %d, local id: %d, row id: %d\n",
+                                  idx,
+                                  (int)block_idx,
+                                  (int)local_idx,
+                                  (int)row_idx);
+                         }
 
-        key_indices[row_idx] = *global_set_ref.insert_and_find(row_idx).first;
-      });
+                         key_indices[row_idx] = *global_set_ref.insert_and_find(row_idx).first;
+                       });
 #else
     thrust::tabulate(rmm::exec_policy_nosync(stream),
                      key_indices.begin(),
