@@ -15,15 +15,12 @@
  */
 
 #include "rolling.cuh"
+#include "rolling_udf.cuh"
 
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
-
-#include <cuda/functional>
-#include <thrust/extrema.h>
-#include <thrust/iterator/constant_iterator.h>
 
 namespace cudf::detail {
 
