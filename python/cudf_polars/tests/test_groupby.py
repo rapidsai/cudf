@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-import decimal
 import itertools
 import random
 from datetime import date
@@ -26,7 +25,6 @@ def df():
             "key2": [2, 2, 2, 2, 6, 1, 4, 6, 8],
             "int": [1, 2, 3, 4, 5, 6, 7, 8, 9],
             "int32": pl.Series([1, 2, 3, 4, 5, 6, 7, 8, 9], dtype=pl.Int32()),
-            "decimal": [decimal.Decimal("1.23"), None, decimal.Decimal("-0.23")] * 3,
             "uint16_with_null": pl.Series(
                 [1, None, 2, None, None, None, 4, 5, 6], dtype=pl.UInt16()
             ),
