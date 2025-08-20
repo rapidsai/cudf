@@ -413,7 +413,8 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
                 options=Options(
                     {
                         "dask_spill_device": str(run_config.spill_device),
-                        "dask_statistics": str(args.rapidsmpf_oom_protection),
+                        "dask_statistics": str(args.rapidsmpf_dask_statistics),
+                        "oom_protection": str(args.rapidsmpf_oom_protection),
                     }
                 ),
             )
@@ -624,6 +625,12 @@ def parse_args(
         action=argparse.BooleanOptionalAction,
         default=False,
         help="Use rapidsmpf CUDA managed memory-based OOM protection.",
+    )
+    parser.add_argument(
+        "--rapidsmpf-dask-statistics",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Print rapidsmpf shuffle statistics on each Dask worker upon completion.",
     )
     parser.add_argument(
         "--rapidsmpf-spill",
