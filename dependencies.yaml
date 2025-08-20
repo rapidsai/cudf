@@ -476,7 +476,7 @@ dependencies:
       - output_types: conda
         packages:
           # Align nvcomp version with rapids-cmake
-          - libnvcomp-dev==4.2.0.11
+          - libnvcomp-dev==5.0.0.6
   rapids_build_skbuild:
     common:
       - output_types: [conda, requirements, pyproject]
