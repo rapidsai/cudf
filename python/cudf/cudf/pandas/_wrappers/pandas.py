@@ -374,7 +374,6 @@ Series = make_final_proxy_type(
         "_constructor_expanddim": _FastSlowAttribute("_constructor_expanddim"),
         "_accessors": set(),
         "dtype": property(_Series_dtype),
-        # "_values": _FastSlowAttribute("_values", private=True),
         "_values": property(_Series_values),
         "values": property(_Series_values_property),
     },
