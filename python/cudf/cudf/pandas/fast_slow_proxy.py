@@ -841,8 +841,6 @@ class _FastSlowAttribute:
                 self._attr = _MethodProxy(
                     fast_attr,
                     slow_attr,
-                    # bypass=self._name in {"__setitem__"}
-                    # and getattr(owner, "__name__", "") == "ndarray",
                 )
             else:
                 # for anything else, use a fast-slow attribute:
@@ -870,12 +868,11 @@ class _FastSlowAttribute:
                         getattr(instance._fsproxy_slow, self._name),
                         None,  # type: ignore
                     )
-                else:
-                    return _fast_slow_function_call(
-                        getattr,
-                        instance,
-                        self._name,
-                    )[0]
+                return _fast_slow_function_call(
+                    getattr,
+                    instance,
+                    self._name,
+                )[0]
 
         return self._attr
 
@@ -913,18 +910,6 @@ class _MethodProxy(_FunctionProxy):
     @property
     def _customqualname(self):
         return self._fsproxy_slow.__qualname__
-
-    def __call__(self, *args, **kwargs):
-        """
-        Call the method with the given arguments and keyword arguments.
-        """
-        result, _ = _fast_slow_function_call(
-            call_operator,
-            self,
-            args,
-            kwargs,
-        )
-        return result
 
 
 def _assert_fast_slow_eq(left, right):
