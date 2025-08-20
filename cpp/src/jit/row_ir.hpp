@@ -315,7 +315,7 @@ struct ast_scalar_input_spec {
     nullptr;  ///< The broadcasted column, a column of size 1
 };
 
-/// @brief A type-erased input specification for the AST
+/// @brief A variant input specification for the AST
 using ast_input_spec =
   std::variant<ast_column_input_spec, ast_named_column_input_spec, ast_scalar_input_spec>;
 
