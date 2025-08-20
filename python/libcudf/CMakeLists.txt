@@ -46,9 +46,23 @@ set(CUDF_EXPORT_NVCOMP OFF)
 
 include(../../cpp/cmake/thirdparty/get_nvcomp.cmake)
 include(cmake/Modules/WheelHelpers.cmake)
-install_aliased_imported_targets(
-  TARGETS nvcomp::nvcomp DESTINATION ${SKBUILD_PLATLIB_DIR}/libcudf/lib64/
-)
+
+# Install only the specific libnvcomp.so.5 library instead of all nvcomp targets
+if(TARGET nvcomp::nvcomp)
+  get_target_property(is_imported nvcomp::nvcomp IMPORTED)
+  if(is_imported)
+    get_target_property(nvcomp_lib_path nvcomp::nvcomp IMPORTED_LOCATION_RELEASE)
+    install(
+      FILES ${nvcomp_lib_path}
+      DESTINATION ${SKBUILD_PLATLIB_DIR}/libcudf/lib64/
+      RENAME libnvcomp.so.5
+    )
+  else()
+    message(FATAL_ERROR "nvcomp target must be imported")
+  endif()
+else()
+  message(FATAL_ERROR "nvcomp target not found")
+endif()
 
 set(CUDA_STATIC_RUNTIME ON)
 
