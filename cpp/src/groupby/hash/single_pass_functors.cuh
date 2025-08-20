@@ -192,6 +192,7 @@ struct global_memory_fallback_fn {
   cudf::size_type num_strides;
   cudf::size_type full_stride;
   size_type num_processing_rows;
+  size_type num_rows;
 
   global_memory_fallback_fn(size_type const* key_indices,
                             cudf::table_device_view input_values,
@@ -201,7 +202,8 @@ struct global_memory_fallback_fn {
                             cudf::size_type stride,
                             cudf::size_type num_strides,
                             cudf::size_type full_stride,
-                            size_type num_processing_rows)
+                            size_type num_processing_rows,
+                            size_type num_rows)
     : key_indices(key_indices),
       input_values(input_values),
       output_values(output_values),
@@ -210,7 +212,8 @@ struct global_memory_fallback_fn {
       stride(stride),
       num_strides(num_strides),
       full_stride(full_stride),
-      num_processing_rows(num_processing_rows)
+      num_processing_rows(num_processing_rows),
+      num_rows(num_rows)
   {
   }
 
@@ -222,7 +225,8 @@ struct global_memory_fallback_fn {
     auto const thread_rank   = idx_in_agg % GROUPBY_BLOCK_SIZE;
     auto const block_idx     = fallback_block_ids[idx_in_agg / GROUPBY_BLOCK_SIZE];
     auto const row_idx =
-      GROUPBY_BLOCK_SIZE * (full_stride * (local_agg_idx / stride) + block_idx) + thread_rank;
+      full_stride * (local_agg_idx / stride) + GROUPBY_BLOCK_SIZE * block_idx + thread_rank;
+    if (row_idx >= num_rows) { return; }
 
     if (auto const target_idx = key_indices[row_idx];
         target_idx != cudf::detail::CUDF_SIZE_TYPE_SENTINEL) {

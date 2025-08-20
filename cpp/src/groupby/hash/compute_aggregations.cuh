@@ -226,26 +226,29 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
       util::div_rounding_up_safe(static_cast<size_type>(num_rows), GROUPBY_BLOCK_SIZE * grid_size);
 
 #if 1
-    thrust::for_each_n(
-      rmm::exec_policy_nosync(stream),
-      thrust::make_counting_iterator(0),
-      GROUPBY_BLOCK_SIZE * num_fallback_blocks * num_strides,
-      [full_stride = GROUPBY_BLOCK_SIZE * grid_size,
-       stride      = GROUPBY_BLOCK_SIZE * num_fallback_blocks,
-       global_set_ref,
-       key_indices        = key_indices.begin(),
-       fallback_block_ids = fallback_block_ids.begin(),
-       row_bitmask] __device__(auto const idx) mutable {
-        auto const idx_in_stride = idx % stride;
-        auto const thread_rank   = idx_in_stride % GROUPBY_BLOCK_SIZE;
-        auto const block_idx     = fallback_block_ids[idx_in_stride / GROUPBY_BLOCK_SIZE];
-        auto const row_idx =
-          GROUPBY_BLOCK_SIZE * (full_stride * (idx / stride) + block_idx) + thread_rank;
+    thrust::for_each_n(rmm::exec_policy_nosync(stream),
+                       thrust::make_counting_iterator(0),
+                       GROUPBY_BLOCK_SIZE * num_fallback_blocks * num_strides,
+                       [num_rows    = static_cast<size_type>(num_rows),
+                        full_stride = GROUPBY_BLOCK_SIZE * grid_size,
+                        stride      = GROUPBY_BLOCK_SIZE * num_fallback_blocks,
+                        global_set_ref,
+                        key_indices        = key_indices.begin(),
+                        fallback_block_ids = fallback_block_ids.begin(),
+                        row_bitmask] __device__(auto const idx) mutable {
+                         auto const idx_in_stride = idx % stride;
+                         auto const thread_rank   = idx_in_stride % GROUPBY_BLOCK_SIZE;
+                         auto const block_idx =
+                           fallback_block_ids[idx_in_stride / GROUPBY_BLOCK_SIZE];
+                         auto const row_idx = full_stride * (idx / stride) +
+                                              GROUPBY_BLOCK_SIZE * block_idx + thread_rank;
 
-        if (!row_bitmask || cudf::bit_is_set(row_bitmask, row_idx)) {
-          key_indices[row_idx] = *global_set_ref.insert_and_find(row_idx).first;
-        }
-      });
+                         if (row_idx >= num_rows) { return; }
+
+                         if (!row_bitmask || cudf::bit_is_set(row_bitmask, row_idx)) {
+                           key_indices[row_idx] = *global_set_ref.insert_and_find(row_idx).first;
+                         }
+                       });
 
 #else
     thrust::tabulate(rmm::exec_policy_nosync(stream),
@@ -321,7 +324,8 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
                                                  stride,
                                                  num_strides,
                                                  full_stride,
-                                                 num_processing_rows});
+                                                 num_processing_rows,
+                                                 static_cast<size_type>(num_rows)});
   }
 
   // Add results back to sparse_results cache
