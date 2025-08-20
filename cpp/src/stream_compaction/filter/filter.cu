@@ -209,10 +209,7 @@ void perform_checks(column_view base_column,
 jitify2::Kernel get_kernel(std::string const& kernel_name, std::string const& cuda_source)
 {
   return cudf::jit::get_program_cache(*stream_compaction_filter_jit_kernel_cu_jit)
-    .get_kernel(kernel_name,
-                {},
-                {{"cudf/detail/operation-udf.hpp", cuda_source}},
-                {"-arch=sm_.", "--device-int128"});
+    .get_kernel(kernel_name, {}, {{"cudf/detail/operation-udf.hpp", cuda_source}}, {"-arch=sm_."});
 }
 
 jitify2::ConfiguredKernel build_kernel(std::string const& kernel_name,
