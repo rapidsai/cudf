@@ -1132,7 +1132,7 @@ def _find_user_frame():
     frame = inspect.currentframe()
     while frame:
         modname = frame.f_globals.get("__name__", "")
-        if modname == "__main__" or not modname.startswith("cudf."):
+        if modname == "__main__" or not modname.startswith(("cudf.", "nvtx.")):
             return frame
         frame = frame.f_back
     raise RuntimeError("Could not find the user's frame.")
