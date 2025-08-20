@@ -469,18 +469,19 @@ void ast_converter::generate_code(target target_id,
           params_decls.push_back(input_decl(i));
         }
 
-        std::string params_decl;
-
-        if (params_decls.empty()) {
-        } else if (params_decls.size() == 1) {
-          params_decl = params_decls[0];
-        } else {
-          params_decl = std::accumulate(
-            params_decls.begin() + 1,
-            params_decls.end(),
-            params_decls[0],
-            [](auto const& a, auto const& b) { return std::format("{}, {}", a, b); });
-        }
+        auto params_decl = [&] {
+          if (params_decls.empty()) {
+            return std::string{};
+          } else if (params_decls.size() == 1) {
+            return params_decls[0];
+          } else {
+            return std::accumulate(
+              params_decls.begin() + 1,
+              params_decls.end(),
+              params_decls[0],
+              [](auto const& a, auto const& b) { return std::format("{}, {}", a, b); });
+          }
+        }();
 
         code_ = std::format(
           R"***(
