@@ -841,8 +841,8 @@ class _FastSlowAttribute:
                 self._attr = _MethodProxy(
                     fast_attr,
                     slow_attr,
-                    bypass=self._name in {"__setitem__"}
-                    and getattr(owner, "__name__", "") == "ndarray",
+                    # bypass=self._name in {"__setitem__"}
+                    # and getattr(owner, "__name__", "") == "ndarray",
                 )
             else:
                 # for anything else, use a fast-slow attribute:
@@ -865,34 +865,23 @@ class _FastSlowAttribute:
                 else:
                     return types.MethodType(self._attr, instance)
             else:
-                if (
-                    self._name in {"values", "_values"}
-                    and getattr(owner, "__name__", "") == "Series"
-                ):
+                if self._private:
+                    return _maybe_wrap_result(
+                        getattr(instance._fsproxy_slow, self._name),
+                        None,  # type: ignore
+                    )
+                else:
                     return _fast_slow_function_call(
                         getattr,
                         instance,
                         self._name,
-                        parent_proxy=instance,
                     )[0]
-                else:
-                    if self._private:
-                        return _maybe_wrap_result(
-                            getattr(instance._fsproxy_slow, self._name),
-                            None,  # type: ignore
-                        )
-                    else:
-                        return _fast_slow_function_call(
-                            getattr,
-                            instance,
-                            self._name,
-                        )[0]
 
         return self._attr
 
 
 class _MethodProxy(_FunctionProxy):
-    def __init__(self, fast, slow, bypass=False):
+    def __init__(self, fast, slow):
         super().__init__(
             fast,
             slow,
@@ -901,7 +890,6 @@ class _MethodProxy(_FunctionProxy):
                 tuple(filter(lambda x: x != "__name__", _WRAPPER_ASSIGNMENTS))
             ),
         )
-        self.bypass = bypass
 
     def __dir__(self):
         return self._fsproxy_slow.__dir__()
@@ -936,56 +924,6 @@ class _MethodProxy(_FunctionProxy):
             args,
             kwargs,
         )
-        if self.__name__ in {"__setitem__"} and self.bypass:
-            # For __setitem__ and __getitem__, we need to ensure that
-            # the result is wrapped in a fast-slow proxy.
-            # Try to set attribute on fast, fall back to slow
-            try:
-                attr_name = "values"
-                name = args[1]
-                values = args[2]
-                operation_name = "__setitem__"
-                parent_proxy = args[0]._parent_proxy_wrapped
-                if parent_proxy is None:
-                    return result
-                # Try fast path
-                fast_attr = getattr(parent_proxy._fsproxy_fast, attr_name)
-                operation = getattr(fast_attr, operation_name)
-                result = operation(_fast_arg(name), _fast_arg(values))
-
-                # If successful, sync to slow
-                try:
-                    slow_obj = parent_proxy._fsproxy_slow
-                    if hasattr(slow_obj, attr_name):
-                        slow_attr = _slow_arg(fast_attr)
-                        setattr(slow_obj, attr_name, slow_attr)
-                except Exception:
-                    pass  # Continue if sync fails
-
-                return result
-            except Exception:
-                attr_name = "values"
-                name = args[1]
-                values = args[2]
-                operation_name = "__setitem__"
-                parent_proxy = args[0]._parent_proxy_wrapped
-                if parent_proxy is None:
-                    return result
-                # Fall back to slow path
-                slow_attr = getattr(parent_proxy._fsproxy_slow, attr_name)
-                operation = getattr(slow_attr, operation_name)
-                result = operation(_slow_arg(name), _slow_arg(values))
-
-                # Try to sync to fast
-                try:
-                    fast_obj = parent_proxy._fsproxy_fast
-                    if hasattr(fast_obj, attr_name):
-                        fast_attr = _fast_arg(slow_attr)
-                        setattr(fast_obj, attr_name, fast_attr)
-                except Exception:
-                    pass  # Continue if sync fails
-
-                return result
         return result
 
 
