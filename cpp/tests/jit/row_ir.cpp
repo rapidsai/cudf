@@ -90,9 +90,9 @@ TEST_F(RowIRCudaCodeGenTest, SetOutput)
 
   {
     row_ir::instance_context ctx{};
-    row_ir::set_output set_ouput_1{1, std::make_unique<row_ir::get_input>(1)};
-    set_ouput_1.instantiate(ctx, info);
-    auto code = set_ouput_1.generate_code(ctx, target_info, info);
+    row_ir::set_output set_output_1{1, std::make_unique<row_ir::get_input>(1)};
+    set_output_1.instantiate(ctx, info);
+    auto code = set_output_1.generate_code(ctx, target_info, info);
 
     auto expected_code =
       "float tmp_0 = in_1;\n"
