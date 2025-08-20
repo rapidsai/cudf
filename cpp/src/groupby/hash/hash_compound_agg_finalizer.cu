@@ -14,23 +14,19 @@
  * limitations under the License.
  */
 
+#include "groupby/common/m2_var_std.hpp"
 #include "hash_compound_agg_finalizer.hpp"
 #include "helpers.cuh"
-#include "m2_var_functor.cuh"
 
-#include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/detail/binaryop.hpp>
 #include <cudf/detail/gather.hpp>
-#include <cudf/detail/unary.hpp>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-
-#include <memory>
 
 namespace cudf::groupby::detail::hash {
 
@@ -41,13 +37,13 @@ hash_compound_agg_finalizer::hash_compound_agg_finalizer(column_view col,
                                                          rmm::cuda_stream_view stream,
                                                          rmm::device_async_resource_ref mr)
   : col{col},
+    input_type{cudf::is_dictionary(col.type()) ? cudf::dictionary_column_view(col).keys().type()
+                                               : col.type()},
     cache{cache},
     d_output_index_map{d_output_index_map},
     d_row_bitmask{d_row_bitmask},
     stream{stream},
-    mr{mr},
-    result_type{cudf::is_dictionary(col.type()) ? cudf::dictionary_column_view(col).keys().type()
-                                                : col.type()}
+    mr{mr}
 {
 }
 
@@ -77,8 +73,8 @@ auto hash_compound_agg_finalizer::gather_argminmax(aggregation const& agg)
 
 void hash_compound_agg_finalizer::visit(cudf::detail::min_aggregation const& agg)
 {
-  if (result_type.id() == type_id::STRING) {
-    if (cache->has_result(col, agg)) { return; }
+  if (cache->has_result(col, agg)) { return; }
+  if (input_type.id() == type_id::STRING) {
     auto transformed_agg = make_argmin_aggregation();
     cache->add_result(col, agg, gather_argminmax(*transformed_agg));
   }  // else: no-op, since this is only relevant for compound aggregations
@@ -87,8 +83,8 @@ void hash_compound_agg_finalizer::visit(cudf::detail::min_aggregation const& agg
 
 void hash_compound_agg_finalizer::visit(cudf::detail::max_aggregation const& agg)
 {
-  if (result_type.id() == type_id::STRING) {
-    if (cache->has_result(col, agg)) { return; }
+  if (cache->has_result(col, agg)) { return; }
+  if (input_type.id() == type_id::STRING) {
     auto transformed_agg = make_argmax_aggregation();
     cache->add_result(col, agg, gather_argminmax(*transformed_agg));
   }  // else: no-op, since this is only relevant for compound aggregations
@@ -108,7 +104,7 @@ void hash_compound_agg_finalizer::visit(cudf::detail::mean_aggregation const& ag
     cudf::detail::binary_operation(sum_result,
                                    count_result,
                                    binary_operator::DIV,
-                                   cudf::detail::target_type(result_type, aggregation::MEAN),
+                                   cudf::detail::target_type(input_type, aggregation::MEAN),
                                    stream,
                                    mr);
   cache->add_result(col, agg, std::move(result));
@@ -118,28 +114,17 @@ void hash_compound_agg_finalizer::visit(cudf::detail::m2_aggregation const& agg)
 {
   if (cache->has_result(col, agg)) { return; }
 
-  auto const sum_agg      = make_sum_aggregation();
-  auto const count_agg    = make_count_aggregation();
-  auto const sum_result   = cache->get_result(col, *sum_agg);
-  auto const count_result = cache->get_result(col, *count_agg);
+  auto const sum_sqr_agg = make_sum_of_squares_aggregation();
+  auto const sum_agg     = make_sum_aggregation();
+  auto const count_agg   = make_count_aggregation();
+  this->visit(*sum_sqr_agg);
+  this->visit(*sum_agg);
+  this->visit(*count_agg);
+  auto const sum_sqr_result = cache->get_result(col, *sum_sqr_agg);
+  auto const sum_result     = cache->get_result(col, *sum_agg);
+  auto const count_result   = cache->get_result(col, *count_agg);
 
-  auto const d_values_ptr = column_device_view::create(col, stream);
-  auto const d_sum_ptr    = column_device_view::create(sum_result, stream).release();
-  auto const d_count_ptr  = column_device_view::create(count_result, stream).release();
-
-  auto output = make_fixed_width_column(
-    cudf::detail::target_type(result_type, agg.kind), col.size(), mask_state::ALL_NULL, stream);
-  auto output_view  = mutable_column_device_view::create(output->mutable_view(), stream);
-  auto output_tview = mutable_table_view{{output->mutable_view()}};
-  cudf::detail::initialize_with_identity(
-    output_tview, host_span<cudf::aggregation::Kind const>(&agg.kind, 1), stream);
-
-  thrust::for_each_n(
-    rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator(0),
-    col.size(),
-    m2_hash_functor{
-      d_output_index_map, d_row_bitmask, *output_view, *d_values_ptr, *d_sum_ptr, *d_count_ptr});
+  auto output = compute_m2(input_type, sum_sqr_result, sum_result, count_result, stream, mr);
   cache->add_result(col, agg, std::move(output));
 }
 
@@ -147,44 +132,30 @@ void hash_compound_agg_finalizer::visit(cudf::detail::var_aggregation const& agg
 {
   if (cache->has_result(col, agg)) { return; }
 
-  auto const sum_agg      = make_sum_aggregation();
-  auto const count_agg    = make_count_aggregation();
-  auto const sum_result   = cache->get_result(col, *sum_agg);
+  auto const m2_agg    = make_m2_aggregation();
+  auto const count_agg = make_count_aggregation();
+  this->visit(*dynamic_cast<cudf::detail::m2_aggregation*>(m2_agg.get()));
+  this->visit(*count_agg);
+  auto const m2_result    = cache->get_result(col, *m2_agg);
   auto const count_result = cache->get_result(col, *count_agg);
 
-  auto values_view = column_device_view::create(col, stream);
-  auto sum_view    = column_device_view::create(sum_result, stream);
-  auto count_view  = column_device_view::create(count_result, stream);
-
-  auto var_result = make_fixed_width_column(
-    cudf::detail::target_type(result_type, agg.kind), col.size(), mask_state::ALL_NULL, stream);
-  auto var_result_view = mutable_column_device_view::create(var_result->mutable_view(), stream);
-  mutable_table_view var_table_view{{var_result->mutable_view()}};
-  cudf::detail::initialize_with_identity(
-    var_table_view, host_span<cudf::aggregation::Kind const>(&agg.kind, 1), stream);
-
-  thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                     thrust::make_counting_iterator(0),
-                     col.size(),
-                     var_hash_functor{d_output_index_map,
-                                      d_row_bitmask,
-                                      *var_result_view,
-                                      *values_view,
-                                      *sum_view,
-                                      *count_view,
-                                      agg._ddof});
-  cache->add_result(col, agg, std::move(var_result));
+  auto output = compute_variance(m2_result, count_result, agg._ddof, stream, mr);
+  cache->add_result(col, agg, std::move(output));
 }
 
 void hash_compound_agg_finalizer::visit(cudf::detail::std_aggregation const& agg)
 {
   if (cache->has_result(col, agg)) { return; }
 
-  auto const var_agg  = make_variance_aggregation(agg._ddof);
-  auto const variance = cache->get_result(col, *var_agg);
+  auto const m2_agg    = make_m2_aggregation();
+  auto const count_agg = make_count_aggregation();
+  this->visit(*dynamic_cast<cudf::detail::m2_aggregation*>(m2_agg.get()));
+  this->visit(*count_agg);
+  auto const m2_result    = cache->get_result(col, *m2_agg);
+  auto const count_result = cache->get_result(col, *count_agg);
 
-  auto result = cudf::detail::unary_operation(variance, unary_operator::SQRT, stream, mr);
-  cache->add_result(col, agg, std::move(result));
+  auto output = compute_std(m2_result, count_result, agg._ddof, stream, mr);
+  cache->add_result(col, agg, std::move(output));
 }
 
 }  // namespace cudf::groupby::detail::hash
