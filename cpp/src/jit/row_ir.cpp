@@ -451,7 +451,7 @@ void ast_converter::generate_code(target target_id,
           auto const& var  = output_vars_[i];
           auto const& ir   = output_irs_[i];
           auto output_type = ir->get_type();
-          return std::format("{} * {}", cuda_type(output_type), var.id);
+          return std::format("{}* {}", cuda_type(output_type), var.id);
         };
 
         auto input_decl = [&](size_t i) {
