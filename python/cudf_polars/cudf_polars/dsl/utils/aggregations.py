@@ -90,7 +90,23 @@ def decompose_single_agg(
     agg = named_expr.value
     name = named_expr.name
     if isinstance(agg, expr.UnaryFunction) and agg.name == "null_count":
-        raise NotImplementedError("null_count is not supported inside groupby context")
+        (child,) = agg.children
+
+        is_null_bool = expr.BooleanFunction(
+            DataType(pl.Boolean()),
+            expr.BooleanFunction.Name.IsNull,
+            (),
+            child,
+        )
+        u32 = DataType(pl.UInt32())
+        sum_name = next(name_generator)
+        sum_agg = expr.NamedExpr(
+            sum_name,
+            expr.Agg(u32, "sum", (), expr.Cast(u32, is_null_bool)),
+        )
+        return [(sum_agg, True)], named_expr.reconstruct(
+            expr.Cast(u32, expr.Col(u32, sum_name))
+        )
     if isinstance(agg, expr.Col):
         # TODO: collect_list produces null for empty group in libcudf, empty list in polars.
         # But we need the nested value type, so need to track proper dtypes in our DSL.
@@ -136,6 +152,21 @@ def decompose_single_agg(
         )
         if any(has_agg for _, has_agg in aggs):
             raise NotImplementedError("Nested aggs in groupby not supported")
+
+        child_dtype = child.dtype.plc
+        req = agg.agg_request
+        is_median = agg.name == "median"
+        is_quantile = agg.name == "quantile"
+
+        is_group_quantile_supported = plc.traits.is_integral(
+            child_dtype
+        ) or plc.traits.is_floating_point(child_dtype)
+
+        unsupported = (
+            (is_median or is_quantile) and not is_group_quantile_supported
+        ) or (not plc.aggregation.is_valid_aggregation(child_dtype, req))
+        if unsupported:
+            return [], named_expr.reconstruct(expr.Literal(child.dtype, None))
         if needs_masking:
             child = expr.UnaryFunction(child.dtype, "mask_nans", (), child)
             # The aggregation is just reconstructed with the new

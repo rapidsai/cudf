@@ -216,3 +216,13 @@ def test_rolling_sum_all_null_window_returns_null():
     )
     # Expected: [0, 0, 5, 5, 5, 1]
     assert_gpu_result_equal(q)
+
+
+def test_rolling_null_count(df):
+    lf = df.with_columns(
+        null=pl.when(pl.col("values") % 2 == 0).then(None).otherwise(pl.col("values"))
+    )
+    q = lf.rolling("dt", period="48h", closed="both").agg(
+        nc=pl.col("null").null_count()
+    )
+    assert_gpu_result_equal(q)
