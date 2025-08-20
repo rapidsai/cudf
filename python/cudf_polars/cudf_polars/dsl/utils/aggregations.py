@@ -158,12 +158,30 @@ def decompose_single_agg(
         is_median = agg.name == "median"
         is_quantile = agg.name == "quantile"
 
-        is_group_quantile_supported = plc.traits.is_fixed_width(
+        # quantile agg on decimal: unsupported -> keep dtype Decimal
+        # mean/median on decimal: Polars returns float -> pre-cast
+        decimal_unsupported = False
+        if plc.traits.is_fixed_point(child_dtype):
+            if is_quantile:
+                decimal_unsupported = True
+            elif agg.name in {"mean", "median"}:
+                tid = agg.dtype.plc.id()
+                if tid in {plc.TypeId.FLOAT32, plc.TypeId.FLOAT64}:
+                    cast_to = (
+                        DataType(pl.Float64)
+                        if tid == plc.TypeId.FLOAT64
+                        else DataType(pl.Float32)
+                    )
+                    child = expr.Cast(cast_to, child)
+                    child_dtype = child.dtype.plc
+
+        is_group_quantile_supported = plc.traits.is_integral(
             child_dtype
-        ) and not plc.traits.is_chrono(child_dtype)
+        ) or plc.traits.is_floating_point(child_dtype)
 
         unsupported = (
-            (is_median or is_quantile) and not is_group_quantile_supported
+            decimal_unsupported
+            or ((is_median or is_quantile) and not is_group_quantile_supported)
         ) or (not plc.aggregation.is_valid_aggregation(child_dtype, req))
         if unsupported:
             return [], named_expr.reconstruct(expr.Literal(child.dtype, None))
@@ -172,11 +190,12 @@ def decompose_single_agg(
             # The aggregation is just reconstructed with the new
             # (potentially masked) child. This is safe because we recursed
             # to ensure there are no nested aggregations.
-            return (
-                [(named_expr.reconstruct(agg.reconstruct([child])), True)],
-                named_expr.reconstruct(expr.Col(agg.dtype, name)),
-            )
-        elif agg.name == "sum":
+
+        # rebuild the agg with the transformed child
+        new_children = [child] if not is_quantile else [child, agg.children[1]]
+        named_expr = named_expr.reconstruct(agg.reconstruct(new_children))
+
+        if agg.name == "sum":
             col = (
                 expr.Cast(agg.dtype, expr.Col(DataType(pl.datatypes.Int64()), name))
                 if (
