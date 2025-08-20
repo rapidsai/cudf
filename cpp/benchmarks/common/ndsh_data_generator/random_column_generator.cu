@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,12 @@
 
 #include "random_column_generator.hpp"
 
+#include <benchmarks/common/nvtx_ranges.hpp>
+
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/binaryop.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
 
@@ -91,7 +92,7 @@ std::unique_ptr<cudf::column> generate_random_string_column(cudf::size_type lowe
                                                             rmm::cuda_stream_view stream,
                                                             rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   auto offsets_begin = cudf::detail::make_counting_transform_iterator(
     0, random_number_generator<cudf::size_type>(lower, upper));
   auto [offsets_column, computed_bytes] = cudf::strings::detail::make_offsets_child_column(
@@ -119,7 +120,7 @@ std::unique_ptr<cudf::column> generate_random_numeric_column(T lower,
                                                              rmm::cuda_stream_view stream,
                                                              rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   auto col = cudf::make_numeric_column(
     cudf::data_type{cudf::type_to_id<T>()}, num_rows, cudf::mask_state::UNALLOCATED, stream, mr);
   cudf::size_type begin = 0;
@@ -165,7 +166,7 @@ std::unique_ptr<cudf::column> generate_primary_key_column(cudf::scalar const& st
                                                           rmm::cuda_stream_view stream,
                                                           rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   return cudf::sequence(num_rows, start, stream, mr);
 }
 
@@ -174,7 +175,7 @@ std::unique_ptr<cudf::column> generate_repeat_string_column(std::string const& v
                                                             rmm::cuda_stream_view stream,
                                                             rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   auto const scalar = cudf::string_scalar(value);
   return cudf::make_column_from_scalar(scalar, num_rows, stream, mr);
 }
@@ -185,7 +186,7 @@ std::unique_ptr<cudf::column> generate_random_string_column_from_set(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   // Build a gather map of random strings to choose from
   // The size of the string sets always fits within 16-bit integers
   auto const indices =
@@ -211,7 +212,7 @@ std::unique_ptr<cudf::column> generate_repeat_sequence_column(T seq_length,
                                                               rmm::cuda_stream_view stream,
                                                               rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   auto pkey =
     generate_primary_key_column(cudf::numeric_scalar<cudf::size_type>(0), num_rows, stream, mr);
   auto repeat_seq_zero_indexed = cudf::binary_operation(pkey->view(),
