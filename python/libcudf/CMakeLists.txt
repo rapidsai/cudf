@@ -46,15 +46,19 @@ set(CUDF_EXPORT_NVCOMP OFF)
 
 include(../../cpp/cmake/thirdparty/get_nvcomp.cmake)
 
-# Install only the specific libnvcomp.so.5 library instead of all nvcomp targets
+# Install only the specific libnvcomp.so.* library instead of all nvcomp targets
 if(TARGET nvcomp::nvcomp)
   get_target_property(is_imported nvcomp::nvcomp IMPORTED)
   if(is_imported)
     get_target_property(nvcomp_lib_path nvcomp::nvcomp IMPORTED_LOCATION_RELEASE)
+    # Compute the SOVERSION from the library path
+    get_filename_component(nvcomp_lib_dir ${nvcomp_lib_path} DIRECTORY)
+    get_filename_component(nvcomp_lib_name ${nvcomp_lib_path} NAME)
+    string(REGEX REPLACE "libnvcomp\\.so\\.([0-9]+)" "\\1" nvcomp_soversion ${nvcomp_lib_name})
     install(
       FILES ${nvcomp_lib_path}
       DESTINATION ${SKBUILD_PLATLIB_DIR}/libcudf/lib64/
-      RENAME libnvcomp.so.5
+      RENAME libnvcomp.so.${nvcomp_soversion}
     )
   else()
     message(FATAL_ERROR "nvcomp target must be imported")
