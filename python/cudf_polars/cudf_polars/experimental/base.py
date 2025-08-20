@@ -136,23 +136,38 @@ class ColumnSourceInfo:
     direct access to column-specific information.
     """
 
-    __slots__ = ("column_name", "table_source_info")
+    __slots__ = ("_allow_unique_sampling", "column_name", "table_source_info")
     table_source_info: DataSourceInfo
     column_name: str
+    _allow_unique_sampling: bool
 
     def __init__(self, table_source_info: DataSourceInfo, column_name: str) -> None:
         self.table_source_info = table_source_info
         self.column_name = column_name
+        self._allow_unique_sampling = False
 
     @property
     def row_count(self) -> ColumnStat[int]:
         """Data source row-count estimate."""
         return self.table_source_info.row_count
 
-    @property
-    def unique_stats(self) -> UniqueStats:
-        """Return unique-value statistics for a column."""
-        return self.table_source_info.unique_stats(self.column_name)
+    def unique_stats(self, *, force: bool = False) -> UniqueStats:
+        """
+        Return unique-value statistics for a column.
+
+        Parameters
+        ----------
+        force
+            If True, return unique-value statistics even if the column
+            wasn't marked as needing unique-value information.
+        """
+        return (
+            self.table_source_info.unique_stats(self.column_name)
+            # Avoid sampling unique-stats if this column
+            # wasn't marked as needing unique-stats.
+            if force or self._allow_unique_sampling
+            else UniqueStats()
+        )
 
     @property
     def storage_size(self) -> ColumnStat[int]:
@@ -161,6 +176,8 @@ class ColumnSourceInfo:
 
     def add_unique_stats_column(self, column: str | None = None) -> None:
         """Add a column needing unique-value information."""
+        if column in (None, self.column_name):
+            self._allow_unique_sampling = True
         return self.table_source_info.add_unique_stats_column(
             column or self.column_name
         )

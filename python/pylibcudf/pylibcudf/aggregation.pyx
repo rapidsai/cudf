@@ -102,6 +102,7 @@ __all__ = [
     "covariance",
     "ewma",
     "histogram",
+    "is_valid_aggregation",
     "lag",
     "lead",
     "m2",

@@ -60,20 +60,34 @@ def test_base_stats_dataframescan(df):
     # Storage stats should not be available
     assert source_info_x.storage_size.value is None
 
-    # Check unique stats
-    assert math.isclose(source_info_x.unique_stats.count.value, row_count, rel_tol=5e-2)
-    assert math.isclose(source_info_x.unique_stats.fraction.value, 1.0, abs_tol=1e-2)
-    assert not source_info_x.unique_stats.count.exact
-    assert math.isclose(source_info_y.unique_stats.count.value, 3, rel_tol=5e-2)
+    # Check unique stats.
+    # We need to use force=True to sample unique-value statistics,
+    # because nothing in the query requires unique-value statistics.
     assert math.isclose(
-        source_info_y.unique_stats.fraction.value, 3 / row_count, abs_tol=1e-2
+        source_info_x.unique_stats(force=True).count.value, row_count, rel_tol=5e-2
     )
-    assert not source_info_y.unique_stats.count.exact
-    assert math.isclose(source_info_z.unique_stats.count.value, 5, rel_tol=5e-2)
     assert math.isclose(
-        source_info_z.unique_stats.fraction.value, 5 / row_count, abs_tol=1e-2
+        source_info_x.unique_stats(force=True).fraction.value, 1.0, abs_tol=1e-2
     )
-    assert not source_info_z.unique_stats.count.exact
+    assert not source_info_x.unique_stats(force=True).count.exact
+    assert math.isclose(
+        source_info_y.unique_stats(force=True).count.value, 3, rel_tol=5e-2
+    )
+    assert math.isclose(
+        source_info_y.unique_stats(force=True).fraction.value,
+        3 / row_count,
+        abs_tol=1e-2,
+    )
+    assert not source_info_y.unique_stats(force=True).count.exact
+    assert math.isclose(
+        source_info_z.unique_stats(force=True).count.value, 5, rel_tol=5e-2
+    )
+    assert math.isclose(
+        source_info_z.unique_stats(force=True).fraction.value,
+        5 / row_count,
+        abs_tol=1e-2,
+    )
+    assert not source_info_z.unique_stats(force=True).count.exact
 
 
 @pytest.mark.parametrize("n_files", [1, 3])
@@ -138,11 +152,11 @@ def test_base_stats_parquet(
     assert set(table_source_info._unique_stats) == set()
 
     if max_footer_samples and max_row_group_samples:
-        assert source_info_x.unique_stats.count.value == df.height
-        assert source_info_x.unique_stats.fraction.value == 1.0
+        assert source_info_x.unique_stats(force=True).count.value == df.height
+        assert source_info_x.unique_stats(force=True).fraction.value == 1.0
     else:
-        assert source_info_x.unique_stats.count.value is None
-        assert source_info_x.unique_stats.fraction.value is None
+        assert source_info_x.unique_stats(force=True).count.value is None
+        assert source_info_x.unique_stats(force=True).fraction.value is None
 
     # source_info._unique_stats should only contain 'x'
     if max_footer_samples and max_row_group_samples:
@@ -159,10 +173,10 @@ def test_base_stats_parquet(
         # Mark 'z' as a key column, and query 'y' stats
         source_info_z.add_unique_stats_column()
         if n_files == 1 and row_group_size == 10_000:
-            assert source_info_y.unique_stats.count.value == 3
+            assert source_info_y.unique_stats(force=True).count.value == 3
         else:
-            assert source_info_y.unique_stats.count.value is None
-        assert source_info_y.unique_stats.fraction.value < 1.0
+            assert source_info_y.unique_stats(force=True).count.value is None
+        assert source_info_y.unique_stats(force=True).fraction.value < 1.0
 
         # source_info._unique_stats should contain all columns now
         assert set(table_source_info._unique_stats) == {"x", "y", "z"}
@@ -186,8 +200,8 @@ def test_base_stats_csv(tmp_path, df):
     # Source info should be empty for CSV
     source_info_x = column_stats["x"].source_info
     assert source_info_x.row_count.value is None
-    assert source_info_x.unique_stats.count.value is None
-    assert source_info_x.unique_stats.fraction.value is None
+    assert source_info_x.unique_stats().count.value is None
+    assert source_info_x.unique_stats().fraction.value is None
 
 
 @pytest.mark.parametrize("max_footer_samples", [1, 3])
@@ -220,7 +234,7 @@ def test_base_stats_parquet_groupby(
     qir1 = Translator(q1._ldf.visit(), engine).translate_ir()
     stats = collect_base_stats(qir1, ConfigOptions.from_polars_engine(engine))
     source_info_y = stats.column_stats[qir1]["y"].source_info
-    unique_stats_y = source_info_y.unique_stats
+    unique_stats_y = source_info_y.unique_stats(force=True)
     y_unique_fraction = unique_stats_y.fraction
     y_row_count = source_info_y.row_count
     assert y_unique_fraction.value < 1.0
@@ -253,7 +267,7 @@ def test_base_stats_parquet_groupby(
     qir2 = Translator(q2._ldf.visit(), engine).translate_ir()
     stats = collect_base_stats(qir2, ConfigOptions.from_polars_engine(engine))
     source_info_y = stats.column_stats[qir2]["y"].source_info
-    assert source_info_y.unique_stats.fraction == y_unique_fraction
+    assert source_info_y.unique_stats().fraction == y_unique_fraction
     assert y_row_count == source_info_y.row_count
     assert_gpu_result_equal(q2.sort(pl.col("y")).slice(0, 2), engine=engine)
 
