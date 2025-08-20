@@ -3685,19 +3685,29 @@ class DatetimeIndex(Index):
     @property
     def inferred_freq(self) -> DateOffset | None:
         timestamp_to_timedelta = {
-            plc.DataType(plc.TypeId.TIMESTAMP_NANOSECONDS): plc.DataType(plc.TypeId.DURATION_NANOSECONDS),
-            plc.DataType(plc.TypeId.TIMESTAMP_MICROSECONDS): plc.DataType(plc.TypeId.DURATION_MICROSECONDS),
-            plc.DataType(plc.TypeId.TIMESTAMP_SECONDS): plc.DataType(plc.TypeId.DURATION_SECONDS),
-            plc.DataType(plc.TypeId.TIMESTAMP_MILLISECONDS): plc.DataType(plc.TypeId.DURATION_MILLISECONDS),
+            plc.DataType(plc.TypeId.TIMESTAMP_NANOSECONDS): plc.DataType(
+                plc.TypeId.DURATION_NANOSECONDS
+            ),
+            plc.DataType(plc.TypeId.TIMESTAMP_MICROSECONDS): plc.DataType(
+                plc.TypeId.DURATION_MICROSECONDS
+            ),
+            plc.DataType(plc.TypeId.TIMESTAMP_SECONDS): plc.DataType(
+                plc.TypeId.DURATION_SECONDS
+            ),
+            plc.DataType(plc.TypeId.TIMESTAMP_MILLISECONDS): plc.DataType(
+                plc.TypeId.DURATION_MILLISECONDS
+            ),
         }
 
-        plc_col = self._column.to_pylibcudf(mode='read')
-        shifted = plc.copying.shift(plc_col, 1, plc.Scalar.from_py(None, dtype=plc_col.type()))
+        plc_col = self._column.to_pylibcudf(mode="read")
+        shifted = plc.copying.shift(
+            plc_col, 1, plc.Scalar.from_py(None, dtype=plc_col.type())
+        )
         diff = plc.binaryop.binary_operation(
-            plc_col, 
-            shifted, 
-            plc.binaryop.BinaryOperator.SUB, 
-            timestamp_to_timedelta[plc_col.type()]
+            plc_col,
+            shifted,
+            plc.binaryop.BinaryOperator.SUB,
+            timestamp_to_timedelta[plc_col.type()],
         )
         offset = plc.column.Column(
             diff.type(),
@@ -3706,7 +3716,7 @@ class DatetimeIndex(Index):
             diff.null_mask(),
             diff.null_count(),
             1,
-            diff.children()
+            diff.children(),
         )
 
         uniques = ColumnBase.from_pylibcudf(offset).unique()
@@ -3717,13 +3727,13 @@ class DatetimeIndex(Index):
             cmps = freq.components
 
             allowed = [
-                'days',
-                'hours',
-                'minutes',
-                'seconds',
-                'milliseconds',
-                'microseconds',
-                'nanoseconds'
+                "days",
+                "hours",
+                "minutes",
+                "seconds",
+                "milliseconds",
+                "microseconds",
+                "nanoseconds",
             ]
 
             kwds = {}
@@ -3733,6 +3743,20 @@ class DatetimeIndex(Index):
 
             return cudf.DateOffset(**kwds)
 
+    def _slice_frequency(self, passed_slice=None):
+        if self._freq is None:
+            return None
+        else:
+            if passed_slice:
+                # fastpath: dont introspect
+                new_freq = passed_slice.step * pd.Timedelta(
+                    self._freq._maybe_as_fast_pandas_offset()
+                )
+                return cudf.DateOffset._from_freqstr(
+                    pd.tseries.frequencies.to_offset(new_freq).freqstr
+                )
+            else:
+                return self.inferred_freq
 
     @property
     def freq(self) -> DateOffset | None:

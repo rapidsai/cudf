@@ -1253,23 +1253,7 @@ class Series(SingleColumnFrame, IndexedFrame):
                 result.index._freq = None
             return result
         elif isinstance(spec, indexing_utils.MaskIndexer):
-#            import pyarrow as pa
-#            range = plc.column.Column.from_arrow(pa.array(range(len(spec.key.column))))
-#            tbl = plc.Table([range])
-#            indices = plc.stream_compaction.apply_boolean_mask(tbl, spec.key.column.to_pylibcudf(mode='read'))
-#            shifted = plc.copying.shift(indices, 1, plc.Scalar.from_py(None, dtype=plc.DataType(plc.TypeId.INT64)))
-#            subtracted = plc.binaryop.binary_operation(
-#                indices, shifted, plc.BinaryOp.SUB, plc.DataType(plc.TypeId.INT64)
-#            )
-#            result = self._apply_boolean_mask(spec.key, keep_index=True)
-
-
-            result = self._apply_boolean_mask(spec.key, keep_index=True)
-            if isinstance(result.index, cudf.DatetimeIndex):
-                datetime_values = result.index._column
-                shifted = plc.copying.shift(datetime_values, 1, plc.Scalar.from_py(None, dtype=plc.DataType(plc.TypeId.INT64)))
-                
-            return result
+            return self._apply_boolean_mask(spec.key, keep_index=True)
         elif isinstance(spec, indexing_utils.SliceIndexer):
             return self._slice(spec.key)
         elif isinstance(spec, indexing_utils.ScalarIndexer):
