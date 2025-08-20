@@ -71,9 +71,13 @@ namespace {
  * aggregation, including special handling for SUM_WITH_OVERFLOW which requires a struct column.
  */
 struct sparse_column_creator {
+  cudf::size_type output_size;
   rmm::cuda_stream_view stream;
 
-  explicit sparse_column_creator(rmm::cuda_stream_view stream) : stream(stream) {}
+  explicit sparse_column_creator(cudf::size_type output_size, rmm::cuda_stream_view stream)
+    : output_size{output_size}, stream{stream}
+  {
+  }
 
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& col,
                                            cudf::aggregation::Kind const& agg) const
@@ -96,6 +100,7 @@ struct sparse_column_creator {
         return make_fixed_width_column(cudf::data_type{type_id}, size, mask_state, stream);
       };
 
+      // TODO: fix mask state
       // Lambda to create children for SUM_WITH_OVERFLOW struct column
       auto make_children = [&make_empty_column](cudf::size_type size, cudf::mask_state mask_state) {
         std::vector<std::unique_ptr<cudf::column>> children;
@@ -109,29 +114,29 @@ struct sparse_column_creator {
         return children;
       };
 
-      if (col.size() == 0) {
+      if (output_size == 0) {
         // For empty columns, create empty struct column manually
         auto children = make_children(0, cudf::mask_state::UNALLOCATED);
         return create_structs_hierarchy(0, std::move(children), 0, {}, stream);
       } else {
-        auto children = make_children(col.size(), mask_flag);
+        auto children = make_children(output_size, mask_flag);
 
         // Create struct column with the children
         // For SUM_WITH_OVERFLOW, make struct nullable if input has nulls (same as other
         // aggregations)
         if (nullable) {
           // Start with ALL_NULL, results will be marked valid during aggregation
-          auto null_mask  = cudf::create_null_mask(col.size(), cudf::mask_state::ALL_NULL, stream);
-          auto null_count = col.size();  // All null initially
+          auto null_mask  = cudf::create_null_mask(output_size, cudf::mask_state::ALL_NULL, stream);
+          auto null_count = output_size;  // All null initially
           return create_structs_hierarchy(
-            col.size(), std::move(children), null_count, std::move(null_mask), stream);
+            output_size, std::move(children), null_count, std::move(null_mask), stream);
         } else {
-          return create_structs_hierarchy(col.size(), std::move(children), 0, {}, stream);
+          return create_structs_hierarchy(output_size, std::move(children), 0, {}, stream);
         }
       }
     } else {
       return make_fixed_width_column(
-        cudf::detail::target_type(col_type, agg), col.size(), mask_flag, stream);
+        cudf::detail::target_type(col_type, agg), output_size, mask_flag, stream);
     }
   }
 };
@@ -147,7 +152,8 @@ void extract_populated_keys(SetType const& key_set,
   populated_keys.resize(std::distance(populated_keys.begin(), keys_end), stream);
 }
 
-cudf::table create_results_table(cudf::table_view const& flattened_values,
+cudf::table create_results_table(cudf::size_type output_size,
+                                 cudf::table_view const& flattened_values,
                                  host_span<cudf::aggregation::Kind const> agg_kinds,
                                  rmm::cuda_stream_view stream)
 {
@@ -156,7 +162,7 @@ cudf::table create_results_table(cudf::table_view const& flattened_values,
                  flattened_values.end(),
                  agg_kinds.begin(),
                  std::back_inserter(output_cols),
-                 sparse_column_creator{stream});
+                 sparse_column_creator{output_size, stream});
   cudf::table result_table(std::move(output_cols));
   cudf::mutable_table_view result_table_view = result_table.mutable_view();
   cudf::detail::initialize_with_identity(result_table_view, agg_kinds, stream);

@@ -47,7 +47,8 @@ void extract_populated_keys(SetType const& key_set,
                             rmm::device_uvector<size_type>& populated_keys,
                             rmm::cuda_stream_view stream);
 
-table create_results_table(table_view const& flattened_values,
+table create_results_table(cudf::size_type output_size,
+                           table_view const& flattened_values,
                            host_span<aggregation::Kind const> agg_kinds,
                            rmm::cuda_stream_view stream);
 }  // namespace cudf::groupby::detail::hash

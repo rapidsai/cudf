@@ -131,6 +131,7 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
 
     // TODO
     compute_global_memory_aggs(num_rows,
+                               static_cast<size_type>(populated_keys.size()),
                                key_indices.begin(),
                                row_bitmask,
                                spass_values,
@@ -304,8 +305,9 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
       auto const old_idx     = global_mapping_index[mapping_idx];
       if (old_idx != cudf::detail::CUDF_SIZE_TYPE_SENTINEL) {
         global_mapping_index[mapping_idx] = new_key_indices[old_idx];
-        printf("update global_mapping_index[%d] = %d, block id: %d, local idx: %d\n",
-               (int)(block_id * GROUPBY_SHM_MAX_ELEMENTS + thread_rank),
+        printf("update global_mapping_index[%d] = %d => %d, block id: %d, local idx: %d\n",
+               (int)mapping_idx,
+               old_idx,
                new_key_indices[old_idx],
                block_id,
                thread_rank);
@@ -313,7 +315,9 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
     });
 
   // make table that will hold sparse results
-  cudf::table result_table = create_results_table(spass_values, spass_agg_kinds, stream);
+  cudf::table result_table = create_results_table(
+    static_cast<size_type>(populated_keys.size()), spass_values, spass_agg_kinds, stream);
+  printf("result table rows: %d\n", result_table.num_rows());
   // prepare to launch kernel to do the actual aggregation
   auto d_values       = table_device_view::create(spass_values, stream);
   auto d_sparse_table = mutable_table_device_view::create(result_table, stream);

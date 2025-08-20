@@ -36,6 +36,7 @@
 namespace cudf::groupby::detail::hash {
 rmm::device_uvector<size_type> compute_global_memory_aggs(
   size_type num_rows,
+  size_type num_output,
   size_type const* key_indices,
   bitmask_type const* row_bitmask,
   table_view const& flattened_values,
@@ -47,10 +48,10 @@ rmm::device_uvector<size_type> compute_global_memory_aggs(
 {
   // auto constexpr uses_global_memory_aggs = true;
   // 'populated_keys' contains inserted row_indices (keys) of global hash set
-  rmm::device_uvector<cudf::size_type> populated_keys(num_rows, stream);
+  // rmm::device_uvector<cudf::size_type> populated_keys(num_rows, stream);
 
   // make table that will hold sparse results
-  cudf::table result_table = create_results_table(flattened_values, agg_kinds, stream);
+  cudf::table result_table = create_results_table(num_output, flattened_values, agg_kinds, stream);
 
   // prepare to launch kernel to do the actual aggregation
   auto d_values       = table_device_view::create(flattened_values, stream);
@@ -71,6 +72,6 @@ rmm::device_uvector<size_type> compute_global_memory_aggs(
   }
 
   // TODO: compute this
-  return populated_keys;
+  return rmm::device_uvector<cudf::size_type>{0, stream};
 }
 }  // namespace cudf::groupby::detail::hash
