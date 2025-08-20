@@ -7,6 +7,12 @@ import cudf
 from cudf.testing._utils import assert_exceptions_equal
 
 
+def test_rangeindex_contains():
+    ridx = cudf.RangeIndex(start=0, stop=10, name="Index")
+    assert 9 in ridx
+    assert 10 not in ridx
+
+
 @pytest.mark.parametrize(
     "start, stop, step", [(10, 20, 1), (0, -10, -1), (5, 5, 1)]
 )

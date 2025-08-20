@@ -1,5 +1,5 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
-
+import datetime
 import re
 
 import numpy as np
@@ -8,6 +8,40 @@ import pytest
 
 import cudf
 from cudf.testing import assert_eq
+
+
+@pytest.mark.parametrize(
+    "values, item, expected",
+    [
+        [[1, 2, 3], 2, True],
+        [[1, 2, 3], 4, False],
+        [[1, 2, 3], "a", False],
+        [["a", "b", "c"], "a", True],
+        [["a", "b", "c"], "ab", False],
+        [["a", "b", "c"], 6, False],
+        [pd.Categorical(["a", "b", "c"]), "a", True],
+        [pd.Categorical(["a", "b", "c"]), "ab", False],
+        [pd.Categorical(["a", "b", "c"]), 6, False],
+        [pd.date_range("20010101", periods=5, freq="D"), 20000101, False],
+        [
+            pd.date_range("20010101", periods=5, freq="D"),
+            datetime.datetime(2000, 1, 1),
+            False,
+        ],
+        [
+            pd.date_range("20010101", periods=5, freq="D"),
+            datetime.datetime(2001, 1, 1),
+            True,
+        ],
+    ],
+)
+@pytest.mark.parametrize(
+    "box",
+    [cudf.Index, lambda x: cudf.Series(index=x)],
+    ids=["index", "series"],
+)
+def test_contains(values, item, expected, box):
+    assert (item in box(values)) is expected
 
 
 @pytest.mark.parametrize(
