@@ -245,7 +245,8 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
                         num_rows    = static_cast<size_type>(num_rows),
                         global_set_ref,
                         key_indices = key_indices.begin(),
-                        block_ids = fallback_block_ids.begin()] __device__(auto const idx) mutable {
+                        block_ids   = fallback_block_ids.begin(),
+                        row_bitmask] __device__(auto const idx) mutable {
                          auto const block_idx = block_ids[(idx % stride) / GROUPBY_BLOCK_SIZE];
                          auto const local_idx = (idx % stride) % GROUPBY_BLOCK_SIZE;
                          auto const row_idx   = GROUPBY_BLOCK_SIZE * full_stride * (idx / stride) +
@@ -260,7 +261,9 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
                                   (int)row_idx);
                          }
 
-                         key_indices[row_idx] = *global_set_ref.insert_and_find(row_idx).first;
+                         if (!row_bitmask || cudf::bit_is_set(row_bitmask, row_idx)) {
+                           key_indices[row_idx] = *global_set_ref.insert_and_find(row_idx).first;
+                         }
                        });
 #else
     thrust::tabulate(rmm::exec_policy_nosync(stream),
