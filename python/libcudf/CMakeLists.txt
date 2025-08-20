@@ -50,7 +50,7 @@ endif()
 include(../../cpp/cmake/thirdparty/get_nvcomp.cmake)
 include(cmake/Modules/WheelHelpers.cmake)
 
-# Install only the specific libnvcomp.so.4 library instead of all nvcomp targets
+# Install only the specific libnvcomp.so.5 library instead of all nvcomp targets
 if(TARGET nvcomp::nvcomp)
   # Check if the nvcomp target is imported
   get_target_property(is_imported nvcomp::nvcomp IMPORTED)
@@ -73,7 +73,7 @@ if(TARGET nvcomp::nvcomp)
   else()
     message(WARNING "nvcomp target is not imported")
   endif()
-  # Get the library file path and install only libnvcomp.so.4 Try IMPORTED_LOCATION first (for
+  # Get the library file path and install only libnvcomp.so.5 Try IMPORTED_LOCATION first (for
   # single-config generators)
   get_target_property(nvcomp_lib_path nvcomp::nvcomp IMPORTED_LOCATION)
   if(NOT nvcomp_lib_path)
@@ -95,23 +95,23 @@ if(TARGET nvcomp::nvcomp)
     get_filename_component(nvcomp_lib_name ${nvcomp_lib_path} NAME)
     # Print the library name
     message(WARNING "nvcomp_lib_name: ${nvcomp_lib_name}")
-    if(nvcomp_lib_name MATCHES "libnvcomp\\.so\\.4")
+    if(nvcomp_lib_name MATCHES "libnvcomp\\.so\\.5")
       # Print the library path
       message(WARNING "Installing nvcomp_lib_path: ${nvcomp_lib_path}")
       install(FILES ${nvcomp_lib_path} DESTINATION ${SKBUILD_PLATLIB_DIR}/libcudf/lib64/)
     else()
       # If the main target doesn't point to .so.4, try to find it in the same directory
       get_filename_component(nvcomp_lib_dir ${nvcomp_lib_path} DIRECTORY)
-      set(nvcomp_so4_path "${nvcomp_lib_dir}/libnvcomp.so.4")
+      set(nvcomp_so5_path "${nvcomp_lib_dir}/libnvcomp.so.5")
       # Print the library path
-      message(WARNING "nvcomp_so4_path: ${nvcomp_so4_path}")
+      message(WARNING "nvcomp_so5_path: ${nvcomp_so5_path}")
       if(EXISTS ${nvcomp_so4_path})
         # Print the library path
-        message(WARNING "Installing nvcomp_so4_path: ${nvcomp_so4_path}")
-        install(FILES ${nvcomp_so4_path} DESTINATION ${SKBUILD_PLATLIB_DIR}/libcudf/lib64/)
+        message(WARNING "Installing nvcomp_so5_path: ${nvcomp_so5_path}")
+        install(FILES ${nvcomp_so5_path} DESTINATION ${SKBUILD_PLATLIB_DIR}/libcudf/lib64/)
       else()
         # Fallback to the original behavior if we can't find the specific library
-        message(WARNING "Falling back to original behavior nvcomp_so4_path not found")
+        message(WARNING "Falling back to original behavior nvcomp_so5_path not found")
         install_aliased_imported_targets(
           TARGETS nvcomp::nvcomp DESTINATION ${SKBUILD_PLATLIB_DIR}/libcudf/lib64/
         )
