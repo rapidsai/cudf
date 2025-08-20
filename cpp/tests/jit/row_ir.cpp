@@ -299,7 +299,7 @@ TEST_F(RowIRCudaCodeGenTest, AstConversionBasic)
   ASSERT_EQ(transform_args.columns[1].null_count(), column->null_count());
 
   auto expected_udf = R"***(
-__device__ void expression(int32_t * out_0, int32_t in_0, int32_t in_1)
+__device__ void expression(int32_t* out_0, int32_t in_0, int32_t in_1)
 {
 int32_t tmp_0 = in_0;
 int32_t tmp_1 = in_1;
