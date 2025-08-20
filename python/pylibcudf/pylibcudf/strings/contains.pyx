@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from cython.operator import dereference
@@ -11,6 +11,9 @@ from pylibcudf.libcudf.scalar.scalar_factories cimport (
 )
 from pylibcudf.libcudf.strings cimport contains as cpp_contains
 from pylibcudf.strings.regex_program cimport RegexProgram
+from pylibcudf.scalar cimport Scalar
+from pylibcudf.utils cimport _get_stream
+from rmm.pylibrmm.stream cimport Stream
 
 __all__ = ["contains_re", "count_re", "like", "matches_re"]
 
@@ -137,10 +140,12 @@ cpdef Column like(Column input, ColumnOrScalar pattern, Scalar escape_character=
         New column of boolean results for each string
     """
     cdef unique_ptr[column] result
+    cdef Stream stream
 
     if escape_character is None:
+        stream = _get_stream(None)
         escape_character = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode())
+            cpp_make_string_scalar("".encode(), stream.view())
         )
 
     cdef const string_scalar* c_escape_character = <const string_scalar*>(
