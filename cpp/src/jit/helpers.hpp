@@ -48,6 +48,7 @@ struct input_column_reflection {
 
 jitify2::StringVec build_jit_template_params(
   bool has_user_data,
+  null_aware is_null_aware,
   std::vector<std::string> const& span_outputs,
   std::vector<std::string> const& column_outputs,
   std::vector<input_column_reflection> const& column_inputs)
@@ -55,6 +56,7 @@ jitify2::StringVec build_jit_template_params(
   jitify2::StringVec tparams;
 
   tparams.emplace_back(jitify2::reflection::reflect(has_user_data));
+  tparams.emplace_back(jitify2::reflection::reflect(is_null_aware == null_aware::YES));
 
   std::transform(thrust::counting_iterator<size_t>(0),
                  thrust::counting_iterator(span_outputs.size()),
