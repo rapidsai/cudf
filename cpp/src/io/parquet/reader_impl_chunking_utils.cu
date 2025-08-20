@@ -129,8 +129,7 @@ void codec_stats::add_pages(host_span<ColumnChunkDesc const> chunks,
                             host_span<bool const> page_mask)
 {
   // Create a page mask iterator that defaults to true if the page_mask is empty
-  auto page_mask_iter =
-    page_mask.empty() ? thrust::make_constant_iterator(true) : page_mask.begin();
+  auto page_mask_iter = thrust::make_constant_iterator(true);
 
   // Zip iterator for iterating over pages and the page mask
   auto zip_iter = thrust::make_zip_iterator(pages.begin(), page_mask_iter);
@@ -139,7 +138,8 @@ void codec_stats::add_pages(host_span<ColumnChunkDesc const> chunks,
     auto& [page, is_page_needed] = item;
     if (is_page_needed && chunks[page.chunk_idx].codec == compression_type &&
         (page.flags & cudf::io::parquet::detail::PAGEINFO_FLAGS_DICTIONARY) ==
-          (selection == page_selection::DICT_PAGES)) {
+          (selection == page_selection::DICT_PAGES) and
+        page.uncompressed_page_size != page.compressed_page_size) {
       ++num_pages;
       total_decomp_size += page.uncompressed_page_size;
       max_decompressed_size = std::max(max_decompressed_size, page.uncompressed_page_size);
@@ -541,7 +541,8 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
       auto& page                = pages[page_idx];
       auto const is_page_needed = page_mask_iter[page_idx];
       if (is_page_needed && chunks[page.chunk_idx].codec == codec.compression_type &&
-          (page.flags & PAGEINFO_FLAGS_DICTIONARY) == select_dict_pages) {
+          (page.flags & PAGEINFO_FLAGS_DICTIONARY) == select_dict_pages and
+          page.uncompressed_page_size != page.compressed_page_size) {
         auto const dst_base = static_cast<uint8_t*>(decomp_data) + decomp_offset;
         // offset will only be non-zero for V2 pages
         auto const offset =
