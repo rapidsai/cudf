@@ -76,9 +76,9 @@ TEST_F(RowIRCudaCodeGenTest, SetOutput)
 
   {
     row_ir::instance_context ctx{};
-    row_ir::set_output set_ouput_0{0, std::make_unique<row_ir::get_input>(0)};
-    set_ouput_0.instantiate(ctx, info);
-    auto code = set_ouput_0.generate_code(ctx, target_info, info);
+    row_ir::set_output set_output_0{0, std::make_unique<row_ir::get_input>(0)};
+    set_output_0.instantiate(ctx, info);
+    auto code = set_output_0.generate_code(ctx, target_info, info);
 
     auto expected_code =
       "int32_t tmp_0 = in_0;\n"
