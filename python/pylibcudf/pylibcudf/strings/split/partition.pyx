@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from pylibcudf.column cimport Column
@@ -10,6 +10,8 @@ from pylibcudf.libcudf.strings.split cimport partition as cpp_partition
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.scalar cimport Scalar
 from pylibcudf.table cimport Table
+from pylibcudf.utils cimport _get_stream
+from rmm.pylibrmm.stream cimport Stream
 
 from cython.operator import dereference
 
@@ -39,10 +41,12 @@ cpdef Table partition(Column input, Scalar delimiter=None):
     cdef const string_scalar* c_delimiter = <const string_scalar*>(
         delimiter.c_obj.get()
     )
+    cdef Stream stream
 
     if delimiter is None:
+        stream = _get_stream(None)
         delimiter = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode())
+            cpp_make_string_scalar("".encode(), stream.view())
         )
 
     with nogil:
@@ -77,10 +81,12 @@ cpdef Table rpartition(Column input, Scalar delimiter=None):
     cdef const string_scalar* c_delimiter = <const string_scalar*>(
         delimiter.c_obj.get()
     )
+    cdef Stream stream
 
     if delimiter is None:
+        stream = _get_stream(None)
         delimiter = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode())
+            cpp_make_string_scalar("".encode(), stream.view())
         )
 
     with nogil:
