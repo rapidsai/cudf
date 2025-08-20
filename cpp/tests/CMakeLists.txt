@@ -59,7 +59,8 @@ function(ConfigureTest CMAKE_TEST_NAME)
   )
 
   target_compile_definitions(
-    ${CMAKE_TEST_NAME} PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_AVOID_SORT_UNROLL=1 ${_CUDF_TEST_EXTRA_COMPILE_DEFINITIONS}
+    ${CMAKE_TEST_NAME} PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_AVOID_SORT_UNROLL=1
+                               ${_CUDF_TEST_EXTRA_COMPILE_DEFINITIONS}
   )
 
   target_link_libraries(
@@ -341,8 +342,17 @@ ConfigureTest(
   io/parquet_test.cpp
 )
 ConfigureTest(
-  PARQUET_EXPERIMENTAL_API_TEST io/parquet_experimental_apis_test.cu io/parquet_common.cpp
-  io/parquet_test.cpp EXTRA_LIBS roaring EXTRA_COMPILE_DEFINITIONS DISABLENEON=1 ROARING_DISABLE_X64=1 ROARING_DISABLE_AVX=1 CROARING_COMPILER_SUPPORTS_AVX512=0
+  PARQUET_EXPERIMENTAL_API_TEST
+  io/parquet_experimental_apis_test.cu
+  io/parquet_common.cpp
+  io/parquet_test.cpp
+  EXTRA_LIBS
+  roaring
+  EXTRA_COMPILE_DEFINITIONS
+  DISABLENEON=1
+  ROARING_DISABLE_X64=1
+  ROARING_DISABLE_AVX=1
+  CROARING_COMPILER_SUPPORTS_AVX512=0
 )
 ConfigureTest(
   JSON_TEST io/json/json_test.cpp io/json/json_chunked_reader.cu
