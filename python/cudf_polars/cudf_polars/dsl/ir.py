@@ -1467,16 +1467,6 @@ class GroupBy(IR):
                 else:
                     (child,) = value.children
                 col = child.evaluate(df, context=ExecutionContext.GROUPBY).obj
-
-                if value.name == "median" and col.type().id() in {
-                    plc.TypeId.DECIMAL128,
-                    plc.TypeId.DECIMAL64,
-                    plc.TypeId.DECIMAL32,
-                }:
-                    # libcudf doesn't support median (quantile) with decimal types,
-                    # but Polars returns a float result, so just cast the input.
-                    assert isinstance(child, expr.Col)
-                    col = plc.unary.cast(col, schema[child.name].plc)
             else:
                 # Anything else, we pre-evaluate
                 col = value.evaluate(df, context=ExecutionContext.GROUPBY).obj

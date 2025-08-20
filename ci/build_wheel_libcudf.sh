@@ -33,6 +33,7 @@ export SKBUILD_CMAKE_ARGS="-DUSE_NVCOMP_RUNTIME_WHEEL=OFF"
 # repair wheels and write to the location that artifact-uploading code expects to find them
 python -m auditwheel repair \
     --exclude libkvikio.so \
+    --exclude libnvcomp.so.5 \
     --exclude librapids_logger.so \
     --exclude librmm.so \
     -w "${RAPIDS_WHEEL_BLD_OUTPUT_DIR}" \
