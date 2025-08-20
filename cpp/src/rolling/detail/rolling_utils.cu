@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "rolling.cuh"
 #include "rolling.hpp"
+#include "rolling_operators.cuh"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
