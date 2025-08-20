@@ -9,16 +9,16 @@ set -euo pipefail
 cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../python/cudf_polars/
 
 # Test the "in-memory" executor
-python -m pytest --cache-clear "$@" tests --executor in-memory
+python -m pytest --cache-clear "$@" tests/common tests/in_memory --executor in-memory
 
 # Test the default "streaming" executor
-python -m pytest --cache-clear "$@" tests --executor streaming
+python -m pytest --cache-clear "$@" tests/common tests/streaming --executor streaming
 
 # Test the "streaming" executor with small blocksize
-python -m pytest --cache-clear "$@" tests --executor streaming --blocksize-mode small
+python -m pytest --cache-clear "$@" tests/common tests/streaming --executor streaming --blocksize-mode small
 
 # Run experimental tests with Distributed cluster
-python -m pytest --cache-clear "$@" "tests/experimental" \
+python -m pytest --cache-clear "$@" "tests/streaming_distributed" \
     --executor streaming \
     --scheduler distributed \
     --cov-fail-under=0  # No code-coverage requirement for these tests.
