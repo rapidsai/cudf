@@ -26,7 +26,7 @@
 
 namespace CUDF_EXPORT cudf {
 
-/// @brief CUDF's IR for row-wise columnar operations
+/// @brief cudf IR for operations acting on elements of a row
 namespace row_ir {
 
 /// @brief The target for which the IR is generated.
