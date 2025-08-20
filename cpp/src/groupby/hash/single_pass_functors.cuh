@@ -187,33 +187,47 @@ struct global_memory_fallback_fn {
   cudf::table_device_view input_values;
   cudf::mutable_table_device_view output_values;
   cudf::aggregation::Kind const* __restrict__ aggs;
-  cudf::size_type* block_cardinality;
+  cudf::size_type* fallback_block_ids;
   cudf::size_type stride;
-  bitmask_type const* __restrict__ row_bitmask;
+  cudf::size_type num_strides;
+  cudf::size_type full_stride;
+  size_type num_processing_rows;
 
   global_memory_fallback_fn(size_type const* key_indices,
                             cudf::table_device_view input_values,
                             cudf::mutable_table_device_view output_values,
                             cudf::aggregation::Kind const* aggs,
-                            cudf::size_type* block_cardinality,
+                            cudf::size_type* fallback_block_ids,
                             cudf::size_type stride,
-                            bitmask_type const* row_bitmask)
+                            cudf::size_type num_strides,
+                            cudf::size_type full_stride,
+                            size_type num_processing_rows)
     : key_indices(key_indices),
       input_values(input_values),
       output_values(output_values),
       aggs(aggs),
-      block_cardinality(block_cardinality),
+      fallback_block_ids(fallback_block_ids),
       stride(stride),
-      row_bitmask(row_bitmask)
+      num_strides(num_strides),
+      full_stride(full_stride),
+      num_processing_rows(num_processing_rows)
   {
   }
 
-  __device__ void operator()(cudf::size_type i) const
+  __device__ void operator()(int64_t idx) const
   {
-    auto const block_id = (i % stride) / GROUPBY_BLOCK_SIZE;
-    if (block_cardinality[block_id] >= GROUPBY_CARDINALITY_THRESHOLD and
-        (not row_bitmask or cudf::bit_is_set(row_bitmask, i))) {
-      cudf::detail::aggregate_row(output_values, key_indices[i], input_values, i, aggs);
+    auto const agg_idx       = static_cast<size_type>(idx / num_processing_rows);
+    auto const local_agg_idx = static_cast<size_type>(idx % num_processing_rows);
+
+    auto const block_idx = fallback_block_ids[(local_agg_idx % stride) / GROUPBY_BLOCK_SIZE];
+    auto const local_idx = (local_agg_idx % stride) % GROUPBY_BLOCK_SIZE;
+
+    auto const row_idx = GROUPBY_BLOCK_SIZE * full_stride * (local_agg_idx / stride) +
+                         block_idx * GROUPBY_BLOCK_SIZE + local_idx;
+
+    if (auto const target_idx = key_indices[row_idx];
+        target_idx != cudf::detail::CUDF_SIZE_TYPE_SENTINEL) {
+      cudf::detail::aggregate_row(agg_idx, output_values, target_idx, input_values, row_idx, aggs);
     }
   }
 };
@@ -249,7 +263,6 @@ struct compute_single_pass_aggs_fn {
   table_device_view input_values;
   mutable_table_device_view output_values;
   aggregation::Kind const* __restrict__ aggs;
-  bitmask_type const* __restrict__ row_bitmask;
 
   /**
    * @brief Construct a new compute_single_pass_aggs_fn functor object
@@ -261,26 +274,23 @@ struct compute_single_pass_aggs_fn {
    * `input_values`.
    * @param aggs The set of aggregation operations to perform across the
    * columns of the `input_values` rows
-   * @param row_bitmask Bitmask where bit `i` indicates the presence of a null
-   * value in row `i` of input keys. Only used if `skip_rows_with_nulls` is `true`
    */
   compute_single_pass_aggs_fn(size_type const* key_indices,
                               table_device_view input_values,
                               mutable_table_device_view output_values,
-                              aggregation::Kind const* aggs,
-                              bitmask_type const* row_bitmask)
-    : key_indices(key_indices),
-      input_values(input_values),
-      output_values(output_values),
-      aggs(aggs),
-      row_bitmask(row_bitmask)
+                              aggregation::Kind const* aggs)
+    : key_indices(key_indices), input_values(input_values), output_values(output_values), aggs(aggs)
   {
   }
 
-  __device__ void operator()(size_type i) const
+  __device__ void operator()(int64_t idx) const
   {
-    if (not row_bitmask or cudf::bit_is_set(row_bitmask, i)) {
-      cudf::detail::aggregate_row(output_values, key_indices[i], input_values, i, aggs);
+    auto const num_rows = input_values.num_rows();
+    auto const agg_idx  = static_cast<size_type>(idx / num_rows);
+    auto const row_idx  = static_cast<size_type>(idx % num_rows);
+    if (auto const target_idx = key_indices[row_idx];
+        target_idx != cudf::detail::CUDF_SIZE_TYPE_SENTINEL) {
+      cudf::detail::aggregate_row(agg_idx, output_values, target_idx, input_values, row_idx, aggs);
     }
   }
 };

@@ -242,7 +242,6 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
                        GROUPBY_BLOCK_SIZE * num_fallback_blocks * num_strides,
                        [full_stride = GROUPBY_BLOCK_SIZE * grid_size,
                         stride      = GROUPBY_BLOCK_SIZE * num_fallback_blocks,
-                        num_rows    = static_cast<size_type>(num_rows),
                         global_set_ref,
                         key_indices = key_indices.begin(),
                         block_ids   = fallback_block_ids.begin(),
@@ -333,17 +332,23 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
   // the temporary aggregation results. In these situations, we must fall back to a global memory
   // aggregator to process the remaining aggregation requests.
   if (needs_fallback) {
-    auto const stride = GROUPBY_BLOCK_SIZE * grid_size;
+    auto const num_strides =
+      util::div_rounding_up_safe(static_cast<size_type>(num_rows), GROUPBY_BLOCK_SIZE * grid_size);
+    auto const full_stride         = GROUPBY_BLOCK_SIZE * grid_size;
+    auto const stride              = GROUPBY_BLOCK_SIZE * num_fallback_blocks;
+    auto const num_processing_rows = GROUPBY_BLOCK_SIZE * num_fallback_blocks * num_strides;
     thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                       thrust::counting_iterator{0},
-                       num_rows,
+                       thrust::make_counting_iterator(int64_t{0}),
+                       static_cast<int64_t>(num_processing_rows) * spass_values.num_columns(),
                        global_memory_fallback_fn{key_indices.begin(),
                                                  *d_values,
                                                  *d_sparse_table,
                                                  d_spass_agg_kinds.data(),
-                                                 block_cardinality.data(),
+                                                 fallback_block_ids.data(),
                                                  stride,
-                                                 row_bitmask});
+                                                 num_strides,
+                                                 full_stride,
+                                                 num_processing_rows});
   }
 
   // Add results back to sparse_results cache

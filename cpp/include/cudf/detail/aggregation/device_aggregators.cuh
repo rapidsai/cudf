@@ -60,9 +60,8 @@ struct update_target_element {
 };
 
 template <typename Source>
-  requires(is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
-           !is_fixed_point<Source>())
-struct update_target_element<Source, aggregation::MIN> {
+requires(is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
+         !is_fixed_point<Source>()) struct update_target_element<Source, aggregation::MIN> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -75,8 +74,10 @@ struct update_target_element<Source, aggregation::MIN> {
 };
 
 template <typename Source>
-  requires(is_fixed_point<Source>() && cudf::has_atomic_support<device_storage_type_t<Source>>())
-struct update_target_element<Source, aggregation::MIN> {
+requires(
+  is_fixed_point<Source>() &&
+  cudf::has_atomic_support<
+    device_storage_type_t<Source>>()) struct update_target_element<Source, aggregation::MIN> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -92,9 +93,8 @@ struct update_target_element<Source, aggregation::MIN> {
 };
 
 template <typename Source>
-  requires(is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
-           !is_fixed_point<Source>())
-struct update_target_element<Source, aggregation::MAX> {
+requires(is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
+         !is_fixed_point<Source>()) struct update_target_element<Source, aggregation::MAX> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -107,8 +107,10 @@ struct update_target_element<Source, aggregation::MAX> {
 };
 
 template <typename Source>
-  requires(is_fixed_point<Source>() && cudf::has_atomic_support<device_storage_type_t<Source>>())
-struct update_target_element<Source, aggregation::MAX> {
+requires(
+  is_fixed_point<Source>() &&
+  cudf::has_atomic_support<
+    device_storage_type_t<Source>>()) struct update_target_element<Source, aggregation::MAX> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -124,9 +126,9 @@ struct update_target_element<Source, aggregation::MAX> {
 };
 
 template <typename Source>
-  requires(cudf::is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
-           !cudf::is_fixed_point<Source>() && !cudf::is_timestamp<Source>())
-struct update_target_element<Source, aggregation::SUM> {
+requires(cudf::is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
+         !cudf::is_fixed_point<Source>() &&
+         !cudf::is_timestamp<Source>()) struct update_target_element<Source, aggregation::SUM> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -139,8 +141,10 @@ struct update_target_element<Source, aggregation::SUM> {
 };
 
 template <typename Source>
-  requires(is_fixed_point<Source>() && cudf::has_atomic_support<device_storage_type_t<Source>>())
-struct update_target_element<Source, aggregation::SUM> {
+requires(
+  is_fixed_point<Source>() &&
+  cudf::has_atomic_support<
+    device_storage_type_t<Source>>()) struct update_target_element<Source, aggregation::SUM> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -156,8 +160,9 @@ struct update_target_element<Source, aggregation::SUM> {
 };
 
 template <typename Source>
-  requires(cuda::std::is_same_v<Source, int64_t>)
-struct update_target_element<Source, aggregation::SUM_WITH_OVERFLOW> {
+requires(cuda::std::is_same_v<Source, int64_t>) struct update_target_element<
+  Source,
+  aggregation::SUM_WITH_OVERFLOW> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -216,8 +221,7 @@ struct update_target_from_dictionary {
   __device__ void operator()(mutable_column_device_view,
                              size_type,
                              column_device_view,
-                             size_type) const noexcept
-    requires(is_dictionary<Source>())
+                             size_type) const noexcept requires(is_dictionary<Source>())
   {
   }
 };
@@ -234,9 +238,9 @@ struct update_target_from_dictionary {
  * `update_target_element( target, target_index, source.keys(), source.indices()[source_index] )`
  */
 template <aggregation::Kind k>
-  requires(not(k == aggregation::ARGMIN or k == aggregation::ARGMAX or
-               k == aggregation::COUNT_VALID or k == aggregation::COUNT_ALL))
-struct update_target_element<dictionary32, k> {
+requires(not(k == aggregation::ARGMIN or k == aggregation::ARGMAX or
+             k == aggregation::COUNT_VALID or
+             k == aggregation::COUNT_ALL)) struct update_target_element<dictionary32, k> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -254,8 +258,8 @@ struct update_target_element<dictionary32, k> {
 };
 
 template <typename Source>
-  requires(is_product_supported<Source>())
-struct update_target_element<Source, aggregation::SUM_OF_SQUARES> {
+requires(is_product_supported<Source>()) struct update_target_element<Source,
+                                                                      aggregation::SUM_OF_SQUARES> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -268,8 +272,8 @@ struct update_target_element<Source, aggregation::SUM_OF_SQUARES> {
 };
 
 template <typename Source>
-  requires(is_product_supported<Source>())
-struct update_target_element<Source, aggregation::PRODUCT> {
+requires(
+  is_product_supported<Source>()) struct update_target_element<Source, aggregation::PRODUCT> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -282,8 +286,9 @@ struct update_target_element<Source, aggregation::PRODUCT> {
 };
 
 template <typename Source>
-  requires(is_valid_aggregation<Source, aggregation::COUNT_VALID>())
-struct update_target_element<Source, aggregation::COUNT_VALID> {
+requires(is_valid_aggregation<Source, aggregation::COUNT_VALID>()) struct update_target_element<
+  Source,
+  aggregation::COUNT_VALID> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -295,8 +300,9 @@ struct update_target_element<Source, aggregation::COUNT_VALID> {
 };
 
 template <typename Source>
-  requires(is_valid_aggregation<Source, aggregation::COUNT_ALL>())
-struct update_target_element<Source, aggregation::COUNT_ALL> {
+requires(is_valid_aggregation<Source, aggregation::COUNT_ALL>()) struct update_target_element<
+  Source,
+  aggregation::COUNT_ALL> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -308,9 +314,10 @@ struct update_target_element<Source, aggregation::COUNT_ALL> {
 };
 
 template <typename Source>
-  requires(is_valid_aggregation<Source, aggregation::ARGMAX>() &&
-           cudf::is_relationally_comparable<Source, Source>())
-struct update_target_element<Source, aggregation::ARGMAX> {
+requires(is_valid_aggregation<Source, aggregation::ARGMAX>() &&
+         cudf::is_relationally_comparable<
+           Source,
+           Source>()) struct update_target_element<Source, aggregation::ARGMAX> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -328,9 +335,10 @@ struct update_target_element<Source, aggregation::ARGMAX> {
 };
 
 template <typename Source>
-  requires(is_valid_aggregation<Source, aggregation::ARGMIN>() &&
-           cudf::is_relationally_comparable<Source, Source>())
-struct update_target_element<Source, aggregation::ARGMIN> {
+requires(is_valid_aggregation<Source, aggregation::ARGMIN>() &&
+         cudf::is_relationally_comparable<
+           Source,
+           Source>()) struct update_target_element<Source, aggregation::ARGMIN> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -352,7 +360,7 @@ struct update_target_element<Source, aggregation::ARGMIN> {
  * performing an aggregation operation with a single element from a source
  * column.
  */
-struct elementwise_aggregator {
+struct element_aggregator {
   template <typename Source, aggregation::Kind k>
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
@@ -407,6 +415,7 @@ struct elementwise_aggregator {
  *  - `source`: Skipped
  *  - `target`: Cannot be null
  *
+ * @param col_index Index of the columns in both `source` and `target` to update
  * @param target Table containing the row to update
  * @param target_index Index of the row to update in `target`
  * @param source Table containing the row used to update the row in `target`.
@@ -416,20 +425,19 @@ struct elementwise_aggregator {
  * and `source` rows. Must contain at least `target.num_columns()` valid
  * `aggregation::Kind` values.
  */
-__device__ inline void aggregate_row(mutable_table_device_view target,
+__device__ inline void aggregate_row(size_type col_index,
+                                     mutable_table_device_view target,
                                      size_type target_index,
                                      table_device_view source,
                                      size_type source_index,
                                      aggregation::Kind const* aggs)
 {
-  for (auto i = 0; i < target.num_columns(); ++i) {
-    dispatch_type_and_aggregation(source.column(i).type(),
-                                  aggs[i],
-                                  elementwise_aggregator{},
-                                  target.column(i),
-                                  target_index,
-                                  source.column(i),
-                                  source_index);
-  }
+  dispatch_type_and_aggregation(source.column(col_index).type(),
+                                aggs[col_index],
+                                element_aggregator{},
+                                target.column(col_index),
+                                target_index,
+                                source.column(col_index),
+                                source_index);
 }
 }  // namespace cudf::detail

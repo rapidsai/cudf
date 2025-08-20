@@ -56,11 +56,12 @@ rmm::device_uvector<size_type> compute_global_memory_aggs(
   auto d_values       = table_device_view::create(flattened_values, stream);
   auto d_result_table = mutable_table_device_view::create(result_table, stream);
 
-  thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                     thrust::counting_iterator{0},
-                     num_rows,
-                     hash::compute_single_pass_aggs_fn{
-                       key_indices, *d_values, *d_result_table, d_agg_kinds, row_bitmask});
+  // TODO: change to spass_values
+  thrust::for_each_n(
+    rmm::exec_policy_nosync(stream),
+    thrust::make_counting_iterator(int64_t{0}),
+    static_cast<int64_t>(num_rows) * flattened_values.num_columns(),
+    compute_single_pass_aggs_fn{key_indices, *d_values, *d_result_table, d_agg_kinds});
 
   // Add results back to sparse_results cache
   auto result_cols = result_table.release();
