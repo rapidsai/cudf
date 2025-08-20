@@ -3614,7 +3614,6 @@ class DatetimeIndex(Index):
         return result
 
     def __getitem__(self, index):
-        breakpoint()
         value = super().__getitem__(index)
         if cudf.get_option("mode.pandas_compatible") and isinstance(
             value, np.datetime64
@@ -3685,7 +3684,55 @@ class DatetimeIndex(Index):
 
     @property
     def inferred_freq(self) -> DateOffset | None:
-        raise NotImplementedError("inferred_freq is currently not implemented")
+        timestamp_to_timedelta = {
+            plc.DataType(plc.TypeId.TIMESTAMP_NANOSECONDS): plc.DataType(plc.TypeId.DURATION_NANOSECONDS),
+            plc.DataType(plc.TypeId.TIMESTAMP_MICROSECONDS): plc.DataType(plc.TypeId.DURATION_MICROSECONDS),
+            plc.DataType(plc.TypeId.TIMESTAMP_SECONDS): plc.DataType(plc.TypeId.DURATION_SECONDS),
+            plc.DataType(plc.TypeId.TIMESTAMP_MILLISECONDS): plc.DataType(plc.TypeId.DURATION_MILLISECONDS),
+        }
+
+        plc_col = self._column.to_pylibcudf(mode='read')
+        shifted = plc.copying.shift(plc_col, 1, plc.Scalar.from_py(None, dtype=plc_col.type()))
+        diff = plc.binaryop.binary_operation(
+            plc_col, 
+            shifted, 
+            plc.binaryop.BinaryOperator.SUB, 
+            timestamp_to_timedelta[plc_col.type()]
+        )
+        offset = plc.column.Column(
+            diff.type(),
+            diff.size() - 1,
+            diff.data(),
+            diff.null_mask(),
+            diff.null_count(),
+            1,
+            diff.children()
+        )
+
+        uniques = ColumnBase.from_pylibcudf(offset).unique()
+        if len(uniques) != 1:
+            return None
+        else:
+            freq = uniques.to_arrow().to_pylist()[0]
+            cmps = freq.components
+
+            allowed = [
+                'days',
+                'hours',
+                'minutes',
+                'seconds',
+                'milliseconds',
+                'microseconds',
+                'nanoseconds'
+            ]
+
+            kwds = {}
+            for component in allowed:
+                if getattr(cmps, component) != 0:
+                    kwds[component] = getattr(cmps, component)
+
+            return cudf.DateOffset(**kwds)
+
 
     @property
     def freq(self) -> DateOffset | None:
