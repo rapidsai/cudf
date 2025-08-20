@@ -178,13 +178,10 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
   {
     auto const select_cond = [block_cardinality =
                                 block_cardinality.begin()] __device__(auto const idx) {
-      if (block_cardinality[idx] >= GROUPBY_CARDINALITY_THRESHOLD) {
-        printf("fallback: %d\n", idx);
-      }
+      if (block_cardinality[idx] >= GROUPBY_CARDINALITY_THRESHOLD) {}
       return block_cardinality[idx] >= GROUPBY_CARDINALITY_THRESHOLD;
     };
 
-    printf("total num blocks: %d\n", grid_size);
     size_t storage_bytes = 0;
     cub::DeviceSelect::If(nullptr,
                           storage_bytes,
@@ -225,22 +222,8 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
 
   // TODO
   if (needs_fallback) {
-    printf("num_fallback_blocks: %d\n", num_fallback_blocks);
-    fflush(stdout);
-
     auto const num_strides =
       util::div_rounding_up_safe(static_cast<size_type>(num_rows), GROUPBY_BLOCK_SIZE * grid_size);
-
-    printf(
-      " total row: %d, num strides: %d, num fallback blocks: %d, total blocks: %d, "
-      "strides = %d, full stride = %d\n",
-      (int)num_rows,
-      (int)num_strides,
-      num_fallback_blocks,
-      grid_size,
-      (int)GROUPBY_BLOCK_SIZE * num_fallback_blocks,
-      (int)GROUPBY_BLOCK_SIZE * grid_size * num_strides);
-    fflush(stdout);
 
 #if 1
     thrust::for_each_n(
@@ -258,15 +241,6 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
         auto const block_idx     = fallback_block_ids[idx_in_stride / GROUPBY_BLOCK_SIZE];
         auto const row_idx =
           GROUPBY_BLOCK_SIZE * (full_stride * (idx / stride) + block_idx) + thread_rank;
-
-        // if (idx % 128 == 0)
-        {
-          printf("idx: %d, block id: %d, local id: %d, row id: %d\n",
-                 idx,
-                 (int)block_idx,
-                 (int)thread_rank,
-                 (int)row_idx);
-        }
 
         if (!row_bitmask || cudf::bit_is_set(row_bitmask, row_idx)) {
           key_indices[row_idx] = *global_set_ref.insert_and_find(row_idx).first;
@@ -287,8 +261,6 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
 #endif
   }
   extract_populated_keys(global_set, populated_keys, stream);
-  printf("populated_keys size: %zu\n", populated_keys.size());
-  fflush(stdout);
 
   // TODO: update global_mapping_index with the new indices
   auto const new_key_indices = find_output_indices(key_indices, populated_keys, stream);
@@ -305,19 +277,13 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
       auto const old_idx     = global_mapping_index[mapping_idx];
       if (old_idx != cudf::detail::CUDF_SIZE_TYPE_SENTINEL) {
         global_mapping_index[mapping_idx] = new_key_indices[old_idx];
-        printf("update global_mapping_index[%d] = %d => %d, block id: %d, local idx: %d\n",
-               (int)mapping_idx,
-               old_idx,
-               new_key_indices[old_idx],
-               block_id,
-               thread_rank);
       }
     });
 
   // make table that will hold sparse results
   cudf::table result_table = create_results_table(
     static_cast<size_type>(populated_keys.size()), spass_values, spass_agg_kinds, stream);
-  printf("result table rows: %d\n", result_table.num_rows());
+
   // prepare to launch kernel to do the actual aggregation
   auto d_values       = table_device_view::create(spass_values, stream);
   auto d_sparse_table = mutable_table_device_view::create(result_table, stream);
