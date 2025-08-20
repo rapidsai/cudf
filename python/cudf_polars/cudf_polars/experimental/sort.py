@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, TypedDict
 
+import polars as pl
+
 import pylibcudf as plc
 import rmm.mr
 from rmm.pylibrmm.stream import DEFAULT_STREAM
@@ -79,11 +81,11 @@ def find_sort_splits(
     split_last_col = plc.search.upper_bound(
         tbl, sort_boundaries, column_order, null_order
     )
-    # And convert to arrow/CPU for final processing
-    split_first_col = plc.interop.to_arrow(split_first_col).to_pylist()
-    split_last_col = plc.interop.to_arrow(split_last_col).to_pylist()
-    split_part_id = plc.interop.to_arrow(split_part_id).to_pylist()
-    split_local_row = plc.interop.to_arrow(split_local_row).to_pylist()
+    # And convert to list for final processing
+    split_first_col = pl.Series(split_first_col).to_list()
+    split_last_col = pl.Series(split_last_col).to_list()
+    split_part_id = pl.Series(split_part_id).to_list()
+    split_local_row = pl.Series(split_local_row).to_list()
 
     # Find the final split points.  This is slightly tricky because of the possibility
     # of equal values, which is why we need the part_id and local_row.
