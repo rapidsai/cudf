@@ -31,8 +31,7 @@
 
 #include <thrust/reduce.h>
 
-namespace cudf {
-namespace detail {
+namespace cudf::detail {
 
 /**
  * @brief Standalone count implementation using precomputed hash indices
@@ -40,9 +39,9 @@ namespace detail {
  * This implementation provides essential count functionality for mixed joins
  * using precomputed probe indices and step sizes.
  */
-template <typename KeyEqual>
+template <bool has_nulls>
 __device__ __forceinline__ auto standalone_count(
-  KeyEqual const& key_equal,
+  pair_expression_equality<has_nulls> const& key_equal,
   cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
   cuco::pair<hash_value_type, cudf::size_type> const& probe_key,
   cuda::std::pair<cudf::size_type, cudf::size_type> const& hash_idx) noexcept
@@ -167,5 +166,4 @@ std::size_t launch_compute_mixed_join_output_size(
     rmm::exec_policy_nosync(stream), matches_per_row.begin(), matches_per_row.end());
 }
 
-}  // namespace detail
-}  // namespace cudf
+}  // namespace cudf::detail

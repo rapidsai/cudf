@@ -40,11 +40,11 @@ namespace cudf::detail {
  *
  * @tparam is_outer Boolean flag indicating whether outer join semantics should be used
  */
-template <bool is_outer, typename KeyEqual>
+template <bool is_outer, bool has_nulls>
 __device__ __forceinline__ void retrieve(
   cooperative_groups::thread_block const& block,
   cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
-  KeyEqual const& key_equal,
+  pair_expression_equality<has_nulls> const& key_equal,
   cuco::pair<hash_value_type, cudf::size_type> const* input_probe_begin,
   cuco::pair<hash_value_type, cudf::size_type> const* input_probe_end,
   cuda::std::pair<cudf::size_type, cudf::size_type> const* input_hash_begin,
