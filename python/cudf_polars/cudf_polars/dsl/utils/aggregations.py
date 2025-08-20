@@ -158,9 +158,9 @@ def decompose_single_agg(
         is_median = agg.name == "median"
         is_quantile = agg.name == "quantile"
 
-        is_group_quantile_supported = plc.traits.is_integral(
+        is_group_quantile_supported = plc.traits.is_fixed_width(
             child_dtype
-        ) or plc.traits.is_floating_point(child_dtype)
+        ) and not plc.traits.is_chrono(child_dtype)
 
         unsupported = (
             (is_median or is_quantile) and not is_group_quantile_supported

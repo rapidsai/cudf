@@ -1468,7 +1468,7 @@ class GroupBy(IR):
                     (child,) = value.children
                 col = child.evaluate(df, context=ExecutionContext.GROUPBY).obj
 
-                if value.name == "median" and col.type().id() in {
+                if value.name in ["median", "mean", "quantile"] and col.type().id() in {
                     plc.TypeId.DECIMAL128,
                     plc.TypeId.DECIMAL64,
                     plc.TypeId.DECIMAL32,
