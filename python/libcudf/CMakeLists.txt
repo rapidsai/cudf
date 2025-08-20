@@ -45,7 +45,6 @@ set(CUDF_BUILD_STREAMS_TEST_UTIL OFF)
 set(CUDF_EXPORT_NVCOMP OFF)
 
 include(../../cpp/cmake/thirdparty/get_nvcomp.cmake)
-include(cmake/Modules/WheelHelpers.cmake)
 
 # Install only the specific libnvcomp.so.5 library instead of all nvcomp targets
 if(TARGET nvcomp::nvcomp)
