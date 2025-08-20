@@ -23,8 +23,10 @@ public class BatchedZstdDecompressor extends BatchedDecompressor {
   }
 
   @Override
-  protected long batchedDecompressGetTempSize(long numChunks, long maxUncompressedChunkBytes) {
-    return NvcompJni.batchedZstdDecompressGetTempSize(numChunks, maxUncompressedChunkBytes);
+  protected long batchedDecompressGetTempSize(long numChunks, long maxUncompressedChunkBytes,
+      long maxTotalSize) {
+    return NvcompJni.batchedZstdDecompressGetTempSize(numChunks, maxUncompressedChunkBytes,
+      maxTotalSize);
   }
 
   @Override
