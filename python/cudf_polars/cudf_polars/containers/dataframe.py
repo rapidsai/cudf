@@ -29,26 +29,17 @@ __all__: list[str] = ["DataFrame"]
 def _create_polars_column_metadata(
     name: str, dtype: PolarsDataType
 ) -> plc.interop.ColumnMetadata:
-    """Create ColumnMetadata preserving dtype attributes not supported by libcudf."""
-    children_meta = []
-    timezone = ""
-    precision: int | None = None
-
+    """Create ColumnMetadata preserving pl.Struct field names."""
     if isinstance(dtype, pl.Struct):
         children_meta = [
             _create_polars_column_metadata(field.name, field.dtype)
             for field in dtype.fields
         ]
-    elif isinstance(dtype, pl.Datetime):
-        timezone = dtype.time_zone or timezone
-    elif isinstance(dtype, pl.Decimal):
-        precision = dtype.precision
-
+    else:
+        children_meta = []
+    timezone = dtype.time_zone if isinstance(dtype, pl.Datetime) else None
     return plc.interop.ColumnMetadata(
-        name=name,
-        timezone=timezone,
-        precision=precision,
-        children_meta=children_meta,
+        name=name, timezone=timezone or "", children_meta=children_meta
     )
 
 
