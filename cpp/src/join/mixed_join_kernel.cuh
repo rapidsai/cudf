@@ -40,10 +40,10 @@ namespace cudf::detail {
  *
  * @tparam is_outer Boolean flag indicating whether outer join semantics should be used
  */
-template <bool is_outer, typename StorageRef, typename KeyEqual>
-__device__ __forceinline__ void standalone_retrieve(
+template <bool is_outer, typename KeyEqual>
+__device__ __forceinline__ void retrieve(
   cooperative_groups::thread_block const& block,
-  StorageRef const& storage_ref,
+  cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
   KeyEqual const& key_equal,
   cuco::pair<hash_value_type, cudf::size_type> const* input_probe_begin,
   cuco::pair<hash_value_type, cudf::size_type> const* input_probe_end,
@@ -52,8 +52,8 @@ __device__ __forceinline__ void standalone_retrieve(
   cudf::size_type* output_match,
   cuda::atomic<size_t, cuda::thread_scope_device>& atomic_counter) noexcept
 {
-  using size_type                   = typename StorageRef::size_type;
-  static constexpr auto bucket_size = StorageRef::bucket_size;
+  using size_type                   = cudf::size_type;
+  static constexpr auto bucket_size = 2;
   static constexpr auto block_size  = DEFAULT_JOIN_BLOCK_SIZE;
   namespace cg                      = cooperative_groups;
 
@@ -100,7 +100,7 @@ __device__ __forceinline__ void standalone_retrieve(
       auto const& probe_key = *(input_probe_begin + idx);
       auto const& hash_idx  = *(input_hash_begin + idx);
 
-      auto const extent     = storage_ref.extent();
+      auto const extent     = hash_table_storage.size();
       auto current_slot_idx = static_cast<std::size_t>(hash_idx.first);
       auto const step       = static_cast<std::size_t>(hash_idx.second);
 
@@ -109,7 +109,9 @@ __device__ __forceinline__ void standalone_retrieve(
 
       while (active_flushing_cg.any(running)) {
         if (running) {
-          auto const bucket_slots = storage_ref[current_slot_idx];
+          auto const bucket_slots = *reinterpret_cast<
+            cuda::std::array<cuco::pair<hash_value_type, cudf::size_type>, 2> const*>(
+            hash_table_storage.data() + current_slot_idx);
 
           auto const first_slot_is_empty  = bucket_slots[0].second == cudf::detail::JoinNoneValue;
           auto const second_slot_is_empty = bucket_slots[1].second == cudf::detail::JoinNoneValue;
@@ -176,21 +178,18 @@ __device__ __forceinline__ void standalone_retrieve(
 }
 
 template <bool has_nulls>
-CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) mixed_join(
-  table_device_view left_table,
-  table_device_view right_table,
-  cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
-  cuda::std::pair<cudf::size_type, cudf::size_type> const* hash_indices,
-  row_equality const equality_probe,
-  join_kind const join_type,
-  cuco::bucket_storage_ref<cuco::pair<hash_value_type, cudf::size_type>,
-                           2,
-                           cuco::valid_extent<std::size_t, 18446744073709551615UL>> storage_ref,
-  size_type* join_output_l,
-  size_type* join_output_r,
-  size_t* size,
-  cudf::ast::detail::expression_device_view device_expression_data,
-  bool const swap_tables)
+CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
+  mixed_join(table_device_view left_table,
+             table_device_view right_table,
+             cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
+             cuda::std::pair<cudf::size_type, cudf::size_type> const* hash_indices,
+             row_equality const equality_probe,
+             join_kind const join_type,
+             cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
+             size_type* join_output_l,
+             size_type* join_output_r,
+             cudf::ast::detail::expression_device_view device_expression_data,
+             bool const swap_tables)
 {
   extern __shared__ char raw_intermediate_storage[];
   auto intermediate_storage =
@@ -207,12 +206,10 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) mixed_join(
   auto const equality = pair_expression_equality<has_nulls>{
     evaluator, thread_intermediate_storage, swap_tables, equality_probe};
 
-  // storage_ref is now passed directly as parameter
-
   namespace cg = cooperative_groups;
 
   auto const block = cg::this_thread_block();
-  auto counter_ref = cuda::atomic<size_t, cuda::thread_scope_device>(*size);
+  cuda::atomic<size_t, cuda::thread_scope_device> counter_ref{0};
 
   auto const block_begin_offset = block.group_index().x * DEFAULT_JOIN_BLOCK_SIZE;
   auto const block_end_offset   = cuda::std::min(
@@ -220,25 +217,25 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) mixed_join(
 
   if (block_begin_offset < block_end_offset) {
     if (join_type == join_kind::LEFT_JOIN || join_type == join_kind::FULL_JOIN) {
-      standalone_retrieve<true>(block,
-                                storage_ref,
-                                equality,
-                                input_pairs + block_begin_offset,
-                                input_pairs + block_end_offset,
-                                hash_indices + block_begin_offset,
-                                swap_tables ? join_output_r : join_output_l,
-                                swap_tables ? join_output_l : join_output_r,
-                                counter_ref);
+      retrieve<true>(block,
+                     hash_table_storage,
+                     equality,
+                     input_pairs + block_begin_offset,
+                     input_pairs + block_end_offset,
+                     hash_indices + block_begin_offset,
+                     swap_tables ? join_output_r : join_output_l,
+                     swap_tables ? join_output_l : join_output_r,
+                     counter_ref);
     } else {
-      standalone_retrieve<false>(block,
-                                 storage_ref,
-                                 equality,
-                                 input_pairs + block_begin_offset,
-                                 input_pairs + block_end_offset,
-                                 hash_indices + block_begin_offset,
-                                 swap_tables ? join_output_r : join_output_l,
-                                 swap_tables ? join_output_l : join_output_r,
-                                 counter_ref);
+      retrieve<false>(block,
+                      hash_table_storage,
+                      equality,
+                      input_pairs + block_begin_offset,
+                      input_pairs + block_end_offset,
+                      hash_indices + block_begin_offset,
+                      swap_tables ? join_output_r : join_output_l,
+                      swap_tables ? join_output_l : join_output_r,
+                      counter_ref);
     }
   }
 }
@@ -251,9 +248,7 @@ void launch_mixed_join(
   cuda::std::pair<cudf::size_type, cudf::size_type> const* hash_indices,
   row_equality const equality_probe,
   join_kind const join_type,
-  cuco::bucket_storage_ref<cuco::pair<hash_value_type, cudf::size_type>,
-                           2,
-                           cuco::valid_extent<std::size_t, 18446744073709551615UL>> storage_ref,
+  cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
   size_type* join_output_l,
   size_type* join_output_r,
   cudf::ast::detail::expression_device_view device_expression_data,
@@ -262,8 +257,6 @@ void launch_mixed_join(
   int64_t shmem_size_per_block,
   rmm::cuda_stream_view stream)
 {
-  cudf::detail::device_scalar<size_t> size(0, stream);
-
   mixed_join<has_nulls>
     <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
       left_table,
@@ -272,10 +265,9 @@ void launch_mixed_join(
       hash_indices,
       equality_probe,
       join_type,
-      storage_ref,
+      hash_table_storage,
       join_output_l,
       join_output_r,
-      size.data(),
       device_expression_data,
       swap_tables);
 }

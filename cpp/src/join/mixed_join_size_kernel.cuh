@@ -40,22 +40,23 @@ namespace detail {
  * This implementation provides essential count functionality for mixed joins
  * using precomputed probe indices and step sizes.
  */
-template <typename StorageRef, typename KeyEqual>
-__device__ __forceinline__ auto standalone_count_with_indices(
-  StorageRef const& storage_ref,
+template <typename KeyEqual>
+__device__ __forceinline__ auto standalone_count(
   KeyEqual const& key_equal,
+  cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
   cuco::pair<hash_value_type, cudf::size_type> const& probe_key,
   cuda::std::pair<cudf::size_type, cudf::size_type> const& hash_idx) noexcept
 {
-  using size_type = typename StorageRef::size_type;
-
-  size_type count   = 0;
-  auto const extent = storage_ref.extent();
-  auto probe_idx    = static_cast<std::size_t>(hash_idx.first);   // initial probe index
-  auto const step   = static_cast<std::size_t>(hash_idx.second);  // step size
+  cudf::size_type count = 0;
+  auto const extent     = hash_table_storage.size();
+  auto const* data      = hash_table_storage.data();
+  auto probe_idx        = static_cast<std::size_t>(hash_idx.first);   // initial probe index
+  auto const step       = static_cast<std::size_t>(hash_idx.second);  // step size
 
   while (true) {
-    auto const bucket_slots = storage_ref[probe_idx];
+    auto const bucket_slots =
+      *reinterpret_cast<cuda::std::array<cuco::pair<hash_value_type, cudf::size_type>, 2> const*>(
+        data + probe_idx);
 
     // Check for empty slots and key equality
     auto const first_slot_is_empty  = bucket_slots[0].second == cudf::detail::JoinNoneValue;
@@ -86,9 +87,7 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) compute_mixed_join_o
   cuda::std::pair<cudf::size_type, cudf::size_type> const* hash_indices,
   row_equality const equality_probe,
   join_kind const join_type,
-  cuco::bucket_storage_ref<cuco::pair<hash_value_type, cudf::size_type>,
-                           2,
-                           cuco::valid_extent<std::size_t, 18446744073709551615UL>> storage_ref,
+  cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
   ast::detail::expression_device_view device_expression_data,
   bool const swap_tables,
   cudf::device_span<cudf::size_type> matches_per_row)
@@ -123,13 +122,13 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) compute_mixed_join_o
     auto const& hash_idx  = hash_indices[outer_row_index];
 
     // Use our standalone count function with precomputed indices
-    auto const count =
-      standalone_count_with_indices(storage_ref, count_equality, probe_key, hash_idx);
+    auto const match_count =
+      standalone_count(count_equality, hash_table_storage, probe_key, hash_idx);
     if (join_type == join_kind::LEFT_JOIN || join_type == join_kind::FULL_JOIN) {
       // Non-matching rows are counted as 1 match for the outer joins
-      matches_per_row[outer_row_index] = count == 0 ? 1 : count;
+      matches_per_row[outer_row_index] = (match_count == 0 ? 1 : match_count);
     } else {
-      matches_per_row[outer_row_index] = count;
+      matches_per_row[outer_row_index] = match_count;
     }
   }
 }
@@ -142,9 +141,7 @@ std::size_t launch_compute_mixed_join_output_size(
   cuda::std::pair<cudf::size_type, cudf::size_type> const* hash_indices,
   row_equality const equality_probe,
   join_kind const join_type,
-  cuco::bucket_storage_ref<cuco::pair<hash_value_type, cudf::size_type>,
-                           2,
-                           cuco::valid_extent<std::size_t, 18446744073709551615UL>> storage_ref,
+  cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
   ast::detail::expression_device_view device_expression_data,
   bool const swap_tables,
   cudf::device_span<cudf::size_type> matches_per_row,
@@ -161,10 +158,11 @@ std::size_t launch_compute_mixed_join_output_size(
       hash_indices,
       equality_probe,
       join_type,
-      storage_ref,
+      hash_table_storage,
       device_expression_data,
       swap_tables,
       matches_per_row);
+
   return thrust::reduce(
     rmm::exec_policy_nosync(stream), matches_per_row.begin(), matches_per_row.end());
 }

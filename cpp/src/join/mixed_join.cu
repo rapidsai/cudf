@@ -228,7 +228,8 @@ mixed_join(
                         compare_nulls,
                         static_cast<bitmask_type const*>(row_bitmask.data()),
                         stream);
-  auto count_ref = hash_table.ref(cuco::count);
+  auto hash_table_storage = cudf::device_span<cuco::pair<hash_value_type, size_type>>{
+    hash_table.ref(cuco::retrieve).storage_ref().data(), hash_table.capacity()};
 
   auto left_conditional_view  = table_device_view::create(left_conditional, stream);
   auto right_conditional_view = table_device_view::create(right_conditional, stream);
@@ -259,9 +260,6 @@ mixed_join(
   auto [input_pairs, hash_indices] =
     precompute_mixed_join_data(hash_table, hash_probe, outer_num_rows, stream, mr);
 
-  // Get retrieve reference for storage_ref needed by launch functions
-  auto retrieve_ref = hash_table.ref(cuco::retrieve);
-
   if (output_size_data.has_value()) {
     join_size            = output_size_data->first;
     matches_per_row_span = output_size_data->second;
@@ -281,7 +279,7 @@ mixed_join(
                                                               hash_indices.data(),
                                                               equality_probe,
                                                               kernel_join_type,
-                                                              count_ref.storage_ref(),
+                                                              hash_table_storage,
                                                               parser.device_expression_data,
                                                               swap_tables,
                                                               mutable_matches_per_row_span,
@@ -296,7 +294,7 @@ mixed_join(
                                                                hash_indices.data(),
                                                                equality_probe,
                                                                kernel_join_type,
-                                                               count_ref.storage_ref(),
+                                                               hash_table_storage,
                                                                parser.device_expression_data,
                                                                swap_tables,
                                                                mutable_matches_per_row_span,
@@ -331,7 +329,7 @@ mixed_join(
                             hash_indices.data(),
                             equality_probe,
                             kernel_join_type,
-                            retrieve_ref.storage_ref(),
+                            hash_table_storage,
                             join_output_l,
                             join_output_r,
                             parser.device_expression_data,
@@ -346,7 +344,7 @@ mixed_join(
                              hash_indices.data(),
                              equality_probe,
                              kernel_join_type,
-                             retrieve_ref.storage_ref(),
+                             hash_table_storage,
                              join_output_l,
                              join_output_r,
                              parser.device_expression_data,
@@ -493,7 +491,8 @@ compute_mixed_join_output_size(table_view const& left_equality,
                         compare_nulls,
                         static_cast<bitmask_type const*>(row_bitmask.data()),
                         stream);
-  auto hash_table_ref = hash_table.ref(cuco::count);
+  auto hash_table_storage = cudf::device_span<cuco::pair<hash_value_type, size_type>>{
+    hash_table.ref(cuco::retrieve).storage_ref().data(), hash_table.capacity()};
 
   auto left_conditional_view  = table_device_view::create(left_conditional, stream);
   auto right_conditional_view = table_device_view::create(right_conditional, stream);
@@ -525,7 +524,7 @@ compute_mixed_join_output_size(table_view const& left_equality,
                                                          hash_indices.data(),
                                                          equality_probe,
                                                          join_type,
-                                                         hash_table_ref.storage_ref(),
+                                                         hash_table_storage,
                                                          parser.device_expression_data,
                                                          swap_tables,
                                                          matches_per_row_span,
@@ -540,7 +539,7 @@ compute_mixed_join_output_size(table_view const& left_equality,
                                                           hash_indices.data(),
                                                           equality_probe,
                                                           join_type,
-                                                          hash_table_ref.storage_ref(),
+                                                          hash_table_storage,
                                                           parser.device_expression_data,
                                                           swap_tables,
                                                           matches_per_row_span,
