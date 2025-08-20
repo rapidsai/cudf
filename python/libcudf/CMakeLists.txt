@@ -52,6 +52,8 @@ include(cmake/Modules/WheelHelpers.cmake)
 
 # Install only the specific libnvcomp.so.5 library instead of all nvcomp targets
 if(TARGET nvcomp::nvcomp)
+  # Print TARGET_FILE:nvcomp::nvcomp
+  message(WARNING "TARGET_FILE:nvcomp::nvcomp: $<TARGET_FILE:nvcomp::nvcomp>")
   # Check if the nvcomp target is imported
   get_target_property(is_imported nvcomp::nvcomp IMPORTED)
   if(is_imported)
@@ -73,64 +75,24 @@ if(TARGET nvcomp::nvcomp)
   else()
     message(WARNING "nvcomp target is not imported")
   endif()
-  # Get the library file path and install only libnvcomp.so.5 Try IMPORTED_LOCATION first (for
-  # single-config generators)
-  get_target_property(nvcomp_lib_path nvcomp::nvcomp IMPORTED_LOCATION)
-  if(NOT nvcomp_lib_path)
-    # For multi-config generators, try IMPORTED_LOCATION_RELEASE
-    get_target_property(nvcomp_lib_path nvcomp::nvcomp IMPORTED_LOCATION_RELEASE)
-  endif()
-  if(NOT nvcomp_lib_path)
-    # Fallback to IMPORTED_LOCATION_DEBUG
-    get_target_property(nvcomp_lib_path nvcomp::nvcomp IMPORTED_LOCATION_DEBUG)
-  endif()
-  if(NOT nvcomp_lib_path)
-    # Try to get the location using generator expressions
-    get_target_property(nvcomp_lib_path nvcomp::nvcomp IMPORTED_LOCATION_NOCONFIG)
-  endif()
-  # Print the library path
+  # Get the library file path using IMPORTED_LOCATION_RELEASE since we know it works
+  get_target_property(nvcomp_lib_path nvcomp::nvcomp IMPORTED_LOCATION_RELEASE)
   message(WARNING "nvcomp_lib_path: ${nvcomp_lib_path}")
-  if(nvcomp_lib_path)
-    # Extract just the filename to check if it's the right library
-    get_filename_component(nvcomp_lib_name ${nvcomp_lib_path} NAME)
-    # Print the library name
-    message(WARNING "nvcomp_lib_name: ${nvcomp_lib_name}")
-    if(nvcomp_lib_name MATCHES "libnvcomp\\.so\\.5")
-      # Print the library path
-      message(WARNING "Installing nvcomp_lib_path: ${nvcomp_lib_path}")
-      install(FILES ${nvcomp_lib_path} DESTINATION ${SKBUILD_PLATLIB_DIR}/libcudf/lib64/)
-    else()
-      # If the main target doesn't point to .so.4, try to find it in the same directory
-      get_filename_component(nvcomp_lib_dir ${nvcomp_lib_path} DIRECTORY)
-      set(nvcomp_so5_path "${nvcomp_lib_dir}/libnvcomp.so.5")
-      # Print the library path
-      message(WARNING "nvcomp_so5_path: ${nvcomp_so5_path}")
-      if(EXISTS ${nvcomp_so4_path})
-        # Print the library path
-        message(WARNING "Installing nvcomp_so5_path: ${nvcomp_so5_path}")
-        install(FILES ${nvcomp_so5_path} DESTINATION ${SKBUILD_PLATLIB_DIR}/libcudf/lib64/)
-      else()
-        # Fallback to the original behavior if we can't find the specific library
-        message(WARNING "Falling back to original behavior nvcomp_so5_path not found")
-        install_aliased_imported_targets(
-          TARGETS nvcomp::nvcomp DESTINATION ${SKBUILD_PLATLIB_DIR}/libcudf/lib64/
-        )
-      endif()
-    endif()
-  else()
-    # Fallback to the original behavior if we can't get the library path
-    message(WARNING "Falling back to original behavior nvcomp_lib_path not found")
-    install_aliased_imported_targets(
-      TARGETS nvcomp::nvcomp DESTINATION ${SKBUILD_PLATLIB_DIR}/libcudf/lib64/
-    )
-  endif()
+
+  # Install the library file and rename it to libnvcomp.so.5
+  install(
+    FILES ${nvcomp_lib_path}
+    DESTINATION ${SKBUILD_PLATLIB_DIR}/libcudf/lib64/
+    RENAME libnvcomp.so.5
+  )
+  message(WARNING "Installing ${nvcomp_lib_path} as libnvcomp.so.5")
 endif()
 
 set(CUDA_STATIC_RUNTIME ON)
 
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
 
-add_subdirectory(../../cpp cudf-cpp)
+# add_subdirectory(../../cpp cudf-cpp)
 
 if(USE_NVCOMP_RUNTIME_WHEEL)
   set(rpaths "$ORIGIN/../../nvidia/nvcomp")
