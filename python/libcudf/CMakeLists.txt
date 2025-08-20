@@ -54,7 +54,7 @@ set(CUDA_STATIC_RUNTIME ON)
 
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
 
-# add_subdirectory(../../cpp cudf-cpp)
+add_subdirectory(../../cpp cudf-cpp)
 
 if(USE_NVCOMP_RUNTIME_WHEEL)
   set(rpaths "$ORIGIN/../../nvidia/nvcomp")
