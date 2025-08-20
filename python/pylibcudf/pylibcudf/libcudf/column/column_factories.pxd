@@ -88,6 +88,12 @@ cdef extern from "cudf/column/column_factories.hpp" namespace "cudf" nogil:
         size_type size
     ) except +libcudf_exception_handler
 
+    cdef unique_ptr[column] make_column_from_scalar(
+        const scalar& s,
+        size_type size,
+        cuda_stream_view stream
+    ) except +libcudf_exception_handler
+
     cdef unique_ptr[column] make_dictionary_from_scalar(
         const scalar& s,
         size_type size
