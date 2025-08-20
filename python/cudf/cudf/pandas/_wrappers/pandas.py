@@ -1132,6 +1132,7 @@ def _find_user_frame():
     frame = inspect.currentframe()
     while frame:
         modname = frame.f_globals.get("__name__", "")
+        # TODO: Remove "nvtx." entry once we cross nvtx-0.2.11 as minimum version
         if modname == "__main__" or not modname.startswith(("cudf.", "nvtx.")):
             return frame
         frame = frame.f_back
