@@ -222,6 +222,35 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
 
   // TODO
   if (needs_fallback) {
+    // TODO: this is a repeat code
+    if (num_fallback_blocks == grid_size) {
+      thrust::tabulate(rmm::exec_policy_nosync(stream),
+                       key_indices.begin(),
+                       key_indices.end(),
+                       [global_set_ref, row_bitmask] __device__(auto const idx) mutable {
+                         if (!row_bitmask || cudf::bit_is_set(row_bitmask, idx)) {
+                           return *global_set_ref.insert_and_find(idx).first;
+                         }
+                         return cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
+                       });
+
+      extract_populated_keys(global_set, populated_keys, stream);
+      find_output_indices(key_indices, populated_keys, stream);
+
+      // TODO
+      compute_global_memory_aggs(num_rows,
+                                 static_cast<size_type>(populated_keys.size()),
+                                 key_indices.begin(),
+                                 row_bitmask,
+                                 spass_values,
+                                 d_spass_agg_kinds.data(),
+                                 spass_agg_kinds,
+                                 spass_aggs,
+                                 cache,
+                                 stream);
+      return std::pair{std::move(populated_keys), std::move(key_indices)};
+    }
+
     auto const num_strides =
       util::div_rounding_up_safe(static_cast<size_type>(num_rows), GROUPBY_BLOCK_SIZE * grid_size);
 
