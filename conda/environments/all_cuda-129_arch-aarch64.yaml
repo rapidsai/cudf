@@ -20,10 +20,10 @@ dependencies:
 - cuda-nvcc
 - cuda-nvrtc-dev
 - cuda-nvtx-dev
-- cuda-python>=12.9.1,<13.0a0
+- cuda-python>=12.9.2,<13.0a0
 - cuda-sanitizer-api
 - cuda-version=12.9
-- cupy>=12.0.0
+- cupy>=13.6.0
 - cxx-compiler
 - cython>=3.0.3
 - dask-cuda==25.10.*,>=0.0.0a0
