@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import datetime
+
 import pytest
 
 import polars as pl
@@ -95,7 +97,9 @@ def test_select_literal_series():
     assert_gpu_result_equal(q)
 
 
-@pytest.mark.parametrize("expr", [pl.lit(None), pl.lit(10, dtype=pl.Decimal())])
+@pytest.mark.parametrize(
+    "expr", [pl.lit(None), pl.lit(datetime.time(12, 0), dtype=pl.Time())]
+)
 def test_unsupported_literal_raises(expr):
     df = pl.LazyFrame({})
 
