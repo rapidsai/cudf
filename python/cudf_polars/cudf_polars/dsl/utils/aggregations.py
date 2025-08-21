@@ -235,7 +235,49 @@ def decompose_single_agg(
                 expr.Col(agg.dtype, name)
             )
     if isinstance(agg, expr.Ternary):
-        raise NotImplementedError("Ternary inside groupby")
+        when, then, otherwise = agg.children
+
+        when_aggs, when_post = decompose_single_agg(
+            expr.NamedExpr(next(name_generator), when),
+            name_generator,
+            is_top=False,
+            context=context,
+        )
+        then_aggs, then_post = decompose_single_agg(
+            expr.NamedExpr(next(name_generator), then),
+            name_generator,
+            is_top=False,
+            context=context,
+        )
+        otherwise_aggs, otherwise_post = decompose_single_agg(
+            expr.NamedExpr(next(name_generator), otherwise),
+            name_generator,
+            is_top=False,
+            context=context,
+        )
+
+        when_has = any(h for _, h in when_aggs)
+        then_has = any(h for _, h in then_aggs)
+        otherwise_has = any(h for _, h in otherwise_aggs)
+
+        if is_top and not (when_has or then_has or otherwise_has):
+            raise NotImplementedError(
+                "Broadcasted ternary with list output in groupby is not supported"
+            )
+
+        for post, has in (
+            (when_post, when_has),
+            (then_post, then_has),
+            (otherwise_post, otherwise_has),
+        ):
+            if is_top and not has and not isinstance(post.value, expr.Literal):
+                raise NotImplementedError(
+                    "Broadcasting aggregated expressions in groupby/rolling"
+                )
+
+        return [*when_aggs, *then_aggs, *otherwise_aggs], named_expr.reconstruct(
+            agg.reconstruct([when_post.value, then_post.value, otherwise_post.value])
+        )
     if not agg.is_pointwise and isinstance(agg, expr.BooleanFunction):
         raise NotImplementedError(
             f"Non pointwise boolean function {agg.name!r} not supported in groupby or rolling context"
