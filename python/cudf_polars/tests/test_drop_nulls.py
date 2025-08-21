@@ -10,6 +10,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+from cudf_polars.utils.versions import POLARS_VERSION_LT_132
 
 
 @pytest.fixture(
@@ -56,8 +57,10 @@ def test_fill_null_with_string():
 )
 def test_fill_null_with_strategy(null_data, strategy):
     q = null_data.select(pl.col("a").fill_null(strategy=strategy))
-
-    assert_gpu_result_equal(q)
+    if POLARS_VERSION_LT_132:
+        assert_ir_translation_raises(q, NotImplementedError)
+    else:
+        assert_gpu_result_equal(q)
 
 
 @pytest.mark.parametrize("strategy", ["forward", "backward"])
@@ -67,4 +70,7 @@ def test_fill_null_with_limit(null_data, strategy, limit):
     if limit != 0:
         assert_ir_translation_raises(q, NotImplementedError)
     else:
-        assert_gpu_result_equal(q)
+        if POLARS_VERSION_LT_132:
+            assert_ir_translation_raises(q, NotImplementedError)
+        else:
+            assert_gpu_result_equal(q)
