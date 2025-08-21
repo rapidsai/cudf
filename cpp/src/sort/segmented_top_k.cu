@@ -74,7 +74,7 @@ CUDF_KERNEL void resolve_segment_indices(device_span<size_type const> d_offsets,
 }
 }  // namespace
 
-std::unique_ptr<column> top_k_segmented_order(column_view const& col,
+std::unique_ptr<column> segmented_top_k_order(column_view const& col,
                                               column_view const& segment_offsets,
                                               size_type k,
                                               order sort_order,
@@ -125,7 +125,7 @@ std::unique_ptr<column> top_k_segmented_order(column_view const& col,
     num_rows, std::move(offsets), std::move(result), 0, rmm::device_buffer{}, stream, mr);
 }
 
-std::unique_ptr<column> top_k_segmented(column_view const& col,
+std::unique_ptr<column> segmented_top_k(column_view const& col,
                                         column_view const& segment_offsets,
                                         size_type k,
                                         order sort_order,
@@ -135,7 +135,7 @@ std::unique_ptr<column> top_k_segmented(column_view const& col,
   if (col.is_empty()) { return cudf::make_empty_column(col.type()); }
 
   auto ordered =
-    cudf::detail::top_k_segmented_order(col, segment_offsets, k, sort_order, stream, mr);
+    cudf::detail::segmented_top_k_order(col, segment_offsets, k, sort_order, stream, mr);
   auto lv = cudf::lists_column_view(ordered->view());
   if (lv.is_empty()) { return cudf::make_empty_lists_column(col.type(), stream, mr); }
 
@@ -158,7 +158,7 @@ std::unique_ptr<column> top_k_segmented(column_view const& col,
 
 }  // namespace detail
 
-std::unique_ptr<column> top_k_segmented(column_view const& col,
+std::unique_ptr<column> segmented_top_k(column_view const& col,
                                         column_view const& segment_offsets,
                                         size_type k,
                                         order sort_order,
@@ -166,10 +166,10 @@ std::unique_ptr<column> top_k_segmented(column_view const& col,
                                         rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::top_k_segmented(col, segment_offsets, k, sort_order, stream, mr);
+  return detail::segmented_top_k(col, segment_offsets, k, sort_order, stream, mr);
 }
 
-std::unique_ptr<column> top_k_segmented_order(column_view const& col,
+std::unique_ptr<column> segmented_top_k_order(column_view const& col,
                                               column_view const& segment_offsets,
                                               size_type k,
                                               order sort_order,
@@ -177,6 +177,6 @@ std::unique_ptr<column> top_k_segmented_order(column_view const& col,
                                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::top_k_segmented_order(col, segment_offsets, k, sort_order, stream, mr);
+  return detail::segmented_top_k_order(col, segment_offsets, k, sort_order, stream, mr);
 }
 }  // namespace cudf
