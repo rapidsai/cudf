@@ -94,7 +94,7 @@ void BM_orc_write_io_compression(nvbench::state& state)
 
   cudf::size_type const cardinality = state.get_int64("cardinality");
   cudf::size_type const run_length  = state.get_int64("run_length");
-  auto const sink_type = retrieve_io_type_enum(state.get_string("io_type"));
+  auto const sink_type              = retrieve_io_type_enum(state.get_string("io_type"));
   auto const compression = retrieve_compression_type_enum(state.get_string("compression_type"));
 
   auto const tbl =
@@ -129,9 +129,8 @@ void BM_orc_write_io_compression(nvbench::state& state)
 }
 
 template <cudf::io::statistics_freq Statistics>
-void BM_orc_write_statistics(
-  nvbench::state& state,
-  nvbench::type_list<nvbench::enum_type<Statistics>>)
+void BM_orc_write_statistics(nvbench::state& state,
+                             nvbench::type_list<nvbench::enum_type<Statistics>>)
 {
   auto const d_type = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL_SIGNED),
                                          static_cast<int32_t>(data_type::FLOAT),
