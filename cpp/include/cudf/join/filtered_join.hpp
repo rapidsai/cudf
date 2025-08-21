@@ -76,12 +76,14 @@ class filtered_join {
    */
   filtered_join(cudf::table_view const& build,
                 null_equality compare_nulls  = null_equality::EQUAL,
+                bool reuse_left_table = false,
                 double load_factor           = 0.5,
                 rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   filtered_join(cudf::table_view const& build,
-                cudf::null_equality compare_nulls,
-                rmm::cuda_stream_view stream);
+                cudf::null_equality compare_nulls = null_equality::EQUAL,
+                bool reuse_left_table = false,
+                rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
    * @brief Returns the row indices that can be used to construct the result of performing
@@ -123,9 +125,8 @@ class filtered_join {
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
  private:
-  using impl_type = cudf::detail::filtered_join;  ///< Implementation type
-
-  std::unique_ptr<impl_type> _impl;  ///< Distinct hash join implementation
+  bool const _reuse_left_table;
+  std::unique_ptr<cudf::detail::filtered_join> _impl;  ///< Distinct hash join implementation
 };
 
 /** @} */  // end of group
