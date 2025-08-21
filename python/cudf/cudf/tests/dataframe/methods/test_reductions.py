@@ -237,3 +237,16 @@ def test_empty_numeric_only():
     expected = pdf.prod(numeric_only=True)
     actual = gdf.prod(numeric_only=True)
     assert_eq(expected, actual, check_dtype=True)
+
+
+@pytest.mark.parametrize(
+    "op",
+    ["count", "kurt", "kurtosis", "skew"],
+)
+def test_dataframe_axis1_unsupported_ops(op):
+    df = cudf.DataFrame({"a": [1, 2, 3], "b": [8, 9, 10]})
+
+    with pytest.raises(
+        NotImplementedError, match="Only axis=0 is currently supported."
+    ):
+        getattr(df, op)(axis=1)

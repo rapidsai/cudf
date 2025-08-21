@@ -241,3 +241,71 @@ def test_dataframe_values_complex_types(data):
     gdf = cudf.DataFrame(data)
     with pytest.raises(NotImplementedError):
         gdf.values
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        pd.DataFrame(),
+        pd.DataFrame(index=[100, 10, 1, 0]),
+        pd.DataFrame(columns=["a", "b", "c", "d"]),
+        pd.DataFrame(columns=["a", "b", "c", "d"], index=[100]),
+        pd.DataFrame(
+            columns=["a", "b", "c", "d"], index=[100, 10000, 2131, 133]
+        ),
+        pd.DataFrame({"a": [1, 2, 3], "b": ["abc", "xyz", "klm"]}),
+    ],
+)
+def test_dataframe_size(df):
+    pdf = df
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(pdf.size, gdf.size)
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        pd.DataFrame(),
+        pd.DataFrame(index=[100, 10, 1, 0]),
+        pd.DataFrame(columns=["a", "b", "c", "d"]),
+        pd.DataFrame(columns=["a", "b", "c", "d"], index=[100]),
+        pd.DataFrame(
+            columns=["a", "b", "c", "d"], index=[100, 10000, 2131, 133]
+        ),
+        pd.DataFrame({"a": [1, 2, 3], "b": ["abc", "xyz", "klm"]}),
+    ],
+)
+def test_dataframe_empty(df):
+    pdf = df
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(pdf.empty, gdf.empty)
+
+
+def test_cudf_arrow_array_error():
+    df = cudf.DataFrame({"a": [1, 2, 3]})
+
+    with pytest.raises(
+        TypeError,
+        match="Implicit conversion to a host PyArrow object via "
+        "__arrow_array__ is not allowed. Consider using .to_arrow()",
+    ):
+        df.__arrow_array__()
+
+    sr = cudf.Series([1, 2, 3])
+
+    with pytest.raises(
+        TypeError,
+        match="Implicit conversion to a host PyArrow object via "
+        "__arrow_array__ is not allowed. Consider using .to_arrow()",
+    ):
+        sr.__arrow_array__()
+
+    sr = cudf.Series(["a", "b", "c"])
+    with pytest.raises(
+        TypeError,
+        match="Implicit conversion to a host PyArrow object via "
+        "__arrow_array__ is not allowed. Consider using .to_arrow()",
+    ):
+        sr.__arrow_array__()

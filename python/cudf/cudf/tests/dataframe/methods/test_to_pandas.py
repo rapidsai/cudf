@@ -7,6 +7,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
+from cudf.testing import assert_eq
 
 
 def test_list_to_pandas_nullable_true():
@@ -54,3 +55,150 @@ def test_dataframe_to_pandas_arrow_type_nullable_raises(scalar):
     df = cudf.DataFrame({"a": pa_array})
     with pytest.raises(ValueError):
         df.to_pandas(nullable=True, arrow_type=True)
+
+
+@pytest.mark.parametrize(
+    "df,expected_pdf",
+    [
+        (
+            lambda: cudf.DataFrame(
+                {
+                    "a": cudf.Series([1, 2, None, 3], dtype="uint8"),
+                    "b": cudf.Series([23, None, None, 32], dtype="uint16"),
+                }
+            ),
+            pd.DataFrame(
+                {
+                    "a": pd.Series([1, 2, None, 3], dtype=pd.UInt8Dtype()),
+                    "b": pd.Series(
+                        [23, None, None, 32], dtype=pd.UInt16Dtype()
+                    ),
+                }
+            ),
+        ),
+        (
+            lambda: cudf.DataFrame(
+                {
+                    "a": cudf.Series([None, 123, None, 1], dtype="uint32"),
+                    "b": cudf.Series(
+                        [234, 2323, 23432, None, None, 224], dtype="uint64"
+                    ),
+                }
+            ),
+            pd.DataFrame(
+                {
+                    "a": pd.Series(
+                        [None, 123, None, 1], dtype=pd.UInt32Dtype()
+                    ),
+                    "b": pd.Series(
+                        [234, 2323, 23432, None, None, 224],
+                        dtype=pd.UInt64Dtype(),
+                    ),
+                }
+            ),
+        ),
+        (
+            lambda: cudf.DataFrame(
+                {
+                    "a": cudf.Series(
+                        [-10, 1, None, -1, None, 3], dtype="int8"
+                    ),
+                    "b": cudf.Series(
+                        [111, None, 222, None, 13], dtype="int16"
+                    ),
+                }
+            ),
+            pd.DataFrame(
+                {
+                    "a": pd.Series(
+                        [-10, 1, None, -1, None, 3], dtype=pd.Int8Dtype()
+                    ),
+                    "b": pd.Series(
+                        [111, None, 222, None, 13], dtype=pd.Int16Dtype()
+                    ),
+                }
+            ),
+        ),
+        (
+            lambda: cudf.DataFrame(
+                {
+                    "a": cudf.Series(
+                        [11, None, 22, 33, None, 2, None, 3], dtype="int32"
+                    ),
+                    "b": cudf.Series(
+                        [32431, None, None, 32322, 0, 10, -32324, None],
+                        dtype="int64",
+                    ),
+                }
+            ),
+            pd.DataFrame(
+                {
+                    "a": pd.Series(
+                        [11, None, 22, 33, None, 2, None, 3],
+                        dtype=pd.Int32Dtype(),
+                    ),
+                    "b": pd.Series(
+                        [32431, None, None, 32322, 0, 10, -32324, None],
+                        dtype=pd.Int64Dtype(),
+                    ),
+                }
+            ),
+        ),
+        (
+            lambda: cudf.DataFrame(
+                {
+                    "a": cudf.Series(
+                        [True, None, False, None, False, True, True, False],
+                        dtype="bool_",
+                    ),
+                    "b": cudf.Series(
+                        [
+                            "abc",
+                            "a",
+                            None,
+                            "hello world",
+                            "foo buzz",
+                            "",
+                            None,
+                            "rapids ai",
+                        ],
+                        dtype="object",
+                    ),
+                    "c": cudf.Series(
+                        [0.1, None, 0.2, None, 3, 4, 1000, None],
+                        dtype="float64",
+                    ),
+                }
+            ),
+            pd.DataFrame(
+                {
+                    "a": pd.Series(
+                        [True, None, False, None, False, True, True, False],
+                        dtype=pd.BooleanDtype(),
+                    ),
+                    "b": pd.Series(
+                        [
+                            "abc",
+                            "a",
+                            None,
+                            "hello world",
+                            "foo buzz",
+                            "",
+                            None,
+                            "rapids ai",
+                        ],
+                        dtype=pd.StringDtype(),
+                    ),
+                    "c": pd.Series(
+                        [0.1, None, 0.2, None, 3, 4, 1000, None],
+                        dtype=pd.Float64Dtype(),
+                    ),
+                }
+            ),
+        ),
+    ],
+)
+def test_dataframe_to_pandas_nullable_dtypes(df, expected_pdf):
+    actual_pdf = df().to_pandas(nullable=True)
+
+    assert_eq(actual_pdf, expected_pdf)

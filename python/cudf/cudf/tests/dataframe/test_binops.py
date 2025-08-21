@@ -144,3 +144,27 @@ def test_dataframe_binop_with_mixed_date_types():
     expected = df - ser
     got = gdf - gser
     assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "df1",
+    [
+        pd.DataFrame({"a": [10, 11, 12]}, index=["a", "b", "z"]),
+        pd.DataFrame({"z": ["a"]}),
+        pd.DataFrame({"a": [], "b": []}),
+    ],
+)
+@pytest.mark.parametrize(
+    "df2",
+    [
+        pd.DataFrame(),
+        pd.DataFrame({"a": ["a", "a", "c", "z", "A"], "z": [1, 2, 3, 4, 5]}),
+    ],
+)
+def test_dataframe_error_equality(df1, df2, comparison_op):
+    gdf1 = cudf.from_pandas(df1)
+    gdf2 = cudf.from_pandas(df2)
+
+    assert_exceptions_equal(
+        comparison_op, comparison_op, ([df1, df2],), ([gdf1, gdf2],)
+    )
