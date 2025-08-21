@@ -1534,7 +1534,7 @@ __device__ void zero_fill_null_positions_shared(
 
   auto const data_out = ni.data_out;
 
-  constexpr int bits_per_mask = sizeof(cudf::bitmask_type) * 8;
+  constexpr int bits_per_mask = cudf::detail::size_in_bits<bitmask_type>();
   constexpr int warp_size     = 32;
   constexpr int num_warps     = block_size / warp_size;
 
