@@ -1,5 +1,6 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
 import datetime
+import decimal
 import operator
 
 import cupy as cp
@@ -788,3 +789,70 @@ def test_datetime_series_cmpops_pandas_compatibility(comparison_op):
         got = comparison_op(gsr1, gsr2)
 
     assert_eq(expect, got)
+
+
+def test_decimal_overflow():
+    s = cudf.Series(
+        [decimal.Decimal("0.0009384233522166997927180531650178250")]
+    )
+    result = s * s
+    assert_eq(cudf.Decimal128Dtype(precision=38, scale=37), result.dtype)
+
+    s = cudf.Series([1, 2], dtype=cudf.Decimal128Dtype(precision=38, scale=0))
+    result = s * decimal.Decimal("1.0")
+    assert_eq(cudf.Decimal128Dtype(precision=38, scale=1), result.dtype)
+
+
+def test_decimal_binop_upcast_operands():
+    ser1 = cudf.Series([0.51, 1.51, 2.51]).astype(cudf.Decimal64Dtype(18, 2))
+    ser2 = cudf.Series([0.90, 0.96, 0.99]).astype(cudf.Decimal128Dtype(19, 2))
+    result = ser1 + ser2
+    expected = cudf.Series([1.41, 2.47, 3.50]).astype(
+        cudf.Decimal128Dtype(20, 2)
+    )
+    assert_eq(result, expected)
+
+
+def test_categorical_compare_ordered():
+    cat1 = pd.Categorical(
+        ["a", "a", "b", "c", "a"], categories=["a", "b", "c"], ordered=True
+    )
+    pdsr1 = pd.Series(cat1)
+    sr1 = cudf.Series(cat1)
+    cat2 = pd.Categorical(
+        ["a", "b", "a", "c", "b"], categories=["a", "b", "c"], ordered=True
+    )
+    pdsr2 = pd.Series(cat2)
+    sr2 = cudf.Series(cat2)
+
+    # test equal
+    out = sr1 == sr1
+    assert out.dtype == np.bool_
+    assert type(out[0]) is np.bool_
+    assert np.all(out.to_numpy())
+    assert np.all(pdsr1 == pdsr1)
+
+    # test inequality
+    out = sr1 != sr1
+    assert not np.any(out.to_numpy())
+    assert not np.any(pdsr1 != pdsr1)
+
+    assert pdsr1.cat.ordered
+    assert sr1.cat.ordered
+
+    # test using ordered operators
+    np.testing.assert_array_equal(pdsr1 < pdsr2, (sr1 < sr2).to_numpy())
+    np.testing.assert_array_equal(pdsr1 > pdsr2, (sr1 > sr2).to_numpy())
+
+
+def test_categorical_binary_add():
+    cat = pd.Categorical(["a", "a", "b", "c", "a"], categories=["a", "b", "c"])
+    pdsr = pd.Series(cat)
+    sr = cudf.Series(cat)
+
+    assert_exceptions_equal(
+        lfunc=operator.add,
+        rfunc=operator.add,
+        lfunc_args_and_kwargs=([pdsr, pdsr],),
+        rfunc_args_and_kwargs=([sr, sr],),
+    )

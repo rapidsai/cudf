@@ -351,23 +351,3 @@ def test_decimal_invalid_precision():
 
     with pytest.raises(pa.ArrowInvalid):
         _ = cudf.Series([Decimal("300")], dtype=cudf.Decimal64Dtype(2, 1))
-
-
-def test_decimal_overflow():
-    s = cudf.Series([Decimal("0.0009384233522166997927180531650178250")])
-    result = s * s
-    assert_eq(cudf.Decimal128Dtype(precision=38, scale=37), result.dtype)
-
-    s = cudf.Series([1, 2], dtype=cudf.Decimal128Dtype(precision=38, scale=0))
-    result = s * Decimal("1.0")
-    assert_eq(cudf.Decimal128Dtype(precision=38, scale=1), result.dtype)
-
-
-def test_decimal_binop_upcast_operands():
-    ser1 = cudf.Series([0.51, 1.51, 2.51]).astype(cudf.Decimal64Dtype(18, 2))
-    ser2 = cudf.Series([0.90, 0.96, 0.99]).astype(cudf.Decimal128Dtype(19, 2))
-    result = ser1 + ser2
-    expected = cudf.Series([1.41, 2.47, 3.50]).astype(
-        cudf.Decimal128Dtype(20, 2)
-    )
-    assert_eq(result, expected)

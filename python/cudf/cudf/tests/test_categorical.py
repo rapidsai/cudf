@@ -111,51 +111,6 @@ def test_categorical_compare_unordered():
     )
 
 
-def test_categorical_compare_ordered():
-    cat1 = pd.Categorical(
-        ["a", "a", "b", "c", "a"], categories=["a", "b", "c"], ordered=True
-    )
-    pdsr1 = pd.Series(cat1)
-    sr1 = cudf.Series(cat1)
-    cat2 = pd.Categorical(
-        ["a", "b", "a", "c", "b"], categories=["a", "b", "c"], ordered=True
-    )
-    pdsr2 = pd.Series(cat2)
-    sr2 = cudf.Series(cat2)
-
-    # test equal
-    out = sr1 == sr1
-    assert out.dtype == np.bool_
-    assert type(out[0]) is np.bool_
-    assert np.all(out.to_numpy())
-    assert np.all(pdsr1 == pdsr1)
-
-    # test inequality
-    out = sr1 != sr1
-    assert not np.any(out.to_numpy())
-    assert not np.any(pdsr1 != pdsr1)
-
-    assert pdsr1.cat.ordered
-    assert sr1.cat.ordered
-
-    # test using ordered operators
-    np.testing.assert_array_equal(pdsr1 < pdsr2, (sr1 < sr2).to_numpy())
-    np.testing.assert_array_equal(pdsr1 > pdsr2, (sr1 > sr2).to_numpy())
-
-
-def test_categorical_binary_add():
-    cat = pd.Categorical(["a", "a", "b", "c", "a"], categories=["a", "b", "c"])
-    pdsr = pd.Series(cat)
-    sr = cudf.Series(cat)
-
-    assert_exceptions_equal(
-        lfunc=operator.add,
-        rfunc=operator.add,
-        lfunc_args_and_kwargs=([pdsr, pdsr],),
-        rfunc_args_and_kwargs=([sr, sr],),
-    )
-
-
 def test_categorical_element_indexing():
     """
     Element indexing to a cat column must give the underlying object
