@@ -10,6 +10,10 @@ import pytest
 import rmm
 
 import cudf
+from cudf.core._compat import (
+    PANDAS_CURRENT_SUPPORTED_VERSION,
+    PANDAS_VERSION,
+)
 from cudf.core.buffer import as_buffer
 from cudf.core.column.column import _can_values_be_equal, as_column
 from cudf.testing import assert_eq
@@ -612,3 +616,20 @@ def test_string_int_to_ipv4_dtype_fail(dtype):
     gsr = cudf.Series([1, 2, 3, 4, 5]).astype(dtype)
     with pytest.raises(TypeError):
         gsr._column.int2ip()
+
+
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas.",
+)
+def test_datetime_can_cast_safely():
+    sr = cudf.Series(
+        ["1679-01-01", "2000-01-31", "2261-01-01"], dtype="datetime64[ms]"
+    )
+    assert sr._column.can_cast_safely(np.dtype("datetime64[ns]"))
+
+    sr = cudf.Series(
+        ["1677-01-01", "2000-01-31", "2263-01-01"], dtype="datetime64[ms]"
+    )
+
+    assert sr._column.can_cast_safely(np.dtype("datetime64[ns]")) is False
