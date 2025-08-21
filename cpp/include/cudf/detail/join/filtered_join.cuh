@@ -38,7 +38,7 @@ namespace cudf::experimental::row::equality {
 class preprocessed_table;
 }
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace detail {
 
 using cudf::experimental::row::lhs_index_type;
@@ -232,4 +232,4 @@ class filtered_join_with_set : public filtered_join {
 };
 
 }  // namespace detail
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf
