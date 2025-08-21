@@ -62,7 +62,7 @@ comment = (
     f"Passed tests: {pr_passed}\n"
     f"cudf.Pandas Skipped: {pr_skipped_by_cudf_pandas}\n"
     f"cudf.Pandas xFailed: {pr_xfailed_by_cudf_pandas}\n"
-    f"pandas skipped: {pr_skipped - pr_skipped_by_cudf_pandas}\n"
+    f"pandas skipped: {pr_skipped - (pr_skipped_by_cudf_pandas + pr_xfailed_by_cudf_pandas)}\n"
 )
 
 

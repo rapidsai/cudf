@@ -370,12 +370,6 @@ jobs:
       script: ci/cudf_pandas_scripts/pandas-tests/run.sh pr
       file_to_upload: ./artifacts/pr-results.json
       artifact-name: pr-results.json
-    # with:
-    #   matrix_filter: '[{"ARCH": "amd64", "PY_VER": "3.13", "CUDA_VER": "12.9.1", "LINUX_VER": "ubuntu24.04", "GPU": "l4", "DRIVER": "latest", "DEPENDENCIES": "newest"}]'
-    #   build_type: pull-request
-    #   script: ci/cudf_pandas_scripts/pandas-tests/run.sh pr
-    #   # Hide test failures because they exceed the GITHUB_STEP_SUMMARY output limit.
-    #   test_summary_show: "none"
   pandas-tests-diff:
     # diff the results of running the Pandas unit tests and publish a job summary
     needs: pandas-tests
