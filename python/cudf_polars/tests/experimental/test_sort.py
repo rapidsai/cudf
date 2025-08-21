@@ -133,3 +133,19 @@ def test_sort_slice(df, engine, offset):
         match="sort does not support multiple partitions for slices with offset.",
     ):
         assert_gpu_result_equal(q, engine=engine)
+
+
+def test_sort_after_sparse_join():
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "scheduler": DEFAULT_SCHEDULER,
+            "max_rows_per_partition": 4,
+        },
+    )
+
+    left = pl.LazyFrame({"foo": list(range(5)), "bar": list(range(5))})
+    right = pl.LazyFrame({"foo": list(range(1))})
+    q = left.join(right, on="foo", how="inner").sort(by=["foo"])
+    assert_gpu_result_equal(q, engine=engine)

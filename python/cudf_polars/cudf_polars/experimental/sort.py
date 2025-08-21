@@ -12,7 +12,7 @@ import pylibcudf as plc
 import rmm.mr
 from rmm.pylibrmm.stream import DEFAULT_STREAM
 
-from cudf_polars.containers import DataFrame
+from cudf_polars.containers import Column, DataFrame, DataType
 from cudf_polars.dsl.expr import Col
 from cudf_polars.dsl.ir import IR, Sort
 from cudf_polars.dsl.traversal import traversal
@@ -26,7 +26,6 @@ from cudf_polars.experimental.utils import _concat, _lower_ir_fallback
 if TYPE_CHECKING:
     from collections.abc import MutableMapping, Sequence
 
-    from cudf_polars.containers import DataType
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.typing import Schema
@@ -120,17 +119,35 @@ def _select_local_split_candidates(
     row id columns).  The columns are already in the order of `by`.
     """
     df = df.select(by)
+    name_gen = unique_names(df.column_names)
+    part_id_dtype = DataType(pl.UInt32())
+    if df.num_rows == 0:
+        # Return empty DataFrame with the correct column names and dtypes
+        return DataFrame(
+            [
+                *df.columns,
+                Column(
+                    plc.column_factories.make_empty_column(part_id_dtype.plc),
+                    dtype=part_id_dtype,
+                    name=next(name_gen),
+                ),
+                Column(
+                    plc.column_factories.make_empty_column(part_id_dtype.plc),
+                    dtype=part_id_dtype,
+                    name=next(name_gen),
+                ),
+            ]
+        )
+
     candidates = [i * df.num_rows // num_partitions for i in range(num_partitions)]
-    row_id = plc.Column.from_iterable_of_py(candidates)
+    row_id = plc.Column.from_iterable_of_py(candidates, part_id_dtype.plc)
 
     res = plc.copying.gather(df.table, row_id, plc.copying.OutOfBoundsPolicy.DONT_CHECK)
-    part_id_dtype = plc.types.DataType(plc.types.TypeId.UINT32)
     part_id = plc.Column.from_scalar(
-        plc.Scalar.from_py(my_part_id, part_id_dtype),
+        plc.Scalar.from_py(my_part_id, part_id_dtype.plc),
         len(candidates),
     )
 
-    name_gen = unique_names(df.column_names)
     return DataFrame.from_table(
         plc.Table([*res.columns(), part_id, row_id]),
         [*df.column_names, next(name_gen), next(name_gen)],
