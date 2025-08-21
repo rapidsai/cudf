@@ -429,7 +429,6 @@ add_library(
   src/groupby/hash/compute_aggregations.cu
   src/groupby/hash/compute_aggregations_null.cu
   src/groupby/hash/compute_global_memory_aggs.cu
-  src/groupby/hash/compute_global_memory_aggs_null.cu
   src/groupby/hash/compute_groupby.cu
   src/groupby/hash/compute_mapping_indices.cu
   src/groupby/hash/compute_mapping_indices_null.cu
