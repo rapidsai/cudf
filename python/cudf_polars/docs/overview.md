@@ -425,6 +425,8 @@ Since `DataSourceInfo` tracks information for an entire table, we use
 for a specific IR + column combination. We bundle these references
 together to simplify the design and maintenance of `StatsCollector`.
 **NOTE:** The current `UniqueStats` estimates are not yet populated.
+- `JoinKey`: This class is used to define a set of columns being
+joined on and the estimated unique-value count of the key.
 - `StatsCollector`: This class is used to collect and store
 statistics for all IR nodes within a single query. The statistics
 attached to each IR node refer to the **output** columns of the
@@ -436,6 +438,10 @@ Each object has two important attributes:
   **NOTE:** This attribute is not yet populated.
   - `StatsCollector.column_stats`: Returns a mapping between each IR
   node and the `dict[str, ColumnStats]` mapping for that node.
+  - `StatsCollector.join_keys`: Returns a mapping between distinct
+  `JoinKey` objects.
+  - `StatsCollector.joins`: Returns a mapping between IR nodes and
+  the list of associated `JoinKey` objects.
 
 ## Collecting and using statistics
 
