@@ -432,7 +432,7 @@ def test_base_stats_join_key_info():
     assert key_sets[1] == [("prod_id", "loc_id"), ("prod_id", "loc_id")]
 
     # Check basic PK-FK unique-count heuristics
-    stats = apply_pkfk_heuristics(stats, config_options)
+    apply_pkfk_heuristics(stats.join_keys)
     unique_count_estimate = stats.joins[ir][0].unique_count_estimate
     assert unique_count_estimate == stats.joins[ir][1].unique_count_estimate
     assert (

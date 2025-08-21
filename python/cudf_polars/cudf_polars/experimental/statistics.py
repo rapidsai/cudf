@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import itertools
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING
 
 from cudf_polars.dsl.ir import (
     IR,
@@ -46,57 +46,53 @@ def collect_base_stats(root: IR, config_options: ConfigOptions) -> StatsCollecto
     Returns
     -------
     A new StatsCollector object with populated datasource statistics.
+
+    Notes
+    -----
+    This function initializes the ``StatsCollector`` object
+    with the base datasource statistics. The goal is to build an
+    outline of the statistics that will be collected before any
+    real data is sampled.
     """
     stats: StatsCollector = StatsCollector()
     for node in post_traversal([root]):
         # Initialize column statistics from datasource information
         stats.column_stats[node] = initialize_column_stats(node, stats, config_options)
         # Initialize Join-key information
-        stats = initialize_join_key_info(node, stats, config_options)
+        initialize_join_key_info(node, stats, config_options)
     return stats
 
 
 def initialize_join_key_info(
     node: IR, stats: StatsCollector, config_options: ConfigOptions
-) -> StatsCollector:
+) -> None:
     """
-    Update join-key information for the given node.
+    Initialize join-key information for the given node.
 
     Parameters
     ----------
     node
-        IR node to update join-key information for.
+        IR node to initialize join-key information for.
     stats
         StatsCollector object to update.
     config_options
         GPUEngine configuration options.
-
-    Returns
-    -------
-    Updated StatsCollector object.
 
     Notes
     -----
     This function updates ``stats.joins`` and ``stats.join_keys``.
     """
     if isinstance(node, Join):
+        # Only need to update join-key information for Join nodes.
         left, right = node.children
-        left_keys = [stats.column_stats[left][n.name] for n in node.left_on]
-        right_keys = [stats.column_stats[right][n.name] for n in node.right_on]
-        lkey = JoinKey(*left_keys)
-        rkey = JoinKey(*right_keys)
+        lkey = JoinKey(*[stats.column_stats[left][n.name] for n in node.left_on])
+        rkey = JoinKey(*[stats.column_stats[right][n.name] for n in node.right_on])
         stats.join_keys[lkey].add(rkey)
         stats.join_keys[rkey].add(lkey)
         stats.joins[node] = [lkey, rkey]
-    return stats
 
 
-T = TypeVar("T")
-
-
-def find_equivalence_sets(
-    joins: Mapping[T, set[T]],
-) -> list[set[T]]:
+def find_equivalence_sets(joins: Mapping[JoinKey, set[JoinKey]]) -> list[set[JoinKey]]:
     """
     Find equivalence sets in a join-key mapping.
 
@@ -108,6 +104,10 @@ def find_equivalence_sets(
     Returns
     -------
     List of equivalence sets.
+
+    Notes
+    -----
+    This function is used by ``apply_pkfk_heuristics``.
     """
     seen = set()
     components = []
@@ -126,33 +126,25 @@ def find_equivalence_sets(
     return components
 
 
-def apply_pkfk_heuristics(
-    stats: StatsCollector,
-    config_options: ConfigOptions,
-) -> StatsCollector:
+def apply_pkfk_heuristics(joins: Mapping[JoinKey, set[JoinKey]]) -> None:
     """
-    Apply PK-FK join heuristics to the given stats.
+    Apply PK-FK unique-count heuristics to join keys.
 
     Parameters
     ----------
-    stats
-        StatsCollector object to update.
-    config_options
-        GPUEngine configuration options.
-
-    Returns
-    -------
-    Updated StatsCollector object.
+    joins
+        Join-key mapping to apply PK-FK heuristics to.
 
     Notes
     -----
     This function modifies the ``JoinKey`` objects being tracked
-    in ``StatsCollector.joins`` and ``StatsCollector.join_keys``.
+    in ``StatsCollector.joins`` and ``StatsCollector.join_keys``
+    using PK-FK heuristics to estimate the local unique-value count.
     """
     # This applies the PK-FK matching scheme of
     # https://blobs.duckdb.org/papers/tom-ebergen-msc-thesis-join-order-optimization-with-almost-no-statistics.pdf
     # See section 3.2
-    for keys in find_equivalence_sets(stats.join_keys):
+    for keys in find_equivalence_sets(joins):
         unique_count_estimate = max(
             (
                 c.unique_count_estimate
@@ -168,7 +160,6 @@ def apply_pkfk_heuristics(
         for key in keys:
             # Update unique-count estimate for each join key
             key.unique_count_estimate = unique_count_estimate
-    return stats
 
 
 def _update_unique_stats_columns(
