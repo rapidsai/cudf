@@ -73,6 +73,18 @@ def test_create_interval_series(data1, data2, data3, data4, interval_closed):
     assert_eq(expect_three, got_three)
 
 
+def test_from_pandas_for_series_nan_as_null(nan_as_null):
+    data = [np.nan, 2.0, 3.0]
+    psr = pd.Series(data)
+
+    expected = cudf.Series._from_column(
+        as_column(data, nan_as_null=nan_as_null)
+    )
+    got = cudf.from_pandas(psr, nan_as_null=nan_as_null)
+
+    assert_eq(expected, got)
+
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -225,6 +237,41 @@ def test_series_init_dict(data):
     cudf_series = cudf.Series(data)
 
     assert_eq(pandas_series, cudf_series)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [[]],
+        [[[]]],
+        [[0]],
+        [[0, 1]],
+        [[0, 1], [2, 3]],
+        [[[0, 1], [2]], [[3, 4]]],
+        [[None]],
+        [[[None]]],
+        [[None], None],
+        [[1, None], [1]],
+        [[1, None], None],
+        [[[1, None], None], None],
+    ],
+)
+def test_create_list_series(data):
+    expect = pd.Series(data)
+    got = cudf.Series(data)
+    assert_eq(expect, got)
+    assert isinstance(got[0], type(expect[0]))
+    assert isinstance(got.to_pandas()[0], type(expect[0]))
+
+
+@pytest.mark.parametrize(
+    "input_obj", [[[1, pd.NA, 3]], [[1, pd.NA, 3], [4, 5, pd.NA]]]
+)
+def test_construction_series_with_nulls(input_obj):
+    expect = pa.array(input_obj, from_pandas=True)
+    got = cudf.Series(input_obj).to_arrow()
+
+    assert expect == got
 
 
 def test_series_unitness_np_datetimelike_units():
@@ -641,6 +688,98 @@ def test_construct_all_pd_NA_with_dtype(nan_as_null):
     assert_eq(result, expected)
 
 
+def test_to_from_arrow_nulls(all_supported_types_as_str):
+    if all_supported_types_as_str in {"category", "str"}:
+        pytest.skip(f"Test not applicable with {all_supported_types_as_str}")
+    data_type = all_supported_types_as_str
+    if data_type == "bool":
+        s1 = pa.array([True, None, False, None, True], type=data_type)
+    else:
+        dtype = np.dtype(data_type)
+        if dtype.type == np.datetime64:
+            time_unit, _ = np.datetime_data(dtype)
+            data_type = pa.timestamp(unit=time_unit)
+        elif dtype.type == np.timedelta64:
+            time_unit, _ = np.datetime_data(dtype)
+            data_type = pa.duration(unit=time_unit)
+        s1 = pa.array([1, None, 3, None, 5], type=data_type)
+    gs1 = cudf.Series.from_arrow(s1)
+    assert isinstance(gs1, cudf.Series)
+    # We have 64B padded buffers for nulls whereas Arrow returns a minimal
+    # number of bytes, so only check the first byte in this case
+    np.testing.assert_array_equal(
+        np.asarray(s1.buffers()[0]).view("u1")[0],
+        gs1._column.mask_array_view(mode="read").copy_to_host().view("u1")[0],
+    )
+    assert pa.Array.equals(s1, gs1.to_arrow())
+
+    s2 = pa.array([None, None, None, None, None], type=data_type)
+    gs2 = cudf.Series.from_arrow(s2)
+    assert isinstance(gs2, cudf.Series)
+    # We have 64B padded buffers for nulls whereas Arrow returns a minimal
+    # number of bytes, so only check the first byte in this case
+    np.testing.assert_array_equal(
+        np.asarray(s2.buffers()[0]).view("u1")[0],
+        gs2._column.mask_array_view(mode="read").copy_to_host().view("u1")[0],
+    )
+    assert pa.Array.equals(s2, gs2.to_arrow())
+
+
+def test_cuda_array_interface(numeric_and_bool_types_as_str):
+    np_data = np.arange(10).astype(numeric_and_bool_types_as_str)
+    cupy_data = cp.array(np_data)
+    pd_data = pd.Series(np_data)
+
+    cudf_data = cudf.Series(cupy_data)
+    assert_eq(pd_data, cudf_data)
+
+    gdf = cudf.DataFrame()
+    gdf["test"] = cupy_data
+    pd_data.name = "test"
+    assert_eq(pd_data, gdf["test"])
+
+
+@pytest.mark.parametrize("nan_as_null", [True, False])
+def test_series_list_nanasnull(nan_as_null):
+    data = [1.0, 2.0, 3.0, np.nan, None]
+
+    expect = pa.array(data, from_pandas=nan_as_null)
+    got = cudf.Series(data, nan_as_null=nan_as_null).to_arrow()
+
+    # Bug in Arrow 0.14.1 where NaNs aren't handled
+    expect = expect.cast("int64", safe=False)
+    got = got.cast("int64", safe=False)
+
+    assert pa.Array.equals(expect, got)
+
+
+@pytest.mark.parametrize("num_elements", [0, 10])
+@pytest.mark.parametrize("null_type", [np.nan, None, "mixed"])
+def test_series_all_null(num_elements, null_type):
+    if null_type == "mixed":
+        data = []
+        data1 = [np.nan] * int(num_elements / 2)
+        data2 = [None] * int(num_elements / 2)
+        for idx in range(len(data1)):
+            data.append(data1[idx])
+            data.append(data2[idx])
+    else:
+        data = [null_type] * num_elements
+
+    # Typecast Pandas because None will return `object` dtype
+    expect = pd.Series(data, dtype="float64")
+    got = cudf.Series(data, dtype="float64")
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("num_elements", [0, 10])
+def test_series_all_valid_nan(num_elements):
+    data = [np.nan] * num_elements
+    sr = cudf.Series(data, nan_as_null=False)
+    np.testing.assert_equal(sr.null_count, 0)
+
+
 def test_series_empty_dtype():
     expected = pd.Series([])
     actual = cudf.Series([])
@@ -1011,6 +1150,23 @@ def test_from_pandas_object_dtype_passed_dtype(klass):
     result = klass(pd.Series([True, False], dtype=object), dtype="int8")
     expected = klass(pa.array([1, 0], type=pa.int8()))
     assert_eq(result, expected)
+
+
+def test_series_basic():
+    # Make series from buffer
+    a1 = np.arange(10, dtype=np.float64)
+    series = cudf.Series(a1)
+    assert len(series) == 10
+    np.testing.assert_equal(series.to_numpy(), np.hstack([a1]))
+
+
+def test_series_from_cupy_scalars():
+    data = [0.1, 0.2, 0.3]
+    data_np = np.array(data)
+    data_cp = cp.array(data)
+    s_np = cudf.Series([data_np[0], data_np[2]])
+    s_cp = cudf.Series([data_cp[0], data_cp[2]])
+    assert_eq(s_np, s_cp)
 
 
 def test_to_dense_array():

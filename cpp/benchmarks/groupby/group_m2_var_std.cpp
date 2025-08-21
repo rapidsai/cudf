@@ -21,11 +21,13 @@
 
 #include <nvbench/nvbench.cuh>
 
-template <typename Type>
-void groupby_m2_helper(nvbench::state& state,
-                       cudf::size_type num_rows,
-                       cudf::size_type value_key_ratio,
-                       double null_probability)
+namespace {
+
+template <typename Type, cudf::aggregation::Kind Agg>
+void run_benchmark(nvbench::state& state,
+                   cudf::size_type num_rows,
+                   cudf::size_type value_key_ratio,
+                   double null_probability)
 {
   auto const keys = [&] {
     data_profile const profile =
@@ -51,13 +53,22 @@ void groupby_m2_helper(nvbench::state& state,
   // Vector of 1 request
   std::vector<cudf::groupby::aggregation_request> requests(1);
   requests.back().values = values->view();
-  requests.back().aggregations.push_back(cudf::make_m2_aggregation<cudf::groupby_aggregation>());
+  if constexpr (Agg == cudf::aggregation::Kind::M2) {
+    requests.back().aggregations.push_back(cudf::make_m2_aggregation<cudf::groupby_aggregation>());
+  } else if constexpr (Agg == cudf::aggregation::Kind::VARIANCE) {
+    requests.back().aggregations.push_back(
+      cudf::make_variance_aggregation<cudf::groupby_aggregation>());
+  } else if constexpr (Agg == cudf::aggregation::Kind::STD) {
+    requests.back().aggregations.push_back(cudf::make_std_aggregation<cudf::groupby_aggregation>());
+  } else {
+    throw std::runtime_error("Unsupported aggregation kind.");
+  }
 
   auto const mem_stats_logger = cudf::memory_stats_logger();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
-    auto gb_obj       = cudf::groupby::groupby(cudf::table_view({keys->view()}));
-    auto const result = gb_obj.aggregate(requests);
+    auto gb_obj                        = cudf::groupby::groupby(cudf::table_view({keys->view()}));
+    [[maybe_unused]] auto const result = gb_obj.aggregate(requests);
   });
 
   auto const elapsed_time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
@@ -66,18 +77,26 @@ void groupby_m2_helper(nvbench::state& state,
     mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
-template <typename Type>
-void bench_groupby_m2(nvbench::state& state, nvbench::type_list<Type>)
+}  // namespace
+
+template <typename Type, cudf::aggregation::Kind Agg>
+void bench_groupby_m2_var_std(nvbench::state& state,
+                              nvbench::type_list<Type, nvbench::enum_type<Agg>>)
 {
   auto const value_key_ratio  = static_cast<cudf::size_type>(state.get_int64("value_key_ratio"));
   auto const num_rows         = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const null_probability = state.get_float64("null_probability");
 
-  groupby_m2_helper<Type>(state, num_rows, value_key_ratio, null_probability);
+  run_benchmark<Type, Agg>(state, num_rows, value_key_ratio, null_probability);
 }
 
-NVBENCH_BENCH_TYPES(bench_groupby_m2, NVBENCH_TYPE_AXES(nvbench::type_list<int32_t, double>))
-  .set_name("groupby_m2")
-  .add_int64_axis("value_key_ratio", {10, 30, 100})
-  .add_int64_axis("num_rows", {10'000, 1'000'000, 10'000'000})
-  .add_float64_axis("null_probability", {0, 0.1, 0.9});
+using Types    = nvbench::type_list<int32_t, double>;
+using AggKinds = nvbench::enum_type_list<cudf::aggregation::Kind::M2,
+                                         cudf::aggregation::Kind::VARIANCE,
+                                         cudf::aggregation::Kind::STD>;
+
+NVBENCH_BENCH_TYPES(bench_groupby_m2_var_std, NVBENCH_TYPE_AXES(Types, AggKinds))
+  .set_name("groupby_m2_var_std")
+  .add_int64_axis("value_key_ratio", {20, 100})
+  .add_int64_axis("num_rows", {100'000, 10'000'000, 100'000'000})
+  .add_float64_axis("null_probability", {0, 0.5});
