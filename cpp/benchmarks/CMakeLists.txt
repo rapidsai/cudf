@@ -174,6 +174,11 @@ ConfigureNVBench(NDSH_Q09_NVBENCH ndsh/q09.cpp ndsh/utilities.cpp)
 ConfigureNVBench(NDSH_Q10_NVBENCH ndsh/q10.cpp ndsh/utilities.cpp)
 
 # ##################################################################################################
+# * filter benchmark -------------------------------------------------------------------
+
+ConfigureNVBench(FILTER_NVBENCH filter/minmax_filter.cpp)
+
+# ##################################################################################################
 # * stream_compaction benchmark -------------------------------------------------------------------
 ConfigureNVBench(
   STREAM_COMPACTION_NVBENCH
@@ -261,8 +266,9 @@ ConfigureBench(
 
 ConfigureNVBench(
   GROUPBY_NVBENCH
+  groupby/group_complex_keys.cpp
   groupby/group_histogram.cpp
-  groupby/group_m2.cpp
+  groupby/group_m2_var_std.cpp
   groupby/group_max.cpp
   groupby/group_max_multithreaded.cpp
   groupby/group_nunique.cpp

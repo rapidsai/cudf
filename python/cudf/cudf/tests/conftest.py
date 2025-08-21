@@ -1,6 +1,7 @@
 # Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 import itertools
+import math
 import operator
 import os
 import pathlib
@@ -210,6 +211,44 @@ comparison_ops = [
     operator.gt,
     operator.ge,
 ]
+bitwise_ops = [
+    operator.and_,
+    operator.or_,
+    operator.xor,
+]
+unary_ops = [
+    math.acos,
+    math.acosh,
+    math.asin,
+    math.asinh,
+    math.atan,
+    math.atanh,
+    math.ceil,
+    math.cos,
+    math.degrees,
+    math.erf,
+    math.erfc,
+    math.exp,
+    math.expm1,
+    math.fabs,
+    math.floor,
+    math.gamma,
+    math.lgamma,
+    math.log,
+    math.log10,
+    math.log1p,
+    math.log2,
+    math.radians,
+    math.sin,
+    math.sinh,
+    math.sqrt,
+    math.tan,
+    math.tanh,
+    operator.pos,
+    operator.neg,
+    operator.not_,
+    operator.invert,
+]
 
 
 @pytest.fixture(params=arithmetic_ops)
@@ -236,6 +275,16 @@ def comparison_op(request):
 def comparison_op_method(comparison_op):
     """Comparison methods defined on Series/DataFrame"""
     return comparison_op.__name__
+
+
+@pytest.fixture(params=bitwise_ops)
+def bitwise_op(request):
+    return request.param
+
+
+@pytest.fixture(params=unary_ops)
+def unary_op(request):
+    return request.param
 
 
 @pytest.fixture(params=arithmetic_ops + comparison_ops)
@@ -532,6 +581,34 @@ def ascending(request):
     return request.param
 
 
+axis_0s = [0, "index"]
+axis_1s = [1, "columns"]
+
+
+@pytest.fixture(params=axis_0s)
+def axis_0(request):
+    """Param for `axis=0` argument"""
+    return request.param
+
+
+@pytest.fixture(params=axis_1s)
+def axis_1(request):
+    """Param for `axis=1` argument"""
+    return request.param
+
+
+@pytest.fixture(params=axis_0s + axis_1s)
+def axis(request):
+    """Param for `axis` argument"""
+    return request.param
+
+
+@pytest.fixture(params=[True, False])
+def sort(request):
+    """Param for `sort` argument"""
+    return request.param
+
+
 @pytest.fixture(params=[True, False])
 def numeric_only(request):
     """Param for `numeric_only` argument"""
@@ -547,4 +624,10 @@ def categorical_ordered(request):
 @pytest.fixture(params=["left", "right", "both", "neither"])
 def interval_closed(request):
     """Param for `closed` argument for interval types"""
+    return request.param
+
+
+@pytest.fixture(params=["all", "any"])
+def dropna_how(request):
+    """Param for `how` argument"""
     return request.param

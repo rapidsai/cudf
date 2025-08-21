@@ -72,6 +72,18 @@ def test_create_interval_series(data1, data2, data3, data4, interval_closed):
     assert_eq(expect_three, got_three)
 
 
+def test_from_pandas_for_series_nan_as_null(nan_as_null):
+    data = [np.nan, 2.0, 3.0]
+    psr = pd.Series(data)
+
+    expected = cudf.Series._from_column(
+        as_column(data, nan_as_null=nan_as_null)
+    )
+    got = cudf.from_pandas(psr, nan_as_null=nan_as_null)
+
+    assert_eq(expected, got)
+
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -224,6 +236,41 @@ def test_series_init_dict(data):
     cudf_series = cudf.Series(data)
 
     assert_eq(pandas_series, cudf_series)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [[]],
+        [[[]]],
+        [[0]],
+        [[0, 1]],
+        [[0, 1], [2, 3]],
+        [[[0, 1], [2]], [[3, 4]]],
+        [[None]],
+        [[[None]]],
+        [[None], None],
+        [[1, None], [1]],
+        [[1, None], None],
+        [[[1, None], None], None],
+    ],
+)
+def test_create_list_series(data):
+    expect = pd.Series(data)
+    got = cudf.Series(data)
+    assert_eq(expect, got)
+    assert isinstance(got[0], type(expect[0]))
+    assert isinstance(got.to_pandas()[0], type(expect[0]))
+
+
+@pytest.mark.parametrize(
+    "input_obj", [[[1, pd.NA, 3]], [[1, pd.NA, 3], [4, 5, pd.NA]]]
+)
+def test_construction_series_with_nulls(input_obj):
+    expect = pa.array(input_obj, from_pandas=True)
+    got = cudf.Series(input_obj).to_arrow()
+
+    assert expect == got
 
 
 def test_series_unitness_np_datetimelike_units():

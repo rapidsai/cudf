@@ -37,6 +37,8 @@
 #include <thrust/transform_scan.h>
 #include <thrust/unique.h>
 
+#include <algorithm>
+#include <array>
 #include <iostream>
 #include <numeric>
 
@@ -127,17 +129,20 @@ void codec_stats::add_pages(host_span<ColumnChunkDesc const> chunks,
                             host_span<bool const> page_mask)
 {
   // Create a page mask iterator that defaults to true if the page_mask is empty
-  auto page_mask_iter =
-    page_mask.empty() ? thrust::make_constant_iterator(true) : page_mask.begin();
+  auto page_mask_iter = thrust::make_constant_iterator(true);
 
   // Zip iterator for iterating over pages and the page mask
   auto zip_iter = thrust::make_zip_iterator(pages.begin(), page_mask_iter);
 
   std::for_each(zip_iter, zip_iter + pages.size(), [&](auto const& item) {
     auto& [page, is_page_needed] = item;
+    // If this is a V2 page, use the `is_compressed` field to determine if it's compressed.
+    // For V1 pages, it's always compressed if the chunk.codec is specified.
+    auto const is_page_compressed = (page.flags & PAGEINFO_FLAGS_V2) ? page.is_compressed : true;
     if (is_page_needed && chunks[page.chunk_idx].codec == compression_type &&
         (page.flags & cudf::io::parquet::detail::PAGEINFO_FLAGS_DICTIONARY) ==
-          (selection == page_selection::DICT_PAGES)) {
+          (selection == page_selection::DICT_PAGES) and
+        is_page_compressed) {
       ++num_pages;
       total_decomp_size += page.uncompressed_page_size;
       max_decompressed_size = std::max(max_decompressed_size, page.uncompressed_page_size);
@@ -538,8 +543,11 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
     for (auto page_idx = 0; std::cmp_less(page_idx, pages.size()); ++page_idx) {
       auto& page                = pages[page_idx];
       auto const is_page_needed = page_mask_iter[page_idx];
+      // If this is a V2 page, use the `is_compressed` field to determine if it's compressed.
+      // For V1 pages, it's always compressed if the chunk.codec is specified.
+      auto const is_page_compressed = (page.flags & PAGEINFO_FLAGS_V2) ? page.is_compressed : true;
       if (is_page_needed && chunks[page.chunk_idx].codec == codec.compression_type &&
-          (page.flags & PAGEINFO_FLAGS_DICTIONARY) == select_dict_pages) {
+          (page.flags & PAGEINFO_FLAGS_DICTIONARY) == select_dict_pages and is_page_compressed) {
         auto const dst_base = static_cast<uint8_t*>(decomp_data) + decomp_offset;
         // offset will only be non-zero for V2 pages
         auto const offset =
@@ -684,14 +692,11 @@ void detect_malformed_pages(device_span<PageInfo const> pages,
   }
 }
 
-void include_decompression_scratch_size(device_span<ColumnChunkDesc const> chunks,
-                                        device_span<PageInfo const> pages,
-                                        device_span<cumulative_page_info> c_info,
-                                        rmm::cuda_stream_view stream)
+rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
+  device_span<ColumnChunkDesc const> chunks,
+  device_span<PageInfo const> pages,
+  rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(pages.size() == c_info.size(),
-               "Encountered page/cumulative_page_info size mismatch");
-
   auto page_keys = make_page_key_iterator(pages);
 
   // per-codec page counts and decompression sizes
@@ -712,17 +717,112 @@ void include_decompression_scratch_size(device_span<ColumnChunkDesc const> chunk
     return cudf::io::detail::get_decompression_scratch_size(d);
   });
 
-  // add to the cumulative_page_info data
   rmm::device_uvector<size_t> d_temp_cost = cudf::detail::make_device_uvector_async(
     temp_cost, stream, cudf::get_current_device_resource_ref());
+
+  std::array codecs{compression_type::BROTLI,
+                    compression_type::GZIP,
+                    compression_type::LZ4,
+                    compression_type::SNAPPY,
+                    compression_type::ZSTD};
+  for (auto const codec : codecs) {
+    if (cudf::io::detail::is_decompression_scratch_size_ex_supported(codec)) {
+      auto const total_decomp_info = thrust::transform_reduce(
+        rmm::exec_policy(stream),
+        decomp_iter,
+        decomp_iter + pages.size(),
+        cuda::proclaim_return_type<decompression_info>(
+          [codec] __device__(decompression_info const& d) {
+            return d.type == codec ? d : decompression_info{codec, 0, 0, 0};
+          }),
+        decompression_info{codec, 0, 0, 0},
+        decomp_sum{});
+
+      // Collect pages with matching codecs
+      rmm::device_uvector<device_span<uint8_t const>> temp_spans(pages.size(), stream);
+      auto iter = thrust::make_counting_iterator(size_t{0});
+      thrust::for_each(
+        rmm::exec_policy_nosync(stream),
+        iter,
+        iter + pages.size(),
+        [pages      = pages.begin(),
+         chunks     = chunks.begin(),
+         temp_spans = temp_spans.begin(),
+         codec] __device__(size_t i) {
+          auto const& page = pages[i];
+          if (parquet_compression_support(chunks[page.chunk_idx].codec).first == codec) {
+            temp_spans[i] = {page.page_data, static_cast<size_t>(page.compressed_page_size)};
+          } else {
+            temp_spans[i] = {nullptr, 0};  // Mark pages with other codecs as empty
+          }
+        });
+      // Copy only non-null spans
+      rmm::device_uvector<device_span<uint8_t const>> page_spans(pages.size(), stream);
+      auto end_iter =
+        thrust::copy_if(rmm::exec_policy_nosync(stream),
+                        temp_spans.begin(),
+                        temp_spans.end(),
+                        page_spans.begin(),
+                        [] __device__(auto const& span) { return span.data() != nullptr; });
+      if (end_iter == page_spans.begin()) {
+        // No pages compressed with this codec, skip
+        continue;
+      }
+      page_spans.resize(end_iter - page_spans.begin(), stream);
+
+      auto const total_temp_size    = get_decompression_scratch_size(total_decomp_info);
+      auto const total_temp_size_ex = cudf::io::detail::get_decompression_scratch_size_ex(
+        total_decomp_info.type,
+        page_spans,
+        total_decomp_info.max_page_decompressed_size,
+        total_decomp_info.total_decompressed_size,
+        stream);
+
+      // Make use of the extended API if it provides a more accurate estimate
+      if (total_temp_size_ex < total_temp_size) {
+        // The new extended API provides a more accurate (smaller) estimate than the legacy API.
+        // We cannot efficiently use the extended API to get per-page scratch sizes, so we adjust
+        // the per-page scratch sizes to on-average reflect the better estimate. This means that
+        // the scratch size might not be accurate for each page, but it will in aggregate.
+        auto const adjustment_ratio = static_cast<double>(total_temp_size_ex) / total_temp_size;
+
+        // Apply the adjustment ratio to each page's temporary cost
+        thrust::for_each(rmm::exec_policy_nosync(stream),
+                         thrust::make_counting_iterator(size_t{0}),
+                         thrust::make_counting_iterator(pages.size()),
+                         [pages           = pages.begin(),
+                          chunks          = chunks.begin(),
+                          d_temp_cost_ptr = d_temp_cost.begin(),
+                          adjustment_ratio,
+                          codec] __device__(size_t i) {
+                           auto const page_codec =
+                             parquet_compression_support(chunks[pages[i].chunk_idx].codec).first;
+                           // Only adjust pages that use the current compression codec
+                           if (page_codec == codec) {
+                             auto const cost = d_temp_cost_ptr[i];
+                             // Scale down the cost and round up to ensure we don't underestimate
+                             auto const adjusted =
+                               static_cast<size_t>(cuda::std::ceil(cost * adjustment_ratio));
+                             d_temp_cost_ptr[i] = adjusted;
+                           }
+                         });
+      }
+    }
+  }
+  return d_temp_cost;
+}
+
+void include_decompression_scratch_size(device_span<size_t const> temp_cost,
+                                        device_span<cumulative_page_info> c_info,
+                                        rmm::cuda_stream_view stream)
+{
   auto iter = thrust::make_counting_iterator(size_t{0});
   thrust::for_each(rmm::exec_policy_nosync(stream),
                    iter,
-                   iter + pages.size(),
-                   [temp_cost = d_temp_cost.begin(), c_info = c_info.begin()] __device__(size_t i) {
+                   iter + c_info.size(),
+                   [temp_cost = temp_cost.begin(), c_info = c_info.begin()] __device__(size_t i) {
                      c_info[i].size_bytes += temp_cost[i];
                    });
-  stream.synchronize();
 }
 
 }  // namespace cudf::io::parquet::detail
