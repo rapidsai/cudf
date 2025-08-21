@@ -120,7 +120,7 @@ def test_null_count():
 
 @pytest.mark.parametrize("method", ["ordinal", "dense", "min", "max", "average"])
 @pytest.mark.parametrize("descending", [False, True])
-def test_rank_supported(request, ldf, method, descending):
+def test_rank_supported(request, ldf: pl.LazyFrame, method: str, *, descending: bool):
     request.applymarker(
         pytest.mark.xfail(condition=POLARS_VERSION_LT_132, reason="nested loop join")
     )
@@ -131,18 +131,27 @@ def test_rank_supported(request, ldf, method, descending):
 
 @pytest.mark.parametrize("method", ["ordinal", "dense", "min", "max", "average"])
 @pytest.mark.parametrize("descending", [False, True])
-def test_rank_methods_with_null_values(
-    ldf: pl.LazyFrame, method: str, *, descending: bool
+@pytest.mark.parametrize("test", ["with_nulls", "with_ties"])
+def test_rank_methods_with_nulls_or_ties(
+    request, ldf: pl.LazyFrame, method: str, *, descending: bool, test: str
 ) -> None:
-    x_null = pl.when((pl.col("a") % 2) == 0).then(None).otherwise(pl.col("a"))
+    request.applymarker(
+        pytest.mark.xfail(condition=POLARS_VERSION_LT_132, reason="nested loop join")
+    )
 
-    q = ldf.select(x_null.rank(method=method, descending=descending))
+    base = pl.col("a")
+    if test == "with_nulls":
+        expr = pl.when((base % 2) == 0).then(None).otherwise(base)
+    else:
+        expr = pl.when((base % 2) == 0).then(pl.lit(-5)).otherwise(base)
+
+    q = ldf.select(expr.rank(method=method, descending=descending))
     assert_gpu_result_equal(q)
 
 
 @pytest.mark.parametrize("seed", [42])
 @pytest.mark.parametrize("method", ["random"])
-def test_rank_unsupported(ldf, method, seed):
+def test_rank_unsupported(ldf: pl.LazyFrame, method: str, seed: int) -> None:
     expr = pl.col("a").rank(method=method, seed=seed)
     q = ldf.select(expr)
     assert_ir_translation_raises(q, NotImplementedError)
