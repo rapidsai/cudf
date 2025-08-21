@@ -451,6 +451,7 @@ cudf::size_type distinct_count(table_view const& input,
  * @param user_data     User-defined device data to pass to the UDF.
  * @param copy_mask     Optional vector of booleans indicating which columns to copy from the input
  *                      columns to the output. If not provided, all columns are copied.
+ * @param is_null_aware Signifies the UDF will receive row inputs as optional values
  * @param stream        CUDA stream used for device memory operations and kernel launches
  * @param mr            Device memory resource used to allocate the returned column's device memory
  * @return              The filtered target columns
@@ -461,6 +462,7 @@ std::vector<std::unique_ptr<column>> filter(
   bool is_ptx,
   std::optional<void*> user_data             = std::nullopt,
   std::optional<std::vector<bool>> copy_mask = std::nullopt,
+  null_aware is_null_aware                   = null_aware::NO,
   rmm::cuda_stream_view stream               = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr          = cudf::get_current_device_resource_ref());
 

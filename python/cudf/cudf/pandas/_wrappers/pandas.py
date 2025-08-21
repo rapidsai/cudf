@@ -298,6 +298,7 @@ DataFrame = make_final_proxy_type(
         "_accessors": set(),
         "_ipython_canary_method_should_not_exist_": ignore_ipython_canary_check,
         "dtypes": property(_DataFrame__dtypes),
+        "__iter__": custom_iter,
     },
 )
 
@@ -1131,7 +1132,8 @@ def _find_user_frame():
     frame = inspect.currentframe()
     while frame:
         modname = frame.f_globals.get("__name__", "")
-        if modname == "__main__" or not modname.startswith("cudf."):
+        # TODO: Remove "nvtx." entry once we cross nvtx-0.2.11 as minimum version
+        if modname == "__main__" or not modname.startswith(("cudf.", "nvtx.")):
             return frame
         frame = frame.f_back
     raise RuntimeError("Could not find the user's frame.")
