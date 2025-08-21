@@ -424,6 +424,7 @@ add_library(
   src/filling/fill.cu
   src/filling/repeat.cu
   src/filling/sequence.cu
+  src/groupby/common/m2_var_std.cu
   src/groupby/groupby.cu
   src/groupby/hash/compute_aggregations.cu
   src/groupby/hash/compute_aggregations_null.cu
@@ -638,6 +639,7 @@ add_library(
   src/reductions/nth_element.cu
   src/reductions/nunique.cu
   src/reductions/product.cu
+  src/reductions/quantile.cu
   src/reductions/reductions.cpp
   src/reductions/scan/rank_scan.cu
   src/reductions/scan/ewm.cu
@@ -661,6 +663,7 @@ add_library(
   src/reductions/std.cu
   src/reductions/sum.cu
   src/reductions/sum_of_squares.cu
+  src/reductions/sum_with_overflow.cu
   src/reductions/var.cu
   src/replace/clamp.cu
   src/replace/nans.cu

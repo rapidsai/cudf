@@ -112,7 +112,7 @@ std::size_t try_parse_numeric_env_var(char const* const env_name, std::size_t de
 }
 }  // namespace
 
-jitify2::ProgramCache<>& jit::program_cache::get(jitify2::PreprocessedProgramData preprog)
+jitify2::ProgramCache<>& jit::program_cache::get(jitify2::PreprocessedProgramData const& preprog)
 {
   std::lock_guard<std::mutex> const caches_lock(_caches_mutex);
 
@@ -138,7 +138,7 @@ jitify2::ProgramCache<>& jit::program_cache::get(jitify2::PreprocessedProgramDat
   return *(existing_cache->second);
 }
 
-jitify2::ProgramCache<>& jit::get_program_cache(jitify2::PreprocessedProgramData preprog)
+jitify2::ProgramCache<>& jit::get_program_cache(jitify2::PreprocessedProgramData const& preprog)
 {
   return cudf::get_context().program_cache().get(preprog);
 }

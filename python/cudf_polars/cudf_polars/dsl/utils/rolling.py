@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 import pylibcudf as plc
 
 from cudf_polars.dsl import expr, ir
+from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.utils.aggregations import apply_pre_evaluation
 from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.dsl.utils.windows import offsets_to_windows
@@ -81,7 +82,12 @@ def rewrite_rolling(
     temp_prefix = "_" * max(map(len, schema))
     if len(aggs) > 0:
         aggs, rolling_schema, apply_post_evaluation = apply_pre_evaluation(
-            schema, keys, aggs, unique_names(temp_prefix), index
+            schema,
+            keys,
+            aggs,
+            unique_names(temp_prefix),
+            ExecutionContext.ROLLING,
+            index,
         )
     else:
         rolling_schema = schema

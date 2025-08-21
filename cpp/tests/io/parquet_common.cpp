@@ -178,6 +178,8 @@ std::unique_ptr<cudf::column> make_parquet_list_list_col(
 
 template std::unique_ptr<cudf::column> make_parquet_list_list_col<int>(
   int skip_rows, int num_rows, int lists_per_row, int list_size, bool include_validity);
+template std::unique_ptr<cudf::column> make_parquet_list_list_col<bool>(
+  int skip_rows, int num_rows, int lists_per_row, int list_size, bool include_validity);
 
 template std::unique_ptr<cudf::column> make_parquet_list_list_col<bool>(
   int skip_rows, int num_rows, int lists_per_row, int list_size, bool include_validity);
