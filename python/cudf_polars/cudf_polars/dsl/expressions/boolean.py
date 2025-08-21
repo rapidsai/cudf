@@ -38,6 +38,7 @@ class BooleanFunction(Expr):
         Any = auto()
         AnyHorizontal = auto()
         IsBetween = auto()
+        IsClose = auto()
         IsDuplicated = auto()
         IsFinite = auto()
         IsFirstDistinct = auto()
@@ -85,6 +86,12 @@ class BooleanFunction(Expr):
             BooleanFunction.Name.IsLastDistinct,
             BooleanFunction.Name.IsUnique,
         )
+        if self.name in {
+            BooleanFunction.Name.IsClose,
+        }:
+            raise NotImplementedError(
+                f"Boolean function {self.name}"
+            )  # pragma: no cover
 
     @staticmethod
     def _distinct(
