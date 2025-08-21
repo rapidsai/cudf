@@ -1563,7 +1563,7 @@ __device__ void zero_fill_null_positions_shared(
     bool in_range = (bit_idx >= start_bit_idx && bit_idx < end_bit_idx);
 
     // Check if this bit is null (0 in validity mask)
-    bool is_null = ((validity_word >> lane_id) & 1) == 0;
+    bool const is_null = not cudf::bit_is_set(&validity_word, lane_id);
 
     if (in_range && is_null) {
       void* const dst = data_out + (static_cast<size_t>(dst_pos) * dtype_len);
