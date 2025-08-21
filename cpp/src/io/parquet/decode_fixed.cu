@@ -894,32 +894,27 @@ __device__ inline bool maybe_has_nulls(page_state_s* s)
   return run_val != s->col.max_level[lvl];
 }
 
-template <int decode_block_size_t, typename state_buf>
-inline __device__ void bool_plain_decode(page_state_s* s, state_buf* sb, int t, int to_decode)
+template <typename state_buf, typename thread_group>
+inline __device__ void bool_plain_decode(page_state_s* s,
+                                         state_buf* sb,
+                                         int target_pos,
+                                         thread_group const& group)
 {
-  int pos              = s->dict_pos;
-  int const target_pos = pos + to_decode;
-  __syncthreads();  // Make sure all threads have read dict_pos before it changes at the end.
+  int const pos = s->dict_pos;
+  int const t   = group.thread_rank();
+  // Ensure all threads have the dict_pos
+  group.sync();
 
-  while (pos < target_pos) {
-    int const batch_len = min(target_pos - pos, decode_block_size_t);
+  for (auto bit_pos = pos + t; bit_pos < target_pos; bit_pos += group.size()) {
+    int const byte_offset       = bit_pos >> 3;
+    int const bit_in_byte_index = bit_pos & 7;
 
-    if (t < batch_len) {
-      int const bit_pos           = pos + t;
-      int const byte_offset       = bit_pos >> 3;
-      int const bit_in_byte_index = bit_pos & 7;
+    uint8_t const* const read_from = s->data_start + byte_offset;
+    bool const read_bit            = (*read_from) & (1 << bit_in_byte_index);
 
-      uint8_t const* const read_from = s->data_start + byte_offset;
-      bool const read_bit            = (*read_from) & (1 << bit_in_byte_index);
-
-      int const write_to_index     = rolling_index<state_buf::dict_buf_size>(bit_pos);
-      sb->dict_idx[write_to_index] = read_bit;
-    }
-
-    pos += batch_len;
+    int const write_to_index     = rolling_index<state_buf::dict_buf_size>(bit_pos);
+    sb->dict_idx[write_to_index] = read_bit;
   }
-
-  if (t == 0) { s->dict_pos = pos; }
 }
 
 template <int rolling_buf_size, typename stream_type>
@@ -1054,6 +1049,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
     if (not page_mask[page_idx]) {
       pp->num_nulls  = pp->num_rows;
       pp->num_valids = 0;
+      // Set s->nesting info = nullptr to bypass `null_count_back_copier` at return
+      s->nesting_info = nullptr;
       return;
     }
   }
@@ -1233,7 +1230,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
       if (bools_are_rle_stream) {
         bool_stream.decode_next(t, next_valid_count - valid_count);
       } else {
-        bool_plain_decode<decode_block_size_t>(s, sb, t, next_valid_count - valid_count);
+        auto const target_pos = next_valid_count + skipped_leaf_values;
+        bool_plain_decode(s, sb, target_pos, block);
+        if (t == 0) { s->dict_pos = target_pos; }
       }
       block.sync();
     }

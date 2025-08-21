@@ -1,7 +1,6 @@
 # Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
-import itertools
 import string
 from collections import abc
 from contextlib import contextmanager
@@ -295,7 +294,9 @@ def assert_column_memory_eq(lhs: ColumnBase, rhs: ColumnBase):
     assert lhs.offset == rhs.offset
     assert lhs.size == rhs.size
     assert len(lhs.base_children) == len(rhs.base_children)
-    for lhs_child, rhs_child in zip(lhs.base_children, rhs.base_children):
+    for lhs_child, rhs_child in zip(
+        lhs.base_children, rhs.base_children, strict=True
+    ):
         assert_column_memory_eq(lhs_child, rhs_child)
     if isinstance(lhs, cudf.core.column.CategoricalColumn) and isinstance(
         rhs, cudf.core.column.CategoricalColumn
@@ -354,12 +355,6 @@ def assert_asserters_equal(
             cudf_asserter(cudf_left, cudf_right, *args, **kwargs)
     else:
         cudf_asserter(cudf_left, cudf_right, *args, **kwargs)
-
-
-parametrize_numeric_dtypes_pairwise = pytest.mark.parametrize(
-    "left_dtype,right_dtype",
-    list(itertools.combinations_with_replacement(NUMERIC_TYPES, 2)),
-)
 
 
 @contextmanager

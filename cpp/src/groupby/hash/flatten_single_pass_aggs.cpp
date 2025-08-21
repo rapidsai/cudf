@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -69,9 +69,22 @@ class groupby_simple_aggregations_collector final
   }
 
   std::vector<std::unique_ptr<aggregation>> visit(data_type,
+                                                  cudf::detail::m2_aggregation const&) override
+  {
+    std::vector<std::unique_ptr<aggregation>> aggs;
+    aggs.push_back(make_sum_of_squares_aggregation());
+    aggs.push_back(make_sum_aggregation());
+    // COUNT_VALID
+    aggs.push_back(make_count_aggregation());
+
+    return aggs;
+  }
+
+  std::vector<std::unique_ptr<aggregation>> visit(data_type,
                                                   cudf::detail::var_aggregation const&) override
   {
     std::vector<std::unique_ptr<aggregation>> aggs;
+    aggs.push_back(make_sum_of_squares_aggregation());
     aggs.push_back(make_sum_aggregation());
     // COUNT_VALID
     aggs.push_back(make_count_aggregation());
@@ -83,6 +96,7 @@ class groupby_simple_aggregations_collector final
                                                   cudf::detail::std_aggregation const&) override
   {
     std::vector<std::unique_ptr<aggregation>> aggs;
+    aggs.push_back(make_sum_of_squares_aggregation());
     aggs.push_back(make_sum_aggregation());
     // COUNT_VALID
     aggs.push_back(make_count_aggregation());

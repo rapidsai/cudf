@@ -1,10 +1,73 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
 
 import pandas as pd
+import pyarrow as pa
 import pytest
 
 import cudf
 from cudf.testing import assert_eq
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1],
+        [1, 2, 3],
+        [[1, 2, 3], [4, 5, 6]],
+        [pd.NA],
+        [1, pd.NA, 3],
+        [[1, pd.NA, 3], [pd.NA, 5, 6]],
+        [[1.1, pd.NA, 3.3], [4.4, 5.5, pd.NA]],
+        [["a", pd.NA, "c"], ["d", "e", pd.NA]],
+        [["a", "b", "c"], ["d", "e", "f"]],
+    ],
+)
+def test_list_getitem(data):
+    list_sr = cudf.Series([data])
+    assert list_sr[0] == data
+
+
+@pytest.mark.parametrize("nesting_level", [1, 3])
+def test_list_scalar_device_construction_null(nesting_level):
+    data = [[]]
+    for i in range(nesting_level - 1):
+        data = [data]
+
+    arrow_type = pa.infer_type(data)
+    arrow_arr = pa.array([None], type=arrow_type)
+
+    res = cudf.Series(arrow_arr)[0]
+    assert res is cudf.NA
+
+
+@pytest.mark.parametrize(
+    "data, idx",
+    [
+        (
+            [[{"f2": {"a": 100}, "f1": "a"}, {"f1": "sf12", "f2": pd.NA}]],
+            0,
+        ),
+        (
+            [
+                [
+                    {"f2": {"a": 100, "c": 90, "f2": 10}, "f1": "a"},
+                    {"f1": "sf12", "f2": pd.NA},
+                ]
+            ],
+            0,
+        ),
+        (
+            [[[[1, 2]], [[2], [3]]], [[[2]]], [[[3]]]],
+            0,
+        ),
+        ([[[[1, 2]], [[2], [3]]], [[[2]]], [[[3]]]], 2),
+        ([[[{"a": 1, "b": 2, "c": 10}]]], 0),
+    ],
+)
+def test_nested_list_extract_host_scalars(data, idx):
+    series = cudf.Series(data)
+
+    assert series[idx] == data[idx]
 
 
 @pytest.mark.parametrize(
@@ -143,6 +206,11 @@ def test_struct_slice(series, slce):
 def test_struct_getitem(series, expected):
     sr = cudf.Series(series)
     assert sr[0] == expected
+
+
+def test_datetime_getitem_na():
+    s = cudf.Series([1, 2, None, 3], dtype="datetime64[ns]")
+    assert s[2] is cudf.NaT
 
 
 def test_timedelta_getitem_na():

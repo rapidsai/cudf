@@ -94,7 +94,7 @@ def custom_pyop(func):
                 return None
             return func(x, y)
 
-        return pa.array([inner(x, y) for x, y in zip(x, y)])
+        return pa.array([inner(x, y) for x, y in zip(x, y, strict=True)])
 
     return wrapper
 
