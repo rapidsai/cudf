@@ -161,3 +161,19 @@ def test_to_arrow_categorical():
 
     assert isinstance(pa_gs, pa.Array)
     assert pa.Array.equals(pa_s, pa_gs)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {0: [1, 2, 3], 2: [10, 11, 23]},
+        {("a", "b"): [1, 2, 3], ("2",): [10, 11, 23]},
+    ],
+)
+def test_non_string_column_name_to_arrow(data):
+    df = cudf.DataFrame(data)
+
+    expected = df.to_arrow()
+    actual = pa.Table.from_pandas(df.to_pandas())
+
+    assert expected.equals(actual)

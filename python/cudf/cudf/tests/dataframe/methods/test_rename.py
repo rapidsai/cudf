@@ -68,3 +68,11 @@ def test_dataframe_column_rename(axis):
     got = gdf.rename(columns=rename_mapper)
 
     assert_eq(expect, got)
+
+
+def test_rename_reset_label_dtype():
+    data = {1: [2]}
+    col_mapping = {1: "a"}
+    result = cudf.DataFrame(data).rename(columns=col_mapping)
+    expected = pd.DataFrame(data).rename(columns=col_mapping)
+    assert_eq(result, expected)

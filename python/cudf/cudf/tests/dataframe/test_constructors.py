@@ -13,6 +13,7 @@ from numba import cuda
 import cudf
 from cudf.core.column.column import as_column
 from cudf.testing import assert_eq
+from cudf.testing._utils import assert_exceptions_equal
 
 
 def test_init_via_list_of_tuples():
@@ -1354,3 +1355,99 @@ def test_create_interval_df(data1, data2, data3, data4, interval_closed):
         dtype="interval",
     )
     assert_eq(expect_three, got_three)
+
+
+def test_roundtrip_dataframe_plc_table():
+    pdf = pd.DataFrame(
+        {
+            "a": [None, None, np.nan, None],
+            "b": [np.nan, None, np.nan, None],
+        }
+    )
+    expect = cudf.DataFrame.from_pandas(pdf)
+    actual = cudf.DataFrame.from_pylibcudf(*expect.to_pylibcudf())
+    assert_eq(expect, actual)
+
+
+def test_dataframe_from_generator():
+    pdf = pd.DataFrame((i for i in range(5)))
+    gdf = cudf.DataFrame((i for i in range(5)))
+    assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize(
+    "dtype", ["datetime64[ns]", "timedelta64[ns]", "int64", "float32"]
+)
+def test_dataframe_mixed_dtype_error(dtype):
+    pdf = pd.Series([1, 2, 3], dtype=dtype).to_frame().astype(object)
+    with pytest.raises(TypeError):
+        cudf.from_pandas(pdf)
+
+
+def test_dataframe_from_arrow_slice():
+    table = pa.Table.from_pandas(
+        pd.DataFrame.from_dict(
+            {"a": ["aa", "bb", "cc"] * 3, "b": [1, 2, 3] * 3}
+        )
+    )
+    table_slice = table.slice(3, 7)
+
+    expected = table_slice.to_pandas()
+    actual = cudf.DataFrame.from_arrow(table_slice)
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data,index",
+    [
+        ({"a": [1, 2, 3], "b": ["x", "y", "z", "z"], "c": 4}, None),
+        (
+            {
+                "a": [1, 2, 3],
+                "b": ["x", "y", "z"],
+            },
+            [10, 11],
+        ),
+        (
+            {
+                "a": [1, 2, 3],
+                "b": ["x", "y", "z"],
+            },
+            [10, 11],
+        ),
+        ([[10, 11], [12, 13]], ["a", "b", "c"]),
+    ],
+)
+def test_dataframe_init_length_error(data, index):
+    assert_exceptions_equal(
+        lfunc=pd.DataFrame,
+        rfunc=cudf.DataFrame,
+        lfunc_args_and_kwargs=(
+            [],
+            {"data": data, "index": index},
+        ),
+        rfunc_args_and_kwargs=(
+            [],
+            {"data": data, "index": index},
+        ),
+    )
+
+
+def test_complex_types_from_arrow():
+    expected = pa.Table.from_arrays(
+        [
+            pa.array([1, 2, 3]),
+            pa.array([10, 20, 30]),
+            pa.array([{"a": 9}, {"b": 10}, {"c": 11}]),
+            pa.array([[{"a": 1}], [{"b": 2}], [{"c": 3}]]),
+            pa.array([10, 11, 12]).cast(pa.decimal128(21, 2)),
+            pa.array([{"a": 9}, {"b": 10, "c": {"g": 43}}, {"c": {"a": 10}}]),
+        ],
+        names=["a", "b", "c", "d", "e", "f"],
+    )
+
+    df = cudf.DataFrame.from_arrow(expected)
+    actual = df.to_arrow()
+
+    assert expected.equals(actual)

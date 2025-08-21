@@ -3,6 +3,7 @@
 import pandas as pd
 
 import cudf
+from cudf.testing import assert_eq
 
 
 def test_listcol_setitem_retain_dtype():
@@ -23,3 +24,11 @@ def test_listcol_setitem_retain_dtype():
 def test_setitem_datetime():
     df = cudf.DataFrame({"date": pd.date_range("20010101", "20010105").values})
     assert df.date.dtype.kind == "M"
+
+
+def test_setitem_reset_label_dtype():
+    result = cudf.DataFrame({1: [2]})
+    expected = pd.DataFrame({1: [2]})
+    result["a"] = [2]
+    expected["a"] = [2]
+    assert_eq(result, expected)

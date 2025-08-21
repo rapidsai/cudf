@@ -6,6 +6,7 @@ import pytest
 
 import cudf
 from cudf.testing import assert_eq
+from cudf.testing._utils import assert_exceptions_equal
 
 
 @pytest.mark.parametrize("copy", [True, False])
@@ -189,3 +190,52 @@ def test_reindex_columns_rangeindex_keeps_rangeindex(name, klass):
     result = df.reindex(columns=new_columns).columns
     expected = pd.RangeIndex(3, name=exp_name)
     assert_eq(result, expected)
+
+
+def test_dataframe_duplicate_index_reindex():
+    gdf = cudf.DataFrame({"a": [0, 1, 2, 3]}, index=[0, 0, 1, 1])
+    pdf = gdf.to_pandas()
+
+    assert_exceptions_equal(
+        gdf.reindex,
+        pdf.reindex,
+        lfunc_args_and_kwargs=([10, 11, 12, 13], {}),
+        rfunc_args_and_kwargs=([10, 11, 12, 13], {}),
+    )
+
+
+def test_dataframe_reindex_keep_colname():
+    gdf = cudf.DataFrame([1], columns=cudf.Index([1], name="foo"))
+    result = gdf.reindex(index=[0, 1])
+    expected = cudf.DataFrame(
+        [1, None], columns=cudf.Index([1], name="foo"), index=[0, 1]
+    )
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "index_data,name",
+    [([10, 13], "a"), ([30, 40, 20], "b"), (["ef"], "c"), ([2, 3], "Z")],
+)
+def test_dataframe_reindex_with_index_names(index_data, name):
+    gdf = cudf.DataFrame(
+        {
+            "a": [10, 12, 13],
+            "b": [20, 30, 40],
+            "c": cudf.Series(["ab", "cd", "ef"], dtype="category"),
+        }
+    )
+    if name in gdf.columns:
+        gdf = gdf.set_index(name)
+    pdf = gdf.to_pandas()
+
+    gidx = cudf.Index(index_data, name=name)
+    actual = gdf.reindex(gidx)
+    expected = pdf.reindex(gidx.to_pandas())
+
+    assert_eq(actual, expected)
+
+    actual = gdf.reindex(index_data)
+    expected = pdf.reindex(index_data)
+
+    assert_eq(actual, expected)

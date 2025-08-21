@@ -180,3 +180,64 @@ def test_ndim():
     pdf = pd.DataFrame({"x": range(5), "y": range(5, 10)})
     gdf = cudf.DataFrame.from_pandas(pdf)
     assert pdf.ndim == gdf.ndim
+
+
+@pytest.mark.parametrize("names", [["abc", "def"], [1, 2], ["abc", 10]])
+def test_dataframe_multiindex_column_names(names):
+    arrays = [["A", "A", "B", "B"], ["one", "two", "one", "two"]]
+    tuples = list(zip(*arrays, strict=True))
+    index = pd.MultiIndex.from_tuples(tuples, names=["first", "second"])
+
+    pdf = pd.DataFrame([[1, 2, 3, 4], [5, 6, 7, 8]], columns=index)
+    df = cudf.from_pandas(pdf)
+
+    assert_eq(df, pdf)
+    assert_eq(df.columns.names, pdf.columns.names)
+    pdf.columns.names = names
+    df.columns.names = names
+    assert_eq(df, pdf)
+    assert_eq(df.columns.names, pdf.columns.names)
+
+
+@pytest.mark.parametrize("name", ["a", 0, None, np.nan, cudf.NA])
+@pytest.mark.parametrize("contains", ["a", 0, None, np.nan, cudf.NA])
+@pytest.mark.parametrize("other_names", [[], ["b", "c"], [1, 2]])
+def test_dataframe_contains(name, contains, other_names):
+    column_names = [name, *other_names]
+    gdf = cudf.DataFrame({c: [0] for c in column_names})
+    pdf = pd.DataFrame({c: [0] for c in column_names})
+
+    assert_eq(gdf, pdf)
+
+    if contains is cudf.NA or name is cudf.NA:
+        expectation = contains is cudf.NA and name is cudf.NA
+        assert (contains in pdf) == expectation
+        assert (contains in gdf) == expectation
+    elif gdf.columns.dtype.kind == "f":
+        # In some cases, the columns are converted to an Index[float] based on
+        # the other column names. That casts name values from None to np.nan.
+        expectation = contains is np.nan and (name is None or name is np.nan)
+        assert (contains in pdf) == expectation
+        assert (contains in gdf) == expectation
+    else:
+        expectation = contains == name or (
+            contains is np.nan and name is np.nan
+        )
+        assert (contains in pdf) == expectation
+        assert (contains in gdf) == expectation
+
+    assert (contains in pdf) == (contains in gdf)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"col": [{"a": 1.1}, {"a": 2.1}, {"a": 10.0}, {"a": 11.2323}, None]},
+        {"a": [[{"b": 567}], None] * 10},
+        {"a": [decimal.Decimal(10), decimal.Decimal(20), None]},
+    ],
+)
+def test_dataframe_values_complex_types(data):
+    gdf = cudf.DataFrame(data)
+    with pytest.raises(NotImplementedError):
+        gdf.values

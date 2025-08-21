@@ -73,3 +73,15 @@ def test_any_all_axis_none(data, op):
     actual = getattr(gdf, op)(axis=None)
 
     assert expected == actual
+
+
+def test_dataframe_reduction_error():
+    gdf = cudf.DataFrame(
+        {
+            "a": cudf.Series([1, 2, 3], dtype="float"),
+            "d": cudf.Series([10, 20, 30], dtype="timedelta64[ns]"),
+        }
+    )
+
+    with pytest.raises(TypeError):
+        gdf.sum()
