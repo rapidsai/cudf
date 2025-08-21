@@ -84,9 +84,14 @@ def test_over(df: pl.LazyFrame, partition_by, agg_expr):
     result_name = f"{agg_expr!s}_over_{partition_by!s}"
     window_expr = window_expr.alias(result_name)
 
-    query = df.with_columns(window_expr)
+    q = df.with_columns(window_expr)
 
-    assert_ir_translation_raises(query, NotImplementedError)
+    # CPU: 1.333333333333333
+    # GPU: 1.333333333333334
+    # Classic floating-point gotcha: looks the same, but the test fails
+    assert_gpu_result_equal(
+        q, check_exact=False, rtol=1e-15, atol=1e-15
+    ) if "var" in str(agg_expr) else assert_gpu_result_equal(q)
 
 
 def test_over_with_sort(df: pl.LazyFrame):
