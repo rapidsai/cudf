@@ -316,7 +316,7 @@ def _sort_partition_dataframe(
     sort_boundaries
         The global sort boundary candidates used to decide where to split.
     """
-    if df.num_rows == 0:
+    if df.num_rows == 0:  # pragma: no cover
         # Fast path for empty DataFrame
         return {i: df for i in range(partition_count)}
 
