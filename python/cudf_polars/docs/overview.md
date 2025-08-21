@@ -441,7 +441,7 @@ Each object has two important attributes:
   - `StatsCollector.join_keys`: Returns a mapping between distinct
   `JoinKey` objects.
   - `StatsCollector.joins`: Returns a mapping between each IR node
-  the list of associated `JoinKey` objects.
+  and the list of associated `JoinKey` objects.
 
 ## Collecting and using statistics
 
