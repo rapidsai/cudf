@@ -29,15 +29,14 @@
 
 namespace cudf::groupby::detail::hash {
 
-rmm::device_uvector<cudf::size_type> compute_global_memory_aggs(
-  cudf::size_type num_rows,
-  size_type num_output,
-  size_type const* key_indices,
-  bitmask_type const* row_bitmask,
-  cudf::table_view const& flattened_values,
-  cudf::aggregation::Kind const* d_agg_kinds,
-  host_span<cudf::aggregation::Kind const> agg_kinds,
-  std::vector<std::unique_ptr<aggregation>>& aggregations,
-  cudf::detail::result_cache* cache,
-  rmm::cuda_stream_view stream);
+void compute_global_memory_aggs(cudf::size_type num_rows,
+                                size_type num_output,
+                                size_type const* key_indices,
+                                bitmask_type const* row_bitmask,
+                                cudf::table_view const& flattened_values,
+                                cudf::aggregation::Kind const* d_agg_kinds,
+                                host_span<cudf::aggregation::Kind const> agg_kinds,
+                                std::vector<std::unique_ptr<aggregation>>& aggregations,
+                                cudf::detail::result_cache* cache,
+                                rmm::cuda_stream_view stream);
 }  // namespace cudf::groupby::detail::hash
