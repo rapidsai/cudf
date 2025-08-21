@@ -95,12 +95,6 @@ struct instance_context {
   void reset();
 };
 
-/// @brief The base class for all IR nodes.
-/// This class defines the interface for IR nodes, which can be instantiated and used to generate
-/// code. Each IR node represents a specific operation or value in the program. They represent a
-/// single-static-assignment (SSA) variable in the program IR. It is separate from the AST as it
-/// contains more detailed program information and analysis that would be needed to instantiate the
-/// program and generate correct and robust code.
 struct node {
   /// @brief Get the identifier of the IR node
   /// @return The identifier of the IR node
@@ -351,7 +345,6 @@ struct ast_args {
     {};  ///< The mapping of column names to their indices in the table
 };
 
-/// @brief A converter that converts AST expressions to IR nodes and CUDA UDFs.
 struct ast_converter {
  private:
   std::vector<ast_input_spec> input_specs_;              ///< The input specs for the AST

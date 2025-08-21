@@ -28,18 +28,27 @@
 
 namespace CUDF_EXPORT cudf {
 
-namespace row_ir {
-
-struct node;
-struct ast_converter;
-}  // namespace row_ir
-
-namespace ast {
 /**
  * @addtogroup expressions
  * @{
  * @file
  */
+
+namespace row_ir {
+
+/// @brief The base class for all IR nodes.
+/// This class defines the interface for IR nodes, which can be instantiated and used to generate
+/// code. Each IR node represents a specific operation or value in the program. They represent a
+/// single-static-assignment (SSA) variable in the program IR. It is separate from the AST as it
+/// contains more detailed program information and analysis that would be needed to instantiate the
+/// program and generate correct and robust code.
+struct node;
+
+/// @brief A converter that converts AST expressions to IR nodes and CUDA UDFs.
+struct ast_converter;
+}  // namespace row_ir
+
+namespace ast {
 
 // Forward declaration.
 namespace detail {
@@ -607,7 +616,6 @@ class tree {
   std::vector<std::unique_ptr<expression>> expressions;
 };
 
-/** @} */  // end of group
 }  // namespace ast
-
+/** @} */  // end of group
 }  // namespace CUDF_EXPORT cudf
