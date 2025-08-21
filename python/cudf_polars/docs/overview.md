@@ -440,7 +440,7 @@ Each object has two important attributes:
   node and the `dict[str, ColumnStats]` mapping for that node.
   - `StatsCollector.join_keys`: Returns a mapping between distinct
   `JoinKey` objects.
-  - `StatsCollector.joins`: Returns a mapping between each IR nodes
+  - `StatsCollector.joins`: Returns a mapping between each IR node
   the list of associated `JoinKey` objects.
 
 ## Collecting and using statistics
