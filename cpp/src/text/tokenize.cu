@@ -19,11 +19,9 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/algorithm.cuh>
-#include <cudf/detail/utilities/grid_1d.cuh>
-#include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/strings/detail/attributes.hpp>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -38,10 +36,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <cuda/atomic>
-#include <cuda/std/functional>
 #include <thrust/copy.h>
-#include <thrust/count.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
@@ -102,31 +97,6 @@ std::unique_ptr<cudf::column> tokenize_fn(cudf::size_type strings_count,
                      tokenizer);
   // create the strings column using the tokens pointers
   return cudf::strings::detail::make_strings_column(tokens.begin(), tokens.end(), stream, mr);
-}
-
-constexpr int64_t block_size       = 512;  // number of threads per block
-constexpr int64_t bytes_per_thread = 4;    // bytes processed per thread
-
-CUDF_KERNEL void count_characters(uint8_t const* d_chars, int64_t chars_bytes, int64_t* d_output)
-{
-  auto const idx      = cudf::detail::grid_1d::global_thread_id();
-  auto const byte_idx = static_cast<int64_t>(idx) * bytes_per_thread;
-  auto const lane_idx = static_cast<cudf::size_type>(threadIdx.x);
-
-  using block_reduce = cub::BlockReduce<int64_t, block_size>;
-  __shared__ typename block_reduce::TempStorage temp_storage;
-
-  int64_t count = 0;
-  // each thread processes multiple bytes
-  for (auto i = byte_idx; (i < (byte_idx + bytes_per_thread)) && (i < chars_bytes); ++i) {
-    count += cudf::strings::detail::is_begin_utf8_char(d_chars[i]);
-  }
-  auto const total = block_reduce(temp_storage).Reduce(count, cuda::std::plus());
-
-  if ((lane_idx == 0) && (total > 0)) {
-    cuda::atomic_ref<int64_t, cuda::thread_scope_device> ref{*d_output};
-    ref.fetch_add(total, cuda::std::memory_order_relaxed);
-  }
 }
 
 }  // namespace
@@ -203,7 +173,7 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
 {
   auto strings_count = strings_column.size();
   if (strings_count == 0) {
-    return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
+    return cudf::make_empty_lists_column(cudf::data_type{cudf::type_id::STRING});
   }
 
   CUDF_EXPECTS(
@@ -216,21 +186,20 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
                              offsets, strings_column.offset() + strings_count, stream) -
                            offset;
   // no bytes -- this could happen in an all-empty column
-  if (chars_bytes == 0) { return cudf::make_empty_column(cudf::type_id::STRING); }
+  if (chars_bytes == 0) {
+    return cudf::make_empty_lists_column(cudf::data_type{cudf::type_id::STRING});
+  }
   auto d_chars =
     strings_column.parent().data<uint8_t>();  // unsigned is necessary for checking bits
   d_chars += offset;
 
-  // To minimize memory, count the number of characters so we can
-  // build the output offsets without an intermediate buffer.
-  // In the worst case each byte is a character so the output is 4x the input.
-  cudf::detail::device_scalar<int64_t> d_count(0, stream);
-  auto const num_blocks = cudf::util::div_rounding_up_safe(
-    cudf::util::div_rounding_up_safe(chars_bytes, static_cast<int64_t>(bytes_per_thread)),
-    block_size);
-  count_characters<<<num_blocks, block_size, 0, stream.value()>>>(
-    d_chars, chars_bytes, d_count.data());
-  auto const num_characters = d_count.value(stream);
+  auto const character_counts = cudf::strings::detail::count_characters(
+    strings_column, stream, cudf::get_current_device_resource_ref());
+  auto [list_offsets, num_characters] =
+    cudf::detail::make_offsets_child_column(character_counts->view().begin<cudf::size_type>(),
+                                            character_counts->view().end<cudf::size_type>(),
+                                            stream,
+                                            mr);
 
   // number of characters becomes the number of rows so need to check the row limit
   CUDF_EXPECTS(
@@ -258,9 +227,13 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
   rmm::device_uvector<char> output_chars(chars_bytes, stream, mr);
   thrust::copy(rmm::exec_policy(stream), d_chars, d_chars + chars_bytes, output_chars.data());
 
-  // return new strings column
-  return cudf::make_strings_column(
+  auto output_strings = cudf::make_strings_column(
     num_characters, std::move(offsets_column), output_chars.release(), 0, rmm::device_buffer{});
+  return cudf::make_lists_column(strings_count,
+                                 std::move(list_offsets),
+                                 std::move(output_strings),
+                                 strings_column.null_count(),
+                                 cudf::detail::copy_bitmask(strings_column.parent(), stream, mr));
 }
 
 }  // namespace detail
