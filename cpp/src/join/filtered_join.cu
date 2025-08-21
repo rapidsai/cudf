@@ -14,12 +14,7 @@
  * limitations under the License.
  */
 
-#include "cuco/detail/utility/cuda.hpp"
-#include "cuco/utility/cuda_thread_scope.cuh"
-#include "cudf/table/experimental/row_operators.cuh"
-#include "cudf/utilities/error.hpp"
 #include "join_common_utils.cuh"
-#include "thrust/iterator/counting_iterator.h"
 
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/join/filtered_join.cuh>
@@ -27,7 +22,9 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/join/filtered_join.hpp>
+#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -41,7 +38,9 @@
 #include <cuco/static_multiset_ref.cuh>
 #include <cuco/static_set_ref.cuh>
 #include <cuco/types.cuh>
+#include <cuco/utility/cuda_thread_scope.cuh>
 #include <cuda/std/iterator>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
 
 #include <algorithm>
@@ -82,16 +81,6 @@ std::pair<rmm::device_buffer, bitmask_type const*> build_row_bitmask(table_view 
 
   return std::pair(rmm::device_buffer{0, stream}, nullable_columns.front().null_mask());
 }
-
-template <template <typename...> class TemplateType, typename T>
-struct is_template_of;
-
-template <template <typename...> class TemplateType,
-          template <typename...> class ActualTemplate,
-          typename... Args>
-struct is_template_of<TemplateType, ActualTemplate<Args...>> {
-  static constexpr bool value = std::is_same_v<TemplateType<Args...>, ActualTemplate<Args...>>;
-};
 
 }  // namespace
 
