@@ -191,6 +191,7 @@ TESTS_TO_SKIP: Mapping[str, str] = {
     # Tests performance difference of CPU engine
     "tests/unit/operations/test_join.py::test_join_where_eager_perf_21145": "Tests performance bug in CPU engine",
     "tests/unit/operations/namespaces/list/test_list.py::test_list_struct_field_perf": "Tests CPU Engine perf",
+    "tests/benchmark/test_with_columns.py::test_with_columns_quadratic_19503": "Tests performance bug in CPU engine",
     # The test may segfault with the legacy streaming engine. We should
     # remove this skip when all polars tests use the new streaming engine.
     "tests/unit/streaming/test_streaming_group_by.py::test_streaming_group_by_literal[1]": "May segfault w/the legacy streaming engine",
