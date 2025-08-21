@@ -29,7 +29,11 @@ from cudf.io.parquet import (
     ParquetWriter,
     merge_parquet_filemetadata,
 )
-from cudf.testing import assert_eq, dataset_generator as dg
+from cudf.testing import (
+    assert_arrow_table_equal,
+    assert_eq,
+    dataset_generator as dg,
+)
 from cudf.testing._utils import TIMEDELTA_TYPES, set_random_null_mask_inplace
 
 
@@ -1110,7 +1114,7 @@ def test_parquet_reader_struct_basic(tmp_path, data):
     pa.parquet.write_table(expect, fname)
     assert os.path.exists(fname)
     got = cudf.read_parquet(fname)
-    assert expect.equals(got.to_arrow())
+    assert_arrow_table_equal(expect, got.to_arrow())
 
 
 def select_columns_params():
@@ -1188,7 +1192,7 @@ def test_parquet_reader_struct_select_columns(data, columns):
 
     expect = pq.ParquetFile(buff).read(columns=columns)
     got = cudf.read_parquet(buff, columns=columns)
-    assert expect.equals(got.to_arrow())
+    assert_arrow_table_equal(expect, got.to_arrow())
 
 
 def test_parquet_reader_struct_los_large(tmp_path):
@@ -1205,7 +1209,7 @@ def test_parquet_reader_struct_los_large(tmp_path):
     pa.parquet.write_table(expect, fname)
     assert os.path.exists(fname)
     got = cudf.read_parquet(fname)
-    assert expect.equals(got.to_arrow())
+    assert_arrow_table_equal(expect, got.to_arrow())
 
 
 @pytest.mark.parametrize(
@@ -1243,7 +1247,7 @@ def test_parquet_reader_struct_sol_table(tmp_path, params):
     pa.parquet.write_table(expect, fname)
     assert os.path.exists(fname)
     got = cudf.read_parquet(fname)
-    assert expect.equals(got.to_arrow())
+    assert_arrow_table_equal(expect, got.to_arrow())
 
 
 def test_parquet_reader_v2(tmp_path, simple_pdf):
@@ -2403,7 +2407,7 @@ def test_parquet_writer_list_chunked(tmp_path, store_schema):
     got = pq.read_table(fname)
     # compare with pyarrow since pandas doesn't
     # have a list or struct dtype
-    assert expect.to_arrow().equals(got)
+    assert_arrow_table_equal(expect.to_arrow(), got)
 
 
 def test_parquet_nullable_boolean(tmp_path, engine):
