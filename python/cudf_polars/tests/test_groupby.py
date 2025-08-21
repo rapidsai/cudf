@@ -14,12 +14,12 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_1321
+from cudf_polars.utils.versions import POLARS_VERSION_LT_132, POLARS_VERSION_LT_1321
 
 
 @pytest.fixture
 def df():
-    return pl.LazyFrame(
+    lf = pl.LazyFrame(
         {
             "key1": [1, 1, 1, 2, 3, 1, 4, 6, 7],
             "key2": [2, 2, 2, 2, 6, 1, 4, 6, 8],
@@ -43,6 +43,11 @@ def df():
             ],
         }
     )
+    if not POLARS_VERSION_LT_132:
+        lf = lf.with_columns(
+            pl.col("float").cast(pl.Decimal(precision=9, scale=2)).alias("decimal")
+        )
+    return lf
 
 
 @pytest.fixture(
@@ -61,39 +66,47 @@ def keys(request):
     return request.param
 
 
-@pytest.fixture(
-    params=[
-        [],
-        ["int"],
-        ["float", "int"],
-        [pl.col("float") + pl.col("int")],
-        [pl.col("float").is_not_null()],
-        [pl.col("int32").sum()],
-        [pl.col("int32").mean()],
-        [
-            pl.col("uint16_with_null").sum(),
-            pl.col("uint16_with_null").mean().alias("mean"),
-        ],
-        [pl.col("float").max() - pl.col("int").min() + pl.col("int").max()],
-        [pl.col("float").mean(), pl.col("int").std()],
-        [(pl.col("float") - pl.lit(2)).max()],
-        [pl.lit(10).alias("literal_value")],
-        [pl.col("float").sum().round(decimals=1)],
-        [pl.col("float").round(decimals=1).sum()],
-        [pl.col("float").sum().round()],
-        [pl.col("float").round().sum()],
-        [pl.col("int").first(), pl.col("float").last()],
-        [pl.col("int").sum(), pl.col("string").str.replace("h", "foo", literal=True)],
-        [pl.col("float").quantile(0.3, interpolation="nearest")],
-        [pl.col("float").quantile(0.3, interpolation="higher")],
-        [pl.col("float").quantile(0.3, interpolation="lower")],
-        [pl.col("float").quantile(0.3, interpolation="midpoint")],
-        [pl.col("float").quantile(0.3, interpolation="linear")],
-        [
-            pl.col("datetime").max(),
-            pl.col("datetime").max().dt.is_leap_year().alias("leapyear"),
-        ],
+_EXPRS: list[list[pl.Expr | str]] = [
+    [],
+    ["int"],
+    ["float", "int"],
+    [pl.col("float") + pl.col("int")],
+    [pl.col("float").is_not_null()],
+    [pl.col("int32").sum()],
+    [pl.col("int32").mean()],
+    [
+        pl.col("uint16_with_null").sum(),
+        pl.col("uint16_with_null").mean().alias("mean"),
     ],
+    [pl.col("float").max() - pl.col("int").min() + pl.col("int").max()],
+    [pl.col("float").mean(), pl.col("int").std()],
+    [(pl.col("float") - pl.lit(2)).max()],
+    [pl.lit(10).alias("literal_value")],
+    [pl.col("float").sum().round(decimals=1)],
+    [pl.col("float").round(decimals=1).sum()],
+    [pl.col("float").sum().round()],
+    [pl.col("float").round().sum()],
+    [pl.col("int").first(), pl.col("float").last()],
+    [pl.col("int").sum(), pl.col("string").str.replace("h", "foo", literal=True)],
+    [pl.col("float").quantile(0.3, interpolation="nearest")],
+    [pl.col("float").quantile(0.3, interpolation="higher")],
+    [pl.col("float").quantile(0.3, interpolation="lower")],
+    [pl.col("float").quantile(0.3, interpolation="midpoint")],
+    [pl.col("float").quantile(0.3, interpolation="linear")],
+    [
+        pl.col("datetime").max(),
+        pl.col("datetime").max().dt.is_leap_year().alias("leapyear"),
+    ],
+]
+
+# polars gives us precision=None, which we
+# do not supprt
+if not POLARS_VERSION_LT_132:
+    _EXPRS.append([pl.col("decimal").median()])
+
+
+@pytest.fixture(
+    params=_EXPRS,
     ids=lambda aggs: "-".join(map(str, aggs)),
 )
 def exprs(request):
