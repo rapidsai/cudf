@@ -45,10 +45,11 @@ void bench_segmented_top_k(nvbench::state& state, nvbench::type_list<DataType>)
   state.add_global_memory_writes<nvbench::int32_t>(segments->size() * k);
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    if (ordered)
+    if (ordered) {
       cudf::segmented_top_k_order(input->view(), segments->view(), k);
-    else
+    } else {
       cudf::segmented_top_k(input->view(), segments->view(), k);
+    }
   });
 }
 

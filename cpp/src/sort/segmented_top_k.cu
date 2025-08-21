@@ -54,7 +54,7 @@ namespace {
 CUDF_KERNEL void resolve_segment_indices(device_span<size_type const> d_offsets,
                                          size_type k,
                                          device_span<size_type> d_indices,
-                                         device_span<size_type> d_segment_sizes)
+                                         size_type* d_segment_sizes)
 {
   auto const tid = cudf::detail::grid_1d::global_thread_id();
   if (tid >= d_indices.size()) { return; }
@@ -109,7 +109,7 @@ std::unique_ptr<column> segmented_top_k_order(column_view const& col,
   auto span_indices  = device_span<size_type>{d_indices, static_cast<std::size_t>(indices->size())};
   auto const grid    = cudf::detail::grid_1d(indices->size(), 256);
   resolve_segment_indices<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
-    segment_offsets, k, span_indices, segment_sizes);
+    segment_offsets, k, span_indices, segment_sizes.data());
   auto [offsets, total_elements] =
     cudf::detail::make_offsets_child_column(segment_sizes.begin(), segment_sizes.end(), stream, mr);
 

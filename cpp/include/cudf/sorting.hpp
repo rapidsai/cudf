@@ -393,9 +393,8 @@ std::unique_ptr<column> top_k_order(
 /**
  * @brief Computes the top k values within each segment of a column
  *
- * This performs the equivalent of a sort and the slice of the resulting first k elements
- * within each segment.
- * However, the values within each segment may not necessarily be sorted.
+ * Returns the top k values (largest or smallest) within each segment of the given column.
+ * The values within each segment may not necessarily be sorted.
  * If a segment contain less than k elements then all values for that segment are returned.
  *
  * @code{.pseudo}
