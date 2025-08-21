@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
 from libcpp.memory cimport unique_ptr
@@ -12,6 +12,8 @@ from pylibcudf.libcudf.scalar.scalar_factories cimport (
 from pylibcudf.libcudf.strings cimport strip as cpp_strip
 from pylibcudf.scalar cimport Scalar
 from pylibcudf.strings.side_type cimport side_type
+from pylibcudf.utils cimport _get_stream
+from rmm.pylibrmm.stream cimport Stream
 
 __all__ = ["strip"]
 
@@ -41,10 +43,12 @@ cpdef Column strip(
     pylibcudf.Column
         New strings column.
     """
+    cdef Stream stream
 
     if to_strip is None:
+        stream = _get_stream(None)
         to_strip = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode())
+            cpp_make_string_scalar("".encode(), stream.view())
         )
 
     cdef unique_ptr[column] c_result
