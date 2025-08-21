@@ -118,7 +118,7 @@ def test_null_count():
     assert_gpu_result_equal(q)
 
 
-@pytest.mark.parametrize("method", ["average", "min", "max", "dense"])
+@pytest.mark.parametrize("method", ["ordinal", "dense", "min", "max", "average"])
 @pytest.mark.parametrize("descending", [False, True])
 def test_rank_supported(request, ldf, method, descending):
     request.applymarker(
@@ -126,6 +126,17 @@ def test_rank_supported(request, ldf, method, descending):
     )
     expr = pl.col("a").rank(method=method, descending=descending)
     q = ldf.select(expr)
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("method", ["ordinal", "dense", "min", "max", "average"])
+@pytest.mark.parametrize("descending", [False, True])
+def test_rank_methods_with_null_values(
+    ldf: pl.LazyFrame, method: str, *, descending: bool
+) -> None:
+    x_null = pl.when((pl.col("a") % 2) == 0).then(None).otherwise(pl.col("a"))
+
+    q = ldf.select(x_null.rank(method=method, descending=descending))
     assert_gpu_result_equal(q)
 
 

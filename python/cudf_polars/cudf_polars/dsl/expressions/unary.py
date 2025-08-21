@@ -377,33 +377,45 @@ class UnaryFunction(Expr):
 
             null_count = column.null_count
             if null_count and not descending:
-                # libcudf rank is offset by +k (null count) in ascending
-                # when nulls would sort first. Subtract k from non-null
-                # outputs so ranks match polars.
+                # libcudf rank is offset when nulls would sort first and are excluded:
+                #  - dense: +1 (nulls count as a skipped leading group)
+                #  - min/max/ordinal/average: +k (nulls counted before all valid rows)
                 rank_dtype = ranked.type()
-                null_count_scalar = plc.Scalar.from_py(
-                    float(null_count)
-                    if rank_dtype.id() in {plc.TypeId.FLOAT32, plc.TypeId.FLOAT64}
-                    else int(null_count),
-                    rank_dtype,
-                )
-                ranked = plc.binaryop.binary_operation(
-                    ranked,
-                    null_count_scalar,
-                    plc.binaryop.BinaryOperator.SUB,
-                    rank_dtype,
-                )
+                if method_str == "dense":
+                    one = plc.Scalar.from_py(
+                        1.0
+                        if rank_dtype.id() in {plc.TypeId.FLOAT32, plc.TypeId.FLOAT64}
+                        else 1,
+                        rank_dtype,
+                    )
+                    ranked = plc.binaryop.binary_operation(
+                        ranked, one, plc.binaryop.BinaryOperator.SUB, rank_dtype
+                    )
+                else:
+                    k_scalar = plc.Scalar.from_py(
+                        float(null_count)
+                        if rank_dtype.id() in {plc.TypeId.FLOAT32, plc.TypeId.FLOAT64}
+                        else int(null_count),
+                        rank_dtype,
+                    )
+                    ranked = plc.binaryop.binary_operation(
+                        ranked, k_scalar, plc.binaryop.BinaryOperator.SUB, rank_dtype
+                    )
 
-            # Min/Max/Dense/Ordinal -> IDX_DTYPE
-            # See https://github.com/pola-rs/polars/blob/main/crates/polars-ops/src/series/ops/rank.rs
-            if method_str in {"min", "max", "dense", "ordinal"}:
+            # Polars semantics:
+            #  - Average  -> Float64
+            #  - Min/Max/Dense/Ordinal -> IDX_DTYPE
+            # See
+            # https://github.com/pola-rs/polars/blob/main/crates/polars-ops/src/series/ops/rank.rs
+            if method_str == "average":
+                if ranked.type().id() != plc.TypeId.FLOAT64:
+                    ranked = plc.unary.cast(ranked, plc.DataType(plc.TypeId.FLOAT64))
+            else:
                 dest = self.dtype.plc.id()
                 src = ranked.type().id()
                 if dest == plc.TypeId.UINT32 and src != plc.TypeId.UINT32:
                     ranked = plc.unary.cast(ranked, plc.DataType(plc.TypeId.UINT32))
-                elif (
-                    dest == plc.TypeId.UINT64 and src != plc.TypeId.UINT64
-                ):  # pragma: no cover
+                elif dest == plc.TypeId.UINT64 and src != plc.TypeId.UINT64:
                     ranked = plc.unary.cast(ranked, plc.DataType(plc.TypeId.UINT64))
 
             return Column(ranked, dtype=self.dtype)
