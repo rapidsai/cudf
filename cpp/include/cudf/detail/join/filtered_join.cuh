@@ -161,6 +161,9 @@ class filtered_join {
 
   virtual std::unique_ptr<rmm::device_uvector<cudf::size_type>> semi_join(
     cudf::table_view const& probe, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) = 0;
+
+  virtual std::unique_ptr<rmm::device_uvector<cudf::size_type>> anti_join(
+    cudf::table_view const& probe, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) = 0;
 };
 
 class filtered_join_with_multiset : public filtered_join {
@@ -170,10 +173,13 @@ class filtered_join_with_multiset : public filtered_join {
                         double load_factor,
                         rmm::cuda_stream_view stream);
 
+  std::unique_ptr<rmm::device_uvector<cudf::size_type>> semi_anti_join(
+    cudf::table_view const& probe, join_kind kind, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> semi_join(
     cudf::table_view const& probe, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) override;
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> anti_join(
-    cudf::table_view const& probe, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
+    cudf::table_view const& probe, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) override;
+
   template <int32_t CGSize, typename Ref>
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> query_build_table(
       cudf::table_view const &probe,
@@ -191,10 +197,13 @@ class filtered_join_with_set : public filtered_join {
                         double load_factor,
                         rmm::cuda_stream_view stream);
 
+  std::unique_ptr<rmm::device_uvector<cudf::size_type>> semi_anti_join(
+    cudf::table_view const& probe, join_kind kind, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> semi_join(
-    cudf::table_view const& probe, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
+    cudf::table_view const& probe, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) override;
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> anti_join(
-    cudf::table_view const& probe, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
+    cudf::table_view const& probe, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) override;
+
   template <int32_t CGSize, typename Ref>
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> query_build_table(
       cudf::table_view const &probe,

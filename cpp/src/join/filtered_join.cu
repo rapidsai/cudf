@@ -367,8 +367,8 @@ filtered_join_with_multiset::filtered_join_with_multiset(cudf::table_view const&
   }
 }
 
-std::unique_ptr<rmm::device_uvector<cudf::size_type>> filtered_join_with_set::semi_join(
-  cudf::table_view const& probe, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+std::unique_ptr<rmm::device_uvector<cudf::size_type>> filtered_join_with_set::semi_anti_join(
+  cudf::table_view const& probe, join_kind kind, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
   auto const has_any_nulls   = has_nested_nulls(probe) || _build_props._has_nulls;
   auto const preprocessed_probe =
@@ -417,8 +417,18 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> filtered_join_with_set::se
   }
 }
 
-std::unique_ptr<rmm::device_uvector<cudf::size_type>> filtered_join_with_multiset::semi_join(
-  cudf::table_view const& probe, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+std::unique_ptr<rmm::device_uvector<cudf::size_type>> filtered_join_with_set::semi_join(
+    cudf::table_view const& probe, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) {
+  return semi_anti_join(probe, join_kind::LEFT_SEMI_JOIN, stream , mr);
+}
+
+std::unique_ptr<rmm::device_uvector<cudf::size_type>> filtered_join_with_set::anti_join(
+    cudf::table_view const& probe, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) {
+  return semi_anti_join(probe, join_kind::LEFT_ANTI_JOIN, stream , mr);
+}
+
+std::unique_ptr<rmm::device_uvector<cudf::size_type>> filtered_join_with_multiset::semi_anti_join(
+  cudf::table_view const& probe, join_kind kind, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
   auto const has_any_nulls   = has_nested_nulls(probe) || _build_props._has_nulls;
   auto const preprocessed_probe =
@@ -434,7 +444,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> filtered_join_with_multise
                                  cuco::thread_scope_device,
                                  _bucket_storage.ref()};
     auto query_ref = set_ref.rebind_operators(cuco::op::retrieve);
-    return query_build_table<primitive_probing_scheme::cg_size>(probe, preprocessed_probe, join_kind::LEFT_SEMI_JOIN, query_ref, stream, mr);
+    return query_build_table<primitive_probing_scheme::cg_size>(probe, preprocessed_probe, kind, query_ref, stream, mr);
   } else {
     auto const d_build_probe_comparator = cudf::experimental::row::equality::two_table_comparator{
       _preprocessed_build, preprocessed_probe};
@@ -450,7 +460,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> filtered_join_with_multise
                                    cuco::thread_scope_device,
                                    _bucket_storage.ref()};
       auto query_ref = set_ref.rebind_operators(cuco::op::retrieve);
-      return query_build_table<nested_probing_scheme::cg_size>(probe, preprocessed_probe, join_kind::LEFT_SEMI_JOIN, query_ref, stream, mr);
+      return query_build_table<nested_probing_scheme::cg_size>(probe, preprocessed_probe, kind, query_ref, stream, mr);
     } else {
       auto d_build_probe_nan_comparator = d_build_probe_comparator.equal_to<false>(
         nullate::DYNAMIC{has_any_nulls},
@@ -465,6 +475,16 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> filtered_join_with_multise
       return query_build_table<simple_probing_scheme::cg_size>(probe, preprocessed_probe, join_kind::LEFT_SEMI_JOIN, query_ref, stream, mr);
     }
   }
+}
+
+std::unique_ptr<rmm::device_uvector<cudf::size_type>> filtered_join_with_multiset::semi_join(
+    cudf::table_view const& probe, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) {
+  return semi_anti_join(probe, join_kind::LEFT_SEMI_JOIN, stream , mr);
+}
+
+std::unique_ptr<rmm::device_uvector<cudf::size_type>> filtered_join_with_multiset::anti_join(
+    cudf::table_view const& probe, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) {
+  return semi_anti_join(probe, join_kind::LEFT_ANTI_JOIN, stream , mr);
 }
 
 }  // namespace detail
@@ -500,7 +520,6 @@ std::unique_ptr<rmm::device_uvector<size_type>> filtered_join::semi_join(
   return _impl->semi_join(probe, stream, mr);
 }
 
-/*
 std::unique_ptr<rmm::device_uvector<size_type>> filtered_join::anti_join(
   cudf::table_view const& probe,
   rmm::cuda_stream_view stream,
@@ -508,6 +527,5 @@ std::unique_ptr<rmm::device_uvector<size_type>> filtered_join::anti_join(
 {
   return _impl->anti_join(probe, stream, mr);
 }
-*/
 
 }  // namespace cudf
