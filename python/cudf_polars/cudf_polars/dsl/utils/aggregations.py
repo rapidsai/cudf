@@ -241,7 +241,7 @@ def decompose_single_agg(
                 return [(named_expr, True), (win_len, True)], expr.NamedExpr(
                     name, post_ternary_expr
                 )
-        elif agg.name == "mean":
+        elif agg.name in {"mean", "median", "quantile", "std", "var"}:
             post_agg_col: expr.Expr = expr.Col(
                 DataType(pl.Float64()), name
             )  # libcudf promotes to float64
