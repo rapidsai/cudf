@@ -402,20 +402,16 @@ class UnaryFunction(Expr):
                         ranked, k_scalar, plc.binaryop.BinaryOperator.SUB, rank_dtype
                     )
 
-            # Polars semantics:
-            #  - Average  -> Float64
-            #  - Min/Max/Dense/Ordinal -> IDX_DTYPE
-            # See
-            # https://github.com/pola-rs/polars/blob/main/crates/polars-ops/src/series/ops/rank.rs
-            if method_str == "average":
-                if ranked.type().id() != plc.TypeId.FLOAT64:
-                    ranked = plc.unary.cast(ranked, plc.DataType(plc.TypeId.FLOAT64))
-            else:
+            # Min/Max/Dense/Ordinal -> IDX_DTYPE
+            # See https://github.com/pola-rs/polars/blob/main/crates/polars-ops/src/series/ops/rank.rs
+            if method_str in {"min", "max", "dense", "ordinal"}:
                 dest = self.dtype.plc.id()
                 src = ranked.type().id()
                 if dest == plc.TypeId.UINT32 and src != plc.TypeId.UINT32:
                     ranked = plc.unary.cast(ranked, plc.DataType(plc.TypeId.UINT32))
-                elif dest == plc.TypeId.UINT64 and src != plc.TypeId.UINT64:
+                elif (
+                    dest == plc.TypeId.UINT64 and src != plc.TypeId.UINT64
+                ):  # pragma: no cover
                     ranked = plc.unary.cast(ranked, plc.DataType(plc.TypeId.UINT64))
 
             return Column(ranked, dtype=self.dtype)
