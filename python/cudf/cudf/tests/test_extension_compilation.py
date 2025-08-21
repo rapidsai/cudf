@@ -12,7 +12,6 @@ import cudf
 from cudf import NA
 from cudf.core.udf.api import Masked
 from cudf.core.udf.masked_typing import MaskedType
-from cudf.testing._utils import parametrize_numeric_dtypes_pairwise
 from cudf.utils._numba import _CUDFNumbaConfig
 
 arith_ops = (
@@ -166,20 +165,21 @@ def test_compile_arith_na_vs_masked(op, ty):
 
 
 @pytest.mark.parametrize("op", ops)
-@parametrize_numeric_dtypes_pairwise
 @pytest.mark.parametrize(
     "masked",
     ((False, True), (True, False), (True, True)),
     ids=("um", "mu", "mm"),
 )
-def test_compile_arith_masked_ops(op, left_dtype, right_dtype, masked):
+def test_compile_arith_masked_ops(
+    op, numeric_types_as_str, numeric_types_as_str2, masked
+):
     def func(x, y):
         return op(x, y)
 
     cc = (7, 5)
 
-    ty1 = from_dtype(np.dtype(left_dtype))
-    ty2 = from_dtype(np.dtype(right_dtype))
+    ty1 = from_dtype(np.dtype(numeric_types_as_str))
+    ty2 = from_dtype(np.dtype(numeric_types_as_str2))
 
     if masked[0]:
         ty1 = MaskedType(ty1)
