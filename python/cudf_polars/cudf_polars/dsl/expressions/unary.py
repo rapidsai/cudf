@@ -106,12 +106,13 @@ class UnaryFunction(Expr):
             "drop_nulls",
             "fill_null",
             "mask_nans",
+            "null_count",
+            "rank",
             "round",
             "set_sorted",
+            "top_k",
             "unique",
             "value_counts",
-            "null_count",
-            "top_k",
         }
     )
     _supported_cum_aggs = frozenset(
@@ -135,13 +136,14 @@ class UnaryFunction(Expr):
         self.children = children
         self.is_pointwise = self.name not in (
             "as_struct",
-            "cum_min",
             "cum_max",
+            "cum_min",
             "cum_prod",
             "cum_sum",
             "drop_nulls",
-            "unique",
+            "rank",
             "top_k",
+            "unique",
         )
 
         if self.name not in UnaryFunction._supported_fns:
@@ -151,6 +153,12 @@ class UnaryFunction(Expr):
             if reverse:
                 raise NotImplementedError(
                     "reverse=True is not supported for cumulative aggregations"
+                )
+        if self.name == "rank":
+            method, _, _ = self.options
+            if method not in {"average", "min", "max", "dense", "ordinal"}:
+                raise NotImplementedError(
+                    f"ranking with {method=} is not yet supported"
                 )
 
     def do_evaluate(
@@ -342,6 +350,71 @@ class UnaryFunction(Expr):
                 ),
                 dtype=self.dtype,
             )
+        elif self.name == "rank":
+            (column,) = (child.evaluate(df, context=context) for child in self.children)
+            method_str, descending, _ = self.options
+
+            method = {
+                "average": plc.aggregation.RankMethod.AVERAGE,
+                "min": plc.aggregation.RankMethod.MIN,
+                "max": plc.aggregation.RankMethod.MAX,
+                "dense": plc.aggregation.RankMethod.DENSE,
+                "ordinal": plc.aggregation.RankMethod.FIRST,
+            }[method_str]
+
+            order = (
+                plc.types.Order.DESCENDING if descending else plc.types.Order.ASCENDING
+            )
+
+            ranked: plc.Column = plc.sorting.rank(
+                column.obj,
+                method,
+                order,
+                plc.types.NullPolicy.EXCLUDE,
+                plc.types.NullOrder.BEFORE,
+                percentage=False,
+            )
+
+            null_count = column.null_count
+            if null_count and not descending:
+                # libcudf rank is offset when nulls would sort first and are excluded:
+                #  - dense: +1 (nulls count as a skipped leading group)
+                #  - min/max/ordinal/average: +k (nulls counted before all valid rows)
+                rank_dtype = ranked.type()
+                if method_str == "dense":
+                    one = plc.Scalar.from_py(
+                        1.0
+                        if rank_dtype.id() in {plc.TypeId.FLOAT32, plc.TypeId.FLOAT64}
+                        else 1,
+                        rank_dtype,
+                    )
+                    ranked = plc.binaryop.binary_operation(
+                        ranked, one, plc.binaryop.BinaryOperator.SUB, rank_dtype
+                    )
+                else:
+                    k_scalar = plc.Scalar.from_py(
+                        float(null_count)
+                        if rank_dtype.id() in {plc.TypeId.FLOAT32, plc.TypeId.FLOAT64}
+                        else int(null_count),
+                        rank_dtype,
+                    )
+                    ranked = plc.binaryop.binary_operation(
+                        ranked, k_scalar, plc.binaryop.BinaryOperator.SUB, rank_dtype
+                    )
+
+            # Min/Max/Dense/Ordinal -> IDX_DTYPE
+            # See https://github.com/pola-rs/polars/blob/main/crates/polars-ops/src/series/ops/rank.rs
+            if method_str in {"min", "max", "dense", "ordinal"}:
+                dest = self.dtype.plc.id()
+                src = ranked.type().id()
+                if dest == plc.TypeId.UINT32 and src != plc.TypeId.UINT32:
+                    ranked = plc.unary.cast(ranked, plc.DataType(plc.TypeId.UINT32))
+                elif (
+                    dest == plc.TypeId.UINT64 and src != plc.TypeId.UINT64
+                ):  # pragma: no cover
+                    ranked = plc.unary.cast(ranked, plc.DataType(plc.TypeId.UINT64))
+
+            return Column(ranked, dtype=self.dtype)
         elif self.name == "top_k":
             (column, k) = (
                 child.evaluate(df, context=context) for child in self.children

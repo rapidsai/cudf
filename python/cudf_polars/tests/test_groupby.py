@@ -384,3 +384,9 @@ def test_groupby_aggs_keep_unsupported_as_null(df: pl.LazyFrame, agg_expr) -> No
 def test_groupby_ternary_supported(df: pl.LazyFrame, expr: pl.Expr) -> None:
     q = df.group_by("key1").agg(expr)
     assert_gpu_result_equal(q, check_row_order=False)
+
+
+def test_groupby_rank_raises(df: pl.LazyFrame) -> None:
+    q = df.group_by("key1").agg(pl.col("int").rank())
+
+    assert_ir_translation_raises(q, NotImplementedError)
