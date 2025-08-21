@@ -80,12 +80,9 @@ precompute_mixed_join_data(mixed_multimap_type const& hash_table,
     rmm::device_uvector<cuda::std::pair<size_type, size_type>>(outer_num_rows, stream, mr);
 
   // Get hash table info for computing indices
-  auto retrieve_ref                        = hash_table.ref(cuco::retrieve);
-  auto const storage_ref                   = retrieve_ref.storage_ref();
-  auto const probing_scheme                = retrieve_ref.probing_scheme();
-  auto const probe_hash_fn                 = probing_scheme.hash_function();
-  auto const extent                        = storage_ref.extent();
-  static constexpr std::size_t bucket_size = 2;
+  auto const extent                        = hash_table.capacity();
+  auto const probe_hash_fn                 = hash_table.hash_function();
+  static constexpr std::size_t bucket_size = mixed_multimap_type::bucket_size;
 
   // Create dual functor to compute both pairs and hash indices
   auto precompute_fn = [=] __device__(size_type i) {
@@ -100,9 +97,9 @@ precompute_mixed_join_data(mixed_multimap_type const& hash_table,
     auto const step_val =
       ((hash2_val % (extent / bucket_size - std::size_t{1})) + std::size_t{1}) * bucket_size;
 
-    return cuda::std::make_pair(
+    return cuda::std::pair{
       probe_key,
-      cuda::std::make_pair(static_cast<size_type>(init_idx), static_cast<size_type>(step_val)));
+      cuda::std::pair{static_cast<size_type>(init_idx), static_cast<size_type>(step_val)}};
   };
 
   // Single transform to fill both arrays using zip iterator
@@ -229,7 +226,7 @@ mixed_join(
                         static_cast<bitmask_type const*>(row_bitmask.data()),
                         stream);
   auto hash_table_storage = cudf::device_span<cuco::pair<hash_value_type, size_type>>{
-    hash_table.ref(cuco::retrieve).storage_ref().data(), hash_table.capacity()};
+    hash_table.data(), hash_table.capacity()};
 
   auto left_conditional_view  = table_device_view::create(left_conditional, stream);
   auto right_conditional_view = table_device_view::create(right_conditional, stream);
@@ -492,7 +489,7 @@ compute_mixed_join_output_size(table_view const& left_equality,
                         static_cast<bitmask_type const*>(row_bitmask.data()),
                         stream);
   auto hash_table_storage = cudf::device_span<cuco::pair<hash_value_type, size_type>>{
-    hash_table.ref(cuco::retrieve).storage_ref().data(), hash_table.capacity()};
+    hash_table.data(), hash_table.capacity()};
 
   auto left_conditional_view  = table_device_view::create(left_conditional, stream);
   auto right_conditional_view = table_device_view::create(right_conditional, stream);

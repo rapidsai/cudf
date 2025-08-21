@@ -30,6 +30,8 @@
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <cuda/atomic>
+
 namespace cudf::detail {
 
 /**
@@ -124,8 +126,10 @@ __device__ __forceinline__ void retrieve(
             if constexpr (is_outer) { found_match = true; }
 
             cudf::size_type num_matches = (first_equals ? 1 : 0) + (second_equals ? 1 : 0);
+            cuda::atomic_ref<cudf::size_type, cuda::thread_scope_block> counter_ref{
+              flushing_cg_counter[flushing_cg_id]};
             cudf::size_type output_idx =
-              atomicAdd(&flushing_cg_counter[flushing_cg_id], num_matches);
+              counter_ref.fetch_add(num_matches, cuda::memory_order_relaxed);
 
             auto const probe_row_index = probe_key.second;
 
@@ -147,7 +151,9 @@ __device__ __forceinline__ void retrieve(
 
             if constexpr (is_outer) {
               if (not found_match) {
-                auto const output_idx      = atomicAdd(&flushing_cg_counter[flushing_cg_id], 1);
+                cuda::atomic_ref<cudf::size_type, cuda::thread_scope_block> counter_ref{
+                  flushing_cg_counter[flushing_cg_id]};
+                auto const output_idx      = counter_ref.fetch_add(1, cuda::memory_order_relaxed);
                 auto const probe_row_index = probe_key.second;
                 probe_output_buffer[flushing_cg_id][output_idx] = probe_row_index;
                 match_output_buffer[flushing_cg_id][output_idx] = cudf::detail::JoinNoneValue;
