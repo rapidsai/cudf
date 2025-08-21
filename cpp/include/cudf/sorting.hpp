@@ -402,7 +402,7 @@ std::unique_ptr<column> top_k_order(
  * Example:
  * col = [ 3, 4, 5, 4, 1, 2, 3, 5, 6, 7, 8, 9, 10 ]
  * offsets = [0, 3, 7, 13]
- * result = cudf::top_k_segmented(col, offsets, 3);
+ * result = cudf::segmented_top_k(col, offsets, 3);
  * result is [[5,4,3], [4,3,2], [10,8,9]] // each segment may not be sorted
  * @endcode
  *
@@ -419,7 +419,7 @@ std::unique_ptr<column> top_k_order(
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return A column with the top k values of the input column.
  */
-std::unique_ptr<column> top_k_segmented(
+std::unique_ptr<column> segmented_top_k(
   column_view const& col,
   column_view const& segment_offsets,
   size_type k,
@@ -438,7 +438,7 @@ std::unique_ptr<column> top_k_segmented(
  * Example:
  * col = [ 3, 4, 5, 4, 1, 2, 3, 5, 6, 7, 8, 9, 10 ]
  * offsets = [0, 3, 7, 13]
- * result = cudf::top_k_segmented_order(col, offsets, 3);
+ * result = cudf::segmented_top_k_order(col, offsets, 3);
  * result is [[2,1,0], [3,6,5], [12,10,11]] // each segment may not be sorted
  * @endcode
  *
@@ -455,7 +455,7 @@ std::unique_ptr<column> top_k_segmented(
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Indices of the top k values of the input column
  */
-std::unique_ptr<column> top_k_segmented_order(
+std::unique_ptr<column> segmented_top_k_order(
   column_view const& col,
   column_view const& segment_offsets,
   size_type k,

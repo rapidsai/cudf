@@ -46,9 +46,9 @@ void bench_segmented_top_k(nvbench::state& state, nvbench::type_list<DataType>)
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     if (ordered)
-      cudf::top_k_segmented_order(input->view(), segments->view(), k);
+      cudf::segmented_top_k_order(input->view(), segments->view(), k);
     else
-      cudf::top_k_segmented(input->view(), segments->view(), k);
+      cudf::segmented_top_k(input->view(), segments->view(), k);
   });
 }
 
