@@ -1542,7 +1542,7 @@ __device__ void zero_fill_null_positions_shared(
   int const start_bit_idx = valid_map_offset;
   int const end_bit_idx   = valid_map_offset + num_values;
   int const start_block   = start_bit_idx / bits_per_mask;
-  int const end_block     = (end_bit_idx + bits_per_mask - 1) / bits_per_mask;  // round up
+  int const end_block     = cudf::util::div_rounding_up_safe(end_bit_idx, bits_per_mask);
   int const num_blocks    = end_block - start_block;
 
   int const warp_id = t / warp_size;
