@@ -58,3 +58,26 @@ def test_multiindex_wildcard_selection_three_level_all():
     expect = df.to_pandas().loc[:, (slice("a", "c"), slice("a", "b"), "b")]
     got = df.loc[:, (slice(None), "b")]
     assert_eq(expect, got)
+
+
+def test_multiindex_wildcard_selection_all():
+    midx = cudf.MultiIndex.from_tuples(
+        [(c1, c2) for c1 in "abc" for c2 in "ab"]
+    )
+    df = cudf.DataFrame({f"{i}": [i] for i in range(6)})
+    df.columns = midx
+    expect = df.to_pandas().loc[:, (slice(None), "b")]
+    got = df.loc[:, (slice(None), "b")]
+    assert_eq(expect, got)
+
+
+@pytest.mark.xfail(reason="Not yet properly supported.")
+def test_multiindex_wildcard_selection_partial():
+    midx = cudf.MultiIndex.from_tuples(
+        [(c1, c2) for c1 in "abc" for c2 in "ab"]
+    )
+    df = cudf.DataFrame({f"{i}": [i] for i in range(6)})
+    df.columns = midx
+    expect = df.to_pandas().loc[:, (slice("a", "b"), "b")]
+    got = df.loc[:, (slice("a", "b"), "b")]
+    assert_eq(expect, got)
