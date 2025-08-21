@@ -33,8 +33,6 @@
 
 #include <numeric>
 
-using namespace roaring::api;
-
 namespace cudf::io::parquet::experimental {
 
 namespace {
@@ -168,12 +166,12 @@ auto build_row_mask_column(cudf::host_span<size_t const> row_indices,
         cudf::detail::host_worker_pool().submit_task([&, thread_idx = thread_idx] {
           // Thread local roaring64 context for faster (bulk) contains operations
           auto roaring64_context =
-            roaring64_bulk_context_t{.high_bytes = {0, 0, 0, 0, 0, 0}, .leaf = nullptr};
+          roaring64_bulk_context_t{.high_bytes = {0, 0, 0, 0, 0, 0}, .leaf = nullptr};
 
           // Fill up the row mask using the deletion vector
           for (auto row_idx = thread_idx; row_idx < num_rows; row_idx += thread_pool_size) {
             // Check if each row index is not present in the deletion vector
-            row_mask[row_idx] = not roaring64_bitmap_contains_bulk(
+            row_mask[row_idx] = not roaring::api::roaring64_bitmap_contains_bulk(
               deletion_vector, &roaring64_context, static_cast<uint64_t>(row_indices[row_idx]));
           }
         }));
@@ -237,7 +235,7 @@ table_with_metadata read_parquet_and_apply_deletion_vector(
 
   // If roaring bitmap is nullptr or empty, return the table with index column and the
   // updated metadata
-  if (not deletion_vector or not roaring64_bitmap_get_cardinality(deletion_vector)) {
+  if (not deletion_vector or not roaring::api::roaring64_bitmap_get_cardinality(deletion_vector)) {
     return table_with_metadata{std::move(table_with_index), std::move(metadata)};
   }
 
@@ -263,19 +261,19 @@ table_with_metadata read_parquet_and_apply_serialized_deletion_vector(
     if (serialized_roaring64_bytes.empty()) { return nullptr; }
 
     // Check if we can deserialize the roaring64 bitmap from the serialized bytes
-    CUDF_EXPECTS(roaring64_bitmap_portable_deserialize_size(
+    CUDF_EXPECTS(roaring::api::roaring64_bitmap_portable_deserialize_size(
                    reinterpret_cast<char const*>(serialized_roaring64_bytes.data()),
                    static_cast<size_t>(serialized_roaring64_bytes.size())),
                  "Failed to deserialize the roaring64 bitmap");
 
     // Deserialize the roaring64 bitmap from the frozen serialized bytes
-    auto roaring64_bitmap = roaring64_bitmap_portable_deserialize_safe(
+    auto roaring64_bitmap = roaring::api::roaring64_bitmap_portable_deserialize_safe(
       reinterpret_cast<char const*>(serialized_roaring64_bytes.data()),
       static_cast<size_t>(serialized_roaring64_bytes.size()));
 
     // Validate the deserialized roaring64 bitmap
     CUDF_EXPECTS(roaring64_bitmap, "Failed to deserialize the portable roaring64 bitmap");
-    CUDF_EXPECTS(roaring64_bitmap_internal_validate(roaring64_bitmap, nullptr),
+    CUDF_EXPECTS(roaring::api::roaring64_bitmap_internal_validate(roaring64_bitmap, nullptr),
                  "Encountered an inconsistent roaring64 bitmap after deserialization");
 
     return roaring64_bitmap;

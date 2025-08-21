@@ -540,7 +540,7 @@ add_library(
   src/io/parquet/compact_protocol_writer.cpp
   src/io/parquet/decode_preprocess.cu
   src/io/parquet/experimental/dictionary_page_filter.cu
-  src/io/parquet/experimental/functions.cu
+  src/io/parquet/experimental/deletion_vector_functions.cu
   src/io/parquet/experimental/hybrid_scan.cpp
   src/io/parquet/experimental/hybrid_scan_chunking.cu
   src/io/parquet/experimental/hybrid_scan_helpers.cpp
