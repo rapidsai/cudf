@@ -276,7 +276,7 @@ class JoinKey:
 
     @cached_property
     def source_row_count(self) -> int | None:
-        """Return the estimated number of rows in the join key."""
+        """Return the estimated row-count of the source columns."""
         return min(
             (
                 cs.source_info.row_count.value
@@ -285,10 +285,6 @@ class JoinKey:
             ),
             default=None,
         )
-
-    def names(self) -> tuple[str, ...]:
-        """Return the names of the columns in the join key."""
-        return tuple(cs.name for cs in self.column_stats)
 
 
 class StatsCollector:

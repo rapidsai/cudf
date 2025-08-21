@@ -424,7 +424,7 @@ def test_base_stats_join_key_info():
 
     # Check equivalence sets
     key_sets = sorted(
-        sorted(k.names() for k in group)
+        sorted(tuple(cs.name for cs in k.column_stats) for k in group)
         for group in find_equivalence_sets(stats.join_keys)
     )
     assert len(key_sets) == 2
