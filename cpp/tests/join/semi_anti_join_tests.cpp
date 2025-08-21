@@ -15,6 +15,7 @@
  */
 
 #include "cudf/join/join.hpp"
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -35,6 +36,7 @@
 #include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
+
 #include <memory>
 
 template <typename T>
@@ -133,7 +135,7 @@ TEST_F(JoinTest, TestSimple)
   auto left  = cudf::table_view{{left_col0}};
   auto right = cudf::table_view{{right_col0}};
 
-  auto result    = left_semi_join(left, right, {0}, {0});
+  auto result = left_semi_join(left, right, {0}, {0});
 
   column_wrapper<int32_t> col_gold_0{0, 1};
   auto gold = cudf::table_view{{col_gold_0}};
@@ -152,14 +154,14 @@ TEST_F(JoinTest, TestSimpleMultiCol)
   auto left  = cudf::table_view{{col0_0, col0_1}};
   auto right = cudf::table_view{{col1_0, col1_1}};
 
-  auto result    = left_semi_join(right, left, {0, 1}, {0, 1});
+  auto result            = left_semi_join(right, left, {0, 1}, {0, 1});
   auto result_sort_order = cudf::sorted_order(result->view());
   auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
   column_wrapper<int32_t> gold_col0{2, 2};
   strcol_wrapper gold_col1({"s0", "s0"});
 
-  auto gold = cudf::table_view{{gold_col0, gold_col1}};
+  auto gold            = cudf::table_view{{gold_col0, gold_col1}};
   auto gold_sort_order = cudf::sorted_order(gold);
   auto sorted_gold     = cudf::gather(gold, *gold_sort_order);
 
@@ -286,7 +288,8 @@ TEST_F(JoinTest, SemiJoinWithStructsDebug)
     cols1.push_back(col1_2.release());
     cols1.push_back(col1_3.release());
 
-    return std::pair{std::make_unique<Table>(std::move(cols0)), std::make_unique<Table>(std::move(cols1))};
+    return std::pair{std::make_unique<Table>(std::move(cols0)),
+std::make_unique<Table>(std::move(cols1))};
   }();
 
   auto result =
