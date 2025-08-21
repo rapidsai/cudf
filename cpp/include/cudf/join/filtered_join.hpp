@@ -76,14 +76,14 @@ class filtered_join {
    */
   filtered_join(cudf::table_view const& build,
                 null_equality compare_nulls  = null_equality::EQUAL,
-                bool reuse_left_table = false,
+                bool reuse_left_table        = false,
                 double load_factor           = 0.5,
                 rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   filtered_join(cudf::table_view const& build,
                 cudf::null_equality compare_nulls = null_equality::EQUAL,
-                bool reuse_left_table = false,
-                rmm::cuda_stream_view stream = cudf::get_default_stream());
+                bool reuse_left_table             = false,
+                rmm::cuda_stream_view stream      = cudf::get_default_stream());
 
   /**
    * @brief Returns the row indices that can be used to construct the result of performing

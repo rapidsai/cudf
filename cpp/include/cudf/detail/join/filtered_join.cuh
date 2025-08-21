@@ -28,10 +28,10 @@
 
 #include <cuco/bucket_storage.cuh>
 #include <cuco/extent.cuh>
-#include <cuda/std/type_traits>
-#include <cuco/types.cuh>
-#include <cuco/static_set_ref.cuh>
 #include <cuco/static_multiset_ref.cuh>
+#include <cuco/static_set_ref.cuh>
+#include <cuco/types.cuh>
+#include <cuda/std/type_traits>
 
 // Forward declaration
 namespace cudf::experimental::row::equality {
@@ -47,7 +47,7 @@ using cudf::experimental::row::rhs_index_type;
 class filtered_join {
  public:
   struct build_properties {
-    bool _has_nulls;                   ///< True if nested nulls are present in build table
+    bool _has_nulls;  ///< True if nested nulls are present in build table
     bool _has_floating_point;
     bool _has_nested_columns;
   };
@@ -137,7 +137,6 @@ class filtered_join {
            cudf::nullate::DYNAMIC,
            cudf::experimental::row::equality::nan_equal_physical_equality_comparator>;
 
-
   storage_type _bucket_storage;
   static constexpr auto empty_sentinel_key = cuco::empty_key{
     cuco::pair{std::numeric_limits<hash_value_type>::max(), lhs_index_type{JoinNoneValue}}};
@@ -157,61 +156,79 @@ class filtered_join {
                 rmm::cuda_stream_view stream);
 
   template <int32_t CGSize, typename Ref>
-  void insert_build_table(Ref const &insert_ref, rmm::cuda_stream_view stream);
+  void insert_build_table(Ref const& insert_ref, rmm::cuda_stream_view stream);
 
   virtual std::unique_ptr<rmm::device_uvector<cudf::size_type>> semi_join(
-    cudf::table_view const& probe, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) = 0;
+    cudf::table_view const& probe,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) = 0;
 
   virtual std::unique_ptr<rmm::device_uvector<cudf::size_type>> anti_join(
-    cudf::table_view const& probe, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) = 0;
+    cudf::table_view const& probe,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) = 0;
 };
 
 class filtered_join_with_multiset : public filtered_join {
  public:
   filtered_join_with_multiset(cudf::table_view const& build,
-                        cudf::null_equality compare_nulls,
-                        double load_factor,
-                        rmm::cuda_stream_view stream);
+                              cudf::null_equality compare_nulls,
+                              double load_factor,
+                              rmm::cuda_stream_view stream);
 
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> semi_anti_join(
-    cudf::table_view const& probe, join_kind kind, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
+    cudf::table_view const& probe,
+    join_kind kind,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr);
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> semi_join(
-    cudf::table_view const& probe, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) override;
+    cudf::table_view const& probe,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) override;
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> anti_join(
-    cudf::table_view const& probe, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) override;
+    cudf::table_view const& probe,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) override;
 
   template <int32_t CGSize, typename Ref>
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> query_build_table(
-      cudf::table_view const &probe,
-      std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> preprocessed_probe,
-      join_kind kind,
-      Ref query_ref,
-      rmm::cuda_stream_view stream, 
-      rmm::device_async_resource_ref mr);
+    cudf::table_view const& probe,
+    std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> preprocessed_probe,
+    join_kind kind,
+    Ref query_ref,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr);
 };
 
 class filtered_join_with_set : public filtered_join {
  public:
   filtered_join_with_set(cudf::table_view const& build,
-                        cudf::null_equality compare_nulls,
-                        double load_factor,
-                        rmm::cuda_stream_view stream);
+                         cudf::null_equality compare_nulls,
+                         double load_factor,
+                         rmm::cuda_stream_view stream);
 
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> semi_anti_join(
-    cudf::table_view const& probe, join_kind kind, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
+    cudf::table_view const& probe,
+    join_kind kind,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr);
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> semi_join(
-    cudf::table_view const& probe, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) override;
+    cudf::table_view const& probe,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) override;
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> anti_join(
-    cudf::table_view const& probe, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) override;
+    cudf::table_view const& probe,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) override;
 
   template <int32_t CGSize, typename Ref>
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> query_build_table(
-      cudf::table_view const &probe,
-      std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> preprocessed_probe,
-      join_kind kind,
-      Ref query_ref,
-      rmm::cuda_stream_view stream, 
-      rmm::device_async_resource_ref mr);
+    cudf::table_view const& probe,
+    std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> preprocessed_probe,
+    join_kind kind,
+    Ref query_ref,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr);
 };
 
 }  // namespace detail
