@@ -279,7 +279,8 @@ class max_aggregation final : public rolling_aggregation,
  */
 class count_aggregation final : public rolling_aggregation,
                                 public groupby_aggregation,
-                                public groupby_scan_aggregation {
+                                public groupby_scan_aggregation,
+                                public reduce_aggregation {
  public:
   count_aggregation(aggregation::Kind kind) : aggregation(kind) {}
 
