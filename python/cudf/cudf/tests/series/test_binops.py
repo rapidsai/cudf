@@ -484,3 +484,20 @@ def test_string_binary_op_add(lhs, rhs):
     gds = cudf.Series(lhs) + cudf.Series(rhs)
 
     assert_eq(pds, gds)
+
+
+def test_concatenate_rows_of_lists():
+    pser = pd.Series([["a", "a"], ["b"], ["c"]])
+    gser = cudf.Series([["a", "a"], ["b"], ["c"]])
+
+    expect = pser + pser
+    got = gser + gser
+
+    assert_eq(expect, got)
+
+
+def test_concatenate_list_with_nonlist():
+    gser1 = cudf.Series([["a", "c"], ["b", "d"], ["c", "d"]])
+    gser2 = cudf.Series(["a", "b", "c"])
+    with pytest.raises(TypeError):
+        gser1 + gser2
