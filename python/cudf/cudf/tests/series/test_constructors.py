@@ -72,6 +72,18 @@ def test_create_interval_series(data1, data2, data3, data4, interval_closed):
     assert_eq(expect_three, got_three)
 
 
+def test_from_pandas_for_series_nan_as_null(nan_as_null):
+    data = [np.nan, 2.0, 3.0]
+    psr = pd.Series(data)
+
+    expected = cudf.Series._from_column(
+        as_column(data, nan_as_null=nan_as_null)
+    )
+    got = cudf.from_pandas(psr, nan_as_null=nan_as_null)
+
+    assert_eq(expected, got)
+
+
 @pytest.mark.parametrize(
     "data",
     [
