@@ -81,6 +81,8 @@ def _from_polars(dtype: pl.DataType) -> plc.DataType:
         assert_never(dtype.time_unit)
     elif isinstance(dtype, pl.String):
         return plc.DataType(plc.TypeId.STRING)
+    elif isinstance(dtype, pl.Decimal):
+        return plc.DataType(plc.TypeId.DECIMAL128, scale=-dtype.scale)
     elif isinstance(dtype, pl.Null):
         # TODO: Hopefully
         return plc.DataType(plc.TypeId.EMPTY)
