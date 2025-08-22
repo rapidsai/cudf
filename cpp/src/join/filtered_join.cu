@@ -233,7 +233,7 @@ filtered_join::filtered_join(cudf::table_view const& build,
     _bucket_storage{cuco::extent<cudf::size_type>{compute_bucket_storage_size(build, load_factor)},
                     cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream.value()}}
 {
-  _bucket_storage.initialize(empty_sentinel_key);
+  _bucket_storage.initialize(empty_sentinel_key, stream);
 }
 
 filtered_join_with_set::filtered_join_with_set(cudf::table_view const& build,
