@@ -130,7 +130,7 @@ static void BM_string_compare_ast_transform(nvbench::state& state)
   auto const num_rows     = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const tree_levels  = static_cast<cudf::size_type>(state.get_int64("tree_levels"));
   auto const hit_rate     = static_cast<cudf::size_type>(state.get_int64("hit_rate"));
-  engine_type engine      = engine_from_string(state.get_string("engine"));
+  auto const engine      = engine_from_string(state.get_string("engine"));
 
   CUDF_EXPECTS(tree_levels > 0, "benchmarks require 1 or more comparisons");
 
