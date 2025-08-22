@@ -208,7 +208,7 @@ class RunConfig:
     def __post_init__(self) -> None:  # noqa: D105
         if self.gather_shuffle_stats and self.shuffle != "rapidsmpf":
             raise ValueError(
-                "gather_shuffle_stats is only supported for streaming executor."
+                "gather_shuffle_stats is only supported when shuffle='rapidsmpf'."
             )
 
     @classmethod
