@@ -67,7 +67,7 @@ static void BM_ast_transform(nvbench::state& state)
 {
   auto const num_rows    = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const tree_levels = static_cast<cudf::size_type>(state.get_int64("tree_levels"));
-  engine_type engine     = engine_from_string(state.get_string("engine"));
+  auto const engine     = engine_from_string(state.get_string("engine"));
 
   // Create table data
   auto const num_columns = reuse_columns ? 1 : tree_levels + 1;
