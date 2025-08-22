@@ -67,8 +67,7 @@ class filtered_join {
    * @brief Adapter for insertion operations in the hash table
    *
    * When build table is reused, always returns false to allow duplicate entries in the hash table
-   * for no-op comparison. When build table is not reused, Returns result of self comparison of the
-   * comparator passed.
+   * for no-op comparison. When build table is not reused, returns result of self comparator passed
    */
   template <typename T>
   struct insertion_adapter {
@@ -164,81 +163,185 @@ class filtered_join {
     }
   };
 
+  // Key type used in the hash table
   using key = cuco::pair<hash_value_type, lhs_index_type>;
+
+  // Storage type for the hash table buckets
   using storage_type =
     cuco::bucket_storage<key,
                          1,  /// fixing bucket size to be 1 i.e each thread handles one slot
                          cuco::extent<cudf::size_type>,
                          cudf::detail::cuco_allocator<char>>;
 
+  // Hasher for primitive row types
   using primitive_row_hasher =
     cudf::row::primitive::row_hasher<cudf::hashing::detail::default_hash>;
+  // Linear probing scheme with bucket size 1 for primitive types
   using primitive_probing_scheme = cuco::linear_probing<1, hasher_adapter>;
+  // Equality comparator for primitive rows
   using primitive_row_comparator = cudf::row::primitive::row_equality_comparator;
 
+  // Hasher for complex row types with dynamic null handling
   using row_hasher =
     cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
                                                      nullate::DYNAMIC>;
+  // Linear probing scheme with bucket size 4 for nested data structures
   using nested_probing_scheme = cuco::linear_probing<4, hasher_adapter>;
+  // Linear probing scheme with bucket size 1 for simple data
   using simple_probing_scheme = cuco::linear_probing<1, hasher_adapter>;
-  using row_comparator        = cudf::experimental::row::equality::device_row_comparator<
-           true,
-           cudf::nullate::DYNAMIC,
-           cudf::experimental::row::equality::nan_equal_physical_equality_comparator>;
+  // Equality comparator for complex rows with null handling and NaN comparison
+  using row_comparator = cudf::experimental::row::equality::device_row_comparator<
+    true,
+    cudf::nullate::DYNAMIC,
+    cudf::experimental::row::equality::nan_equal_physical_equality_comparator>;
 
-  storage_type _bucket_storage;
+  storage_type _bucket_storage;  ///< Storage for hash table buckets
+
+  // Empty sentinel key used to mark empty slots in the hash table
   static constexpr auto empty_sentinel_key = cuco::empty_key{
     cuco::pair{std::numeric_limits<hash_value_type>::max(), lhs_index_type{JoinNoneValue}}};
-  build_properties _build_props;
+  build_properties _build_props;           ///< Properties of the build table
   cudf::table_view _build;                 ///< input table to build the hash map
   cudf::null_equality const _nulls_equal;  ///< whether to consider nulls as equal
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table>
     _preprocessed_build;  ///< input table preprocssed for row operators
 
  public:
+  /**
+   * @brief Calculates the required storage size for the hash table
+   *
+   * Computes the appropriate size for the bucket storage based on the input
+   * table size and desired load factor.
+   *
+   * @param tbl Table for which to calculate storage
+   * @param load_factor Target load factor for the hash table
+   * @return Calculated bucket storage size
+   */
   auto compute_bucket_storage_size(cudf::table_view tbl, double load_factor);
 
  public:
+  /**
+   * @brief Constructor for filtered_join base class
+   *
+   * Initializes the hash table with the build table and prepares it for join operations.
+   *
+   * @param build The table to build the hash table from
+   * @param compare_nulls How null values should be compared
+   * @param load_factor Target load factor for the hash table
+   * @param stream CUDA stream on which to perform operations
+   */
   filtered_join(cudf::table_view const& build,
                 cudf::null_equality compare_nulls,
                 double load_factor,
                 rmm::cuda_stream_view stream);
 
+  /**
+   * @brief Populates the hash table with the build table
+   *
+   * @tparam CGSize CUDA cooperative group size
+   * @tparam Ref Reference type for the hash table
+   * @param insert_ref Reference to the hash table for insertion
+   * @param stream CUDA stream on which to perform operations
+   */
   template <int32_t CGSize, typename Ref>
   void insert_build_table(Ref const& insert_ref, rmm::cuda_stream_view stream);
 
+  /**
+   * Virtual semi join function overridden in derived classes
+   */
   virtual std::unique_ptr<rmm::device_uvector<cudf::size_type>> semi_join(
     cudf::table_view const& probe,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) = 0;
 
+  /**
+   * Virtual anti join function overridden in derived classes
+   */
   virtual std::unique_ptr<rmm::device_uvector<cudf::size_type>> anti_join(
     cudf::table_view const& probe,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) = 0;
 };
 
+/**
+ * @brief Implementation of filtered join using multiset hash tables
+ *
+ * This class extends the base filtered_join to implement join operations
+ * using multiset semantics, where duplicate keys are allowed in the hash table.
+ */
 class filtered_join_with_multiset : public filtered_join {
  public:
+  /**
+   * @brief Constructor for filtered join with multiset
+   *
+   * @param build The table to build the hash table from
+   * @param compare_nulls How null values should be compared
+   * @param load_factor Target load factor for the hash table
+   * @param stream CUDA stream on which to perform operations
+   */
   filtered_join_with_multiset(cudf::table_view const& build,
                               cudf::null_equality compare_nulls,
                               double load_factor,
                               rmm::cuda_stream_view stream);
 
+  /**
+   * @brief Performs either a semi or anti join based on the specified kind
+   *
+   * @param probe The table to probe the hash table with
+   * @param kind The kind of join to perform (SEMI or ANTI)
+   * @param stream CUDA stream on which to perform operations
+   * @param mr Memory resource for allocations
+   * @return Device vector of indices representing the join result
+   */
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> semi_anti_join(
     cudf::table_view const& probe,
     join_kind kind,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr);
+  /**
+   * @brief Implementation of semi join for multiset
+   *
+   * Returns indices of build table rows that have matching keys in the probe table.
+   *
+   * @param probe The table to probe the hash table with
+   * @param stream CUDA stream on which to perform operations
+   * @param mr Memory resource for allocations
+   * @return Device vector of indices representing the join result
+   */
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> semi_join(
     cudf::table_view const& probe,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) override;
+  /**
+   * @brief Implementation of anti join for multiset
+   *
+   * Returns indices of build table rows that do not have matching keys in the probe table.
+   *
+   * @param probe The table to probe the hash table with
+   * @param stream CUDA stream on which to perform operations
+   * @param mr Memory resource for allocations
+   * @return Device vector of indices representing the join result
+   */
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> anti_join(
     cudf::table_view const& probe,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) override;
 
+  /**
+   * @brief Core implementation for querying the hash table
+   *
+   * Performs the actual hash table query operation for both semi and anti joins.
+   *
+   * @tparam CGSize CUDA cooperative group size
+   * @tparam Ref Reference type for the hash table
+   * @param probe The table to probe the hash table with
+   * @param preprocessed_probe Preprocessed probe table for row operators
+   * @param kind The kind of join to perform
+   * @param query_ref Reference to the hash table for querying
+   * @param stream CUDA stream on which to perform operations
+   * @param mr Memory resource for allocations
+   * @return Device vector of indices representing the join result
+   */
   template <int32_t CGSize, typename Ref>
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> query_build_table(
     cudf::table_view const& probe,
@@ -249,27 +352,88 @@ class filtered_join_with_multiset : public filtered_join {
     rmm::device_async_resource_ref mr);
 };
 
+/**
+ * @brief Implementation of filtered join using set hash tables
+ *
+ * This class extends the base filtered_join to implement join operations
+ * using set semantics, where duplicate keys are not allowed in the hash table.
+ * This implementation is more memory efficient when the same filter table (right table)
+ * is to be reused for multiple semi/anti join operations.
+ */
 class filtered_join_with_set : public filtered_join {
  public:
+  /**
+   * @brief Constructor for filtered join with set
+   *
+   * @param build The table to build the hash table from
+   * @param compare_nulls How null values should be compared
+   * @param load_factor Target load factor for the hash table
+   * @param stream CUDA stream on which to perform operations
+   */
   filtered_join_with_set(cudf::table_view const& build,
                          cudf::null_equality compare_nulls,
                          double load_factor,
                          rmm::cuda_stream_view stream);
 
+  /**
+   * @brief Performs either a semi or anti join based on the specified kind
+   *
+   * @param probe The table to probe the hash table with
+   * @param kind The kind of join to perform (SEMI or ANTI)
+   * @param stream CUDA stream on which to perform operations
+   * @param mr Memory resource for allocations
+   * @return Device vector of indices representing the join result
+   */
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> semi_anti_join(
     cudf::table_view const& probe,
     join_kind kind,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr);
+  /**
+   * @brief Implementation of semi join for set
+   *
+   * Returns indices of probe table rows that have matching keys in the build table.
+   *
+   * @param probe The table to probe the hash table with
+   * @param stream CUDA stream on which to perform operations
+   * @param mr Memory resource for allocations
+   * @return Device vector of indices representing the join result
+   */
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> semi_join(
     cudf::table_view const& probe,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) override;
+  /**
+   * @brief Implementation of anti join for set
+   *
+   * Returns indices of probe table rows that do not have matching keys in the build table.
+   *
+   * @param probe The table to probe the hash table with
+   * @param stream CUDA stream on which to perform operations
+   * @param mr Memory resource for allocations
+   * @return Device vector of indices representing the join result
+   */
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> anti_join(
     cudf::table_view const& probe,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) override;
 
+  /**
+   * @brief Core implementation for querying the hash table
+   *
+   * Performs the actual hash table query operation for both semi and anti joins
+   * using set semantics.
+   *
+   * @tparam CGSize CUDA cooperative group size
+   * @tparam Ref Reference type for the hash table
+   * @param probe The table to probe the hash table with
+   * @param preprocessed_probe Preprocessed probe table for row operators
+   * @param kind The kind of join to perform
+   * @param query_ref Reference to the hash table for querying
+   * @param stream CUDA stream on which to perform operations
+   * @param mr Memory resource for allocations
+   * @return Device vector of indices representing the join result
+   */
   template <int32_t CGSize, typename Ref>
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> query_build_table(
     cudf::table_view const& probe,
