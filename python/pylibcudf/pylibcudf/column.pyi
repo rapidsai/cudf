@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from typing import Any, Protocol, TypedDict
 
 from rmm.pylibrmm.device_buffer import DeviceBuffer
+from rmm.pylibrmm.stream import Stream
 
 from pylibcudf._interop_helpers import ArrowLike
 from pylibcudf.gpumemoryview import gpumemoryview
@@ -57,10 +58,14 @@ class Column:
     ) -> Column: ...
     def list_view(self) -> ListColumnView: ...
     @staticmethod
-    def from_scalar(scalar: Scalar, size: int) -> Column: ...
-    def to_scalar(self) -> Column: ...
+    def from_scalar(
+        scalar: Scalar, size: int, stream: Stream | None = None
+    ) -> Column: ...
+    def to_scalar(self, stream: Stream | None = None) -> Scalar: ...
     @staticmethod
-    def all_null_like(like: Column, size: int) -> Column: ...
+    def all_null_like(
+        like: Column, size: int, stream: Stream | None = None
+    ) -> Column: ...
     @staticmethod
     def from_rmm_buffer(
         buff: DeviceBuffer, dtype: DataType, size: int, children: list[Column]
@@ -74,7 +79,9 @@ class Column:
         cls, obj: SupportsCudaArrayInterface
     ) -> Column: ...
     @classmethod
-    def from_array_interface(cls, obj: SupportsArrayInterface) -> Column: ...
+    def from_array_interface(
+        cls, obj: SupportsArrayInterface, stream: Stream | None = None
+    ) -> Column: ...
     @staticmethod
     def from_array(
         cls, obj: SupportsCudaArrayInterface | SupportsArrayInterface
