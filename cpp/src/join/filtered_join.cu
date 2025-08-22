@@ -145,78 +145,6 @@ void filtered_join::insert_build_table(Ref const& insert_ref, rmm::cuda_stream_v
 }
 
 template <int32_t CGSize, typename Ref>
-std::unique_ptr<rmm::device_uvector<cudf::size_type>> filtered_join_with_set::query_build_table(
-  cudf::table_view const& probe,
-  std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> preprocessed_probe,
-  join_kind kind,
-  Ref query_ref,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
-{
-  auto const probe_has_nulls = has_nested_nulls(probe);
-  auto const has_any_nulls   = probe_has_nulls || _build_props._has_nulls;
-
-  auto query_set = [this,
-                    probe,
-                    probe_has_nulls,
-                    query_ref,
-                    stream]<typename InputProbeIterator, typename OutputContainsIterator>(
-                     InputProbeIterator probe_iter, OutputContainsIterator contains_iter) {
-    auto const grid_size = cuco::detail::grid_size(probe.num_rows(), CGSize);
-    if (probe_has_nulls && _nulls_equal == null_equality::UNEQUAL) {
-      auto const bitmask_buffer_and_ptr = build_row_bitmask(probe, stream);
-      auto const row_bitmask_ptr        = bitmask_buffer_and_ptr.second;
-      cuco::detail::open_addressing_ns::contains_if_n<CGSize, cuco::detail::default_block_size()>
-        <<<grid_size, cuco::detail::default_block_size(), 0, stream.value()>>>(
-          probe_iter,
-          probe.num_rows(),
-          thrust::counting_iterator<size_type>{0},
-          row_is_valid{row_bitmask_ptr},
-          contains_iter,
-          query_ref);
-    } else {
-      cuco::detail::open_addressing_ns::contains_if_n<CGSize, cuco::detail::default_block_size()>
-        <<<grid_size, cuco::detail::default_block_size(), 0, stream.value()>>>(
-          probe_iter,
-          probe.num_rows(),
-          thrust::constant_iterator<bool>{true},
-          cuda::std::identity{},
-          contains_iter,
-          query_ref);
-    }
-  };
-
-  auto contains_map = rmm::device_uvector<bool>(probe.num_rows(), stream);
-  if (cudf::is_primitive_row_op_compatible(_build) && !_build_props._has_floating_point) {
-    auto const d_probe_hasher =
-      primitive_row_hasher{nullate::DYNAMIC{has_any_nulls}, preprocessed_probe};
-    auto const probe_iter = cudf::detail::make_counting_transform_iterator(
-      size_type{0}, keys_adapter<rhs_index_type, primitive_row_hasher>{d_probe_hasher});
-
-    query_set(probe_iter, contains_map.begin());
-  } else {
-    auto const d_probe_hasher =
-      cudf::experimental::row::hash::row_hasher{preprocessed_probe}.device_hasher(
-        nullate::DYNAMIC(has_any_nulls));
-    auto const probe_iter = cudf::detail::make_counting_transform_iterator(
-      size_type{0}, keys_adapter<rhs_index_type, row_hasher>{d_probe_hasher});
-
-    query_set(probe_iter, contains_map.begin());
-  }
-  auto gather_map = detail::make_zeroed_device_uvector<size_type>(probe.num_rows(), stream, mr);
-  auto gather_map_end =
-    thrust::copy_if(rmm::exec_policy(stream),
-                    thrust::counting_iterator<size_type>(0),
-                    thrust::counting_iterator<size_type>(probe.num_rows()),
-                    gather_map.begin(),
-                    [kind, d_flagged = contains_map.begin()] __device__(size_type const idx) {
-                      return *(d_flagged + idx) == (kind == join_kind::LEFT_SEMI_JOIN);
-                    });
-  gather_map.resize(cuda::std::distance(gather_map.begin(), gather_map_end), stream);
-  return std::make_unique<rmm::device_uvector<size_type>>(std::move(gather_map));
-}
-
-template <int32_t CGSize, typename Ref>
 std::unique_ptr<rmm::device_uvector<cudf::size_type>>
 filtered_join_with_multiset::query_build_table(
   cudf::table_view const& probe,
@@ -304,54 +232,6 @@ filtered_join::filtered_join(cudf::table_view const& build,
   _bucket_storage.initialize(empty_sentinel_key);
 }
 
-filtered_join_with_set::filtered_join_with_set(cudf::table_view const& build,
-                                               cudf::null_equality compare_nulls,
-                                               double load_factor,
-                                               rmm::cuda_stream_view stream)
-  : filtered_join(build, compare_nulls, load_factor, stream)
-{
-  if (cudf::is_primitive_row_op_compatible(build) && !_build_props._has_floating_point) {
-    auto const d_build_comparator =
-      primitive_row_comparator{nullate::DYNAMIC{_build_props._has_nulls},
-                               _preprocessed_build,
-                               _preprocessed_build,
-                               compare_nulls};
-    cuco::static_set_ref set_ref{empty_sentinel_key,
-                                 insertion_adapter{d_build_comparator},
-                                 primitive_probing_scheme{},
-                                 cuco::thread_scope_device,
-                                 _bucket_storage.ref()};
-    auto insert_ref = set_ref.rebind_operators(cuco::insert);
-    insert_build_table<primitive_probing_scheme::cg_size>(insert_ref, stream);
-  } else if (_build_props._has_nested_columns) {
-    auto const d_build_comparator =
-      cudf::experimental::row::equality::self_comparator{_preprocessed_build}.equal_to<true>(
-        nullate::DYNAMIC{_build_props._has_nulls},
-        compare_nulls,
-        cudf::experimental::row::equality::nan_equal_physical_equality_comparator{});
-    cuco::static_set_ref set_ref{empty_sentinel_key,
-                                 insertion_adapter{d_build_comparator},
-                                 nested_probing_scheme{},
-                                 cuco::thread_scope_device,
-                                 _bucket_storage.ref()};
-    auto insert_ref = set_ref.rebind_operators(cuco::insert);
-    insert_build_table<nested_probing_scheme::cg_size>(insert_ref, stream);
-  } else {
-    auto const d_build_comparator =
-      cudf::experimental::row::equality::self_comparator{_preprocessed_build}.equal_to<false>(
-        nullate::DYNAMIC{_build_props._has_nulls},
-        compare_nulls,
-        cudf::experimental::row::equality::nan_equal_physical_equality_comparator{});
-    cuco::static_set_ref set_ref{empty_sentinel_key,
-                                 insertion_adapter{d_build_comparator},
-                                 simple_probing_scheme{},
-                                 cuco::thread_scope_device,
-                                 _bucket_storage.ref()};
-    auto insert_ref = set_ref.rebind_operators(cuco::insert);
-    insert_build_table<simple_probing_scheme::cg_size>(insert_ref, stream);
-  }
-}
-
 filtered_join_with_multiset::filtered_join_with_multiset(cudf::table_view const& build,
                                                          cudf::null_equality compare_nulls,
                                                          double load_factor,
@@ -383,74 +263,6 @@ filtered_join_with_multiset::filtered_join_with_multiset(cudf::table_view const&
     auto insert_ref = set_ref.rebind_operators(cuco::insert);
     insert_build_table<simple_probing_scheme::cg_size>(insert_ref, stream);
   }
-}
-
-std::unique_ptr<rmm::device_uvector<cudf::size_type>> filtered_join_with_set::semi_anti_join(
-  cudf::table_view const& probe,
-  join_kind kind,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
-{
-  auto const has_any_nulls = has_nested_nulls(probe) || _build_props._has_nulls;
-  auto const preprocessed_probe =
-    cudf::experimental::row::equality::preprocessed_table::create(probe, stream);
-
-  if (cudf::is_primitive_row_op_compatible(_build) && !_build_props._has_floating_point) {
-    auto const d_build_probe_comparator = primitive_row_comparator{
-      nullate::DYNAMIC{has_any_nulls}, _preprocessed_build, preprocessed_probe, _nulls_equal};
-
-    cuco::static_set_ref set_ref{empty_sentinel_key,
-                                 comparator_adapter{d_build_probe_comparator},
-                                 primitive_probing_scheme{},
-                                 cuco::thread_scope_device,
-                                 _bucket_storage.ref()};
-    auto query_ref = set_ref.rebind_operators(cuco::op::contains);
-    return query_build_table<primitive_probing_scheme::cg_size>(
-      probe, preprocessed_probe, kind, query_ref, stream, mr);
-  } else {
-    auto const d_build_probe_comparator = cudf::experimental::row::equality::two_table_comparator{
-      _preprocessed_build, preprocessed_probe};
-
-    if (_build_props._has_nested_columns) {
-      auto d_build_probe_nan_comparator = d_build_probe_comparator.equal_to<true>(
-        nullate::DYNAMIC{has_any_nulls},
-        _nulls_equal,
-        cudf::experimental::row::equality::nan_equal_physical_equality_comparator{});
-      cuco::static_set_ref set_ref{empty_sentinel_key,
-                                   comparator_adapter{d_build_probe_nan_comparator},
-                                   nested_probing_scheme{},
-                                   cuco::thread_scope_device,
-                                   _bucket_storage.ref()};
-      auto query_ref = set_ref.rebind_operators(cuco::op::contains);
-      return query_build_table<nested_probing_scheme::cg_size>(
-        probe, preprocessed_probe, kind, query_ref, stream, mr);
-    } else {
-      auto d_build_probe_nan_comparator = d_build_probe_comparator.equal_to<false>(
-        nullate::DYNAMIC{has_any_nulls},
-        _nulls_equal,
-        cudf::experimental::row::equality::nan_equal_physical_equality_comparator{});
-      cuco::static_set_ref set_ref{empty_sentinel_key,
-                                   comparator_adapter{d_build_probe_nan_comparator},
-                                   simple_probing_scheme{},
-                                   cuco::thread_scope_device,
-                                   _bucket_storage.ref()};
-      auto query_ref = set_ref.rebind_operators(cuco::op::contains);
-      return query_build_table<simple_probing_scheme::cg_size>(
-        probe, preprocessed_probe, kind, query_ref, stream, mr);
-    }
-  }
-}
-
-std::unique_ptr<rmm::device_uvector<cudf::size_type>> filtered_join_with_set::semi_join(
-  cudf::table_view const& probe, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
-{
-  return semi_anti_join(probe, join_kind::LEFT_SEMI_JOIN, stream, mr);
-}
-
-std::unique_ptr<rmm::device_uvector<cudf::size_type>> filtered_join_with_set::anti_join(
-  cudf::table_view const& probe, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
-{
-  return semi_anti_join(probe, join_kind::LEFT_ANTI_JOIN, stream, mr);
 }
 
 std::unique_ptr<rmm::device_uvector<cudf::size_type>> filtered_join_with_multiset::semi_anti_join(
@@ -530,15 +342,11 @@ filtered_join::filtered_join(cudf::table_view const& build,
                              bool reuse_left_table,
                              double load_factor,
                              rmm::cuda_stream_view stream)
-  : _reuse_left_table{reuse_left_table}
+  : _reuse_left_table{true}
 {
-  if (_reuse_left_table) {
-    _impl = std::make_unique<cudf::detail::filtered_join_with_multiset>(
-      build, compare_nulls, load_factor, stream);
-  } else {
-    _impl = std::make_unique<cudf::detail::filtered_join_with_set>(
-      build, compare_nulls, load_factor, stream);
-  }
+  // TODO: once 19778 is merged, fix _impl creation depending on _reuse_left_table
+  _impl = std::make_unique<cudf::detail::filtered_join_with_multiset>(
+    build, compare_nulls, load_factor, stream);
 }
 
 filtered_join::filtered_join(cudf::table_view const& build,
