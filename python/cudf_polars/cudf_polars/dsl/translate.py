@@ -280,7 +280,7 @@ def _(node: pl_ir.Cache, translator: Translator, schema: Schema) -> ir.IR:
     else:
         refcount = None
 
-    # Make sure Cache nodes with the same hash
+    # Make sure Cache nodes with the same id_
     # are actually the same object.
     if node.id_ not in translator._cache_nodes:
         translator._cache_nodes[node.id_] = ir.Cache(
