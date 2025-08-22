@@ -485,7 +485,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   }
 
   // Zero-fill null positions after decoding valid values
-  auto const& ni             = s->nesting_info[s->col.max_nesting_depth - 1];
+  auto const& ni = s->nesting_info[s->col.max_nesting_depth - 1];
   if (ni.valid_map != nullptr) {
     int const num_values = ni.valid_map_offset - init_valid_map_offset;
     zero_fill_null_positions_shared<decode_block_size>(
