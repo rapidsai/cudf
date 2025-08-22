@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -232,7 +232,6 @@ mixed_full_join(
  * choose a suitable compare_nulls value AND use appropriate null-safe
  * operators in the expression.
  *
- * If the provided output size or per-row counts are incorrect, behavior is undefined.
  *
  * @code{.pseudo}
  * left_equality: {{0, 1, 2}}
@@ -258,8 +257,7 @@ mixed_full_join(
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
- * @return A pair of vectors [`left_indices`, `right_indices`] that can be used to construct
- * the result of performing a mixed full join between the four input tables.
+ * @return A vector of indices from the left table that have matches in the right table.
  */
 std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_semi_join(
   table_view const& left_equality,
@@ -282,7 +280,6 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_semi_join(
  * choose a suitable compare_nulls value AND use appropriate null-safe
  * operators in the expression.
  *
- * If the provided output size or per-row counts are incorrect, behavior is undefined.
  *
  * @code{.pseudo}
  * left_equality: {{0, 1, 2}}
@@ -308,8 +305,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_semi_join(
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
- * @return A pair of vectors [`left_indices`, `right_indices`] that can be used to construct
- * the result of performing a mixed full join between the four input tables.
+ * @return A vector of indices from the left table that do not have matches in the right table.
  */
 std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_anti_join(
   table_view const& left_equality,
