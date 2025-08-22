@@ -312,10 +312,10 @@ filtered_join_with_set::filtered_join_with_set(cudf::table_view const& build,
 {
   if (cudf::is_primitive_row_op_compatible(build) && !_build_props._has_floating_point) {
     auto const d_build_comparator =
-      cudf::row::primitive::row_equality_comparator{nullate::DYNAMIC{_build_props._has_nulls},
-                                                    _preprocessed_build,
-                                                    _preprocessed_build,
-                                                    compare_nulls};
+      primitive_row_comparator{nullate::DYNAMIC{_build_props._has_nulls},
+                               _preprocessed_build,
+                               _preprocessed_build,
+                               compare_nulls};
     cuco::static_set_ref set_ref{empty_sentinel_key,
                                  insertion_adapter{d_build_comparator},
                                  primitive_probing_scheme{},
@@ -396,7 +396,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> filtered_join_with_set::se
     cudf::experimental::row::equality::preprocessed_table::create(probe, stream);
 
   if (cudf::is_primitive_row_op_compatible(_build) && !_build_props._has_floating_point) {
-    auto const d_build_probe_comparator = cudf::row::primitive::row_equality_comparator{
+    auto const d_build_probe_comparator = primitive_row_comparator{
       nullate::DYNAMIC{has_any_nulls}, _preprocessed_build, preprocessed_probe, _nulls_equal};
 
     cuco::static_set_ref set_ref{empty_sentinel_key,
@@ -464,7 +464,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> filtered_join_with_multise
     cudf::experimental::row::equality::preprocessed_table::create(probe, stream);
 
   if (cudf::is_primitive_row_op_compatible(_build) && !_build_props._has_floating_point) {
-    auto const d_build_probe_comparator = cudf::row::primitive::row_equality_comparator{
+    auto const d_build_probe_comparator = primitive_row_comparator{
       nullate::DYNAMIC{has_any_nulls}, _preprocessed_build, preprocessed_probe, _nulls_equal};
 
     cuco::static_multiset_ref set_ref{empty_sentinel_key,
