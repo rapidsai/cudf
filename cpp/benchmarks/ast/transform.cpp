@@ -191,6 +191,7 @@ static void BM_string_compare_ast_transform(nvbench::state& state)
         cudf::compute_column_jit(table, expression);
         break;
       }
+      default: CUDF_FAIL("Invalid engine type");
     }
   });
 }
