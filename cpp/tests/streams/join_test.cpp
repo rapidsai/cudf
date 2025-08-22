@@ -22,6 +22,7 @@
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/join/conditional_join.hpp>
+#include <cudf/join/filtered_join.hpp>
 #include <cudf/join/join.hpp>
 #include <cudf/join/mixed_join.hpp>
 #include <cudf/join/sort_merge_join.hpp>
@@ -81,8 +82,9 @@ TEST_F(JoinTest, FullJoin)
 
 TEST_F(JoinTest, LeftSemiJoin)
 {
-  cudf::left_semi_join(
-    table0, table1, cudf::null_equality::EQUAL, cudf::test::get_default_stream());
+  cudf::filtered_join obj(
+    table1, cudf::null_equality::EQUAL, false, cudf::test::get_default_stream());
+  auto join_result = obj.semi_join(table0, cudf::test::get_default_stream());
 }
 
 TEST_F(JoinTest, LeftAntiJoin)

@@ -137,12 +137,14 @@ TEST_F(JoinTest, TestSimple)
   auto left  = cudf::table_view{{left_col0}};
   auto right = cudf::table_view{{right_col0}};
 
-  auto result = left_semi_join(left, right, {0}, {0});
-
-  column_wrapper<int32_t> col_gold_0{0, 1};
-  auto gold = cudf::table_view{{col_gold_0}};
-
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(gold, result->view());
+  auto result    = left_semi_join(left, right);
+  auto result_cv = cudf::column_view(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
+                                     result->size(),
+                                     result->data(),
+                                     nullptr,
+                                     0);
+  column_wrapper<cudf::size_type> expected{0, 1};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result_cv);
 }
 
 std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> get_saj_tables(
