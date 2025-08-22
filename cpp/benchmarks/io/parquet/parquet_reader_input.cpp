@@ -488,5 +488,6 @@ NVBENCH_BENCH(BM_parquet_read_long_strings)
   .add_string_axis("io_type", {"DEVICE_BUFFER"})
   .set_min_samples(4)
   .add_int64_axis("cardinality", {0, 1000})
+  .add_int64_axis("data_size", {512 << 20})
   .add_int64_power_of_two_axis("avg_string_length",
                                nvbench::range(4, 16, 2));  // 16, 64, ... -> 64k
