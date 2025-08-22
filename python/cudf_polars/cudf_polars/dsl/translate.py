@@ -60,7 +60,7 @@ class Translator:
         self.visitor = visitor
         self.config_options = config.ConfigOptions.from_polars_engine(engine)
         self.errors: list[Exception] = []
-        self._cache_nodes: dict[ir.Cache, ir.Cache] = {}
+        self._cache_nodes: dict[int, ir.Cache] = {}
 
     def translate_ir(self, *, n: int | None = None) -> ir.IR:
         """
