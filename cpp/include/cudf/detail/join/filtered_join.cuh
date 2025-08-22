@@ -33,6 +33,8 @@
 #include <cuco/types.cuh>
 #include <cuda/std/type_traits>
 
+#include <type_traits>
+
 // Forward declaration
 namespace cudf::experimental::row::equality {
 class preprocessed_table;
@@ -44,23 +46,54 @@ namespace detail {
 using cudf::experimental::row::lhs_index_type;
 using cudf::experimental::row::rhs_index_type;
 
+/**
+ * @brief Base class providing common functionality for filtered join operations.
+ *
+ * This abstract class implements the core components needed for hash-based semi
+ * and anti join operations.
+ */
 class filtered_join {
  public:
+  /**
+   * @brief Properties of the build table used in the join operation
+   */
   struct build_properties {
-    bool _has_nulls;  ///< True if nested nulls are present in build table
-    bool _has_floating_point;
-    bool _has_nested_columns;
+    bool _has_nulls;           ///< True if nested nulls are present in build table
+    bool _has_floating_point;  ///< True if the build table contains floating point columns
+    bool _has_nested_columns;  ///< True if the build table contains nested columns
   };
 
+  /**
+   * @brief Adapter for insertion operations in the hash table
+   *
+   * When build table is reused, always returns false to allow duplicate entries in the hash table
+   * for no-op comparison. When build table is not reused, Returns result of self comparison of the
+   * comparator passed.
+   */
+  template <typename T>
   struct insertion_adapter {
+    insertion_adapter(T const& _c) : _comparator{_c} {}
     __device__ constexpr bool operator()(
-      cuco::pair<hash_value_type, lhs_index_type> const&,
-      cuco::pair<hash_value_type, lhs_index_type> const&) const noexcept
+      cuco::pair<hash_value_type, lhs_index_type> const& lhs,
+      cuco::pair<hash_value_type, lhs_index_type> const& rhs) const noexcept
     {
-      return false;
+      if constexpr (std::is_same_v<T, bool>) {
+        return false;
+      } else {
+        if (lhs.first != rhs.first) { return false; }
+        auto const lhs_index = static_cast<size_type>(lhs.second);
+        auto const rhs_index = static_cast<size_type>(rhs.second);
+        return _comparator(lhs_index, rhs_index);
+      }
     }
+
+   private:
+    T _comparator;
   };
 
+  /**
+   * @brief Adapter for extracting hash values from key-value pairs
+   */
   struct hasher_adapter {
     template <typename T>
     __device__ constexpr hash_value_type operator()(
@@ -70,6 +103,12 @@ class filtered_join {
     }
   };
 
+  /**
+   * @brief Adapter for generating key-value pairs from indices
+   *
+   * @tparam T Index type
+   * @tparam Hasher Hash function type
+   */
   template <typename T, typename Hasher>
   struct keys_adapter {
     CUDF_HOST_DEVICE constexpr keys_adapter(Hasher const& hasher) : _hasher{hasher} {}
@@ -83,6 +122,13 @@ class filtered_join {
     Hasher _hasher;
   };
 
+  /**
+   * @brief Adapter for comparing key-value pairs
+   *
+   * Compares hash values first for performance, then uses the provided equality comparator
+   *
+   * @tparam Equal Equality comparator type
+   */
   template <typename Equal>
   struct comparator_adapter {
     comparator_adapter(Equal const& d_equal) : _d_equal{d_equal} {}
@@ -107,6 +153,9 @@ class filtered_join {
     Equal _d_equal;
   };
 
+  /**
+   * @brief Adapter for extracting indices from key-value pairs
+   */
   struct output_adapter {
     __device__ constexpr cudf::size_type operator()(
       cuco::pair<hash_value_type, lhs_index_type> const& x) const
