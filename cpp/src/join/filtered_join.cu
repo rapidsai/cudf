@@ -406,7 +406,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> filtered_join_with_set::se
                                  _bucket_storage.ref()};
     auto query_ref = set_ref.rebind_operators(cuco::op::contains);
     return query_build_table<primitive_probing_scheme::cg_size>(
-      probe, preprocessed_probe, join_kind::LEFT_SEMI_JOIN, query_ref, stream, mr);
+      probe, preprocessed_probe, kind, query_ref, stream, mr);
   } else {
     auto const d_build_probe_comparator = cudf::experimental::row::equality::two_table_comparator{
       _preprocessed_build, preprocessed_probe};
@@ -423,7 +423,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> filtered_join_with_set::se
                                    _bucket_storage.ref()};
       auto query_ref = set_ref.rebind_operators(cuco::op::contains);
       return query_build_table<nested_probing_scheme::cg_size>(
-        probe, preprocessed_probe, join_kind::LEFT_SEMI_JOIN, query_ref, stream, mr);
+        probe, preprocessed_probe, kind, query_ref, stream, mr);
     } else {
       auto d_build_probe_nan_comparator = d_build_probe_comparator.equal_to<false>(
         nullate::DYNAMIC{has_any_nulls},
@@ -436,7 +436,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> filtered_join_with_set::se
                                    _bucket_storage.ref()};
       auto query_ref = set_ref.rebind_operators(cuco::op::contains);
       return query_build_table<simple_probing_scheme::cg_size>(
-        probe, preprocessed_probe, join_kind::LEFT_SEMI_JOIN, query_ref, stream, mr);
+        probe, preprocessed_probe, kind, query_ref, stream, mr);
     }
   }
 }
@@ -504,7 +504,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> filtered_join_with_multise
                                         _bucket_storage.ref()};
       auto query_ref = set_ref.rebind_operators(cuco::op::retrieve);
       return query_build_table<simple_probing_scheme::cg_size>(
-        probe, preprocessed_probe, join_kind::LEFT_SEMI_JOIN, query_ref, stream, mr);
+        probe, preprocessed_probe, kind, query_ref, stream, mr);
     }
   }
 }
