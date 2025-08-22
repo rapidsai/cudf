@@ -17,10 +17,13 @@
 #include "sort_column_impl.cuh"
 
 #include <cudf/column/column.hpp>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/sequence.hpp>
 #include <cudf/detail/sorting.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -37,9 +40,9 @@ std::unique_ptr<column> top_k(column_view const& col,
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(k <= col.size(),
-               "k must be less than or equal to the number of rows in the column",
-               std::invalid_argument);
+  CUDF_EXPECTS(k >= 0, "k must be non-negative", std::invalid_argument);
+  if (k == 0 || col.is_empty()) { return empty_like(col); }
+  if (k >= col.size()) { return std::make_unique<column>(col, stream, mr); }
 
   // code will be specialized for fixed-width types once CUB topk function is available
   auto const nulls     = sort_order == order::ASCENDING ? null_order::AFTER : null_order::BEFORE;
@@ -60,9 +63,12 @@ std::unique_ptr<column> top_k_order(column_view const& col,
                                     rmm::cuda_stream_view stream,
                                     rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(k <= col.size(),
-               "k must be less than or equal to the number of rows in the column",
-               std::invalid_argument);
+  CUDF_EXPECTS(k >= 0, "k must be non-negative", std::invalid_argument);
+  if (k == 0 || col.is_empty()) { return make_empty_column(cudf::type_to_id<size_type>()); }
+  if (k >= col.size()) {
+    return cudf::detail::sequence(
+      col.size(), numeric_scalar<size_type>(0, true, stream), stream, mr);
+  }
 
   auto const nulls   = sort_order == order::ASCENDING ? null_order::AFTER : null_order::BEFORE;
   auto const indices = sorted_order<sort_method::STABLE>(col, sort_order, nulls, stream, mr);

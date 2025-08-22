@@ -340,6 +340,7 @@ struct PageInfo {
   Encoding encoding;       // Encoding for data or dictionary page
   Encoding definition_level_encoding;  // Encoding used for definition levels (data page)
   Encoding repetition_level_encoding;  // Encoding used for repetition levels (data page)
+  bool is_compressed;                  // Whether the page is compressed (V2 header)
 
   // for nested types, we run a preprocess step in order to determine output
   // column sizes. Because of this, we can jump directly to the position in the
