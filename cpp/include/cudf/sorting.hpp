@@ -177,6 +177,7 @@ std::unique_ptr<table> stable_sort_by_key(
  * value starts from 1.
  *
  * @code{.pseudo}
+ * Using default order::ASCENDING
  * input = {3, 4, 5, 4, 1, 2}
  * Results for different rank_methods
  * FIRST    = {3, 4, 6, 5, 1, 2}
@@ -218,8 +219,8 @@ std::unique_ptr<table> stable_sort_by_key(
  * @param input The column to rank
  * @param method The ranking method used for tie breaking (same values)
  * @param column_order The desired sort order for ranking
- * @param null_handling Flag to include nulls during ranking. If nulls are not
- * included, the corresponding rank will be null.
+ * @param null_handling Flag to include nulls during ranking.
+ *                      If nulls are excluded, the corresponding rank will be null.
  * @param null_precedence The desired order of null rows compared to other elements
  * @param percentage Flag to convert ranks to percentage in range (0,1]
  * @param stream CUDA stream used for device memory operations and kernel launches
