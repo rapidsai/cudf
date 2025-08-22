@@ -187,7 +187,7 @@ class GroupedRollingWindow(Expr):
         unsupported = [
             type(named_expr.value).__name__
             for named_expr in self.named_aggs
-            if not isinstance(named_expr.value, (expr.Len, expr.Agg, expr.Col))
+            if not isinstance(named_expr.value, (expr.Len, expr.Agg))
         ]
         if unsupported:
             kinds = ", ".join(sorted(set(unsupported)))
