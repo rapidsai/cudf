@@ -1261,8 +1261,14 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   // Zero-fill null positions after decoding valid values
   if (should_process_nulls) {
     uint32_t const dtype_len = has_strings_t ? sizeof(cudf::size_type) : s->dtype_len;
-    auto const& ni           = s->nesting_info[s->col.max_nesting_depth - 1];
-    int const num_values = has_lists_t ? ni.valid_map_offset - init_valid_map_offset : s->num_rows;
+    int const num_values     = [&]() {
+      if constexpr (has_lists_t) {
+        auto const& ni = s->nesting_info[s->col.max_nesting_depth - 1];
+        return ni.valid_map_offset - init_valid_map_offset;
+      } else {
+        return s->num_rows;
+      }
+    }();
     zero_fill_null_positions_shared<decode_block_size_t>(
       s, dtype_len, init_valid_map_offset, num_values, t);
   }

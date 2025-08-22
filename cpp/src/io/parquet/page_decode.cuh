@@ -1525,6 +1525,9 @@ template <int block_size>
 __device__ void zero_fill_null_positions_shared(
   page_state_s* s, uint32_t dtype_len, int valid_map_offset, int num_values, int t)
 {
+  auto const block = cg::this_thread_block();
+  auto const warp  = cg::tiled_partition<cudf::detail::warp_size>(block);
+
   // nesting level that is storing actual leaf values
   int const leaf_level_index = s->col.max_nesting_depth - 1;
   auto const& ni             = s->nesting_info[leaf_level_index];
@@ -1536,7 +1539,7 @@ __device__ void zero_fill_null_positions_shared(
 
   constexpr int bits_per_mask = cudf::detail::size_in_bits<bitmask_type>();
   using cudf::detail::warp_size;
-  constexpr int num_warps     = block_size / warp_size;
+  constexpr int num_warps = block_size / warp_size;
 
   // Calculate the range of validity blocks we need to process
   int const start_bit_idx = valid_map_offset;
@@ -1546,7 +1549,7 @@ __device__ void zero_fill_null_positions_shared(
   int const num_blocks    = end_block - start_block;
 
   int const warp_id = t / warp_size;
-  int const lane_id = t % warp_size;
+  int const lane_id = warp.thread_rank();
 
   // Helper lambda for warp-parallel bit processing
   auto process_block_parallel = [&](int block_idx) {
