@@ -411,6 +411,7 @@ class orc_reader_options_builder {
    * @brief Set whether to ignore writer timezone in the stripe footer.
    *
    * @param ignore Boolean value to enable/disable ignoring writer timezone
+   * @return this for chaining
    */
   orc_reader_options_builder& set_ignore_timezone_in_stripe_footer(bool ignore)
   {
