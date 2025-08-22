@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 import pandas as pd
 import pytest
 
@@ -42,7 +42,3 @@ def test_convert_integer_false_convert_floating_true():
         .to_pandas(nullable=True)
     )
     assert_eq(result, expected)
-
-
-# Now write the same test, but construct a DataFrame
-# as input instead of parametrizing:
