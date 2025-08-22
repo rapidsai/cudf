@@ -217,3 +217,29 @@ def test_over_with_mapping_strategy_unsupported(df, strategy):
 def test_over_boolean_function_unsupported(df):
     q = df.select(pl.col("x").not_().over("g"))
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_over_ternary(df):
+    q = df.select(
+        pl.when(pl.col("g") == 1)
+        .then(pl.lit(None, dtype=pl.Int64))
+        .otherwise(pl.col("x"))
+        .sum()
+        .over("g")
+    )
+
+    assert_gpu_result_equal(q)
+
+
+def test_over_broadcast_input_row_group_indices_aligned():
+    num_rows, num_groups = 512, 64
+
+    df = pl.LazyFrame(
+        {
+            "g": [(i * 31) % num_groups for i in range(num_rows)],
+            "x": list(range(num_rows)),
+        }
+    )
+    q = df.select(pl.col("x").sum().over("g"))
+
+    assert_gpu_result_equal(q)
