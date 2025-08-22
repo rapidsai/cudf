@@ -60,6 +60,7 @@ class Translator:
         self.visitor = visitor
         self.config_options = config.ConfigOptions.from_polars_engine(engine)
         self.errors: list[Exception] = []
+        self._cache_nodes: dict[int, ir.Cache] = {}
 
     def translate_ir(self, *, n: int | None = None) -> ir.IR:
         """
@@ -278,12 +279,17 @@ def _(node: pl_ir.Cache, translator: Translator, schema: Schema) -> ir.IR:
         refcount = node.cache_hits
     else:
         refcount = None
-    return ir.Cache(
-        schema,
-        node.id_,
-        refcount,
-        translator.translate_ir(n=node.input),
-    )
+
+    # Make sure Cache nodes with the same id_
+    # are actually the same object.
+    if node.id_ not in translator._cache_nodes:
+        translator._cache_nodes[node.id_] = ir.Cache(
+            schema,
+            node.id_,
+            refcount,
+            translator.translate_ir(n=node.input),
+        )
+    return translator._cache_nodes[node.id_]
 
 
 @_translate_ir.register
