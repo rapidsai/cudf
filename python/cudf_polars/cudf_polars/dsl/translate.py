@@ -117,13 +117,6 @@ class Translator:
                 return ir.ErrorNode(schema, str(e))
             try:
                 result = _translate_ir(node, self, schema)
-                if isinstance(result, ir.Cache):
-                    # Make sure Cache nodes with the same hash
-                    # are actually the same object.
-                    try:
-                        result = self._cache_nodes[result]
-                    except KeyError:
-                        self._cache_nodes[result] = result
             except Exception as e:
                 self.errors.append(e)
                 return ir.ErrorNode(schema, str(e))
@@ -286,12 +279,17 @@ def _(node: pl_ir.Cache, translator: Translator, schema: Schema) -> ir.IR:
         refcount = node.cache_hits
     else:
         refcount = None
-    return ir.Cache(
-        schema,
-        node.id_,
-        refcount,
-        translator.translate_ir(n=node.input),
-    )
+
+    # Make sure Cache nodes with the same hash
+    # are actually the same object.
+    if node.id_ not in translator._cache_nodes:
+        translator._cache_nodes[node.id_] = ir.Cache(
+            schema,
+            node.id_,
+            refcount,
+            translator.translate_ir(n=node.input),
+        )
+    return translator._cache_nodes[node.id_]
 
 
 @_translate_ir.register
