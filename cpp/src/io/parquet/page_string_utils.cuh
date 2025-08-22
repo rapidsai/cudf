@@ -245,7 +245,11 @@ __device__ inline int calc_threads_per_string_log2(int avg_string_length)  // re
  * @param t The current thread's index
  * @param string_output_offset Starting offset into the output column data for writing
  */
-template <int block_size, bool has_lists_t, bool split_decode_t, typename state_buf>
+template <int block_size,
+          bool has_lists_t,
+          bool split_decode_t,
+          bool direct_copy,
+          typename state_buf>
 __device__ size_t decode_strings(
   page_state_s* s, state_buf* const sb, int start, int end, int t, size_t string_output_offset)
 {
@@ -265,9 +269,13 @@ __device__ size_t decode_strings(
 
     // Index from value buffer (doesn't include nulls) to final array (has gaps for nulls)
     int const dst_pos = [&]() {
-      int dst_pos = sb->nz_idx[rolling_index<state_buf::nz_buf_size>(thread_pos)];
-      if constexpr (!has_lists_t) { dst_pos -= s->first_row; }
-      return dst_pos;
+      if constexpr (direct_copy) {
+        return thread_pos - s->first_row;
+      } else {
+        int dst_pos = sb->nz_idx[rolling_index<state_buf::nz_buf_size>(thread_pos)];
+        if constexpr (!has_lists_t) { dst_pos -= s->first_row; }
+        return dst_pos;
+      }
     }();
 
     // src_pos represents the logical row position we want to read from. But in the case of
