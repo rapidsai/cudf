@@ -37,19 +37,18 @@ namespace CUDF_EXPORT cudf {
 
 namespace detail {
 /**
- * @brief Forward declaration for our distinct hash join
+ * @brief Forward declaration for our filtered hash join
  */
 class filtered_join;
 }  // namespace detail
 
 /**
- * @brief Distinct hash join that builds hash table in creation and probes results in subsequent
+ * @brief Filtered hash join that builds hash table in creation and probes results in subsequent
  * `*_join` member functions
  *
- * This class enables the distinct hash join scheme that builds hash table once, and probes as many
+ * This class enables the filtered hash join scheme that builds hash table once, and probes as many
  * times as needed (possibly in parallel).
  *
- * @note Behavior is undefined if the build table contains duplicates.
  * @note All NaNs are considered as equal
  */
 class filtered_join {
@@ -62,17 +61,27 @@ class filtered_join {
   filtered_join& operator=(filtered_join&&)      = delete;
 
   /**
-   * @brief Constructs a distinct hash join object for subsequent probe calls
+   * @brief Constructs a filtered hash join object for subsequent probe calls
    *
-   * @throw cudf::logic_error if the build table has no columns
-   * @throw std::invalid_argument if load_factor is not greater than 0 and less than or equal to 1
-   *
-   * @param build The build table that contains distinct elements
+   * @param build The build table
    * @param compare_nulls Controls whether null join-key values should match or not
+   * @param reuse_left_table Boolean indicating if the build table should be reused. If true, then
+   * the build table is considered as the left table, and is reused with multiple right (probe)
+   * tables. If false, then the build table is the right/filter table, it will be applied to
+   * multiple left (probe) tables.
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   */
+  filtered_join(cudf::table_view const& build,
+                cudf::null_equality compare_nulls = null_equality::EQUAL,
+                bool reuse_left_table             = false,
+                rmm::cuda_stream_view stream      = cudf::get_default_stream());
+
+  /**
+   * @copydoc filtered_join(cudf::table_view const&, null_equality, bool, rmm::cuda_stream_view)
+   *
    * @param load_factor The desired ratio of filled slots to total slots in the hash table, must be
    * in range (0,1]. For example, 0.5 indicates a target of 50% occupancy. Note that the actual
    * occupancy achieved may be slightly lower than the specified value.
-   * @param stream CUDA stream used for device memory operations and kernel launches
    */
   filtered_join(cudf::table_view const& build,
                 null_equality compare_nulls  = null_equality::EQUAL,
@@ -80,22 +89,27 @@ class filtered_join {
                 double load_factor           = 0.5,
                 rmm::cuda_stream_view stream = cudf::get_default_stream());
 
-  filtered_join(cudf::table_view const& build,
-                cudf::null_equality compare_nulls = null_equality::EQUAL,
-                bool reuse_left_table             = false,
-                rmm::cuda_stream_view stream      = cudf::get_default_stream());
-
   /**
-   * @brief Returns the row indices that can be used to construct the result of performing
-   * an inner join between two tables. @see cudf::inner_join().
+   * @brief Returns a vector of row indices corresponding to a semi-join
+   * between the specified tables.
    *
-   * @param probe The probe table, from which the keys are probed
+   * The returned vector contains the row indices from the left table
+   * for which there is a matching row in the right table. Note that the left table
+   * is the build table if `reuse_left_table` is set to true, and is the probe table
+   * otherwise.
+   *
+   * @code{.pseudo}
+   * TableA: {{0, 1, 2}}
+   * TableB: {{1, 2, 3}}
+   * Result: {1, 2}
+   * @endcode
+   *
+   * @param probe The probe table
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource used to allocate the returned indices' device memory.
+   * @param mr Device memory resource used to allocate the returned table and columns' device memory
    *
-   * @return A pair of columns [`probe_indices`, `build_indices`] that can be used to
-   * construct the result of performing an inner join between two tables
-   * with `build` and `probe` as the join keys.
+   * @return A vector `left_indices` that can be used to construct
+   * the result of performing a left semi join
    */
   [[nodiscard]] std::unique_ptr<rmm::device_uvector<size_type>> semi_join(
     cudf::table_view const& probe,
@@ -103,21 +117,26 @@ class filtered_join {
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
   /**
-   * @brief Returns the build table indices that can be used to construct the result of performing
-   * a left join between two tables.
+   * @brief Returns a vector of row indices corresponding to a anti-join
+   * between the specified tables.
    *
-   * @note For a given row index `i` of the probe table, the resulting `build_indices[i]` contains
-   * the row index of the matched row from the build table if there is a match. Otherwise, contains
-   * `JoinNoneValue`.
+   * The returned vector contains the row indices from the left table
+   * for which there are no matching rows in the right table. Note that the left table
+   * is the build table if `reuse_left_table` is set to true, and is the probe table
+   * otherwise.
    *
-   * @param probe The probe table, from which the keys are probed
+   * @code{.pseudo}
+   * TableA: {{0, 1, 2}}
+   * TableB: {{1, 2, 3}}
+   * Result: {1, 2}
+   * @endcode
+   *
+   * @param probe The probe table
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource used to allocate the returned table and columns' device
-   * memory.
+   * @param mr Device memory resource used to allocate the returned table and columns' device memory
    *
-   * @return A `build_indices` column that can be used to construct the result of
-   * performing a left join between two tables with `build` and `probe` as the join
-   * keys.
+   * @return A vector `left_indices` that can be used to construct
+   * the result of performing a left anti join
    */
   [[nodiscard]] std::unique_ptr<rmm::device_uvector<size_type>> anti_join(
     cudf::table_view const& probe,
@@ -126,7 +145,7 @@ class filtered_join {
 
  private:
   bool const _reuse_left_table;
-  std::unique_ptr<cudf::detail::filtered_join> _impl;  ///< Distinct hash join implementation
+  std::unique_ptr<cudf::detail::filtered_join> _impl;  ///< Filtered hash join implementation
 };
 
 /** @} */  // end of group
