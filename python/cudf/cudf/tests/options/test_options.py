@@ -80,18 +80,19 @@ class TestCleanOptions:
 
 @pytest.mark.parametrize("default_integer_bitwidth", [32, 64, None])
 def test_empty_option_context(default_integer_bitwidth):
-    prev_setting = cudf.get_option("default_integer_bitwidth")
-    cudf.set_option("default_integer_bitwidth", default_integer_bitwidth)
-    with cudf.option_context():
+    with cudf.option_context(
+        "default_integer_bitwidth", default_integer_bitwidth
+    ):
+        with cudf.option_context():
+            assert (
+                cudf.get_option("default_integer_bitwidth")
+                == default_integer_bitwidth
+            )
+
         assert (
             cudf.get_option("default_integer_bitwidth")
             == default_integer_bitwidth
         )
-
-    assert (
-        cudf.get_option("default_integer_bitwidth") == default_integer_bitwidth
-    )
-    cudf.set_option("default_integer_bitwidth", prev_setting)
 
 
 @pytest.mark.parametrize("pandas_compatible", [True, False])

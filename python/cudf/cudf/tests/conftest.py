@@ -185,7 +185,7 @@ def _get_all_zones():
         # so all_zone_names can use zoneinfo.available_timezones()
         try:
             pd.DatetimeTZDtype("ns", zone)
-        except Exception:
+        except KeyError:
             continue
         else:
             zones.append(zone)
@@ -204,7 +204,7 @@ def all_timezones(request):
 )
 def limited_timezones(request):
     """
-    Limited set of interesting timezones for testing.
+    Small representative set of timezones for testing.
     """
     return request.param
 

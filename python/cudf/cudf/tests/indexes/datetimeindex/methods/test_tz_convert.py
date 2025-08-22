@@ -18,5 +18,5 @@ def test_tz_convert():
 
 
 def test_tz_convert_naive_typeerror():
-    with pytest.raises(TypeError):
+    with pytest.raises(TypeError, match="Cannot convert tz-naive timestamps"):
         cudf.date_range("2020", periods=2, freq="D").tz_convert(None)
