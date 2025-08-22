@@ -367,6 +367,12 @@ def numeric_and_temporal_types_as_str(request):
     return request.param
 
 
+@pytest.fixture
+def numeric_and_temporal_types_as_str2(numeric_and_temporal_types_as_str):
+    """Used for testing cartesian product of numeric_and_temporal_types_as_str"""
+    return numeric_and_temporal_types_as_str
+
+
 @pytest.fixture(
     params=signed_integer_types
     + unsigned_integer_types
