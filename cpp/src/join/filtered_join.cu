@@ -311,24 +311,39 @@ filtered_join_with_set::filtered_join_with_set(cudf::table_view const& build,
   : filtered_join(build, compare_nulls, load_factor, stream)
 {
   if (cudf::is_primitive_row_op_compatible(build) && !_build_props._has_floating_point) {
+    auto const d_build_comparator =
+      cudf::row::primitive::row_equality_comparator{nullate::DYNAMIC{_build_props._has_nulls},
+                                                    _preprocessed_build,
+                                                    _preprocessed_build,
+                                                    compare_nulls};
     cuco::static_set_ref set_ref{empty_sentinel_key,
-                                 insertion_adapter{},
+                                 insertion_adapter{d_build_comparator},
                                  primitive_probing_scheme{},
                                  cuco::thread_scope_device,
                                  _bucket_storage.ref()};
     auto insert_ref = set_ref.rebind_operators(cuco::insert);
     insert_build_table<primitive_probing_scheme::cg_size>(insert_ref, stream);
   } else if (_build_props._has_nested_columns) {
+    auto const d_build_comparator =
+      cudf::experimental::row::equality::self_comparator{_preprocessed_build}.equal_to<true>(
+        nullate::DYNAMIC{_build_props._has_nulls},
+        compare_nulls,
+        cudf::experimental::row::equality::nan_equal_physical_equality_comparator{});
     cuco::static_set_ref set_ref{empty_sentinel_key,
-                                 insertion_adapter{},
+                                 insertion_adapter{d_build_comparator},
                                  nested_probing_scheme{},
                                  cuco::thread_scope_device,
                                  _bucket_storage.ref()};
     auto insert_ref = set_ref.rebind_operators(cuco::insert);
     insert_build_table<nested_probing_scheme::cg_size>(insert_ref, stream);
   } else {
+    auto const d_build_comparator =
+      cudf::experimental::row::equality::self_comparator{_preprocessed_build}.equal_to<false>(
+        nullate::DYNAMIC{_build_props._has_nulls},
+        compare_nulls,
+        cudf::experimental::row::equality::nan_equal_physical_equality_comparator{});
     cuco::static_set_ref set_ref{empty_sentinel_key,
-                                 insertion_adapter{},
+                                 insertion_adapter{d_build_comparator},
                                  simple_probing_scheme{},
                                  cuco::thread_scope_device,
                                  _bucket_storage.ref()};
@@ -345,7 +360,7 @@ filtered_join_with_multiset::filtered_join_with_multiset(cudf::table_view const&
 {
   if (cudf::is_primitive_row_op_compatible(build) && !_build_props._has_floating_point) {
     cuco::static_multiset_ref set_ref{empty_sentinel_key,
-                                      insertion_adapter{},
+                                      insertion_adapter{false},
                                       primitive_probing_scheme{},
                                       cuco::thread_scope_device,
                                       _bucket_storage.ref()};
@@ -353,7 +368,7 @@ filtered_join_with_multiset::filtered_join_with_multiset(cudf::table_view const&
     insert_build_table<primitive_probing_scheme::cg_size>(insert_ref, stream);
   } else if (_build_props._has_nested_columns) {
     cuco::static_multiset_ref set_ref{empty_sentinel_key,
-                                      insertion_adapter{},
+                                      insertion_adapter{false},
                                       nested_probing_scheme{},
                                       cuco::thread_scope_device,
                                       _bucket_storage.ref()};
@@ -361,7 +376,7 @@ filtered_join_with_multiset::filtered_join_with_multiset(cudf::table_view const&
     insert_build_table<nested_probing_scheme::cg_size>(insert_ref, stream);
   } else {
     cuco::static_multiset_ref set_ref{empty_sentinel_key,
-                                      insertion_adapter{},
+                                      insertion_adapter{false},
                                       simple_probing_scheme{},
                                       cuco::thread_scope_device,
                                       _bucket_storage.ref()};
