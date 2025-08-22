@@ -471,7 +471,7 @@ std::vector<std::unique_ptr<column>> filter(
   rmm::device_async_resource_ref mr          = cudf::get_current_device_resource_ref());
 
 /**
- * @brief Creates a new column by applying a filter function against every
+ * @brief Creates new columns by applying a filter function against every
  * element of the input columns.
  *
  * Null values in the input columns are considered as not matching the filter.
