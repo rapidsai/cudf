@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
+from typing_extensions import assert_never
+
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
@@ -105,6 +107,7 @@ class UnaryFunction(Expr):
             "as_struct",
             "drop_nulls",
             "fill_null",
+            "fill_null_with_strategy",
             "mask_nans",
             "null_count",
             "rank",
@@ -154,6 +157,10 @@ class UnaryFunction(Expr):
                 raise NotImplementedError(
                     "reverse=True is not supported for cumulative aggregations"
                 )
+        if self.name == "fill_null_with_strategy" and self.options[1] not in {0, None}:
+            raise NotImplementedError(
+                "Filling null values with limit specified is not yet supported."
+            )
         if self.name == "rank":
             method, _, _ = self.options
             if method not in {"average", "min", "max", "dense", "ordinal"}:
@@ -334,6 +341,58 @@ class UnaryFunction(Expr):
                     .obj.to_scalar()
                 )
             return Column(plc.replace.replace_nulls(column.obj, arg), dtype=self.dtype)
+        elif self.name == "fill_null_with_strategy":
+            column = self.children[0].evaluate(df, context=context)
+            strategy, limit = self.options
+            if (
+                column.null_count == 0
+                or limit == 0
+                or (
+                    column.null_count == column.size and strategy not in {"zero", "one"}
+                )
+            ):
+                return column
+            if strategy == "forward":
+                replacement = plc.replace.ReplacePolicy.PRECEDING
+            elif strategy == "backward":
+                replacement = plc.replace.ReplacePolicy.FOLLOWING
+            elif strategy == "min":
+                replacement = plc.reduce.reduce(
+                    column.obj,
+                    plc.aggregation.min(),
+                    column.dtype.plc,
+                )
+            elif strategy == "max":
+                replacement = plc.reduce.reduce(
+                    column.obj,
+                    plc.aggregation.max(),
+                    column.dtype.plc,
+                )
+            elif strategy == "mean":
+                replacement = plc.reduce.reduce(
+                    column.obj,
+                    plc.aggregation.mean(),
+                    plc.DataType(plc.TypeId.FLOAT64),
+                )
+            elif strategy == "zero":
+                replacement = plc.scalar.Scalar.from_py(0, dtype=column.dtype.plc)
+            elif strategy == "one":
+                replacement = plc.scalar.Scalar.from_py(1, dtype=column.dtype.plc)
+            else:
+                assert_never(strategy)  # pragma: no cover
+
+            if strategy == "mean":
+                return Column(
+                    plc.replace.replace_nulls(
+                        plc.unary.cast(column.obj, plc.DataType(plc.TypeId.FLOAT64)),
+                        replacement,
+                    ),
+                    dtype=self.dtype,
+                ).astype(self.dtype)
+            return Column(
+                plc.replace.replace_nulls(column.obj, replacement),
+                dtype=self.dtype,
+            )
         elif self.name == "as_struct":
             children = [
                 child.evaluate(df, context=context).obj for child in self.children
@@ -371,36 +430,9 @@ class UnaryFunction(Expr):
                 method,
                 order,
                 plc.types.NullPolicy.EXCLUDE,
-                plc.types.NullOrder.BEFORE,
+                plc.types.NullOrder.BEFORE if descending else plc.types.NullOrder.AFTER,
                 percentage=False,
             )
-
-            null_count = column.null_count
-            if null_count and not descending:
-                # libcudf rank is offset when nulls would sort first and are excluded:
-                #  - dense: +1 (nulls count as a skipped leading group)
-                #  - min/max/ordinal/average: +k (nulls counted before all valid rows)
-                rank_dtype = ranked.type()
-                if method_str == "dense":
-                    one = plc.Scalar.from_py(
-                        1.0
-                        if rank_dtype.id() in {plc.TypeId.FLOAT32, plc.TypeId.FLOAT64}
-                        else 1,
-                        rank_dtype,
-                    )
-                    ranked = plc.binaryop.binary_operation(
-                        ranked, one, plc.binaryop.BinaryOperator.SUB, rank_dtype
-                    )
-                else:
-                    k_scalar = plc.Scalar.from_py(
-                        float(null_count)
-                        if rank_dtype.id() in {plc.TypeId.FLOAT32, plc.TypeId.FLOAT64}
-                        else int(null_count),
-                        rank_dtype,
-                    )
-                    ranked = plc.binaryop.binary_operation(
-                        ranked, k_scalar, plc.binaryop.BinaryOperator.SUB, rank_dtype
-                    )
 
             # Min/Max/Dense/Ordinal -> IDX_DTYPE
             # See https://github.com/pola-rs/polars/blob/main/crates/polars-ops/src/series/ops/rank.rs
