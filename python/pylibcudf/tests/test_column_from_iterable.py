@@ -216,3 +216,14 @@ def test_from_nested_list_of_large_strings(dummy_large_string_type):
     assert col.type().id() == plc.TypeId.LIST
     assert col.children()[1].type().id() == plc.TypeId.STRING
     assert col.children()[1].children()[0].type().id() == plc.TypeId.INT64
+
+
+def test_from_iterable_pyarrow_array():
+    expect = pa.array([1, 2], type=pa.int32())
+    got = plc.Column.from_iterable_of_py(expect, dtype=plc.types.SIZE_TYPE)
+    assert_column_eq(expect, got)
+
+
+def test_from_iterable_plc_column():
+    with pytest.raises(ValueError, match="is not iterable"):
+        plc.Column.from_iterable_of_py(plc.Column.from_iterable_of_py([1]))
