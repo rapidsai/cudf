@@ -497,6 +497,8 @@ void reader_impl::generate_list_column_row_counts(is_estimate_row_counts is_esti
 
 void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_limit)
 {
+  CUDF_FUNC_RANGE();
+
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
 
@@ -639,6 +641,8 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
 
 void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_rows)
 {
+  CUDF_FUNC_RANGE();
+
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
 
@@ -665,8 +669,6 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
   // buffers if they are not part of a list hierarchy. mark down
   // if we have any list columns that need further processing.
   bool has_lists = false;
-  // Casting to std::byte since data buffer pointer is void *
-  std::vector<cudf::device_span<cuda::std::byte>> memset_bufs;
   // Validity Buffer is a uint32_t pointer
   std::vector<cudf::device_span<cudf::bitmask_type>> nullmask_bufs;
 
@@ -694,8 +696,6 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
                      std::overflow_error);
         out_buf.create_with_mask(
           out_buf_size, cudf::mask_state::UNINITIALIZED, false, _stream, _mr);
-        memset_bufs.emplace_back(static_cast<cuda::std::byte*>(out_buf.data()),
-                                 out_buf.data_size());
         nullmask_bufs.emplace_back(
           out_buf.null_mask(),
           cudf::util::round_up_safe(out_buf.null_mask_size(), sizeof(cudf::bitmask_type)) /
@@ -813,8 +813,6 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
           // we're going to start null mask as all valid and then turn bits off if necessary
           out_buf.create_with_mask(
             buffer_size, cudf::mask_state::UNINITIALIZED, false, _stream, _mr);
-          memset_bufs.emplace_back(static_cast<cuda::std::byte*>(out_buf.data()),
-                                   out_buf.data_size());
           nullmask_bufs.emplace_back(
             out_buf.null_mask(),
             cudf::util::round_up_safe(out_buf.null_mask_size(), sizeof(cudf::bitmask_type)) /
@@ -824,8 +822,6 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
     }
   }
 
-  cudf::detail::batched_memset<cuda::std::byte>(
-    memset_bufs, static_cast<cuda::std::byte>(0), _stream);
   // Need to set null mask bufs to all high bits
   cudf::detail::batched_memset<cudf::bitmask_type>(
     nullmask_bufs, std::numeric_limits<cudf::bitmask_type>::max(), _stream);

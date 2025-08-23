@@ -89,6 +89,11 @@ def decompose_single_agg(
     """
     agg = named_expr.value
     name = named_expr.name
+    if isinstance(agg, expr.UnaryFunction) and agg.name in {"rank"}:
+        name = agg.name
+        raise NotImplementedError(
+            f"UnaryFunction {name=} not supported in groupby context"
+        )
     if isinstance(agg, expr.UnaryFunction) and agg.name == "null_count":
         (child,) = agg.children
 
