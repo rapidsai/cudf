@@ -33,6 +33,7 @@ cpdef Column concatenate(
     Scalar narep=None,
     Scalar col_narep=None,
     separator_on_nulls separate_nulls=separator_on_nulls.YES,
+    Stream stream=None,
 ):
     """
     Concatenate all columns in the table horizontally into one new string
@@ -64,10 +65,9 @@ cpdef Column concatenate(
     cdef unique_ptr[column] c_result
     cdef const string_scalar* c_col_narep
     cdef const string_scalar* c_separator
-    cdef Stream stream
+    stream = _get_stream(stream)
 
     if narep is None:
-        stream = _get_stream(None)
         narep = Scalar.from_libcudf(
             cpp_make_string_scalar("".encode(), stream.view())
         )
@@ -77,7 +77,6 @@ cpdef Column concatenate(
 
     if ColumnOrScalar is Column:
         if col_narep is None:
-            stream = _get_stream(None)
             col_narep = Scalar.from_libcudf(
                 cpp_make_string_scalar("".encode(), stream.view())
             )
@@ -91,7 +90,8 @@ cpdef Column concatenate(
                     separator.view(),
                     dereference(c_narep),
                     dereference(c_col_narep),
-                    separate_nulls
+                    separate_nulls,
+                    stream.view()
                 )
             )
     elif ColumnOrScalar is Scalar:
@@ -106,15 +106,18 @@ cpdef Column concatenate(
                     strings_columns.view(),
                     dereference(c_separator),
                     dereference(c_narep),
-                    separate_nulls
+                    separate_nulls,
+                    stream.view()
                 )
             )
     else:
         raise ValueError("separator must be a Column or a Scalar")
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream)
 
 
-cpdef Column join_strings(Column input, Scalar separator, Scalar narep):
+cpdef Column join_strings(
+    Column input, Scalar separator, Scalar narep, Stream stream=None
+):
     """
     Concatenates all strings in the column into one new string delimited
     by an optional separator string.
@@ -136,6 +139,7 @@ cpdef Column join_strings(Column input, Scalar separator, Scalar narep):
         New column containing one string
     """
     cdef unique_ptr[column] c_result
+    stream = _get_stream(stream)
     cdef const string_scalar* c_separator = <const string_scalar*>(
         separator.c_obj.get()
     )
@@ -148,10 +152,11 @@ cpdef Column join_strings(Column input, Scalar separator, Scalar narep):
                 input.view(),
                 dereference(c_separator),
                 dereference(c_narep),
+                stream.view()
             )
         )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream)
 
 
 cpdef Column join_list_elements(
@@ -161,6 +166,7 @@ cpdef Column join_list_elements(
     Scalar string_narep,
     separator_on_nulls separate_nulls,
     output_if_empty_list empty_list_policy,
+    Stream stream=None,
 ):
     """
     Given a lists column of strings (each row is a list of strings),
@@ -198,6 +204,7 @@ cpdef Column join_list_elements(
         New strings column with concatenated results
     """
     cdef unique_ptr[column] c_result
+    stream = _get_stream(stream)
     cdef const string_scalar* c_separator_narep = <const string_scalar*>(
         separator_narep.c_obj.get()
     )
@@ -216,6 +223,7 @@ cpdef Column join_list_elements(
                     dereference(c_string_narep),
                     separate_nulls,
                     empty_list_policy,
+                    stream.view()
                 )
             )
     elif ColumnOrScalar is Scalar:
@@ -226,13 +234,15 @@ cpdef Column join_list_elements(
                     lists_strings_column.view(),
                     dereference(c_separator),
                     dereference(c_separator_narep),
+                    dereference(c_string_narep),
                     separate_nulls,
                     empty_list_policy,
+                    stream.view()
                 )
             )
     else:
         raise ValueError("separator must be a Column or a Scalar")
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream)
 
 OutputIfEmptyList.__str__ = OutputIfEmptyList.__repr__
 SeparatorOnNulls.__str__ = SeparatorOnNulls.__repr__
