@@ -12,6 +12,7 @@ from pylibcudf.libcudf.types cimport (
     null_equality,
     null_order,
     null_policy,
+    null_aware,
     order,
     size_type,
     sorted,

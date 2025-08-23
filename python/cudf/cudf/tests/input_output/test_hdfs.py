@@ -1,6 +1,5 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
-import os
 from io import BytesIO
 
 import fastavro
@@ -12,8 +11,10 @@ import pytest
 import cudf
 from cudf.testing import assert_eq
 
-if not os.environ.get("RUN_HDFS_TESTS"):
-    pytestmark = pytest.mark.skip("Env not configured to run HDFS tests")
+pytest.skip(
+    reason="https://github.com/rapidsai/cudf/issues/19633",
+    allow_module_level=True,
+)
 
 
 basedir = "/tmp/test-hdfs"

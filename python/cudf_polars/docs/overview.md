@@ -417,8 +417,11 @@ datasource (e.g. a Parquet dataset or in-memory `DataFrame`).
   **aggregated** column sampling via sub-classing. For example,
   The `ParquetSourceInfo` sub-class uses caching to avoid
   redundant file-system access.
+- `ColumnSourceInfo`: This class wraps a `DataSourceInfo` object.
+Since `DataSourceInfo` tracks information for an entire table, we use
+`ColumnSourceInfo` to provide a single-column view of the object.
 - `ColumnStats`: This class is used to group together the "base"
-`DataSourceInfo` reference and the current `UniqueStats` estimates
+`ColumnSourceInfo` reference and the local `UniqueStats` estimates
 for a specific IR + column combination. We bundle these references
 together to simplify the design and maintenance of `StatsCollector`.
 **NOTE:** The current `UniqueStats` estimates are not yet populated.
