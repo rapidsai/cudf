@@ -27,53 +27,22 @@ rapids-pip-retry install -U -e .
 rapids-logger "Check narwhals versions"
 python -c "import narwhals; print(narwhals.show_versions())"
 
-# test_horizontal_slice_with_series: xpassing in Narwhals, fixed in cuDF https://github.com/rapidsai/cudf/pull/18558
-# test_rolling_mean_expr_lazy_grouped: xpassing in Narwhals
-# test_rolling_std_expr_lazy_grouped: xpassing in Narwhals
-# test_rolling_sum_expr_lazy_grouped: xpassing in Narwhals
-# test_rolling_var_expr_lazy_grouped: xpassing in Narwhals
-# test_offset_by_tz: xpassing in Narwhals
-# test_double_same_aggregation: xpassing in Narwhals
-# test_all_kind_of_aggs: xpassing in Narwhals
-TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF="not test_rolling_mean_expr_lazy_grouped[cudf-expected_a4-3-1-True] \
-and not test_rolling_mean_expr_lazy_grouped[cudf-expected_a5-4-1-True] \
-and not test_rolling_mean_expr_lazy_grouped[cudf-expected_a6-5-1-True] \
-and not test_rolling_std_expr_lazy_grouped[cudf-expected_a4-3-1-True-1] \
-and not test_rolling_std_expr_lazy_grouped[cudf-expected_a5-4-1-True-1] \
-and not test_rolling_std_expr_lazy_grouped[cudf-expected_a6-5-1-True-0] \
-and not test_rolling_sum_expr_lazy_grouped[cudf-expected_a4-3-1-True] \
-and not test_rolling_sum_expr_lazy_grouped[cudf-expected_a5-4-1-True] \
-and not test_rolling_sum_expr_lazy_grouped[cudf-expected_a6-5-1-True] \
-and not test_rolling_var_expr_lazy_grouped[cudf-expected_a4-3-1-True-1] \
-and not test_rolling_var_expr_lazy_grouped[cudf-expected_a5-4-1-True-1] \
-and not test_rolling_var_expr_lazy_grouped[cudf-expected_a6-5-1-True-0] \
-and not test_horizontal_slice_with_series \
-and not test_offset_by_tz \
-and not test_double_same_aggregation \
-and not test_all_kind_of_aggs"
-
 rapids-logger "Run narwhals tests for cuDF"
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest \
     --cache-clear \
-    --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-narwhals.xml" \
     -p xdist \
     -p env \
     -p no:pytest_benchmark \
     -p cudf.testing.narwhals_test_plugin \
-    -k "$TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF" \
     --numprocesses=8 \
     --dist=worksteal \
     --constructors=cudf
 
-# test_dtypes: With cudf.pandas loaded, to_pandas() preserves Arrow dtypes like list and struct, so pandas
-# columns aren't object anymore. The test expects object, causing a mismatch.
-# test_nan: Narwhals expect this test to fail, but as of polars 1.30 we raise a RuntimeError,
-# not polars ComputeError. So the test is looking for the wrong error and fails.
-# test_floordiv_int_by_zero: This bug is fixed as of 25.08, narwhals should remove the xfail
+# test_datetime[polars[lazy]]: Fixed in the next narwhals release >2.0.1
+# test_nan[polars[lazy]]: Passes as of https://github.com/rapidsai/cudf/pull/19742
 TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_POLARS=" \
-test_dtypes or \
-test_nan or \
-test_floordiv_int_by_zero \
+test_datetime[polars[lazy]] or \
+test_nan[polars[lazy]] \
 "
 
 rapids-logger "Run narwhals tests for cuDF Polars"

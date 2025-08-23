@@ -16,6 +16,8 @@
 
 #include <cudf/aggregation/host_udf.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/column/column_factories.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -49,6 +51,13 @@ std::unique_ptr<scalar> reduce_aggregate_impl(
 {
   switch (agg.kind) {
     case aggregation::SUM: return sum(col, output_dtype, init, stream, mr);
+    case aggregation::SUM_WITH_OVERFLOW: {
+      // Validate that input column is int64_t (unified validation for SUM_WITH_OVERFLOW)
+      CUDF_EXPECTS(col.type().id() == cudf::type_id::INT64,
+                   "SUM_WITH_OVERFLOW aggregation only supports int64_t input types",
+                   std::invalid_argument);
+      return sum_with_overflow(col, output_dtype, init, stream, mr);
+    }
     case aggregation::PRODUCT: return product(col, output_dtype, init, stream, mr);
     case aggregation::MIN: return min(col, output_dtype, init, stream, mr);
     case aggregation::MAX: return max(col, output_dtype, init, stream, mr);
@@ -75,6 +84,12 @@ std::unique_ptr<scalar> reduce_aggregate_impl(
                    "Reduction quantile accepts only one quantile value",
                    std::invalid_argument);
       return quantile(col, qagg._quantiles.front(), qagg._interpolation, output_dtype, stream, mr);
+    }
+    case aggregation::COUNT_ALL:
+    case aggregation::COUNT_VALID: {
+      auto null_handling =
+        agg.kind == aggregation::COUNT_VALID ? null_policy::EXCLUDE : null_policy::INCLUDE;
+      return count(col, null_handling, output_dtype, stream, mr);
     }
     case aggregation::NUNIQUE: {
       auto nunique_agg = static_cast<cudf::detail::nunique_aggregation const&>(agg);
@@ -168,10 +183,20 @@ std::unique_ptr<scalar> reduce_no_data_impl(reduce_aggregation const& agg,
     case aggregation::ALL: {
       return std::make_unique<numeric_scalar<bool>>(agg.kind == aggregation::ALL, true, stream, mr);
     }
+    case aggregation::COUNT_ALL:
+    case aggregation::COUNT_VALID: {
+      auto null_handling =
+        agg.kind == aggregation::COUNT_VALID ? null_policy::EXCLUDE : null_policy::INCLUDE;
+      return count(col, null_handling, output_dtype, stream, mr);
+    }
     case aggregation::NUNIQUE: {
       auto nunique_agg = static_cast<cudf::detail::nunique_aggregation const&>(agg);
       auto valid = !col.is_empty() && (nunique_agg._null_handling == cudf::null_policy::INCLUDE);
       return std::make_unique<numeric_scalar<size_type>>(!col.is_empty(), valid, stream, mr);
+    }
+    case aggregation::SUM_WITH_OVERFLOW: {
+      // For empty input, return {null, false} struct
+      return sum_with_overflow(col, output_dtype, std::nullopt, stream, mr);
     }
     default: {
       return cudf::is_nested(output_dtype)
@@ -192,13 +217,14 @@ std::unique_ptr<scalar> reduce(column_view const& col,
   CUDF_EXPECTS(!init.has_value() || cudf::have_same_types(col, init.value().get()),
                "column and initial value must be the same type",
                cudf::data_type_error);
-  if (init.has_value() && !(agg.kind == aggregation::SUM || agg.kind == aggregation::PRODUCT ||
-                            agg.kind == aggregation::MIN || agg.kind == aggregation::MAX ||
-                            agg.kind == aggregation::ANY || agg.kind == aggregation::ALL ||
-                            agg.kind == aggregation::HOST_UDF)) {
+  if (init.has_value() &&
+      !(agg.kind == aggregation::SUM || agg.kind == aggregation::SUM_WITH_OVERFLOW ||
+        agg.kind == aggregation::PRODUCT || agg.kind == aggregation::MIN ||
+        agg.kind == aggregation::MAX || agg.kind == aggregation::ANY ||
+        agg.kind == aggregation::ALL || agg.kind == aggregation::HOST_UDF)) {
     CUDF_FAIL(
-      "Initial value is only supported for SUM, PRODUCT, MIN, MAX, ANY, ALL, and HOST_UDF "
-      "aggregation types",
+      "Initial value is only supported for SUM, SUM_WITH_OVERFLOW, PRODUCT, MIN, MAX, ANY, ALL, "
+      "and HOST_UDF aggregation types",
       std::invalid_argument);
   }
 
@@ -230,4 +256,5 @@ std::unique_ptr<scalar> reduce(column_view const& col,
   CUDF_FUNC_RANGE();
   return reduction::detail::reduce(col, agg, output_dtype, init, stream, mr);
 }
+
 }  // namespace cudf

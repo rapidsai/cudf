@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -15,6 +15,8 @@ from pylibcudf.libcudf.strings.replace cimport (
 )
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.scalar cimport Scalar
+from pylibcudf.utils cimport _get_stream
+from rmm.pylibrmm.stream cimport Stream
 
 __all__ = ["replace", "replace_multiple", "replace_slice"]
 
@@ -144,10 +146,12 @@ cpdef Column replace_slice(
         New string column
     """
     cdef unique_ptr[column] c_result
+    cdef Stream stream
 
     if repl is None:
+        stream = _get_stream(None)
         repl = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode())
+            cpp_make_string_scalar("".encode(), stream.view())
         )
 
     cdef const string_scalar* scalar_str = <string_scalar*>(repl.c_obj.get())

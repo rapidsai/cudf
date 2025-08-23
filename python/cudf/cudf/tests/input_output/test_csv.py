@@ -2251,3 +2251,41 @@ def test_empty_file_pandas_compat_raises(tmp_path):
             cudf.read_csv(empty_file)
         with pytest.raises(pd.errors.EmptyDataError):
             cudf.read_csv(str(empty_file))
+
+
+def test_read_csv_gcs(monkeypatch):
+    gcsfs = pytest.importorskip("gcsfs")
+    pdf = pd.DataFrame(
+        {
+            "Integer": np.array([2345, 11987, 9027, 9027]),
+            "Float": np.array([9.001, 8.343, 6, 2.781]),
+            "Integer2": np.array([2345, 106, 2088, 789277]),
+            "String": np.array(["Alpha", "Beta", "Gamma", "Delta"]),
+            "Boolean": np.array([True, False, True, False]),
+        }
+    )
+
+    # Write to buffer
+    fpath = "cudf-gcs-test-bucket/test_csv_reader.csv"
+    buffer = pdf.to_csv(index=False)
+
+    def mock_open(*args, **kwargs):
+        return BytesIO(buffer.encode())
+
+    def mock_size(*args):
+        return len(buffer.encode())
+
+    monkeypatch.setattr(gcsfs.GCSFileSystem, "open", mock_open)
+    monkeypatch.setattr(gcsfs.GCSFileSystem, "size", mock_size)
+
+    # Test read from explicit path.
+    got = cudf.read_csv(f"gcs://{fpath}")
+    assert_eq(pdf, got)
+
+    # AbstractBufferedFile -> PythonFile conversion
+    # will work fine with the monkey-patched FS if we
+    # pass in an fsspec file object
+    fs = gcsfs.GCSFileSystem()
+    with fs.open(f"gcs://{fpath}") as f:
+        got = cudf.read_csv(f)
+    assert_eq(pdf, got)

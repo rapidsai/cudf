@@ -2,6 +2,7 @@
 import datetime
 import decimal
 import types
+import zoneinfo
 
 import cupy as cp
 import numba.cuda
@@ -70,6 +71,18 @@ def test_create_interval_series(data1, data2, data3, data4, interval_closed):
         dtype="interval",
     )
     assert_eq(expect_three, got_three)
+
+
+def test_from_pandas_for_series_nan_as_null(nan_as_null):
+    data = [np.nan, 2.0, 3.0]
+    psr = pd.Series(data)
+
+    expected = cudf.Series._from_column(
+        as_column(data, nan_as_null=nan_as_null)
+    )
+    got = cudf.from_pandas(psr, nan_as_null=nan_as_null)
+
+    assert_eq(expected, got)
 
 
 @pytest.mark.parametrize(
@@ -224,6 +237,41 @@ def test_series_init_dict(data):
     cudf_series = cudf.Series(data)
 
     assert_eq(pandas_series, cudf_series)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [[]],
+        [[[]]],
+        [[0]],
+        [[0, 1]],
+        [[0, 1], [2, 3]],
+        [[[0, 1], [2]], [[3, 4]]],
+        [[None]],
+        [[[None]]],
+        [[None], None],
+        [[1, None], [1]],
+        [[1, None], None],
+        [[[1, None], None], None],
+    ],
+)
+def test_create_list_series(data):
+    expect = pd.Series(data)
+    got = cudf.Series(data)
+    assert_eq(expect, got)
+    assert isinstance(got[0], type(expect[0]))
+    assert isinstance(got.to_pandas()[0], type(expect[0]))
+
+
+@pytest.mark.parametrize(
+    "input_obj", [[[1, pd.NA, 3]], [[1, pd.NA, 3], [4, 5, pd.NA]]]
+)
+def test_construction_series_with_nulls(input_obj):
+    expect = pa.array(input_obj, from_pandas=True)
+    got = cudf.Series(input_obj).to_arrow()
+
+    assert expect == got
 
 
 def test_series_unitness_np_datetimelike_units():
@@ -1290,3 +1338,39 @@ def test_timezone_pyarrow_array():
     result = cudf.Series(pa_array)
     expected = pa_array.to_pandas()
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "klass", ["Series", "DatetimeIndex", "Index", "CategoricalIndex"]
+)
+def test_pandas_compatible_non_zoneinfo_raises(klass):
+    pytz = pytest.importorskip("pytz")
+    tz = pytz.timezone("US/Pacific")
+    tz_aware_data = [pd.Timestamp("2020-01-01", tz="UTC").tz_convert(tz)]
+    pandas_obj = getattr(pd, klass)(tz_aware_data)
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            cudf.from_pandas(pandas_obj)
+
+
+@pytest.mark.parametrize(
+    "klass", ["Series", "DatetimeIndex", "Index", "CategoricalIndex"]
+)
+def test_from_pandas_obj_tz_aware(klass):
+    tz = zoneinfo.ZoneInfo("US/Pacific")
+    tz_aware_data = [pd.Timestamp("2020-01-01", tz="UTC").tz_convert(tz)]
+    pandas_obj = getattr(pd, klass)(tz_aware_data)
+    result = cudf.from_pandas(pandas_obj)
+    expected = getattr(cudf, klass)(tz_aware_data)
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "klass", ["Series", "DatetimeIndex", "Index", "CategoricalIndex"]
+)
+def test_from_pandas_obj_tz_aware_unsupported(klass):
+    tz = datetime.timezone(datetime.timedelta(hours=1))
+    tz_aware_data = [pd.Timestamp("2020-01-01", tz="UTC").tz_convert(tz)]
+    pandas_obj = getattr(pd, klass)(tz_aware_data)
+    with pytest.raises(NotImplementedError):
+        cudf.from_pandas(pandas_obj)
