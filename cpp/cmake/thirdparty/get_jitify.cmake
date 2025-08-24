@@ -20,7 +20,7 @@ function(find_and_configure_jitify)
     jitify 2.0.0
     GIT_REPOSITORY https://github.com/NVIDIA/jitify.git
     GIT_TAG 70783a3ad7b0cad2992a26a1ebf8fbe3d6b44e25 # jitify2 branch as of 5th Aug 2025
-    GIT_SHALLOW TRUE
+    GIT_SHALLOW FALSE
     DOWNLOAD_ONLY TRUE
   )
   set(JITIFY_INCLUDE_DIR
