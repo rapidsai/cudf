@@ -1,12 +1,15 @@
 # Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
+import pytest
 from numba import types
 
 from cudf.core.udf.utils import _udf_code_cache, compile_udf
 
 
-def setup_function():
+@pytest.fixture(autouse=True)
+def clear_udf_cache():
     _udf_code_cache.clear()
+    return
 
 
 def assert_cache_size(size):
