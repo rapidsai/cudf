@@ -16,14 +16,16 @@
 
 #pragma once
 
-#include "join/join_common_utils.hpp"
-#include "join/mixed_join_common_utils.cuh"
+#include "join_common_utils.cuh"
+#include "join_common_utils.hpp"
+#include "mixed_join_common_utils.cuh"
 
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
-#include <cudf/hashing.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/span.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <cuco/pair.cuh>
 
@@ -31,30 +33,31 @@ namespace CUDF_EXPORT cudf {
 namespace detail {
 
 /**
- * @brief Performs a join using the combination of a hash lookup to identify
- * equal rows between one pair of tables and the evaluation of an expression
- * containing an arbitrary expression.
+ * @brief Performs a mixed join using hash lookup and expression evaluation.
  *
  * This method probes the hash table with each row in the probe table using a
  * custom equality comparator that also checks that the conditional expression
  * evaluates to true between the left/right tables when a match is found
  * between probe and build rows.
  *
- * @tparam block_size The number of threads per block for this kernel
  * @tparam has_nulls Whether or not the inputs may contain nulls.
  *
  * @param[in] left_table The left table
  * @param[in] right_table The right table
- * @param[in] hash_probe The hasher used for the probe table.
- * @param[in] equality_probe The equality comparator used when probing the hash table.
+ * @param[in] input_pairs Array of hash-value/row-index pairs for probing
+ * @param[in] hash_indices Array of hash index pairs for efficient lookup
+ * @param[in] equality_probe The equality comparator used when probing the hash table
  * @param[in] join_type The type of join to be performed
- * @param[in] hash_table_view The hash table built from `build`.
+ * @param[in] hash_table_storage The hash table storage for probing operations
  * @param[out] join_output_l The left result of the join operation
  * @param[out] join_output_r The right result of the join operation
  * @param[in] device_expression_data Container of device data required to evaluate the desired
- * expression.
+ * expression
  * @param[in] swap_tables If true, the kernel was launched with one thread per right row and
- * the kernel needs to internally loop over left rows. Otherwise, loop over right rows.
+ * the kernel needs to internally loop over left rows. Otherwise, loop over right rows
+ * @param[in] config Grid configuration for kernel launch
+ * @param[in] shmem_size_per_block Shared memory size per block in bytes
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 template <bool has_nulls>
 void launch_mixed_join(

@@ -29,11 +29,9 @@ template std::size_t launch_compute_mixed_join_output_size<true>(
   cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
   ast::detail::expression_device_view device_expression_data,
   bool const swap_tables,
-  cudf::device_span<cudf::size_type> matches_per_row,
   detail::grid_1d const config,
   int64_t shmem_size_per_block,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);
+  rmm::cuda_stream_view stream);
 
 }  // namespace detail
 }  // namespace cudf

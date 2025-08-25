@@ -46,32 +46,31 @@ namespace detail {
  * evaluates to true between the left/right tables when a match is found
  * between probe and build rows.
  *
- * @tparam block_size The number of threads per block for this kernel
+ * Uses the current device memory resource for internal allocations.
+ *
  * @tparam has_nulls Whether or not the inputs may contain nulls.
  *
  * @param[in] left_table The left table
  * @param[in] right_table The right table
- * @param[in] hash_probe The hasher used for the probe table.
- * @param[in] equality_probe The equality comparator used when probing the hash table.
+ * @param[in] input_pairs Array of hash-value/row-index pairs for probing
+ * @param[in] hash_indices Array of hash index pairs for efficient lookup
+ * @param[in] equality_probe The equality comparator used when probing the hash table
  * @param[in] join_type The type of join to be performed
- * @param[in] hash_table_view The hash table built from `build`.
+ * @param[in] hash_table_storage The hash table storage for probing operations
  * @param[in] device_expression_data Container of device data required to evaluate the desired
- * expression.
+ * expression
  * @param[in] swap_tables If true, the kernel was launched with one thread per right row and
- * the kernel needs to internally loop over left rows. Otherwise, loop over right rows.
- * @param[out] output_size The resulting output size
- * @param[out] matches_per_row The number of matches in one pair of
- * equality/conditional tables for each row in the other pair of tables. If
- * swap_tables is true, matches_per_row corresponds to the right_table,
- * otherwise it corresponds to the left_table. Note that corresponding swap of
- * left/right tables to determine which is the build table and which is the
- * probe table has already happened on the host.
+ * the kernel needs to internally loop over left rows. Otherwise, loop over right rows
+ * @param[in] config Grid configuration for kernel launch
+ * @param[in] shmem_size_per_block Shared memory size per block in bytes
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
+ *
+ * @return The resulting output size
  */
-
 template <bool has_nulls>
 std::size_t launch_compute_mixed_join_output_size(
-  cudf::table_device_view left_table,
-  cudf::table_device_view right_table,
+  table_device_view left_table,
+  table_device_view right_table,
   cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
   cuda::std::pair<cudf::size_type, cudf::size_type> const* hash_indices,
   row_equality const equality_probe,
@@ -79,11 +78,9 @@ std::size_t launch_compute_mixed_join_output_size(
   cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
   ast::detail::expression_device_view device_expression_data,
   bool const swap_tables,
-  cudf::device_span<cudf::size_type> matches_per_row,
   detail::grid_1d const config,
   int64_t shmem_size_per_block,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);
+  rmm::cuda_stream_view stream);
 
 }  // namespace detail
 }  // namespace CUDF_EXPORT cudf

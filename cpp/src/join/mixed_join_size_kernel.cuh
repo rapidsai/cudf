@@ -29,6 +29,7 @@
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <cuda/atomic>
 #include <thrust/reduce.h>
 
 namespace cudf::detail {
@@ -89,7 +90,7 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) compute_mixed_join_o
   cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
   ast::detail::expression_device_view device_expression_data,
   bool const swap_tables,
-  cudf::device_span<cudf::size_type> matches_per_row)
+  size_t* d_total_count)
 {
   // The (required) extern storage of the shared memory array leads to
   // conflicting declarations between different templates. The easiest
@@ -100,6 +101,10 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) compute_mixed_join_o
     reinterpret_cast<cudf::ast::detail::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
   auto thread_intermediate_storage =
     intermediate_storage + (threadIdx.x * device_expression_data.num_intermediates);
+
+  // Allocate shared memory for block reduction
+  using BlockReduce = cub::BlockReduce<size_t, DEFAULT_JOIN_BLOCK_SIZE>;
+  __shared__ typename BlockReduce::TempStorage temp_storage;
 
   auto const start_idx                 = cudf::detail::grid_1d::global_thread_id();
   auto const stride                    = cudf::detail::grid_1d::grid_stride();
@@ -115,20 +120,33 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) compute_mixed_join_o
   auto count_equality = pair_expression_equality<has_nulls>{
     evaluator, thread_intermediate_storage, swap_tables, equality_probe};
 
+  // Thread-local count
+  size_t thread_count = 0;
+
   for (auto outer_row_index = start_idx; outer_row_index < outer_num_rows;
        outer_row_index += stride) {
     auto const& probe_key = input_pairs[outer_row_index];
     auto const& hash_idx  = hash_indices[outer_row_index];
 
     // Use our standalone count function with precomputed indices
-    auto const match_count =
-      standalone_count(count_equality, hash_table_storage, probe_key, hash_idx);
+    auto match_count = standalone_count(count_equality, hash_table_storage, probe_key, hash_idx);
+
     if (join_type == join_kind::LEFT_JOIN || join_type == join_kind::FULL_JOIN) {
       // Non-matching rows are counted as 1 match for the outer joins
-      matches_per_row[outer_row_index] = (match_count == 0 ? 1 : match_count);
-    } else {
-      matches_per_row[outer_row_index] = match_count;
+      match_count = (match_count == 0 ? 1 : match_count);
     }
+
+    thread_count += match_count;
+  }
+
+  // Perform block reduction to get the total count for this block
+  size_t block_count = BlockReduce(temp_storage).Sum(thread_count);
+
+  // Only one thread per block adds to the global counter
+  if (threadIdx.x == 0) {
+    // Use cuda::atomic to atomically add to the counter
+    cuda::atomic_ref<size_t, cuda::thread_scope_device> counter_ref(*d_total_count);
+    counter_ref.fetch_add(block_count, cuda::memory_order_relaxed);
   }
 }
 
@@ -143,12 +161,13 @@ std::size_t launch_compute_mixed_join_output_size(
   cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
   ast::detail::expression_device_view device_expression_data,
   bool const swap_tables,
-  cudf::device_span<cudf::size_type> matches_per_row,
   detail::grid_1d const config,
   int64_t shmem_size_per_block,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  rmm::cuda_stream_view stream)
 {
+  // Allocate device memory for the total count using the current device memory resource
+  rmm::device_scalar<size_t> d_total_count{0, stream, cudf::get_current_device_resource_ref()};
+
   compute_mixed_join_output_size<has_nulls>
     <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
       left_table,
@@ -160,10 +179,10 @@ std::size_t launch_compute_mixed_join_output_size(
       hash_table_storage,
       device_expression_data,
       swap_tables,
-      matches_per_row);
+      d_total_count.data());
 
-  return thrust::reduce(
-    rmm::exec_policy_nosync(stream), matches_per_row.begin(), matches_per_row.end());
+  // Copy the result back to host
+  return d_total_count.value(stream);
 }
 
 }  // namespace cudf::detail
