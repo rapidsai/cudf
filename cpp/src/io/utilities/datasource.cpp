@@ -182,7 +182,9 @@ class file_source : public kvikio_source<kvikio::FileHandle> {
  */
 class memory_mapped_source : public kvikio_source<kvikio::MmapHandle> {
  public:
-  explicit memory_mapped_source(char const* filepath, size_t offset, size_t max_size_estimate)
+  explicit memory_mapped_source(char const* filepath,
+                                size_t offset,
+                                [[maybe_unused]] size_t max_size_estimate)
     : kvikio_source{kvikio::MmapHandle()}
   {
     // Since the superclass kvikio_source is initialized with an empty mmap handle, `this->size()`
@@ -190,9 +192,6 @@ class memory_mapped_source : public kvikio_source<kvikio::MmapHandle> {
     auto const file_size = kvikio::get_file_size(filepath);
     if (file_size != 0) {
       CUDF_EXPECTS(offset < file_size, "Offset is past end of file", std::overflow_error);
-      if (max_size_estimate == 0 || (offset + max_size_estimate) > file_size) {
-        max_size_estimate = file_size - offset;
-      }
       _kvikio_handle =
         kvikio::MmapHandle(filepath, "r", std::nullopt, 0, kvikio::FileHandle::m644, MAP_SHARED);
     }
