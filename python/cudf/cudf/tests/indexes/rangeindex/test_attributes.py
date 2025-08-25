@@ -4,6 +4,7 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal
 
 
@@ -45,3 +46,11 @@ def test_bool_rangeindex_raises():
         lfunc_args_and_kwargs=[[pd.RangeIndex(0)]],
         rfunc_args_and_kwargs=[[cudf.RangeIndex(0)]],
     )
+
+
+def test_from_pandas_rangeindex():
+    idx1 = pd.RangeIndex(start=0, stop=4, step=1, name="myindex")
+    idx2 = cudf.from_pandas(idx1)
+
+    assert_eq(idx1.values, idx2.values)
+    assert idx1.name == idx2.name

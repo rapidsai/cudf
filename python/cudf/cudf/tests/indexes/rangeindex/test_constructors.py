@@ -41,3 +41,10 @@ def test_rangeindex_accepts_rangeindex(klass, name_inner, name_outer):
         pd.RangeIndex(range(1), name=name_inner), name=name_outer
     )
     assert_eq(result, expected)
+
+
+def test_from_pandas_rangeindex_step():
+    expected = pd.RangeIndex(start=0, stop=8, step=2, name="myindex")
+    actual = cudf.from_pandas(expected)
+
+    assert_eq(expected, actual)
