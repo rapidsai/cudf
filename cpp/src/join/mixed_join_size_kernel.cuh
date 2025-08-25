@@ -30,7 +30,6 @@
 #include <cudf/utilities/span.hpp>
 
 #include <cuda/atomic>
-#include <thrust/reduce.h>
 
 namespace cudf::detail {
 
@@ -166,7 +165,8 @@ std::size_t launch_compute_mixed_join_output_size(
   rmm::cuda_stream_view stream)
 {
   // Allocate device memory for the total count using the current device memory resource
-  rmm::device_scalar<size_t> d_total_count{0, stream, cudf::get_current_device_resource_ref()};
+  cudf::detail::device_scalar<std::size_t> d_total_count{
+    0, stream, cudf::get_current_device_resource_ref()};
 
   compute_mixed_join_output_size<has_nulls>
     <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
