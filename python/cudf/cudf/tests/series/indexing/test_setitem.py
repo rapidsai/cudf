@@ -1,4 +1,5 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
+import decimal
 
 import cupy as cp
 import numpy as np
@@ -534,3 +535,85 @@ def test_series_cat_copy(copy_on_write):
         assert_eq(s1, cudf.Series([10, 20, 30, 40, 50], dtype=s.dtype))
         assert_eq(s2, cudf.Series([10, 20, 30, 10, 50], dtype=s.dtype))
         assert_eq(s3, cudf.Series([10, 20, 20, 20, 20], dtype=s.dtype))
+
+
+@pytest.mark.parametrize(
+    "data, dtype, item, to, expect",
+    [
+        # scatter to a single index
+        (
+            ["1", "2", "3"],
+            cudf.Decimal64Dtype(1, 0),
+            decimal.Decimal(5),
+            1,
+            ["1", "5", "3"],
+        ),
+        (
+            ["1.5", "2.5", "3.5"],
+            cudf.Decimal64Dtype(2, 1),
+            decimal.Decimal("5.5"),
+            1,
+            ["1.5", "5.5", "3.5"],
+        ),
+        (
+            ["1.0042", "2.0042", "3.0042"],
+            cudf.Decimal64Dtype(5, 4),
+            decimal.Decimal("5.0042"),
+            1,
+            ["1.0042", "5.0042", "3.0042"],
+        ),
+        # scatter via boolmask
+        (
+            ["1", "2", "3"],
+            cudf.Decimal64Dtype(1, 0),
+            decimal.Decimal(5),
+            [True, False, True],
+            ["5", "2", "5"],
+        ),
+        (
+            ["1.5", "2.5", "3.5"],
+            cudf.Decimal64Dtype(2, 1),
+            decimal.Decimal("5.5"),
+            [True, True, True],
+            ["5.5", "5.5", "5.5"],
+        ),
+        (
+            ["1.0042", "2.0042", "3.0042"],
+            cudf.Decimal64Dtype(5, 4),
+            decimal.Decimal("5.0042"),
+            [False, False, True],
+            ["1.0042", "2.0042", "5.0042"],
+        ),
+        # We will allow assigning a decimal with less precision
+        (
+            ["1.00", "2.00", "3.00"],
+            cudf.Decimal64Dtype(3, 2),
+            decimal.Decimal(5),
+            1,
+            ["1.00", "5.00", "3.00"],
+        ),
+        # But not truncation
+        (
+            ["1", "2", "3"],
+            cudf.Decimal64Dtype(1, 0),
+            decimal.Decimal("5.5"),
+            1,
+            pa.ArrowInvalid,
+        ),
+        # We will allow for setting scalars into decimal columns
+        (["1", "2", "3"], cudf.Decimal64Dtype(1, 0), 5, 1, ["1", "5", "3"]),
+        # But not if it has too many digits to fit the precision
+        (["1", "2", "3"], cudf.Decimal64Dtype(1, 0), 50, 1, pa.ArrowInvalid),
+    ],
+)
+def test_series_setitem_decimal(data, dtype, item, to, expect):
+    data = cudf.Series([decimal.Decimal(x) for x in data], dtype=dtype)
+
+    if expect is pa.ArrowInvalid:
+        with pytest.raises(expect):
+            data[to] = item
+        return
+    else:
+        expect = cudf.Series([decimal.Decimal(x) for x in expect], dtype=dtype)
+        data[to] = item
+        assert_eq(data, expect)

@@ -10,8 +10,10 @@ import pyarrow as pa
 import pytest
 
 import cudf
+from cudf.core.column.decimal import Decimal32Column, Decimal64Column
+from cudf.core.column.numerical import NumericalColumn
 from cudf.testing import assert_eq
-from cudf.testing._utils import assert_exceptions_equal
+from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
 
 
 @pytest.mark.parametrize(
@@ -1090,3 +1092,157 @@ def test_series_astype_null_categorical():
     expect = cudf.Series([None, None, None], dtype="int32")
     got = sr.astype("int32")
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("precision, scale", [(7, 2), (11, 4), (18, 9)])
+def test_typecast_from_float_to_decimal(
+    request, float_types_as_str, precision, scale
+):
+    to_dtype = cudf.Decimal64Dtype(precision, scale)
+    data = cudf.Series(
+        [
+            14.12302,
+            97938.2,
+            np.nan,
+            0.0,
+            -8.302014,
+            np.nan,
+            94.31304,
+            -112.2314,
+            0.3333333,
+            np.nan,
+        ]
+    )
+    request.applymarker(
+        pytest.mark.xfail(
+            float_types_as_str == "float32" and to_dtype.precision > 12,
+            reason="https://github.com/rapidsai/cudf/issues/14169",
+        )
+    )
+    got = data.astype(float_types_as_str)
+
+    pa_arr = got.to_arrow().cast(
+        pa.decimal128(to_dtype.precision, to_dtype.scale)
+    )
+    expected = cudf.Series._from_column(Decimal64Column.from_arrow(pa_arr))
+
+    got = got.astype(to_dtype)
+
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize("precision, scale", [(9, 3), (11, 4), (18, 9)])
+def test_typecast_from_int_to_decimal(integer_types_as_str, precision, scale):
+    to_dtype = cudf.Decimal64Dtype(precision, scale)
+    data = cudf.Series(
+        [
+            14.12302,
+            38.2,
+            np.nan,
+            0.0,
+            -8.302014,
+            np.nan,
+            94.31304,
+            np.nan,
+            -112.2314,
+            0.3333333,
+            np.nan,
+        ]
+    )
+    got = data.astype(integer_types_as_str)
+
+    pa_arr = (
+        got.to_arrow()
+        .cast("float64")
+        .cast(pa.decimal128(to_dtype.precision, to_dtype.scale))
+    )
+    expected = cudf.Series._from_column(Decimal64Column.from_arrow(pa_arr))
+
+    got = got.astype(to_dtype)
+
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "from_dtype",
+    [
+        cudf.Decimal64Dtype(7, 2),
+        cudf.Decimal64Dtype(11, 4),
+        cudf.Decimal64Dtype(18, 10),
+        cudf.Decimal32Dtype(7, 2),
+        cudf.Decimal32Dtype(5, 3),
+        cudf.Decimal32Dtype(9, 5),
+    ],
+)
+@pytest.mark.parametrize(
+    "to_dtype",
+    [
+        cudf.Decimal64Dtype(7, 2),
+        cudf.Decimal64Dtype(18, 10),
+        cudf.Decimal64Dtype(11, 4),
+        cudf.Decimal32Dtype(7, 2),
+        cudf.Decimal32Dtype(9, 5),
+        cudf.Decimal32Dtype(5, 3),
+    ],
+)
+def test_typecast_to_from_decimal(from_dtype, to_dtype):
+    data = cudf.Series(
+        [
+            14.12309,
+            2.343942,
+            np.nan,
+            0.0,
+            -8.302082,
+            np.nan,
+            94.31308,
+            -112.2364,
+            -8.029972,
+            np.nan,
+        ]
+    )
+    if from_dtype.scale > to_dtype.MAX_PRECISION:
+        pytest.skip(
+            "This is supposed to overflow because the representation value in "
+            "the source exceeds the max representable in destination dtype."
+        )
+    s = data.astype(from_dtype)
+
+    pa_arr = s.to_arrow().cast(
+        pa.decimal128(to_dtype.precision, to_dtype.scale), safe=False
+    )
+    if isinstance(to_dtype, cudf.Decimal32Dtype):
+        expected = cudf.Series._from_column(Decimal32Column.from_arrow(pa_arr))
+    elif isinstance(to_dtype, cudf.Decimal64Dtype):
+        expected = cudf.Series._from_column(Decimal64Column.from_arrow(pa_arr))
+
+    with expect_warning_if(to_dtype.scale < s.dtype.scale, UserWarning):
+        got = s.astype(to_dtype)
+
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize("precision, scale", [(7, 2), (11, 4), (17, 10)])
+def test_typecast_from_decimal(precision, scale, signed_integer_types_as_str):
+    from_dtype = cudf.Decimal64Dtype(precision, scale)
+    data = cudf.Series(
+        [
+            14.12309,
+            2.343942,
+            np.nan,
+            0.0,
+            -8.302082,
+            np.nan,
+            94.31308,
+            -112.2364,
+            -8.029972,
+            np.nan,
+        ]
+    )
+    got = data.astype(from_dtype)
+    pa_arr = got.to_arrow().cast(signed_integer_types_as_str, safe=False)
+
+    got = got.astype(signed_integer_types_as_str)
+    expected = cudf.Series._from_column(NumericalColumn.from_arrow(pa_arr))
+
+    assert_eq(got, expected)
+    assert_eq(got.dtype, expected.dtype)
