@@ -47,9 +47,10 @@ static void bench_encode(nvbench::state& state, nvbench::type_list<DataType>)
   state.add_global_memory_reads<uint8_t>(alloc_size);
   state.add_global_memory_writes<cudf::size_type>(num_rows);
   auto stream = cudf::get_default_stream();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
 
   state.exec(nvbench::exec_tag::sync,
-             [&](nvbench::launch& launch) { auto result = cudf::encode(tv, stream); });
+             [&](nvbench::launch&) { auto result = cudf::encode(tv, stream); });
 }
 
 NVBENCH_DECLARE_TYPE_STRINGS(cudf::string_view, "string_view", "string_view");
