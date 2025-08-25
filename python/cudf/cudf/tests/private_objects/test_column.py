@@ -562,11 +562,10 @@ def test_string_int_to_ipv4():
     assert_eq(expected, got)
 
 
-@pytest.mark.parametrize(
-    "dtype", sorted(list(dtypeutils.NUMERIC_TYPES - {"uint32"}))
-)
-def test_string_int_to_ipv4_dtype_fail(dtype):
-    gsr = cudf.Series([1, 2, 3, 4, 5]).astype(dtype)
+def test_string_int_to_ipv4_dtype_fail(numeric_types_as_str):
+    if numeric_types_as_str == "uint32":
+        pytest.skip(f"int2ip passes with {numeric_types_as_str}")
+    gsr = cudf.Series([1, 2, 3, 4, 5]).astype(numeric_types_as_str)
     with pytest.raises(TypeError):
         gsr._column.int2ip()
 
