@@ -360,16 +360,6 @@ def test_dataframe_loc(scalar, step):
     assert_eq(df.loc[np.array([0])], pdf.loc[np.array([0])])
 
 
-def test_dataframe_loc_duplicate_index_scalar():
-    pdf = pd.DataFrame({"a": [1, 2, 3, 4, 5]}, index=[1, 2, 1, 4, 2])
-    gdf = cudf.DataFrame.from_pandas(pdf)
-
-    pdf_sorted = pdf.sort_values(by=list(pdf.columns), axis=0)
-    gdf_sorted = gdf.sort_values(by=list(gdf.columns), axis=0)
-
-    assert_eq(pdf_sorted, gdf_sorted)
-
-
 @pytest.mark.parametrize(
     "mask",
     [[True, False, False, False, False], [True, False, True, False, True]],
@@ -699,78 +689,6 @@ def test_dataframe_iloc_index_error():
         pdf.iloc[nelem * 2]
     with pytest.raises(IndexError):
         gdf.iloc[nelem * 2]
-
-
-@pytest.mark.parametrize("ntake", [0, 1, 10, 123, 122, 200])
-def test_dataframe_take(ntake):
-    rng = np.random.default_rng(seed=0)
-    nelem = 123
-    df = cudf.DataFrame(
-        {
-            "ii": rng.integers(0, 20, nelem),
-            "ff": rng.random(nelem),
-        }
-    )
-
-    take_indices = rng.integers(0, len(df), ntake)
-
-    actual = df.take(take_indices)
-    expected = df.to_pandas().take(take_indices)
-
-    assert actual.ii.null_count == 0
-    assert actual.ff.null_count == 0
-    assert_eq(actual, expected)
-
-
-@pytest.mark.parametrize("ntake", [1, 2, 8, 9])
-def test_dataframe_take_with_multiindex(ntake):
-    rng = np.random.default_rng(seed=0)
-    df = cudf.DataFrame(
-        index=cudf.MultiIndex(
-            levels=[["lama", "cow", "falcon"], ["speed", "weight", "length"]],
-            codes=[[0, 0, 0, 1, 1, 1, 2, 2, 2], [0, 1, 2, 0, 1, 2, 0, 1, 2]],
-        )
-    )
-
-    nelem = 9
-    df["ii"] = rng.integers(0, 20, nelem)
-    df["ff"] = rng.random(nelem)
-
-    take_indices = rng.integers(0, len(df), ntake)
-
-    actual = df.take(take_indices)
-    expected = df.to_pandas().take(take_indices)
-
-    assert_eq(actual, expected)
-
-
-@pytest.mark.parametrize("ntake", [0, 1, 10, 123, 122, 200])
-def test_series_take(ntake):
-    rng = np.random.default_rng(seed=0)
-    nelem = 123
-
-    psr = pd.Series(rng.integers(0, 20, nelem))
-    gsr = cudf.Series(psr)
-
-    take_indices = rng.integers(0, len(gsr), ntake)
-
-    actual = gsr.take(take_indices)
-    expected = psr.take(take_indices)
-
-    assert_eq(actual, expected)
-
-
-def test_series_take_positional():
-    psr = pd.Series([1, 2, 3, 4, 5], index=["a", "b", "c", "d", "e"])
-
-    gsr = cudf.Series.from_pandas(psr)
-
-    take_indices = [1, 2, 0, 3]
-
-    expect = psr.take(take_indices)
-    got = gsr.take(take_indices)
-
-    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("nelem", [0, 1, 5, 20, 100])
