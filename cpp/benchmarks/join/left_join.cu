@@ -27,20 +27,22 @@ void nvbench_left_anti_join(nvbench::state& state,
                                                nvbench::enum_type<NullEquality>,
                                                nvbench::enum_type<DataType>>)
 {
-  auto const num_operations = static_cast<cudf::size_type>(state.get_int64("num_operations"));
-  auto const reuse_left_table     = state.get_string("reuse_table") == "left" ? true : false;
+  auto const num_operations   = static_cast<cudf::size_type>(state.get_int64("num_operations"));
+  auto const reuse_left_table = state.get_string("reuse_table") == "left" ? true : false;
   if (reuse_left_table) {
-    state.skip(
-      "Not yet implemented");
+    state.skip("Not yet implemented");
     return;
   }
   auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
 
-  auto join = [reuse_left_table](cudf::table_view const& left,
-                 cudf::table_view const& right,
-                 cudf::null_equality compare_nulls) {
+  auto join = [num_operations, reuse_left_table](cudf::table_view const& left,
+                                                 cudf::table_view const& right,
+                                                 cudf::null_equality compare_nulls) {
     cudf::filtered_join obj(right, compare_nulls, reuse_left_table, cudf::get_default_stream());
-    return obj.semi_join(left);
+    for (auto i = 0; i < num_operations - 1; i++) {
+      auto result = obj.anti_join(left);
+    }
+    return obj.anti_join(left);
   };
 
   BM_join<Nullable, join_t::HASH, NullEquality>(state, dtypes, join);
@@ -52,19 +54,21 @@ void nvbench_left_semi_join(nvbench::state& state,
                                                nvbench::enum_type<NullEquality>,
                                                nvbench::enum_type<DataType>>)
 {
-  auto const num_operations = static_cast<cudf::size_type>(state.get_int64("num_operations"));
-  auto const reuse_left_table     = state.get_string("reuse_table") == "left" ? true : false;
+  auto const num_operations   = static_cast<cudf::size_type>(state.get_int64("num_operations"));
+  auto const reuse_left_table = state.get_string("reuse_table") == "left" ? true : false;
   if (reuse_left_table) {
-    state.skip(
-      "Not yet implemented");
+    state.skip("Not yet implemented");
     return;
   }
   auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
 
-  auto join = [reuse_left_table](cudf::table_view const& left,
-                 cudf::table_view const& right,
-                 cudf::null_equality compare_nulls) {
+  auto join = [num_operations, reuse_left_table](cudf::table_view const& left,
+                                                 cudf::table_view const& right,
+                                                 cudf::null_equality compare_nulls) {
     cudf::filtered_join obj(right, compare_nulls, reuse_left_table, cudf::get_default_stream());
+    for (auto i = 0; i < num_operations - 1; i++) {
+      auto result = obj.semi_join(left);
+    }
     return obj.semi_join(left);
   };
   BM_join<Nullable, join_t::HASH, NullEquality>(state, dtypes, join);
