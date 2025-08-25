@@ -1,5 +1,6 @@
 # Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
+import io
 import pickle
 
 import numpy as np
@@ -132,3 +133,32 @@ def test_pickle_string_column(slices):
     out = pickle.loads(pickled)
 
     assert_eq(Series._from_column(out), Series._from_column(input_col))
+
+
+@pytest.mark.parametrize(
+    "names",
+    [
+        ["a", "b", "c"],
+        [None, None, None],
+        ["aa", "aa", "aa"],
+        ["bb", "aa", "aa"],
+        None,
+    ],
+)
+def test_pickle_roundtrip_multiindex(names):
+    df = DataFrame(
+        {
+            "one": [1, 2, 3],
+            "two": [True, False, True],
+            "three": ["ab", "cd", "ef"],
+            "four": [0.2, 0.1, -10.2],
+        }
+    )
+    expected_df = df.set_index(["one", "two", "three"])
+    expected_df.index.names = names
+    local_file = io.BytesIO()
+
+    pickle.dump(expected_df, local_file)
+    local_file.seek(0)
+    actual_df = pickle.load(local_file)
+    assert_eq(expected_df, actual_df)

@@ -1,10 +1,7 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
 
-import itertools
 import operator
-import pickle
 from contextlib import contextmanager
-from io import BytesIO
 
 import cupy as cp
 import numpy as np
@@ -13,7 +10,7 @@ import pytest
 
 import cudf
 from cudf.core.column import as_column
-from cudf.testing import assert_eq, assert_neq
+from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
 
 
@@ -170,15 +167,6 @@ def test_series_multiindex(pdfIndex):
     ps.index = pdfIndex
     gs.index = cudf.from_pandas(pdfIndex)
     assert_eq(ps, gs)
-
-
-def test_multiindex_getitem(pdf, gdf, pdfIndex):
-    gdfIndex = cudf.from_pandas(pdfIndex)
-    pdf = pdf.copy(deep=False)
-    gdf = gdf.copy(deep=False)
-    pdf.index = pdfIndex
-    gdf.index = gdfIndex
-    assert_eq(pdf.index[0], gdf.index[0])
 
 
 @pytest.mark.parametrize(
@@ -386,150 +374,6 @@ def test_multiindex_index_and_columns():
     assert_eq(pdf, gdf)
 
 
-def test_multiindex_multiple_groupby():
-    rng = np.random.default_rng(seed=0)
-    pdf = pd.DataFrame(
-        {
-            "a": [4, 17, 4, 9, 5],
-            "b": [1, 4, 4, 3, 2],
-            "x": rng.normal(size=5),
-        }
-    )
-    gdf = cudf.DataFrame.from_pandas(pdf)
-    pdg = pdf.groupby(["a", "b"], sort=True).sum()
-    gdg = gdf.groupby(["a", "b"], sort=True).sum()
-    assert_eq(pdg, gdg)
-    pdg = pdf.groupby(["a", "b"], sort=True).x.sum()
-    gdg = gdf.groupby(["a", "b"], sort=True).x.sum()
-    assert_eq(pdg, gdg)
-
-
-@pytest.mark.parametrize(
-    "func",
-    [
-        lambda df: df.groupby(["x", "y"], sort=True).z.sum(),
-        lambda df: df.groupby(["x", "y"], sort=True).sum(),
-    ],
-)
-def test_multi_column(func):
-    rng = np.random.default_rng(seed=0)
-    pdf = pd.DataFrame(
-        {
-            "x": rng.integers(0, 5, size=1000),
-            "y": rng.integers(0, 10, size=1000),
-            "z": rng.normal(size=1000),
-        }
-    )
-    gdf = cudf.DataFrame.from_pandas(pdf)
-
-    a = func(pdf)
-    b = func(gdf)
-
-    assert_eq(a, b)
-
-
-def test_multiindex_equality():
-    # mi made from groupby
-    # mi made manually to be identical
-    # are they equal?
-    gdf = cudf.DataFrame(
-        {"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5], "z": [0, 1, 0, 1, 0]}
-    )
-    mi1 = gdf.groupby(["x", "y"], sort=True).mean().index
-    mi2 = cudf.MultiIndex(
-        levels=[[1, 3, 4, 5], [1, 2, 5]],
-        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
-        names=["x", "y"],
-    )
-    assert_eq(mi1, mi2)
-
-    # mi made from two groupbys, are they equal?
-    mi2 = gdf.groupby(["x", "y"], sort=True).max().index
-    assert_eq(mi1, mi2)
-
-    # mi made manually twice are they equal?
-    mi1 = cudf.MultiIndex(
-        levels=[[1, 3, 4, 5], [1, 2, 5]],
-        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
-        names=["x", "y"],
-    )
-    mi2 = cudf.MultiIndex(
-        levels=[[1, 3, 4, 5], [1, 2, 5]],
-        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
-        names=["x", "y"],
-    )
-    assert_eq(mi1, mi2)
-
-    # mi made from different groupbys are they not equal?
-    mi1 = gdf.groupby(["x", "y"]).mean().index
-    mi2 = gdf.groupby(["x", "z"]).mean().index
-    assert_neq(mi1, mi2)
-
-    # mi made from different manuals are they not equal?
-    mi1 = cudf.MultiIndex(
-        levels=[[1, 3, 4, 5], [1, 2, 5]],
-        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
-        names=["x", "y"],
-    )
-    mi2 = cudf.MultiIndex(
-        levels=[[0, 3, 4, 5], [1, 2, 5]],
-        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
-        names=["x", "y"],
-    )
-    assert_neq(mi1, mi2)
-
-
-def test_multiindex_equals():
-    # mi made from groupby
-    # mi made manually to be identical
-    # are they equal?
-    gdf = cudf.DataFrame(
-        {"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5], "z": [0, 1, 0, 1, 0]}
-    )
-    mi1 = gdf.groupby(["x", "y"], sort=True).mean().index
-    mi2 = cudf.MultiIndex(
-        levels=[[1, 3, 4, 5], [1, 2, 5]],
-        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
-        names=["x", "y"],
-    )
-    assert_eq(mi1.equals(mi2), True)
-
-    # mi made from two groupbys, are they equal?
-    mi2 = gdf.groupby(["x", "y"], sort=True).max().index
-    assert_eq(mi1.equals(mi2), True)
-
-    # mi made manually twice are they equal?
-    mi1 = cudf.MultiIndex(
-        levels=[[1, 3, 4, 5], [1, 2, 5]],
-        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
-        names=["x", "y"],
-    )
-    mi2 = cudf.MultiIndex(
-        levels=[[1, 3, 4, 5], [1, 2, 5]],
-        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
-        names=["x", "y"],
-    )
-    assert_eq(mi1.equals(mi2), True)
-
-    # mi made from different groupbys are they not equal?
-    mi1 = gdf.groupby(["x", "y"], sort=True).mean().index
-    mi2 = gdf.groupby(["x", "z"], sort=True).mean().index
-    assert_eq(mi1.equals(mi2), False)
-
-    # mi made from different manuals are they not equal?
-    mi1 = cudf.MultiIndex(
-        levels=[[1, 3, 4, 5], [1, 2, 5]],
-        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
-        names=["x", "y"],
-    )
-    mi2 = cudf.MultiIndex(
-        levels=[[0, 3, 4, 5], [1, 2, 5]],
-        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
-        names=["x", "y"],
-    )
-    assert_eq(mi1.equals(mi2), False)
-
-
 @pytest.mark.parametrize(
     "iloc_rows",
     [
@@ -649,52 +493,6 @@ def test_multicolumn_item():
     assert_eq(gdgT[(0, 0)], pdgT[(0, 0)])
 
 
-def test_multiindex_reset_index(pdf, gdf, pdfIndex):
-    gdfIndex = cudf.from_pandas(pdfIndex)
-    pdf = pdf.copy(deep=False)
-    gdf = gdf.copy(deep=False)
-    pdf.index = pdfIndex
-    gdf.index = gdfIndex
-    assert_eq(pdf.reset_index(), gdf.reset_index())
-
-
-def test_multiindex_groupby_reset_index():
-    gdf = cudf.DataFrame(
-        {"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5], "z": [0, 1, 0, 1, 0]}
-    )
-    pdf = gdf.to_pandas()
-    gdg = gdf.groupby(["x", "y"], sort=True).sum()
-    pdg = pdf.groupby(["x", "y"], sort=True).sum()
-    assert_eq(pdg.reset_index(), gdg.reset_index())
-
-
-def test_multicolumn_reset_index():
-    gdf = cudf.DataFrame({"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5]})
-    pdf = gdf.to_pandas()
-    gdg = gdf.groupby(["x"], sort=True).agg({"y": ["count", "mean"]})
-    pdg = pdf.groupby(["x"], sort=True).agg({"y": ["count", "mean"]})
-    assert_eq(pdg.reset_index(), gdg.reset_index(), check_dtype=False)
-    gdg = gdf.groupby(["x"], sort=True).agg({"y": ["count"]})
-    pdg = pdf.groupby(["x"], sort=True).agg({"y": ["count"]})
-    assert_eq(pdg.reset_index(), gdg.reset_index(), check_dtype=False)
-    gdg = gdf.groupby(["x"], sort=True).agg({"y": "count"})
-    pdg = pdf.groupby(["x"], sort=True).agg({"y": "count"})
-    assert_eq(pdg.reset_index(), gdg.reset_index(), check_dtype=False)
-
-
-def test_multiindex_multicolumn_reset_index():
-    gdf = cudf.DataFrame(
-        {"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5], "z": [1, 2, 3, 4, 5]}
-    )
-    pdf = gdf.to_pandas()
-    gdg = gdf.groupby(["x", "y"], sort=True).agg({"y": ["count", "mean"]})
-    pdg = pdf.groupby(["x", "y"], sort=True).agg({"y": ["count", "mean"]})
-    assert_eq(pdg.reset_index(), gdg.reset_index(), check_dtype=False)
-    gdg = gdf.groupby(["x", "z"], sort=True).agg({"y": ["count", "mean"]})
-    pdg = pdf.groupby(["x", "z"], sort=True).agg({"y": ["count", "mean"]})
-    assert_eq(pdg.reset_index(), gdg.reset_index(), check_dtype=False)
-
-
 def test_groupby_multiindex_columns_from_pandas(pdf, gdf, pdfIndex):
     gdfIndex = cudf.from_pandas(pdfIndex)
     pdf = pdf.copy(deep=False)
@@ -780,48 +578,6 @@ def test_multicolumn_set_item(pdf, pdfIndex):
     assert_eq(pdf, gdf)
 
 
-@pytest.mark.parametrize(
-    "key",
-    [0, 1, [], [0, 1], slice(None), slice(0, 0), slice(0, 1), slice(0, 2)],
-)
-def test_multiindex_indexing(key):
-    gi = cudf.MultiIndex.from_frame(
-        cudf.DataFrame({"a": [1, 2, 3], "b": [True, False, False]})
-    )
-    pi = gi.to_pandas()
-
-    assert_eq(gi[key], pi[key], exact=False)
-
-
-@pytest.mark.parametrize(
-    "names",
-    [
-        ["a", "b", "c"],
-        [None, None, None],
-        ["aa", "aa", "aa"],
-        ["bb", "aa", "aa"],
-        None,
-    ],
-)
-def test_pickle_roundtrip_multiindex(names):
-    df = cudf.DataFrame(
-        {
-            "one": [1, 2, 3],
-            "two": [True, False, True],
-            "three": ["ab", "cd", "ef"],
-            "four": [0.2, 0.1, -10.2],
-        }
-    )
-    expected_df = df.set_index(["one", "two", "three"])
-    expected_df.index.names = names
-    local_file = BytesIO()
-
-    pickle.dump(expected_df, local_file)
-    local_file.seek(0)
-    actual_df = pickle.load(local_file)
-    assert_eq(expected_df, actual_df)
-
-
 def test_multiindex_index_single_row():
     arrays = [["a", "a", "b", "b"], [1, 2, 3, 4]]
     tuples = list(zip(*arrays, strict=True))
@@ -832,29 +588,6 @@ def test_multiindex_index_single_row():
     gdf.index = idx
     pdf = gdf.to_pandas()
     assert_eq(pdf.loc[("b", 3)], gdf.loc[("b", 3)])
-
-
-@pytest.mark.parametrize(
-    "levels",
-    itertools.chain.from_iterable(
-        itertools.permutations(range(3), n) for n in range(1, 4)
-    ),
-    ids=str,
-)
-def test_multiindex_sort_index_partial(levels):
-    df = pd.DataFrame(
-        {
-            "a": [3, 3, 3, 1, 1, 1, 2, 2],
-            "b": [4, 2, 7, -1, 11, -2, 7, 7],
-            "c": [4, 4, 2, 3, 3, 3, 1, 1],
-            "val": [1, 2, 3, 4, 5, 6, 7, 8],
-        }
-    ).set_index(["a", "b", "c"])
-    cdf = cudf.from_pandas(df)
-
-    expect = df.sort_index(level=levels, sort_remaining=True)
-    got = cdf.sort_index(level=levels, sort_remaining=True)
-    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("idx_get", [(0, 0), (0, 1), (1, 0), (1, 1)])
