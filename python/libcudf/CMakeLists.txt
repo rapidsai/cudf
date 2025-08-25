@@ -54,7 +54,8 @@ if(TARGET nvcomp::nvcomp)
     # Compute the SOVERSION from the library path
     get_filename_component(nvcomp_lib_dir ${nvcomp_lib_path} DIRECTORY)
     get_filename_component(nvcomp_lib_name ${nvcomp_lib_path} NAME)
-    string(REGEX REPLACE "^libnvcomp\\.so\\.([0-9]+).*$" "\\1" nvcomp_soversion_major ${nvcomp_lib_name})
+    string(REGEX REPLACE "^libnvcomp\\.so\\.([0-9]+).*$" "\\1" nvcomp_soversion_major
+                         ${nvcomp_lib_name})
     install(
       FILES ${nvcomp_lib_path}
       DESTINATION ${SKBUILD_PLATLIB_DIR}/libcudf/lib64/
