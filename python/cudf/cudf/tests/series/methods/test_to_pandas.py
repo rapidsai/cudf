@@ -13,6 +13,19 @@ import cudf
 from cudf.testing import assert_eq
 
 
+def test_to_pandas_index_true_timezone():
+    data = [
+        "2008-05-12",
+        "2008-12-12",
+        "2009-05-12",
+    ]
+    dti = cudf.DatetimeIndex(data).tz_localize("UTC")
+    ser = cudf.Series(dti, index=list("abc"))
+    result = ser.to_pandas(index=True)
+    expected = pd.Series(pd.to_datetime(data, utc=True), index=list("abc"))
+    assert_eq(result, expected)
+
+
 @pytest.mark.parametrize(
     "sr_data,expected_psr",
     [
