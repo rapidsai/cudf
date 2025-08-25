@@ -77,9 +77,9 @@ Unlike the single GPU executor, this does require a number of
 additional dependencies. We currently require
 [Dask](https://www.dask.org/) and
 [Dask-CUDA](https://docs.rapids.ai/api/dask-cuda/nightly/) to be
-installed. In addition, we recommend that
-[ucxx](https://github.com/rapidsai/ucxx) and
-[rapidsmpf](https://github.com/rapidsai/rapidsmpf) are installed to
+installed. In addition, we recommend that Dask Distributed plugin of
+[UCXX](https://github.com/rapidsai/ucxx) and
+[RapidsMPF](https://github.com/rapidsai/rapidsmpf) are installed to
 take advantage of any high-performance networking.
 
 To quickly install all of these dependencies into a conda environment,
@@ -87,7 +87,7 @@ you can run:
 
 ```
 conda install -c rapidsai -c conda-forge \
-    cudf-polars rapidsmpf dask-cuda ucxx
+    cudf-polars rapidsmpf dask-cuda distributed-ucxx
 ```
 
 

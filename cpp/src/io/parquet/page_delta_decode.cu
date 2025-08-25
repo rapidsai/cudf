@@ -342,6 +342,9 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
   // Must be evaluated after setup_local_page_info
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
+  // Capture initial valid_map_offset before any processing that might modify it
+  int const init_valid_map_offset = s->nesting_info[s->col.max_nesting_depth - 1].valid_map_offset;
+
   // Write list offsets and exit if the page does not need to be decoded
   if (not page_mask[page_idx]) {
     auto& page      = pages[page_idx];
@@ -434,6 +437,14 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
     block.sync();
   }
 
+  // Zero-fill null positions after decoding valid values
+  auto const& ni = s->nesting_info[s->col.max_nesting_depth - 1];
+  if (ni.valid_map != nullptr) {
+    int const num_values = ni.valid_map_offset - init_valid_map_offset;
+    zero_fill_null_positions_shared<decode_block_size>(
+      s, s->dtype_len, init_valid_map_offset, num_values, static_cast<int>(block.thread_rank()));
+  }
+
   if (block.thread_rank() == 0 and s->error != 0) { set_error(s->error, error_code); }
 }
 
@@ -487,6 +498,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   }
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
+
+  // Capture initial valid_map_offset before any processing that might modify it
+  int const init_valid_map_offset = s->nesting_info[s->col.max_nesting_depth - 1].valid_map_offset;
 
   // Write list/string offsets and exit if the page does not need to be decoded
   if (not page_mask[page_idx]) {
@@ -615,6 +629,17 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     block.sync();
   }
 
+  // Zero-fill null positions after decoding valid values
+  auto const& ni = s->nesting_info[leaf_level_index];
+  if (ni.valid_map != nullptr) {
+    int const num_values = ni.valid_map_offset - init_valid_map_offset;
+    zero_fill_null_positions_shared<decode_block_size>(s,
+                                                       sizeof(size_type),
+                                                       init_valid_map_offset,
+                                                       num_values,
+                                                       static_cast<int>(block.thread_rank()));
+  }
+
   // For large strings, update the initial string buffer offset to be used during large string
   // column construction. Otherwise, convert string sizes to final offsets.
   if (s->col.is_large_string_col) {
@@ -683,6 +708,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   }
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
+
+  // Capture initial valid_map_offset before any processing that might modify it
+  int const init_valid_map_offset = s->nesting_info[s->col.max_nesting_depth - 1].valid_map_offset;
 
   // Write list/string offsets and exit if the page does not need to be decoded
   if (not page_mask[page_idx]) {
@@ -804,6 +832,17 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       if (warp.thread_rank() == 0) { s->src_pos = src_pos + batch_size; }
     }
     block.sync();
+  }
+
+  // Zero-fill null positions after decoding valid values
+  auto const& ni = nesting_info_base[leaf_level_index];
+  if (ni.valid_map != nullptr) {
+    int const num_values = ni.valid_map_offset - init_valid_map_offset;
+    zero_fill_null_positions_shared<decode_block_size>(s,
+                                                       sizeof(size_type),
+                                                       init_valid_map_offset,
+                                                       num_values,
+                                                       static_cast<int>(block.thread_rank()));
   }
 
   // For large strings, update the initial string buffer offset to be used during large string
