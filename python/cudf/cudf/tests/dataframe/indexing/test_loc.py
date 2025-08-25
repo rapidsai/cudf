@@ -37,7 +37,7 @@ def test_loc_setitem_list_11944():
     )
     cdf = cudf.from_pandas(df)
     df.loc[df.a == "yes", "b"] = [["hello"]]
-    cdf.loc[df.a == "yes", "b"] = [["hello"]]
+    cdf.loc[cdf.a == "yes", "b"] = [["hello"]]
     assert_eq(df, cdf)
 
 

@@ -10,7 +10,7 @@ from cudf.testing import assert_eq
 
 @pytest.mark.parametrize("arg", [[True, False, True], [True, True, True]])
 @pytest.mark.parametrize("value", [0, -1])
-def test_dataframe_setitem_bool_mask_scaler(arg, value):
+def test_dataframe_setitem_bool_mask_scalar(arg, value):
     df = pd.DataFrame({"a": [1, 2, 3]})
     gdf = cudf.from_pandas(df)
 
@@ -19,7 +19,7 @@ def test_dataframe_setitem_bool_mask_scaler(arg, value):
     assert_eq(df, gdf)
 
 
-def test_dataframe_setitem_scaler_bool():
+def test_dataframe_setitem_scalar_bool():
     df = pd.DataFrame({"a": [1, 2, 3]})
     df[[True, False, True]] = pd.DataFrame({"a": [-1, -2]})
 

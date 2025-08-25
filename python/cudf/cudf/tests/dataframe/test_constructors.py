@@ -1435,7 +1435,7 @@ def test_from_records_withindex(columns):
     assert_eq(ii, df.index.values)
 
 
-def test_numpy_non_contiguious():
+def test_numpy_non_contiguous():
     recdtype = np.dtype([("index", np.int64), ("a", np.int32)])
     rec = np.recarray(10, dtype=recdtype)
     rec.index = np.arange(30, 40)
