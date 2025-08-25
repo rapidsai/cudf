@@ -2,6 +2,7 @@
 import datetime
 import decimal
 import types
+import zoneinfo
 
 import cupy as cp
 import numba.cuda
@@ -1337,3 +1338,39 @@ def test_timezone_pyarrow_array():
     result = cudf.Series(pa_array)
     expected = pa_array.to_pandas()
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "klass", ["Series", "DatetimeIndex", "Index", "CategoricalIndex"]
+)
+def test_pandas_compatible_non_zoneinfo_raises(klass):
+    pytz = pytest.importorskip("pytz")
+    tz = pytz.timezone("US/Pacific")
+    tz_aware_data = [pd.Timestamp("2020-01-01", tz="UTC").tz_convert(tz)]
+    pandas_obj = getattr(pd, klass)(tz_aware_data)
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            cudf.from_pandas(pandas_obj)
+
+
+@pytest.mark.parametrize(
+    "klass", ["Series", "DatetimeIndex", "Index", "CategoricalIndex"]
+)
+def test_from_pandas_obj_tz_aware(klass):
+    tz = zoneinfo.ZoneInfo("US/Pacific")
+    tz_aware_data = [pd.Timestamp("2020-01-01", tz="UTC").tz_convert(tz)]
+    pandas_obj = getattr(pd, klass)(tz_aware_data)
+    result = cudf.from_pandas(pandas_obj)
+    expected = getattr(cudf, klass)(tz_aware_data)
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "klass", ["Series", "DatetimeIndex", "Index", "CategoricalIndex"]
+)
+def test_from_pandas_obj_tz_aware_unsupported(klass):
+    tz = datetime.timezone(datetime.timedelta(hours=1))
+    tz_aware_data = [pd.Timestamp("2020-01-01", tz="UTC").tz_convert(tz)]
+    pandas_obj = getattr(pd, klass)(tz_aware_data)
+    with pytest.raises(NotImplementedError):
+        cudf.from_pandas(pandas_obj)
