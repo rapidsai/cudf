@@ -36,7 +36,15 @@ from pylibcudf._interop_helpers cimport (
     _release_device_array,
     _metadata_to_libcudf,
 )
-from ._interop_helpers import ArrowLike, ColumnMetadata
+from ._interop_helpers import ArrowLike, ColumnMetadata, _ObjectWithArrowMetadata
+
+try:
+    import pyarrow as pa
+    pa_err = None
+except ImportError as e:
+    pa = None
+    pa_err = e
+
 
 __all__ = ["Table"]
 
@@ -60,6 +68,19 @@ cdef class Table:
         if not all(isinstance(c, Column) for c in columns):
             raise ValueError("All columns must be pylibcudf Column objects")
         self._columns = columns
+
+    def to_arrow(
+        self,
+        metadata: list[ColumnMetadata | str] | None = None
+    ) -> ArrowLike:
+        """Create a PyArrow table from a pylibcudf table."""
+        if pa_err is not None:
+            raise RuntimeError(
+                "pyarrow was not found on your system. Please "
+                "pip install pylibcudf with the [pyarrow] extra for a "
+                "compatible pyarrow version."
+            ) from pa_err
+        return pa.table(_ObjectWithArrowMetadata(self, metadata))
 
     @staticmethod
     def from_arrow(obj: ArrowLike, dtype: DataType | None = None) -> Table:

@@ -150,6 +150,25 @@ cdef class Scalar:
         """True if the scalar is valid, false if not"""
         return self.get().is_valid()
 
+    def to_arrow(
+        self,
+        metadata: ColumnMetadata | str | None = None
+    ) -> ArrowLike:
+        """Create a PyArrow array from a pylibcudf scalar.
+
+        Parameters
+        ----------
+        metadata : list
+            The metadata to attach to the columns of the table.
+
+        Returns
+        -------
+        pyarrow.Scalar
+        """
+        # Note that metadata for scalars is primarily important for preserving
+        # information on nested types since names are otherwise irrelevant.
+        return Column.from_scalar(self, 1).to_arrow(metadata=metadata)[0]
+
     @staticmethod
     def from_arrow(
         pa_val,
