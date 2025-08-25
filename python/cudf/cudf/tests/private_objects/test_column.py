@@ -5,31 +5,17 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+from numba import cuda
 
 import cudf
 from cudf.core.column.column import _can_values_be_equal, as_column
 from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal
-from cudf.utils import dtypes as dtypeutils
-
-dtypes = sorted(
-    list(
-        dtypeutils.ALL_TYPES
-        - {
-            "datetime64[s]",
-            "datetime64[ms]",
-            "datetime64[us]",
-            "timedelta64[s]",
-            "timedelta64[ms]",
-            "timedelta64[us]",
-        }
-    )
-)
 
 
-@pytest.fixture(params=dtypes, ids=dtypes)
-def pandas_input(request):
-    dtype = request.param
+@pytest.fixture
+def pandas_input(all_supported_types_as_str):
+    dtype = all_supported_types_as_str
     rng = np.random.default_rng(seed=0)
     size = 100
 
@@ -69,10 +55,34 @@ def str_host_view(list_of_str, to_dtype):
     )
 
 
+def test_column_set_equal_length_object_by_mask():
+    # Series.__setitem__ might bypass some of the cases
+    # handled in column.__setitem__ so this test is needed
+
+    data = cudf.Series([0, 0, 1, 1, 1])._column
+    replace_data = cudf.Series([100, 200, 300, 400, 500])._column
+    bool_col = cudf.Series([True, True, True, True, True])._column
+
+    data[bool_col] = replace_data
+    assert_eq(
+        cudf.Series._from_column(data),
+        cudf.Series._from_column(replace_data),
+    )
+
+    data = cudf.Series([0, 0, 1, 1, 1])._column
+    bool_col = cudf.Series([True, False, True, False, True])._column
+    data[bool_col] = replace_data
+
+    assert_eq(
+        cudf.Series._from_column(data),
+        cudf.Series([100, 0, 300, 1, 500]),
+    )
+
+
 @pytest.mark.parametrize("offset", [0, 1, 15])
 @pytest.mark.parametrize("size", [50, 10, 0])
 def test_column_offset_and_size(pandas_input, offset, size):
-    col = cudf.core.column.as_column(pandas_input)
+    col = as_column(pandas_input)
     col = cudf.core.column.build_column(
         data=col.base_data,
         dtype=col.dtype,
@@ -141,7 +151,7 @@ def column_slicing_test(col, offset, size, cast_to_float=False):
 @pytest.mark.parametrize("offset", [0, 1, 15])
 @pytest.mark.parametrize("size", [50, 10, 0])
 def test_column_slicing(pandas_input, offset, size):
-    col = cudf.core.column.as_column(pandas_input)
+    col = as_column(pandas_input)
     column_slicing_test(col, offset, size)
 
 
@@ -154,9 +164,7 @@ def test_column_slicing(pandas_input, offset, size):
     [cudf.Decimal128Dtype, cudf.Decimal64Dtype, cudf.Decimal32Dtype],
 )
 def test_decimal_column_slicing(offset, size, precision, scale, decimal_type):
-    col = cudf.core.column.as_column(
-        pd.Series(np.random.default_rng(seed=0).random(1000))
-    )
+    col = as_column(pd.Series(np.random.default_rng(seed=0).random(1000)))
     col = col.astype(decimal_type(precision, scale))
     column_slicing_test(col, offset, size, True)
 
@@ -173,7 +181,7 @@ def test_column_series_multi_dim(data):
         cudf.Series(data)
 
     with pytest.raises(ValueError):
-        cudf.core.column.as_column(data)
+        as_column(data)
 
 
 @pytest.mark.parametrize(
@@ -195,14 +203,13 @@ def test_column_mixed_dtype(data, error):
             cudf.Series(data)
 
 
-@pytest.mark.parametrize("nan_as_null", [True, False])
 @pytest.mark.parametrize(
     "scalar",
     [np.nan, pd.Timedelta(days=1), pd.Timestamp(2020, 1, 1)],
     ids=repr,
 )
-@pytest.mark.parametrize("size", [1, 10])
-def test_as_column_scalar_with_nan(nan_as_null, scalar, size):
+def test_as_column_scalar_with_nan(nan_as_null, scalar):
+    size = 5
     expected = (
         cudf.Series([scalar] * size, nan_as_null=nan_as_null)
         .dropna()
@@ -221,23 +228,20 @@ def test_as_column_scalar_with_nan(nan_as_null, scalar, size):
 
 
 @pytest.mark.parametrize("data", [[1.1, 2.2, 3.3, 4.4], [1, 2, 3, 4]])
-@pytest.mark.parametrize("dtype", ["float32", "float64"])
-def test_column_series_cuda_array_dtype(data, dtype):
-    psr = pd.Series(np.asarray(data), dtype=dtype)
-    sr = cudf.Series(cp.asarray(data), dtype=dtype)
+def test_column_series_cuda_array_dtype(data, float_types_as_str):
+    psr = pd.Series(np.asarray(data, dtype=float_types_as_str))
+    sr = cudf.Series(cp.asarray(data, dtype=float_types_as_str))
 
     assert_eq(psr, sr)
 
-    psr = pd.Series(data, dtype=dtype)
-    sr = cudf.Series(data, dtype=dtype)
+    psr = pd.Series(data, dtype=float_types_as_str)
+    sr = cudf.Series(data, dtype=float_types_as_str)
 
     assert_eq(psr, sr)
 
 
 def test_column_zero_length_slice():
     # see https://github.com/rapidsai/cudf/pull/4777
-    from numba import cuda
-
     x = cudf.DataFrame({"a": [1]})
     the_column = x[1:]["a"]._column
 
@@ -251,20 +255,16 @@ def test_column_chunked_array_creation():
     pyarrow_array = pa.array([1, 2, 3] * 1000)
     chunked_array = pa.chunked_array(pyarrow_array)
 
-    actual_column = cudf.core.column.as_column(
-        chunked_array, dtype=np.dtype(np.float64)
-    )
-    expected_column = cudf.core.column.as_column(
-        pyarrow_array, dtype=np.dtype(np.float64)
-    )
+    actual_column = as_column(chunked_array, dtype=np.dtype(np.float64))
+    expected_column = as_column(pyarrow_array, dtype=np.dtype(np.float64))
 
     assert_eq(
         cudf.Series._from_column(actual_column),
         cudf.Series._from_column(expected_column),
     )
 
-    actual_column = cudf.core.column.as_column(chunked_array)
-    expected_column = cudf.core.column.as_column(pyarrow_array)
+    actual_column = as_column(chunked_array)
+    expected_column = as_column(pyarrow_array)
 
     assert_eq(
         cudf.Series._from_column(actual_column),
@@ -418,14 +418,106 @@ def test_column_view_string_slice(slc):
     ],
 )
 def test_as_column_buffer(box, data):
-    expected = cudf.core.column.as_column(data)
-    actual_column = cudf.core.column.as_column(
+    expected = as_column(data)
+    actual_column = as_column(
         cudf.core.buffer.as_buffer(box(data)), dtype=data.dtype
     )
     assert_eq(
         cudf.Series._from_column(actual_column),
         cudf.Series._from_column(expected),
     )
+
+
+def test_can_cast_safely_same_kind():
+    # 'i' -> 'i'
+    data = cudf.Series([1, 2, 3], dtype="int32")._column
+    to_dtype = np.dtype("int64")
+
+    assert data.can_cast_safely(to_dtype)
+
+    data = cudf.Series([1, 2, 3], dtype="int64")._column
+    to_dtype = np.dtype("int32")
+
+    assert data.can_cast_safely(to_dtype)
+
+    data = cudf.Series([1, 2, 2**31], dtype="int64")._column
+    assert not data.can_cast_safely(to_dtype)
+
+    # 'u' -> 'u'
+    data = cudf.Series([1, 2, 3], dtype="uint32")._column
+    to_dtype = np.dtype("uint64")
+
+    assert data.can_cast_safely(to_dtype)
+
+    data = cudf.Series([1, 2, 3], dtype="uint64")._column
+    to_dtype = np.dtype("uint32")
+
+    assert data.can_cast_safely(to_dtype)
+
+    data = cudf.Series([1, 2, 2**33], dtype="uint64")._column
+    assert not data.can_cast_safely(to_dtype)
+
+    # 'f' -> 'f'
+    data = cudf.Series([np.inf, 1.0], dtype="float64")._column
+    to_dtype = np.dtype("float32")
+    assert data.can_cast_safely(to_dtype)
+
+    data = cudf.Series(
+        [float(np.finfo("float32").max) * 2, 1.0], dtype="float64"
+    )._column
+    to_dtype = np.dtype("float32")
+    assert not data.can_cast_safely(to_dtype)
+
+
+def test_can_cast_safely_mixed_kind():
+    data = cudf.Series([1, 2, 3], dtype="int32")._column
+    to_dtype = np.dtype("float32")
+    assert data.can_cast_safely(to_dtype)
+
+    # too big to fit into f32 exactly
+    data = cudf.Series([1, 2, 2**24 + 1], dtype="int32")._column
+    assert not data.can_cast_safely(to_dtype)
+
+    data = cudf.Series([1, 2, 3], dtype="uint32")._column
+    to_dtype = np.dtype("float32")
+    assert data.can_cast_safely(to_dtype)
+
+    # too big to fit into f32 exactly
+    data = cudf.Series([1, 2, 2**24 + 1], dtype="uint32")._column
+    assert not data.can_cast_safely(to_dtype)
+
+    to_dtype = np.dtype("float64")
+    assert data.can_cast_safely(to_dtype)
+
+    data = cudf.Series([1.0, 2.0, 3.0], dtype="float32")._column
+    to_dtype = np.dtype("int32")
+    assert data.can_cast_safely(to_dtype)
+
+    # not integer float
+    data = cudf.Series([1.0, 2.0, 3.5], dtype="float32")._column
+    assert not data.can_cast_safely(to_dtype)
+
+    data = cudf.Series([10.0, 11.0, 2000.0], dtype="float64")._column
+    assert data.can_cast_safely(to_dtype)
+
+    # float out of int range
+    data = cudf.Series([1.0, 2.0, 1.0 * (2**31)], dtype="float32")._column
+    assert not data.can_cast_safely(to_dtype)
+
+    # negative signed integers casting to unsigned integers
+    data = cudf.Series([-1, 0, 1], dtype="int32")._column
+    to_dtype = np.dtype("uint32")
+    assert not data.can_cast_safely(to_dtype)
+
+
+def test_can_cast_safely_has_nulls():
+    data = cudf.Series([1, 2, 3, None], dtype="float32")._column
+    to_dtype = np.dtype("int64")
+
+    assert data.can_cast_safely(to_dtype)
+
+    data = cudf.Series([1, 2, 3.1, None], dtype="float32")._column
+    assert not data.can_cast_safely(to_dtype)
 
 
 @pytest.mark.parametrize(
@@ -528,29 +620,6 @@ def test_build_series_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
     got_mask = gd_data._column._get_mask_as_column().values_host
 
     np.testing.assert_array_equal(expect_mask, got_mask)
-
-
-@pytest.mark.parametrize(
-    "alias,expect_dtype",
-    [
-        ("UInt8", "uint8"),
-        ("UInt16", "uint16"),
-        ("UInt32", "uint32"),
-        ("UInt64", "uint64"),
-        ("Int8", "int8"),
-        ("Int16", "int16"),
-        ("Int32", "int32"),
-        ("Int64", "int64"),
-        ("boolean", "bool"),
-        ("Float32", "float32"),
-        ("Float64", "float64"),
-    ],
-)
-def test_astype_with_aliases(alias, expect_dtype):
-    pd_data = pd.Series([1, 2, 0])
-    gd_data = cudf.Series.from_pandas(pd_data)
-
-    assert_eq(pd_data.astype(expect_dtype), gd_data.astype(alias))
 
 
 @pytest.mark.parametrize(
