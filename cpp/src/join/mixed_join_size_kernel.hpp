@@ -50,20 +50,20 @@ namespace detail {
  *
  * @tparam has_nulls Whether or not the inputs may contain nulls.
  *
- * @param[in] left_table The left table
- * @param[in] right_table The right table
- * @param[in] input_pairs Array of hash-value/row-index pairs for probing
- * @param[in] hash_indices Array of hash index pairs for efficient lookup
- * @param[in] equality_probe The equality comparator used when probing the hash table
- * @param[in] join_type The type of join to be performed
- * @param[in] hash_table_storage The hash table storage for probing operations
- * @param[in] device_expression_data Container of device data required to evaluate the desired
+ * @param left_table The left table
+ * @param right_table The right table
+ * @param input_pairs Array of hash-value/row-index pairs for probing
+ * @param hash_indices Array of hash index pairs for efficient lookup
+ * @param equality_probe The equality comparator used when probing the hash table
+ * @param join_type The type of join to be performed
+ * @param hash_table_storage The hash table storage for probing operations
+ * @param device_expression_data Container of device data required to evaluate the desired
  * expression
- * @param[in] swap_tables If true, the kernel was launched with one thread per right row and
+ * @param swap_tables If true, the kernel was launched with one thread per right row and
  * the kernel needs to internally loop over left rows. Otherwise, loop over right rows
- * @param[in] config Grid configuration for kernel launch
- * @param[in] shmem_size_per_block Shared memory size per block in bytes
- * @param[in] stream CUDA stream used for device memory operations and kernel launches
+ * @param config Grid configuration for kernel launch
+ * @param shmem_size_per_block Shared memory size per block in bytes
+ * @param stream CUDA stream used for device memory operations and kernel launches
  *
  * @return The resulting output size
  */
