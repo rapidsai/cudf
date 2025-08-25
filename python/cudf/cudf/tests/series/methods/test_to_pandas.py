@@ -13,6 +13,19 @@ import cudf
 from cudf.testing import assert_eq
 
 
+def test_to_pandas_index_true_timezone():
+    data = [
+        "2008-05-12",
+        "2008-12-12",
+        "2009-05-12",
+    ]
+    dti = cudf.DatetimeIndex(data).tz_localize("UTC")
+    ser = cudf.Series(dti, index=list("abc"))
+    result = ser.to_pandas(index=True)
+    expected = pd.Series(pd.to_datetime(data, utc=True), index=list("abc"))
+    assert_eq(result, expected)
+
+
 @pytest.mark.parametrize(
     "sr_data,expected_psr",
     [
@@ -133,6 +146,28 @@ def test_series_to_pandas_arrow_type_nullable_raises(scalar):
     ser = cudf.Series(pa_array)
     with pytest.raises(ValueError, match=".* cannot both be set"):
         ser.to_pandas(nullable=True, arrow_type=True)
+
+
+def test_to_pandas_nullable_integer():
+    gsr_not_null = cudf.Series([1, 2, 3])
+    gsr_has_null = cudf.Series([1, 2, None])
+
+    psr_not_null = pd.Series([1, 2, 3], dtype="int64")
+    psr_has_null = pd.Series([1, 2, None], dtype="Int64")
+
+    assert_eq(gsr_not_null.to_pandas(), psr_not_null)
+    assert_eq(gsr_has_null.to_pandas(nullable=True), psr_has_null)
+
+
+def test_to_pandas_nullable_bool():
+    gsr_not_null = cudf.Series([True, False, True])
+    gsr_has_null = cudf.Series([True, False, None])
+
+    psr_not_null = pd.Series([True, False, True], dtype="bool")
+    psr_has_null = pd.Series([True, False, None], dtype="boolean")
+
+    assert_eq(gsr_not_null.to_pandas(), psr_not_null)
+    assert_eq(gsr_has_null.to_pandas(nullable=True), psr_has_null)
 
 
 @pytest.mark.parametrize(

@@ -149,6 +149,27 @@ def test_series_iter_error():
         iter(gs._column)
 
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        lambda: cudf.Series([1, 2, 3, -12, 12, 44]),
+        lambda: cudf.Series([1, 2, 3, -12, 12, 44], dtype="str"),
+        lambda: cudf.DataFrame(
+            {"a": [1, 2, 3, -1234], "b": [0.1, 0.2222, 0.4, -3.14]}
+        ),
+    ],
+)
+@pytest.mark.parametrize("dtype", [None, "float", "int", "str"])
+def test_series_dataframe__array__(data, dtype):
+    gs = data()
+
+    with pytest.raises(TypeError):
+        gs.__array__(dtype=dtype)
+
+    with pytest.raises(TypeError):
+        gs.index.__array__(dtype=dtype)
+
+
 @pytest.mark.parametrize("data", [[], [None, None], ["a", None]])
 def test_series_size(data):
     psr = pd.Series(data)
