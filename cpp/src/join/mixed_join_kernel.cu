@@ -17,25 +17,22 @@
 #include "mixed_join_kernel.cuh"
 #include "mixed_join_kernel.hpp"
 
-namespace cudf {
-namespace detail {
+namespace cudf::detail {
 
 template void launch_mixed_join<false>(
   table_device_view left_table,
   table_device_view right_table,
+  join_kind join_type,
+  row_equality equality_probe,
+  cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
   cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
   cuda::std::pair<cudf::size_type, cudf::size_type> const* hash_indices,
-  row_equality const equality_probe,
-  join_kind join_type,
-  cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
   cudf::size_type* join_output_l,
   cudf::size_type* join_output_r,
   cudf::ast::detail::expression_device_view device_expression_data,
   bool swap_tables,
-  detail::grid_1d const config,
+  detail::grid_1d const& config,
   int64_t shmem_size_per_block,
   rmm::cuda_stream_view stream);
 
-}  // namespace detail
-
-}  // namespace cudf
+}  // namespace cudf::detail

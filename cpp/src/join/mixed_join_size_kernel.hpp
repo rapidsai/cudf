@@ -52,11 +52,11 @@ namespace detail {
  *
  * @param left_table The left table
  * @param right_table The right table
+ * @param join_type The type of join to be performed
+ * @param equality_probe The equality comparator used when probing the hash table
+ * @param hash_table_storage The hash table storage for probing operations
  * @param input_pairs Array of hash-value/row-index pairs for probing
  * @param hash_indices Array of hash index pairs for efficient lookup
- * @param equality_probe The equality comparator used when probing the hash table
- * @param join_type The type of join to be performed
- * @param hash_table_storage The hash table storage for probing operations
  * @param device_expression_data Container of device data required to evaluate the desired
  * expression
  * @param swap_tables If true, the kernel was launched with one thread per right row and
@@ -71,14 +71,14 @@ template <bool has_nulls>
 std::size_t launch_compute_mixed_join_output_size(
   table_device_view left_table,
   table_device_view right_table,
+  join_kind join_type,
+  row_equality equality_probe,
+  cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
   cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
   cuda::std::pair<cudf::size_type, cudf::size_type> const* hash_indices,
-  row_equality const equality_probe,
-  join_kind join_type,
-  cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
   ast::detail::expression_device_view device_expression_data,
   bool swap_tables,
-  detail::grid_1d const config,
+  detail::grid_1d const& config,
   int64_t shmem_size_per_block,
   rmm::cuda_stream_view stream);
 
