@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -18,8 +18,8 @@
 function(find_and_configure_jitify)
   rapids_cpm_find(
     jitify 2.0.0
-    GIT_REPOSITORY https://github.com/rapidsai/jitify.git
-    GIT_TAG jitify2
+    GIT_REPOSITORY https://github.com/NVIDIA/jitify.git
+    GIT_TAG 70783a3ad7b0cad2992a26a1ebf8fbe3d6b44e25 # jitify2 branch as of 5th Aug 2025
     GIT_SHALLOW TRUE
     DOWNLOAD_ONLY TRUE
   )

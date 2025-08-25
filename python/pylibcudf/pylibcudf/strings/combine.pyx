@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from pylibcudf.column cimport Column
@@ -10,6 +10,8 @@ from pylibcudf.libcudf.scalar.scalar_factories cimport (
 from pylibcudf.libcudf.strings cimport combine as cpp_combine
 from pylibcudf.scalar cimport Scalar
 from pylibcudf.table cimport Table
+from pylibcudf.utils cimport _get_stream
+from rmm.pylibrmm.stream cimport Stream
 
 from cython.operator import dereference
 from pylibcudf.libcudf.strings.combine import \
@@ -62,10 +64,12 @@ cpdef Column concatenate(
     cdef unique_ptr[column] c_result
     cdef const string_scalar* c_col_narep
     cdef const string_scalar* c_separator
+    cdef Stream stream
 
     if narep is None:
+        stream = _get_stream(None)
         narep = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode())
+            cpp_make_string_scalar("".encode(), stream.view())
         )
     cdef const string_scalar* c_narep = <const string_scalar*>(
         narep.c_obj.get()
@@ -73,8 +77,9 @@ cpdef Column concatenate(
 
     if ColumnOrScalar is Column:
         if col_narep is None:
+            stream = _get_stream(None)
             col_narep = Scalar.from_libcudf(
-                cpp_make_string_scalar("".encode())
+                cpp_make_string_scalar("".encode(), stream.view())
             )
         c_col_narep = <const string_scalar*>(
             col_narep.c_obj.get()
@@ -228,3 +233,6 @@ cpdef Column join_list_elements(
     else:
         raise ValueError("separator must be a Column or a Scalar")
     return Column.from_libcudf(move(c_result))
+
+OutputIfEmptyList.__str__ = OutputIfEmptyList.__repr__
+SeparatorOnNulls.__str__ = SeparatorOnNulls.__repr__

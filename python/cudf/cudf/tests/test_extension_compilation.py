@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 import operator
 
 import cupy as cp
@@ -8,10 +8,10 @@ from numba import cuda, types
 from numba.cuda import compile_ptx
 from numba.np.numpy_support import from_dtype
 
+import cudf
 from cudf import NA
 from cudf.core.udf.api import Masked
 from cudf.core.udf.masked_typing import MaskedType
-from cudf.testing._utils import parametrize_numeric_dtypes_pairwise
 from cudf.utils._numba import _CUDFNumbaConfig
 
 arith_ops = (
@@ -106,7 +106,7 @@ def test_execute_masked_binary(op, ty):
         if u != r1.value:
             err[0] = 3
 
-    err = cp.asarray([0], dtype="int8")
+    err = cudf.Series([0], dtype="int8")
     with _CUDFNumbaConfig():
         test_kernel[1, 1](1, 2, err)
     assert err[0] == 0
@@ -165,20 +165,21 @@ def test_compile_arith_na_vs_masked(op, ty):
 
 
 @pytest.mark.parametrize("op", ops)
-@parametrize_numeric_dtypes_pairwise
 @pytest.mark.parametrize(
     "masked",
     ((False, True), (True, False), (True, True)),
     ids=("um", "mu", "mm"),
 )
-def test_compile_arith_masked_ops(op, left_dtype, right_dtype, masked):
+def test_compile_arith_masked_ops(
+    op, numeric_types_as_str, numeric_types_as_str2, masked
+):
     def func(x, y):
         return op(x, y)
 
     cc = (7, 5)
 
-    ty1 = from_dtype(np.dtype(left_dtype))
-    ty2 = from_dtype(np.dtype(right_dtype))
+    ty1 = from_dtype(np.dtype(numeric_types_as_str))
+    ty2 = from_dtype(np.dtype(numeric_types_as_str2))
 
     if masked[0]:
         ty1 = MaskedType(ty1)
@@ -214,7 +215,7 @@ def test_is_na(fn):
         if not invalid_is_na:
             err[0] = 2
 
-    err = cp.asarray([0], dtype="int8")
+    err = cudf.Series([0], dtype="int8")
     with _CUDFNumbaConfig():
         test_kernel[1, 1](err)
     assert err[0] == 0
@@ -304,7 +305,7 @@ def test_na_masked_comparisons(fn, ty):
         if invalid_cmp_na:
             err[0] = 2
 
-    err = cp.asarray([0], dtype="int8")
+    err = cudf.Series(cp.asarray([0], dtype="int8"))
     with _CUDFNumbaConfig():
         test_kernel[1, 1](err)
     assert err[0] == 0

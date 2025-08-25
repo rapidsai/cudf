@@ -7,7 +7,7 @@ from __future__ import annotations
 import operator
 from collections import defaultdict
 from functools import reduce
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, TypeAlias, TypedDict
 
 from cudf_polars.dsl.ir import (
     IR,
@@ -26,14 +26,34 @@ from cudf_polars.experimental.io import Scan, SplitScan
 
 if TYPE_CHECKING:
     from collections.abc import Callable, MutableMapping, Sequence
-    from typing import Any
 
     from typing_extensions import Self
 
     from cudf_polars.containers import DataFrame
     from cudf_polars.experimental.base import PartitionInfo
-    from cudf_polars.experimental.dispatch import LowerIRTransformer
-    from cudf_polars.typing import Schema
+    from cudf_polars.typing import GenericTransformer, Schema
+
+
+class State(TypedDict):
+    """
+    State for fusing IR sub-graphs.
+
+    Parameters
+    ----------
+    unique_subplans
+        Set of unique sub-plans in the IR graph.
+    partition_info
+        Partition info of the IR graph.
+    """
+
+    unique_subplans: set[IR]
+    partition_info: MutableMapping[IR, PartitionInfo]
+
+
+IRFusor: TypeAlias = (
+    "GenericTransformer[IR, tuple[IR, MutableMapping[IR, PartitionInfo]], State]"
+)
+"""Protocol for fusing IR nodes."""
 
 
 class Fused(IR):
@@ -180,9 +200,7 @@ def _maybe_make_fused(
     return new_node
 
 
-def _fuse_ir_node(
-    ir: IR, rec: LowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+def _fuse_ir_node(ir: IR, rec: IRFusor) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     partition_info: MutableMapping[IR, PartitionInfo] = {}
     children = ()
     if ir.children:
@@ -244,6 +262,9 @@ def fuse_ir_graph(
         for child in node.children:
             parents[child] += 1
     unique_subplans = {node for node, count in parents.items() if count == 1}
-    state = {"unique_subplans": unique_subplans, "partition_info": partition_info}
-    mapper = CachingVisitor(_fuse_ir_node, state=state)
+    state: State = {
+        "unique_subplans": unique_subplans,
+        "partition_info": partition_info,
+    }
+    mapper: IRFusor = CachingVisitor(_fuse_ir_node, state=state)
     return mapper(ir)

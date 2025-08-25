@@ -5,78 +5,42 @@
 
 from __future__ import annotations
 
-import pyarrow as pa
-
-import polars as pl
-
 import pylibcudf as plc
 from pylibcudf.traits import (
     is_floating_point,
     is_integral_not_bool,
+    is_nested,
     is_numeric_not_bool,
 )
 
 __all__ = [
-    "TO_ARROW_COMPAT_LEVEL",
     "can_cast",
-    "downcast_arrow_lists",
     "is_order_preserving_cast",
 ]
-
-TO_ARROW_COMPAT_LEVEL = (
-    pl.CompatLevel.newest()
-    if hasattr(pa.lib, "Type_STRING_VIEW")
-    else pl.CompatLevel.oldest()
-)
-
-
-def downcast_arrow_lists(typ: pa.DataType) -> pa.DataType:
-    """
-    Sanitize an arrow datatype from polars.
-
-    Parameters
-    ----------
-    typ
-        Arrow type to sanitize
-
-    Returns
-    -------
-    Sanitized arrow type
-
-    Notes
-    -----
-    As well as arrow ``ListType``s, polars can produce
-    ``LargeListType``s and ``FixedSizeListType``s, these are not
-    currently handled by libcudf, so we attempt to cast them all into
-    normal ``ListType``s on the arrow side before consuming the arrow
-    data.
-    """
-    if isinstance(typ, pa.LargeListType):
-        return pa.list_(downcast_arrow_lists(typ.value_type))
-    # We don't have to worry about diving into struct types for now
-    # since those are always NotImplemented before we get here.
-    assert not isinstance(typ, pa.StructType)
-    return typ
 
 
 def can_cast(from_: plc.DataType, to: plc.DataType) -> bool:
     """
-    Can we cast (via :func:`~.pylibcudf.unary.cast`) between two datatypes.
+    Determine whether a cast between two datatypes is supported by cudf-polars.
 
     Parameters
     ----------
-    from_
+    from_ : pylibcudf.DataType
         Source datatype
-    to
+
+    to : pylibcudf.DataType
         Target datatype
 
     Returns
     -------
-    True if casting is supported, False otherwise
+    bool
+        True if the cast is supported, False otherwise.
     """
     to_is_empty = to.id() == plc.TypeId.EMPTY
     from_is_empty = from_.id() == plc.TypeId.EMPTY
     has_empty = to_is_empty or from_is_empty
+    if is_nested(from_) and is_nested(to):
+        return False
     return (
         (
             from_ == to
@@ -98,6 +62,17 @@ def can_cast(from_: plc.DataType, to: plc.DataType) -> bool:
             to.id() == plc.TypeId.STRING
             and not from_is_empty
             and is_numeric_not_bool(from_)
+        )
+        or (
+            plc.traits.is_integral_not_bool(from_)
+            and from_.id() != plc.TypeId.UINT64  # not overflow safe
+            and not to_is_empty
+            and plc.traits.is_timestamp(to)
+        )
+        or (
+            plc.traits.is_integral_not_bool(to)
+            and not to_is_empty
+            and plc.traits.is_timestamp(from_)
         )
     )
 

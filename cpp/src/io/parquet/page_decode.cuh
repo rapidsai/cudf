@@ -88,7 +88,7 @@ struct page_state_s {
 };
 
 // buffers only used in the decode kernel.  separated from page_state_s to keep
-// shared memory usage in other kernels (eg, gpuComputePageSizes) down.
+// shared memory usage in other kernels (eg, compute_page_sizes_kernel) down.
 template <int _nz_buf_size, int _dict_buf_size, int _str_buf_size>
 struct page_state_buffers_s {
   static constexpr int nz_buf_size   = _nz_buf_size;
@@ -239,7 +239,7 @@ enum class is_calc_sizes_only : bool { NO = false, YES = true };
  * @param[out] sb Page state buffer output
  * @param[in] target_pos Target index position in dict_idx buffer (may exceed this value by up to
  * 31)
- * @param[in] t Warp thread ID (0..31)
+ * @param[in] warp Warp cooperative group
  * @tparam sizes_only Indicates if only sizes are to be calculated
  * @tparam state_buf Typename of the `state_buf` (usually inferred)
  *
@@ -249,23 +249,25 @@ enum class is_calc_sizes_only : bool { NO = false, YES = true };
  * additional values.
  */
 template <is_calc_sizes_only sizes_only, typename state_buf>
-__device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(page_state_s* s,
-                                                                [[maybe_unused]] state_buf* sb,
-                                                                int target_pos,
-                                                                int t)
+__device__ cuda::std::pair<int, int> decode_dictionary_indices(
+  page_state_s* s,
+  [[maybe_unused]] state_buf* sb,
+  int target_pos,
+  cg::thread_block_tile<cudf::detail::warp_size, cg::thread_block> const& warp)
 {
   uint8_t const* end = s->data_end;
   int dict_bits      = s->dict_bits;
   int pos            = s->dict_pos;
   int str_len        = 0;
+  int const t        = warp.thread_rank();
 
-  // NOTE: racecheck warns about a RAW involving s->dict_pos, which is likely a false positive
-  // because the only path that does not include a sync will lead to s->dict_pos being overwritten
-  // with the same value
+  // NOTE: racecheck warns about a RAW involving s->dict_pos, which is likely a false
+  // positive because the only path that does not include a sync will lead to
+  // s->dict_pos being overwritten with the same value
 
   while (pos < target_pos) {
     int is_literal, batch_len;
-    if (!t) {
+    if (t == 0) {
       uint32_t run       = s->dict_run;
       uint8_t const* cur = s->data_start;
       if (run <= 1) {
@@ -303,7 +305,7 @@ __device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(page_state_s* s,
       is_literal    = run & 1;
       __threadfence_block();
     }
-    __syncwarp();
+    warp.sync();
     is_literal = shuffle(is_literal);
     batch_len  = shuffle(batch_len);
 
@@ -372,7 +374,7 @@ __device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(page_state_s* s,
  * @return The new output position
  */
 template <typename state_buf>
-inline __device__ int gpuDecodeRleBooleans(
+inline __device__ int decode_rle_booleans(
   page_state_s* s,
   state_buf* sb,
   int target_pos,
@@ -380,6 +382,7 @@ inline __device__ int gpuDecodeRleBooleans(
 {
   uint8_t const* end = s->data_end;
   int64_t pos        = s->dict_pos;
+  int const t        = warp.thread_rank();
 
   // NOTE: racecheck warns about a RAW involving s->dict_pos, which is likely a false positive
   // because the only path that does not include a sync will lead to s->dict_pos being overwritten
@@ -387,7 +390,7 @@ inline __device__ int gpuDecodeRleBooleans(
 
   while (pos < target_pos) {
     int is_literal, batch_len;
-    if (warp.thread_rank() == 0) {
+    if (t == 0) {
       uint32_t run       = s->dict_run;
       uint8_t const* cur = s->data_start;
       if (run <= 1) {
@@ -420,16 +423,16 @@ inline __device__ int gpuDecodeRleBooleans(
     is_literal = shuffle(is_literal);
     batch_len  = shuffle(batch_len);
 
-    if (warp.thread_rank() < batch_len) {
+    if (t < batch_len) {
       int dict_idx;
       if (is_literal) {
-        int32_t ofs      = warp.thread_rank() - ((batch_len + 7) & ~7);
+        int32_t ofs      = t - ((batch_len + 7) & ~7);
         uint8_t const* p = s->data_start + (ofs >> 3);
         dict_idx         = (p < end) ? (p[0] >> (ofs & 7u)) & 1 : 0;
       } else {
         dict_idx = s->dict_val;
       }
-      sb->dict_idx[rolling_index<state_buf::dict_buf_size>(pos + warp.thread_rank())] = dict_idx;
+      sb->dict_idx[rolling_index<state_buf::dict_buf_size>(pos + t)] = dict_idx;
     }
     pos += batch_len;
   }
@@ -451,10 +454,10 @@ inline __device__ int gpuDecodeRleBooleans(
  * @return Total length of strings processed
  */
 template <is_calc_sizes_only sizes_only, typename state_buf, typename thread_group>
-__device__ size_type gpuInitStringDescriptors(page_state_s* s,
-                                              [[maybe_unused]] state_buf* sb,
-                                              int target_pos,
-                                              thread_group const& group)
+__device__ size_type initialize_string_descriptors(page_state_s* s,
+                                                   [[maybe_unused]] state_buf* sb,
+                                                   int target_pos,
+                                                   thread_group const& group)
 {
   int const t         = group.thread_rank();
   int const dict_size = s->dict_size;
@@ -627,8 +630,14 @@ inline __device__ void store_validity(int valid_map_offset,
     if (relevant_mask == ~0) {
       valid_map[word_offset] = valid_mask;
     } else {
-      atomicAnd(valid_map + word_offset, ~(relevant_mask << bit_offset));
-      atomicOr(valid_map + word_offset, (valid_mask & relevant_mask) << bit_offset);
+      auto validity_map_word_ref =
+        cuda::atomic_ref<bitmask_type, cuda::thread_scope_device>(valid_map[word_offset]);
+      // It's okay to fetch_and and fetch_or in separate transactions here as each thread modifies a
+      // different set of bits within the word
+      validity_map_word_ref.fetch_and(~(relevant_mask << bit_offset),
+                                      cuda::std::memory_order_relaxed);
+      validity_map_word_ref.fetch_or((valid_mask & relevant_mask) << bit_offset,
+                                     cuda::std::memory_order_relaxed);
     }
   }
   // we're going to spill over into the next word.
@@ -642,14 +651,23 @@ inline __device__ void store_validity(int valid_map_offset,
     // first word. strip bits_left bits off the beginning and store that
     uint32_t relevant_mask = ((1 << bits_left) - 1);
     uint32_t mask_word0    = valid_mask & relevant_mask;
-    atomicAnd(valid_map + word_offset, ~(relevant_mask << bit_offset));
-    atomicOr(valid_map + word_offset, mask_word0 << bit_offset);
+    auto validity_map_first_word_ref =
+      cuda::atomic_ref<bitmask_type, cuda::thread_scope_device>(valid_map[word_offset]);
+    // It's okay to fetch_and and fetch_or in separate transactions here as each thread modifies a
+    // different set of bits within the word
+    validity_map_first_word_ref.fetch_and(~(relevant_mask << bit_offset),
+                                          cuda::std::memory_order_relaxed);
+    validity_map_first_word_ref.fetch_or(mask_word0 << bit_offset, cuda::std::memory_order_relaxed);
 
     // second word. strip the remainder of the bits off the end and store that
+    auto validity_map_second_word_ref =
+      cuda::atomic_ref<bitmask_type, cuda::thread_scope_device>(valid_map[word_offset + 1]);
     relevant_mask       = ((1 << (value_count - bits_left)) - 1);
     uint32_t mask_word1 = valid_mask & (relevant_mask << bits_left);
-    atomicAnd(valid_map + word_offset + 1, ~(relevant_mask));
-    atomicOr(valid_map + word_offset + 1, mask_word1 >> bits_left);
+    // It's okay to fetch_and and fetch_or in separate transactions here as each thread modifies a
+    // different set of bits within the word
+    validity_map_second_word_ref.fetch_and(~(relevant_mask), cuda::std::memory_order_relaxed);
+    validity_map_second_word_ref.fetch_or(mask_word1 >> bits_left, cuda::std::memory_order_relaxed);
   }
 }
 
@@ -709,7 +727,7 @@ inline __device__ void get_nesting_bounds(int& start_depth,
  * This function iterates through the nesting levels of a column and updates the offsets for a list
  * column. The offset for the current nesting level equals the length of the next nesting level
  *
- * @tparam decode_block_size The size of the block used for decoding.
+ * @tparam block_size The size of the block used for decoding.
  * @param[in,out] state Pointer to page state containing column and nesting information.
  */
 template <int block_size>
@@ -720,7 +738,7 @@ static __device__ void update_list_offsets_for_pruned_pages(page_state_s* state)
   auto const tid               = cg::this_thread_block().thread_rank();
 
   // Iterate by depth and store offset(s) to the list location(s)
-  for (int depth = tid; depth <= max_depth; depth += block_size) {
+  for (int depth = tid; depth < max_depth; depth += block_size) {
     auto& nesting_info = state->nesting_info[depth];
     // If we're -not- at a leaf column and we're within nesting/row bounds and we have a valid
     // data_out pointer, it implies this is a list column, so emit an offset for the current nesting
@@ -1061,14 +1079,14 @@ inline __device__ uint32_t InitLevelSection(page_state_s* s,
 }
 
 /**
- * @brief Functor for setupLocalPageInfo that always returns true.
+ * @brief Functor for setup_local_page_info that always returns true.
  */
 struct all_types_filter {
   __device__ inline bool operator()(PageInfo const& page) { return true; }
 };
 
 /**
- * @brief Functor for setupLocalPageInfo that takes a mask of allowed types.
+ * @brief Functor for setup_local_page_info that takes a mask of allowed types.
  */
 struct mask_filter {
   uint32_t mask;
@@ -1099,17 +1117,17 @@ enum class page_processing_stage {
  * @param[in] filter Filtering function used to decide which pages to operate on
  * @param[in] stage What stage of the decoding process is this being called from
  * @tparam Filter Function that takes a PageInfo reference and returns true if the given page should
- * be operated on Currently only used by gpuComputePageSizes step)
+ * be operated on Currently only used by compute_page_sizes_kernel step)
  * @return True if this page should be processed further
  */
 template <typename Filter>
-inline __device__ bool setupLocalPageInfo(page_state_s* const s,
-                                          PageInfo const* p,
-                                          device_span<ColumnChunkDesc const> chunks,
-                                          size_t min_row,
-                                          size_t num_rows,
-                                          Filter filter,
-                                          page_processing_stage stage)
+inline __device__ bool setup_local_page_info(page_state_s* const s,
+                                             PageInfo const* p,
+                                             device_span<ColumnChunkDesc const> chunks,
+                                             size_t min_row,
+                                             size_t num_rows,
+                                             Filter filter,
+                                             page_processing_stage stage)
 {
   int t = threadIdx.x;
 
@@ -1486,6 +1504,115 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
   __syncthreads();
 
   return true;
+}
+
+/**
+ * @brief Zero-fill null positions in output data using parallel per-validity-block processing
+ *
+ * This function processes the validity bitmap and zero-fills all positions in the output
+ * data that correspond to null values. It uses a parallel approach where each thread
+ * handles one 32-bit validity block at a time, looping only over the zero bits (null positions)
+ * within that block.
+ *
+ * @tparam block_size CUDA block size for the kernel
+ * @param s Page state containing all necessary information
+ * @param dtype_len Size of each data element in bytes
+ * @param valid_map_offset Starting bit offset in the validity map
+ * @param num_values Number of values to process
+ * @param t Thread index within the block
+ */
+template <int block_size>
+__device__ void zero_fill_null_positions_shared(
+  page_state_s* s, uint32_t dtype_len, int valid_map_offset, int num_values, int t)
+{
+  auto const block = cg::this_thread_block();
+  auto const warp  = cg::tiled_partition<cudf::detail::warp_size>(block);
+
+  // nesting level that is storing actual leaf values
+  int const leaf_level_index = s->col.max_nesting_depth - 1;
+  auto const& ni             = s->nesting_info[leaf_level_index];
+
+  // Check if we have nulls to fill
+  if ((ni.valid_map == nullptr) || (num_values == 0)) { return; }
+
+  auto const data_out = ni.data_out;
+
+  constexpr int bits_per_mask = cudf::detail::size_in_bits<bitmask_type>();
+  using cudf::detail::warp_size;
+  constexpr int num_warps = block_size / warp_size;
+
+  // Calculate the range of validity blocks we need to process
+  int const start_bit_idx = valid_map_offset;
+  int const end_bit_idx   = valid_map_offset + num_values;
+  int const start_block   = start_bit_idx / bits_per_mask;
+  int const end_block     = cudf::util::div_rounding_up_safe(end_bit_idx, bits_per_mask);
+  int const num_blocks    = end_block - start_block;
+
+  int const warp_id = t / warp_size;
+  int const lane_id = warp.thread_rank();
+
+  // Helper lambda for warp-parallel bit processing
+  auto process_block_parallel = [&](int block_idx) {
+    static_assert(bits_per_mask == warp_size, "if 64bit mask, use 2 warps per mask");
+
+    cudf::bitmask_type validity_word = ni.valid_map[block_idx];
+    int const block_start_bit        = block_idx * bits_per_mask;
+
+    // Each thread in the warp processes one bit
+    int const bit_idx = block_start_bit + lane_id;
+    int const dst_pos = bit_idx - valid_map_offset;
+
+    // Check if this bit is within our range
+    bool in_range = (bit_idx >= start_bit_idx && bit_idx < end_bit_idx);
+
+    // Check if this bit is null (0 in validity mask)
+    bool const is_null = not cudf::bit_is_set(&validity_word, lane_id);
+
+    if (in_range && is_null) {
+      void* const dst = data_out + (static_cast<size_t>(dst_pos) * dtype_len);
+      cuda::std::memset(dst, 0, dtype_len);
+    }
+  };
+
+  // Helper lambda for sequential bit processing (fallback for remaining blocks)
+  auto process_block_sequential = [&](int block_idx) {
+    cudf::bitmask_type validity_word  = ni.valid_map[block_idx];
+    cudf::bitmask_type null_positions = ~validity_word;
+    int const dst_pos_first_bit       = block_idx * bits_per_mask - valid_map_offset;
+
+    while (null_positions != 0) {
+      int const bit_pos = __ffs(null_positions) - 1;
+      int const dst_pos = dst_pos_first_bit + bit_pos;
+
+      void* const dst = data_out + (static_cast<size_t>(dst_pos) * dtype_len);
+      cuda::std::memset(dst, 0, dtype_len);
+
+      null_positions &= (null_positions - 1);
+    }
+  };
+
+  // Phase 1: Assign specific blocks to warps for warp-parallel processing
+  if (warp_id == 0) {
+    // Warp 0: Process first block
+    process_block_parallel(start_block);
+  } else if (warp_id == 1 && num_blocks > 1) {
+    // Warp 1: Process last block (if different from first)
+    process_block_parallel(end_block - 1);
+  } else if (warp_id >= 2) {
+    // Warps 2+: Process additional blocks from the beginning
+    int const block_idx = start_block + (warp_id - 1);
+    if (block_idx < (end_block - 1)) { process_block_parallel(block_idx); }
+  }
+
+  // Phase 2: All warps cooperatively process remaining middle blocks
+  auto const last_block_processed = static_cast<int>(num_blocks > 1);
+  int const remaining_start       = start_block + num_warps - last_block_processed;
+  int const remaining_end         = end_block - last_block_processed;
+  for (int block_idx = remaining_start + t; block_idx < remaining_end; block_idx += block_size) {
+    process_block_sequential(block_idx);
+  }
+
+  __syncthreads();
 }
 
 }  // namespace cudf::io::parquet::detail

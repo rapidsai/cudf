@@ -39,14 +39,16 @@ batched_args create_batched_nvcomp_args(device_span<device_span<uint8_t const> c
   // Prepare the input vectors
   auto ins_it = thrust::make_zip_iterator(input_data_ptrs.begin(), input_data_sizes.begin());
   thrust::transform(
-    rmm::exec_policy(stream), inputs.begin(), inputs.end(), ins_it, [] __device__(auto const& in) {
-      return thrust::make_tuple(in.data(), in.size());
-    });
+    rmm::exec_policy_nosync(stream),
+    inputs.begin(),
+    inputs.end(),
+    ins_it,
+    [] __device__(auto const& in) { return thrust::make_tuple(in.data(), in.size()); });
 
   // Prepare the output vectors
   auto outs_it = thrust::make_zip_iterator(output_data_ptrs.begin(), output_data_sizes.begin());
   thrust::transform(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     outputs.begin(),
     outputs.end(),
     outs_it,
@@ -58,58 +60,73 @@ batched_args create_batched_nvcomp_args(device_span<device_span<uint8_t const> c
           std::move(output_data_sizes)};
 }
 
+std::pair<rmm::device_uvector<void const*>, rmm::device_uvector<size_t>> create_get_temp_size_args(
+  device_span<device_span<uint8_t const> const> inputs, rmm::cuda_stream_view stream)
+{
+  rmm::device_uvector<void const*> input_data_ptrs(inputs.size(), stream);
+  rmm::device_uvector<size_t> input_data_sizes(inputs.size(), stream);
+
+  auto ins_it = thrust::make_zip_iterator(input_data_ptrs.begin(), input_data_sizes.begin());
+  thrust::transform(
+    rmm::exec_policy_nosync(stream),
+    inputs.begin(),
+    inputs.end(),
+    ins_it,
+    [] __device__(auto const& in) { return thrust::make_tuple(in.data(), in.size()); });
+
+  return {std::move(input_data_ptrs), std::move(input_data_sizes)};
+}
+
 void update_compression_results(device_span<nvcompStatus_t const> nvcomp_stats,
                                 device_span<size_t const> actual_output_sizes,
-                                device_span<compression_result> results,
+                                device_span<codec_exec_result> results,
                                 rmm::cuda_stream_view stream)
 {
   thrust::transform_if(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     nvcomp_stats.begin(),
     nvcomp_stats.end(),
     actual_output_sizes.begin(),
     results.begin(),
     results.begin(),
     [] __device__(auto const& nvcomp_status, auto const& size) {
-      return compression_result{size,
-                                nvcomp_status == nvcompStatus_t::nvcompSuccess
-                                  ? compression_status::SUCCESS
-                                  : compression_status::FAILURE};
+      return codec_exec_result{size,
+                               nvcomp_status == nvcompStatus_t::nvcompSuccess
+                                 ? codec_status::SUCCESS
+                                 : codec_status::FAILURE};
     },
-    [] __device__(auto const& cudf_status) {
-      return cudf_status.status != compression_status::SKIPPED;
-    });
+    [] __device__(auto const& cudf_status) { return cudf_status.status != codec_status::SKIPPED; });
 }
 
 void update_compression_results(device_span<size_t const> actual_output_sizes,
-                                device_span<compression_result> results,
+                                device_span<codec_exec_result> results,
                                 rmm::cuda_stream_view stream)
 {
   thrust::transform_if(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     actual_output_sizes.begin(),
     actual_output_sizes.end(),
     results.begin(),
     results.begin(),
-    [] __device__(auto const& size) { return compression_result{size}; },
-    [] __device__(auto const& results) { return results.status != compression_status::SKIPPED; });
+    [] __device__(auto const& size) { return codec_exec_result{size}; },
+    [] __device__(auto const& results) { return results.status != codec_status::SKIPPED; });
 }
 
 void skip_unsupported_inputs(device_span<size_t> input_sizes,
-                             device_span<compression_result> results,
+                             device_span<codec_exec_result> results,
                              std::optional<size_t> max_valid_input_size,
                              rmm::cuda_stream_view stream)
 {
   if (max_valid_input_size.has_value()) {
     auto status_size_it = thrust::make_zip_iterator(input_sizes.begin(), results.begin());
     thrust::transform_if(
-      rmm::exec_policy(stream),
+      rmm::exec_policy_nosync(stream),
       results.begin(),
       results.end(),
       input_sizes.begin(),
       status_size_it,
       [] __device__(auto const& status) {
-        return thrust::pair{0, compression_result{0, compression_status::SKIPPED}};
+        return thrust::pair{0, codec_exec_result{0, codec_status::SKIPPED}};
       },
       [max_size = max_valid_input_size.value()] __device__(size_t input_size) {
         return input_size > max_size;

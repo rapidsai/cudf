@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,16 +48,35 @@ using shmem_extent_t =
   cuco::extent<cudf::size_type,
                static_cast<cudf::size_type>(static_cast<double>(GROUPBY_SHM_MAX_ELEMENTS) * 1.43)>;
 
-/// Number of buckets needed by each shared memory hash set
-CUDF_HOST_DEVICE auto constexpr bucket_extent =
-  cuco::make_bucket_extent<GROUPBY_CG_SIZE, GROUPBY_BUCKET_SIZE>(shmem_extent_t{});
+/// Number of slots needed by each shared memory hash set
+CUDF_HOST_DEVICE auto constexpr valid_extent =
+  cuco::make_valid_extent<GROUPBY_CG_SIZE, GROUPBY_BUCKET_SIZE>(shmem_extent_t{});
 
 using row_hash_t =
   cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
                                                    cudf::nullate::DYNAMIC>;
 
+/// Adapter to cudf row hasher with caching support.
+class row_hasher_with_cache_t {
+  row_hash_t hasher;
+  hash_value_type const* values;
+
+ public:
+  row_hasher_with_cache_t(row_hash_t const& hasher,
+                          hash_value_type const* values = nullptr) noexcept
+    : hasher(hasher), values(values)
+  {
+  }
+
+  __device__ hash_value_type operator()(size_type const idx) const noexcept
+  {
+    if (values) { return values[idx]; }
+    return hasher(idx);
+  }
+};
+
 /// Probing scheme type used by groupby hash table
-using probing_scheme_t = cuco::linear_probing<GROUPBY_CG_SIZE, row_hash_t>;
+using probing_scheme_t = cuco::linear_probing<GROUPBY_CG_SIZE, row_hasher_with_cache_t>;
 
 using row_comparator_t = cudf::experimental::row::equality::device_row_comparator<
   false,
@@ -86,20 +105,24 @@ using nullable_global_set_t = cuco::static_set<cudf::size_type,
                                                cuco::storage<GROUPBY_BUCKET_SIZE>>;
 
 template <typename Op>
-using hash_set_ref_t = cuco::static_set_ref<
-  cudf::size_type,
-  cuda::thread_scope_device,
-  row_comparator_t,
-  probing_scheme_t,
-  cuco::bucket_storage_ref<cudf::size_type, GROUPBY_BUCKET_SIZE, cuco::bucket_extent<int64_t>>,
-  Op>;
+using hash_set_ref_t =
+  cuco::static_set_ref<cudf::size_type,
+                       cuda::thread_scope_device,
+                       row_comparator_t,
+                       probing_scheme_t,
+                       cuco::bucket_storage_ref<cudf::size_type,
+                                                GROUPBY_BUCKET_SIZE,
+                                                cuco::valid_extent<int64_t, cuco::dynamic_extent>>,
+                       Op>;
 
 template <typename Op>
-using nullable_hash_set_ref_t = cuco::static_set_ref<
-  cudf::size_type,
-  cuda::thread_scope_device,
-  nullable_row_comparator_t,
-  probing_scheme_t,
-  cuco::bucket_storage_ref<cudf::size_type, GROUPBY_BUCKET_SIZE, cuco::bucket_extent<int64_t>>,
-  Op>;
+using nullable_hash_set_ref_t =
+  cuco::static_set_ref<cudf::size_type,
+                       cuda::thread_scope_device,
+                       nullable_row_comparator_t,
+                       probing_scheme_t,
+                       cuco::bucket_storage_ref<cudf::size_type,
+                                                GROUPBY_BUCKET_SIZE,
+                                                cuco::valid_extent<int64_t, cuco::dynamic_extent>>,
+                       Op>;
 }  // namespace cudf::groupby::detail::hash

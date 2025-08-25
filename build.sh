@@ -15,7 +15,7 @@ ARGS=$*
 
 # NOTE: ensure all dir changes are relative to the location of this
 # script, and that this script resides in the repo dir!
-REPODIR=$(cd $(dirname $0); pwd)
+REPODIR=$(cd "$(dirname "$0")"; pwd)
 
 VALIDARGS="clean libcudf pylibcudf cudf cudf_polars cudfjar dask_cudf benchmarks tests libcudf_kafka cudf_kafka custreamz -v -g -n --pydevelop -l --allgpuarch --disable_nvtx --opensource_nvcomp  --show_depr_warn --ptds -h --build_metrics --incl_cache_stats --disable_large_strings"
 HELP="$0 [clean] [libcudf] [pylibcudf] [cudf] [cudf_polars] [cudfjar] [dask_cudf] [benchmarks] [tests] [libcudf_kafka] [cudf_kafka] [custreamz] [-v] [-g] [-n] [-h] [--cmake-args=\\\"<args>\\\"]
@@ -73,8 +73,7 @@ BUILD_PER_THREAD_DEFAULT_STREAM=OFF
 BUILD_REPORT_METRICS=OFF
 BUILD_REPORT_INCL_CACHE_STATS=OFF
 BUILD_DISABLE_LARGE_STRINGS=OFF
-USE_PROPRIETARY_NVCOMP=ON
-PYTHON_ARGS_FOR_INSTALL="-m pip install --no-build-isolation --no-deps --config-settings rapidsai.disable-cuda=true"
+PYTHON_ARGS_FOR_INSTALL=("-m" "pip" "install" "--no-build-isolation" "--no-deps" "--config-settings" "rapidsai.disable-cuda=true")
 
 # Set defaults for vars that may not have been defined externally
 #  FIXME: if INSTALL_PREFIX is not set, check PREFIX, then check
@@ -83,37 +82,38 @@ INSTALL_PREFIX=${INSTALL_PREFIX:=${PREFIX:=${CONDA_PREFIX}}}
 PARALLEL_LEVEL=${PARALLEL_LEVEL:=$(nproc)}
 
 function hasArg {
-    (( ${NUMARGS} != 0 )) && (echo " ${ARGS} " | grep -q " $1 ")
+    (( NUMARGS != 0 )) && (echo " ${ARGS} " | grep -q " $1 ")
 }
 
 function cmakeArgs {
     # Check for multiple cmake args options
-    if [[ $(echo $ARGS | { grep -Eo "\-\-cmake\-args" || true; } | wc -l ) -gt 1 ]]; then
+    if [[ $(echo "$ARGS" | { grep -Eo "\-\-cmake\-args" || true; } | wc -l ) -gt 1 ]]; then
         echo "Multiple --cmake-args options were provided, please provide only one: ${ARGS}"
         exit 1
     fi
 
     # Check for cmake args option
-    if [[ -n $(echo $ARGS | { grep -E "\-\-cmake\-args" || true; } ) ]]; then
+    if [[ -n $(echo "$ARGS" | { grep -E "\-\-cmake\-args" || true; } ) ]]; then
         # There are possible weird edge cases that may cause this regex filter to output nothing and fail silently
         # the true pipe will catch any weird edge cases that may happen and will cause the program to fall back
         # on the invalid option error
-        EXTRA_CMAKE_ARGS=$(echo $ARGS | { grep -Eo "\-\-cmake\-args=\".+\"" || true; })
+        EXTRA_CMAKE_ARGS=$(echo "$ARGS" | { grep -Eo "\-\-cmake\-args=\".+\"" || true; })
         if [[ -n ${EXTRA_CMAKE_ARGS} ]]; then
             # Remove the full  EXTRA_CMAKE_ARGS argument from list of args so that it passes validArgs function
             ARGS=${ARGS//$EXTRA_CMAKE_ARGS/}
             # Filter the full argument down to just the extra string that will be added to cmake call
-            EXTRA_CMAKE_ARGS=$(echo $EXTRA_CMAKE_ARGS | grep -Eo "\".+\"" | sed -e 's/^"//' -e 's/"$//')
+            EXTRA_CMAKE_ARGS=$(echo "$EXTRA_CMAKE_ARGS" | grep -Eo "\".+\"" | sed -e 's/^"//' -e 's/"$//')
         fi
     fi
+    read -ra EXTRA_CMAKE_ARGS <<< "$EXTRA_CMAKE_ARGS"
 }
 
 function buildAll {
-    ((${NUMARGS} == 0 )) || !(echo " ${ARGS} " | grep -q " [^-]\+ ")
+    (( NUMARGS == 0 )) || ! (echo " ${ARGS} " | grep -q " [^-]\+ ")
 }
 
 function buildLibCudfJniInDocker {
-    local cudaVersion="11.8.0"
+    local cudaVersion="12.9.1"
     local imageName="cudf-build:${cudaVersion}-devel-rocky8"
     local CMAKE_GENERATOR="${CMAKE_GENERATOR:-Ninja}"
     local workspaceDir="/rapids"
@@ -127,7 +127,7 @@ function buildLibCudfJniInDocker {
         -f java/ci/Dockerfile.rocky \
         --build-arg CUDA_VERSION=${cudaVersion} \
         -t $imageName .
-    nvidia-docker run -it -u $(id -u):$(id -g) --rm \
+    nvidia-docker run -it -u "$(id -u)":"$(id -g)" --rm \
         -e PARALLEL_LEVEL \
         -e CCACHE_DISABLE \
         -e CCACHE_DIR="$workspaceCcacheDir" \
@@ -152,7 +152,6 @@ function buildLibCudfJniInDocker {
                 -DCMAKE_CUDA_ARCHITECTURES=${CUDF_CMAKE_CUDA_ARCHITECTURES} \
                 -DCMAKE_INSTALL_PREFIX=/usr/local/rapids \
                 -DUSE_NVTX=ON \
-                -DCUDF_USE_PROPRIETARY_NVCOMP=ON \
                 -DCUDF_USE_ARROW_STATIC=ON \
                 -DCUDF_ENABLE_ARROW_S3=OFF \
                 -DBUILD_TESTS=OFF \
@@ -186,7 +185,7 @@ if hasArg -h || hasArg --h || hasArg --help; then
 fi
 
 # Check for valid usage
-if (( ${NUMARGS} != 0 )); then
+if (( NUMARGS != 0 )); then
     # Check for cmake args
     cmakeArgs
     for a in ${ARGS}; do
@@ -220,9 +219,6 @@ fi
 if hasArg --disable_nvtx; then
     BUILD_NVTX="OFF"
 fi
-if hasArg --opensource_nvcomp; then
-    USE_PROPRIETARY_NVCOMP="OFF"
-fi
 if hasArg --show_depr_warn; then
     BUILD_DISABLE_DEPRECATION_WARNINGS=OFF
 fi
@@ -237,7 +233,7 @@ if hasArg --incl_cache_stats; then
     BUILD_REPORT_INCL_CACHE_STATS=ON
 fi
 if hasArg --pydevelop; then
-    PYTHON_ARGS_FOR_INSTALL="${PYTHON_ARGS_FOR_INSTALL} -e"
+    PYTHON_ARGS_FOR_INSTALL+=("-e")
 fi
 
 if hasArg --disable_large_strings; then
@@ -251,14 +247,14 @@ if hasArg clean; then
     # The find removes all contents but leaves the dirs, the rmdir
     # attempts to remove the dirs but can fail safely.
     for bd in ${BUILD_DIRS}; do
-    if [ -d ${bd} ]; then
-        find ${bd} -mindepth 1 -delete
-        rmdir ${bd} || true
+    if [ -d "${bd}" ]; then
+        find "${bd}" -mindepth 1 -delete
+        rmdir "${bd}" || true
     fi
     done
 
     # Cleaning up python artifacts
-    find ${REPODIR}/python/ | grep -E "(__pycache__|\.pyc|\.pyo|\.so|\_skbuild$)"  | xargs rm -rf
+    find "${REPODIR}"/python/ | grep -E "(__pycache__|\.pyc|\.pyo|\.so|\_skbuild$)"  | xargs rm -rf
 
 fi
 
@@ -267,7 +263,7 @@ fi
 # Configure, build, and install libcudf
 
 if buildAll || hasArg libcudf || hasArg pylibcudf || hasArg cudf || hasArg cudfjar; then
-    if (( ${BUILD_ALL_GPU_ARCH} == 0 )); then
+    if (( BUILD_ALL_GPU_ARCH == 0 )); then
         CUDF_CMAKE_CUDA_ARCHITECTURES="${CUDF_CMAKE_CUDA_ARCHITECTURES:-NATIVE}"
         if [[ "$CUDF_CMAKE_CUDA_ARCHITECTURES" == "NATIVE" ]]; then
             echo "Building for the architecture of the GPU in the system..."
@@ -287,23 +283,22 @@ if buildAll || hasArg libcudf; then
         sccache --zero-stats
     fi
 
-    cmake -S $REPODIR/cpp -B ${LIB_BUILD_DIR} \
-          -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
-          -DCMAKE_CUDA_ARCHITECTURES=${CUDF_CMAKE_CUDA_ARCHITECTURES} \
+    cmake -S "$REPODIR"/cpp -B "${LIB_BUILD_DIR}" \
+          -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}" \
+          -DCMAKE_CUDA_ARCHITECTURES="${CUDF_CMAKE_CUDA_ARCHITECTURES}" \
           -DUSE_NVTX=${BUILD_NVTX} \
-          -DCUDF_USE_PROPRIETARY_NVCOMP=${USE_PROPRIETARY_NVCOMP} \
           -DBUILD_TESTS=${BUILD_TESTS} \
           -DBUILD_BENCHMARKS=${BUILD_BENCHMARKS} \
           -DDISABLE_DEPRECATION_WARNINGS=${BUILD_DISABLE_DEPRECATION_WARNINGS} \
           -DCUDF_USE_PER_THREAD_DEFAULT_STREAM=${BUILD_PER_THREAD_DEFAULT_STREAM} \
           -DCUDF_LARGE_STRINGS_DISABLED=${BUILD_DISABLE_LARGE_STRINGS} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
-          ${EXTRA_CMAKE_ARGS}
+          "${EXTRA_CMAKE_ARGS[@]}"
 
-    cd ${LIB_BUILD_DIR}
+    cd "${LIB_BUILD_DIR}"
 
     compile_start=$(date +%s)
-    cmake --build . -j${PARALLEL_LEVEL} ${VERBOSE_FLAG}
+    cmake --build . -j"${PARALLEL_LEVEL}" ${VERBOSE_FLAG}
     compile_end=$(date +%s)
     compile_total=$(( compile_end - compile_start ))
 
@@ -321,51 +316,51 @@ if buildAll || hasArg libcudf; then
         MSG="${MSG}<br/>parallel setting: $PARALLEL_LEVEL"
         MSG="${MSG}<br/>parallel build time: $compile_total seconds"
         if [[ -f "${LIB_BUILD_DIR}/libcudf.so" ]]; then
-           LIBCUDF_FS=$(ls -lh ${LIB_BUILD_DIR}/libcudf.so | awk '{print $5}')
+           LIBCUDF_FS=$(find "${LIB_BUILD_DIR}" -name libcudf.so -printf '%s')
            MSG="${MSG}<br/>libcudf.so size: $LIBCUDF_FS"
         fi
         BMR_DIR=${RAPIDS_ARTIFACTS_DIR:-"${LIB_BUILD_DIR}"}
         echo "Metrics output dir: [$BMR_DIR]"
-        mkdir -p ${BMR_DIR}
+        mkdir -p "${BMR_DIR}"
         MSG_OUTFILE="$(mktemp)"
         echo "$MSG" > "${MSG_OUTFILE}"
-        python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --fmt html --msg "${MSG_OUTFILE}" > ${BMR_DIR}/ninja_log.html
-        cp ${LIB_BUILD_DIR}/.ninja_log ${BMR_DIR}/ninja.log
+        python "${REPODIR}/cpp/scripts/sort_ninja_log.py" "${LIB_BUILD_DIR}/.ninja_log" --fmt html --msg "${MSG_OUTFILE}" > "${BMR_DIR}/ninja_log.html"
+        cp "${LIB_BUILD_DIR}/.ninja_log" "${BMR_DIR}/ninja.log"
     fi
 
     if [[ ${INSTALL_TARGET} != "" ]]; then
-        cmake --build . -j${PARALLEL_LEVEL} --target install ${VERBOSE_FLAG}
+        cmake --build . -j"${PARALLEL_LEVEL}" --target install ${VERBOSE_FLAG}
     fi
 fi
 
 # Build and install the pylibcudf Python package
 if buildAll || hasArg pylibcudf; then
 
-    cd ${REPODIR}/python/pylibcudf
-    SKBUILD_CMAKE_ARGS="-DCMAKE_PREFIX_PATH=${INSTALL_PREFIX};-DCMAKE_LIBRARY_PATH=${LIBCUDF_BUILD_DIR};-DCMAKE_CUDA_ARCHITECTURES=${CUDF_CMAKE_CUDA_ARCHITECTURES};${EXTRA_CMAKE_ARGS}" \
-        python ${PYTHON_ARGS_FOR_INSTALL} .
+    cd "${REPODIR}/python/pylibcudf"
+    SKBUILD_CMAKE_ARGS="-DCMAKE_PREFIX_PATH=${INSTALL_PREFIX};-DCMAKE_LIBRARY_PATH=${LIBCUDF_BUILD_DIR};-DCMAKE_CUDA_ARCHITECTURES=${CUDF_CMAKE_CUDA_ARCHITECTURES};${EXTRA_CMAKE_ARGS[*]}" \
+        python "${PYTHON_ARGS_FOR_INSTALL[@]}" .
 fi
 
 # Build and install the cudf Python package
 if buildAll || hasArg cudf; then
 
-    cd ${REPODIR}/python/cudf
-    SKBUILD_CMAKE_ARGS="-DCMAKE_PREFIX_PATH=${INSTALL_PREFIX};-DCMAKE_LIBRARY_PATH=${LIBCUDF_BUILD_DIR};-DCMAKE_CUDA_ARCHITECTURES=${CUDF_CMAKE_CUDA_ARCHITECTURES};${EXTRA_CMAKE_ARGS}" \
-        python ${PYTHON_ARGS_FOR_INSTALL} .
+    cd "${REPODIR}/python/cudf"
+    SKBUILD_CMAKE_ARGS="-DCMAKE_PREFIX_PATH=${INSTALL_PREFIX};-DCMAKE_LIBRARY_PATH=${LIBCUDF_BUILD_DIR};-DCMAKE_CUDA_ARCHITECTURES=${CUDF_CMAKE_CUDA_ARCHITECTURES};${EXTRA_CMAKE_ARGS[*]}" \
+        python "${PYTHON_ARGS_FOR_INSTALL[@]}" .
 fi
 
 # Build and install the cudf_polars Python package
 if buildAll || hasArg cudf_polars; then
 
-    cd ${REPODIR}/python/cudf_polars
-    python ${PYTHON_ARGS_FOR_INSTALL} .
+    cd "${REPODIR}/python/cudf_polars"
+    python "${PYTHON_ARGS_FOR_INSTALL[@]}" .
 fi
 
 # Build and install the dask_cudf Python package
 if buildAll || hasArg dask_cudf; then
 
-    cd ${REPODIR}/python/dask_cudf
-    python ${PYTHON_ARGS_FOR_INSTALL} .
+    cd "${REPODIR}/python/dask_cudf"
+    python "${PYTHON_ARGS_FOR_INSTALL[@]}" .
 fi
 
 if hasArg cudfjar; then
@@ -374,30 +369,31 @@ fi
 
 # Build libcudf_kafka library
 if hasArg libcudf_kafka; then
-    cmake -S $REPODIR/cpp/libcudf_kafka -B ${KAFKA_LIB_BUILD_DIR} \
-          -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
+    cmake -S "$REPODIR/cpp/libcudf_kafka" -B "${KAFKA_LIB_BUILD_DIR}" \
+          -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}" \
           -DBUILD_TESTS=${BUILD_TESTS} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
-          ${EXTRA_CMAKE_ARGS}
+          "${EXTRA_CMAKE_ARGS[@]}"
 
 
-    cd ${KAFKA_LIB_BUILD_DIR}
-    cmake --build . -j${PARALLEL_LEVEL} ${VERBOSE_FLAG}
+    cd "${KAFKA_LIB_BUILD_DIR}"
+    cmake --build . -j"${PARALLEL_LEVEL}" ${VERBOSE_FLAG}
 
     if [[ ${INSTALL_TARGET} != "" ]]; then
-        cmake --build . -j${PARALLEL_LEVEL} --target install ${VERBOSE_FLAG}
+        cmake --build . -j"${PARALLEL_LEVEL}" --target install ${VERBOSE_FLAG}
     fi
 fi
 
 # build cudf_kafka Python package
 if hasArg cudf_kafka; then
-    cd ${REPODIR}/python/cudf_kafka
-    SKBUILD_CMAKE_ARGS="-DCMAKE_PREFIX_PATH=${INSTALL_PREFIX};-DCMAKE_LIBRARY_PATH=${LIBCUDF_BUILD_DIR};${EXTRA_CMAKE_ARGS}"
-        python ${PYTHON_ARGS_FOR_INSTALL} .
+    cd "${REPODIR}/python/cudf_kafka"
+    # shellcheck disable=2034
+    SKBUILD_CMAKE_ARGS="-DCMAKE_PREFIX_PATH=${INSTALL_PREFIX};-DCMAKE_LIBRARY_PATH=${LIBCUDF_BUILD_DIR};${EXTRA_CMAKE_ARGS[*]}"
+        python "${PYTHON_ARGS_FOR_INSTALL[@]}" .
 fi
 
 # build custreamz Python package
 if hasArg custreamz; then
-    cd ${REPODIR}/python/custreamz
-    python ${PYTHON_ARGS_FOR_INSTALL} .
+    cd "${REPODIR}/python/custreamz"
+    python "${PYTHON_ARGS_FOR_INSTALL[@]}" .
 fi

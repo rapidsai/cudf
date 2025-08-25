@@ -77,7 +77,7 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
     for (auto& col : input_columns) {
       auto const [null_mask, null_count] =
         cudf::test::detail::make_null_mask(valid_iter + offset, valid_iter + col->size() + offset);
-      col = cudf::structs::detail::superimpose_nulls(
+      col = cudf::structs::detail::superimpose_and_sanitize_nulls(
         static_cast<cudf::bitmask_type const*>(null_mask.data()),
         null_count,
         std::move(col),
@@ -856,7 +856,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithStructsOfLists)
 
   // for these tests, different columns get written to different numbers of pages so it's a
   // little tricky to describe the expected results by page counts. To get an idea of how
-  // these values are chosen, see the debug output from the call to print_cumulative_row_info() in
+  // these values are chosen, see the debug output from the call to print_cumulative_page_info() in
   // reader_impl_preprocess.cu -> find_splits()
 
   {
@@ -995,7 +995,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithListsOfStructs)
 
   // for these tests, different columns get written to different numbers of pages so it's a
   // little tricky to describe the expected results by page counts. To get an idea of how
-  // these values are chosen, see the debug output from the call to print_cumulative_row_info() in
+  // these values are chosen, see the debug output from the call to print_cumulative_page_info() in
   // reader_impl_preprocess.cu -> find_splits()
   {
     auto const [result, num_chunks] = chunked_read(filepath_no_null, 1'000'000);
@@ -1907,52 +1907,177 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSourceEmptyTable)
     std::equal(expected_counts.cbegin(), expected_counts.cend(), num_rows_per_source.cbegin()));
 }
 
+TEST_F(ParquetReaderTest, BooleanList)
+{
+  std::mt19937 gen(0xcaffe);
+
+  // Parquet file
+  auto const parquet_filepath = temp_env->get_temp_filepath("BooleanList.parquet");
+  {
+    auto constexpr num_rows = num_ordered_rows;
+
+    // Validity helpers
+    std::bernoulli_distribution bn(0.7f);
+    auto valids =
+      cudf::detail::make_counting_transform_iterator(0, [&](int index) { return bn(gen); });
+    auto list_valids =
+      cudf::detail::make_counting_transform_iterator(0, [&](int index) { return index % 100; });
+
+    // str(non-nullable)
+    auto col0 = testdata::ascending<cudf::string_view>();
+
+    // list<bool(nullable)>(nullable)
+    auto bools_iter =
+      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+    auto bools_col =
+      cudf::test::fixed_width_column_wrapper<bool>(bools_iter, bools_iter + num_rows, valids);
+    auto offsets_iter = thrust::counting_iterator<cudf::size_type>(0);
+    auto offsets_col  = cudf::test::fixed_width_column_wrapper<cudf::size_type>(
+      offsets_iter, offsets_iter + num_rows + 1);
+    auto [null_mask, null_count] =
+      cudf::test::detail::make_null_mask(list_valids, list_valids + num_rows);
+    auto _col1 = cudf::make_lists_column(
+      num_rows, offsets_col.release(), bools_col.release(), null_count, std::move(null_mask));
+    auto col1 = cudf::purge_nonempty_nulls(*_col1);
+
+    // list<list<bool(nullable)>(nullable)>(nullable)
+    auto col2 = make_parquet_list_list_col<bool>(0, num_rows, 5, 8, true);
+
+    // Input table
+    auto constexpr num_concat = 3;
+    auto table                = cudf::table_view{{col0, *col1, *col2}};
+    auto expected             = cudf::concatenate(std::vector<table_view>(num_concat, table));
+    table                     = expected->view();
+    // Write to parquet buffer
+    cudf::io::parquet_writer_options out_opts =
+      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{parquet_filepath}, table)
+        // Note: The following writer options have been chosen to work with the chunked reader's
+        // empirical memory limits. We may need to adjust them in the future.
+        .row_group_size_rows(num_rows)
+        .max_page_size_rows(page_size_for_ordered_tests)
+        .compression(cudf::io::compression_type::SNAPPY)
+        .dictionary_policy(cudf::io::dictionary_policy::ALWAYS);
+
+    cudf::io::write_parquet(out_opts);
+  }
+
+  // Parquet reader options
+  cudf::io::parquet_reader_options const options =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info(parquet_filepath));
+
+  // Read parquet using the chunked parquet reader
+  auto const read = [&]() {
+    // Note that this test relies on these empirically chosen memory limits to have the chunked
+    // reader create subpasses such that we end a subpass at `page.num_rows - 1` and let next
+    // subpass read that last row from that page. We may need to adjust these limits in the future
+    // to hit this edge case in chunking.
+    auto constexpr input_mem_limit  = 102400;
+    auto constexpr output_mem_limit = 0;
+    auto reader = cudf::io::chunked_parquet_reader(output_mem_limit, input_mem_limit, options);
+
+    auto table_chunks = std::vector<std::unique_ptr<cudf::table>>();
+    while (reader.has_next()) {
+      auto chunk = reader.read_chunk();
+      table_chunks.push_back(std::move(chunk.tbl));
+    }
+
+    // Commented as future changes to chunking logic may change the number of table_chunks
+    // EXPECT_GT(table_chunks.size(), 1);
+
+    auto out_tviews = std::vector<cudf::table_view>{};
+    for (auto const& tbl : table_chunks) {
+      out_tviews.emplace_back(tbl->view());
+    }
+
+    return cudf::concatenate(out_tviews);
+  }();
+
+  // Read using the main parquet reader
+  auto const expected = cudf::io::read_parquet(options).tbl;
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), read->view());
+}
+
 TEST_F(ParquetReaderTest, ManyLargeLists)
 {
   auto const stream = cudf::get_default_stream();
 
   // Generate a large list<bool> column
-  constexpr cudf::size_type num_rows      = 10'000'000;
-  constexpr cudf::size_type bools_per_row = 2;
-  auto offsets_iter = cudf::detail::make_counting_transform_iterator(0, offset_gen{bools_per_row});
-  auto offsets_col  = cudf::make_fixed_width_column(
-    cudf::data_type{cudf::type_id::INT32}, num_rows + 1, cudf::mask_state::UNALLOCATED);
-  thrust::copy(rmm::exec_policy_nosync(stream),
-               offsets_iter,
-               offsets_iter + num_rows + 1,
-               offsets_col->mutable_view().begin<int>());
+  constexpr cudf::size_type num_rows = 10'000'000;
 
-  auto bools_iter = cudf::detail::make_counting_transform_iterator(0, bool_gen{});
-  auto bools_col  = cudf::make_fixed_width_column(
-    cudf::data_type{cudf::type_id::BOOL8}, num_rows * bools_per_row, cudf::mask_state::UNALLOCATED);
-  thrust::copy(rmm::exec_policy_nosync(stream),
-               bools_iter,
-               bools_iter + (num_rows * bools_per_row),
-               bools_col->mutable_view().begin<bool>());
+  // Helper to test chunked-read a parquet table with a large list<bool> column
+  auto const test_chunked_read_many_large_lists = [&](cudf::size_type bools_per_row,
+                                                      cudf::mask_state bools_col_state) {
+    // Offsets column
+    auto offsets_iter =
+      cudf::detail::make_counting_transform_iterator(0, offset_gen{bools_per_row});
+    auto offsets_col = cudf::make_fixed_width_column(
+      cudf::data_type{cudf::type_id::INT32}, num_rows + 1, cudf::mask_state::UNALLOCATED);
+    thrust::copy(rmm::exec_policy_nosync(stream),
+                 offsets_iter,
+                 offsets_iter + num_rows + 1,
+                 offsets_col->mutable_view().begin<int>());
 
-  stream.synchronize();
+    // Booleans column
+    auto bools_iter = cudf::detail::make_counting_transform_iterator(0, bool_gen{});
+    auto bools_col  = cudf::make_fixed_width_column(
+      cudf::data_type{cudf::type_id::BOOL8}, num_rows * bools_per_row, bools_col_state);
+    thrust::copy(rmm::exec_policy_nosync(stream),
+                 bools_iter,
+                 bools_iter + (num_rows * bools_per_row),
+                 bools_col->mutable_view().begin<bool>());
 
-  auto list_col = cudf::make_lists_column(
-    num_rows, std::move(offsets_col), std::move(bools_col), 0, rmm::device_buffer{});
+    stream.synchronize();
 
-  auto const table    = cudf::table_view({*list_col});
-  auto const filepath = temp_env->get_temp_filepath("ManyLargeLists.parquet");
-  auto const out_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, table).build();
-  // Write the table to parquet
-  cudf::io::write_parquet(out_opts);
+    // list<bool> column
+    auto list_col = cudf::make_lists_column(
+      num_rows, std::move(offsets_col), std::move(bools_col), 0, rmm::device_buffer{});
 
-  // Times to concat filepath to overflow cudf column size limits
-  constexpr cudf::size_type reads_to_overflow =
-    (std::numeric_limits<cudf::size_type>::max() / (num_rows * bools_per_row)) + 1;
+    auto const table    = cudf::table_view({*list_col});
+    auto const filepath = temp_env->get_temp_filepath("ManyLargeLists.parquet");
+    auto const out_opts =
+      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, table).build();
+    // Write the table to parquet
+    cudf::io::write_parquet(out_opts);
 
-  auto const in_opts =
-    cudf::io::parquet_reader_options::builder(
-      cudf::io::source_info{std::vector<std::string>(reads_to_overflow, filepath)})
-      .build();
+    // Times to concat filepath to (just slightly) overflow cudf column size limits
+    auto const reads_to_overflow = static_cast<cudf::size_type>(
+      (std::numeric_limits<cudf::size_type>::max() / (num_rows * bools_per_row)) + 1);
 
-  // Expect an overflow error when reading the files
-  EXPECT_THROW(cudf::io::read_parquet(in_opts), std::overflow_error);
+    auto const in_opts =
+      cudf::io::parquet_reader_options::builder(
+        cudf::io::source_info{std::vector<std::string>(reads_to_overflow, filepath)})
+        .build();
+
+    // Expect an overflow error when reading the files
+    EXPECT_THROW(cudf::io::read_parquet(in_opts), std::overflow_error);
+
+    // Now read the files with the chunked reader (no limits) without the overflow error
+    auto const reader = cudf::io::chunked_parquet_reader(0, 0, in_opts);
+    auto num_chunks   = 0;
+    while (reader.has_next()) {
+      EXPECT_NO_THROW(std::ignore = reader.read_chunk());
+      num_chunks++;
+    }
+    // We will end up with exactly two chunks as the total number of leaf rows is just above 2B
+    // rows per table chunk limit and we haven't set any chunk or pass read limits
+    EXPECT_EQ(num_chunks, 2);
+  };
+
+  // Test the case where the number of top-level (list) rows does not exceed the cudf column size
+  // limit but the number of leaf (bool) values (not rows) does
+  auto constexpr bools_per_row_for_excess_leaf_rows = 4;
+  test_chunked_read_many_large_lists(bools_per_row_for_excess_leaf_rows,
+                                     cudf::mask_state::UNALLOCATED);
+
+  // Test the case where the number of top-level (list) rows exceeds the cudf column size
+  // limit but the number of leaf (bool) values (not rows) does not
+  auto constexpr bools_per_row_for_excess_top_level_rows = 1;
+  test_chunked_read_many_large_lists(bools_per_row_for_excess_top_level_rows,
+                                     cudf::mask_state::ALL_NULL);
+
+  // Note: The chunked reader will always fail if the number of leaf (bool) rows (values + nulls)
+  // exceeds the cudf column size limit unless a smaller `pass_read_limit` is specified.
 }
 
 TEST_P(ParquetChunkedDecompressionTest, RoundTripBasic)

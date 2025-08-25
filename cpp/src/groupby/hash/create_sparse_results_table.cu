@@ -21,6 +21,7 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/null_mask.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
@@ -35,6 +36,80 @@
 #include <vector>
 
 namespace cudf::groupby::detail::hash {
+namespace {
+/**
+ * @brief Functor to create sparse result columns for hash-based groupby aggregations
+ *
+ * This functor handles the creation of appropriately typed and sized columns for each
+ * aggregation, including special handling for SUM_WITH_OVERFLOW which requires a struct column.
+ */
+struct sparse_column_creator {
+  rmm::cuda_stream_view stream;
+
+  explicit sparse_column_creator(rmm::cuda_stream_view stream) : stream(stream) {}
+
+  std::unique_ptr<cudf::column> operator()(cudf::column_view const& col,
+                                           cudf::aggregation::Kind const& agg) const
+  {
+    auto const nullable =
+      (agg == cudf::aggregation::COUNT_VALID or agg == cudf::aggregation::COUNT_ALL)
+        ? false
+        : (col.has_nulls() or agg == cudf::aggregation::VARIANCE or agg == cudf::aggregation::STD);
+    auto const mask_flag = (nullable) ? cudf::mask_state::ALL_NULL : cudf::mask_state::UNALLOCATED;
+    auto const col_type  = cudf::is_dictionary(col.type())
+                             ? cudf::dictionary_column_view(col).keys().type()
+                             : col.type();
+
+    // Special handling for SUM_WITH_OVERFLOW which needs a struct column
+    if (agg == cudf::aggregation::SUM_WITH_OVERFLOW) {
+      // Lambda to create empty columns for better readability
+      auto make_empty_column = [&stream = this->stream](cudf::type_id type_id,
+                                                        cudf::size_type size,
+                                                        cudf::mask_state mask_state) {
+        return make_fixed_width_column(cudf::data_type{type_id}, size, mask_state, stream);
+      };
+
+      // Lambda to create children for SUM_WITH_OVERFLOW struct column
+      auto make_children = [&make_empty_column](cudf::size_type size, cudf::mask_state mask_state) {
+        std::vector<std::unique_ptr<cudf::column>> children;
+        // Create sum child column (int64_t) - no null mask needed, struct-level mask handles
+        // nullability
+        children.push_back(
+          make_empty_column(cudf::type_id::INT64, size, cudf::mask_state::UNALLOCATED));
+        // Create overflow child column (bool) - no null mask needed, only value matters
+        children.push_back(
+          make_empty_column(cudf::type_id::BOOL8, size, cudf::mask_state::UNALLOCATED));
+        return children;
+      };
+
+      if (col.size() == 0) {
+        // For empty columns, create empty struct column manually
+        auto children = make_children(0, cudf::mask_state::UNALLOCATED);
+        return create_structs_hierarchy(0, std::move(children), 0, {}, stream);
+      } else {
+        auto children = make_children(col.size(), mask_flag);
+
+        // Create struct column with the children
+        // For SUM_WITH_OVERFLOW, make struct nullable if input has nulls (same as other
+        // aggregations)
+        if (nullable) {
+          // Start with ALL_NULL, results will be marked valid during aggregation
+          auto null_mask  = cudf::create_null_mask(col.size(), cudf::mask_state::ALL_NULL, stream);
+          auto null_count = col.size();  // All null initially
+          return create_structs_hierarchy(
+            col.size(), std::move(children), null_count, std::move(null_mask), stream);
+        } else {
+          return create_structs_hierarchy(col.size(), std::move(children), 0, {}, stream);
+        }
+      }
+    } else {
+      return make_fixed_width_column(
+        cudf::detail::target_type(col_type, agg), col.size(), mask_flag, stream);
+    }
+  }
+};
+}  // anonymous namespace
+
 template <typename SetType>
 void extract_populated_keys(SetType const& key_set,
                             rmm::device_uvector<cudf::size_type>& populated_keys,
@@ -61,20 +136,7 @@ cudf::table create_sparse_results_table(cudf::table_view const& flattened_values
                  flattened_values.end(),
                  agg_kinds.begin(),
                  std::back_inserter(sparse_columns),
-                 [stream](auto const& col, auto const& agg) {
-                   auto const nullable =
-                     (agg == cudf::aggregation::COUNT_VALID or agg == cudf::aggregation::COUNT_ALL)
-                       ? false
-                       : (col.has_nulls() or agg == cudf::aggregation::VARIANCE or
-                          agg == cudf::aggregation::STD);
-                   auto const mask_flag =
-                     (nullable) ? cudf::mask_state::ALL_NULL : cudf::mask_state::UNALLOCATED;
-                   auto const col_type = cudf::is_dictionary(col.type())
-                                           ? cudf::dictionary_column_view(col).keys().type()
-                                           : col.type();
-                   return make_fixed_width_column(
-                     cudf::detail::target_type(col_type, agg), col.size(), mask_flag, stream);
-                 });
+                 sparse_column_creator{stream});
   cudf::table sparse_table(std::move(sparse_columns));
   // If no direct aggregations, initialize the sparse table
   // only for the keys inserted in global hash set

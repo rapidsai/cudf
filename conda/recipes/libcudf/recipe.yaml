@@ -65,27 +65,15 @@ cache:
     host:
       - librmm =${{ minor_version }}
       - libkvikio =${{ minor_version }}
-      - if: cuda_major == "11"
+      - cuda-nvrtc-dev
+      - cuda-nvtx-dev
+      - libcurand-dev
+      - libnvjitlink-dev
+      - if: linux and x86_64
         then:
-          - cudatoolkit
-          - libcurand =${{ cuda11_libcurand_host_version }}
-          - libcurand-dev =${{ cuda11_libcurand_host_version }}
-          - cuda-nvrtc =${{ cuda_version }}
-          - cuda-nvrtc-dev =${{ cuda_version }}
-          - cuda-nvtx =${{ cuda_version }}
-          - if: linux and x86_64
-            then:
-              - libcufile =${{ cuda11_libcufile_host_version }}
-              - libcufile-dev =${{ cuda11_libcufile_host_version }}
-        else:
-          - cuda-nvrtc-dev
-          - cuda-nvtx-dev
-          - libcurand-dev
-          - if: linux and x86_64
-            then:
-              - libcufile-dev
+          - libcufile-dev
       - cuda-version =${{ cuda_version }}
-      - nvcomp ${{ nvcomp_version }}
+      - libnvcomp-dev ${{ nvcomp_version }}
       - dlpack ${{ dlpack_version }}
       - librdkafka ${{ librdkafka_version }}
       - flatbuffers =${{ flatbuffers_version }}
@@ -119,28 +107,23 @@ outputs:
         - cuda-version =${{ cuda_version }}
         - libkvikio =${{ minor_version }}
         - librmm =${{ minor_version }}
-        - nvcomp ${{ nvcomp_version }}
+        - libnvcomp-dev ${{ nvcomp_version }}
         - rapids-logger =0.1
         - zlib ${{ zlib_version }}
-        - if: cuda_major == "11"
-          then: cudatoolkit
-          else: cuda-cudart-dev
+        - cuda-cudart-dev
       run:
         - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
-        - if: cuda_major == "11"
+        - cuda-nvrtc
+        - if: linux and x86_64
           then:
-            - cudatoolkit
-            - if: linux and x86_64
-              then:
-                - libcufile ${{ cuda11_libcufile_run_version }}
-          else:
-            - cuda-nvrtc
-            - if: linux and x86_64
-              then:
-                - libcufile
-        - nvcomp ${{ nvcomp_version }}
+            - libcufile
         - librmm =${{ minor_version }}
         - libkvikio =${{ minor_version }}
+        # We export a run dependency on libnvcomp-dev because libcudf requires
+        # libnvcomp headers if used by another package at build time. This can
+        # be refactored once we have -dev packages for RAPIDS libraries.
+        # See https://github.com/rapidsai/build-planning/issues/46
+        - libnvcomp-dev ${{ nvcomp_version }}
         - dlpack ${{ dlpack_version }}
         - rapids-logger =0.1
       run_exports:
@@ -158,10 +141,6 @@ outputs:
           - librdkafka
           - libzlib
           - librmm
-          - nvcomp
-          - if: cuda_major == "11"
-            then:
-              - cudatoolkit
     tests:
       - script:
         - test -f $PREFIX/include/cudf/column/column.hpp
@@ -203,10 +182,7 @@ outputs:
           - librdkafka
           - librmm
           - libzlib
-          - nvcomp
-          - if: cuda_major == "11"
-            then:
-              - cudatoolkit
+          - libnvcomp
     tests:
       - script:
         - test -f $PREFIX/lib/libcudf_kafka.so
@@ -254,24 +230,15 @@ outputs:
       host:
         - ${{ pin_subpackage("libcudf", exact=True) }}
         - cuda-version =${{ cuda_version }}
-        - if: cuda_major == "11"
-          then:
-            - cuda-nvtx =${{ cuda_version }}
-            - cudatoolkit
-          else:
-            - cuda-nvtx-dev
-            - cuda-cudart-dev
+        - cuda-nvtx-dev
+        - cuda-cudart-dev
       run:
         - ${{ pin_subpackage("libcudf", exact=True) }}
         - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
-        - if: cuda_major != "11"
-          then:
-            - cuda-nvtx
+        - cuda-nvtx
       ignore_run_exports:
         from_package:
-          - if: cuda_major != "11"
-            then:
-              - cuda-nvtx-dev
+          - cuda-nvtx-dev
         by_name:
           - cuda-cudart
           - cuda-nvrtc
@@ -284,10 +251,7 @@ outputs:
           - librdkafka
           - librmm
           - libzlib
-          - nvcomp
-          - if: cuda_major == "11"
-            then:
-              - cudatoolkit
+          - libnvcomp
     about:
       homepage: ${{ load_from_file("python/libcudf/pyproject.toml").project.urls.Homepage }}
       license: ${{ load_from_file("python/libcudf/pyproject.toml").project.license.text }}
@@ -313,27 +277,16 @@ outputs:
         - ${{ pin_subpackage("libcudf", exact=True) }}
         - ${{ pin_subpackage("libcudf_kafka", exact=True) }}
         - cuda-version =${{ cuda_version }}
-        - if: cuda_major == "11"
-          then:
-            - libcurand ${{ cuda11_libcurand_run_version }}
-            - cudatoolkit
-          else:
-            - libcurand-dev
-            - cuda-cudart-dev
+        - libcurand-dev
+        - cuda-cudart-dev
       run:
         - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
         - ${{ pin_subpackage("libcudf", exact=True) }}
         - ${{ pin_subpackage("libcudf_kafka", exact=True) }}
-        - if: cuda_major == "11"
-          then:
-            - libcurand ${{ cuda11_libcurand_run_version }}
-          else:
-            - libcurand
+        - libcurand
       ignore_run_exports:
         from_package:
-          - if: cuda_major != "11"
-            then:
-              - libcurand-dev
+          - libcurand-dev
         by_name:
           - cuda-cudart
           - cuda-nvrtc
@@ -347,10 +300,7 @@ outputs:
           - librdkafka
           - librmm
           - libzlib
-          - nvcomp
-          - if: cuda_major == "11"
-            then:
-              - cudatoolkit
+          - libnvcomp
     about:
       homepage: ${{ load_from_file("python/libcudf/pyproject.toml").project.urls.Homepage }}
       license: ${{ load_from_file("python/libcudf/pyproject.toml").project.license.text }}

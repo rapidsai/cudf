@@ -10,18 +10,6 @@ else:
     libcudf.load_library()
     del libcudf
 
-# _setup_numba _must be called before numba.cuda is imported, because
-# it sets the numba config variable responsible for enabling
-# Minor Version Compatibility. Setting it after importing numba.cuda has no effect.
-from cudf.utils._numba import _setup_numba
-from cudf.utils.gpu_utils import validate_setup
-
-_setup_numba()
-validate_setup()
-
-del _setup_numba
-del validate_setup
-
 import cupy
 from numba import cuda
 

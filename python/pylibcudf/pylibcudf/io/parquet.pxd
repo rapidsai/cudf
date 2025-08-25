@@ -20,7 +20,7 @@ from pylibcudf.io.types cimport (
 )
 
 from pylibcudf.libcudf.io.parquet cimport (
-    parquet_chunked_writer as cpp_parquet_chunked_writer,
+    chunked_parquet_writer as cpp_chunked_parquet_writer,
     chunked_parquet_reader as cpp_chunked_parquet_reader,
     parquet_writer_options,
     parquet_writer_options_builder,
@@ -53,6 +53,8 @@ cdef class ParquetReaderOptionsBuilder:
     cpdef ParquetReaderOptionsBuilder use_pandas_metadata(self, bool val)
     cpdef ParquetReaderOptionsBuilder allow_mismatched_pq_schemas(self, bool val)
     cpdef ParquetReaderOptionsBuilder use_arrow_schema(self, bool val)
+    cpdef ParquetReaderOptionsBuilder filter(self, Expression filter)
+    cpdef ParquetReaderOptionsBuilder columns(self, list col_names)
     cpdef build(self)
 
 
@@ -67,8 +69,8 @@ cdef class ChunkedParquetReader:
 cpdef read_parquet(ParquetReaderOptions options, Stream stream = *)
 
 
-cdef class ParquetChunkedWriter:
-    cdef unique_ptr[cpp_parquet_chunked_writer] c_obj
+cdef class ChunkedParquetWriter:
+    cdef unique_ptr[cpp_chunked_parquet_writer] c_obj
     cpdef memoryview close(self, list column_chunks_file_paths)
     cpdef void write(self, Table table, object partitions_info=*)
 
@@ -151,6 +153,10 @@ cdef class ParquetWriterOptionsBuilder:
     cpdef ParquetWriterOptionsBuilder utc_timestamps(self, bool enabled)
 
     cpdef ParquetWriterOptionsBuilder write_arrow_schema(self, bool enabled)
+
+    cpdef ParquetWriterOptionsBuilder row_group_size_rows(self, size_type val)
+
+    cpdef ParquetWriterOptionsBuilder max_page_size_bytes(self, size_t val)
 
     cpdef ParquetWriterOptions build(self)
 

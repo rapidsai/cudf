@@ -19,13 +19,13 @@
 #include "reduction_operators.cuh"
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/utilities/cast_functor.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
-#include <rmm/device_scalar.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cub/device/device_reduce.cuh>
@@ -40,34 +40,33 @@ namespace detail {
 /**
  * @brief Compute the specified simple reduction over the input range of elements.
  *
- * @param[in] d_in      the begin iterator
- * @param[in] num_items the number of items
- * @param[in] op        the reduction operator
- * @param[in] init      Optional initial value of the reduction
- * @param[in] stream    CUDA stream used for device memory operations and kernel launches
- * @param[in] mr        Device memory resource used to allocate the returned scalar's device
- * memory
- * @returns   Output scalar in device memory
- *
  * @tparam Op               the reduction operator with device binary operator
  * @tparam InputIterator    the input column iterator
  * @tparam OutputType       the output type of reduction
+ *
+ * @param d_in      the begin iterator
+ * @param num_items the number of items
+ * @param op        the reduction operator
+ * @param init      Optional initial value of the reduction
+ * @param stream    CUDA stream used for device memory operations and kernel launches
+ * @param mr        Device memory resource used to allocate the returned scalar's device memory
+ * @returns Output scalar in device memory
  */
 template <typename Op,
           typename InputIterator,
-          typename OutputType = cuda::std::iter_value_t<InputIterator>,
-          std::enable_if_t<is_fixed_width<OutputType>() &&
-                           not cudf::is_fixed_point<OutputType>()>* = nullptr>
+          typename OutputType = cuda::std::iter_value_t<InputIterator>>
 std::unique_ptr<scalar> reduce(InputIterator d_in,
                                cudf::size_type num_items,
                                op::simple_op<Op> op,
                                std::optional<OutputType> init,
                                rmm::cuda_stream_view stream,
                                rmm::device_async_resource_ref mr)
+  requires(is_fixed_width<OutputType>() && not cudf::is_fixed_point<OutputType>())
 {
   auto const binary_op     = cudf::detail::cast_functor<OutputType>(op.get_binary_op());
   auto const initial_value = init.value_or(op.template get_identity<OutputType>());
-  auto dev_result          = rmm::device_scalar<OutputType>{initial_value, stream, mr};
+  using ScalarType         = cudf::scalar_type_t<OutputType>;
+  auto result              = std::make_unique<ScalarType>(initial_value, true, stream, mr);
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
@@ -75,7 +74,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
   cub::DeviceReduce::Reduce(d_temp_storage.data(),
                             temp_storage_bytes,
                             d_in,
-                            dev_result.data(),
+                            result->data(),
                             num_items,
                             binary_op,
                             initial_value,
@@ -86,27 +85,24 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
   cub::DeviceReduce::Reduce(d_temp_storage.data(),
                             temp_storage_bytes,
                             d_in,
-                            dev_result.data(),
+                            result->data(),
                             num_items,
                             binary_op,
                             initial_value,
                             stream.value());
-
-  // only for string_view, data is copied
-  auto s = new cudf::scalar_type_t<OutputType>(std::move(dev_result), true, stream, mr);
-  return std::unique_ptr<scalar>(s);
+  return result;
 }
 
 template <typename Op,
           typename InputIterator,
-          typename OutputType                             = cuda::std::iter_value_t<InputIterator>,
-          std::enable_if_t<is_fixed_point<OutputType>()>* = nullptr>
+          typename OutputType = cuda::std::iter_value_t<InputIterator>>
 std::unique_ptr<scalar> reduce(InputIterator d_in,
                                cudf::size_type num_items,
                                op::simple_op<Op> op,
                                std::optional<OutputType> init,
                                rmm::cuda_stream_view stream,
                                rmm::device_async_resource_ref mr)
+  requires(is_fixed_point<OutputType>())
 {
   CUDF_FAIL(
     "This function should never be called. fixed_point reduce should always go through the reduce "
@@ -116,18 +112,18 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
 // @brief string_view specialization of simple reduction
 template <typename Op,
           typename InputIterator,
-          typename OutputType = cuda::std::iter_value_t<InputIterator>,
-          std::enable_if_t<std::is_same_v<OutputType, string_view>>* = nullptr>
+          typename OutputType = cuda::std::iter_value_t<InputIterator>>
 std::unique_ptr<scalar> reduce(InputIterator d_in,
                                cudf::size_type num_items,
                                op::simple_op<Op> op,
                                std::optional<OutputType> init,
                                rmm::cuda_stream_view stream,
                                rmm::device_async_resource_ref mr)
+  requires(std::is_same_v<OutputType, string_view>)
 {
   auto const binary_op     = cudf::detail::cast_functor<OutputType>(op.get_binary_op());
   auto const initial_value = init.value_or(op.template get_identity<OutputType>());
-  auto dev_result          = rmm::device_scalar<OutputType>{initial_value, stream};
+  auto dev_result          = cudf::detail::device_scalar<OutputType>{initial_value, stream};
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
@@ -152,24 +148,11 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             initial_value,
                             stream.value());
 
-  using ScalarType = cudf::scalar_type_t<OutputType>;
-  auto s = new ScalarType(dev_result, true, stream, mr);  // only for string_view, data is copied
-  return std::unique_ptr<scalar>(s);
+  return std::make_unique<cudf::string_scalar>(dev_result, true, stream, mr);
 }
 
 /**
  * @brief compute reduction by the compound operator (reduce and transform)
- *
- * @param[in] d_in        the begin iterator
- * @param[in] num_items   the number of items
- * @param[in] op          the reduction operator
- * @param[in] valid_count Number of valid items
- * @param[in] ddof        Delta degrees of freedom used for standard deviation and variance
- * @param[in] init        Optional initial value of the reduction
- * @param[in] stream      CUDA stream used for device memory operations and kernel launches
- * @param[in] mr          Device memory resource used to allocate the returned scalar's device
- * memory
- * @returns   Output scalar in device memory
  *
  * The reduction operator must have `intermediate::compute_result()` method.
  * This method performs reduction using binary operator `Op::Op` and transforms the
@@ -178,6 +161,15 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
  * @tparam Op               the reduction operator with device binary operator
  * @tparam InputIterator    the input column iterator
  * @tparam OutputType       the output type of reduction
+ *
+ * @param d_in        the begin iterator
+ * @param num_items   the number of items
+ * @param op          the reduction operator
+ * @param valid_count Number of valid items
+ * @param ddof        Delta degrees of freedom used for standard deviation and variance
+ * @param stream      CUDA stream used for device memory operations and kernel launches
+ * @param mr          Device memory resource used to allocate the returned scalar's device memory
+ * @returns Output scalar in device memory
  */
 template <typename Op,
           typename InputIterator,
@@ -194,7 +186,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
   auto const binary_op     = cudf::detail::cast_functor<IntermediateType>(op.get_binary_op());
   auto const initial_value = op.template get_identity<IntermediateType>();
 
-  rmm::device_scalar<IntermediateType> intermediate_result{initial_value, stream};
+  cudf::detail::device_scalar<IntermediateType> intermediate_result{initial_value, stream};
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
@@ -221,14 +213,14 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
 
   // compute the result value from intermediate value in device
   using ScalarType = cudf::scalar_type_t<OutputType>;
-  auto result      = new ScalarType(OutputType{0}, true, stream, mr);
+  auto result      = std::make_unique<ScalarType>(OutputType{0}, true, stream, mr);
   thrust::for_each_n(rmm::exec_policy(stream),
                      intermediate_result.data(),
                      1,
                      [dres = result->data(), op, valid_count, ddof] __device__(auto i) {
                        *dres = op.template compute_result<OutputType>(i, valid_count, ddof);
                      });
-  return std::unique_ptr<scalar>(result);
+  return result;
 }
 
 }  // namespace detail

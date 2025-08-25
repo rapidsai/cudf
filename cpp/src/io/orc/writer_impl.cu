@@ -19,15 +19,18 @@
  * @brief cuDF-IO ORC writer class implementation
  */
 
+#include "io/comp/compression.hpp"
 #include "io/orc/orc_gpu.hpp"
 #include "io/statistics/column_statistics.cuh"
 #include "writer_impl.hpp"
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/batched_memcpy.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/logger.hpp>
@@ -907,7 +910,14 @@ encoded_data encode_columns(orc_table_view const& orc_table,
     std::vector<size_type> indices;
     for (auto const& stripe : segmentation.stripes) {
       for (auto rg_idx_it = stripe.cbegin(); rg_idx_it < stripe.cend() - 1; ++rg_idx_it) {
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-reference"
+#endif
         auto const& chunk = chunks[col_idx][*rg_idx_it];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic pop
+#endif
         indices.push_back(chunk.start_row);
         indices.push_back(chunk.start_row + chunk.num_rows);
       }
@@ -956,8 +966,15 @@ encoded_data encode_columns(orc_table_view const& orc_table,
         if (strm_id >= 0) {
           size_t stripe_size = 0;
           std::for_each(stripe.cbegin(), stripe.cend(), [&](auto rg_idx) {
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-reference"
+#endif
             auto const& ck = chunks[col_idx][rg_idx];
-            auto& strm     = col_streams[rg_idx];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic pop
+#endif
+            auto& strm = col_streams[rg_idx];
 
             if ((strm_type == CI_DICTIONARY) ||
                 (strm_type == CI_DATA2 && ck.encoding_kind == DICTIONARY_V2)) {
@@ -992,8 +1009,15 @@ encoded_data encode_columns(orc_table_view const& orc_table,
         // Set offsets
         for (auto rg_idx_it = stripe.cbegin(); rg_idx_it < stripe.cend(); ++rg_idx_it) {
           auto const rg_idx = *rg_idx_it;
-          auto const& ck    = chunks[col_idx][rg_idx];
-          auto& strm        = col_streams[rg_idx];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-reference"
+#endif
+          auto const& ck = chunks[col_idx][rg_idx];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic pop
+#endif
+          auto& strm = col_streams[rg_idx];
 
           if (strm_id < 0 or (strm_type == CI_DATA && streams[strm_id].length == 0 &&
                               (ck.type_kind == DOUBLE || ck.type_kind == FLOAT))) {
@@ -1146,7 +1170,18 @@ cudf::detail::hostdevice_vector<uint8_t> allocate_and_encode_blobs(
   // figure out the buffer size needed for protobuf format
   orc_init_statistics_buffersize(
     stats_merge_groups.device_ptr(), stat_chunks.data(), num_stat_blobs, stream);
-  auto max_blobs = stats_merge_groups.element(num_stat_blobs - 1, stream);
+
+  // get stats_merge_groups[num_stat_blobs - 1] via a host pinned bounce buffer
+  auto const max_blobs = [&]() {
+    auto max_blobs_element =
+      cudf::detail::make_pinned_vector_async<statistics_merge_group>(1, stream);
+    cudf::detail::cuda_memcpy<statistics_merge_group>(
+      max_blobs_element,
+      cudf::device_span<statistics_merge_group>{stats_merge_groups.device_ptr(num_stat_blobs - 1),
+                                                1},
+      stream);
+    return max_blobs_element.front();
+  }();
 
   cudf::detail::hostdevice_vector<uint8_t> blobs(max_blobs.start_chunk + max_blobs.num_chunks,
                                                  stream);
@@ -1463,7 +1498,7 @@ void write_index_stream(int32_t stripe_id,
                         file_segmentation const& segmentation,
                         host_2dspan<encoder_chunk_streams const> enc_streams,
                         host_2dspan<stripe_stream const> strm_desc,
-                        host_span<compression_result const> comp_res,
+                        host_span<codec_exec_result const> comp_res,
                         host_span<col_stats_blob const> rg_stats,
                         StripeInformation* stripe,
                         orc_streams* streams,
@@ -1481,7 +1516,14 @@ void write_index_stream(int32_t stripe_id,
     if (stream.ids[type] > 0) {
       record.pos = 0;
       if (compression != compression_type::NONE) {
-        auto const& ss   = strm_desc[stripe_id][stream.ids[type] - (columns.size() + 1)];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-reference"
+#endif
+        auto const& ss = strm_desc[stripe_id][stream.ids[type] - (columns.size() + 1)];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic pop
+#endif
         record.blk_pos   = ss.first_block;
         record.comp_pos  = 0;
         record.comp_size = ss.stream_size;
@@ -1508,10 +1550,17 @@ void write_index_stream(int32_t stripe_id,
   auto kind = TypeKind::STRUCT;
   // TBD: Not sure we need an empty index stream for column 0
   if (stream_id != 0) {
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-reference"
+#endif
     auto const& strm = enc_streams[column_id][0];
-    present          = find_record(strm, CI_PRESENT);
-    data             = find_record(strm, CI_DATA);
-    data2            = find_record(strm, CI_DATA2);
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic pop
+#endif
+    present = find_record(strm, CI_PRESENT);
+    data    = find_record(strm, CI_DATA);
+    data2   = find_record(strm, CI_DATA2);
 
     // Change string dictionary to int from index point of view
     kind = columns[column_id].orc_kind();
@@ -1537,7 +1586,14 @@ void write_index_stream(int32_t stripe_id,
                               : (&rg_stats[column_id * segmentation.num_rowgroups() + rowgroup]));
 
     if (stream_id != 0) {
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-reference"
+#endif
       const auto& strm = enc_streams[column_id][rowgroup];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic pop
+#endif
       scan_record(strm, CI_PRESENT, present);
       scan_record(strm, CI_DATA, data);
       scan_record(strm, CI_DATA2, data2);
@@ -2340,8 +2396,8 @@ auto convert_table_to_orc_data(table_view const& input,
     return std::tuple{std::move(enc_data),
                       std::move(segmentation),
                       std::move(orc_table),
-                      rmm::device_uvector<uint8_t>{0, stream},                // compressed_data
-                      cudf::detail::hostdevice_vector<compression_result>{},  // comp_results
+                      rmm::device_uvector<uint8_t>{0, stream},               // compressed_data
+                      cudf::detail::hostdevice_vector<codec_exec_result>{},  // comp_results
                       std::move(strm_descs),
                       intermediate_statistics{orc_table, stream},
                       std::optional<writer_compression_statistics>{},
@@ -2380,12 +2436,12 @@ auto convert_table_to_orc_data(table_view const& input,
 
   // Compress the data streams
   rmm::device_uvector<uint8_t> compressed_data(compressed_bfr_size, stream);
-  cudf::detail::hostdevice_vector<compression_result> comp_results(num_compressed_blocks, stream);
+  cudf::detail::hostdevice_vector<codec_exec_result> comp_results(num_compressed_blocks, stream);
   std::optional<writer_compression_statistics> compression_stats;
   thrust::fill(rmm::exec_policy(stream),
                comp_results.d_begin(),
                comp_results.d_end(),
-               compression_result{0, compression_status::FAILURE});
+               codec_exec_result{0, codec_status::FAILURE});
   if (compression != compression_type::NONE) {
     strm_descs.host_to_device_async(stream);
     compression_stats = compress_orc_data_streams(compressed_data,
@@ -2573,7 +2629,7 @@ void writer::impl::write_orc_data_to_sink(encoded_data const& enc_data,
                                           file_segmentation const& segmentation,
                                           orc_table_view const& orc_table,
                                           device_span<uint8_t const> compressed_data,
-                                          host_span<compression_result const> comp_results,
+                                          host_span<codec_exec_result const> comp_results,
                                           host_2dspan<stripe_stream const> strm_descs,
                                           host_span<col_stats_blob const> rg_stats,
                                           orc_streams& streams,
@@ -2659,8 +2715,8 @@ void writer::impl::write_orc_data_to_sink(encoded_data const& enc_data,
       stripe.footerLength = bytes_written;
     }
   }
-  for (auto const& task : write_tasks) {
-    task.wait();
+  for (auto& task : write_tasks) {
+    task.get();
   }
 }
 

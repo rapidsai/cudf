@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import operator
 from functools import reduce
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeAlias, TypedDict
 
 import pylibcudf as plc
 
@@ -42,18 +42,17 @@ from cudf_polars.dsl.expressions.base import Col, Expr, NamedExpr
 from cudf_polars.dsl.expressions.binaryop import BinOp
 from cudf_polars.dsl.expressions.literal import Literal
 from cudf_polars.dsl.expressions.unary import Cast, UnaryFunction
-from cudf_polars.dsl.ir import Distinct, Empty, HConcat, Select
+from cudf_polars.dsl.ir import IR, Distinct, Empty, HConcat, Select
 from cudf_polars.dsl.traversal import (
     CachingVisitor,
 )
 from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.repartition import Repartition
-from cudf_polars.experimental.utils import _leaf_column_names
+from cudf_polars.experimental.utils import _get_unique_fractions, _leaf_column_names
 
 if TYPE_CHECKING:
     from collections.abc import Generator, MutableMapping, Sequence
-    from typing import TypeAlias
 
     from cudf_polars.dsl.expressions.base import Expr
     from cudf_polars.dsl.ir import IR
@@ -61,9 +60,26 @@ if TYPE_CHECKING:
     from cudf_polars.utils.config import ConfigOptions
 
 
-ExprDecomposer: TypeAlias = (
-    "GenericTransformer[Expr, tuple[Expr, IR, MutableMapping[IR, PartitionInfo]]]"
-)
+class State(TypedDict):
+    """
+    State for decomposing expressions.
+
+    Parameters
+    ----------
+    input_ir
+        IR of the input expression.
+    input_partition_info
+        Partition info of the input expression.
+    """
+
+    input_ir: IR
+    input_partition_info: PartitionInfo
+    config_options: ConfigOptions
+    unique_names: Generator[str, None, None]
+
+
+ExprDecomposer: TypeAlias = "GenericTransformer[Expr, tuple[Expr, IR, MutableMapping[IR, PartitionInfo]], State]"
+"""Protocol for decomposing expressions."""
 
 
 def select(
@@ -174,13 +190,14 @@ def _decompose_unique(
         "'in-memory' executor not supported in '_decompose_unique'"
     )
 
-    cardinality: float | None = None
-    if cardinality_factor := {
-        max(min(v, 1.0), 0.00001)
-        for k, v in config_options.executor.cardinality_factor.items()
-        if k in _leaf_column_names(child)
-    }:
-        cardinality = max(cardinality_factor)
+    unique_fraction_dict = _get_unique_fractions(
+        _leaf_column_names(child),
+        config_options.executor.unique_fraction,
+    )
+
+    unique_fraction = (
+        max(unique_fraction_dict.values()) if unique_fraction_dict else None
+    )
 
     input_ir, partition_info = lower_distinct(
         Distinct(
@@ -194,7 +211,7 @@ def _decompose_unique(
         input_ir,
         partition_info,
         config_options,
-        cardinality=cardinality,
+        unique_fraction=unique_fraction,
     )
 
     return column, input_ir, partition_info
@@ -303,10 +320,15 @@ def _decompose_agg_node(
             (child,) = children
             agg = agg.reconstruct([child])
             shuffle_on = (NamedExpr(next(names), child),)
+
+            assert config_options.executor.name == "streaming", (
+                "'in-memory' executor not supported in '_decompose_agg_node'"
+            )
+
             input_ir = Shuffle(
                 input_ir.schema,
                 shuffle_on,
-                config_options,
+                config_options.executor.shuffle_method,
                 input_ir,
             )
             partition_info[input_ir] = PartitionInfo(
@@ -397,7 +419,7 @@ def _decompose_expr_node(
         # For Literal nodes, we don't actually want an
         # input IR with real columns, because it will
         # mess up the result of ``HConcat``.
-        input_ir = Empty()
+        input_ir = Empty({})
         partition_info[input_ir] = PartitionInfo(count=1)
 
     partition_count = partition_info[input_ir].count
@@ -509,13 +531,17 @@ def decompose_expr_graph(
     -----
     This function recursively decomposes ``named_expr.value`` and
     ``input_ir`` into multiple partition-wise stages.
+
+    The state dictionary is an instance of :class:`State`.
     """
-    state = {
-        "input_ir": input_ir,
-        "input_partition_info": partition_info[input_ir],
-        "config_options": config_options,
-        "unique_names": unique_names((named_expr.name, *input_ir.schema.keys())),
-    }
-    mapper = CachingVisitor(_decompose, state=state)
+    mapper: ExprDecomposer = CachingVisitor(
+        _decompose,
+        state={
+            "input_ir": input_ir,
+            "input_partition_info": partition_info[input_ir],
+            "config_options": config_options,
+            "unique_names": unique_names((named_expr.name, *input_ir.schema.keys())),
+        },
+    )
     expr, input_ir, partition_info = mapper(named_expr.value)
     return named_expr.reconstruct(expr), input_ir, partition_info

@@ -16,6 +16,12 @@ exclude = [
 module = ["cudf_polars.*"]
 disallow_untyped_defs = true
 
+[[tool.mypy.overrides]]
+module = ["polars.*"]
+# override the global "skip" above so that types from polars
+# aren't skipped and assumed to be `Any`.
+follow_imports = "normal"
+
 [tool.codespell]
 # note: pre-commit passes explicit lists of files here, which this skip file list doesn't override -
 # this is only to allow you to run codespell interactively
@@ -41,6 +47,8 @@ select = [
     "W",
     # isort
     "I",
+    # zip-without-explicit-strict
+    "B905",
     # no-blank-line-before-function
     "D201",
     # one-blank-line-after-class
@@ -128,6 +136,10 @@ fixable = ["ALL"]
 exclude = [
     "cpp/scripts/gdb-pretty-printers.py",
 ]
+extend-unsafe-fixes = [
+    # zip-without-explicit-strict's autofix sets strict to False, but we want to enforce True
+    "B905",
+]
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "numpy.can_cast".msg = "Use find_common_dtype from cudf.utils.dtypes instead"
@@ -138,6 +150,9 @@ exclude = [
 [tool.ruff.lint.per-file-ignores]
 # We use "== None" to demonstrate null handling in this notebook
 "docs/cudf/source/user_guide/missing-data.ipynb" = ["E711"]
+# We demonstrate UDFs where numba doesn't support `zip(..., strict=True)` (or
+# any keywords) and we don't want to litter demo notebooks with noqas
+"docs/cudf/source/user_guide/guide-to-udfs.ipynb" = ["B905"]
 # Lots of pytest implicitly injected attributes in conftest-patch.py
 "python/cudf/cudf/pandas/scripts/conftest-patch.py" = ["F821"]
 "python/cudf/cudf/pandas/scripts/*" = ["D"]

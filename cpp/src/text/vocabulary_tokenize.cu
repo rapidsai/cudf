@@ -27,6 +27,7 @@
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -39,7 +40,6 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <cub/cub.cuh>
 #include <cuco/static_map.cuh>
 #include <cuda/std/functional>
 #include <cuda/std/iterator>
@@ -225,10 +225,8 @@ CUDF_KERNEL void token_counts_fn(cudf::column_device_view const d_strings,
 {
   // string per warp
   auto const idx     = cudf::detail::grid_1d::global_thread_id();
-  auto const str_idx = static_cast<cudf::size_type>(idx / cudf::detail::warp_size);
+  auto const str_idx = idx / cudf::detail::warp_size;
   if (str_idx >= d_strings.size()) { return; }
-  auto const lane_idx = static_cast<cudf::size_type>(idx % cudf::detail::warp_size);
-
   if (d_strings.is_null(str_idx)) {
     d_counts[str_idx] = 0;
     return;
@@ -239,6 +237,10 @@ CUDF_KERNEL void token_counts_fn(cudf::column_device_view const d_strings,
     return;
   }
 
+  namespace cg        = cooperative_groups;
+  auto const warp     = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
+  auto const lane_idx = warp.thread_rank();
+
   auto const offsets     = d_strings.child(cudf::strings_column_view::offsets_column_index);
   auto const offsets_itr = cudf::detail::input_offsetalator(offsets.head(), offsets.type());
   auto const offset = offsets_itr[str_idx + d_strings.offset()] - offsets_itr[d_strings.offset()];
@@ -248,9 +250,6 @@ CUDF_KERNEL void token_counts_fn(cudf::column_device_view const d_strings,
   auto const end          = begin + d_str.size_bytes();
   auto const d_output     = d_results + offset;
   auto const d_output_end = d_output + d_str.size_bytes();
-
-  using warp_reduce = cub::WarpReduce<cudf::size_type>;
-  __shared__ typename warp_reduce::TempStorage warp_storage;
 
   cudf::size_type count = 0;
   if (lane_idx == 0) {
@@ -272,7 +271,7 @@ CUDF_KERNEL void token_counts_fn(cudf::column_device_view const d_strings,
     }
     count = ((begin + ch_size) == end);
   }
-  __syncwarp();
+  warp.sync();
 
   for (auto itr = d_output + lane_idx + 1; itr < d_output_end; itr += cudf::detail::warp_size) {
     // add one if at the edge of a token or if at the string's end
@@ -282,10 +281,10 @@ CUDF_KERNEL void token_counts_fn(cudf::column_device_view const d_strings,
       count += (itr + 1 == d_output_end);
     }
   }
-  __syncwarp();
+  warp.sync();
 
   // add up the counts from the other threads to compute the total token count for this string
-  auto const total_count = warp_reduce(warp_storage).Reduce(count, cuda::std::plus());
+  auto const total_count = cg::reduce(warp, count, cg::plus<cudf::size_type>{});
   if (lane_idx == 0) { d_counts[str_idx] = total_count; }
 }
 
@@ -421,7 +420,8 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
                        stream.value()>>>(d_input_chars, chars_size, d_delimiter, d_marks.data());
 
   // launch warp per string to compute token counts
-  cudf::detail::grid_1d grid{input.size() * cudf::detail::warp_size, block_size};
+  constexpr cudf::thread_index_type warp_size = cudf::detail::warp_size;
+  cudf::detail::grid_1d grid{input.size() * warp_size, block_size};
   token_counts_fn<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
     *d_strings, d_delimiter, d_token_counts.data(), d_marks.data());
   auto [token_offsets, total_count] = cudf::detail::make_offsets_child_column(

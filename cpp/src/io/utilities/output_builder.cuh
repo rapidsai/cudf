@@ -294,8 +294,15 @@ class output_builder {
    */
   [[nodiscard]] T back_element(rmm::cuda_stream_view stream) const
   {
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-reference"
+#endif
     auto const& last_nonempty_chunk =
       _chunks.size() > 1 and _chunks.back().is_empty() ? _chunks.rbegin()[1] : _chunks.back();
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic pop
+#endif
     return last_nonempty_chunk.back_element(stream);
   }
 

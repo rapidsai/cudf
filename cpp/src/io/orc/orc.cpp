@@ -16,10 +16,10 @@
 
 #include "orc.hpp"
 
-#include "io/comp/io_uncomp.hpp"
 #include "orc_field_reader.hpp"
 #include "orc_field_writer.hpp"
 
+#include <cudf/io/detail/codec.hpp>
 #include <cudf/io/orc.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 
@@ -44,7 +44,7 @@ namespace {
 uint32_t protobuf_reader::read_field_size(uint8_t const* end)
 {
   auto const size = get<uint32_t>();
-  CUDF_EXPECTS(size <= static_cast<uint32_t>(end - m_cur), "Protobuf parsing out of bounds");
+  CUDF_EXPECTS(std::cmp_less_equal(size, end - m_cur), "Protobuf parsing out of bounds");
   return size;
 }
 

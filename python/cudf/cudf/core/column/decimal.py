@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import cupy as cp
 import numpy as np
+import pandas as pd
 import pyarrow as pa
 
 import pylibcudf as plc
@@ -23,11 +24,15 @@ from cudf.core.dtypes import (
     Decimal64Dtype,
     Decimal128Dtype,
     DecimalDtype,
+    is_decimal128_dtype,
 )
 from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     cudf_dtype_to_pa_type,
+    get_dtype_of_same_kind,
+    get_dtype_of_same_type,
+    pyarrow_dtype_to_cudf_dtype,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 
@@ -111,7 +116,12 @@ class DecimalBaseColumn(NumericalBaseColumn):
             return self
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
-    def as_string_column(self) -> StringColumn:
+    def as_string_column(self, dtype) -> StringColumn:
+        if cudf.get_option("mode.pandas_compatible"):
+            if isinstance(dtype, np.dtype) and dtype.kind == "O":
+                raise TypeError(
+                    f"Cannot cast a decimal from {self.dtype} to {dtype}"
+                )
         if len(self) > 0:
             with acquire_spill_lock():
                 plc_column = (
@@ -204,7 +214,12 @@ class DecimalBaseColumn(NumericalBaseColumn):
         }:
             if isinstance(rhs, (int, Decimal)):
                 rhs = _to_plc_scalar(rhs, self.dtype)
-            return binaryop.binaryop(lhs, rhs, op, np.dtype(np.bool_))
+            return binaryop.binaryop(
+                lhs,
+                rhs,
+                op,
+                get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
+            )
         else:
             raise TypeError(
                 f"{op} not supported for the following dtypes: "
@@ -356,11 +371,13 @@ class Decimal32Column(DecimalBaseColumn):
         )
 
     def _with_type_metadata(
-        self: "cudf.core.column.Decimal32Column", dtype: Dtype
+        self: "cudf.core.column.Decimal32Column",
+        dtype: Dtype,
     ) -> "cudf.core.column.Decimal32Column":
         if isinstance(dtype, Decimal32Dtype):
             self.dtype.precision = dtype.precision
-
+        if cudf.get_option("mode.pandas_compatible"):
+            self._dtype = get_dtype_of_same_type(dtype, self.dtype)
         return self
 
 
@@ -375,7 +392,13 @@ class Decimal128Column(DecimalBaseColumn):
         null_count: int | None = None,
         children: tuple = (),
     ):
-        if not isinstance(dtype, Decimal128Dtype):
+        if (
+            not cudf.get_option("mode.pandas_compatible")
+            and not isinstance(dtype, Decimal128Dtype)
+        ) or (
+            cudf.get_option("mode.pandas_compatible")
+            and not is_decimal128_dtype(dtype)
+        ):
             raise ValueError(f"{dtype=} must be a Decimal128Dtype instance")
         super().__init__(
             data=data,
@@ -394,14 +417,21 @@ class Decimal128Column(DecimalBaseColumn):
         return result
 
     def to_arrow(self) -> pa.Array:
-        return super().to_arrow().cast(self.dtype.to_arrow())
+        if isinstance(self.dtype, pd.ArrowDtype):
+            dtype = pyarrow_dtype_to_cudf_dtype(self.dtype)
+        else:
+            dtype = self.dtype
+
+        return super().to_arrow().cast(dtype.to_arrow())
 
     def _with_type_metadata(
-        self: "cudf.core.column.Decimal128Column", dtype: Dtype
+        self: "cudf.core.column.Decimal128Column",
+        dtype: Dtype,
     ) -> "cudf.core.column.Decimal128Column":
         if isinstance(dtype, Decimal128Dtype):
             self.dtype.precision = dtype.precision
-
+        if cudf.get_option("mode.pandas_compatible"):
+            self._dtype = get_dtype_of_same_type(dtype, self.dtype)
         return self
 
 
@@ -472,11 +502,13 @@ class Decimal64Column(DecimalBaseColumn):
         )
 
     def _with_type_metadata(
-        self: "cudf.core.column.Decimal64Column", dtype: Dtype
+        self: "cudf.core.column.Decimal64Column",
+        dtype: Dtype,
     ) -> "cudf.core.column.Decimal64Column":
         if isinstance(dtype, Decimal64Dtype):
             self.dtype.precision = dtype.precision
-
+        if cudf.get_option("mode.pandas_compatible"):
+            self._dtype = get_dtype_of_same_type(dtype, self.dtype)
         return self
 
 

@@ -42,22 +42,23 @@ struct dispatch_to_arrow_type {
   }
 
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
-  int operator()(column_view input_view, column_metadata const&, ArrowSchema* out)
+  int operator()(column_view input_view, column_metadata const& metadata, ArrowSchema* out)
   {
     cudf::type_id const id = input_view.type().id();
+    auto timezone          = metadata.timezone.c_str();
     switch (id) {
       case cudf::type_id::TIMESTAMP_SECONDS:
         return ArrowSchemaSetTypeDateTime(
-          out, NANOARROW_TYPE_TIMESTAMP, NANOARROW_TIME_UNIT_SECOND, nullptr);
+          out, NANOARROW_TYPE_TIMESTAMP, NANOARROW_TIME_UNIT_SECOND, timezone);
       case cudf::type_id::TIMESTAMP_MILLISECONDS:
         return ArrowSchemaSetTypeDateTime(
-          out, NANOARROW_TYPE_TIMESTAMP, NANOARROW_TIME_UNIT_MILLI, nullptr);
+          out, NANOARROW_TYPE_TIMESTAMP, NANOARROW_TIME_UNIT_MILLI, timezone);
       case cudf::type_id::TIMESTAMP_MICROSECONDS:
         return ArrowSchemaSetTypeDateTime(
-          out, NANOARROW_TYPE_TIMESTAMP, NANOARROW_TIME_UNIT_MICRO, nullptr);
+          out, NANOARROW_TYPE_TIMESTAMP, NANOARROW_TIME_UNIT_MICRO, timezone);
       case cudf::type_id::TIMESTAMP_NANOSECONDS:
         return ArrowSchemaSetTypeDateTime(
-          out, NANOARROW_TYPE_TIMESTAMP, NANOARROW_TIME_UNIT_NANO, nullptr);
+          out, NANOARROW_TYPE_TIMESTAMP, NANOARROW_TIME_UNIT_NANO, timezone);
       case cudf::type_id::DURATION_SECONDS:
         return ArrowSchemaSetTypeDateTime(
           out, NANOARROW_TYPE_DURATION, NANOARROW_TIME_UNIT_SECOND, nullptr);
@@ -78,37 +79,43 @@ struct dispatch_to_arrow_type {
 template <typename DeviceType>
 int decimals_to_arrow(column_view input, int32_t precision, ArrowSchema* out)
 {
+  CUDF_EXPECTS(precision >= 1 and precision <= 38,
+               "Precision must be between 1 and 38 inclusive",
+               cudf::data_type_error);
   return ArrowSchemaSetTypeDecimal(
     out, id_to_arrow_type(input.type().id()), precision, -input.type().scale());
 }
 
 template <>
 int dispatch_to_arrow_type::operator()<numeric::decimal32>(column_view input,
-                                                           column_metadata const&,
+                                                           column_metadata const& metadata,
                                                            ArrowSchema* out)
 {
-  using DeviceType = int32_t;
-  return decimals_to_arrow<DeviceType>(input, cudf::detail::max_precision<DeviceType>(), out);
+  using DeviceType  = int32_t;
+  int32_t precision = metadata.precision.value_or(cudf::detail::max_precision<DeviceType>());
+  return decimals_to_arrow<DeviceType>(input, precision, out);
 }
 
 template <>
 int dispatch_to_arrow_type::operator()<numeric::decimal64>(column_view input,
-                                                           column_metadata const&,
+                                                           column_metadata const& metadata,
                                                            ArrowSchema* out)
 {
   using DeviceType = int64_t;
   // Arrow decimal 64 maxes at precision of 18, cudf::detail::max_precision<int64_t>() produces 19.
   // decimal32 has precision 1 - 9, decimal64 has precision 10 - 18, decimal128 is 19 - 38
-  return decimals_to_arrow<DeviceType>(input, cudf::detail::max_precision<DeviceType>() - 1, out);
+  int32_t precision = metadata.precision.value_or(cudf::detail::max_precision<DeviceType>() - 1);
+  return decimals_to_arrow<DeviceType>(input, precision, out);
 }
 
 template <>
 int dispatch_to_arrow_type::operator()<numeric::decimal128>(column_view input,
-                                                            column_metadata const&,
+                                                            column_metadata const& metadata,
                                                             ArrowSchema* out)
 {
-  using DeviceType = __int128_t;
-  return decimals_to_arrow<DeviceType>(input, cudf::detail::max_precision<DeviceType>(), out);
+  using DeviceType  = __int128_t;
+  int32_t precision = metadata.precision.value_or(cudf::detail::max_precision<DeviceType>());
+  return decimals_to_arrow<DeviceType>(input, precision, out);
 }
 
 template <>

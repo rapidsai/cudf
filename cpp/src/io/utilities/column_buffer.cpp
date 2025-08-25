@@ -22,11 +22,13 @@
 #include "column_buffer.hpp"
 
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <functional>
 #include <sstream>
 
 namespace cudf::io::detail {
@@ -181,127 +183,137 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
                                     std::optional<reader_column_schema> const& schema,
                                     rmm::cuda_stream_view stream)
 {
-  if (schema_info != nullptr) {
-    schema_info->name        = buffer.name;
-    schema_info->is_nullable = buffer.is_nullable;
-  }
+  std::function<std::unique_ptr<column>(column_buffer_base<string_policy> & buffer,
+                                        column_name_info * schema_info,
+                                        std::optional<reader_column_schema> const& schema)> const
+    construct_column =
+      [&construct_column, stream](
+        column_buffer_base<string_policy>& buffer,
+        column_name_info* schema_info,
+        std::optional<reader_column_schema> const& schema) -> std::unique_ptr<column> {
+    if (schema_info != nullptr) {
+      schema_info->name        = buffer.name;
+      schema_info->is_nullable = buffer.is_nullable;
+    }
+    switch (buffer.type.id()) {
+      case type_id::STRING:
+        if (schema.value_or(reader_column_schema{}).is_enabled_convert_binary_to_strings()) {
+          if (schema_info != nullptr) { schema_info->children.emplace_back("offsets"); }
 
-  switch (buffer.type.id()) {
-    case type_id::STRING:
-      if (schema.value_or(reader_column_schema{}).is_enabled_convert_binary_to_strings()) {
-        if (schema_info != nullptr) { schema_info->children.emplace_back("offsets"); }
+          // make_strings_column allocates new memory, it does not simply move
+          // from the inputs, so we need to pass it the memory resource given to
+          // the buffer on construction so that the memory is allocated using the
+          // resource that the calling code expected.
+          return buffer.make_string_column(stream);
+        } else {
+          // convert to binary
+          auto const string_col = buffer.make_string_column(stream);
+          auto const num_rows   = string_col->size();
+          auto const null_count = string_col->null_count();
+          auto col_content      = string_col->release();
 
-        // make_strings_column allocates new memory, it does not simply move
-        // from the inputs, so we need to pass it the memory resource given to
-        // the buffer on construction so that the memory is allocated using the
-        // resource that the calling code expected.
-        return buffer.make_string_column(stream);
-      } else {
-        // convert to binary
-        auto const string_col = buffer.make_string_column(stream);
-        auto const num_rows   = string_col->size();
-        auto const null_count = string_col->null_count();
-        auto col_content      = string_col->release();
+          // convert to uint8 column, strings are currently stored as int8
+          auto data      = col_content.data.release();
+          auto char_size = data->size();
 
-        // convert to uint8 column, strings are currently stored as int8
-        auto data      = col_content.data.release();
-        auto char_size = data->size();
+          CUDF_EXPECTS(char_size < static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
+                       "Cannot convert strings column to lists column due to size_type limit",
+                       std::overflow_error);
 
-        CUDF_EXPECTS(char_size < static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
-                     "Cannot convert strings column to lists column due to size_type limit",
-                     std::overflow_error);
+          auto uint8_col = std::make_unique<column>(
+            data_type{type_id::UINT8}, char_size, std::move(*data), rmm::device_buffer{}, 0);
 
-        auto uint8_col = std::make_unique<column>(
-          data_type{type_id::UINT8}, char_size, std::move(*data), rmm::device_buffer{}, 0);
-
-        if (schema_info != nullptr) {
-          schema_info->children.emplace_back("offsets");
-          schema_info->children.emplace_back("binary");
-          // cuDF type will be list<UINT8>, but remember it was originally binary data
-          schema_info->is_binary = true;
-          if (schema.has_value() and schema->get_type_length() > 0) {
-            schema_info->type_length = schema->get_type_length();
+          if (schema_info != nullptr) {
+            schema_info->children.emplace_back("offsets");
+            schema_info->children.emplace_back("binary");
+            // cuDF type will be list<UINT8>, but remember it was originally binary data
+            schema_info->is_binary = true;
+            if (schema.has_value() and schema->get_type_length() > 0) {
+              schema_info->type_length = schema->get_type_length();
+            }
           }
+
+          return make_lists_column(
+            num_rows,
+            std::move(col_content.children[strings_column_view::offsets_column_index]),
+            std::move(uint8_col),
+            null_count,
+            std::move(*col_content.null_mask),
+            stream);
         }
 
-        return make_lists_column(
-          num_rows,
-          std::move(col_content.children[strings_column_view::offsets_column_index]),
-          std::move(uint8_col),
-          null_count,
-          std::move(*col_content.null_mask),
-          stream);
-      }
+      case type_id::LIST: {
+        // make offsets column
+        auto offsets = std::make_unique<column>(
+          data_type{type_id::INT32}, buffer.size, std::move(buffer._data), rmm::device_buffer{}, 0);
 
-    case type_id::LIST: {
-      // make offsets column
-      auto offsets = std::make_unique<column>(
-        data_type{type_id::INT32}, buffer.size, std::move(buffer._data), rmm::device_buffer{}, 0);
-
-      column_name_info* child_info = nullptr;
-      if (schema_info != nullptr) {
-        schema_info->children.emplace_back("offsets");
-        schema_info->children.emplace_back("");
-        child_info = &schema_info->children.back();
-      }
-
-      CUDF_EXPECTS(not schema.has_value() or schema->get_num_children() > 0,
-                   "Invalid schema provided for read, expected child data for list!");
-      auto const child_schema = schema.has_value()
-                                  ? std::make_optional<reader_column_schema>(schema->child(0))
-                                  : std::nullopt;
-
-      // make child column
-      CUDF_EXPECTS(buffer.children.size() > 0, "Encountered malformed column_buffer");
-      auto child = make_column<string_policy>(buffer.children[0], child_info, child_schema, stream);
-
-      // make the final list column (note : size is the # of offsets, so our actual # of rows is 1
-      // less)
-      return make_lists_column(buffer.size - 1,
-                               std::move(offsets),
-                               std::move(child),
-                               buffer._null_count,
-                               std::move(buffer._null_mask),
-                               stream,
-                               buffer._mr);
-    } break;
-
-    case type_id::STRUCT: {
-      std::vector<std::unique_ptr<cudf::column>> output_children;
-      output_children.reserve(buffer.children.size());
-      for (size_t i = 0; i < buffer.children.size(); ++i) {
         column_name_info* child_info = nullptr;
         if (schema_info != nullptr) {
+          schema_info->children.emplace_back("offsets");
           schema_info->children.emplace_back("");
           child_info = &schema_info->children.back();
         }
 
-        CUDF_EXPECTS(not schema.has_value() or schema->get_num_children() > i,
-                     "Invalid schema provided for read, expected more child data for struct!");
+        CUDF_EXPECTS(not schema.has_value() or schema->get_num_children() > 0,
+                     "Invalid schema provided for read, expected child data for list!");
         auto const child_schema = schema.has_value()
-                                    ? std::make_optional<reader_column_schema>(schema->child(i))
+                                    ? std::make_optional<reader_column_schema>(schema->child(0))
                                     : std::nullopt;
 
-        output_children.emplace_back(
-          make_column<string_policy>(buffer.children[i], child_info, child_schema, stream));
-      }
+        // make child column
+        CUDF_EXPECTS(buffer.children.size() > 0, "Encountered malformed column_buffer");
+        auto child = construct_column(buffer.children[0], child_info, child_schema);
 
-      return make_structs_column(buffer.size,
-                                 std::move(output_children),
+        // make the final list column (note : size is the # of offsets, so our actual # of rows is 1
+        // less)
+        return make_lists_column(buffer.size - 1,
+                                 std::move(offsets),
+                                 std::move(child),
                                  buffer._null_count,
                                  std::move(buffer._null_mask),
                                  stream,
                                  buffer._mr);
-    } break;
+      } break;
 
-    default: {
-      return std::make_unique<column>(buffer.type,
-                                      buffer.size,
-                                      std::move(buffer._data),
-                                      std::move(buffer._null_mask),
-                                      buffer._null_count);
+      case type_id::STRUCT: {
+        std::vector<std::unique_ptr<cudf::column>> output_children;
+        output_children.reserve(buffer.children.size());
+        for (size_t i = 0; i < buffer.children.size(); ++i) {
+          column_name_info* child_info = nullptr;
+          if (schema_info != nullptr) {
+            schema_info->children.emplace_back("");
+            child_info = &schema_info->children.back();
+          }
+
+          CUDF_EXPECTS(not schema.has_value() or schema->get_num_children() > i,
+                       "Invalid schema provided for read, expected more child data for struct!");
+          auto const child_schema = schema.has_value()
+                                      ? std::make_optional<reader_column_schema>(schema->child(i))
+                                      : std::nullopt;
+
+          output_children.emplace_back(
+            construct_column(buffer.children[i], child_info, child_schema));
+        }
+
+        return create_structs_hierarchy(buffer.size,
+                                        std::move(output_children),
+                                        buffer._null_count,
+                                        std::move(buffer._null_mask),
+                                        stream,
+                                        buffer._mr);
+      } break;
+
+      default: {
+        return std::make_unique<column>(buffer.type,
+                                        buffer.size,
+                                        std::move(buffer._data),
+                                        std::move(buffer._null_mask),
+                                        buffer._null_count);
+      }
     }
-  }
+  };
+
+  return construct_column(buffer, schema_info, schema);
 }
 
 /**

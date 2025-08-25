@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 import pylibcudf as plc
 
 from cudf_polars.dsl import ir
+from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.utils.aggregations import apply_pre_evaluation
 from cudf_polars.dsl.utils.naming import unique_names
 
@@ -19,7 +20,6 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl import expr
     from cudf_polars.typing import Schema
-    from cudf_polars.utils import config
 
 __all__ = ["rewrite_groupby"]
 
@@ -29,7 +29,6 @@ def rewrite_groupby(
     schema: Schema,
     keys: Sequence[expr.NamedExpr],
     aggs: Sequence[expr.NamedExpr],
-    config_options: config.ConfigOptions,
     inp: ir.IR,
 ) -> ir.IR:
     """
@@ -45,8 +44,6 @@ def rewrite_groupby(
         Grouping keys.
     aggs
         Originally requested aggregations.
-    config_options
-        Configuration options.
     inp
         Input plan node to the groupby.
 
@@ -82,7 +79,11 @@ def rewrite_groupby(
         )
 
     aggs, group_schema, apply_post_evaluation = apply_pre_evaluation(
-        schema, keys, aggs, unique_names(schema.keys())
+        schema,
+        keys,
+        aggs,
+        unique_names(schema.keys()),
+        ExecutionContext.GROUPBY,
     )
     # TODO: use Distinct when the partitioned executor supports it if
     # the requested aggregations are empty
@@ -92,7 +93,6 @@ def rewrite_groupby(
         aggs,
         node.maintain_order,
         node.options.slice,
-        config_options,
         inp,
     )
     return apply_post_evaluation(inp)

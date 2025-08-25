@@ -29,6 +29,15 @@ project(
 # Set a default build type if none was specified
 rapids_cmake_build_type(Release)
 
+# Set C++ standard globally to ensure all targets use C++20
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# For now, disable CMake's automatic module scanning for C++ files. There is an sccache bug in the
+# version RAPIDS uses in CI that causes it to handle the resulting -M* flags incorrectly with
+# gcc>=14. We can remove this once we upgrade to a newer sccache version.
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
+
 # ##################################################################################################
 # * conda environment -----------------------------------------------------------------------------
 rapids_cmake_support_conda_env(conda_env MODIFY_PREFIX_PATH)
@@ -78,11 +87,8 @@ if(TARGET conda_env)
 endif()
 
 set_target_properties(
-  cudf_kafka
-  PROPERTIES BUILD_RPATH "\$ORIGIN"
-             INSTALL_RPATH "\$ORIGIN" # set target compile options
-             CXX_STANDARD 17
-             CXX_STANDARD_REQUIRED ON
+  cudf_kafka PROPERTIES BUILD_RPATH "\$ORIGIN" INSTALL_RPATH
+                                               "\$ORIGIN" # set target compile options
 )
 
 add_library(cudf_kafka::cudf_kafka ALIAS cudf_kafka)

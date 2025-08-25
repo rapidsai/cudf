@@ -67,3 +67,20 @@ def test_target_partition_size(tmp_path, df, blocksize, n_files):
         assert count > n_files
     else:
         assert count < n_files
+
+
+@pytest.mark.parametrize("mask", [None, pl.col("x") < 1_000])
+def test_split_scan_predicate(tmp_path, df, mask):
+    make_partitioned_source(df, tmp_path, "parquet", n_files=1)
+    q = pl.scan_parquet(tmp_path)
+    if mask is not None:
+        q = q.filter(mask)
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "target_partition_size": 1_000,
+            "scheduler": DEFAULT_SCHEDULER,
+        },
+    )
+    assert_gpu_result_equal(q, engine=engine)

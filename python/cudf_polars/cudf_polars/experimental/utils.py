@@ -10,12 +10,13 @@ from functools import reduce
 from itertools import chain
 from typing import TYPE_CHECKING
 
-from cudf_polars.dsl.expr import Col
+from cudf_polars.dsl.expr import Col, Expr, GroupedRollingWindow, UnaryFunction
 from cudf_polars.dsl.ir import Union
+from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.base import PartitionInfo
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping
+    from collections.abc import MutableMapping, Sequence
 
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import Expr
@@ -98,3 +99,31 @@ def _leaf_column_names(expr: Expr) -> tuple[str, ...]:
         return (expr.name,)
     else:
         return ()
+
+
+def _get_unique_fractions(
+    column_names: Sequence[str],
+    user_unique_fractions: dict[str, float],
+) -> dict[str, float]:
+    """Return unique-fraction statistics subset."""
+    return {
+        c: max(min(f, 1.0), 0.00001)
+        for c, f in user_unique_fractions.items()
+        if c in column_names
+    }
+
+
+def _contains_over(exprs: Sequence[Expr]) -> bool:
+    """Return True if any expression in 'exprs' contains an over(...) (ie. GroupedRollingWindow)."""
+    return any(isinstance(e, GroupedRollingWindow) for e in traversal(exprs))
+
+
+def _contains_unsupported_fill_strategy(exprs: Sequence[Expr]) -> bool:
+    for e in traversal(exprs):
+        if (
+            isinstance(e, UnaryFunction)
+            and e.name == "fill_null_with_strategy"
+            and e.options[0] not in ("zero", "one")
+        ):
+            return True
+    return False

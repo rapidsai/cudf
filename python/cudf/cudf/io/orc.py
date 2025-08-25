@@ -75,7 +75,7 @@ def read_orc_statistics(
         file_statistics = {
             column_name: column_stats
             for column_name, column_stats in zip(
-                column_names, parsed_file_statistics
+                column_names, parsed_file_statistics, strict=True
             )
             if columns is None or column_name in columns
         }
@@ -86,7 +86,7 @@ def read_orc_statistics(
             stripe_statistics = {
                 column_name: column_stats
                 for column_name, column_stats in zip(
-                    column_names, parsed_stripe_statistics
+                    column_names, parsed_stripe_statistics, strict=True
                 )
                 if columns is None or column_name in columns
             }
@@ -329,7 +329,7 @@ def read_orc(
                     df = df.set_index(list(index_col_names.values()))
 
             if reset_index_name:
-                df.index.names = [None] * len(df.index.names)
+                df.index.names = [None] * df.index.nlevels
         return df
     else:
         from pyarrow import orc
@@ -465,7 +465,7 @@ def _plc_write_orc(
             tbl_meta.column_metadata[level].set_name(
                 ioutils._index_level_name(idx_name, level, table._column_names)  # type: ignore[arg-type]
             )
-        num_index_cols_meta = len(table.index.names)
+        num_index_cols_meta = table.index.nlevels
     else:
         plc_table = plc.Table(
             [col.to_pylibcudf(mode="read") for col in table._columns]
@@ -544,6 +544,13 @@ class ORCWriter:
         self.stripe_size_rows = stripe_size_rows
         self.row_index_stride = row_index_stride
         self.initialized = False
+        self.writer = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
 
     def write_table(self, table):
         """Writes a single table to the file"""
@@ -593,7 +600,7 @@ class ORCWriter:
                 self.tbl_meta = plc.io.types.TableInputMetadata(plc_table)
                 for level, idx_name in enumerate(table.index.names):
                     self.tbl_meta.column_metadata[level].set_name(idx_name)
-                num_index_cols_meta = len(table.index.names)
+                num_index_cols_meta = table.index.nlevels
             else:
                 if table.index.name is not None:
                     plc_table = plc.Table(
@@ -688,7 +695,7 @@ def _set_col_children_metadata(
 ) -> None:
     if isinstance(col.dtype, StructDtype):
         for i, (child_col, name) in enumerate(
-            zip(col.children, list(col.dtype.fields))
+            zip(col.children, list(col.dtype.fields), strict=True)
         ):
             col_meta.child(i).set_name(name)
             _set_col_children_metadata(
