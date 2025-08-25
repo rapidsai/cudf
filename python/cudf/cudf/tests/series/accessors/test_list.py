@@ -534,3 +534,36 @@ def test_list_methods_setattr():
 
     with pytest.raises(AttributeError):
         ser.list.a = "b"
+
+
+def test_lists_contains(numeric_types_as_str):
+    inner_data = np.array([1, 2, 3], dtype=numeric_types_as_str)
+
+    data = cudf.Series([inner_data])
+
+    contained_scalar = inner_data.dtype.type(2)
+    not_contained_scalar = inner_data.dtype.type(42)
+
+    assert data.list.contains(contained_scalar)[0]
+    assert not data.list.contains(not_contained_scalar)[0]
+
+
+def test_lists_contains_datetime(temporal_types_as_str):
+    inner_data = np.array([1, 2, 3], dtype=temporal_types_as_str)
+
+    unit, _ = np.datetime_data(inner_data.dtype)
+
+    data = cudf.Series([inner_data])
+
+    contained_scalar = inner_data.dtype.type(2, unit)
+    not_contained_scalar = inner_data.dtype.type(42, unit)
+
+    assert data.list.contains(contained_scalar)[0]
+    assert not data.list.contains(not_contained_scalar)[0]
+
+
+def test_lists_contains_bool():
+    data = cudf.Series([[True, True, True]])
+
+    assert data.list.contains(True)[0]
+    assert not data.list.contains(False)[0]
