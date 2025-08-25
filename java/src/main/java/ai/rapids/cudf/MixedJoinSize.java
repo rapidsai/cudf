@@ -17,7 +17,7 @@
 package ai.rapids.cudf;
 
 /** This class tracks size information associated with a mixed table join. */
-public final class MixedJoinSize {
+public final class MixedJoinSize implements AutoCloseable {
   private final long outputRowCount;
 
   MixedJoinSize(long outputRowCount) {
@@ -27,5 +27,14 @@ public final class MixedJoinSize {
   /** Return the number of output rows that would be generated from the mixed join */
   public long getOutputRowCount() {
     return outputRowCount;
+  }
+
+  /**
+   * Close this resource. This implementation does nothing as there are no resources to release,
+   * but implementing AutoCloseable allows this class to be used in try-with-resources blocks.
+   */
+  @Override
+  public void close() {
+    // Nothing to close
   }
 }
