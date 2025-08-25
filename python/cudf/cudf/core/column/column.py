@@ -818,19 +818,23 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if len(self) == 0:
             return np.array([], dtype=self.dtype)
 
-        if cudf.get_option(
-            "mode.pandas_compatible"
-        ) and is_pandas_nullable_extension_dtype(self.dtype):
-            if self.dtype.kind in "iuf":
-                with acquire_spill_lock():
-                    res = self.data_array_view(mode="read").copy_to_host()
-                if self.has_nulls():
-                    res = np.where(
-                        self.isnull().values_host,
-                        np.nan,
-                        res,
-                    )
-                return res
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and is_pandas_nullable_extension_dtype(self.dtype)
+            and self.dtype.kind in "iuf"
+            and self.has_nulls()
+        ):
+            col = self.astype(
+                np.dtype("float32")
+                if getattr(self.dtype, "numpy_dtype", self.dtype)
+                == np.dtype("float32")
+                else np.dtype("float64")
+            )
+            col = col.fillna(np.nan)
+            with acquire_spill_lock():
+                res = col.data_array_view(mode="read").copy_to_host()
+            return res
+
         if self.has_nulls():
             raise ValueError("Column must have no nulls.")
 
@@ -2570,10 +2574,7 @@ def _has_any_nan(arbitrary: pd.Series | np.ndarray) -> bool:
 
 def _has_any_nat(arbitrary: pd.Series | np.ndarray) -> bool:
     """Check if an object dtype Series or array contains NaT."""
-    return any(
-        isinstance(x, (type(pd.NaT), pd.Timestamp)) and x is pd.NaT
-        for x in np.asarray(arbitrary)
-    )
+    return any(x is pd.NaT for x in np.asarray(arbitrary))
 
 
 def column_empty(

@@ -7066,7 +7066,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                         "var",
                         "nanvar",
                     }
-                    and common_dtype.kind not in "f"
+                    and common_dtype.kind != "f"
                 ):
                     result_dtype = get_dtype_of_same_kind(
                         common_dtype, np.dtype(np.float64)
