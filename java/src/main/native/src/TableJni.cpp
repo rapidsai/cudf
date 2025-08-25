@@ -874,24 +874,16 @@ jlongArray mixed_join_size(JNIEnv* env,
     auto const condition = reinterpret_cast<cudf::jni::ast::compiled_expr const*>(j_condition);
     auto const nulls_equal =
       j_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
-    auto [join_size, matches_per_row] = join_size_func(*left_keys,
-                                                       *right_keys,
-                                                       *left_condition,
-                                                       *right_condition,
-                                                       condition->get_top_expression(),
-                                                       nulls_equal);
-    if (matches_per_row->size() > std::numeric_limits<cudf::size_type>::max()) {
-      throw std::runtime_error("Too many values in device buffer to convert into a column");
-    }
-    auto col_size = static_cast<size_type>(matches_per_row->size());
-    auto col_data = matches_per_row->release();
-    cudf::jni::native_jlongArray result(env, 2);
+    auto join_size = join_size_func(*left_keys,
+                                    *right_keys,
+                                    *left_condition,
+                                    *right_condition,
+                                    condition->get_top_expression(),
+                                    nulls_equal);
+
+    // Return only the size value as a single element array
+    cudf::jni::native_jlongArray result(env, 1);
     result[0] = static_cast<jlong>(join_size);
-    result[1] = ptr_as_jlong(new cudf::column{cudf::data_type{cudf::type_id::INT32},
-                                              col_size,
-                                              std::move(col_data),
-                                              rmm::device_buffer{},
-                                              0});
     return result.get_jArray();
   }
   CATCH_STD(env, NULL);
@@ -967,14 +959,12 @@ jlongArray mixed_join_gather_single_map(JNIEnv* env,
   CATCH_STD(env, NULL);
 }
 
-std::pair<std::size_t, cudf::device_span<cudf::size_type const>> get_mixed_size_info(
-  JNIEnv* env, jlong j_output_row_count, jlong j_matches_view)
+std::optional<std::size_t> get_mixed_size_info(JNIEnv* env,
+                                               jlong j_output_row_count,
+                                               jlong j_matches_view)
 {
   auto const row_count = static_cast<std::size_t>(j_output_row_count);
-  auto const matches   = reinterpret_cast<cudf::column_view const*>(j_matches_view);
-  return std::make_pair(row_count,
-                        cudf::device_span<cudf::size_type const>(
-                          matches->template data<cudf::size_type>(), matches->size()));
+  return std::optional<std::size_t>(row_count);
 }
 
 cudf::column_view remove_validity_from_col(cudf::column_view column_view)

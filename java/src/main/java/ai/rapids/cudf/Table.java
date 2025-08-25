@@ -3115,10 +3115,9 @@ public final class Table implements AutoCloseable {
             leftKeys.getNativeView(), rightKeys.getNativeView(),
             leftConditional.getNativeView(), rightConditional.getNativeView(),
             condition.getNativeHandle(), nullEquality == NullEquality.EQUAL);
-    assert mixedSizeInfo.length == 2;
+    assert mixedSizeInfo.length == 1;
     long outputRowCount = mixedSizeInfo[0];
-    long matchesColumnHandle = mixedSizeInfo[1];
-    return new MixedJoinSize(outputRowCount, new ColumnVector(matchesColumnHandle));
+    return new MixedJoinSize(outputRowCount);
   }
 
   /**
@@ -3182,7 +3181,7 @@ public final class Table implements AutoCloseable {
             leftConditional.getNativeView(), rightConditional.getNativeView(),
             condition.getNativeHandle(),
             nullEquality == NullEquality.EQUAL,
-            joinSize.getOutputRowCount(), joinSize.getMatches().getNativeView());
+            joinSize.getOutputRowCount(), 0);
     return buildJoinGatherMaps(gatherMapData);
   }
 
@@ -3382,10 +3381,9 @@ public final class Table implements AutoCloseable {
         leftKeys.getNativeView(), rightKeys.getNativeView(),
         leftConditional.getNativeView(), rightConditional.getNativeView(),
         condition.getNativeHandle(), nullEquality == NullEquality.EQUAL);
-    assert mixedSizeInfo.length == 2;
+    assert mixedSizeInfo.length == 1;
     long outputRowCount = mixedSizeInfo[0];
-    long matchesColumnHandle = mixedSizeInfo[1];
-    return new MixedJoinSize(outputRowCount, new ColumnVector(matchesColumnHandle));
+    return new MixedJoinSize(outputRowCount);
   }
 
   /**
@@ -3449,7 +3447,7 @@ public final class Table implements AutoCloseable {
         leftConditional.getNativeView(), rightConditional.getNativeView(),
         condition.getNativeHandle(),
         nullEquality == NullEquality.EQUAL,
-        joinSize.getOutputRowCount(), joinSize.getMatches().getNativeView());
+        joinSize.getOutputRowCount(), 0);
     return buildJoinGatherMaps(gatherMapData);
   }
 
