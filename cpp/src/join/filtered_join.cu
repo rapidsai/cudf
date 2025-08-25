@@ -14,12 +14,14 @@
  * limitations under the License.
  */
 
+#include "cub/detail/nvtx.cuh"
 #include "join_common_utils.cuh"
 
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/join/filtered_join.cuh>
 #include <cudf/detail/join/join.hpp>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/join/filtered_join.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
@@ -101,6 +103,7 @@ auto filtered_join::compute_bucket_storage_size(cudf::table_view tbl, double loa
 template <int32_t CGSize, typename Ref>
 void filtered_join::insert_build_table(Ref const& insert_ref, rmm::cuda_stream_view stream)
 {
+  nvtxRangePushA("insert_build_table");
   auto insert = [&]<typename Iterator>(Iterator build_iter) {
     // Build hash table by inserting all rows from build table
     auto const grid_size = cuco::detail::grid_size(_build.num_rows(), CGSize);
@@ -142,6 +145,7 @@ void filtered_join::insert_build_table(Ref const& insert_ref, rmm::cuda_stream_v
 
     insert(build_iter);
   }
+  nvtxRangePop();
 }
 
 template <int32_t CGSize, typename Ref>
@@ -153,6 +157,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> filtered_join_with_set::qu
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
+  nvtxRangePushA("query_build_table");
   auto const probe_has_nulls = has_nested_nulls(probe);
   auto const has_any_nulls   = probe_has_nulls || _build_props._has_nulls;
 
@@ -213,6 +218,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> filtered_join_with_set::qu
                       return *(d_flagged + idx) == (kind == join_kind::LEFT_SEMI_JOIN);
                     });
   gather_map.resize(cuda::std::distance(gather_map.begin(), gather_map_end), stream);
+  nvtxRangePop();
   return std::make_unique<rmm::device_uvector<size_type>>(std::move(gather_map));
 }
 
@@ -242,6 +248,7 @@ filtered_join_with_set::filtered_join_with_set(cudf::table_view const& build,
                                                rmm::cuda_stream_view stream)
   : filtered_join(build, compare_nulls, load_factor, stream)
 {
+  nvtxRangePushA("filtered_join_with_set");
   if (cudf::is_primitive_row_op_compatible(build) && !_build_props._has_floating_point) {
     auto const d_build_comparator =
       primitive_row_comparator{nullate::DYNAMIC{_build_props._has_nulls},
@@ -282,6 +289,7 @@ filtered_join_with_set::filtered_join_with_set(cudf::table_view const& build,
     auto insert_ref = set_ref.rebind_operators(cuco::insert);
     insert_build_table<simple_probing_scheme::cg_size>(insert_ref, stream);
   }
+  nvtxRangePop();
 }
 
 std::unique_ptr<rmm::device_uvector<cudf::size_type>> filtered_join_with_set::semi_anti_join(
@@ -290,6 +298,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> filtered_join_with_set::se
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
+  nvtxRangePushA("filtered_join_with_set::semi_anti_join");
   auto const has_any_nulls = has_nested_nulls(probe) || _build_props._has_nulls;
   auto const preprocessed_probe =
     cudf::experimental::row::equality::preprocessed_table::create(probe, stream);
@@ -338,6 +347,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> filtered_join_with_set::se
         probe, preprocessed_probe, kind, query_ref, stream, mr);
     }
   }
+  nvtxRangePop();
 }
 
 std::unique_ptr<rmm::device_uvector<cudf::size_type>> filtered_join_with_set::semi_join(
