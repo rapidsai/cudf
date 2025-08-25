@@ -38,7 +38,7 @@ struct benchmark_domain {
  * Example:
  * ```
  * void some_function(){
- *    CUDF_FUNC_RANGE();
+ *    CUDF_BENCHMARK_RANGE();
  *    ...
  * }
  * ```
