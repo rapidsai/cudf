@@ -19,6 +19,7 @@ import pylibcudf as plc
 
 from cudf_polars.dsl.ir import IR, DataFrameScan, Empty, Scan, Sink, Union
 from cudf_polars.experimental.base import (
+    ColumnSourceInfo,
     ColumnStat,
     ColumnStats,
     DataSourceInfo,
@@ -118,8 +119,8 @@ class ScanPartitionPlan:
             blocksize: int = config_options.executor.target_partition_size
             column_stats = _extract_scan_stats(ir, config_options)
             column_sizes: list[int] = []
-            for name, cs in column_stats.items():
-                storage_size = cs.source_info.storage_size(name)
+            for cs in column_stats.values():
+                storage_size = cs.source_info.storage_size
                 if storage_size.value is not None:
                     column_sizes.append(storage_size.value)
 
@@ -821,7 +822,7 @@ def _extract_scan_stats(
 ) -> dict[str, ColumnStats]:
     """Extract base ColumnStats for a Scan node."""
     if ir.typ == "parquet":
-        source_info = _sample_pq_stats(
+        table_source_info = _sample_pq_stats(
             tuple(ir.paths),
             config_options.parquet_options.max_footer_samples,
             config_options.parquet_options.max_row_group_samples,
@@ -829,8 +830,7 @@ def _extract_scan_stats(
         return {
             name: ColumnStats(
                 name=name,
-                source_info=source_info,
-                source_name=name,
+                source_info=ColumnSourceInfo(table_source_info, name),
             )
             for name in ir.schema
         }
@@ -879,12 +879,11 @@ class DataFrameSourceInfo(DataSourceInfo):
 
 def _extract_dataframescan_stats(ir: DataFrameScan) -> dict[str, ColumnStats]:
     """Extract base ColumnStats for a DataFrameScan node."""
-    source_info = DataFrameSourceInfo(ir.df)
+    table_source_info = DataFrameSourceInfo(ir.df)
     return {
         name: ColumnStats(
             name=name,
-            source_info=source_info,
-            source_name=name,
+            source_info=ColumnSourceInfo(table_source_info, name),
         )
         for name in ir.schema
     }

@@ -62,7 +62,7 @@ def test_character_tokenize(input_col):
     got = plc.nvtext.tokenize.character_tokenize(
         plc.Column.from_arrow(input_col)
     )
-    expect = pa.array(["a", "b", " ", "c", "d", ".", "e", ":", "f", ";"])
+    expect = pa.array([["a"], ["b", " ", "c"], ["d", ".", "e", ":", "f", ";"]])
     assert_column_eq(expect, got)
 
 
