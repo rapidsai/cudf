@@ -74,10 +74,10 @@ std::size_t launch_compute_mixed_join_output_size(
   cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
   cuda::std::pair<cudf::size_type, cudf::size_type> const* hash_indices,
   row_equality const equality_probe,
-  join_kind const join_type,
+  join_kind join_type,
   cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
   ast::detail::expression_device_view device_expression_data,
-  bool const swap_tables,
+  bool swap_tables,
   detail::grid_1d const config,
   int64_t shmem_size_per_block,
   rmm::cuda_stream_view stream);

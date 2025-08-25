@@ -190,12 +190,12 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
              cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
              cuda::std::pair<cudf::size_type, cudf::size_type> const* hash_indices,
              row_equality const equality_probe,
-             join_kind const join_type,
+             join_kind join_type,
              cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
              size_type* join_output_l,
              size_type* join_output_r,
              cudf::ast::detail::expression_device_view device_expression_data,
-             bool const swap_tables)
+             bool swap_tables)
 {
   extern __shared__ char raw_intermediate_storage[];
   auto intermediate_storage =
@@ -253,12 +253,12 @@ void launch_mixed_join(
   cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
   cuda::std::pair<cudf::size_type, cudf::size_type> const* hash_indices,
   row_equality const equality_probe,
-  join_kind const join_type,
+  join_kind join_type,
   cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
   size_type* join_output_l,
   size_type* join_output_r,
   cudf::ast::detail::expression_device_view device_expression_data,
-  bool const swap_tables,
+  bool swap_tables,
   detail::grid_1d const config,
   int64_t shmem_size_per_block,
   rmm::cuda_stream_view stream)
