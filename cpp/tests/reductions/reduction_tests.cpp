@@ -1131,6 +1131,15 @@ TEST_F(ReductionEmptyTest, empty_column)
   EXPECT_EQ(result->is_valid(), false);
   result = cudf::reduce(col_nulls, *quantile_agg, double_type);
   EXPECT_EQ(result->is_valid(), false);
+
+  auto count_agg =
+    cudf::make_count_aggregation<cudf::reduce_aggregation>(cudf::null_policy::INCLUDE);
+  result = cudf::reduce(col0, *count_agg, size_data_type);
+  EXPECT_EQ(result->is_valid(), true);
+  EXPECT_EQ(dynamic_cast<cudf::numeric_scalar<cudf::size_type>*>(result.get())->value(), 0);
+  result = cudf::reduce(col_nulls, *count_agg, size_data_type);
+  EXPECT_EQ(result->is_valid(), true);
+  EXPECT_EQ(dynamic_cast<cudf::numeric_scalar<cudf::size_type>*>(result.get())->value(), col_size);
 }
 
 TEST_F(ReductionEmptyTest, Errors)
@@ -1588,6 +1597,38 @@ TYPED_TEST(ReductionTest, UniqueCount)
                 cudf::data_type{cudf::type_to_id<uint32_t>()})
               .first,
             expected_null_value1);
+}
+
+TYPED_TEST(ReductionTest, Count)
+{
+  using T = TypeParam;
+  std::vector<int> int_values({1, -3, 1, 2, 0, 2, -4, 45});
+  std::vector<T> v = convert_values<T>(int_values);
+
+  auto const output_type = cudf::data_type{cudf::type_to_id<cudf::size_type>()};
+
+  // test without nulls
+  auto col            = cudf::test::fixed_width_column_wrapper<T>(v.begin(), v.end());
+  auto expected_value = static_cast<cudf::size_type>(v.size());
+  auto count_agg = cudf::make_count_aggregation<reduce_aggregation>(cudf::null_policy::INCLUDE);
+  auto count_agg_exclude =
+    cudf::make_count_aggregation<reduce_aggregation>(cudf::null_policy::EXCLUDE);
+  EXPECT_EQ(this->template reduction_test<cudf::size_type>(col, *count_agg, output_type).first,
+            expected_value);
+  EXPECT_EQ(
+    this->template reduction_test<cudf::size_type>(col, *count_agg_exclude, output_type).first,
+    expected_value);
+
+  // test with nulls
+  auto validity = cudf::test::iterators::null_at(3);
+  col           = cudf::test::fixed_width_column_wrapper<T>(v.begin(), v.end(), validity);
+  EXPECT_EQ(this->template reduction_test<cudf::size_type>(col, *count_agg, output_type).first,
+            expected_value);
+
+  expected_value = static_cast<cudf::size_type>(v.size() - 1);
+  EXPECT_EQ(
+    this->template reduction_test<cudf::size_type>(col, *count_agg_exclude, output_type).first,
+    expected_value);
 }
 
 template <typename T>

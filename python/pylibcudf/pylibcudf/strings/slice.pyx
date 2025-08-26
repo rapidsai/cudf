@@ -81,16 +81,19 @@ cpdef Column slice_strings(
 
     elif ColumnOrScalar is Scalar:
         if start is None:
+            stream = _get_stream(None)
             start = Scalar.from_libcudf(
-                cpp_make_fixed_width_scalar(0)
+                cpp_make_fixed_width_scalar(0, stream.view())
             )
         if stop is None:
+            stream = _get_stream(None)
             stop = Scalar.from_libcudf(
-                cpp_make_fixed_width_scalar(0)
+                cpp_make_fixed_width_scalar(0, stream.view())
             )
         if step is None:
+            stream = _get_stream(None)
             step = Scalar.from_libcudf(
-                cpp_make_fixed_width_scalar(1)
+                cpp_make_fixed_width_scalar(1, stream.view())
             )
 
         cpp_start = <numeric_scalar[size_type]*>start.c_obj.get()

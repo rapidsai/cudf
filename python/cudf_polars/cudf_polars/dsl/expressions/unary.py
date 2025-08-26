@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
+from typing_extensions import assert_never
+
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
@@ -105,13 +107,15 @@ class UnaryFunction(Expr):
             "as_struct",
             "drop_nulls",
             "fill_null",
+            "fill_null_with_strategy",
             "mask_nans",
+            "null_count",
+            "rank",
             "round",
             "set_sorted",
+            "top_k",
             "unique",
             "value_counts",
-            "null_count",
-            "top_k",
         }
     )
     _supported_cum_aggs = frozenset(
@@ -135,13 +139,14 @@ class UnaryFunction(Expr):
         self.children = children
         self.is_pointwise = self.name not in (
             "as_struct",
-            "cum_min",
             "cum_max",
+            "cum_min",
             "cum_prod",
             "cum_sum",
             "drop_nulls",
-            "unique",
+            "rank",
             "top_k",
+            "unique",
         )
 
         if self.name not in UnaryFunction._supported_fns:
@@ -151,6 +156,16 @@ class UnaryFunction(Expr):
             if reverse:
                 raise NotImplementedError(
                     "reverse=True is not supported for cumulative aggregations"
+                )
+        if self.name == "fill_null_with_strategy" and self.options[1] not in {0, None}:
+            raise NotImplementedError(
+                "Filling null values with limit specified is not yet supported."
+            )
+        if self.name == "rank":
+            method, _, _ = self.options
+            if method not in {"average", "min", "max", "dense", "ordinal"}:
+                raise NotImplementedError(
+                    f"ranking with {method=} is not yet supported"
                 )
 
     def do_evaluate(
@@ -326,6 +341,58 @@ class UnaryFunction(Expr):
                     .obj.to_scalar()
                 )
             return Column(plc.replace.replace_nulls(column.obj, arg), dtype=self.dtype)
+        elif self.name == "fill_null_with_strategy":
+            column = self.children[0].evaluate(df, context=context)
+            strategy, limit = self.options
+            if (
+                column.null_count == 0
+                or limit == 0
+                or (
+                    column.null_count == column.size and strategy not in {"zero", "one"}
+                )
+            ):
+                return column
+            if strategy == "forward":
+                replacement = plc.replace.ReplacePolicy.PRECEDING
+            elif strategy == "backward":
+                replacement = plc.replace.ReplacePolicy.FOLLOWING
+            elif strategy == "min":
+                replacement = plc.reduce.reduce(
+                    column.obj,
+                    plc.aggregation.min(),
+                    column.dtype.plc,
+                )
+            elif strategy == "max":
+                replacement = plc.reduce.reduce(
+                    column.obj,
+                    plc.aggregation.max(),
+                    column.dtype.plc,
+                )
+            elif strategy == "mean":
+                replacement = plc.reduce.reduce(
+                    column.obj,
+                    plc.aggregation.mean(),
+                    plc.DataType(plc.TypeId.FLOAT64),
+                )
+            elif strategy == "zero":
+                replacement = plc.scalar.Scalar.from_py(0, dtype=column.dtype.plc)
+            elif strategy == "one":
+                replacement = plc.scalar.Scalar.from_py(1, dtype=column.dtype.plc)
+            else:
+                assert_never(strategy)  # pragma: no cover
+
+            if strategy == "mean":
+                return Column(
+                    plc.replace.replace_nulls(
+                        plc.unary.cast(column.obj, plc.DataType(plc.TypeId.FLOAT64)),
+                        replacement,
+                    ),
+                    dtype=self.dtype,
+                ).astype(self.dtype)
+            return Column(
+                plc.replace.replace_nulls(column.obj, replacement),
+                dtype=self.dtype,
+            )
         elif self.name == "as_struct":
             children = [
                 child.evaluate(df, context=context).obj for child in self.children
@@ -342,6 +409,44 @@ class UnaryFunction(Expr):
                 ),
                 dtype=self.dtype,
             )
+        elif self.name == "rank":
+            (column,) = (child.evaluate(df, context=context) for child in self.children)
+            method_str, descending, _ = self.options
+
+            method = {
+                "average": plc.aggregation.RankMethod.AVERAGE,
+                "min": plc.aggregation.RankMethod.MIN,
+                "max": plc.aggregation.RankMethod.MAX,
+                "dense": plc.aggregation.RankMethod.DENSE,
+                "ordinal": plc.aggregation.RankMethod.FIRST,
+            }[method_str]
+
+            order = (
+                plc.types.Order.DESCENDING if descending else plc.types.Order.ASCENDING
+            )
+
+            ranked: plc.Column = plc.sorting.rank(
+                column.obj,
+                method,
+                order,
+                plc.types.NullPolicy.EXCLUDE,
+                plc.types.NullOrder.BEFORE if descending else plc.types.NullOrder.AFTER,
+                percentage=False,
+            )
+
+            # Min/Max/Dense/Ordinal -> IDX_DTYPE
+            # See https://github.com/pola-rs/polars/blob/main/crates/polars-ops/src/series/ops/rank.rs
+            if method_str in {"min", "max", "dense", "ordinal"}:
+                dest = self.dtype.plc.id()
+                src = ranked.type().id()
+                if dest == plc.TypeId.UINT32 and src != plc.TypeId.UINT32:
+                    ranked = plc.unary.cast(ranked, plc.DataType(plc.TypeId.UINT32))
+                elif (
+                    dest == plc.TypeId.UINT64 and src != plc.TypeId.UINT64
+                ):  # pragma: no cover
+                    ranked = plc.unary.cast(ranked, plc.DataType(plc.TypeId.UINT64))
+
+            return Column(ranked, dtype=self.dtype)
         elif self.name == "top_k":
             (column, k) = (
                 child.evaluate(df, context=context) for child in self.children

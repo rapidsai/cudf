@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
 from libcpp.memory cimport unique_ptr
@@ -19,6 +19,9 @@ from pylibcudf.libcudf.scalar.scalar_factories cimport (
     make_string_scalar as cpp_make_string_scalar,
 )
 from pylibcudf.libcudf.types cimport size_type
+from pylibcudf.scalar cimport Scalar
+from pylibcudf.utils cimport _get_stream
+from rmm.pylibrmm.stream cimport Stream
 
 __all__ = [
     "TokenizeVocabulary",
@@ -63,10 +66,12 @@ cpdef Column tokenize_scalar(Column input, Scalar delimiter=None):
         New strings columns of tokens
     """
     cdef unique_ptr[column] c_result
+    cdef Stream stream
 
     if delimiter is None:
+        stream = _get_stream(None)
         delimiter = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode())
+            cpp_make_string_scalar("".encode(), stream.view())
         )
 
     with nogil:
@@ -126,10 +131,12 @@ cpdef Column count_tokens_scalar(Column input, Scalar delimiter=None):
         New column of token counts
     """
     cdef unique_ptr[column] c_result
+    cdef Stream stream
 
     if delimiter is None:
+        stream = _get_stream(None)
         delimiter = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode())
+            cpp_make_string_scalar("".encode(), stream.view())
         )
 
     with nogil:
@@ -218,10 +225,12 @@ cpdef Column detokenize(
         New strings columns of tokens
     """
     cdef unique_ptr[column] c_result
+    cdef Stream stream
 
     if separator is None:
+        stream = _get_stream(None)
         separator = Scalar.from_libcudf(
-            cpp_make_string_scalar(" ".encode())
+            cpp_make_string_scalar(" ".encode(), stream.view())
         )
 
     with nogil:
