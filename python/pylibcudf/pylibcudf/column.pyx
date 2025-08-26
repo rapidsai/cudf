@@ -1015,16 +1015,21 @@ cdef class Column:
             hasattr(obj, "__cuda_array_interface__")
             or hasattr(obj, "__array_interface__")
         ):
-            return Column.from_array(obj)
+            raise TypeError(
+                "Object has __cuda_array_interface__ or __array_interface__. "
+                "Please call Column.from_array(obj)."
+            )
 
         if (
             hasattr(obj, "__arrow_c_array__")
-            or hasattr(obj, "__arrow_c_array__")
             or hasattr(obj, "__arrow_c_device_array__")
             or hasattr(obj, "__arrow_c_stream__")
             or hasattr(obj, "__arrow_c_device_stream__")
         ):
-            return Column.from_arrow(obj)
+            raise TypeError(
+                "Object implements a C data interface protocol. "
+                "Please call Column.from_arrow(obj)."
+            )
 
         if not isinstance(obj, (list, tuple)):
             obj = list(obj)
