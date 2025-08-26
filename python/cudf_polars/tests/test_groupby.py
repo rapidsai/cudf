@@ -397,3 +397,25 @@ def test_groupby_aggs_keep_unsupported_as_null(df: pl.LazyFrame, agg_expr) -> No
 def test_groupby_ternary_supported(df: pl.LazyFrame, expr: pl.Expr) -> None:
     q = df.group_by("key1").agg(expr)
     assert_gpu_result_equal(q, check_row_order=False)
+
+
+@pytest.mark.parametrize(
+    "strategy", ["forward", "backward", "min", "max", "mean", "zero", "one"]
+)
+def test_groupby_fill_null_with_strategy(strategy):
+    lf = pl.LazyFrame(
+        {
+            "key": [1, 1, 2, 2, 2],
+            "val": [None, 2, None, 4, None],
+        }
+    )
+
+    q = lf.group_by("key").agg(pl.col("val").fill_null(strategy=strategy))
+
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_groupby_rank_raises(df: pl.LazyFrame) -> None:
+    q = df.group_by("key1").agg(pl.col("int").rank())
+
+    assert_ir_translation_raises(q, NotImplementedError)

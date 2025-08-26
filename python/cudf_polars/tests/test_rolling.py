@@ -272,3 +272,10 @@ def test_rolling_ternary_supported(df, expr):
 def test_rolling_ternary_unsupported(df, expr):
     q = df.rolling("dt", period="48h", closed="both").agg(expr.alias("out"))
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_rolling_rank_unsupported(df):
+    q = df.rolling("dt", period="48h", closed="both").agg(
+        pl.col("values").rank(method="dense", descending=False)
+    )
+    assert_ir_translation_raises(q, NotImplementedError)

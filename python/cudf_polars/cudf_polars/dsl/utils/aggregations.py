@@ -89,6 +89,11 @@ def decompose_single_agg(
     """
     agg = named_expr.value
     name = named_expr.name
+    if isinstance(agg, expr.UnaryFunction) and agg.name in {"rank"}:
+        name = agg.name
+        raise NotImplementedError(
+            f"UnaryFunction {name=} not supported in groupby context"
+        )
     if isinstance(agg, expr.UnaryFunction) and agg.name == "null_count":
         (child,) = agg.children
 
@@ -131,6 +136,15 @@ def decompose_single_agg(
         return [(named_expr, True)], named_expr.reconstruct(expr.Col(agg.dtype, name))
     if isinstance(agg, (expr.Literal, expr.LiteralColumn)):
         return [], named_expr
+    if (
+        is_top
+        and isinstance(agg, expr.UnaryFunction)
+        and agg.name == "fill_null_with_strategy"
+    ):
+        strategy, _ = agg.options
+        raise NotImplementedError(
+            f"fill_null_with_strategy({strategy!r}) is not supported in groupby aggregations"
+        )
     if isinstance(agg, expr.Agg):
         if agg.name == "quantile":
             # Second child the requested quantile (which is asserted
