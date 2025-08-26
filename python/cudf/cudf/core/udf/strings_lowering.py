@@ -794,32 +794,34 @@ def create_masked_upper_or_lower(op, cuda_func):
     cuda_lower(op, MaskedType(string_view))(upper_or_lower_impl)
 
 
-create_masked_binary_string_func("MaskedType.strip", strip_impl, udf_string)
-create_masked_binary_string_func("MaskedType.lstrip", lstrip_impl, udf_string)
-create_masked_binary_string_func("MaskedType.rstrip", rstrip_impl, udf_string)
-create_masked_binary_string_func(
-    "MaskedType.startswith",
-    startswith_impl,
-    types.boolean,
-)
-create_masked_binary_string_func(
-    "MaskedType.endswith", endswith_impl, types.boolean
-)
-create_masked_binary_string_func("MaskedType.find", find_impl, size_type)
-create_masked_binary_string_func("MaskedType.rfind", rfind_impl, size_type)
-create_masked_binary_string_func("MaskedType.count", count_impl, size_type)
-create_masked_binary_string_func(
-    operator.contains, contains_impl, types.boolean
-)
+def register_strings_lowering():
+    create_masked_binary_string_func("MaskedType.strip", strip_impl, udf_string)
+    create_masked_binary_string_func("MaskedType.lstrip", lstrip_impl, udf_string)
+    create_masked_binary_string_func("MaskedType.rstrip", rstrip_impl, udf_string)
+    create_masked_binary_string_func(
+        "MaskedType.startswith",
+        startswith_impl,
+        types.boolean,
+    )
+    create_masked_binary_string_func(
+        "MaskedType.endswith", endswith_impl, types.boolean
+    )
+    create_masked_binary_string_func("MaskedType.find", find_impl, size_type)
+    create_masked_binary_string_func("MaskedType.rfind", rfind_impl, size_type)
+    create_masked_binary_string_func("MaskedType.count", count_impl, size_type)
+    create_masked_binary_string_func(
+        operator.contains, contains_impl, types.boolean
+    )
 
 
-create_masked_unary_identifier_func("MaskedType.isalnum", isalnum_impl)
-create_masked_unary_identifier_func("MaskedType.isalpha", isalpha_impl)
-create_masked_unary_identifier_func("MaskedType.isdigit", isdigit_impl)
-create_masked_unary_identifier_func("MaskedType.isupper", isupper_impl)
-create_masked_unary_identifier_func("MaskedType.islower", islower_impl)
-create_masked_unary_identifier_func("MaskedType.isspace", isspace_impl)
-create_masked_unary_identifier_func("MaskedType.isdecimal", isdecimal_impl)
-create_masked_unary_identifier_func("MaskedType.istitle", istitle_impl)
-create_masked_upper_or_lower("MaskedType.upper", upper_impl)
-create_masked_upper_or_lower("MaskedType.lower", lower_impl)
+    create_masked_unary_identifier_func("MaskedType.isalnum", isalnum_impl)
+    create_masked_unary_identifier_func("MaskedType.isalpha", isalpha_impl)
+    create_masked_unary_identifier_func("MaskedType.isdigit", isdigit_impl)
+    create_masked_unary_identifier_func("MaskedType.isupper", isupper_impl)
+    create_masked_unary_identifier_func("MaskedType.islower", islower_impl)
+    create_masked_unary_identifier_func("MaskedType.isspace", isspace_impl)
+    create_masked_unary_identifier_func("MaskedType.isdecimal", isdecimal_impl)
+    create_masked_unary_identifier_func("MaskedType.istitle", istitle_impl)
+    create_masked_upper_or_lower("MaskedType.upper", upper_impl)
+    create_masked_upper_or_lower("MaskedType.lower", lower_impl)
+

@@ -233,19 +233,6 @@ def register_const_op(op):
     cuda_lower(op, types.NPTimedelta, MaskedType)(to_lower_op)
 
 
-# register all lowering at init
-for binary_op in arith_ops + bitwise_ops + comparison_ops:
-    register_arithmetic_op(binary_op)
-    register_const_op(binary_op)
-    # null op impl can be shared between all ops
-    cuda_lower(binary_op, MaskedType, NAType)(masked_scalar_null_op_impl)
-    cuda_lower(binary_op, NAType, MaskedType)(masked_scalar_null_op_impl)
-
-# register all lowering at init
-for unary_op in unary_ops:
-    register_unary_op(unary_op)
-register_unary_op(abs)
-
 
 @cuda_lower(operator.is_, MaskedType, NAType)
 @cuda_lower(operator.is_, NAType, MaskedType)
@@ -413,3 +400,19 @@ def lower_constant_masked(context, builder, ty, val):
     masked.value = context.get_constant(ty.value_type, val.value)
     masked.valid = context.get_constant(types.boolean, val.valid)
     return masked._getvalue()
+
+def register_masked_lowering():
+    # register all lowering at init
+    for binary_op in arith_ops + bitwise_ops + comparison_ops:
+        register_arithmetic_op(binary_op)
+        register_const_op(binary_op)
+        # null op impl can be shared between all ops
+        cuda_lower(binary_op, MaskedType, NAType)(masked_scalar_null_op_impl)
+        cuda_lower(binary_op, NAType, MaskedType)(masked_scalar_null_op_impl)
+
+    # register all lowering at init
+    for unary_op in unary_ops:
+        register_unary_op(unary_op)
+    register_unary_op(abs)
+
+

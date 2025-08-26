@@ -9,7 +9,7 @@ from numba.np import numpy_support
 import pylibcudf as plc
 
 from cudf.api.types import is_scalar
-from cudf.core.udf.utils import compile_udf
+from cudf.utils._numba import compile_udf
 from cudf.utils.dtypes import SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES
 
 if TYPE_CHECKING:

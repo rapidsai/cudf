@@ -467,16 +467,6 @@ class UnpackReturnToMasked(AbstractTemplate):
             return nb_signature(return_type, args[0])
 
 
-for binary_op in arith_ops + bitwise_ops + comparison_ops:
-    # Every op shares the same typing class
-    cuda_decl_registry.register_global(binary_op)(MaskedScalarArithOp)
-    cuda_decl_registry.register_global(binary_op)(MaskedScalarNullOp)
-    cuda_decl_registry.register_global(binary_op)(MaskedScalarScalarOp)
-
-for unary_op in unary_ops:
-    cuda_decl_registry.register_global(unary_op)(MaskedScalarUnaryOp)
-
-
 # Strings functions and utilities
 def _is_valid_string_arg(ty):
     return (
@@ -548,10 +538,6 @@ class MaskedStringViewCmpOp(AbstractTemplate):
                 MaskedType(string_view),
                 MaskedType(string_view),
             )
-
-
-for op in comparison_ops:
-    cuda_decl_registry.register_global(op)(MaskedStringViewCmpOp)
 
 
 def create_masked_binary_attr(attrname, retty):
@@ -685,5 +671,22 @@ class MaskedManagedUDFStringAttrs(MaskedStringViewAttrs):
         return managed_udf_string
 
 
-cuda_decl_registry.register_attr(MaskedStringViewAttrs)
-cuda_decl_registry.register_attr(MaskedManagedUDFStringAttrs)
+def register_masked_typing():
+    for binary_op in arith_ops + bitwise_ops + comparison_ops:
+        # Every op shares the same typing class
+        cuda_decl_registry.register_global(binary_op)(MaskedScalarArithOp)
+        cuda_decl_registry.register_global(binary_op)(MaskedScalarNullOp)
+        cuda_decl_registry.register_global(binary_op)(MaskedScalarScalarOp)
+
+    for unary_op in unary_ops:
+        cuda_decl_registry.register_global(unary_op)(MaskedScalarUnaryOp)
+
+
+    for op in comparison_ops:
+        cuda_decl_registry.register_global(op)(MaskedStringViewCmpOp)
+
+
+
+    cuda_decl_registry.register_attr(MaskedStringViewAttrs)
+    cuda_decl_registry.register_attr(MaskedManagedUDFStringAttrs)
+
