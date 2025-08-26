@@ -20,6 +20,7 @@
 #include "single_pass_functors.cuh"
 
 #include <cudf/detail/aggregation/result_cache.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
@@ -44,6 +45,8 @@ void compute_global_memory_aggs(size_type num_rows,
                                 cudf::detail::result_cache* cache,
                                 rmm::cuda_stream_view stream)
 {
+  cudf::scoped_range r("global mem");
+
   // make table that will hold sparse results
   cudf::table result_table = create_results_table(num_output, flattened_values, agg_kinds, stream);
 
@@ -64,5 +67,7 @@ void compute_global_memory_aggs(size_type num_rows,
     // Note that the cache will make a copy of this temporary aggregation
     cache->add_result(flattened_values.column(i), *aggregations[i], std::move(result_cols[i]));
   }
+
+  stream.synchronize();
 }
 }  // namespace cudf::groupby::detail::hash

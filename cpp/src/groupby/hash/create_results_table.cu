@@ -21,6 +21,7 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -41,24 +42,33 @@ rmm::device_uvector<size_type> find_output_indices(device_span<size_type> key_in
                                                    device_span<size_type const> unique_indices,
                                                    rmm::cuda_stream_view stream)
 {
+  cudf::scoped_range r("find output_indices");
   rmm::device_uvector<cudf::size_type> new_indices(key_indices.size(), stream);
   if (unique_indices.size() == 0) { return new_indices; }
 
-  thrust::scatter(rmm::exec_policy_nosync(stream),
-                  thrust::make_counting_iterator(0),
-                  thrust::make_counting_iterator(static_cast<size_type>(unique_indices.size())),
-                  unique_indices.begin(),
-                  new_indices.begin());
-
-  thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                     thrust::make_counting_iterator(0),
-                     static_cast<size_type>(key_indices.size()),
-                     [new_indices = new_indices.begin(),
-                      key_indices = key_indices.begin()] __device__(size_type const idx) {
-                       if (key_indices[idx] != cudf::detail::CUDF_SIZE_TYPE_SENTINEL) {
-                         key_indices[idx] = new_indices[key_indices[idx]];
-                       }
-                     });
+  stream.synchronize();
+  {
+    cudf::scoped_range r("scatter");
+    thrust::scatter(rmm::exec_policy_nosync(stream),
+                    thrust::make_counting_iterator(0),
+                    thrust::make_counting_iterator(static_cast<size_type>(unique_indices.size())),
+                    unique_indices.begin(),
+                    new_indices.begin());
+    stream.synchronize();
+  }
+  {
+    cudf::scoped_range r("for_each_n");
+    thrust::for_each_n(rmm::exec_policy_nosync(stream),
+                       thrust::make_counting_iterator(0),
+                       static_cast<size_type>(key_indices.size()),
+                       [new_indices = new_indices.begin(),
+                        key_indices = key_indices.begin()] __device__(size_type const idx) {
+                         if (key_indices[idx] != cudf::detail::CUDF_SIZE_TYPE_SENTINEL) {
+                           key_indices[idx] = new_indices[key_indices[idx]];
+                         }
+                       });
+    stream.synchronize();
+  }
 
   return new_indices;
 }
@@ -147,9 +157,11 @@ void extract_populated_keys(SetType const& key_set,
                             rmm::device_uvector<cudf::size_type>& populated_keys,
                             rmm::cuda_stream_view stream)
 {
+  cudf::scoped_range r("extract keys");
   auto const keys_end = key_set.retrieve_all(populated_keys.begin(), stream.value());
 
   populated_keys.resize(std::distance(populated_keys.begin(), keys_end), stream);
+  stream.synchronize();
 }
 
 cudf::table create_results_table(cudf::size_type output_size,
@@ -157,6 +169,7 @@ cudf::table create_results_table(cudf::size_type output_size,
                                  host_span<cudf::aggregation::Kind const> agg_kinds,
                                  rmm::cuda_stream_view stream)
 {
+  cudf::scoped_range r("create results table");
   std::vector<std::unique_ptr<cudf::column>> output_cols;
   std::transform(flattened_values.begin(),
                  flattened_values.end(),
@@ -166,7 +179,7 @@ cudf::table create_results_table(cudf::size_type output_size,
   cudf::table result_table(std::move(output_cols));
   cudf::mutable_table_view result_table_view = result_table.mutable_view();
   cudf::detail::initialize_with_identity(result_table_view, agg_kinds, stream);
-
+  stream.synchronize();
   return result_table;
 }
 

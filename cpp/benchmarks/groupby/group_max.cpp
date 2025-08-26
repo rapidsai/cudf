@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -91,15 +91,16 @@ void bench_groupby_max_cardinality(nvbench::state& state, nvbench::type_list<Typ
   groupby_max_helper<Type>(state, num_rows, cardinality, null_probability);
 }
 
-NVBENCH_BENCH_TYPES(bench_groupby_max,
-                    NVBENCH_TYPE_AXES(nvbench::type_list<int32_t, int64_t, float, double>))
+NVBENCH_BENCH_TYPES(bench_groupby_max, NVBENCH_TYPE_AXES(nvbench::type_list<int32_t>))
   .set_name("groupby_max")
   .add_int64_axis("cardinality", {0})
-  .add_int64_power_of_two_axis("num_rows", {12, 18, 24})
-  .add_float64_axis("null_probability", {0, 0.1, 0.9})
-  .add_int64_axis("num_aggregations", {1, 2, 4, 8, 16, 32});
+  .add_int64_power_of_two_axis("num_rows", {12, 24})
+  .add_float64_axis("null_probability", {0})
+  .add_int64_axis("num_aggregations", {1, 4, 16});
 
-NVBENCH_BENCH_TYPES(bench_groupby_max_cardinality, NVBENCH_TYPE_AXES(nvbench::type_list<int32_t>))
-  .set_name("groupby_max_cardinality")
-  .add_int64_axis("num_aggregations", {1})
-  .add_int64_axis("cardinality", {10, 20, 50, 100, 1'000, 10'000, 100'000, 1'000'000, 10'000'000});
+// NVBENCH_BENCH_TYPES(bench_groupby_max_cardinality,
+// NVBENCH_TYPE_AXES(nvbench::type_list<int32_t>))
+//   .set_name("groupby_max_cardinality")
+//   .add_int64_axis("num_aggregations", {1})
+//   .add_int64_axis("cardinality", {10, 20, 50, 100, 1'000, 10'000, 100'000, 1'000'000,
+//   10'000'000});
