@@ -28,11 +28,7 @@
 
 namespace CUDF_EXPORT cudf {
 
-/**
- * @addtogroup expressions
- * @{
- * @file
- */
+/// \cond
 namespace row_ir {
 
 /// @brief The base class for all IR nodes.
@@ -47,7 +43,7 @@ struct node;
 struct ast_converter;
 
 }  // namespace row_ir
-/** @} */  // end of group
+/// \encond
 
 namespace ast {
 /**
