@@ -37,7 +37,7 @@ namespace CUDF_EXPORT cudf {
 /**
  * @brief Identifies the hash function to be used in hash partitioning
  */
-enum class hash_id {
+enum class hash_id : int32_t {
   HASH_IDENTITY = 0,  ///< Identity hash function that simply returns the key to be hashed
   HASH_MURMUR3        ///< Murmur3 hash function
 };

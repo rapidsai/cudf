@@ -50,7 +50,7 @@ def test_replace_re_list_str_columns(flags):
         flags=flags,
     )
     expect = arr
-    for pat, repl in zip(pats, repls):
+    for pat, repl in zip(pats, repls, strict=True):
         expect = pc.replace_substring_regex(
             expect,
             pat,

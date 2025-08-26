@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 import pandas as pd
 import pytest
 
@@ -33,7 +33,7 @@ def test_convert_dtypes():
     df = pd.DataFrame(
         {
             k: pd.Series(v, dtype=d)
-            for k, v, d in zip(data.keys(), data.values(), dtypes)
+            for k, v, d in zip(data.keys(), data.values(), dtypes, strict=True)
         }
     )
     gdf = cudf.DataFrame.from_pandas(df)

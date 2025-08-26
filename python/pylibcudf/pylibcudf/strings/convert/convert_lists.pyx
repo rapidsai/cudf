@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -14,6 +14,8 @@ from pylibcudf.libcudf.strings.convert cimport (
 )
 from pylibcudf.scalar cimport Scalar
 from pylibcudf.types cimport type_id
+from pylibcudf.utils cimport _get_stream
+from rmm.pylibrmm.stream cimport Stream
 
 from cython.operator import dereference
 
@@ -48,10 +50,12 @@ cpdef Column format_list_column(
         New strings column
     """
     cdef unique_ptr[column] c_result
+    cdef Stream stream
 
     if na_rep is None:
+        stream = _get_stream(None)
         na_rep = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode())
+            cpp_make_string_scalar("".encode(), stream.view())
         )
 
     cdef const string_scalar* c_na_rep = <const string_scalar*>(

@@ -11,6 +11,7 @@ from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from polars.exceptions import InvalidOperationError
+from polars.polars import dtype_str_repr
 
 import pylibcudf as plc
 
@@ -18,6 +19,7 @@ from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal, LiteralColumn
 from cudf_polars.dsl.utils.reshape import broadcast
+from cudf_polars.utils.versions import POLARS_VERSION_LT_132
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -137,6 +139,7 @@ class StringFunction(Expr):
         Name.Reverse,
         Name.Tail,
         Name.Titlecase,
+        Name.ZFill,
     }
     __slots__ = ("_regex_program", "name", "options")
     _non_child = ("dtype", "name", "options")
@@ -264,12 +267,29 @@ class StringFunction(Expr):
                 raise NotImplementedError(
                     "strip operations only support scalar patterns"
                 )
+        elif self.name is StringFunction.Name.ZFill:
+            if isinstance(self.children[1], Literal):
+                _, width = self.children
+                assert isinstance(width, Literal)
+                if (
+                    POLARS_VERSION_LT_132
+                    and width.value is not None
+                    and width.value < 0
+                ):  # pragma: no cover
+                    dtypestr = dtype_str_repr(width.dtype.polars)
+                    raise InvalidOperationError(
+                        f"conversion from `{dtypestr}` to `u64` "
+                        f"failed in column 'literal' for 1 out of "
+                        f"1 values: [{width.value}]"
+                    ) from None
 
     @staticmethod
     def _create_regex_program(
         pattern: str,
         flags: plc.strings.regex_flags.RegexFlags = plc.strings.regex_flags.RegexFlags.DEFAULT,
     ) -> plc.strings.regex_program.RegexProgram:
+        if pattern == "":
+            raise NotImplementedError("Empty regex pattern is not yet supported")
         try:
             return plc.strings.regex_program.RegexProgram.create(
                 pattern,
@@ -322,6 +342,66 @@ class StringFunction(Expr):
                 ),
                 dtype=self.dtype,
             )
+        elif self.name is StringFunction.Name.ZFill:
+            # TODO: expensive validation
+            # polars pads based on bytes, libcudf by visual width
+            # only pass chars if the visual width matches the byte length
+            column = self.children[0].evaluate(df, context=context)
+            col_len_bytes = plc.strings.attributes.count_bytes(column.obj)
+            col_len_chars = plc.strings.attributes.count_characters(column.obj)
+            equal = plc.binaryop.binary_operation(
+                col_len_bytes,
+                col_len_chars,
+                plc.binaryop.BinaryOperator.NULL_EQUALS,
+                plc.DataType(plc.TypeId.BOOL8),
+            )
+            if not plc.reduce.reduce(
+                equal,
+                plc.aggregation.all(),
+                plc.DataType(plc.TypeId.BOOL8),
+            ).to_py():
+                raise InvalidOperationError(
+                    "zfill only supports ascii strings with no unicode characters"
+                )
+            if isinstance(self.children[1], Literal):
+                width = self.children[1]
+                assert isinstance(width, Literal)
+                if width.value is None:
+                    return Column(
+                        plc.Column.from_scalar(
+                            plc.Scalar.from_py(None, self.dtype.plc),
+                            column.size,
+                        ),
+                        self.dtype,
+                    )
+                return Column(
+                    plc.strings.padding.zfill(column.obj, width.value), self.dtype
+                )
+            else:
+                col_width = self.children[1].evaluate(df, context=context)
+                assert isinstance(col_width, Column)
+                all_gt_0 = plc.binaryop.binary_operation(
+                    col_width.obj,
+                    plc.Scalar.from_py(0, plc.DataType(plc.TypeId.INT64)),
+                    plc.binaryop.BinaryOperator.GREATER_EQUAL,
+                    plc.DataType(plc.TypeId.BOOL8),
+                )
+
+                if (
+                    POLARS_VERSION_LT_132
+                    and not plc.reduce.reduce(
+                        all_gt_0,
+                        plc.aggregation.all(),
+                        plc.DataType(plc.TypeId.BOOL8),
+                    ).to_py()
+                ):  # pragma: no cover
+                    raise InvalidOperationError("fill conversion failed.")
+
+                return Column(
+                    plc.strings.padding.zfill_by_widths(column.obj, col_width.obj),
+                    self.dtype,
+                )
+
         elif self.name is StringFunction.Name.Contains:
             child, arg = self.children
             column = child.evaluate(df, context=context)
@@ -722,8 +802,15 @@ class StringFunction(Expr):
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.PadStart:
-            (column,) = columns
-            width, char = self.options
+            if POLARS_VERSION_LT_132:  # pragma: no cover
+                (column,) = columns
+                width, char = self.options
+            else:
+                (column, width_col) = columns
+                (char,) = self.options
+                # TODO: Maybe accept a string scalar in
+                # cudf::strings::pad to avoid DtoH transfer
+                width = width_col.obj.to_scalar().to_py()
             return Column(
                 plc.strings.padding.pad(
                     column.obj, width, plc.strings.SideType.LEFT, char
@@ -731,8 +818,15 @@ class StringFunction(Expr):
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.PadEnd:
-            (column,) = columns
-            width, char = self.options
+            if POLARS_VERSION_LT_132:  # pragma: no cover
+                (column,) = columns
+                width, char = self.options
+            else:
+                (column, width_col) = columns
+                (char,) = self.options
+                # TODO: Maybe accept a string scalar in
+                # cudf::strings::pad to avoid DtoH transfer
+                width = width_col.obj.to_scalar().to_py()
             return Column(
                 plc.strings.padding.pad(
                     column.obj, width, plc.strings.SideType.RIGHT, char

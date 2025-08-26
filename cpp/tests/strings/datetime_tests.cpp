@@ -625,18 +625,22 @@ TEST_F(StringsDatetimeTest, Errors)
                cudf::logic_error);
   EXPECT_THROW(
     cudf::strings::to_timestamps(view, cudf::data_type{cudf::type_id::TIMESTAMP_SECONDS}, ""),
-    cudf::logic_error);
+    std::invalid_argument);
   EXPECT_THROW(
     cudf::strings::to_timestamps(view, cudf::data_type{cudf::type_id::TIMESTAMP_SECONDS}, "%2Y"),
-    cudf::logic_error);
+    std::invalid_argument);
   EXPECT_THROW(
     cudf::strings::to_timestamps(view, cudf::data_type{cudf::type_id::TIMESTAMP_SECONDS}, "%g"),
-    cudf::logic_error);
+    std::invalid_argument);
 
   cudf::test::fixed_width_column_wrapper<int64_t> invalid_timestamps{1530705600};
-  EXPECT_THROW(cudf::strings::from_timestamps(invalid_timestamps), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::from_timestamps(invalid_timestamps), std::invalid_argument);
   cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep> timestamps{
     1530705600};
-  EXPECT_THROW(cudf::strings::from_timestamps(timestamps, ""), cudf::logic_error);
-  EXPECT_THROW(cudf::strings::from_timestamps(timestamps, "%A %B", view), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::from_timestamps(timestamps, ""), std::invalid_argument);
+  EXPECT_THROW(cudf::strings::from_timestamps(timestamps, "%B", view), std::invalid_argument);
+
+  EXPECT_THROW(cudf::strings::is_timestamp(view, "%D"), std::invalid_argument);
+  EXPECT_THROW(cudf::strings::is_timestamp(view, "%p %"), std::invalid_argument);
+  EXPECT_THROW(cudf::strings::from_timestamps(timestamps, "%Y:%H", view), std::invalid_argument);
 }

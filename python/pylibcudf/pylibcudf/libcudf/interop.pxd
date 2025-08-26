@@ -1,6 +1,8 @@
 # Copyright (c) 2020-2025, NVIDIA CORPORATION.
+from libc.stdint cimport int32_t
 from libcpp.memory cimport shared_ptr, unique_ptr
 from libcpp.string cimport string
+from libcpp.optional cimport optional
 from libcpp.vector cimport vector
 from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.column.column cimport column
@@ -49,6 +51,7 @@ cdef extern from "cudf/interop.hpp" namespace "cudf" \
         column_metadata(string name_) except +libcudf_exception_handler
         string name
         string timezone
+        optional[int32_t] precision
         vector[column_metadata] children_meta
 
 

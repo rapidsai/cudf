@@ -9,9 +9,8 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_230
 from cudf.testing import _utils as utils, assert_eq
-from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
+from cudf.testing._utils import assert_exceptions_equal
 
 
 @pytest.fixture(
@@ -335,38 +334,6 @@ def test_timedelta_series_mod_with_scalar_zero(reverse):
     assert_eq(expected, actual)
 
 
-@pytest.mark.parametrize("reduction_op", ["sum", "mean", "median", "quantile"])
-def test_timedelta_reduction_ops(
-    data_non_overflow, timedelta_dtype, reduction_op
-):
-    gsr = cudf.Series(data_non_overflow, dtype=timedelta_dtype)
-    psr = gsr.to_pandas()
-
-    if len(psr) > 0 and psr.isnull().all() and reduction_op == "median":
-        with pytest.warns(RuntimeWarning, match="Mean of empty slice"):
-            expected = getattr(psr, reduction_op)()
-    else:
-        with expect_warning_if(
-            PANDAS_GE_230
-            and reduction_op == "quantile"
-            and len(data_non_overflow) == 0
-            and timedelta_dtype != "timedelta64[ns]"
-        ):
-            expected = getattr(psr, reduction_op)()
-    actual = getattr(gsr, reduction_op)()
-    if pd.isna(expected) and pd.isna(actual):
-        pass
-    elif isinstance(expected, pd.Timedelta) and isinstance(
-        actual, pd.Timedelta
-    ):
-        assert (
-            expected.round(gsr._column.time_unit).value
-            == actual.round(gsr._column.time_unit).value
-        )
-    else:
-        assert_eq(expected, actual)
-
-
 @pytest.mark.parametrize("datetime_dtype", utils.DATETIME_TYPES)
 def test_timedelta_index_datetime_index_ops(
     data_non_overflow, datetime_dtype, timedelta_dtype
@@ -616,50 +583,6 @@ def test_timedelta_invalid_ops():
         lfunc_args_and_kwargs=([psr, psr],),
         rfunc_args_and_kwargs=([sr, sr],),
     )
-
-
-@pytest.mark.parametrize("data", [[1, 2, 3], [], [1, 20, 1000, None]])
-@pytest.mark.parametrize("ddof", [1, 2, 3])
-def test_timedelta_std(data, timedelta_dtype, ddof):
-    gsr = cudf.Series(data, dtype=timedelta_dtype)
-    psr = gsr.to_pandas()
-
-    expected = psr.std(ddof=ddof)
-    actual = gsr.std(ddof=ddof)
-
-    if np.isnat(expected.to_numpy()) and np.isnat(actual.to_numpy()):
-        assert True
-    else:
-        np.testing.assert_allclose(
-            expected.to_numpy().astype("float64"),
-            actual.to_numpy().astype("float64"),
-            rtol=1e-5,
-            atol=0,
-        )
-
-
-@pytest.mark.parametrize("op", ["max", "min"])
-@pytest.mark.parametrize(
-    "data",
-    [
-        [],
-        [1, 2, 3, 100],
-        [10, None, 100, None, None],
-        [None, None, None],
-        [1231],
-    ],
-)
-def test_timedelta_reductions(data, op, timedelta_dtype):
-    sr = cudf.Series(data, dtype=timedelta_dtype)
-    psr = sr.to_pandas()
-
-    actual = getattr(sr, op)()
-    expected = getattr(psr, op)()
-
-    if np.isnat(expected.to_numpy()) and np.isnat(actual):
-        assert True
-    else:
-        assert_eq(expected.to_numpy(), actual)
 
 
 @pytest.mark.parametrize("op", [operator.add, operator.sub])

@@ -174,8 +174,8 @@ merge<LargerIterator, SmallerIterator>::matches_per_row(rmm::cuda_stream_view st
 
   // naive: iterate through larger table and binary search on smaller table
   auto const larger_numrows = larger.num_rows();
-  rmm::device_scalar<bound_type> d_lb_type(bound_type::LOWER, stream, temp_mr);
-  rmm::device_scalar<bound_type> d_ub_type(bound_type::UPPER, stream, temp_mr);
+  cudf::detail::device_scalar<bound_type> d_lb_type(bound_type::LOWER, stream, temp_mr);
+  cudf::detail::device_scalar<bound_type> d_ub_type(bound_type::UPPER, stream, temp_mr);
 
   auto match_counts =
     cudf::detail::make_zeroed_device_uvector_async<size_type>(larger_numrows + 1, stream, temp_mr);

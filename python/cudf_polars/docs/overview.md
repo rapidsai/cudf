@@ -383,6 +383,94 @@ def rename(e: Expr, mapping: Mapping[str, str]) -> Expr:
     return mapper(e)
 ```
 
+# Estimated column statistics
+
+:::{note}
+Column-statistics estimation is experimental and the details are
+likely to change in the future.
+:::
+
+The `cudf-polars` streaming executor (enabled by default) may use
+estimated column statistics to transform translated logical-plan
+IR nodes into the final "physical-plan" IR nodes.
+
+## Storing statistics
+
+The following classes are used to store column statistics (listed
+in order of decreasing granularity):
+
+- `ColumnStat`: This class is used to store an individual column
+statistic (e.g. row count or unique-value count). Each object
+has two important attributes:
+  - `ColumnStat.value`: Returns the actual column-statistic value
+  (e.g. an `int` if the statistic is a row-count) or `None` if no
+  estimate is available.
+  - `ColumnStat.exact`: Whether the statistic is known "exactly".
+- `UniqueStats`: Since we usually sample both the unique-value
+**count** and the unique-value **fraction** of a column at once,
+we use `UniqueStats` to group these `ColumnStat`s into one object.
+- `DataSourceInfo`: This class is used to sample and store
+`ColumnStat`/`UniqueStats` objects associated with a single
+datasource (e.g. a Parquet dataset or in-memory `DataFrame`).
+  - Since it can be expensive to sample datasource statistics,
+  this class is specifically designed to enable **lazy** and
+  **aggregated** column sampling via sub-classing. For example,
+  The `ParquetSourceInfo` sub-class uses caching to avoid
+  redundant file-system access.
+- `ColumnSourceInfo`: This class wraps a `DataSourceInfo` object.
+Since `DataSourceInfo` tracks information for an entire table, we use
+`ColumnSourceInfo` to provide a single-column view of the object.
+- `ColumnStats`: This class is used to group together the "base"
+`ColumnSourceInfo` reference and the local `UniqueStats` estimates
+for a specific IR + column combination. We bundle these references
+together to simplify the design and maintenance of `StatsCollector`.
+**NOTE:** The current `UniqueStats` estimates are not yet populated.
+- `StatsCollector`: This class is used to collect and store
+statistics for all IR nodes within a single query. The statistics
+attached to each IR node refer to the **output** columns of the
+IR node in question. The `StatsCollector` class is especially important,
+because it is used to organize **all** statistics within a logical plan.
+Each object has two important attributes:
+  - `StatsCollector.row_count`: Returns a mapping between each IR
+  node and the row-count `ColumnStat` estimate for that node.
+  **NOTE:** This attribute is not yet populated.
+  - `StatsCollector.column_stats`: Returns a mapping between each IR
+  node and the `dict[str, ColumnStats]` mapping for that node.
+
+## Collecting and using statistics
+
+:::{note}
+Column-statistics collection is under active development.
+The existing APIs only support the sampling of base
+datasource statistics. The current row-count and unique-value
+statistics for each IR node are not populated by any traversal
+logic yet.
+:::
+
+### Collecting base statistics
+
+The top-level API for sampling base datasource statistics is
+`cudf_polars.experimental.statistics.collect_base_stats`. This
+function calls into the `initialize_column_stats` single-dispatch
+function to collect a `dict[str, ColumnStats]` mapping for each
+IR node in the logical plan.
+
+The IR-specific logic for each `initialize_column_stats` dispatch is
+relatively simple, because the only goal is to collect and propagate
+the underlying `DataSourceInfo` reference and child-`ColumnStats`
+references for each column. This means that `Scan` and `DataFrameScan`
+are the only IR classes needing specialized sampling logic. All other
+IR classes are typically propagating reference from child-IR nodes.
+
+### Using base statistics
+
+Base `DataSourceInfo` references are currently used to calculate
+the partition count when a Parquet-based `Scan` node is lowered
+by the `cudf-polars` streaming executor.
+
+In the future, these statistics will also be used for
+parallel-algorithm selection and intermediate repartitioning.
+
 # Containers
 
 Containers should be constructed as relatively lightweight objects

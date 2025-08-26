@@ -300,7 +300,7 @@ std::unique_ptr<column> group_rank_to_percentage(rank_method const method,
                        double const r   = is_double ? d_rank[row_index] : s_rank[row_index];
                        auto const count = dcount[labels[row_index]];
                        size_type const last_rank_index = offsets[labels[row_index]] + count - 1;
-                       auto const last_rank            = s_rank[last_rank_index];
+                       auto const last_rank = last_rank_index < 0 ? 1 : s_rank[last_rank_index];
                        return percentage == rank_percentage::ZERO_NORMALIZED
                                 ? r / last_rank
                                 : one_normalized(r, last_rank);

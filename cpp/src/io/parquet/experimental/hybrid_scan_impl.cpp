@@ -20,7 +20,6 @@
 #include "hybrid_scan_helpers.hpp"
 #include "io/parquet/reader_impl_chunking_utils.cuh"
 
-#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/transform.hpp>
@@ -169,8 +168,6 @@ std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_w
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
-  CUDF_FUNC_RANGE();
-
   CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
   CUDF_EXPECTS(options.get_filter().has_value(), "Encountered empty converted filter expression");
 
@@ -195,8 +192,6 @@ hybrid_scan_reader_impl::secondary_filters_byte_ranges(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options)
 {
-  CUDF_FUNC_RANGE();
-
   CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
   CUDF_EXPECTS(options.get_filter().has_value(), "Filter expression must not be empty");
 
@@ -230,8 +225,6 @@ hybrid_scan_reader_impl::filter_row_groups_with_dictionary_pages(
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
-  CUDF_FUNC_RANGE();
-
   CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
   CUDF_EXPECTS(options.get_filter().has_value(), "Encountered empty converted filter expression");
 
@@ -302,8 +295,6 @@ std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_w
   CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
   CUDF_EXPECTS(options.get_filter().has_value(), "Encountered empty converted filter expression");
 
-  CUDF_FUNC_RANGE();
-
   select_columns(read_columns_mode::FILTER_COLUMNS, options);
 
   table_metadata metadata;
@@ -331,8 +322,6 @@ std::unique_ptr<cudf::column> hybrid_scan_reader_impl::build_row_mask_with_page_
   CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
   CUDF_EXPECTS(options.get_filter().has_value(), "Encountered empty converted filter expression");
 
-  CUDF_FUNC_RANGE();
-
   select_columns(read_columns_mode::FILTER_COLUMNS, options);
 
   table_metadata metadata;
@@ -355,8 +344,6 @@ std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
 hybrid_scan_reader_impl::get_input_column_chunk_byte_ranges(
   cudf::host_span<std::vector<size_type> const> row_group_indices) const
 {
-  CUDF_FUNC_RANGE();
-
   // Descriptors for all the chunks that make up the selected columns
   auto const num_input_columns = _input_columns.size();
   auto const num_row_groups =
@@ -438,8 +425,6 @@ table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns(
   CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
   CUDF_EXPECTS(options.get_filter().has_value(), "Encountered empty converted filter expression");
 
-  CUDF_FUNC_RANGE();
-
   reset_internal_state();
 
   table_metadata metadata;
@@ -476,8 +461,6 @@ table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns(
   CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
   CUDF_EXPECTS(row_mask.null_count() == 0,
                "Row mask must not have any nulls when materializing payload column");
-
-  CUDF_FUNC_RANGE();
 
   reset_internal_state();
 
@@ -728,8 +711,6 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
 void hybrid_scan_reader_impl::set_pass_page_mask(
   cudf::host_span<std::vector<bool> const> data_page_mask)
 {
-  CUDF_FUNC_RANGE();
-
   auto const& pass   = _pass_itm_data;
   auto const& chunks = pass->chunks;
 

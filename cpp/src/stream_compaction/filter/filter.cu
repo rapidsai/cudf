@@ -14,11 +14,6 @@
  * limitations under the License.
  */
 
-#include "jit/cache.hpp"
-#include "jit/helpers.hpp"
-#include "jit/parser.hpp"
-#include "jit/span.cuh"
-
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -37,6 +32,10 @@
 #include <cuda/std/iterator>
 #include <thrust/copy.h>
 
+#include <jit/cache.hpp>
+#include <jit/helpers.hpp>
+#include <jit/parser.hpp>
+#include <jit/span.cuh>
 #include <jit_preprocessed_files/stream_compaction/filter/jit/kernel.cu.jit.hpp>
 
 #include <utility>
@@ -175,7 +174,7 @@ void launch_filter_kernel(jitify2::ConfiguredKernel& kernel,
 
   std::array<void*, 3> args{&outputs_ptr, &inputs_ptr, &p_user_data};
 
-  kernel->launch(args.data());
+  kernel->launch_raw(args.data());
 }
 
 void perform_checks(column_view base_column,
@@ -219,11 +218,15 @@ jitify2::ConfiguredKernel build_kernel(std::string const& kernel_name,
                                        std::vector<std::string> const& span_outputs,
                                        std::vector<column_view> const& input_columns,
                                        bool has_user_data,
+                                       null_aware is_null_aware,
                                        std::string const& udf,
                                        bool is_ptx,
                                        rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr)
 {
+  CUDF_EXPECTS(!(is_null_aware == null_aware::YES && is_ptx),
+               "Optional types are not supported in PTX UDFs",
+               std::invalid_argument);
   auto const cuda_source =
     is_ptx ? cudf::jit::parse_single_function_ptx(
                udf,
@@ -235,6 +238,7 @@ jitify2::ConfiguredKernel build_kernel(std::string const& kernel_name,
   return get_kernel(jitify2::reflection::Template(kernel_name)
                       .instantiate(cudf::jit::build_jit_template_params(
                         has_user_data,
+                        is_null_aware,
                         span_outputs,
                         {},
                         cudf::jit::reflect_input_columns(base_column_size, input_columns))),
@@ -248,6 +252,7 @@ std::vector<std::unique_ptr<column>> filter_operation(column_view base_column,
                                                       bool is_ptx,
                                                       std::optional<void*> user_data,
                                                       std::optional<std::vector<bool>> copy_mask,
+                                                      null_aware is_null_aware,
                                                       rmm::cuda_stream_view stream,
                                                       rmm::device_async_resource_ref mr)
 {
@@ -259,6 +264,7 @@ std::vector<std::unique_ptr<column>> filter_operation(column_view base_column,
                              {"cudf::size_type"},
                              columns,
                              user_data.has_value(),
+                             is_null_aware,
                              predicate_udf,
                              is_ptx,
                              stream,
@@ -310,6 +316,7 @@ std::vector<std::unique_ptr<column>> filter(std::vector<column_view> const& colu
                                             bool is_ptx,
                                             std::optional<void*> user_data,
                                             std::optional<std::vector<bool>> copy_mask,
+                                            null_aware is_null_aware,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr)
 {
@@ -321,7 +328,7 @@ std::vector<std::unique_ptr<column>> filter(std::vector<column_view> const& colu
   perform_checks(*base_column, columns, copy_mask);
 
   auto filtered = filter_operation(
-    *base_column, columns, predicate_udf, is_ptx, user_data, copy_mask, stream, mr);
+    *base_column, columns, predicate_udf, is_ptx, user_data, copy_mask, is_null_aware, stream, mr);
 
   return filtered;
 }
@@ -333,11 +340,13 @@ std::vector<std::unique_ptr<column>> filter(std::vector<column_view> const& colu
                                             bool is_ptx,
                                             std::optional<void*> user_data,
                                             std::optional<std::vector<bool>> copy_mask,
+                                            null_aware is_null_aware,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::filter(columns, predicate_udf, is_ptx, user_data, copy_mask, stream, mr);
+  return detail::filter(
+    columns, predicate_udf, is_ptx, user_data, copy_mask, is_null_aware, stream, mr);
 }
 
 }  // namespace cudf

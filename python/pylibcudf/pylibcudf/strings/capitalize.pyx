@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -11,6 +11,8 @@ from pylibcudf.libcudf.scalar.scalar_factories cimport (
 from pylibcudf.libcudf.strings cimport capitalize as cpp_capitalize
 from pylibcudf.scalar cimport Scalar
 from pylibcudf.strings.char_types cimport string_character_types
+from pylibcudf.utils cimport _get_stream
+from rmm.pylibrmm.stream cimport Stream
 
 from cython.operator import dereference
 
@@ -39,10 +41,12 @@ cpdef Column capitalize(
         Column of strings capitalized from the input column
     """
     cdef unique_ptr[column] c_result
+    cdef Stream stream
 
     if delimiters is None:
+        stream = _get_stream(None)
         delimiters = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode())
+            cpp_make_string_scalar("".encode(), stream.view())
         )
 
     cdef const string_scalar* cpp_delimiters = <const string_scalar*>(

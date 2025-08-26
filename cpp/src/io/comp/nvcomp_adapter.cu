@@ -60,6 +60,23 @@ batched_args create_batched_nvcomp_args(device_span<device_span<uint8_t const> c
           std::move(output_data_sizes)};
 }
 
+std::pair<rmm::device_uvector<void const*>, rmm::device_uvector<size_t>> create_get_temp_size_args(
+  device_span<device_span<uint8_t const> const> inputs, rmm::cuda_stream_view stream)
+{
+  rmm::device_uvector<void const*> input_data_ptrs(inputs.size(), stream);
+  rmm::device_uvector<size_t> input_data_sizes(inputs.size(), stream);
+
+  auto ins_it = thrust::make_zip_iterator(input_data_ptrs.begin(), input_data_sizes.begin());
+  thrust::transform(
+    rmm::exec_policy_nosync(stream),
+    inputs.begin(),
+    inputs.end(),
+    ins_it,
+    [] __device__(auto const& in) { return thrust::make_tuple(in.data(), in.size()); });
+
+  return {std::move(input_data_ptrs), std::move(input_data_sizes)};
+}
+
 void update_compression_results(device_span<nvcompStatus_t const> nvcomp_stats,
                                 device_span<size_t const> actual_output_sizes,
                                 device_span<codec_exec_result> results,

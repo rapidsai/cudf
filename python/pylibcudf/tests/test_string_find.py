@@ -142,8 +142,7 @@ def colwise_apply(pa_data_col, pa_target_col, operator):
         [
             handle_none(elem, target)
             for elem, target in zip(
-                pa_data_col.to_pylist(),
-                pa_target_col.to_pylist(),
+                pa_data_col.to_pylist(), pa_target_col.to_pylist(), strict=True
             )
         ],
         type=pa.bool_(),
@@ -159,8 +158,7 @@ def test_find_column(data_col, target_col):
         [
             elem.find(target) if not (elem is None or target is None) else None
             for elem, target in zip(
-                pa_data_col.to_pylist(),
-                pa_target_col.to_pylist(),
+                pa_data_col.to_pylist(), pa_target_col.to_pylist(), strict=True
             )
         ],
         type=pa.int32(),

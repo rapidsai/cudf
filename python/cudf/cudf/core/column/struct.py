@@ -111,7 +111,10 @@ class StructColumn(ColumnBase):
             else self.dtype
         )
         pa_type = pa.struct(
-            {field: child.type for field, child in zip(dtype.fields, children)}
+            {
+                field: child.type
+                for field, child in zip(dtype.fields, children, strict=True)
+            }
         )
 
         if self.mask is not None:
@@ -190,7 +193,10 @@ class StructColumn(ColumnBase):
         but with the field names equal to `names`.
         """
         dtype = StructDtype(
-            {name: col.dtype for name, col in zip(names, self.children)}
+            {
+                name: col.dtype
+                for name, col in zip(names, self.children, strict=True)
+            }
         )
         return StructColumn(  # type: ignore[return-value]
             data=None,

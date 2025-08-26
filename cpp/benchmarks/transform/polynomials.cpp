@@ -95,6 +95,7 @@ static void BM_transform_polynomials(nvbench::state& state)
                     cudf::data_type{cudf::type_to_id<key_type>()},
                     false,
                     std::nullopt,
+                    cudf::null_aware::NO,
                     launch.get_stream().get_stream());
   });
 }

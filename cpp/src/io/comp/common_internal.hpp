@@ -49,8 +49,18 @@ constexpr double default_host_device_decompression_work_ratio = 100;
 // single GPU block; higher values lead to more host compression in HYBRID mode
 constexpr double default_host_device_compression_work_ratio = 100;
 
-[[nodiscard]] std::optional<nvcomp::compression_type> to_nvcomp_compression(
-  compression_type compression);
+[[nodiscard]] constexpr std::optional<nvcomp::compression_type> to_nvcomp_compression(
+  compression_type compression)
+{
+  switch (compression) {
+    case compression_type::GZIP: return nvcomp::compression_type::GZIP;
+    case compression_type::LZ4: return nvcomp::compression_type::LZ4;
+    case compression_type::SNAPPY: return nvcomp::compression_type::SNAPPY;
+    case compression_type::ZLIB: return nvcomp::compression_type::DEFLATE;
+    case compression_type::ZSTD: return nvcomp::compression_type::ZSTD;
+    default: return std::nullopt;
+  }
+}
 
 struct sorted_codec_parameters {
   rmm::device_uvector<device_span<uint8_t const>> inputs;

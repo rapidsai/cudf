@@ -53,6 +53,8 @@ cdef class ParquetReaderOptionsBuilder:
     cpdef ParquetReaderOptionsBuilder use_pandas_metadata(self, bool val)
     cpdef ParquetReaderOptionsBuilder allow_mismatched_pq_schemas(self, bool val)
     cpdef ParquetReaderOptionsBuilder use_arrow_schema(self, bool val)
+    cpdef ParquetReaderOptionsBuilder filter(self, Expression filter)
+    cpdef ParquetReaderOptionsBuilder columns(self, list col_names)
     cpdef build(self)
 
 

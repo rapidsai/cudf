@@ -55,8 +55,9 @@ TYPED_TEST(FilterNumericTest, NoAssertions)
 
   std::vector<std::unique_ptr<cudf::column>> results;
 
-  EXPECT_NO_THROW(results =
-                    cudf::filter({a, b}, this->udf, false, std::nullopt, std::vector{true, false}));
+  EXPECT_NO_THROW(
+    results = cudf::filter(
+      {a, b}, this->udf, false, std::nullopt, std::vector{true, false}, cudf::null_aware::NO));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, results[0]->view());
 }
 
@@ -77,8 +78,9 @@ TYPED_TEST(FilterChronoTest, NoAssertions)
   auto expected = cudf::test::fixed_width_column_wrapper<T>{T{}, T{}, T{}, T{}, T{}, T{}};
 
   std::vector<std::unique_ptr<cudf::column>> results;
-  EXPECT_NO_THROW(results =
-                    cudf::filter({a, b}, this->udf, false, std::nullopt, std::vector{true, false}));
+  EXPECT_NO_THROW(
+    results = cudf::filter(
+      {a, b}, this->udf, false, std::nullopt, std::vector{true, false}, cudf::null_aware::NO));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, results[0]->view());
 }
 
@@ -101,8 +103,9 @@ TYPED_TEST(FilterFixedPointTest, NoAssertions)
 
   std::vector<std::unique_ptr<cudf::column>> results;
 
-  EXPECT_NO_THROW(results =
-                    cudf::filter({a, b}, this->udf, false, std::nullopt, std::vector{true, false}));
+  EXPECT_NO_THROW(
+    results = cudf::filter(
+      {a, b}, this->udf, false, std::nullopt, std::vector{true, false}, cudf::null_aware::NO));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, results[0]->view());
 }
@@ -118,8 +121,9 @@ TEST_F(FilterTestFixture, StringNoAssertions)
 
   std::vector<std::unique_ptr<cudf::column>> results;
 
-  EXPECT_NO_THROW(results =
-                    cudf::filter({a, b}, this->udf, false, std::nullopt, std::vector{true, false}));
+  EXPECT_NO_THROW(
+    results = cudf::filter(
+      {a, b}, this->udf, false, std::nullopt, std::vector{true, false}, cudf::null_aware::NO));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, results[0]->view());
 }
 
@@ -133,26 +137,42 @@ TEST_F(FilterAssertsTest, CopyMask)
 __device__ void is_divisible(bool* out, int32_t a, int32_t b) { *out = ((a % b) == 0); }
   )***";
 
-  EXPECT_NO_THROW(cudf::filter({a, b}, cuda, false, std::nullopt, std::vector{true, true}));
-  EXPECT_THROW(cudf::filter({a, b}, cuda, false, std::nullopt, std::vector{true}),
-               std::invalid_argument);
-  EXPECT_THROW(cudf::filter({a, b}, cuda, false, std::nullopt, std::vector{true, true, true}),
-               std::invalid_argument);
+  EXPECT_NO_THROW(
+    cudf::filter({a, b}, cuda, false, std::nullopt, std::vector{true, true}, cudf::null_aware::NO));
+  EXPECT_THROW(
+    cudf::filter({a, b}, cuda, false, std::nullopt, std::vector{true}, cudf::null_aware::NO),
+    std::invalid_argument);
+  EXPECT_THROW(
+    cudf::filter(
+      {a, b}, cuda, false, std::nullopt, std::vector{true, true, true}, cudf::null_aware::NO),
+    std::invalid_argument);
 }
 
 struct FilterTest : public FilterTestFixture {};
 
 TEST_F(FilterTest, Basic)
 {
-  auto a           = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+  auto a = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+                                                           {1, 1, 1, 1, 1, 1, 1, 0, 0, 0});
   std::string cuda = R"***(
 __device__ void is_even(bool* out, int32_t a) { *out = (a % 2 == 0); }
   )***";
 
-  auto result   = cudf::filter({a}, cuda, false, std::nullopt, std::vector{true});
-  auto expected = cudf::test::fixed_width_column_wrapper<int32_t>{2, 4, 6, 8, 10};
+  auto result =
+    cudf::filter({a}, cuda, false, std::nullopt, std::vector{true}, cudf::null_aware::NO);
+  auto expected = cudf::test::fixed_width_column_wrapper<int32_t>{2, 4, 6};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result[0]->view());
+
+  std::string null_cuda = R"***(
+__device__ void is_even(bool* out, cuda::std::optional<int32_t> a) { *out = a.has_value() && (*a % 2 == 0); }
+  )***";
+
+  auto null_result =
+    cudf::filter({a}, null_cuda, false, std::nullopt, std::vector{true}, cudf::null_aware::YES);
+  auto null_expected = cudf::test::fixed_width_column_wrapper<int32_t>{2, 4, 6};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(null_expected, null_result[0]->view());
 }
 
 TEST_F(FilterTest, ScalarBroadcast)
@@ -163,7 +183,7 @@ TEST_F(FilterTest, ScalarBroadcast)
 __device__ void is_divisible(bool* out, int32_t a, int32_t b) { *out = ((a % b) == 0); }
   )***";
 
-  auto result     = cudf::filter({a, b}, cuda, false, std::nullopt);
+  auto result = cudf::filter({a, b}, cuda, false, std::nullopt, std::nullopt, cudf::null_aware::NO);
   auto expected_a = cudf::test::fixed_width_column_wrapper<int32_t>{2, 4, 6, 8, 10};
   auto expected_b = cudf::test::fixed_width_column_wrapper<int32_t>{2, 2, 2, 2, 2};
 
@@ -220,7 +240,8 @@ __device__ void filter(bool* out,
                  cuda,
                  false,
                  std::nullopt,
-                 std::vector{true, true, false, false, false, false, false, false, false, false});
+                 std::vector{true, true, false, false, false, false, false, false, false, false},
+                 cudf::null_aware::NO);
 
   EXPECT_EQ(result.size(), 2);
 
@@ -282,7 +303,8 @@ __device__ void filter(bool* out,
                  cuda,
                  false,
                  std::nullopt,
-                 std::vector{true, true, false, false, false, false, false, false, false, false});
+                 std::vector{true, true, false, false, false, false, false, false, false, false},
+                 cudf::null_aware::NO);
 
   auto expected_countries = cudf::test::strings_column_wrapper{"Germany", "Spain"};
 
