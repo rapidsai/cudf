@@ -1369,7 +1369,7 @@ cdef list _arrow_to_pylist_bool8(ArrowArray* arr):
     if out is None:
         raise MemoryError("Unable to create new python List")
 
-    cdef const void** bufs = arr.buffers
+    cdef const void** buffers = arr.buffers
     cdef int64_t offset = arr.offset
     cdef const uint8_t* null_bm = NULL
     cdef const uint8_t* data_bm = NULL
@@ -1379,15 +1379,15 @@ cdef list _arrow_to_pylist_bool8(ArrowArray* arr):
     if n == 0:
         return out
 
-    if arr.n_buffers >= 1 and bufs[0] != NULL and arr.null_count != 0:
-        null_bm = <const uint8_t*>bufs[0]
+    if arr.n_buffers >= 1 and buffers[0] != NULL and arr.null_count != 0:
+        null_bm = <const uint8_t*>buffers[0]
 
-    if arr.n_buffers < 2 or bufs[1] == NULL:
+    if arr.n_buffers < 2 or buffers[1] == NULL:
         for i in range(n):
             _set_item(out, <Py_ssize_t>i, None)
         return out
 
-    data_bm = <const uint8_t*>bufs[1]
+    data_bm = <const uint8_t*>buffers[1]
 
     for i in range(n):
         bit_index = <size_t>(offset + <int64_t>i)
@@ -1410,7 +1410,7 @@ cdef list _arrow_to_pylist_string(ArrowArray* arr):
     # buffers[0] = null-bitmap (optional)
     # buffers[1] = int32 offsets
     # buffers[2] = char* data
-    cdef const void** bufs = arr.buffers
+    cdef const void** buffers = arr.buffers
     cdef int64_t offset = arr.offset
     cdef const uint8_t* null_bm = NULL
     cdef const int32_t* offs = NULL
@@ -1421,16 +1421,16 @@ cdef list _arrow_to_pylist_string(ArrowArray* arr):
     if n == 0:
         return out
 
-    if arr.n_buffers >= 1 and bufs[0] != NULL and arr.null_count != 0:
-        null_bm = <const uint8_t*>bufs[0]
+    if arr.n_buffers >= 1 and buffers[0] != NULL and arr.null_count != 0:
+        null_bm = <const uint8_t*>buffers[0]
 
-    if arr.n_buffers < 3 or bufs[1] == NULL or bufs[2] == NULL:
+    if arr.n_buffers < 3 or buffers[1] == NULL or buffers[2] == NULL:
         for i in range(n):
             _set_item(out, <Py_ssize_t>i, None)
         return out
 
-    offs = <const int32_t*>bufs[1]
-    data = <const char*>bufs[2]
+    offs = <const int32_t*>buffers[1]
+    data = <const char*>buffers[2]
     offs = offs + <Py_ssize_t>offset
 
     for i in range(n):
@@ -1455,40 +1455,40 @@ cdef list _arrow_to_pylist_numeric(type_id dtype, ArrowArray* arr):
     if out is None:
         raise MemoryError("Unable to create new python List")
 
-    cdef const void** bufs = arr.buffers
+    cdef const void** buffers = arr.buffers
     cdef int64_t offset = arr.offset
     cdef const uint8_t* null_bm = NULL
     cdef size_t i, bit_index
-    cdef size_t item_sz
+    cdef size_t item_size
     cdef object obj
 
     if n == 0:
         return out
 
-    if arr.n_buffers >= 1 and bufs[0] != NULL and arr.null_count != 0:
-        null_bm = <const uint8_t*>bufs[0]
+    if arr.n_buffers >= 1 and buffers[0] != NULL and arr.null_count != 0:
+        null_bm = <const uint8_t*>buffers[0]
 
-    if arr.n_buffers < 2 or bufs[1] == NULL:
+    if arr.n_buffers < 2 or buffers[1] == NULL:
         for i in range(n):
             _set_item(out, <Py_ssize_t>i, None)
         return out
 
     if dtype == type_id.INT8 or dtype == type_id.UINT8:
-        item_sz = sizeof(uint8_t)
+        item_size = sizeof(uint8_t)
     elif dtype == type_id.INT16  or dtype == type_id.UINT16:
-        item_sz = sizeof(uint16_t)
+        item_size = sizeof(uint16_t)
     elif dtype == type_id.INT32  or dtype == type_id.UINT32:
-        item_sz = sizeof(uint32_t)
+        item_size = sizeof(uint32_t)
     elif dtype == type_id.INT64  or dtype == type_id.UINT64:
-        item_sz = sizeof(uint64_t)
+        item_size = sizeof(uint64_t)
     elif dtype == type_id.FLOAT32:
-        item_sz = sizeof(float)
+        item_size = sizeof(float)
     elif dtype == type_id.FLOAT64:
-        item_sz = sizeof(double)
+        item_size = sizeof(double)
     else:
         raise NotImplementedError(f"Column with {dtype=} not supported")
 
-    cdef const char* base = <const char*>bufs[1] + item_sz * <size_t>offset
+    cdef const char* base = <const char*>buffers[1] + item_size * <size_t>offset
 
     if null_bm is NULL:
         for i in range(n):
