@@ -158,7 +158,7 @@ repos:
       - id: verify-codeowners
         args: [--fix, --project-prefix=cudf]
   - repo: https://github.com/rapidsai/dependency-file-generator
-    rev: v1.19.1
+    rev: v1.20.0
     hooks:
       - id: rapids-dependency-file-generator
         args: ["--clean"]
