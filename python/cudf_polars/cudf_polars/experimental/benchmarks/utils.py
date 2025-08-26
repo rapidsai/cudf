@@ -14,6 +14,7 @@ import statistics
 import sys
 import textwrap
 import time
+import traceback
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Literal, assert_never
@@ -716,6 +717,7 @@ def run_polars(
     vars(args).update({"query_set": benchmark.name})
     run_config = RunConfig.from_args(args)
     validation_failures: list[int] = []
+    query_failures: list[tuple[int, int]] = []
 
     client = initialize_dask_cluster(run_config, args)  # type: ignore
 
@@ -743,39 +745,52 @@ def run_polars(
         for i in range(args.iterations):
             t0 = time.monotonic()
 
-            result = execute_query(q_id, i, q, run_config, args, engine)
-
-            if run_config.shuffle == "rapidsmpf" and run_config.gather_shuffle_stats:
-                from rapidsmpf.integrations.dask.shuffler import (
-                    clear_shuffle_statistics,
-                    gather_shuffle_statistics,
-                )
-
-                shuffle_stats = gather_shuffle_statistics(client)  # type: ignore[arg-type]
-                clear_shuffle_statistics(client)  # type: ignore[arg-type]
+            try:
+                result = execute_query(q_id, i, q, run_config, args, engine)
+            except Exception:
+                print(f"❌ query={q_id} iteration={i} failed!")
+                print(traceback.format_exc())
+                query_failures.append((q_id, i))
+                continue
             else:
-                shuffle_stats = None
-
-            if args.validate and run_config.executor != "cpu":
-                try:
-                    assert_gpu_result_equal(
-                        q,
-                        engine=engine,
-                        executor=run_config.executor,
-                        check_exact=False,
+                if (
+                    run_config.shuffle == "rapidsmpf"
+                    and run_config.gather_shuffle_stats
+                ):
+                    from rapidsmpf.integrations.dask.shuffler import (
+                        clear_shuffle_statistics,
+                        gather_shuffle_statistics,
                     )
-                    print(f"✅ Query {q_id} passed validation!")
-                except AssertionError as e:
-                    validation_failures.append(q_id)
-                    print(f"❌ Query {q_id} failed validation!\n{e}")
 
-            t1 = time.monotonic()
-            record = Record(query=q_id, duration=t1 - t0, shuffle_stats=shuffle_stats)
-            if args.print_results:
-                print(result)
+                    shuffle_stats = gather_shuffle_statistics(client)  # type: ignore[arg-type]
+                    clear_shuffle_statistics(client)  # type: ignore[arg-type]
+                else:
+                    shuffle_stats = None
 
-            print(f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s")
-            records[q_id].append(record)
+                if args.validate and run_config.executor != "cpu":
+                    try:
+                        assert_gpu_result_equal(
+                            q,
+                            engine=engine,
+                            executor=run_config.executor,
+                            check_exact=False,
+                        )
+                        print(f"✅ Query {q_id} passed validation!")
+                    except AssertionError as e:
+                        validation_failures.append(q_id)
+                        print(f"❌ Query {q_id} failed validation!\n{e}")
+
+                t1 = time.monotonic()
+                record = Record(
+                    query=q_id, duration=t1 - t0, shuffle_stats=shuffle_stats
+                )
+                if args.print_results:
+                    print(result)
+
+                print(
+                    f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s"
+                )
+                records[q_id].append(record)
 
     run_config = dataclasses.replace(run_config, records=dict(records))
 
@@ -794,5 +809,9 @@ def run_polars(
             )
         else:
             print("All validated queries passed.")
+
     args.output.write(json.dumps(run_config.serialize(engine=engine)))
     args.output.write("\n")
+
+    if query_failures or validation_failures:
+        sys.exit(1)
