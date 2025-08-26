@@ -80,6 +80,7 @@ dependencies:
 - python-confluent-kafka>=2.8.0,<2.9.0a0
 - python-xxhash
 - python>=3.10,<3.14
+- pytorch>=2.4.0
 - rapids-build-backend>=0.4.0,<0.5.0.dev0
 - rapids-dask-dependency==25.10.*,>=0.0.0a0
 - rapids-logger==0.1.*,>=0.0.0a0
