@@ -49,7 +49,7 @@ static void BM_ast_polynomials(nvbench::state& state)
   auto const num_rows         = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const order            = static_cast<cudf::size_type>(state.get_int64("order"));
   auto const null_probability = state.get_float64("null_probability");
-  auto const engine          = engine_from_string(state.get_string("engine"));
+  auto const engine           = engine_from_string(state.get_string("engine"));
 
   CUDF_EXPECTS(order > 0, "Polynomial order must be greater than 0");
 
