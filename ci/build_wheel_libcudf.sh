@@ -27,11 +27,7 @@ rapids-pip-retry install \
 # 0 really means "add --no-build-isolation" (ref: https://github.com/pypa/pip/issues/5735)
 export PIP_NO_BUILD_ISOLATION=0
 
-# TODO(nvcomp): when `nvcomp` supports Python 3.13 and we de-vendor `nvcomp` from `kvikio`
-# this should be switched back to using the nvcomp runtime wheel
-# https://github.com/rapidsai/build-planning/issues/171
-# export SKBUILD_CMAKE_ARGS="-DUSE_NVCOMP_RUNTIME_WHEEL=ON"
-export SKBUILD_CMAKE_ARGS="-DUSE_NVCOMP_FROM_LIBKVIKIO_WHEEL=ON"
+export SKBUILD_CMAKE_ARGS="-DUSE_NVCOMP_RUNTIME_WHEEL=OFF"
 ./ci/build_wheel.sh "${package_name}" "${package_dir}"
 
 # repair wheels and write to the location that artifact-uploading code expects to find them

@@ -1,5 +1,8 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
 
+import datetime
+import zoneinfo
+
 import cupy as cp
 import numpy as np
 import pandas as pd
@@ -193,6 +196,29 @@ def test_numeric_to_timedelta(
     expected = psr.astype(timedelta_types_as_str)
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "alias,expect_dtype",
+    [
+        ("UInt8", "uint8"),
+        ("UInt16", "uint16"),
+        ("UInt32", "uint32"),
+        ("UInt64", "uint64"),
+        ("Int8", "int8"),
+        ("Int16", "int16"),
+        ("Int32", "int32"),
+        ("Int64", "int64"),
+        ("boolean", "bool"),
+        ("Float32", "float32"),
+        ("Float64", "float64"),
+    ],
+)
+def test_astype_with_aliases(alias, expect_dtype):
+    pd_data = pd.Series([1, 2, 0])
+    gd_data = cudf.Series.from_pandas(pd_data)
+
+    assert_eq(pd_data.astype(expect_dtype), gd_data.astype(alias))
 
 
 def test_timedelta_datetime_cast_invalid():
@@ -529,3 +555,307 @@ def test_datetime_infer_format(data, timezone, datetime_types_as_str):
             with pytest.raises(NotImplementedError):
                 # pandas doesn't allow parsing "Z" to naive type
                 sr.astype(datetime_types_as_str)
+
+
+@pytest.mark.parametrize("unit", ["ns", "us"])
+def test_astype_aware_to_aware(unit):
+    ser = cudf.Series(
+        [datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc)]
+    )
+    result = ser.astype(f"datetime64[{unit}, US/Pacific]")
+    expected = ser.to_pandas().astype(f"datetime64[{unit}, US/Pacific]")
+    zoneinfo_type = pd.DatetimeTZDtype(
+        expected.dtype.unit, zoneinfo.ZoneInfo(str(expected.dtype.tz))
+    )
+    expected = ser.astype(zoneinfo_type)
+    assert_eq(result, expected)
+
+
+def test_astype_naive_to_aware_raises():
+    ser = cudf.Series([datetime.datetime(2020, 1, 1)])
+    with pytest.raises(TypeError):
+        ser.astype("datetime64[ns, UTC]")
+    with pytest.raises(TypeError):
+        ser.to_pandas().astype("datetime64[ns, UTC]")
+
+
+@pytest.mark.parametrize(
+    "np_dtype,pd_dtype",
+    [
+        tuple(item)
+        for item in cudf.utils.dtypes.np_dtypes_to_pandas_dtypes.items()
+    ],
+)
+def test_series_astype_pandas_nullable(
+    all_supported_types_as_str, np_dtype, pd_dtype
+):
+    source = cudf.Series([0, 1, None], dtype=all_supported_types_as_str)
+
+    expect = source.astype(np_dtype)
+    got = source.astype(pd_dtype)
+
+    assert_eq(expect, got)
+
+
+def test_series_astype_numeric_to_numeric(
+    numeric_types_as_str, numeric_types_as_str2
+):
+    psr = pd.Series([1, 2, 4, 3], dtype=numeric_types_as_str)
+    gsr = cudf.from_pandas(psr)
+    assert_eq(
+        psr.astype(numeric_types_as_str2), gsr.astype(numeric_types_as_str2)
+    )
+
+
+def test_series_astype_numeric_to_numeric_nulls(
+    numeric_types_as_str, numeric_types_as_str2
+):
+    data = [1, 2, None, 3]
+    sr = cudf.Series(data, dtype=numeric_types_as_str)
+    got = sr.astype(numeric_types_as_str2)
+    expect = cudf.Series([1, 2, None, 3], dtype=numeric_types_as_str2)
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "as_dtype",
+    [
+        "str",
+        "category",
+        "datetime64[s]",
+        "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
+    ],
+)
+def test_series_astype_numeric_to_other(
+    request, all_supported_types_as_str, as_dtype
+):
+    if all_supported_types_as_str.startswith(
+        "timedelta64"
+    ) and as_dtype.startswith("datetime64"):
+        pytest.skip(
+            f"Casting {all_supported_types_as_str} to {as_dtype} is invalid"
+        )
+    if all_supported_types_as_str == "str" and as_dtype.startswith(
+        "datetime64"
+    ):
+        pytest.skip(
+            f"Casting {all_supported_types_as_str} to {as_dtype} for test data is invalid."
+        )
+    request.applymarker(
+        pytest.mark.xfail(
+            all_supported_types_as_str
+            in {"timedelta64[us]", "timedelta64[ms]", "timedelta64[s]"}
+            and as_dtype == "str",
+            reason=f"Casting {all_supported_types_as_str} to {as_dtype} is incorrect.",
+        )
+    )
+    psr = pd.Series([1, 2, 3], dtype=all_supported_types_as_str)
+    gsr = cudf.from_pandas(psr)
+    assert_eq(psr.astype(as_dtype), gsr.astype(as_dtype))
+
+
+@pytest.mark.parametrize(
+    "as_dtype",
+    [
+        "str",
+        "int32",
+        "uint32",
+        "float32",
+        "category",
+        "datetime64[s]",
+        "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
+    ],
+)
+def test_series_astype_string_to_other(as_dtype):
+    if "datetime64" in as_dtype:
+        data = ["2001-01-01", "2002-02-02", "2000-01-05"]
+    else:
+        data = ["1", "2", "3"]
+    psr = pd.Series(data)
+    gsr = cudf.from_pandas(psr)
+    assert_eq(psr.astype(as_dtype), gsr.astype(as_dtype))
+
+
+@pytest.mark.parametrize(
+    "as_dtype",
+    [
+        "category",
+        "datetime64[s]",
+        "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
+    ],
+)
+def test_series_astype_datetime_to_other(as_dtype):
+    data = ["2001-01-01", "2002-02-02", "2001-01-05"]
+    psr = pd.Series(data)
+    gsr = cudf.from_pandas(psr)
+    assert_eq(psr.astype(as_dtype), gsr.astype(as_dtype))
+
+
+@pytest.mark.parametrize(
+    "inp",
+    [
+        ("datetime64[ns]", "2011-01-01 00:00:00.000000000"),
+        ("datetime64[us]", "2011-01-01 00:00:00.000000"),
+        ("datetime64[ms]", "2011-01-01 00:00:00.000"),
+        ("datetime64[s]", "2011-01-01 00:00:00"),
+    ],
+)
+def test_series_astype_datetime_to_string(inp):
+    dtype, expect = inp
+    base_date = "2011-01-01"
+    sr = cudf.Series([base_date], dtype=dtype)
+    got = sr.astype(str)[0]
+    assert expect == got
+
+
+@pytest.mark.parametrize(
+    "as_dtype",
+    [
+        "int32",
+        "uint32",
+        "float32",
+        "category",
+        "datetime64[s]",
+        "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
+        "str",
+    ],
+)
+def test_series_astype_categorical_to_other(as_dtype):
+    if "datetime64" in as_dtype:
+        data = ["2001-01-01", "2002-02-02", "2000-01-05", "2001-01-01"]
+    else:
+        data = [1, 2, 3, 1]
+    psr = pd.Series(data, dtype="category")
+    gsr = cudf.from_pandas(psr)
+    assert_eq(psr.astype(as_dtype), gsr.astype(as_dtype))
+
+
+def test_series_astype_to_categorical_ordered(categorical_ordered):
+    psr = pd.Series([1, 2, 3, 1], dtype="category")
+    gsr = cudf.from_pandas(psr)
+
+    ordered_dtype_pd = pd.CategoricalDtype(
+        categories=[1, 2, 3], ordered=categorical_ordered
+    )
+    ordered_dtype_gd = cudf.CategoricalDtype.from_pandas(ordered_dtype_pd)
+    assert_eq(
+        psr.astype("int32").astype(ordered_dtype_pd).astype("int32"),
+        gsr.astype("int32").astype(ordered_dtype_gd).astype("int32"),
+    )
+
+
+def test_series_astype_cat_ordered_to_unordered(categorical_ordered):
+    pd_dtype = pd.CategoricalDtype(
+        categories=[1, 2, 3], ordered=categorical_ordered
+    )
+    pd_to_dtype = pd.CategoricalDtype(
+        categories=[1, 2, 3], ordered=not categorical_ordered
+    )
+    gd_dtype = cudf.CategoricalDtype.from_pandas(pd_dtype)
+    gd_to_dtype = cudf.CategoricalDtype.from_pandas(pd_to_dtype)
+
+    psr = pd.Series([1, 2, 3], dtype=pd_dtype)
+    gsr = cudf.Series([1, 2, 3], dtype=gd_dtype)
+
+    expect = psr.astype(pd_to_dtype)
+    got = gsr.astype(gd_to_dtype)
+
+    assert_eq(expect, got)
+
+
+def test_series_astype_null_cases():
+    data = [1, 2, None, 3]
+
+    # numerical to other
+    assert_eq(cudf.Series(data, dtype="str"), cudf.Series(data).astype("str"))
+
+    assert_eq(
+        cudf.Series(data, dtype="category"),
+        cudf.Series(data).astype("category"),
+    )
+
+    assert_eq(
+        cudf.Series(data, dtype="float32"),
+        cudf.Series(data, dtype="int32").astype("float32"),
+    )
+
+    assert_eq(
+        cudf.Series(data, dtype="float32"),
+        cudf.Series(data, dtype="uint32").astype("float32"),
+    )
+
+    assert_eq(
+        cudf.Series(data, dtype="datetime64[ms]"),
+        cudf.Series(data).astype("datetime64[ms]"),
+    )
+
+    # categorical to other
+    assert_eq(
+        cudf.Series(data, dtype="str"),
+        cudf.Series(data, dtype="category").astype("str"),
+    )
+
+    assert_eq(
+        cudf.Series(data, dtype="float32"),
+        cudf.Series(data, dtype="category").astype("float32"),
+    )
+
+    assert_eq(
+        cudf.Series(data, dtype="datetime64[ms]"),
+        cudf.Series(data, dtype="category").astype("datetime64[ms]"),
+    )
+
+    # string to other
+    assert_eq(
+        cudf.Series([1, 2, None, 3], dtype="int32"),
+        cudf.Series(["1", "2", None, "3"]).astype("int32"),
+    )
+
+    assert_eq(
+        cudf.Series(
+            ["2001-01-01", "2001-02-01", None, "2001-03-01"],
+            dtype="datetime64[ms]",
+        ),
+        cudf.Series(["2001-01-01", "2001-02-01", None, "2001-03-01"]).astype(
+            "datetime64[ms]"
+        ),
+    )
+
+    assert_eq(
+        cudf.Series(["a", "b", "c", None], dtype="category").to_pandas(),
+        cudf.Series(["a", "b", "c", None]).astype("category").to_pandas(),
+    )
+
+    # datetime to other
+    data = [
+        "2001-01-01 00:00:00.000000",
+        "2001-02-01 00:00:00.000000",
+        None,
+        "2001-03-01 00:00:00.000000",
+    ]
+    assert_eq(
+        cudf.Series(data),
+        cudf.Series(data, dtype="datetime64[us]").astype("str"),
+    )
+
+    assert_eq(
+        pd.Series(data, dtype="datetime64[ns]").astype("category"),
+        cudf.from_pandas(pd.Series(data, dtype="datetime64[ns]")).astype(
+            "category"
+        ),
+    )
+
+
+def test_series_astype_null_categorical():
+    sr = cudf.Series([None, None, None], dtype="category")
+    expect = cudf.Series([None, None, None], dtype="int32")
+    got = sr.astype("int32")
+    assert_eq(expect, got)

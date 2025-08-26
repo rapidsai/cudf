@@ -59,3 +59,23 @@ def test_cache(request):
     qir.evaluate(cache=node_cache, timer=None)
     assert len(node_cache) == 0
     assert node_cache.hits == 3
+
+
+def test_union_cache_nodes():
+    df = pl.LazyFrame({"a": [7, 8], "b": [12, 13]})
+    q = pl.concat([df, df])
+    qir = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
+    # Logical plan:
+    # UNION ('x', 'y', 'z')
+    #   CACHE ('x', 'y', 'z')
+    #     PROJECTION ('x', 'y', 'z')
+    #       DATAFRAMESCAN ('x', 'y', 'z')
+    #   (repeated 2 times)
+
+    # Check that the concatenated Cache nodes are the same object
+    # See: https://github.com/rapidsai/cudf/issues/19766
+    assert isinstance(qir, ir.Union)
+    assert isinstance(qir.children[0], ir.Cache)
+    assert isinstance(qir.children[1], ir.Cache)
+    assert hash(qir.children[0]) == hash(qir.children[1])
+    assert hash(qir.children[0].children[0]) == hash(qir.children[1].children[0])

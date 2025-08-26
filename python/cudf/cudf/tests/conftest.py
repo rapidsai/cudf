@@ -1,12 +1,15 @@
 # Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 import itertools
+import math
 import operator
 import os
 import pathlib
+import zoneinfo
 
 import cupy as cp
 import numpy as np
+import pandas as pd
 import pytest
 
 import rmm  # noqa: F401
@@ -175,6 +178,37 @@ def pytest_runtest_makereport(item, call):
     setattr(item, "report", {rep.when: rep})
 
 
+def _get_all_zones():
+    zones = []
+    for zone in zoneinfo.available_timezones():
+        # TODO: pandas 3.0 defaults to zoneinfo,
+        # so all_zone_names can use zoneinfo.available_timezones()
+        try:
+            pd.DatetimeTZDtype("ns", zone)
+        except KeyError:
+            continue
+        else:
+            zones.append(zone)
+    return sorted(zones)
+
+
+# NOTE: _get_all_zones is a very large list; we likely do NOT want to
+# use it for more than a handful of tests
+@pytest.fixture(params=_get_all_zones())
+def all_timezones(request):
+    return request.param
+
+
+@pytest.fixture(
+    params=["America/New_York", "Asia/Tokyo", "CET", "Etc/GMT+1", "UTC"]
+)
+def limited_timezones(request):
+    """
+    Small representative set of timezones for testing.
+    """
+    return request.param
+
+
 @pytest.fixture(
     params=[
         {
@@ -210,6 +244,44 @@ comparison_ops = [
     operator.gt,
     operator.ge,
 ]
+bitwise_ops = [
+    operator.and_,
+    operator.or_,
+    operator.xor,
+]
+unary_ops = [
+    math.acos,
+    math.acosh,
+    math.asin,
+    math.asinh,
+    math.atan,
+    math.atanh,
+    math.ceil,
+    math.cos,
+    math.degrees,
+    math.erf,
+    math.erfc,
+    math.exp,
+    math.expm1,
+    math.fabs,
+    math.floor,
+    math.gamma,
+    math.lgamma,
+    math.log,
+    math.log10,
+    math.log1p,
+    math.log2,
+    math.radians,
+    math.sin,
+    math.sinh,
+    math.sqrt,
+    math.tan,
+    math.tanh,
+    operator.pos,
+    operator.neg,
+    operator.not_,
+    operator.invert,
+]
 
 
 @pytest.fixture(params=arithmetic_ops)
@@ -236,6 +308,16 @@ def comparison_op(request):
 def comparison_op_method(comparison_op):
     """Comparison methods defined on Series/DataFrame"""
     return comparison_op.__name__
+
+
+@pytest.fixture(params=bitwise_ops)
+def bitwise_op(request):
+    return request.param
+
+
+@pytest.fixture(params=unary_ops)
+def unary_op(request):
+    return request.param
 
 
 @pytest.fixture(params=arithmetic_ops + comparison_ops)
@@ -575,4 +657,10 @@ def categorical_ordered(request):
 @pytest.fixture(params=["left", "right", "both", "neither"])
 def interval_closed(request):
     """Param for `closed` argument for interval types"""
+    return request.param
+
+
+@pytest.fixture(params=["all", "any"])
+def dropna_how(request):
+    """Param for `how` argument"""
     return request.param

@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
 from libcpp.memory cimport unique_ptr
@@ -15,6 +15,8 @@ from pylibcudf.libcudf.scalar.scalar_factories cimport (
 )
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.scalar cimport Scalar
+from pylibcudf.utils cimport _get_stream
+from rmm.pylibrmm.stream cimport Stream
 
 __all__ = ["filter_tokens", "replace_tokens"]
 
@@ -47,9 +49,11 @@ cpdef Column replace_tokens(
         New strings column with replaced strings
     """
     cdef unique_ptr[column] c_result
+    cdef Stream stream
     if delimiter is None:
+        stream = _get_stream(None)
         delimiter = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode())
+            cpp_make_string_scalar("".encode(), stream.view())
         )
     with nogil:
         c_result = cpp_replace_tokens(
@@ -90,13 +94,16 @@ cpdef Column filter_tokens(
         New strings column of filtered strings
     """
     cdef unique_ptr[column] c_result
+    cdef Stream stream
     if delimiter is None:
+        stream = _get_stream(None)
         delimiter = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode())
+            cpp_make_string_scalar("".encode(), stream.view())
         )
     if replacement is None:
+        stream = _get_stream(None)
         replacement = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode())
+            cpp_make_string_scalar("".encode(), stream.view())
         )
 
     with nogil:

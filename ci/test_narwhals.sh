@@ -39,8 +39,10 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest \
     --constructors=cudf
 
 # test_datetime[polars[lazy]]: Fixed in the next narwhals release >2.0.1
+# test_nan[polars[lazy]]: Passes as of https://github.com/rapidsai/cudf/pull/19742
 TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_POLARS=" \
-test_datetime[polars[lazy]] \
+test_datetime[polars[lazy]] or \
+test_nan[polars[lazy]] \
 "
 
 rapids-logger "Run narwhals tests for cuDF Polars"
