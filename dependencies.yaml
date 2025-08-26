@@ -101,6 +101,7 @@ files:
       - depends_on_dask_cuda
       - depends_on_pylibcudf
       - depends_on_libcudf
+      - depends_on_numba_cuda
       - depends_on_dask_cudf
       - depends_on_cudf_kafka
       - depends_on_custreamz
