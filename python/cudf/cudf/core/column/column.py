@@ -950,57 +950,37 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
         elif isinstance(array.type, ArrowIntervalType):
             return cudf.core.column.IntervalColumn.from_arrow(array)
+        elif pa.types.is_null(array.type):
+            # default "empty" type
+            array = array.cast(pa.string())
 
-        data = pa.table([array], [None])
-
-        if isinstance(array.type, pa.DictionaryType):
-            indices_table = pa.table(
-                [
-                    pa.chunked_array(
-                        [chunk.indices for chunk in data.column(0).chunks],
-                        type=array.type.index_type,
-                    )
-                ],
-                [None],
-            )
-            dictionaries_table = pa.table(
-                [
-                    pa.chunked_array(
-                        [chunk.dictionary for chunk in data.column(0).chunks],
-                        type=array.type.value_type,
-                    )
-                ],
-                [None],
-            )
+        if pa.types.is_dictionary(array.type):
+            if isinstance(array, pa.Array):
+                codes = array.indices
+                dictionary = array.dictionary
+            else:
+                codes = pa.chunked_array(
+                    [chunk.indices for chunk in array.chunks],
+                    type=array.type.index_type,
+                )
+                dictionary = pa.chunked_array(
+                    [chunk.dictionary for chunk in array.chunks],
+                    type=array.type.value_type,
+                )
             with acquire_spill_lock():
-                codes = cls.from_pylibcudf(
-                    plc.Table.from_arrow(indices_table).columns()[0]
-                )
+                result = cls.from_pylibcudf(plc.Column.from_arrow(codes))
                 categories = cls.from_pylibcudf(
-                    plc.Table.from_arrow(dictionaries_table).columns()[0]
+                    plc.Column.from_arrow(dictionary)
                 )
-            codes = cudf.core.column.categorical.as_unsigned_codes(
-                len(categories),
-                codes,  # type: ignore[arg-type]
-            )
-            return cudf.core.column.CategoricalColumn(
-                data=None,
-                size=codes.size,
-                dtype=CategoricalDtype(
+            return result._with_type_metadata(
+                CategoricalDtype(
                     categories=categories, ordered=array.type.ordered
-                ),
-                mask=codes.base_mask,
-                children=(codes,),
+                )
             )
         else:
-            result = cls.from_pylibcudf(
-                plc.Table.from_arrow(data).columns()[0]
-            )
-
-            # Return a column with the appropriately converted dtype
-            return result._with_type_metadata(
-                cudf_dtype_from_pa_type(array.type)
-            )
+            return cls.from_pylibcudf(
+                plc.Column.from_arrow(array)
+            )._with_type_metadata(cudf_dtype_from_pa_type(array.type))
 
     @acquire_spill_lock()
     def _get_mask_as_column(self) -> ColumnBase:
@@ -2868,24 +2848,12 @@ def as_column(
             column = column.astype(dtype)
         return column
     elif isinstance(arbitrary, (pa.Array, pa.ChunkedArray)):
-        if (nan_as_null is None or nan_as_null) and pa.types.is_floating(
-            arbitrary.type
-        ):
-            arbitrary = pc.if_else(
-                pc.is_nan(arbitrary),
-                pa.nulls(len(arbitrary), type=arbitrary.type),
-                arbitrary,
-            )
-        elif dtype is None and pa.types.is_null(arbitrary.type):
-            # default "empty" type
-            dtype = CUDF_STRING_DTYPE
-        col = ColumnBase.from_arrow(arbitrary)
-
+        column = ColumnBase.from_arrow(arbitrary)
+        if nan_as_null is not False:
+            column = column.nans_to_nulls()
         if dtype is not None:
-            col = col.astype(dtype)
-
-        return col
-
+            column = column.astype(dtype)
+        return column
     elif isinstance(
         arbitrary, (pd.Series, pd.Index, pd.api.extensions.ExtensionArray)
     ):
