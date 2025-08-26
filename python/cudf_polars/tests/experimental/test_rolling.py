@@ -34,3 +34,24 @@ def test_rolling_datetime():
     )
     q = df.with_columns(pl.sum("a").rolling(index_column="dt", period="2d"))
     assert_gpu_result_equal(q, engine=engine)
+
+
+def test_over_in_filter_unsupported() -> None:
+    q = pl.concat(
+        [
+            pl.LazyFrame({"k": ["x", "y"], "v": [3, 2]}),
+            pl.LazyFrame({"k": ["x", "y"], "v": [5, 7]}),
+        ]
+    ).filter(pl.len().over("k") == 2)
+
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "max_rows_per_partition": 1,
+            "scheduler": DEFAULT_SCHEDULER,
+            "fallback_mode": StreamingFallbackMode.SILENT,
+        },
+    )
+
+    assert_gpu_result_equal(q, engine=engine)

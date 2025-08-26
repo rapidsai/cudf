@@ -18,6 +18,7 @@
 #include "io/utilities/column_buffer.hpp"
 #include "page_decode.cuh"
 
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/hashing/detail/default_hash.cuh>
 
 #include <rmm/exec_policy.hpp>
@@ -518,6 +519,8 @@ void compute_page_sizes(cudf::detail::hostdevice_span<PageInfo> pages,
                         int level_type_size,
                         rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
+
   dim3 dim_block(preprocess_block_size, 1);
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
 
