@@ -97,22 +97,26 @@ auto column_name_reference::accept(detail::expression_transformer& visitor) cons
   return visitor.visit(*this);
 }
 
-std::unique_ptr<row_ir::node> literal::accept(row_ir::ast_converter& converter) const
+std::unique_ptr<cudf::detail::row_ir::node> literal::accept(
+  cudf::detail::row_ir::ast_converter& converter) const
 {
   return converter.add_ir_node(*this);
 }
 
-std::unique_ptr<row_ir::node> column_reference::accept(row_ir::ast_converter& converter) const
+std::unique_ptr<cudf::detail::row_ir::node> column_reference::accept(
+  cudf::detail::row_ir::ast_converter& converter) const
 {
   return converter.add_ir_node(*this);
 }
 
-std::unique_ptr<row_ir::node> operation::accept(row_ir::ast_converter& converter) const
+std::unique_ptr<cudf::detail::row_ir::node> operation::accept(
+  cudf::detail::row_ir::ast_converter& converter) const
 {
   return converter.add_ir_node(*this);
 }
 
-std::unique_ptr<row_ir::node> column_name_reference::accept(row_ir::ast_converter& converter) const
+std::unique_ptr<cudf::detail::row_ir::node> column_name_reference::accept(
+  cudf::detail::row_ir::ast_converter& converter) const
 {
   return converter.add_ir_node(*this);
 }

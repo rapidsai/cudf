@@ -28,7 +28,7 @@
 
 namespace CUDF_EXPORT cudf {
 
-/// \cond
+namespace detail {
 namespace row_ir {
 
 /// @brief The base class for all IR nodes.
@@ -43,7 +43,7 @@ struct node;
 struct ast_converter;
 
 }  // namespace row_ir
-/// \encond
+}  // namespace detail
 
 namespace ast {
 /**
@@ -88,8 +88,8 @@ struct expression {
    * @param visitor The `row_ir::ast_converter` converting this expression tree
    * @return The IR node representing this expression
    */
-  [[nodiscard]] virtual std::unique_ptr<row_ir::node> accept(
-    row_ir::ast_converter& visitor) const = 0;
+  [[nodiscard]] virtual std::unique_ptr<cudf::detail::row_ir::node> accept(
+    cudf::detail::row_ir::ast_converter& visitor) const = 0;
 
   /**
    * @brief Returns true if the expression may evaluate to null.
@@ -297,7 +297,8 @@ class literal : public expression {
     detail::expression_transformer& visitor) const override;
 
   /// @copydoc expression::accept
-  [[nodiscard]] std::unique_ptr<row_ir::node> accept(row_ir::ast_converter& visitor) const override;
+  [[nodiscard]] std::unique_ptr<cudf::detail::row_ir::node> accept(
+    cudf::detail::row_ir::ast_converter& visitor) const override;
 
   [[nodiscard]] bool may_evaluate_null(table_view const& left,
                                        table_view const& right,
@@ -406,7 +407,8 @@ class column_reference : public expression {
   }
 
   /// @copydoc expression::accept
-  [[nodiscard]] std::unique_ptr<row_ir::node> accept(row_ir::ast_converter& visitor) const override;
+  [[nodiscard]] std::unique_ptr<cudf::detail::row_ir::node> accept(
+    cudf::detail::row_ir::ast_converter& visitor) const override;
 
  private:
   cudf::size_type column_index;
@@ -475,7 +477,8 @@ class operation : public expression {
                                        rmm::cuda_stream_view stream) const override;
 
   /// @copydoc expression::accept
-  [[nodiscard]] std::unique_ptr<row_ir::node> accept(row_ir::ast_converter& visitor) const override;
+  [[nodiscard]] std::unique_ptr<cudf::detail::row_ir::node> accept(
+    cudf::detail::row_ir::ast_converter& visitor) const override;
 
  private:
   ast_operator op;
@@ -521,7 +524,8 @@ class column_name_reference : public expression {
   }
 
   /// @copydoc expression::accept
-  [[nodiscard]] std::unique_ptr<row_ir::node> accept(row_ir::ast_converter& visitor) const override;
+  [[nodiscard]] std::unique_ptr<cudf::detail::row_ir::node> accept(
+    cudf::detail::row_ir::ast_converter& visitor) const override;
 
  private:
   std::string column_name;

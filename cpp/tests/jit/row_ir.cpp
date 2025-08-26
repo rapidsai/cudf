@@ -29,6 +29,8 @@
 #include <cctype>
 
 using namespace cudf;
+namespace row_ir = cudf::detail::row_ir;
+
 struct RowIRCudaCodeGenTest : public ::testing::Test {};
 
 TEST_F(RowIRCudaCodeGenTest, GetInput)

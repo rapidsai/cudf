@@ -354,10 +354,11 @@ std::vector<std::unique_ptr<column>> filter(table_view const& table,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr)
 {
-  row_ir::ast_converter converter;
-  row_ir::ast_args ast_args{.table = table, .table_column_names = {}};
+  cudf::detail::row_ir::ast_converter converter;
+  cudf::detail::row_ir::ast_args ast_args{.table = table, .table_column_names = {}};
   // TODO(lamarrr): get column names
-  auto args = converter.filter(row_ir::target::CUDA, expr, ast_args, copy_mask, stream, mr);
+  auto args =
+    converter.filter(cudf::detail::row_ir::target::CUDA, expr, ast_args, copy_mask, stream, mr);
 
   return cudf::filter(args.columns,
                       args.predicate_udf,

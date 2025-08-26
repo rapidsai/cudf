@@ -25,6 +25,7 @@
 #include <string_view>
 
 namespace CUDF_EXPORT cudf {
+namespace detail {
 
 /// @brief cudf IR for operations acting on elements of a row
 namespace row_ir {
@@ -438,4 +439,5 @@ struct ast_converter {
 };
 
 }  // namespace row_ir
+}  // namespace detail
 }  // namespace CUDF_EXPORT cudf

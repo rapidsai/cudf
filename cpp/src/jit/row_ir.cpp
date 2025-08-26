@@ -23,6 +23,8 @@
 
 namespace cudf {
 
+namespace detail {
+
 namespace row_ir {
 
 std::string cuda_type(type_info type) { return type_to_name(type.type); }
@@ -601,4 +603,5 @@ filter_args ast_converter::filter(target target_id,
 }
 
 }  // namespace row_ir
+}  // namespace detail
 }  // namespace cudf
