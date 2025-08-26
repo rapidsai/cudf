@@ -205,8 +205,8 @@ cdef class DataType:
         precision : int | None
             The precision of the decimal type
         fields : Iterable[pyarrow.Field] |
-                 Iterable[tuple[str, pyarrow.DataType]] |
-                 Mapping[str, pyarrow.DataType]
+                Iterable[tuple[str, pyarrow.DataType]] |
+                Mapping[str, pyarrow.DataType]
             Iterable of Fields or tuples, or mapping of strings to DataTypes
             Each field must have a UTF8-encoded name, and these field names are
             part of the type metadata.
