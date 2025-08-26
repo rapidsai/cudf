@@ -106,7 +106,6 @@ files:
       - depends_on_cudf_kafka
       - depends_on_custreamz
       - depends_on_cudf_polars
-      - depends_on_numba_cuda
   test_java:
     output: none
     includes:
@@ -168,10 +167,10 @@ files:
     includes:
       - build_base
       - build_python_common
+      - depends_on_numba_cuda
       - depends_on_pylibcudf
       - depends_on_libcudf
       - depends_on_librmm
-      - depends_on_numba_cuda
       - depends_on_rmm
   py_run_cudf:
     output: pyproject
