@@ -80,6 +80,9 @@ cdef class Table:
                 "pip install pylibcudf with the [pyarrow] extra for a "
                 "compatible pyarrow version."
             ) from pa_err
+        # TODO: Once the arrow C device interface registers more
+        # types that it supports, we can call pa.array(self) if
+        # no metadata is passed.
         return pa.table(_ObjectWithArrowMetadata(self, metadata))
 
     @staticmethod

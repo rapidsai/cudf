@@ -59,6 +59,7 @@ from .traits cimport is_floating_point
 from .types cimport DataType
 from .utils cimport _get_stream
 from functools import singledispatch
+from ._interop_helpers import ArrowLike, ColumnMetadata
 
 try:
     import pyarrow as pa
@@ -152,7 +153,8 @@ cdef class Scalar:
 
     def to_arrow(
         self,
-        metadata: ColumnMetadata | str | None = None
+        metadata: list[ColumnMetadata] | str | None = None,
+        stream: Stream = None,
     ) -> ArrowLike:
         """Create a PyArrow array from a pylibcudf scalar.
 
@@ -160,14 +162,17 @@ cdef class Scalar:
         ----------
         metadata : list
             The metadata to attach to the columns of the table.
+        stream : Stream | None
+            CUDA stream on which to perform the operation.
 
         Returns
         -------
         pyarrow.Scalar
         """
+        stream = _get_stream(stream)
         # Note that metadata for scalars is primarily important for preserving
         # information on nested types since names are otherwise irrelevant.
-        return Column.from_scalar(self, 1).to_arrow(metadata=metadata)[0]
+        return Column.from_scalar(self, 1, stream).to_arrow(metadata=metadata)[0]
 
     @staticmethod
     def from_arrow(

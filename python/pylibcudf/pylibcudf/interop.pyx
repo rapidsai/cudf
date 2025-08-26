@@ -104,8 +104,13 @@ if pa is not None:
         return Table.from_arrow(pyarrow_object, dtype=data_type)
 
     @from_arrow.register(pa.Scalar)
-    def _from_arrow_scalar(pyarrow_object, *, DataType data_type=None):
-        return Scalar.from_arrow(pyarrow_object, dtype=data_type)
+    def _from_arrow_scalar(
+        pyarrow_object,
+        *,
+        DataType data_type=None,
+        Stream stream = None
+    ):
+        return Scalar.from_arrow(pyarrow_object, dtype=data_type, stream=stream)
 
     @from_arrow.register(pa.Array)
     def _from_arrow_column(pyarrow_object, *, DataType data_type=None):
