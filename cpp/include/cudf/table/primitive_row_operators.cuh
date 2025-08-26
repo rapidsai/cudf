@@ -129,32 +129,21 @@ class row_equality_comparator {
    */
   __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const
   {
-    // if any of null equality check fails, we dont need to compare elements in the row
-    if (_has_nulls) {
-      bool all_nulls = true;
-      for (size_type i = 0; i < _lhs.num_columns(); ++i) {
-        bool const lhs_is_null{_lhs.column(i).is_null(lhs_row_index)};
-        bool const rhs_is_null{_rhs.column(i).is_null(rhs_row_index)};
+    auto equal_elements = [this, lhs_row_index, rhs_row_index](column_device_view const& l,
+                                                               column_device_view const& r) {
+      // Handle null comparison for each element
+      if (_has_nulls) {
+        bool const lhs_is_null{l.is_null(lhs_row_index)};
+        bool const rhs_is_null{r.is_null(rhs_row_index)};
         if (lhs_is_null and rhs_is_null) {
-          // If nulls are unequal, return false immediately
-          if (_nulls_are_equal == null_equality::UNEQUAL) { return false; }
-          // If nulls are equal, continue checking other columns
-          continue;
+          return _nulls_are_equal == null_equality::EQUAL;
         } else if (lhs_is_null != rhs_is_null) {
           return false;
-        } else {
-          // Both are non-null
-          all_nulls = false;
         }
       }
 
-      // If all columns were null and nulls are equal, the rows are equal
-      if (all_nulls && _nulls_are_equal == null_equality::EQUAL) { return true; }
-    }
-
-    element_equality_comparator comparator;
-    auto equal_elements = [&comparator, lhs_row_index, rhs_row_index](column_device_view const& l,
-                                                                      column_device_view const& r) {
+      // Both elements are non-null, compare their values
+      element_equality_comparator comparator;
       return cudf::type_dispatcher<dispatch_primitive_type>(
         l.type(), comparator, l, r, lhs_row_index, rhs_row_index);
     };
