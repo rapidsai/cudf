@@ -21,6 +21,7 @@ dependencies:
 - cuda-nvrtc-dev
 - cuda-nvtx-dev
 - cuda-python>=13.0.1,<14.0a0
+- cuda-sanitizer-api
 - cuda-version=13.0
 - cupy>=13.6.0
 - cxx-compiler

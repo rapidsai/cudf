@@ -701,8 +701,14 @@ dependencies:
               cuda: "12.*"
               cuda_suffixed: "true"
             packages:
-              - nvidia-cuda-nvcc-cu{12,13}.
-              - nvidia-cuda-nvrtc-cu{12,13}.
+              - nvidia-cuda-nvcc-cu12
+              - nvidia-cuda-nvrtc-cu12
+          - matrix:
+              cuda: "13.*"
+              cuda_suffixed: "true"
+            packages:
+              - nvidia-cuda-nvcc-cu13
+              - nvidia-cuda-nvrtc-cu13
           - {matrix: null, packages: []}
   run_cudf_polars:
     common:
@@ -745,15 +751,7 @@ dependencies:
       - output_types: conda
         packages:
           - *cmake_ver
-    specific:
-      - output_types: conda
-        matrices:
-          - matrix:
-              cuda: "12.*"
-            packages:
-              - cuda-sanitizer-api
-          - matrix: # Fallback for no matrix
-            packages:
+          - cuda-sanitizer-api
   # packages we want in the 'test_cpp' group in 'files', for CI, but which
   # shouldn't be added to 'all' for building a development environment
   test_cpp_cudf:
@@ -873,6 +871,7 @@ dependencies:
               cuda: "12.*"
             packages:
               - pytorch>=2.4.0
+          # TODO: add a 13.x entry here when pytorch has CUDA 13 packages (https://github.com/pytorch/pytorch/issues/159779)
           - matrix:
             packages:
     specific:
