@@ -320,7 +320,7 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
   extract_populated_keys(global_set, populated_keys, stream);
   stream.synchronize();
   // TODO: update global_mapping_index with the new indices
-  auto const new_key_indices = find_output_indices(key_indices, populated_keys, stream);
+  auto const [map, new_key_indices] = find_output_indices(key_indices, populated_keys, stream);
   stream.synchronize();
   {
     cudf::scoped_range r("update global mapping index");
