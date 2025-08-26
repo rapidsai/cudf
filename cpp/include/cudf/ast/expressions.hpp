@@ -28,11 +28,12 @@
 
 namespace CUDF_EXPORT cudf {
 
-namespace row_ir {
 /**
  * @addtogroup expressions
  * @{
+ * @file
  */
+namespace row_ir {
 
 /// @brief The base class for all IR nodes.
 /// This class defines the interface for IR nodes, which can be instantiated and used to generate
@@ -45,9 +46,8 @@ struct node;
 /// @brief A converter that converts AST expressions to IR nodes and CUDA UDFs.
 struct ast_converter;
 
-/** @} */  // end of group
-
 }  // namespace row_ir
+/** @} */  // end of group
 
 namespace ast {
 /**
