@@ -899,11 +899,10 @@ dependencies:
           - matrix:
               cuda: "12.*"
             packages:
-              - numba-cuda[cu12]>=0.19.1,<0.20.0a0
-          # fallback to CUDA 13 versions if 'cuda' is '13.*' or not provided
+              - &numba_cuda_cu12 numba-cuda[cu12]>=0.19.1,<0.20.0a0
           - matrix:
             packages:
-              - numba-cuda[cu13]>=0.19.1,<0.20.0a0
+              - *numba_cuda_cu12
   depends_on_pylibcudf:
     common:
       - output_types: conda
