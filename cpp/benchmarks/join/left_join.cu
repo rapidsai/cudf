@@ -16,7 +16,8 @@
 
 #include "join_common.hpp"
 
-#include <cudf/join/join.hpp>
+#include <cudf/join/filtered_join.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 auto const num_keys = 1;
 
@@ -26,12 +27,22 @@ void nvbench_left_anti_join(nvbench::state& state,
                                                nvbench::enum_type<NullEquality>,
                                                nvbench::enum_type<DataType>>)
 {
+  auto const num_operations   = static_cast<cudf::size_type>(state.get_int64("num_operations"));
+  auto const reuse_left_table = state.get_string("reuse_table") == "left" ? true : false;
+  if (!reuse_left_table) {
+    state.skip("Not yet implemented");
+    return;
+  }
   auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
 
-  auto join = [](cudf::table_view const& left,
-                 cudf::table_view const& right,
-                 cudf::null_equality compare_nulls) {
-    return cudf::left_anti_join(left, right, compare_nulls);
+  auto join = [num_operations, reuse_left_table](cudf::table_view const& left,
+                                                 cudf::table_view const& right,
+                                                 cudf::null_equality compare_nulls) {
+    cudf::filtered_join obj(left, compare_nulls, reuse_left_table, cudf::get_default_stream());
+    for (auto i = 0; i < num_operations - 1; i++) {
+      auto result = obj.anti_join(right);
+    }
+    return obj.anti_join(right);
   };
 
   BM_join<Nullable, join_t::HASH, NullEquality>(state, dtypes, join);
@@ -43,12 +54,22 @@ void nvbench_left_semi_join(nvbench::state& state,
                                                nvbench::enum_type<NullEquality>,
                                                nvbench::enum_type<DataType>>)
 {
+  auto const num_operations   = static_cast<cudf::size_type>(state.get_int64("num_operations"));
+  auto const reuse_left_table = state.get_string("reuse_table") == "left" ? true : false;
+  if (!reuse_left_table) {
+    state.skip("Not yet implemented");
+    return;
+  }
   auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
 
-  auto join = [](cudf::table_view const& left,
-                 cudf::table_view const& right,
-                 cudf::null_equality compare_nulls) {
-    return cudf::left_semi_join(left, right, compare_nulls);
+  auto join = [num_operations, reuse_left_table](cudf::table_view const& left,
+                                                 cudf::table_view const& right,
+                                                 cudf::null_equality compare_nulls) {
+    cudf::filtered_join obj(left, compare_nulls, reuse_left_table, cudf::get_default_stream());
+    for (auto i = 0; i < num_operations - 1; i++) {
+      auto result = obj.semi_join(right);
+    }
+    return obj.semi_join(right);
   };
   BM_join<Nullable, join_t::HASH, NullEquality>(state, dtypes, join);
 }
@@ -60,7 +81,9 @@ NVBENCH_BENCH_TYPES(nvbench_left_anti_join,
   .set_name("left_anti_join")
   .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("right_size", JOIN_SIZE_RANGE);
+  .add_int64_axis("right_size", JOIN_SIZE_RANGE)
+  .add_int64_axis("num_operations", {4})
+  .add_string_axis("reuse_table", {"left", "right"});
 
 NVBENCH_BENCH_TYPES(nvbench_left_semi_join,
                     NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
@@ -69,4 +92,6 @@ NVBENCH_BENCH_TYPES(nvbench_left_semi_join,
   .set_name("left_semi_join")
   .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("right_size", JOIN_SIZE_RANGE);
+  .add_int64_axis("right_size", JOIN_SIZE_RANGE)
+  .add_int64_axis("num_operations", {4})
+  .add_string_axis("reuse_table", {"left", "right"});
