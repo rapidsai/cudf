@@ -26,7 +26,6 @@
 #include "single_pass_functors.cuh"
 
 #include <cudf/detail/aggregation/result_cache.hpp>
-#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/groupby.hpp>
@@ -116,9 +115,7 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
   // memory, such as when aggregating dictionary columns, when there is insufficient dynamic
   // shared memory for shared memory aggregations, or when SUM_WITH_OVERFLOW aggregations are
   // present.
-  stream.synchronize();
   if (!is_shared_memory_compatible) {
-    cudf::scoped_range r("insert all");
     thrust::tabulate(rmm::exec_policy_nosync(stream),
                      key_indices.begin(),
                      key_indices.end(),
@@ -129,13 +126,10 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
                        return cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
                      });
 
-    stream.synchronize();
     extract_populated_keys(global_set, populated_keys, stream);
-    stream.synchronize();
     find_output_indices(key_indices, populated_keys, stream);
 
     // TODO
-    stream.synchronize();
     compute_global_memory_aggs(num_rows,
                                static_cast<size_type>(populated_keys.size()),
                                key_indices.begin(),
@@ -166,28 +160,22 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
   CUDF_CUDA_TRY(cudaMemsetAsync(
     needs_global_memory_fallback.data(), 0, sizeof(cuda::std::atomic_flag), stream.value()));
 
-  stream.synchronize();
-  {
-    cudf::scoped_range r("compute mapping indices");
-    compute_mapping_indices(grid_size,
-                            num_rows,
-                            global_set_ref,
-                            row_bitmask,
-                            local_mapping_index.data(),
-                            global_mapping_index.data(),
-                            block_cardinality.data(),
-                            needs_global_memory_fallback.data(),
-                            stream);
-    stream.synchronize();
-  }
+  compute_mapping_indices(grid_size,
+                          num_rows,
+                          global_set_ref,
+                          row_bitmask,
+                          local_mapping_index.data(),
+                          global_mapping_index.data(),
+                          block_cardinality.data(),
+                          needs_global_memory_fallback.data(),
+                          stream);
+
   // For the thread blocks that need fallback to the code path using global memory aggregation,
   // we need to collect these block ids.
   rmm::device_uvector<cudf::size_type> fallback_block_ids(grid_size, stream);
   rmm::device_scalar<cudf::size_type> d_num_fallback_blocks(stream);
   size_type num_fallback_blocks = 0;
-  stream.synchronize();
   {
-    cudf::scoped_range r("select fallback blocks");
     auto const select_cond = [block_cardinality =
                                 block_cardinality.begin()] __device__(auto const idx) {
       if (block_cardinality[idx] >= GROUPBY_CARDINALITY_THRESHOLD) {}
@@ -212,7 +200,6 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
                           grid_size,
                           select_cond,
                           stream.value());
-    stream.synchronize();
   }
 
   cuda::std::atomic_flag h_needs_fallback;
@@ -237,25 +224,19 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
   if (needs_fallback) {
     // TODO: this is a repeat code
     if (num_fallback_blocks == grid_size) {
-      cudf::scoped_range r("fallback all");
-      {
-        cudf::scoped_range r("tabulate all");
-        thrust::tabulate(rmm::exec_policy_nosync(stream),
-                         key_indices.begin(),
-                         key_indices.end(),
-                         [global_set_ref, row_bitmask] __device__(auto const idx) mutable {
-                           if (!row_bitmask || cudf::bit_is_set(row_bitmask, idx)) {
-                             return *global_set_ref.insert_and_find(idx).first;
-                           }
-                           return cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
-                         });
-        stream.synchronize();
-      }
-      stream.synchronize();
+      thrust::tabulate(rmm::exec_policy_nosync(stream),
+                       key_indices.begin(),
+                       key_indices.end(),
+                       [global_set_ref, row_bitmask] __device__(auto const idx) mutable {
+                         if (!row_bitmask || cudf::bit_is_set(row_bitmask, idx)) {
+                           return *global_set_ref.insert_and_find(idx).first;
+                         }
+                         return cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
+                       });
+
       extract_populated_keys(global_set, populated_keys, stream);
-      stream.synchronize();
       find_output_indices(key_indices, populated_keys, stream);
-      stream.synchronize();
+
       // TODO
       compute_global_memory_aggs(num_rows,
                                  static_cast<size_type>(populated_keys.size()),
@@ -267,42 +248,37 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
                                  spass_aggs,
                                  cache,
                                  stream);
-
       return std::pair{std::move(populated_keys), std::move(key_indices)};
     }
 
     auto const num_strides =
       util::div_rounding_up_safe(static_cast<size_type>(num_rows), GROUPBY_BLOCK_SIZE * grid_size);
 
-    stream.synchronize();
 #if 1
-    {
-      cudf::scoped_range r("insert partial");
-      thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                         thrust::make_counting_iterator(0),
-                         GROUPBY_BLOCK_SIZE * num_fallback_blocks * num_strides,
-                         [num_rows    = static_cast<size_type>(num_rows),
-                          full_stride = GROUPBY_BLOCK_SIZE * grid_size,
-                          stride      = GROUPBY_BLOCK_SIZE * num_fallback_blocks,
-                          global_set_ref,
-                          key_indices        = key_indices.begin(),
-                          fallback_block_ids = fallback_block_ids.begin(),
-                          row_bitmask] __device__(auto const idx) mutable {
-                           auto const idx_in_stride = idx % stride;
-                           auto const thread_rank   = idx_in_stride % GROUPBY_BLOCK_SIZE;
-                           auto const block_idx =
-                             fallback_block_ids[idx_in_stride / GROUPBY_BLOCK_SIZE];
-                           auto const row_idx = full_stride * (idx / stride) +
-                                                GROUPBY_BLOCK_SIZE * block_idx + thread_rank;
+    thrust::for_each_n(rmm::exec_policy_nosync(stream),
+                       thrust::make_counting_iterator(0),
+                       GROUPBY_BLOCK_SIZE * num_fallback_blocks * num_strides,
+                       [num_rows    = static_cast<size_type>(num_rows),
+                        full_stride = GROUPBY_BLOCK_SIZE * grid_size,
+                        stride      = GROUPBY_BLOCK_SIZE * num_fallback_blocks,
+                        global_set_ref,
+                        key_indices        = key_indices.begin(),
+                        fallback_block_ids = fallback_block_ids.begin(),
+                        row_bitmask] __device__(auto const idx) mutable {
+                         auto const idx_in_stride = idx % stride;
+                         auto const thread_rank   = idx_in_stride % GROUPBY_BLOCK_SIZE;
+                         auto const block_idx =
+                           fallback_block_ids[idx_in_stride / GROUPBY_BLOCK_SIZE];
+                         auto const row_idx = full_stride * (idx / stride) +
+                                              GROUPBY_BLOCK_SIZE * block_idx + thread_rank;
 
-                           if (row_idx >= num_rows) { return; }
+                         if (row_idx >= num_rows) { return; }
 
-                           if (!row_bitmask || cudf::bit_is_set(row_bitmask, row_idx)) {
-                             key_indices[row_idx] = *global_set_ref.insert_and_find(row_idx).first;
-                           }
-                         });
-      stream.synchronize();
-    }
+                         if (!row_bitmask || cudf::bit_is_set(row_bitmask, row_idx)) {
+                           key_indices[row_idx] = *global_set_ref.insert_and_find(row_idx).first;
+                         }
+                       });
+
 #else
     thrust::tabulate(rmm::exec_policy_nosync(stream),
                      key_indices.begin(),
@@ -316,32 +292,26 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
 
 #endif
   }
-  stream.synchronize();
   extract_populated_keys(global_set, populated_keys, stream);
-  stream.synchronize();
+
   // TODO: update global_mapping_index with the new indices
   auto const new_key_indices = find_output_indices(key_indices, populated_keys, stream);
-  stream.synchronize();
-  {
-    cudf::scoped_range r("update global mapping index");
-    thrust::for_each_n(
-      rmm::exec_policy_nosync(stream),
-      thrust::make_counting_iterator(0),
-      grid_size * GROUPBY_BLOCK_SIZE,
-      [new_key_indices      = new_key_indices.begin(),
-       global_mapping_index = global_mapping_index.begin()] __device__(auto const idx) {
-        auto const block_id    = idx / GROUPBY_BLOCK_SIZE;
-        auto const thread_rank = idx % GROUPBY_BLOCK_SIZE;
-        auto const mapping_idx = block_id * GROUPBY_SHM_MAX_ELEMENTS + thread_rank;
-        auto const old_idx     = global_mapping_index[mapping_idx];
-        if (old_idx != cudf::detail::CUDF_SIZE_TYPE_SENTINEL) {
-          global_mapping_index[mapping_idx] = new_key_indices[old_idx];
-        }
-      });
 
-    stream.synchronize();
-  }
-  stream.synchronize();
+  thrust::for_each_n(
+    rmm::exec_policy_nosync(stream),
+    thrust::make_counting_iterator(0),
+    grid_size * GROUPBY_BLOCK_SIZE,
+    [new_key_indices      = new_key_indices.begin(),
+     global_mapping_index = global_mapping_index.begin()] __device__(auto const idx) {
+      auto const block_id    = idx / GROUPBY_BLOCK_SIZE;
+      auto const thread_rank = idx % GROUPBY_BLOCK_SIZE;
+      auto const mapping_idx = block_id * GROUPBY_SHM_MAX_ELEMENTS + thread_rank;
+      auto const old_idx     = global_mapping_index[mapping_idx];
+      if (old_idx != cudf::detail::CUDF_SIZE_TYPE_SENTINEL) {
+        global_mapping_index[mapping_idx] = new_key_indices[old_idx];
+      }
+    });
+
   // make table that will hold sparse results
   cudf::table result_table = create_results_table(
     static_cast<size_type>(populated_keys.size()), spass_values, spass_agg_kinds, stream);
@@ -350,30 +320,23 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
   auto d_values       = table_device_view::create(spass_values, stream);
   auto d_sparse_table = mutable_table_device_view::create(result_table, stream);
 
-  stream.synchronize();
-  {
-    cudf::scoped_range r("shared memory aggs");
-    compute_shared_memory_aggs(grid_size,
-                               available_shmem_size,
-                               num_rows,
-                               row_bitmask,
-                               local_mapping_index.data(),
-                               global_mapping_index.data(),
-                               block_cardinality.data(),
-                               *d_values,
-                               *d_sparse_table,
-                               d_spass_agg_kinds.data(),
-                               stream);
-    stream.synchronize();
-  }
+  compute_shared_memory_aggs(grid_size,
+                             available_shmem_size,
+                             num_rows,
+                             row_bitmask,
+                             local_mapping_index.data(),
+                             global_mapping_index.data(),
+                             block_cardinality.data(),
+                             *d_values,
+                             *d_sparse_table,
+                             d_spass_agg_kinds.data(),
+                             stream);
 
   // The shared memory groupby is designed so that each thread block can handle up to 128 unique
-  // keys. When a block reaches this cardinality limit, shared memory becomes insufficient to
-  // store the temporary aggregation results. In these situations, we must fall back to a global
-  // memory aggregator to process the remaining aggregation requests.
-  stream.synchronize();
+  // keys. When a block reaches this cardinality limit, shared memory becomes insufficient to store
+  // the temporary aggregation results. In these situations, we must fall back to a global memory
+  // aggregator to process the remaining aggregation requests.
   if (needs_fallback) {
-    cudf::scoped_range r("partial fallback");
     auto const num_strides =
       util::div_rounding_up_safe(static_cast<size_type>(num_rows), GROUPBY_BLOCK_SIZE * grid_size);
     auto const full_stride         = GROUPBY_BLOCK_SIZE * grid_size;
@@ -392,11 +355,9 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> comput
                                                  full_stride,
                                                  num_processing_rows,
                                                  static_cast<size_type>(num_rows)});
-    stream.synchronize();
   }
-  stream.synchronize();
-  // Add results back to sparse_results cache
 
+  // Add results back to sparse_results cache
   auto result_cols = result_table.release();
   for (size_t i = 0; i < spass_aggs.size(); i++) {
     // Note that the cache will make a copy of this temporary aggregation

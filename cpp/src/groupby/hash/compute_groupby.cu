@@ -22,7 +22,6 @@
 #include <cudf/detail/aggregation/aggregation.cuh>
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/gather.hpp>
-#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 
@@ -65,11 +64,8 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
   // convert to int64_t to avoid potential overflow with large `keys`
   auto const num_keys = static_cast<int64_t>(keys.num_rows());
 
-  stream.synchronize();
   [[maybe_unused]] auto const [row_bitmask_data, row_bitmask] =
     [&]() -> std::pair<rmm::device_buffer, bitmask_type const*> {
-    cudf::scoped_range r("bitmask data");
-
     if (!skip_rows_with_nulls) { return {rmm::device_buffer{0, stream}, nullptr}; }
 
     if (keys.num_columns() == 1) {
@@ -87,14 +83,10 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
     if (null_count == 0) { return {rmm::device_buffer{0, stream}, nullptr}; }
 
     auto const null_mask = static_cast<bitmask_type const*>(null_mask_data.data());
-    stream.synchronize();
-
     return {std::move(null_mask_data), null_mask};
   }();
 
-  stream.synchronize();
   auto const cached_hashes = [&]() -> rmm::device_uvector<hash_value_type> {
-    cudf::scoped_range r("cache hashes");
     auto const num_columns =
       std::accumulate(keys.begin(), keys.end(), 0, [](int count, column_view const& col) {
         return count + count_nested_columns(col);
@@ -114,26 +106,19 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
                        }
                        return hash_value_type{0};  // dummy value, as it will be unused
                      });
-    stream.synchronize();
     return hashes;
   }();
 
-  stream.synchronize();
-  auto set = [&] {
-    cudf::scoped_range r("cuco set");
-    auto t = cuco::static_set{
-      cuco::extent<int64_t>{num_keys},
-      cudf::detail::CUCO_DESIRED_LOAD_FACTOR,  // 50% load factor
-      cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
-      d_row_equal,
-      probing_scheme_t{row_hasher_with_cache_t{d_row_hash, cached_hashes.data()}},
-      cuco::thread_scope_device,
-      cuco::storage<GROUPBY_BUCKET_SIZE>{},
-      cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
-      stream.value()};
-    stream.synchronize();
-    return t;
-  }();
+  auto set = cuco::static_set{
+    cuco::extent<int64_t>{num_keys},
+    cudf::detail::CUCO_DESIRED_LOAD_FACTOR,  // 50% load factor
+    cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
+    d_row_equal,
+    probing_scheme_t{row_hasher_with_cache_t{d_row_hash, cached_hashes.data()}},
+    cuco::thread_scope_device,
+    cuco::storage<GROUPBY_BUCKET_SIZE>{},
+    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
+    stream.value()};
 
   // Compute all single pass aggs first
   auto const [key_gather_map, output_index_map] =
@@ -150,19 +135,12 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
     }
   }
 
-  stream.synchronize();
-  auto t = [&] {
-    cudf::scoped_range r("gather keys");
-    auto t = cudf::detail::gather(keys,
-                                  key_gather_map,
-                                  out_of_bounds_policy::DONT_CHECK,
-                                  cudf::detail::negative_index_policy::NOT_ALLOWED,
-                                  stream,
-                                  mr);
-    stream.synchronize();
-    return t;
-  }();
-  return t;
+  return cudf::detail::gather(keys,
+                              key_gather_map,
+                              out_of_bounds_policy::DONT_CHECK,
+                              cudf::detail::negative_index_policy::NOT_ALLOWED,
+                              stream,
+                              mr);
 }
 
 template std::unique_ptr<table> compute_groupby<row_comparator_t, row_hash_t>(

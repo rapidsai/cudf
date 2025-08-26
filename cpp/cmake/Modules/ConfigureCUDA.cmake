@@ -42,7 +42,9 @@ rapids_cuda_enable_fatbin_compression(VARIABLE CUDF_CUDA_FLAGS TUNE_FOR rapids)
 
 # Option to enable line info in CUDA device compilation to allow introspection when profiling /
 # memchecking
-list(APPEND CUDF_CUDA_FLAGS -lineinfo)
+if(CUDA_ENABLE_LINEINFO)
+  list(APPEND CUDF_CUDA_FLAGS -lineinfo)
+endif()
 
 # Debug options
 if(CMAKE_BUILD_TYPE MATCHES Debug)
