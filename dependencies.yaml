@@ -874,18 +874,6 @@ dependencies:
           # TODO: add a 13.x entry here when pytorch has CUDA 13 packages (https://github.com/pytorch/pytorch/issues/159779)
           - matrix:
             packages:
-    specific:
-      - output_types: [conda, requirements]
-        matrices:
-          - matrix: {dependencies: "oldest"}
-            packages:
-              - numpy==1.24.*
-              # pyarrow 14 is fine in some circumstances but we require pyarrow
-              # 15 in our CI tests in order to get a lz4-c that is compatible
-              # with cudf_kafka's dependencies.
-              - pyarrow==15.*
-          - matrix:
-            packages:
   test_python_cudf_polars:
     common:
       - output_types: [conda, requirements, pyproject]
