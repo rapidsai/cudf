@@ -38,67 +38,15 @@
 
 namespace cudf::groupby::detail::hash {
 
-std::pair<key_map_t, rmm::device_uvector<size_type>> find_output_indices(
-  device_span<size_type> key_indices,
-  device_span<size_type const> unique_indices,
-  rmm::cuda_stream_view stream)
+rmm::device_uvector<size_type> find_output_indices(device_span<size_type> key_indices,
+                                                   device_span<size_type const> unique_indices,
+                                                   rmm::cuda_stream_view stream)
 {
   cudf::scoped_range r("find output_indices");
-
-  // {
-  //   auto tmp = cudf::detail::make_std_vector(unique_indices, stream);
-  //   std::sort(tmp.begin(), tmp.end());
-  //   printf("unique keys: %d\n", (int)tmp.size());
-  //   for (auto i : tmp) {
-  //     printf("%d, ", (int)i);
-  //   }
-  //   printf("\n");
-  //   fflush(stdout);
-  // }
-
-  auto tmp = rmm::device_uvector<size_type>(key_indices.size(), stream);
-  thrust::copy(
-    rmm::exec_policy_nosync(stream), key_indices.begin(), key_indices.end(), tmp.begin());
-  stream.synchronize();
-
-  // auto set = cuco::static_set{
-  //   cuco::extent<int64_t>{unique_indices.size()},
-  //   cudf::detail::CUCO_DESIRED_LOAD_FACTOR,  // 50% load factor
-  //   cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
-  //   key_indices_comparator_t{unique_indices.begin()},
-  //   simplified_probing_scheme_t{unique_indices.begin()},
-  //   cuco::thread_scope_device,
-  //   cuco::storage<GROUPBY_BUCKET_SIZE>{},
-  //   cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
-  //   stream.value()};
-
-  rmm::device_uvector<size_type> counts(2, stream);
-  thrust::fill(rmm::exec_policy_nosync(stream), counts.begin(), counts.end(), 0);
-  stream.synchronize();
-
-  auto map =
-    key_map_t{cuco::extent<std::size_t>{unique_indices.size()},
-              0.5,
-              cuco::empty_key<cudf::size_type>{-1},
-              cuco::empty_value<cudf::size_type>{-1},
-              // eq_t{counts.begin()},
-              // cuco::linear_probing<GROUPBY_CG_SIZE, hash_t>{hash_t{counts.begin() + 1}},
-              {},
-              {},
-              cuco::thread_scope_device,
-              cuco::storage<GROUPBY_BUCKET_SIZE>{},
-              cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
-              stream.value()};
-
   rmm::device_uvector<cudf::size_type> new_indices(key_indices.size(), stream);
-  if (unique_indices.size() == 0) {
-    // return new_indices;
-    return std::pair{std::move(map), std::move(new_indices)};
-  }
+  if (unique_indices.size() == 0) { return new_indices; }
 
   stream.synchronize();
-
-  // #if 0
   {
     cudf::scoped_range r("scatter");
     thrust::scatter(rmm::exec_policy_nosync(stream),
@@ -109,7 +57,7 @@ std::pair<key_map_t, rmm::device_uvector<size_type>> find_output_indices(
     stream.synchronize();
   }
   {
-    cudf::scoped_range r("update indices");
+    cudf::scoped_range r("for_each_n");
     thrust::for_each_n(rmm::exec_policy_nosync(stream),
                        thrust::make_counting_iterator(0),
                        static_cast<size_type>(key_indices.size()),
@@ -122,47 +70,7 @@ std::pair<key_map_t, rmm::device_uvector<size_type>> find_output_indices(
     stream.synchronize();
   }
 
-  {
-    cudf::scoped_range r("clear");
-    thrust::copy(rmm::exec_policy_nosync(stream), tmp.begin(), tmp.end(), key_indices.begin());
-    stream.synchronize();
-  }
-
-  // return new_indices;
-  // #else
-  {
-    cudf::scoped_range r("insert");
-    auto it = cudf::detail::make_counting_transform_iterator(
-      0, [unique_indices = unique_indices.begin()] __device__(size_type const idx) {
-        return cuco::make_pair(unique_indices[idx], idx);
-      });
-    map.insert_async(it, it + unique_indices.size(), stream.value());
-    // auto c = map.insert(it, it + unique_indices.size(), stream.value());
-    // printf("inserted: %d\n", (int)c);
-    // fflush(stdout);
-    stream.synchronize();
-  }
-
-  {
-    cudf::scoped_range r("update indices");
-    thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                       thrust::make_counting_iterator(0),
-                       static_cast<size_type>(key_indices.size()),
-                       [map         = map.ref(cuco::op::find),
-                        key_indices = key_indices.begin()] __device__(size_type const idx) {
-                         if (key_indices[idx] != cudf::detail::CUDF_SIZE_TYPE_SENTINEL) {
-                           auto const itr   = map.find(key_indices[idx]);
-                           key_indices[idx] = (itr != map.end())
-                                                ? itr->second
-                                                : cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
-                         }
-                       });
-    stream.synchronize();
-  }
-
-  return std::pair{std::move(map), std::move(new_indices)};
-  // return map;
-  // #endif
+  return new_indices;
 }
 
 namespace {

@@ -15,8 +15,6 @@
  */
 #pragma once
 
-#include "helpers.cuh"
-
 #include <cudf/aggregation.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -26,95 +24,12 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
-#include <cuco/static_map.cuh>
-#include <cuco/static_set.cuh>
-
 namespace cudf::groupby::detail::hash {
 
-// struct key_indices_hasher_t {
-//   size_type const* key_indices{nullptr};
-//   using hasher = cuco::default_hash_function<size_type>;
-
-//   __device__ bool operator()(size_type idx) const { return hasher{}(key_indices[idx]); }
-// };
-// struct simplified_probing_scheme_t : cuco::linear_probing<GROUPBY_CG_SIZE, key_indices_hasher_t>
-// {
-//   __device__ simplified_probing_scheme_t(key_indices_hasher_t const& hasher)
-//     : cuco::linear_probing<GROUPBY_CG_SIZE, key_indices_hasher_t>{hasher}
-//   {
-//   }
-
-//   simplified_probing_scheme_t(size_type const* key_indices)
-//     : cuco::linear_probing<GROUPBY_CG_SIZE,
-//     key_indices_hasher_t>{key_indices_hasher_t{key_indices}}
-//   {
-//   }
-// };
-
-// struct key_indices_comparator_t {
-//   size_type const* key_indices{nullptr};
-
-//   __device__ bool operator()(size_type const lhs, size_type const rhs) const
-//   {
-//     return key_indices[lhs] == key_indices[rhs];
-//   }
-// };
-
-// using simplified_row_comparator_t = key_indices_comparator_t;
-
-// using simplified_global_set_t = cuco::static_set<cudf::size_type,
-//                                                  cuco::extent<int64_t>,
-//                                                  cuda::thread_scope_device,
-//                                                  simplified_row_comparator_t,
-//                                                  simplified_probing_scheme_t,
-//                                                  cudf::detail::cuco_allocator<char>,
-//                                                  cuco::storage<GROUPBY_BUCKET_SIZE>>;
-
-#if 0
-struct eq_t {
-  int* count;
-  eq_t(int* count) : count(count) {}
-
-  __device__ bool operator()(int x, int y) const
-  {
-    auto c = atomicAdd(count, 1);
-    printf("compare %d, %d, count = %d\n", x, y, c + 1);
-
-    return x == y;
-  }
-};
-
-struct hash_t {
-  int* count;
-  hash_t(int* count) : count(count) {}
-  __device__ uint32_t operator()(int x) const
-  {
-    auto c  = atomicAdd(count, 1);
-    using h = cuco::default_hash_function<cudf::size_type>;
-    auto t  = h{}(x);
-    printf("hash %d = %d, count = %d\n", x, (int)t, c + 1);
-    return t;
-  }
-};
-#endif
-
-using key_map_t = cuco::static_map<
-  cudf::size_type,
-  cudf::size_type,
-  cuco::extent<std::size_t>,
-  cuda::thread_scope_device,
-  cuda::std::equal_to<cudf::size_type>,
-  cuco::linear_probing<GROUPBY_CG_SIZE, cuco::default_hash_function<cudf::size_type>>,
-  // eq_t,
-  // cuco::linear_probing<GROUPBY_CG_SIZE, hash_t>,
-  cudf::detail::cuco_allocator<char>,
-  cuco::storage<GROUPBY_BUCKET_SIZE>>;
-
 // TODO
-std::pair<key_map_t, rmm::device_uvector<size_type>> find_output_indices(
-  device_span<size_type> key_indices,
-  device_span<size_type const> unique_indices,
-  rmm::cuda_stream_view stream);
+rmm::device_uvector<size_type> find_output_indices(device_span<size_type> key_indices,
+                                                   device_span<size_type const> unique_indices,
+                                                   rmm::cuda_stream_view stream);
 
 /**
  * @brief Computes and returns a device vector containing all populated keys in
