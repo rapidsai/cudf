@@ -53,7 +53,7 @@ namespace CUDF_EXPORT cudf {
  * responsibility to choose a suitable compare_nulls value AND use appropriate
  * null-safe operators in the expression.
  *
- * If the provided output size is incorrect, behavior is undefined.
+ * If the specified output size is less than the actual output size, the behavior is undefined.
  *
  * @code{.pseudo}
  * left_equality: {{0, 1, 2}}
@@ -113,7 +113,7 @@ mixed_inner_join(table_view const& left_equality,
  * responsibility to choose a suitable compare_nulls value AND use appropriate
  * null-safe operators in the expression.
  *
- * If the provided output size is incorrect, behavior is undefined.
+ * If the specified output size is less than the actual output size, the behavior is undefined.
  *
  * @code{.pseudo}
  * left_equality: {{0, 1, 2}}
@@ -173,7 +173,7 @@ mixed_left_join(table_view const& left_equality,
  * responsibility to choose a suitable compare_nulls value AND use appropriate
  * null-safe operators in the expression.
  *
- * If the provided output size is incorrect, behavior is undefined.
+ * If the specified output size is less than the actual output size, the behavior is undefined.
  *
  * @code{.pseudo}
  * left_equality: {{0, 1, 2}}
@@ -196,8 +196,7 @@ mixed_left_join(table_view const& left_equality,
  * @param right_conditional The right table used for the conditional join
  * @param binary_predicate The condition on which to join
  * @param compare_nulls Whether or not null values join to each other or not
- * @param output_size An optional value indicating the exact output size (may be
- * precomputed using the corresponding mixed_full_join_size API).
+ * @param output_size An optional value indicating the exact output size
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
