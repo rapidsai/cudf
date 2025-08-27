@@ -20,6 +20,7 @@ dependencies:
 - cuda-nvcc
 - cuda-nvrtc-dev
 - cuda-nvtx-dev
+- cuda-nvvm-tools
 - cuda-python>=13.0.1,<14.0a0
 - cuda-sanitizer-api
 - cuda-version=13.0

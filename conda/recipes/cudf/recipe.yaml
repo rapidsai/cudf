@@ -71,6 +71,10 @@ requirements:
     - pandas >=2.0,<2.4.0dev0
     - cupy >=13.6.0
     - numba-cuda >=0.19.1,<0.20.0a0
+    # TODO: remove cuda-nvvm-tools once https://github.com/NVIDIA/numba-cuda/issues/430 is resolved
+    #       and we move the numba-cuda floor up to a version containing a fix for it
+    - if: cuda_major == "13"
+      then: cuda-nvvm-tools
     - numba >=0.60.0,<0.62.0a0
     - numpy >=1.23,<3.0a0
     - pyarrow>=14.0.0,<20.0.0a0
