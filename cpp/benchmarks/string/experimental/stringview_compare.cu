@@ -38,18 +38,21 @@
 #include <nanoarrow/nanoarrow.hpp>
 #include <nvbench/nvbench.cuh>
 
+#include <cstdlib>
 #include <format>
 #include <string>
 
-// Compile-time switch to use ArrowStringView instead of cudf's Arrow string format.
-//
-// Set to 1 to use ArrowStringView, 0 to use cudf.
-// This will generate nvbench benchmark output that can be compared directly
-// using the `nvbench compare.py` script.
-#define BM_ARROW_STRINGVIEW 1
-
 namespace {
-#if BM_ARROW_STRINGVIEW
+
+// Runtime switch to use ArrowStringView instead of cudf's Arrow string format.
+//
+// Set to anything to use ArrowStringView, and unset to use cudf.
+// Example command line to generate ArrowStringView numbers for sv_hash benchmark:
+//   CUDF_BM_ARROWSTRINGVIEW=1 benchmarks/STRINGS_EXPERIMENTAL_NVBENCH -d 0 -b sv_hash
+//
+// This will generate nvbench benchmark outputs that can be compared directly
+// using the `nvbench compare.py` script.
+auto const BM_ARROWSTRINGVIEW = "CUDF_BM_ARROWSTRINGVIEW";
 
 /**
  * Creates ArrowBinaryView objects from a strings column.
@@ -88,9 +91,6 @@ struct strings_to_binary_view {
     }
   }
 };
-#endif
-
-#if BM_ARROW_STRINGVIEW
 
 /**
  * Returns a string_view from an ArrowBinaryView.
@@ -179,8 +179,6 @@ struct compare_arrow_sv {
   }
 };
 
-#else
-
 /**
  * Hashes a string from a cudf column
  */
@@ -222,16 +220,10 @@ struct compare_sv {
   }
 };
 
-#endif
-
-}  // namespace
-
-#if BM_ARROW_STRINGVIEW
-
 /**
  * Creates an ArrowBinaryView vector and data buffer from a strings column.
  */
-static std::pair<rmm::device_uvector<ArrowBinaryView>, rmm::device_buffer> create_sv_array(
+std::pair<rmm::device_uvector<ArrowBinaryView>, rmm::device_buffer> create_sv_array(
   cudf::strings_column_view const& input, rmm::cuda_stream_view stream)
 {
   auto const d_strings = cudf::column_device_view::create(input.parent(), stream);
@@ -295,7 +287,7 @@ static std::pair<rmm::device_uvector<ArrowBinaryView>, rmm::device_buffer> creat
 
   return std::pair{std::move(d_items), std::move(data_buffer)};
 }
-#endif
+}  // namespace
 
 static void BM_sv_hash(nvbench::state& state)
 {
@@ -316,22 +308,25 @@ static void BM_sv_hash(nvbench::state& state)
   auto begin  = thrust::make_counting_iterator<cudf::size_type>(0);
   auto end    = thrust::make_counting_iterator<cudf::size_type>(num_rows);
 
-#if BM_ARROW_STRINGVIEW
-  auto [d_items, data_buffer] = create_sv_array(col_view, stream);
-  auto const d_chars          = reinterpret_cast<char const*>(data_buffer.data());
-  state.add_global_memory_reads(num_rows * sizeof(ArrowBinaryView) + data_buffer.size());
-  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    thrust::transform(
-      rmm::exec_policy(stream), begin, end, output.begin(), hash_arrow_sv{d_items.data(), d_chars});
-  });
-#else
-  auto d_strings = cudf::column_device_view::create(col_view, stream);
-  auto col_size  = column->alloc_size();
-  state.add_global_memory_reads(col_size);
-  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    thrust::transform(rmm::exec_policy(stream), begin, end, output.begin(), hash_sv{*d_strings});
-  });
-#endif
+  if (std::getenv(BM_ARROWSTRINGVIEW)) {
+    auto [d_items, data_buffer] = create_sv_array(col_view, stream);
+    auto const d_chars          = reinterpret_cast<char const*>(data_buffer.data());
+    state.add_global_memory_reads(num_rows * sizeof(ArrowBinaryView) + data_buffer.size());
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      thrust::transform(rmm::exec_policy(stream),
+                        begin,
+                        end,
+                        output.begin(),
+                        hash_arrow_sv{d_items.data(), d_chars});
+    });
+  } else {
+    auto d_strings = cudf::column_device_view::create(col_view, stream);
+    auto col_size  = column->alloc_size();
+    state.add_global_memory_reads(col_size);
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      thrust::transform(rmm::exec_policy(stream), begin, end, output.begin(), hash_sv{*d_strings});
+    });
+  }
 }
 
 static void BM_sv_starts(nvbench::state& state)
@@ -353,26 +348,27 @@ static void BM_sv_starts(nvbench::state& state)
   auto output = rmm::device_uvector<bool>(num_rows, stream);
   auto begin  = thrust::make_counting_iterator<cudf::size_type>(0);
   auto end    = thrust::make_counting_iterator<cudf::size_type>(num_rows);
-#if BM_ARROW_STRINGVIEW
-  auto [d_items, data_buffer] = create_sv_array(col_view, stream);
-  auto const d_chars          = reinterpret_cast<char const*>(data_buffer.data());
-  state.add_global_memory_reads(num_rows * sizeof(ArrowBinaryView) + data_buffer.size());
-  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    thrust::transform(rmm::exec_policy(stream),
-                      begin,
-                      end,
-                      output.begin(),
-                      starts_arrow_sv{d_items.data(), d_chars, tgt_size});
-  });
-#else
-  auto d_strings = cudf::column_device_view::create(col_view, stream);
-  auto col_size  = column->alloc_size();
-  state.add_global_memory_reads(col_size);
-  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    thrust::transform(
-      rmm::exec_policy(stream), begin, end, output.begin(), starts_sv{*d_strings, tgt_size});
-  });
-#endif
+
+  if (std::getenv(BM_ARROWSTRINGVIEW)) {
+    auto [d_items, data_buffer] = create_sv_array(col_view, stream);
+    auto const d_chars          = reinterpret_cast<char const*>(data_buffer.data());
+    state.add_global_memory_reads(num_rows * sizeof(ArrowBinaryView) + data_buffer.size());
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      thrust::transform(rmm::exec_policy(stream),
+                        begin,
+                        end,
+                        output.begin(),
+                        starts_arrow_sv{d_items.data(), d_chars, tgt_size});
+    });
+  } else {
+    auto d_strings = cudf::column_device_view::create(col_view, stream);
+    auto col_size  = column->alloc_size();
+    state.add_global_memory_reads(col_size);
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      thrust::transform(
+        rmm::exec_policy(stream), begin, end, output.begin(), starts_sv{*d_strings, tgt_size});
+    });
+  }
 }
 
 static void BM_sv_sort(nvbench::state& state)
@@ -409,32 +405,32 @@ static void BM_sv_sort(nvbench::state& state)
   auto out_keys  = keys.begin();
   auto tmp_bytes = std::size_t{0};
 
-#if BM_ARROW_STRINGVIEW
-  auto [d_items, data_buffer] = create_sv_array(col_view, stream);
-  auto const d_chars          = reinterpret_cast<char const*>(data_buffer.data());
-  auto comparator             = compare_arrow_sv{d_items.data(), d_chars};
-  cub::DeviceMergeSort::SortKeysCopy(
-    nullptr, tmp_bytes, in_keys, out_keys, num_rows, comparator, stream.value());
-  auto tmp_stg = rmm::device_buffer(tmp_bytes, stream);
-  state.add_global_memory_reads(num_rows * sizeof(ArrowBinaryView) + data_buffer.size());
-  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+  if (std::getenv(BM_ARROWSTRINGVIEW)) {
+    auto [d_items, data_buffer] = create_sv_array(col_view, stream);
+    auto const d_chars          = reinterpret_cast<char const*>(data_buffer.data());
+    auto comparator             = compare_arrow_sv{d_items.data(), d_chars};
     cub::DeviceMergeSort::SortKeysCopy(
-      tmp_stg.data(), tmp_bytes, in_keys, out_keys, num_rows, comparator, stream.value());
-  });
-#else
-  auto d_strings = cudf::column_device_view::create(col_view, stream);
-  auto col_size  = column->alloc_size();
-  state.add_global_memory_reads(col_size);
-  auto comparator = compare_sv{*d_strings};
-  cub::DeviceMergeSort::SortKeysCopy(
-    nullptr, tmp_bytes, in_keys, out_keys, num_rows, comparator, stream.value());
-  auto tmp_stg = rmm::device_buffer(tmp_bytes, stream);
-  state.add_global_memory_reads(col_size);
-  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      nullptr, tmp_bytes, in_keys, out_keys, num_rows, comparator, stream.value());
+    auto tmp_stg = rmm::device_buffer(tmp_bytes, stream);
+    state.add_global_memory_reads(num_rows * sizeof(ArrowBinaryView) + data_buffer.size());
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      cub::DeviceMergeSort::SortKeysCopy(
+        tmp_stg.data(), tmp_bytes, in_keys, out_keys, num_rows, comparator, stream.value());
+    });
+  } else {
+    auto d_strings = cudf::column_device_view::create(col_view, stream);
+    auto col_size  = column->alloc_size();
+    state.add_global_memory_reads(col_size);
+    auto comparator = compare_sv{*d_strings};
     cub::DeviceMergeSort::SortKeysCopy(
-      tmp_stg.data(), tmp_bytes, in_keys, out_keys, num_rows, comparator, stream.value());
-  });
-#endif
+      nullptr, tmp_bytes, in_keys, out_keys, num_rows, comparator, stream.value());
+    auto tmp_stg = rmm::device_buffer(tmp_bytes, stream);
+    state.add_global_memory_reads(col_size);
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      cub::DeviceMergeSort::SortKeysCopy(
+        tmp_stg.data(), tmp_bytes, in_keys, out_keys, num_rows, comparator, stream.value());
+    });
+  }
 }
 
 static void BM_sv_filter(nvbench::state& state)
@@ -456,25 +452,27 @@ static void BM_sv_filter(nvbench::state& state)
                                cudf::numeric_scalar<int32_t>(0),
                                cudf::numeric_scalar<int32_t>(frows),
                                stream);
-#if BM_ARROW_STRINGVIEW
-  auto [d_items, data_buffer] = create_sv_array(col_view, stream);
+  if (std::getenv(BM_ARROWSTRINGVIEW)) {
+    auto [d_items, data_buffer] = create_sv_array(col_view, stream);
 
-  auto begin  = filter->view().begin<int32_t>();
-  auto end    = filter->view().end<int32_t>();
-  auto input  = d_items.data();
-  auto output = rmm::device_uvector<ArrowBinaryView>(filter->size(), stream);
+    auto begin  = filter->view().begin<int32_t>();
+    auto end    = filter->view().end<int32_t>();
+    auto input  = d_items.data();
+    auto output = rmm::device_uvector<ArrowBinaryView>(filter->size(), stream);
 
-  state.add_global_memory_writes(frows * sizeof(ArrowBinaryView));
-  state.add_global_memory_reads(frows * sizeof(ArrowBinaryView));
-  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    thrust::gather(rmm::exec_policy(stream), begin, end, input, output.begin());
-  });
-#else
-  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    cudf::gather(
-      cudf::table_view({col_view}), filter->view(), cudf::out_of_bounds_policy::DONT_CHECK, stream);
-  });
-#endif
+    state.add_global_memory_writes(frows * sizeof(ArrowBinaryView));
+    state.add_global_memory_reads(frows * sizeof(ArrowBinaryView));
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      thrust::gather(rmm::exec_policy(stream), begin, end, input, output.begin());
+    });
+  } else {
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      cudf::gather(cudf::table_view({col_view}),
+                   filter->view(),
+                   cudf::out_of_bounds_policy::DONT_CHECK,
+                   stream);
+    });
+  }
 }
 
 NVBENCH_BENCH(BM_sv_hash)
