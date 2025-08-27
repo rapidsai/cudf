@@ -200,22 +200,18 @@ cdef class DataType:
         """
         Convert a datatype to arrow.
 
-        Parameters
-        ----------
-        precision : int | None
-            The precision of the decimal type
-        fields : Iterable[pyarrow.Field] |
-                Iterable[tuple[str, pyarrow.DataType]] |
-                Mapping[str, pyarrow.DataType]
-            Iterable of Fields or tuples, or mapping of strings to DataTypes
-            Each field must have a UTF8-encoded name, and these field names are
-            part of the type metadata.
-        value_type : pyarrow.DataType | pyarrow.Field
-            The wrapped type of the list type.
-
         Returns
         -------
         pyarrow.DataType
+
+        Notes
+        -----
+        Translation of some types requires extra information as a keyword
+        argument. Specifically:
+
+        - When translating a decimal type, provide ``precision``
+        - When translating a struct type, provide ``fields``
+        - When translating a list type, provide the wrapped ``value_type``
         """
         if pa_err is not None:
             raise RuntimeError(
