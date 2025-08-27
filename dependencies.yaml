@@ -657,17 +657,19 @@ dependencies:
     specific:
       - output_types: [conda, requirements, pyproject]
         matrices:
-          - matrix: {cuda: "12.*"}
-            packages: &run_pylibcudf_packages_all_cu12
-              - cuda-python>=12.9.1,<13.0a0
-          - {matrix: null, packages: *run_pylibcudf_packages_all_cu12}
+          - matrix: &run_pylibcudf_packages_all_cu12
+              cuda: "12.*"
+            packages:
+              - &cuda_python_cu12 cuda-python>=12.9.2,<13.0a0
+          - matrix:
+            packages:
+              - *cuda_python_cu12
   run_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cachetools
-          # TODO: Revert to numba>=0.60.0,<0.62.0a0 once https://github.com/NVIDIA/numba-cuda/pull/403 is released.
-          - &numba numba>=0.61.0,<0.62.0a0
+          - &numba numba>=0.60.0,<0.62.0a0
           - nvtx>=0.2.1
           - packaging
           - rich
@@ -682,7 +684,7 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages: &run_cudf_packages_all_cu12
-              - cuda-python>=12.9.1,<13.0a0
+              - cuda-python>=12.9.2,<13.0a0
           - {matrix: null, packages: *run_cudf_packages_all_cu12}
       - output_types: [requirements, pyproject]
         matrices:
@@ -767,8 +769,7 @@ dependencies:
         matrices:
           - matrix: {dependencies: "oldest"}
             packages:
-              # TODO: Revert to numba==0.60.0 once https://github.com/NVIDIA/numba-cuda/pull/403 is released.
-              - numba==0.61.0
+              - numba==0.60.0
               - pandas==2.0.*
               - numba-cuda==0.19.1
           - matrix: {dependencies: "latest"}
@@ -778,20 +779,18 @@ dependencies:
             packages:
       - output_types: conda
         matrices:
-          - matrix: {dependencies: "oldest", arch: "aarch64", cuda: "12.*"}
-            packages:
-              - cupy==12.2.0 # cupy 12.2.0 is the earliest with CUDA 12 ARM packages.
           - matrix: {dependencies: "oldest"}
             packages:
-              - cupy==12.0.0
+              - cupy==13.6.0
           - matrix:
             packages:
       - output_types: requirements
         # Using --constraints for pip install, so we list cupy multiple times
         matrices:
-          - matrix: {dependencies: "oldest"}
+          - matrix:
+              dependencies: "oldest"
             packages:
-              - cupy-cuda12x==12.0.0
+              - cupy-cuda12x==13.6.0
           - matrix:
             packages:
   test_python_pylibcudf:
@@ -838,10 +837,7 @@ dependencies:
         matrices:
           - matrix: {dependencies: "oldest"}
             packages:
-              # TODO: Revert to numpy==1.23.* once
-              # https://github.com/NVIDIA/numba-cuda/pull/403 is released and
-              # we revert to an oldest pinning of numba==0.60.0.
-              - numpy==1.24.*
+              - numpy==1.23.*
               # pyarrow 14 is fine in some circumstances but we require pyarrow
               # 15 in our CI tests in order to get a lz4-c that is compatible
               # with cudf_kafka's dependencies.
@@ -987,9 +983,10 @@ dependencies:
     specific:
       - output_types: [requirements, pyproject]
         matrices:
-          - matrix: {cuda: "12.*"}
+          - matrix:
+              cuda: "12.*"
             packages: &cupy_packages_cu12
-              - cupy-cuda12x>=12.0.0
+              - cupy-cuda12x>=13.6.0
           - {matrix: null, packages: *cupy_packages_cu12}
   depends_on_libkvikio:
     common:
