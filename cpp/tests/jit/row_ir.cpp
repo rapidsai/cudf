@@ -275,7 +275,7 @@ TEST_F(RowIRCudaCodeGenTest, AstConversionBasic)
   auto expected =
     cudf::test::fixed_width_column_wrapper<int32_t>(expected_iter, expected_iter + column->size());
 
-  row_ir::ast_args args{.table = cudf::table_view{{column->view()}}, .table_column_names = {}};
+  row_ir::ast_args args{.table = cudf::table_view{{column->view()}}};
 
   auto transform_args = converter.compute_column(row_ir::target::CUDA,
                                                  add_op,

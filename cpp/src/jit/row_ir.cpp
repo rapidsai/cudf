@@ -16,9 +16,12 @@
 
 #include "jit/row_ir.hpp"
 
+#include "runtime/context.hpp"
+
 #include <cudf/column/column_factories.hpp>
 
 #include <algorithm>
+#include <iostream>
 #include <numeric>
 
 namespace cudf {
@@ -209,8 +212,15 @@ void operation::instantiate(instance_context& ctx, instance_info const& info)
     operand_types.emplace_back(arg->get_type().type);
   }
 
-  // TODO(lamarrr): decimal scale needs to be propagated to output
-  type_ = type_info{ast::detail::ast_operator_return_type(op_, operand_types)};
+  auto type_id = ast::detail::ast_operator_return_type(op_, operand_types).id();
+
+  // all decimal operation result types should have scale equal to the minimum scale of the operands
+  auto scale = std::accumulate(operand_types.begin() + 1,
+                               operand_types.end(),
+                               operand_types.front().scale(),
+                               [](auto const& a, auto const& b) { return std::min(a, b.scale()); });
+
+  type_ = type_info{cudf::data_type{type_id, scale}};
 }
 
 std::string operation::generate_code(instance_context& ctx,
@@ -290,28 +300,12 @@ std::unique_ptr<row_ir::node> ast_converter::add_ir_node(ast::operation const& e
   return std::make_unique<row_ir::operation>(expr.get_operator(), std::move(operands));
 }
 
-std::unique_ptr<row_ir::node> ast_converter::add_ir_node(ast::column_name_reference const& expr)
-{
-  auto index = add_ast_input(ast_named_column_input_spec{expr.get_column_name()});
-  return std::make_unique<row_ir::get_input>(index);
-}
-
 void ast_converter::add_input_var(ast_column_input_spec const& in, ast_args const& args)
 {
   // TODO(lamarrr): consider mangling column name to make debugging easier
   auto id   = std::format("in_{}", input_vars_.size());
   auto type = args.table.column(in.column).type();
   input_vars_.emplace_back(std::move(id), type_info{type});
-}
-
-void ast_converter::add_input_var(ast_named_column_input_spec const& in, ast_args const& args)
-{
-  auto column_index_iter = args.table_column_names.find(in.name);
-  CUDF_EXPECTS(column_index_iter != args.table_column_names.end(),
-               "Column name not found in table.",
-               std::invalid_argument);
-  return add_input_var(ast_column_input_spec{ast::table_reference::LEFT, column_index_iter->second},
-                       args);
 }
 
 void ast_converter::add_input_var(ast_scalar_input_spec const& in,
@@ -342,8 +336,6 @@ decltype(auto) dispatch_input_spec(ast_input_spec const& in, Fn&& fn, Args&&... 
 {
   if (std::holds_alternative<ast_column_input_spec>(in)) {
     return fn(std::get<ast_column_input_spec>(in), std::forward<Args>(args)...);
-  } else if (std::holds_alternative<ast_named_column_input_spec>(in)) {
-    return fn(std::get<ast_named_column_input_spec>(in), std::forward<Args>(args)...);
   } else if (std::holds_alternative<ast_scalar_input_spec>(in)) {
     return fn(std::get<ast_scalar_input_spec>(in), std::forward<Args>(args)...);
   } else {
@@ -359,15 +351,6 @@ column_view get_column_view(ast_column_input_spec const& spec, ast_args const& a
   return args.table.column(spec.column);
 }
 
-column_view get_column_view(ast_named_column_input_spec const& spec, ast_args const& args)
-{
-  auto column_index_iter = args.table_column_names.find(spec.name);
-  CUDF_EXPECTS(column_index_iter != args.table_column_names.end(),
-               "Column name not found in table.",
-               std::invalid_argument);
-  return args.table.column(column_index_iter->second);
-}
-
 column_view get_column_view(ast_scalar_input_spec const& spec, ast_args const& args)
 {
   return spec.broadcast_column->view();
@@ -381,17 +364,6 @@ bool map_copy_mask(ast_column_input_spec const& spec,
                "Table reference must be LEFT",
                std::invalid_argument);
   return copy_mask[spec.column];
-}
-
-bool map_copy_mask(ast_named_column_input_spec const& spec,
-                   ast_args const& args,
-                   std::vector<bool> const& copy_mask)
-{
-  auto column_index_iter = args.table_column_names.find(spec.name);
-  CUDF_EXPECTS(column_index_iter != args.table_column_names.end(),
-               "Column name not found in table.",
-               std::invalid_argument);
-  return copy_mask[column_index_iter->second];
 }
 
 bool map_copy_mask(ast_scalar_input_spec const&, ast_args const&, std::vector<bool> const&)
@@ -410,8 +382,7 @@ void ast_converter::generate_code(target target_id,
 
   bool uses_input_table =
     std::any_of(input_specs_.begin(), input_specs_.end(), [](auto const& spec) {
-      return std::holds_alternative<ast_column_input_spec>(spec) ||
-             std::holds_alternative<ast_named_column_input_spec>(spec);
+      return std::holds_alternative<ast_column_input_spec>(spec);
     });
 
   if (!uses_input_table && args.table.num_columns() > 0) {
@@ -517,6 +488,9 @@ transform_args ast_converter::compute_column(target target_id,
 
   // TODO(lamarrr): properly handle null-sensitive operators
 
+  // TODO(lamarrr): consider deduplicating input columns. See
+  // TransformTest/1.DeeplyNestedArithmeticLogicalExpression for reference
+
   generate_code(target_id, expr, args, stream, resource_ref);
 
   std::vector<column_view> columns;
@@ -544,6 +518,10 @@ transform_args ast_converter::compute_column(target target_id,
                            null_aware::NO};
 
   clear();
+
+  if (get_context().dump_codegen()) {
+    std::cout << "Generated code for transform: " << transform.udf << std::endl;
+  }
 
   return transform;
 }
@@ -598,6 +576,10 @@ filter_args ast_converter::filter(target target_id,
                      null_aware::NO};
 
   clear();
+
+  if (get_context().dump_codegen()) {
+    std::cout << "Generated code for filter: " << filter.predicate_udf << std::endl;
+  }
 
   return filter;
 }

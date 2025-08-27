@@ -116,11 +116,12 @@ std::unique_ptr<cudf::detail::row_ir::node> operation::accept(
 }
 
 std::unique_ptr<cudf::detail::row_ir::node> column_name_reference::accept(
-  cudf::detail::row_ir::ast_converter& converter) const
+  cudf::detail::row_ir::ast_converter&) const
 {
-  return converter.add_ir_node(*this);
+  CUDF_FAIL(
+    "column_name_reference is not supported in row_ir. row_ir only supports resolved expressions",
+    std::invalid_argument);
 }
 
 }  // namespace ast
-
 }  // namespace cudf

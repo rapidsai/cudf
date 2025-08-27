@@ -296,12 +296,6 @@ struct ast_column_input_spec {
   int32_t column             = 0;   ///< The column index in the referenced table
 };
 
-/// @brief A specification of an input column to the AST with a name
-/// This is used to refer to columns by their names in the table metadata.
-struct ast_named_column_input_spec {
-  std::string name = {};  ///< The name of the column in the table metadata
-};
-
 /// @brief A specification of an input scalar to the AST
 struct ast_scalar_input_spec {
   std::reference_wrapper<scalar const> ref;  ///< The scalar value
@@ -310,9 +304,8 @@ struct ast_scalar_input_spec {
     nullptr;  ///< The broadcasted column, a column of size 1
 };
 
-/// @brief A variant input specification for the AST
-using ast_input_spec =
-  std::variant<ast_column_input_spec, ast_named_column_input_spec, ast_scalar_input_spec>;
+/// @brief An input specification for the AST
+using ast_input_spec = std::variant<ast_column_input_spec, ast_scalar_input_spec>;
 
 /// @brief The arguments needed to invoke a `cudf::transform`
 struct transform_args {
@@ -342,8 +335,6 @@ struct filter_args {
 /// @brief The AST input column arguments used to resolve the column expressions
 struct ast_args {
   table_view table = {};  ///< The table view containing the columns
-  std::map<std::string, int32_t> table_column_names =
-    {};  ///< The mapping of column names to their indices in the table
 };
 
 struct ast_converter {
@@ -383,16 +374,12 @@ struct ast_converter {
 
   std::unique_ptr<row_ir::node> add_ir_node(ast::operation const& expr);
 
-  std::unique_ptr<row_ir::node> add_ir_node(ast::column_name_reference const& expr);
-
   [[nodiscard]] std::span<ast_input_spec const> get_input_specs() const;
 
   // add an AST input/input_reference and return its reference index
   int32_t add_ast_input(ast_input_spec in);
 
   void add_input_var(ast_column_input_spec const& in, ast_args const& args);
-
-  void add_input_var(ast_named_column_input_spec const& in, ast_args const& args);
 
   void add_input_var(ast_scalar_input_spec const& in, ast_args const& args);
 
