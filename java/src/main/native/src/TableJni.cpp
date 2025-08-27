@@ -881,7 +881,6 @@ jlongArray mixed_join_size(JNIEnv* env,
                                     condition->get_top_expression(),
                                     nulls_equal);
 
-    // Return only the size value as a single element array
     cudf::jni::native_jlongArray result(env, 1);
     result[0] = static_cast<jlong>(join_size);
     return result.get_jArray();

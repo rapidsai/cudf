@@ -214,8 +214,8 @@ struct MixedJoinPairReturnTest : public MixedJoinTest<T> {
       left_equality, right_equality, left_conditional, right_conditional, predicate, compare_nulls);
     EXPECT_TRUE(result_size == expected_outputs.size());
 
-    // Since we no longer get per-row counts, we can't verify them
-    // Just verify the total count matches
+    // Since we no longer get per-row counts, we can't verify them.
+    // Instead just verify that the total count matches
 
     auto result = this->join(
       left_equality, right_equality, left_conditional, right_conditional, predicate, compare_nulls);

@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "cudf/types.hpp"
+#include <cudf/types.hpp>
 #include "join_common_utils.cuh"
 #include "join_common_utils.hpp"
 #include "mixed_join_common_utils.cuh"

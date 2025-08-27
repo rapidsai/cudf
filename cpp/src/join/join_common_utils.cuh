@@ -152,7 +152,6 @@ void build_join_hash_table(
   CUDF_EXPECTS(0 != build.num_columns(), "Selected build dataset is empty", std::invalid_argument);
   CUDF_EXPECTS(0 != build.num_rows(), "Build side table has no rows", std::invalid_argument);
 
-  // Lambda to insert rows into hash table
   auto insert_rows = [&](auto const& build, auto const& d_hasher) {
     auto const iter = cudf::detail::make_counting_transform_iterator(0, pair_fn{d_hasher});
 
@@ -169,7 +168,6 @@ void build_join_hash_table(
 
   auto const nulls = nullate::DYNAMIC{has_nested_nulls};
 
-  // Insert rows into hash table
   auto const row_hash = experimental::row::hash::row_hasher{preprocessed_build};
   auto const d_hasher = row_hash.device_hasher(nulls);
 
