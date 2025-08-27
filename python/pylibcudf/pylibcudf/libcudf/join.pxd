@@ -19,7 +19,6 @@ from pylibcudf.libcudf.utilities.span cimport device_span
 
 ctypedef unique_ptr[device_uvector[size_type]] gather_map_type
 ctypedef pair[gather_map_type, gather_map_type] gather_map_pair_type
-ctypedef optional[size_t] output_size_data_type
 
 cdef extern from "cudf/join/join.hpp" namespace "cudf" nogil:
     cdef gather_map_pair_type inner_join(
@@ -169,7 +168,7 @@ cdef extern from "cudf/join/mixed_join.hpp" namespace "cudf" nogil:
         const table_view right_conditional,
         const expression binary_predicate,
         null_equality compare_nulls,
-        output_size_data_type output_size_data,
+        optional[size_t] output_size,
         cuda_stream_view stream
     ) except +libcudf_exception_handler
 
@@ -180,7 +179,7 @@ cdef extern from "cudf/join/mixed_join.hpp" namespace "cudf" nogil:
         const table_view right_conditional,
         const expression binary_predicate,
         null_equality compare_nulls,
-        output_size_data_type output_size_data,
+        optional[size_t] output_size,
         cuda_stream_view stream
     ) except +libcudf_exception_handler
 
@@ -191,7 +190,7 @@ cdef extern from "cudf/join/mixed_join.hpp" namespace "cudf" nogil:
         const table_view right_conditional,
         const expression binary_predicate,
         null_equality compare_nulls,
-        output_size_data_type output_size_data,
+        optional[size_t] output_size,
         cuda_stream_view stream
     ) except +libcudf_exception_handler
 
