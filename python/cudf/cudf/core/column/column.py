@@ -963,9 +963,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     [chunk.indices for chunk in array.chunks],
                     type=array.type.index_type,
                 )
-                dictionary = pa.chunked_array(
-                    [chunk.dictionary for chunk in array.chunks],
-                    type=array.type.value_type,
+                dictionary = pc.unique(
+                    pa.chunked_array(
+                        [chunk.dictionary for chunk in array.chunks],
+                        type=array.type.value_type,
+                    )
                 )
             with acquire_spill_lock():
                 result = cls.from_pylibcudf(plc.Column.from_arrow(codes))

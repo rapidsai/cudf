@@ -28,16 +28,12 @@ from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     ColumnBase,
     as_column,
-    column_empty,
     deserialize_columns,
     serialize_columns,
 )
-from cudf.core.column.categorical import CategoricalColumn, as_unsigned_codes
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.mixins import BinaryOperand, Scannable
 from cudf.utils.dtypes import (
-    CUDF_STRING_DTYPE,
-    cudf_dtype_from_pa_type,
     find_common_type,
     is_dtype_obj_numeric,
     is_pandas_nullable_extension_dtype,
@@ -1030,145 +1026,16 @@ class Frame(BinaryOperand, Scannable, Serializable):
             raise TypeError(
                 f"data must be a pyarrow.Table, not {type(data).__name__}"
             )
-
-        column_names = data.column_names
-        pandas_dtypes = {}
-        np_dtypes = {}
-        if isinstance(data.schema.pandas_metadata, dict):
-            for col in data.schema.pandas_metadata:
-                if "field_name" in col:
-                    pandas_dtypes[col["field_name"]] = col["pandas_type"]
-                    np_dtypes[col["field_name"]] = col["numpy_type"]
-
-        # Currently we don't have support for
-        # pyarrow.DictionaryArray -> cudf Categorical column,
-        # so handling indices and dictionary as two different columns.
-        # This needs be removed once we have hooked libcudf dictionary32
-        # with categorical.
-        if any(
-            isinstance(x.type, pa.DictionaryType)
-            and isinstance(x, pa.ChunkedArray)
-            for x in data
-        ):
-            data = data.combine_chunks()
-
-        dict_indices = {}
-        dict_dictionaries = {}
-        dict_ordered = {}
-        for field in data.schema:
-            if isinstance(field.type, pa.DictionaryType):
-                dict_ordered[field.name] = field.type.ordered
-                dict_indices[field.name] = pa.chunked_array(
-                    [chunk.indices for chunk in data[field.name].chunks],
-                    type=field.type.index_type,
+        ca = ColumnAccessor(
+            {
+                name: ColumnBase.from_arrow(array)
+                for name, array in zip(
+                    data.column_names, data.itercolumns(), strict=True
                 )
-                dict_dictionaries[field.name] = pa.chunked_array(
-                    [chunk.dictionary for chunk in data[field.name].chunks],
-                    type=field.type.value_type,
-                )
-
-        # Handle dict arrays
-        cudf_category_frame = {}
-        if len(dict_indices):
-            dict_indices_table = pa.table(dict_indices)
-            data = data.drop(dict_indices_table.column_names)
-            plc_indices = plc.Table.from_arrow(dict_indices_table)
-            # as dictionary size can vary, it can't be a single table
-            cudf_dictionaries_columns = {
-                name: ColumnBase.from_arrow(dict_dictionaries[name])
-                for name in dict_dictionaries.keys()
-            }
-
-            for name, plc_codes in zip(
-                dict_indices_table.column_names,
-                plc_indices.columns(),
-                strict=True,
-            ):
-                codes = ColumnBase.from_pylibcudf(plc_codes)
-                categories = cudf_dictionaries_columns[name]
-                codes = as_unsigned_codes(len(categories), codes)  # type: ignore[arg-type]
-                cudf_category_frame[name] = CategoricalColumn(
-                    data=None,
-                    size=codes.size,
-                    dtype=cudf.CategoricalDtype(
-                        categories=categories,
-                        ordered=dict_ordered[name],
-                    ),
-                    mask=codes.base_mask,
-                    children=(codes,),
-                )
-
-        # Handle non-dict arrays
-        cudf_non_category_frame = {
-            name: ColumnBase.from_pylibcudf(plc_col)
-            for name, plc_col in zip(
-                data.column_names,
-                plc.Table.from_arrow(data).columns(),
-                strict=True,
-            )
-        }
-
-        result = {**cudf_non_category_frame, **cudf_category_frame}
-
-        # There are some special cases that need to be handled
-        # based on metadata.
-        for name in result:
-            if (
-                len(result[name]) == 0
-                and pandas_dtypes.get(name) == "categorical"
-            ):
-                # When pandas_dtype is a categorical column and the size
-                # of column is 0 (i.e., empty) then we will have an
-                # int8 column in result._data[name] returned by libcudf,
-                # which needs to be type-casted to 'category' dtype.
-                result[name] = result[name].astype(
-                    cudf.CategoricalDtype(
-                        categories=column_empty(0, dtype=result[name].dtype)
-                    )
-                )
-            elif (
-                pandas_dtypes.get(name) == "empty"
-                and np_dtypes.get(name) == "object"
-            ):
-                # When a string column has all null values, pandas_dtype is
-                # is specified as 'empty' and np_dtypes as 'object',
-                # hence handling this special case to type-cast the empty
-                # float column to str column.
-                result[name] = result[name].astype(CUDF_STRING_DTYPE)
-            elif name in data.column_names and isinstance(
-                data[name].type,
-                (
-                    pa.StructType,
-                    pa.ListType,
-                    pa.Decimal128Type,
-                    pa.TimestampType,
-                ),
-            ):
-                # In case of struct column, libcudf is not aware of names of
-                # struct fields, hence renaming the struct fields is
-                # necessary by extracting the field names from arrow
-                # struct types.
-
-                # In case of decimal column, libcudf is not aware of the
-                # decimal precision.
-
-                # In case of list column, there is a possibility of nested
-                # list columns to have struct or decimal columns inside them.
-
-                # Datetimes ("timestamps") may need timezone metadata
-                # attached to them, as libcudf is timezone-unaware
-
-                # All of these cases are handled by calling the
-                # _with_type_metadata method on the column.
-                result[name] = result[name]._with_type_metadata(
-                    cudf_dtype_from_pa_type(data[name].type)
-                )
-
-        return cls._from_data(
-            ColumnAccessor(
-                {name: result[name] for name in column_names}, verify=False
-            )
+            },
+            verify=False,
         )
+        return cls._from_data(ca)
 
     @_performance_tracking
     def to_arrow(self) -> pa.Table:
