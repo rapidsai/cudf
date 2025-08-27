@@ -535,6 +535,8 @@ filter_args ast_converter::filter(target target_id,
 {
   clear();
 
+  generate_code(target_id, expr, args, stream, resource_ref);
+
   CUDF_EXPECTS(output_irs_.size() == 1,
                "Filter expression must return a single output.",
                std::invalid_argument);
