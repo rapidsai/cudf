@@ -223,12 +223,11 @@ class GroupedRollingWindow(Expr):
             )  # pragma: no cover; translation raises first
 
         by_exprs = self.children[: self.by_count]
-        by_cols = list(
-            broadcast(
-                *(b.evaluate(df, context=ExecutionContext.FRAME) for b in by_exprs),
-                target_length=df.num_rows,
-            )
+        by_cols = broadcast(
+            *(b.evaluate(df) for b in by_exprs),
+            target_length=df.num_rows,
         )
+
         by_tbl = plc.Table([c.obj for c in by_cols])
 
         sorted_flag = (
@@ -253,13 +252,9 @@ class GroupedRollingWindow(Expr):
             out_dtypes.append(val.dtype)
 
             if isinstance(val, expr.Len):
-                # Count rows per group via sum(1).
-                ones = plc.Column.from_scalar(
-                    plc.Scalar.from_py(1, plc.DataType(plc.TypeId.INT8)), df.num_rows
-                )
-                gb_requests.append(
-                    plc.groupby.GroupByRequest(ones, [plc.aggregation.sum()])
-                )
+                # A count aggregation, we need a column so use a key column
+                col = by_cols[0].obj
+                gb_requests.append(plc.groupby.GroupByRequest(col, [val.agg_request]))
             elif isinstance(val, expr.Agg):
                 (child,) = (
                     val.children if val.name != "quantile" else (val.children[0],)
@@ -270,42 +265,32 @@ class GroupedRollingWindow(Expr):
         group_keys_tbl, value_tables = grouper.aggregate(gb_requests)
         out_cols = (t.columns()[0] for t in value_tables)
 
-        # Build gather maps to broadcast per-group results to all rows.
-        # Also left-join input keys to group-keys so every input row appears exactly once.
-        lg, rg = plc.join.left_join(
+        # We do a left-join between the input keys to group-keys
+        # so every input row appears exactly once. left_order is
+        # returned un-ordered by libcudf.
+        left_order, right_order = plc.join.left_join(
             by_tbl, group_keys_tbl, plc.types.NullEquality.EQUAL
         )
 
-        # Reorder the gather maps to preserve left/input order
-        left_rows, right_rows = by_tbl.num_rows(), group_keys_tbl.num_rows()
-        init = plc.Scalar.from_py(0, plc.types.SIZE_TYPE)
-        step = plc.Scalar.from_py(1, plc.types.SIZE_TYPE)
-        left_order = plc.copying.gather(
-            plc.Table([plc.filling.sequence(left_rows, init, step)]),
-            lg,
-            plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+        # Scatter the right order indices into an all-null table
+        # and at the position of the index in left order. Now we
+        # the map between rows an groups with the correct ordering
+        left_rows = left_order.size()
+        target = plc.Column.from_scalar(
+            plc.Scalar.from_py(None, plc.types.SIZE_TYPE), left_rows
         )
-        right_order = plc.copying.gather(
-            plc.Table([plc.filling.sequence(right_rows, init, step)]),
-            rg,
-            plc.copying.OutOfBoundsPolicy.NULLIFY,
-        )
-        # Sort both maps by (left_order, right_order), then use the reordered right map
-        # to gather group aggregates in the original row order.
-        _, rg = plc.sorting.stable_sort_by_key(
-            plc.Table([lg, rg]),
-            plc.Table([*left_order.columns(), *right_order.columns()]),
-            [plc.types.Order.ASCENDING, plc.types.Order.ASCENDING],
-            [plc.types.NullOrder.AFTER, plc.types.NullOrder.AFTER],
-        ).columns()
+        aligned_map = plc.copying.scatter(
+            plc.Table([right_order]),
+            left_order,
+            plc.Table([target]),
+        ).columns()[0]
 
-        # Broadcast each aggregated result back to row-shape using the right map.
+        # Broadcast each aggregated result back to row-shape using
+        # the aligned mapping between rows indices and group indices
         broadcasted_cols = [
             Column(
                 plc.copying.gather(
-                    plc.Table([col]),
-                    rg,
-                    plc.copying.OutOfBoundsPolicy.NULLIFY,
+                    plc.Table([col]), aligned_map, plc.copying.OutOfBoundsPolicy.NULLIFY
                 ).columns()[0],
                 name=named_expr.name,
                 dtype=dtype,

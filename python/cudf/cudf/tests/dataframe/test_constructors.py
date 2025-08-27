@@ -1354,3 +1354,93 @@ def test_create_interval_df(data1, data2, data3, data4, interval_closed):
         dtype="interval",
     )
     assert_eq(expect_three, got_three)
+
+
+def test_from_pandas():
+    pdf = pd.DataFrame(
+        {
+            "a": np.arange(10, dtype=np.int32),
+            "b": np.arange(10, 20, dtype=np.float64),
+        }
+    )
+
+    df = cudf.DataFrame.from_pandas(pdf)
+
+    assert tuple(df.columns) == tuple(pdf.columns)
+
+    assert df["a"].dtype == pdf["a"].dtype
+    assert df["b"].dtype == pdf["b"].dtype
+
+    assert len(df["a"]) == len(pdf["a"])
+    assert len(df["b"]) == len(pdf["b"])
+
+
+def test_from_pandas_ex1():
+    pdf = pd.DataFrame({"a": [0, 1, 2, 3], "b": [0.1, 0.2, None, 0.3]})
+    df = cudf.DataFrame.from_pandas(pdf)
+
+    assert tuple(df.columns) == tuple(pdf.columns)
+    assert np.all(df["a"].to_numpy() == pdf["a"])
+    matches = df["b"].to_numpy(na_value=np.nan) == pdf["b"]
+    # the 3d element is False due to (nan == nan) == False
+    assert np.all(matches == [True, True, False, True])
+    assert np.isnan(df["b"].to_numpy(na_value=np.nan)[2])
+    assert np.isnan(pdf["b"][2])
+
+
+def test_from_pandas_with_index():
+    pdf = pd.DataFrame({"a": [0, 1, 2, 3], "b": [0.1, 0.2, None, 0.3]})
+    pdf = pdf.set_index(np.asarray([4, 3, 2, 1]))
+    df = cudf.DataFrame.from_pandas(pdf)
+
+    # Check columns
+    assert_eq(df.a, pdf.a)
+    assert_eq(df.b, pdf.b)
+    # Check index
+    assert_eq(df.index.values, pdf.index.values)
+    # Check again using pandas testing tool on frames
+    assert_eq(df, pdf)
+
+
+@pytest.mark.parametrize("columns", [None, ("a", "b"), ("a",), ("b",)])
+def test_from_records_noindex(columns):
+    recdtype = np.dtype([("a", np.int32), ("b", np.float64)])
+    rec = np.recarray(10, dtype=recdtype)
+    rec.a = aa = np.arange(10, dtype=np.int32)
+    rec.b = bb = np.arange(10, 20, dtype=np.float64)
+    df = cudf.DataFrame.from_records(rec, columns=columns)
+
+    if columns and "a" in columns:
+        assert_eq(aa, df["a"].values)
+    if columns and "b" in columns:
+        assert_eq(bb, df["b"].values)
+    assert_eq(np.arange(10), df.index.values)
+
+
+@pytest.mark.parametrize("columns", [None, ("a", "b"), ("a",), ("b",)])
+def test_from_records_withindex(columns):
+    recdtype = np.dtype(
+        [("index", np.int64), ("a", np.int32), ("b", np.float64)]
+    )
+    rec = np.recarray(10, dtype=recdtype)
+    rec.index = ii = np.arange(30, 40)
+    rec.a = aa = np.arange(10, dtype=np.int32)
+    rec.b = bb = np.arange(10, 20, dtype=np.float64)
+    df = cudf.DataFrame.from_records(rec, index="index")
+
+    if columns and "a" in columns:
+        assert_eq(aa, df["a"].values)
+    if columns and "b" in columns:
+        assert_eq(bb, df["b"].values)
+    assert_eq(ii, df.index.values)
+
+
+def test_numpy_non_contiguous():
+    recdtype = np.dtype([("index", np.int64), ("a", np.int32)])
+    rec = np.recarray(10, dtype=recdtype)
+    rec.index = np.arange(30, 40)
+    rec.a = aa = np.arange(20, dtype=np.int32)[::2]
+    assert rec.a.flags["C_CONTIGUOUS"] is False
+
+    gdf = cudf.DataFrame.from_records(rec, index="index")
+    assert_eq(aa, gdf["a"].values)

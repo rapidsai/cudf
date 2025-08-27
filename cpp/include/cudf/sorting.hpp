@@ -177,28 +177,55 @@ std::unique_ptr<table> stable_sort_by_key(
  * value starts from 1.
  *
  * @code{.pseudo}
- * input = { 3, 4, 5, 4, 1, 2}
- * Result for different rank_method are
+ * Using default order::ASCENDING
+ * input = {3, 4, 5, 4, 1, 2}
+ * Results for different rank_methods
  * FIRST    = {3, 4, 6, 5, 1, 2}
  * AVERAGE  = {3, 4.5, 6, 4.5, 1, 2}
  * MIN      = {3, 4, 6, 4, 1, 2}
  * MAX      = {3, 5, 6, 5, 1, 2}
  * DENSE    = {3, 4, 5, 4, 1, 2}
+ *
+ * For null_policy::INCLUDE, null_order::AFTER
+ * input = {3, 4, null, 4, 1, 2}
+ * The results are the same as above.
+ *
+ * For null_policy::INCLUDE, null_order::BEFORE
+ * input = {3, 4, null, 4, 1, 2}
+ * Results for different rank_methods
+ * FIRST    = {4, 5, 1, 6, 2, 3}
+ * AVERAGE  = {4, 5.5, 1, 5.5, 2, 3}
+ * MIN      = {4, 5, 1, 5, 2, 3}
+ * MAX      = {4, 6, 1, 6, 2, 3}
+ * DENSE    = {4, 5, 1, 5, 2, 3}
+ *
+ * For null_policy::EXCLUDE (null_order::AFTER only)
+ * input = {3, 4, null, 4, 1, 2}
+ * Results for different rank_methods
+ * FIRST    = {3, 4, null, 5, 1, 2}
+ * AVERAGE  = {3, 4.5, null, 4.5, 1, 2}
+ * MIN      = {3, 4, null, 4, 1, 2}
+ * MAX      = {3, 5, null, 5, 1, 2}
+ * DENSE    = {3, 4, null, 4, 1, 2}
  * @endcode
+ *
+ * For null_policy::EXCLUDE with null_order::BEFORE, using column_order::ASCENDING
+ * will result in undefined behavior. Likewise for null_policy::EXCLUDE with
+ * null_order::AFTER and column_order::DESCENDING.
+ *
+ * The output column type will be `double` when `method=rank_method::AVERAGE` or `percentage=True`
+ * and `size_type` otherwise.
  *
  * @param input The column to rank
  * @param method The ranking method used for tie breaking (same values)
  * @param column_order The desired sort order for ranking
- * @param null_handling  flag to include nulls during ranking. If nulls are not
- * included, corresponding rank will be null.
- * @param null_precedence The desired order of null compared to other elements
- * for column
- * @param percentage flag to convert ranks to percentage in range (0,1]
+ * @param null_handling Flag to include nulls during ranking.
+ *                      If nulls are excluded, the corresponding rank will be null.
+ * @param null_precedence The desired order of null rows compared to other elements
+ * @param percentage Flag to convert ranks to percentage in range (0,1]
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return A column of containing the rank of the each element of the column of `input`. The output
- * column type will be `size_type`column by default or else `double` when
- * `method=rank_method::AVERAGE` or `percentage=True`
+ * @return A column of containing the rank of the each element of the column of `input`
  */
 std::unique_ptr<column> rank(
   column_view const& input,
