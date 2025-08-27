@@ -1027,7 +1027,7 @@ cdef class Column:
             or hasattr(obj, "__arrow_c_device_stream__")
         ):
             raise TypeError(
-                "Object implements a C data interface protocol. "
+                "Object implements the Arrow C data interface protocol. "
                 "Please call Column.from_arrow(obj)."
             )
 
