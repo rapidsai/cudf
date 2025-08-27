@@ -666,8 +666,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cachetools
-          # TODO: Revert to numba>=0.60.0,<0.62.0a0 once https://github.com/NVIDIA/numba-cuda/pull/403 is released.
-          - &numba numba>=0.61.0,<0.62.0a0
+          - &numba numba>=0.60.0,<0.62.0a0
           - nvtx>=0.2.1
           - packaging
           - rich
@@ -838,10 +837,7 @@ dependencies:
         matrices:
           - matrix: {dependencies: "oldest"}
             packages:
-              # TODO: Revert to numpy==1.23.* once
-              # https://github.com/NVIDIA/numba-cuda/pull/403 is released and
-              # we revert to an oldest pinning of numba==0.60.0.
-              - numpy==1.24.*
+              - numpy==1.23.*
               # pyarrow 14 is fine in some circumstances but we require pyarrow
               # 15 in our CI tests in order to get a lz4-c that is compatible
               # with cudf_kafka's dependencies.
