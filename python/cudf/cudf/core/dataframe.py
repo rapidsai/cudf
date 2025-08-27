@@ -7020,6 +7020,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         if len(arr) == 0 and method == "nanmedian":
             # Workaround for a cupy limitation, cupy
             # errors for zero dim array in nanmedian
+            # https://github.com/cupy/cupy/issues/9332
             method = "median"
         result = getattr(cupy, method)(arr, axis=1, **kwargs)
 
