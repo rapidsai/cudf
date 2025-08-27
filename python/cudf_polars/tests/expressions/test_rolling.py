@@ -243,3 +243,43 @@ def test_over_broadcast_input_row_group_indices_aligned():
     q = df.select(pl.col("x").sum().over("g"))
 
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("method", ["ordinal", "dense", "min", "max", "average"])
+@pytest.mark.parametrize("descending", [False, True])
+def test_rank_over(df: pl.LazyFrame, method: str, *, descending: bool) -> None:
+    expr = pl.col("x").rank(method=method, descending=descending).over("g")
+    q = df.select(expr)
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("method", ["ordinal", "dense", "min", "max", "average"])
+@pytest.mark.parametrize("descending", [False, True])
+def test_rank_over_with_ties(
+    df: pl.LazyFrame, method: str, *, descending: bool
+) -> None:
+    v = pl.when(pl.col("g") == 2).then(pl.lit(4)).otherwise(pl.col("x"))
+    expr = v.rank(method=method, descending=descending).over("g")
+    q = df.select(expr)
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("method", ["ordinal", "dense", "min", "max", "average"])
+@pytest.mark.parametrize("descending", [False, True])
+def test_rank_over_with_null_values(
+    df: pl.LazyFrame, method: str, *, descending: bool
+) -> None:
+    x_null = pl.when((pl.col("x") % 2) == 0).then(None).otherwise(pl.col("x"))
+    expr = x_null.rank(method=method, descending=descending).over("g")
+    q = df.select(expr)
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("method", ["ordinal", "dense", "min", "max", "average"])
+@pytest.mark.parametrize("descending", [False, True])
+def test_rank_over_with_null_group_keys(
+    df: pl.LazyFrame, method: str, *, descending: bool
+) -> None:
+    expr = pl.col("x").rank(method=method, descending=descending).over("g_null")
+    q = df.select(expr)
+    assert_gpu_result_equal(q)

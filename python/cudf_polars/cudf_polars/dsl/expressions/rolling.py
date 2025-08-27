@@ -187,7 +187,13 @@ class GroupedRollingWindow(Expr):
         unsupported = [
             type(named_expr.value).__name__
             for named_expr in self.named_aggs
-            if not isinstance(named_expr.value, (expr.Len, expr.Agg))
+            if not (
+                isinstance(named_expr.value, (expr.Len, expr.Agg))
+                or (
+                    isinstance(named_expr.value, expr.UnaryFunction)
+                    and named_expr.value.name == "rank"
+                )
+            )
         ]
         if unsupported:
             kinds = ", ".join(sorted(set(unsupported)))
@@ -210,9 +216,145 @@ class GroupedRollingWindow(Expr):
             for ne in self.named_aggs
             for v in (ne.value,)
             if isinstance(v, expr.Agg)
+            or (isinstance(v, expr.UnaryFunction) and v.name == "rank")
         ]
         self.by_count = len(by_expr)
         self.children = tuple(by_expr) + tuple(child_deps)
+
+    @staticmethod
+    def _rebuild_col_with_nulls(
+        ranks: plc.Column, i: plc.Column, n: int, out_dtype: DataType
+    ) -> Column:
+        # scatter ranks back to length n column
+        # of NULLs (which we originally dropped)
+        out_plc = (
+            ranks
+            if ranks.type().id() == out_dtype.plc.id()
+            else plc.unary.cast(ranks, out_dtype.plc)
+        )
+        ranks_with_nulls = plc.Column.from_scalar(
+            plc.Scalar.from_py(None, out_dtype.plc), n
+        )
+        ranks_with_nulls = plc.copying.scatter(
+            plc.Table([out_plc]), i, plc.Table([ranks_with_nulls])
+        ).columns()[0]
+        return Column(ranks_with_nulls, dtype=out_dtype)
+
+    @staticmethod
+    def _segmented_rank(
+        values: Column,
+        group_indices: plc.Column,
+        *,
+        method: str,
+        descending: bool,
+        out_dtype: DataType,
+        num_groups: int,
+    ) -> Column:
+        """Compute the average/min/max/dense/ordinal per group."""
+        order = plc.types.Order.DESCENDING if descending else plc.types.Order.ASCENDING
+        size_type = plc.types.SIZE_TYPE
+
+        n = values.size
+        zero = plc.Scalar.from_py(0, size_type)
+        one = plc.Scalar.from_py(1, size_type)
+
+        # Polars does not consider nulls when computing
+        # the ranks, so we drop them.
+        i_seq = plc.filling.sequence(n, zero, one)
+        full_tbl = plc.Table([values.obj, group_indices, i_seq])
+        nn_tbl = plc.stream_compaction.drop_nulls(full_tbl, [0], 1)
+        values, groups, i = nn_tbl.columns()  # Define v(i), g(i), i
+        num_non_null_rows = nn_tbl.num_rows()
+
+        # First sort by group index, then by value to get
+        # the sorted order within each group. This gives us a
+        # permutation map between the sorted row k and
+        # the original row i. Define f(k) = i to be the
+        # permutation map
+        perm_k_to_i = plc.sorting.stable_sorted_order(
+            plc.Table([groups, values]),
+            [plc.types.Order.ASCENDING, order],
+            [plc.types.NullOrder.AFTER, plc.types.NullOrder.AFTER],
+        )
+
+        # We also need the inverse permuutation map from the
+        # original row i to the sorted row k. The inverse map
+        # lets compute the 1-based ordinal ranks within each group
+        # Define f^{-1}(i) = k be the inverse permutation map
+        k = plc.filling.sequence(num_non_null_rows, zero, one)
+        inv_perm_i_to_k = plc.copying.scatter(
+            plc.Table([k]),
+            perm_k_to_i,
+            plc.Table([plc.Column.from_scalar(zero, num_non_null_rows)]),
+        ).columns()[0]
+
+        # Goal: 1-based ordinal rank of each row i within its group after sorting by (group, value).
+        # where:
+        #   - f : k -> i is the permutation map from the sorted row k to original row i
+        #   - f^{-1} : i -> k is its inverse (sorted position of original row i)
+        #   - first: g -> k = min { k : g(f(k)) = g } is the first sorted row at where g is
+
+        # Compute g(f(k)). Ie. take the row that ended
+        # up in sorted row k and look up its group
+        g_sorted = plc.copying.gather(
+            plc.Table([groups]),
+            perm_k_to_i,
+            plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+        ).columns()[0]
+
+        # First k per distinct group in g(f(k))
+        first_k_per_group = plc.stream_compaction.distinct_indices(
+            plc.Table([g_sorted]),
+            plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
+            plc.types.NullEquality.EQUAL,
+            plc.types.NanEquality.ALL_EQUAL,
+        )
+
+        # g_at_first_k[g] = g(f(first_k)) = the group found at
+        # its first sorted position
+        g_at_first_k = plc.copying.gather(
+            plc.Table([g_sorted]),
+            first_k_per_group,
+            plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+        ).columns()[0]
+
+        # first(g)
+        first_at_g = plc.copying.scatter(
+            plc.Table([first_k_per_group]),
+            g_at_first_k,
+            plc.Table([plc.Column.from_scalar(zero, num_groups)]),
+        ).columns()[0]
+
+        # first(g(i))
+        first_at_i = plc.copying.gather(
+            plc.Table([first_at_g]),
+            groups,
+            plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+        ).columns()[0]
+
+        # Now subtract the first position of the group
+        # from the globally sorted position to get
+        # (0-based) ordinal rank of each row in that group.
+        # (And add 1 to get the 1-based ordinal ranks)
+        # Ie. ordinal(i) = f^{-1}(i) - first[g(i)] + 1
+        ordinal_ranks = plc.binaryop.binary_operation(
+            plc.binaryop.binary_operation(
+                inv_perm_i_to_k,
+                first_at_i,
+                plc.binaryop.BinaryOperator.SUB,
+                size_type,
+            ),
+            one,
+            plc.binaryop.BinaryOperator.ADD,
+            size_type,
+        )
+
+        if method == "ordinal":
+            return GroupedRollingWindow._rebuild_col_with_nulls(
+                ordinal_ranks, i, n, out_dtype
+            )
+
+        raise NotImplementedError(f"rank({method=}).over(..)")
 
     def do_evaluate(  # noqa: D102
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
@@ -243,10 +385,21 @@ class GroupedRollingWindow(Expr):
             null_precedence=[k.null_order for k in by_cols],
         )
 
+        # Split up expressions into scalar aggs (eg. Len) vs per-row (eg. rank)
+        scalar_named: list[expr.NamedExpr] = []
+        rank_named: list[expr.NamedExpr] = []
+        for ne in self.named_aggs:
+            v = ne.value
+            if isinstance(v, expr.UnaryFunction) and v.name == "rank":
+                rank_named.append(ne)
+            else:
+                scalar_named.append(ne)
+
+        # Build GroupByRequests for scalar aggregations
         gb_requests: list[plc.groupby.GroupByRequest] = []
         out_names: list[str] = []
         out_dtypes: list[DataType] = []
-        for ne in self.named_aggs:
+        for ne in scalar_named:
             val = ne.value
             out_names.append(ne.name)
             out_dtypes.append(val.dtype)
@@ -285,7 +438,7 @@ class GroupedRollingWindow(Expr):
             plc.Table([target]),
         ).columns()[0]
 
-        # Broadcast each aggregated result back to row-shape using
+        # Broadcast each scalar aggregated result back to row-shape using
         # the aligned mapping between rows indices and group indices
         broadcasted_cols = [
             Column(
@@ -296,9 +449,31 @@ class GroupedRollingWindow(Expr):
                 dtype=dtype,
             )
             for named_expr, dtype, col in zip(
-                self.named_aggs, out_dtypes, out_cols, strict=True
+                scalar_named, out_dtypes, out_cols, strict=True
             )
         ]
+
+        # Compute per-row ranks over groups using the aligned group ids
+        if rank_named:
+            group_indices = aligned_map
+            num_groups = group_keys_tbl.num_rows()
+
+            for ne in rank_named:
+                rank_expr = ne.value
+                (child_expr,) = rank_expr.children
+                values = child_expr.evaluate(df, context=ExecutionContext.FRAME)
+                assert isinstance(rank_expr, expr.UnaryFunction)
+                method_str, descending, _ = rank_expr.options
+                ranked = GroupedRollingWindow._segmented_rank(
+                    values,
+                    group_indices,
+                    method=method_str,
+                    descending=bool(descending),
+                    out_dtype=rank_expr.dtype,
+                    num_groups=num_groups,
+                )
+                ranked.name = ne.name
+                broadcasted_cols.append(ranked)
 
         # Create a temporary DataFrame with the broadcasted columns named by their
         # placeholder names from agg decomposition, then evaluate the post-expression.

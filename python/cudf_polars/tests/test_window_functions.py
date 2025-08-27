@@ -105,10 +105,13 @@ def test_over_mapping_strategy(df: pl.LazyFrame, mapping_strategy: str):
     """Test window functions with different mapping strategies."""
     # ignore is for polars' WindowMappingStrategy, which isn't publicly exported.
     # https://github.com/pola-rs/polars/issues/17420
-    query = df.with_columns(
+    q = df.with_columns(
         [pl.col("b").rank().over(pl.col("a"), mapping_strategy=mapping_strategy)]  # type: ignore[arg-type]
     )
-    assert_ir_translation_raises(query, NotImplementedError)
+    if mapping_strategy == "group_to_rows":
+        assert_gpu_result_equal(q)
+    else:
+        assert_ir_translation_raises(q, NotImplementedError)
 
 
 @pytest.mark.parametrize("period", ["2d", "3d"])
