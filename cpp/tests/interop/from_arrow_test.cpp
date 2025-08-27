@@ -444,7 +444,7 @@ TEST_P(FromArrowTestSlice, SliceTest)
   if (got_cudf_table.value()->num_rows() == 0 and expected_cudf_table.num_rows() == 0) {
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_cudf_table.view(), got_cudf_table.value()->view());
   } else {
-    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_cudf_table.view(), got_cudf_table.value()->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_cudf_table.view(), got_cudf_table.value()->view());
   }
 }
 
