@@ -52,37 +52,39 @@ namespace {
 /**
  * @brief Precompute input pairs and hash indices for mixed join operations
  *
- * This function eliminates code duplication by providing a common implementation
- * for precomputing both input pairs and hash indices in a single pass, which can
- * be reused by both mixed_join and compute_mixed_join_output_size functions.
+ * Precomputes input pairs and hash indices in a single pass to reduce code duplication
+ * between mixed_join and compute_mixed_join_output_size functions.
+ *
+ * Precomputation reduces register pressure in probing kernels by avoiding expensive
+ * on-the-fly calculations of iterator transforms and hash table indices.
  *
  * @tparam HashProbe Type of the device hasher for computing probe keys
- * @param hash_table The hash table to get probing information from
- * @param hash_probe Device hasher for computing probe keys
- * @param outer_num_rows Number of rows in the outer table
+ * @param hash_table Hash table for probing
+ * @param hash_probe Device hasher for probe keys
+ * @param probe_table_num_rows Number of rows in probe table
  * @param stream CUDA stream
  * @param mr Memory resource
- * @return A pair of device vectors containing precomputed input pairs and hash indices
+ * @return Pair of device vectors: precomputed input pairs and hash indices
  */
 template <typename HashProbe>
 std::pair<rmm::device_uvector<cuco::pair<hash_value_type, size_type>>,
           rmm::device_uvector<cuda::std::pair<size_type, size_type>>>
 precompute_mixed_join_data(mixed_multimap_type const& hash_table,
                            HashProbe const& hash_probe,
-                           size_type outer_num_rows,
+                           size_type probe_table_num_rows,
                            rmm::cuda_stream_view stream,
                            rmm::device_async_resource_ref mr)
 {
   auto input_pairs =
-    rmm::device_uvector<cuco::pair<hash_value_type, size_type>>(outer_num_rows, stream, mr);
+    rmm::device_uvector<cuco::pair<hash_value_type, size_type>>(probe_table_num_rows, stream, mr);
   auto hash_indices =
-    rmm::device_uvector<cuda::std::pair<size_type, size_type>>(outer_num_rows, stream, mr);
+    rmm::device_uvector<cuda::std::pair<size_type, size_type>>(probe_table_num_rows, stream, mr);
 
   auto const extent                        = hash_table.capacity();
   auto const probe_hash_fn                 = hash_table.hash_function();
   static constexpr std::size_t bucket_size = mixed_multimap_type::bucket_size;
 
-  // Create dual functor to compute both pairs and hash indices
+  // Functor to pre-compute both input pairs and initial slots and step sizes for double hashing.
   auto precompute_fn = [=] __device__(size_type i) {
     auto const probe_key = cuco::pair<hash_value_type, size_type>{hash_probe(i), i};
 
@@ -104,7 +106,7 @@ precompute_mixed_join_data(mixed_multimap_type const& hash_table,
   thrust::transform(
     rmm::exec_policy_nosync(stream),
     thrust::counting_iterator<size_type>(0),
-    thrust::counting_iterator<size_type>(outer_num_rows),
+    thrust::counting_iterator<size_type>(probe_table_num_rows),
     thrust::make_zip_iterator(thrust::make_tuple(input_pairs.begin(), hash_indices.begin())),
     precompute_fn);
 
@@ -138,10 +140,10 @@ mixed_join(table_view const& left_equality,
   auto const left_num_rows{left_conditional.num_rows()};
   auto const swap_tables = (join_type == join_kind::INNER_JOIN) && (right_num_rows > left_num_rows);
 
-  // The "outer" table is the larger of the two tables. The kernels are
-  // launched with one thread per row of the outer table, which also means that
-  // it is the probe table for the hash
-  auto const outer_num_rows{swap_tables ? right_num_rows : left_num_rows};
+  // The "probe" table is the table we iterate over during the join operation.
+  // For performance optimization, we choose the larger table as the probe table.
+  // The kernels are launched with one thread per row of the probe table.
+  auto const probe_table_num_rows{swap_tables ? right_num_rows : left_num_rows};
 
   // We can immediately filter out cases where the right table is empty. In
   // some cases, we return all the rows of the left table with a corresponding
@@ -195,7 +197,6 @@ mixed_join(table_view const& left_equality,
   auto probe_view = table_device_view::create(probe, stream);
   auto build_view = table_device_view::create(build, stream);
 
-  // Use static_multiset with CG size of 1 for mixed joins.
   mixed_multimap_type hash_table{
     cuco::extent{static_cast<std::size_t>(build.num_rows())},
     cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
@@ -230,7 +231,7 @@ mixed_join(table_view const& left_equality,
 
   // For inner joins we support optimizing the join by launching one thread for
   // whichever table is larger rather than always using the left table.
-  detail::grid_1d const config(outer_num_rows, DEFAULT_JOIN_BLOCK_SIZE);
+  detail::grid_1d const config(probe_table_num_rows, DEFAULT_JOIN_BLOCK_SIZE);
   auto const shmem_size_per_block = parser.shmem_per_thread * config.num_threads_per_block;
   join_kind const kernel_join_type =
     join_type == join_kind::FULL_JOIN ? join_kind::LEFT_JOIN : join_type;
@@ -246,9 +247,8 @@ mixed_join(table_view const& left_equality,
     cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
   auto const equality_probe = row_comparator.equal_to<false>(has_nulls, compare_nulls);
 
-  // Precompute input pairs and hash indices using common utility function
   auto [input_pairs, hash_indices] =
-    precompute_mixed_join_data(hash_table, hash_probe, outer_num_rows, stream, mr);
+    precompute_mixed_join_data(hash_table, hash_probe, probe_table_num_rows, stream, mr);
 
   if (output_size.has_value()) {
     join_size = output_size.value();
@@ -372,10 +372,10 @@ std::size_t compute_mixed_join_output_size(table_view const& left_equality,
   auto const left_num_rows{left_conditional.num_rows()};
   auto const swap_tables = (join_type == join_kind::INNER_JOIN) && (right_num_rows > left_num_rows);
 
-  // The "outer" table is the larger of the two tables. The kernels are
-  // launched with one thread per row of the outer table, which also means that
-  // it is the probe table for the hash
-  auto const outer_num_rows{swap_tables ? right_num_rows : left_num_rows};
+  // The "probe" table is the table we iterate over during the join operation.
+  // For performance optimization, we choose the larger table as the probe table.
+  // The kernels are launched with one thread per row of the probe table.
+  auto const probe_table_num_rows{swap_tables ? right_num_rows : left_num_rows};
 
   // We can immediately filter out cases where one table is empty. In
   // some cases, we return all the rows of the other table with a corresponding
@@ -432,7 +432,6 @@ std::size_t compute_mixed_join_output_size(table_view const& left_equality,
   auto probe_view = table_device_view::create(probe, stream);
   auto build_view = table_device_view::create(build, stream);
 
-  // Use static_multiset with CG size of 1 for mixed joins.
   mixed_multimap_type hash_table{
     cuco::extent{static_cast<size_t>(build.num_rows())},
     cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
@@ -466,7 +465,7 @@ std::size_t compute_mixed_join_output_size(table_view const& left_equality,
 
   // For inner joins we support optimizing the join by launching one thread for
   // whichever table is larger rather than always using the left table.
-  detail::grid_1d const config(outer_num_rows, DEFAULT_JOIN_BLOCK_SIZE);
+  detail::grid_1d const config(probe_table_num_rows, DEFAULT_JOIN_BLOCK_SIZE);
   auto const shmem_size_per_block = parser.shmem_per_thread * config.num_threads_per_block;
 
   auto const preprocessed_probe =
@@ -479,7 +478,7 @@ std::size_t compute_mixed_join_output_size(table_view const& left_equality,
 
   // Precompute input pairs and hash indices using common utility function
   auto [input_pairs, hash_indices] =
-    precompute_mixed_join_data(hash_table, hash_probe, outer_num_rows, stream, mr);
+    precompute_mixed_join_data(hash_table, hash_probe, probe_table_num_rows, stream, mr);
 
   // Determine number of output rows without actually building the output to simply
   // find what the size of the output will be.

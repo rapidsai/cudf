@@ -41,6 +41,12 @@ struct mixed_join_always_not_equal {
   }
 };
 
+// hasher1 and hasher2 used for double hashing. The first hash is used to determine the initial slot
+// and the second hash is used to determine the step size.
+//
+// For the first hash, we use the row hash value directly so there is no need to hash it again.
+//
+// For the second hash, we hash the row hash value again to determine the step size.
 struct mixed_join_hasher1 {
   __device__ constexpr hash_value_type operator()(
     cuco::pair<hash_value_type, size_type> const& key) const noexcept
