@@ -107,14 +107,15 @@ class UnaryFunction(Expr):
             "as_struct",
             "drop_nulls",
             "fill_null",
+            "fill_null_with_strategy",
             "mask_nans",
+            "null_count",
+            "rank",
             "round",
             "set_sorted",
+            "top_k",
             "unique",
             "value_counts",
-            "fill_null_with_strategy",
-            "null_count",
-            "top_k",
         }
     )
     _supported_cum_aggs = frozenset(
@@ -138,13 +139,14 @@ class UnaryFunction(Expr):
         self.children = children
         self.is_pointwise = self.name not in (
             "as_struct",
-            "cum_min",
             "cum_max",
+            "cum_min",
             "cum_prod",
             "cum_sum",
             "drop_nulls",
-            "unique",
+            "rank",
             "top_k",
+            "unique",
         )
 
         if self.name not in UnaryFunction._supported_fns:
@@ -159,6 +161,12 @@ class UnaryFunction(Expr):
             raise NotImplementedError(
                 "Filling null values with limit specified is not yet supported."
             )
+        if self.name == "rank":
+            method, _, _ = self.options
+            if method not in {"average", "min", "max", "dense", "ordinal"}:
+                raise NotImplementedError(
+                    f"ranking with {method=} is not yet supported"
+                )
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
@@ -401,6 +409,44 @@ class UnaryFunction(Expr):
                 ),
                 dtype=self.dtype,
             )
+        elif self.name == "rank":
+            (column,) = (child.evaluate(df, context=context) for child in self.children)
+            method_str, descending, _ = self.options
+
+            method = {
+                "average": plc.aggregation.RankMethod.AVERAGE,
+                "min": plc.aggregation.RankMethod.MIN,
+                "max": plc.aggregation.RankMethod.MAX,
+                "dense": plc.aggregation.RankMethod.DENSE,
+                "ordinal": plc.aggregation.RankMethod.FIRST,
+            }[method_str]
+
+            order = (
+                plc.types.Order.DESCENDING if descending else plc.types.Order.ASCENDING
+            )
+
+            ranked: plc.Column = plc.sorting.rank(
+                column.obj,
+                method,
+                order,
+                plc.types.NullPolicy.EXCLUDE,
+                plc.types.NullOrder.BEFORE if descending else plc.types.NullOrder.AFTER,
+                percentage=False,
+            )
+
+            # Min/Max/Dense/Ordinal -> IDX_DTYPE
+            # See https://github.com/pola-rs/polars/blob/main/crates/polars-ops/src/series/ops/rank.rs
+            if method_str in {"min", "max", "dense", "ordinal"}:
+                dest = self.dtype.plc.id()
+                src = ranked.type().id()
+                if dest == plc.TypeId.UINT32 and src != plc.TypeId.UINT32:
+                    ranked = plc.unary.cast(ranked, plc.DataType(plc.TypeId.UINT32))
+                elif (
+                    dest == plc.TypeId.UINT64 and src != plc.TypeId.UINT64
+                ):  # pragma: no cover
+                    ranked = plc.unary.cast(ranked, plc.DataType(plc.TypeId.UINT64))
+
+            return Column(ranked, dtype=self.dtype)
         elif self.name == "top_k":
             (column, k) = (
                 child.evaluate(df, context=context) for child in self.children
