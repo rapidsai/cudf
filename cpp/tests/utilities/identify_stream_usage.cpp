@@ -212,7 +212,7 @@ DEFINE_OVERLOAD(cudaLaunchKernel,
 
 #if CUDART_VERSION >= 13000
 // We need to define the __cudaLaunchKernel ABI as
-// it isn't part of cuda_runtime.h
+// it isn't part of cuda_runtime.h when compiling as a C++ source
 extern "C" cudaError_t CUDARTAPI __cudaLaunchKernel(cudaKernel_t kernel,
                                                     dim3 gridDim,
                                                     dim3 blockDim,
