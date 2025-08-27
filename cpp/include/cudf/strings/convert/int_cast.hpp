@@ -31,6 +31,11 @@ namespace strings {
  */
 
 /**
+ * @brief Configures whether casting also byte swaps
+ */
+enum class endian : bool { BIG, LITTLE };
+
+/**
  * @brief Returns a new integer numeric column encoded to represent the
  * strings in the input column
  *
@@ -53,10 +58,14 @@ namespace strings {
  * If the input column contains strings greater than the number of bytes supported
  * by the output type, the result is undefined.
  *
+ * If only equals logic is needed, use `swap==BIG` is sufficient. Otherwise
+ * use `swap==LITTLE` to ensure comparison operations work correctly.
+ *
  * @throw cudf::logic_error if output_type is not integral type.
  *
  * @param input Strings instance for this operation
  * @param output_type Type of integer numeric column to return
+ * @param swap Whether to swap bytes on the output. Default is to swap.
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New column with encoded integers converted from strings
@@ -64,6 +73,7 @@ namespace strings {
 std::unique_ptr<column> cast_to_integer(
   strings_column_view const& input,
   data_type output_type,
+  endian swap                       = endian::LITTLE,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
@@ -76,15 +86,19 @@ std::unique_ptr<column> cast_to_integer(
  *
  * Any null entries will result in corresponding null entries in the output column.
  *
+ * Ensure the `swap` parameter matches is the same value used in the `cast_to_integer` API.
+ *
  * @throw cudf::logic_error if integers column is not integral type.
  *
  * @param integers Encoded integer column to convert
+ * @param swap Whether the input is stored as big or little endian
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New strings column with integers as strings
  */
 std::unique_ptr<column> cast_from_integer(
   column_view const& integers,
+  endian swap                       = endian::LITTLE,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
