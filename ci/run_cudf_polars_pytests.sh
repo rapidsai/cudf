@@ -6,6 +6,12 @@ set -euo pipefail
 HELPER="$(dirname "$(realpath "${BASH_SOURCE[0]}")")/utils/get_device_and_worker_count.py"
 eval "$(python "$HELPER" | sed 's/^/export /')"
 
+# Cap the number of pytest workers (default 16)
+: "${MAX_PYTEST_WORKERS:=16}"
+if (( NUM_WORKERS > MAX_PYTEST_WORKERS )); then
+  NUM_WORKERS="${MAX_PYTEST_WORKERS}"
+fi
+
 # Set the GPU to use, if one was selected
 if [[ -n "${GPU_ID:-}" ]]; then
   export CUDA_VISIBLE_DEVICES="${GPU_ID}"
