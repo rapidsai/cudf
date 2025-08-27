@@ -185,7 +185,9 @@ class sum_aggregation final : public rolling_aggregation,
  * @brief Derived class for specifying a sum_with_overflow aggregation
  */
 class sum_with_overflow_aggregation final : public groupby_aggregation,
-                                            public groupby_scan_aggregation {
+                                            public groupby_scan_aggregation,
+                                            public reduce_aggregation,
+                                            public segmented_reduce_aggregation {
  public:
   sum_with_overflow_aggregation() : aggregation(SUM_WITH_OVERFLOW) {}
 
@@ -277,7 +279,8 @@ class max_aggregation final : public rolling_aggregation,
  */
 class count_aggregation final : public rolling_aggregation,
                                 public groupby_aggregation,
-                                public groupby_scan_aggregation {
+                                public groupby_scan_aggregation,
+                                public reduce_aggregation {
  public:
   count_aggregation(aggregation::Kind kind) : aggregation(kind) {}
 

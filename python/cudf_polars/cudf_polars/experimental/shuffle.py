@@ -67,11 +67,6 @@ class RMPFIntegration:  # pragma: no cover
 
         context = get_worker_context()
 
-        if context.br is None:  # pragma: no cover
-            raise ValueError(
-                "rapidsmpf insert_partition called on an uninitialized worker."
-            )
-
         on = options["on"]
         assert not other, f"Unexpected arguments: {other}"
         columns_to_hash = tuple(df.column_names.index(val) for val in on)
@@ -104,10 +99,6 @@ class RMPFIntegration:  # pragma: no cover
             from rapidsmpf.integrations.single import get_worker_context
 
         context = get_worker_context()
-        if context.br is None:  # pragma: no cover
-            raise ValueError(
-                "rapidsmpf extract_partition called on an uninitialized worker."
-            )
 
         shuffler.wait_on(partition_id)
         column_names = options["column_names"]

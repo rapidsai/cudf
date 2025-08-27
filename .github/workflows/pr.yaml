@@ -316,13 +316,19 @@ jobs:
     needs: telemetry-setup
     uses: rapidsai/shared-workflows/.github/workflows/build-in-devcontainer.yaml@branch-25.10
     with:
-      node_type: "cpu32"
-      arch: '["amd64"]'
+      arch: '["amd64", "arm64"]'
       cuda: '["12.9"]'
+      node_type: "cpu8"
+      rapids-aux-secret-1: GIST_REPO_READ_ORG_GITHUB_TOKEN
+      env: |
+        SCCACHE_DIST_MAX_RETRIES=inf
+        SCCACHE_SERVER_LOG=sccache=debug
+        SCCACHE_DIST_FALLBACK_TO_LOCAL_COMPILE=false
+        SCCACHE_DIST_AUTH_TOKEN_VAR=RAPIDS_AUX_SECRET_1
       build_command: |
-        sccache -z;
-        build-all -DBUILD_BENCHMARKS=ON --verbose;
-        sccache -s;
+        sccache --zero-stats;
+        build-all -j0 -DBUILD_BENCHMARKS=ON --verbose 2>&1 | tee telemetry-artifacts/build.log;
+        sccache --show-adv-stats | tee telemetry-artifacts/sccache-stats.txt;
   unit-tests-cudf-pandas:
     needs: [wheel-build-cudf, changed-files]
     secrets: inherit
@@ -337,6 +343,7 @@ jobs:
     needs: conda-python-build
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.10
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cudf_pandas
     with:
       build_type: pull-request
       branch: ${{ inputs.branch }}

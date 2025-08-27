@@ -31,8 +31,8 @@ public class BatchedZstdCompressor extends BatchedCompressor {
   }
 
   @Override
-  protected long batchedCompressGetTempSize(long batchSize, long maxChunkSize) {
-    return NvcompJni.batchedZstdCompressGetTempSize(batchSize, maxChunkSize);
+  protected long batchedCompressGetTempSize(long batchSize, long maxChunkSize, long totalSize) {
+    return NvcompJni.batchedZstdCompressGetTempSize(batchSize, maxChunkSize, totalSize);
   }
 
   @Override

@@ -15,7 +15,10 @@ from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.dispatch import lower_ir_node
 from cudf_polars.experimental.expressions import decompose_expr_graph
-from cudf_polars.experimental.utils import _lower_ir_fallback
+from cudf_polars.experimental.utils import (
+    _contains_unsupported_fill_strategy,
+    _lower_ir_fallback,
+)
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -107,6 +110,17 @@ def _(
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     child, partition_info = rec(ir.children[0])
     pi = partition_info[child]
+    if pi.count > 1 and _contains_unsupported_fill_strategy(
+        [e.value for e in ir.exprs]
+    ):
+        return _lower_ir_fallback(
+            ir.reconstruct([child]),
+            rec,
+            msg=(
+                "fill_null with strategy other than 'zero' or 'one' is not supported "
+                "for multiple partitions; falling back to in-memory evaluation."
+            ),
+        )
     if (
         pi.count == 1
         and Select._is_len_expr(ir.exprs)
@@ -138,7 +152,7 @@ def _(
         isinstance(expr, (Col, Len)) for expr in traversal([e.value for e in ir.exprs])
     ):
         # Special Case: Selection does not depend on any columns.
-        new_node = ir.reconstruct([input_ir := Empty()])
+        new_node = ir.reconstruct([input_ir := Empty({})])
         partition_info[input_ir] = partition_info[new_node] = PartitionInfo(count=1)
         return new_node, partition_info
 
