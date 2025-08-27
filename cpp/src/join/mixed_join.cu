@@ -73,13 +73,11 @@ precompute_mixed_join_data(mixed_multimap_type const& hash_table,
                            rmm::cuda_stream_view stream,
                            rmm::device_async_resource_ref mr)
 {
-  // Create output arrays
   auto input_pairs =
     rmm::device_uvector<cuco::pair<hash_value_type, size_type>>(outer_num_rows, stream, mr);
   auto hash_indices =
     rmm::device_uvector<cuda::std::pair<size_type, size_type>>(outer_num_rows, stream, mr);
 
-  // Get hash table info for computing indices
   auto const extent                        = hash_table.capacity();
   auto const probe_hash_fn                 = hash_table.hash_function();
   static constexpr std::size_t bucket_size = mixed_multimap_type::bucket_size;
@@ -411,7 +409,6 @@ std::size_t compute_mixed_join_output_size(table_view const& left_equality,
     }
   }
 
-  // Use the current device resource for all memory allocations
   auto mr = cudf::get_current_device_resource_ref();
 
   // If evaluating the expression may produce null outputs we create a nullable

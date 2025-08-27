@@ -62,7 +62,7 @@ struct mixed_join_hasher2 {
   hash_type _hash;
 };
 
-// Multimap type used for mixed joins, now using cuco::static_multiset like hash_join
+// Multimap type used for mixed joins
 using mixed_multimap_type =
   cuco::static_multiset<cuco::pair<hash_value_type, size_type>,
                         cuco::extent<std::size_t>,

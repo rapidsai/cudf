@@ -101,7 +101,6 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) compute_mixed_join_o
   auto thread_intermediate_storage =
     intermediate_storage + (threadIdx.x * device_expression_data.num_intermediates);
 
-  // Allocate shared memory for block reduction
   using BlockReduce = cub::BlockReduce<size_t, DEFAULT_JOIN_BLOCK_SIZE>;
   __shared__ typename BlockReduce::TempStorage temp_storage;
 
@@ -127,7 +126,6 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) compute_mixed_join_o
     auto const& probe_key = input_pairs[outer_row_index];
     auto const& hash_idx  = hash_indices[outer_row_index];
 
-    // Use our standalone count function with precomputed indices
     auto match_count = standalone_count(count_equality, hash_table_storage, probe_key, hash_idx);
 
     if (join_type == join_kind::LEFT_JOIN || join_type == join_kind::FULL_JOIN) {
@@ -138,12 +136,9 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) compute_mixed_join_o
     thread_count += match_count;
   }
 
-  // Perform block reduction to get the total count for this block
   size_t block_count = BlockReduce(temp_storage).Sum(thread_count);
 
-  // Only one thread per block adds to the global counter
   if (threadIdx.x == 0) {
-    // Use cuda::atomic to atomically add to the counter
     cuda::atomic_ref<size_t, cuda::thread_scope_device> counter_ref(*d_total_count);
     counter_ref.fetch_add(block_count, cuda::memory_order_relaxed);
   }
@@ -164,7 +159,6 @@ std::size_t launch_compute_mixed_join_output_size(
   int64_t shmem_size_per_block,
   rmm::cuda_stream_view stream)
 {
-  // Allocate device memory for the total count using the current device memory resource
   cudf::detail::device_scalar<std::size_t> d_total_count{
     0, stream, cudf::get_current_device_resource_ref()};
 
@@ -181,7 +175,6 @@ std::size_t launch_compute_mixed_join_output_size(
       swap_tables,
       d_total_count.data());
 
-  // Copy the result back to host
   return d_total_count.value(stream);
 }
 
