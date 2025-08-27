@@ -219,25 +219,25 @@ def test_from_nested_list_of_large_strings(dummy_large_string_type):
 
 
 @pytest.mark.parametrize(
-    "expect, dtype",
+    "arr",
     [
-        ([-1, 2, 3], plc.DataType(plc.TypeId.INT8)),
-        ([-1, 2, 3], plc.DataType(plc.TypeId.INT16)),
-        ([-1, 2, 3], plc.DataType(plc.TypeId.INT32)),
-        ([-1, 2, 3], plc.DataType(plc.TypeId.INT64)),
-        ([1, 2, 3], plc.DataType(plc.TypeId.UINT8)),
-        ([1, 2, 3], plc.DataType(plc.TypeId.UINT16)),
-        ([1, 2, 3], plc.DataType(plc.TypeId.UINT32)),
-        ([1, 2, 3], plc.DataType(plc.TypeId.UINT64)),
-        ([1.25, 4.5, 7.75], plc.DataType(plc.TypeId.FLOAT32)),
-        ([1.25, 4.5, 7.75], plc.DataType(plc.TypeId.FLOAT64)),
-        ([True, False, True], plc.DataType(plc.TypeId.BOOL8)),
-        (["foo", "bar", "baz"], plc.DataType(plc.TypeId.STRING)),
+        pa.array([-1, 2, 3], type=pa.int64()),
+        pa.array([2, None, 3, 1, None, 5, None, 7, 8, None], type=pa.int16()),
+        pa.array([1, None, 3], type=pa.int32()),
+        pa.array([1, 2, 3], type=pa.uint8()),
+        pa.array([1, None, 3], type=pa.uint32()),
+        pa.array([1.25, 4.5, 7.75], type=pa.float32()),
+        pa.array([1.25, None, 7.75], type=pa.float64()),
+        pa.array([True, False, True], type=pa.bool_()),
+        pa.array([True, None, False, True, None, False], type=pa.bool_()),
+        pa.array(["fóó", "bår", "bäz"], type=pa.string()),
+        pa.array([], type=pa.string()),
     ],
 )
-def test_to_pylist(expect, dtype):
-    col = plc.Column.from_iterable_of_py(expect, dtype=dtype)
+def test_to_pylist(arr):
+    col = plc.Column.from_arrow(arr)
     got = col.to_pylist()
+    expect = arr.to_pylist()
     assert got == expect
 
 

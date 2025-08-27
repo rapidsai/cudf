@@ -1350,10 +1350,40 @@ def is_c_contiguous(
 
 
 cdef bint _is_valid(const uint8_t* null_bitmap, size_t bit_index):
-    # Check the validity bitmap to see if element at bit_index is null or valid.
-    # Each bit in null_bitmap marks whether a row is valid (1) or null (0).
-    # Ex: if bit_index = 5, then we look at byte = null_bitmap[0],
-    # and the 5th bit tells us if row 5 is valid.
+    # Example:
+    # - column = [2, None, 3, 1, None, 5, None, 7, 8, None]
+    # - index  = [0, 1,    2, 3, 4,    5, 6,    7, 8, 9]
+    #
+    # Row values:
+    # - row 0 -> valid -> 1
+    # - row 1 -> null  -> 0
+    # - row 2 -> valid -> 1
+    # - row 3 -> valid -> 1
+    # - row 4 -> null  -> 0
+    # - row 5 -> valid -> 1
+    # - row 6 -> null  -> 0
+    # - row 7 -> valid -> 1
+    # - row 8 -> valid -> 1
+    # - row 9 -> null  -> 0
+    #
+    # Build the bitmap:
+    # - index     0,1,2,3,4,5,6,7       76543210 (row_index -> bit_index)
+    # - Byte 0 = [1,0,1,1,0,1,0,1] -> 0b10101101
+    # - Byte 1 = [1,0,0,0,0,0,0,0] -> 0b00000001
+    #
+    # Check the 7th element:
+    # row_index = 6
+    # offset = 0
+    # bit_index = offset + row_index = 6
+    # 1. Choose the byte
+    #    bit_index >> 3 = 0
+    #    null_bitmap[0] = 0b10101101
+    # 2. Get the bit position within that byte (bit_index mod 8)
+    #    bit_index & 7 = 6 & 7 = 6
+    # 3. Shift the target bit to the least significant bit position
+    #    0b10101101 >> 6 = 0b00000010
+    # 4. Remove all other bits
+    #    0b00000010 & 1 = 0 (=> the 7th element is null)
     if null_bitmap == NULL:
         return 1
     return ((null_bitmap[bit_index >> 3] >> (bit_index & 7)) & 1) != 0
