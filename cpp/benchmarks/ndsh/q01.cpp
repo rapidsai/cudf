@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <nvbench/nvbench.cuh>
@@ -67,10 +68,14 @@
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
 {
-  auto const one = cudf::numeric_scalar<double>(1);
+  auto const one = discount.type().id() == cudf::type_id::DECIMAL64
+                     ? cudf::make_fixed_point_scalar<numeric::decimal64>(1L, numeric::scale_type{0})
+                     : cudf::make_fixed_width_scalar<double>(1);
   auto const one_minus_discount =
-    cudf::binary_operation(one, discount, cudf::binary_operator::SUB, discount.type(), stream, mr);
-  auto const disc_price_type = cudf::data_type{cudf::type_id::FLOAT64};
+    cudf::binary_operation(*one, discount, cudf::binary_operator::SUB, discount.type(), stream, mr);
+  auto const disc_price_type = discount.type().id() == cudf::type_id::DECIMAL64
+                                 ? cudf::data_type{cudf::type_id::DECIMAL64}
+                                 : cudf::data_type{cudf::type_id::FLOAT64};
   auto disc_price            = cudf::binary_operation(extendedprice,
                                            one_minus_discount->view(),
                                            cudf::binary_operator::MUL,
@@ -94,17 +99,20 @@
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
 {
-  auto const one = cudf::numeric_scalar<double>(1);
+  auto const one = tax.type().id() == cudf::type_id::DECIMAL64
+                     ? cudf::make_fixed_point_scalar<numeric::decimal64>(1L, numeric::scale_type{0})
+                     : cudf::make_fixed_width_scalar<double>(1);
   auto const one_plus_tax =
-    cudf::binary_operation(one, tax, cudf::binary_operator::ADD, tax.type(), stream, mr);
-  auto const charge_type = cudf::data_type{cudf::type_id::FLOAT64};
+    cudf::binary_operation(*one, tax, cudf::binary_operator::ADD, tax.type(), stream, mr);
+  auto const charge_type = tax.type().id() == cudf::type_id::DECIMAL64
+                             ? cudf::data_type{cudf::type_id::DECIMAL64}
+                             : cudf::data_type{cudf::type_id::FLOAT64};
   auto charge            = cudf::binary_operation(
     disc_price, one_plus_tax->view(), cudf::binary_operator::MUL, charge_type, stream, mr);
   return charge;
 }
 
-void run_ndsh_q1(nvbench::state& state,
-                 std::unordered_map<std::string, cuio_source_sink_pair>& sources)
+void run_ndsh_q1(nvbench::state& state, cudf::io::source_info const& source)
 {
   // Define the column projections and filter predicate for `lineitem` table
   std::vector<std::string> const lineitem_cols = {"l_returnflag",
@@ -124,8 +132,7 @@ void run_ndsh_q1(nvbench::state& state,
     cudf::ast::ast_operator::LESS_EQUAL, shipdate_ref, shipdate_upper_literal);
 
   // Read out the `lineitem` table from parquet file
-  auto lineitem = read_parquet(
-    sources.at("lineitem").make_source_info(), lineitem_cols, std::move(lineitem_pred));
+  auto lineitem = read_parquet(source, lineitem_cols, std::move(lineitem_pred));
 
   // Calculate the discount price and charge columns and append to lineitem table
   auto disc_price =
@@ -169,14 +176,23 @@ void run_ndsh_q1(nvbench::state& state,
 void ndsh_q1(nvbench::state& state)
 {
   // Generate the required parquet files in device buffers
-  double const scale_factor = state.get_float64("scale_factor");
+  auto const scale_factor = state.get_float64("scale_factor");
+  auto const filename     = state.get_string("filename");
   std::unordered_map<std::string, cuio_source_sink_pair> sources;
-  generate_parquet_data_sources(scale_factor, {"lineitem"}, sources);
+  auto source = [&] {
+    if (filename.empty()) {
+      generate_parquet_data_sources(scale_factor, {"lineitem"}, sources);
+      return sources.at("lineitem").make_source_info();
+    }
+    return cudf::io::source_info(filename);
+  }();
 
   auto stream = cudf::get_default_stream();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
-  state.exec(nvbench::exec_tag::sync,
-             [&](nvbench::launch& launch) { run_ndsh_q1(state, sources); });
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) { run_ndsh_q1(state, source); });
 }
 
-NVBENCH_BENCH(ndsh_q1).set_name("ndsh_q1").add_float64_axis("scale_factor", {0.01, 0.1, 1});
+NVBENCH_BENCH(ndsh_q1)
+  .set_name("ndsh_q1")
+  .add_string_axis("filename", {""})
+  .add_float64_axis("scale_factor", {0.01, 0.1, 1});
