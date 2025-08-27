@@ -752,45 +752,37 @@ def run_polars(
                 print(traceback.format_exc())
                 query_failures.append((q_id, i))
                 continue
+            if run_config.shuffle == "rapidsmpf" and run_config.gather_shuffle_stats:
+                from rapidsmpf.integrations.dask.shuffler import (
+                    clear_shuffle_statistics,
+                    gather_shuffle_statistics,
+                )
+
+                shuffle_stats = gather_shuffle_statistics(client)  # type: ignore[arg-type]
+                clear_shuffle_statistics(client)  # type: ignore[arg-type]
             else:
-                if (
-                    run_config.shuffle == "rapidsmpf"
-                    and run_config.gather_shuffle_stats
-                ):
-                    from rapidsmpf.integrations.dask.shuffler import (
-                        clear_shuffle_statistics,
-                        gather_shuffle_statistics,
+                shuffle_stats = None
+
+            if args.validate and run_config.executor != "cpu":
+                try:
+                    assert_gpu_result_equal(
+                        q,
+                        engine=engine,
+                        executor=run_config.executor,
+                        check_exact=False,
                     )
+                    print(f"✅ Query {q_id} passed validation!")
+                except AssertionError as e:
+                    validation_failures.append(q_id)
+                    print(f"❌ Query {q_id} failed validation!\n{e}")
 
-                    shuffle_stats = gather_shuffle_statistics(client)  # type: ignore[arg-type]
-                    clear_shuffle_statistics(client)  # type: ignore[arg-type]
-                else:
-                    shuffle_stats = None
+            t1 = time.monotonic()
+            record = Record(query=q_id, duration=t1 - t0, shuffle_stats=shuffle_stats)
+            if args.print_results:
+                print(result)
 
-                if args.validate and run_config.executor != "cpu":
-                    try:
-                        assert_gpu_result_equal(
-                            q,
-                            engine=engine,
-                            executor=run_config.executor,
-                            check_exact=False,
-                        )
-                        print(f"✅ Query {q_id} passed validation!")
-                    except AssertionError as e:
-                        validation_failures.append(q_id)
-                        print(f"❌ Query {q_id} failed validation!\n{e}")
-
-                t1 = time.monotonic()
-                record = Record(
-                    query=q_id, duration=t1 - t0, shuffle_stats=shuffle_stats
-                )
-                if args.print_results:
-                    print(result)
-
-                print(
-                    f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s"
-                )
-                records[q_id].append(record)
+            print(f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s")
+            records[q_id].append(record)
 
     run_config = dataclasses.replace(run_config, records=dict(records))
 
