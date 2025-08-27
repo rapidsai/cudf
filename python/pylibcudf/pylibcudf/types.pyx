@@ -216,15 +216,6 @@ cdef class DataType:
         Returns
         -------
         pyarrow.DataType
-
-        Notes
-        -----
-        Translation of some types requires extra information as a keyword
-        argument. Specifically:
-
-        - When translating a decimal type, provide ``precision``
-        - When translating a struct type, provide ``fields``
-        - When translating a list type, provide the wrapped ``value_type``
         """
         if pa_err is not None:
             raise RuntimeError(
