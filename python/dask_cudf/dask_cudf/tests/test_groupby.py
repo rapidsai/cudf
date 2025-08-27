@@ -1,5 +1,7 @@
 # Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
+import warnings
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -625,7 +627,13 @@ def test_groupby_agg_params(
 
     # Compute for easier multiindex handling
     gf = gr.compute()
-    pf = pr.compute()
+
+    with warnings.catch_warnings():
+        # dask<=2025.7.0 uses a deprecated "grouper" attribute
+        # in some of these computations. We'll silence the warning
+        # here and fix it upstream.
+        warnings.filterwarnings("ignore", category=FutureWarning)
+        pf = pr.compute()
 
     # Reset index and sort by groupby columns
     if as_index:
