@@ -518,7 +518,7 @@ cpdef tuple mixed_inner_join(
         join.
     """
     cdef cpp_join.gather_map_pair_type c_result
-    cdef cpp_join.output_size_data_type empty_optional
+    cdef optional[size_t] empty_optional
 
     stream = _get_stream(stream)
 
@@ -623,7 +623,7 @@ cpdef tuple mixed_left_join(
         join.
     """
     cdef cpp_join.gather_map_pair_type c_result
-    cdef cpp_join.output_size_data_type empty_optional
+    cdef optional[size_t] empty_optional
 
     stream = _get_stream(stream)
 
@@ -728,7 +728,7 @@ cpdef tuple mixed_full_join(
         join.
     """
     cdef cpp_join.gather_map_pair_type c_result
-    cdef cpp_join.output_size_data_type empty_optional
+    cdef optional[size_t] empty_optional
 
     stream = _get_stream(stream)
 
