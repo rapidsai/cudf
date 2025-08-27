@@ -9,7 +9,6 @@ from cudf.core.udf.utils import _udf_code_cache, compile_udf
 @pytest.fixture(autouse=True)
 def clear_udf_cache():
     _udf_code_cache.clear()
-    return
 
 
 def assert_cache_size(size):
