@@ -1,4 +1,6 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
+import datetime
+import zoneinfo
 
 import cupy as cp
 import numpy as np
@@ -571,3 +573,158 @@ def test_dt_series_datetime_fields(data, field):
     base = getattr(pd_data.dt, field)
     test = getattr(gdf_data.dt, field)
     assert_eq(base, test, check_dtype=False)
+
+
+@pytest.mark.parametrize("fmt", ["%Y-%m-%dT%H:%M%z", "%Y-%m-%dT%H:%M"])
+def test_strftime_tz_aware_as_utc(fmt):
+    data = [datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc)]
+    cudf_pacific = cudf.Series(data).dt.tz_convert("US/Pacific")
+    pd_utc = pd.Series(data)
+    assert cudf_pacific.dtype != pd_utc.dtype
+    result = cudf_pacific.dt.strftime(fmt)
+    expected = pd_utc.dt.strftime(fmt)
+    assert_eq(result, expected)
+
+
+def test_tz_localize(datetime_types_as_str, all_timezones):
+    s = cudf.Series(cudf.date_range("2001-01-01", "2001-01-02", freq="1s"))
+    s = s.astype(datetime_types_as_str)
+    s = s.dt.tz_localize(all_timezones)
+    assert isinstance(s.dtype, pd.DatetimeTZDtype)
+    assert s.dtype.unit == datetime_types_as_str.removeprefix(
+        "datetime64["
+    ).removesuffix("]")
+    assert str(s.dtype.tz) == all_timezones
+
+
+def test_localize_ambiguous(request, datetime_types_as_str, all_timezones):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(all_timezones == "America/Metlakatla"),
+            reason="https://www.timeanddate.com/news/time/metlakatla-quits-dst.html",
+        )
+    )
+    s = cudf.Series(
+        [
+            "2018-11-04 00:30:00",
+            "2018-11-04 01:00:00",
+            "2018-11-04 01:30:00",
+            "2018-11-04 02:00:00",
+            None,
+            "2018-11-04 02:30:00",
+        ],
+        dtype=datetime_types_as_str,
+    )
+    expect = s.to_pandas().dt.tz_localize(
+        zoneinfo.ZoneInfo(all_timezones), ambiguous="NaT", nonexistent="NaT"
+    )
+    got = s.dt.tz_localize(all_timezones)
+    assert_eq(expect, got)
+
+
+def test_localize_nonexistent(request, datetime_types_as_str, all_timezones):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=all_timezones == "America/Grand_Turk",
+            reason="https://www.worldtimezone.com/dst_news/dst_news_turkscaicos03.html",
+        )
+    )
+    s = cudf.Series(
+        [
+            "2018-03-11 01:30:00",
+            "2018-03-11 02:00:00",
+            "2018-03-11 02:30:00",
+            "2018-03-11 03:00:00",
+            None,
+            "2018-03-11 03:30:00",
+        ],
+        dtype=datetime_types_as_str,
+    )
+    expect = s.to_pandas().dt.tz_localize(
+        zoneinfo.ZoneInfo(all_timezones), ambiguous="NaT", nonexistent="NaT"
+    )
+    got = s.dt.tz_localize(all_timezones)
+    assert_eq(expect, got)
+
+
+def test_delocalize(datetime_types_as_str, limited_timezones):
+    psr = pd.Series(
+        pd.date_range("2001-01-01", "2001-01-02", freq="1s")
+    ).astype(datetime_types_as_str)
+    sr = cudf.from_pandas(psr)
+
+    expect = psr.dt.tz_localize(limited_timezones).dt.tz_localize(None)
+    got = sr.dt.tz_localize(limited_timezones).dt.tz_localize(None)
+    assert_eq(expect, got)
+
+
+def test_delocalize_naive():
+    # delocalizing naive datetimes should be a no-op
+    psr = pd.Series(["2001-01-01"], dtype="datetime64[ns]")
+    sr = cudf.from_pandas(psr)
+
+    expect = psr.dt.tz_localize(None)
+    got = sr.dt.tz_localize(None)
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "from_tz", ["Europe/London", "America/Chicago", "UTC"]
+)
+@pytest.mark.parametrize(
+    "to_tz", ["Europe/London", "America/Chicago", "UTC", None]
+)
+def test_convert(from_tz, to_tz):
+    from_tz = zoneinfo.ZoneInfo(from_tz)
+    if to_tz is not None:
+        to_tz = zoneinfo.ZoneInfo(to_tz)
+    ps = pd.Series(pd.date_range("2023-01-01", periods=3, freq="h"))
+    gs = cudf.from_pandas(ps)
+    ps = ps.dt.tz_localize(from_tz)
+    gs = gs.dt.tz_localize(from_tz)
+    expect = ps.dt.tz_convert(to_tz)
+    got = gs.dt.tz_convert(to_tz)
+    assert_eq(expect, got)
+
+
+def test_convert_from_naive():
+    gs = cudf.Series(cudf.date_range("2023-01-01", periods=3, freq="h"))
+    with pytest.raises(TypeError):
+        gs.dt.tz_convert("America/New_York")
+
+
+@pytest.mark.parametrize(
+    "data,original_timezone,target_timezone",
+    [
+        # DST transition:
+        (["2023-03-12 01:30:00"], "America/New_York", "America/Los_Angeles"),
+        # crossing the international date line:
+        (["2023-05-17 23:30:00"], "Pacific/Auckland", "America/Los_Angeles"),
+        # timezone with non-integer offset:
+        (["2023-05-17 12:00:00"], "Asia/Kolkata", "Australia/Eucla"),
+        # timezone with negative offset:
+        (["2023-05-17 09:00:00"], "America/Los_Angeles", "Pacific/Auckland"),
+        # conversion across multiple days:
+        (["2023-05-16 23:30:00"], "America/New_York", "Asia/Kolkata"),
+        # timezone with half-hour offset:
+        (["2023-05-17 12:00:00"], "Asia/Kolkata", "Australia/Adelaide"),
+        # timezone conversion with a timestamp in the future:
+        (["2025-01-01 00:00:00"], "America/New_York", "Europe/London"),
+        # timezone conversion with a timestamp in the past:
+        (["2000-01-01 12:00:00"], "Europe/Paris", "America/Los_Angeles"),
+        # timezone conversion with a timestamp at midnight:
+        (["2023-05-17 00:00:00"], "Asia/Tokyo", "Europe/Paris"),
+    ],
+)
+def test_convert_edge_cases(data, original_timezone, target_timezone):
+    original_timezone = zoneinfo.ZoneInfo(original_timezone)
+    target_timezone = zoneinfo.ZoneInfo(target_timezone)
+    ps = pd.Series(data, dtype="datetime64[s]").dt.tz_localize(
+        original_timezone
+    )
+    gs = cudf.Series(data, dtype="datetime64[s]").dt.tz_localize(
+        original_timezone
+    )
+    expect = ps.dt.tz_convert(target_timezone)
+    got = gs.dt.tz_convert(target_timezone)
+    assert_eq(expect, got)

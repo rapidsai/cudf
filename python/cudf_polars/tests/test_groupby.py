@@ -413,3 +413,9 @@ def test_groupby_fill_null_with_strategy(strategy):
     q = lf.group_by("key").agg(pl.col("val").fill_null(strategy=strategy))
 
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_groupby_rank_raises(df: pl.LazyFrame) -> None:
+    q = df.group_by("key1").agg(pl.col("int").rank())
+
+    assert_ir_translation_raises(q, NotImplementedError)
