@@ -762,6 +762,7 @@ dependencies:
           - pytest
           - pytest-cov
           - pytest-xdist
+  # all of the "latest" and "oldest" constraints should be here, to be re-used across tests for different packages
   test_python_cudf_common:
     specific:
       # Define additional constraints for testing with oldest dependencies.
@@ -775,6 +776,17 @@ dependencies:
           - matrix: {dependencies: "latest"}
             packages:
               - pandas==2.3.1
+          - matrix:
+            packages:
+      - output_types: [conda, requirements, pyproject]
+        matrices:
+          - matrix: {dependencies: "oldest"}
+            packages:
+              - &numpy_oldest numpy==1.23.*
+              # pyarrow 14 is fine in some circumstances but we require pyarrow
+              # 15 in our CI tests in order to get a lz4-c that is compatible
+              # with cudf_kafka's dependencies.
+              - pyarrow==15.*
           - matrix:
             packages:
       - output_types: conda
@@ -833,17 +845,6 @@ dependencies:
           - msgpack
           - tzdata
     specific:
-      - output_types: [conda, requirements]
-        matrices:
-          - matrix: {dependencies: "oldest"}
-            packages:
-              - numpy==1.23.*
-              # pyarrow 14 is fine in some circumstances but we require pyarrow
-              # 15 in our CI tests in order to get a lz4-c that is compatible
-              # with cudf_kafka's dependencies.
-              - pyarrow==15.*
-          - matrix:
-            packages:
       - output_types: conda
         matrices:
           - matrix:
@@ -979,7 +980,7 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - cupy>=12.0.0
+          - cupy>=13.6.0
     specific:
       - output_types: [requirements, pyproject]
         matrices:
