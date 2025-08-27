@@ -119,7 +119,7 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) compute_mixed_join_o
     evaluator, thread_intermediate_storage, swap_tables, equality_probe};
 
   // Thread-local count
-  size_t thread_count = 0;
+  size_t per_thread_count = 0;
 
   for (auto outer_row_index = start_idx; outer_row_index < outer_num_rows;
        outer_row_index += stride) {
@@ -133,14 +133,14 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) compute_mixed_join_o
       match_count = (match_count == 0 ? 1 : match_count);
     }
 
-    thread_count += match_count;
+    per_thread_count += match_count;
   }
 
-  size_t block_count = BlockReduce(temp_storage).Sum(thread_count);
+  size_t per_block_count = BlockReduce(temp_storage).Sum(per_thread_count);
 
   if (threadIdx.x == 0) {
     cuda::atomic_ref<size_t, cuda::thread_scope_device> counter_ref(*d_total_count);
-    counter_ref.fetch_add(block_count, cuda::memory_order_relaxed);
+    counter_ref.fetch_add(per_block_count, cuda::memory_order_relaxed);
   }
 }
 

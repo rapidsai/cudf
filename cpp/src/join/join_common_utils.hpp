@@ -31,54 +31,5 @@ using pair_type = cuco::pair<hash_value_type, size_type>;
 
 using hash_type = cuco::murmurhash3_32<hash_value_type>;
 
-// Comparator that always returns false to ensure all values are inserted (like hash_join)
-struct mixed_join_always_not_equal {
-  __device__ constexpr bool operator()(cuco::pair<hash_value_type, size_type> const&,
-                                       cuco::pair<hash_value_type, size_type> const&) const noexcept
-  {
-    // multiset always insert
-    return false;
-  }
-};
-
-// hasher1 and hasher2 used for double hashing. The first hash is used to determine the initial slot
-// and the second hash is used to determine the step size.
-//
-// For the first hash, we use the row hash value directly so there is no need to hash it again.
-//
-// For the second hash, we hash the row hash value again to determine the step size.
-struct mixed_join_hasher1 {
-  __device__ constexpr hash_value_type operator()(
-    cuco::pair<hash_value_type, size_type> const& key) const noexcept
-  {
-    return key.first;
-  }
-};
-
-struct mixed_join_hasher2 {
-  mixed_join_hasher2(hash_value_type seed) : _hash{seed} {}
-
-  __device__ constexpr hash_value_type operator()(
-    cuco::pair<hash_value_type, size_type> const& key) const noexcept
-  {
-    return _hash(key.first);
-  }
-
- private:
-  hash_type _hash;
-};
-
-// Multimap type used for mixed joins
-using mixed_multimap_type =
-  cuco::static_multiset<cuco::pair<hash_value_type, size_type>,
-                        cuco::extent<std::size_t>,
-                        cuda::thread_scope_device,
-                        mixed_join_always_not_equal,
-                        cuco::double_hashing<1, mixed_join_hasher1, mixed_join_hasher2>,
-                        cudf::detail::cuco_allocator<char>,
-                        cuco::storage<2>>;
-template <typename Tag>
-using mixed_join_hash_table_ref_t = mixed_multimap_type::ref_type<Tag>;
-
 bool is_trivial_join(table_view const& left, table_view const& right, join_kind join_type);
 }  // namespace cudf::detail

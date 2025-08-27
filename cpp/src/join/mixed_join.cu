@@ -16,6 +16,7 @@
 
 #include "join_common_utils.cuh"
 #include "join_common_utils.hpp"
+#include "mixed_join_common_utils.cuh"
 #include "mixed_join_kernel.hpp"
 #include "mixed_join_size_kernel.hpp"
 
@@ -69,7 +70,7 @@ namespace {
 template <typename HashProbe>
 std::pair<rmm::device_uvector<cuco::pair<hash_value_type, size_type>>,
           rmm::device_uvector<cuda::std::pair<size_type, size_type>>>
-precompute_mixed_join_data(mixed_multimap_type const& hash_table,
+precompute_mixed_join_data(mixed_join_hash_table_t const& hash_table,
                            HashProbe const& hash_probe,
                            size_type probe_table_num_rows,
                            rmm::cuda_stream_view stream,
@@ -82,7 +83,7 @@ precompute_mixed_join_data(mixed_multimap_type const& hash_table,
 
   auto const extent                        = hash_table.capacity();
   auto const probe_hash_fn                 = hash_table.hash_function();
-  static constexpr std::size_t bucket_size = mixed_multimap_type::bucket_size;
+  static constexpr std::size_t bucket_size = mixed_join_hash_table_t::bucket_size;
 
   // Functor to pre-compute both input pairs and initial slots and step sizes for double hashing.
   auto precompute_fn = [=] __device__(size_type i) {
@@ -197,7 +198,7 @@ mixed_join(table_view const& left_equality,
   auto probe_view = table_device_view::create(probe, stream);
   auto build_view = table_device_view::create(build, stream);
 
-  mixed_multimap_type hash_table{
+  mixed_join_hash_table_t hash_table{
     cuco::extent{static_cast<std::size_t>(build.num_rows())},
     cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
     cuco::empty_key{
@@ -377,18 +378,14 @@ std::size_t compute_mixed_join_output_size(table_view const& left_equality,
   // The kernels are launched with one thread per row of the probe table.
   auto const probe_table_num_rows{swap_tables ? right_num_rows : left_num_rows};
 
-  // We can immediately filter out cases where one table is empty. In
-  // some cases, we return all the rows of the other table with a corresponding
-  // null index for the empty table; in others, we return an empty output.
+  // We can immediately filter out cases where one table is empty.
   if (right_num_rows == 0) {
     switch (join_type) {
-      // Left, left anti, and full all return all the row indices from left
-      // with a corresponding NULL from the right.
-      case join_kind::LEFT_JOIN:
-      case join_kind::FULL_JOIN: {
+      // Left joins return all the row indices from left with a corresponding NULL from the right.
+      case join_kind::LEFT_JOIN: {
         return left_num_rows;
       }
-      // Inner and left semi joins return empty output because no matches can exist.
+      // Inner joins return empty output because no matches can exist.
       case join_kind::INNER_JOIN: {
         return 0;
       }
@@ -396,14 +393,10 @@ std::size_t compute_mixed_join_output_size(table_view const& left_equality,
     }
   } else if (left_num_rows == 0) {
     switch (join_type) {
-      // Left, left anti, left semi, and inner joins all return empty sets.
+      // Left and inner joins all return empty sets.
       case join_kind::LEFT_JOIN:
       case join_kind::INNER_JOIN: {
         return 0;
-      }
-      // Full joins need to return the trivial complement.
-      case join_kind::FULL_JOIN: {
-        return right_num_rows;
       }
       default: CUDF_FAIL("Invalid join kind."); break;
     }
@@ -432,7 +425,7 @@ std::size_t compute_mixed_join_output_size(table_view const& left_equality,
   auto probe_view = table_device_view::create(probe, stream);
   auto build_view = table_device_view::create(build, stream);
 
-  mixed_multimap_type hash_table{
+  mixed_join_hash_table_t hash_table{
     cuco::extent{static_cast<size_t>(build.num_rows())},
     cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
     cuco::empty_key{
