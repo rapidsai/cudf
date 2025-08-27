@@ -54,49 +54,50 @@ __device__ __forceinline__ void retrieve(
   cudf::size_type* output_match,
   cuda::atomic<size_t, cuda::thread_scope_device>& atomic_counter) noexcept
 {
-  using size_type                   = cudf::size_type;
   static constexpr auto bucket_size = 2;
   static constexpr auto block_size  = DEFAULT_JOIN_BLOCK_SIZE;
   namespace cg                      = cooperative_groups;
 
   auto const n = cuda::std::distance(input_probe_begin, input_probe_end);
 
-  auto constexpr flushing_cg_size = cudf::detail::warp_size;
+  // Use warps to efficiently flush shared memory buffers when they get full
+  // Each warp manages its own buffer segment to avoid conflicts
+  auto constexpr num_warps            = block_size / warp_size;
+  auto constexpr max_matches_per_step = warp_size * bucket_size;
+  auto constexpr buffer_size          = max_matches_per_step + warp_size;
 
-  auto constexpr num_flushing_cgs     = block_size / flushing_cg_size;
-  auto constexpr max_matches_per_step = flushing_cg_size * bucket_size;
-  auto constexpr buffer_size          = max_matches_per_step + flushing_cg_size;
+  auto const warp    = cg::tiled_partition<warp_size>(block);
+  auto const warp_id = warp.meta_group_rank();
+  auto const stride  = block_size;
+  auto idx           = threadIdx.x;
 
-  auto const flushing_cg = cg::tiled_partition<flushing_cg_size>(block);
+  __shared__ cudf::size_type probe_output_buffer[num_warps][buffer_size];
+  __shared__ cudf::size_type match_output_buffer[num_warps][buffer_size];
+  __shared__ cudf::size_type warp_counter[num_warps];
 
-  auto const flushing_cg_id = flushing_cg.meta_group_rank();
-  auto const stride         = block_size;
-  auto idx                  = threadIdx.x;
+  if (warp.thread_rank() == 0) {
+    cuda::atomic_ref<cudf::size_type, cuda::thread_scope_block> init_counter_ref{
+      warp_counter[warp_id]};
+    init_counter_ref.store(0, cuda::memory_order_relaxed);
+  }
+  warp.sync();
 
-  __shared__ cudf::size_type probe_output_buffer[num_flushing_cgs][buffer_size];
-  __shared__ cudf::size_type match_output_buffer[num_flushing_cgs][buffer_size];
-  __shared__ cudf::size_type flushing_cg_counter[num_flushing_cgs];
-
-  if (flushing_cg.thread_rank() == 0) { flushing_cg_counter[flushing_cg_id] = 0; }
-  flushing_cg.sync();
-
-  auto flush_output_buffer = [&](auto const& tile) {
+  auto flush_output_buffer = [&](auto const& warp_group) {
     size_type offset = 0;
-    auto const count = flushing_cg_counter[flushing_cg_id];
-    auto const rank  = tile.thread_rank();
+    auto const count = warp_counter[warp_id];
+    auto const rank  = warp_group.thread_rank();
     if (rank == 0) { offset = atomic_counter.fetch_add(count, cuda::memory_order_relaxed); }
-    offset = tile.shfl(offset, 0);
+    offset = warp_group.shfl(offset, 0);
 
-    for (auto i = rank; i < count; i += tile.size()) {
-      *(output_probe + offset + i) = probe_output_buffer[flushing_cg_id][i];
-      *(output_match + offset + i) = match_output_buffer[flushing_cg_id][i];
+    for (auto i = rank; i < count; i += warp_group.size()) {
+      *(output_probe + offset + i) = probe_output_buffer[warp_id][i];
+      *(output_match + offset + i) = match_output_buffer[warp_id][i];
     }
   };
 
-  while (flushing_cg.any(idx < n)) {
-    bool active_flag = idx < n;
-    auto const active_flushing_cg =
-      cg::binary_partition<flushing_cg_size>(flushing_cg, active_flag);
+  while (warp.any(idx < n)) {
+    bool active_flag       = idx < n;
+    auto const active_warp = cg::binary_partition<warp_size>(warp, active_flag);
 
     if (active_flag) {
       auto const& probe_key = *(input_probe_begin + idx);
@@ -109,7 +110,7 @@ __device__ __forceinline__ void retrieve(
       bool running                      = true;
       [[maybe_unused]] bool found_match = false;
 
-      while (active_flushing_cg.any(running)) {
+      while (active_warp.any(running)) {
         if (running) {
           auto const bucket_slots = *reinterpret_cast<
             cuda::std::array<cuco::pair<hash_value_type, cudf::size_type>, 2> const*>(
@@ -127,22 +128,22 @@ __device__ __forceinline__ void retrieve(
 
             cudf::size_type num_matches = (first_equals ? 1 : 0) + (second_equals ? 1 : 0);
             cuda::atomic_ref<cudf::size_type, cuda::thread_scope_block> counter_ref{
-              flushing_cg_counter[flushing_cg_id]};
+              warp_counter[warp_id]};
             cudf::size_type output_idx =
               counter_ref.fetch_add(num_matches, cuda::memory_order_relaxed);
 
             auto const probe_row_index = probe_key.second;
 
             if (first_equals) {
-              probe_output_buffer[flushing_cg_id][output_idx] = probe_row_index;
-              match_output_buffer[flushing_cg_id][output_idx] = bucket_slots[0].second;
+              probe_output_buffer[warp_id][output_idx] = probe_row_index;
+              match_output_buffer[warp_id][output_idx] = bucket_slots[0].second;
               if (second_equals) {
-                probe_output_buffer[flushing_cg_id][output_idx + 1] = probe_row_index;
-                match_output_buffer[flushing_cg_id][output_idx + 1] = bucket_slots[1].second;
+                probe_output_buffer[warp_id][output_idx + 1] = probe_row_index;
+                match_output_buffer[warp_id][output_idx + 1] = bucket_slots[1].second;
               }
             } else if (second_equals) {
-              probe_output_buffer[flushing_cg_id][output_idx] = probe_row_index;
-              match_output_buffer[flushing_cg_id][output_idx] = bucket_slots[1].second;
+              probe_output_buffer[warp_id][output_idx] = probe_row_index;
+              match_output_buffer[warp_id][output_idx] = bucket_slots[1].second;
             }
           }
 
@@ -152,23 +153,24 @@ __device__ __forceinline__ void retrieve(
             if constexpr (is_outer) {
               if (not found_match) {
                 cuda::atomic_ref<cudf::size_type, cuda::thread_scope_block> counter_ref{
-                  flushing_cg_counter[flushing_cg_id]};
+                  warp_counter[warp_id]};
                 auto const output_idx      = counter_ref.fetch_add(1, cuda::memory_order_relaxed);
                 auto const probe_row_index = probe_key.second;
-                probe_output_buffer[flushing_cg_id][output_idx] = probe_row_index;
-                match_output_buffer[flushing_cg_id][output_idx] = cudf::detail::JoinNoneValue;
+                probe_output_buffer[warp_id][output_idx] = probe_row_index;
+                match_output_buffer[warp_id][output_idx] = cudf::detail::JoinNoneValue;
               }
             }
           }
         }
 
-        active_flushing_cg.sync();
-        if (flushing_cg_counter[flushing_cg_id] > (buffer_size - max_matches_per_step)) {
-          flush_output_buffer(active_flushing_cg);
-          active_flushing_cg.sync();
+        active_warp.sync();
+        // Check if warp's shared memory buffer is getting full and needs flushing
+        if (warp_counter[warp_id] > (buffer_size - max_matches_per_step)) {
+          flush_output_buffer(active_warp);
+          active_warp.sync();
 
-          if (active_flushing_cg.thread_rank() == 0) { flushing_cg_counter[flushing_cg_id] = 0; }
-          active_flushing_cg.sync();
+          if (active_warp.thread_rank() == 0) { warp_counter[warp_id] = 0; }
+          active_warp.sync();
         }
 
         current_slot_idx = (current_slot_idx + step) % extent;
@@ -176,11 +178,15 @@ __device__ __forceinline__ void retrieve(
       }
     }
 
+    warp.sync();
     idx += stride;
   }
 
-  flushing_cg.sync();
-  if (flushing_cg_counter[flushing_cg_id] > 0) { flush_output_buffer(flushing_cg); }
+  warp.sync();
+  // Final flush: ensure any remaining buffered matches are written to global memory
+  cuda::atomic_ref<cudf::size_type, cuda::thread_scope_block> final_counter_ref{
+    warp_counter[warp_id]};
+  if (final_counter_ref.load(cuda::memory_order_relaxed) > 0) { flush_output_buffer(warp); }
 }
 
 template <bool has_nulls>
