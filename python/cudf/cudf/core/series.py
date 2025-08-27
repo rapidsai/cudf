@@ -2973,7 +2973,9 @@ class Series(SingleColumnFrame, IndexedFrame):
         res = self._column.unique()
         if cudf.get_option("mode.pandas_compatible"):
             if is_pandas_nullable_extension_dtype(self.dtype):
-                raise NotImplementedError("cudf does not support ExtensionArrays")
+                raise NotImplementedError(
+                    "cudf does not support ExtensionArrays"
+                )
             return res.values
         return Series._from_column(res, name=self.name)
 
