@@ -8,7 +8,7 @@ import pandas as pd
 import pyarrow as pa
 
 import cudf
-from cudf.core.column.column import as_column, pa_mask_buffer_to_mask
+from cudf.core.column.column import as_column
 from cudf.core.column.struct import StructColumn
 from cudf.core.dtypes import IntervalDtype
 from cudf.utils.dtypes import is_dtype_obj_interval
@@ -60,25 +60,7 @@ class IntervalColumn(StructColumn):
     @classmethod
     def from_arrow(cls, data: pa.Array) -> Self:
         new_col = super().from_arrow(data.storage)
-        size = len(data)
-        dtype = IntervalDtype.from_arrow(data.type)
-        mask = data.buffers()[0]
-        if mask is not None:
-            mask = pa_mask_buffer_to_mask(mask, len(data))
-
-        offset = data.offset
-        null_count = data.null_count
-        children = new_col.children
-
-        return cls(
-            data=None,
-            size=size,
-            dtype=dtype,
-            mask=mask,
-            offset=offset,
-            null_count=null_count,
-            children=children,  # type: ignore[arg-type]
-        )
+        return new_col._with_type_metadata(IntervalDtype.from_arrow(data.type))  # type: ignore[return-value]
 
     def to_arrow(self) -> pa.Array:
         typ = self.dtype.to_arrow()
