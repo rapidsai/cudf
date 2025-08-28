@@ -45,7 +45,7 @@ class context {
 
   jit::program_cache& program_cache();
 
-  bool dump_codegen() const;
+  [[nodiscard]] bool dump_codegen() const;
 };
 
 std::unique_ptr<context>& get_context_ptr_ref();
