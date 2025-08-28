@@ -46,7 +46,7 @@ class context {
 
   jit::program_cache& program_cache();
 
-  bool dump_codegen() const;
+  [[nodiscard]] bool dump_codegen() const;
 
   bool use_jit() const;
 };
