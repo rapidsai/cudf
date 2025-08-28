@@ -531,7 +531,6 @@ filter_args ast_converter::filter(target target_id,
 
   std::vector<column_view> columns;
   std::vector<std::unique_ptr<column>> scalar_columns;
-  std::vector<bool> copy_mask;
 
   for (auto& input : input_specs_) {
     auto column_view =
