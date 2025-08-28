@@ -56,7 +56,6 @@ from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
     StringColumn,
-    StructColumn,
     as_column,
     column_empty,
     concat_columns,
@@ -7782,14 +7781,21 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 "requires field name to be string. Non-string column names "
                 "will be casted to string as the field name."
             )
-        fields = {str(name): dtype for name, dtype in self._dtypes}
-        col = StructColumn(
-            data=None,
-            dtype=StructDtype(fields=fields),
-            children=tuple(col.copy(deep=True) for col in self._columns),
-            size=len(self),
-            offset=0,
+        dtype = StructDtype(
+            fields={str(name): dtype for name, dtype in self._dtypes}
         )
+        if self._num_columns == 0:
+            col = column_empty(len(self), dtype=dtype)
+        else:
+            plc_column = plc.Column.struct_from_children(
+                (
+                    col.copy(deep=True).to_pylibcudf(mode="read")
+                    for col in self._columns
+                ),
+            )
+            col = ColumnBase.from_pylibcudf(plc_column)._with_type_metadata(
+                dtype
+            )
         return Series._from_column(
             col,
             index=self.index,
