@@ -316,8 +316,7 @@ std::unique_ptr<column> transform(std::vector<column_view> const& inputs,
                "Optional types are not supported in PTX UDFs",
                std::invalid_argument);
 
-  auto const base_column = std::max_element(
-    inputs.begin(), inputs.end(), [](auto& a, auto& b) { return a.size() < b.size(); });
+  auto const base_column = cudf::jit::get_transform_base_column(inputs);
 
   transformation::jit::perform_checks(*base_column, output_type, inputs);
 
