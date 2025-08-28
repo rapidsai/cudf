@@ -214,22 +214,11 @@ struct hash_join {
     rmm::device_async_resource_ref mr) const;
 
  private:
-  /**
-   * @brief Probes the `_hash_table` built from `_build` for tuples in `probe_table`,
-   * and returns the output indices of `build_table` and `probe_table` as a combined table,
-   * i.e. if full join is specified as the join type then left join is called. Behavior
-   * is undefined if the provided `output_size` is smaller than the actual output size.
-   *
-   * @throw cudf::logic_error if build table is empty and `join == INNER_JOIN`.
-   *
-   * @param probe_table Table of probe side columns to join.
-   * @param join The type of join to be performed.
-   * @param output_size Optional value which allows users to specify the exact output size.
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   * @param mr Device memory resource used to allocate the returned vectors.
-   *
-   * @return Join output indices vector pair.
-   */
+  template <typename OutputIterator>
+  void compute_match_counts(cudf::table_view const& probe,
+                            OutputIterator output_iter,
+                            rmm::cuda_stream_view stream) const;
+
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
   probe_join_indices(cudf::table_view const& probe_table,
