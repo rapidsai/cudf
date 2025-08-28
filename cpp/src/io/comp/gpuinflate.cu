@@ -309,7 +309,7 @@ __device__ int construct(
     left <<= 1;                 // one more bit, double codes left
     left -= counts[len];        // deduct count from possible codes
     if (left < 0) return left;  // over-subscribed--return negative
-  }  // left > 0 means incomplete
+  }                             // left > 0 means incomplete
 
   // generate offsets into symbol table for each length for sorting
   offs[1] = 0;
@@ -1244,7 +1244,8 @@ CUDF_HOST_DEVICE double task_host_cost(size_t input_size,
   // the decompression/compression throughput when the data is incompressible
   auto const copy_cost = trivial_case_cost_ratio * (input_size + output_size);
   return (cost_factor(input_size, output_size, task_type) * input_size + copy_cost) /
-         device_host_ratio;
+           device_host_ratio +
+         5000;
 }
 
 sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const> inputs,
@@ -1344,6 +1345,7 @@ void copy_results_to_original_order(device_span<codec_exec_result const> sorted_
                   original_results.begin());
 }
 
+// TODO add task type parameter
 [[nodiscard]] size_t find_split_index(device_span<device_span<uint8_t const> const> inputs,
                                       device_span<device_span<uint8_t> const> outputs,
                                       host_engine_state host_state,
@@ -1360,18 +1362,29 @@ void copy_results_to_original_order(device_span<codec_exec_result const> sorted_
   }
 
   if (host_state == host_engine_state::HYBRID) {
-    auto const h_inputs    = cudf::detail::make_host_vector(inputs, stream);
-    auto const h_outputs   = cudf::detail::make_host_vector(outputs, stream);
+    auto const h_inputs  = cudf::detail::make_host_vector(inputs, stream);
+    auto const h_outputs = cudf::detail::make_host_vector(outputs, stream);
+
+    std::vector<double> device_costs;
+    std::vector<double> host_costs;
     double total_host_cost = 0;
     for (size_t i = 0; i < h_inputs.size(); ++i) {
-      if (total_host_cost >=
-          task_device_cost(h_inputs[i].size(), h_outputs[i].size(), task_type::DECOMPRESSION)) {
-        return i;
-      }
+      device_costs.push_back(
+        task_device_cost(h_inputs[i].size(), h_outputs[i].size(), task_type::DECOMPRESSION));
+      host_costs.push_back(total_host_cost);
+      if (total_host_cost > device_costs.back()) { break; }
       total_host_cost += task_host_cost(
         h_inputs[i].size(), h_outputs[i].size(), hybrid_mode_cost_ratio, task_type::DECOMPRESSION);
     }
-    return inputs.size();  // No split
+    // find the index at which the sum of host and device cost is minimal
+    size_t max_drop_index = 0;
+    for (size_t i = 1; i < device_costs.size(); ++i) {
+      if (host_costs[i] + device_costs[i] <
+          host_costs[max_drop_index] + device_costs[max_drop_index]) {
+        max_drop_index = i;
+      }
+    }
+    return max_drop_index;
   }
 
   CUDF_FAIL("Invalid host engine state for compression: " +
