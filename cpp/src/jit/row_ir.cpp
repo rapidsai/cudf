@@ -356,21 +356,6 @@ column_view get_column_view(ast_scalar_input_spec const& spec, ast_args const& a
   return spec.broadcast_column->view();
 }
 
-bool map_copy_mask(ast_column_input_spec const& spec,
-                   ast_args const&,
-                   std::vector<bool> const& copy_mask)
-{
-  CUDF_EXPECTS(spec.table == ast::table_reference::LEFT,
-               "Table reference must be LEFT",
-               std::invalid_argument);
-  return copy_mask[spec.column];
-}
-
-bool map_copy_mask(ast_scalar_input_spec const&, ast_args const&, std::vector<bool> const&)
-{
-  return false;  // AST Scalars do not have a copy mask
-}
-
 void ast_converter::generate_code(target target_id,
                                   ast::expression const& expr,
                                   ast_args const& args,
@@ -529,7 +514,7 @@ transform_args ast_converter::compute_column(target target_id,
 filter_args ast_converter::filter(target target_id,
                                   ast::expression const& expr,
                                   ast_args const& args,
-                                  std::optional<std::vector<bool>> table_copy_mask,
+                                  table_view const& filter_table,
                                   rmm::cuda_stream_view stream,
                                   rmm::device_async_resource_ref const& resource_ref)
 {
@@ -559,22 +544,20 @@ filter_args ast_converter::filter(target target_id,
       auto& scalar_input = std::get<ast_scalar_input_spec>(input);
       scalar_columns.push_back(std::move(scalar_input.broadcast_column));
     }
-
-    // if the table_copy_mask is provided, we need to extract the copy mask for each input
-    if (table_copy_mask.has_value()) {
-      copy_mask.push_back(dispatch_input_spec(
-        input, [](auto&... args) { return map_copy_mask(args...); }, args, *table_copy_mask));
-    } else {
-      copy_mask.push_back(true);
-    }
   }
+
+  std::vector<column_view> filter_columns;
+  std::transform(filter_table.begin(),
+                 filter_table.end(),
+                 std::back_inserter(filter_columns),
+                 [](auto const& col) { return col; });
 
   filter_args filter{std::move(scalar_columns),
                      std::move(columns),
                      std::move(code_),
+                     std::move(filter_columns),
                      false,
                      std::nullopt,
-                     copy_mask,
                      null_aware::NO};
 
   clear();

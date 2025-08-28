@@ -126,10 +126,10 @@ static void BM_filter_min_max(nvbench::state& state)
     tree.push(cudf::ast::operation{cudf::ast::ast_operator::LOGICAL_AND, filter_min, filter_max});
   }
 
-  std::vector<cudf::column_view> filter_inputs;
-  filter_inputs.push_back(column->view());
-  filter_inputs.push_back(min_scalar_column->view());
-  filter_inputs.push_back(max_scalar_column->view());
+  std::vector<cudf::column_view> predicate_columns;
+  predicate_columns.push_back(column->view());
+  predicate_columns.push_back(min_scalar_column->view());
+  predicate_columns.push_back(max_scalar_column->view());
 
   // Use the number of bytes read from global memory
   state.add_global_memory_reads<key_type>(static_cast<size_t>(num_rows));
@@ -147,11 +147,11 @@ static void BM_filter_min_max(nvbench::state& state)
           cudf::apply_boolean_mask(input_table, filter_boolean->view(), stream, mr);
       } break;
       case engine_type::JIT: {
-        auto result = cudf::filter(filter_inputs,
+        auto result = cudf::filter(predicate_columns,
                                    udf,
+                                   std::vector{predicate_columns[0]},
                                    false,
                                    std::nullopt,
-                                   std::vector{true, false, false},
                                    cudf::null_aware::NO,
                                    stream,
                                    mr);

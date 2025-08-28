@@ -323,13 +323,12 @@ struct transform_args {
 struct filter_args {
   std::vector<std::unique_ptr<column>> scalar_columns =
     {};  ///< The scalar columns created during the expression conversion
-  std::vector<column_view> columns = {};     ///< The input columns to the filter
-  std::string predicate_udf        = {};     ///< The user-defined function to apply as a predicate
-  bool is_ptx                      = false;  ///< Whether the filter is a PTX device function
-  std::optional<void*> user_data   = std::nullopt;  ///< User data to pass to the filter
-  std::optional<std::vector<bool>> copy_mask =
-    std::nullopt;                             ///< Optional copy mask to apply to the filter
-  null_aware is_null_aware = null_aware::NO;  ///< Whether the filter is null-aware
+  std::vector<column_view> predicate_columns = {};  ///< The input columns to the predicate UDF
+  std::string predicate_udf = {};  ///< The user-defined function to apply as a predicate
+  std::vector<column_view> filter_columns = {};     ///< The input columns to the filter
+  bool is_ptx                             = false;  ///< Whether the filter is a PTX device function
+  std::optional<void*> user_data          = std::nullopt;    ///< User data to pass to the filter
+  null_aware is_null_aware                = null_aware::NO;  ///< Whether the filter is null-aware
 };
 
 /// @brief The AST input column arguments used to resolve the column expressions
@@ -413,14 +412,14 @@ struct ast_converter {
   /// @param expr The AST expression to convert
   /// @param null_aware Whether to use null-aware operators
   /// @param args The arguments needed to resolve the AST expression
-  /// @param table_copy_mask Optional copy mask to apply to the filter
+  /// @param filter_table The table to be filtered
   /// @param stream The CUDA stream to use for device memory operations and kernel launches
   /// @param resource_ref The device async resource reference for the operation
   /// @return The result of the conversion, containing the filter arguments and scalar columns
   filter_args filter(target target,
                      ast::expression const& expr,
                      ast_args const& args,
-                     std::optional<std::vector<bool>> table_copy_mask,
+                     table_view const& filter_table,
                      rmm::cuda_stream_view stream,
                      rmm::device_async_resource_ref const& resource_ref);
 };
