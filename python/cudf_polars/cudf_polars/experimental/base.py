@@ -287,8 +287,14 @@ class JoinKey:
 
     @cached_property
     def source_row_count(self) -> int | None:
-        """Return the estimated row-count of the source columns."""
-        return min(
+        """
+        Return the estimated row-count of the source columns.
+
+        Notes
+        -----
+        This is the maximum row-count estimate of the source columns.
+        """
+        return max(
             (
                 cs.source_info.row_count.value
                 for cs in self.column_stats
@@ -299,7 +305,16 @@ class JoinKey:
 
 
 class JoinInfo:
-    """Join information."""
+    """
+    Join information.
+
+    Notes
+    -----
+    This class is used to track mapping between joined-on
+    columns and joined-on keys (groups of columns). We need
+    these mappings to calculate equivalence sets and make
+    join-based unique-count and row-count estimates.
+    """
 
     __slots__ = ("column_map", "join_map", "key_map")
 
