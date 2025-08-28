@@ -65,6 +65,10 @@ Be sure to select the appropriate cuDF package depending
 on the major version of CUDA available in your environment:
 
 ```bash
+# CUDA 13
+pip install cudf-cu13
+
+# CUDA 12
 pip install cudf-cu12
 ```
 
@@ -73,7 +77,11 @@ pip install cudf-cu12
 cuDF can be installed with conda (via [miniforge](https://github.com/conda-forge/miniforge)) from the `rapidsai` channel:
 
 ```bash
-conda install -c rapidsai -c conda-forge cudf=25.10
+# CUDA 13
+conda install -c rapidsai -c conda-forge cudf=25.10 cuda-version=13.0
+
+# CUDA 12
+conda install -c rapidsai -c conda-forge cudf=25.10 cuda-version=12.9
 ```
 
 We also provide [nightly Conda packages](https://anaconda.org/rapidsai-nightly) built from the HEAD

@@ -20,9 +20,10 @@ dependencies:
 - cuda-nvcc
 - cuda-nvrtc-dev
 - cuda-nvtx-dev
-- cuda-python>=12.9.2,<13.0a0
+- cuda-nvvm-tools
+- cuda-python>=13.0.1,<14.0a0
 - cuda-sanitizer-api
-- cuda-version=12.9
+- cuda-version=13.0
 - cupy>=13.6.0
 - cxx-compiler
 - cython>=3.0.3
@@ -32,13 +33,12 @@ dependencies:
 - fastavro>=0.22.9
 - flatbuffers==24.3.25
 - fsspec>=0.6.0
-- gcc_linux-64=14.*
+- gcc_linux-aarch64=14.*
 - hypothesis>=6.131.7
 - identify>=2.5.20
 - include-what-you-use==0.24.0
 - ipython
 - jupyter_client
-- libcufile-dev
 - libcurand-dev
 - libkvikio==25.10.*,>=0.0.0a0
 - libnvcomp-dev==5.0.0.6
@@ -81,7 +81,6 @@ dependencies:
 - python-confluent-kafka>=2.8.0,<2.9.0a0
 - python-xxhash
 - python>=3.10,<3.14
-- pytorch>=2.4.0
 - rapids-build-backend>=0.4.0,<0.5.0.dev0
 - rapids-dask-dependency==25.10.*,>=0.0.0a0
 - rapids-logger==0.1.*,>=0.0.0a0
@@ -97,8 +96,8 @@ dependencies:
 - sphinx>=8.1.0
 - sphinxcontrib-websupport
 - streamz
-- sysroot_linux-64==2.28
+- sysroot_linux-aarch64==2.28
 - typing_extensions>=4.0.0
 - zlib>=1.2.13
 - zstandard
-name: all_cuda-129_arch-x86_64
+name: all_cuda-130_arch-aarch64
