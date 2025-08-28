@@ -225,8 +225,6 @@ class GroupedRollingWindow(Expr):
     def _rebuild_col_with_nulls(
         ranks: plc.Column, i: plc.Column, n: int, out_dtype: DataType
     ) -> Column:
-        # scatter ranks back to length n column
-        # of NULLs (which we originally dropped)
         out_plc = (
             ranks
             if ranks.type().id() == out_dtype.plc.id()
@@ -250,7 +248,7 @@ class GroupedRollingWindow(Expr):
         out_dtype: DataType,
         num_groups: int,
     ) -> Column:
-        """Compute the average/min/max/dense/ordinal per group."""
+        """Compute per-group ranks (ordinal/dense/min/max/average)."""
         order = plc.types.Order.DESCENDING if descending else plc.types.Order.ASCENDING
         size_type = plc.types.SIZE_TYPE
 
@@ -258,76 +256,62 @@ class GroupedRollingWindow(Expr):
         zero = plc.Scalar.from_py(0, size_type)
         one = plc.Scalar.from_py(1, size_type)
 
-        # Polars does not consider nulls when computing
-        # the ranks, so we drop them.
+        # Polars excludes nulls from ranking: so remove null rows first, but carry their
+        # original indices so we can rebuild the full column (with nulls) at the end.
         i_seq = plc.filling.sequence(n, zero, one)
         full_tbl = plc.Table([values.obj, group_indices, i_seq])
         nn_tbl = plc.stream_compaction.drop_nulls(full_tbl, [0], 1)
-        values, groups, i = nn_tbl.columns()  # Define v(i), g(i), i
+        values, groups, i_seq = nn_tbl.columns()
         num_non_null_rows = nn_tbl.num_rows()
 
-        # First sort by group index, then by value to get
-        # the sorted order within each group. This gives us a
-        # permutation map between the sorted row k and
-        # the original row i. Define f(k) = i to be the
-        # permutation map
+        # Sorting by (group, value) defines a stable permutation f : k -> i from the
+        # sorted index k to the original row i. This allows us to get groups, values,
+        # tied runs in sorted order.
         perm_k_to_i = plc.sorting.stable_sorted_order(
             plc.Table([groups, values]),
             [plc.types.Order.ASCENDING, order],
             [plc.types.NullOrder.AFTER, plc.types.NullOrder.AFTER],
         )
 
-        # We also need the inverse permuutation map from the
-        # original row i to the sorted row k. The inverse map
-        # lets compute the 1-based ordinal ranks within each group
-        # Define f^{-1}(i) = k be the inverse permutation map
-        k = plc.filling.sequence(num_non_null_rows, zero, one)
+        # We also need the inverse permutation map f^{-1} : i -> k (the sorted position of
+        # an original row). This lets us express ranks via the original row order.
+        k_seq = plc.filling.sequence(num_non_null_rows, zero, one)
         inv_perm_i_to_k = plc.copying.scatter(
-            plc.Table([k]),
+            plc.Table([k_seq]),
             perm_k_to_i,
             plc.Table([plc.Column.from_scalar(zero, num_non_null_rows)]),
         ).columns()[0]
 
-        # Goal: 1-based ordinal rank of each row i within its group after sorting by (group, value).
-        # where:
-        #   - f : k -> i is the permutation map from the sorted row k to original row i
-        #   - f^{-1} : i -> k is its inverse (sorted position of original row i)
-        #   - first: g -> k = min { k : g(f(k)) = g } is the first sorted row at where g is
-
-        # Compute g(f(k)). Ie. take the row that ended
-        # up in sorted row k and look up its group
+        # Group ids in sorted order: g(f(k)).
         g_sorted = plc.copying.gather(
             plc.Table([groups]),
             perm_k_to_i,
             plc.copying.OutOfBoundsPolicy.DONT_CHECK,
         ).columns()[0]
 
-        # First k per distinct group in g(f(k))
+        # For each distinct group g, calculate its first sorted position:
+        # first_k(g) = min { k | g(f(k)) = g }
         first_k_per_group = plc.stream_compaction.distinct_indices(
             plc.Table([g_sorted]),
             plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
             plc.types.NullEquality.EQUAL,
             plc.types.NanEquality.ALL_EQUAL,
         )
-
-        # g_at_first_k[g] = g(f(first_k)) = the group found at
-        # its first sorted position
-        g_at_first_k = plc.copying.gather(
+        group_at_first_k = plc.copying.gather(
             plc.Table([g_sorted]),
             first_k_per_group,
             plc.copying.OutOfBoundsPolicy.DONT_CHECK,
         ).columns()[0]
-
-        # first(g)
-        first_at_g = plc.copying.scatter(
+        first_k_at_g = plc.copying.scatter(
             plc.Table([first_k_per_group]),
-            g_at_first_k,
+            group_at_first_k,
             plc.Table([plc.Column.from_scalar(zero, num_groups)]),
         ).columns()[0]
 
-        # first(g(i))
-        first_at_i = plc.copying.gather(
-            plc.Table([first_at_g]),
+        # Then map this to each row i by its group:
+        #   first_k(i) = first_k( g(i) )
+        first_k_at_i = plc.copying.gather(
+            plc.Table([first_k_at_g]),
             groups,
             plc.copying.OutOfBoundsPolicy.DONT_CHECK,
         ).columns()[0]
@@ -336,11 +320,11 @@ class GroupedRollingWindow(Expr):
         # from the globally sorted position to get
         # (0-based) ordinal rank of each row in that group.
         # (And add 1 to get the 1-based ordinal ranks)
-        # Ie. ordinal(i) = f^{-1}(i) - first[g(i)] + 1
+        # Ie. ordinal(i) = f^{-1}(i) - first_k(g(i)) + 1
         ordinal_ranks = plc.binaryop.binary_operation(
             plc.binaryop.binary_operation(
                 inv_perm_i_to_k,
-                first_at_i,
+                first_k_at_i,
                 plc.binaryop.BinaryOperator.SUB,
                 size_type,
             ),
@@ -348,13 +332,200 @@ class GroupedRollingWindow(Expr):
             plc.binaryop.BinaryOperator.ADD,
             size_type,
         )
-
         if method == "ordinal":
             return GroupedRollingWindow._rebuild_col_with_nulls(
-                ordinal_ranks, i, n, out_dtype
+                ordinal_ranks, i_seq, n, out_dtype
             )
 
-        raise NotImplementedError(f"rank({method=}).over(..)")
+        # For methods dense/min/max/average we handle ties. We do this
+        # by marking the start of each (group, value) run,
+        # then inclusive-scan to produce run ids.
+        v_sorted = plc.copying.gather(
+            plc.Table([values]),
+            perm_k_to_i,
+            plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+        ).columns()[0]
+        run_starts = plc.stream_compaction.distinct_indices(
+            plc.Table([g_sorted, v_sorted]),
+            plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
+            plc.types.NullEquality.EQUAL,
+            plc.types.NanEquality.ALL_EQUAL,
+        )
+        num_tied_runs = run_starts.size()
+        run_markers = plc.copying.scatter(
+            plc.Table([plc.Column.from_scalar(one, num_tied_runs)]),
+            run_starts,
+            plc.Table([plc.Column.from_scalar(zero, num_non_null_rows)]),
+        ).columns()[0]
+        run_id_sorted = plc.reduce.scan(
+            run_markers, plc.aggregation.sum(), plc.reduce.ScanType.INCLUSIVE
+        )
+        run_id = plc.copying.gather(
+            plc.Table([run_id_sorted]),
+            inv_perm_i_to_k,
+            plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+        ).columns()[0]
+
+        if method == "dense":
+            # Dense rank assigns consecutive integers to distinct values within each group.
+            # dense(i) = run_id(i) - run_id_first_k_per_row(i) + 1
+            # run_id_first_k_per_row(i) = the run id at the group's first sorted row
+            run_id_at_first_k = plc.copying.gather(
+                plc.Table([run_id_sorted]),
+                first_k_per_group,
+                plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+            ).columns()[0]
+            run_id_first_k_map = plc.copying.scatter(
+                plc.Table([run_id_at_first_k]),
+                group_at_first_k,
+                plc.Table([plc.Column.from_scalar(zero, num_groups)]),
+            ).columns()[0]
+            run_id_first_k_per_row = plc.copying.gather(
+                plc.Table([run_id_first_k_map]),
+                groups,
+                plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+            ).columns()[0]
+            dense_ranks = plc.binaryop.binary_operation(
+                plc.binaryop.binary_operation(
+                    run_id,
+                    run_id_first_k_per_row,
+                    plc.binaryop.BinaryOperator.SUB,
+                    size_type,
+                ),
+                one,
+                plc.binaryop.BinaryOperator.ADD,
+                size_type,
+            )
+            return GroupedRollingWindow._rebuild_col_with_nulls(
+                dense_ranks, i_seq, n, out_dtype
+            )
+
+        # For min/max/average we work with per-group positions in the sorted view.
+        # For each sorted row k, its 0-based position within the group is:
+        #   pos_in_group(k) = k - first_k(g(f(k))).
+        first_sorted_k_for_group = plc.copying.gather(
+            plc.Table([first_k_at_g]),
+            g_sorted,
+            plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+        ).columns()[0]
+        pos_in_group = plc.binaryop.binary_operation(
+            k_seq,
+            first_sorted_k_for_group,
+            plc.binaryop.BinaryOperator.SUB,
+            size_type,
+        )
+
+        # Each tie run has a min and max position within its group.
+        # We compute run_ends from run_starts, then gather min/max positions
+        # per run, and finally convert to 1-based ranks.
+        run_ends = plc.Column.from_scalar(
+            plc.Scalar.from_py(num_non_null_rows - 1, size_type), num_tied_runs
+        )
+        if num_tied_runs > 1:
+            # There are multiple tied runs, so update the default run_ends
+            # for each run run_id (r) except the last, set run_ends[r] = run_starts[r+1] - 1.
+            # This ensures that each run's end index is the position immediately
+            # before the start of the next run. The last run already ends at
+            # num_non_null_rows - 1.
+            tail = plc.copying.gather(
+                plc.Table([run_starts]),
+                plc.filling.sequence(num_tied_runs - 1, one, one),
+                plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+            ).columns()[0]
+            tail = plc.binaryop.binary_operation(
+                tail, one, plc.binaryop.BinaryOperator.SUB, size_type
+            )
+            run_ends = plc.copying.scatter(
+                plc.Table([tail]),
+                plc.filling.sequence(num_tied_runs - 1, zero, one),
+                plc.Table([run_ends]),
+            ).columns()[0]
+
+        # For each run (r), get the min and max position within the group
+        # from pos_in_group at run_starts[r] and run_ends[r].
+        min_pos = plc.copying.gather(
+            plc.Table([pos_in_group]),
+            run_starts,
+            plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+        ).columns()[0]
+        max_pos = plc.copying.gather(
+            plc.Table([pos_in_group]),
+            run_ends,
+            plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+        ).columns()[0]
+        min_pos = plc.binaryop.binary_operation(
+            min_pos, one, plc.binaryop.BinaryOperator.ADD, size_type
+        )
+        max_pos = plc.binaryop.binary_operation(
+            max_pos, one, plc.binaryop.BinaryOperator.ADD, size_type
+        )
+
+        def _per_row_ranks_from_run_pos(positions: plc.Column) -> plc.Column:
+            # Map the per-run min/max ranks back to per-row results
+            run_ids_at_starts = plc.copying.gather(
+                plc.Table([run_id_sorted]),
+                run_starts,
+                plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+            ).columns()[0]
+            run_index_per_row = plc.binaryop.binary_operation(
+                run_id_sorted, one, plc.binaryop.BinaryOperator.SUB, size_type
+            )
+            run_index_per_run = plc.binaryop.binary_operation(
+                run_ids_at_starts, one, plc.binaryop.BinaryOperator.SUB, size_type
+            )
+
+            mapping = plc.copying.scatter(
+                plc.Table([positions]),
+                run_index_per_run,
+                plc.Table(
+                    [
+                        plc.Column.from_scalar(
+                            plc.Scalar.from_py(0, size_type), num_tied_runs
+                        )
+                    ]
+                ),
+            ).columns()[0]
+
+            ranks_sorted = plc.copying.gather(
+                plc.Table([mapping]),
+                run_index_per_row,
+                plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+            ).columns()[0]
+
+            return plc.copying.gather(
+                plc.Table([ranks_sorted]),
+                inv_perm_i_to_k,
+                plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+            ).columns()[0]
+
+        if method == "min":
+            return GroupedRollingWindow._rebuild_col_with_nulls(
+                _per_row_ranks_from_run_pos(min_pos), i_seq, n, out_dtype
+            )
+        if method == "max":
+            return GroupedRollingWindow._rebuild_col_with_nulls(
+                _per_row_ranks_from_run_pos(max_pos), i_seq, n, out_dtype
+            )
+        if method == "average":
+            max_ranks = _per_row_ranks_from_run_pos(max_pos)
+            min_ranks = _per_row_ranks_from_run_pos(min_pos)
+            f64 = plc.DataType(plc.TypeId.FLOAT64)
+            min_ = plc.unary.cast(min_ranks, f64)
+            max_ = plc.unary.cast(max_ranks, f64)
+            sum_ = plc.binaryop.binary_operation(
+                min_, max_, plc.binaryop.BinaryOperator.ADD, f64
+            )
+            two = plc.Scalar.from_py(2.0, f64)
+            avg = plc.binaryop.binary_operation(
+                sum_, two, plc.binaryop.BinaryOperator.DIV, f64
+            )
+            if out_dtype.plc.id() != f64.id():  # pragma: no cover
+                avg = plc.unary.cast(avg, out_dtype.plc)
+            return GroupedRollingWindow._rebuild_col_with_nulls(
+                avg, i_seq, n, out_dtype
+            )
+
+        raise NotImplementedError(f"rank({method=}).over(..)")  # pragma: no cover
 
     def do_evaluate(  # noqa: D102
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
