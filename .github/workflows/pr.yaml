@@ -281,7 +281,7 @@ jobs:
       build_type: pull-request
       script: "ci/test_wheel_cudf_polars.sh"
   cudf-polars-polars-tests:
-    needs: wheel-build-cudf-polars
+    needs: [wheel-build-cudf-polars, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-25.10
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
@@ -341,7 +341,7 @@ jobs:
       build_type: pull-request
       script: ci/cudf_pandas_scripts/run_tests.sh
   third-party-integration-tests-cudf-pandas:
-    needs: conda-python-build
+    needs: [conda-python-build, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.10
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cudf_pandas
