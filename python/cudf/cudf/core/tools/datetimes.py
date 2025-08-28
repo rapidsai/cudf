@@ -775,7 +775,7 @@ def date_range(
         ``U``, ``us``, ``N``, ``ns``.
 
     tz : str or tzinfo, optional
-        Not Supported
+        Time zone name for returning localized DatetimeIndex.
 
     normalize : bool, default False
         Not Supported

@@ -283,11 +283,11 @@ class DatetimeColumn(TemporalBaseColumn):
             plc.datetime.days_in_month(self.to_pylibcudf(mode="read"))
         )
 
-    @property
+    @functools.cached_property
     def day_of_week(self) -> ColumnBase:
         raise NotImplementedError("day_of_week is currently not implemented.")
 
-    @property
+    @functools.cached_property
     def is_normalized(self) -> bool:
         raise NotImplementedError(
             "is_normalized is currently not implemented."
