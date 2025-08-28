@@ -1868,16 +1868,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         # Re-label self w.r.t. the provided categories
         if dtype._categories is not None:
             cat_col = dtype._categories
-            codes = self._label_encoding(cats=cat_col)
-            codes = cudf.core.column.categorical.as_unsigned_codes(
-                len(cat_col), codes
-            )
-            return cudf.core.column.categorical.CategoricalColumn(
-                data=None,
-                size=None,
-                dtype=dtype,
-                mask=self.mask,
-                children=(codes,),
+            return (
+                self._label_encoding(cats=cat_col)  # type: ignore[return-value]
+                .set_mask(self.mask)
+                ._with_type_metadata(dtype)
             )
 
         # Categories must be unique and sorted in ascending order.
