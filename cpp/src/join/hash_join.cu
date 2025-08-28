@@ -720,7 +720,8 @@ cudf::join_match_context hash_join<Hasher>::inner_join_match_context(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr) const
 {
-  CUDF_FUNC_RANGE();
+  cudf::scoped_range range{"hash_join::inner_join_match_context"};
+
   auto match_counts =
     std::make_unique<rmm::device_uvector<size_type>>(probe.num_rows(), stream, mr);
 
@@ -739,7 +740,8 @@ cudf::join_match_context hash_join<Hasher>::left_join_match_context(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr) const
 {
-  CUDF_FUNC_RANGE();
+  cudf::scoped_range range{"hash_join::left_join_match_context"};
+
   auto match_counts =
     std::make_unique<rmm::device_uvector<size_type>>(probe.num_rows(), stream, mr);
 
@@ -761,7 +763,8 @@ cudf::join_match_context hash_join<Hasher>::full_join_match_context(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr) const
 {
-  CUDF_FUNC_RANGE();
+  cudf::scoped_range range{"hash_join::full_join_match_context"};
+
   auto match_counts =
     std::make_unique<rmm::device_uvector<size_type>>(probe.num_rows(), stream, mr);
 
