@@ -18,6 +18,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/detail/join/join.hpp>
 #include <cudf/hashing.hpp>
+#include <cudf/join/join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -187,6 +188,30 @@ struct hash_join {
   std::size_t full_join_size(cudf::table_view const& probe,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr) const;
+
+  /**
+   * @copydoc cudf::hash_join::inner_join_match_context
+   */
+  [[nodiscard]] cudf::join_match_context inner_join_match_context(
+    cudf::table_view const& probe,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
+
+  /**
+   * @copydoc cudf::hash_join::left_join_match_context
+   */
+  [[nodiscard]] cudf::join_match_context left_join_match_context(
+    cudf::table_view const& probe,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
+
+  /**
+   * @copydoc cudf::hash_join::full_join_match_context
+   */
+  [[nodiscard]] cudf::join_match_context full_join_match_context(
+    cudf::table_view const& probe,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
 
  private:
   /**

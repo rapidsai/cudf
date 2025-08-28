@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/hashing.hpp>
+#include <cudf/join/join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -238,6 +239,82 @@ class hash_join {
    * and `probe` as the join keys .
    */
   [[nodiscard]] std::size_t full_join_size(
+    cudf::table_view const& probe,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
+
+  /**
+   * @brief Returns context information about matches between the probe and build tables.
+   *
+   * This method computes, for each row in the probe table, how many matching rows exist in
+   * the build table according to inner join semantics, and returns the number of matches through a
+   * join_match_context object.
+   *
+   * This is particularly useful for:
+   * - Determining the total size of a potential join result without materializing it
+   * - Planning partitioned join operations for large datasets
+   *
+   * @param probe The probe table to join with the pre-processed build table
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the result device memory
+   *
+   * @throw cudf::logic_error If the input probe table has nulls while this hash_join object was not
+   * constructed with null check.
+   *
+   * @return A join_match_context object containing the probe table view and a device vector
+   *         of match counts for each row in the probe table
+   */
+  [[nodiscard]] cudf::join_match_context inner_join_match_context(
+    cudf::table_view const& probe,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
+
+  /**
+   * @brief Returns context information about matches between the probe and build tables.
+   *
+   * This method computes, for each row in the probe table, how many matching rows exist in
+   * the build table according to left join semantics, and returns the number of matches through a
+   * join_match_context object.
+   *
+   * For left join, every row in the probe table will have at least one match (either with a
+   * matching row from the build table or with a null placeholder).
+   *
+   * @param probe The probe table to join with the pre-processed build table
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the result device memory
+   *
+   * @throw cudf::logic_error If the input probe table has nulls while this hash_join object was not
+   * constructed with null check.
+   *
+   * @return A join_match_context object containing the probe table view and a device vector
+   *         of match counts for each row in the probe table
+   */
+  [[nodiscard]] cudf::join_match_context left_join_match_context(
+    cudf::table_view const& probe,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
+
+  /**
+   * @brief Returns context information about matches between the probe and build tables.
+   *
+   * This method computes, for each row in the probe table, how many matching rows exist in
+   * the build table according to full join semantics, and returns the number of matches through a
+   * join_match_context object.
+   *
+   * For full join, this includes matches for probe table rows, and the result may need to be
+   * combined with unmatched rows from the build table to get the complete picture.
+   *
+   * @param probe The probe table to join with the pre-processed build table
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the result device memory
+   *
+   * @throw cudf::logic_error If the input probe table has nulls while this hash_join object was not
+   * constructed with null check.
+   *
+   * @return A join_match_context object containing the probe table view and a device vector
+   *         of match counts for each row in the probe table
+   */
+  [[nodiscard]] cudf::join_match_context full_join_match_context(
     cudf::table_view const& probe,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
