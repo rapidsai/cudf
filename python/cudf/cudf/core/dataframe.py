@@ -7787,12 +7787,25 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         if self._num_columns == 0:
             col = column_empty(len(self), dtype=dtype)
         else:
-            plc_column = plc.Column.struct_from_children(
-                (
-                    col.copy(deep=True).to_pylibcudf(mode="read")
-                    for col in self._columns
-                ),
+            first_null_count = self._columns[0].null_count
+            children = (
+                col.copy(deep=True).to_pylibcudf(mode="read")
+                for col in self._columns
             )
+            if all(
+                col.null_count == first_null_count for col in self._columns
+            ):
+                plc_column = plc.Column.struct_from_children(children)
+            else:
+                plc_column = plc.Column(
+                    plc.DataType(plc.type_id.STRUCT),
+                    len(self),
+                    None,
+                    None,
+                    0,
+                    0,
+                    list(children),
+                )
             col = ColumnBase.from_pylibcudf(plc_column)._with_type_metadata(
                 dtype
             )
