@@ -10,11 +10,6 @@ else:
     libcudf.load_library()
     del libcudf
 
-from cudf.utils.gpu_utils import validate_setup
-
-validate_setup()
-
-del validate_setup
 import cupy
 from numba import cuda
 

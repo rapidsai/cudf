@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from cython.operator cimport dereference
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
@@ -15,6 +15,8 @@ from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.scalar cimport Scalar
 from pylibcudf.strings.regex_flags cimport regex_flags
 from pylibcudf.strings.regex_program cimport RegexProgram
+from pylibcudf.utils cimport _get_stream
+from rmm.pylibrmm.stream cimport Stream
 
 __all__ = ["replace_re", "replace_with_backrefs"]
 
@@ -58,11 +60,13 @@ cpdef Column replace_re(
     """
     cdef unique_ptr[column] c_result
     cdef vector[string] c_patterns
+    cdef Stream stream
 
     if Patterns is RegexProgram and Replacement is Scalar:
         if replacement is None:
+            stream = _get_stream(None)
             replacement = Scalar.from_libcudf(
-                cpp_make_string_scalar("".encode())
+                cpp_make_string_scalar("".encode(), stream.view())
             )
         with nogil:
             c_result = move(

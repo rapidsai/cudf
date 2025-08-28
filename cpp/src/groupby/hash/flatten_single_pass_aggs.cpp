@@ -72,6 +72,7 @@ class groupby_simple_aggregations_collector final
                                                   cudf::detail::m2_aggregation const&) override
   {
     std::vector<std::unique_ptr<aggregation>> aggs;
+    aggs.push_back(make_sum_of_squares_aggregation());
     aggs.push_back(make_sum_aggregation());
     // COUNT_VALID
     aggs.push_back(make_count_aggregation());
@@ -83,6 +84,7 @@ class groupby_simple_aggregations_collector final
                                                   cudf::detail::var_aggregation const&) override
   {
     std::vector<std::unique_ptr<aggregation>> aggs;
+    aggs.push_back(make_sum_of_squares_aggregation());
     aggs.push_back(make_sum_aggregation());
     // COUNT_VALID
     aggs.push_back(make_count_aggregation());
@@ -94,6 +96,7 @@ class groupby_simple_aggregations_collector final
                                                   cudf::detail::std_aggregation const&) override
   {
     std::vector<std::unique_ptr<aggregation>> aggs;
+    aggs.push_back(make_sum_of_squares_aggregation());
     aggs.push_back(make_sum_aggregation());
     // COUNT_VALID
     aggs.push_back(make_count_aggregation());
