@@ -73,7 +73,6 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
     is_pandas_nullable_extension_dtype,
     min_signed_type,
-    min_unsigned_type,
     np_dtypes_to_pandas_dtypes,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
@@ -1851,37 +1850,18 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def as_categorical_column(
         self, dtype: CategoricalDtype
     ) -> CategoricalColumn:
-        ordered = dtype.ordered
-
-        # Re-label self w.r.t. the provided categories
         if dtype._categories is not None:
-            cat_col = dtype._categories
-            return (
-                self._label_encoding(cats=cat_col)  # type: ignore[return-value]
-                .set_mask(self.mask)
-                ._with_type_metadata(dtype)
-            )
-
-        # Categories must be unique and sorted in ascending order.
-        cats = self.unique().sort_values()
-        label_dtype = min_unsigned_type(len(cats))
-        labels = self._label_encoding(
-            cats=cats, dtype=label_dtype, na_sentinel=pa.scalar(1)
-        )
-        # columns include null index in factorization; remove:
-        if self.has_nulls():
-            cats = cats.dropna()
-
-        labels = cudf.core.column.categorical.as_unsigned_codes(
-            len(cats), labels
-        )
-        return cudf.core.column.categorical.CategoricalColumn(
-            data=None,
-            size=None,
-            dtype=CategoricalDtype(categories=cats, ordered=ordered),
-            mask=self.mask,
-            children=(labels,),
-        )
+            # Re-label self w.r.t. the provided categories
+            codes = self._label_encoding(cats=dtype._categories)
+        else:
+            # Compute categories from self
+            cats = self.unique().sort_values()
+            codes = self._label_encoding(cats=cats)
+            if self.has_nulls():
+                # TODO: Make dropna shallow copy if there are no nulls?
+                cats = cats.dropna()
+            dtype = CategoricalDtype(categories=cats, ordered=dtype.ordered)
+        return codes.set_mask(self.mask)._with_type_metadata(dtype)  # type: ignore[return-value]
 
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
         raise NotImplementedError
