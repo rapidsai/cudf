@@ -12,6 +12,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+from cudf_polars.utils.versions import POLARS_VERSION_LT_132
 
 
 @pytest.fixture
@@ -108,7 +109,7 @@ def test_over_mapping_strategy(df: pl.LazyFrame, mapping_strategy: str):
     q = df.with_columns(
         [pl.col("b").rank().over(pl.col("a"), mapping_strategy=mapping_strategy)]  # type: ignore[arg-type]
     )
-    if mapping_strategy == "group_to_rows":
+    if not POLARS_VERSION_LT_132 and mapping_strategy == "group_to_rows":
         assert_gpu_result_equal(q)
     else:
         assert_ir_translation_raises(q, NotImplementedError)
