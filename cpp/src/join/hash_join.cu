@@ -44,6 +44,7 @@
 #include <thrust/uninitialized_fill.h>
 
 #include <cstddef>
+#include <memory>
 
 namespace cudf {
 namespace detail {
@@ -55,7 +56,7 @@ using hash_table_t = cudf::hash_join::impl_type::hash_table_t;
 // mixed-join migration
 template <typename Hasher>
 struct pair_fn {
-  pair_fn(Hasher hash) : _hash{hash} {}
+  pair_fn(Hasher hash) : _hash{std::move(hash)} {}
 
   __device__ cuco::pair<hash_value_type, size_type> operator()(size_type i) const noexcept
   {
@@ -542,7 +543,7 @@ hash_join<Hasher>::hash_join(cudf::table_view const& build,
       cudf::experimental::row::equality::preprocessed_table::create(_build, stream)}
 {
   CUDF_FUNC_RANGE();
-  CUDF_EXPECTS(0 != build.num_columns(), "Hash join build table is empty");
+  CUDF_EXPECTS(0 != build.num_columns(), "Hash join build table is empty", std::invalid_argument);
   CUDF_EXPECTS(load_factor > 0 && load_factor <= 1,
                "Invalid load factor: must be greater than 0 and less than or equal to 1.",
                std::invalid_argument);
@@ -606,7 +607,8 @@ std::size_t hash_join<Hasher>::inner_join_size(cudf::table_view const& probe,
   if (_is_empty) { return 0; }
 
   CUDF_EXPECTS(_has_nulls || !cudf::has_nested_nulls(probe),
-               "Probe table has nulls while build table was not hashed with null check.");
+               "Probe table has nulls while build table was not hashed with null check.",
+               std::invalid_argument);
 
   auto const preprocessed_probe =
     cudf::experimental::row::equality::preprocessed_table::create(probe, stream);
@@ -632,7 +634,8 @@ std::size_t hash_join<Hasher>::left_join_size(cudf::table_view const& probe,
   if (_is_empty) { return probe.num_rows(); }
 
   CUDF_EXPECTS(_has_nulls || !cudf::has_nested_nulls(probe),
-               "Probe table has nulls while build table was not hashed with null check.");
+               "Probe table has nulls while build table was not hashed with null check.",
+               std::invalid_argument);
 
   auto const preprocessed_probe =
     cudf::experimental::row::equality::preprocessed_table::create(probe, stream);
@@ -659,7 +662,8 @@ std::size_t hash_join<Hasher>::full_join_size(cudf::table_view const& probe,
   if (_is_empty) { return probe.num_rows(); }
 
   CUDF_EXPECTS(_has_nulls || !cudf::has_nested_nulls(probe),
-               "Probe table has nulls while build table was not hashed with null check.");
+               "Probe table has nulls while build table was not hashed with null check.",
+               std::invalid_argument);
 
   auto const preprocessed_probe =
     cudf::experimental::row::equality::preprocessed_table::create(probe, stream);
@@ -682,7 +686,8 @@ void hash_join<Hasher>::compute_match_counts(cudf::table_view const& probe,
                                              rmm::cuda_stream_view stream) const
 {
   CUDF_EXPECTS(_has_nulls || !cudf::has_nested_nulls(probe),
-               "Probe table has nulls while build table was not hashed with null check.");
+               "Probe table has nulls while build table was not hashed with null check.",
+               std::invalid_argument);
 
   auto const preprocessed_probe =
     cudf::experimental::row::equality::preprocessed_table::create(probe, stream);
@@ -797,7 +802,8 @@ hash_join<Hasher>::probe_join_indices(cudf::table_view const& probe_table,
   CUDF_EXPECTS(!_is_empty, "Hash table of hash join is null.");
 
   CUDF_EXPECTS(_has_nulls || !cudf::has_nested_nulls(probe_table),
-               "Probe table has nulls while build table was not hashed with null check.");
+               "Probe table has nulls while build table was not hashed with null check.",
+               std::invalid_argument);
 
   auto const preprocessed_probe =
     cudf::experimental::row::equality::preprocessed_table::create(probe_table, stream);
@@ -830,13 +836,15 @@ hash_join<Hasher>::compute_hash_join(cudf::table_view const& probe,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr) const
 {
-  CUDF_EXPECTS(0 != probe.num_columns(), "Hash join probe table is empty");
+  CUDF_EXPECTS(0 != probe.num_columns(), "Hash join probe table is empty", std::invalid_argument);
 
   CUDF_EXPECTS(_build.num_columns() == probe.num_columns(),
-               "Mismatch in number of columns to be joined on");
+               "Mismatch in number of columns to be joined on",
+               std::invalid_argument);
 
   CUDF_EXPECTS(_has_nulls || !cudf::has_nested_nulls(probe),
-               "Probe table has nulls while build table was not hashed with null check.");
+               "Probe table has nulls while build table was not hashed with null check.",
+               std::invalid_argument);
 
   if (is_trivial_join(probe, _build, join)) {
     return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
