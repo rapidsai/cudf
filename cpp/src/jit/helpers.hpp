@@ -22,6 +22,8 @@
 #include <jit/span.cuh>
 #include <jit_preprocessed_files/transform/jit/kernel.cu.jit.hpp>
 
+#include <algorithm>
+
 namespace cudf {
 namespace jit {
 namespace {
@@ -29,6 +31,25 @@ namespace {
 constexpr bool is_scalar(cudf::size_type base_column_size, cudf::size_type column_size)
 {
   return column_size == 1 && column_size != base_column_size;
+}
+
+auto get_transform_base_column(std::vector<column_view> const& inputs)
+{
+  // TODO(lamarrr): remove ambiguous row-size-related logic for processing scalars in transforms and
+  // filters and use strongly-typed scalars
+
+  if (inputs.empty()) { return inputs.end(); }
+
+  auto [smallest, largest] = std::minmax_element(
+    inputs.begin(), inputs.end(), [](auto const& a, auto const& b) { return a.size() < b.size(); });
+
+  /// when the largest size is 1, the size-1 column could be a scalar or an actual column, it would
+  /// be a scalar if it has columns that are zero-sized
+  if (largest->size() != 1) { return largest; }
+
+  if (smallest->size() == 0) { return smallest; }
+
+  return largest;
 }
 
 struct input_column_reflection {

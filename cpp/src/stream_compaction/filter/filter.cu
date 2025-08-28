@@ -321,9 +321,7 @@ std::vector<std::unique_ptr<column>> filter(std::vector<column_view> const& pred
   CUDF_EXPECTS(
     !filter_columns.empty(), "Filters must have at least 1 column", std::invalid_argument);
 
-  auto const base_column = std::max_element(predicate_columns.begin(),
-                                            predicate_columns.end(),
-                                            [](auto& a, auto& b) { return a.size() < b.size(); });
+  auto const base_column = cudf::jit::get_transform_base_column(predicate_columns);
 
   perform_checks(*base_column, predicate_columns, filter_columns);
 
