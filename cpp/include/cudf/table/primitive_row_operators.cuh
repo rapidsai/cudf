@@ -254,7 +254,7 @@ class row_hasher {
     element_hasher<Hash> hasher;
     // avoid hash combine call if there is only one column
     auto hash = cuda::std::numeric_limits<hash_value_type>::max();
-    if (!(_has_nulls && _table.column(0).is_null(row_index))) {
+    if (!_has_nulls || !_table.column(0).is_null(row_index)) {
       hash = cudf::type_dispatcher<dispatch_primitive_type>(
         _table.column(0).type(), hasher, _seed, _table.column(0), row_index);
     }
