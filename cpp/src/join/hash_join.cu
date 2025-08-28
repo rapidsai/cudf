@@ -489,8 +489,10 @@ std::size_t get_full_join_size(
     // Assume all the indices in invalid_index_map are invalid
     auto invalid_index_map =
       std::make_unique<rmm::device_uvector<size_type>>(right_table_row_count, stream);
-    thrust::uninitialized_fill(
-      rmm::exec_policy(stream), invalid_index_map->begin(), invalid_index_map->end(), int32_t{1});
+    thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
+                               invalid_index_map->begin(),
+                               invalid_index_map->end(),
+                               int32_t{1});
 
     // Functor to check for index validity since left joins can create invalid indices
     valid_range<size_type> valid(0, right_table_row_count);
@@ -723,7 +725,7 @@ cudf::join_match_context hash_join<Hasher>::inner_join_match_context(
     std::make_unique<rmm::device_uvector<size_type>>(probe.num_rows(), stream, mr);
 
   if (_is_empty) {
-    thrust::fill(rmm::exec_policy(stream), match_counts->begin(), match_counts->end(), 0);
+    thrust::fill(rmm::exec_policy_nosync(stream), match_counts->begin(), match_counts->end(), 0);
   } else {
     compute_match_counts(probe, match_counts->begin(), stream);
   }
@@ -742,7 +744,7 @@ cudf::join_match_context hash_join<Hasher>::left_join_match_context(
     std::make_unique<rmm::device_uvector<size_type>>(probe.num_rows(), stream, mr);
 
   if (_is_empty) {
-    thrust::fill(rmm::exec_policy(stream), match_counts->begin(), match_counts->end(), 1);
+    thrust::fill(rmm::exec_policy_nosync(stream), match_counts->begin(), match_counts->end(), 1);
   } else {
     auto transform = [] __device__(size_type count) { return count == 0 ? 1 : count; };
     auto transformed_output =
@@ -764,7 +766,7 @@ cudf::join_match_context hash_join<Hasher>::full_join_match_context(
     std::make_unique<rmm::device_uvector<size_type>>(probe.num_rows(), stream, mr);
 
   if (_is_empty) {
-    thrust::fill(rmm::exec_policy(stream), match_counts->begin(), match_counts->end(), 1);
+    thrust::fill(rmm::exec_policy_nosync(stream), match_counts->begin(), match_counts->end(), 1);
   } else {
     auto transform = [] __device__(size_type count) { return count == 0 ? 1 : count; };
     auto transformed_output =
