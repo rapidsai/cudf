@@ -41,9 +41,8 @@ rapids-logger "pytest custreamz"
   --cov-report=term
 
 rapids-logger "pytest cudf-polars"
-./ci/run_cudf_polars_pytests.sh \
+MAX_PYTEST_WORKERS=8 ./ci/run_cudf_polars_pytests.sh \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars.xml" \
-  --numprocesses=8 \
   --dist=worksteal \
   --cov-config=./pyproject.toml \
   --cov=cudf_polars \
