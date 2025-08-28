@@ -355,9 +355,11 @@ struct PageInfo {
   int32_t skipped_leaf_values;
   // for string columns only, the size of all the chars in the string for
   // this page. only valid/computed during the base preprocess pass
-  size_t str_offset;  // offset into string data for this page
-  int32_t str_bytes;
-  bool has_page_index;  // true if str_bytes, num_valids, etc are derivable from page indexes
+  size_t str_offset;      // offset into string data for this page
+  int32_t str_bytes;      // in the case where we have selected a subset of rows, this will
+                          // reflect the subset
+  int32_t str_bytes_all;  // this reflects all rows
+  bool has_page_index;    // true if str_bytes, num_valids, etc are derivable from page indexes
 
   // nesting information (input/output) for each page. this array contains
   // input column nesting information, output column nesting information and
@@ -739,7 +741,6 @@ uint32_t GetAggregatedDecodeKernelMask(cudf::detail::hostdevice_span<PageInfo co
  * - We need to determine information about where to start decoding the value stream
  *   if we are using custom user bounds (skip_rows / num_rows)
  * - We need to determine actual number of top level rows per page
- * - If we are doing a chunked read, we need to determine the total string size per page
  *
  *
  * @param pages All pages to be decoded
@@ -748,8 +749,6 @@ uint32_t GetAggregatedDecodeKernelMask(cudf::detail::hostdevice_span<PageInfo co
  * @param num_rows Maximum number of rows to read
  * @param compute_num_rows If set to true, the num_rows field in PageInfo will be
  * computed
- * @param compute_string_sizes If set to true, the str_bytes field in PageInfo will
- * be computed
  * @param level_type_size Size in bytes of the type for level decoding
  * @param stream CUDA stream to use
  */
@@ -758,7 +757,6 @@ void compute_page_sizes(cudf::detail::hostdevice_span<PageInfo> pages,
                         size_t min_row,
                         size_t num_rows,
                         bool compute_num_rows,
-                        bool compute_string_sizes,
                         int level_type_size,
                         rmm::cuda_stream_view stream);
 
@@ -775,7 +773,8 @@ void ComputePageStringSizesPass1(cudf::detail::hostdevice_span<PageInfo> pages,
                                  size_t num_rows,
                                  uint32_t kernel_mask,
                                  rmm::cuda_stream_view stream,
-                                 bool all_values);
+                                 bool all_values,
+                                 int level_type_size);
 
 /**
  * @brief Compute string page output size information.

@@ -69,14 +69,6 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
     // Compute column string sizes (using page string offsets) for this output table chunk
     col_string_sizes = calculate_page_string_offsets();
 
-    /*
-      printf("CSS\n");
-      for(size_t idx=0; idx<col_string_sizes.size(); idx++){
-        printf("%d ", (int)col_string_sizes[idx]);
-      }
-      printf("\n");
-      */
-
     // Check for overflow in cumulative column string sizes of this pass so that the page string
     // offsets of overflowing (large) string columns are treated as 64-bit.
     auto const threshold         = static_cast<size_t>(strings::detail::get_offset64_threshold());
@@ -414,14 +406,6 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
   // Copy over initial string offsets from device
   auto h_initial_str_offsets = cudf::detail::make_host_vector_async(initial_str_offsets, _stream);
 
-  /*
-  _stream.synchronize();
-  for(size_t idx=0; idx<h_initial_str_offsets.size(); idx++){
-    printf("%d ", (int)h_initial_str_offsets[idx]);
-  }
-  printf("\n");
-  */
-
   if (auto const error = error_code.value_sync(_stream); error != 0) {
     CUDF_FAIL("Parquet data decode failed with code(s) " + kernel_error::to_string(error));
   }
@@ -615,51 +599,18 @@ void reader::impl::preprocess_chunk_strings(row_range const& read_info)
   bool full_string_sizes_computed = _output_chunk_read_limit > 0;
   bool const need_string_size_recompute =
     (!full_string_sizes_computed) ||
-    ((subpass.skip_rows != read_info.skip_rows) || (subpass.num_rows != read_info.num_rows));
-
-  ComputePageStringBounds(subpass.pages,
-                          pass.chunks,
-                          read_info.skip_rows,
-                          read_info.num_rows,
-                          pass.level_type_size,
-                          _stream);
-  /*
-  {
-    auto h_pages = cudf::detail::make_std_vector(subpass.pages, _stream);
-    for(size_t idx=0; idx<h_pages.size(); idx++){
-      auto const& p = h_pages[idx];
-      if(BitAnd(p.kernel_mask, STRINGS_MASK)){
-        printf("P(%lu): %lu (%d %d) %d %d\n", idx, (size_t)p.str_bytes,
-                                             (int)p.start_val, (int)p.end_val,
-                                             (int)p.num_nulls,
-                                             (int)p.num_valids);
-      }
-    }
-  }
-  */
+    ((pass.skip_rows != read_info.skip_rows) || (pass.num_rows != read_info.num_rows));
 
   if (need_string_size_recompute) {
-    // printf("String size recompute\n");
     ComputePageStringSizesPass1(subpass.pages,
                                 pass.chunks,
                                 read_info.skip_rows,
                                 read_info.num_rows,
                                 subpass.kernel_mask,
                                 _stream,
-                                false);
+                                false,
+                                _pass_itm_data->level_type_size);
   }
-
-  /*
-  {
-    auto h_pages = cudf::detail::make_std_vector(subpass.pages, _stream);
-    for(size_t idx=0; idx<h_pages.size(); idx++){
-      auto const& p = h_pages[idx];
-      if(BitAnd(p.kernel_mask, STRINGS_MASK)){
-        printf("P(%lu): %lu (%d %d)\n", idx, (size_t)p.str_bytes, (int)p.start_val, (int)p.end_val);
-      }
-    }
-  }
-  */
 
   //
   ComputePageStringSizesPass2(subpass.pages,
@@ -670,18 +621,6 @@ void reader::impl::preprocess_chunk_strings(row_range const& read_info)
                               pass.level_type_size,
                               subpass.kernel_mask,
                               _stream);
-
-  /*
-    {
-      auto h_pages = cudf::detail::make_std_vector(subpass.pages, _stream);
-      for(size_t idx=0; idx<h_pages.size(); idx++){
-        auto const& p = h_pages[idx];
-        if(BitAnd(p.kernel_mask, STRINGS_MASK)){
-          printf("P(%lu): %lu\n", idx, (size_t)p.str_bytes);
-        }
-      }
-    }
-    */
 }
 
 table_with_metadata reader::impl::read_chunk_internal(read_mode mode)
@@ -723,6 +662,21 @@ table_with_metadata reader::impl::read_chunk_internal(read_mode mode)
   auto& pass            = *_pass_itm_data;
   auto& subpass         = *pass.subpass;
   auto const& read_info = subpass.output_chunk_read_info[subpass.current_output_chunk];
+
+  // computes:
+  // PageNestingInfo::batch_size for each level of nesting, for each page, taking row bounds into
+  // account. PageInfo::skipped_values, which tells us where to start decoding in the input to
+  // respect the user bounds. It is only necessary to do this second pass if uses_custom_row_bounds
+  // is set (if the user has specified artificial bounds).
+  if (uses_custom_row_bounds(mode)) {
+    compute_page_sizes(subpass.pages,
+                       pass.chunks,
+                       read_info.skip_rows,
+                       read_info.num_rows,
+                       false,  // num_rows is already computed
+                       pass.level_type_size,
+                       _stream);
+  }
 
   // preprocess strings
   preprocess_chunk_strings(read_info);

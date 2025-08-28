@@ -298,7 +298,6 @@ __device__ thrust::pair<int, int> page_bounds(
       pp->num_nulls  = null_count;
       pp->num_valids = pp->num_input_values - null_count;
     }
-
     end_value -= pp->num_nulls;
   }
 
@@ -608,7 +607,9 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size) gpuComputeStringPageBo
       s->page.num_valids = 0;
     }
     // reset str_bytes to 0 in case it's already been calculated (esp needed for chunked reads).
-    // pp->str_bytes = 0;
+    pp->str_bytes = 0;
+    pp->start_val = 0;
+    pp->end_val   = 0;
   }
 
   // whether or not we have repetition levels (lists)
@@ -682,8 +683,6 @@ CUDF_KERNEL void __launch_bounds__(delta_preproc_block_size)
   // whether or not we have repetition levels (lists)
   bool const has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
 
-  if (t == 0) { pp->str_bytes = 0; }
-
   // setup page info
   if (!setup_local_page_info(s,
                              pp,
@@ -717,7 +716,11 @@ CUDF_KERNEL void __launch_bounds__(delta_preproc_block_size)
     // if we have size info, then we only need to do this for bounds pages
     if (pp->has_page_index && !is_bounds_pg) {
       // check if we need to store values from the index
-      if (is_page_contained(s, min_row, num_rows)) { pp->str_bytes = pp->str_bytes_from_index; }
+      if (t == 0 && is_page_contained(s, min_row, num_rows)) {
+        pp->str_bytes = pp->str_bytes_from_index;
+        // record the full size so that we don't have to recompute every chunk.
+        if (all_values) { pp->str_bytes_all = pp->str_bytes; }
+      }
       return;
     }
 
@@ -736,6 +739,9 @@ CUDF_KERNEL void __launch_bounds__(delta_preproc_block_size)
       if (start_value > 0) { pp->temp_string_size = temp_bytes; }
     }
   }
+
+  // record the full size so that we don't have to recompute every chunk.
+  if (t == 0 && all_values) { pp->str_bytes_all = pp->str_bytes; }
 }
 
 /**
@@ -773,8 +779,6 @@ CUDF_KERNEL void __launch_bounds__(delta_length_block_size)
   // whether or not we have repetition levels (lists)
   bool const has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
 
-  if (t == 0) { pp->str_bytes = 0; }
-
   // setup page info
   if (!setup_local_page_info(s,
                              pp,
@@ -791,7 +795,12 @@ CUDF_KERNEL void __launch_bounds__(delta_length_block_size)
   // if we have size info, then we only need to do this for bounds pages
   if (pp->has_page_index && !is_bounds_pg) {
     // check if we need to store values from the index
-    if (is_page_contained(s, min_row, num_rows)) { pp->str_bytes = pp->str_bytes_from_index; }
+    if (t == 0 && is_page_contained(s, min_row, num_rows)) {
+      pp->str_bytes = pp->str_bytes_from_index;
+
+      // record the full size so that we don't have to recompute every chunk.
+      if (all_values) { pp->str_bytes_all = pp->str_bytes; }
+    }
     return;
   }
 
@@ -845,6 +854,9 @@ CUDF_KERNEL void __launch_bounds__(delta_length_block_size)
     if (t == 0) {
       total_bytes += warp_sum;
       pp->str_bytes = total_bytes;
+
+      // record the full size so that we don't have to recompute every chunk.
+      if (all_values) { pp->str_bytes_all = pp->str_bytes; }
     }
   }
 }
@@ -877,8 +889,6 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   // whether or not we have repetition levels (lists)
   bool const has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
 
-  if (t == 0) { pp->str_bytes = 0; }
-
   // setup page info
   if (!setup_local_page_info(s,
                              pp,
@@ -895,7 +905,11 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   // if we have size info, then we only need to do this for bounds pages
   if (pp->has_page_index && !is_bounds_pg) {
     // check if we need to store values from the index
-    if (is_page_contained(s, min_row, num_rows)) { pp->str_bytes = pp->str_bytes_from_index; }
+    if (t == 0 && is_page_contained(s, min_row, num_rows)) {
+      pp->str_bytes = pp->str_bytes_from_index;
+    }
+    // record the full size so that we don't have to recompute every chunk.
+    if (all_values) { pp->str_bytes_all = pp->str_bytes; }
     return;
   }
 
@@ -946,6 +960,8 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   if (t == 0) {
     // TODO check for overflow
     pp->str_bytes = str_bytes;
+    // record the full size so that we don't have to recompute every chunk.
+    if (all_values) { pp->str_bytes_all = pp->str_bytes; }
 
     // only need temp space for delta
     pp->temp_string_size = 0;
@@ -967,15 +983,18 @@ struct page_tform_functor {
 
 }  // anonymous namespace
 
-void ComputePageStringBounds(cudf::detail::hostdevice_span<PageInfo> pages,
-                             cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-                             size_t min_row,
-                             size_t num_rows,
-                             int level_type_size,
-                             rmm::cuda_stream_view stream)
+void ComputePageStringSizesPass1(cudf::detail::hostdevice_span<PageInfo> pages,
+                                 cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                                 size_t min_row,
+                                 size_t num_rows,
+                                 uint32_t kernel_mask,
+                                 rmm::cuda_stream_view stream,
+                                 bool all_values,
+                                 int level_type_size)
 {
   dim3 const dim_block(preprocess_block_size, 1);
   dim3 const dim_grid(pages.size(), 1);  // 1 threadblock per page
+
   if (level_type_size == 1) {
     gpuComputeStringPageBounds<uint8_t>
       <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
@@ -983,18 +1002,6 @@ void ComputePageStringBounds(cudf::detail::hostdevice_span<PageInfo> pages,
     gpuComputeStringPageBounds<uint16_t>
       <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
   }
-}
-
-void ComputePageStringSizesPass1(cudf::detail::hostdevice_span<PageInfo> pages,
-                                 cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-                                 size_t min_row,
-                                 size_t num_rows,
-                                 uint32_t kernel_mask,
-                                 rmm::cuda_stream_view stream,
-                                 bool all_values)
-{
-  dim3 const dim_block(preprocess_block_size, 1);
-  dim3 const dim_grid(pages.size(), 1);  // 1 threadblock per page
 
   // kernel mask may contain other kernels we don't need to count
   int const count_mask = kernel_mask & STRINGS_MASK;
@@ -1004,18 +1011,15 @@ void ComputePageStringSizesPass1(cudf::detail::hostdevice_span<PageInfo> pages,
   int s_idx = 0;
   if (BitAnd(kernel_mask, decode_kernel_mask::DELTA_BYTE_ARRAY) != 0) {
     dim3 dim_delta(delta_preproc_block_size, 1);
-    // printf("PSS 1\n");
     gpuComputeDeltaPageStringSizes<<<dim_grid, dim_delta, 0, streams[s_idx++].value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows, all_values);
   }
   if (BitAnd(kernel_mask, decode_kernel_mask::DELTA_LENGTH_BA) != 0) {
     dim3 dim_delta(delta_length_block_size, 1);
-    // printf("PSS 2\n");
     gpuComputeDeltaLengthPageStringSizes<<<dim_grid, dim_delta, 0, streams[s_idx++].value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows, all_values);
   }
   if (BitAnd(kernel_mask, STRINGS_MASK_NON_DELTA) != 0) {
-    // printf("PSS 3\n");
     gpuComputePageStringSizes<<<dim_grid, dim_block, 0, streams[s_idx++].value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows, all_values);
   }

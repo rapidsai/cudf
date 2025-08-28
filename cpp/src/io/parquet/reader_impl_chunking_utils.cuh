@@ -484,7 +484,7 @@ struct get_page_output_size {
       }));
     return {
       0,
-      thrust::reduce(thrust::seq, iter, iter + page.num_output_nesting_levels) + page.str_bytes,
+      thrust::reduce(thrust::seq, iter, iter + page.num_output_nesting_levels) + page.str_bytes_all,
       page.src_col_schema};
   }
 };
