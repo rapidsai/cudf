@@ -471,9 +471,9 @@ transform_args ast_converter::compute_column(target target_id,
 {
   clear();
 
-  // TODO(lamarrr): properly handle null-sensitive operators
+  // TODO(lamarrr): support null-sensitive operators
 
-  // TODO(lamarrr): consider deduplicating input columns. See
+  // TODO(lamarrr): consider deduplicating ast expression's input column references. See
   // TransformTest/1.DeeplyNestedArithmeticLogicalExpression for reference
 
   generate_code(target_id, expr, args, stream, resource_ref);
