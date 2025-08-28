@@ -13,7 +13,7 @@ from rmm.pylibrmm.stream import DEFAULT_STREAM
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.expr import Col
 from cudf_polars.dsl.ir import IR
-from cudf_polars.dsl.tracing import nvtx_annotate_cudf_polars
+from cudf_polars.dsl.tracing import log_do_evaluate, nvtx_annotate_cudf_polars
 from cudf_polars.experimental.base import get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.experimental.utils import _concat
@@ -150,6 +150,7 @@ class Shuffle(IR):
         self.children = (df,)
 
     @classmethod
+    @log_do_evaluate
     def do_evaluate(
         cls,
         schema: Schema,

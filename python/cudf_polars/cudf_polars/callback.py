@@ -20,6 +20,7 @@ from polars.exceptions import ComputeError, PerformanceWarning
 
 import pylibcudf
 import rmm
+import rmm.statistics
 from rmm._cuda import gpu
 
 from cudf_polars.dsl.tracing import CUDF_POLARS_NVTX_DOMAIN
@@ -143,6 +144,7 @@ def set_memory_resource(
             ),
         )
     rmm.mr.set_current_device_resource(mr)
+    rmm.statistics.enable_statistics()
     try:
         yield mr
     finally:

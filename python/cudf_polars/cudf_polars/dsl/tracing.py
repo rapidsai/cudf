@@ -6,11 +6,145 @@
 from __future__ import annotations
 
 import functools
+import os
+import time
+from typing import TYPE_CHECKING, Any, Literal
 
 import nvtx
+from typing_extensions import ParamSpec
+
+import rmm
+import rmm.statistics
+
+import cudf_polars.containers
+
+try:
+    import structlog
+except ImportError:
+    HAS_STRUCTLOG = False
+else:
+    HAS_STRUCTLOG = True
+
+# Question: should this be toggleable at runtime?
+LOG_TRACES = HAS_STRUCTLOG and os.environ.get("CUDF_POLARS_LOG_TRACES", "0") in {
+    "1",
+    "true",
+    "y",
+    "yes",
+}
 
 CUDF_POLARS_NVTX_DOMAIN = "cudf_polars"
 
 nvtx_annotate_cudf_polars = functools.partial(
     nvtx.annotate, domain=CUDF_POLARS_NVTX_DOMAIN
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from cudf_polars.dsl import ir
+
+
+def make_snaphot(
+    node_type: type[ir.IR],
+    frames: list[cudf_polars.containers.DataFrame],
+    extra: dict[str, Any] | None = None,
+    phase: Literal["input", "output"] = "input",
+) -> dict:
+    """
+    Log the evaluation of an IR node.
+
+    Parameters
+    ----------
+    node_type
+        The type of the IR node.
+    frames
+        The frames being evaluated.
+    extra
+        Extra information to log.
+    phase
+        The phase of the evaluation. Either "input" or "output".
+    """
+    ir_name = node_type.__name__
+
+    d = {
+        "type": ir_name,
+        f"count_frames_{phase}": len(frames),
+        f"frames_{phase}": [
+            {
+                "shape": frame.table.shape(),
+                "size": sum(col.device_buffer_size() for col in frame.table.columns()),
+            }
+            for frame in frames
+        ],
+    }
+    d[f"total_bytes_{phase}"] = sum(x["size"] for x in d[f"frames_{phase}"])  # type: ignore[attr-defined]
+
+    stats = rmm.statistics.get_statistics()
+    if stats:
+        d.update(
+            {
+                f"rmm_current_bytes_{phase}": stats.current_bytes,
+                f"rmm_current_count_{phase}": stats.current_count,
+                f"rmm_peak_bytes_{phase}": stats.peak_bytes,
+                f"rmm_peak_count_{phase}": stats.peak_count,
+                f"rmm_total_bytes_{phase}": stats.total_bytes,
+                f"rmm_total_count_{phase}": stats.total_count,
+            }
+        )
+
+    if extra:
+        d.update(extra)
+
+    # log.info("Execute IR", **d)
+    return d
+
+
+P = ParamSpec("P")
+
+
+def log_do_evaluate(
+    func: Callable[P, cudf_polars.containers.DataFrame],
+) -> Callable[P, cudf_polars.containers.DataFrame]:
+    """
+    Decorator for an ``IR.do_evaluate`` method that logs information before and after evaluation.
+
+    Parameters
+    ----------
+    func
+        The ``IR.do_evaluate`` method to wrap.
+    """
+
+    @functools.wraps(func)
+    def wrapper(
+        cls: type[ir.IR], *args: Any, **kwargs: Any
+    ) -> cudf_polars.containers.DataFrame:
+        if LOG_TRACES:
+            log = structlog.get_logger()
+            frames = [
+                arg
+                for arg in list(args) + list(kwargs.values())
+                if isinstance(arg, cudf_polars.containers.DataFrame)
+            ]
+
+            before = make_snaphot(cls, frames, phase="input")
+
+            # TODO: fix these types! Want some way to say
+            #     Callable[ir.IR, *P.args, **P.kwargs], cudf_polars.containers.DataFrame]
+            # i.e. the first arg is an IR, it returns a DataFrame, and does
+            # whatever for the remaining args/kwargs.
+            start = time.monotonic_ns()
+            result = func(cls, *args, **kwargs)  # type: ignore
+            stop = time.monotonic_ns()
+
+            after = make_snaphot(
+                cls, [result], phase="output", extra={"start": start, "stop": stop}
+            )
+            record = before | after
+            log.info("Execute IR", **record)
+
+            return result
+        else:
+            return func(cls, *args, **kwargs)  # type: ignore
+
+    return wrapper  # type: ignore
