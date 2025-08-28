@@ -5081,7 +5081,7 @@ class TimedeltaProperties(BaseDatelikeProperties):
         """
         return self._return_result_like_self(self.series._column.nanoseconds)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def components(self) -> DataFrame:
         """
@@ -5109,7 +5109,7 @@ class TimedeltaProperties(BaseDatelikeProperties):
         3      0      0       35       35           656             0            0
         4     37     13       12       14           234             0            0
         """
-        ca = ColumnAccessor(self.series._column.components(), verify=False)
+        ca = ColumnAccessor(self.series._column.components, verify=False)
         return self.series._constructor_expanddim._from_data(
             ca, index=self.series.index
         )

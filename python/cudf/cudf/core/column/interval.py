@@ -1,6 +1,7 @@
 # Copyright (c) 2018-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
+import functools
 from typing import TYPE_CHECKING, Literal
 
 import pandas as pd
@@ -119,7 +120,7 @@ class IntervalColumn(StructColumn):
             children=struct_copy.base_children,  # type: ignore[arg-type]
         )
 
-    @property
+    @functools.cached_property
     def is_empty(self) -> ColumnBase:
         left_equals_right = (self.right == self.left).fillna(False)
         not_closed_both = as_column(
@@ -127,19 +128,19 @@ class IntervalColumn(StructColumn):
         )
         return left_equals_right & not_closed_both
 
-    @property
+    @functools.cached_property
     def is_non_overlapping_monotonic(self) -> bool:
         raise NotImplementedError(
             "is_overlapping is currently not implemented."
         )
 
-    @property
+    @functools.cached_property
     def is_overlapping(self) -> bool:
         raise NotImplementedError(
             "is_overlapping is currently not implemented."
         )
 
-    @property
+    @functools.cached_property
     def length(self) -> ColumnBase:
         return self.right - self.left
 
@@ -147,7 +148,7 @@ class IntervalColumn(StructColumn):
     def left(self) -> ColumnBase:
         return self.children[0]
 
-    @property
+    @functools.cached_property
     def mid(self) -> ColumnBase:
         try:
             return 0.5 * (self.left + self.right)
