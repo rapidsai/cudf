@@ -954,10 +954,9 @@ TEST_F(JoinTest, PartitionedInnerJoinWithNulls)
   cudf::sort_merge_join obj(t1.select(right_on), cudf::sorted::NO, compare_nulls, stream);
   auto match_context = obj.inner_join_match_context(
     t0.select(left_on), cudf::sorted::NO, stream, cudf::get_current_device_resource_ref());
-  auto partition_context = cudf::sort_merge_join::partition_context{std::move(match_context), 0, 0};
+  auto partition_context = cudf::join_partition_context{std::move(match_context), 0, 0};
 
-  auto join_and_gather = [&t0, &t1, &obj, stream](
-                           cudf::sort_merge_join::partition_context const& cxt) {
+  auto join_and_gather = [&t0, &t1, &obj, stream](cudf::join_partition_context const& cxt) {
     auto const [left_join_indices, right_join_indices] =
       obj.partitioned_inner_join(cxt, stream, cudf::get_current_device_resource_ref());
 

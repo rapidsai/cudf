@@ -558,7 +558,7 @@ sort_merge_join::inner_join(table_view const& left,
     });
 }
 
-sort_merge_join::match_context sort_merge_join::inner_join_match_context(
+cudf::join_match_context sort_merge_join::inner_join_match_context(
   table_view const& left,
   sorted is_left_sorted,
   rmm::cuda_stream_view stream,
@@ -606,18 +606,18 @@ sort_merge_join::match_context sort_merge_join::inner_join_match_context(
                         mapping.begin(),
                         unprocessed_matches_per_row.begin());
         stream.synchronize();
-        return match_context{
+        return join_match_context{
           left,
           std::make_unique<rmm::device_uvector<size_type>>(std::move(unprocessed_matches_per_row))};
       }
-      return match_context{left, std::move(matches_per_row)};
+      return join_match_context{left, std::move(matches_per_row)};
     });
 }
 
 // left_partition_end exclusive
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-sort_merge_join::partitioned_inner_join(sort_merge_join::partition_context const& context,
+sort_merge_join::partitioned_inner_join(cudf::join_partition_context const& context,
                                         rmm::cuda_stream_view stream,
                                         rmm::device_async_resource_ref mr)
 {
