@@ -421,20 +421,27 @@ def test_base_stats_join_key_info():
     ir = Translator(q._ldf.visit(), engine).translate_ir()
     config_options = ConfigOptions.from_polars_engine(engine)
     stats = collect_base_stats(ir, config_options)
+    join_info = stats.join_info
 
     # Check equivalence sets
     key_sets = sorted(
         sorted(tuple(cs.name for cs in k.column_stats) for k in group)
-        for group in find_equivalence_sets(stats.join_keys)
+        for group in find_equivalence_sets(join_info.key_map)
     )
     assert len(key_sets) == 2
     assert key_sets[0] == [("cust_id",), ("cust_id",)]
     assert key_sets[1] == [("prod_id", "loc_id"), ("prod_id", "loc_id")]
 
     # Check basic PK-FK unique-count heuristics
-    apply_pkfk_heuristics(stats.join_keys)
-    unique_count_estimate = stats.joins[ir][0].unique_count_estimate
-    assert unique_count_estimate == stats.joins[ir][1].unique_count_estimate
+    apply_pkfk_heuristics(join_info)
+    implied_unique_count = join_info.join_map[ir][0].implied_unique_count
+    assert implied_unique_count == join_info.join_map[ir][1].implied_unique_count
     assert (
-        q.select(pl.col("cust_id").n_unique()).collect().item() == unique_count_estimate
+        q.select(pl.col("cust_id").n_unique()).collect().item() == implied_unique_count
+    )
+    assert (
+        # Calling apply_pkfk_heuristics should update the implied_unique_count
+        # estimate on the associated ColumnSourceInfo as well
+        stats.column_stats[ir]["cust_id"].source_info.implied_unique_count.value
+        == implied_unique_count
     )

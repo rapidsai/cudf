@@ -74,7 +74,7 @@ class ColumnStat(Generic[T]):
 @dataclasses.dataclass
 class UniqueStats:
     """
-    Unique-value statistics.
+    Sampled unique-value statistics.
 
     Parameters
     ----------
@@ -84,6 +84,11 @@ class UniqueStats:
         Unique-value fraction. This corresponds to the total
         number of unique values (count) divided by the total
         number of rows.
+
+    Notes
+    -----
+    This class is used to track unique-value column statistics
+    that have been sampled from a data source.
     """
 
     count: ColumnStat[int] = dataclasses.field(default_factory=ColumnStat[int])
@@ -136,14 +141,22 @@ class ColumnSourceInfo:
     direct access to column-specific information.
     """
 
-    __slots__ = ("_allow_unique_sampling", "column_name", "table_source_info")
+    __slots__ = (
+        "_allow_unique_sampling",
+        "column_name",
+        "implied_unique_count",
+        "table_source_info",
+    )
     table_source_info: DataSourceInfo
     column_name: str
+    implied_unique_count: ColumnStat[int]
+    """Unique-value count implied by join heuristics."""
     _allow_unique_sampling: bool
 
     def __init__(self, table_source_info: DataSourceInfo, column_name: str) -> None:
         self.table_source_info = table_source_info
         self.column_name = column_name
+        self.implied_unique_count = ColumnStat[int](None)
         self._allow_unique_sampling = False
 
     @property
@@ -195,16 +208,16 @@ class ColumnStats:
         Child ColumnStats objects.
     source_info
         Column source information.
-    unique_stats
-        Unique-value statistics.
+    unique_count
+        Unique-value count.
     """
 
-    __slots__ = ("children", "name", "source_info", "unique_stats")
+    __slots__ = ("children", "name", "source_info", "unique_count")
 
     name: str
     children: tuple[ColumnStats, ...]
     source_info: ColumnSourceInfo
-    unique_stats: UniqueStats
+    unique_count: ColumnStat[int]
 
     def __init__(
         self,
@@ -212,12 +225,12 @@ class ColumnStats:
         *,
         children: tuple[ColumnStats, ...] = (),
         source_info: ColumnSourceInfo | None = None,
-        unique_stats: UniqueStats | None = None,
+        unique_count: ColumnStat[int] | None = None,
     ) -> None:
         self.name = name
         self.children = children
         self.source_info = source_info or ColumnSourceInfo(DataSourceInfo(), name)
-        self.unique_stats = unique_stats or UniqueStats()
+        self.unique_count = unique_count or ColumnStat[int](None)
 
     def new_parent(
         self,
@@ -245,8 +258,6 @@ class ColumnStats:
             children=(self,),
             # Want to reference the same DataSourceInfo
             source_info=self.source_info,
-            # Want fresh UniqueStats so we can mutate in place
-            unique_stats=UniqueStats(),
         )
 
 
@@ -267,12 +278,12 @@ class JoinKey:
     """
 
     column_stats: tuple[ColumnStats, ...]
-    unique_count_estimate: int | None
+    implied_unique_count: int | None
     """Estimated unique-value count from join heuristics."""
 
     def __init__(self, *column_stats: ColumnStats) -> None:
         self.column_stats = column_stats
-        self.unique_count_estimate = None
+        self.implied_unique_count = None
 
     @cached_property
     def source_row_count(self) -> int | None:
@@ -287,24 +298,39 @@ class JoinKey:
         )
 
 
+class JoinInfo:
+    """Join information."""
+
+    __slots__ = ("column_map", "join_map", "key_map")
+
+    column_map: MutableMapping[ColumnStats, set[ColumnStats]]
+    """Mapping between joined columns."""
+    key_map: MutableMapping[JoinKey, set[JoinKey]]
+    """Mapping between joined keys (groups of columns)."""
+    join_map: dict[IR, list[JoinKey]]
+    """Mapping between IR nodes and associated join keys."""
+
+    def __init__(self) -> None:
+        self.column_map: MutableMapping[ColumnStats, set[ColumnStats]] = defaultdict(
+            set[ColumnStats]
+        )
+        self.key_map: MutableMapping[JoinKey, set[JoinKey]] = defaultdict(set[JoinKey])
+        self.join_map: dict[IR, list[JoinKey]] = {}
+
+
 class StatsCollector:
     """Column statistics collector."""
 
-    __slots__ = ("column_stats", "join_keys", "joins", "row_count")
+    __slots__ = ("column_stats", "join_info", "row_count")
 
     row_count: dict[IR, ColumnStat[int]]
     """Estimated row count for each IR node."""
     column_stats: dict[IR, dict[str, ColumnStats]]
     """Column statistics for each IR node."""
-    join_keys: MutableMapping[JoinKey, set[JoinKey]]
-    """Join-key mappings."""
-    joins: dict[IR, list[JoinKey]]
-    """Join keys associated with each IR node."""
+    join_info: JoinInfo
+    """Join information."""
 
     def __init__(self) -> None:
         self.row_count: dict[IR, ColumnStat[int]] = {}
         self.column_stats: dict[IR, dict[str, ColumnStats]] = {}
-        self.join_keys: MutableMapping[JoinKey, set[JoinKey]] = defaultdict(
-            set[JoinKey]
-        )
-        self.joins: dict[IR, list[JoinKey]] = {}
+        self.join_info = JoinInfo()

@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import itertools
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar
 
 from cudf_polars.dsl.ir import (
     IR,
@@ -20,6 +20,7 @@ from cudf_polars.dsl.ir import (
 )
 from cudf_polars.dsl.traversal import post_traversal
 from cudf_polars.experimental.base import (
+    ColumnStat,
     ColumnStats,
     JoinKey,
     StatsCollector,
@@ -29,6 +30,7 @@ from cudf_polars.experimental.dispatch import initialize_column_stats
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
+    from cudf_polars.experimental.base import JoinInfo
     from cudf_polars.utils.config import ConfigOptions
 
 
@@ -58,48 +60,52 @@ def collect_base_stats(root: IR, config_options: ConfigOptions) -> StatsCollecto
     for node in post_traversal([root]):
         # Initialize column statistics from datasource information
         stats.column_stats[node] = initialize_column_stats(node, stats, config_options)
-        # Initialize Join-key information
-        initialize_join_key_info(node, stats, config_options)
+        # Initialize join information
+        if isinstance(node, Join):
+            initialize_join_info(node, stats)
     return stats
 
 
-def initialize_join_key_info(
-    node: IR, stats: StatsCollector, config_options: ConfigOptions
-) -> None:
+def initialize_join_info(node: Join, stats: StatsCollector) -> None:
     """
-    Initialize join-key information for the given node.
+    Initialize join information for the given node.
 
     Parameters
     ----------
     node
-        IR node to initialize join-key information for.
+        Join node to initialize join-key information for.
     stats
         StatsCollector object to update.
-    config_options
-        GPUEngine configuration options.
 
     Notes
     -----
-    This function updates ``stats.joins`` and ``stats.join_keys``.
+    This function updates ``stats.join_info``.
     """
-    if isinstance(node, Join):
-        # Only need to update join-key information for Join nodes.
-        left, right = node.children
-        lkey = JoinKey(*[stats.column_stats[left][n.name] for n in node.left_on])
-        rkey = JoinKey(*[stats.column_stats[right][n.name] for n in node.right_on])
-        stats.join_keys[lkey].add(rkey)
-        stats.join_keys[rkey].add(lkey)
-        stats.joins[node] = [lkey, rkey]
+    left, right = node.children
+    join_info = stats.join_info
+    right_keys = [stats.column_stats[right][n.name] for n in node.right_on]
+    left_keys = [stats.column_stats[left][n.name] for n in node.left_on]
+    lkey = JoinKey(*right_keys)
+    rkey = JoinKey(*left_keys)
+    join_info.key_map[lkey].add(rkey)
+    join_info.key_map[rkey].add(lkey)
+    join_info.join_map[node] = [lkey, rkey]
+    for u, v in zip(left_keys, right_keys, strict=True):
+        join_info.column_map[u].add(v)
+        join_info.column_map[v].add(u)
 
 
-def find_equivalence_sets(joins: Mapping[JoinKey, set[JoinKey]]) -> list[set[JoinKey]]:
+T = TypeVar("T")
+
+
+def find_equivalence_sets(join_map: Mapping[T, set[T]]) -> list[set[T]]:
     """
     Find equivalence sets in a join-key mapping.
 
     Parameters
     ----------
-    joins
-        Join-key mapping to find equivalence sets in.
+    join_map
+        Joined key or column mapping to find equivalence sets in.
 
     Returns
     -------
@@ -111,13 +117,13 @@ def find_equivalence_sets(joins: Mapping[JoinKey, set[JoinKey]]) -> list[set[Joi
     """
     seen = set()
     components = []
-    for v in joins:
+    for v in join_map:
         if v not in seen:
             cluster = {v}
             stack = [v]
             while stack:
                 node = stack.pop()
-                for n in joins[node]:
+                for n in join_map[node]:
                     if n not in cluster:
                         cluster.add(n)
                         stack.append(n)
@@ -126,30 +132,32 @@ def find_equivalence_sets(joins: Mapping[JoinKey, set[JoinKey]]) -> list[set[Joi
     return components
 
 
-def apply_pkfk_heuristics(joins: Mapping[JoinKey, set[JoinKey]]) -> None:
+def apply_pkfk_heuristics(join_info: JoinInfo) -> None:
     """
     Apply PK-FK unique-count heuristics to join keys.
 
     Parameters
     ----------
-    joins
-        Join-key mapping to apply PK-FK heuristics to.
+    join_info
+        Join information to apply PK-FK heuristics to.
 
     Notes
     -----
     This function modifies the ``JoinKey`` objects being tracked
-    in ``StatsCollector.joins`` and ``StatsCollector.join_keys``
-    using PK-FK heuristics to estimate the local unique-value count.
+    in ``StatsCollector.join_info`` using PK-FK heuristics to
+    estimate the "implied" unique-value count. This function also
+    modifies the inderlying ``ColumnStats`` objects included in
+    a join key.
     """
     # This applies the PK-FK matching scheme of
     # https://blobs.duckdb.org/papers/tom-ebergen-msc-thesis-join-order-optimization-with-almost-no-statistics.pdf
     # See section 3.2
-    for keys in find_equivalence_sets(joins):
-        unique_count_estimate = max(
+    for keys in find_equivalence_sets(join_info.key_map):
+        implied_unique_count = max(
             (
-                c.unique_count_estimate
+                c.implied_unique_count
                 for c in keys
-                if c.unique_count_estimate is not None
+                if c.implied_unique_count is not None
             ),
             # Default unique-count estimate is the minimum source row count
             default=min(
@@ -159,7 +167,29 @@ def apply_pkfk_heuristics(joins: Mapping[JoinKey, set[JoinKey]]) -> None:
         )
         for key in keys:
             # Update unique-count estimate for each join key
-            key.unique_count_estimate = unique_count_estimate
+            key.implied_unique_count = implied_unique_count
+
+    # We separately apply PK-FK heuristics to individual columns so
+    # that we can update ColumnStats.source_info.implied_unique_count
+    # and use the per-column information elsewhere in the query plan.
+    for cols in find_equivalence_sets(join_info.column_map):
+        unique_count = max(
+            (
+                cs.source_info.implied_unique_count.value
+                for cs in cols
+                if cs.source_info.implied_unique_count.value is not None
+            ),
+            default=min(
+                (
+                    cs.source_info.row_count.value
+                    for cs in cols
+                    if cs.source_info.row_count.value is not None
+                ),
+                default=None,
+            ),
+        )
+        for cs in cols:
+            cs.source_info.implied_unique_count = ColumnStat[int](unique_count)
 
 
 def _update_unique_stats_columns(
