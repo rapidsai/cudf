@@ -17,6 +17,7 @@
 #include "reader_impl.hpp"
 
 #include "error.hpp"
+#include "runtime/context.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/stream_compaction.hpp>
@@ -24,6 +25,7 @@
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/stream_compaction.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
@@ -817,20 +819,32 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
 
   // check if the output filter AST expression (= _expr_conv.get_converted_expr()) exists
   if (_expr_conv.get_converted_expr().has_value()) {
-    auto read_table = std::make_unique<table>(std::move(out_columns));
-    auto predicate  = cudf::detail::compute_column(*read_table,
-                                                  _expr_conv.get_converted_expr().value().get(),
-                                                  _stream,
-                                                  cudf::get_current_device_resource_ref());
-    CUDF_EXPECTS(predicate->view().type().id() == type_id::BOOL8,
-                 "Predicate filter should return a boolean");
-    // Exclude columns present in filter only in output
+    auto read_table         = std::make_unique<table>(std::move(out_columns));
     auto counting_it        = thrust::make_counting_iterator<std::size_t>(0);
     auto const output_count = read_table->num_columns() - _num_filter_only_columns;
     auto only_output        = read_table->select(counting_it, counting_it + output_count);
-    auto output_table = cudf::detail::apply_boolean_mask(only_output, *predicate, _stream, _mr);
+
     if (_num_filter_only_columns > 0) { out_metadata.schema_info.resize(output_count); }
-    return {std::move(output_table), std::move(out_metadata)};
+
+    if (!cudf::get_context().use_jit()) {
+      auto predicate = cudf::detail::compute_column(*read_table,
+                                                    _expr_conv.get_converted_expr().value().get(),
+                                                    _stream,
+                                                    cudf::get_current_device_resource_ref());
+      CUDF_EXPECTS(predicate->view().type().id() == type_id::BOOL8,
+                   "Predicate filter should return a boolean");
+      // Exclude columns present in filter only in output
+      auto output_table = cudf::detail::apply_boolean_mask(only_output, *predicate, _stream, _mr);
+      return {std::move(output_table), std::move(out_metadata)};
+    } else {
+      auto output_table = cudf::filter(read_table->view(),
+                                       _expr_conv.get_converted_expr().value().get(),
+                                       only_output,
+                                       _stream,
+                                       cudf::get_current_device_resource_ref());
+
+      return {std::move(output_table), std::move(out_metadata)};
+    }
   }
   return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
 }

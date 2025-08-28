@@ -34,6 +34,7 @@ class context {
  private:
   std::unique_ptr<jit::program_cache> _program_cache;
   bool _dump_codegen;
+  bool _use_jit;
 
  public:
   context();
@@ -46,6 +47,8 @@ class context {
   jit::program_cache& program_cache();
 
   bool dump_codegen() const;
+
+  bool use_jit() const;
 };
 
 std::unique_ptr<context>& get_context_ptr_ref();

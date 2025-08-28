@@ -2998,7 +2998,7 @@ TEST_F(ParquetReaderTest, RowBoundsAndFilter)
     auto const [table_with_metadata, expected] =
       read_parquet_table(filter_expression, rows_to_skip, rows_to_read);
 
-    CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), table_with_metadata.tbl->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view(), table_with_metadata.tbl->view());
 
     auto const& metadata = table_with_metadata.metadata;
     EXPECT_EQ(metadata.num_input_row_groups, 3);  // RGs: {1,2,3},{},{}
@@ -3072,7 +3072,7 @@ TEST_F(ParquetReaderTest, RowBoundsAndFilter)
     auto const [table_with_metadata, expected] =
       read_parquet_table(filter_expression, rows_to_skip, rows_to_read);
 
-    CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), table_with_metadata.tbl->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view(), table_with_metadata.tbl->view());
 
     auto const& metadata = table_with_metadata.metadata;
     EXPECT_EQ(metadata.num_input_row_groups, 6);  // RGs: {}, {1,2,3,4},{0,1}
@@ -3101,7 +3101,7 @@ TEST_F(ParquetReaderTest, RowBoundsAndFilter)
     auto const [table_with_metadata, expected] =
       read_parquet_table(filter_expression, rows_to_skip, rows_to_read);
 
-    CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), table_with_metadata.tbl->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view(), table_with_metadata.tbl->view());
 
     auto const& metadata = table_with_metadata.metadata;
     EXPECT_EQ(metadata.num_input_row_groups, 9);  // RGs: {},{1,2,3,4},{0,1,2,3,4}
@@ -3130,7 +3130,7 @@ TEST_F(ParquetReaderTest, RowBoundsAndFilter)
     auto const [table_with_metadata, expected] =
       read_parquet_table(filter_expression, rows_to_skip, rows_to_read);
 
-    CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), table_with_metadata.tbl->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view(), table_with_metadata.tbl->view());
 
     auto const& metadata = table_with_metadata.metadata;
     EXPECT_EQ(metadata.num_input_row_groups, 5);  // RGs: {},{0,1,2,3,4},{}
@@ -3159,7 +3159,7 @@ TEST_F(ParquetReaderTest, RowBoundsAndFilter)
     auto const [table_with_metadata, expected] =
       read_parquet_table(filter_expression, rows_to_skip, rows_to_read);
 
-    CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), table_with_metadata.tbl->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view(), table_with_metadata.tbl->view());
 
     auto const& metadata = table_with_metadata.metadata;
     EXPECT_EQ(metadata.num_input_row_groups, 5);  // RGs: {}, {0,1,2,3,4}, {}

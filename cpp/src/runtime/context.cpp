@@ -26,15 +26,21 @@
 
 namespace cudf {
 
-context::context() : _program_cache{std::make_unique<jit::program_cache>()}, _dump_codegen{false}
+context::context()
+  : _program_cache{std::make_unique<jit::program_cache>()}, _dump_codegen{false}, _use_jit{false}
 {
   auto dump_codegen_flag = getenv_or("LIBCUDF_DUMP_CODEGEN", std::string{"OFF"});
   _dump_codegen          = (dump_codegen_flag == "ON" || dump_codegen_flag == "1");
+
+  auto use_jit_flag = getenv_or("LIBCUDF_USE_JIT", std::string{"OFF"});
+  _use_jit          = (use_jit_flag == "ON" || use_jit_flag == "1");
 }
 
 jit::program_cache& context::program_cache() { return *_program_cache; }
 
 bool context::dump_codegen() const { return _dump_codegen; }
+
+bool context::use_jit() const { return _use_jit; }
 
 std::unique_ptr<context>& get_context_ptr_ref()
 {
