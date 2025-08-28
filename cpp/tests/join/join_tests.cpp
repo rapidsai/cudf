@@ -282,10 +282,10 @@ TEST_P(JoinParameterizedTest, InvalidInput)
   cudf::table_view right({right_first_col, right_second_col, right_third_col});
 
   EXPECT_THROW(inner_join(left, right, {0, 1}, {0, 1, 2}, cudf::null_equality::EQUAL, algo),
-               cudf::logic_error);
+               std::invalid_argument);
 
   EXPECT_THROW(inner_join(left, right, {}, {0, 1, 2}, cudf::null_equality::EQUAL, algo),
-               cudf::logic_error);
+               std::invalid_argument);
 }
 
 TEST_P(JoinParameterizedTest, EmptySentinelRepro)

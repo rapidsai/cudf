@@ -287,7 +287,7 @@ class sort_merge_join {
  * Result: {{1}, {0}}
  * @endcode
  *
- * @throw cudf::logic_error if number of elements in `left_keys` or `right_keys`
+ * @throw std::invalid_argument if number of elements in `left_keys` or `right_keys`
  * mismatch.
  *
  * @param[in] left_keys The left table
@@ -329,7 +329,7 @@ sort_merge_inner_join(cudf::table_view const& left_keys,
  * Result: {{1}, {0}}
  * @endcode
  *
- * @throw cudf::logic_error if number of elements in `left_keys` or `right_keys`
+ * @throw std::invalid_argument if number of elements in `left_keys` or `right_keys`
  * mismatch.
  *
  * @param[in] left_keys The left table

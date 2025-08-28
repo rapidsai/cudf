@@ -121,14 +121,14 @@ class hash_join {
    * an inner join between two tables. @see cudf::inner_join(). Behavior is undefined if the
    * provided `output_size` is smaller than the actual output size.
    *
+   * @throw std::invalid_argument If the input probe table has nulls while this hash_join object was
+   * not constructed with null check.
+   *
    * @param probe The probe table, from which the tuples are probed
    * @param output_size Optional value which allows users to specify the exact output size
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned table and columns' device
    * memory.
-   *
-   * @throw std::invalid_argument If the input probe table has nulls while this hash_join object was
-   * not constructed with null check.
    *
    * @return A pair of columns [`left_indices`, `right_indices`] that can be used to construct
    * the result of performing an inner join between two tables with `build` and `probe`
@@ -146,14 +146,14 @@ class hash_join {
    * a left join between two tables. @see cudf::left_join(). Behavior is undefined if the
    * provided `output_size` is smaller than the actual output size.
    *
+   * @throw std::invalid_argument If the input probe table has nulls while this hash_join object was
+   * not constructed with null check.
+   *
    * @param probe The probe table, from which the tuples are probed
    * @param output_size Optional value which allows users to specify the exact output size
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned table and columns' device
    * memory.
-   *
-   * @throw std::invalid_argument If the input probe table has nulls while this hash_join object was
-   * not constructed with null check.
    *
    * @return A pair of columns [`left_indices`, `right_indices`] that can be used to construct
    * the result of performing a left join between two tables with `build` and `probe`
@@ -171,14 +171,14 @@ class hash_join {
    * a full join between two tables. @see cudf::full_join(). Behavior is undefined if the
    * provided `output_size` is smaller than the actual output size.
    *
+   * @throw std::invalid_argument If the input probe table has nulls while this hash_join object was
+   * not constructed with null check.
+   *
    * @param probe The probe table, from which the tuples are probed
    * @param output_size Optional value which allows users to specify the exact output size
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned table and columns' device
    * memory.
-   *
-   * @throw std::invalid_argument If the input probe table has nulls while this hash_join object was
-   * not constructed with null check.
    *
    * @return A pair of columns [`left_indices`, `right_indices`] that can be used to construct
    * the result of performing a full join between two tables with `build` and `probe`
@@ -195,11 +195,11 @@ class hash_join {
    * Returns the exact number of matches (rows) when performing an inner join with the specified
    * probe table.
    *
-   * @param probe The probe table, from which the tuples are probed
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   *
    * @throw std::invalid_argument If the input probe table has nulls while this hash_join object was
    * not constructed with null check.
+   *
+   * @param probe The probe table, from which the tuples are probed
+   * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return The exact number of output when performing an inner join between two tables with
    * `build` and `probe` as the join keys .
@@ -211,11 +211,11 @@ class hash_join {
    * Returns the exact number of matches (rows) when performing a left join with the specified probe
    * table.
    *
-   * @param probe The probe table, from which the tuples are probed
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   *
    * @throw std::invalid_argument If the input probe table has nulls while this hash_join object was
    * not constructed with null check.
+   *
+   * @param probe The probe table, from which the tuples are probed
+   * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return The exact number of output when performing a left join between two tables with `build`
    * and `probe` as the join keys .
@@ -227,13 +227,13 @@ class hash_join {
    * Returns the exact number of matches (rows) when performing a full join with the specified probe
    * table.
    *
+   * @throw std::invalid_argument If the input probe table has nulls while this hash_join object was
+   * not constructed with null check.
+   *
    * @param probe The probe table, from which the tuples are probed
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the intermediate table and columns' device
    * memory.
-   *
-   * @throw std::invalid_argument If the input probe table has nulls while this hash_join object was
-   * not constructed with null check.
    *
    * @return The exact number of output when performing a full join between two tables with `build`
    * and `probe` as the join keys .
@@ -254,12 +254,12 @@ class hash_join {
    * - Determining the total size of a potential join result without materializing it
    * - Planning partitioned join operations for large datasets
    *
+   * @throw std::invalid_argument If the input probe table has nulls while this hash_join object was
+   * not constructed with null check.
+   *
    * @param probe The probe table to join with the pre-processed build table
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the result device memory
-   *
-   * @throw std::invalid_argument If the input probe table has nulls while this hash_join object was
-   * not constructed with null check.
    *
    * @return A join_match_context object containing the probe table view and a device vector
    *         of match counts for each row in the probe table
@@ -279,12 +279,12 @@ class hash_join {
    * For left join, every row in the probe table will have at least one match (either with a
    * matching row from the build table or with a null placeholder).
    *
+   * @throw std::invalid_argument If the input probe table has nulls while this hash_join object was
+   * not constructed with null check.
+   *
    * @param probe The probe table to join with the pre-processed build table
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the result device memory
-   *
-   * @throw std::invalid_argument If the input probe table has nulls while this hash_join object was
-   * not constructed with null check.
    *
    * @return A join_match_context object containing the probe table view and a device vector
    *         of match counts for each row in the probe table
@@ -304,12 +304,12 @@ class hash_join {
    * For full join, this includes matches for probe table rows, and the result may need to be
    * combined with unmatched rows from the build table to get the complete picture.
    *
+   * @throw std::invalid_argument If the input probe table has nulls while this hash_join object was
+   * not constructed with null check.
+   *
    * @param probe The probe table to join with the pre-processed build table
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the result device memory
-   *
-   * @throw std::invalid_argument If the input probe table has nulls while this hash_join object was
-   * not constructed with null check.
    *
    * @return A join_match_context object containing the probe table view and a device vector
    *         of match counts for each row in the probe table

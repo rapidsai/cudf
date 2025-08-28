@@ -408,7 +408,8 @@ sort_merge_join::sort_merge_join(table_view const& right,
   cudf::scoped_range range{"sort_merge_join::sort_merge_join"};
   // Sanity checks
   CUDF_EXPECTS(right.num_columns() != 0,
-               "Number of columns the keys table must be non-zero for a join");
+               "Number of columns the keys table must be non-zero for a join",
+               std::invalid_argument);
 
   this->compare_nulls = compare_nulls;
 
@@ -528,9 +529,11 @@ sort_merge_join::inner_join(table_view const& left,
   cudf::scoped_range range{"sort_merge_join::inner_join"};
   // Sanity checks
   CUDF_EXPECTS(left.num_columns() != 0,
-               "Number of columns in left keys must be non-zero for a join");
+               "Number of columns in left keys must be non-zero for a join",
+               std::invalid_argument);
   CUDF_EXPECTS(left.num_columns() == preprocessed_right._null_processed_table_view.num_columns(),
-               "Number of columns must match for a join");
+               "Number of columns must match for a join",
+               std::invalid_argument);
 
   // Preprocessing the left table
   preprocessed_left._table_view = left;
@@ -567,9 +570,11 @@ cudf::join_match_context sort_merge_join::inner_join_match_context(
   cudf::scoped_range range{"sort_merge_join::inner_join_match_context"};
   // Sanity checks
   CUDF_EXPECTS(left.num_columns() != 0,
-               "Number of columns in left keys must be non-zero for a join");
+               "Number of columns in left keys must be non-zero for a join",
+               std::invalid_argument);
   CUDF_EXPECTS(left.num_columns() == preprocessed_right._null_processed_table_view.num_columns(),
-               "Number of columns must match for a join");
+               "Number of columns must match for a join",
+               std::invalid_argument);
 
   // Preprocessing the left table
   preprocessed_left._table_view = left;
