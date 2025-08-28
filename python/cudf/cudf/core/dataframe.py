@@ -7798,7 +7798,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 plc_column = plc.Column.struct_from_children(children)
             else:
                 plc_column = plc.Column(
-                    plc.DataType(plc.type_id.STRUCT),
+                    plc.DataType(plc.TypeId.STRUCT),
                     len(self),
                     None,
                     None,
