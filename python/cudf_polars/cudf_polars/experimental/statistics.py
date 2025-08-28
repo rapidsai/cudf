@@ -66,9 +66,8 @@ def _update_unique_stats_columns(
         if (
             name not in unique_fraction
             and (column_stats := child_column_stats.get(name)) is not None
-            and (source_stats := column_stats.source_info) is not None
         ):
-            source_stats.add_unique_stats_column(column_stats.source_name or name)
+            column_stats.source_info.add_unique_stats_column()
 
 
 @initialize_column_stats.register(IR)

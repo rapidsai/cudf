@@ -1,4 +1,5 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
+import decimal
 import string
 
 import numpy as np
@@ -97,3 +98,40 @@ def test_dataframe_transpose(
 
     assert_eq(expect, got_function.to_pandas(nullable=nullable))
     assert_eq(expect, got_property.to_pandas(nullable=nullable))
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"col": [{"a": 1.1}, {"a": 2.1}, {"a": 10.0}, {"a": 11.2323}, None]},
+        {"a": [[{"b": 567}], None] * 10},
+        {"a": [decimal.Decimal(10), decimal.Decimal(20), None]},
+    ],
+)
+def test_dataframe_transpose_complex_types(data):
+    gdf = cudf.DataFrame(data)
+    pdf = gdf.to_pandas()
+
+    expected = pdf.T
+    actual = gdf.T
+
+    assert_eq(expected, actual)
+
+
+def test_dataframe_transpose_category():
+    pdf = pd.DataFrame(
+        {
+            "a": pd.Series(["a", "b", "c"], dtype="category"),
+            "b": pd.Series(["a", "b", "c"], dtype="category"),
+        }
+    )
+
+    gdf = cudf.DataFrame.from_pandas(pdf)
+
+    got_function = gdf.transpose()
+    got_property = gdf.T
+
+    expect = pdf.transpose()
+
+    assert_eq(expect, got_function.to_pandas())
+    assert_eq(expect, got_property.to_pandas())

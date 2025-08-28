@@ -297,7 +297,7 @@ cdef class Scalar:
             return decimal.Decimal(
                 (<fixed_point_scalar[decimal128]*>slr).value().value()
             ).scaleb(
-                -(<fixed_point_scalar[decimal128]*>slr).type().scale()
+                (<fixed_point_scalar[decimal128]*>slr).type().scale()
             )
         else:
             raise NotImplementedError(
@@ -686,12 +686,12 @@ def _(py_val: datetime.date, dtype: DataType | None, stream: Stream | None):
 
 @_from_py.register(decimal.Decimal)
 def _(py_val: decimal.Decimal, dtype: DataType | None, stream: Stream | None):
-    scale = -py_val.as_tuple().exponent
-    as_int = int(py_val.scaleb(scale))
+    scale = py_val.as_tuple().exponent
+    as_int = int(py_val.scaleb(-scale))
 
     cdef int128_t val = <int128_t>as_int
 
-    dtype = DataType(type_id.DECIMAL128, -scale)
+    dtype = DataType(type_id.DECIMAL128, scale)
 
     if dtype.id() != type_id.DECIMAL128:
         raise TypeError("Expected dtype to be DECIMAL128")
