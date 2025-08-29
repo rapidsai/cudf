@@ -4,12 +4,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
 import polars as pl
 
 import pylibcudf as plc
-import rmm.mr
 from rmm.pylibrmm.stream import DEFAULT_STREAM
 
 from cudf_polars.containers import Column, DataFrame, DataType
@@ -249,6 +248,7 @@ class SortedShuffleOptions(TypedDict):
     null_order: Sequence[plc.types.NullOrder]
     column_names: Sequence[str]
     column_dtypes: Sequence[DataType]
+    cluster_kind: Literal["dask", "single"]
 
 
 # Experimental rapidsmpf shuffler integration
@@ -267,6 +267,14 @@ class RMPFIntegrationSortedShuffle:  # pragma: no cover
         """Add cudf-polars DataFrame chunks to an RMP shuffler."""
         from rapidsmpf.integrations.cudf.partition import split_and_pack
 
+        if options["cluster_kind"] == "dask":
+            from rapidsmpf.integrations.dask import get_worker_context
+
+        else:
+            from rapidsmpf.integrations.single import get_worker_context
+
+        context = get_worker_context()
+
         by = options["by"]
 
         splits = find_sort_splits(
@@ -279,8 +287,8 @@ class RMPFIntegrationSortedShuffle:  # pragma: no cover
         packed_inputs = split_and_pack(
             df.table,
             splits=splits,
+            br=context.br,
             stream=DEFAULT_STREAM,
-            device_mr=rmm.mr.get_current_device_resource(),
         )
         shuffler.insert_chunks(packed_inputs)
 
@@ -291,7 +299,18 @@ class RMPFIntegrationSortedShuffle:  # pragma: no cover
         options: SortedShuffleOptions,
     ) -> DataFrame:
         """Extract a finished partition from the RMP shuffler."""
-        from rapidsmpf.integrations.cudf.partition import unpack_and_concat
+        from rapidsmpf.integrations.cudf.partition import (
+            unpack_and_concat,
+            unspill_partitions,
+        )
+
+        if options["cluster_kind"] == "dask":
+            from rapidsmpf.integrations.dask import get_worker_context
+
+        else:
+            from rapidsmpf.integrations.single import get_worker_context
+
+        context = get_worker_context()
 
         shuffler.wait_on(partition_id)
         column_names = options["column_names"]
@@ -301,9 +320,15 @@ class RMPFIntegrationSortedShuffle:  # pragma: no cover
         # require stability, as cudf merge is not stable).
         return DataFrame.from_table(
             unpack_and_concat(
-                shuffler.extract(partition_id),
+                unspill_partitions(
+                    shuffler.extract(partition_id),
+                    br=context.br,
+                    stream=DEFAULT_STREAM,
+                    allow_overbooking=True,
+                    statistics=context.statistics,
+                ),
+                br=context.br,
                 stream=DEFAULT_STREAM,
-                device_mr=rmm.mr.get_current_device_resource(),
             ),
             column_names,
             column_dtypes,
@@ -525,10 +550,16 @@ def _(
 
     # Try using rapidsmpf shuffler if we have "simple" shuffle
     # keys, and the "shuffle_method" config is set to "rapidsmpf"
-    if shuffle_method in (None, "rapidsmpf"):  # pragma: no cover
+    if shuffle_method in ("rapidsmpf", "rapidsmpf-single"):  # pragma: no cover
         try:
-            from rapidsmpf.integrations.dask import rapidsmpf_shuffle_graph
+            if shuffle_method == "rapidsmpf-single":
+                from rapidsmpf.integrations.single import rapidsmpf_shuffle_graph
 
+                options["cluster_kind"] = "single"
+            else:
+                from rapidsmpf.integrations.dask import rapidsmpf_shuffle_graph
+
+                options["cluster_kind"] = "dask"
             graph.update(
                 rapidsmpf_shuffle_graph(
                     get_key_name(child),

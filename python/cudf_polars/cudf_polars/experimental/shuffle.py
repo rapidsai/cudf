@@ -39,7 +39,7 @@ class ShuffleOptions(TypedDict):
     on: Sequence[str]
     column_names: Sequence[str]
     dtypes: Sequence[DataType]
-    cluster_kind: str
+    cluster_kind: Literal["dask", "single"]
 
 
 # Experimental rapidsmpf shuffler integration
