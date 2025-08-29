@@ -367,7 +367,7 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       node_type: "gpu-l4-latest-1"
-      container_image: "rapidsai/ci-conda:25.10-latest"
+      container_image: "rapidsai/citestwheel:25.10-latest"
       script: ci/cudf_pandas_scripts/pandas-tests/run.sh pr
       file_to_upload: ./artifacts/pr-results.json
       artifact-name: pr-results.json
