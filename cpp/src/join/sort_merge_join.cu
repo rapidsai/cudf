@@ -19,11 +19,11 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/row_operator/row_operators.cuh>
 #include <cudf/join/sort_merge_join.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/stream_compaction.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -118,8 +118,8 @@ class merge {
     table_device_view _rhs;
     device_span<detail::dremel_device_view const> _lhs_dremel;
     device_span<detail::dremel_device_view const> _rhs_dremel;
-    cudf::experimental::row::lexicographic::device_row_comparator<true, bool> ub_comparator;
-    cudf::experimental::row::lexicographic::device_row_comparator<true, bool> lb_comparator;
+    cudf::detail::row::lexicographic::device_row_comparator<true, bool> ub_comparator;
+    cudf::detail::row::lexicographic::device_row_comparator<true, bool> lb_comparator;
   };
 
   merge(table_view const& smaller,

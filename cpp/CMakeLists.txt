@@ -683,6 +683,8 @@ add_library(
   src/rolling/range_window_bounds.cpp
   src/rolling/rolling.cpp
   src/round/round.cu
+  src/row_operator/primitive_row_operators.cu
+  src/row_operator/row_operators.cu
   src/runtime/context.cpp
   src/scalar/scalar.cpp
   src/scalar/scalar_factories.cpp
@@ -785,8 +787,6 @@ add_library(
   src/structs/structs_column_factories.cu
   src/structs/structs_column_view.cpp
   src/structs/utilities.cu
-  src/table/primitive_row_operators.cu
-  src/table/row_operators.cu
   src/table/table.cpp
   src/table/table_device_view.cu
   src/table/table_view.cpp

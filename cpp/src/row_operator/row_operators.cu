@@ -20,12 +20,12 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/row_operator/row_operators.cuh>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/linked_column.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/lists_column_view.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_checks.hpp>
@@ -36,8 +36,7 @@
 #include <functional>
 
 namespace cudf {
-namespace experimental {
-
+namespace detail {
 namespace {
 
 /**
@@ -876,5 +875,5 @@ two_table_comparator::two_table_comparator(table_view const& left,
 }  // namespace equality
 
 }  // namespace row
-}  // namespace experimental
+}  // namespace detail
 }  // namespace cudf

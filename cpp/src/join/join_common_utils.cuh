@@ -19,9 +19,9 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/row_operator/row_operators.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -120,8 +120,8 @@ class pair_equality {
   template <typename LhsPair, typename RhsPair>
   __device__ __forceinline__ bool operator()(LhsPair const& lhs, RhsPair const& rhs) const noexcept
   {
-    using experimental::row::lhs_index_type;
-    using experimental::row::rhs_index_type;
+    using detail::row::lhs_index_type;
+    using detail::row::rhs_index_type;
 
     return lhs.first == rhs.first and
            _check_row_equality(lhs_index_type{rhs.second}, rhs_index_type{lhs.second});
@@ -157,7 +157,7 @@ get_trivial_left_join_indices(table_view const& left,
  * @tparam MultimapType The type of the hash table
  *
  * @param build Table of columns used to build join hash.
- * @param preprocessed_build shared_ptr to cudf::experimental::row::equality::preprocessed_table
+ * @param preprocessed_build shared_ptr to cudf::detail::row::equality::preprocessed_table
  * for build
  * @param hash_table Build hash table.
  * @param has_nulls Flag to denote if build or probe tables have nested nulls
@@ -168,7 +168,7 @@ get_trivial_left_join_indices(table_view const& left,
 template <typename MultimapType>
 void build_join_hash_table(
   cudf::table_view const& build,
-  std::shared_ptr<experimental::row::equality::preprocessed_table> const& preprocessed_build,
+  std::shared_ptr<detail::row::equality::preprocessed_table> const& preprocessed_build,
   MultimapType& hash_table,
   bool has_nulls,
   null_equality nulls_equal,
@@ -178,7 +178,7 @@ void build_join_hash_table(
   CUDF_EXPECTS(0 != build.num_columns(), "Selected build dataset is empty");
   CUDF_EXPECTS(0 != build.num_rows(), "Build side table has no rows");
 
-  auto const row_hash   = experimental::row::hash::row_hasher{preprocessed_build};
+  auto const row_hash   = detail::row::hash::row_hasher{preprocessed_build};
   auto const hash_build = row_hash.device_hasher(nullate::DYNAMIC{has_nulls});
 
   auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();

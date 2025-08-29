@@ -35,7 +35,7 @@
 #include <optional>
 
 // Forward declaration
-namespace cudf::experimental::row::equality {
+namespace cudf::detail::row::equality {
 class preprocessed_table;
 }
 
@@ -107,7 +107,7 @@ struct hash_join {
   bool const _has_nulls;  ///< true if nulls are present in either build table or any probe table
   cudf::null_equality const _nulls_equal;  ///< whether to consider nulls as equal
   cudf::table_view _build;                 ///< input table to build the hash map
-  std::shared_ptr<cudf::experimental::row::equality::preprocessed_table>
+  std::shared_ptr<cudf::detail::row::equality::preprocessed_table>
     _preprocessed_build;     ///< input table preprocssed for row operators
   hash_table_t _hash_table;  ///< hash table built on `_build`
 
