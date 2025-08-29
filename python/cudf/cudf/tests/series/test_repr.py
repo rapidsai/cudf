@@ -9,7 +9,6 @@ import pytest
 from hypothesis import given, settings, strategies as st
 
 import cudf
-from cudf.utils.dtypes import np_dtypes_to_pandas_dtypes
 
 
 @pytest.mark.parametrize("nrows", [0, 5, 10])
@@ -29,14 +28,7 @@ def test_null_series(nrows, all_supported_types_as_str, request):
     if all_supported_types_as_str != "category" and cudf.dtype(
         all_supported_types_as_str
     ).kind in {"u", "i"}:
-        ps = pd.Series(
-            sr._column.data_array_view(mode="read").copy_to_host(),
-            dtype=np_dtypes_to_pandas_dtypes.get(
-                cudf.dtype(all_supported_types_as_str),
-                cudf.dtype(all_supported_types_as_str),
-            ),
-        )
-        ps[sr.isnull().to_pandas()] = pd.NA
+        ps = sr.to_pandas(nullable=True)
     else:
         ps = sr.to_pandas()
 

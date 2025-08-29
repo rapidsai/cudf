@@ -10,7 +10,7 @@ from itertools import chain
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Literal, cast
 
-import cupy
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -368,8 +368,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             else:
                 if cai["typestr"] not in ("|i1", "|u1"):
                     if isinstance(value, ColumnBase):
-                        value = value.data_array_view(mode="write")
-                    value = cupy.asarray(value).view("|u1")
+                        value = value.values
+                    value = cp.asarray(value).view("|u1")
                 mask = as_buffer(value)
             if mask.size < required_num_bytes:
                 raise ValueError(error_msg.format(str(value.size)))
@@ -657,7 +657,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     def data_array_view(
         self, *, mode: Literal["write", "read"] = "write"
-    ) -> "cuda.devicearray.DeviceNDArray":
+    ) -> cp.ndarray:
         """
         View the data as a device array object
 
@@ -675,7 +675,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         Returns
         -------
-        numba.cuda.cudadrv.devicearray.DeviceNDArray
+        cupy.ndarray
         """
         if self.data is not None:
             if mode == "read":
@@ -690,7 +690,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 raise ValueError(f"Unsupported mode: {mode}")
         else:
             obj = None
-        return cuda.as_cuda_array(obj).view(self.dtype)
+        return cp.asarray(obj).view(self.dtype)
 
     def mask_array_view(
         self, *, mode: Literal["write", "read"] = "write"
@@ -804,20 +804,20 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             raise ValueError("Column must have no nulls.")
 
         with acquire_spill_lock():
-            return self.data_array_view(mode="read").copy_to_host()
+            return self.data_array_view(mode="read").get()
 
     @property
-    def values(self) -> cupy.ndarray:
+    def values(self) -> cp.ndarray:
         """
         Return a CuPy representation of the Column.
         """
         if len(self) == 0:
-            return cupy.array([], dtype=self.dtype)
+            return cp.array([], dtype=self.dtype)
 
         if self.has_nulls():
             raise ValueError("Column must have no nulls.")
 
-        return cupy.asarray(self.data_array_view(mode="write"))
+        return self.data_array_view(mode="write")
 
     def find_and_replace(
         self,
@@ -1536,12 +1536,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         valid_locs = ~mask
         if isinstance(index, RangeIndex):
             # Each point is evenly spaced, index values don't matter
-            known_x = cupy.flatnonzero(valid_locs.values)
+            known_x = cp.flatnonzero(valid_locs.values)
         else:
             known_x = index._column.apply_boolean_mask(valid_locs).values  # type: ignore[attr-defined]
         known_y = self.apply_boolean_mask(valid_locs).values
 
-        result = cupy.interp(index.to_cupy(), known_x, known_y)
+        result = cp.interp(index.to_cupy(), known_x, known_y)
 
         first_nan_idx = valid_locs.values.argmax().item()
         result[:first_nan_idx] = np.nan
@@ -2763,9 +2763,9 @@ def maybe_reshape(
 ) -> Any:
     """Reshape ndarrays compatible with cuDF columns."""
     if len(shape) == 0:
-        arbitrary = cupy.asarray(arbitrary)[np.newaxis]
+        arbitrary = cp.asarray(arbitrary)[np.newaxis]
     if not plc.column.is_c_contiguous(shape, strides, dtype.itemsize):
-        arbitrary = cupy.ascontiguousarray(arbitrary)
+        arbitrary = cp.ascontiguousarray(arbitrary)
     return arbitrary
 
 
@@ -2985,7 +2985,7 @@ def as_column(
                 # not supported by cupy
                 arbitrary = np.asarray(arbitrary)
             else:
-                arbitrary = cupy.asarray(arbitrary)
+                arbitrary = cp.asarray(arbitrary)
             return as_column(
                 arbitrary, nan_as_null=nan_as_null, dtype=dtype, length=length
             )
@@ -3293,10 +3293,10 @@ def as_column(
             if is_column_like(element):
                 # e.g. test_nested_series_from_sequence_data
                 return cudf.core.column.ListColumn.from_sequences(arbitrary)
-            elif isinstance(element, cupy.ndarray):
+            elif isinstance(element, cp.ndarray):
                 # e.g. test_series_from_cupy_scalars
                 return as_column(
-                    cupy.array(arbitrary),
+                    cp.array(arbitrary),
                     dtype=dtype,
                     nan_as_null=nan_as_null,
                     length=length,

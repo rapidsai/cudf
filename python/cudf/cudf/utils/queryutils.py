@@ -223,7 +223,10 @@ def query_execute(df, expr, callenv):
             "query only supports numeric, datetime, timedelta, or bool dtypes."
         )
 
-    colarrays = [col.data_array_view(mode="read") for col in colarrays]
+    colarrays = [
+        cuda.as_cuda_array(col.data_array_view(mode="read"))
+        for col in colarrays
+    ]
 
     kernel = compiled["kernel"]
     # process env args
