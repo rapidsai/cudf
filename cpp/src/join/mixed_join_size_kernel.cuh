@@ -44,7 +44,8 @@ __device__ __forceinline__ auto standalone_count(
   pair_expression_equality<has_nulls> const& key_equal,
   cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
   cuco::pair<hash_value_type, cudf::size_type> const& probe_key,
-  cuda::std::pair<cudf::size_type, cudf::size_type> const& hash_idx) noexcept
+  cuda::std::pair<cudf::size_type, cudf::size_type> const& hash_idx,
+  join_kind join_type) noexcept
 {
   cudf::size_type count = 0;
   auto const extent     = hash_table_storage.size();
@@ -68,13 +69,25 @@ __device__ __forceinline__ auto standalone_count(
     count += (first_slot_equals + second_slot_equals);
 
     // Exit if we find an empty slot
-    if (first_slot_is_empty or second_slot_is_empty) { return count; }
+    if (first_slot_is_empty or second_slot_is_empty) {
+      // Handle outer join logic: non-matching rows are counted as 1 match
+      if ((join_type == join_kind::LEFT_JOIN || join_type == join_kind::FULL_JOIN) && count == 0) {
+        return 1;
+      }
+      return count;
+    }
 
     // Move to next bucket using precomputed step
     probe_idx = (probe_idx + step) % extent;
 
     // Detect full cycle completion
-    if (probe_idx == static_cast<std::size_t>(hash_idx.first)) { return count; }
+    if (probe_idx == static_cast<std::size_t>(hash_idx.first)) {
+      // Handle outer join logic: non-matching rows are counted as 1 match
+      if ((join_type == join_kind::LEFT_JOIN || join_type == join_kind::FULL_JOIN) && count == 0) {
+        return 1;
+      }
+      return count;
+    }
   }
 }
 
@@ -126,12 +139,8 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) compute_mixed_join_o
     auto const& probe_key = input_pairs[outer_row_index];
     auto const& hash_idx  = hash_indices[outer_row_index];
 
-    auto match_count = standalone_count(count_equality, hash_table_storage, probe_key, hash_idx);
-
-    if (join_type == join_kind::LEFT_JOIN || join_type == join_kind::FULL_JOIN) {
-      // Non-matching rows are counted as 1 match for the outer joins
-      match_count = (match_count == 0 ? 1 : match_count);
-    }
+    auto match_count =
+      standalone_count(count_equality, hash_table_storage, probe_key, hash_idx, join_type);
 
     per_thread_count += match_count;
   }

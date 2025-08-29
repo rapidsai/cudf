@@ -35,7 +35,7 @@
 namespace cudf::detail {
 template <typename Hasher>
 struct pair_fn {
-  CUDF_HOST_DEVICE pair_fn(Hasher hash) : _hash{hash} {}
+  CUDF_HOST_DEVICE pair_fn(Hasher hash) : _hash{std::move(hash)} {}
 
   __device__ cuco::pair<hash_value_type, size_type> operator()(size_type i) const noexcept
   {
