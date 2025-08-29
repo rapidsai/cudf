@@ -1164,7 +1164,8 @@ dependencies:
           - nbconvert
           - nbformat
           - openpyxl
-          - pytest-rerunfailures
+          # https://github.com/pytest-dev/pytest-rerunfailures/issues/302
+          - pytest-rerunfailures<16.0
   depends_on_dask_cuda:
     common:
       - output_types: conda
