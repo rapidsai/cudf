@@ -689,7 +689,7 @@ void hash_join<Hasher>::compute_match_counts(cudf::table_view const& probe,
                std::invalid_argument);
 
   auto const preprocessed_probe =
-    cudf::experimental::row::equality::preprocessed_table::create(probe, stream);
+    cudf::detail::row::equality::preprocessed_table::create(probe, stream);
   auto const probe_nulls          = cudf::nullate::DYNAMIC{_has_nulls};
   auto const probe_table_num_rows = probe.num_rows();
 
@@ -703,16 +703,16 @@ void hash_join<Hasher>::compute_match_counts(cudf::table_view const& probe,
                            stream.value());
   };
 
-  if (cudf::is_primitive_row_op_compatible(_build)) {
-    auto const d_hasher = cudf::row::primitive::row_hasher{probe_nulls, preprocessed_probe};
-    auto const d_equal  = cudf::row::primitive::row_equality_comparator{
+  if (cudf::detail::is_primitive_row_op_compatible(_build)) {
+    auto const d_hasher = cudf::detail::row::primitive::row_hasher{probe_nulls, preprocessed_probe};
+    auto const d_equal  = cudf::detail::row::primitive::row_equality_comparator{
       probe_nulls, preprocessed_probe, _preprocessed_build, _nulls_equal};
     compute_counts(primitive_pair_equal{d_equal}, d_hasher);
   } else {
     auto const d_hasher =
-      cudf::experimental::row::hash::row_hasher{preprocessed_probe}.device_hasher(probe_nulls);
-    auto const row_comparator = cudf::experimental::row::equality::two_table_comparator{
-      preprocessed_probe, _preprocessed_build};
+      cudf::detail::row::hash::row_hasher{preprocessed_probe}.device_hasher(probe_nulls);
+    auto const row_comparator =
+      cudf::detail::row::equality::two_table_comparator{preprocessed_probe, _preprocessed_build};
     auto const d_equal = row_comparator.equal_to<false>(probe_nulls, _nulls_equal);
     compute_counts(pair_equal{d_equal}, d_hasher);
   }
