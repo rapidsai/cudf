@@ -1292,6 +1292,52 @@ sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const>
   return {std::move(sorted_inputs), std::move(sorted_outputs), std::move(order)};
 }
 
+[[nodiscard]] size_t find_split_index(device_span<device_span<uint8_t const> const> inputs,
+                                      device_span<device_span<uint8_t> const> outputs,
+                                      host_engine_state host_state,
+                                      size_t auto_mode_threshold,
+                                      size_t hybrid_mode_cost_ratio,
+                                      task_type task,
+                                      rmm::cuda_stream_view stream)
+{
+  CUDF_FUNC_RANGE();
+  if (host_state == host_engine_state::OFF or inputs.empty()) { return 0; }
+  if (host_state == host_engine_state::ON) { return inputs.size(); }
+
+  if (host_state == host_engine_state::AUTO) {
+    return inputs.size() < auto_mode_threshold ? inputs.size() : 0;
+  }
+
+  if (host_state == host_engine_state::HYBRID) {
+    auto const h_inputs  = cudf::detail::make_host_vector(inputs, stream);
+    auto const h_outputs = cudf::detail::make_host_vector(outputs, stream);
+
+    std::vector<double> device_costs;
+    std::vector<double> host_costs;
+    double total_host_cost = 0;
+    for (size_t i = 0; i < h_inputs.size(); ++i) {
+      device_costs.push_back(
+        task_device_cost(h_inputs[i].size(), h_outputs[i].size(), task));
+      host_costs.push_back(total_host_cost);
+      if (total_host_cost > device_costs.back()) { break; }
+      total_host_cost += task_host_cost(
+        h_inputs[i].size(), h_outputs[i].size(), hybrid_mode_cost_ratio, task);
+    }
+    // find the index at which the sum of host and device cost is minimal
+    size_t max_drop_index = 0;
+    for (size_t i = 1; i < device_costs.size(); ++i) {
+      if (host_costs[i] + device_costs[i] <
+          host_costs[max_drop_index] + device_costs[max_drop_index]) {
+        max_drop_index = i;
+      }
+    }
+    return max_drop_index;
+  }
+
+  CUDF_FAIL("Invalid host engine state for compression: " +
+            std::to_string(static_cast<uint8_t>(host_state)));
+}
+
 }  // namespace
 
 void gpuinflate(device_span<device_span<uint8_t const> const> inputs,
@@ -1343,51 +1389,6 @@ void copy_results_to_original_order(device_span<codec_exec_result const> sorted_
                   sorted_results.end(),
                   order.begin(),
                   original_results.begin());
-}
-
-[[nodiscard]] size_t find_split_index(device_span<device_span<uint8_t const> const> inputs,
-                                      device_span<device_span<uint8_t> const> outputs,
-                                      host_engine_state host_state,
-                                      size_t auto_mode_threshold,
-                                      size_t hybrid_mode_cost_ratio,
-                                      task_type task,
-                                      rmm::cuda_stream_view stream)
-{
-  CUDF_FUNC_RANGE();
-  if (host_state == host_engine_state::OFF or inputs.empty()) { return 0; }
-  if (host_state == host_engine_state::ON) { return inputs.size(); }
-
-  if (host_state == host_engine_state::AUTO) {
-    return inputs.size() < auto_mode_threshold ? inputs.size() : 0;
-  }
-
-  if (host_state == host_engine_state::HYBRID) {
-    auto const h_inputs  = cudf::detail::make_host_vector(inputs, stream);
-    auto const h_outputs = cudf::detail::make_host_vector(outputs, stream);
-
-    std::vector<double> device_costs;
-    std::vector<double> host_costs;
-    double total_host_cost = 0;
-    for (size_t i = 0; i < h_inputs.size(); ++i) {
-      device_costs.push_back(task_device_cost(h_inputs[i].size(), h_outputs[i].size(), task));
-      host_costs.push_back(total_host_cost);
-      if (total_host_cost > device_costs.back()) { break; }
-      total_host_cost +=
-        task_host_cost(h_inputs[i].size(), h_outputs[i].size(), hybrid_mode_cost_ratio, task);
-    }
-    // find the index at which the sum of host and device cost is minimal
-    size_t max_drop_index = 0;
-    for (size_t i = 1; i < device_costs.size(); ++i) {
-      if (host_costs[i] + device_costs[i] <
-          host_costs[max_drop_index] + device_costs[max_drop_index]) {
-        max_drop_index = i;
-      }
-    }
-    return max_drop_index;
-  }
-
-  CUDF_FAIL("Invalid host engine state for compression: " +
-            std::to_string(static_cast<uint8_t>(host_state)));
 }
 
 [[nodiscard]] size_t split_compression_tasks(device_span<device_span<uint8_t const> const> inputs,
