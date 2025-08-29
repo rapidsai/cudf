@@ -1292,13 +1292,13 @@ sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const>
   return {std::move(sorted_inputs), std::move(sorted_outputs), std::move(order)};
 }
 
-[[nodiscard]] size_t find_split_index(device_span<device_span<uint8_t const> const> inputs,
-                                      device_span<device_span<uint8_t> const> outputs,
-                                      host_engine_state host_state,
-                                      size_t auto_mode_threshold,
-                                      size_t hybrid_mode_cost_ratio,
-                                      task_type task,
-                                      rmm::cuda_stream_view stream)
+[[nodiscard]] size_t split_tasks(device_span<device_span<uint8_t const> const> inputs,
+                                 device_span<device_span<uint8_t> const> outputs,
+                                 host_engine_state host_state,
+                                 size_t auto_mode_threshold,
+                                 size_t hybrid_mode_cost_ratio,
+                                 task_type task,
+                                 rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
   if (host_state == host_engine_state::OFF or inputs.empty()) { return 0; }
@@ -1316,12 +1316,11 @@ sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const>
     std::vector<double> host_costs;
     double total_host_cost = 0;
     for (size_t i = 0; i < h_inputs.size(); ++i) {
-      device_costs.push_back(
-        task_device_cost(h_inputs[i].size(), h_outputs[i].size(), task));
+      device_costs.push_back(task_device_cost(h_inputs[i].size(), h_outputs[i].size(), task));
       host_costs.push_back(total_host_cost);
       if (total_host_cost > device_costs.back()) { break; }
-      total_host_cost += task_host_cost(
-        h_inputs[i].size(), h_outputs[i].size(), hybrid_mode_cost_ratio, task);
+      total_host_cost +=
+        task_host_cost(h_inputs[i].size(), h_outputs[i].size(), hybrid_mode_cost_ratio, task);
     }
     // find the index at which the sum of host and device cost is minimal
     size_t max_drop_index = 0;
@@ -1398,13 +1397,13 @@ void copy_results_to_original_order(device_span<codec_exec_result const> sorted_
                                              size_t hybrid_mode_cost_ratio,
                                              rmm::cuda_stream_view stream)
 {
-  return find_split_index(inputs,
-                          outputs,
-                          host_state,
-                          auto_mode_threshold,
-                          hybrid_mode_cost_ratio,
-                          task_type::COMPRESSION,
-                          stream);
+  return split_tasks(inputs,
+                     outputs,
+                     host_state,
+                     auto_mode_threshold,
+                     hybrid_mode_cost_ratio,
+                     task_type::COMPRESSION,
+                     stream);
 }
 
 [[nodiscard]] size_t split_decompression_tasks(device_span<device_span<uint8_t const> const> inputs,
@@ -1414,13 +1413,13 @@ void copy_results_to_original_order(device_span<codec_exec_result const> sorted_
                                                size_t hybrid_mode_cost_ratio,
                                                rmm::cuda_stream_view stream)
 {
-  return find_split_index(inputs,
-                          outputs,
-                          host_state,
-                          auto_mode_threshold,
-                          hybrid_mode_cost_ratio,
-                          task_type::DECOMPRESSION,
-                          stream);
+  return split_tasks(inputs,
+                     outputs,
+                     host_state,
+                     auto_mode_threshold,
+                     hybrid_mode_cost_ratio,
+                     task_type::DECOMPRESSION,
+                     stream);
 }
 
 }  // namespace cudf::io::detail
