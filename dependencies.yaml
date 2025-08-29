@@ -930,16 +930,6 @@ dependencies:
         packages:
         - numba-cuda>=0.19.1,<0.20.0a0
     specific:
-      # TODO: remove cuda-nvvm-tools once https://github.com/NVIDIA/numba-cuda/issues/430 is resolved
-      #       and we move the numba-cuda floor up to a version containing a fix for it
-      - output_types: [conda]
-        matrices:
-          - matrix:
-              cuda: "13.*"
-            packages:
-              - cuda-nvvm-tools
-          - matrix:
-            packages:
       - output_types: [requirements, pyproject]
         matrices:
           - matrix:
