@@ -45,6 +45,64 @@
 
 namespace CUDF_EXPORT cudf {
 
+// Aliases for backward compatibility - these provide access to common utilities
+// that were previously defined inline or elsewhere but are now in detail namespace
+
+/**
+ * @brief Alias for backward compatibility with legacy row operators.
+ *
+ * @deprecated This alias is deprecated as of 25.10 and will be removed in 25.12.
+ * Use `cudf::detail::weak_ordering` instead.
+ */
+using weak_ordering = cudf::detail::weak_ordering;
+
+/**
+ * @brief Alias for backward compatibility with legacy row operators.
+ *
+ * @deprecated This function is deprecated as of 25.10 and will be removed in 25.12.
+ * Use `cudf::detail::compare_elements` instead.
+ */
+template <typename Element>
+__device__ weak_ordering compare_elements(Element lhs, Element rhs)
+{
+  return cudf::detail::compare_elements(lhs, rhs);
+}
+
+/**
+ * @brief Alias for backward compatibility with legacy row operators.
+ *
+ * @deprecated This function is deprecated as of 25.10 and will be removed in 25.12.
+ * Use `cudf::detail::relational_compare` instead.
+ */
+template <typename Element>
+__device__ weak_ordering relational_compare(Element lhs, Element rhs)
+{
+  return cudf::detail::relational_compare(lhs, rhs);
+}
+
+/**
+ * @brief Alias for backward compatibility with legacy row operators.
+ *
+ * @deprecated This function is deprecated as of 25.10 and will be removed in 25.12.
+ * Use `cudf::detail::null_compare` instead.
+ */
+inline __device__ auto null_compare(bool lhs_is_null, bool rhs_is_null, null_order null_precedence)
+{
+  return cudf::detail::null_compare(lhs_is_null, rhs_is_null, null_precedence);
+}
+
+/**
+ * @brief Alias for backward compatibility with legacy row operators.
+ *
+ * @deprecated This function is deprecated as of 25.10 and will be removed in 25.12.
+ * Use `cudf::detail::equality_compare` instead.
+ */
+template <typename Element>
+__device__ bool equality_compare(Element lhs, Element rhs)
+{
+  return cudf::detail::equality_compare(lhs, rhs);
+}
+
 /**
  * @brief Performs an equality comparison between two elements in two columns.
  *
@@ -54,9 +112,7 @@ namespace CUDF_EXPORT cudf {
  * @tparam Nullate A cudf::nullate type describing how to check for nulls.
  */
 template <typename Nullate>
-class [[deprecated(
-  "Use cudf::detail::row::equality::device_row_comparator::element_comparator instead")]]
-element_equality_comparator {
+class element_equality_comparator {
  public:
   /**
    * @brief Construct type-dispatched function object for comparing equality
@@ -129,8 +185,7 @@ element_equality_comparator {
  * @tparam Nullate A cudf::nullate type describing how to check for nulls
  */
 template <typename Nullate>
-class [[deprecated("Use cudf::detail::row::equality::device_row_comparator instead")]]
-row_equality_comparator {
+class row_equality_comparator {
  public:
   /**
    * @brief Construct a new row equality comparator object
@@ -185,9 +240,7 @@ row_equality_comparator {
  * @tparam Nullate A cudf::nullate type describing how to check for nulls.
  */
 template <typename Nullate>
-class [[deprecated(
-  "Use cudf::detail::row::lexicographic::device_row_comparator::element_comparator instead")]]
-element_relational_comparator {
+class element_relational_comparator {
  public:
   /**
    * @brief Construct type-dispatched function object for performing a
@@ -285,8 +338,7 @@ element_relational_comparator {
  * @tparam Nullate A cudf::nullate type describing how to check for nulls.
  */
 template <typename Nullate>
-class [[deprecated("Use cudf::detail::row::lexicographic::device_row_comparator instead")]]
-row_lexicographic_comparator {
+class row_lexicographic_comparator {
  public:
   /**
    * @brief Construct a function object for performing a lexicographic
@@ -370,7 +422,7 @@ row_lexicographic_comparator {
  * @tparam Nullate A cudf::nullate type describing how to check for nulls.
  */
 template <template <typename> class hash_function, typename Nullate>
-class [[deprecated("Use cudf::detail::row::hash::element_hasher instead")]] element_hasher {
+class element_hasher {
  public:
   /**
    * @brief Returns the hash value of the given element in the given column.
@@ -416,8 +468,7 @@ class [[deprecated("Use cudf::detail::row::hash::element_hasher instead")]] elem
  * @tparam Nullate A cudf::nullate type describing how to check for nulls
  */
 template <template <typename> class hash_function, typename Nullate>
-class [[deprecated("Use cudf::detail::row::hash::element_hasher instead")]]
-element_hasher_with_seed {
+class element_hasher_with_seed {
  public:
   /**
    * @brief Constructs a function object for hashing an element in the given column
@@ -487,7 +538,7 @@ element_hasher_with_seed {
  * @tparam Nullate A cudf::nullate type describing how to check for nulls.
  */
 template <template <typename> class hash_function, typename Nullate>
-class [[deprecated("Use cudf::detail::row::hash::device_row_hasher instead")]] row_hasher {
+class row_hasher {
  public:
   row_hasher() = delete;
 

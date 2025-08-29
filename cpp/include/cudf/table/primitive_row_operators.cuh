@@ -52,9 +52,6 @@ namespace CUDF_EXPORT cudf {
  * @deprecated This function is deprecated in 25.10 and will be removed in 25.12.
  * Users should use cudf/detail/row_operator/primitive_row_operators.cuh instead.
  */
-[[deprecated(
-  "This function is deprecated in 25.10 and will be removed in 25.12. Use "
-  "cudf/detail/row_operator/primitive_row_operators.cuh instead.")]]
 bool is_primitive_row_op_compatible(cudf::table_view const& table);
 
 namespace row::primitive {
@@ -66,10 +63,7 @@ namespace row::primitive {
  * Users should use cudf/detail/row_operator/primitive_row_operators.cuh instead.
  */
 template <typename T>
-using
-  [[deprecated("This type alias is deprecated in 25.10 and will be removed in 25.12. Use "
-               "cudf/detail/row_operator/primitive_row_operators.cuh instead.")]] primitive_type_t =
-    cuda::std::conditional_t<cudf::is_numeric<T>(), T, void>;
+using primitive_type_t = cuda::std::conditional_t<cudf::is_numeric<T>(), T, void>;
 
 /**
  * @brief Custom dispatcher for primitive types
@@ -78,9 +72,7 @@ using
  * Users should use cudf/detail/row_operator/primitive_row_operators.cuh instead.
  */
 template <cudf::type_id Id>
-struct [[deprecated(
-  "This struct is deprecated in 25.10 and will be removed in 25.12. Use "
-  "cudf/detail/row_operator/primitive_row_operators.cuh instead.")]] dispatch_primitive_type {
+struct dispatch_primitive_type {
   using type = primitive_type_t<id_to_type<Id>>;  ///< The underlying type
 };
 
@@ -90,9 +82,7 @@ struct [[deprecated(
  * @deprecated This class is deprecated in 25.10 and will be removed in 25.12.
  * Users should use cudf/detail/row_operator/primitive_row_operators.cuh instead.
  */
-class [[deprecated(
-  "This class is deprecated in 25.10 and will be removed in 25.12. Use "
-  "cudf/detail/row_operator/primitive_row_operators.cuh instead.")]] element_equality_comparator {
+class element_equality_comparator {
  public:
   /**
    * @brief Compares the specified elements for equality.
@@ -131,9 +121,7 @@ class [[deprecated(
  * @deprecated This class is deprecated in 25.10 and will be removed in 25.12.
  * Users should use cudf/detail/row_operator/primitive_row_operators.cuh instead.
  */
-class [[deprecated(
-  "This class is deprecated in 25.10 and will be removed in 25.12. Use "
-  "cudf/detail/row_operator/primitive_row_operators.cuh instead.")]] row_equality_comparator {
+class row_equality_comparator {
  public:
   /**
    * @brief Construct a new row equality comparator object
@@ -213,9 +201,7 @@ class [[deprecated(
  * Users should use cudf/detail/row_operator/primitive_row_operators.cuh instead.
  */
 template <template <typename> class Hash>
-class [[deprecated(
-  "This class is deprecated in 25.10 and will be removed in 25.12. Use "
-  "cudf/detail/row_operator/primitive_row_operators.cuh instead.")]] element_hasher {
+class element_hasher {
  public:
   /**
    * @brief Returns the hash value of the given element in the given column.
@@ -252,9 +238,7 @@ class [[deprecated(
  * Users should use cudf/detail/row_operator/primitive_row_operators.cuh instead.
  */
 template <template <typename> class Hash = cudf::hashing::detail::default_hash>
-class [[deprecated(
-  "This class is deprecated in 25.10 and will be removed in 25.12. Use "
-  "cudf/detail/row_operator/primitive_row_operators.cuh instead.")]] row_hasher {
+class row_hasher {
  public:
   row_hasher() = delete;
 

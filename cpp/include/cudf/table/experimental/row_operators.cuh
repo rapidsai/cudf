@@ -90,9 +90,7 @@ namespace experimental {
  * Users should use cudf/detail/row_operator/row_operators.cuh instead.
  */
 template <cudf::type_id t>
-struct [[deprecated(
-  "This struct is deprecated in 25.10 and will be removed in 25.12. Use "
-  "cudf/detail/row_operator/row_operators.cuh instead.")]] dispatch_void_if_nested {
+struct dispatch_void_if_nested {
   /// The type to dispatch to if the type is nested
   using type = std::conditional_t<t == type_id::STRUCT or t == type_id::LIST, void, id_to_type<t>>;
 };
@@ -119,15 +117,12 @@ enum class rhs_index_type : size_type {};
  * Users should use cudf/detail/row_operator/row_operators.cuh instead.
  */
 template <typename Index, typename Underlying = std::underlying_type_t<Index>>
-struct [[deprecated(
-  "This struct is deprecated in 25.10 and will be removed in 25.12. Use "
-  "cudf/detail/row_operator/row_operators.cuh instead.")]] strong_index_iterator
-  : public thrust::iterator_facade<strong_index_iterator<Index>,
-                                   Index,
-                                   thrust::use_default,
-                                   thrust::random_access_traversal_tag,
-                                   Index,
-                                   Underlying> {
+struct strong_index_iterator : public thrust::iterator_facade<strong_index_iterator<Index>,
+                                                              Index,
+                                                              thrust::use_default,
+                                                              thrust::random_access_traversal_tag,
+                                                              Index,
+                                                              Underlying> {
   using super_t =
     thrust::iterator_adaptor<strong_index_iterator<Index>, Index>;  ///< The base class
 
@@ -184,9 +179,7 @@ namespace lexicographic {
  * @deprecated This struct is deprecated in 25.10 and will be removed in 25.12.
  * Users should use cudf/detail/row_operator/row_operators.cuh instead.
  */
-struct [[deprecated(
-  "This struct is deprecated in 25.10 and will be removed in 25.12. Use "
-  "cudf/detail/row_operator/row_operators.cuh instead.")]] physical_element_comparator {
+struct physical_element_comparator {
   /**
    * @brief Operator for relational comparisons.
    *
@@ -209,9 +202,7 @@ struct [[deprecated(
  * @deprecated This struct is deprecated in 25.10 and will be removed in 25.12.
  * Users should use cudf/detail/row_operator/row_operators.cuh instead.
  */
-struct [[deprecated(
-  "This struct is deprecated in 25.10 and will be removed in 25.12. Use "
-  "cudf/detail/row_operator/row_operators.cuh instead.")]] sorting_physical_element_comparator {
+struct sorting_physical_element_comparator {
   /**
    * @brief Operator for relational comparison of non-floating point values.
    *
@@ -300,9 +291,7 @@ using optional_dremel_view = cuda::std::optional<detail::dremel_device_view cons
 template <bool has_nested_columns,
           typename Nullate,
           typename PhysicalElementComparator = sorting_physical_element_comparator>
-class [[deprecated(
-  "This class is deprecated in 25.10 and will be removed in 25.12. Use "
-  "cudf/detail/row_operator/row_operators.cuh instead.")]] device_row_comparator {
+class device_row_comparator {
  public:
   friend class self_comparator;       ///< Allow self_comparator to access private members
   friend class two_table_comparator;  ///< Allow two_table_comparator to access private members
@@ -718,9 +707,7 @@ class [[deprecated(
  * Users should use cudf/detail/row_operator/row_operators.cuh instead.
  */
 template <typename Comparator, weak_ordering... values>
-struct [[deprecated(
-  "This struct is deprecated in 25.10 and will be removed in 25.12. Use "
-  "cudf/detail/row_operator/row_operators.cuh instead.")]] weak_ordering_comparator_impl {
+struct weak_ordering_comparator_impl {
   static_assert(not((weak_ordering::EQUIVALENT == values) && ...),
                 "weak_ordering_comparator should not be used for pure equality comparisons. The "
                 "`row_equality_comparator` should be used instead");
@@ -745,10 +732,7 @@ struct [[deprecated(
  * Users should use cudf/detail/row_operator/row_operators.cuh instead.
  */
 template <typename Comparator>
-struct [[deprecated(
-  "This struct is deprecated in 25.10 and will be removed in 25.12. Use "
-  "cudf/detail/row_operator/row_operators.cuh instead.")]] less_comparator
-  : weak_ordering_comparator_impl<Comparator, weak_ordering::LESS> {
+struct less_comparator : weak_ordering_comparator_impl<Comparator, weak_ordering::LESS> {
   /**
    * @brief Constructs a less_comparator
    *
@@ -771,9 +755,7 @@ struct [[deprecated(
  * Users should use cudf/detail/row_operator/row_operators.cuh instead.
  */
 template <typename Comparator>
-struct [[deprecated(
-  "This struct is deprecated in 25.10 and will be removed in 25.12. Use "
-  "cudf/detail/row_operator/row_operators.cuh instead.")]] less_equivalent_comparator
+struct less_equivalent_comparator
   : weak_ordering_comparator_impl<Comparator, weak_ordering::LESS, weak_ordering::EQUIVALENT> {
   /**
    * @brief Constructs a less_equivalent_comparator
@@ -793,9 +775,7 @@ struct [[deprecated(
  * @deprecated This struct is deprecated in 25.10 and will be removed in 25.12.
  * Users should use cudf/detail/row_operator/row_operators.cuh instead.
  */
-struct [[deprecated(
-  "This struct is deprecated in 25.10 and will be removed in 25.12. Use "
-  "cudf/detail/row_operator/row_operators.cuh instead.")]] preprocessed_table {
+struct preprocessed_table {
   /// Type of table device view owner for the preprocessed table.
   using table_device_view_owner =
     std::invoke_result_t<decltype(table_device_view::create), table_view, rmm::cuda_stream_view>;
@@ -1030,9 +1010,7 @@ struct [[deprecated(
  * @deprecated This class is deprecated in 25.10 and will be removed in 25.12.
  * Users should use cudf/detail/row_operator/row_operators.cuh instead.
  */
-class [[deprecated(
-  "This class is deprecated in 25.10 and will be removed in 25.12. Use "
-  "cudf/detail/row_operator/row_operators.cuh instead.")]] self_comparator {
+class self_comparator {
  public:
   /**
    * @brief Construct an owning object for performing a lexicographic comparison between two rows of
@@ -1188,9 +1166,7 @@ struct strong_index_comparator_adapter {
  * @deprecated This class is deprecated in 25.10 and will be removed in 25.12.
  * Users should use cudf/detail/row_operator/row_operators.cuh instead.
  */
-class [[deprecated(
-  "This class is deprecated in 25.10 and will be removed in 25.12. Use "
-  "cudf/detail/row_operator/row_operators.cuh instead.")]] two_table_comparator {
+class two_table_comparator {
  public:
   /**
    * @brief Construct an owning object for performing a lexicographic comparison between rows of
@@ -1336,9 +1312,7 @@ namespace equality {
  * @deprecated This struct is deprecated in 25.10 and will be removed in 25.12.
  * Users should use cudf/detail/row_operator/row_operators.cuh instead.
  */
-struct [[deprecated(
-  "This struct is deprecated in 25.10 and will be removed in 25.12. Use "
-  "cudf/detail/row_operator/row_operators.cuh instead.")]] physical_equality_comparator {
+struct physical_equality_comparator {
   /**
    * @brief Operator for equality comparisons.
    *
@@ -1362,9 +1336,7 @@ struct [[deprecated(
  * @deprecated This struct is deprecated in 25.10 and will be removed in 25.12.
  * Users should use cudf/detail/row_operator/row_operators.cuh instead.
  */
-struct [[deprecated(
-  "This struct is deprecated in 25.10 and will be removed in 25.12. Use "
-  "cudf/detail/row_operator/row_operators.cuh instead.")]] nan_equal_physical_equality_comparator {
+struct nan_equal_physical_equality_comparator {
   /**
    * @brief Operator for equality comparison of non-floating point values.
    *
@@ -1421,9 +1393,7 @@ struct [[deprecated(
 template <bool has_nested_columns,
           typename Nullate,
           typename PhysicalEqualityComparator = nan_equal_physical_equality_comparator>
-class [[deprecated(
-  "This class is deprecated in 25.10 and will be removed in 25.12. Use "
-  "cudf/detail/row_operator/row_operators.cuh instead.")]] device_row_comparator {
+class device_row_comparator {
   friend class self_comparator;       ///< Allow self_comparator to access private members
   friend class two_table_comparator;  ///< Allow two_table_comparator to access private members
 
@@ -1643,9 +1613,7 @@ class [[deprecated(
  * @deprecated This struct is deprecated in 25.10 and will be removed in 25.12.
  * Users should use cudf/detail/row_operator/row_operators.cuh instead.
  */
-struct [[deprecated(
-  "This struct is deprecated in 25.10 and will be removed in 25.12. Use "
-  "cudf/detail/row_operator/row_operators.cuh instead.")]] preprocessed_table {
+struct preprocessed_table {
   /**
    * @brief Factory to construct preprocessed_table for use with
    * row equality comparison or row hashing
@@ -1701,9 +1669,7 @@ struct [[deprecated(
  * @deprecated This class is deprecated in 25.10 and will be removed in 25.12.
  * Users should use cudf/detail/row_operator/row_operators.cuh instead.
  */
-class [[deprecated(
-  "This class is deprecated in 25.10 and will be removed in 25.12. Use "
-  "cudf/detail/row_operator/row_operators.cuh instead.")]] self_comparator {
+class self_comparator {
  public:
   /**
    * @brief Construct an owning object for performing equality comparisons between two rows of the
@@ -1807,9 +1773,7 @@ struct strong_index_comparator_adapter {
  * @deprecated This class is deprecated in 25.10 and will be removed in 25.12.
  * Users should use cudf/detail/row_operator/row_operators.cuh instead.
  */
-class [[deprecated(
-  "This class is deprecated in 25.10 and will be removed in 25.12. Use "
-  "cudf/detail/row_operator/row_operators.cuh instead.")]] two_table_comparator {
+class two_table_comparator {
  public:
   /**
    * @brief Construct an owning object for performing equality comparisons between two rows from two
@@ -1904,9 +1868,7 @@ namespace hash {
  * Users should use cudf/detail/row_operator/row_operators.cuh instead.
  */
 template <template <typename> class hash_function, typename Nullate>
-class [[deprecated(
-  "This class is deprecated in 25.10 and will be removed in 25.12. Use "
-  "cudf/detail/row_operator/row_operators.cuh instead.")]] element_hasher {
+class element_hasher {
  public:
   /**
    * @brief Constructs an element_hasher object.
@@ -1969,9 +1931,7 @@ class [[deprecated(
  * Users should use cudf/detail/row_operator/row_operators.cuh instead.
  */
 template <template <typename> class hash_function, typename Nullate>
-class [[deprecated(
-  "This class is deprecated in 25.10 and will be removed in 25.12. Use "
-  "cudf/detail/row_operator/row_operators.cuh instead.")]] device_row_hasher {
+class device_row_hasher {
   friend class row_hasher;  ///< Allow row_hasher to access private members.
 
  public:
@@ -2088,9 +2048,7 @@ using preprocessed_table = row::equality::preprocessed_table;
  * @deprecated This class is deprecated in 25.10 and will be removed in 25.12.
  * Users should use cudf/detail/row_operator/row_operators.cuh instead.
  */
-class [[deprecated(
-  "This class is deprecated in 25.10 and will be removed in 25.12. Use "
-  "cudf/detail/row_operator/row_operators.cuh instead.")]] row_hasher {
+class row_hasher {
  public:
   /**
    * @brief Construct an owning object for hashing the rows of a table
