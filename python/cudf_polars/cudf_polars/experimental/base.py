@@ -310,7 +310,7 @@ class JoinInfo:
 
     Notes
     -----
-    This class is used to track mapping between joined-on
+    This class is used to track mappings between joined-on
     columns and joined-on keys (groups of columns). We need
     these mappings to calculate equivalence sets and make
     join-based unique-count and row-count estimates.
