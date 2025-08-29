@@ -88,6 +88,28 @@ struct sorted_codec_parameters {
   rmm::device_async_resource_ref mr);
 
 /**
+ * @brief Finds the split index for decompression tasks
+ *
+ * This function determines the index at which to split the input data for decompression processing,
+ * using decompression-specific cost calculations.
+ *
+ * @param inputs A device span of input data to be split
+ * @param outputs A device span of output buffers corresponding to inputs
+ * @param host_state The state of the host-side engine used for processing
+ * @param auto_mode_threshold The threshold value used to determine the split in automatic mode
+ * @param hybrid_mode_cost_ratio The cost ratio used to determine the split in hybrid mode
+ * @param stream The CUDA stream to be used for asynchronous execution
+ *
+ * @return The index at which the input data should be split for decompression.
+ */
+[[nodiscard]] size_t split_decompression_tasks(device_span<device_span<uint8_t const> const> inputs,
+                                               device_span<device_span<uint8_t> const> outputs,
+                                               host_engine_state host_state,
+                                               size_t auto_mode_threshold,
+                                               size_t hybrid_mode_cost_ratio,
+                                               rmm::cuda_stream_view stream);
+
+/**
  * @brief Sorts input and output spans for compression by output size in descending order
  *
  * This function creates a sorted view of the inputs and outputs for compression, where they are
@@ -107,26 +129,26 @@ struct sorted_codec_parameters {
   rmm::device_async_resource_ref mr);
 
 /**
- * @brief Finds the split index for input data based on the specified thresholds and target ratio.
+ * @brief Finds the split index for compression tasks
  *
- * This function determines the index at which to split the input data for processing, using
- * the provided thresholds and target ratio. Inputs before the split index will be processed
- * using the host engine, while those after will be processed using the device engine.
+ * This function determines the index at which to split the input data for compression processing,
+ * using compression-specific cost calculations.
  *
  * @param inputs A device span of input data to be split
+ * @param outputs A device span of output buffers corresponding to inputs
  * @param host_state The state of the host-side engine used for processing
  * @param auto_mode_threshold The threshold value used to determine the split in automatic mode
- * @param hybrid_mode_target_ratio The target ratio used to determine the split in hybrid mode
+ * @param hybrid_mode_cost_ratio The cost ratio used to determine the split in hybrid mode
  * @param stream The CUDA stream to be used for asynchronous execution
  *
- * @return The index at which the input data should be split.
+ * @return The index at which the input data should be split for compression.
  */
-[[nodiscard]] size_t find_split_index(device_span<device_span<uint8_t const> const> inputs,
-                                      device_span<device_span<uint8_t> const> outputs,
-                                      host_engine_state host_state,
-                                      size_t auto_mode_threshold,
-                                      size_t hybrid_mode_cost_ratio,
-                                      rmm::cuda_stream_view stream);
+[[nodiscard]] size_t split_compression_tasks(device_span<device_span<uint8_t const> const> inputs,
+                                             device_span<device_span<uint8_t> const> outputs,
+                                             host_engine_state host_state,
+                                             size_t auto_mode_threshold,
+                                             size_t hybrid_mode_cost_ratio,
+                                             rmm::cuda_stream_view stream);
 
 /**
  * @brief Copies results back to their original positions using the ordering map

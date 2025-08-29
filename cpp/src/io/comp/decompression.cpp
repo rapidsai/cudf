@@ -789,7 +789,7 @@ void decompress(compression_type compression,
   auto inputs_view  = device_span<device_span<uint8_t const> const>(sorted_inputs);
   auto outputs_view = device_span<device_span<uint8_t> const>(sorted_outputs);
 
-  auto const split_idx = find_split_index(
+  auto const split_idx = split_decompression_tasks(
     inputs_view,
     outputs_view,
     get_host_engine_state(compression),
