@@ -432,7 +432,7 @@ def _(
             return _lower_ir_fallback(
                 ir,
                 rec,
-                msg="sort does not support multiple partitions for slices with offset.",
+                msg="Sort does not support a multi-partition slice with an offset.",
             )
 
         from cudf_polars.experimental.parallel import _lower_ir_pwise
