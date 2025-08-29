@@ -233,7 +233,9 @@ class Merge:
             if on
             else {
                 lkey.name
-                for lkey, rkey in zip(self._left_keys, self._right_keys)
+                for lkey, rkey in zip(
+                    self._left_keys, self._right_keys, strict=True
+                )
                 if lkey.name == rkey.name
                 and not (
                     isinstance(lkey, _IndexIndexer)
@@ -276,7 +278,7 @@ class Merge:
             as_column(range(n), dtype=SIZE_TYPE_DTYPE).take(
                 map_, nullify=null, check_bounds=False
             )
-            for map_, n, null in zip(maps, lengths, nullify)
+            for map_, n, null in zip(maps, lengths, nullify, strict=True)
         ]
         if self.how == "right":
             # If how is right, right map is primary sort key.
@@ -296,7 +298,9 @@ class Merge:
         left_join_cols = []
         right_join_cols = []
 
-        for left_key, right_key in zip(self._left_keys, self._right_keys):
+        for left_key, right_key in zip(
+            self._left_keys, self._right_keys, strict=True
+        ):
             lcol = left_key.get(self.lhs)
             rcol = right_key.get(self.rhs)
             lcol_casted, rcol_casted = _match_join_keys(lcol, rcol, self.how)
@@ -405,7 +409,9 @@ class Merge:
         # combined by filling nulls in the left key column with corresponding
         # values from the right key column:
         if self.how == "outer":
-            for lkey, rkey in zip(self._left_keys, self._right_keys):
+            for lkey, rkey in zip(
+                self._left_keys, self._right_keys, strict=True
+            ):
                 if lkey.name == rkey.name:
                     # fill nulls in lhs from values in the rhs
                     lkey.set(
@@ -459,12 +465,20 @@ class Merge:
             multiindex_columns = (
                 self.lhs._data.multiindex and self.rhs._data.multiindex
             )
+            rangeindex_columns = (
+                self.lhs._data.rangeindex and self.rhs._data.rangeindex
+            )
         elif self.lhs._data:
             multiindex_columns = self.lhs._data.multiindex
+            rangeindex_columns = self.lhs._data.rangeindex
         elif self.rhs._data:
             multiindex_columns = self.rhs._data.multiindex
+            rangeindex_columns = self.rhs._data.rangeindex
         else:
             multiindex_columns = False
+            rangeindex_columns = (
+                self.lhs._data.rangeindex and self.rhs._data.rangeindex
+            )
 
         index: Index | None
         if self._using_right_index:
@@ -479,7 +493,9 @@ class Merge:
         # Construct result from data and index:
         return (
             left_result._data.__class__(
-                data=data, multiindex=multiindex_columns
+                data=data,
+                multiindex=multiindex_columns,
+                rangeindex=rangeindex_columns,
             ),
             index,
         )

@@ -131,7 +131,7 @@ def _pyarrow_quantiles(
                 [
                     (name, order_mapper[order])
                     for name, order in zip(
-                        pa_tbl_data.column_names, column_order
+                        pa_tbl_data.column_names, column_order, strict=True
                     )
                 ],
                 null_placement="at_start"

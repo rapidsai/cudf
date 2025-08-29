@@ -117,6 +117,11 @@ class DecimalBaseColumn(NumericalBaseColumn):
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
     def as_string_column(self, dtype) -> StringColumn:
+        if cudf.get_option("mode.pandas_compatible"):
+            if isinstance(dtype, np.dtype) and dtype.kind == "O":
+                raise TypeError(
+                    f"Cannot cast a decimal from {self.dtype} to {dtype}"
+                )
         if len(self) > 0:
             with acquire_spill_lock():
                 plc_column = (

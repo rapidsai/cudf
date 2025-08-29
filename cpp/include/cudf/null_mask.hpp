@@ -113,13 +113,16 @@ void set_null_mask(bitmask_type* bitmask,
                    rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
- * @brief Sets a vector of pre-allocated bitmask buffers to given states in the corresponding ranges
- * in bulk
+ * @brief Sets a vector of non-overlapping pre-allocated bitmask buffers to given states in the
+ * corresponding non-aliasing ranges in bulk
  *
  * Sets bit ranges `[begin_bit, end_bit)` of given bitmasks to specified valid states. The bitmask
- * bit ranges must be non-aliasing. i.e., attempting to concurrently set bits within the same
- * physical word across bitmasks will result in undefined behavior. This utility is optimized for
- * bulk operation on 16 or more bitmasks sized 2^24 bits or less.
+ * bit ranges must be non-overlapping and non-aliasing. i.e., attempting to concurrently set bits
+ * within the same physical word across bitmasks will result in undefined behavior. This utility is
+ * optimized for bulk operation on 16 or more bitmasks sized 2^24 bits or less.
+ *
+ * @deprecated in 25.08 and to be removed in a future release. Use `cudf::set_null_masks_unsafe`
+ * instead.
  *
  * @param bitmasks Pointers to bitmasks (e.g. returned by `column_view::null_mask()`)
  * @param begin_bits Indices of the first bits to set (inclusive)
@@ -127,11 +130,53 @@ void set_null_mask(bitmask_type* bitmask,
  * @param valids Booleans indicating if the corresponding bitmasks should be set to valid or null
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
-void set_null_masks(cudf::host_span<bitmask_type*> bitmasks,
-                    cudf::host_span<size_type const> begin_bits,
-                    cudf::host_span<size_type const> end_bits,
-                    cudf::host_span<bool const> valids,
-                    rmm::cuda_stream_view stream = cudf::get_default_stream());
+[[deprecated]] void set_null_masks(cudf::host_span<bitmask_type*> bitmasks,
+                                   cudf::host_span<size_type const> begin_bits,
+                                   cudf::host_span<size_type const> end_bits,
+                                   cudf::host_span<bool const> valids,
+                                   rmm::cuda_stream_view stream = cudf::get_default_stream());
+
+/**
+ * @brief Sets a vector of non-overlapping pre-allocated bitmask buffers to given states in the
+ * corresponding ranges in bulk
+ *
+ * Sets bit ranges `[begin_bit, end_bit)` of given bitmasks to specified valid states. The bitmask
+ * bit ranges must be non-overlapping. i.e., attempting to set a physical bit concurrently across
+ * bitmasks will result in undefined behavior. This utility is optimized for bulk operation on 16
+ * or more bitmasks sized 2^24 bits or less.
+ *
+ * @param bitmasks Pointers to bitmasks (e.g. returned by `column_view::null_mask()`)
+ * @param begin_bits Indices of the first bits to set (inclusive)
+ * @param end_bits Indices of the last bits to set (exclusive)
+ * @param valids Booleans indicating if the corresponding bitmasks should be set to valid or null
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ */
+void set_null_masks_safe(cudf::host_span<bitmask_type*> bitmasks,
+                         cudf::host_span<size_type const> begin_bits,
+                         cudf::host_span<size_type const> end_bits,
+                         cudf::host_span<bool const> valids,
+                         rmm::cuda_stream_view stream = cudf::get_default_stream());
+
+/**
+ * @brief Sets a vector of non-overlapping pre-allocated bitmask buffers to given states in the
+ * corresponding non-aliasing ranges in bulk
+ *
+ * Sets bit ranges `[begin_bit, end_bit)` of given bitmasks to specified valid states. The bitmask
+ * bit ranges must be non-overlapping and non-aliasing. i.e., attempting to concurrently set bits
+ * within the same physical word across bitmasks will result in undefined behavior. This utility is
+ * optimized for bulk operation on 16 or more bitmasks sized 2^24 bits or less.
+ *
+ * @param bitmasks Pointers to bitmasks (e.g. returned by `column_view::null_mask()`)
+ * @param begin_bits Indices of the first bits to set (inclusive)
+ * @param end_bits Indices of the last bits to set (exclusive)
+ * @param valids Booleans indicating if the corresponding bitmasks should be set to valid or null
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ */
+void set_null_masks_unsafe(cudf::host_span<bitmask_type*> bitmasks,
+                           cudf::host_span<size_type const> begin_bits,
+                           cudf::host_span<size_type const> end_bits,
+                           cudf::host_span<bool const> valids,
+                           rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
  * @brief Creates a `device_buffer` from a slice of bitmask defined by a range

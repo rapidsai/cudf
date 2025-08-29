@@ -7799,10 +7799,11 @@ public class TableTest extends CudfTestBase {
              .build();
          Table results = input.groupBy(0).aggregate(GroupByAggregation.M2()
                .onColumn(1));
+         Table resultsSorted = results.orderBy(OrderByArg.asc(0));
          Table expected = new Table.TestBuilder().column(1, 2, 3)
              .column(42.0, 122.75, 114.0)
              .build()) {
-      assertTablesAreEqual(expected, results);
+      assertTablesAreEqual(expected, resultsSorted);
     }
 
     // Test with values have nulls (the values associated with key=2 has both nulls and non-nulls,
@@ -7812,10 +7813,11 @@ public class TableTest extends CudfTestBase {
              .build();
          Table results = input.groupBy(0).aggregate(GroupByAggregation.M2()
              .onColumn(1));
+         Table resultsSorted = results.orderBy(OrderByArg.asc(0));
          Table expected = new Table.TestBuilder().column(1, 2, 3, 4, 5)
              .column(0.0, 2.0, 8.0, 0.0, null)
              .build()) {
-      assertTablesAreEqual(expected, results);
+      assertTablesAreEqual(expected, resultsSorted);
     }
 
     // Test with floating-point values having NaN:
@@ -7824,10 +7826,11 @@ public class TableTest extends CudfTestBase {
              .build();
          Table results = input.groupBy(0).aggregate(GroupByAggregation.M2()
              .onColumn(1));
+         Table resultsSorted = results.orderBy(OrderByArg.asc(0));
          Table expected = new Table.TestBuilder().column(1, 2, 3, 4, null)
              .column(18.0, Double.NaN, 18.0, Double.NaN, 0.0)
              .build()) {
-      assertTablesAreEqual(expected, results);
+      assertTablesAreEqual(expected, resultsSorted);
     }
 
     // Test with floating-point values having NaN and +/- Inf
@@ -7857,10 +7860,11 @@ public class TableTest extends CudfTestBase {
              .build();
          Table results = input.groupBy(0).aggregate(GroupByAggregation.M2()
              .onColumn(1));
+         Table resultsSorted = results.orderBy(OrderByArg.asc(0));
          Table expected = new Table.TestBuilder().column(1, 2, 3, 4, 5)
              .column(Double.NaN, Double.NaN, Double.NaN, Double.NaN, 12.5)
              .build()) {
-      assertTablesAreEqual(expected, results);
+      assertTablesAreEqual(expected, resultsSorted);
     }
   }
 

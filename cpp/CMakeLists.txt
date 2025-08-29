@@ -53,7 +53,6 @@ option(BUILD_SHARED_LIBS "Build cuDF shared libraries" ON)
 option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
 option(CUDF_BUILD_TESTUTIL "Whether to build the test utilities contained in libcudf" ON)
 mark_as_advanced(CUDF_BUILD_TESTUTIL)
-option(CUDF_USE_PROPRIETARY_NVCOMP "Download and use NVCOMP with proprietary extensions" ON)
 option(CUDF_EXPORT_NVCOMP "Export NVCOMP as a dependency" ON)
 option(CUDF_LARGE_STRINGS_DISABLED "Build with large string support disabled" OFF)
 mark_as_advanced(CUDF_LARGE_STRINGS_DISABLED)
@@ -132,6 +131,11 @@ set(CUDF_CXX_FLAGS "")
 set(CUDF_CUDA_FLAGS "")
 set(CUDF_CXX_DEFINITIONS "")
 set(CUDF_CUDA_DEFINITIONS "")
+
+# For now, disable CMake's automatic module scanning for C++ files. There is an sccache bug in the
+# version RAPIDS uses in CI that causes it to handle the resulting -M* flags incorrectly with
+# gcc>=14. We can remove this once we upgrade to a newer sccache version.
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 
 # Set logging level
 set(LIBCUDF_LOGGING_LEVEL
@@ -419,6 +423,7 @@ add_library(
   src/filling/fill.cu
   src/filling/repeat.cu
   src/filling/sequence.cu
+  src/groupby/common/m2_var_std.cu
   src/groupby/groupby.cu
   src/groupby/hash/compute_aggregations.cu
   src/groupby/hash/compute_aggregations_null.cu
@@ -532,6 +537,7 @@ add_library(
   src/io/parquet/decode_preprocess.cu
   src/io/parquet/experimental/dictionary_page_filter.cu
   src/io/parquet/experimental/hybrid_scan.cpp
+  src/io/parquet/experimental/hybrid_scan_chunking.cu
   src/io/parquet/experimental/hybrid_scan_helpers.cpp
   src/io/parquet/experimental/hybrid_scan_impl.cpp
   src/io/parquet/experimental/hybrid_scan_preprocess.cu
@@ -573,7 +579,6 @@ add_library(
   src/io/utilities/trie.cu
   src/jit/cache.cpp
   src/jit/parser.cpp
-  src/jit/runtime_support.cpp
   src/jit/util.cpp
   src/join/conditional_join.cu
   src/join/cross_join.cu
@@ -625,13 +630,16 @@ add_library(
   src/reductions/any.cu
   src/reductions/bitwise.cu
   src/reductions/collect_ops.cu
+  src/reductions/count.cpp
   src/reductions/histogram.cu
   src/reductions/max.cu
   src/reductions/mean.cu
   src/reductions/min.cu
   src/reductions/minmax.cu
   src/reductions/nth_element.cu
+  src/reductions/nunique.cpp
   src/reductions/product.cu
+  src/reductions/quantile.cu
   src/reductions/reductions.cpp
   src/reductions/scan/rank_scan.cu
   src/reductions/scan/ewm.cu
@@ -655,6 +663,7 @@ add_library(
   src/reductions/std.cu
   src/reductions/sum.cu
   src/reductions/sum_of_squares.cu
+  src/reductions/sum_with_overflow.cu
   src/reductions/var.cu
   src/replace/clamp.cu
   src/replace/nans.cu
@@ -674,15 +683,20 @@ add_library(
   src/rolling/range_window_bounds.cpp
   src/rolling/rolling.cpp
   src/round/round.cu
+  src/runtime/context.cpp
   src/scalar/scalar.cpp
   src/scalar/scalar_factories.cpp
   src/search/contains_column.cu
   src/search/contains_scalar.cu
   src/search/contains_table.cu
+  src/search/contains_table_impl.cu
+  src/search/contains_table_impl_nested.cu
+  src/search/contains_table_impl_primitive.cu
   src/search/search_ordered.cu
   src/sort/is_sorted.cu
   src/sort/rank.cu
   src/sort/segmented_sort.cu
+  src/sort/segmented_top_k.cu
   src/sort/sort.cu
   src/sort/sort_column.cu
   src/sort/sort_radix.cu
@@ -690,12 +704,14 @@ add_library(
   src/sort/stable_segmented_sort.cu
   src/sort/stable_sort_column.cu
   src/sort/stable_sort.cu
+  src/sort/top_k.cu
   src/stream_compaction/apply_boolean_mask.cu
   src/stream_compaction/distinct.cu
   src/stream_compaction/distinct_count.cu
   src/stream_compaction/distinct_helpers.cu
   src/stream_compaction/drop_nans.cu
   src/stream_compaction/drop_nulls.cu
+  src/stream_compaction/filter/filter.cu
   src/stream_compaction/stable_distinct.cu
   src/stream_compaction/unique.cu
   src/stream_compaction/unique_count.cu
@@ -749,10 +765,12 @@ add_library(
   src/strings/search/contains_multiple.cu
   src/strings/search/findall.cu
   src/strings/search/find.cu
+  src/strings/search/find_instance.cu
   src/strings/search/find_multiple.cu
   src/strings/slice.cu
   src/strings/split/partition.cu
   src/strings/split/split.cu
+  src/strings/split/split_part.cu
   src/strings/split/split_re.cu
   src/strings/split/split_record.cu
   src/strings/strings_column_factories.cu
@@ -784,10 +802,6 @@ add_library(
   src/text/stemmer.cu
   src/text/bpe/byte_pair_encoding.cu
   src/text/bpe/load_merge_pairs.cu
-  src/text/subword/data_normalizer.cu
-  src/text/subword/load_hash_file.cu
-  src/text/subword/subword_tokenize.cu
-  src/text/subword/wordpiece_tokenizer.cu
   src/text/tokenize.cu
   src/text/vocabulary_tokenize.cu
   src/text/wordpiece_tokenize.cu

@@ -41,8 +41,10 @@ public class BatchedLZ4Decompressor extends BatchedDecompressor {
   }
 
   @Override
-  protected long batchedDecompressGetTempSize(long numChunks, long maxUncompressedChunkBytes) {
-    return NvcompJni.batchedLZ4DecompressGetTempSize(numChunks, maxUncompressedChunkBytes);
+  protected long batchedDecompressGetTempSize(long numChunks, long maxUncompressedChunkBytes,
+      long maxTotalSize) {
+    return NvcompJni.batchedLZ4DecompressGetTempSize(numChunks, maxUncompressedChunkBytes,
+      maxTotalSize);
   }
 
   @Override

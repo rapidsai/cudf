@@ -33,8 +33,9 @@ from cudf_polars.experimental.dispatch import (
     generate_ir_tasks,
     lower_ir_node,
 )
+from cudf_polars.experimental.io import _clear_source_info_cache
 from cudf_polars.experimental.repartition import Repartition
-from cudf_polars.experimental.utils import _concat, _lower_ir_fallback
+from cudf_polars.experimental.utils import _concat, _contains_over, _lower_ir_fallback
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -228,6 +229,9 @@ def evaluate_streaming(
     -------
     A cudf-polars DataFrame object.
     """
+    # Clear source info cache in case data was overwritten
+    _clear_source_info_cache()
+
     ir, partition_info = lower_ir_graph(ir, config_options)
 
     graph, key = task_graph(ir, partition_info, config_options)
@@ -261,9 +265,13 @@ def _(
     ir: Union, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     # Check zlice
-    if ir.zlice is not None:  # pragma: no cover
-        return _lower_ir_fallback(
-            ir, rec, msg="zlice is not supported for multiple partitions."
+    if ir.zlice is not None:
+        return rec(
+            Slice(
+                ir.schema,
+                *ir.zlice,
+                Union(ir.schema, None, *ir.children),
+            )
         )
 
     # Lower children
@@ -338,9 +346,30 @@ def _lower_ir_pwise(
 
 _lower_ir_pwise_preserve = partial(_lower_ir_pwise, preserve_partitioning=True)
 lower_ir_node.register(Projection, _lower_ir_pwise_preserve)
-lower_ir_node.register(Filter, _lower_ir_pwise_preserve)
 lower_ir_node.register(Cache, _lower_ir_pwise)
 lower_ir_node.register(HConcat, _lower_ir_pwise)
+
+
+@lower_ir_node.register(Filter)
+def _(
+    ir: Filter, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    child, partition_info = rec(ir.children[0])
+
+    if partition_info[child].count > 1 and _contains_over([ir.mask.value]):
+        # mask contains .over(...), collapse to single partition
+        return _lower_ir_fallback(
+            ir.reconstruct([child]),
+            rec,
+            msg=(
+                "over(...) inside filter is not supported for multiple partitions; "
+                "falling back to in-memory evaluation."
+            ),
+        )
+
+    new_node = ir.reconstruct([child])
+    partition_info[new_node] = partition_info[child]
+    return new_node, partition_info
 
 
 @lower_ir_node.register(Slice)

@@ -11,7 +11,7 @@ import polars as pl
 
 from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_sink_result_equal
 from cudf_polars.utils.config import ConfigOptions
-from cudf_polars.utils.versions import POLARS_VERSION_LT_128, POLARS_VERSION_LT_130
+from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 
 @pytest.fixture(scope="module")
@@ -30,15 +30,8 @@ def df():
 @pytest.mark.parametrize("row_group_size", [None, 1_000])
 @pytest.mark.parametrize("max_rows_per_partition", [1_000, 1_000_000])
 def test_sink_parquet_single_file(
-    request, df, tmp_path, mkdir, data_page_size, row_group_size, max_rows_per_partition
+    df, tmp_path, mkdir, data_page_size, row_group_size, max_rows_per_partition
 ):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=POLARS_VERSION_LT_128,
-            reason="not supported until polars 1.28",
-        )
-    )
-
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
@@ -66,15 +59,8 @@ def test_sink_parquet_single_file(
 @pytest.mark.parametrize("row_group_size", [None, 1_000])
 @pytest.mark.parametrize("max_rows_per_partition", [1_000, 1_000_000])
 def test_sink_parquet_directory(
-    request, df, tmp_path, mkdir, data_page_size, row_group_size, max_rows_per_partition
+    df, tmp_path, mkdir, data_page_size, row_group_size, max_rows_per_partition
 ):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=POLARS_VERSION_LT_128,
-            reason="not supported until polars 1.28",
-        )
-    )
-
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
@@ -116,17 +102,10 @@ def test_sink_parquet_distributed_raises():
         ConfigOptions.from_polars_engine(engine)
 
 
-def test_sink_parquet_raises(request, df, tmp_path):
+def test_sink_parquet_raises(df, tmp_path):
     if DEFAULT_SCHEDULER == "distributed":
         # We end up with an extra row per partition.
         pytest.skip("Distributed requires sink_to_directory=True")
-
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=POLARS_VERSION_LT_128,
-            reason="not supported until polars 1.28",
-        )
-    )
 
     engine = pl.GPUEngine(
         raise_on_fail=True,
@@ -163,7 +142,6 @@ def test_sink_parquet_raises(request, df, tmp_path):
 @pytest.mark.parametrize("separator", [",", "|"])
 @pytest.mark.parametrize("max_rows_per_partition", [1_000, 1_000_000])
 def test_sink_csv(
-    request,
     df,
     tmp_path,
     include_header,
@@ -171,13 +149,6 @@ def test_sink_csv(
     separator,
     max_rows_per_partition,
 ):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=POLARS_VERSION_LT_128,
-            reason="not supported until polars 1.28",
-        )
-    )
-
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
@@ -203,14 +174,7 @@ def test_sink_csv(
 
 
 @pytest.mark.parametrize("max_rows_per_partition", [1_000, 1_000_000])
-def test_sink_ndjson(request, df, tmp_path, max_rows_per_partition):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=POLARS_VERSION_LT_128,
-            reason="not supported until polars 1.28",
-        )
-    )
-
+def test_sink_ndjson(df, tmp_path, max_rows_per_partition):
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",

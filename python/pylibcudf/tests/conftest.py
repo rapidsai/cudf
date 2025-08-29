@@ -15,6 +15,13 @@ from pylibcudf.io.types import CompressionType
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "common"))
 
+
+# This ensures that assertions from expressions like `left == right` in the
+# common/utils.py are rewritten so that we get nice tracebacks.
+# We need to register this before the module is imported.
+pytest.register_assert_rewrite("utils")
+
+
 from utils import (
     ALL_PA_TYPES,
     DEFAULT_PA_TYPES,
@@ -112,7 +119,10 @@ def _generate_table_data(types, nrows, seed=42):
                 )
             elif isinstance(typ, pa.ListType):
                 pa_array = pa.array(
-                    [list(row_vals) for row_vals in zip(rand_arrs[0])],
+                    [
+                        list(row_vals)
+                        for row_vals in zip(rand_arrs[0], strict=True)
+                    ],
                     type=typ,
                 )
                 child_colnames.append(("", grandchild_colnames))

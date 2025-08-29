@@ -151,7 +151,7 @@ ConfigureNVBench(
 
 # ##################################################################################################
 # * contiguous_split benchmark  -------------------------------------------------------------------
-ConfigureBench(CONTIGUOUS_SPLIT_NVBENCH contiguous_split/contiguous_split.cpp)
+ConfigureNVBench(CONTIGUOUS_SPLIT_NVBENCH contiguous_split/contiguous_split.cpp)
 
 # ##################################################################################################
 # * lists scatter benchmark -----------------------------------------------------------------------
@@ -172,6 +172,11 @@ ConfigureNVBench(NDSH_Q05_NVBENCH ndsh/q05.cpp ndsh/utilities.cpp)
 ConfigureNVBench(NDSH_Q06_NVBENCH ndsh/q06.cpp ndsh/utilities.cpp)
 ConfigureNVBench(NDSH_Q09_NVBENCH ndsh/q09.cpp ndsh/utilities.cpp)
 ConfigureNVBench(NDSH_Q10_NVBENCH ndsh/q10.cpp ndsh/utilities.cpp)
+
+# ##################################################################################################
+# * filter benchmark -------------------------------------------------------------------
+
+ConfigureNVBench(FILTER_NVBENCH filter/minmax_filter.cpp)
 
 # ##################################################################################################
 # * stream_compaction benchmark -------------------------------------------------------------------
@@ -205,8 +210,17 @@ ConfigureNVBench(SEARCH_NVBENCH search/contains_scalar.cpp search/contains_table
 # ##################################################################################################
 # * sort benchmark --------------------------------------------------------------------------------
 ConfigureNVBench(
-  SORT_NVBENCH sort/rank.cpp sort/rank_lists.cpp sort/rank_structs.cpp sort/segmented_sort.cpp
-  sort/sort.cpp sort/sort_lists.cpp sort/sort_strings.cpp sort/sort_structs.cpp
+  SORT_NVBENCH
+  sort/rank.cpp
+  sort/rank_lists.cpp
+  sort/rank_structs.cpp
+  sort/segmented_top_k.cpp
+  sort/segmented_sort.cpp
+  sort/sort.cpp
+  sort/sort_lists.cpp
+  sort/sort_strings.cpp
+  sort/sort_structs.cpp
+  sort/top_k.cpp
 )
 
 # ##################################################################################################
@@ -217,7 +231,7 @@ ConfigureNVBench(STRUCT_CREATION_NVBENCH structs/create_structs.cpp)
 # ##################################################################################################
 # * quantiles benchmark
 # --------------------------------------------------------------------------------
-ConfigureBench(QUANTILES_BENCH quantiles/quantiles.cpp)
+ConfigureNVBench(QUANTILES_NVBENCH quantiles/quantiles.cpp)
 
 # ##################################################################################################
 # * tdigest benchmark
@@ -250,7 +264,7 @@ ConfigureNVBench(REPLACE_NVBENCH replace/nulls.cpp)
 
 # ##################################################################################################
 # * filling benchmark -----------------------------------------------------------------------------
-ConfigureBench(FILL_BENCH filling/repeat.cpp)
+ConfigureNVBench(FILL_NVBENCH filling/repeat.cpp)
 
 # ##################################################################################################
 # * groupby benchmark -----------------------------------------------------------------------------
@@ -261,7 +275,9 @@ ConfigureBench(
 
 ConfigureNVBench(
   GROUPBY_NVBENCH
+  groupby/group_complex_keys.cpp
   groupby/group_histogram.cpp
+  groupby/group_m2_var_std.cpp
   groupby/group_max.cpp
   groupby/group_max_multithreaded.cpp
   groupby/group_nunique.cpp
@@ -352,7 +368,9 @@ ConfigureNVBench(
 # ##################################################################################################
 # * transform benchmark
 # ---------------------------------------------------------------------------------
-ConfigureNVBench(TRANSFORM_NVBENCH transform/polynomials.cpp transform/transform.cpp)
+ConfigureNVBench(
+  TRANSFORM_NVBENCH transform/encode.cpp transform/polynomials.cpp transform/transform.cpp
+)
 
 # ##################################################################################################
 # * nvtext benchmark -------------------------------------------------------------------
@@ -392,6 +410,7 @@ ConfigureNVBench(
   string/factory.cpp
   string/filter.cpp
   string/find.cpp
+  string/find_instance.cpp
   string/find_multiple.cpp
   string/join_strings.cpp
   string/lengths.cpp

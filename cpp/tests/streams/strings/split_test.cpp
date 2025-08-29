@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@
 
 class StringsSplitTest : public cudf::test::BaseFixture {};
 
-TEST_F(StringsSplitTest, SplitPartition)
+TEST_F(StringsSplitTest, SplitAll)
 {
   auto input = cudf::test::strings_column_wrapper({"Héllo thesé", "tést strings", ""});
   auto view  = cudf::strings_column_view(input);
@@ -39,6 +39,7 @@ TEST_F(StringsSplitTest, SplitPartition)
   cudf::strings::rsplit_record(view, delimiter, -1, cudf::test::get_default_stream());
   cudf::strings::partition(view, delimiter, cudf::test::get_default_stream());
   cudf::strings::rpartition(view, delimiter, cudf::test::get_default_stream());
+  cudf::strings::split_part(view, delimiter, 1, cudf::test::get_default_stream());
 
   auto const pattern = std::string("\\s");
   auto const prog    = cudf::strings::regex_program::create(pattern);

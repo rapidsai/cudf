@@ -94,6 +94,26 @@ class BinOp(Expr):
                 lop = left.obj_scalar
             elif right.is_scalar:
                 rop = right.obj_scalar
+        if plc.traits.is_integral_not_bool(self.dtype.plc) and self.op in {
+            plc.binaryop.BinaryOperator.FLOOR_DIV,
+            plc.binaryop.BinaryOperator.PYMOD,
+        }:
+            if right.obj.size() == 1 and right.obj.to_scalar().to_py() == 0:
+                return Column(
+                    plc.Column.all_null_like(left.obj, left.obj.size()),
+                    dtype=self.dtype,
+                )
+
+            if right.obj.size() > 1:
+                rop = plc.replace.find_and_replace_all(
+                    right.obj,
+                    plc.Column.from_scalar(
+                        plc.Scalar.from_py(0, dtype=self.dtype.plc), 1
+                    ),
+                    plc.Column.from_scalar(
+                        plc.Scalar.from_py(None, dtype=self.dtype.plc), 1
+                    ),
+                )
         return Column(
             plc.binaryop.binary_operation(lop, rop, self.op, self.dtype.plc),
             dtype=self.dtype,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -111,11 +111,12 @@ TEST_F(TextTokenizeTest, TokenizeErrorTest)
 
 TEST_F(TextTokenizeTest, CharacterTokenize)
 {
-  cudf::test::strings_column_wrapper input({"the mousé ate the cheese", ""});
+  cudf::test::strings_column_wrapper input({"the mousé ate", "the cheese", ""});
 
-  cudf::test::strings_column_wrapper expected{"t", "h", "e", " ", "m", "o", "u", "s",
-                                              "é", " ", "a", "t", "e", " ", "t", "h",
-                                              "e", " ", "c", "h", "e", "e", "s", "e"};
+  using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
+  LCW expected{LCW{"t", "h", "e", " ", "m", "o", "u", "s", "é", " ", "a", "t", "e"},
+               LCW{"t", "h", "e", " ", "c", "h", "e", "e", "s", "e"},
+               LCW{}};
 
   auto results = nvtext::character_tokenize(cudf::strings_column_view(input));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);

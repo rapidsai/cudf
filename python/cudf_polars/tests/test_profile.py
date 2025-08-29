@@ -7,6 +7,8 @@ import pytest
 import polars as pl
 from polars.testing import assert_frame_equal
 
+from cudf_polars.utils.versions import POLARS_VERSION_LT_130
+
 
 def test_profile_basic() -> None:
     df = pl.LazyFrame(
@@ -30,13 +32,18 @@ def test_profile_basic() -> None:
 def test_profile_streaming_raises(scheduler: str) -> None:
     df = pl.LazyFrame({"a": [1, 2, 3, 4]})
     q = df.sort("a").group_by("a").len()
-
-    with pytest.raises(
-        NotImplementedError,
-        match=r"profile\(\) is not supported with the streaming executor.",
-    ):
-        q.profile(
-            engine=pl.GPUEngine(
-                executor="streaming", executor_options={"scheduler": scheduler}
-            )
-        )
+    engine = pl.GPUEngine(
+        executor="streaming", executor_options={"scheduler": scheduler}
+    )
+    if POLARS_VERSION_LT_130:
+        with pytest.raises(
+            pl.exceptions.ComputeError,
+            match=r"profile\(\) is not supported with the streaming executor.",
+        ):
+            q.profile(engine=engine)
+    else:
+        with pytest.raises(
+            NotImplementedError,
+            match=r"profile\(\) is not supported with the streaming executor.",
+        ):
+            q.profile(engine=engine)

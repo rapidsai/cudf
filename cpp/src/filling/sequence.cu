@@ -18,6 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/sequence.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
@@ -117,7 +118,7 @@ struct sequence_functor {
   std::unique_ptr<column> operator()(Args&&...)
     requires(not cudf::is_numeric<T>() or cudf::is_boolean<T>())
   {
-    CUDF_FAIL("Unsupported sequence scalar type");
+    CUDF_FAIL("Unsupported sequence scalar type", cudf::data_type_error);
   }
 };
 
@@ -132,8 +133,11 @@ std::unique_ptr<column> sequence(size_type size,
   CUDF_EXPECTS(cudf::have_same_types(init, step),
                "init and step must be of the same type.",
                cudf::data_type_error);
-  CUDF_EXPECTS(size >= 0, "size must be >= 0");
-  CUDF_EXPECTS(is_numeric(init.type()), "Input scalar types must be numeric");
+  CUDF_EXPECTS(size >= 0, "size must be >= 0", std::invalid_argument);
+  CUDF_EXPECTS(
+    is_numeric(init.type()), "Input scalar types must be numeric", std::invalid_argument);
+  CUDF_EXPECTS(init.is_valid(stream), "init must be a valid scalar", std::invalid_argument);
+  CUDF_EXPECTS(step.is_valid(stream), "step must be a valid scalar", std::invalid_argument);
 
   return type_dispatcher(init.type(), sequence_functor{}, size, init, step, stream, mr);
 }
@@ -143,8 +147,9 @@ std::unique_ptr<column> sequence(size_type size,
                                  rmm::cuda_stream_view stream,
                                  rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(size >= 0, "size must be >= 0");
-  CUDF_EXPECTS(is_numeric(init.type()), "init scalar type must be numeric");
+  CUDF_EXPECTS(size >= 0, "size must be >= 0", std::invalid_argument);
+  CUDF_EXPECTS(is_numeric(init.type()), "init scalar type must be numeric", cudf::data_type_error);
+  CUDF_EXPECTS(init.is_valid(stream), "init must be a valid scalar", std::invalid_argument);
 
   return type_dispatcher(init.type(), sequence_functor{}, size, init, stream, mr);
 }

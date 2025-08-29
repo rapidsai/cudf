@@ -28,16 +28,18 @@ class RoundTest : public cudf::test::BaseFixture {};
 
 TEST_F(RoundTest, RoundHalfToEven)
 {
-  std::vector<double> vals = {1.729, 17.29, 172.9, 1729};
-  cudf::test::fixed_width_column_wrapper<double> input(vals.begin(), vals.end());
-  cudf::round(input, 0, cudf::rounding_method::HALF_UP, cudf::test::get_default_stream());
+  auto const input = cudf::test::fixed_point_column_wrapper<int32_t>{
+    {1140, 1150, 1160, 1240, 1250, 1260, -1140, -1150, -1160, -1240, -1250, -1260},
+    numeric::scale_type{0}};
+  cudf::round_decimal(input, 0, cudf::rounding_method::HALF_UP, cudf::test::get_default_stream());
 }
 
 TEST_F(RoundTest, RoundHalfAwayFromEven)
 {
-  std::vector<double> vals = {1.5, 2.5, 1.35, 1.45, 15, 25};
-  cudf::test::fixed_width_column_wrapper<double> input(vals.begin(), vals.end());
-  cudf::round(input, -1, cudf::rounding_method::HALF_EVEN, cudf::test::get_default_stream());
+  auto const input =
+    cudf::test::fixed_width_column_wrapper<int32_t>{-12, -135, -145, -146, -1454, -1455, -1500};
+  cudf::round_decimal(
+    input, -1, cudf::rounding_method::HALF_EVEN, cudf::test::get_default_stream());
 }
 
 CUDF_TEST_PROGRAM_MAIN()

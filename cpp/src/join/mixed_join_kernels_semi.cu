@@ -23,12 +23,8 @@
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <cub/cub.cuh>
-
 namespace cudf {
 namespace detail {
-
-namespace cg = cooperative_groups;
 
 template <cudf::size_type block_size, bool has_nulls>
 CUDF_KERNEL void __launch_bounds__(block_size)
@@ -41,10 +37,6 @@ CUDF_KERNEL void __launch_bounds__(block_size)
                   cudf::device_span<bool> left_table_keep_mask,
                   cudf::ast::detail::expression_device_view device_expression_data)
 {
-  auto constexpr cg_size = hash_set_ref_type::cg_size;
-
-  auto const tile = cg::tiled_partition<cg_size>(cg::this_thread_block());
-
   // Normally the casting of a shared memory array is used to create multiple
   // arrays of different types from the shared memory buffer, but here it is
   // used to circumvent conflicts between arrays of different types between
@@ -53,7 +45,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   auto intermediate_storage =
     reinterpret_cast<cudf::ast::detail::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
   auto thread_intermediate_storage =
-    intermediate_storage + (tile.meta_group_rank() * device_expression_data.num_intermediates);
+    intermediate_storage + (threadIdx.x * device_expression_data.num_intermediates);
 
   // Equality evaluator to use
   auto const evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
@@ -69,15 +61,13 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 
   // Total number of rows to query the set
   auto const outer_num_rows = left_table.num_rows();
-  // Grid stride for the tile
-  auto const cg_grid_stride = cudf::detail::grid_1d::grid_stride<block_size>() / cg_size;
+  auto const grid_stride    = cudf::detail::grid_1d::grid_stride<block_size>();
 
   // Find all the rows in the left table that are in the hash table
-  for (auto outer_row_index = cudf::detail::grid_1d::global_thread_id<block_size>() / cg_size;
+  for (auto outer_row_index = cudf::detail::grid_1d::global_thread_id<block_size>();
        outer_row_index < outer_num_rows;
-       outer_row_index += cg_grid_stride) {
-    auto const result = set_ref_equality.contains(tile, outer_row_index);
-    if (tile.thread_rank() == 0) { left_table_keep_mask[outer_row_index] = result; }
+       outer_row_index += grid_stride) {
+    left_table_keep_mask[outer_row_index] = set_ref_equality.contains(outer_row_index);
   }
 }
 

@@ -24,7 +24,6 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/jit/runtime_support.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/transform.hpp>
@@ -42,15 +41,7 @@ using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
 
 constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::ALL_ERRORS};
 
-struct TransformTest : public cudf::test::BaseFixture {
- protected:
-  void SetUp() override
-  {
-    if (!cudf::is_runtime_jit_supported()) {
-      GTEST_SKIP() << "Skipping tests that require runtime JIT support";
-    }
-  }
-};
+struct TransformTest : public cudf::test::BaseFixture {};
 
 TEST_F(TransformTest, ColumnReference)
 {

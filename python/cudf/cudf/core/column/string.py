@@ -106,11 +106,18 @@ class StringColumn(ColumnBase):
         if (
             not cudf.get_option("mode.pandas_compatible")
             and dtype != CUDF_STRING_DTYPE
+            and dtype.kind != "U"
         ) or (
             cudf.get_option("mode.pandas_compatible")
             and not is_dtype_obj_string(dtype)
         ):
             raise ValueError(f"dtype must be {CUDF_STRING_DTYPE}")
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and isinstance(dtype, np.dtype)
+            and dtype.kind == "U"
+        ):
+            dtype = CUDF_STRING_DTYPE
         if len(children) > 1:
             raise ValueError("StringColumn must have at most 1 offset column.")
 
@@ -411,13 +418,22 @@ class StringColumn(ColumnBase):
         return result  # type: ignore[return-value]
 
     def as_string_column(self, dtype) -> StringColumn:
+        col = self
         if dtype != self.dtype:
             if isinstance(dtype, pd.StringDtype) or (
                 isinstance(dtype, pd.ArrowDtype)
                 and pa.string() == dtype.pyarrow_dtype
             ):
-                self._dtype = dtype
-        return self
+                # TODO: Drop the deep copies on astype's copy keyword
+                # default value is fixed in `25.10`
+                col = self.copy(deep=True)
+                col._dtype = dtype
+            elif isinstance(dtype, np.dtype) and dtype.kind in {"U", "O"}:
+                # TODO: Drop the deep copies on astype's copy keyword
+                # default value is fixed in `25.10`
+                col = self.copy(deep=True)
+                col._dtype = CUDF_STRING_DTYPE
+        return col
 
     @property
     def values_host(self) -> np.ndarray:
@@ -818,32 +834,6 @@ class StringColumn(ColumnBase):
                 else index.to_pylibcudf(mode="read"),
             )
         )
-
-    @acquire_spill_lock()
-    def subword_tokenize(
-        self,
-        hashed_vocabulary: plc.nvtext.subword_tokenize.HashedVocabulary,
-        max_sequence_length: int = 64,
-        stride: int = 48,
-        do_lower: bool = True,
-        do_truncate: bool = False,
-    ) -> tuple[ColumnBase, ColumnBase, ColumnBase]:
-        """
-        Subword tokenizes text series by using the pre-loaded hashed vocabulary
-        """
-        result = plc.nvtext.subword_tokenize.subword_tokenize(
-            self.to_pylibcudf(mode="read"),
-            hashed_vocabulary,
-            max_sequence_length,
-            stride,
-            do_lower,
-            do_truncate,
-        )
-        # return the 3 tensor components
-        tokens = type(self).from_pylibcudf(result[0])
-        masks = type(self).from_pylibcudf(result[1])
-        metadata = type(self).from_pylibcudf(result[2])
-        return tokens, masks, metadata
 
     @acquire_spill_lock()
     def tokenize_scalar(self, delimiter: plc.Scalar) -> Self:

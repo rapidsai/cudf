@@ -1,9 +1,7 @@
 # Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
-import itertools
 import string
-import time
 from collections import abc
 from contextlib import contextmanager
 from decimal import Decimal
@@ -12,17 +10,11 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 import pytest
-from numba.core.typing import signature as nb_signature
-from numba.core.typing.templates import AbstractTemplate
-from numba.cuda.cudadecl import registry as cuda_decl_registry
-from numba.cuda.cudaimpl import lower as cuda_lower
 
 import pylibcudf as plc
 
 import cudf
 from cudf.core.column.column import as_column
-from cudf.core.udf.strings_lowering import cast_string_view_to_udf_string
-from cudf.core.udf.strings_typing import StringView, string_view, udf_string
 from cudf.utils import dtypes as dtypeutils
 from cudf.utils.temporal import unit_to_nanoseconds_conversion
 
@@ -285,11 +277,6 @@ def _decimal_series(input, dtype):
     )
 
 
-@contextmanager
-def does_not_raise():
-    yield
-
-
 def assert_column_memory_eq(lhs: ColumnBase, rhs: ColumnBase):
     """Assert the memory location and size of `lhs` and `rhs` are equivalent.
 
@@ -307,7 +294,9 @@ def assert_column_memory_eq(lhs: ColumnBase, rhs: ColumnBase):
     assert lhs.offset == rhs.offset
     assert lhs.size == rhs.size
     assert len(lhs.base_children) == len(rhs.base_children)
-    for lhs_child, rhs_child in zip(lhs.base_children, rhs.base_children):
+    for lhs_child, rhs_child in zip(
+        lhs.base_children, rhs.base_children, strict=True
+    ):
         assert_column_memory_eq(lhs_child, rhs_child)
     if isinstance(lhs, cudf.core.column.CategoricalColumn) and isinstance(
         rhs, cudf.core.column.CategoricalColumn
@@ -324,10 +313,48 @@ def assert_column_memory_ne(lhs: ColumnBase, rhs: ColumnBase):
     raise AssertionError("lhs and rhs holds the same memory.")
 
 
-parametrize_numeric_dtypes_pairwise = pytest.mark.parametrize(
-    "left_dtype,right_dtype",
-    list(itertools.combinations_with_replacement(NUMERIC_TYPES, 2)),
-)
+def assert_asserters_equal(
+    pandas_asserter,
+    cudf_asserter,
+    pandas_left,
+    pandas_right,
+    cudf_left,
+    cudf_right,
+    *args,
+    **kwargs,
+):
+    """
+    Assert that a pandas and cudf asserter have equivalent behavior.
+
+    Parameters
+    ----------
+    pandas_asserter : callable
+        A pandas asserter function.
+    cudf_asserter : callable
+        A cudf asserter function.
+    pandas_left : object
+        A pandas object as the left argument to the pandas asserter.
+    pandas_right : object
+        A pandas object as the right argument to the pandas asserter.
+    cudf_left : object
+        A cudf object as the left argument to the cudf asserter.
+    cudf_right : object
+        A cudf object as the right argument to the pandas asserter.
+    *args : tuple
+        Additional arguments to pass to both asserters.
+    **kwargs : dict
+        Additional keyword arguments to both asserters.
+    """
+    # TypeError is raised (erroneously from pandas) when comparing
+    # categorical indices with different categories.
+    exceptions = (AssertionError, TypeError)
+    try:
+        pandas_asserter(pandas_left, pandas_right, *args, **kwargs)
+    except exceptions:
+        with pytest.raises(exceptions):
+            cudf_asserter(cudf_left, cudf_right, *args, **kwargs)
+    else:
+        cudf_asserter(cudf_left, cudf_right, *args, **kwargs)
 
 
 @contextmanager
@@ -341,57 +368,3 @@ def expect_warning_if(condition, warning=FutureWarning, *args, **kwargs):
             yield
     else:
         yield
-
-
-def sv_to_udf_str(sv):
-    """
-    Cast a string_view object to a udf_string object
-
-    This placeholder function never runs in python
-    It exists only for numba to have something to replace
-    with the typing and lowering code below
-
-    This is similar conceptually to needing a translation
-    engine to emit an expression in target language "B" when
-    there is no equivalent in the source language "A" to
-    translate from. This function effectively defines the
-    expression in language "A" and the associated typing
-    and lowering describe the translation process, despite
-    the expression having no meaning in language "A"
-    """
-    pass
-
-
-@cuda_decl_registry.register_global(sv_to_udf_str)
-class StringViewToUDFStringDecl(AbstractTemplate):
-    def generic(self, args, kws):
-        if isinstance(args[0], StringView) and len(args) == 1:
-            return nb_signature(udf_string, string_view)
-
-
-@cuda_lower(sv_to_udf_str, string_view)
-def sv_to_udf_str_testing_lowering(context, builder, sig, args):
-    return cast_string_view_to_udf_string(
-        context, builder, sig.args[0], sig.return_type, args[0]
-    )
-
-
-class cudf_timeout:
-    """
-    Context manager to raise a TimeoutError after a specified number of seconds.
-    """
-
-    def __init__(self, timeout):
-        self.timeout = timeout
-
-    def __enter__(self):
-        self.start_time = time.perf_counter()
-
-    def __exit__(self, *args):
-        elapsed_time = (
-            time.perf_counter() - self.start_time
-        )  # Calculate elapsed time
-        if elapsed_time >= self.timeout:
-            raise TimeoutError(
-                f"Expected to finish in {self.timeout=} seconds but took {elapsed_time=} seconds"
-            )

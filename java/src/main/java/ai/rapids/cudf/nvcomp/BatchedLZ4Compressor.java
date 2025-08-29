@@ -32,8 +32,8 @@ public class BatchedLZ4Compressor extends BatchedCompressor {
   }
 
   @Override
-  protected long batchedCompressGetTempSize(long batchSize, long maxChunkSize) {
-    return NvcompJni.batchedLZ4CompressGetTempSize(batchSize, maxChunkSize);
+  protected long batchedCompressGetTempSize(long batchSize, long maxChunkSize, long totalSize) {
+    return NvcompJni.batchedLZ4CompressGetTempSize(batchSize, maxChunkSize, totalSize);
   }
 
   @Override

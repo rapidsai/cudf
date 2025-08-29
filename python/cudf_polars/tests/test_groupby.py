@@ -14,11 +14,12 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+from cudf_polars.utils.versions import POLARS_VERSION_LT_132, POLARS_VERSION_LT_1321
 
 
 @pytest.fixture
 def df():
-    return pl.LazyFrame(
+    lf = pl.LazyFrame(
         {
             "key1": [1, 1, 1, 2, 3, 1, 4, 6, 7],
             "key2": [2, 2, 2, 2, 6, 1, 4, 6, 8],
@@ -42,6 +43,11 @@ def df():
             ],
         }
     )
+    if not POLARS_VERSION_LT_132:
+        lf = lf.with_columns(
+            pl.col("float").cast(pl.Decimal(precision=9, scale=2)).alias("decimal")
+        )
+    return lf
 
 
 @pytest.fixture(
@@ -60,39 +66,47 @@ def keys(request):
     return request.param
 
 
-@pytest.fixture(
-    params=[
-        [],
-        ["int"],
-        ["float", "int"],
-        [pl.col("float") + pl.col("int")],
-        [pl.col("float").is_not_null()],
-        [pl.col("int32").sum()],
-        [pl.col("int32").mean()],
-        [
-            pl.col("uint16_with_null").sum(),
-            pl.col("uint16_with_null").mean().alias("mean"),
-        ],
-        [pl.col("float").max() - pl.col("int").min() + pl.col("int").max()],
-        [pl.col("float").mean(), pl.col("int").std()],
-        [(pl.col("float") - pl.lit(2)).max()],
-        [pl.lit(10).alias("literal_value")],
-        [pl.col("float").sum().round(decimals=1)],
-        [pl.col("float").round(decimals=1).sum()],
-        [pl.col("float").sum().round()],
-        [pl.col("float").round().sum()],
-        [pl.col("int").first(), pl.col("float").last()],
-        [pl.col("int").sum(), pl.col("string").str.replace("h", "foo", literal=True)],
-        [pl.col("float").quantile(0.3, interpolation="nearest")],
-        [pl.col("float").quantile(0.3, interpolation="higher")],
-        [pl.col("float").quantile(0.3, interpolation="lower")],
-        [pl.col("float").quantile(0.3, interpolation="midpoint")],
-        [pl.col("float").quantile(0.3, interpolation="linear")],
-        [
-            pl.col("datetime").max(),
-            pl.col("datetime").max().dt.is_leap_year().alias("leapyear"),
-        ],
+_EXPRS: list[list[pl.Expr | str]] = [
+    [],
+    ["int"],
+    ["float", "int"],
+    [pl.col("float") + pl.col("int")],
+    [pl.col("float").is_not_null()],
+    [pl.col("int32").sum()],
+    [pl.col("int32").mean()],
+    [
+        pl.col("uint16_with_null").sum(),
+        pl.col("uint16_with_null").mean().alias("mean"),
     ],
+    [pl.col("float").max() - pl.col("int").min() + pl.col("int").max()],
+    [pl.col("float").mean(), pl.col("int").std()],
+    [(pl.col("float") - pl.lit(2)).max()],
+    [pl.lit(10).alias("literal_value")],
+    [pl.col("float").sum().round(decimals=1)],
+    [pl.col("float").round(decimals=1).sum()],
+    [pl.col("float").sum().round()],
+    [pl.col("float").round().sum()],
+    [pl.col("int").first(), pl.col("float").last()],
+    [pl.col("int").sum(), pl.col("string").str.replace("h", "foo", literal=True)],
+    [pl.col("float").quantile(0.3, interpolation="nearest")],
+    [pl.col("float").quantile(0.3, interpolation="higher")],
+    [pl.col("float").quantile(0.3, interpolation="lower")],
+    [pl.col("float").quantile(0.3, interpolation="midpoint")],
+    [pl.col("float").quantile(0.3, interpolation="linear")],
+    [
+        pl.col("datetime").max(),
+        pl.col("datetime").max().dt.is_leap_year().alias("leapyear"),
+    ],
+]
+
+# polars gives us precision=None, which we
+# do not supprt
+if not POLARS_VERSION_LT_132:
+    _EXPRS.append([pl.col("decimal").median()])
+
+
+@pytest.fixture(
+    params=_EXPRS,
     ids=lambda aggs: "-".join(map(str, aggs)),
 )
 def exprs(request):
@@ -151,12 +165,17 @@ def test_groupby_len(df, keys):
     "expr",
     [
         (pl.col("int").max() + pl.col("float").min()).max(),
-        pl.when(pl.col("int") < pl.lit(2))
-        .then(pl.col("float").sum())
-        .otherwise(pl.lit(-2)),
+        (
+            pl.when((pl.col("float") - pl.col("float").mean()) > 0)
+            .then(pl.col("float"))
+            .otherwise(None)
+            .sum()
+        ),
+        (pl.when(pl.col("int") > 5).then(pl.col("float")).otherwise(pl.lit(0.0))),
+        (pl.when(pl.col("int").min() >= 3).then(pl.col("float"))),
     ],
 )
-def test_groupby_unsupported(df, expr):
+def test_groupby_unsupported(df: pl.LazyFrame, expr: pl.Expr) -> None:
     q = df.group_by("key1").agg(expr)
 
     assert_ir_translation_raises(q, NotImplementedError)
@@ -213,7 +232,13 @@ def test_groupby_nan_minmax_raises(op):
             pl.lit([[4, 5, 6]]).alias("value"),
             marks=pytest.mark.xfail(reason="Need to expose OtherScalar in rust IR"),
         ),
-        pl.Series("value", [[4, 5, 6]], dtype=pl.List(pl.Int32)),
+        pytest.param(
+            pl.Series("value", [[4, 5, 6]], dtype=pl.List(pl.Int32)),
+            marks=pytest.mark.xfail(
+                condition=not POLARS_VERSION_LT_1321,
+                reason="https://github.com/rapidsai/cudf/issues/19610",
+            ),
+        ),
         pl.col("float") * (1 - pl.col("int")),
         [pl.lit(2).alias("value"), pl.col("float") * 2],
     ],
@@ -273,3 +298,124 @@ def test_groupby_nunique(df: pl.LazyFrame, column):
     q = df.group_by("key1").agg(pl.col(column).n_unique())
 
     assert_gpu_result_equal(q, check_row_order=False)
+
+
+def test_groupby_null_count(df: pl.LazyFrame):
+    q = df.group_by("key1").agg(pl.col("uint16_with_null").null_count())
+
+    assert_gpu_result_equal(q, check_row_order=False)
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.col("int").all(),
+        pl.col("int").any(),
+        pl.col("int").is_duplicated(),
+        pl.col("int").is_first_distinct(),
+        pl.col("int").is_last_distinct(),
+        pl.col("int").is_unique(),
+    ],
+    ids=[
+        "all_horizontal",
+        "any_horizontal",
+        "is_duplicated",
+        "is_first_distinct",
+        "is_last_distinct",
+        "is_unique",
+    ],
+)
+def test_groupby_unsupported_non_pointwise_boolean_function(df: pl.LazyFrame, expr):
+    q = df.group_by("key1").agg(expr)
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_groupby_mean_type_promotion(df: pl.LazyFrame) -> None:
+    df = df.with_columns(pl.col("float").cast(pl.Float32))
+
+    q = df.group_by("key1").agg(pl.col("float").mean())
+
+    assert_gpu_result_equal(q, check_row_order=False)
+
+
+def test_groupby_sum_all_null_group_returns_null():
+    df = pl.LazyFrame(
+        {
+            "key": ["a", "a", "b", "b", "c"],
+            "null_groups": [None, None, None, 2, None],
+        }
+    )
+
+    q = df.group_by("key").agg(out=pl.col("null_groups").sum())
+    assert_gpu_result_equal(q, check_row_order=False)
+
+
+@pytest.mark.parametrize(
+    "agg_expr",
+    [
+        pl.all().sum(),
+        pl.all().mean(),
+        pl.all().median(),
+        pl.all().quantile(0.5),
+    ],
+    ids=["sum", "mean", "median", "quantile-0.5"],
+)
+def test_groupby_aggs_keep_unsupported_as_null(df: pl.LazyFrame, agg_expr) -> None:
+    lf = df.filter(pl.col("datetime") == date(2004, 12, 1))
+    q = lf.group_by("datetime").agg(agg_expr)
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.when(pl.col("int") > 5).then(pl.col("float")).otherwise(None).sum(),
+        pl.when(pl.col("float").count() > 0)
+        .then(pl.col("float").sum())
+        .otherwise(None),
+        (
+            pl.when(pl.col("float").min() < pl.col("float").max())
+            .then(pl.col("float").max() - pl.col("float").min())
+            .otherwise(pl.lit(0.0))
+        ),
+        (
+            pl.when(pl.col("int").count() > 0)
+            .then(
+                pl.col("int").cast(pl.Float64).sum()
+                / pl.col("int").count().cast(pl.Float64)
+            )
+            .otherwise(None)
+        ),
+    ],
+    ids=[
+        "pre_pointwise_then_sum",
+        "post_over_aggs",
+        "post_multiple_aggs_range",
+        "post_manually_compute_mean",
+    ],
+)
+def test_groupby_ternary_supported(df: pl.LazyFrame, expr: pl.Expr) -> None:
+    q = df.group_by("key1").agg(expr)
+    assert_gpu_result_equal(q, check_row_order=False)
+
+
+@pytest.mark.parametrize(
+    "strategy", ["forward", "backward", "min", "max", "mean", "zero", "one"]
+)
+def test_groupby_fill_null_with_strategy(strategy):
+    lf = pl.LazyFrame(
+        {
+            "key": [1, 1, 2, 2, 2],
+            "val": [None, 2, None, 4, None],
+        }
+    )
+
+    q = lf.group_by("key").agg(pl.col("val").fill_null(strategy=strategy))
+
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_groupby_rank_raises(df: pl.LazyFrame) -> None:
+    q = df.group_by("key1").agg(pl.col("int").rank())
+
+    assert_ir_translation_raises(q, NotImplementedError)
