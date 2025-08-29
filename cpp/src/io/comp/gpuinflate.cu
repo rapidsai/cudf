@@ -1312,23 +1312,23 @@ sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const>
     auto const h_inputs  = cudf::detail::make_host_vector(inputs, stream);
     auto const h_outputs = cudf::detail::make_host_vector(outputs, stream);
 
-    // Cost at each index is the total cost for that engine if the split is at that index.
-    std::vector<double> device_costs;
-    std::vector<double> host_costs;
+    // Compute total costs (host + device) for each potential split index
+    std::vector<double> total_costs;
     double total_host_cost = 0;
     // Compute costs for each index up until the first index where the host cost is greater than
     // the device cost for the remaining tasks. We don't want the CPU to be the bottleneck.
     for (size_t i = 0; i < h_inputs.size(); ++i) {
-      // Device cost reflacts the latency of the kernel, so we use the cost of the most expensive
+      // Device cost reflects the latency of the kernel, so we use the cost of the most expensive
       // remaining task, which is the first one after the split
-      device_costs.push_back(task_device_cost(h_inputs[i].size(), h_outputs[i].size(), task));
-      // Host cost includes the cost of all previous tasks, so it grows with the index
-      host_costs.push_back(total_host_cost);
+      auto const device_cost = task_device_cost(h_inputs[i].size(), h_outputs[i].size(), task);
+      // Total cost is host cost (all previous tasks) + device cost (most expensive remaining task)
+      total_costs.push_back(total_host_cost + device_cost);
 
       // If the host cost is greater than the device cost for the remaining tasks, we don't want to
       // split at an index greater than this one.
-      if (total_host_cost > device_costs.back()) { break; }
+      if (total_host_cost > device_cost) { break; }
 
+      // Host cost includes the cost of all previous tasks, so it grows with the index
       total_host_cost +=
         task_host_cost(h_inputs[i].size(), h_outputs[i].size(), hybrid_mode_cost_ratio, task);
     }
@@ -1337,15 +1337,9 @@ sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const>
     // is modeled as the cost of the most expensive remaining task, the index at which the sum is
     // minimal is where the device cost has a big drop and using the host reduces the kernel
     // latency.
-    size_t optimal_split_index = 0;
-    for (size_t i = 1; i < device_costs.size(); ++i) {
-      if (host_costs[i] + device_costs[i] <
-          host_costs[optimal_split_index] + device_costs[optimal_split_index]) {
-        optimal_split_index = i;
-      }
-    }
+    auto const optimal_split_it = std::min_element(total_costs.begin(), total_costs.end());
     // Depending on the costs, this may be 0, which means that no tasks should be run on the host.
-    return optimal_split_index;
+    return std::distance(total_costs.begin(), optimal_split_it);
   }
 
   CUDF_FAIL("Invalid host engine state for compression: " +
