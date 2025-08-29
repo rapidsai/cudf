@@ -1243,9 +1243,11 @@ CUDF_HOST_DEVICE double task_host_cost(size_t input_size,
   // Cost to copy the block to host and back; NOTE: assumes that the copy throughput is the same as
   // the decompression/compression throughput when the data is incompressible
   auto const copy_cost = trivial_case_cost_ratio * (input_size + output_size);
+  // Constant factor to account for the synchronization overhead
+  constexpr double constant_overhead = 5000;
   return (cost_factor(input_size, output_size, task_type) * input_size + copy_cost) /
            device_host_ratio +
-         5000;
+         constant_overhead;
 }
 
 sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const> inputs,
