@@ -19,7 +19,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <cmath>
+#include <cuda/std/type_traits>
 
 namespace cudf::detail {
 
@@ -70,7 +70,7 @@ __device__ weak_ordering compare_elements(Element lhs, Element rhs)
  */
 template <typename Element>
 __device__ weak_ordering relational_compare(Element lhs, Element rhs)
-  requires(std::is_floating_point_v<Element>)
+  requires(cuda::std::is_floating_point_v<Element>)
 {
   if (isnan(lhs) and isnan(rhs)) {
     return weak_ordering::EQUIVALENT;
@@ -113,7 +113,7 @@ inline __device__ auto null_compare(bool lhs_is_null, bool rhs_is_null, null_ord
  */
 template <typename Element>
 __device__ weak_ordering relational_compare(Element lhs, Element rhs)
-  requires(not std::is_floating_point_v<Element>)
+  requires(not cuda::std::is_floating_point_v<Element>)
 {
   return detail::compare_elements(lhs, rhs);
 }
@@ -128,7 +128,7 @@ __device__ weak_ordering relational_compare(Element lhs, Element rhs)
  */
 template <typename Element>
 __device__ bool equality_compare(Element lhs, Element rhs)
-  requires(std::is_floating_point_v<Element>)
+  requires(cuda::std::is_floating_point_v<Element>)
 {
   if (isnan(lhs) and isnan(rhs)) { return true; }
   return lhs == rhs;
@@ -144,7 +144,7 @@ __device__ bool equality_compare(Element lhs, Element rhs)
  */
 template <typename Element>
 __device__ bool equality_compare(Element const lhs, Element const rhs)
-  requires(not std::is_floating_point_v<Element>)
+  requires(not cuda::std::is_floating_point_v<Element>)
 {
   return lhs == rhs;
 }
