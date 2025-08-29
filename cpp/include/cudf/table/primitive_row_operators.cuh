@@ -21,13 +21,16 @@
 #include <cudf/hashing/detail/hash_functions.cuh>
 #include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
-#include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/table/table_view.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
+#include <thrust/equal.h>
+
+#include <memory>
 
 namespace CUDF_EXPORT cudf {
 
@@ -126,21 +129,26 @@ class row_equality_comparator {
    */
   __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const
   {
-    if (_has_nulls) {
-      bool const lhs_is_null{_lhs.column(0).is_null(lhs_row_index)};
-      bool const rhs_is_null{_rhs.column(0).is_null(rhs_row_index)};
-      if (lhs_is_null and rhs_is_null) {
-        return _nulls_are_equal == null_equality::EQUAL;
-      } else if (lhs_is_null != rhs_is_null) {
-        return false;
+    auto equal_elements = [this, lhs_row_index, rhs_row_index](column_device_view const& l,
+                                                               column_device_view const& r) {
+      // Handle null comparison for each element
+      if (_has_nulls) {
+        bool const lhs_is_null{l.is_null(lhs_row_index)};
+        bool const rhs_is_null{r.is_null(rhs_row_index)};
+        if (lhs_is_null and rhs_is_null) {
+          return _nulls_are_equal == null_equality::EQUAL;
+        } else if (lhs_is_null != rhs_is_null) {
+          return false;
+        }
       }
-    }
-    return cudf::type_dispatcher<dispatch_primitive_type>(_lhs.begin()->type(),
-                                                          element_equality_comparator{},
-                                                          _lhs.column(0),
-                                                          _rhs.column(0),
-                                                          lhs_row_index,
-                                                          rhs_row_index);
+
+      // Both elements are non-null, compare their values
+      element_equality_comparator comparator;
+      return cudf::type_dispatcher<dispatch_primitive_type>(
+        l.type(), comparator, l, r, lhs_row_index, rhs_row_index);
+    };
+
+    return thrust::equal(thrust::seq, _lhs.begin(), _lhs.end(), _rhs.begin(), equal_elements);
   }
 
   /**
@@ -243,11 +251,26 @@ class row_hasher {
    */
   __device__ auto operator()(size_type row_index) const
   {
-    if (_has_nulls && _table.column(0).is_null(row_index)) {
-      return cuda::std::numeric_limits<hash_value_type>::max();
+    element_hasher<Hash> hasher;
+    // avoid hash combine call if there is only one column
+    auto hash = cuda::std::numeric_limits<hash_value_type>::max();
+    if (!_has_nulls || !_table.column(0).is_null(row_index)) {
+      hash = cudf::type_dispatcher<dispatch_primitive_type>(
+        _table.column(0).type(), hasher, _seed, _table.column(0), row_index);
     }
-    return cudf::type_dispatcher<dispatch_primitive_type>(
-      _table.column(0).type(), element_hasher<Hash>{}, _seed, _table.column(0), row_index);
+
+    for (size_type i = 1; i < _table.num_columns(); ++i) {
+      if (!(_has_nulls && _table.column(i).is_null(row_index))) {
+        hash = cudf::hashing::detail::hash_combine(
+          hash,
+          cudf::type_dispatcher<dispatch_primitive_type>(
+            _table.column(i).type(), hasher, _seed, _table.column(i), row_index));
+      } else {
+        hash = cudf::hashing::detail::hash_combine(
+          hash, cuda::std::numeric_limits<hash_value_type>::max());
+      }
+    }
+    return hash;
   }
 
  private:

@@ -210,8 +210,17 @@ ConfigureNVBench(SEARCH_NVBENCH search/contains_scalar.cpp search/contains_table
 # ##################################################################################################
 # * sort benchmark --------------------------------------------------------------------------------
 ConfigureNVBench(
-  SORT_NVBENCH sort/rank.cpp sort/rank_lists.cpp sort/rank_structs.cpp sort/segmented_sort.cpp
-  sort/sort.cpp sort/sort_lists.cpp sort/sort_strings.cpp sort/sort_structs.cpp sort/top_k.cpp
+  SORT_NVBENCH
+  sort/rank.cpp
+  sort/rank_lists.cpp
+  sort/rank_structs.cpp
+  sort/segmented_top_k.cpp
+  sort/segmented_sort.cpp
+  sort/sort.cpp
+  sort/sort_lists.cpp
+  sort/sort_strings.cpp
+  sort/sort_structs.cpp
+  sort/top_k.cpp
 )
 
 # ##################################################################################################
@@ -268,7 +277,7 @@ ConfigureNVBench(
   GROUPBY_NVBENCH
   groupby/group_complex_keys.cpp
   groupby/group_histogram.cpp
-  groupby/group_m2.cpp
+  groupby/group_m2_var_std.cpp
   groupby/group_max.cpp
   groupby/group_max_multithreaded.cpp
   groupby/group_nunique.cpp
@@ -359,7 +368,9 @@ ConfigureNVBench(
 # ##################################################################################################
 # * transform benchmark
 # ---------------------------------------------------------------------------------
-ConfigureNVBench(TRANSFORM_NVBENCH transform/polynomials.cpp transform/transform.cpp)
+ConfigureNVBench(
+  TRANSFORM_NVBENCH transform/encode.cpp transform/polynomials.cpp transform/transform.cpp
+)
 
 # ##################################################################################################
 # * nvtext benchmark -------------------------------------------------------------------

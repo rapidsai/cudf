@@ -2,6 +2,7 @@
 import datetime
 import decimal
 import types
+import zoneinfo
 
 import cupy as cp
 import numba.cuda
@@ -21,6 +22,7 @@ from cudf.core.column.column import as_column
 from cudf.errors import MixedTypeError
 from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal
+from cudf.utils.dtypes import np_dtypes_to_pandas_dtypes
 
 
 @pytest.mark.parametrize(
@@ -70,6 +72,18 @@ def test_create_interval_series(data1, data2, data3, data4, interval_closed):
         dtype="interval",
     )
     assert_eq(expect_three, got_three)
+
+
+def test_from_pandas_for_series_nan_as_null(nan_as_null):
+    data = [np.nan, 2.0, 3.0]
+    psr = pd.Series(data)
+
+    expected = cudf.Series._from_column(
+        as_column(data, nan_as_null=nan_as_null)
+    )
+    got = cudf.from_pandas(psr, nan_as_null=nan_as_null)
+
+    assert_eq(expected, got)
 
 
 @pytest.mark.parametrize(
@@ -666,6 +680,26 @@ def test_construct_nonnative_array(arr):
     assert_eq(result, expected)
 
 
+@pytest.mark.parametrize("input_obj", [[1, cudf.NA, 3]])
+def test_series_construction_with_nulls(numeric_types_as_str, input_obj):
+    dtype = np.dtype(numeric_types_as_str)
+    # numpy case
+
+    expect = pd.Series(input_obj, dtype=np_dtypes_to_pandas_dtypes[dtype])
+    got = cudf.Series(input_obj, dtype=dtype).to_pandas(nullable=True)
+
+    assert_eq(expect, got)
+
+    # Test numpy array of objects case
+    np_data = [
+        dtype.type(v) if v is not cudf.NA else cudf.NA for v in input_obj
+    ]
+
+    expect = pd.Series(np_data, dtype=np_dtypes_to_pandas_dtypes[dtype])
+    got = cudf.Series(np_data, dtype=dtype).to_pandas(nullable=True)
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize("nan_as_null", [True, False])
 def test_construct_all_pd_NA_with_dtype(nan_as_null):
     result = cudf.Series(
@@ -1203,7 +1237,7 @@ def test_roundtrip_series_plc_column(ps):
     assert_eq(expect, actual)
 
 
-def test_series_construction_with_nulls():
+def test_series_structarray_construction_with_nulls():
     fields = [
         pa.array([1], type=pa.int64()),
         pa.array([None], type=pa.int64()),
@@ -1325,3 +1359,39 @@ def test_timezone_pyarrow_array():
     result = cudf.Series(pa_array)
     expected = pa_array.to_pandas()
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "klass", ["Series", "DatetimeIndex", "Index", "CategoricalIndex"]
+)
+def test_pandas_compatible_non_zoneinfo_raises(klass):
+    pytz = pytest.importorskip("pytz")
+    tz = pytz.timezone("US/Pacific")
+    tz_aware_data = [pd.Timestamp("2020-01-01", tz="UTC").tz_convert(tz)]
+    pandas_obj = getattr(pd, klass)(tz_aware_data)
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            cudf.from_pandas(pandas_obj)
+
+
+@pytest.mark.parametrize(
+    "klass", ["Series", "DatetimeIndex", "Index", "CategoricalIndex"]
+)
+def test_from_pandas_obj_tz_aware(klass):
+    tz = zoneinfo.ZoneInfo("US/Pacific")
+    tz_aware_data = [pd.Timestamp("2020-01-01", tz="UTC").tz_convert(tz)]
+    pandas_obj = getattr(pd, klass)(tz_aware_data)
+    result = cudf.from_pandas(pandas_obj)
+    expected = getattr(cudf, klass)(tz_aware_data)
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "klass", ["Series", "DatetimeIndex", "Index", "CategoricalIndex"]
+)
+def test_from_pandas_obj_tz_aware_unsupported(klass):
+    tz = datetime.timezone(datetime.timedelta(hours=1))
+    tz_aware_data = [pd.Timestamp("2020-01-01", tz="UTC").tz_convert(tz)]
+    pandas_obj = getattr(pd, klass)(tz_aware_data)
+    with pytest.raises(NotImplementedError):
+        cudf.from_pandas(pandas_obj)

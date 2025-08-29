@@ -1113,33 +1113,4 @@ TEST_F(SortDouble, InfinityAndNan)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 }
 
-TYPED_TEST(Sort, TopK)
-{
-  using T = TypeParam;
-  if constexpr (std::is_same_v<T, bool>) { GTEST_SKIP(); }
-
-  auto itr   = thrust::counting_iterator<int32_t>(0);
-  auto input = cudf::test::fixed_width_column_wrapper<T, int32_t>(
-    itr, itr + 100, cudf::test::iterators::null_at(4));
-  auto expected =
-    cudf::test::fixed_width_column_wrapper<T, int32_t>({99, 98, 97, 96, 95, 94, 93, 92, 91, 90});
-  auto result = cudf::top_k(input, 10);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result->view());
-  auto expected_order = cudf::test::fixed_width_column_wrapper<cudf::size_type>(
-    {99, 98, 97, 96, 95, 94, 93, 92, 91, 90});
-  result = cudf::top_k_order(input, 10);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_order, result->view());
-
-  result   = cudf::top_k(input, 10, cudf::order::ASCENDING);
-  expected = cudf::test::fixed_width_column_wrapper<T, int32_t>({0, 1, 2, 3, 5, 6, 7, 8, 9, 10});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result->view());
-  expected_order =
-    cudf::test::fixed_width_column_wrapper<cudf::size_type>({0, 1, 2, 3, 5, 6, 7, 8, 9, 10});
-  result = cudf::top_k_order(input, 10, cudf::order::ASCENDING);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_order, result->view());
-
-  EXPECT_THROW(cudf::top_k(input, 101), std::invalid_argument);
-  EXPECT_THROW(cudf::top_k_order(input, 101), std::invalid_argument);
-}
-
 CUDF_TEST_PROGRAM_MAIN()
