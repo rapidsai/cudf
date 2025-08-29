@@ -730,7 +730,9 @@ def test_to_from_arrow_nulls(all_supported_types_as_str):
     # number of bytes, so only check the first byte in this case
     np.testing.assert_array_equal(
         np.asarray(s1.buffers()[0]).view("u1")[0],
-        gs1._column.mask_array_view(mode="read").copy_to_host().view("u1")[0],
+        cp.asarray(gs1._column.to_pylibcudf(mode="read").null_mask())
+        .get()
+        .view("u1")[0],
     )
     assert pa.Array.equals(s1, gs1.to_arrow())
 
@@ -741,7 +743,9 @@ def test_to_from_arrow_nulls(all_supported_types_as_str):
     # number of bytes, so only check the first byte in this case
     np.testing.assert_array_equal(
         np.asarray(s2.buffers()[0]).view("u1")[0],
-        gs2._column.mask_array_view(mode="read").copy_to_host().view("u1")[0],
+        cp.asarray(gs2._column.to_pylibcudf(mode="read").null_mask())
+        .get()
+        .view("u1")[0],
     )
     assert pa.Array.equals(s2, gs2.to_arrow())
 

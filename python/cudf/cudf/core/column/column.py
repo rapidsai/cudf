@@ -15,7 +15,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.compute as pc
-from numba import cuda
 from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 from typing_extensions import Self
 
@@ -692,43 +691,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             obj = None
         return cp.asarray(obj).view(self.dtype)
 
-    def mask_array_view(
-        self, *, mode: Literal["write", "read"] = "write"
-    ) -> "cuda.devicearray.DeviceNDArray":
-        """
-        View the mask as a device array
-
-        Parameters
-        ----------
-        mode : str, default 'write'
-            Supported values are {'read', 'write'}
-            If 'write' is passed, a device array object
-            with readonly flag set to False in CAI is returned.
-            If 'read' is passed, a device array object
-            with readonly flag set to True in CAI is returned.
-            This also means, If the caller wishes to modify
-            the data returned through this view, they must
-            pass mode="write", else pass mode="read".
-
-        Returns
-        -------
-        numba.cuda.cudadrv.devicearray.DeviceNDArray
-        """
-        if self.mask is not None:
-            if mode == "read":
-                obj = cuda_array_interface_wrapper(
-                    ptr=self.mask.get_ptr(mode="read"),
-                    size=self.mask.size,
-                    owner=self.mask,
-                )
-            elif mode == "write":
-                obj = self.mask
-            else:
-                raise ValueError(f"Unsupported mode: {mode}")
-        else:
-            obj = None
-        return cuda.as_cuda_array(obj).view(SIZE_TYPE_DTYPE)
-
     def __len__(self) -> int:
         return self.size
 
@@ -1060,11 +1022,16 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return type(self).from_pylibcudf(plc_col)  # type: ignore[return-value]
 
     @property
-    def nullmask(self) -> Buffer:
+    def nullmask(self) -> cp.ndarray:
         """The gpu buffer for the null-mask"""
         if not self.nullable:
             raise ValueError("Column has no null mask")
-        return self.mask_array_view(mode="read")
+        obj = cuda_array_interface_wrapper(
+            ptr=self.mask.get_ptr(mode="read"),  # type: ignore[union-attr]
+            size=self.mask.size,  # type: ignore[union-attr]
+            owner=self.mask,  # type: ignore[union-attr]
+        )
+        return cp.asarray(obj).view(SIZE_TYPE_DTYPE)
 
     def copy(self, deep: bool = True) -> Self:
         """
