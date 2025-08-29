@@ -44,6 +44,7 @@
 #include <thrust/uninitialized_fill.h>
 
 #include <cstddef>
+#include <memory>
 
 namespace cudf {
 namespace detail {
@@ -55,7 +56,7 @@ using hash_table_t = cudf::hash_join::impl_type::hash_table_t;
 // mixed-join migration
 template <typename Hasher>
 struct pair_fn {
-  pair_fn(Hasher hash) : _hash{hash} {}
+  pair_fn(Hasher hash) : _hash{std::move(hash)} {}
 
   __device__ cuco::pair<hash_value_type, size_type> operator()(size_type i) const noexcept
   {
@@ -489,8 +490,10 @@ std::size_t get_full_join_size(
     // Assume all the indices in invalid_index_map are invalid
     auto invalid_index_map =
       std::make_unique<rmm::device_uvector<size_type>>(right_table_row_count, stream);
-    thrust::uninitialized_fill(
-      rmm::exec_policy(stream), invalid_index_map->begin(), invalid_index_map->end(), int32_t{1});
+    thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
+                               invalid_index_map->begin(),
+                               invalid_index_map->end(),
+                               int32_t{1});
 
     // Functor to check for index validity since left joins can create invalid indices
     valid_range<size_type> valid(0, right_table_row_count);
@@ -539,7 +542,7 @@ hash_join<Hasher>::hash_join(cudf::table_view const& build,
     _preprocessed_build{cudf::detail::row::equality::preprocessed_table::create(_build, stream)}
 {
   CUDF_FUNC_RANGE();
-  CUDF_EXPECTS(0 != build.num_columns(), "Hash join build table is empty");
+  CUDF_EXPECTS(0 != build.num_columns(), "Hash join build table is empty", std::invalid_argument);
   CUDF_EXPECTS(load_factor > 0 && load_factor <= 1,
                "Invalid load factor: must be greater than 0 and less than or equal to 1.",
                std::invalid_argument);
@@ -603,7 +606,8 @@ std::size_t hash_join<Hasher>::inner_join_size(cudf::table_view const& probe,
   if (_is_empty) { return 0; }
 
   CUDF_EXPECTS(_has_nulls || !cudf::has_nested_nulls(probe),
-               "Probe table has nulls while build table was not hashed with null check.");
+               "Probe table has nulls while build table was not hashed with null check.",
+               std::invalid_argument);
 
   auto const preprocessed_probe =
     cudf::detail::row::equality::preprocessed_table::create(probe, stream);
@@ -629,7 +633,8 @@ std::size_t hash_join<Hasher>::left_join_size(cudf::table_view const& probe,
   if (_is_empty) { return probe.num_rows(); }
 
   CUDF_EXPECTS(_has_nulls || !cudf::has_nested_nulls(probe),
-               "Probe table has nulls while build table was not hashed with null check.");
+               "Probe table has nulls while build table was not hashed with null check.",
+               std::invalid_argument);
 
   auto const preprocessed_probe =
     cudf::detail::row::equality::preprocessed_table::create(probe, stream);
@@ -656,7 +661,8 @@ std::size_t hash_join<Hasher>::full_join_size(cudf::table_view const& probe,
   if (_is_empty) { return probe.num_rows(); }
 
   CUDF_EXPECTS(_has_nulls || !cudf::has_nested_nulls(probe),
-               "Probe table has nulls while build table was not hashed with null check.");
+               "Probe table has nulls while build table was not hashed with null check.",
+               std::invalid_argument);
 
   auto const preprocessed_probe =
     cudf::detail::row::equality::preprocessed_table::create(probe, stream);
@@ -670,6 +676,112 @@ std::size_t hash_join<Hasher>::full_join_size(cudf::table_view const& probe,
                                           _nulls_equal,
                                           stream,
                                           mr);
+}
+
+template <typename Hasher>
+template <typename OutputIterator>
+void hash_join<Hasher>::compute_match_counts(cudf::table_view const& probe,
+                                             OutputIterator output_iter,
+                                             rmm::cuda_stream_view stream) const
+{
+  CUDF_EXPECTS(_has_nulls || !cudf::has_nested_nulls(probe),
+               "Probe table has nulls while build table was not hashed with null check.",
+               std::invalid_argument);
+
+  auto const preprocessed_probe =
+    cudf::experimental::row::equality::preprocessed_table::create(probe, stream);
+  auto const probe_nulls          = cudf::nullate::DYNAMIC{_has_nulls};
+  auto const probe_table_num_rows = probe.num_rows();
+
+  auto compute_counts = [&](auto equality, auto d_hasher) {
+    auto const iter = cudf::detail::make_counting_transform_iterator(0, pair_fn{d_hasher});
+    _hash_table.count_each(iter,
+                           iter + probe_table_num_rows,
+                           equality,
+                           _hash_table.hash_function(),
+                           output_iter,
+                           stream.value());
+  };
+
+  if (cudf::is_primitive_row_op_compatible(_build)) {
+    auto const d_hasher = cudf::row::primitive::row_hasher{probe_nulls, preprocessed_probe};
+    auto const d_equal  = cudf::row::primitive::row_equality_comparator{
+      probe_nulls, preprocessed_probe, _preprocessed_build, _nulls_equal};
+    compute_counts(primitive_pair_equal{d_equal}, d_hasher);
+  } else {
+    auto const d_hasher =
+      cudf::experimental::row::hash::row_hasher{preprocessed_probe}.device_hasher(probe_nulls);
+    auto const row_comparator = cudf::experimental::row::equality::two_table_comparator{
+      preprocessed_probe, _preprocessed_build};
+    auto const d_equal = row_comparator.equal_to<false>(probe_nulls, _nulls_equal);
+    compute_counts(pair_equal{d_equal}, d_hasher);
+  }
+}
+
+template <typename Hasher>
+cudf::join_match_context hash_join<Hasher>::inner_join_match_context(
+  cudf::table_view const& probe,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr) const
+{
+  cudf::scoped_range range{"hash_join::inner_join_match_context"};
+
+  auto match_counts =
+    std::make_unique<rmm::device_uvector<size_type>>(probe.num_rows(), stream, mr);
+
+  if (_is_empty) {
+    thrust::fill(rmm::exec_policy_nosync(stream), match_counts->begin(), match_counts->end(), 0);
+  } else {
+    compute_match_counts(probe, match_counts->begin(), stream);
+  }
+
+  return cudf::join_match_context{probe, std::move(match_counts)};
+}
+
+template <typename Hasher>
+cudf::join_match_context hash_join<Hasher>::left_join_match_context(
+  cudf::table_view const& probe,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr) const
+{
+  cudf::scoped_range range{"hash_join::left_join_match_context"};
+
+  auto match_counts =
+    std::make_unique<rmm::device_uvector<size_type>>(probe.num_rows(), stream, mr);
+
+  if (_is_empty) {
+    thrust::fill(rmm::exec_policy_nosync(stream), match_counts->begin(), match_counts->end(), 1);
+  } else {
+    auto transform = [] __device__(size_type count) { return count == 0 ? 1 : count; };
+    auto transformed_output =
+      thrust::make_transform_output_iterator(match_counts->begin(), transform);
+    compute_match_counts(probe, transformed_output, stream);
+  }
+
+  return cudf::join_match_context{probe, std::move(match_counts)};
+}
+
+template <typename Hasher>
+cudf::join_match_context hash_join<Hasher>::full_join_match_context(
+  cudf::table_view const& probe,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr) const
+{
+  cudf::scoped_range range{"hash_join::full_join_match_context"};
+
+  auto match_counts =
+    std::make_unique<rmm::device_uvector<size_type>>(probe.num_rows(), stream, mr);
+
+  if (_is_empty) {
+    thrust::fill(rmm::exec_policy_nosync(stream), match_counts->begin(), match_counts->end(), 1);
+  } else {
+    auto transform = [] __device__(size_type count) { return count == 0 ? 1 : count; };
+    auto transformed_output =
+      thrust::make_transform_output_iterator(match_counts->begin(), transform);
+    compute_match_counts(probe, transformed_output, stream);
+  }
+
+  return cudf::join_match_context{probe, std::move(match_counts)};
 }
 
 template <typename Hasher>
@@ -689,7 +801,8 @@ hash_join<Hasher>::probe_join_indices(cudf::table_view const& probe_table,
   CUDF_EXPECTS(!_is_empty, "Hash table of hash join is null.");
 
   CUDF_EXPECTS(_has_nulls || !cudf::has_nested_nulls(probe_table),
-               "Probe table has nulls while build table was not hashed with null check.");
+               "Probe table has nulls while build table was not hashed with null check.",
+               std::invalid_argument);
 
   auto const preprocessed_probe =
     cudf::detail::row::equality::preprocessed_table::create(probe_table, stream);
@@ -722,13 +835,15 @@ hash_join<Hasher>::compute_hash_join(cudf::table_view const& probe,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr) const
 {
-  CUDF_EXPECTS(0 != probe.num_columns(), "Hash join probe table is empty");
+  CUDF_EXPECTS(0 != probe.num_columns(), "Hash join probe table is empty", std::invalid_argument);
 
   CUDF_EXPECTS(_build.num_columns() == probe.num_columns(),
-               "Mismatch in number of columns to be joined on");
+               "Mismatch in number of columns to be joined on",
+               std::invalid_argument);
 
   CUDF_EXPECTS(_has_nulls || !cudf::has_nested_nulls(probe),
-               "Probe table has nulls while build table was not hashed with null check.");
+               "Probe table has nulls while build table was not hashed with null check.",
+               std::invalid_argument);
 
   if (is_trivial_join(probe, _build, join)) {
     return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
@@ -748,7 +863,6 @@ hash_join::~hash_join() = default;
 hash_join::hash_join(cudf::table_view const& build,
                      null_equality compare_nulls,
                      rmm::cuda_stream_view stream)
-  // If we cannot know beforehand about null existence then let's assume that there are nulls.
   : hash_join(
       build, nullable_join::YES, compare_nulls, cudf::detail::CUCO_DESIRED_LOAD_FACTOR, stream)
 {
@@ -811,6 +925,28 @@ std::size_t hash_join::full_join_size(cudf::table_view const& probe,
                                       rmm::device_async_resource_ref mr) const
 {
   return _impl->full_join_size(probe, stream, mr);
+}
+
+cudf::join_match_context hash_join::inner_join_match_context(
+  cudf::table_view const& probe,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr) const
+{
+  return _impl->inner_join_match_context(probe, stream, mr);
+}
+
+cudf::join_match_context hash_join::left_join_match_context(cudf::table_view const& probe,
+                                                            rmm::cuda_stream_view stream,
+                                                            rmm::device_async_resource_ref mr) const
+{
+  return _impl->left_join_match_context(probe, stream, mr);
+}
+
+cudf::join_match_context hash_join::full_join_match_context(cudf::table_view const& probe,
+                                                            rmm::cuda_stream_view stream,
+                                                            rmm::device_async_resource_ref mr) const
+{
+  return _impl->full_join_match_context(probe, stream, mr);
 }
 
 }  // namespace cudf
