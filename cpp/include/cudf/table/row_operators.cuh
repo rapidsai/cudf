@@ -83,8 +83,8 @@ class element_equality_comparator {
       }
     }
 
-    return equality_compare(lhs.element<Element>(lhs_element_index),
-                            rhs.element<Element>(rhs_element_index));
+    return cudf::detail::equality_compare(lhs.element<Element>(lhs_element_index),
+                                          rhs.element<Element>(rhs_element_index));
   }
 
   // @cond
@@ -206,8 +206,8 @@ class element_relational_comparator {
    * the `lhs` and `rhs` columns.
    */
   template <typename Element>
-  __device__ weak_ordering operator()(size_type lhs_element_index,
-                                      size_type rhs_element_index) const noexcept
+  __device__ cudf::detail::weak_ordering operator()(size_type lhs_element_index,
+                                                    size_type rhs_element_index) const noexcept
     requires(cudf::is_relationally_comparable<Element, Element>())
   {
     if (nulls) {
@@ -215,17 +215,18 @@ class element_relational_comparator {
       bool const rhs_is_null{rhs.is_null(rhs_element_index)};
 
       if (lhs_is_null or rhs_is_null) {  // at least one is null
-        return null_compare(lhs_is_null, rhs_is_null, null_precedence);
+        return cudf::detail::null_compare(lhs_is_null, rhs_is_null, null_precedence);
       }
     }
 
-    return relational_compare(lhs.element<Element>(lhs_element_index),
-                              rhs.element<Element>(rhs_element_index));
+    return cudf::detail::relational_compare(lhs.element<Element>(lhs_element_index),
+                                            rhs.element<Element>(rhs_element_index));
   }
 
   // @cond
   template <typename Element>
-  __device__ weak_ordering operator()(size_type lhs_element_index, size_type rhs_element_index)
+  __device__ cudf::detail::weak_ordering operator()(size_type lhs_element_index,
+                                                    size_type rhs_element_index)
     requires(not cudf::is_relationally_comparable<Element, Element>())
   {
     CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
@@ -310,12 +311,13 @@ class row_lexicographic_comparator {
       auto comparator =
         element_relational_comparator{_nulls, _lhs.column(i), _rhs.column(i), null_precedence};
 
-      weak_ordering state =
+      cudf::detail::weak_ordering state =
         cudf::type_dispatcher(_lhs.column(i).type(), comparator, lhs_index, rhs_index);
 
-      if (state == weak_ordering::EQUIVALENT) { continue; }
+      if (state == cudf::detail::weak_ordering::EQUIVALENT) { continue; }
 
-      return state == (ascending ? weak_ordering::LESS : weak_ordering::GREATER);
+      return state ==
+             (ascending ? cudf::detail::weak_ordering::LESS : cudf::detail::weak_ordering::GREATER);
     }
     return false;
   }

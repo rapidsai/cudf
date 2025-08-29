@@ -18,6 +18,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/row_operator/common_utils.cuh>
 #include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/hashing/detail/default_hash.cuh>
@@ -173,9 +174,10 @@ struct physical_element_comparator {
    * @return Relation between elements
    */
   template <typename Element>
-  __device__ constexpr weak_ordering operator()(Element const lhs, Element const rhs) const noexcept
+  __device__ constexpr cudf::detail::weak_ordering operator()(Element const lhs,
+                                                              Element const rhs) const noexcept
   {
-    return detail::compare_elements(lhs, rhs);
+    return cudf::detail::compare_elements(lhs, rhs);
   }
 };
 
@@ -193,9 +195,10 @@ struct sorting_physical_element_comparator {
    * @return Relation between elements
    */
   template <typename Element, CUDF_ENABLE_IF(not std::is_floating_point_v<Element>)>
-  __device__ constexpr weak_ordering operator()(Element const lhs, Element const rhs) const noexcept
+  __device__ constexpr cudf::detail::weak_ordering operator()(Element const lhs,
+                                                              Element const rhs) const noexcept
   {
-    return detail::compare_elements(lhs, rhs);
+    return cudf::detail::compare_elements(lhs, rhs);
   }
 
   /**
@@ -206,15 +209,17 @@ struct sorting_physical_element_comparator {
    * @return Relation between elements
    */
   template <typename Element, CUDF_ENABLE_IF(std::is_floating_point_v<Element>)>
-  __device__ constexpr weak_ordering operator()(Element const lhs, Element const rhs) const noexcept
+  __device__ constexpr cudf::detail::weak_ordering operator()(Element const lhs,
+                                                              Element const rhs) const noexcept
   {
     if (isnan(lhs)) {
-      return isnan(rhs) ? weak_ordering::EQUIVALENT : weak_ordering::GREATER;
+      return isnan(rhs) ? cudf::detail::weak_ordering::EQUIVALENT
+                        : cudf::detail::weak_ordering::GREATER;
     } else if (isnan(rhs)) {
-      return weak_ordering::LESS;
+      return cudf::detail::weak_ordering::LESS;
     }
 
-    return detail::compare_elements(lhs, rhs);
+    return cudf::detail::compare_elements(lhs, rhs);
   }
 };
 
@@ -404,7 +409,7 @@ class device_row_comparator {
      */
     template <typename Element,
               CUDF_ENABLE_IF(cudf::is_relationally_comparable<Element, Element>())>
-    __device__ cuda::std::pair<weak_ordering, int> operator()(
+    __device__ cuda::std::pair<cudf::detail::weak_ordering, int> operator()(
       size_type const lhs_element_index, size_type const rhs_element_index) const noexcept
     {
       if (_check_nulls) {
@@ -412,7 +417,8 @@ class device_row_comparator {
         bool const rhs_is_null{_rhs.is_null(rhs_element_index)};
 
         if (lhs_is_null or rhs_is_null) {  // at least one is null
-          return cuda::std::pair(null_compare(lhs_is_null, rhs_is_null, _null_precedence), _depth);
+          return cuda::std::pair(
+            cudf::detail::null_compare(lhs_is_null, rhs_is_null, _null_precedence), _depth);
         }
       }
 
@@ -431,8 +437,8 @@ class device_row_comparator {
     template <typename Element,
               CUDF_ENABLE_IF(not cudf::is_relationally_comparable<Element, Element>() and
                              (not has_nested_columns or not cudf::is_nested<Element>()))>
-    __device__ cuda::std::pair<weak_ordering, int> operator()(size_type const,
-                                                              size_type const) const noexcept
+    __device__ cuda::std::pair<cudf::detail::weak_ordering, int> operator()(
+      size_type const, size_type const) const noexcept
     {
       CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
     }
@@ -447,7 +453,7 @@ class device_row_comparator {
      */
     template <typename Element,
               CUDF_ENABLE_IF(has_nested_columns and std::is_same_v<Element, cudf::struct_view>)>
-    __device__ cuda::std::pair<weak_ordering, int> operator()(
+    __device__ cuda::std::pair<cudf::detail::weak_ordering, int> operator()(
       size_type const lhs_element_index, size_type const rhs_element_index) const noexcept
     {
       column_device_view lcol = _lhs;
@@ -458,12 +464,14 @@ class device_row_comparator {
         bool const rhs_is_null{rcol.is_null(rhs_element_index)};
 
         if (lhs_is_null or rhs_is_null) {  // at least one is null
-          weak_ordering state = null_compare(lhs_is_null, rhs_is_null, _null_precedence);
+          cudf::detail::weak_ordering state =
+            cudf::detail::null_compare(lhs_is_null, rhs_is_null, _null_precedence);
           return cuda::std::pair(state, depth);
         }
 
         if (lcol.num_child_columns() == 0) {
-          return cuda::std::pair(weak_ordering::EQUIVALENT, cuda::std::numeric_limits<int>::max());
+          return cuda::std::pair(cudf::detail::weak_ordering::EQUIVALENT,
+                                 cuda::std::numeric_limits<int>::max());
         }
 
         // Non-empty structs have been modified to only have 1 child when using this.
@@ -489,15 +497,15 @@ class device_row_comparator {
      */
     template <typename Element,
               CUDF_ENABLE_IF(has_nested_columns and std::is_same_v<Element, cudf::list_view>)>
-    __device__ cuda::std::pair<weak_ordering, int> operator()(size_type lhs_element_index,
-                                                              size_type rhs_element_index)
+    __device__ cuda::std::pair<cudf::detail::weak_ordering, int> operator()(
+      size_type lhs_element_index, size_type rhs_element_index)
     {
       // only order top-NULLs according to null_order
       auto const is_l_row_null = _lhs.is_null(lhs_element_index);
       auto const is_r_row_null = _rhs.is_null(rhs_element_index);
       if (is_l_row_null || is_r_row_null) {
-        return cuda::std::pair(null_compare(is_l_row_null, is_r_row_null, _null_precedence),
-                               _depth);
+        return cuda::std::pair(
+          cudf::detail::null_compare(is_l_row_null, is_r_row_null, _null_precedence), _depth);
       }
 
       // These are all the values from the Dremel encoding.
@@ -545,8 +553,9 @@ class device_row_comparator {
         // early exit for smaller sub-list
         if (l_rep_level != r_rep_level) {
           // the lower repetition level is a smaller sub-list
-          return l_rep_level < r_rep_level ? cuda::std::pair(weak_ordering::LESS, _depth)
-                                           : cuda::std::pair(weak_ordering::GREATER, _depth);
+          return l_rep_level < r_rep_level
+                   ? cuda::std::pair(cudf::detail::weak_ordering::LESS, _depth)
+                   : cuda::std::pair(cudf::detail::weak_ordering::GREATER, _depth);
         }
 
         // only compare if left and right are at same nesting level
@@ -568,16 +577,19 @@ class device_row_comparator {
           if (l_def_level == r_def_level) { continue; }
           // We require [] < [NULL] < [leaf] for nested nulls.
           // The null_precedence only affects top level nulls.
-          return l_def_level < r_def_level ? cuda::std::pair(weak_ordering::LESS, _depth)
-                                           : cuda::std::pair(weak_ordering::GREATER, _depth);
+          return l_def_level < r_def_level
+                   ? cuda::std::pair(cudf::detail::weak_ordering::LESS, _depth)
+                   : cuda::std::pair(cudf::detail::weak_ordering::GREATER, _depth);
         }
 
         // finally, compare leaf to leaf
-        weak_ordering state{weak_ordering::EQUIVALENT};
+        cudf::detail::weak_ordering state{cudf::detail::weak_ordering::EQUIVALENT};
         int last_null_depth                    = _depth;
         cuda::std::tie(state, last_null_depth) = cudf::type_dispatcher<dispatch_void_if_nested>(
           lcol.type(), comparator, element_index, element_index);
-        if (state != weak_ordering::EQUIVALENT) { return cuda::std::pair(state, _depth); }
+        if (state != cudf::detail::weak_ordering::EQUIVALENT) {
+          return cuda::std::pair(state, _depth);
+        }
         ++element_index;
       }
 
@@ -612,8 +624,8 @@ class device_row_comparator {
    * @return weak ordering comparison of the row in the `lhs` table relative to the row in the `rhs`
    * table
    */
-  __device__ constexpr weak_ordering operator()(size_type const lhs_index,
-                                                size_type const rhs_index) const noexcept
+  __device__ constexpr cudf::detail::weak_ordering operator()(
+    size_type const lhs_index, size_type const rhs_index) const noexcept
   {
     int last_null_depth = cuda::std::numeric_limits<int>::max();
     size_type list_column_index{-1};
@@ -647,17 +659,18 @@ class device_row_comparator {
                                              l_dremel_i,
                                              r_dremel_i};
 
-      weak_ordering state;
+      cudf::detail::weak_ordering state;
       cuda::std::tie(state, last_null_depth) =
         cudf::type_dispatcher(_lhs.column(i).type(), element_comp, lhs_index, rhs_index);
 
-      if (state == weak_ordering::EQUIVALENT) { continue; }
+      if (state == cudf::detail::weak_ordering::EQUIVALENT) { continue; }
 
-      return ascending
-               ? state
-               : (state == weak_ordering::GREATER ? weak_ordering::LESS : weak_ordering::GREATER);
+      return ascending ? state
+                       : (state == cudf::detail::weak_ordering::GREATER
+                            ? cudf::detail::weak_ordering::LESS
+                            : cudf::detail::weak_ordering::GREATER);
     }
-    return weak_ordering::EQUIVALENT;
+    return cudf::detail::weak_ordering::EQUIVALENT;
   }
 
  private:
@@ -673,26 +686,28 @@ class device_row_comparator {
 };  // class device_row_comparator
 
 /**
- * @brief Wraps and interprets the result of templated Comparator that returns a weak_ordering.
- * Returns true if the weak_ordering matches any of the templated values.
+ * @brief Wraps and interprets the result of templated Comparator that returns a
+ * cudf::detail::weak_ordering. Returns true if the cudf::detail::weak_ordering matches any of the
+ * templated values.
  *
- * Note that this should never be used with only `weak_ordering::EQUIVALENT`.
+ * Note that this should never be used with only `cudf::detail::weak_ordering::EQUIVALENT`.
  * An equality comparator should be used instead for optimal performance.
  *
- * @tparam Comparator generic comparator that returns a weak_ordering.
- * @tparam values weak_ordering parameter pack of orderings to interpret as true
+ * @tparam Comparator generic comparator that returns a cudf::detail::weak_ordering.
+ * @tparam values cudf::detail::weak_ordering parameter pack of orderings to interpret as true
  */
-template <typename Comparator, weak_ordering... values>
+template <typename Comparator, cudf::detail::weak_ordering... values>
 struct weak_ordering_comparator_impl {
-  static_assert(not((weak_ordering::EQUIVALENT == values) && ...),
-                "weak_ordering_comparator should not be used for pure equality comparisons. The "
-                "`row_equality_comparator` should be used instead");
+  static_assert(
+    not((cudf::detail::weak_ordering::EQUIVALENT == values) && ...),
+    "cudf::detail::weak_ordering_comparator should not be used for pure equality comparisons. The "
+    "`row_equality_comparator` should be used instead");
 
   template <typename LhsType, typename RhsType>
   __device__ constexpr bool operator()(LhsType const lhs_index,
                                        RhsType const rhs_index) const noexcept
   {
-    weak_ordering const result = comparator(lhs_index, rhs_index);
+    cudf::detail::weak_ordering const result = comparator(lhs_index, rhs_index);
     return ((result == values) || ...);
   }
   Comparator const comparator;
@@ -700,41 +715,45 @@ struct weak_ordering_comparator_impl {
 
 /**
  * @brief Wraps and interprets the result of device_row_comparator, true if the result is
- * weak_ordering::LESS meaning one row is lexicographically *less* than another row.
+ * cudf::detail::weak_ordering::LESS meaning one row is lexicographically *less* than another row.
  *
- * @tparam Comparator generic comparator that returns a weak_ordering
+ * @tparam Comparator generic comparator that returns a cudf::detail::weak_ordering
  */
 template <typename Comparator>
-struct less_comparator : weak_ordering_comparator_impl<Comparator, weak_ordering::LESS> {
+struct less_comparator
+  : weak_ordering_comparator_impl<Comparator, cudf::detail::weak_ordering::LESS> {
   /**
    * @brief Constructs a less_comparator
    *
    * @param comparator The comparator to wrap
    */
   less_comparator(Comparator const& comparator)
-    : weak_ordering_comparator_impl<Comparator, weak_ordering::LESS>{comparator}
+    : weak_ordering_comparator_impl<Comparator, cudf::detail::weak_ordering::LESS>{comparator}
   {
   }
 };
 
 /**
  * @brief Wraps and interprets the result of device_row_comparator, true if the result is
- * weak_ordering::LESS or weak_ordering::EQUIVALENT meaning one row is lexicographically *less* than
- * or *equivalent* to another row.
+ * cudf::detail::weak_ordering::LESS or cudf::detail::weak_ordering::EQUIVALENT meaning one row is
+ * lexicographically *less* than or *equivalent* to another row.
  *
- * @tparam Comparator generic comparator that returns a weak_ordering
+ * @tparam Comparator generic comparator that returns a cudf::detail::weak_ordering
  */
 template <typename Comparator>
 struct less_equivalent_comparator
-  : weak_ordering_comparator_impl<Comparator, weak_ordering::LESS, weak_ordering::EQUIVALENT> {
+  : weak_ordering_comparator_impl<Comparator,
+                                  cudf::detail::weak_ordering::LESS,
+                                  cudf::detail::weak_ordering::EQUIVALENT> {
   /**
    * @brief Constructs a less_equivalent_comparator
    *
    * @param comparator The comparator to wrap
    */
   less_equivalent_comparator(Comparator const& comparator)
-    : weak_ordering_comparator_impl<Comparator, weak_ordering::LESS, weak_ordering::EQUIVALENT>{
-        comparator}
+    : weak_ordering_comparator_impl<Comparator,
+                                    cudf::detail::weak_ordering::LESS,
+                                    cudf::detail::weak_ordering::EQUIVALENT>{comparator}
   {
   }
 };
@@ -1088,26 +1107,26 @@ template <typename Comparator>
 struct strong_index_comparator_adapter {
   strong_index_comparator_adapter(Comparator const& comparator) : comparator{comparator} {}
 
-  __device__ constexpr weak_ordering operator()(lhs_index_type const lhs_index,
-                                                rhs_index_type const rhs_index) const noexcept
+  __device__ constexpr cudf::detail::weak_ordering operator()(
+    lhs_index_type const lhs_index, rhs_index_type const rhs_index) const noexcept
   {
     return comparator(static_cast<cudf::size_type>(lhs_index),
                       static_cast<cudf::size_type>(rhs_index));
   }
 
-  __device__ constexpr weak_ordering operator()(rhs_index_type const rhs_index,
-                                                lhs_index_type const lhs_index) const noexcept
+  __device__ constexpr cudf::detail::weak_ordering operator()(
+    rhs_index_type const rhs_index, lhs_index_type const lhs_index) const noexcept
   {
     auto const left_right_ordering =
       comparator(static_cast<cudf::size_type>(lhs_index), static_cast<cudf::size_type>(rhs_index));
 
     // Invert less/greater values to reflect right to left ordering
-    if (left_right_ordering == weak_ordering::LESS) {
-      return weak_ordering::GREATER;
-    } else if (left_right_ordering == weak_ordering::GREATER) {
-      return weak_ordering::LESS;
+    if (left_right_ordering == cudf::detail::weak_ordering::LESS) {
+      return cudf::detail::weak_ordering::GREATER;
+    } else if (left_right_ordering == cudf::detail::weak_ordering::GREATER) {
+      return cudf::detail::weak_ordering::LESS;
     }
-    return weak_ordering::EQUIVALENT;
+    return cudf::detail::weak_ordering::EQUIVALENT;
   }
 
   Comparator const comparator;

@@ -81,8 +81,8 @@ class element_equality_comparator {
                              size_type lhs_element_index,
                              size_type rhs_element_index) const
   {
-    return cudf::equality_compare(lhs.element<Element>(lhs_element_index),
-                                  rhs.element<Element>(rhs_element_index));
+    return cudf::detail::equality_compare(lhs.element<Element>(lhs_element_index),
+                                          rhs.element<Element>(rhs_element_index));
   }
 
   // @cond

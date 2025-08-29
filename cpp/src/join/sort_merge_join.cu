@@ -106,9 +106,9 @@ class merge {
     __device__ bool operator()(size_type lhs_index, size_type rhs_index) const noexcept
     {
       if (*_d_ptr == bound_type::UPPER) {
-        return ub_comparator(lhs_index, rhs_index) == weak_ordering::LESS;
+        return ub_comparator(lhs_index, rhs_index) == cudf::detail::weak_ordering::LESS;
       }
-      return lb_comparator(lhs_index, rhs_index) == weak_ordering::LESS;
+      return lb_comparator(lhs_index, rhs_index) == cudf::detail::weak_ordering::LESS;
     }
 
     bound_type* _d_ptr;
