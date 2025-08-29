@@ -17,6 +17,7 @@
 #include <benchmarks/common/generate_input.hpp>
 
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/debug_utilities.hpp>
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -433,44 +434,42 @@ static void BM_sv_sort(nvbench::state& state)
   }
 }
 
-static void BM_sv_filter(nvbench::state& state)
+static void BM_sv_gather(nvbench::state& state)
 {
   auto const num_rows = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const width    = static_cast<cudf::size_type>(state.get_int64("width"));
-  auto const frows    = static_cast<cudf::size_type>(state.get_int64("frows"));
+  auto const map_rows = static_cast<cudf::size_type>(state.get_int64("map_rows"));
 
-  data_profile const profile =
-    data_profile_builder()
-      .distribution(cudf::type_id::STRING, distribution_id::NORMAL, width, width)
-      .no_validity();
+  data_profile profile = data_profile_builder().no_validity().distribution(
+    cudf::type_id::STRING, distribution_id::NORMAL, width, width);
   auto const column = create_random_column(cudf::type_id::STRING, row_count{num_rows}, profile);
   auto col_view     = column->view();
-  auto stream       = cudf::get_default_stream();
+
+  data_profile map_profile = data_profile_builder().cardinality(0).no_validity().distribution(
+    cudf::type_id::INT32, distribution_id::UNIFORM, 0, num_rows - 1);
+  auto map      = create_random_column(cudf::type_id::INT32, row_count{map_rows}, map_profile);
+  auto map_view = map->view();
+
+  auto stream = cudf::get_default_stream();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
 
-  auto filter = cudf::sequence(num_rows / frows,
-                               cudf::numeric_scalar<int32_t>(0),
-                               cudf::numeric_scalar<int32_t>(frows),
-                               stream);
   if (std::getenv(BM_ARROWSTRINGVIEW)) {
     auto [d_items, data_buffer] = create_sv_array(col_view, stream);
 
-    auto begin  = filter->view().begin<int32_t>();
-    auto end    = filter->view().end<int32_t>();
+    auto begin  = map_view.begin<int32_t>();
+    auto end    = map_view.end<int32_t>();
     auto input  = d_items.data();
-    auto output = rmm::device_uvector<ArrowBinaryView>(filter->size(), stream);
+    auto output = rmm::device_uvector<ArrowBinaryView>(map_view.size(), stream);
 
-    state.add_global_memory_writes(frows * sizeof(ArrowBinaryView));
-    state.add_global_memory_reads(frows * sizeof(ArrowBinaryView));
+    state.add_global_memory_writes(map_rows * sizeof(ArrowBinaryView));
+    state.add_global_memory_reads(map_rows * sizeof(ArrowBinaryView));
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       thrust::gather(rmm::exec_policy(stream), begin, end, input, output.begin());
     });
   } else {
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-      cudf::gather(cudf::table_view({col_view}),
-                   filter->view(),
-                   cudf::out_of_bounds_policy::DONT_CHECK,
-                   stream);
+      cudf::gather(
+        cudf::table_view({col_view}), map_view, cudf::out_of_bounds_policy::DONT_CHECK, stream);
     });
   }
 }
@@ -494,8 +493,8 @@ NVBENCH_BENCH(BM_sv_sort)
   .add_int64_axis("max_width", {10, 20, 30, 60})
   .add_int64_axis("card", {100, 1000});
 
-NVBENCH_BENCH(BM_sv_filter)
-  .set_name("sv_filter")
+NVBENCH_BENCH(BM_sv_gather)
+  .set_name("sv_gather")
   .add_int64_axis("num_rows", {100'000, 1'000'000, 10'000'000})
   .add_int64_axis("width", {6, 12, 24, 48})
-  .add_int64_axis("frows", {100, 1000});
+  .add_int64_axis("map_rows", {10'000, 100'000});
