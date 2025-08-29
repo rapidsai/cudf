@@ -1249,26 +1249,27 @@ class Series(SingleColumnFrame, IndexedFrame):
         """
         if isinstance(spec, indexing_utils.MapIndexer):
             result = self._gather(spec.key, keep_index=True)
-            if isinstance(result.index, cudf.DatetimeIndex):
-                result.index._freq = None
-            return result
         elif isinstance(spec, indexing_utils.MaskIndexer):
             result = self._apply_boolean_mask(spec.key, keep_index=True)
-            if isinstance(result.index, cudf.DatetimeIndex):
-                result.index._freq = result.index._get_slice_frequency()
-            return result
         elif isinstance(spec, indexing_utils.SliceIndexer):
             result = self._slice(spec.key)
-            if isinstance(result.index, cudf.DatetimeIndex):
-                result.index._freq = result.index._get_slice_frequency(spec.key)
-            return result
         elif isinstance(spec, indexing_utils.ScalarIndexer):
             return self._gather(
                 spec.key, keep_index=False
             )._column.element_indexing(0)
         elif isinstance(spec, indexing_utils.EmptyIndexer):
             return self._empty_like(keep_index=True)
-        assert_never(spec)
+        else:
+            assert_never(spec)
+
+        if isinstance(result.index, cudf.DatetimeIndex):
+            result.index._freq = (
+                result.index._get_slice_frequency()
+                if isinstance(spec, indexing_utils.SliceIndexer)
+                else None
+            )
+
+        return result
 
     @_performance_tracking
     def __getitem__(self, arg):

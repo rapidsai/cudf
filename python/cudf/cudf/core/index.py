@@ -72,7 +72,7 @@ if TYPE_CHECKING:
     from cudf.core.frame import Frame
     from cudf.core.multiindex import MultiIndex
     from cudf.core.series import Series
-    from cudf.core.tools.datetimes import DateOffset, MonthEnd
+    from cudf.core.tools.datetimes import DateOffset, MonthEnd, YearEnd
 
 
 def ensure_index(index_like: Any) -> Index:
@@ -5787,7 +5787,7 @@ def _get_nearest_indexer(
     return indexer
 
 
-def _validate_freq(freq: Any) -> DateOffset | MonthEnd | None:
+def _validate_freq(freq: Any) -> DateOffset | MonthEnd | YearEnd | None:
     if isinstance(freq, str):
         return cudf.DateOffset._from_freqstr(freq)
     elif freq is None:
