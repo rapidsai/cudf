@@ -1253,9 +1253,15 @@ class Series(SingleColumnFrame, IndexedFrame):
                 result.index._freq = None
             return result
         elif isinstance(spec, indexing_utils.MaskIndexer):
-            return self._apply_boolean_mask(spec.key, keep_index=True)
+            result = self._apply_boolean_mask(spec.key, keep_index=True)
+            if isinstance(result.index, cudf.DatetimeIndex):
+                result.index._freq = result.index._get_slice_frequency()
+            return result
         elif isinstance(spec, indexing_utils.SliceIndexer):
-            return self._slice(spec.key)
+            result = self._slice(spec.key)
+            if isinstance(result.index, cudf.DatetimeIndex):
+                result.index._freq = result.index._get_slice_frequency(spec.key)
+            return result
         elif isinstance(spec, indexing_utils.ScalarIndexer):
             return self._gather(
                 spec.key, keep_index=False

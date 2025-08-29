@@ -3739,7 +3739,7 @@ class DatetimeIndex(Index):
 
             return cudf.DateOffset(**kwds)
 
-    def _slice_frequency(self, passed_slice=None):
+    def _get_slice_frequency(self, passed_slice=None):
         if self._freq is None:
             return None
         else:

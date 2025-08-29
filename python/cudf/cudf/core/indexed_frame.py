@@ -2921,7 +2921,7 @@ class IndexedFrame(Frame):
         stop = min(stop, num_rows)
 
         if stride != 1:
-            result = self._gather(
+            return self._gather(
                 GatherMap.from_column_unchecked(
                     cast(
                         NumericalColumn,
@@ -2935,13 +2935,6 @@ class IndexedFrame(Frame):
                 ),
                 keep_index=keep_index,
             )
-            if isinstance(result.index, cudf.DatetimeIndex):
-                # handle frequency reduction
-                old_freq = self.index.freq
-                if old_freq is not None:
-                    new_freq = stride * pd.Timedelta(self.index.freq._maybe_as_fast_pandas_offset())
-                    result.index._freq = cudf.DateOffset._from_freqstr(pd.tseries.frequencies.to_offset(new_freq).freqstr)
-            return result
 
         columns_to_slice = (
             itertools.chain(self.index._columns, self._columns)

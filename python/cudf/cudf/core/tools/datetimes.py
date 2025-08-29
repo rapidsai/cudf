@@ -422,9 +422,11 @@ class MonthEnd:
     def _maybe_as_fast_pandas_offset(self):
         return pd._libs.tslibs.offsets.MonthEnd()
 
+
 class YearEnd:
     def _maybe_as_fast_pandas_offset(self):
         return pd._libs.tslibs.offsets.YearEnd()
+
 
 class DateOffset:
     """
@@ -730,7 +732,7 @@ class DateOffset:
         # and automatically swapped on construction
         if freq_part == "M":
             freq_part == "ME"
-        if freq_part == 'Y':
+        if freq_part == "Y":
             freq_part = "YE"
 
         if freq_part == "ME":
