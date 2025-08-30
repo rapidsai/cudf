@@ -2351,9 +2351,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 new_dtype = type(col_dtype)(precision, scale)
                 result_col = result_col.astype(new_dtype)
             elif isinstance(col_dtype, IntervalDtype):
-                result_col = type(self).from_struct_column(  # type: ignore[attr-defined]
-                    result_col, closed=col_dtype.closed
-                )
+                result_col = result_col._with_type_metadata(col_dtype)
         return result_col.element_indexing(0)
 
     @acquire_spill_lock()

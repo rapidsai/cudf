@@ -35,7 +35,6 @@ from cudf.core.accessors import (
 )
 from cudf.core.column import (
     ColumnBase,
-    IntervalColumn,
     as_column,
 )
 from cudf.core.column.column import concat_columns
@@ -3109,8 +3108,9 @@ class Series(SingleColumnFrame, IndexedFrame):
         # Pandas returns an IntervalIndex as the index of res
         # this condition makes sure we do too if bins is given
         if bins is not None and len(res) == len(res.index.categories):
-            interval_col = IntervalColumn.from_struct_column(
-                res.index._column._get_decategorized_column()
+            struct_col = res.index._column._get_decategorized_column()
+            interval_col = struct_col._with_type_metadata(
+                res.index.dtype.categories.dtype
             )
             res.index = cudf.IntervalIndex._from_column(
                 interval_col, name=res.index.name
