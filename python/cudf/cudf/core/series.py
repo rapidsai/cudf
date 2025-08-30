@@ -378,7 +378,10 @@ class _SeriesLocIndexer(_FrameIndexer):
                     self._frame, Index._from_column(col)
                 )
                 if indices.null_count > 0:
-                    raise KeyError("label scalar is out of bound")
+                    missing = (
+                        indices[indices.isnull()].index.to_pandas().tolist()
+                    )
+                    raise KeyError(f"{missing} not in the index.")
                 return indices
 
 
