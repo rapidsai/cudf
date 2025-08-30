@@ -59,6 +59,10 @@ using weak_ordering = cudf::detail::weak_ordering;
 /**
  * @brief Alias for backward compatibility with legacy row operators.
  *
+ * @tparam Element The type of the elements being compared
+ * @param lhs First element to compare
+ * @param rhs Second element to compare
+ * @return weak_ordering indicating the relationship between the elements
  * @deprecated This function is deprecated as of 25.10 and will be removed in 25.12.
  * Use `cudf::detail::compare_elements` instead.
  */
@@ -71,6 +75,10 @@ __device__ weak_ordering compare_elements(Element lhs, Element rhs)
 /**
  * @brief Alias for backward compatibility with legacy row operators.
  *
+ * @tparam Element The type of the elements being compared
+ * @param lhs First element to compare
+ * @param rhs Second element to compare
+ * @return weak_ordering indicating the relationship between the elements
  * @deprecated This function is deprecated as of 25.10 and will be removed in 25.12.
  * Use `cudf::detail::relational_compare` instead.
  */
@@ -83,6 +91,10 @@ __device__ weak_ordering relational_compare(Element lhs, Element rhs)
 /**
  * @brief Alias for backward compatibility with legacy row operators.
  *
+ * @param lhs_is_null Boolean representing if lhs is null
+ * @param rhs_is_null Boolean representing if rhs is null
+ * @param null_precedence Null order specifying precedence of null values
+ * @return weak_ordering indicating the relationship between null in lhs and rhs columns
  * @deprecated This function is deprecated as of 25.10 and will be removed in 25.12.
  * Use `cudf::detail::null_compare` instead.
  */
@@ -94,6 +106,10 @@ inline __device__ auto null_compare(bool lhs_is_null, bool rhs_is_null, null_ord
 /**
  * @brief Alias for backward compatibility with legacy row operators.
  *
+ * @tparam Element The type of the elements being compared
+ * @param lhs First element to compare
+ * @param rhs Second element to compare
+ * @return bool `true` if `lhs` == `rhs` else `false`
  * @deprecated This function is deprecated as of 25.10 and will be removed in 25.12.
  * Use `cudf::detail::equality_compare` instead.
  */

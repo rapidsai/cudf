@@ -97,7 +97,9 @@ struct dispatch_void_if_nested {
 
 namespace row {
 
+/// Strongly typed index for left-hand side table rows
 enum class lhs_index_type : size_type {};
+/// Strongly typed index for right-hand side table rows
 enum class rhs_index_type : size_type {};
 
 /**
@@ -236,6 +238,7 @@ struct sorting_physical_element_comparator {
   }
 };
 
+/// Optional dremel device view for handling nested column structures
 using optional_dremel_view = cuda::std::optional<detail::dremel_device_view const>;
 
 // The has_nested_columns template parameter of the device_row_comparator is
@@ -2040,6 +2043,7 @@ class device_row_hasher {
 // Inject row::equality::preprocessed_table into the row::hash namespace
 // As a result, row::equality::preprocessed_table and row::hash::preprocessed table are the same
 // type and are interchangeable.
+/// Preprocessed table type alias for row hashing operations
 using preprocessed_table = row::equality::preprocessed_table;
 
 /**
