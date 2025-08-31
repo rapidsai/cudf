@@ -140,6 +140,10 @@ class NodeTraverser(Protocol):
         """Set the callback replacing the current node in the plan."""
         ...
 
+    def expr_str(self, node: int) -> str:
+        """Get the __str__ representation of the expression."""
+        ...
+
 
 OptimizationArgs: TypeAlias = Literal[
     "type_coercion",

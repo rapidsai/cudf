@@ -473,8 +473,9 @@ def _(node: pl_ir.Slice, translator: Translator, schema: Schema) -> ir.IR:
 def _(node: pl_ir.Filter, translator: Translator, schema: Schema) -> ir.IR:
     with set_node(translator.visitor, node.input):
         inp = translator.translate_ir(n=None)
+        pred_str = translator.visitor.expr_str(node.predicate.node)
         mask = translate_named_expr(translator, n=node.predicate, schema=inp.schema)
-    return ir.Filter(schema, mask, inp)
+    return ir.Filter(schema, mask, inp, predicate_str=pred_str)
 
 
 @_translate_ir.register
