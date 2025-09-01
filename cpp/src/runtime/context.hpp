@@ -33,7 +33,7 @@ class program_cache;
 class context {
  private:
   std::unique_ptr<jit::program_cache> _program_cache;
-  bool _dump_codegen;
+  bool _dump_codegen = false;
 
  public:
   context();
