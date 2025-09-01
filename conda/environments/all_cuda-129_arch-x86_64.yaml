@@ -76,7 +76,7 @@ dependencies:
 - pytest-benchmark
 - pytest-cases>=3.8.2
 - pytest-cov
-- pytest-rerunfailures
+- pytest-rerunfailures<16.0
 - pytest-xdist
 - python-confluent-kafka>=2.8.0,<2.9.0a0
 - python-xxhash

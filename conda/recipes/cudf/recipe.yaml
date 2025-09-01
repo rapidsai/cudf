@@ -79,7 +79,9 @@ requirements:
     - ${{ pin_compatible("rmm", upper_bound="x.x") }}
     - fsspec >=0.6.0
     - cuda-cudart
-    - cuda-python >=12.9.2,<13.0a0
+    - if: cuda_major == "12"
+      then: cuda-python >=12.9.2,<13.0a0
+      else: cuda-python >=13.0.1,<14.0a0
     - if: linux and x86_64
       then:
         - libcufile
