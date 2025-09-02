@@ -1715,7 +1715,7 @@ aggregate_reader_metadata::select_columns(
         } else {
           // Ensure that selected path matches a path in all_paths
           CUDF_EXPECTS(found_path != all_paths.end(),
-                       "Encountered non existent column in selected path",
+                       "Encountered non-existent column in selected path",
                        std::invalid_argument);
         }
       }
