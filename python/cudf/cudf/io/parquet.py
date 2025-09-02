@@ -24,7 +24,6 @@ from pylibcudf import expressions as plc_expr
 from cudf.api.types import is_list_like
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import ColumnBase, as_column, column_empty
-from cudf.core.column.categorical import CategoricalColumn, as_unsigned_codes
 from cudf.core.dataframe import DataFrame
 from cudf.core.dtypes import (
     CategoricalDtype,
@@ -1277,17 +1276,10 @@ def _parquet_to_frame(
                     partition_categories[name].index(value),
                     length=_len,
                 )
-                codes = as_unsigned_codes(
-                    len(partition_categories[name]), codes
-                )
-                col = CategoricalColumn(
-                    data=None,
-                    size=codes.size,
-                    dtype=CategoricalDtype(
+                col = codes._with_type_metadata(
+                    CategoricalDtype(
                         categories=partition_categories[name], ordered=False
-                    ),
-                    offset=codes.offset,
-                    children=(codes,),
+                    )
                 )
             else:
                 # Not building categorical columns, so
