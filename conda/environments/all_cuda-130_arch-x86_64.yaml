@@ -69,7 +69,7 @@ dependencies:
 - pandoc
 - polars>=1.28,<1.33
 - pre-commit
-- pyarrow>=14.0.0,<20.0.0a0
+- pyarrow>=15.0.0,<22.0.0a0
 - pydata-sphinx-theme>=0.15.4
 - pynvml>=12.0.0,<13.0.0a0
 - pytest
