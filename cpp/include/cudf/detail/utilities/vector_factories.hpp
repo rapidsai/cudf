@@ -374,7 +374,7 @@ host_vector<T> make_empty_host_vector(size_t capacity, rmm::cuda_stream_view str
 }
 
 /**
- * @brief Asynchronously construct a `thrust::host_vector` containing a copy of data from a
+ * @brief Asynchronously construct a `cudf::detail::host_vector` containing a copy of data from a
  * `device_span`
  *
  * @note This function does not synchronize `stream` after the copy. The returned vector may be
@@ -415,7 +415,7 @@ host_vector<typename Container::value_type> make_host_vector_async(Container con
 }
 
 /**
- * @brief Synchronously construct a `thrust::host_vector` containing a copy of data from a
+ * @brief Synchronously construct a `cudf::detail::host_vector` containing a copy of data from a
  * `device_span`
  *
  * @note This function does a synchronize on `stream` after the copy. The returned vector may be
@@ -435,7 +435,7 @@ host_vector<T> make_host_vector(device_span<T const> source_data, rmm::cuda_stre
 }
 
 /**
- * @brief Synchronously construct a `thrust::host_vector` containing a copy of data from a device
+ * @brief Synchronously construct a `cudf::detail::host_vector` containing a copy of data from a device
  * container
  *
  * @note This function synchronizes `stream` after the copy.
