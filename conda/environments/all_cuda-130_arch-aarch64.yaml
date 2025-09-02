@@ -20,7 +20,6 @@ dependencies:
 - cuda-nvcc
 - cuda-nvrtc-dev
 - cuda-nvtx-dev
-- cuda-nvvm-tools
 - cuda-python>=13.0.1,<14.0a0
 - cuda-sanitizer-api
 - cuda-version=13.0
@@ -69,14 +68,14 @@ dependencies:
 - pandoc
 - polars>=1.28,<1.33
 - pre-commit
-- pyarrow>=14.0.0,<20.0.0a0
+- pyarrow>=15.0.0,<22.0.0a0
 - pydata-sphinx-theme>=0.15.4
 - pynvml>=12.0.0,<13.0.0a0
 - pytest
 - pytest-benchmark
 - pytest-cases>=3.8.2
 - pytest-cov
-- pytest-rerunfailures
+- pytest-rerunfailures!=16.0.0
 - pytest-xdist
 - python-confluent-kafka>=2.8.0,<2.9.0a0
 - python-xxhash
