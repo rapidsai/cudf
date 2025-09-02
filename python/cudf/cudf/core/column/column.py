@@ -122,18 +122,6 @@ def _can_values_be_equal(left: DtypeObj, right: DtypeObj) -> bool:
     return False
 
 
-def pa_mask_buffer_to_mask(mask_buf: pa.Buffer, size: int) -> Buffer:
-    """
-    Convert PyArrow mask buffer to cuDF mask buffer
-    """
-    mask_size = plc.null_mask.bitmask_allocation_size_bytes(size)
-    if mask_buf.size < mask_size:
-        dbuf = rmm.DeviceBuffer(size=mask_size)
-        dbuf.copy_from_host(np.asarray(mask_buf).view("u1"))
-        return as_buffer(dbuf)
-    return as_buffer(mask_buf)
-
-
 class ColumnBase(Serializable, BinaryOperand, Reducible):
     """
     A ColumnBase stores columnar data in device memory.
