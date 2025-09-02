@@ -20,9 +20,9 @@ dependencies:
 - cuda-nvcc
 - cuda-nvrtc-dev
 - cuda-nvtx-dev
-- cuda-python>=12.9.2,<13.0a0
+- cuda-python>=13.0.1,<14.0a0
 - cuda-sanitizer-api
-- cuda-version=12.9
+- cuda-version=13.0
 - cupy>=13.6.0
 - cxx-compiler
 - cython>=3.0.3
@@ -80,7 +80,6 @@ dependencies:
 - python-confluent-kafka>=2.8.0,<2.9.0a0
 - python-xxhash
 - python>=3.10,<3.14
-- pytorch>=2.4.0
 - rapids-build-backend>=0.4.0,<0.5.0.dev0
 - rapids-dask-dependency==25.10.*,>=0.0.0a0
 - rapids-logger==0.1.*,>=0.0.0a0
@@ -100,4 +99,4 @@ dependencies:
 - typing_extensions>=4.0.0
 - zlib>=1.2.13
 - zstandard
-name: all_cuda-129_arch-aarch64
+name: all_cuda-130_arch-aarch64
