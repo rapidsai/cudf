@@ -272,11 +272,11 @@ rmm::device_uvector<typename Container::value_type> make_device_uvector(
  * @return The data copied to the host
  */
 template <typename T>
-std::vector<T> make_std_vector_async(device_span<T const> v, rmm::cuda_stream_view stream)
+std::vector<T> make_std_vector_async(device_span<T const> source_data, rmm::cuda_stream_view stream)
 {
-  std::vector<T> result(v.size());
+  std::vector<T> result(source_data.size());
   CUDF_CUDA_TRY(cudaMemcpyAsync(
-    result.data(), v.data(), v.size() * sizeof(T), cudaMemcpyDefault, stream.value()));
+    result.data(), source_data.data(), source_data.size() * sizeof(T), cudaMemcpyDefault, stream.value()));
   return result;
 }
 
@@ -312,9 +312,9 @@ std::vector<typename Container::value_type> make_std_vector_async(Container cons
  * @return The data copied to the host
  */
 template <typename T>
-std::vector<T> make_std_vector(device_span<T const> v, rmm::cuda_stream_view stream)
+std::vector<T> make_std_vector(device_span<T const> source_data, rmm::cuda_stream_view stream)
 {
-  auto result = make_std_vector_async(v, stream);
+  auto result = make_std_vector_async(source_data, stream);
   stream.synchronize();
   return result;
 }
@@ -386,10 +386,10 @@ host_vector<T> make_empty_host_vector(size_t capacity, rmm::cuda_stream_view str
  * @return The data copied to the host
  */
 template <typename T>
-host_vector<T> make_host_vector_async(device_span<T const> v, rmm::cuda_stream_view stream)
+host_vector<T> make_host_vector_async(device_span<T const> source_data, rmm::cuda_stream_view stream)
 {
-  auto result = make_host_vector<T>(v.size(), stream);
-  cuda_memcpy_async<T>(result, v, stream);
+  auto result = make_host_vector<T>(source_data.size(), stream);
+  cuda_memcpy_async<T>(result, source_data, stream);
   return result;
 }
 
@@ -427,9 +427,9 @@ host_vector<typename Container::value_type> make_host_vector_async(Container con
  * @return The data copied to the host
  */
 template <typename T>
-host_vector<T> make_host_vector(device_span<T const> v, rmm::cuda_stream_view stream)
+host_vector<T> make_host_vector(device_span<T const> source_data, rmm::cuda_stream_view stream)
 {
-  auto result = make_host_vector_async(v, stream);
+  auto result = make_host_vector_async(source_data, stream);
   stream.synchronize();
   return result;
 }
