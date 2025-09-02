@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,10 +25,19 @@
 
 namespace cudf::groupby::detail::hash {
 
-// flatten aggs to filter in single pass aggs
+/**
+ * @brief Extract all single-pass aggregations.
+ *
+ * @return A tuple containing:
+ *         - A table_view containing the input values columns for the single-pass aggregations,
+ *         - A vector of aggregation kinds corresponding to each of these values columns,
+ *         - A vector of aggregation objects corresponding to each of these values columns, and
+ *         - A boolean value indicating if there are any multi-pass aggregations.
+ */
 std::tuple<table_view,
            cudf::detail::host_vector<aggregation::Kind>,
-           std::vector<std::unique_ptr<aggregation>>>
+           std::vector<std::unique_ptr<aggregation>>,
+           bool>
 flatten_single_pass_aggs(host_span<aggregation_request const> requests,
                          rmm::cuda_stream_view stream);
 

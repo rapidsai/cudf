@@ -15,54 +15,62 @@
  */
 
 #include "compute_global_memory_aggs.hpp"
-#include "create_results_table.hpp"
-#include "helpers.cuh"
+#include "create_output.hpp"
 #include "single_pass_functors.cuh"
 
-#include <cudf/detail/aggregation/result_cache.hpp>
-#include <cudf/groupby.hpp>
-#include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
-#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <cuco/static_set.cuh>
 #include <thrust/for_each.h>
 
 namespace cudf::groupby::detail::hash {
-void compute_global_memory_aggs(size_type num_rows,
-                                size_type num_output,
-                                size_type const* key_indices,
-                                bitmask_type const* row_bitmask,
-                                table_view const& flattened_values,
-                                aggregation::Kind const* d_agg_kinds,
-                                host_span<aggregation::Kind const> agg_kinds,
-                                std::vector<std::unique_ptr<aggregation>>& aggregations,
-                                cudf::detail::result_cache* cache,
-                                rmm::cuda_stream_view stream)
+
+template <typename SetType>
+std::tuple<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_global_memory_aggs(
+  bitmask_type const* row_bitmask,
+  table_device_view const& d_values,
+  SetType const& key_set,
+  host_span<aggregation::Kind const> h_agg_kinds,
+  device_span<aggregation::Kind const> d_agg_kinds,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
-  // make table that will hold sparse results
-  cudf::table result_table = create_results_table(num_output, flattened_values, agg_kinds, stream);
+  auto const num_rows = d_values.num_rows();
+  auto target_indices = compute_key_indices(row_bitmask, key_set, num_rows, stream);
+  auto [unique_key_indices, key_transform_map] = extract_populated_keys(key_set, num_rows, stream);
+  transform_key_indices(target_indices, key_transform_map, stream);
 
-  // prepare to launch kernel to do the actual aggregation
-  auto d_values       = table_device_view::create(flattened_values, stream);
-  auto d_result_table = mutable_table_device_view::create(result_table, stream);
+  auto agg_results = create_results_table(
+    static_cast<size_type>(unique_key_indices.size()), d_values, h_agg_kinds, stream, mr);
+  auto d_results_ptr = mutable_table_device_view::create(*agg_results, stream);
 
-  // TODO: change to spass_values
-  thrust::for_each_n(
-    rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator(int64_t{0}),
-    static_cast<int64_t>(num_rows) * flattened_values.num_columns(),
-    compute_single_pass_aggs_fn{key_indices, *d_values, *d_result_table, d_agg_kinds});
+  thrust::for_each_n(rmm::exec_policy_nosync(stream),
+                     thrust::make_counting_iterator(int64_t{0}),
+                     num_rows * static_cast<int64_t>(h_agg_kinds.size()),
+                     compute_single_pass_aggs_fn{
+                       target_indices.begin(), d_values, d_agg_kinds.data(), *d_results_ptr});
 
-  // Add results back to sparse_results cache
-  auto result_cols = result_table.release();
-  for (size_t i = 0; i < aggregations.size(); i++) {
-    // Note that the cache will make a copy of this temporary aggregation
-    cache->add_result(flattened_values.column(i), *aggregations[i], std::move(result_cols[i]));
-  }
+  return {std::move(agg_results), std::move(unique_key_indices)};
 }
+
+template std::tuple<std::unique_ptr<table>, rmm::device_uvector<size_type>>
+compute_global_memory_aggs<global_set_t>(bitmask_type const* row_bitmask,
+                                         table_device_view const& d_values,
+                                         global_set_t const& key_set,
+                                         host_span<aggregation::Kind const> h_agg_kinds,
+                                         device_span<aggregation::Kind const> d_agg_kinds,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::device_async_resource_ref mr);
+
+template std::tuple<std::unique_ptr<table>, rmm::device_uvector<size_type>>
+compute_global_memory_aggs<nullable_global_set_t>(bitmask_type const* row_bitmask,
+                                                  table_device_view const& d_values,
+                                                  nullable_global_set_t const& key_set,
+                                                  host_span<aggregation::Kind const> h_agg_kinds,
+                                                  device_span<aggregation::Kind const> d_agg_kinds,
+                                                  rmm::cuda_stream_view stream,
+                                                  rmm::device_async_resource_ref mr);
+
 }  // namespace cudf::groupby::detail::hash

@@ -32,15 +32,12 @@ namespace cudf::groupby::detail::hash {
 
 hash_compound_agg_finalizer::hash_compound_agg_finalizer(column_view col,
                                                          cudf::detail::result_cache* cache,
-                                                         size_type const* d_output_index_map,
                                                          bitmask_type const* d_row_bitmask,
                                                          rmm::cuda_stream_view stream,
                                                          rmm::device_async_resource_ref mr)
   : col{col},
-    input_type{cudf::is_dictionary(col.type()) ? cudf::dictionary_column_view(col).keys().type()
-                                               : col.type()},
+    input_type{is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type()},
     cache{cache},
-    d_output_index_map{d_output_index_map},
     d_row_bitmask{d_row_bitmask},
     stream{stream},
     mr{mr}

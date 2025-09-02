@@ -26,7 +26,6 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
   column_view col;
   data_type input_type;
   cudf::detail::result_cache* cache;
-  size_type const* d_output_index_map;
   bitmask_type const* d_row_bitmask;
   rmm::cuda_stream_view stream;
   rmm::device_async_resource_ref mr;
@@ -36,7 +35,6 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
 
   hash_compound_agg_finalizer(column_view col,
                               cudf::detail::result_cache* cache,
-                              size_type const* d_output_index_map,
                               bitmask_type const* d_row_bitmask,
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr);

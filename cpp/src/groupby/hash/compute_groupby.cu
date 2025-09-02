@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-#include "compute_aggregations.hpp"
 #include "compute_groupby.hpp"
+#include "compute_single_pass_aggs.hpp"
+#include "create_output.hpp"
 #include "hash_compound_agg_finalizer.hpp"
 #include "helpers.cuh"
 
@@ -61,8 +62,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
                                        rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr)
 {
-  // convert to int64_t to avoid potential overflow with large `keys`
-  auto const num_keys = static_cast<int64_t>(keys.num_rows());
+  auto const num_keys = keys.num_rows();
 
   [[maybe_unused]] auto const [row_bitmask_data, row_bitmask] =
     [&]() -> std::pair<rmm::device_buffer, bitmask_type const*> {
@@ -110,7 +110,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
   }();
 
   auto set = cuco::static_set{
-    cuco::extent<int64_t>{num_keys},
+    cuco::extent<int64_t>{static_cast<int64_t>(num_keys)},
     cudf::detail::CUCO_DESIRED_LOAD_FACTOR,  // 50% load factor
     cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
     d_row_equal,
@@ -120,18 +120,25 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
     cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
     stream.value()};
 
-  // Compute all single pass aggs first
-  auto const [key_gather_map, output_index_map] =
-    compute_aggregations(num_keys, row_bitmask, set, requests, cache, stream);
+  // Compute all single pass aggs first.
+  auto [key_gather_map, has_compound_aggs] =
+    compute_single_pass_aggs(set, row_bitmask, requests, cache, stream, mr);
 
-  for (auto const& request : requests) {
-    auto const& agg_v = request.aggregations;
-    auto const& col   = request.values;
+  if (has_compound_aggs) {
+    for (auto const& request : requests) {
+      auto const& agg_v = request.aggregations;
+      auto const& col   = request.values;
 
-    auto finalizer =
-      hash_compound_agg_finalizer(col, cache, output_index_map.begin(), row_bitmask, stream, mr);
-    for (auto&& agg : agg_v) {
-      agg->finalize(finalizer);
+      // The target output index for writing into for each input row are not always available to
+      // reduce overhead. As such, there is no way for the finalizers to perform another aggregation
+      // operation. They can only finalize the results using the previously computed single-pass
+      // aggregations with linear transformations such as addition/multiplication (e.g. for
+      // variance/stddev). In the future, if there is more compound aggregations that require
+      // another aggregation step, we can revisit this design.
+      auto finalizer = hash_compound_agg_finalizer(col, cache, row_bitmask, stream, mr);
+      for (auto&& agg : agg_v) {
+        agg->finalize(finalizer);
+      }
     }
   }
 
