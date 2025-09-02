@@ -27,7 +27,7 @@ namespace cudf::groupby::detail::hash {
 template <typename SetType>
 std::tuple<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_global_memory_aggs(
   bitmask_type const* row_bitmask,
-  table_device_view const& d_values,
+  table_view const& values,
   SetType const& key_set,
   host_span<aggregation::Kind const> h_agg_kinds,
   device_span<aggregation::Kind const> d_agg_kinds,

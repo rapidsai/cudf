@@ -76,9 +76,9 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> extrac
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return A device vector mapping each input row to its key index
  */
-template <typename SetType>
+template <typename SetRef>
 rmm::device_uvector<size_type> compute_key_indices(bitmask_type const* row_bitmask,
-                                                   SetType const& key_set,
+                                                   SetRef set_ref,
                                                    size_type num_rows,
                                                    rmm::cuda_stream_view stream);
 

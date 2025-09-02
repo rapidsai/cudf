@@ -23,7 +23,7 @@
 
 namespace cudf::groupby::detail::hash {
 
-std::pair<bool, size_type> is_shared_memory_compatible(host_span<aggregation::Kind> agg_kinds,
+std::pair<bool, size_type> is_shared_memory_compatible(host_span<aggregation::Kind const> agg_kinds,
                                                        table_view const& values,
                                                        size_type grid_size)
 {

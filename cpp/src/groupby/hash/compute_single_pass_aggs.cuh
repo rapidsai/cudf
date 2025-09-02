@@ -73,18 +73,15 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
   auto const [can_run_by_shared_mem_kernel, available_shmem_size] =
     is_shared_memory_compatible(spass_agg_kinds, spass_values, grid_size);
 
-  auto const set_ref_insert = global_set.ref(cuco::op::insert_and_find);
-  auto const d_spass_values = table_device_view::create(spass_values, stream);
-
   // Performs naive global memory aggregations when the workload is not compatible with shared
   // memory, such as when aggregating dictionary columns, when there is insufficient dynamic
   // shared memory for shared memory aggregations, or when SUM_WITH_OVERFLOW aggregations are
   // present.
   auto const run_aggs_by_global_mem_kernel = [&] {
     auto [spass_results, unique_key_indices] = compute_global_memory_aggs(
-      row_bitmask, d_spass_values, set_ref_insert, spass_agg_kinds, d_spass_agg_kinds, stream, mr);
+      row_bitmask, spass_values, global_set, spass_agg_kinds, d_spass_agg_kinds, stream, mr);
     collect_output_to_cache(spass_values, spass_aggs, spass_results, cache);
-    return {std::move(unique_key_indices), has_compound_aggs};
+    return std::pair{std::move(unique_key_indices), has_compound_aggs};
   };
   if (!can_run_by_shared_mem_kernel) { return run_aggs_by_global_mem_kernel(); }
 
@@ -102,6 +99,7 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
   // Compute the cardinality (the number of unique keys) en by each thread block.
   rmm::device_uvector<size_type> block_cardinality(grid_size, stream);
 
+  auto set_ref_insert = global_set.ref(cuco::op::insert_and_find);
   compute_mapping_indices(grid_size,
                           num_rows,
                           set_ref_insert,
@@ -178,8 +176,9 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
       }
     });
 
-  auto spass_results = create_results_table(
-    static_cast<size_type>(unique_key_indices.size()), d_spass_values, spass_agg_kinds, stream, mr);
+  auto const d_spass_values = table_device_view::create(spass_values, stream);
+  auto spass_results        = create_results_table(
+    static_cast<size_type>(unique_key_indices.size()), spass_values, spass_agg_kinds, stream, mr);
   auto d_results_ptr = mutable_table_device_view::create(*spass_results, stream);
 
   compute_shared_memory_aggs(grid_size,

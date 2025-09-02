@@ -34,7 +34,7 @@ namespace cudf::groupby::detail::hash {
  * @return A pair consisting of a boolean indicating if all aggregations can be computed using
  *         shared memory kernels, and the currently available shared memory size
  */
-std::pair<bool, size_type> is_shared_memory_compatible(host_span<aggregation::Kind> agg_kinds,
+std::pair<bool, size_type> is_shared_memory_compatible(host_span<aggregation::Kind const> agg_kinds,
                                                        table_view const& values,
                                                        size_type grid_size);
 

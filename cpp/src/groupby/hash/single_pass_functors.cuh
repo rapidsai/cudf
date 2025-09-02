@@ -187,7 +187,7 @@ struct global_memory_fallback_fn {
   cudf::table_device_view input_values;
   cudf::mutable_table_device_view output_values;
   cudf::aggregation::Kind const* __restrict__ aggs;
-  cudf::size_type* fallback_block_ids;
+  cudf::size_type const* fallback_block_ids;
   cudf::size_type stride;
   cudf::size_type num_strides;
   cudf::size_type full_stride;
@@ -198,7 +198,7 @@ struct global_memory_fallback_fn {
                             cudf::table_device_view input_values,
                             cudf::mutable_table_device_view output_values,
                             cudf::aggregation::Kind const* aggs,
-                            cudf::size_type* fallback_block_ids,
+                            cudf::size_type const* fallback_block_ids,
                             cudf::size_type stride,
                             cudf::size_type num_strides,
                             cudf::size_type full_stride,
@@ -264,8 +264,8 @@ struct global_memory_fallback_fn {
 struct compute_single_pass_aggs_fn {
   size_type const* key_indices;
   table_device_view input_values;
-  mutable_table_device_view output_values;
   aggregation::Kind const* __restrict__ aggs;
+  mutable_table_device_view output_values;
 
   /**
    * @brief Construct a new compute_single_pass_aggs_fn functor object
@@ -273,16 +273,16 @@ struct compute_single_pass_aggs_fn {
    * @param set_ref Hash set object to insert key,value pairs into.
    * @param input_values The table whose rows will be aggregated in the values
    * of the hash set
+   * @param aggs The set of aggregation operations to perform across the
    * @param output_values Table that stores the results of aggregating rows of
    * `input_values`.
-   * @param aggs The set of aggregation operations to perform across the
    * columns of the `input_values` rows
    */
   compute_single_pass_aggs_fn(size_type const* key_indices,
                               table_device_view input_values,
-                              mutable_table_device_view output_values,
-                              aggregation::Kind const* aggs)
-    : key_indices(key_indices), input_values(input_values), output_values(output_values), aggs(aggs)
+                              aggregation::Kind const* aggs,
+                              mutable_table_device_view output_values)
+    : key_indices(key_indices), input_values(input_values), aggs(aggs), output_values(output_values)
   {
   }
 

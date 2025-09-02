@@ -30,34 +30,36 @@ namespace cudf::groupby::detail::hash {
 template <typename SetType>
 std::tuple<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_global_memory_aggs(
   bitmask_type const* row_bitmask,
-  table_device_view const& d_values,
+  table_view const& values,
   SetType const& key_set,
   host_span<aggregation::Kind const> h_agg_kinds,
   device_span<aggregation::Kind const> d_agg_kinds,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  auto const num_rows = d_values.num_rows();
-  auto target_indices = compute_key_indices(row_bitmask, key_set, num_rows, stream);
+  auto const num_rows = values.num_rows();
+  auto target_indices =
+    compute_key_indices(row_bitmask, key_set.ref(cuco::op::insert_and_find), num_rows, stream);
   auto [unique_key_indices, key_transform_map] = extract_populated_keys(key_set, num_rows, stream);
   transform_key_indices(target_indices, key_transform_map, stream);
 
-  auto agg_results = create_results_table(
-    static_cast<size_type>(unique_key_indices.size()), d_values, h_agg_kinds, stream, mr);
+  auto const d_values = table_device_view::create(values, stream);
+  auto agg_results    = create_results_table(
+    static_cast<size_type>(unique_key_indices.size()), values, h_agg_kinds, stream, mr);
   auto d_results_ptr = mutable_table_device_view::create(*agg_results, stream);
 
   thrust::for_each_n(rmm::exec_policy_nosync(stream),
                      thrust::make_counting_iterator(int64_t{0}),
                      num_rows * static_cast<int64_t>(h_agg_kinds.size()),
                      compute_single_pass_aggs_fn{
-                       target_indices.begin(), d_values, d_agg_kinds.data(), *d_results_ptr});
+                       target_indices.begin(), *d_values, d_agg_kinds.data(), *d_results_ptr});
 
   return {std::move(agg_results), std::move(unique_key_indices)};
 }
 
 template std::tuple<std::unique_ptr<table>, rmm::device_uvector<size_type>>
 compute_global_memory_aggs<global_set_t>(bitmask_type const* row_bitmask,
-                                         table_device_view const& d_values,
+                                         table_view const& values,
                                          global_set_t const& key_set,
                                          host_span<aggregation::Kind const> h_agg_kinds,
                                          device_span<aggregation::Kind const> d_agg_kinds,
@@ -66,7 +68,7 @@ compute_global_memory_aggs<global_set_t>(bitmask_type const* row_bitmask,
 
 template std::tuple<std::unique_ptr<table>, rmm::device_uvector<size_type>>
 compute_global_memory_aggs<nullable_global_set_t>(bitmask_type const* row_bitmask,
-                                                  table_device_view const& d_values,
+                                                  table_view const& values,
                                                   nullable_global_set_t const& key_set,
                                                   host_span<aggregation::Kind const> h_agg_kinds,
                                                   device_span<aggregation::Kind const> d_agg_kinds,

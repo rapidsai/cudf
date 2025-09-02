@@ -33,7 +33,6 @@
 #include <thrust/scatter.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
-#include <thrust/uninitialized_fill.h>
 
 namespace cudf::groupby::detail::hash {
 namespace {
@@ -158,9 +157,9 @@ extract_populated_keys<nullable_global_set_t>(nullable_global_set_t const& key_s
                                               size_type num_keys,
                                               rmm::cuda_stream_view stream);
 
-template <typename SetType>
+template <typename SetRef>
 rmm::device_uvector<size_type> compute_key_indices(bitmask_type const* row_bitmask,
-                                                   SetType const& key_set,
+                                                   SetRef set_ref,
                                                    size_type num_rows,
                                                    rmm::cuda_stream_view stream)
 {
@@ -172,24 +171,25 @@ rmm::device_uvector<size_type> compute_key_indices(bitmask_type const* row_bitma
   thrust::tabulate(rmm::exec_policy_nosync(stream),
                    key_indices.begin(),
                    key_indices.end(),
-                   [key_set, row_bitmask] __device__(auto const idx) mutable {
+                   [set_ref, row_bitmask] __device__(size_type const idx) mutable {
                      if (!row_bitmask || cudf::bit_is_set(row_bitmask, idx)) {
-                       return *key_set.insert_and_find(idx).first;
+                       return *set_ref.insert_and_find(idx).first;
                      }
                      return cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
                    });
   return key_indices;
 }
 
-template rmm::device_uvector<size_type> compute_key_indices<global_set_t>(
-  bitmask_type const* row_bitmask,
-  global_set_t const& key_set,
-  size_type num_rows,
-  rmm::cuda_stream_view stream);
+template rmm::device_uvector<size_type> compute_key_indices<
+  hash_set_ref_t<cuco::insert_and_find_tag>>(bitmask_type const* row_bitmask,
+                                             hash_set_ref_t<cuco::insert_and_find_tag> set_ref,
+                                             size_type num_rows,
+                                             rmm::cuda_stream_view stream);
 
-template rmm::device_uvector<size_type> compute_key_indices<nullable_global_set_t>(
+template rmm::device_uvector<size_type>
+compute_key_indices<nullable_hash_set_ref_t<cuco::insert_and_find_tag>>(
   bitmask_type const* row_bitmask,
-  nullable_global_set_t const& key_set,
+  nullable_hash_set_ref_t<cuco::insert_and_find_tag> set_ref,
   size_type num_rows,
   rmm::cuda_stream_view stream);
 
