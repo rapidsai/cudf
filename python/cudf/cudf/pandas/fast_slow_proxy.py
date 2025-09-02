@@ -991,7 +991,6 @@ def _fast_slow_function_call(
     from .module_accelerator import disable_module_accelerator
 
     fast = False
-    parent_proxy = kwargs.pop("parent_proxy", None)
     try:
         with nvtx.annotate(
             "EXECUTE_FAST",
@@ -1052,8 +1051,6 @@ def _fast_slow_function_call(
             _slow_function_call()
             with disable_module_accelerator():
                 result = func(*slow_args, **slow_kwargs)
-    if parent_proxy is not None:
-        kwargs["parent_proxy"] = parent_proxy
     return _maybe_wrap_result(result, func, *args, **kwargs), fast
 
 
