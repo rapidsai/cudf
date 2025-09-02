@@ -1,5 +1,6 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from pylibcudf.libcudf.types cimport mask_state
+from rmm.pylibrmm.stream cimport Stream
 
 from .column cimport Column
 from .types cimport DataType, size_type, type_id
@@ -22,28 +23,33 @@ cpdef Column make_numeric_column(
     DataType type_,
     size_type size,
     MaskArg mask,
+    Stream stream = *,
 )
 
 cpdef Column make_fixed_point_column(
     DataType type_,
     size_type size,
     MaskArg mask,
+    Stream stream = *,
 )
 
 cpdef Column make_timestamp_column(
     DataType type_,
     size_type size,
     MaskArg mask,
+    Stream stream = *,
 )
 
 cpdef Column make_duration_column(
     DataType type_,
     size_type size,
     MaskArg mask,
+    Stream stream = *,
 )
 
 cpdef Column make_fixed_width_column(
     DataType type_,
     size_type size,
     MaskArg mask,
+    Stream stream = *,
 )

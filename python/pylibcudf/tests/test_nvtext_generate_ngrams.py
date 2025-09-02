@@ -48,7 +48,7 @@ def test_hash_character_ngrams(input_col, ngram, seed):
     pa_result = plc.interop.to_arrow(result)
     assert all(
         len(got) == max(0, len(s.as_py()) - ngram + 1)
-        for got, s in zip(pa_result, input_col)
+        for got, s in zip(pa_result, input_col, strict=True)
     )
     assert pa_result.type == pa.list_(
         pa.field("element", pa.uint32(), nullable=False)

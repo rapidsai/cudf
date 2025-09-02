@@ -17,30 +17,21 @@
 #include "detail/optimized_unbounded_window.hpp"
 #include "detail/range_window_bounds.hpp"
 #include "detail/rolling.cuh"
-#include "detail/rolling_jit.hpp"
+#include "detail/rolling_udf.cuh"
 #include "detail/rolling_utils.cuh"
-#include "rolling/detail/rolling.hpp"
 
+#include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/rolling.hpp>
-#include <cudf/detail/utilities/assert.cuh>
-#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/rolling.hpp>
 #include <cudf/rolling/range_window_bounds.hpp>
 #include <cudf/types.hpp>
-#include <cudf/unary.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-
-#include <cuda/functional>
-
-#include <iterator>
-#include <variant>
 
 namespace cudf {
 

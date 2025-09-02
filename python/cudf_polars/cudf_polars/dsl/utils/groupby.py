@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 import pylibcudf as plc
 
 from cudf_polars.dsl import ir
+from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.utils.aggregations import apply_pre_evaluation
 from cudf_polars.dsl.utils.naming import unique_names
 
@@ -78,7 +79,11 @@ def rewrite_groupby(
         )
 
     aggs, group_schema, apply_post_evaluation = apply_pre_evaluation(
-        schema, keys, aggs, unique_names(schema.keys())
+        schema,
+        keys,
+        aggs,
+        unique_names(schema.keys()),
+        ExecutionContext.GROUPBY,
     )
     # TODO: use Distinct when the partitioned executor supports it if
     # the requested aggregations are empty

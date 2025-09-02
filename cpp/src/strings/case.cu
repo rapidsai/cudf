@@ -456,7 +456,8 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
   // note: tried to use segmented-reduce approach instead here and it was consistently slower
   auto [offsets, bytes] = [&] {
     rmm::device_uvector<size_type> sizes(input.size(), stream);
-    auto grid = cudf::detail::grid_1d(input.size() * cudf::detail::warp_size, block_size);
+    constexpr thread_index_type warp_size = cudf::detail::warp_size;
+    auto grid = cudf::detail::grid_1d(input.size() * warp_size, block_size);
     count_bytes_kernel<bytes_per_thread>
       <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
         ccfn, *d_strings, sizes.data());

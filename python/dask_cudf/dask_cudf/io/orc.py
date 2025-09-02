@@ -101,7 +101,7 @@ def read_orc(path, columns=None, filters=None, storage_options=None, **kwargs):
         )
 
     sources = []
-    for path, n in zip(paths, nstripes_per_file):
+    for path, n in zip(paths, nstripes_per_file, strict=True):
         for stripe in (
             range(n)
             if filters is None
@@ -186,7 +186,7 @@ def to_orc(
     dwrite = delayed(write_orc_partition)
     parts = [
         dwrite(d, path, fs, filename, compression=compression)
-        for d, filename in zip(df.to_delayed(), filenames)
+        for d, filename in zip(df.to_delayed(), filenames, strict=True)
     ]
 
     if compute:

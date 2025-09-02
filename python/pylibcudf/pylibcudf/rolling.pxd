@@ -7,6 +7,7 @@ from pylibcudf.libcudf.rolling cimport (
     bounded_closed, bounded_open, current_row, rolling_request, unbounded
 )
 from pylibcudf.libcudf.types cimport null_order, order, size_type
+from rmm.pylibrmm.stream cimport Stream
 
 from .aggregation cimport Aggregation
 from .column cimport Column
@@ -60,6 +61,7 @@ cpdef Table grouped_range_rolling_window(
     PrecedingRangeWindowType preceding,
     FollowingRangeWindowType following,
     list requests,
+    Stream stream = *,
 )
 
 cpdef Column rolling_window(
@@ -68,6 +70,17 @@ cpdef Column rolling_window(
     WindowType following_window,
     size_type min_periods,
     Aggregation agg,
+    Stream stream = *,
 )
 
 cpdef bool is_valid_rolling_aggregation(DataType source, Aggregation agg)
+
+cpdef tuple make_range_windows(
+    Table group_keys,
+    Column orderby,
+    order order,
+    null_order null_order,
+    PrecedingRangeWindowType preceding,
+    FollowingRangeWindowType following,
+    Stream stream = *,
+)
