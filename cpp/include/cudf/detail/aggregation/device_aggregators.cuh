@@ -25,6 +25,7 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/traits.cuh>
 
+#include <cuda/std/limits>
 #include <cuda/std/type_traits>
 
 namespace cudf::detail {
@@ -151,6 +152,45 @@ struct update_target_element<Source, aggregation::SUM> {
 
     cudf::detail::atomic_add(&target.element<DeviceTarget>(target_index),
                              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
+  }
+};
+
+template <typename Source>
+  requires(cuda::std::is_same_v<Source, int64_t>)
+struct update_target_element<Source, aggregation::SUM_WITH_OVERFLOW> {
+  __device__ void operator()(mutable_column_device_view target,
+                             size_type target_index,
+                             column_device_view source,
+                             size_type source_index) const noexcept
+  {
+    // For SUM_WITH_OVERFLOW, target is a struct with sum value at child(0) and overflow flag at
+    // child(1)
+    auto sum_column      = target.child(0);
+    auto overflow_column = target.child(1);
+
+    auto const source_value = source.element<Source>(source_index);
+    auto const old_sum =
+      cudf::detail::atomic_add(&sum_column.element<int64_t>(target_index), source_value);
+
+    // Early exit if overflow is already set to avoid unnecessary overflow checking
+    auto bool_ref = cuda::atomic_ref<bool, cuda::thread_scope_device>{
+      *(overflow_column.data<bool>() + target_index)};
+    if (bool_ref.load(cuda::memory_order_relaxed)) { return; }
+
+    // Check for overflow before performing the addition to avoid UB
+    // For positive overflow: old_sum > 0, source_value > 0, and old_sum > max - source_value
+    // For negative overflow: old_sum < 0, source_value < 0, and old_sum < min - source_value
+    // TODO: to be replaced by CCCL equivalents once https://github.com/NVIDIA/cccl/pull/3755 is
+    // ready
+    auto constexpr int64_max = cuda::std::numeric_limits<int64_t>::max();
+    auto constexpr int64_min = cuda::std::numeric_limits<int64_t>::min();
+    auto const overflow =
+      ((old_sum > 0 && source_value > 0 && old_sum > int64_max - source_value) ||
+       (old_sum < 0 && source_value < 0 && old_sum < int64_min - source_value));
+    if (overflow) {
+      // Atomically set overflow flag to true (use atomic_max since true > false)
+      cudf::detail::atomic_max(&overflow_column.element<bool>(target_index), true);
+    }
   }
 };
 

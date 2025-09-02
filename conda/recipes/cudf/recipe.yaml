@@ -52,10 +52,10 @@ requirements:
     - python =${{ py_version }}
     - pip
     - cython >=3.0.3
-    - rapids-build-backend >=0.3.0,<0.4.0.dev0
+    - rapids-build-backend >=0.4.0,<0.5.0.dev0
     - scikit-build-core >=0.10.0
     - dlpack >=0.8,<1.0
-    - numba-cuda >=0.14.0,<0.15.0a0
+    - numba-cuda >=0.19.1,<0.20.0a0
     - libcudf =${{ version }}
     - pylibcudf =${{ version }}
     - rmm =${{ minor_version }}
@@ -69,9 +69,9 @@ requirements:
     - python
     - typing_extensions >=4.0.0
     - pandas >=2.0,<2.4.0dev0
-    - cupy >=12.0.0
-    - numba-cuda >=0.14.0,<0.15.0a0
-    - numba >=0.59.1,<0.62.0a0
+    - cupy >=13.6.0
+    - numba-cuda >=0.19.1,<0.20.0a0
+    - numba >=0.60.0,<0.62.0a0
     - numpy >=1.23,<3.0a0
     - pyarrow>=14.0.0,<20.0.0a0
     - libcudf =${{ version }}
@@ -79,13 +79,9 @@ requirements:
     - ${{ pin_compatible("rmm", upper_bound="x.x") }}
     - fsspec >=0.6.0
     - cuda-cudart
-    # Needed by Numba for CUDA support
-    - cuda-nvcc-impl
-    # TODO: Add nvjitlink here
-    # xref: https://github.com/rapidsai/cudf/issues/12822
-    - cuda-nvrtc
-    - cuda-python >=12.6.2,<13.0a0
-    - pynvjitlink
+    - if: cuda_major == "12"
+      then: cuda-python >=12.9.2,<13.0a0
+      else: cuda-python >=13.0.1,<14.0a0
     - if: linux and x86_64
       then:
         - libcufile

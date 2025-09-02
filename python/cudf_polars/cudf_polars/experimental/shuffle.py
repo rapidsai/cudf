@@ -5,10 +5,9 @@
 from __future__ import annotations
 
 import operator
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
 import pylibcudf as plc
-import rmm.mr
 from rmm.pylibrmm.stream import DEFAULT_STREAM
 
 from cudf_polars.containers import DataFrame
@@ -40,6 +39,7 @@ class ShuffleOptions(TypedDict):
     on: Sequence[str]
     column_names: Sequence[str]
     dtypes: Sequence[DataType]
+    cluster_kind: str
 
 
 # Experimental rapidsmpf shuffler integration
@@ -59,6 +59,14 @@ class RMPFIntegration:  # pragma: no cover
         """Add cudf-polars DataFrame chunks to an RMP shuffler."""
         from rapidsmpf.integrations.cudf.partition import partition_and_pack
 
+        if options["cluster_kind"] == "dask":
+            from rapidsmpf.integrations.dask import get_worker_context
+
+        else:
+            from rapidsmpf.integrations.single import get_worker_context
+
+        context = get_worker_context()
+
         on = options["on"]
         assert not other, f"Unexpected arguments: {other}"
         columns_to_hash = tuple(df.column_names.index(val) for val in on)
@@ -66,8 +74,8 @@ class RMPFIntegration:  # pragma: no cover
             df.table,
             columns_to_hash=columns_to_hash,
             num_partitions=partition_count,
+            br=context.br,
             stream=DEFAULT_STREAM,
-            device_mr=rmm.mr.get_current_device_resource(),
         )
         shuffler.insert_chunks(packed_inputs)
 
@@ -79,16 +87,33 @@ class RMPFIntegration:  # pragma: no cover
         options: ShuffleOptions,
     ) -> DataFrame:
         """Extract a finished partition from the RMP shuffler."""
-        from rapidsmpf.integrations.cudf.partition import unpack_and_concat
+        from rapidsmpf.integrations.cudf.partition import (
+            unpack_and_concat,
+            unspill_partitions,
+        )
+
+        if options["cluster_kind"] == "dask":
+            from rapidsmpf.integrations.dask import get_worker_context
+
+        else:
+            from rapidsmpf.integrations.single import get_worker_context
+
+        context = get_worker_context()
 
         shuffler.wait_on(partition_id)
         column_names = options["column_names"]
         dtypes = options["dtypes"]
         return DataFrame.from_table(
             unpack_and_concat(
-                shuffler.extract(partition_id),
+                unspill_partitions(
+                    shuffler.extract(partition_id),
+                    br=context.br,
+                    stream=DEFAULT_STREAM,
+                    allow_overbooking=True,
+                    statistics=context.statistics,
+                ),
+                br=context.br,
                 stream=DEFAULT_STREAM,
-                device_mr=rmm.mr.get_current_device_resource(),
             ),
             column_names,
             dtypes,
@@ -263,10 +288,18 @@ def _(
     # Try using rapidsmpf shuffler if we have "simple" shuffle
     # keys, and the "shuffle_method" config is set to "rapidsmpf"
     _keys: list[Col]
-    if shuffle_method == "rapidsmpf" and len(
+    if shuffle_method in ("rapidsmpf", "rapidsmpf-single") and len(
         _keys := [ne.value for ne in ir.keys if isinstance(ne.value, Col)]
     ) == len(ir.keys):  # pragma: no cover
-        from rapidsmpf.integrations.dask import rapidsmpf_shuffle_graph
+        cluster_kind: Literal["dask", "single"]
+        if shuffle_method == "rapidsmpf-single":
+            from rapidsmpf.integrations.single import rapidsmpf_shuffle_graph
+
+            cluster_kind = "single"
+        else:
+            from rapidsmpf.integrations.dask import rapidsmpf_shuffle_graph
+
+            cluster_kind = "dask"
 
         shuffle_on = [k.name for k in _keys]
 
@@ -281,6 +314,7 @@ def _(
                     "on": shuffle_on,
                     "column_names": list(ir.schema.keys()),
                     "dtypes": list(ir.schema.values()),
+                    "cluster_kind": cluster_kind,
                 },
             )
         except ValueError as err:

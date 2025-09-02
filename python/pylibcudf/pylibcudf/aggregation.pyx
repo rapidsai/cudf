@@ -102,6 +102,7 @@ __all__ = [
     "covariance",
     "ewma",
     "histogram",
+    "is_valid_aggregation",
     "lag",
     "lead",
     "m2",
@@ -917,3 +918,11 @@ cpdef bool is_valid_aggregation(DataType source, Aggregation agg):
     True if the aggregation is supported.
     """
     return cpp_is_valid_aggregation(source.c_obj, agg.kind())
+
+Kind.__str__ = Kind.__repr__
+BitwiseOp.__str__ = BitwiseOp.__repr__
+CorrelationType.__str__ = CorrelationType.__repr__
+EWMHistory.__str__ = EWMHistory.__repr__
+RankMethod.__str__ = RankMethod.__repr__
+RankPercentage.__str__ = RankPercentage.__repr__
+UdfType.__str__ = UdfType.__repr__

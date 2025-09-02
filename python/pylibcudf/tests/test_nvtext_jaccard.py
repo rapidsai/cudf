@@ -31,7 +31,7 @@ def test_jaccard_index(input_data, width):
     expect = pa.array(
         [
             jaccard_index(s1.as_py(), s2.as_py(), width)
-            for s1, s2 in zip(input1, input2)
+            for s1, s2 in zip(input1, input2, strict=True)
         ],
         type=pa.float32(),
     )

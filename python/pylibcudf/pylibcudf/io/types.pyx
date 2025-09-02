@@ -376,14 +376,15 @@ cdef class TableWithMetadata:
     def child_names(self):
         """
         Return a dictionary mapping the names of columns with children
-        to the names of their child columns
+        to the names of their child columns. Columns without children
+        get an empty dictionary.
         """
         return TableWithMetadata._parse_col_names(self.metadata.schema_info)
 
     @staticmethod
     cdef dict _parse_col_names(vector[column_name_info] infos):
-        cdef dict child_names = dict()
-        cdef dict names = dict()
+        cdef dict child_names
+        cdef dict names = {}
         for col_info in infos:
             child_names = TableWithMetadata._parse_col_names(col_info.children)
             names[col_info.name.decode()] = child_names
@@ -661,3 +662,9 @@ cdef class SinkInfo:
             self.c_obj = sink_info(paths)
 
     __hash__ = None
+
+ColumnEncoding.__str__ = ColumnEncoding.__repr__
+CompressionType.__str__ = CompressionType.__repr__
+DictionaryPolicy.__str__ = DictionaryPolicy.__repr__
+QuoteStyle.__str__ = QuoteStyle.__repr__
+StatisticsFreq.__str__ = StatisticsFreq.__repr__

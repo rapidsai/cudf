@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include "text/subword/detail/wordpiece_tokenizer.hpp"
-
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
@@ -30,7 +28,6 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <nvtext/detail/load_hash_file.hpp>
 #include <nvtext/subword_tokenize.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -164,131 +161,6 @@ tokenizer_result build_empty_result(cudf::size_type size,
 
 }  // namespace
 
-tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
-                                  hashed_vocabulary const& vocab_table,
-                                  uint32_t max_sequence_length,
-                                  uint32_t stride,
-                                  bool do_lower_case,
-                                  bool do_truncate,
-                                  rmm::cuda_stream_view stream,
-                                  rmm::device_async_resource_ref mr)
-{
-  CUDF_EXPECTS(stride <= max_sequence_length,
-               "stride must be less than or equal to max_sequence_length");
-  auto const strings_count = strings.size();
-  if (strings_count == strings.null_count()) {  // empty or all-null returns empty
-    return tokenizer_result{0,
-                            max_sequence_length,
-                            cudf::make_empty_column(cudf::data_type{cudf::type_id::UINT32}),
-                            cudf::make_empty_column(cudf::data_type{cudf::type_id::UINT32}),
-                            cudf::make_empty_column(cudf::data_type{cudf::type_id::UINT32})};
-  }
-  CUDF_EXPECTS(
-    max_sequence_length <=
-      (static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()) / strings_count),
-    "max_sequence_length times number of input rows exceeds the column size limit",
-    std::overflow_error);
-
-  // Create tokenizer
-  wordpiece_tokenizer tokenizer(
-    vocab_table, max_sequence_length, stride, do_truncate, do_lower_case);
-  // Run tokenizer
-  auto const tokens = tokenizer.tokenize(strings, stream);
-  // assign output components
-  auto device_token_ids = tokens.first->data();
-  auto device_offsets   = tokens.second->data();
-
-  // Format output from tokenizer
-  // Each string can create 1 or more tensor entries.
-  // Compute the string-per-tensor offsets values by scanning
-  // over the number of tokens for each string.
-  rmm::device_uvector<uint32_t> offsets_per_tensor(strings_count + 1, stream);
-  auto d_offsets_per_tensor = offsets_per_tensor.data();
-
-  thrust::transform_exclusive_scan(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator<cudf::size_type>(0),
-    thrust::make_counting_iterator<cudf::size_type>(strings_count + 1),
-    offsets_per_tensor.begin(),
-    [device_offsets, do_truncate, max_sequence_length, stride, strings_count] __device__(
-      cudf::size_type idx) {
-      uint32_t const num_tokens =
-        idx < strings_count ? device_offsets[idx + 1] - device_offsets[idx] : 0;
-      if (do_truncate || num_tokens <= max_sequence_length) return uint32_t{1};
-      return 1 + ((num_tokens - max_sequence_length + stride - 1) / stride);
-    },
-    uint32_t{0},
-    cuda::std::plus<uint32_t>());
-  // last element is the total number of output rows
-  uint32_t const nrows_tensor_token_ids = offsets_per_tensor.element(strings_count, stream);
-  // if there are no tokens at all, build a specific empty result
-  if (nrows_tensor_token_ids == 0) {
-    return build_empty_result(strings_count, max_sequence_length, stream, mr);
-  }
-
-  // compute global_row to tensor, and global_row to within_tensor_row correspondence
-  rmm::device_uvector<uint32_t> row2tensor(nrows_tensor_token_ids, stream);
-  auto d_row2tensor = row2tensor.data();
-  rmm::device_uvector<uint32_t> row2row_within_tensor(nrows_tensor_token_ids, stream);
-  auto d_row2row_within_tensor = row2row_within_tensor.data();
-  thrust::for_each_n(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator<uint32_t>(0),
-    strings_count,
-    [d_offsets_per_tensor, d_row2tensor, d_row2row_within_tensor] __device__(auto idx) {
-      uint32_t offset = d_offsets_per_tensor[idx];
-      uint32_t nrows  = d_offsets_per_tensor[idx + 1] - offset;
-      for (uint32_t jdx = 0; jdx < nrows; ++jdx) {
-        d_row2tensor[jdx + offset]            = idx;
-        d_row2row_within_tensor[jdx + offset] = jdx;
-      }
-    });
-
-  // create output data columns
-  auto tensor_token_ids = cudf::make_numeric_column(cudf::data_type{cudf::type_id::UINT32},
-                                                    nrows_tensor_token_ids * max_sequence_length,
-                                                    cudf::mask_state::UNALLOCATED,
-                                                    stream,
-                                                    mr);
-  auto tensor_attention_mask =
-    cudf::make_numeric_column(cudf::data_type{cudf::type_id::UINT32},
-                              nrows_tensor_token_ids * max_sequence_length,
-                              cudf::mask_state::UNALLOCATED,
-                              stream,
-                              mr);
-  auto tensor_metadata = cudf::make_numeric_column(cudf::data_type{cudf::type_id::UINT32},
-                                                   nrows_tensor_token_ids * 3,
-                                                   cudf::mask_state::UNALLOCATED,
-                                                   stream,
-                                                   mr);
-
-  // compute final-tensor, mask, and metadata
-  constexpr int block_size = 256;
-  cudf::detail::grid_1d const grid{
-    static_cast<cudf::size_type>(nrows_tensor_token_ids * max_sequence_length), block_size};
-  kernel_compute_tensor_metadata<<<grid.num_blocks,
-                                   grid.num_threads_per_block,
-                                   0,
-                                   stream.value()>>>(
-    device_token_ids,
-    device_offsets,
-    d_row2tensor,
-    d_row2row_within_tensor,
-    max_sequence_length,
-    nrows_tensor_token_ids,
-    stride,
-    do_truncate,
-    tensor_token_ids->mutable_view().data<uint32_t>(),
-    tensor_attention_mask->mutable_view().data<uint32_t>(),
-    tensor_metadata->mutable_view().data<uint32_t>());
-
-  return tokenizer_result{nrows_tensor_token_ids,
-                          max_sequence_length,
-                          std::move(tensor_token_ids),
-                          std::move(tensor_attention_mask),
-                          std::move(tensor_metadata)};
-}
-
 tokenizer_result tokenized_to_tensor(cudf::lists_column_view const& input,
                                      cudf::size_type max_sequence_length,
                                      cudf::size_type stride,
@@ -402,20 +274,6 @@ tokenizer_result tokenized_to_tensor(cudf::lists_column_view const& input,
 }
 
 }  // namespace detail
-
-tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
-                                  hashed_vocabulary const& vocabulary_table,
-                                  uint32_t max_sequence_length,
-                                  uint32_t stride,
-                                  bool do_lower_case,
-                                  bool do_truncate,
-                                  rmm::cuda_stream_view stream,
-                                  rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::subword_tokenize(
-    strings, vocabulary_table, max_sequence_length, stride, do_lower_case, do_truncate, stream, mr);
-}
 
 tokenizer_result tokenized_to_tensor(cudf::lists_column_view const& input,
                                      cudf::size_type max_sequence_length,

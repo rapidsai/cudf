@@ -1,18 +1,22 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
 
+from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+
 
 cdef extern from "nvtext/edit_distance.hpp" namespace "nvtext" nogil:
 
     cdef unique_ptr[column] edit_distance(
         const column_view & strings,
-        const column_view & targets
+        const column_view & targets,
+        cuda_stream_view stream
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] edit_distance_matrix(
-        const column_view & strings
+        const column_view & strings,
+        cuda_stream_view stream
     ) except +libcudf_exception_handler

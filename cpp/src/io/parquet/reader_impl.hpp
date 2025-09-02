@@ -178,6 +178,11 @@ class reader_impl {
   void setup_next_subpass(read_mode mode);
 
   /**
+   * @brief Copies over the relevant page mask information for the subpass
+   */
+  void set_subpass_page_mask();
+
+  /**
    * @brief Read a chunk of data and return an output table.
    *
    * This function is called internally and expects all preprocessing steps have already been done.
@@ -417,8 +422,11 @@ class reader_impl {
   // _output_buffers associated schema indices
   std::vector<int> _output_column_schemas;
 
-  // Page mask for filtering out data pages
-  cudf::detail::host_vector<bool> _page_mask;
+  // Page mask for filtering out pass data pages
+  cudf::detail::host_vector<bool> _pass_page_mask;
+
+  // Page mask for filtering out subpass data pages
+  cudf::detail::host_vector<bool> _subpass_page_mask;
 
   // _output_buffers associated metadata
   std::unique_ptr<table_metadata> _output_metadata;

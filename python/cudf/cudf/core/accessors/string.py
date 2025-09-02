@@ -535,8 +535,11 @@ class StringMethods(BaseAccessor):
     def _split_by_character(self) -> ListColumn:
         col = self._column.fillna("")  # sanitize nulls
         result_col = col.character_tokenize()
+        if isinstance(result_col.dtype, ListDtype) and (result_col.size > 0):
+            return result_col  # type: ignore
 
         offset_col = col.children[0]
+        child_col = result_col.children[1]
 
         return ListColumn(
             data=None,
@@ -545,7 +548,7 @@ class StringMethods(BaseAccessor):
             mask=col.mask,
             offset=0,
             null_count=0,
-            children=(offset_col, result_col),  # type: ignore[arg-type]
+            children=(offset_col, child_col),  # type: ignore[arg-type]
         )
 
     def extract(
@@ -991,9 +994,6 @@ class StringMethods(BaseAccessor):
                     as_column(repl, dtype=CUDF_STRING_DTYPE),  # type: ignore[arg-type]
                 )
             return self._return_or_inplace(result)
-        # Pandas treats 0 as all
-        if n == 0:
-            n = -1
 
         # If 'pat' is re.Pattern then get the pattern string from it
         if regex and isinstance(pat, re.Pattern):
@@ -1014,6 +1014,7 @@ class StringMethods(BaseAccessor):
             result = self._column.replace_str(
                 pat,  # type: ignore[arg-type]
                 pa_repl,
+                n,
             )
         return self._return_or_inplace(result)
 
@@ -4621,7 +4622,7 @@ class StringMethods(BaseAccessor):
         2    .
         dtype: object
         """
-        result_col = self._column.character_tokenize()
+        result_col = self._column.character_tokenize().children[1]
         if isinstance(self._parent, cudf.Series):
             lengths = self.len().fillna(0)
             index = self._parent.index.repeat(lengths)

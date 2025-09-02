@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -8,7 +8,10 @@ from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport null_order, order, size_type
 
+from rmm.pylibrmm.stream cimport Stream
+
 from .table cimport Table
+from .utils cimport _get_stream
 
 __all__ = ["merge"]
 
@@ -17,6 +20,7 @@ cpdef Table merge (
     list key_cols,
     list column_order,
     list null_precedence,
+    Stream stream=None
 ):
     """Merge a set of sorted tables.
 
@@ -32,6 +36,8 @@ cpdef Table merge (
         Whether each column should be sorted in ascending or descending order.
     null_precedence : List[NullOrder]
         Whether nulls should come before or after non-nulls.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -47,11 +53,14 @@ cpdef Table merge (
         c_tables_to_merge.push_back((<Table?> tbl).view())
 
     cdef unique_ptr[table] c_result
+    stream = _get_stream(stream)
+
     with nogil:
         c_result = cpp_merge.merge(
             c_tables_to_merge,
             c_key_cols,
             c_column_order,
             c_null_precedence,
+            stream.view()
         )
-    return Table.from_libcudf(move(c_result))
+    return Table.from_libcudf(move(c_result), stream)

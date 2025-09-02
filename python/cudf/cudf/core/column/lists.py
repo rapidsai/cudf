@@ -6,6 +6,7 @@ import itertools
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Literal, cast
 
+import numpy as np
 import pandas as pd
 import pyarrow as pa
 
@@ -31,7 +32,6 @@ from cudf.utils.utils import _is_null_host_scalar
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    import numpy as np
     from typing_extensions import Self
 
     from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype
@@ -299,6 +299,11 @@ class ListColumn(ColumnBase):
         """
         Create a strings column from a list column
         """
+        if cudf.get_option("mode.pandas_compatible"):
+            if isinstance(dtype, np.dtype) and dtype.kind == "O":
+                raise TypeError(
+                    f"Cannot cast a list from {self.dtype} to {dtype}"
+                )
         lc = self._transform_leaves(lambda col: col.as_string_column(dtype))
 
         # Separator strings to match the Python format

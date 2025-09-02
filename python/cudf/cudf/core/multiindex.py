@@ -200,7 +200,9 @@ class MultiIndex(Index):
             new_codes.append(new_code)
 
         source_data: dict[Hashable, column.ColumnBase] = {}
-        for i, (code, level) in enumerate(zip(new_codes, new_levels)):
+        for i, (code, level) in enumerate(
+            zip(new_codes, new_levels, strict=True)
+        ):
             if len(code):
                 lo, hi = code.minmax()
                 if lo < -1 or hi > len(level) - 1:
@@ -263,7 +265,7 @@ class MultiIndex(Index):
             # definitely buggy, but we can't disallow non-unique
             # names either...
             self._data = type(self._data)(
-                dict(zip(value, self._columns)),
+                dict(zip(value, self._columns, strict=True)),
                 level_names=self._data.level_names,
                 verify=False,
             )
@@ -549,7 +551,7 @@ class MultiIndex(Index):
             preprocess = self
 
         arrays = []
-        for name, col in zip(self.names, preprocess._columns):
+        for name, col in zip(self.names, preprocess._columns, strict=True):
             try:
                 pd_idx = col.to_pandas(nullable=True)
             except NotImplementedError:
@@ -637,7 +639,7 @@ class MultiIndex(Index):
         self._maybe_materialize_codes_and_levels()
         return [
             idx.rename(name)  # type: ignore[misc]
-            for idx, name in zip(self._levels, self.names)  # type: ignore[arg-type]
+            for idx, name in zip(self._levels, self.names, strict=True)  # type: ignore[arg-type]
         ]
 
     @property  # type: ignore
@@ -966,7 +968,7 @@ class MultiIndex(Index):
                 [
                     self_col.equals(other_col)
                     for self_col, other_col in zip(
-                        self._columns, other._columns
+                        self._columns, other._columns, strict=True
                     )
                 ]
             )
@@ -1116,7 +1118,13 @@ class MultiIndex(Index):
         if len(column_names) != len(set(column_names)):
             raise ValueError("Duplicate column names are not allowed")
         ca = ColumnAccessor(
-            dict(zip(column_names, (col.copy() for col in self._columns))),
+            dict(
+                zip(
+                    column_names,
+                    (col.copy() for col in self._columns),
+                    strict=True,
+                )
+            ),
             verify=False,
         )
         return cudf.DataFrame._from_data(
@@ -1654,7 +1662,9 @@ class MultiIndex(Index):
             new_data.pop(self._data.names[i])
 
         if len(new_data) == 1:
-            return _index_from_data(new_data)
+            return Index._from_column(
+                next(iter(new_data.values())), name=new_names[0]
+            )
         else:
             mi = type(self)._from_data(new_data)
             mi.names = new_names
@@ -1970,9 +1980,9 @@ class MultiIndex(Index):
 
         join_keys = [
             _match_join_keys(lcol, rcol, "inner")
-            for lcol, rcol in zip(target._columns, self._columns)
+            for lcol, rcol in zip(target._columns, self._columns, strict=True)
         ]
-        join_keys = map(list, zip(*join_keys))
+        join_keys = map(list, zip(*join_keys, strict=True))
         with acquire_spill_lock():
             plc_tables = [
                 plc.Table([col.to_pylibcudf(mode="read") for col in cols])
@@ -2079,7 +2089,9 @@ class MultiIndex(Index):
             return [None] * self.nlevels
         return [
             self_name if _is_same_name(self_name, other_name) else None
-            for self_name, other_name in zip(self.names, other.names)
+            for self_name, other_name in zip(
+                self.names, other.names, strict=True
+            )
         ]
 
     @_performance_tracking
@@ -2175,7 +2187,9 @@ class MultiIndex(Index):
             lv if isinstance(lv, int) else level_names.index(lv)
             for lv in levels
         }
-        for i, (name, col) in enumerate(zip(self.names, self._columns)):
+        for i, (name, col) in enumerate(
+            zip(self.names, self._columns, strict=True)
+        ):
             if in_levels and i in level_indices:
                 name = f"level_{i}" if name is None else name
                 yield name, col
@@ -2216,7 +2230,9 @@ class MultiIndex(Index):
     ) -> Generator[tuple[Any, column.ColumnBase], None, None]:
         """Return the columns and column names for .reset_index"""
         if levels is None:
-            for i, (col, name) in enumerate(zip(self._columns, self.names)):
+            for i, (col, name) in enumerate(
+                zip(self._columns, self.names, strict=True)
+            ):
                 yield f"level_{i}" if name is None else name, col
         else:
             yield from self._split_columns_by_levels(levels, in_levels=True)

@@ -1,8 +1,8 @@
 c_compiler_version:
-  - 13
+  - 14
 
 cxx_compiler_version:
-  - 13
+  - 14
 
 cuda_compiler:
   - cuda-nvcc
@@ -26,7 +26,7 @@ flatbuffers_version:
   - "=24.3.25"
 
 nvcomp_version:
-  - "=4.2.0.11"
+  - "=5.0.0.6"
 
 zlib_version:
   - ">=1.2.13"

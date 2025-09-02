@@ -38,6 +38,7 @@ class TemporalFunction(Expr):
         Datetime = auto()
         DatetimeFunction = auto()
         Day = auto()
+        DaysInMonth = auto()
         Duration = auto()
         Hour = auto()
         IsLeapYear = auto()
