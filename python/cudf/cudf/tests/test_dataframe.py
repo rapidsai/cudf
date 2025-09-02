@@ -373,7 +373,7 @@ def test_dataframe_to_string_with_masked_data():
 def test_dataframe_to_string_wide():
     # Test basic
     df = cudf.DataFrame({f"a{i}": [0, 1, 2] for i in range(100)})
-    with pd.option_context("display.max_columns", 0):
+    with pd.option_context("display.max_columns", 16):
         got = df.to_string()
 
     expect = textwrap.dedent(
