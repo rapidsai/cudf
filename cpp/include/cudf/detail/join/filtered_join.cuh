@@ -132,6 +132,7 @@ class filtered_join {
   struct comparator_adapter {
     comparator_adapter(Equal const& d_equal) : _d_equal{d_equal} {}
 
+    /*
     __device__ constexpr auto operator()(
       cuco::pair<hash_value_type, lhs_index_type> const& lhs,
       cuco::pair<hash_value_type, rhs_index_type> const& rhs) const noexcept
@@ -139,6 +140,7 @@ class filtered_join {
       if (lhs.first != rhs.first) { return false; }
       return _d_equal(lhs.second, rhs.second);
     }
+    */
 
     __device__ constexpr auto operator()(
       cuco::pair<hash_value_type, rhs_index_type> const& rhs,

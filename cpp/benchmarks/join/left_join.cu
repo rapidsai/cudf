@@ -42,7 +42,7 @@ void nvbench_left_anti_join(nvbench::state& state,
                                                  cudf::null_equality compare_nulls) {
     cudf::filtered_join obj(right, compare_nulls, reuse_left_table, cudf::get_default_stream());
     for (auto i = 0; i < num_operations - 1; i++) {
-      auto result = obj.anti_join(left);
+      [[maybe_unused]] auto result = obj.anti_join(left);
     }
     return obj.anti_join(left);
   };
@@ -71,7 +71,7 @@ void nvbench_left_semi_join(nvbench::state& state,
                                                  cudf::null_equality compare_nulls) {
     cudf::filtered_join obj(right, compare_nulls, reuse_left_table, cudf::get_default_stream());
     for (auto i = 0; i < num_operations - 1; i++) {
-      auto result = obj.semi_join(left);
+      [[maybe_unused]] auto result = obj.semi_join(left);
     }
     return obj.semi_join(left);
   };

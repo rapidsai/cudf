@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "cub/detail/nvtx.cuh"
 #include "join_common_utils.cuh"
 
 #include <cudf/detail/cuco_helpers.hpp>
