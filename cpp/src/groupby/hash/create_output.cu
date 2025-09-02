@@ -58,7 +58,7 @@ struct sparse_column_creator {
   std::unique_ptr<column> operator()(column_view const& col, aggregation::Kind const& agg) const
   {
     auto const nullable =
-      (agg != aggregation::COUNT_VALID && agg == aggregation::COUNT_ALL) || col.has_nulls();
+      agg != aggregation::COUNT_VALID && agg != aggregation::COUNT_ALL && col.has_nulls();
 
     // Special handling for SUM_WITH_OVERFLOW which needs a struct column.
     if (agg != aggregation::SUM_WITH_OVERFLOW) {
