@@ -178,6 +178,10 @@ void ndsh_q1(nvbench::state& state)
   // Generate the required parquet files in device buffers
   auto const scale_factor = state.get_float64("scale_factor");
   auto const filename     = state.get_string("filename");
+  if (!filename.empty() && scale_factor != 1.0) {
+    state.skip("Only scale_factor=1 supported with filename input");
+    return;
+  }
   std::unordered_map<std::string, cuio_source_sink_pair> sources;
   auto source = [&] {
     if (filename.empty()) {
