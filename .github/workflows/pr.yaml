@@ -38,7 +38,7 @@ jobs:
       - devcontainer
       - unit-tests-cudf-pandas
       - pandas-tests
-      - pandas-tests-diff
+      # - pandas-tests-diff
       - narwhals-tests
       - telemetry-setup
       - third-party-integration-tests-cudf-pandas
@@ -371,14 +371,14 @@ jobs:
       script: ci/cudf_pandas_scripts/pandas-tests/run.sh pr
       file_to_upload: ./artifacts/pr-results.json
       artifact-name: pr-results.json
-  pandas-tests-diff:
-    # diff the results of running the Pandas unit tests and publish a job summary
-    needs: pandas-tests
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@cuda13.0
-    with:
-      node_type: "cpu4"
-      build_type: pull-request
-      script: "ci/cudf_pandas_scripts/pandas-tests/diff.sh"
+  # pandas-tests-diff:
+  #   # diff the results of running the Pandas unit tests and publish a job summary
+  #   needs: pandas-tests
+  #   uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@cuda13.0
+  #   with:
+  #     node_type: "cpu4"
+  #     build_type: pull-request
+  #     script: "ci/cudf_pandas_scripts/pandas-tests/diff.sh"
   narwhals-tests:
     needs: [conda-python-build, changed-files]
     secrets: inherit
