@@ -413,7 +413,7 @@ class orc_reader_options_builder {
    * @param ignore Boolean value to enable/disable ignoring writer timezone
    * @return this for chaining
    */
-  orc_reader_options_builder& set_ignore_timezone_in_stripe_footer(bool ignore)
+  orc_reader_options_builder& ignore_timezone_in_stripe_footer(bool ignore)
   {
     options._ignore_timezone_in_stripe_footer = ignore;
     return *this;

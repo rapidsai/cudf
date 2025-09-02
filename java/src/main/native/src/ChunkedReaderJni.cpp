@@ -235,7 +235,7 @@ jlong create_chunked_orc_reader(JNIEnv* env,
                              .use_np_dtypes(static_cast<bool>(using_numpy_Types))
                              .timestamp_type(cudf::data_type(static_cast<cudf::type_id>(unit)))
                              .decimal128_columns(n_dec128_col_names.as_cpp_vector())
-                             .set_ignore_timezone_in_stripe_footer(ignoreTimezoneInStripeFooter)
+                             .ignore_timezone_in_stripe_footer(ignoreTimezoneInStripeFooter)
                              .build();
 
     if (output_granularity) {

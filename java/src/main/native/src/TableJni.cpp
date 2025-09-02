@@ -2445,7 +2445,7 @@ Java_ai_rapids_cudf_Table_readORCFromDataSource(JNIEnv* env,
         .use_np_dtypes(static_cast<bool>(usingNumPyTypes))
         .timestamp_type(cudf::data_type(static_cast<cudf::type_id>(unit)))
         .decimal128_columns(n_dec128_col_names.as_cpp_vector())
-        .set_ignore_timezone_in_stripe_footer(ignore_timezone_in_stripe_footer)
+        .ignore_timezone_in_stripe_footer(ignore_timezone_in_stripe_footer)
         .build();
     return convert_table_for_return(env, cudf::io::read_orc(opts).tbl);
   }
@@ -2504,7 +2504,7 @@ Java_ai_rapids_cudf_Table_readORC(JNIEnv* env,
         .use_np_dtypes(static_cast<bool>(usingNumPyTypes))
         .timestamp_type(cudf::data_type(static_cast<cudf::type_id>(unit)))
         .decimal128_columns(n_dec128_col_names.as_cpp_vector())
-        .set_ignore_timezone_in_stripe_footer(ignore_timezone_in_stripe_footer)
+        .ignore_timezone_in_stripe_footer(ignore_timezone_in_stripe_footer)
         .build();
     return convert_table_for_return(env, cudf::io::read_orc(opts).tbl);
   }
