@@ -1264,7 +1264,7 @@ def test_parquet_reader_struct_select_columns_nonexistent_error(data, columns):
     pa.parquet.write_table(table, buff)
 
     with pytest.raises(
-        ValueError, match="Encountered non existent column in selected path"
+        ValueError, match="Encountered non-existent column in selected path"
     ):
         cudf.read_parquet(buff, columns=columns)
 
