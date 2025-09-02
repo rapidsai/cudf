@@ -3173,10 +3173,10 @@ public final class Table implements AutoCloseable {
                                                     NullEquality nullEquality,
                                                     long outputRowCount) {
     long[] gatherMapData = mixedLeftJoinGatherMapsWithCount(
-            leftKeys.getNativeView(), rightKeys.getNativeView(),
-            leftConditional.getNativeView(), rightConditional.getNativeView(),
-            condition.getNativeHandle(),
-            nullEquality == NullEquality.EQUAL,
+        leftKeys.getNativeView(), rightKeys.getNativeView(),
+        leftConditional.getNativeView(), rightConditional.getNativeView(),
+        condition.getNativeHandle(),
+        nullEquality == NullEquality.EQUAL,
         outputRowCount);
     return buildJoinGatherMaps(gatherMapData);
   }
