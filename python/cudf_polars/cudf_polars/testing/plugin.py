@@ -122,6 +122,7 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/lazyframe/test_lazyframe.py::test_round[dtype1-123.55-1-123.6]": "Rounding midpoints is handled incorrectly",
     "tests/unit/lazyframe/test_lazyframe.py::test_cast_frame": "Casting that raises not supported on GPU",
     "tests/unit/lazyframe/test_lazyframe.py::test_lazy_cache_hit": "Debug output on stderr doesn't match",
+    "tests/unit/lazyframe/test_collect_schema.py::test_collect_schema_parametric": "polars returns decimal column with precision=None",
     "tests/unit/operations/aggregation/test_aggregations.py::test_binary_op_agg_context_no_simplify_expr_12423": "groupby-agg of just literals should not produce collect_list",
     "tests/unit/operations/aggregation/test_aggregations.py::test_nan_inf_aggregation": "treatment of nans and nulls together is different in libcudf and polars in groupby-agg context",
     "tests/unit/operations/test_abs.py::test_abs_duration": "Need to raise for unsupported uops on timelike values",
@@ -163,7 +164,6 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/datatypes/test_struct.py::test_struct_agg_all": "Needs nested list[struct] support",
     "tests/unit/constructors/test_structs.py::test_constructor_non_strict_schema_17956": "Needs nested list[struct] support",
     "tests/unit/io/test_delta.py::test_read_delta_arrow_map_type": "Needs nested list[struct] support",
-    "tests/unit/lazyframe/test_collect_schema.py::test_collect_schema_parametric": "https://github.com/pola-rs/polars/issues/23214",
     "tests/unit/datatypes/test_struct.py::test_struct_null_cast": "pylibcudf.Scalar does not support struct scalars",
     "tests/unit/datatypes/test_struct.py::test_struct_outer_nullability_zip_18119": "pylibcudf.Scalar does not support struct scalars",
     "tests/unit/io/test_lazy_parquet.py::test_parquet_schema_arg[True-columns]": "allow_missing_columns argument in read_parquet not translated in IR",
@@ -174,6 +174,8 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/io/test_lazy_parquet.py::test_parquet_schema_arg[False-row_groups]": "allow_missing_columns argument in read_parquet not translated in IR",
     "tests/unit/io/test_lazy_parquet.py::test_parquet_schema_arg[False-prefiltered]": "allow_missing_columns argument in read_parquet not translated in IR",
     "tests/unit/io/test_lazy_parquet.py::test_parquet_schema_arg[False-none]": "allow_missing_columns argument in read_parquet not translated in IR",
+    "tests/unit/datatypes/test_decimal.py::test_decimal_aggregations": "https://github.com/pola-rs/polars/issues/23899",
+    "tests/unit/datatypes/test_decimal.py::test_decimal_arithmetic_schema": "https://github.com/pola-rs/polars/issues/23899",
 }
 
 
@@ -191,6 +193,7 @@ TESTS_TO_SKIP: Mapping[str, str] = {
     # Tests performance difference of CPU engine
     "tests/unit/operations/test_join.py::test_join_where_eager_perf_21145": "Tests performance bug in CPU engine",
     "tests/unit/operations/namespaces/list/test_list.py::test_list_struct_field_perf": "Tests CPU Engine perf",
+    "tests/benchmark/test_with_columns.py::test_with_columns_quadratic_19503": "Tests performance bug in CPU engine",
     # The test may segfault with the legacy streaming engine. We should
     # remove this skip when all polars tests use the new streaming engine.
     "tests/unit/streaming/test_streaming_group_by.py::test_streaming_group_by_literal[1]": "May segfault w/the legacy streaming engine",

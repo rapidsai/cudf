@@ -10,6 +10,43 @@ from cudf.testing import assert_eq
 
 
 @pytest.mark.parametrize(
+    "item, expected",
+    [
+        ["2020-01-01", False],
+        ["2020-01-01T00:00:00+00:00", True],
+        ["2020-01-01T00:00:00-08:00", False],
+        ["2019-12-31T16:00:00-08:00", True],
+    ],
+)
+def test_contains_tz_aware(item, expected):
+    dti = cudf.date_range("2020", periods=2, freq="D").tz_localize("UTC")
+    result = item in dti
+    assert result == expected
+
+
+@pytest.mark.parametrize("tz", ["UTC", None])
+def test_tz_attribute(tz):
+    dti = cudf.date_range("2020", periods=2, freq="D", tz=tz)
+    if tz is None:
+        assert dti.tz is None
+    else:
+        # TODO(pandas3.0-min): Assert zoneinfo.ZoneInfo(tz) == dti.tz
+        assert str(dti.tz) == tz
+
+
+def test_tz_aware_attributes_local():
+    data = [
+        "2008-05-12 13:50:00",
+        "2008-12-12 14:50:35",
+        "2009-05-12 13:50:32",
+    ]
+    dti = cudf.DatetimeIndex(data).tz_localize("UTC").tz_convert("US/Eastern")
+    result = dti.hour
+    expected = cudf.Index([9, 9, 9], dtype="int16")
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
     "field",
     [
         "year",
