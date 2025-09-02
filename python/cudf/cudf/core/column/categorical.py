@@ -761,14 +761,7 @@ class CategoricalColumn(column.ColumnBase):
             len(cats),
             cast(cudf.core.column.numerical.NumericalColumn, codes_col),
         )
-        return CategoricalColumn(
-            data=None,
-            size=codes_col.size,
-            dtype=CategoricalDtype(categories=cats),
-            mask=codes_col.base_mask,
-            offset=codes_col.offset,
-            children=(codes_col,),  # type: ignore[arg-type]
-        )
+        return codes_col._with_type_metadata(CategoricalDtype(categories=cats))  # type: ignore[return-value]
 
     def _with_type_metadata(self: Self, dtype: Dtype) -> Self:
         if isinstance(dtype, CategoricalDtype):
