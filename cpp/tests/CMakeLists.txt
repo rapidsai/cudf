@@ -91,6 +91,7 @@ endfunction()
 
 # No need to install Arrow libs when only the final test executables are shipped.
 set(CUDF_EXCLUDE_ARROW_FROM_ALL ON)
+set(CUDF_ENABLE_ARROW_COMPUTE ON)
 include(../cmake/thirdparty/get_arrow.cmake)
 
 # ##################################################################################################
