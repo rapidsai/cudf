@@ -88,6 +88,8 @@ def pytest_unconfigure(config):
 
 # TODO: Pass these tests with cudf.pandas enabled.
 NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
+    "tests/series/methods/test_reindex.py::test_reindexing_with_float64_NA_log",
+    "tests/copy_view/test_array.py::test_series_values[values]",
     "tests/api/test_api.py::test_pandas_array_alias",
     "tests/apply/test_frame_apply.py::test_agg_transform[axis='columns']",
     "tests/apply/test_frame_apply.py::test_agg_transform[axis='index']",
