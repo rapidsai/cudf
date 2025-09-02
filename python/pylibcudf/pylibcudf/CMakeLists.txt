@@ -21,6 +21,7 @@ set(cython_sources
     concatenate.pyx
     copying.pyx
     datetime.pyx
+    decimal_division.pyx
     experimental.pyx
     expressions.pyx
     filling.pyx
