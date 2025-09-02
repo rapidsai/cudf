@@ -4,12 +4,14 @@
 from __future__ import annotations
 
 import math
+import re
 
 import pytest
 
 import polars as pl
 
 from cudf_polars import Translator
+from cudf_polars.experimental.explain import explain_query
 from cudf_polars.experimental.io import _clear_source_info_cache
 from cudf_polars.experimental.statistics import (
     apply_pkfk_heuristics,
@@ -51,9 +53,9 @@ def test_base_stats_dataframescan(df):
     source_info_x = column_stats["x"].source_info
     source_info_y = column_stats["y"].source_info
     source_info_z = column_stats["z"].source_info
-    table_source_info = source_info_x.table_source_info
-    assert table_source_info is source_info_y.table_source_info
-    assert table_source_info is source_info_z.table_source_info
+    table_source_info = source_info_x.table_source_pairs[0].table_source
+    assert table_source_info is source_info_y.table_source_pairs[0].table_source
+    assert table_source_info is source_info_z.table_source_pairs[0].table_source
     assert source_info_x.row_count.value == row_count
     assert source_info_x.row_count.exact
 
@@ -131,9 +133,9 @@ def test_base_stats_parquet(
     source_info_x = column_stats["x"].source_info
     source_info_y = column_stats["y"].source_info
     source_info_z = column_stats["z"].source_info
-    table_source_info = source_info_x.table_source_info
-    assert table_source_info is source_info_y.table_source_info
-    assert table_source_info is source_info_z.table_source_info
+    table_source_info = source_info_x.table_source_pairs[0].table_source
+    assert table_source_info is source_info_y.table_source_pairs[0].table_source
+    assert table_source_info is source_info_z.table_source_pairs[0].table_source
     if max_footer_samples:
         assert source_info_x.row_count.value == df.height
         assert source_info_x.row_count.exact
@@ -347,11 +349,9 @@ def test_base_stats_union():
     stats = collect_base_stats(ir, ConfigOptions.from_polars_engine(engine))
     column_stats = stats.column_stats[ir]
 
-    # We lose source info after a Union, but we
-    # can set accurate row-count and unique-value
-    # estimates for the current IR in #19392
+    # Source row-count estimate is the sum of the two sources
     source_info_x = column_stats["x"].source_info
-    assert source_info_x.row_count.value is None
+    assert source_info_x.row_count.value == 24
 
 
 def test_base_stats_distinct(df):
@@ -445,3 +445,166 @@ def test_base_stats_join_key_info():
         stats.column_stats[ir]["cust_id"].source_info.implied_unique_count.value
         == implied_unique_count
     )
+
+
+def test_explain_join_then_groupby():
+    """Test joining two tables and performing groupby aggregation on a join key."""
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "scheduler": DEFAULT_SCHEDULER,
+            "shuffle_method": "tasks",
+        },
+    )
+
+    # Create first table - sales data
+    sales = pl.LazyFrame(
+        {
+            "order_id": [1, 2, 3, 4, 5, 6],
+            "customer_id": [101, 102, 101, 103, 102, 101],
+            "amount": [50.0, 75.0, 30.0, 120.0, 85.0, 40.0],
+            "product": ["A", "B", "A", "C", "B", "A"],
+        }
+    )
+
+    # Create second table - customer data
+    customers = pl.LazyFrame(
+        {
+            "customer_id": [101, 102, 103],
+            "customer_name": ["Alice", "Bob", "Charlie"],
+            "region": ["North", "South", "North"],
+        }
+    )
+
+    # Join tables and then group by customer_id (a join key)
+    q_join = sales.join(customers, on="customer_id", how="inner")
+    q_gb = q_join.group_by("customer_id").agg(
+        [
+            pl.col("amount").sum().alias("total_amount"),
+            pl.col("order_id").count().alias("order_count"),
+            pl.col("customer_name").first().alias("name"),
+            pl.col("region").first().alias("region"),
+        ]
+    )
+    q = q_gb.sort("customer_id")
+
+    # Verify the query runs correctly
+    assert_gpu_result_equal(q, engine=engine)
+
+    # Check the query plan
+    repr = explain_query(q, engine, physical=False)
+    join_count = q_join.collect().height
+    gb_count = q_gb.collect().height
+    final_count = q.collect().height
+    assert re.search(rf"^\s*GROUPBY.*row_count=\'~{gb_count}\'\s*$", repr, re.MULTILINE)
+    assert re.search(
+        rf"^\s*JOIN Inner.*row_count=\'~{join_count}\'\s*$", repr, re.MULTILINE
+    )
+    assert re.search(rf"^\s*SORT.*row_count=\'~{final_count}\'\s*$", repr, re.MULTILINE)
+
+
+def test_explain_concat_then_groupby(tmp_path):
+    """Test concatenating two parquet tables and performing groupby aggregation."""
+    _clear_source_info_cache()
+
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "scheduler": DEFAULT_SCHEDULER,
+            "shuffle_method": "tasks",
+        },
+    )
+
+    # Create first table - sales data from 2023
+    sales_2023 = pl.DataFrame(
+        {
+            "order_id": [1, 2, 3],
+            "customer_id": [101, 102, 101],
+            "amount": [50.0, 75.0, 30.0],
+            "year": [2023, 2023, 2023],
+        }
+    )
+
+    # Create second table - sales data from 2024
+    sales_2024 = pl.DataFrame(
+        {
+            "order_id": [4, 5, 6],
+            "customer_id": [103, 103, 104],
+            "amount": [120.0, 85.0, 40.0],
+            "year": [2024, 2024, 2024],
+        }
+    )
+
+    # Create second table - sales data from 2025
+    sales_2025 = pl.DataFrame(
+        {
+            "order_id": [7, 8, 9],
+            "customer_id": [105, 109, 106],
+            "amount": [10.0, 50.0, 100.0],
+            "year": [2025, 2025, 2025],
+        }
+    )
+
+    # Create separate parquet files
+    path_2023 = tmp_path / "sales_2023"
+    path_2024 = tmp_path / "sales_2024"
+    path_2025 = tmp_path / "sales_2025"
+
+    # Make sure we use a large-enough row-group for reasonable unique-count statistics
+    make_partitioned_source(
+        sales_2023, path_2023, fmt="parquet", n_files=1, row_group_size=10
+    )
+    make_partitioned_source(
+        sales_2024, path_2024, fmt="parquet", n_files=1, row_group_size=10
+    )
+    make_partitioned_source(
+        sales_2025, path_2025, fmt="parquet", n_files=1, row_group_size=10
+    )
+
+    # Read parquet files and concatenate them
+    df_2023 = pl.scan_parquet(path_2023)
+    df_2024 = pl.scan_parquet(path_2024)
+    df_2025 = pl.scan_parquet(path_2025)
+    q_concat_1 = pl.concat([df_2023, df_2024])
+
+    def _gb(df):
+        return df.group_by("customer_id").agg(
+            [
+                pl.col("amount").sum().alias("total_amount"),
+                pl.col("order_id").count().alias("order_count"),
+                pl.col("year").min().alias("first_year"),
+                pl.col("year").max().alias("last_year"),
+            ]
+        )
+
+    # Group by customer_id after concatenation
+    q_gb_1 = _gb(q_concat_1)
+    q_gb_2 = _gb(df_2025)
+    q_concat_2 = pl.concat([q_gb_1, q_gb_2])
+    q = q_concat_2.sort("customer_id").head(2)
+
+    # Verify the query runs correctly
+    assert_gpu_result_equal(q, engine=engine)
+
+    # Check the query plan
+    repr = explain_query(q, engine, physical=False)
+    concat_count_1 = q_concat_1.collect().height
+    concat_count_2 = q_concat_2.collect().height
+    gb_count_1 = q_gb_1.collect().height
+    gb_count_2 = q_gb_2.collect().height
+    final_count = q.collect().height
+    assert re.search(
+        rf"^\s*UNION.*row_count=\'~{concat_count_1}\'\s*$", repr, re.MULTILINE
+    )
+    assert re.search(
+        rf"^\s*UNION.*row_count=\'~{concat_count_2}\'\s*$", repr, re.MULTILINE
+    )
+    assert re.search(
+        rf"^\s*GROUPBY.*row_count=\'~{gb_count_1}\'\s*$", repr, re.MULTILINE
+    )
+    assert re.search(
+        rf"^\s*GROUPBY.*row_count=\'~{gb_count_2}\'\s*$", repr, re.MULTILINE
+    )
+    assert re.search(rf"^\s*SORT.*row_count=\'~{final_count}\'\s*$", repr, re.MULTILINE)
