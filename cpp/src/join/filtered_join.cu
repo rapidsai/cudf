@@ -84,6 +84,15 @@ std::pair<rmm::device_buffer, bitmask_type const*> build_row_bitmask(table_view 
   return std::pair(rmm::device_buffer{0, stream}, nullable_columns.front().null_mask());
 }
 
+struct gather_mask {
+  join_kind kind;
+  device_span<bool const> flagged;
+  __device__ bool operator()(size_type idx)
+  {
+    return flagged[idx] == (kind == join_kind::LEFT_SEMI_JOIN);
+  }
+};
+
 }  // namespace
 
 auto filtered_join::compute_bucket_storage_size(cudf::table_view tbl, double load_factor)
@@ -207,15 +216,12 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> filtered_join_with_set::qu
 
     query_set(probe_iter, contains_map.begin());
   }
-  auto gather_map = detail::make_zeroed_device_uvector<size_type>(probe.num_rows(), stream, mr);
-  auto gather_map_end =
-    thrust::copy_if(rmm::exec_policy(stream),
-                    thrust::counting_iterator<size_type>(0),
-                    thrust::counting_iterator<size_type>(probe.num_rows()),
-                    gather_map.begin(),
-                    [kind, d_flagged = contains_map.begin()] __device__(size_type const idx) {
-                      return *(d_flagged + idx) == (kind == join_kind::LEFT_SEMI_JOIN);
-                    });
+  auto gather_map     = detail::make_zeroed_device_uvector<size_type>(probe.num_rows(), stream, mr);
+  auto gather_map_end = thrust::copy_if(rmm::exec_policy(stream),
+                                        thrust::counting_iterator<size_type>(0),
+                                        thrust::counting_iterator<size_type>(probe.num_rows()),
+                                        gather_map.begin(),
+                                        gather_mask{kind, contains_map});
   gather_map.resize(cuda::std::distance(gather_map.begin(), gather_map_end), stream);
   return std::make_unique<rmm::device_uvector<size_type>>(std::move(gather_map));
 }

@@ -163,6 +163,38 @@ class filtered_join {
     }
   };
 
+  /**
+   * @brief Constructor for filtered_join base class
+   *
+   * Initializes the hash table with the build table and prepares it for join operations.
+   *
+   * @param build The table to build the hash table from
+   * @param compare_nulls How null values should be compared
+   * @param load_factor Target load factor for the hash table
+   * @param stream CUDA stream on which to perform operations
+   */
+  filtered_join(cudf::table_view const& build,
+                cudf::null_equality compare_nulls,
+                double load_factor,
+                rmm::cuda_stream_view stream);
+
+  /**
+   * Virtual semi join function overridden in derived classes
+   */
+  virtual std::unique_ptr<rmm::device_uvector<cudf::size_type>> semi_join(
+    cudf::table_view const& probe,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) = 0;
+
+  /**
+   * Virtual anti join function overridden in derived classes
+   */
+  virtual std::unique_ptr<rmm::device_uvector<cudf::size_type>> anti_join(
+    cudf::table_view const& probe,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) = 0;
+
+ protected:
   // Key type used in the hash table
   using key = cuco::pair<hash_value_type, lhs_index_type>;
 
@@ -206,6 +238,17 @@ class filtered_join {
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table>
     _preprocessed_build;  ///< input table preprocssed for row operators
 
+  /**
+   * @brief Populates the hash table with the build table
+   *
+   * @tparam CGSize CUDA cooperative group size
+   * @tparam Ref Reference type for the hash table
+   * @param insert_ref Reference to the hash table for insertion
+   * @param stream CUDA stream on which to perform operations
+   */
+  template <int32_t CGSize, typename Ref>
+  void insert_build_table(Ref const& insert_ref, rmm::cuda_stream_view stream);
+
  private:
   /**
    * @brief Calculates the required storage size for the hash table
@@ -218,49 +261,6 @@ class filtered_join {
    * @return Calculated bucket storage size
    */
   auto compute_bucket_storage_size(cudf::table_view tbl, double load_factor);
-
- public:
-  /**
-   * @brief Constructor for filtered_join base class
-   *
-   * Initializes the hash table with the build table and prepares it for join operations.
-   *
-   * @param build The table to build the hash table from
-   * @param compare_nulls How null values should be compared
-   * @param load_factor Target load factor for the hash table
-   * @param stream CUDA stream on which to perform operations
-   */
-  filtered_join(cudf::table_view const& build,
-                cudf::null_equality compare_nulls,
-                double load_factor,
-                rmm::cuda_stream_view stream);
-
-  /**
-   * @brief Populates the hash table with the build table
-   *
-   * @tparam CGSize CUDA cooperative group size
-   * @tparam Ref Reference type for the hash table
-   * @param insert_ref Reference to the hash table for insertion
-   * @param stream CUDA stream on which to perform operations
-   */
-  template <int32_t CGSize, typename Ref>
-  void insert_build_table(Ref const& insert_ref, rmm::cuda_stream_view stream);
-
-  /**
-   * Virtual semi join function overridden in derived classes
-   */
-  virtual std::unique_ptr<rmm::device_uvector<cudf::size_type>> semi_join(
-    cudf::table_view const& probe,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr) = 0;
-
-  /**
-   * Virtual anti join function overridden in derived classes
-   */
-  virtual std::unique_ptr<rmm::device_uvector<cudf::size_type>> anti_join(
-    cudf::table_view const& probe,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr) = 0;
 };
 
 /**
@@ -272,20 +272,7 @@ class filtered_join {
  * is to be reused for multiple semi/anti join operations.
  */
 class filtered_join_with_set : public filtered_join {
- public:
-  /**
-   * @brief Constructor for filtered join with set
-   *
-   * @param build The table to build the hash table from
-   * @param compare_nulls How null values should be compared
-   * @param load_factor Target load factor for the hash table
-   * @param stream CUDA stream on which to perform operations
-   */
-  filtered_join_with_set(cudf::table_view const& build,
-                         cudf::null_equality compare_nulls,
-                         double load_factor,
-                         rmm::cuda_stream_view stream);
-
+ private:
   /**
    * @brief Performs either a semi or anti join based on the specified kind
    *
@@ -300,34 +287,6 @@ class filtered_join_with_set : public filtered_join {
     join_kind kind,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr);
-  /**
-   * @brief Implementation of semi join for set
-   *
-   * Returns indices of probe table rows that have matching keys in the build table.
-   *
-   * @param probe The table to probe the hash table with
-   * @param stream CUDA stream on which to perform operations
-   * @param mr Memory resource for allocations
-   * @return Device vector of indices representing the join result
-   */
-  std::unique_ptr<rmm::device_uvector<cudf::size_type>> semi_join(
-    cudf::table_view const& probe,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr) override;
-  /**
-   * @brief Implementation of anti join for set
-   *
-   * Returns indices of probe table rows that do not have matching keys in the build table.
-   *
-   * @param probe The table to probe the hash table with
-   * @param stream CUDA stream on which to perform operations
-   * @param mr Memory resource for allocations
-   * @return Device vector of indices representing the join result
-   */
-  std::unique_ptr<rmm::device_uvector<cudf::size_type>> anti_join(
-    cudf::table_view const& probe,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr) override;
 
   /**
    * @brief Core implementation for querying the hash table
@@ -353,6 +312,50 @@ class filtered_join_with_set : public filtered_join {
     Ref query_ref,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr);
+
+ public:
+  /**
+   * @brief Constructor for filtered join with set
+   *
+   * @param build The table to build the hash table from
+   * @param compare_nulls How null values should be compared
+   * @param load_factor Target load factor for the hash table
+   * @param stream CUDA stream on which to perform operations
+   */
+  filtered_join_with_set(cudf::table_view const& build,
+                         cudf::null_equality compare_nulls,
+                         double load_factor,
+                         rmm::cuda_stream_view stream);
+
+  /**
+   * @brief Implementation of semi join for set
+   *
+   * Returns indices of probe table rows that have matching keys in the build table.
+   *
+   * @param probe The table to probe the hash table with
+   * @param stream CUDA stream on which to perform operations
+   * @param mr Memory resource for allocations
+   * @return Device vector of indices representing the join result
+   */
+  std::unique_ptr<rmm::device_uvector<cudf::size_type>> semi_join(
+    cudf::table_view const& probe,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) override;
+
+  /**
+   * @brief Implementation of anti join for set
+   *
+   * Returns indices of probe table rows that do not have matching keys in the build table.
+   *
+   * @param probe The table to probe the hash table with
+   * @param stream CUDA stream on which to perform operations
+   * @param mr Memory resource for allocations
+   * @return Device vector of indices representing the join result
+   */
+  std::unique_ptr<rmm::device_uvector<cudf::size_type>> anti_join(
+    cudf::table_view const& probe,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) override;
 };
 
 }  // namespace detail
