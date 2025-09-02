@@ -401,7 +401,7 @@ __device__ int update_validity_and_row_indices_nested(
 
       // if this is valid and we're at the leaf, output dst_pos
       if (d_idx == max_depth) {
-        if (is_valid && (target_value_count > first_row)) {
+        if (is_valid) {
           int const dst_pos = value_count + thread_value_count;
           int const src_pos = max_depth_valid_count + thread_valid_count;
 
@@ -527,7 +527,7 @@ __device__ int update_validity_and_row_indices_flat(
     if (t == 0) { ni.null_count += block_null_count; }
 
     // output offset
-    if (is_valid && (target_value_count > first_row)) {
+    if (is_valid) {
       int const dst_pos = value_count + thread_value_count;
       int const src_pos = valid_count + thread_valid_count;
 
@@ -1108,7 +1108,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   // For chunked reads we may not process all of the rows on the page; if not stop early
   int const first_row = s->first_row;
   int const last_row  = first_row + s->num_rows;
-  bool direct_copy    = !should_process_nulls && !has_lists_t;
   while ((s->error == 0) && (processed_count < s->page.num_input_values) &&
          (s->input_row_count <= last_row)) {
     int next_valid_count;
@@ -1143,6 +1142,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
           update_validity_and_row_indices_lists<decode_block_size_t, false, level_t>(
             processed_count, s, sb, nullptr, rep, t);
       } else {
+        // direct copy: no nulls, no lists, no need to update validity or row indices
         processed_count += min(rolling_buf_size, s->page.num_input_values - processed_count);
         int const capped_target_value_count = min(processed_count, last_row);
         if (t == 0) { s->input_row_count = capped_target_value_count; }
@@ -1174,20 +1174,32 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
     }
 
     // decode the values themselves
-    if (direct_copy) {
+    if constexpr (has_lists_t) {
       if constexpr (has_strings_t) {
         string_output_offset =
-          decode_strings<decode_block_size_t, has_lists_t, split_decode_t, true>(
+          decode_strings<decode_block_size_t, has_lists_t, split_decode_t, false>(
             s, sb, valid_count, next_valid_count, t, string_output_offset);
       } else if constexpr (split_decode_t) {
-        decode_fixed_width_split_values<decode_block_size_t, has_lists_t, true>(
+        decode_fixed_width_split_values<decode_block_size_t, has_lists_t, false>(
           s, sb, valid_count, next_valid_count, t);
       } else {
-        decode_fixed_width_values<decode_block_size_t, has_lists_t, true>(
+        decode_fixed_width_values<decode_block_size_t, has_lists_t, false>(
           s, sb, valid_count, next_valid_count, t);
       }
-    } else if constexpr (!has_lists_t) {
-      if (processed_count > first_row) {
+    } else {
+      if (!should_process_nulls) {
+        if constexpr (has_strings_t) {
+          string_output_offset =
+            decode_strings<decode_block_size_t, has_lists_t, split_decode_t, true>(
+              s, sb, valid_count, next_valid_count, t, string_output_offset);
+        } else if constexpr (split_decode_t) {
+          decode_fixed_width_split_values<decode_block_size_t, has_lists_t, true>(
+            s, sb, valid_count, next_valid_count, t);
+        } else {
+          decode_fixed_width_values<decode_block_size_t, has_lists_t, true>(
+            s, sb, valid_count, next_valid_count, t);
+        }
+      } else {
         if constexpr (has_strings_t) {
           string_output_offset =
             decode_strings<decode_block_size_t, has_lists_t, split_decode_t, false>(
@@ -1199,18 +1211,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
           decode_fixed_width_values<decode_block_size_t, has_lists_t, false>(
             s, sb, valid_count, next_valid_count, t);
         }
-      }
-    } else {
-      if constexpr (has_strings_t) {
-        string_output_offset =
-          decode_strings<decode_block_size_t, has_lists_t, split_decode_t, false>(
-            s, sb, valid_count, next_valid_count, t, string_output_offset);
-      } else if constexpr (split_decode_t) {
-        decode_fixed_width_split_values<decode_block_size_t, has_lists_t, false>(
-          s, sb, valid_count, next_valid_count, t);
-      } else {
-        decode_fixed_width_values<decode_block_size_t, has_lists_t, false>(
-          s, sb, valid_count, next_valid_count, t);
       }
     }
     block.sync();
@@ -1237,11 +1237,13 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
     // For large strings, update the initial string buffer offset to be used during large string
     // column construction. Otherwise, convert string sizes to final offsets.
 
-    if (direct_copy) {
-      if (t == 0) {
-        s->nesting_info[s->col.max_nesting_depth - 1].value_count = s->input_row_count;
+    if constexpr (!has_lists_t) {
+      if (!should_process_nulls) {
+        if (t == 0) {
+          s->nesting_info[s->col.max_nesting_depth - 1].value_count = s->input_row_count;
+        }
+        block.sync();
       }
-      block.sync();
     }
 
     if (s->col.is_large_string_col) {
