@@ -503,7 +503,6 @@ class _FastSlowProxy:
     """
 
     _fsproxy_wrapped: Any
-    _parent_proxy_wrapped: Any
 
     def _fsproxy_fast_to_slow(self) -> Any:
         """
@@ -603,7 +602,6 @@ class _FinalProxy(_FastSlowProxy):
                 f"Expected either 'object' or another type in 'PROXY_BASE_CLASSES'"
             )
         proxy._fsproxy_wrapped = value
-        proxy._parent_proxy_wrapped = None
         return proxy
 
     def __reduce__(self):
@@ -626,7 +624,6 @@ class _FinalProxy(_FastSlowProxy):
         with disable_module_accelerator():
             unpickled_wrapped_obj = pickle.loads(state)
         self._fsproxy_wrapped = unpickled_wrapped_obj
-        self._parent_proxy_wrapped = None
 
 
 class _IntermediateProxy(_FastSlowProxy):
@@ -1209,10 +1206,7 @@ def _maybe_wrap_result(result: Any, func: Callable, /, *args, **kwargs) -> Any:
         return result
     elif _is_final_type(result):
         typ = get_final_type_map()[type(result)]
-        res = typ._fsproxy_wrap(result, func)
-        if type(res).__name__ == "ndarray":
-            res._parent_proxy_wrapped = kwargs.get("parent_proxy", None)
-        return res
+        return typ._fsproxy_wrap(result, func)
     elif _is_intermediate_type(result):
         typ = get_intermediate_type_map()[type(result)]
         return typ._fsproxy_wrap(result, method_chain=(func, args, kwargs))

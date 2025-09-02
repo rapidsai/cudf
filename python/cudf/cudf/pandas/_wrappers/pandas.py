@@ -324,34 +324,6 @@ def _Series_dtype(self):
     return _maybe_wrap_result(self._fsproxy_wrapped.dtype, None)
 
 
-def _Series_values(self):
-    # Get the values using the normal fast-slow mechanism
-    result = _fast_slow_function_call(
-        getattr,
-        self,
-        "_values",
-    )[0]
-    # If the result is a proxy object, set up the parent-child relationship
-    if is_proxy_object(result):
-        result._parent_proxy_wrapped = (self, "_values")
-
-    return result
-
-
-def _Series_values_property(self):
-    # Get the values using the normal fast-slow mechanism
-    result = _fast_slow_function_call(
-        getattr,
-        self,
-        "values",
-    )[0]
-    # If the result is a proxy object, set up the parent-child relationship
-    if is_proxy_object(result):
-        result._parent_proxy_wrapped = (self, "values")
-
-    return result
-
-
 Series = make_final_proxy_type(
     "Series",
     cudf.Series,
@@ -374,8 +346,6 @@ Series = make_final_proxy_type(
         "_constructor_expanddim": _FastSlowAttribute("_constructor_expanddim"),
         "_accessors": set(),
         "dtype": property(_Series_dtype),
-        "_values": property(_Series_values),
-        "values": property(_Series_values_property),
     },
 )
 

@@ -10,10 +10,8 @@ import numpy
 from packaging import version
 
 from ..fast_slow_proxy import (
-    _fast_arg,
     _fast_slow_function_call,
     _FastSlowAttribute,
-    _slow_arg,
     is_proxy_object,
     make_final_proxy_type,
     make_intermediate_proxy_type,
@@ -145,74 +143,6 @@ def ndarray__reduce__(self):
     )
 
 
-def ndarray__setitem__(self, key, value):
-    """
-    Custom __setitem__ implementation for ndarray proxy that handles
-    parent-child synchronization when modifying array values.
-    """
-    result, _ = _fast_slow_function_call(
-        lambda obj, k, v: obj.__setitem__(k, v),
-        self,
-        key,
-        value,
-    )
-    parent_result = None
-    # Try to set attribute on fast, fall back to slow
-    try:
-        parent_proxy = self._parent_proxy_wrapped
-        if parent_proxy is None:
-            # No parent, use normal fast-slow mechanism
-            return _fast_slow_function_call(
-                lambda obj, key, value: obj.__setitem__(key, value),
-                self,
-                key,
-                value,
-            )[0]
-        parent_proxy, attr_name = self._parent_proxy_wrapped
-
-        # Try fast path
-        fast_attr = getattr(parent_proxy._fsproxy_fast, attr_name)
-        operation = getattr(fast_attr, "__setitem__")
-        parent_result = operation(_fast_arg(key), _fast_arg(value))
-
-        # If successful, sync to slow
-        try:
-            slow_obj = parent_proxy._fsproxy_slow
-            if hasattr(slow_obj, attr_name):
-                slow_attr = _slow_arg(fast_attr)
-                setattr(slow_obj, attr_name, slow_attr)
-        except Exception:
-            pass  # Continue if sync fails
-
-    except Exception:
-        parent_proxy = self._parent_proxy_wrapped
-        if parent_proxy is None:
-            # No parent, use normal fast-slow mechanism
-            return _fast_slow_function_call(
-                lambda obj, key, value: obj.__setitem__(key, value),
-                self,
-                key,
-                value,
-            )[0]
-        parent_proxy, attr_name = self._parent_proxy_wrapped
-
-        # Fall back to slow path
-        slow_attr = getattr(parent_proxy._fsproxy_slow, attr_name)
-        operation = getattr(slow_attr, "__setitem__")
-        parent_result = operation(_slow_arg(key), _slow_arg(value))  # noqa: F841
-
-        # Try to sync to fast
-        try:
-            fast_obj = parent_proxy._fsproxy_fast
-            if hasattr(fast_obj, attr_name):
-                fast_attr = _fast_arg(slow_attr)
-                setattr(fast_obj, attr_name, fast_attr)
-        except Exception:
-            pass  # Continue if sync fails
-
-    return result
-
-
 ndarray = make_final_proxy_type(
     "ndarray",
     cupy.ndarray,
@@ -238,7 +168,6 @@ ndarray = make_final_proxy_type(
         "_fsproxy_wrap": classmethod(wrap_ndarray),
         "base": _FastSlowAttribute("base", private=True),
         "data": _FastSlowAttribute("data", private=True),
-        "__setitem__": ndarray__setitem__,
     },
 )
 
