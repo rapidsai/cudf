@@ -745,9 +745,9 @@ public final class Table implements AutoCloseable {
                                                        long condition, boolean compareNullsEqual);
 
   private static native long[] mixedLeftJoinGatherMapsWithCount(long leftKeysTable, long rightKeysTable,
-                                                               long leftConditionTable, long rightConditionTable,
-                                                               long condition, boolean compareNullsEqual,
-                                                               long outputRowCount);
+                                                                long leftConditionTable, long rightConditionTable,
+                                                                long condition, boolean compareNullsEqual,
+                                                                long outputRowCount);
 
   private static native long mixedInnerJoinRowCount(long leftKeysTable, long rightKeysTable,
                                                     long leftConditionTable, long rightConditionTable,
