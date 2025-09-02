@@ -851,14 +851,14 @@ jlongArray cond_join_gather_single_map(
 }
 
 template <typename T>
-jlongArray mixed_join_size(JNIEnv* env,
-                           jlong j_left_keys,
-                           jlong j_right_keys,
-                           jlong j_left_condition,
-                           jlong j_right_condition,
-                           jlong j_condition,
-                           jboolean j_nulls_equal,
-                           T join_size_func)
+jlong mixed_join_size(JNIEnv* env,
+                      jlong j_left_keys,
+                      jlong j_right_keys,
+                      jlong j_left_condition,
+                      jlong j_right_condition,
+                      jlong j_condition,
+                      jboolean j_nulls_equal,
+                      T join_size_func)
 {
   JNI_NULL_CHECK(env, j_left_keys, "left keys table is null", 0);
   JNI_NULL_CHECK(env, j_right_keys, "right keys table is null", 0);
@@ -874,18 +874,14 @@ jlongArray mixed_join_size(JNIEnv* env,
     auto const condition = reinterpret_cast<cudf::jni::ast::compiled_expr const*>(j_condition);
     auto const nulls_equal =
       j_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
-    auto join_size = join_size_func(*left_keys,
-                                    *right_keys,
-                                    *left_condition,
-                                    *right_condition,
-                                    condition->get_top_expression(),
-                                    nulls_equal);
-
-    cudf::jni::native_jlongArray result(env, 1);
-    result[0] = static_cast<jlong>(join_size);
-    return result.get_jArray();
+    return join_size_func(*left_keys,
+                          *right_keys,
+                          *left_condition,
+                          *right_condition,
+                          condition->get_top_expression(),
+                          nulls_equal);
   }
-  CATCH_STD(env, NULL);
+  CATCH_STD(env, 0);
 }
 
 template <typename T>
@@ -956,14 +952,6 @@ jlongArray mixed_join_gather_single_map(JNIEnv* env,
                                         nulls_equal));
   }
   CATCH_STD(env, NULL);
-}
-
-std::optional<std::size_t> get_mixed_size_info(JNIEnv* env,
-                                               jlong j_output_row_count,
-                                               jlong j_matches_view)
-{
-  auto const row_count = static_cast<std::size_t>(j_output_row_count);
-  return std::optional<std::size_t>(row_count);
 }
 
 cudf::column_view remove_validity_from_col(cudf::column_view column_view)
@@ -3039,14 +3027,14 @@ Java_ai_rapids_cudf_Table_conditionalLeftJoinGatherMapsWithCount(JNIEnv* env,
                                           });
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_mixedLeftJoinSize(JNIEnv* env,
-                                                                         jclass,
-                                                                         jlong j_left_keys,
-                                                                         jlong j_right_keys,
-                                                                         jlong j_left_condition,
-                                                                         jlong j_right_condition,
-                                                                         jlong j_condition,
-                                                                         jboolean j_nulls_equal)
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_mixedLeftJoinRowCount(JNIEnv* env,
+                                                                        jclass,
+                                                                        jlong j_left_keys,
+                                                                        jlong j_right_keys,
+                                                                        jlong j_left_condition,
+                                                                        jlong j_right_condition,
+                                                                        jlong j_condition,
+                                                                        jboolean j_nulls_equal)
 {
   return cudf::jni::mixed_join_size(
     env,
@@ -3097,18 +3085,16 @@ Java_ai_rapids_cudf_Table_mixedLeftJoinGatherMaps(JNIEnv* env,
 }
 
 JNIEXPORT jlongArray JNICALL
-Java_ai_rapids_cudf_Table_mixedLeftJoinGatherMapsWithSize(JNIEnv* env,
-                                                          jclass,
-                                                          jlong j_left_keys,
-                                                          jlong j_right_keys,
-                                                          jlong j_left_condition,
-                                                          jlong j_right_condition,
-                                                          jlong j_condition,
-                                                          jboolean j_nulls_equal,
-                                                          jlong j_output_row_count,
-                                                          jlong j_matches_view)
+Java_ai_rapids_cudf_Table_mixedLeftJoinGatherMapsWithCount(JNIEnv* env,
+                                                           jclass,
+                                                           jlong j_left_keys,
+                                                           jlong j_right_keys,
+                                                           jlong j_left_condition,
+                                                           jlong j_right_condition,
+                                                           jlong j_condition,
+                                                           jboolean j_nulls_equal,
+                                                           jlong j_output_row_count)
 {
-  auto size_info = cudf::jni::get_mixed_size_info(env, j_output_row_count, j_matches_view);
   return cudf::jni::mixed_join_gather_maps(
     env,
     j_left_keys,
@@ -3117,14 +3103,15 @@ Java_ai_rapids_cudf_Table_mixedLeftJoinGatherMapsWithSize(JNIEnv* env,
     j_right_condition,
     j_condition,
     j_nulls_equal,
-    [&size_info](cudf::table_view const& left_keys,
-                 cudf::table_view const& right_keys,
-                 cudf::table_view const& left_condition,
-                 cudf::table_view const& right_condition,
-                 cudf::ast::expression const& condition,
-                 cudf::null_equality nulls_equal) {
+    [row_count = static_cast<std::size_t>(j_output_row_count)](
+      cudf::table_view const& left_keys,
+      cudf::table_view const& right_keys,
+      cudf::table_view const& left_condition,
+      cudf::table_view const& right_condition,
+      cudf::ast::expression const& condition,
+      cudf::null_equality nulls_equal) {
       return cudf::mixed_left_join(
-        left_keys, right_keys, left_condition, right_condition, condition, nulls_equal, size_info);
+        left_keys, right_keys, left_condition, right_condition, condition, nulls_equal, row_count);
     });
 }
 
@@ -3253,14 +3240,14 @@ Java_ai_rapids_cudf_Table_conditionalInnerJoinGatherMapsWithCount(JNIEnv* env,
                                           });
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_mixedInnerJoinSize(JNIEnv* env,
-                                                                          jclass,
-                                                                          jlong j_left_keys,
-                                                                          jlong j_right_keys,
-                                                                          jlong j_left_condition,
-                                                                          jlong j_right_condition,
-                                                                          jlong j_condition,
-                                                                          jboolean j_nulls_equal)
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_mixedInnerJoinRowCount(JNIEnv* env,
+                                                                         jclass,
+                                                                         jlong j_left_keys,
+                                                                         jlong j_right_keys,
+                                                                         jlong j_left_condition,
+                                                                         jlong j_right_condition,
+                                                                         jlong j_condition,
+                                                                         jboolean j_nulls_equal)
 {
   return cudf::jni::mixed_join_size(
     env,
@@ -3311,18 +3298,16 @@ Java_ai_rapids_cudf_Table_mixedInnerJoinGatherMaps(JNIEnv* env,
 }
 
 JNIEXPORT jlongArray JNICALL
-Java_ai_rapids_cudf_Table_mixedInnerJoinGatherMapsWithSize(JNIEnv* env,
-                                                           jclass,
-                                                           jlong j_left_keys,
-                                                           jlong j_right_keys,
-                                                           jlong j_left_condition,
-                                                           jlong j_right_condition,
-                                                           jlong j_condition,
-                                                           jboolean j_nulls_equal,
-                                                           jlong j_output_row_count,
-                                                           jlong j_matches_view)
+Java_ai_rapids_cudf_Table_mixedInnerJoinGatherMapsWithCount(JNIEnv* env,
+                                                            jclass,
+                                                            jlong j_left_keys,
+                                                            jlong j_right_keys,
+                                                            jlong j_left_condition,
+                                                            jlong j_right_condition,
+                                                            jlong j_condition,
+                                                            jboolean j_nulls_equal,
+                                                            jlong j_output_row_count)
 {
-  auto size_info = cudf::jni::get_mixed_size_info(env, j_output_row_count, j_matches_view);
   return cudf::jni::mixed_join_gather_maps(
     env,
     j_left_keys,
@@ -3331,14 +3316,15 @@ Java_ai_rapids_cudf_Table_mixedInnerJoinGatherMapsWithSize(JNIEnv* env,
     j_right_condition,
     j_condition,
     j_nulls_equal,
-    [&size_info](cudf::table_view const& left_keys,
-                 cudf::table_view const& right_keys,
-                 cudf::table_view const& left_condition,
-                 cudf::table_view const& right_condition,
-                 cudf::ast::expression const& condition,
-                 cudf::null_equality nulls_equal) {
+    [row_count = static_cast<std::size_t>(j_output_row_count)](
+      cudf::table_view const& left_keys,
+      cudf::table_view const& right_keys,
+      cudf::table_view const& left_condition,
+      cudf::table_view const& right_condition,
+      cudf::ast::expression const& condition,
+      cudf::null_equality nulls_equal) {
       return cudf::mixed_inner_join(
-        left_keys, right_keys, left_condition, right_condition, condition, nulls_equal, size_info);
+        left_keys, right_keys, left_condition, right_condition, condition, nulls_equal, row_count);
     });
 }
 
