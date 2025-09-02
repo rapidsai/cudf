@@ -54,7 +54,7 @@ inline bool is_treat_fixed_length_as_string(std::optional<LogicalType> const& lo
 
 }  // namespace
 
-void reader::impl::build_string_dict_indices()
+void reader_impl::build_string_dict_indices()
 {
   CUDF_FUNC_RANGE();
 
@@ -516,7 +516,7 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
   auto& subpass = *pass.subpass;
 
   // figure out which kernels to run
-  subpass.kernel_mask = GetAggregatedDecodeKernelMask(subpass.pages, _stream);
+  subpass.kernel_mask = get_aggregated_decode_kernel_mask(subpass.pages, _stream);
 
   // iterate over all input columns and determine if they contain lists.
   // TODO: we could do this once at the file level instead of every time we get in here. the set of
