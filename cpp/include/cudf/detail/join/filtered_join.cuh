@@ -206,7 +206,7 @@ class filtered_join {
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table>
     _preprocessed_build;  ///< input table preprocssed for row operators
 
- public:
+ private:
   /**
    * @brief Calculates the required storage size for the hash table
    *

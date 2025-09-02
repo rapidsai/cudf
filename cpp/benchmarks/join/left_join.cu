@@ -28,8 +28,10 @@ void nvbench_left_anti_join(nvbench::state& state,
                                                nvbench::enum_type<DataType>>)
 {
   auto const num_operations   = static_cast<cudf::size_type>(state.get_int64("num_operations"));
-  auto const reuse_left_table = state.get_string("reuse_table") == "left" ? true : false;
-  if (reuse_left_table) {
+  auto const reuse_left_table = state.get_string("reuse_table") == "left"
+                                  ? cudf::set_as_build_table::LEFT
+                                  : cudf::set_as_build_table::RIGHT;
+  if (reuse_left_table == cudf::set_as_build_table::LEFT) {
     state.skip("Not yet implemented");
     return;
   }
@@ -55,8 +57,10 @@ void nvbench_left_semi_join(nvbench::state& state,
                                                nvbench::enum_type<DataType>>)
 {
   auto const num_operations   = static_cast<cudf::size_type>(state.get_int64("num_operations"));
-  auto const reuse_left_table = state.get_string("reuse_table") == "left" ? true : false;
-  if (reuse_left_table) {
+  auto const reuse_left_table = state.get_string("reuse_table") == "left"
+                                  ? cudf::set_as_build_table::LEFT
+                                  : cudf::set_as_build_table::RIGHT;
+  if (reuse_left_table == cudf::set_as_build_table::LEFT) {
     state.skip("Not yet implemented");
     return;
   }

@@ -96,7 +96,7 @@ std::unique_ptr<cudf::table> left_semi_join(
        cudf::null_equality compare_nulls,
        rmm::cuda_stream_view stream,
        rmm::device_async_resource_ref mr) {
-      cudf::filtered_join obj(right, compare_nulls, false, stream);
+      cudf::filtered_join obj(right, compare_nulls, cudf::set_as_build_table::RIGHT, stream);
       return obj.semi_join(left, stream, mr);
     },
     left_input,
@@ -119,7 +119,7 @@ std::unique_ptr<cudf::table> left_anti_join(
        cudf::null_equality compare_nulls,
        rmm::cuda_stream_view stream,
        rmm::device_async_resource_ref mr) {
-      cudf::filtered_join obj(right, compare_nulls, false, stream);
+      cudf::filtered_join obj(right, compare_nulls, cudf::set_as_build_table::RIGHT, stream);
       return obj.anti_join(left, stream, mr);
     },
     left_input,

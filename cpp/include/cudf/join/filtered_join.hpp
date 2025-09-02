@@ -43,6 +43,12 @@ class filtered_join;
 }  // namespace detail
 
 /**
+ * @brief Specifies which table to use as the build table in a hash join operation
+ * @see filtered_join
+ */
+enum set_as_build_table { LEFT, RIGHT };
+
+/**
  * @brief Filtered hash join that builds hash table in creation and probes results in subsequent
  * `*_join` member functions
  *
@@ -65,27 +71,34 @@ class filtered_join {
    *
    * @param build The build table
    * @param compare_nulls Controls whether null join-key values should match or not
-   * @param reuse_left_table Boolean indicating if the build table should be reused. If true, then
-   * the build table is considered as the left table, and is reused with multiple right (probe)
-   * tables. If false, then the build table is the right/filter table, it will be applied to
-   * multiple left (probe) tables.
+   * @param reuse_tbl Specifies which table to use as the build table. If LEFT, the build table
+   * is considered as the left table and is reused with multiple right (probe) tables. If RIGHT,
+   * the build table is considered as the right/filter table and will be applied to multiple left
+   * (probe) tables.
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
   filtered_join(cudf::table_view const& build,
                 cudf::null_equality compare_nulls = null_equality::EQUAL,
-                bool reuse_left_table             = false,
+                set_as_build_table reuse_tbl      = set_as_build_table::RIGHT,
                 rmm::cuda_stream_view stream      = cudf::get_default_stream());
 
   /**
-   * @copydoc filtered_join(cudf::table_view const&, null_equality, bool, rmm::cuda_stream_view)
+   * @brief Constructs a filtered hash join object for subsequent probe calls
    *
+   * @param build The build table
+   * @param compare_nulls Controls whether null join-key values should match or not
+   * @param reuse_tbl Specifies which table to use as the build table. If LEFT, the build table
+   * is considered as the left table and is reused with multiple right (probe) tables. If RIGHT,
+   * the build table is considered as the right/filter table and will be applied to multiple left
+   * (probe) tables.
    * @param load_factor The desired ratio of filled slots to total slots in the hash table, must be
    * in range (0,1]. For example, 0.5 indicates a target of 50% occupancy. Note that the actual
    * occupancy achieved may be slightly lower than the specified value.
+   * @param stream CUDA stream used for device memory operations and kernel launches
    */
   filtered_join(cudf::table_view const& build,
                 null_equality compare_nulls  = null_equality::EQUAL,
-                bool reuse_left_table        = false,
+                set_as_build_table reuse_tbl = set_as_build_table::RIGHT,
                 double load_factor           = 0.5,
                 rmm::cuda_stream_view stream = cudf::get_default_stream());
 
@@ -144,7 +157,7 @@ class filtered_join {
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
  private:
-  bool const _reuse_left_table;
+  set_as_build_table _reuse_tbl;
   std::unique_ptr<cudf::detail::filtered_join> _impl;  ///< Filtered hash join implementation
 };
 

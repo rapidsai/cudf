@@ -367,10 +367,10 @@ filtered_join::~filtered_join() = default;
 
 filtered_join::filtered_join(cudf::table_view const& build,
                              null_equality compare_nulls,
-                             bool reuse_left_table,
+                             set_as_build_table reuse_tbl,
                              double load_factor,
                              rmm::cuda_stream_view stream)
-  : _reuse_left_table{false}
+  : _reuse_tbl{reuse_tbl}
 {
   _impl = std::make_unique<cudf::detail::filtered_join_with_set>(
     build, compare_nulls, load_factor, stream);
@@ -378,10 +378,9 @@ filtered_join::filtered_join(cudf::table_view const& build,
 
 filtered_join::filtered_join(cudf::table_view const& build,
                              null_equality compare_nulls,
-                             bool reuse_left_table,
+                             set_as_build_table reuse_tbl,
                              rmm::cuda_stream_view stream)
-  : filtered_join(
-      build, compare_nulls, reuse_left_table, cudf::detail::CUCO_DESIRED_LOAD_FACTOR, stream)
+  : filtered_join(build, compare_nulls, reuse_tbl, cudf::detail::CUCO_DESIRED_LOAD_FACTOR, stream)
 {
 }
 
