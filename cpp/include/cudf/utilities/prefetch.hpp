@@ -87,6 +87,9 @@ void prefetch(rmm::device_uvector<T> const& v,
 
 /**
  * @brief Enable prefetching.
+ *
+ * Prefetching of managed memory in cudf currently always synchronizes on the
+ * default stream and is not compatible with multi-stream applications.
  */
 void enable() noexcept;
 
