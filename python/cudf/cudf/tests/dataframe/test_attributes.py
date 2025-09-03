@@ -180,3 +180,20 @@ def test_ndim():
     pdf = pd.DataFrame({"x": range(5), "y": range(5, 10)})
     gdf = cudf.DataFrame.from_pandas(pdf)
     assert pdf.ndim == gdf.ndim
+
+
+@pytest.mark.parametrize(
+    "index",
+    [
+        ["a", "b", "c", "d", "e"],
+        np.array(["a", "b", "c", "d", "e"]),
+        pd.Index(["a", "b", "c", "d", "e"], name="name"),
+    ],
+)
+def test_string_index(index):
+    rng = np.random.default_rng(seed=0)
+    pdf = pd.DataFrame(rng.random(size=(5, 5)))
+    gdf = cudf.DataFrame.from_pandas(pdf)
+    pdf.index = index
+    gdf.index = index
+    assert_eq(pdf, gdf)

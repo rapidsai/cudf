@@ -1361,6 +1361,34 @@ def test_timezone_pyarrow_array():
     assert_eq(result, expected)
 
 
+def test_string_ingest(one_dimensional_array_types):
+    expect = ["a", "a", "b", "c", "a"]
+    data = one_dimensional_array_types(expect)
+    got = cudf.Series(data)
+    assert got.dtype == np.dtype("object")
+    assert len(got) == 5
+    for idx, val in enumerate(expect):
+        assert expect[idx] == got[idx]
+
+
+def test_decimal_invalid_precision():
+    with pytest.raises(pa.ArrowInvalid):
+        cudf.Series([10, 20, 30], dtype=cudf.Decimal64Dtype(2, 2))
+
+    with pytest.raises(pa.ArrowInvalid):
+        cudf.Series([decimal.Decimal("300")], dtype=cudf.Decimal64Dtype(2, 1))
+
+
+@pytest.mark.parametrize(
+    "input_obj", [[decimal.Decimal(1), cudf.NA, decimal.Decimal(3)]]
+)
+def test_series_construction_decimals_with_nulls(input_obj):
+    expect = pa.array(input_obj, from_pandas=True)
+    got = cudf.Series(input_obj).to_arrow()
+
+    assert expect.equals(got)
+
+
 @pytest.mark.parametrize(
     "klass", ["Series", "DatetimeIndex", "Index", "CategoricalIndex"]
 )
