@@ -1,11 +1,11 @@
-# Copyright (c) 2022-2024, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 from libcpp cimport bool
 from libcpp.string cimport string
 from pylibcudf.exception_handler cimport libcudf_exception_handler
 
 
 cdef extern from "cudf/utilities/prefetch.hpp" \
-        namespace "cudf::experimental::prefetch" nogil:
+        namespace "cudf::prefetch" nogil:
     # Not technically the right signature, but it's good enough to let Cython
     # generate valid C++ code. It just means we'll be copying a host string
     # extra, but that's OK. If we care we could generate string_view bindings,
