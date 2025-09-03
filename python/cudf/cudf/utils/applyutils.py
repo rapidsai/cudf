@@ -160,7 +160,7 @@ class ApplyKernelCompilerBase:
             }
         # Allocate output columns
         outputs = {
-            k: cuda.as_cuda_array(cp.empty(len(df), dtype=np.dtype(dt)))
+            k: cuda.device_array(len(df), dtype=np.dtype(dt))
             for k, dt in self.outcols.items()
         }
 
