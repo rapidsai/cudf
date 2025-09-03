@@ -1279,11 +1279,14 @@ class StringColumn(ColumnBase):
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
     @acquire_spill_lock()
-    def replace_str(self, pattern: str, replacement: pa.Scalar) -> Self:
+    def replace_str(
+        self, pattern: str, replacement: pa.Scalar, max_replace_count: int = -1
+    ) -> Self:
         plc_result = plc.strings.replace.replace(
             self.to_pylibcudf(mode="read"),
             pa_scalar_to_plc_scalar(pa.scalar(pattern)),
             pa_scalar_to_plc_scalar(replacement),
+            max_replace_count,
         )
         return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
 
