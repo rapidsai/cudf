@@ -34,17 +34,43 @@ def df():
     )
 
 
-def test_base_stats_dataframescan(df):
-    row_count = df.height
-    q = pl.LazyFrame(df)
-    engine = pl.GPUEngine(
+@pytest.fixture(scope="module")
+def engine():
+    return pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
         executor_options={
-            "max_rows_per_partition": 1_000,
             "scheduler": DEFAULT_SCHEDULER,
+            "shuffle_method": "tasks",
+            "target_partition_size": 10_000,
+            "max_rows_per_partition": 1_000,
         },
     )
+
+
+def make_lazy_frame(frame, tmp_path, kind, n_files=1, n_rows=None):
+    """Returns a pl.LazyFrame from a pl.DataFrame."""
+    _clear_source_info_cache()
+
+    if kind == "parquet":
+        make_partitioned_source(
+            frame, tmp_path, fmt="parquet", n_files=n_files, row_group_size=10
+        )
+        return pl.scan_parquet(tmp_path, n_rows=n_rows)
+    elif kind == "csv":
+        make_partitioned_source(frame, tmp_path, fmt="csv", n_files=n_files)
+        return pl.scan_csv(tmp_path, n_rows=n_rows)
+    elif kind == "frame":
+        if n_rows is not None:
+            frame = frame.slice(0, n_rows)
+        return frame.lazy()
+    else:
+        raise ValueError(f"Unsupported kind: {kind}")
+
+
+def test_base_stats_dataframescan(df, engine):
+    row_count = df.height
+    q = pl.LazyFrame(df)
     ir = Translator(q._ldf.visit(), engine).translate_ir()
     stats = collect_base_stats(ir, ConfigOptions.from_polars_engine(engine))
     column_stats = stats.column_stats[ir]
@@ -184,17 +210,8 @@ def test_base_stats_parquet(
         assert set(table_source_info._unique_stats) == {"x", "y", "z"}
 
 
-def test_base_stats_csv(tmp_path, df):
-    make_partitioned_source(df, tmp_path, "csv", n_files=3)
-    q = pl.scan_csv(tmp_path)
-    engine = pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "target_partition_size": 10_000,
-            "scheduler": DEFAULT_SCHEDULER,
-        },
-    )
+def test_base_stats_csv(engine, tmp_path, df):
+    q = make_lazy_frame(df, tmp_path, "csv", n_files=3)
     ir = Translator(q._ldf.visit(), engine).translate_ir()
     stats = collect_base_stats(ir, ConfigOptions.from_polars_engine(engine))
     column_stats = stats.column_stats[ir]
@@ -275,15 +292,7 @@ def test_base_stats_parquet_groupby(
 
 
 @pytest.mark.parametrize("how", ["inner", "left", "right"])
-def test_base_stats_join(how):
-    engine = pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "scheduler": DEFAULT_SCHEDULER,
-            "shuffle_method": "tasks",
-        },
-    )
+def test_base_stats_join(how, engine):
     left = pl.LazyFrame(
         {
             "x": range(15),
@@ -320,15 +329,7 @@ def test_base_stats_join(how):
         assert ir_column_stats["z"].source_info.row_count.value == right_count
 
 
-def test_base_stats_union():
-    engine = pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "scheduler": DEFAULT_SCHEDULER,
-            "shuffle_method": "tasks",
-        },
-    )
+def test_base_stats_union(engine):
     left = pl.LazyFrame(
         {
             "x": range(15),
@@ -354,16 +355,8 @@ def test_base_stats_union():
     assert source_info_x.row_count.value == 24
 
 
-def test_base_stats_distinct(df):
+def test_base_stats_distinct(engine, df):
     row_count = df.height
-    engine = pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "scheduler": DEFAULT_SCHEDULER,
-            "shuffle_method": "tasks",
-        },
-    )
     q = pl.LazyFrame(df).unique(subset=["y"])
     ir = Translator(q._ldf.visit(), engine).translate_ir()
     stats = collect_base_stats(ir, ConfigOptions.from_polars_engine(engine))
@@ -374,16 +367,7 @@ def test_base_stats_distinct(df):
     assert source_info_y.row_count.exact
 
 
-def test_base_stats_join_key_info():
-    engine = pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "scheduler": DEFAULT_SCHEDULER,
-            "shuffle_method": "tasks",
-        },
-    )
-
+def test_base_stats_join_key_info(engine):
     # Customers table (PK: cust_id)
     customers = pl.LazyFrame(
         {
@@ -448,20 +432,9 @@ def test_base_stats_join_key_info():
 
 
 @pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
-@pytest.mark.parametrize("nrows", [None, 3])
-def test_explain_io_then_distinct(tmp_path, kind, nrows):
-    _clear_source_info_cache()
-
-    engine = pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "scheduler": DEFAULT_SCHEDULER,
-            "shuffle_method": "tasks",
-            "target_partition_size": 10_000,
-        },
-    )
-
+@pytest.mark.parametrize("n_rows", [None, 3])
+def test_explain_io_then_distinct(engine, tmp_path, kind, n_rows):
+    # Create simple Distinct + Sort query
     df = pl.DataFrame(
         {
             "order_id": [1, 2, 3, 4, 5, 6],
@@ -470,21 +443,7 @@ def test_explain_io_then_distinct(tmp_path, kind, nrows):
             "year": [2023, 2023, 2023, 2024, 2024, 2024],
         }
     )
-
-    if kind == "parquet":
-        make_partitioned_source(
-            df, tmp_path, fmt="parquet", n_files=2, row_group_size=10
-        )
-        df = pl.scan_parquet(tmp_path, n_rows=nrows)
-    elif kind == "csv":
-        make_partitioned_source(df, tmp_path, fmt="csv", n_files=2)
-        df = pl.scan_csv(tmp_path, n_rows=nrows)
-    elif kind == "frame":
-        df = df.lazy()
-        if nrows is not None:
-            df = df.slice(0, nrows)
-
-    # Group by customer_id after concatenation
+    df = make_lazy_frame(df, tmp_path, kind, n_files=2, n_rows=n_rows)
     q = df.unique(subset=["customer_id"]).sort("order_id")
 
     # Verify the query runs correctly
@@ -493,13 +452,13 @@ def test_explain_io_then_distinct(tmp_path, kind, nrows):
     # Check query plan
     repr = explain_query(q, engine, physical=False)
     if kind == "csv":
-        # CSV will NOT provide row-count statistics unless nrows is provided,
+        # CSV will NOT provide row-count statistics unless n_rows is provided,
         # and it will never provide unique-count statistics.
-        if nrows is None:
+        if n_rows is None:
             assert re.search(r"^\s*SORT.*row_count='unknown'\s*$", repr, re.MULTILINE)
         else:
             assert re.search(
-                rf"^\s*SORT.*row_count=\'~{nrows}\'\s*$", repr, re.MULTILINE
+                rf"^\s*SORT.*row_count=\'~{n_rows}\'\s*$", repr, re.MULTILINE
             )
     else:
         assert re.search(
@@ -507,18 +466,10 @@ def test_explain_io_then_distinct(tmp_path, kind, nrows):
         )
 
 
-def test_explain_join_then_groupby():
-    engine = pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "scheduler": DEFAULT_SCHEDULER,
-            "shuffle_method": "tasks",
-        },
-    )
-
-    # Create first table - sales data
-    sales = pl.LazyFrame(
+@pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
+def test_explain_io_then_join(engine, tmp_path, kind):
+    # Create simple Join + Sort query
+    sales = pl.DataFrame(
         {
             "order_id": [1, 2, 3, 4, 5, 6],
             "customer_id": [101, 102, 101, 103, 102, 101],
@@ -526,17 +477,50 @@ def test_explain_join_then_groupby():
             "product": ["A", "B", "A", "C", "B", "A"],
         }
     )
-
-    # Create second table - customer data
-    customers = pl.LazyFrame(
+    sales = make_lazy_frame(sales, tmp_path / f"sales_{kind}", kind)
+    customers = pl.DataFrame(
         {
             "customer_id": [101, 102, 103],
             "customer_name": ["Alice", "Bob", "Charlie"],
             "region": ["North", "South", "North"],
         }
     )
+    customers = make_lazy_frame(customers, tmp_path / f"customers_{kind}", kind)
+    q = sales.join(customers, on="customer_id", how="inner").sort("customer_id")
 
-    # Join tables and then group by customer_id (a join key)
+    # Verify the query runs correctly
+    assert_gpu_result_equal(q, engine=engine)
+
+    # Check the query plan
+    repr = explain_query(q, engine, physical=False)
+    if kind == "csv":
+        assert re.search(r"^\s*SORT.*row_count='unknown'\s*$", repr, re.MULTILINE)
+    else:
+        assert re.search(
+            rf"^\s*SORT.*row_count=\'~{q.collect().height}\'\s*$", repr, re.MULTILINE
+        )
+
+
+@pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
+def test_explain_io_then_join_then_groupby(engine, tmp_path, kind):
+    # Create simple Join + GroupBy + Sort query
+    sales = pl.DataFrame(
+        {
+            "order_id": [1, 2, 3, 4, 5, 6],
+            "customer_id": [101, 102, 101, 103, 102, 101],
+            "amount": [50.0, 75.0, 30.0, 120.0, 85.0, 40.0],
+            "product": ["A", "B", "A", "C", "B", "A"],
+        }
+    )
+    sales = make_lazy_frame(sales, tmp_path / f"sales_{kind}", kind)
+    customers = pl.DataFrame(
+        {
+            "customer_id": [101, 102, 103],
+            "customer_name": ["Alice", "Bob", "Charlie"],
+            "region": ["North", "South", "North"],
+        }
+    )
+    customers = make_lazy_frame(customers, tmp_path / f"customers_{kind}", kind)
     q_join = sales.join(customers, on="customer_id", how="inner")
     q_gb = q_join.group_by("customer_id").agg(
         [
@@ -553,30 +537,25 @@ def test_explain_join_then_groupby():
 
     # Check the query plan
     repr = explain_query(q, engine, physical=False)
-    join_count = q_join.collect().height
-    gb_count = q_gb.collect().height
-    final_count = q.collect().height
-    assert re.search(rf"^\s*GROUPBY.*row_count='~{gb_count}'\s*$", repr, re.MULTILINE)
-    assert re.search(
-        rf"^\s*JOIN Inner.*row_count='~{join_count}'\s*$", repr, re.MULTILINE
-    )
-    assert re.search(rf"^\s*SORT.*row_count='~{final_count}'\s*$", repr, re.MULTILINE)
+    if kind == "csv":
+        assert re.search(r"^\s*SORT.*row_count='unknown'\s*$", repr, re.MULTILINE)
+    else:
+        join_count = q_join.collect().height
+        gb_count = q_gb.collect().height
+        final_count = q.collect().height
+        assert re.search(
+            rf"^\s*GROUPBY.*row_count=\'~{gb_count}\'\s*$", repr, re.MULTILINE
+        )
+        assert re.search(
+            rf"^\s*JOIN Inner.*row_count=\'~{join_count}\'\s*$", repr, re.MULTILINE
+        )
+        assert re.search(
+            rf"^\s*SORT.*row_count=\'~{final_count}\'\s*$", repr, re.MULTILINE
+        )
 
 
-@pytest.mark.parametrize("use_parquet", [True, False])
-def test_explain_concat_then_groupby(tmp_path, use_parquet):
-    _clear_source_info_cache()
-
-    engine = pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "scheduler": DEFAULT_SCHEDULER,
-            "shuffle_method": "tasks",
-            "target_partition_size": 10_000,
-        },
-    )
-
+@pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
+def test_explain_io_then_concat_then_groupby(engine, tmp_path, kind):
     # Create first table - sales data from 2023
     sales_2023 = pl.DataFrame(
         {
@@ -586,6 +565,7 @@ def test_explain_concat_then_groupby(tmp_path, use_parquet):
             "year": [2023, 2023, 2023],
         }
     )
+    df_2023 = make_lazy_frame(sales_2023, tmp_path / f"sales_2023.{kind}", kind)
 
     # Create second table - sales data from 2024
     sales_2024 = pl.DataFrame(
@@ -596,6 +576,7 @@ def test_explain_concat_then_groupby(tmp_path, use_parquet):
             "year": [2024, 2024, 2024],
         }
     )
+    df_2024 = make_lazy_frame(sales_2024, tmp_path / f"sales_2024.{kind}", kind)
 
     # Create second table - sales data from 2025
     sales_2025 = pl.DataFrame(
@@ -606,33 +587,7 @@ def test_explain_concat_then_groupby(tmp_path, use_parquet):
             "year": [2025, 2025, 2025],
         }
     )
-
-    if use_parquet:
-        # Create separate parquet files
-        path_2023 = tmp_path / "sales_2023"
-        path_2024 = tmp_path / "sales_2024"
-        path_2025 = tmp_path / "sales_2025"
-
-        # Make sure we use a large-enough row-group for reasonable unique-count statistics
-        make_partitioned_source(
-            sales_2023, path_2023, fmt="parquet", n_files=1, row_group_size=10
-        )
-        make_partitioned_source(
-            sales_2024, path_2024, fmt="parquet", n_files=1, row_group_size=10
-        )
-        make_partitioned_source(
-            sales_2025, path_2025, fmt="parquet", n_files=1, row_group_size=10
-        )
-
-        # Read parquet files and concatenate them
-        df_2023 = pl.scan_parquet(path_2023)
-        df_2024 = pl.scan_parquet(path_2024)
-        df_2025 = pl.scan_parquet(path_2025)
-    else:
-        # Convert to lazy frames
-        df_2023 = sales_2023.lazy()
-        df_2024 = sales_2024.lazy()
-        df_2025 = sales_2025.lazy()
+    df_2025 = make_lazy_frame(sales_2025, tmp_path / f"sales_2025.{kind}", kind)
 
     def _gb(df):
         return df.group_by("customer_id").agg(
@@ -658,28 +613,44 @@ def test_explain_concat_then_groupby(tmp_path, use_parquet):
 
     # Check query plan q_1
     repr = explain_query(q_1, engine, physical=False)
-    concat_count_1 = q_concat_1.collect().height
-    gb_count_1 = q_gb_1.collect().height
-    final_count_1 = q_1.collect().height
-    assert re.search(
-        rf"^\s*UNION.*row_count='~{concat_count_1}'\s*$", repr, re.MULTILINE
-    )
-    assert re.search(rf"^\s*GROUPBY.*row_count='~{gb_count_1}'\s*$", repr, re.MULTILINE)
-    assert re.search(rf"^\s*SORT.*row_count='~{final_count_1}'\s*$", repr, re.MULTILINE)
+    if kind == "csv":
+        assert re.search(r"^\s*SORT.*row_count='unknown'\s*$", repr, re.MULTILINE)
+    else:
+        concat_count_1 = q_concat_1.collect().height
+        gb_count_1 = q_gb_1.collect().height
+        final_count_1 = q_1.collect().height
+        assert re.search(
+            rf"^\s*UNION.*row_count=\'~{concat_count_1}\'\s*$", repr, re.MULTILINE
+        )
+        assert re.search(
+            rf"^\s*GROUPBY.*row_count=\'~{gb_count_1}\'\s*$", repr, re.MULTILINE
+        )
+        assert re.search(
+            rf"^\s*SORT.*row_count=\'~{final_count_1}\'\s*$", repr, re.MULTILINE
+        )
 
     # Check query plan q_2
     repr = explain_query(q_2, engine, physical=False)
-    concat_count_1 = q_concat_1.collect().height
-    concat_count_2 = q_concat_2.collect().height
-    gb_count_1 = q_gb_1.collect().height
-    gb_count_2 = q_gb_2.collect().height
-    final_count_2 = q_2.collect().height
-    assert re.search(
-        rf"^\s*UNION.*row_count='~{concat_count_1}'\s*$", repr, re.MULTILINE
-    )
-    assert re.search(
-        rf"^\s*UNION.*row_count='~{concat_count_2}'\s*$", repr, re.MULTILINE
-    )
-    assert re.search(rf"^\s*GROUPBY.*row_count='~{gb_count_1}'\s*$", repr, re.MULTILINE)
-    assert re.search(rf"^\s*GROUPBY.*row_count='~{gb_count_2}'\s*$", repr, re.MULTILINE)
-    assert re.search(rf"^\s*SORT.*row_count='~{final_count_2}'\s*$", repr, re.MULTILINE)
+    if kind == "csv":
+        assert re.search(r"^\s*SORT.*row_count='unknown'\s*$", repr, re.MULTILINE)
+    else:
+        concat_count_1 = q_concat_1.collect().height
+        concat_count_2 = q_concat_2.collect().height
+        gb_count_1 = q_gb_1.collect().height
+        gb_count_2 = q_gb_2.collect().height
+        final_count_2 = q_2.collect().height
+        assert re.search(
+            rf"^\s*UNION.*row_count=\'~{concat_count_1}\'\s*$", repr, re.MULTILINE
+        )
+        assert re.search(
+            rf"^\s*UNION.*row_count=\'~{concat_count_2}\'\s*$", repr, re.MULTILINE
+        )
+        assert re.search(
+            rf"^\s*GROUPBY.*row_count=\'~{gb_count_1}\'\s*$", repr, re.MULTILINE
+        )
+        assert re.search(
+            rf"^\s*GROUPBY.*row_count=\'~{gb_count_2}\'\s*$", repr, re.MULTILINE
+        )
+        assert re.search(
+            rf"^\s*SORT.*row_count=\'~{final_count_2}\'\s*$", repr, re.MULTILINE
+        )

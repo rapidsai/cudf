@@ -571,8 +571,7 @@ def _(ir: Join, stats: StatsCollector, config_options: ConfigOptions) -> None:
     # Apply basic join-cardinality estimation.
     try:
         left_rows, right_rows = child_row_counts(ir, stats)
-    except ValueError:  # pragma: no cover; We always have row-count (for now).
-        assert 0 == 1
+    except ValueError:
         # One or more children have an unknown row-count estimate.
         stats.row_count[ir] = ColumnStat[int](None)
     else:
