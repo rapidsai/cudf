@@ -1154,9 +1154,9 @@ class Rolling(IR):
     )
     index: expr.NamedExpr
     """Column being rolled over."""
-    preceding: pa.Scalar
+    preceding: plc.Scalar
     """Preceding window extent defining start of window."""
-    following: pa.Scalar
+    following: plc.Scalar
     """Following window extent defining end of window."""
     closed_window: ClosedInterval
     """Treatment of window endpoints."""
@@ -1171,8 +1171,8 @@ class Rolling(IR):
         self,
         schema: Schema,
         index: expr.NamedExpr,
-        preceding: pa.Scalar,
-        following: pa.Scalar,
+        preceding: plc.Scalar,
+        following: plc.Scalar,
         closed_window: ClosedInterval,
         keys: Sequence[expr.NamedExpr],
         agg_requests: Sequence[expr.NamedExpr],
@@ -1217,8 +1217,8 @@ class Rolling(IR):
     def do_evaluate(
         cls,
         index: expr.NamedExpr,
-        preceding: pa.Scalar,
-        following: pa.Scalar,
+        preceding: plc.Scalar,
+        following: plc.Scalar,
         closed_window: ClosedInterval,
         keys_in: Sequence[expr.NamedExpr],
         aggs: Sequence[expr.NamedExpr],

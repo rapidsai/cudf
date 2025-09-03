@@ -8,6 +8,7 @@ package_dir=$2
 
 source rapids-configure-sccache
 source rapids-date-string
+source rapids-init-pip
 
 rapids-generate-version > ./VERSION
 rapids-generate-version > ./python/cudf/cudf/VERSION

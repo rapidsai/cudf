@@ -6,7 +6,7 @@ import pylibcudf as plc
 from cudf.core.column import ColumnBase
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.dataframe import DataFrame
-from cudf.core.index import BaseIndex
+from cudf.core.index import Index
 from cudf.core.series import Series
 from cudf.utils import ioutils
 from cudf.utils.dtypes import find_common_type, is_dtype_obj_numeric
@@ -56,7 +56,7 @@ def from_dlpack(pycapsule_obj) -> Series | DataFrame:
 
 
 @ioutils.doc_to_dlpack()
-def to_dlpack(cudf_obj: Series | DataFrame | BaseIndex):
+def to_dlpack(cudf_obj: Series | DataFrame | Index):
     """Converts a cuDF object to a DLPack tensor.
 
     DLPack is an open-source memory tensor structure:
@@ -80,7 +80,7 @@ def to_dlpack(cudf_obj: Series | DataFrame | BaseIndex):
     cuDF to_dlpack() produces column-major (Fortran order) output. If the
     output tensor needs to be row major, transpose the output of this function.
     """
-    if isinstance(cudf_obj, (DataFrame, Series, BaseIndex)):
+    if isinstance(cudf_obj, (DataFrame, Series, Index)):
         gdf = cudf_obj
     elif isinstance(cudf_obj, ColumnBase):
         gdf = Series._from_column(cudf_obj)

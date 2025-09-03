@@ -230,7 +230,7 @@ class UnaryFunction(Expr):
             if column.null_count == 0:
                 return column
             if isinstance(self.children[1], Literal):
-                arg = plc.interop.from_arrow(self.children[1].value)
+                arg = plc.Scalar.from_py(self.children[1].value, self.children[1].dtype)
             else:
                 evaluated = self.children[1].evaluate(df, context=context)
                 arg = evaluated.obj_scalar if evaluated.is_scalar else evaluated.obj

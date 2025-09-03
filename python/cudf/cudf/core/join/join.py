@@ -21,8 +21,8 @@ from cudf.options import get_option
 from cudf.utils.dtypes import SIZE_TYPE_DTYPE
 
 if TYPE_CHECKING:
-    from cudf.core._base_index import BaseIndex
     from cudf.core.dataframe import DataFrame
+    from cudf.core.index import Index
 
 
 class Merge:
@@ -462,7 +462,7 @@ class Merge:
         else:
             multiindex_columns = False
 
-        index: BaseIndex | None
+        index: Index | None
         if self._using_right_index:
             # right_index and left_on
             index = left_result.index

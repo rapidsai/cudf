@@ -727,17 +727,14 @@ std::vector<size_t> reader::impl::calculate_output_num_rows_per_source(size_t co
   // Binary search start_row and end_row in exclusive_sum_num_rows_per_source vector
   auto const start_iter =
     std::upper_bound(partial_sum_nrows_source.cbegin(), partial_sum_nrows_source.cend(), start_row);
-  auto const end_iter =
-    (end_row == _file_itm_data.global_skip_rows + _file_itm_data.global_num_rows)
-      ? partial_sum_nrows_source.cend() - 1
-      : std::upper_bound(start_iter, partial_sum_nrows_source.cend(), end_row);
+  auto const end_iter = std::lower_bound(start_iter, partial_sum_nrows_source.cend(), end_row);
 
   // Compute the array offset index for both iterators
-  auto const start_idx = std::distance(partial_sum_nrows_source.cbegin(), start_iter);
-  auto const end_idx   = std::distance(partial_sum_nrows_source.cbegin(), end_iter);
-
-  CUDF_EXPECTS(start_idx <= end_idx,
-               "Encountered invalid source files indexes for output chunk row bounds");
+  auto const start_idx   = std::distance(partial_sum_nrows_source.cbegin(), start_iter);
+  auto const end_idx     = std::distance(partial_sum_nrows_source.cbegin(), end_iter);
+  auto const num_sources = static_cast<cudf::size_type>(partial_sum_nrows_source.size());
+  CUDF_EXPECTS(start_idx <= end_idx and start_idx < num_sources and end_idx < num_sources,
+               "Encountered out of range output table chunk row bounds");
 
   // If the entire chunk is from the same source file, then the count is simply num_rows
   if (start_idx == end_idx) {

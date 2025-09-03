@@ -7,8 +7,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import pyarrow as pa
-
 import polars as pl
 
 import pylibcudf as plc
@@ -77,9 +75,9 @@ def duration_to_int(
     return -value if negative else value
 
 
-def duration_to_scalar(dtype: plc.DataType, value: int) -> pa.Scalar:
+def duration_to_scalar(dtype: plc.DataType, value: int) -> plc.Scalar:
     """
-    Convert a raw polars duration value to a pyarrow scalar.
+    Convert a raw polars duration value to a pylibcudf scalar.
 
     Parameters
     ----------
@@ -88,22 +86,10 @@ def duration_to_scalar(dtype: plc.DataType, value: int) -> pa.Scalar:
     value
         The raw value as in integer. If `dtype` represents a timestamp
         type, this should be in nanoseconds.
-    months
-        Number of months
-    weeks
-        Number of weeks
-    days
-        Number of days
-    nanoseconds
-        Number of nanoseconds
-    parsed_int
-        Is this actually a representation of an integer, not a duration?
-    negative
-        Is this a negative duration?
 
     Returns
     -------
-    Pyarrow scalar
+    pylibcudf.Scalar
         With datatype matching the provided dtype.
 
     Raises
@@ -113,13 +99,17 @@ def duration_to_scalar(dtype: plc.DataType, value: int) -> pa.Scalar:
     """
     tid = dtype.id()
     if tid == plc.TypeId.INT64:
-        return pa.scalar(value, type=pa.int64())
+        return plc.Scalar.from_py(value, dtype)
     elif tid == plc.TypeId.TIMESTAMP_NANOSECONDS:
-        return pa.scalar(value, type=pa.duration("ns"))
+        return plc.Scalar.from_py(value, plc.DataType(plc.TypeId.DURATION_NANOSECONDS))
     elif tid == plc.TypeId.TIMESTAMP_MICROSECONDS:
-        return pa.scalar(value // 10**3, type=pa.duration("us"))
+        return plc.Scalar.from_py(
+            value // 1000, plc.DataType(plc.TypeId.DURATION_MICROSECONDS)
+        )
     elif tid == plc.TypeId.TIMESTAMP_MILLISECONDS:
-        return pa.scalar(value // 10**6, type=pa.duration("ms"))
+        return plc.Scalar.from_py(
+            value // 1_000_000, plc.DataType(plc.TypeId.DURATION_MILLISECONDS)
+        )
     else:
         raise NotImplementedError("Unsupported data type in rolling window offset")
 
@@ -128,7 +118,7 @@ def offsets_to_windows(
     dtype: plc.DataType,
     offset: Duration,
     period: Duration,
-) -> tuple[pa.Scalar, pa.Scalar]:
+) -> tuple[plc.Scalar, plc.Scalar]:
     """
     Convert polars offset/period pair to preceding/following windows.
 
@@ -155,7 +145,7 @@ def offsets_to_windows(
 
 
 def range_window_bounds(
-    preceding: pa.Scalar, following: pa.Scalar, closed_window: ClosedInterval
+    preceding: plc.Scalar, following: plc.Scalar, closed_window: ClosedInterval
 ) -> tuple[plc.rolling.RangeWindowType, plc.rolling.RangeWindowType]:
     """
     Convert preceding and following scalars to range window specs.
@@ -174,25 +164,23 @@ def range_window_bounds(
     tuple
         Of preceding and following range window types.
     """
-    preceding_s = plc.interop.from_arrow(preceding)
-    following_s = plc.interop.from_arrow(following)
     if closed_window == "both":
         return (
-            plc.rolling.BoundedClosed(preceding_s),
-            plc.rolling.BoundedClosed(following_s),
+            plc.rolling.BoundedClosed(preceding),
+            plc.rolling.BoundedClosed(following),
         )
     elif closed_window == "left":
         return (
-            plc.rolling.BoundedClosed(preceding_s),
-            plc.rolling.BoundedOpen(following_s),
+            plc.rolling.BoundedClosed(preceding),
+            plc.rolling.BoundedOpen(following),
         )
     elif closed_window == "right":
         return (
-            plc.rolling.BoundedOpen(preceding_s),
-            plc.rolling.BoundedClosed(following_s),
+            plc.rolling.BoundedOpen(preceding),
+            plc.rolling.BoundedClosed(following),
         )
     else:
         return (
-            plc.rolling.BoundedOpen(preceding_s),
-            plc.rolling.BoundedOpen(following_s),
+            plc.rolling.BoundedOpen(preceding),
+            plc.rolling.BoundedOpen(following),
         )

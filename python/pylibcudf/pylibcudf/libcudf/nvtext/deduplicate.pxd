@@ -13,10 +13,18 @@ ctypedef unique_ptr[device_uvector[size_type]] suffix_array_type
 
 cdef extern from "nvtext/deduplicate.hpp" namespace "nvtext" nogil:
 
-    cdef unique_ptr[column] substring_duplicates(
+    cdef suffix_array_type build_suffix_array(
         column_view source_strings,
         size_type min_width) except +libcudf_exception_handler
 
-    cdef suffix_array_type build_suffix_array(
+    cdef unique_ptr[column] resolve_duplicates(
         column_view source_strings,
+        column_view indices,
+        size_type min_width) except +libcudf_exception_handler
+
+    cdef unique_ptr[column] resolve_duplicates_pair(
+        column_view input1,
+        column_view indices1,
+        column_view input2,
+        column_view indices2,
         size_type min_width) except +libcudf_exception_handler

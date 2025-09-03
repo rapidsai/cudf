@@ -1,4 +1,5 @@
 # Copyright (c) 2019-2025, NVIDIA CORPORATION.
+import contextlib
 import itertools
 import warnings
 from functools import partial
@@ -22,6 +23,7 @@ import cudf
 from cudf.core.column import CategoricalColumn, as_column
 from cudf.io import write_to_dataset
 from cudf.io.parquet import _apply_post_filters, _normalize_filters
+from cudf.utils import ioutils
 from cudf.utils.dtypes import cudf_dtype_from_pa_type
 
 
@@ -348,8 +350,14 @@ class CudfEngine(ArrowDatasetEngine):
                 storage_options=kwargs.get("storage_options", None),
             )
         else:
-            with fs.open(fs.sep.join([path, filename]), mode="wb") as out_file:
-                if not isinstance(out_file, IOBase):
+            with (
+                contextlib.nullcontext()
+                if ioutils._is_local_filesystem(fs)
+                else fs.open(fs.sep.join([path, filename]), mode="wb")
+            ) as out_file:
+                if out_file is None:
+                    out_file = fs.sep.join([path, filename])
+                elif not isinstance(out_file, IOBase):
                     out_file = BufferedWriter(out_file)
                 md = df.to_parquet(
                     path=out_file,

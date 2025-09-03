@@ -86,7 +86,7 @@ if TYPE_CHECKING:
     from cudf.core.column.categorical import CategoricalColumn
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.strings import StringColumn
-    from cudf.core.index import BaseIndex
+    from cudf.core.index import Index
 
 if PANDAS_GE_210:
     NumpyExtensionArray = pd.arrays.NumpyExtensionArray
@@ -1153,6 +1153,29 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return pa.scalar(None, type=cudf_dtype_to_pa_type(self.dtype))
         return NotImplemented
 
+    def _all_bools_with_nulls(
+        self, other: ColumnBase, bool_fill_value: bool
+    ) -> ColumnBase:
+        # Might be able to remove if we share more of
+        # DatetimeColumn._binaryop & TimedeltaColumn._binaryop
+        if self.has_nulls() and other.has_nulls():
+            result_mask = (
+                self._get_mask_as_column() & other._get_mask_as_column()
+            )
+        elif self.has_nulls():
+            result_mask = self._get_mask_as_column()
+        elif other.has_nulls():
+            result_mask = other._get_mask_as_column()
+        else:
+            result_mask = None
+
+        result_col = as_column(
+            bool_fill_value, dtype=np.dtype(np.bool_), length=len(self)
+        )
+        if result_mask is not None:
+            result_col = result_col.set_mask(result_mask.as_mask())
+        return result_col
+
     def _scatter_by_slice(
         self,
         key: builtins.slice,
@@ -1399,7 +1422,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def nan_count(self) -> int:
         return 0
 
-    def interpolate(self, index: BaseIndex) -> ColumnBase:
+    def interpolate(self, index: Index) -> ColumnBase:
         # figure out where the nans are
         mask = self.isnull()
 
@@ -2657,11 +2680,11 @@ def as_column(
         if dtype is not None:
             return column.astype(dtype)
         return column
-    elif isinstance(arbitrary, (ColumnBase, cudf.Series, cudf.BaseIndex)):
+    elif isinstance(arbitrary, (ColumnBase, cudf.Series, cudf.Index)):
         # Ignoring nan_as_null per the docstring
         if isinstance(arbitrary, cudf.Series):
             arbitrary = arbitrary._column
-        elif isinstance(arbitrary, cudf.BaseIndex):
+        elif isinstance(arbitrary, cudf.Index):
             arbitrary = arbitrary._column
         if dtype is not None:
             return arbitrary.astype(dtype)

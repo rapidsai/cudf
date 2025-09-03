@@ -265,8 +265,7 @@ dependencies:
     common:
       - output_types: conda
         packages:
-        # TODO: Remove numpy pinning once https://github.com/catboost/catboost/issues/2671 is resolved
-          - numpy>=1.23,<2.0.0
+          - numpy
           - scipy
           - scikit-learn
           - catboost

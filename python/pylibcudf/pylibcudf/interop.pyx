@@ -48,6 +48,7 @@ ARROW_TO_PYLIBCUDF_TYPES = {
     pa.float64(): type_id.FLOAT64,
     pa.bool_(): type_id.BOOL8,
     pa.string(): type_id.STRING,
+    pa.large_string(): type_id.STRING,
     pa.duration('s'): type_id.DURATION_SECONDS,
     pa.duration('ms'): type_id.DURATION_MILLISECONDS,
     pa.duration('us'): type_id.DURATION_MICROSECONDS,
@@ -59,10 +60,17 @@ ARROW_TO_PYLIBCUDF_TYPES = {
     pa.date32(): type_id.TIMESTAMP_DAYS,
     pa.null(): type_id.EMPTY,
 }
+# New in pyarrow 18.0.0
+if (string_view := getattr(pa, "string_view", None)) is not None:
+    ARROW_TO_PYLIBCUDF_TYPES[string_view()] = type_id.STRING
+
 
 LIBCUDF_TO_ARROW_TYPES = {
     v: k for k, v in ARROW_TO_PYLIBCUDF_TYPES.items()
 }
+# Because we map 2-3 pyarrow string types to type_id.STRING,
+# just map type_id.STRING to pa.string
+LIBCUDF_TO_ARROW_TYPES[type_id.STRING] = pa.string()
 
 
 @singledispatch

@@ -45,7 +45,6 @@ from cudf.core.column.struct import StructMethods
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.groupby.groupby import SeriesGroupBy, groupby_doc_template
 from cudf.core.index import (
-    BaseIndex,
     DatetimeIndex,
     Index,
     RangeIndex,
@@ -60,7 +59,7 @@ from cudf.core.indexed_frame import (
 )
 from cudf.core.resample import SeriesResampler
 from cudf.core.single_column_frame import SingleColumnFrame
-from cudf.core.udf.scalar_function import _get_scalar_kernel
+from cudf.core.udf.scalar_function import SeriesApplyKernel
 from cudf.utils import docutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
@@ -614,7 +613,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         if dtype is not None:
             dtype = cudf.dtype(dtype)
 
-        if isinstance(data, (pd.Series, pd.Index, BaseIndex, Series)):
+        if isinstance(data, (pd.Series, pd.Index, Index, Series)):
             if copy and not isinstance(data, (pd.Series, pd.Index)):
                 data = data.copy(deep=True)
             name_from_data = data.name
@@ -698,7 +697,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         column: ColumnBase,
         *,
         name: abc.Hashable = None,
-        index: BaseIndex | None = None,
+        index: Index | None = None,
     ) -> Self:
         ca = ColumnAccessor({name: column}, verify=False)
         return cls._from_data(ca, index=index)
@@ -708,7 +707,7 @@ class Series(SingleColumnFrame, IndexedFrame):
     def _from_data(
         cls,
         data: MutableMapping,
-        index: BaseIndex | None = None,
+        index: Index | None = None,
         name: Any = no_default,
     ) -> Series:
         out = super()._from_data(data=data, index=index)
@@ -1487,7 +1486,7 @@ class Series(SingleColumnFrame, IndexedFrame):
     ) -> tuple[
         dict[str | None, tuple[ColumnBase, Any, bool, Any]]
         | NotImplementedType,
-        BaseIndex | None,
+        Index | None,
         dict[str, Any],
     ]:
         # Specialize binops to align indices.
@@ -2637,7 +2636,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         elif by_row != "compat":
             raise NotImplementedError("by_row is currently not supported.")
 
-        result = self._apply(func, _get_scalar_kernel, *args, **kwargs)
+        result = self._apply(func, SeriesApplyKernel, *args, **kwargs)
         result.name = self.name
         return result
 
@@ -3458,7 +3457,7 @@ class Series(SingleColumnFrame, IndexedFrame):
 
     @_performance_tracking
     @docutils.doc_apply(
-        groupby_doc_template.format(
+        groupby_doc_template.format(  # type: ignore[has-type]
             ret=textwrap.dedent(
                 """
                 Returns

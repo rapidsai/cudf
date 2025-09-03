@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 """
 Tests for Streamz Dataframes (SDFs) built on top of cuDF DataFrames.
@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import distributed.gc
 from dask.dataframe.utils import assert_eq
 from distributed import Client
 
@@ -20,6 +21,21 @@ from streamz.dask import DaskStream
 from streamz.dataframe import Aggregation, DataFrame, DataFrames, Series
 
 cudf = pytest.importorskip("cudf")
+
+
+@pytest.fixture(scope="module")
+def disable_distributed_gc_diagnosis():
+    # Fix flaky tests seen in workflows like
+    # https://github.com/rapidsai/cudf/actions/runs/15119048978/job/42498435703?pr=18870#step:9:1722
+    # These manifest as a RecursionError in https://github.com/dask/distributed/blob/a890b85c8f107f7c8664ef96270ef8c25a2b31e4/distributed/gc.py#L201
+    # There isn't a public API for whether it's enabled or disabled. We'll just
+    # assume that it's enabled and disable it for the duration of the tests.
+    distributed.gc.disable_gc_diagnosis()
+    yield
+    distributed.gc.enable_gc_diagnosis()
+
+
+pytestmark = pytest.mark.usefixtures("disable_distributed_gc_diagnosis")
 
 
 @pytest.fixture(scope="module")

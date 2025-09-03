@@ -36,12 +36,14 @@ from pylibcudf.libcudf.wrappers.durations cimport (
     duration_ns,
     duration_us,
     duration_s,
+    duration_D,
 )
 from pylibcudf.libcudf.wrappers.timestamps cimport (
     timestamp_s,
     timestamp_ms,
     timestamp_us,
     timestamp_ns,
+    timestamp_D,
 )
 
 from rmm.pylibrmm.memory_resource cimport get_current_device_resource
@@ -226,6 +228,11 @@ def _(py_val: float, dtype: DataType | None):
 def _(py_val: int, dtype: DataType | None):
     cdef unique_ptr[scalar] c_obj
     cdef DataType c_dtype
+    cdef duration_ns c_duration_ns
+    cdef duration_us c_duration_us
+    cdef duration_ms c_duration_ms
+    cdef duration_s c_duration_s
+    cdef duration_D c_duration_D
     if dtype is None:
         c_dtype = dtype = DataType(type_id.INT64)
     elif is_floating_point(dtype):
@@ -298,6 +305,51 @@ def _(py_val: int, dtype: DataType | None):
         c_obj = make_numeric_scalar(c_dtype.c_obj)
         (<numeric_scalar[uint64_t]*>c_obj.get()).set_value(py_val)
 
+    elif tid == type_id.DURATION_NANOSECONDS:
+        if py_val > numeric_limits[int64_t].max():
+            raise OverflowError(
+                f"{py_val} nanoseconds out of range for INT64 limit."
+            )
+        c_obj = make_duration_scalar(c_dtype.c_obj)
+        c_duration_ns = duration_ns(<int64_t>py_val)
+        (<duration_scalar[duration_ns]*>c_obj.get()).set_value(c_duration_ns)
+
+    elif tid == type_id.DURATION_MICROSECONDS:
+        if py_val > numeric_limits[int64_t].max():
+            raise OverflowError(
+                f"{py_val} microseconds out of range for INT64 limit."
+            )
+        c_obj = make_duration_scalar(c_dtype.c_obj)
+        c_duration_us = duration_us(<int64_t>py_val)
+        (<duration_scalar[duration_us]*>c_obj.get()).set_value(c_duration_us)
+
+    elif tid == type_id.DURATION_MILLISECONDS:
+        if py_val > numeric_limits[int64_t].max():
+            raise OverflowError(
+                f"{py_val} milliseconds out of range for INT64 limit."
+            )
+        c_obj = make_duration_scalar(c_dtype.c_obj)
+        c_duration_ms = duration_ms(<int64_t>py_val)
+        (<duration_scalar[duration_ms]*>c_obj.get()).set_value(c_duration_ms)
+
+    elif tid == type_id.DURATION_SECONDS:
+        if py_val > numeric_limits[int64_t].max():
+            raise OverflowError(
+                f"{py_val} seconds out of range for INT64 limit."
+            )
+        c_obj = make_duration_scalar(c_dtype.c_obj)
+        c_duration_s = duration_s(<int64_t>py_val)
+        (<duration_scalar[duration_s]*>c_obj.get()).set_value(c_duration_s)
+
+    elif tid == type_id.DURATION_DAYS:
+        if py_val > numeric_limits[int32_t].max():
+            raise OverflowError(
+                f"{py_val} days out of range for INT32 limit."
+            )
+        c_obj = make_duration_scalar(c_dtype.c_obj)
+        c_duration_D = duration_D(<int32_t>py_val)
+        (<duration_scalar[duration_D]*>c_obj.get()).set_value(c_duration_D)
+
     else:
         typ = c_dtype.id()
         raise TypeError(f"Cannot convert int to Scalar with dtype {typ.name}")
@@ -340,6 +392,7 @@ def _(py_val: datetime.timedelta, dtype: DataType | None):
     cdef duration_ns c_duration_ns
     cdef duration_ms c_duration_ms
     cdef duration_s c_duration_s
+    cdef duration_D c_duration_D
     if dtype is None:
         dtype = DataType(type_id.DURATION_MICROSECONDS)
 
@@ -382,29 +435,43 @@ def _(py_val: datetime.timedelta, dtype: DataType | None):
         c_obj = make_duration_scalar(c_dtype.c_obj)
         c_duration_s = duration_s(<int64_t>total_seconds)
         (<duration_scalar[duration_s]*>c_obj.get()).set_value(c_duration_s)
+    elif tid == type_id.DURATION_DAYS:
+        total_days = int(total_seconds // 86400)
+        if total_days > numeric_limits[int32_t].max():
+            raise OverflowError(
+                f"{total_days} days out of range for INT32 limit."
+            )
+        c_obj = make_duration_scalar(c_dtype.c_obj)
+        c_duration_D = duration_D(<int32_t>total_days)
+        (<duration_scalar[duration_D]*>c_obj.get()).set_value(c_duration_D)
     else:
         typ = c_dtype.id()
         raise TypeError(f"Cannot convert timedelta to Scalar with dtype {typ.name}")
     return _new_scalar(move(c_obj), dtype)
 
 
-@_from_py.register(datetime.datetime)
-def _(py_val: datetime.datetime, dtype: DataType | None):
+@_from_py.register(datetime.date)
+def _(py_val: datetime.date, dtype: DataType | None):
     cdef unique_ptr[scalar] c_obj
     cdef duration_us c_duration_us
     cdef duration_ns c_duration_ns
     cdef duration_ms c_duration_ms
     cdef duration_s c_duration_s
+    cdef duration_D c_duration_D
     cdef timestamp_s c_timestamp_s
     cdef timestamp_ms c_timestamp_ms
     cdef timestamp_us c_timestamp_us
     cdef timestamp_ns c_timestamp_ns
+    cdef timestamp_D c_timestamp_D
     if dtype is None:
         dtype = DataType(type_id.TIMESTAMP_MICROSECONDS)
 
     cdef DataType c_dtype = dtype
     cdef type_id tid = c_dtype.id()
-    epoch_seconds = py_val.timestamp()
+    if isinstance(py_val, datetime.datetime):
+        epoch_seconds = py_val.timestamp()
+    else:
+        epoch_seconds = (py_val - datetime.date(1970, 1, 1)).total_seconds()
     if tid == type_id.TIMESTAMP_NANOSECONDS:
         epoch_nanoseconds = int(epoch_seconds * 1_000_000_000)
         if epoch_nanoseconds > numeric_limits[int64_t].max():
@@ -445,6 +512,16 @@ def _(py_val: datetime.datetime, dtype: DataType | None):
         c_duration_s = duration_s(<int64_t>epoch_seconds)
         c_timestamp_s = timestamp_s(c_duration_s)
         (<timestamp_scalar[timestamp_s]*>c_obj.get()).set_value(c_timestamp_s)
+    elif tid == type_id.TIMESTAMP_DAYS:
+        epoch_days = int(epoch_seconds // 86400)
+        if epoch_days > numeric_limits[int32_t].max():
+            raise OverflowError(
+                f"{epoch_days} days out of range for INT32 limit."
+            )
+        c_obj = make_timestamp_scalar(c_dtype.c_obj)
+        c_duration_D = duration_D(<int32_t>epoch_days)
+        c_timestamp_D = timestamp_D(c_duration_D)
+        (<timestamp_scalar[timestamp_D]*>c_obj.get()).set_value(c_timestamp_D)
     else:
         typ = c_dtype.id()
         raise TypeError(f"Cannot convert datetime to Scalar with dtype {typ.name}")

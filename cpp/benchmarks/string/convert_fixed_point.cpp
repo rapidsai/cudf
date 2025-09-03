@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,11 +45,11 @@ void bench_convert_fixed_point(nvbench::state& state, nvbench::type_list<DataTyp
 
   if (from_num) {
     state.add_global_memory_reads<int8_t>(num_rows * cudf::size_of(data_type));
-    state.add_global_memory_writes<int8_t>(sv.chars_size(stream));
+    state.add_global_memory_writes<int8_t>(strings_col->alloc_size());
     state.exec(nvbench::exec_tag::sync,
                [&](nvbench::launch& launch) { cudf::strings::to_fixed_point(sv, data_type); });
   } else {
-    state.add_global_memory_reads<int8_t>(sv.chars_size(stream));
+    state.add_global_memory_reads<int8_t>(strings_col->alloc_size());
     state.add_global_memory_writes<int8_t>(num_rows * cudf::size_of(data_type));
     state.exec(nvbench::exec_tag::sync,
                [&](nvbench::launch& launch) { cudf::strings::from_fixed_point(fp_col->view()); });

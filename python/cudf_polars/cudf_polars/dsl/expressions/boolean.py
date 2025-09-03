@@ -10,8 +10,6 @@ from enum import IntEnum, auto
 from functools import partial, reduce
 from typing import TYPE_CHECKING, Any, ClassVar
 
-import pyarrow as pa
-
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
@@ -164,11 +162,9 @@ class BooleanFunction(Expr):
             if is_finite:
                 # NaN is neither finite not infinite
                 to_search.append(float("nan"))
-            haystack = plc.interop.from_arrow(
-                pa.array(
-                    to_search,
-                    type=plc.interop.to_arrow(needles.obj.type()),
-                )
+            haystack = plc.Column.from_iterable_of_py(
+                to_search,
+                dtype=needles.obj.type(),
             )
             result = plc.search.contains(haystack, needles.obj)
             if is_finite:

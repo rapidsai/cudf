@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-import math
+import itertools
 from typing import TYPE_CHECKING, Any
 
 from cudf_polars.dsl.ir import IR
@@ -59,9 +59,11 @@ def _(
         )
 
     key_name = get_key_name(ir)
-    stride = math.ceil(count_in / count_out)
+    n, remainder = divmod(count_in, count_out)
+    # Spread remainder evenly over the partitions.
+    offsets = [0, *itertools.accumulate(n + (i < remainder) for i in range(count_out))]
     child_keys = tuple(partition_info[child].keys(child))
     return {
-        (key_name, i): (_concat, *child_keys[k : k + stride])
-        for i, k in enumerate(range(0, count_in, stride))
+        (key_name, i): (_concat, *child_keys[offsets[i] : offsets[i + 1]])
+        for i in range(count_out)
     }

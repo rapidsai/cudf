@@ -205,10 +205,10 @@ def query_execute(df, expr, callenv):
     ----------
     df : DataFrame
     expr : str
-        boolean expression
+        Boolean expression
     callenv : dict
-        Contains keys 'local_dict', 'locals' and 'globals' which are all dict.
-        They represent the arg, local and global dictionaries of the caller.
+        Contains keys 'local_dict', 'global_dict', 'locals', and 'globals',
+        each of which is a dict representing variable scopes in resolution order.
     """
     # compile
     compiled = query_compile(expr)
@@ -228,7 +228,9 @@ def query_execute(df, expr, callenv):
     kernel = compiled["kernel"]
     # process env args
     envargs = []
+    envargs = []
     envdict = callenv["globals"].copy()
+    envdict.update(callenv["global_dict"])
     envdict.update(callenv["locals"])
     envdict.update(callenv["local_dict"])
     for name in compiled["refnames"]:
