@@ -77,7 +77,7 @@ requirements:
     - packaging
   run_constraints:
     - numpy >=1.23,<3.0a0
-    - pyarrow>=14.0.0,<20.0.0a0
+    - pyarrow>=15.0.0,<22.0.0a0
   ignore_run_exports:
     from_package:
       - cuda-cudart-dev

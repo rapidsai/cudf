@@ -216,3 +216,25 @@ def test_datetime_getitem_na():
 def test_timedelta_getitem_na():
     s = cudf.Series([1, 2, None, 3], dtype="timedelta64[ns]")
     assert s[2] is cudf.NaT
+
+
+def test_string_table_view_creation():
+    data = ["hi"] * 25 + [None] * 2027
+    psr = pd.Series(data)
+    gsr = cudf.Series.from_pandas(psr)
+
+    expect = psr[:1]
+    got = gsr[:1]
+
+    assert_eq(expect, got)
+
+
+def test_string_slice_with_mask():
+    actual = cudf.Series(["hi", "hello", None])
+    expected = actual[0:3]
+
+    assert actual._column.base_size == 3
+    assert_eq(actual._column.base_size, expected._column.base_size)
+    assert_eq(actual._column.null_count, expected._column.null_count)
+
+    assert_eq(actual, expected)
