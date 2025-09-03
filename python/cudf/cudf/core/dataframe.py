@@ -105,6 +105,8 @@ from cudf.utils.dtypes import (
     get_dtype_of_same_kind,
     is_column_like,
     is_dtype_obj_numeric,
+    is_mixed_with_object_dtype,
+    is_pandas_nullable_extension_dtype,
     min_signed_type,
 )
 from cudf.utils.ioutils import (
@@ -130,6 +132,7 @@ _cupy_nan_methods_map = {
     "mean": "nanmean",
     "std": "nanstd",
     "var": "nanvar",
+    "median": "nanmedian",
 }
 
 
@@ -2047,9 +2050,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     def astype(
         self,
         dtype: Dtype | dict[Hashable, Dtype],
-        copy: bool = False,
+        copy: bool | None = None,
         errors: Literal["raise", "ignore"] = "raise",
     ) -> Self:
+        if copy is None:
+            copy = True
         if is_dict_like(dtype):
             if len(set(dtype.keys()) - set(self._column_names)) > 0:  # type: ignore[union-attr]
                 raise KeyError(
@@ -6994,6 +6999,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         prepared, mask, common_dtype = self._prepare_for_rowwise_op(
             method, skipna, numeric_only
         )
+
         for col in prepared._column_names:
             if prepared._data[col].nullable:
                 prepared._data[col] = (
@@ -7012,15 +7018,25 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         if skipna is not False and method in _cupy_nan_methods_map:
             method = _cupy_nan_methods_map[method]
 
+        if len(arr) == 0 and method == "nanmedian":
+            # Workaround for a cupy limitation, cupy
+            # errors for zero dim array in nanmedian
+            # https://github.com/cupy/cupy/issues/9332
+            method = "median"
         result = getattr(cupy, method)(arr, axis=1, **kwargs)
 
         if result.ndim == 1:
             type_coerced_methods = {
                 "count",
                 "min",
+                "nanmin",
                 "max",
+                "nanmax",
                 "sum",
+                "nansum",
                 "prod",
+                "nanprod",
+                "product",
                 "cummin",
                 "cummax",
                 "cumsum",
@@ -7032,6 +7048,45 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 or (common_dtype is not None and common_dtype.kind == "M")
                 else None
             )
+
+            if (
+                cudf.get_option("mode.pandas_compatible")
+                and result_dtype is None
+                and is_pandas_nullable_extension_dtype(common_dtype)
+            ):
+                if (
+                    method
+                    in {
+                        "kurt",
+                        "kurtosis",
+                        "mean",
+                        "nanmean",
+                        "median",
+                        "nanmedian",
+                        "sem",
+                        "skew",
+                        "std",
+                        "nanstd",
+                        "var",
+                        "nanvar",
+                    }
+                    and common_dtype.kind != "f"
+                ):
+                    result_dtype = get_dtype_of_same_kind(
+                        common_dtype, np.dtype(np.float64)
+                    )
+                else:
+                    result_dtype = get_dtype_of_same_kind(
+                        common_dtype, result.dtype
+                    )
+            if (
+                result_dtype is not None
+                and result_dtype.kind == "b"
+                and result.dtype.kind != "b"
+            ):
+                result_dtype = get_dtype_of_same_kind(
+                    common_dtype, result.dtype
+                )
             result = as_column(result, dtype=result_dtype)
             if mask is not None:
                 result = result.set_mask(mask._column.as_mask())
@@ -7633,6 +7688,16 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 col.astype(common_type) if col is not None else all_nulls()
                 for col in columns
             )
+            if (
+                cudf.get_option("mode.pandas_compatible")
+                and common_type == "object"
+            ):
+                for col, hcol in zip(columns, homogenized, strict=True):
+                    if is_mixed_with_object_dtype(col, hcol):
+                        raise TypeError(
+                            "Stacking a DataFrame with mixed object and "
+                            "non-object dtypes is not supported. "
+                        )
 
             with acquire_spill_lock():
                 interleaved_col = ColumnBase.from_pylibcudf(
