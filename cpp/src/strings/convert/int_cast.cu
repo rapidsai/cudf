@@ -31,8 +31,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/std/functional>
+#include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/transform.h>
 #include <thrust/transform_reduce.h>
 
 namespace cudf {
