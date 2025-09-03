@@ -67,18 +67,17 @@ struct cast_to_integer_fn {
   __device__ void operator()(size_type idx)
   {
     if (d_strings.is_null(idx)) { return; }
-    auto const d_str     = d_strings.element<string_view>(idx);
-    auto const max_bytes = std::min(d_str.size_bytes(), output_type_size);
+    auto const d_str = d_strings.element<string_view>(idx);
+    auto const size  = std::min(d_str.size_bytes(), output_type_size);
 
     auto value = uint64_t{0};
     auto data  = reinterpret_cast<u_char const*>(d_str.data());
     if (swap == endian::LITTLE) {
-      for (size_type i = 0; i < max_bytes; i++) {
+      for (size_type i = 0; i < size; i++) {
         value = (value << CHAR_BIT) | data[i];
       }
     } else {
-      auto ptr = reinterpret_cast<u_char*>(&value) + sizeof(value) - max_bytes;
-      memcpy(ptr, d_str.data(), max_bytes);
+      memcpy(&value, data, size);
     }
     type_dispatcher(d_results.type(), dispatch_set_int_fn{}, d_results, idx, value);
   }
@@ -95,26 +94,35 @@ std::unique_ptr<column> cast_to_integer(strings_column_view const& input,
                "Output type must be an integer type",
                cudf::data_type_error);
 
-  // possible shortcut:
-  // input.chars_size() == input.size() * size_of(output_type) and no nulls
-  // and output_type==INT8/UINT8 or swap==BIG
-  // -- make a direct copy of input.data into new fixed-width column
-
-  auto results = make_numeric_column(output_type,
+  auto results   = make_numeric_column(output_type,
                                      input.size(),
                                      cudf::detail::copy_bitmask(input.parent(), stream, mr),
                                      input.null_count(),
                                      stream,
                                      mr);
-
   auto d_strings = column_device_view::create(input.parent(), stream);
   auto d_results = mutable_column_device_view::create(*results, stream);
 
-  auto const type_size = static_cast<size_type>(cudf::size_of(output_type));
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator<size_type>(0),
-                     input.size(),
-                     cast_to_integer_fn{*d_strings, *d_results, swap, type_size});
+  // Shortcut conditions:
+  // - the number of characters equals the number of rows * size_of(output_type)
+  //   (also implies no nulls and not sliced)
+  // - and output_type is INT8 or UINT8
+  //   - or swap is BIG and output_type is UINT16, UINT32 or UINT64
+  // the make a direct copy of input.data into new fixed-width column
+  auto const chars_size = input.chars_size(stream);
+  auto const type_size  = static_cast<int64_t>(size_of(output_type));
+  if ((chars_size == type_size * input.size()) &&
+      ((type_size == 1) || (swap == endian::BIG && cudf::is_unsigned(output_type)))) {
+    auto src = d_strings->head();
+    auto dst = d_results->head();
+    CUDF_CUDA_TRY(cudaMemcpyAsync(dst, src, chars_size, cudaMemcpyDefault, stream.value()));
+  } else {
+    auto const type_size = static_cast<size_type>(cudf::size_of(output_type));
+    thrust::for_each_n(rmm::exec_policy(stream),
+                       thrust::make_counting_iterator<size_type>(0),
+                       input.size(),
+                       cast_to_integer_fn{*d_strings, *d_results, swap, type_size});
+  }
 
   return results;
 }
@@ -179,8 +187,7 @@ struct from_integers_fn {
         output[i] = static_cast<u_char>(value >> ((size - 1 - i) * CHAR_BIT));
       }
     } else {
-      auto ptr = reinterpret_cast<u_char*>(&value) + sizeof(value) - size;
-      memcpy(output, ptr, size);
+      memcpy(output, &value, size);
     }
   };
 };
