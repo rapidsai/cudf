@@ -2522,13 +2522,15 @@ def column_empty(
     dtype : Dtype
         Type of the column.
     """
-    if isinstance(dtype, (StructDtype, ListDtype)):
-        if isinstance(dtype, StructDtype):
+    if (is_struct := isinstance(dtype, StructDtype)) or isinstance(
+        dtype, ListDtype
+    ):
+        if is_struct:
             children = tuple(
                 column_empty(row_count, field_dtype)
                 for field_dtype in dtype.fields.values()
             )
-        elif isinstance(dtype, ListDtype):
+        else:
             children = (
                 as_column(0, length=row_count + 1, dtype=SIZE_TYPE_DTYPE),
                 column_empty(row_count, dtype=dtype.element_type),
