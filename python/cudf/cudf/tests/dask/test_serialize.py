@@ -6,12 +6,12 @@ import pickle
 import msgpack
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 from packaging import version
 
 import cudf
-from cudf.core.column import as_column
-from cudf.testing import _utils as utils, assert_eq
+from cudf.testing import assert_eq
 
 
 @pytest.mark.parametrize(
@@ -230,14 +230,7 @@ def test_serialize_multi_index():
 
 
 def test_serialize_masked_series():
-    nelem = 50
-    rng = np.random.default_rng(seed=0)
-    data = rng.random(nelem)
-    mask = utils.random_bitmask(nelem)
-    bitmask = utils.expand_bits_to_bytes(mask)[:nelem]
-    null_count = utils.count_zero(bitmask)
-    assert null_count >= 0
-    sr = cudf.Series._from_column(as_column(data).set_mask(mask))
+    sr = cudf.Series(pa.array([1, None, 2]))
     outsr = cudf.Series.deserialize(*sr.serialize())
     assert_eq(sr, outsr)
 
