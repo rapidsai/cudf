@@ -519,3 +519,23 @@ def test_empty_series_name():
     gs = cudf.from_pandas(ps)
 
     assert repr(ps) == repr(gs)
+
+
+@pytest.mark.parametrize("item", [0, slice(0, 1)])
+@pytest.mark.parametrize("data", [["a"], ["a", None], [None]])
+def test_string_repr(data, item, request):
+    if data == [None]:
+        request.applymarker(
+            pytest.mark.xfail(
+                reason="Missing value repr should be <NA> instead of None",
+            )
+        )
+    ps = pd.Series(data, dtype="str", name="nice name")
+    gs = cudf.Series(data, dtype="str", name="nice name")
+
+    got_out = gs.iloc[item]
+    expect_out = ps.iloc[item]
+
+    expect = str(expect_out)
+    got = str(got_out)
+    assert expect == got
