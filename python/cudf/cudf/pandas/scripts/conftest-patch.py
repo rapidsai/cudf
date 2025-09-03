@@ -14743,6 +14743,15 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     r"tests/util/test_assert_series_equal.py::test_series_equal_index_dtype[True-s11-s21-MultiIndex level \\[0\\] are different]",
 }
 NODEIDS_THAT_XPASS_WITH_CUDF_PANDAS = {
+    "tests/extension/test_arrow.py::TestArrowArray::test_reduce_series_numeric[uint8-skew-True]",
+    "tests/extension/test_arrow.py::TestArrowArray::test_reduce_series_numeric[uint16-skew-True]",
+    "tests/extension/test_arrow.py::TestArrowArray::test_reduce_series_numeric[uint32-skew-True]",
+    "tests/extension/test_arrow.py::TestArrowArray::test_reduce_series_numeric[uint64-skew-True]",
+    "tests/extension/test_arrow.py::TestArrowArray::test_reduce_series_numeric[int8-skew-True]",
+    "tests/extension/test_arrow.py::TestArrowArray::test_reduce_series_numeric[int16-skew-True]",
+    "tests/extension/test_arrow.py::TestArrowArray::test_reduce_series_numeric[int32-skew-True]",
+    "tests/extension/test_arrow.py::TestArrowArray::test_reduce_series_numeric[int64-skew-True]",
+    "tests/extension/test_arrow.py::TestArrowArray::test_reduce_series_numeric[float-skew-True]",
     "tests/io/json/test_readlines.py::test_readjson_unicode[pyarrow]",
     "tests/series/methods/test_info.py::test_info_memory_usage_deep_pypy",
     "tests/arrays/string_/test_string.py::test_add_2d[pyarrow]",
