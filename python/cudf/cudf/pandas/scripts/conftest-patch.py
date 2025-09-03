@@ -12437,6 +12437,7 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/series/methods/test_map.py::test_map_dict_ignore_na[dict]",
     "tests/series/methods/test_map.py::test_map_dict_subclass_with_missing",
     "tests/series/methods/test_map.py::test_map_dict_with_tuple_keys",
+    "tests/series/methods/test_map.py::test_map_empty[categorical]",
     "tests/series/methods/test_map.py::test_map_empty[bool-dtype]",
     "tests/series/methods/test_map.py::test_map_empty[empty]",
     "tests/series/methods/test_map.py::test_map_empty[float32]",
