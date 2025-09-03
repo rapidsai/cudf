@@ -19,29 +19,23 @@
 
 #include <rmm/cuda_device.hpp>
 
+#include <atomic>
 #include <iostream>
 
 namespace cudf::prefetch {
 
 namespace detail {
 
-prefetch_config& prefetch_config::instance()
+std::atomic_bool& enabled()
 {
-  static prefetch_config instance;
-  return instance;
+  static std::atomic_bool value;
+  return value;
 }
 
-bool prefetch_config::get(std::string_view key)
+std::atomic_bool& debug()
 {
-  std::shared_lock<std::shared_mutex> const lock(config_mtx);
-  auto const it = config_values.find(key.data());
-  return it == config_values.end() ? false : it->second;  // default to not prefetching
-}
-
-void prefetch_config::set(std::string_view key, bool value)
-{
-  std::lock_guard<std::shared_mutex> const lock(config_mtx);
-  config_values[key.data()] = value;
+  static std::atomic_bool value;
+  return value;
 }
 
 cudaError_t prefetch_noexcept(void const* ptr,
@@ -49,21 +43,19 @@ cudaError_t prefetch_noexcept(void const* ptr,
                               rmm::cuda_stream_view stream,
                               rmm::cuda_device_id device_id) noexcept
 {
+  if (!detail::enabled()) { return cudaSuccess; }
+
   // Don't try to prefetch nullptrs or empty data. Sometimes libcudf has column
   // views that use nullptrs with a nonzero size as an optimization.
   if (ptr == nullptr) {
-    if (prefetch_config::instance().debug) {
-      std::cerr << "Skipping prefetch of nullptr" << std::endl;
-    }
+    if (detail::debug()) { std::cerr << "Skipping prefetch of nullptr" << std::endl; }
     return cudaSuccess;
   }
   if (size == 0) {
-    if (prefetch_config::instance().debug) {
-      std::cerr << "Skipping prefetch of size 0" << std::endl;
-    }
+    if (detail::debug()) { std::cerr << "Skipping prefetch of size 0" << std::endl; }
     return cudaSuccess;
   }
-  if (prefetch_config::instance().debug) {
+  if (detail::debug()) {
     std::cerr << "Prefetching " << size << " bytes at location " << ptr << std::endl;
   }
 
@@ -97,15 +89,11 @@ void prefetch(void const* ptr,
 
 }  // namespace detail
 
-void enable_prefetching(std::string_view key)
-{
-  detail::prefetch_config::instance().set(key, true);
-}
+void enable() { detail::enabled() = true; }
 
-void disable_prefetching(std::string_view key)
-{
-  detail::prefetch_config::instance().set(key, false);
-}
+void disable() { detail::enabled() = false; }
 
-void prefetch_debugging(bool enable) { detail::prefetch_config::instance().debug = enable; }
+void enable_debugging() { detail::debug() = true; }
+
+void disable_debugging() { detail::debug() = false; }
 }  // namespace cudf::prefetch

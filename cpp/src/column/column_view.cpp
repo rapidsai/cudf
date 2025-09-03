@@ -37,7 +37,7 @@ namespace {
 template <typename ColumnView>
 void prefetch_col_data(ColumnView& col, void const* data_ptr, std::string_view key) noexcept
 {
-  if (cudf::prefetch::detail::prefetch_config::instance().get(key)) {
+  if (cudf::prefetch::detail::enabled()) {
     if (col.type().id() == cudf::type_id::EMPTY) {
       // Skip prefetching for empty columns
       return;

@@ -20,61 +20,16 @@
 
 #include <rmm/device_uvector.hpp>
 
-#include <map>
-#include <shared_mutex>
-#include <string>
-#include <string_view>
+#include <atomic>
 
 namespace CUDF_EXPORT cudf {
 namespace prefetch {
 
 namespace detail {
 
-/**
- * @brief A singleton class that manages the prefetching configuration.
- */
-class prefetch_config {
- public:
-  prefetch_config& operator=(const prefetch_config&) = delete;
-  prefetch_config(const prefetch_config&)            = delete;
+std::atomic_bool& enabled();
 
-  /**
-   * @brief Get the singleton instance of the prefetching configuration.
-   *
-   * @return The singleton instance of the prefetching configuration.
-   */
-  static prefetch_config& instance();
-
-  /**
-   * @brief Get the value of a configuration key.
-   *
-   * If the key does not exist, a `false` value will be returned.
-   *
-   * @param key The configuration key.
-   * @return The value of the configuration key.
-   */
-  bool get(std::string_view key);
-  /**
-   * @brief Set the value of a configuration key.
-   *
-   * This is a thread-safe operation.
-   *
-   * @param key The configuration key.
-   * @param value The value to set.
-   */
-  void set(std::string_view key, bool value);
-  /**
-   * @brief Enable or disable debug mode.
-   *
-   * In debug mode, the pointers being prefetched are printed to stderr.
-   */
-  bool debug{false};
-
- private:
-  prefetch_config() = default;                //< Private constructor to enforce singleton pattern
-  std::map<std::string, bool> config_values;  //< Map of configuration keys to values
-  std::shared_mutex config_mtx;               //< Mutex for thread-safe config access
-};
+std::atomic_bool& debug();
 
 /**
  * @brief Enable prefetching for a particular structure or algorithm.
@@ -131,27 +86,28 @@ void prefetch(rmm::device_uvector<T> const& v,
 }  // namespace detail
 
 /**
- * @brief Enable prefetching for a particular structure or algorithm.
- *
- * @param key The key to enable prefetching for.
+ * @brief Enable prefetching.
  */
-void enable_prefetching(std::string_view key);
+void enable();
 
 /**
- * @brief Disable prefetching for a particular structure or algorithm.
- *
- * @param key The key to disable prefetching for.
+ * @brief Disable prefetching.
  */
-void disable_prefetching(std::string_view key);
+void disable();
 
 /**
- * @brief Enable or disable debug mode.
+ * @brief Enable debug mode for prefetching.
  *
  * In debug mode, the pointers being prefetched are printed to stderr.
- *
- * @param enable Whether to enable or disable debug mode.
  */
-void prefetch_debugging(bool enable);
+void enable_debugging();
+
+/**
+ * @brief Enable debug mode for prefetching.
+ *
+ * In debug mode, the pointers being prefetched are printed to stderr.
+ */
+void disable_debugging();
 
 }  // namespace prefetch
 }  // namespace CUDF_EXPORT cudf
