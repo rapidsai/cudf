@@ -22,6 +22,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/prefetch.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
