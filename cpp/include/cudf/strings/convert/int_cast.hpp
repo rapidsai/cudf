@@ -84,6 +84,13 @@ std::unique_ptr<column> cast_to_integer(
  * This performs the inverse of `cast_to_integer`. The individual bytes of the integer
  * are reconverted into UTF-8 strings.
  *
+ * @code{.pseudo}
+ * Example:
+ * b is [97, 98, 0, 99, 100]
+ * s = cast_from_integer(b)
+ * s is ['a', 'b', '', 'c', 'd']
+ * @endcode *
+ *
  * Any null entries will result in corresponding null entries in the output column.
  *
  * Ensure the `swap` parameter matches is the same value used in the `cast_to_integer` API.

@@ -244,9 +244,10 @@ std::optional<cudf::data_type> integer_cast_type(strings_column_view const& inpu
                              cuda::proclaim_return_type<size_type>(
                                [d_strings = *d_strings] __device__(size_type idx) -> size_type {
                                  if (d_strings.is_null(idx)) { return 0; }
-                                 auto const d_str = d_strings.element<string_view>(idx);
-                                 auto const bits  = d_str.size_bytes() * CHAR_BIT;
-                                 return bits - (bits > 0 && d_str.data()[0] > 0);
+                                 auto const d_str  = d_strings.element<string_view>(idx);
+                                 auto const bits   = d_str.size_bytes() * CHAR_BIT;
+                                 u_char first_byte = bits > 0 ? d_str.data()[0] : 0;
+                                 return bits - ((first_byte & 0x80) == 0);
                                }),
                              size_type{0},
                              cuda::maximum<size_type>{});
