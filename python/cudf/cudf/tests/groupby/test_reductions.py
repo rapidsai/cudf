@@ -1105,3 +1105,93 @@ def test_multiindex_equals():
         names=["x", "y"],
     )
     assert_eq(mi1.equals(mi2), False)
+
+
+@pytest.mark.parametrize(
+    "str_data", [[], ["a", "b", "c", "d", "e"], [None, None, None, None, None]]
+)
+def test_string_groupby_key(str_data):
+    num_keys = 2
+    other_data = [1, 2, 3, 4, 5][: len(str_data)]
+
+    pdf = pd.DataFrame(
+        {
+            0: pd.Series(str_data, dtype="str"),
+            1: pd.Series(str_data, dtype="str"),
+            "a": other_data,
+        }
+    )
+    gdf = cudf.DataFrame(
+        {
+            0: cudf.Series(str_data, dtype="str"),
+            1: cudf.Series(str_data, dtype="str"),
+            "a": other_data,
+        }
+    )
+
+    expect = pdf.groupby(list(range(num_keys)), as_index=False).count()
+    got = gdf.groupby(list(range(num_keys)), as_index=False).count()
+
+    expect = expect.sort_values([0]).reset_index(drop=True)
+    got = got.sort_values([0]).reset_index(drop=True)
+
+    assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "str_data", [[], ["a", "b", "c", "d", "e"], [None, None, None, None, None]]
+)
+@pytest.mark.parametrize("agg", ["count", "max", "min"])
+def test_string_groupby_non_key(str_data, agg):
+    num_cols = 2
+    other_data = [1, 2, 3, 4, 5][: len(str_data)]
+
+    pdf = pd.DataFrame(
+        {
+            0: pd.Series(str_data, dtype="str"),
+            1: pd.Series(str_data, dtype="str"),
+            "a": other_data,
+        }
+    )
+    gdf = cudf.DataFrame(
+        {
+            0: cudf.Series(str_data, dtype="str"),
+            1: cudf.Series(str_data, dtype="str"),
+            "a": other_data,
+        }
+    )
+
+    expect = getattr(pdf.groupby("a", as_index=False), agg)()
+    got = getattr(gdf.groupby("a", as_index=False), agg)()
+
+    expect = expect.sort_values(["a"]).reset_index(drop=True)
+    got = got.sort_values(["a"]).reset_index(drop=True)
+
+    if agg in ["min", "max"] and len(expect) == 0 and len(got) == 0:
+        for i in range(num_cols):
+            expect[i] = expect[i].astype("str")
+
+    assert_eq(expect, got, check_dtype=False)
+
+
+def test_string_groupby_key_index():
+    str_data = ["a", "b", "c", "d", "e"]
+    other_data = [1, 2, 3, 4, 5]
+
+    pdf = pd.DataFrame(
+        {
+            "a": pd.Series(str_data, dtype="str"),
+            "b": other_data,
+        }
+    )
+    gdf = cudf.DataFrame(
+        {
+            "a": cudf.Series(str_data, dtype="str"),
+            "b": other_data,
+        }
+    )
+
+    expect = pdf.groupby("a", sort=True).count()
+    got = gdf.groupby("a", sort=True).count()
+
+    assert_eq(expect, got, check_dtype=False)
