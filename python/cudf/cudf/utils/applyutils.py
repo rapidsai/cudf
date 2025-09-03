@@ -159,13 +159,11 @@ class ApplyKernelCompilerBase:
                 for k in self.incols
             }
         # Allocate output columns
-        outputs = {}
-        for k, dt in self.outcols.items():
-            outputs[k] = cuda.as_cuda_array(
-                column.column_empty(
-                    len(df), np.dtype(dt), False
-                ).data_array_view(mode="write")
-            )
+        outputs = {
+            k: cuda.as_cuda_array(cp.empty(len(df), dtype=np.dtype(dt)))
+            for k, dt in self.outcols.items()
+        }
+
         # Bind argument
         args = {}
         for dct in [inputs, outputs, self.kwargs]:
