@@ -260,7 +260,7 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
 
   // Now build the chars column
   rmm::device_uvector<char> chars(bytes, stream, mr);
-  cudf::experimental::prefetch::detail::prefetch("gather", chars, stream);
+  cudf::prefetch::detail::prefetch("gather", chars, stream);
   size_and_exec_fn.d_chars = chars.data();
 
   // Execute the function fn again to fill in the chars data.
