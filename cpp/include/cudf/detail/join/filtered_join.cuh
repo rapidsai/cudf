@@ -58,16 +58,15 @@ class filtered_join {
    * @brief Properties of the build table used in the join operation
    */
   struct build_properties {
-    bool _has_nulls;           ///< True if nested nulls are present in build table
-    bool _has_floating_point;  ///< True if the build table contains floating point columns
-    bool _has_nested_columns;  ///< True if the build table contains nested columns
+    bool has_nulls;           ///< True if nested nulls are present in build table
+    bool has_floating_point;  ///< True if the build table contains floating point columns
+    bool has_nested_columns;  ///< True if the build table contains nested columns
   };
 
   /**
    * @brief Adapter for insertion operations in the hash table
    *
-   * When build table is reused, always returns false to allow duplicate entries in the hash table
-   * for no-op comparison. When build table is not reused, returns result of self comparator passed
+   * Returns result of self comparator passed
    */
   template <typename T>
   struct insertion_adapter {
@@ -76,14 +75,10 @@ class filtered_join {
       cuco::pair<hash_value_type, lhs_index_type> const& lhs,
       cuco::pair<hash_value_type, lhs_index_type> const& rhs) const noexcept
     {
-      if constexpr (std::is_same_v<T, bool>) {
-        return false;
-      } else {
-        if (lhs.first != rhs.first) { return false; }
-        auto const lhs_index = static_cast<size_type>(lhs.second);
-        auto const rhs_index = static_cast<size_type>(rhs.second);
-        return _comparator(lhs_index, rhs_index);
-      }
+      if (lhs.first != rhs.first) { return false; }
+      auto const lhs_index = static_cast<size_type>(lhs.second);
+      auto const rhs_index = static_cast<size_type>(rhs.second);
+      return _comparator(lhs_index, rhs_index);
     }
 
    private:
@@ -93,7 +88,7 @@ class filtered_join {
   /**
    * @brief Adapter for extracting hash values from key-value pairs
    */
-  struct hasher_adapter {
+  struct hash_extract_fn {
     template <typename T>
     __device__ constexpr hash_value_type operator()(
       cuco::pair<hash_value_type, T> const& key) const noexcept
@@ -109,8 +104,8 @@ class filtered_join {
    * @tparam Hasher Hash function type
    */
   template <typename T, typename Hasher>
-  struct keys_adapter {
-    CUDF_HOST_DEVICE constexpr keys_adapter(Hasher const& hasher) : _hasher{hasher} {}
+  struct key_pair_fn {
+    CUDF_HOST_DEVICE constexpr key_pair_fn(Hasher const& hasher) : _hasher{hasher} {}
 
     __device__ __forceinline__ auto operator()(size_type i) const noexcept
     {
@@ -132,16 +127,6 @@ class filtered_join {
   struct comparator_adapter {
     comparator_adapter(Equal const& d_equal) : _d_equal{d_equal} {}
 
-    /*
-    __device__ constexpr auto operator()(
-      cuco::pair<hash_value_type, lhs_index_type> const& lhs,
-      cuco::pair<hash_value_type, rhs_index_type> const& rhs) const noexcept
-    {
-      if (lhs.first != rhs.first) { return false; }
-      return _d_equal(lhs.second, rhs.second);
-    }
-    */
-
     __device__ constexpr auto operator()(
       cuco::pair<hash_value_type, rhs_index_type> const& rhs,
       cuco::pair<hash_value_type, lhs_index_type> const& lhs) const noexcept
@@ -152,17 +137,6 @@ class filtered_join {
 
    private:
     Equal _d_equal;
-  };
-
-  /**
-   * @brief Adapter for extracting indices from key-value pairs
-   */
-  struct output_adapter {
-    __device__ constexpr cudf::size_type operator()(
-      cuco::pair<hash_value_type, lhs_index_type> const& x) const
-    {
-      return static_cast<cudf::size_type>(x.second);
-    }
   };
 
   /**
@@ -211,7 +185,7 @@ class filtered_join {
   using primitive_row_hasher =
     cudf::row::primitive::row_hasher<cudf::hashing::detail::default_hash>;
   // Linear probing scheme with bucket size 1 for primitive types
-  using primitive_probing_scheme = cuco::linear_probing<1, hasher_adapter>;
+  using primitive_probing_scheme = cuco::linear_probing<1, hash_extract_fn>;
   // Equality comparator for primitive rows
   using primitive_row_comparator = cudf::row::primitive::row_equality_comparator;
 
@@ -220,9 +194,9 @@ class filtered_join {
     cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
                                                      nullate::DYNAMIC>;
   // Linear probing scheme with bucket size 4 for nested data structures
-  using nested_probing_scheme = cuco::linear_probing<4, hasher_adapter>;
+  using nested_probing_scheme = cuco::linear_probing<4, hash_extract_fn>;
   // Linear probing scheme with bucket size 1 for simple data
-  using simple_probing_scheme = cuco::linear_probing<1, hasher_adapter>;
+  using simple_probing_scheme = cuco::linear_probing<1, hash_extract_fn>;
   // Equality comparator for complex rows with null handling and NaN comparison
   using row_comparator = cudf::experimental::row::equality::device_row_comparator<
     true,
