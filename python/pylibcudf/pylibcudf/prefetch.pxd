@@ -1,10 +1,9 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
-from libcpp cimport bool
+cpdef enable()
 
+cpdef disable()
 
-cpdef enable_prefetching(str key)
+cpdef enable_debugging()
 
-cpdef disable_prefetching(str key)
-
-cpdef prefetch_debugging(bool enable)
+cpdef disable_debugging()
