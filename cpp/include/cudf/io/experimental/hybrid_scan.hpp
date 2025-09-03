@@ -505,7 +505,7 @@ table_with_metadata read_parquet_and_apply_deletion_vector(
   roaring64_bitmap_t const* deletion_vector,
   cudf::host_span<size_t const> row_group_offsets,
   cudf::host_span<size_type const> row_group_num_rows,
-  rmm::cuda_stream_view stream = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource_ref());
 
 /**
@@ -529,7 +529,7 @@ table_with_metadata read_parquet_and_apply_serialized_deletion_vector(
   cudf::host_span<std::byte const> serialized_roaring64_bytes,
   cudf::host_span<size_t const> row_group_offsets,
   cudf::host_span<size_type const> row_group_num_rows,
-  rmm::cuda_stream_view stream = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource_ref());
 
 /** @} */  // end of group

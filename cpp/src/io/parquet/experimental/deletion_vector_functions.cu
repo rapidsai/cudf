@@ -166,7 +166,7 @@ auto build_row_mask_column(cudf::host_span<size_t const> row_indices,
         cudf::detail::host_worker_pool().submit_task([&, thread_idx = thread_idx] {
           // Thread local roaring64 context for faster (bulk) contains operations
           auto roaring64_context =
-          roaring64_bulk_context_t{.high_bytes = {0, 0, 0, 0, 0, 0}, .leaf = nullptr};
+            roaring64_bulk_context_t{.high_bytes = {0, 0, 0, 0, 0, 0}, .leaf = nullptr};
 
           // Fill up the row mask using the deletion vector
           for (auto row_idx = thread_idx; row_idx < num_rows; row_idx += thread_pool_size) {
