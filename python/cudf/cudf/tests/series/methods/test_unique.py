@@ -1,5 +1,5 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
-
+import string
 
 import numpy as np
 import pandas as pd
@@ -104,3 +104,24 @@ def test_string_unique(item):
     # cudf returns a cudf.Series
     gres = gs.unique()
     assert_eq(pres, gres)
+
+
+def test_categorical_unique():
+    num_elements = 20
+    rng = np.random.default_rng(seed=12)
+    pd_cat = pd.Categorical(
+        pd.Series(
+            rng.choice(
+                list(string.ascii_letters + string.digits), num_elements
+            ),
+            dtype="category",
+        )
+    )
+
+    gser = cudf.Series(pd_cat)
+    gdf_unique_sorted = np.sort(gser.unique().to_pandas())
+
+    pser = pd.Series(pd_cat)
+    pdf_unique_sorted = np.sort(pser.unique())
+
+    np.testing.assert_array_equal(pdf_unique_sorted, gdf_unique_sorted)

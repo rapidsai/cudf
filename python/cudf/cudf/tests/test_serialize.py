@@ -470,3 +470,25 @@ def test_serialize_decimal_columns(data):
     )
     recreated = df.__class__.deserialize(*df.serialize())
     assert_eq(recreated, df)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": pd.Series(["a", "b", "c", "a", "c", "b"]).astype("category")},
+        {
+            "a": pd.Series(["a", "a", "b", "b"]).astype("category"),
+            "b": pd.Series(["b", "b", "c", "c"]).astype("category"),
+            "c": pd.Series(["c", "c", "a", "a"]).astype("category"),
+        },
+        {
+            "a": pd.Series(["a", None, "b", "b"]).astype("category"),
+            "b": pd.Series(["b", "b", None, "c"]).astype("category"),
+            "c": pd.Series(["c", "c", "a", None]).astype("category"),
+        },
+    ],
+)
+def test_serialize_categorical_columns(data):
+    df = cudf.DataFrame(data)
+    recreated = df.__class__.deserialize(*df.serialize())
+    assert_eq(recreated, df)
