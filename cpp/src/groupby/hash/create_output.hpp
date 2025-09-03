@@ -99,15 +99,22 @@ void transform_key_indices(device_span<size_type> key_indices,
                            rmm::cuda_stream_view stream);
 
 /**
+ * @brief Enum to indicate whether to compute null counts for aggregation result columns.
+ */
+enum class compute_null_count { YES, NO };
+
+/**
  * @brief Collect aggregation result columns from a table into a cache object.
  *
+ * @param find_null_count Whether to compute null counts for aggregation result columns
  * @param values The values columns
  * @param aggregations The aggregation to compute corresponding to each values column
  * @param agg_results The table containing columns storing aggregation results
  * @param cache The cache object to store the extracted aggregation results
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
-void collect_output_to_cache(table_view const& values,
+void collect_output_to_cache(compute_null_count find_null_count,
+                             table_view const& values,
                              std::vector<std::unique_ptr<aggregation>> const& aggregations,
                              std::unique_ptr<table>& agg_results,
                              cudf::detail::result_cache* cache,

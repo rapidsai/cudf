@@ -206,16 +206,17 @@ void transform_key_indices(device_span<size_type> key_indices,
                     });
 }
 
-void collect_output_to_cache(table_view const& values,
+void collect_output_to_cache(compute_null_count find_null_count,
+                             table_view const& values,
                              std::vector<std::unique_ptr<aggregation>> const& aggregations,
                              std::unique_ptr<table>& agg_results,
                              cudf::detail::result_cache* cache,
                              rmm::cuda_stream_view stream)
 {
   auto result_cols = agg_results->release();
-  for (size_t i = 0; i < aggregations.size(); i++) {
+  for (size_t i = 0; i < aggregations.size(); ++i) {
     auto& result = result_cols[i];
-    if (result->nullable()) {
+    if (find_null_count == compute_null_count::YES && result->nullable()) {
       // Call `null_count` triggers a stream sync for each output column.
       // This needs to be improved by a batch processing kernel, which is requested
       // in https://github.com/rapidsai/cudf/issues/19878.
