@@ -50,14 +50,6 @@ def test_series_unique():
 
 
 def test_series_nunique(request, nan_as_null, dropna):
-    # We remove nulls as opposed to NaNs using the dropna parameter,
-    # so to test against pandas we replace NaN with another discrete value
-    request.applymarker(
-        pytest.mark.xfail(
-            nan_as_null is None,
-            reason=f"{nan_as_null=} returns wrong result",
-        )
-    )
     cudf_series = cudf.Series([1, 2, 2, 3, 3], nan_as_null=nan_as_null)
     pd_series = pd.Series([1, 2, 2, 3, 3])
     expect = pd_series.nunique(dropna=dropna)
@@ -67,20 +59,20 @@ def test_series_nunique(request, nan_as_null, dropna):
     cudf_series = cudf.Series(
         [1.0, 2.0, 3.0, np.nan, None], nan_as_null=nan_as_null
     )
-    if nan_as_null is True:
-        pd_series = pd.Series([1.0, 2.0, 3.0, np.nan, None])
+    if nan_as_null in {True, None}:
+        pd_series = pd.Series([1.0, 2.0, 3.0, None, None])
     else:
-        pd_series = pd.Series([1.0, 2.0, 3.0, -1.0, None])
+        pd_series = pd.Series([1.0, 2.0, 3.0, np.nan, None], dtype=object)
 
     expect = pd_series.nunique(dropna=dropna)
     got = cudf_series.nunique(dropna=dropna)
     assert expect == got
 
     cudf_series = cudf.Series([1.0, np.nan, np.nan], nan_as_null=nan_as_null)
-    if nan_as_null is True:
+    if nan_as_null in {True, None}:
         pd_series = pd.Series([1.0, np.nan, np.nan])
     else:
-        pd_series = pd.Series([1.0, -1.0, -1.0])
+        pd_series = pd.Series([1.0, None, None])
     expect = pd_series.nunique(dropna=dropna)
     got = cudf_series.nunique(dropna=dropna)
     assert expect == got

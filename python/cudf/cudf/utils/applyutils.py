@@ -158,7 +158,7 @@ class ApplyKernelCompilerBase:
         outputs = {}
         for k, dt in self.outcols.items():
             outputs[k] = column.column_empty(
-                len(df), np.dtype(dt), False
+                len(df), np.dtype(dt)
             ).data_array_view(mode="write")
         # Bind argument
         args = {}
