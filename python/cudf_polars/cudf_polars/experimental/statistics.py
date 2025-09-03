@@ -485,7 +485,7 @@ def _(ir: DataFrameScan, stats: StatsCollector, config_options: ConfigOptions) -
         stats.row_count[ir] = next(
             iter(stats.column_stats[ir].values())
         ).source_info.row_count
-    else:  # pragma: no cover; We always have row-count (for now).
+    else:  # pragma: no cover; We always have stats.column_stats[ir]
         stats.row_count[ir] = ColumnStat[int](None)
 
     # Update unique-count estimates with sampled statistics
@@ -509,7 +509,7 @@ def _(ir: Scan, stats: StatsCollector, config_options: ConfigOptions) -> None:
         stats.row_count[ir] = next(
             iter(stats.column_stats[ir].values())
         ).source_info.row_count
-    else:  # pragma: no cover; We always have row-count (for now).
+    else:  # pragma: no cover; We always have stats.column_stats[ir]
         # No column stats available.
         stats.row_count[ir] = ColumnStat[int](None)
 
@@ -542,7 +542,7 @@ def _update_distinct_stats(
     unique_counts = [child_column_stats[k].unique_count.value for k in key_names]
     known_unique_count = sum(c for c in unique_counts if c is not None)
     unknown_unique_count = sum(c is None for c in unique_counts)
-    if unknown_unique_count == len(unique_counts):  # pragma: no cover
+    if unknown_unique_count == len(unique_counts):
         # No unique-count estimates, so use the child row-count.
         stats.row_count[ir] = ColumnStat[int](child_row_count)
     else:
@@ -572,6 +572,7 @@ def _(ir: Join, stats: StatsCollector, config_options: ConfigOptions) -> None:
     try:
         left_rows, right_rows = child_row_counts(ir, stats)
     except ValueError:  # pragma: no cover; We always have row-count (for now).
+        assert 0 == 1
         # One or more children have an unknown row-count estimate.
         stats.row_count[ir] = ColumnStat[int](None)
     else:
