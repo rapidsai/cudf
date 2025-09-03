@@ -5,9 +5,11 @@ import math
 import operator
 import os
 import pathlib
+import zoneinfo
 
 import cupy as cp
 import numpy as np
+import pandas as pd
 import pytest
 
 import rmm  # noqa: F401
@@ -174,6 +176,37 @@ def pytest_runtest_makereport(item, call):
     # Set a report attribute for each phase of a call, which can
     # be "setup", "call", "teardown"
     setattr(item, "report", {rep.when: rep})
+
+
+def _get_all_zones():
+    zones = []
+    for zone in zoneinfo.available_timezones():
+        # TODO: pandas 3.0 defaults to zoneinfo,
+        # so all_zone_names can use zoneinfo.available_timezones()
+        try:
+            pd.DatetimeTZDtype("ns", zone)
+        except KeyError:
+            continue
+        else:
+            zones.append(zone)
+    return sorted(zones)
+
+
+# NOTE: _get_all_zones is a very large list; we likely do NOT want to
+# use it for more than a handful of tests
+@pytest.fixture(params=_get_all_zones())
+def all_timezones(request):
+    return request.param
+
+
+@pytest.fixture(
+    params=["America/New_York", "Asia/Tokyo", "CET", "Etc/GMT+1", "UTC"]
+)
+def limited_timezones(request):
+    """
+    Small representative set of timezones for testing.
+    """
+    return request.param
 
 
 @pytest.fixture(
@@ -426,6 +459,12 @@ def datetime_types_as_str(request):
     - "datetime64[ns]", "datetime64[us]", "datetime64[ms]", "datetime64[s]"
     """
     return request.param
+
+
+@pytest.fixture
+def datetime_types_as_str2(datetime_types_as_str):
+    """Used for testing cartesian product of datetime_types_as_str"""
+    return datetime_types_as_str
 
 
 @pytest.fixture(params=timedelta_types)

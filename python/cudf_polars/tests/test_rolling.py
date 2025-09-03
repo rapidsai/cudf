@@ -226,3 +226,56 @@ def test_rolling_null_count(df):
         nc=pl.col("null").null_count()
     )
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.when(pl.col("values") > 5).then(pl.col("floats")).otherwise(None).sum(),
+        pl.when(pl.col("values").count() > 0)
+        .then(pl.col("values").sum())
+        .otherwise(None),
+        pl.when(pl.col("values").min() < pl.col("values").max())
+        .then(pl.col("values").max() - pl.col("values").min())
+        .otherwise(pl.lit(0)),
+        pl.when(pl.col("values").count() > 0)
+        .then(
+            pl.col("values").cast(pl.Float64).sum()
+            / pl.col("values").count().cast(pl.Float64)
+        )
+        .otherwise(None),
+    ],
+    ids=[
+        "pre_pointwise_then_sum",
+        "post_over_aggs",
+        "post_multiple_aggs_range",
+        "post_manually_compute_mean",
+    ],
+)
+def test_rolling_ternary_supported(df, expr):
+    q = df.rolling("dt", period="48h", closed="both").agg(expr.alias("out"))
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.when(pl.col("values") > 3)
+        .then(pl.col("values"))
+        .otherwise(pl.lit(None, dtype=pl.Int64)),
+        pl.when((pl.col("floats") - pl.col("floats").mean()) > 0)
+        .then(pl.col("floats"))
+        .otherwise(None)
+        .sum(),
+    ],
+)
+def test_rolling_ternary_unsupported(df, expr):
+    q = df.rolling("dt", period="48h", closed="both").agg(expr.alias("out"))
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_rolling_rank_unsupported(df):
+    q = df.rolling("dt", period="48h", closed="both").agg(
+        pl.col("values").rank(method="dense", descending=False)
+    )
+    assert_ir_translation_raises(q, NotImplementedError)

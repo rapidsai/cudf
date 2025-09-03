@@ -35,7 +35,6 @@ from cudf.core.accessors import (
 )
 from cudf.core.column import (
     ColumnBase,
-    IntervalColumn,
     as_column,
 )
 from cudf.core.column.column import concat_columns
@@ -379,7 +378,10 @@ class _SeriesLocIndexer(_FrameIndexer):
                     self._frame, Index._from_column(col)
                 )
                 if indices.null_count > 0:
-                    raise KeyError("label scalar is out of bound")
+                    missing = (
+                        indices[indices.isnull()].index.to_pandas().tolist()
+                    )
+                    raise KeyError(f"{missing} not in the index.")
                 return indices
 
 
@@ -3109,8 +3111,9 @@ class Series(SingleColumnFrame, IndexedFrame):
         # Pandas returns an IntervalIndex as the index of res
         # this condition makes sure we do too if bins is given
         if bins is not None and len(res) == len(res.index.categories):
-            interval_col = IntervalColumn.from_struct_column(
-                res.index._column._get_decategorized_column()
+            struct_col = res.index._column._get_decategorized_column()
+            interval_col = struct_col._with_type_metadata(
+                res.index.dtype.categories.dtype
             )
             res.index = cudf.IntervalIndex._from_column(
                 interval_col, name=res.index.name
@@ -5081,7 +5084,7 @@ class TimedeltaProperties(BaseDatelikeProperties):
         """
         return self._return_result_like_self(self.series._column.nanoseconds)
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def components(self) -> DataFrame:
         """
@@ -5109,7 +5112,7 @@ class TimedeltaProperties(BaseDatelikeProperties):
         3      0      0       35       35           656             0            0
         4     37     13       12       14           234             0            0
         """
-        ca = ColumnAccessor(self.series._column.components(), verify=False)
+        ca = ColumnAccessor(self.series._column.components, verify=False)
         return self.series._constructor_expanddim._from_data(
             ca, index=self.series.index
         )

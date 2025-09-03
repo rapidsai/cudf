@@ -427,5 +427,23 @@ std::unique_ptr<scalar> nunique(column_view const& col,
                                 rmm::cuda_stream_view stream,
                                 rmm::device_async_resource_ref mr);
 
+/**
+ * @brief Returns the number of elements in the input column
+ *
+ * Returns `col.size()` or `col.size() - col.null_count()` depending on `null_handling`
+ *
+ * @param col Input column to compute the number of elements
+ * @param null_handling Indicates if null values will be included in the count
+ * @param output_type Data type of return type
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return Number of elements as scalar of type `output_type`
+ */
+std::unique_ptr<scalar> count(column_view const& col,
+                              null_policy null_handling,
+                              data_type const output_type,
+                              rmm::cuda_stream_view stream,
+                              rmm::device_async_resource_ref mr);
+
 }  // namespace reduction::detail
 }  // namespace CUDF_EXPORT cudf

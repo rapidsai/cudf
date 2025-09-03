@@ -18,6 +18,7 @@
 
 #include "error.hpp"
 
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/transform.hpp>
@@ -49,6 +50,8 @@ inline bool is_treat_fixed_length_as_string(std::optional<LogicalType> const& lo
 
 void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_rows)
 {
+  CUDF_FUNC_RANGE();
+
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
 
