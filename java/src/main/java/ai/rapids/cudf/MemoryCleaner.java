@@ -65,7 +65,7 @@ public final class MemoryCleaner {
    * @return true if configured, false otherwise.
    */
   public static boolean configuredDefaultShutdownHook() {
-    return REF_COUNT_DEBUG;
+    return false;
   }
 
   /**
@@ -182,48 +182,73 @@ public final class MemoryCleaner {
     defaultGpu = defaultGpuId;
   }
 
-  private static final Thread t = new Thread(() -> {
-    try {
+  private static class CleanerThread extends Thread {
+    private volatile boolean stopFlag = false;
+    private volatile boolean stoped = false;
+
+    CleanerThread() {
+      super("Cleaner Thread");
+    }
+
+    private void cleanCollected() {
       int currentGpuId = -1;
       while (true) {
-        CleanerWeakReference next = (CleanerWeakReference)collected.remove(100);
-        if (next != null) {
-          try {
-            if (currentGpuId != defaultGpu) {
-              Cuda.setDevice(defaultGpu);
-              currentGpuId = defaultGpu;
-            }
-          } catch (Throwable t) {
-            log.error("ERROR TRYING TO SET GPU ID TO " + defaultGpu, t);
+        CleanerWeakReference next = null;
+        try {
+          next = (CleanerWeakReference)collected.remove(100);
+        } catch (InterruptedException e)  {
+          // ignore
+        }
+
+        if (next == null) {
+          // queue is empty, stop this loop
+          return;
+        }
+
+        try {
+          if (currentGpuId != defaultGpu) {
+            Cuda.setDevice(defaultGpu);
+            currentGpuId = defaultGpu;
           }
-          try {
-            next.clean();
-          } catch (Throwable t) {
-            log.error("CAUGHT EXCEPTION WHILE TRYING TO CLEAN " + next, t);
-          }
-          all.remove(next.cleaner.id);
+        } catch (Throwable t) {
+          log.error("ERROR TRYING TO SET GPU ID TO " + defaultGpu, t);
+        }
+        try {
+          next.clean();
+        } catch (Throwable t) {
+          log.error("CAUGHT EXCEPTION WHILE TRYING TO CLEAN " + next, t);
+        }
+        all.remove(next.cleaner.id);
+      }
+    }
+
+    @Override
+    public void run() {
+      while(!stopFlag) {
+        cleanCollected();
+      }
+      stoped = true;
+    }
+
+    public void stopLoops() {
+      stopFlag = true;
+      while (!stoped) {
+        try {
+          Thread.sleep(10);
+        } catch (InterruptedException e) {
+          // Ignored
         }
       }
-    } catch (InterruptedException e) {
-      // Ignored just exit
     }
-  }, "Cleaner Thread");
+  }
+
+  private static final CleanerThread t = new CleanerThread();
 
   /**
    * Default shutdown runnable used to be added to Java default shutdown hook.
    * It checks the leaks at shutdown time.
    */
-  private static final Runnable DEFAULT_SHUTDOWN_RUNNABLE = () -> {
-    // If we are debugging things do a best effort to check for leaks at the end
-
-    System.gc();
-    // Avoid issues on shutdown with the cleaner thread.
-    t.interrupt();
-    try {
-      t.join(1000);
-    } catch (InterruptedException e) {
-      // Ignored
-    }
+  public static void cleanAtShutdown() {
     if (defaultGpu >= 0) {
       Cuda.setDevice(defaultGpu);
     }
@@ -231,16 +256,11 @@ public final class MemoryCleaner {
     for (CleanerWeakReference cwr : all.values()) {
       cwr.clean();
     }
-  };
-
-  private static final Thread DEFAULT_SHUTDOWN_THREAD = new Thread(DEFAULT_SHUTDOWN_RUNNABLE);
+  }
 
   static {
     t.setDaemon(true);
     t.start();
-    if (REF_COUNT_DEBUG) {
-      Runtime.getRuntime().addShutdownHook(DEFAULT_SHUTDOWN_THREAD);
-    }
   }
 
   /**
@@ -252,8 +272,7 @@ public final class MemoryCleaner {
    * @return the default shutdown runnable
    */
   public static Runnable removeDefaultShutdownHook() {
-    Runtime.getRuntime().removeShutdownHook(DEFAULT_SHUTDOWN_THREAD);
-    return DEFAULT_SHUTDOWN_RUNNABLE;
+    return null;
   }
 
   static void register(ColumnVector vec, Cleaner cleaner) {
@@ -316,6 +335,10 @@ public final class MemoryCleaner {
    */
   static boolean bestEffortHasRmmBlockers() {
     return all.values().stream().anyMatch(cwr -> cwr.isRmmBlocker && !cwr.cleaner.isClean());
+  }
+
+  public static void stopLoops() {
+    t.stopLoops();
   }
 
   /**
