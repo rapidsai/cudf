@@ -309,7 +309,7 @@ are often recommended:
 
 .. note::
   UCX enables Dask-CUDA workers to communicate using high-performance
-  tansport technologies like `NVLink <https://www.nvidia.com/en-us/data-center/nvlink/>`__
+  transport technologies like `NVLink <https://www.nvidia.com/en-us/data-center/nvlink/>`__
   and Infiniband. Without UCX, inter-process communication will rely
   on TCP sockets.
 

@@ -17,12 +17,12 @@ from cudf.core._internals import binaryop
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.temporal_base import TemporalBaseColumn
-from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.dtypes import (
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
     find_common_type,
 )
+from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.temporal import unit_to_nanoseconds_conversion
 
 if TYPE_CHECKING:
@@ -96,7 +96,10 @@ class TimeDeltaColumn(TemporalBaseColumn):
         null_count: int | None = None,
         children: tuple = (),
     ):
-        if not (isinstance(dtype, np.dtype) and dtype.kind == "m"):
+        if cudf.get_option("mode.pandas_compatible"):
+            if not dtype.kind == "m":
+                raise ValueError("dtype must be a timedelta numpy dtype.")
+        elif not (isinstance(dtype, np.dtype) and dtype.kind == "m"):
             raise ValueError("dtype must be a timedelta numpy dtype.")
         super().__init__(
             data=data,
@@ -247,7 +250,12 @@ class TimeDeltaColumn(TemporalBaseColumn):
                     )
                 )
 
-    def as_string_column(self) -> StringColumn:
+    def as_string_column(self, dtype) -> StringColumn:
+        if cudf.get_option("mode.pandas_compatible"):
+            if isinstance(dtype, np.dtype) and dtype.kind == "O":
+                raise TypeError(
+                    f"cannot astype a timedelta like from {self.dtype} to {dtype}"
+                )
         return self.strftime("%D days %H:%M:%S")
 
     def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:
@@ -270,33 +278,14 @@ class TimeDeltaColumn(TemporalBaseColumn):
             unit=self.time_unit,
         ).as_unit(self.time_unit)
 
+    @functools.cached_property
     def components(self) -> dict[str, NumericalColumn]:
         """
-        Return a Dataframe of the components of the Timedeltas.
+        Return a dict of the components of the Timedeltas.
 
         Returns
         -------
-        DataFrame
-
-        Examples
-        --------
-        >>> s = pd.Series(pd.to_timedelta(np.arange(5), unit='s'))
-        >>> s = cudf.Series([12231312123, 1231231231, 1123236768712, 2135656,
-        ...     3244334234], dtype='timedelta64[ms]')
-        >>> s
-        0      141 days 13:35:12.123
-        1       14 days 06:00:31.231
-        2    13000 days 10:12:48.712
-        3        0 days 00:35:35.656
-        4       37 days 13:12:14.234
-        dtype: timedelta64[ms]
-        >>> s.dt.components
-            days  hours  minutes  seconds  milliseconds  microseconds  nanoseconds
-        0    141     13       35       12           123             0            0
-        1     14      6        0       31           231             0            0
-        2  13000     10       12       48           712             0            0
-        3      0      0       35       35           656             0            0
-        4     37     13       12       14           234             0            0
+        dict[str, NumericalColumn]
         """
         date_meta = {
             "hours": ["D", "h"],

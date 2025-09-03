@@ -1,5 +1,5 @@
 # Copyright (c) 2018-2025, NVIDIA CORPORATION.
-
+import decimal
 import itertools
 import pickle
 
@@ -428,14 +428,45 @@ def test_serialize_sliced_string():
 @pytest.mark.parametrize(
     "columns",
     [
-        cudf.RangeIndex(2),
-        cudf.Index([1, 2], dtype="int8"),
-        cudf.MultiIndex(
+        lambda: cudf.RangeIndex(2),
+        lambda: cudf.Index([1, 2], dtype="int8"),
+        lambda: cudf.MultiIndex(
             levels=[["a", "b"], [1, 2]], codes=[[0, 1], [0, 1]], names=["a", 0]
         ),
     ],
+    ids=["RangeIndex", "Index", "MultiIndex"],
 )
 def test_serialize_column_types_preserved(columns):
-    expected = cudf.DataFrame([[10, 11]], columns=columns)
+    expected = cudf.DataFrame([[10, 11]], columns=columns())
     result = cudf.DataFrame.deserialize(*expected.serialize())
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [(["1", "2", "3"], cudf.Decimal64Dtype(1, 0))],
+        [
+            (["1", "2", "3"], cudf.Decimal64Dtype(1, 0)),
+            (["1.0", "2.0", "3.0"], cudf.Decimal64Dtype(2, 1)),
+            (["10.1", "20.2", "30.3"], cudf.Decimal64Dtype(3, 1)),
+        ],
+        [
+            (["1", None, "3"], cudf.Decimal64Dtype(1, 0)),
+            (["1.0", "2.0", None], cudf.Decimal64Dtype(2, 1)),
+            ([None, "20.2", "30.3"], cudf.Decimal64Dtype(3, 1)),
+        ],
+    ],
+)
+def test_serialize_decimal_columns(data):
+    df = cudf.DataFrame(
+        {
+            str(i): cudf.Series(
+                [decimal.Decimal(x) if x is not None else x for x in values],
+                dtype=dtype,
+            )
+            for i, (values, dtype) in enumerate(data)
+        }
+    )
+    recreated = df.__class__.deserialize(*df.serialize())
+    assert_eq(recreated, df)

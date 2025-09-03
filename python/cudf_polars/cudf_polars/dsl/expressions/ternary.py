@@ -17,7 +17,7 @@ from cudf_polars.dsl.expressions.base import (
 )
 
 if TYPE_CHECKING:
-    from cudf_polars.containers import DataFrame
+    from cudf_polars.containers import DataFrame, DataType
 
 
 __all__ = ["Ternary"]
@@ -28,7 +28,7 @@ class Ternary(Expr):
     _non_child = ("dtype",)
 
     def __init__(
-        self, dtype: plc.DataType, when: Expr, then: Expr, otherwise: Expr
+        self, dtype: DataType, when: Expr, then: Expr, otherwise: Expr
     ) -> None:
         self.dtype = dtype
         self.children = (when, then, otherwise)
@@ -43,4 +43,7 @@ class Ternary(Expr):
         )
         then_obj = then.obj_scalar if then.is_scalar else then.obj
         otherwise_obj = otherwise.obj_scalar if otherwise.is_scalar else otherwise.obj
-        return Column(plc.copying.copy_if_else(then_obj, otherwise_obj, when.obj))
+        return Column(
+            plc.copying.copy_if_else(then_obj, otherwise_obj, when.obj),
+            dtype=self.dtype,
+        )

@@ -3,14 +3,12 @@
 
 from __future__ import annotations
 
-import numpy as np
-import pyarrow as pa
 import pytest
 from distributed.protocol import deserialize, serialize
 
+import polars as pl
 from polars.testing.asserts import assert_frame_equal
 
-import pylibcudf as plc
 import rmm
 from rmm.pylibrmm.stream import DEFAULT_STREAM
 
@@ -31,16 +29,26 @@ def convert_to_rmm(frame):
         return frame
 
 
+@pytest.mark.filterwarnings(
+    # If exceptions in threads aren't handled, they get raised as a warning by
+    # Pytest. The warnings raised by this test correspond to unhandled
+    # `ResourceWarning`s in `distributed.node`
+    #
+    # Since Pytest 8, these warnings get elevated to errors and exit the test
+    # suite, so we selectively filter them here if the unraisable exception
+    # concerns `socket.socket`
+    "ignore:.*socket.socket.*:pytest.PytestUnraisableExceptionWarning"
+)
 @pytest.mark.parametrize(
-    "arrow_tbl",
+    "polars_tbl",
     [
-        pa.table([]),
-        pa.table({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}),
-        pa.table({"a": [1, 2, 3]}),
-        pa.table({"a": [1], "b": [2], "c": [3]}),
-        pa.table({"a": ["a", "bb", "ccc"]}),
-        pa.table({"a": [1, 2, None], "b": [None, 3, 4]}),
-        pa.table({"a": pa.array(np.arange(1e7))}),
+        pl.DataFrame(),
+        pl.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}),
+        pl.DataFrame({"a": [1, 2, 3]}),
+        pl.DataFrame({"a": [1], "b": [2], "c": [3]}),
+        pl.DataFrame({"a": ["a", "bb", "ccc"]}),
+        pl.DataFrame({"a": [1, 2, None], "b": [None, 3, 4]}),
+        pl.DataFrame({"a": range(int(1e7))}),
     ],
 )
 @pytest.mark.parametrize("protocol", ["cuda", "cuda_rmm", "dask"])
@@ -56,9 +64,8 @@ def convert_to_rmm(frame):
         },
     ],
 )
-def test_dask_serialization_roundtrip(arrow_tbl, protocol, context):
-    plc_tbl = plc.Table(arrow_tbl)
-    df = DataFrame.from_table(plc_tbl, names=arrow_tbl.column_names)
+def test_dask_serialization_roundtrip(polars_tbl, protocol, context):
+    df = DataFrame.from_polars(polars_tbl)
 
     cuda_rmm = protocol == "cuda_rmm"
     protocol = "cuda" if protocol == "cuda_rmm" else protocol
@@ -89,9 +96,7 @@ def test_dask_serialization_roundtrip(arrow_tbl, protocol, context):
 
 
 def test_dask_serialization_error():
-    arrow_tbl = pa.table({"a": [1, 2, 3]})
-    plc_tbl = plc.Table(arrow_tbl)
-    df = DataFrame.from_table(plc_tbl, names=arrow_tbl.column_names)
+    df = DataFrame.from_polars(pl.DataFrame({"a": [1, 2, 3]}))
 
     header, frames = serialize(
         df,

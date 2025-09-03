@@ -51,28 +51,24 @@ requirements:
   host:
     - python =${{ py_version }}
     - pip
-    - cython >=3.0.3,<3.1.0a0
+    - cython >=3.0.3
     - cuda-version =${{ cuda_version }}
     - pylibcudf =${{ version }}
     - libcudf_kafka =${{ version }}
-    - rapids-build-backend >=0.3.0,<0.4.0.dev0
+    - rapids-build-backend >=0.4.0,<0.5.0.dev0
     - scikit-build-core >=0.10.0
-    - if: cuda_major != "11"
-      then: cuda-cudart-dev
+    - cuda-cudart-dev
   run:
     - python
     - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
     - libcudf_kafka =${{ version }}
     - pylibcudf =${{ version }}
-    - if: cuda_major != "11"
-      then: cuda-cudart
+    - cuda-cudart
   ignore_run_exports:
     from_package:
-      - if: cuda_major != "11"
-        then: cuda-cudart-dev
+      - cuda-cudart-dev
     by_name:
       - cuda-version
-      - cudatoolkit
 
 tests:
   - python:

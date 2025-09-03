@@ -21,11 +21,9 @@
 #include <cudf/column/column.hpp>
 #include <cudf/io/orc.hpp>
 #include <cudf/io/parquet.hpp>
-#include <cudf/table/table.hpp>
 
 #include <memory>
 #include <optional>
-#include <vector>
 
 // This file is for the code related to chunked reader (Parquet, ORC, etc.).
 
@@ -55,7 +53,7 @@ Java_ai_rapids_cudf_ParquetChunkedReader_create(JNIEnv* env,
     read_buffer = false;
   } else if (inp_file_path != nullptr) {
     JNI_THROW_NEW(env,
-                  cudf::jni::ILLEGAL_ARG_CLASS,
+                  cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS,
                   "Cannot pass in both buffers and an inp_file_path",
                   nullptr);
   }
@@ -64,7 +62,8 @@ Java_ai_rapids_cudf_ParquetChunkedReader_create(JNIEnv* env,
     cudf::jni::auto_set_device(env);
     cudf::jni::native_jstring filename(env, inp_file_path);
     if (!read_buffer && filename.is_empty()) {
-      JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "inp_file_path cannot be empty", nullptr);
+      JNI_THROW_NEW(
+        env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "inp_file_path cannot be empty", nullptr);
     }
 
     cudf::jni::native_jstringArray n_filter_col_names(env, filter_col_names);
@@ -217,16 +216,16 @@ jlong create_chunked_orc_reader(JNIEnv* env,
 {
   JNI_NULL_CHECK(env, buffer, "buffer is null", 0);
   if (buffer_length <= 0) {
-    JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "An empty buffer is not supported", 0);
+    JNI_THROW_NEW(
+      env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "An empty buffer is not supported", 0);
   }
 
   try {
     cudf::jni::auto_set_device(env);
     cudf::jni::native_jstringArray n_filter_col_names(env, filter_col_names);
     cudf::jni::native_jstringArray n_dec128_col_names(env, dec128_col_names);
-
-    auto const source = cudf::io::source_info(reinterpret_cast<char*>(buffer),
-                                              static_cast<std::size_t>(buffer_length));
+    auto const source = cudf::io::source_info(cudf::host_span<std::byte const>(
+      reinterpret_cast<std::byte const*>(buffer), static_cast<std::size_t>(buffer_length)));
     auto opts_builder = cudf::io::orc_reader_options::builder(source);
     if (n_filter_col_names.size() > 0) {
       opts_builder = opts_builder.columns(n_filter_col_names.as_cpp_vector());

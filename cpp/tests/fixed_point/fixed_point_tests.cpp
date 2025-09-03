@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <cudf_test/testing_main.hpp>
 
 #include <cudf/binaryop.hpp>
+#include <cudf/fixed_point/conv.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/unary.hpp>
 

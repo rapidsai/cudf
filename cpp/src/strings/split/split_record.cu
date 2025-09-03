@@ -83,98 +83,7 @@ std::unique_ptr<column> split_record_fn(strings_column_view const& input,
                            mr);
 }
 
-enum class Direction { FORWARD, BACKWARD };
-
-/**
- * @brief Identify the tokens from the `idx'th` string element of `d_strings`.
- */
-template <Direction direction>
-struct whitespace_token_reader_fn {
-  column_device_view const d_strings;  // strings to split
-  size_type const max_tokens = std::numeric_limits<size_type>::max();
-  size_type const* d_token_offsets{};
-  string_index_pair* d_tokens{};
-
-  __device__ size_type count_tokens(size_type idx) const
-  {
-    if (d_strings.is_null(idx)) { return 0; }
-    auto const d_str = d_strings.element<string_view>(idx);
-    return count_tokens_whitespace(d_str, max_tokens);
-  }
-
-  __device__ void operator()(size_type idx)
-  {
-    auto const token_offset = d_token_offsets[idx];
-    auto const token_count  = d_token_offsets[idx + 1] - token_offset;
-    if (token_count == 0) { return; }
-    auto d_result = d_tokens + token_offset;
-
-    auto const d_str = d_strings.element<string_view>(idx);
-    whitespace_string_tokenizer tokenizer(d_str, direction != Direction::FORWARD);
-    size_type token_idx = 0;
-    position_pair token{0, 0};
-    if constexpr (direction == Direction::FORWARD) {
-      while (tokenizer.next_token() && (token_idx < token_count)) {
-        token = tokenizer.get_token();
-        d_result[token_idx++] =
-          string_index_pair{d_str.data() + token.first, token.second - token.first};
-      }
-      --token_idx;
-      token.second = d_str.size_bytes() - token.first;
-    } else {
-      while (tokenizer.prev_token() && (token_idx < token_count)) {
-        token = tokenizer.get_token();
-        d_result[token_count - 1 - token_idx] =
-          string_index_pair{d_str.data() + token.first, token.second - token.first};
-        ++token_idx;
-      }
-      token_idx   = token_count - token_idx;  // token_count - 1 - (token_idx-1)
-      token.first = 0;
-    }
-    // reset last token only if we hit the max
-    if (token_count == max_tokens)
-      d_result[token_idx] = string_index_pair{d_str.data() + token.first, token.second};
-  }
-};
-
 }  // namespace
-
-// The output is one list item per string
-template <typename TokenReader>
-std::unique_ptr<column> whitespace_split_record_fn(strings_column_view const& input,
-                                                   TokenReader reader,
-                                                   rmm::cuda_stream_view stream,
-                                                   rmm::device_async_resource_ref mr)
-{
-  // create offsets column by counting the number of tokens per string
-  auto token_counts = rmm::device_uvector<size_type>(input.size(), stream);
-  thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(input.size()),
-                    token_counts.begin(),
-                    cuda::proclaim_return_type<size_type>(
-                      [reader] __device__(auto idx) { return reader.count_tokens(idx); }));
-  auto [offsets, total_tokens] =
-    cudf::detail::make_offsets_child_column(token_counts.begin(), token_counts.end(), stream, mr);
-  auto d_offsets = offsets->view().template data<cudf::size_type>();
-
-  // split each string into an array of index-pair values
-  rmm::device_uvector<string_index_pair> tokens(total_tokens, stream);
-  reader.d_token_offsets = d_offsets;
-  reader.d_tokens        = tokens.data();
-  thrust::for_each_n(
-    rmm::exec_policy(stream), thrust::make_counting_iterator<size_type>(0), input.size(), reader);
-  // convert the index-pairs into one big strings column
-  auto strings_output = make_strings_column(tokens.begin(), tokens.end(), stream, mr);
-  // create a lists column using the offsets and the strings columns
-  return make_lists_column(input.size(),
-                           std::move(offsets),
-                           std::move(strings_output),
-                           input.null_count(),
-                           cudf::detail::copy_bitmask(input.parent(), stream, mr),
-                           stream,
-                           mr);
-}
 
 std::unique_ptr<column> split_record(strings_column_view const& input,
                                      string_scalar const& delimiter,
@@ -189,12 +98,11 @@ std::unique_ptr<column> split_record(strings_column_view const& input,
 
   auto d_strings = column_device_view::create(input.parent(), stream);
   if (delimiter.size() == 0) {
-    return whitespace_split_record_fn(
-      input,
-      whitespace_token_reader_fn<detail::Direction::FORWARD>{*d_strings, max_tokens},
-      stream,
-      mr);
+    auto tokenizer    = split_ws_tokenizer_fn{*d_strings, max_tokens};
+    auto delimiter_fn = whitespace_delimiter_fn{};
+    return split_record_fn(input, tokenizer, delimiter_fn, stream, mr);
   }
+
   auto tokenizer    = split_tokenizer_fn{*d_strings, delimiter.size(), max_tokens};
   auto delimiter_fn = string_delimiter_fn{delimiter.value(stream)};
   return split_record_fn(input, tokenizer, delimiter_fn, stream, mr);
@@ -213,12 +121,11 @@ std::unique_ptr<column> rsplit_record(strings_column_view const& input,
 
   auto d_strings = column_device_view::create(input.parent(), stream);
   if (delimiter.size() == 0) {
-    return whitespace_split_record_fn(
-      input,
-      whitespace_token_reader_fn<detail::Direction::BACKWARD>{*d_strings, max_tokens},
-      stream,
-      mr);
+    auto tokenizer    = rsplit_ws_tokenizer_fn{*d_strings, max_tokens};
+    auto delimiter_fn = whitespace_delimiter_fn{};
+    return split_record_fn(input, tokenizer, delimiter_fn, stream, mr);
   }
+
   auto tokenizer    = rsplit_tokenizer_fn{*d_strings, delimiter.size(), max_tokens};
   auto delimiter_fn = string_delimiter_fn{delimiter.value(stream)};
   return split_record_fn(input, tokenizer, delimiter_fn, stream, mr);

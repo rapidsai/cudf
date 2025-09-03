@@ -25,8 +25,6 @@ Attributes
    Series.dtypes
    Series.shape
    Series.ndim
-   Series.nullable
-   Series.nullmask
    Series.null_count
    Series.size
    Series.T
@@ -336,7 +334,7 @@ String handling
 
    Series.str
 
-.. currentmodule:: cudf.core.column.string.StringMethods
+.. currentmodule:: cudf.core.accessors.string.StringMethods
 .. autosummary::
    :toctree: api/
 
@@ -396,7 +394,6 @@ String handling
    minhash
    ngrams
    ngrams_tokenize
-   normalize_characters
    normalize_spaces
    pad
    partition
@@ -444,7 +441,7 @@ the ``Series.cat`` accessor.
 
    Series.cat
 
-.. currentmodule:: cudf.core.column.categorical.CategoricalAccessor
+.. currentmodule:: cudf.core.accessors.categorical.CategoricalAccessor
 .. autosummary::
    :toctree: api/
 
@@ -469,7 +466,7 @@ List handling
 
    Series.list
 
-.. currentmodule:: cudf.core.column.lists.ListMethods
+.. currentmodule:: cudf.core.accessors.lists.ListMethods
 .. autosummary::
    :toctree: api/
 
@@ -495,7 +492,7 @@ Struct handling
 
    Series.struct
 
-.. currentmodule:: cudf.core.column.struct.StructMethods
+.. currentmodule:: cudf.core.accessors.struct.StructMethods
 .. autosummary::
    :toctree: api/
 
@@ -536,8 +533,6 @@ Serialization / IO / conversion
    Series.to_pandas
    Series.to_string
    Series.from_arrow
-   Series.from_categorical
-   Series.from_masked_array
    Series.from_pandas
    Series.hash_values
    Series.to_pylibcudf

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,10 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include <cudf/detail/utilities/assert.cuh>
+#include <cudf/fixed_point/conv.hpp>
 #include <cudf/types.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/error.hpp>

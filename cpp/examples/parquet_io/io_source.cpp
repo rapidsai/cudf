@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,13 +71,15 @@ io_source::io_source(std::string_view file_path, io_source_type type, rmm::cuda_
     case io_source_type::HOST_BUFFER: {
       h_buffer.resize(file_size);
       file.read(h_buffer.data(), file_size);
-      source_info = cudf::io::source_info(h_buffer.data(), file_size);
+      source_info = cudf::io::source_info(cudf::host_span<std::byte const>(
+        reinterpret_cast<std::byte const*>(h_buffer.data()), file_size));
       break;
     }
     case io_source_type::PINNED_BUFFER: {
       pinned_buffer.resize(file_size);
       file.read(pinned_buffer.data(), file_size);
-      source_info = cudf::io::source_info(pinned_buffer.data(), file_size);
+      source_info = cudf::io::source_info(cudf::host_span<std::byte const>(
+        reinterpret_cast<std::byte const*>(pinned_buffer.data()), file_size));
       break;
     }
     case io_source_type::DEVICE_BUFFER: {

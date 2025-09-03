@@ -28,7 +28,7 @@ from pylibcudf.libcudf.io.parquet cimport (
     write_parquet as cpp_write_parquet,
     is_supported_write_parquet as cpp_is_supported_write_parquet,
     parquet_writer_options,
-    parquet_chunked_writer as cpp_parquet_chunked_writer,
+    chunked_parquet_writer as cpp_chunked_parquet_writer,
     chunked_parquet_writer_options,
     merge_row_group_metadata as cpp_merge_row_group_metadata,
 )
@@ -45,15 +45,17 @@ from pylibcudf.utils cimport _get_stream
 
 __all__ = [
     "ChunkedParquetReader",
-    "ParquetWriterOptions",
-    "ParquetWriterOptionsBuilder",
-    "read_parquet",
-    "write_parquet",
+    "ChunkedParquetWriterOptions",
+    "ChunkedParquetWriterOptionsBuilder",
+    "ParquetChunkedWriter",
     "ParquetReaderOptions",
     "ParquetReaderOptionsBuilder",
-    "ChunkedParquetWriterOptions",
-    "ChunkedParquetWriterOptionsBuilder"
+    "ParquetWriterOptions",
+    "ParquetWriterOptionsBuilder",
+    "is_supported_write_parquet",
     "merge_row_group_metadata",
+    "read_parquet",
+    "write_parquet",
 ]
 
 
@@ -169,7 +171,7 @@ cdef class ParquetReaderOptions:
         -------
         None
         """
-        self.c_obj.set_filter(<expression &>dereference(filter.c_obj.get()))
+        self.c_obj.set_filter(<expression &>dereference(filter.c_obj))
 
 
 cdef class ParquetReaderOptionsBuilder:
@@ -237,6 +239,41 @@ cdef class ParquetReaderOptionsBuilder:
         ParquetReaderOptionsBuilder
         """
         self.c_obj.use_arrow_schema(val)
+        return self
+
+    cpdef ParquetReaderOptionsBuilder filter(self, Expression filter):
+        """
+        Sets AST based filter for predicate pushdown.
+
+        Parameters
+        ----------
+        filter : Expression
+            AST expression to use as filter
+
+        Returns
+        -------
+        ParquetReaderOptionsBuilder
+        """
+        self.c_obj.filter(<expression &>dereference(filter.c_obj))
+        return self
+
+    cpdef ParquetReaderOptionsBuilder columns(self, list col_names):
+        """
+        Sets names of the columns to be read.
+
+        Parameters
+        ----------
+        col_names : list[str]
+            List of column names
+
+        Returns
+        -------
+        ParquetReaderOptionsBuilder
+        """
+        cdef vector[string] vec
+        for name in col_names:
+            vec.push_back(<string>str(name).encode())
+        self.c_obj.columns(vec)
         return self
 
     cpdef build(self):
@@ -339,7 +376,7 @@ cpdef read_parquet(ParquetReaderOptions options, Stream stream = None):
     return TableWithMetadata.from_libcudf(c_result, stream)
 
 
-cdef class ParquetChunkedWriter:
+cdef class ChunkedParquetWriter:
     cpdef memoryview close(self, list metadata_file_path):
         """
         Closes the chunked Parquet writer.
@@ -404,14 +441,14 @@ cdef class ParquetChunkedWriter:
 
         Returns
         -------
-        ParquetChunkedWriter
+        ChunkedParquetWriter
         """
-        cdef ParquetChunkedWriter parquet_writer = ParquetChunkedWriter.__new__(
-            ParquetChunkedWriter
+        cdef ChunkedParquetWriter parquet_writer = ChunkedParquetWriter.__new__(
+            ChunkedParquetWriter
         )
         cdef Stream s = _get_stream(stream)
         parquet_writer.c_obj.reset(
-            new cpp_parquet_chunked_writer(options.c_obj, s.view())
+            new cpp_chunked_parquet_writer(options.c_obj, s.view())
         )
         return parquet_writer
 
@@ -915,6 +952,38 @@ cdef class ParquetWriterOptionsBuilder:
         Self
         """
         self.c_obj.write_arrow_schema(enabled)
+        return self
+
+    cpdef ParquetWriterOptionsBuilder row_group_size_rows(self, size_type val):
+        """
+        Sets the maximum row group size, in rows.
+
+        Parameters
+        ----------
+        val : size_type
+            Maximum row group size, in rows to set
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.row_group_size_rows(val)
+        return self
+
+    cpdef ParquetWriterOptionsBuilder max_page_size_bytes(self, size_t val):
+        """
+        Sets the maximum uncompressed page size, in bytes.
+
+        Parameters
+        ----------
+        val : size_t
+            Maximum uncompressed page size, in bytes to set
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.max_page_size_bytes(val)
         return self
 
     cpdef ParquetWriterOptions build(self):

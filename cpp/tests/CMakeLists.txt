@@ -50,11 +50,11 @@ function(ConfigureTest CMAKE_TEST_NAME)
     ${CMAKE_TEST_NAME}
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gtests>"
                INSTALL_RPATH "\$ORIGIN/../../../lib"
-               CXX_STANDARD 17
+               CXX_STANDARD 20
                CXX_STANDARD_REQUIRED ON
                # For std:: support of __int128_t. Can be removed once using cuda::std
                CXX_EXTENSIONS ON
-               CUDA_STANDARD 17
+               CUDA_STANDARD 20
                CUDA_STANDARD_REQUIRED ON
   )
 
@@ -91,6 +91,7 @@ endfunction()
 
 # No need to install Arrow libs when only the final test executables are shipped.
 set(CUDF_EXCLUDE_ARROW_FROM_ALL ON)
+set(CUDF_ENABLE_ARROW_COMPUTE ON)
 include(../cmake/thirdparty/get_arrow.cmake)
 
 # ##################################################################################################
@@ -269,7 +270,7 @@ ConfigureTest(
 )
 
 # ##################################################################################################
-# * unary transform tests -------------------------------------------------------------------------
+# * transform tests -------------------------------------------------------------------------
 ConfigureTest(
   TRANSFORM_TEST
   transform/integration/unary_transform_test.cpp
@@ -280,6 +281,10 @@ ConfigureTest(
   transform/segmented_row_bit_count_test.cu
   transform/one_hot_encode_tests.cpp
 )
+
+# ##################################################################################################
+# * filter tests -------------------------------------------------------------------------
+ConfigureTest(FILTER_TEST filter/filter_test.cpp)
 
 # ##################################################################################################
 # * interop tests -------------------------------------------------------------------------
@@ -319,7 +324,6 @@ ConfigureTest(
   io/parquet_bloom_filter_test.cu
   io/parquet_chunked_reader_test.cu
   io/parquet_chunked_writer_test.cpp
-  io/parquet_experimental_reader_test.cpp
   io/parquet_common.cpp
   io/parquet_misc_test.cpp
   io/parquet_reader_test.cpp
@@ -328,6 +332,14 @@ ConfigureTest(
   io/parquet_writer_test.cpp
   GPUS 1
   PERCENT 30
+)
+ConfigureTest(
+  HYBRID_SCAN_TEST
+  io/experimental/hybrid_scan_common.cpp
+  io/experimental/hybrid_scan_filters_test.cpp
+  io/experimental/hybrid_scan_test.cpp
+  io/parquet_common.cpp
+  io/parquet_test.cpp
 )
 ConfigureTest(
   JSON_TEST io/json/json_test.cpp io/json/json_chunked_reader.cu
@@ -354,8 +366,8 @@ ConfigureTest(TYPE_INFERENCE_TEST io/type_inference_test.cu)
 # ##################################################################################################
 # * sort tests ------------------------------------------------------------------------------------
 ConfigureTest(
-  SORT_TEST sort/segmented_sort_tests.cpp sort/sort_nested_types_tests.cpp sort/sort_test.cpp
-  sort/stable_sort_tests.cpp sort/rank_test.cpp
+  SORT_TEST sort/rank_test.cpp sort/segmented_sort_tests.cpp sort/sort_nested_types_tests.cpp
+  sort/sort_test.cpp sort/stable_sort_tests.cpp sort/top_k_tests.cpp
   GPUS 1
   PERCENT 70
 )

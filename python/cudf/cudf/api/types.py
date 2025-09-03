@@ -8,7 +8,7 @@ import warnings
 from collections import abc
 from functools import wraps
 from inspect import isclass
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import cupy as cp
 import numpy as np
@@ -35,6 +35,10 @@ from cudf.core.dtypes import (  # noqa: F401
     is_struct_dtype,
 )
 from cudf.utils.dtypes import CUDF_STRING_DTYPE
+
+if TYPE_CHECKING:
+    from cudf.core.index import CategoricalIndex
+    from cudf.core.series import Series
 
 
 def is_numeric_dtype(obj):
@@ -80,8 +84,6 @@ def is_integer(obj):
     -------
     bool
     """
-    if isinstance(obj, cudf.Scalar):
-        return obj.dtype.kind in "iu"
     return pd.api.types.is_integer(obj)  # noqa: TID251
 
 
@@ -102,6 +104,14 @@ def is_string_dtype(obj):
         (
             isinstance(obj, (cudf.Index, cudf.Series))
             and obj.dtype == CUDF_STRING_DTYPE
+        )
+        or (isinstance(obj, pd.StringDtype))
+        or (
+            isinstance(obj, pd.ArrowDtype)
+            and (
+                pa.types.is_string(obj.pyarrow_dtype)
+                or pa.types.is_large_string(obj.pyarrow_dtype)
+            )
         )
         or (isinstance(obj, cudf.core.column.StringColumn))
         or (
@@ -132,7 +142,6 @@ def is_scalar(val):
     return isinstance(
         val,
         (
-            cudf.Scalar,
             cudf.core.tools.datetimes.DateOffset,
             plc.Scalar,
             pa.Scalar,
@@ -211,7 +220,7 @@ def _wrap_pandas_is_dtype_api(func):
 
 
 def _union_categoricals(
-    to_union: list[cudf.Series | cudf.CategoricalIndex],
+    to_union: list[Series | CategoricalIndex],
     sort_categories: bool = False,
     ignore_order: bool = False,
 ):

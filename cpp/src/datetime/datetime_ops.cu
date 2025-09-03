@@ -237,12 +237,12 @@ struct is_leap_year_op {
 // Specific function for applying ceil/floor/round date ops
 struct dispatch_round {
   template <typename Timestamp>
-  std::enable_if_t<cudf::is_timestamp<Timestamp>(), std::unique_ptr<cudf::column>> operator()(
-    rounding_function round_kind,
-    rounding_frequency component,
-    cudf::column_view const& column,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr) const
+  std::unique_ptr<cudf::column> operator()(rounding_function round_kind,
+                                           rounding_frequency component,
+                                           cudf::column_view const& column,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr) const
+    requires(cudf::is_timestamp<Timestamp>())
   {
     auto size            = column.size();
     auto output_col_type = data_type{cudf::type_to_id<Timestamp>()};
@@ -269,8 +269,8 @@ struct dispatch_round {
   }
 
   template <typename Timestamp, typename... Args>
-  std::enable_if_t<!cudf::is_timestamp<Timestamp>(), std::unique_ptr<cudf::column>> operator()(
-    Args&&...)
+  std::unique_ptr<cudf::column> operator()(Args&&...)
+    requires(!cudf::is_timestamp<Timestamp>())
   {
     CUDF_FAIL("Must be cudf::timestamp");
   }
@@ -285,15 +285,15 @@ struct launch_functor {
   launch_functor(column_view inp, mutable_column_view out) : input(inp), output(out) {}
 
   template <typename Element>
-  std::enable_if_t<!cudf::is_timestamp_t<Element>::value, void> operator()(
-    rmm::cuda_stream_view stream) const
+  void operator()(rmm::cuda_stream_view stream) const
+    requires(!cudf::is_timestamp_t<Element>::value)
   {
     CUDF_FAIL("Cannot extract datetime component from non-timestamp column.");
   }
 
   template <typename Timestamp>
-  std::enable_if_t<cudf::is_timestamp_t<Timestamp>::value, void> operator()(
-    rmm::cuda_stream_view stream) const
+  void operator()(rmm::cuda_stream_view stream) const
+    requires(cudf::is_timestamp_t<Timestamp>::value)
   {
     thrust::transform(rmm::exec_policy(stream),
                       input.begin<Timestamp>(),
@@ -332,18 +332,18 @@ std::unique_ptr<column> apply_datetime_op(column_view const& column,
 
 struct add_calendrical_months_functor {
   template <typename Element, typename... Args>
-  std::enable_if_t<!cudf::is_timestamp_t<Element>::value, std::unique_ptr<column>> operator()(
-    Args&&...) const
+  std::unique_ptr<column> operator()(Args&&...) const
+    requires(!cudf::is_timestamp_t<Element>::value)
   {
     CUDF_FAIL("Cannot extract datetime component from non-timestamp column.");
   }
 
   template <typename Timestamp, typename MonthIterator>
-  std::enable_if_t<cudf::is_timestamp_t<Timestamp>::value, std::unique_ptr<column>> operator()(
-    column_view timestamp_column,
-    MonthIterator months_begin,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr) const
+  std::unique_ptr<column> operator()(column_view timestamp_column,
+                                     MonthIterator months_begin,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr) const
+    requires(cudf::is_timestamp_t<Timestamp>::value)
   {
     auto size            = timestamp_column.size();
     auto output_col_type = timestamp_column.type();

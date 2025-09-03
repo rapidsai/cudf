@@ -93,9 +93,9 @@ std::shared_ptr<arrow::Array> to_arrow_array(cudf::type_id id, Ts&&... args)
 }
 
 template <typename T>
-std::enable_if_t<cudf::is_fixed_width<T>() and !std::is_same_v<T, bool>,
-                 std::shared_ptr<arrow::Array>>
-get_arrow_array(std::vector<T> const& data, std::vector<uint8_t> const& mask = {})
+std::shared_ptr<arrow::Array> get_arrow_array(std::vector<T> const& data,
+                                              std::vector<uint8_t> const& mask = {})
+  requires(cudf::is_fixed_width<T>() and !std::is_same_v<T, bool>)
 {
   std::shared_ptr<arrow::Buffer> data_buffer;
   arrow::BufferBuilder buff_builder;
@@ -110,9 +110,9 @@ get_arrow_array(std::vector<T> const& data, std::vector<uint8_t> const& mask = {
 }
 
 template <typename T>
-std::enable_if_t<cudf::is_fixed_width<T>() and !std::is_same_v<T, bool>,
-                 std::shared_ptr<arrow::Array>>
-get_arrow_array(std::initializer_list<T> elements, std::initializer_list<uint8_t> validity = {})
+std::shared_ptr<arrow::Array> get_arrow_array(std::initializer_list<T> elements,
+                                              std::initializer_list<uint8_t> validity = {})
+  requires(cudf::is_fixed_width<T>() and !std::is_same_v<T, bool>)
 {
   std::vector<T> data(elements);
   std::vector<uint8_t> mask(validity);
@@ -121,8 +121,9 @@ get_arrow_array(std::initializer_list<T> elements, std::initializer_list<uint8_t
 }
 
 template <typename T>
-std::enable_if_t<std::is_same_v<T, bool>, std::shared_ptr<arrow::Array>> get_arrow_array(
-  std::vector<bool> const& data, std::vector<bool> const& mask = {})
+std::shared_ptr<arrow::Array> get_arrow_array(std::vector<bool> const& data,
+                                              std::vector<bool> const& mask = {})
+  requires(std::is_same_v<T, bool>)
 {
   std::shared_ptr<arrow::BooleanArray> boolean_array;
   arrow::BooleanBuilder boolean_builder;
@@ -140,8 +141,9 @@ std::enable_if_t<std::is_same_v<T, bool>, std::shared_ptr<arrow::Array>> get_arr
 }
 
 template <typename T>
-std::enable_if_t<std::is_same_v<T, bool>, std::shared_ptr<arrow::Array>> get_arrow_array(
-  std::initializer_list<bool> elements, std::initializer_list<bool> validity = {})
+std::shared_ptr<arrow::Array> get_arrow_array(std::initializer_list<bool> elements,
+                                              std::initializer_list<bool> validity = {})
+  requires(std::is_same_v<T, bool>)
 {
   std::vector<bool> mask(validity);
   std::vector<bool> data(elements);
@@ -150,8 +152,9 @@ std::enable_if_t<std::is_same_v<T, bool>, std::shared_ptr<arrow::Array>> get_arr
 }
 
 template <typename T>
-std::enable_if_t<std::is_same_v<T, cudf::string_view>, std::shared_ptr<arrow::Array>>
-get_arrow_array(std::vector<std::string> const& data, std::vector<uint8_t> const& mask = {})
+std::shared_ptr<arrow::Array> get_arrow_array(std::vector<std::string> const& data,
+                                              std::vector<uint8_t> const& mask = {})
+  requires(std::is_same_v<T, cudf::string_view>)
 {
   std::shared_ptr<arrow::StringArray> string_array;
   arrow::StringBuilder string_builder;
@@ -164,9 +167,9 @@ get_arrow_array(std::vector<std::string> const& data, std::vector<uint8_t> const
 }
 
 template <typename T>
-std::enable_if_t<std::is_same_v<T, cudf::string_view>, std::shared_ptr<arrow::Array>>
-get_arrow_array(std::initializer_list<std::string> elements,
-                std::initializer_list<uint8_t> validity = {})
+std::shared_ptr<arrow::Array> get_arrow_array(std::initializer_list<std::string> elements,
+                                              std::initializer_list<uint8_t> validity = {})
+  requires(std::is_same_v<T, cudf::string_view>)
 {
   std::vector<uint8_t> mask(validity);
   std::vector<std::string> data(elements);
@@ -238,14 +241,14 @@ std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_table
   cudf::size_type length = 10000);
 
 template <typename T>
-std::enable_if_t<std::disjunction_v<std::is_same<T, int32_t>,
-                                    std::is_same<T, int64_t>,
-                                    std::is_same<T, __int128_t>>,
-                 std::shared_ptr<arrow::Array>>
-get_decimal_arrow_array(std::vector<T> const& data,
-                        std::optional<std::vector<uint8_t>> const& validity,
-                        int32_t precision,
-                        int32_t scale)
+std::shared_ptr<arrow::Array> get_decimal_arrow_array(
+  std::vector<T> const& data,
+  std::optional<std::vector<uint8_t>> const& validity,
+  int32_t precision,
+  int32_t scale)
+  requires(std::disjunction_v<std::is_same<T, int32_t>,
+                              std::is_same<T, int64_t>,
+                              std::is_same<T, __int128_t>>)
 {
   std::shared_ptr<arrow::Buffer> data_buffer;
   arrow::BufferBuilder buff_builder;

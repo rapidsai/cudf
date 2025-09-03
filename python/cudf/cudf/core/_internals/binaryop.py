@@ -58,4 +58,4 @@ def binaryop(
             plc.binaryop.BinaryOperator[op],
             dtype_to_pylibcudf_type(dtype),
         )
-    )
+    )._with_type_metadata(dtype)

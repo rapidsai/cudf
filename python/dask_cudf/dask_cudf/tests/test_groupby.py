@@ -1,5 +1,7 @@
 # Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
+import warnings
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -10,7 +12,6 @@ from dask.utils_test import hlg_layer
 
 import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
-from cudf.testing._utils import expect_warning_if
 
 import dask_cudf
 from dask_cudf._expr.groupby import OPTIMIZED_AGGS, _aggs_optimized
@@ -53,7 +54,7 @@ def pdf(request):
 # deprecation check for "collect".
 @pytest.mark.parametrize(
     "aggregation",
-    sorted((*tuple(set(OPTIMIZED_AGGS) - {list}), "collect")),
+    sorted(set(OPTIMIZED_AGGS) - {list}),
 )
 @pytest.mark.parametrize("series", [False, True])
 def test_groupby_basic(series, aggregation, pdf):
@@ -69,9 +70,8 @@ def test_groupby_basic(series, aggregation, pdf):
 
     check_dtype = aggregation != "count"
 
-    with expect_warning_if(aggregation == "collect"):
-        expect = getattr(gdf_grouped, aggregation)()
-        actual = getattr(ddf_grouped, aggregation)()
+    expect = getattr(gdf_grouped, aggregation)()
+    actual = getattr(ddf_grouped, aggregation)()
 
     dd.assert_eq(expect, actual, check_dtype=check_dtype)
 
@@ -625,9 +625,14 @@ def test_groupby_agg_params(
         1 if split_out == "use_dask_default" else split_out
     )
 
-    # Compute for easier multiindex handling
-    gf = gr.compute()
-    pf = pr.compute()
+    with warnings.catch_warnings():
+        # dask<=2025.7.0 uses a deprecated "grouper" attribute
+        # in some of these computations. We'll silence the warning
+        # here and fix it upstream.
+        warnings.filterwarnings("ignore", category=FutureWarning)
+        # Compute for easier multiindex handling
+        gf = gr.compute()
+        pf = pr.compute()
 
     # Reset index and sort by groupby columns
     if as_index:

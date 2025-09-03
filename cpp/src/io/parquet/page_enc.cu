@@ -23,6 +23,8 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 
@@ -55,8 +57,8 @@ namespace {
 
 using ::cudf::detail::device_2dspan;
 
-using cudf::io::detail::compression_result;
-using cudf::io::detail::compression_status;
+using cudf::io::detail::codec_exec_result;
+using cudf::io::detail::codec_status;
 
 constexpr int encode_block_size = 128;
 constexpr int rle_buffer_size   = 2 * encode_block_size;
@@ -1523,7 +1525,7 @@ __device__ void finish_page_encode(state_buf* s,
                                    device_span<EncPage> pages,
                                    device_span<device_span<uint8_t const>> comp_in,
                                    device_span<device_span<uint8_t>> comp_out,
-                                   device_span<compression_result> comp_results,
+                                   device_span<codec_exec_result> comp_results,
                                    bool write_v2_headers)
 {
   auto const t = threadIdx.x;
@@ -1606,8 +1608,7 @@ __device__ void finish_page_encode(state_buf* s,
     }
     pages[blockIdx.x] = s->page;
     if (not comp_results.empty()) {
-      auto const status =
-        s->col.skip_compression ? compression_status::SKIPPED : compression_status::FAILURE;
+      auto const status = s->col.skip_compression ? codec_status::SKIPPED : codec_status::FAILURE;
       comp_results[blockIdx.x]   = {0, status};
       pages[blockIdx.x].comp_res = &comp_results[blockIdx.x];
     }
@@ -1643,7 +1644,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
   gpuEncodePages(device_span<EncPage> pages,
                  device_span<device_span<uint8_t const>> comp_in,
                  device_span<device_span<uint8_t>> comp_out,
-                 device_span<compression_result> comp_results,
+                 device_span<codec_exec_result> comp_results,
                  bool write_v2_headers,
                  bool is_split_stream)
 {
@@ -1882,7 +1883,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
   gpuEncodeDictPages(device_span<EncPage> pages,
                      device_span<device_span<uint8_t const>> comp_in,
                      device_span<device_span<uint8_t>> comp_out,
-                     device_span<compression_result> comp_results,
+                     device_span<codec_exec_result> comp_results,
                      bool write_v2_headers)
 {
   __shared__ __align__(8) rle_page_enc_state_s state_g;
@@ -2009,7 +2010,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
   gpuEncodeDeltaBinaryPages(device_span<EncPage> pages,
                             device_span<device_span<uint8_t const>> comp_in,
                             device_span<device_span<uint8_t>> comp_out,
-                            device_span<compression_result> comp_results)
+                            device_span<codec_exec_result> comp_results)
 {
   // block of shared memory for value storage and bit packing
   __shared__ uleb128_t delta_shared[delta::buffer_size + delta::block_size];
@@ -2112,7 +2113,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
   gpuEncodeDeltaLengthByteArrayPages(device_span<EncPage> pages,
                                      device_span<device_span<uint8_t const>> comp_in,
                                      device_span<device_span<uint8_t>> comp_out,
-                                     device_span<compression_result> comp_results)
+                                     device_span<codec_exec_result> comp_results)
 {
   // block of shared memory for value storage and bit packing
   __shared__ uleb128_t delta_shared[delta::buffer_size + delta::block_size];
@@ -2255,7 +2256,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
   gpuEncodeDeltaByteArrayPages(device_span<EncPage> pages,
                                device_span<device_span<uint8_t const>> comp_in,
                                device_span<device_span<uint8_t>> comp_out,
-                               device_span<compression_result> comp_results)
+                               device_span<codec_exec_result> comp_results)
 {
   using cudf::detail::warp_size;
   // block of shared memory for value storage and bit packing
@@ -2536,9 +2537,7 @@ CUDF_KERNEL void __launch_bounds__(decide_compression_block_size)
       auto const lvl_bytes = curr_page.is_v2() ? curr_page.level_bytes() : 0;
       compressed_data_size += comp_res->bytes_written + lvl_bytes;
       // TODO: would this be better as a ballot?
-      if (comp_res->status != compression_status::SUCCESS) {
-        atomicOr(&compression_error[warp_id], 1);
-      }
+      if (comp_res->status != codec_status::SUCCESS) { atomicOr(&compression_error[warp_id], 1); }
     }
     // collect encoding info for the chunk metadata
     encodings |= encoding_to_mask(curr_page.encoding);
@@ -2977,7 +2976,7 @@ __device__ uint8_t* EncodeStatistics(uint8_t* start,
 // blockDim(encode_block_size, 1, 1)
 CUDF_KERNEL void __launch_bounds__(encode_block_size)
   gpuEncodePageHeaders(device_span<EncPage> pages,
-                       device_span<compression_result const> comp_results,
+                       device_span<codec_exec_result const> comp_results,
                        device_span<statistics_chunk const> page_stats,
                        statistics_chunk const* chunk_stats)
 {
@@ -3425,7 +3424,7 @@ void EncodePages(device_span<EncPage> pages,
                  bool write_v2_headers,
                  device_span<device_span<uint8_t const>> comp_in,
                  device_span<device_span<uint8_t>> comp_out,
-                 device_span<compression_result> comp_results,
+                 device_span<codec_exec_result> comp_results,
                  rmm::cuda_stream_view stream)
 {
   auto num_pages = pages.size();
@@ -3500,7 +3499,7 @@ void DecideCompression(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view
 }
 
 void EncodePageHeaders(device_span<EncPage> pages,
-                       device_span<compression_result const> comp_results,
+                       device_span<codec_exec_result const> comp_results,
                        device_span<statistics_chunk const> page_stats,
                        statistics_chunk const* chunk_stats,
                        rmm::cuda_stream_view stream)

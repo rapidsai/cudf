@@ -21,7 +21,7 @@
 
     <groupId>ai.rapids</groupId>
     <artifactId>cudf</artifactId>
-    <version>25.06.0-SNAPSHOT</version>
+    <version>25.10.0-SNAPSHOT</version>
 
     <name>cudfjni</name>
     <description>
@@ -284,7 +284,7 @@
             <distributionManagement>
                 <snapshotRepository>
                     <id>ossrh</id>
-                    <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+                    <url>https://central.sonatype.com/repository/maven-snapshots/</url>
                 </snapshotRepository>
             </distributionManagement>
             <properties>
@@ -354,6 +354,35 @@
                             <nexusUrl>https://oss.sonatype.org/</nexusUrl>
                             <autoReleaseAfterClose>false</autoReleaseAfterClose>
                         </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>javadoc-jdk17</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <version>3.6.3</version>
+                        <configuration>
+                            <classifier>javadoc</classifier>
+                            <additionalJOptions>
+                                <additionalJOption>-Xdoclint:none</additionalJOption>
+                            </additionalJOptions>
+                            <source>8</source> <!-- Compatible to JDK 8 -->
+                            <!-- Set JDK 17 javadoc path -->
+                            <javadocExecutable>${env.JDK17_HOME}/bin/javadoc</javadocExecutable>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>attach-javadocs</id>
+                                <goals>
+                                    <goal>jar</goal>
+                                </goals>
+                            </execution>
+                        </executions>
                     </plugin>
                 </plugins>
             </build>

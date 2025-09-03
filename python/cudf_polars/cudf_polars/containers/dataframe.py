@@ -12,18 +12,58 @@ import polars as pl
 
 import pylibcudf as plc
 
-from cudf_polars.containers import Column
+from cudf_polars.containers import Column, DataType
 from cudf_polars.utils import conversion
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence, Set
 
-    from typing_extensions import Any, Self
+    from typing_extensions import Any, CapsuleType, Self
 
-    from cudf_polars.typing import ColumnOptions, DataFrameHeader, Slice
+    from cudf_polars.typing import ColumnOptions, DataFrameHeader, PolarsDataType, Slice
 
 
 __all__: list[str] = ["DataFrame"]
+
+
+def _create_polars_column_metadata(
+    name: str, dtype: PolarsDataType
+) -> plc.interop.ColumnMetadata:
+    """Create ColumnMetadata preserving dtype attributes not supported by libcudf."""
+    children_meta = []
+    timezone = ""
+    precision: int | None = None
+
+    if isinstance(dtype, pl.Struct):
+        children_meta = [
+            _create_polars_column_metadata(field.name, field.dtype)
+            for field in dtype.fields
+        ]
+    elif isinstance(dtype, pl.Datetime):
+        timezone = dtype.time_zone or timezone
+    elif isinstance(dtype, pl.Decimal):
+        precision = dtype.precision
+
+    return plc.interop.ColumnMetadata(
+        name=name,
+        timezone=timezone,
+        precision=precision,
+        children_meta=children_meta,
+    )
+
+
+# This is also defined in pylibcudf.interop
+class _ObjectWithArrowMetadata:
+    def __init__(
+        self, obj: plc.Table, metadata: list[plc.interop.ColumnMetadata]
+    ) -> None:
+        self.obj = obj
+        self.metadata = metadata
+
+    def __arrow_c_array__(
+        self, requested_schema: None = None
+    ) -> tuple[CapsuleType, CapsuleType]:
+        return self.obj._to_schema(self.metadata), self.obj._to_host_array()
 
 
 # Pacify the type checker. DataFrame init asserts that all the columns
@@ -44,6 +84,7 @@ class DataFrame:
         if any(c.name is None for c in columns):
             raise ValueError("All columns must have a name")
         self.columns = [cast(NamedColumn, c) for c in columns]
+        self.dtypes = [c.dtype for c in self.columns]
         self.column_map = {c.name: c for c in self.columns}
         self.table = plc.Table([c.obj for c in self.columns])
 
@@ -60,11 +101,12 @@ class DataFrame:
         # To guarantee we produce correct names, we therefore
         # serialise with names we control and rename with that map.
         name_map = {f"column_{i}": name for i, name in enumerate(self.column_map)}
-        table = plc.interop.to_arrow(
-            self.table,
-            [plc.interop.ColumnMetadata(name=name) for name in name_map],
-        )
-        df: pl.DataFrame = pl.from_arrow(table)
+        metadata = [
+            _create_polars_column_metadata(name, dtype.polars)
+            for name, dtype in zip(name_map, self.dtypes, strict=True)
+        ]
+        table_with_metadata = _ObjectWithArrowMetadata(self.table, metadata)
+        df = pl.DataFrame(table_with_metadata)
         return df.rename(name_map).with_columns(
             pl.col(c.name).set_sorted(descending=c.order == plc.types.Order.DESCENDING)
             if c.is_sorted
@@ -106,16 +148,18 @@ class DataFrame:
         -------
         New dataframe representing the input.
         """
-        plc_table = plc.Table(df)
+        plc_table = plc.Table.from_arrow(df)
         return cls(
-            Column(d_col, name=name).copy_metadata(h_col)
+            Column(d_col, name=name, dtype=DataType(h_col.dtype)).copy_metadata(h_col)
             for d_col, h_col, name in zip(
                 plc_table.columns(), df.iter_columns(), df.columns, strict=True
             )
         )
 
     @classmethod
-    def from_table(cls, table: plc.Table, names: Sequence[str]) -> Self:
+    def from_table(
+        cls, table: plc.Table, names: Sequence[str], dtypes: Sequence[DataType]
+    ) -> Self:
         """
         Create from a pylibcudf table.
 
@@ -125,6 +169,8 @@ class DataFrame:
             Pylibcudf table to obtain columns from
         names
             Names for the columns
+        dtypes
+            Dtypes for the columns
 
         Returns
         -------
@@ -139,7 +185,8 @@ class DataFrame:
         if table.num_columns() != len(names):
             raise ValueError("Mismatching name and table length.")
         return cls(
-            Column(c, name=name) for c, name in zip(table.columns(), names, strict=True)
+            Column(c, name=name, dtype=dtype)
+            for c, name, dtype in zip(table.columns(), names, dtypes, strict=True)
         )
 
     @classmethod
@@ -166,7 +213,7 @@ class DataFrame:
             packed_metadata, packed_gpu_data
         )
         return cls(
-            Column(c, **kw)
+            Column(c, **Column.deserialize_ctor_kwargs(kw))
             for c, kw in zip(table.columns(), header["columns_kwargs"], strict=True)
         )
 
@@ -195,13 +242,7 @@ class DataFrame:
 
         # Keyword arguments for `Column.__init__`.
         columns_kwargs: list[ColumnOptions] = [
-            {
-                "is_sorted": col.is_sorted,
-                "order": col.order,
-                "null_order": col.null_order,
-                "name": col.name,
-            }
-            for col in self.columns
+            col.serialize_ctor_kwargs() for col in self.columns
         ]
         header: DataFrameHeader = {
             "columns_kwargs": columns_kwargs,
@@ -288,7 +329,11 @@ class DataFrame:
     def filter(self, mask: Column) -> Self:
         """Return a filtered table given a mask."""
         table = plc.stream_compaction.apply_boolean_mask(self.table, mask.obj)
-        return type(self).from_table(table, self.column_names).sorted_like(self)
+        return (
+            type(self)
+            .from_table(table, self.column_names, self.dtypes)
+            .sorted_like(self)
+        )
 
     def slice(self, zlice: Slice | None) -> Self:
         """
@@ -309,4 +354,8 @@ class DataFrame:
         (table,) = plc.copying.slice(
             self.table, conversion.from_polars_slice(zlice, num_rows=self.num_rows)
         )
-        return type(self).from_table(table, self.column_names).sorted_like(self)
+        return (
+            type(self)
+            .from_table(table, self.column_names, self.dtypes)
+            .sorted_like(self)
+        )

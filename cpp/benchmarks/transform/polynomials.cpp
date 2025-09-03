@@ -34,10 +34,12 @@ static void BM_transform_polynomials(nvbench::state& state)
 {
   auto const num_rows{static_cast<cudf::size_type>(state.get_int64("num_rows"))};
   auto const order{static_cast<cudf::size_type>(state.get_int64("order"))};
+  auto const null_probability = state.get_float64("null_probability");
 
   CUDF_EXPECTS(order > 0, "Polynomial order must be greater than 0");
 
   data_profile profile;
+  profile.set_null_probability(null_probability);
   profile.set_distribution_params(cudf::type_to_id<key_type>(),
                                   distribution_id::NORMAL,
                                   static_cast<key_type>(0),
@@ -92,6 +94,8 @@ static void BM_transform_polynomials(nvbench::state& state)
                     udf,
                     cudf::data_type{cudf::type_to_id<key_type>()},
                     false,
+                    std::nullopt,
+                    cudf::null_aware::NO,
                     launch.get_stream().get_stream());
   });
 }
@@ -102,7 +106,8 @@ static void BM_transform_polynomials(nvbench::state& state)
   NVBENCH_BENCH(name)                                                                  \
     .set_name(#name)                                                                   \
     .add_int64_axis("num_rows", {100'000, 1'000'000, 10'000'000, 100'000'000})         \
-    .add_int64_axis("order", {1, 2, 4, 8, 16, 32})
+    .add_int64_axis("order", {1, 2, 4, 8, 16, 32})                                     \
+    .add_float64_axis("null_probability", {0.01})
 
 TRANSFORM_POLYNOMIALS_BENCHMARK_DEFINE(transform_polynomials_float32, float);
 

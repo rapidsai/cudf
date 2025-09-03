@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -242,6 +242,15 @@ std::pair<rmm::device_buffer, size_type> bitmask_and(host_span<bitmask_type cons
 std::pair<rmm::device_buffer, size_type> bitmask_and(table_view const& view,
                                                      rmm::cuda_stream_view stream,
                                                      rmm::device_async_resource_ref mr);
+
+/**
+ * @copydoc cudf::segmented_bitmask_and
+ */
+std::pair<std::vector<std::unique_ptr<rmm::device_buffer>>, std::vector<size_type>>
+segmented_bitmask_and(host_span<column_view const> colviews,
+                      host_span<size_type const> segment_offsets,
+                      rmm::cuda_stream_view stream,
+                      rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::bitmask_or

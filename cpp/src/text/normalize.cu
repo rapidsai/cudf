@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 
+#include "text/detail/codepoint_metadata.ah"
 #include "text/normalize.cuh"
-#include "text/subword/detail/data_normalizer.hpp"
-#include "text/subword/detail/tokenizer_utils.cuh"
 #include "text/utilities/tokenize_ops.cuh"
 
 #include <cudf/column/column.hpp>
@@ -26,6 +25,8 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/strings/case.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
@@ -105,67 +106,11 @@ struct normalize_spaces_fn {
   }
 };
 
-// code-point to multi-byte range limits
-constexpr uint32_t UTF8_1BYTE = 0x0080;
-constexpr uint32_t UTF8_2BYTE = 0x0800;
-constexpr uint32_t UTF8_3BYTE = 0x01'0000;
-
 __device__ int8_t cp_to_utf8(uint32_t codepoint, char* out)
 {
   auto utf8 = cudf::strings::detail::codepoint_to_utf8(codepoint);
   return cudf::strings::detail::from_char_utf8(utf8, out);
 }
-
-/**
- * @brief Convert code-point arrays into UTF-8 bytes for each string.
- */
-struct codepoint_to_utf8_fn {
-  cudf::column_device_view const d_strings;  // input strings
-  uint32_t const* cp_data;                   // full code-point array
-  int64_t const* d_cp_offsets{};             // offsets to each string's code-point array
-  cudf::size_type* d_sizes{};                // size of output string
-  char* d_chars{};                           // buffer for the output strings column
-  cudf::detail::input_offsetalator d_offsets;
-
-  /**
-   * @brief Return the number of bytes for the output string given its code-point array.
-   *
-   * @param str_cps code-points for the string
-   * @param count number of code-points in `str_cps`
-   * @return Number of bytes required for the output
-   */
-  __device__ cudf::size_type compute_output_size(uint32_t const* str_cps, uint32_t count)
-  {
-    return thrust::transform_reduce(
-      thrust::seq,
-      str_cps,
-      str_cps + count,
-      [](auto cp) { return 1 + (cp >= UTF8_1BYTE) + (cp >= UTF8_2BYTE) + (cp >= UTF8_3BYTE); },
-      0,
-      cuda::std::plus());
-  }
-
-  __device__ void operator()(cudf::size_type idx)
-  {
-    if (d_strings.is_null(idx)) {
-      if (!d_chars) { d_sizes[idx] = 0; }
-      return;
-    }
-    auto const offset = d_cp_offsets[idx];
-    auto const count  = d_cp_offsets[idx + 1] - offset;  // number of code-points
-    auto str_cps      = cp_data + offset;                // code-points for this string
-    if (!d_chars) {
-      d_sizes[idx] = compute_output_size(str_cps, count);
-      return;
-    }
-    // convert each code-point to 1-4 UTF-8 encoded bytes
-    char* out_ptr = d_chars + d_offsets[idx];
-    for (uint32_t jdx = 0; jdx < count; ++jdx) {
-      uint32_t codepoint = *str_cps++;
-      out_ptr += cp_to_utf8(codepoint, out_ptr);
-    }
-  }
-};
 
 }  // namespace
 
@@ -191,45 +136,71 @@ std::unique_ptr<cudf::column> normalize_spaces(cudf::strings_column_view const& 
 }
 
 /**
- * @copydoc nvtext::normalize_characters
+ * @brief Retrieve the code point metadata table.
+ *
+ * Build the code point metadata table in device memory
+ * using the vector pieces from codepoint_metadata.ah
  */
-std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view const& strings,
-                                                   bool do_lower_case,
-                                                   rmm::cuda_stream_view stream,
-                                                   rmm::device_async_resource_ref mr)
+rmm::device_uvector<codepoint_metadata_type> get_codepoint_metadata(rmm::cuda_stream_view stream)
 {
-  if (strings.is_empty()) return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
+  auto table_vector = rmm::device_uvector<codepoint_metadata_type>(codepoint_metadata_size, stream);
+  auto table        = table_vector.data();
+  thrust::fill(rmm::exec_policy(stream),
+               table + cp_section1_end,
+               table + codepoint_metadata_size,
+               codepoint_metadata_default_value);
+  CUDF_CUDA_TRY(cudaMemcpyAsync(table,
+                                codepoint_metadata,
+                                cp_section1_end * sizeof(codepoint_metadata[0]),  // 1st section
+                                cudaMemcpyDefault,
+                                stream.value()));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(
+    table + cp_section2_begin,
+    cp_metadata_917505_917999,
+    (cp_section2_end - cp_section2_begin + 1) * sizeof(codepoint_metadata[0]),  // 2nd section
+    cudaMemcpyDefault,
+    stream.value()));
+  return table_vector;
+}
 
-  // create the normalizer and call it
-  auto result = [&] {
-    auto const cp_metadata = get_codepoint_metadata(stream);
-    auto const aux_table   = get_aux_codepoint_data(stream);
-    auto const normalizer  = data_normalizer(cp_metadata.data(), aux_table.data(), do_lower_case);
-    return normalizer.normalize(strings, stream);
-  }();
-
-  CUDF_EXPECTS(
-    result.first->size() < static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
-    "output exceeds the column size limit",
-    std::overflow_error);
-
-  // convert the result into a strings column
-  // - the cp_chars are the new 4-byte code-point values for all the characters in the output
-  // - the cp_offsets identify which code-points go with which strings
-  auto const cp_chars   = result.first->data();
-  auto const cp_offsets = result.second->data();
-
-  auto d_strings = cudf::column_device_view::create(strings.parent(), stream);
-
-  // build offsets and children using the codepoint_to_utf8_fn
-  auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
-    codepoint_to_utf8_fn{*d_strings, cp_chars, cp_offsets}, strings.size(), stream, mr);
-
-  return cudf::make_strings_column(strings.size(),
-                                   std::move(offsets_column),
-                                   chars.release(),
-                                   strings.null_count(),
-                                   cudf::detail::copy_bitmask(strings.parent(), stream, mr));
+/**
+ * @brief Retrieve the aux code point data table.
+ *
+ * Build the aux code point data table in device memory
+ * using the vector pieces from codepoint_metadata.ah
+ */
+rmm::device_uvector<aux_codepoint_data_type> get_aux_codepoint_data(rmm::cuda_stream_view stream)
+{
+  auto table_vector = rmm::device_uvector<aux_codepoint_data_type>(aux_codepoint_data_size, stream);
+  auto table        = table_vector.data();
+  thrust::fill(rmm::exec_policy(stream),
+               table + aux_section1_end,
+               table + aux_codepoint_data_size,
+               aux_codepoint_default_value);
+  CUDF_CUDA_TRY(cudaMemcpyAsync(table,
+                                aux_codepoint_data,
+                                aux_section1_end * sizeof(aux_codepoint_data[0]),  // 1st section
+                                cudaMemcpyDefault,
+                                stream.value()));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(
+    table + aux_section2_begin,
+    aux_cp_data_44032_55203,
+    (aux_section2_end - aux_section2_begin + 1) * sizeof(aux_codepoint_data[0]),  // 2nd section
+    cudaMemcpyDefault,
+    stream.value()));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(
+    table + aux_section3_begin,
+    aux_cp_data_70475_71099,
+    (aux_section3_end - aux_section3_begin + 1) * sizeof(aux_codepoint_data[0]),  // 3rd section
+    cudaMemcpyDefault,
+    stream.value()));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(
+    table + aux_section4_begin,
+    aux_cp_data_119134_119232,
+    (aux_section4_end - aux_section4_begin + 1) * sizeof(aux_codepoint_data[0]),  // 4th section
+    cudaMemcpyDefault,
+    stream.value()));
+  return table_vector;
 }
 
 }  // namespace detail
@@ -242,18 +213,6 @@ std::unique_ptr<cudf::column> normalize_spaces(cudf::strings_column_view const& 
 {
   CUDF_FUNC_RANGE();
   return detail::normalize_spaces(input, stream, mr);
-}
-
-/**
- * @copydoc nvtext::normalize_characters
- */
-std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view const& input,
-                                                   bool do_lower_case,
-                                                   rmm::cuda_stream_view stream,
-                                                   rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::normalize_characters(input, do_lower_case, stream, mr);
 }
 
 struct character_normalizer::character_normalizer_impl {

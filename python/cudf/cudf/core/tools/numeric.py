@@ -145,7 +145,7 @@ def to_numeric(
                     return arg
                 else:
                     raise e
-    elif dtype == CUDF_STRING_DTYPE:
+    elif dtype == CUDF_STRING_DTYPE or isinstance(dtype, pd.StringDtype):
         try:
             col = _convert_str_col(col, errors, downcast)  # type: ignore[arg-type]
         except ValueError as e:

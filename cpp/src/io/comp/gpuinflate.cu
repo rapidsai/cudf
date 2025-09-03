@@ -47,7 +47,15 @@ Mark Adler    madler@alumni.caltech.edu
 #include "gpuinflate.hpp"
 #include "io/utilities/block_utils.cuh"
 
+#include <cudf/detail/nvtx/ranges.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
+#include <rmm/exec_policy.hpp>
+
+#include <thrust/gather.h>
+#include <thrust/sequence.h>
+#include <thrust/sort.h>
 
 namespace cudf::io::detail {
 
@@ -1024,7 +1032,7 @@ template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
   inflate_kernel(device_span<device_span<uint8_t const> const> inputs,
                  device_span<device_span<uint8_t> const> outputs,
-                 device_span<compression_result> results,
+                 device_span<codec_exec_result> results,
                  gzip_header_included parse_hdr)
 {
   __shared__ __align__(16) inflate_state_s state_g;
@@ -1133,9 +1141,9 @@ CUDF_KERNEL void __launch_bounds__(block_size)
     results[z].bytes_written = state->out - state->outbase;
     results[z].status        = [&]() {
       switch (state->err) {
-        case 0: return compression_status::SUCCESS;
-        case 1: return compression_status::OUTPUT_OVERFLOW;
-        default: return compression_status::FAILURE;
+        case 0: return codec_status::SUCCESS;
+        case 1: return codec_status::OUTPUT_OVERFLOW;
+        default: return codec_status::FAILURE;
       }
     }();
   }
@@ -1202,7 +1210,7 @@ CUDF_KERNEL void __launch_bounds__(1024)
 
 void gpuinflate(device_span<device_span<uint8_t const> const> inputs,
                 device_span<device_span<uint8_t> const> outputs,
-                device_span<compression_result> results,
+                device_span<codec_exec_result> results,
                 gzip_header_included parse_hdr,
                 rmm::cuda_stream_view stream)
 {
@@ -1220,6 +1228,50 @@ void gpu_copy_uncompressed_blocks(device_span<device_span<uint8_t const> const> 
   if (inputs.size() > 0) {
     copy_uncompressed_kernel<<<inputs.size(), 1024, 0, stream.value()>>>(inputs, outputs);
   }
+}
+
+sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const> inputs,
+                                   device_span<device_span<uint8_t> const> outputs,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  rmm::device_uvector<std::size_t> order(inputs.size(), stream, mr);
+  thrust::sequence(rmm::exec_policy_nosync(stream), order.begin(), order.end());
+  thrust::sort(rmm::exec_policy_nosync(stream),
+               order.begin(),
+               order.end(),
+               [inputs] __device__(std::size_t a, std::size_t b) {
+                 return inputs[a].size() > inputs[b].size();
+               });
+
+  auto sorted_inputs = rmm::device_uvector<device_span<uint8_t const>>(inputs.size(), stream, mr);
+  thrust::gather(rmm::exec_policy_nosync(stream),
+                 order.begin(),
+                 order.end(),
+                 inputs.begin(),
+                 sorted_inputs.begin());
+
+  auto sorted_outputs = rmm::device_uvector<device_span<uint8_t>>(outputs.size(), stream, mr);
+  thrust::gather(rmm::exec_policy_nosync(stream),
+                 order.begin(),
+                 order.end(),
+                 outputs.begin(),
+                 sorted_outputs.begin());
+
+  return {std::move(sorted_inputs), std::move(sorted_outputs), std::move(order)};
+}
+
+void copy_results_to_original_order(device_span<codec_exec_result const> sorted_results,
+                                    device_span<codec_exec_result> original_results,
+                                    device_span<std::size_t const> order,
+                                    rmm::cuda_stream_view stream)
+{
+  thrust::scatter(rmm::exec_policy_nosync(stream),
+                  sorted_results.begin(),
+                  sorted_results.end(),
+                  order.begin(),
+                  original_results.begin());
 }
 
 }  // namespace cudf::io::detail

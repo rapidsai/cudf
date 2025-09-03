@@ -1,9 +1,12 @@
 # Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
+import datetime
 import decimal
+import itertools
 import operator
+import re
 import warnings
-from itertools import combinations_with_replacement, product
+from concurrent.futures import ThreadPoolExecutor
 
 import cupy as cp
 import numpy as np
@@ -29,112 +32,12 @@ from cudf.utils.dtypes import (
 )
 
 STRING_TYPES = {"str"}
-
-_binops = [
-    operator.add,
-    operator.sub,
-    operator.mul,
-    operator.floordiv,
-    operator.truediv,
-    operator.mod,
-    operator.pow,
-]
-
-_binops_compare = [
-    operator.eq,
-    operator.ne,
-    operator.lt,
-    operator.le,
-    operator.gt,
-    operator.ge,
-]
-
-_bitwise_binops = [operator.and_, operator.or_, operator.xor]
-
-_int_types = [
-    "int8",
-    "int16",
-    "int32",
-    "int64",
-    "uint8",
-    "uint16",
-    "uint32",
-]
-
-_cmpops = [
-    operator.lt,
-    operator.gt,
-    operator.le,
-    operator.ge,
-    operator.eq,
-    operator.ne,
-]
-
-_reflected_ops = [
-    lambda x: 1 + x,
-    lambda x: 2 * x,
-    lambda x: 2 - x,
-    lambda x: 2 // x,
-    lambda x: 2 / x,
-    lambda x: 3 + x,
-    lambda x: 3 * x,
-    lambda x: 3 - x,
-    lambda x: 3 // x,
-    lambda x: 3 / x,
-    lambda x: 3 % x,
-    lambda x: -1 + x,
-    lambda x: -2 * x,
-    lambda x: -2 - x,
-    lambda x: -2 // x,
-    lambda x: -2 / x,
-    lambda x: -3 + x,
-    lambda x: -3 * x,
-    lambda x: -3 - x,
-    lambda x: -3 // x,
-    lambda x: -3 / x,
-    lambda x: -3 % x,
-    lambda x: 0 + x,
-    lambda x: 0 * x,
-    lambda x: 0 - x,
-    lambda x: 0 // x,
-    lambda x: 0 / x,
-]
-
-_operators_arithmetic = [
-    "add",
-    "radd",
-    "sub",
-    "rsub",
-    "mul",
-    "rmul",
-    "mod",
-    "rmod",
-    "pow",
-    "rpow",
-    "div",
-    "divide",
-    "floordiv",
-    "rfloordiv",
-    "truediv",
-    "rtruediv",
-]
-
-_operators_comparison = ["eq", "ne", "lt", "le", "gt", "ge"]
-
-
 pytest_xfail = pytest.mark.xfail
 pytestmark = pytest.mark.spilling
 
 # If spilling is enabled globally, we skip many test permutations
 # to reduce running time.
 if get_global_manager() is not None:
-    _binops = _binops[:1]
-    _binops_compare = _binops_compare[:1]
-    _int_types = _int_types[-1:]
-    _cmpops = _cmpops[:1]
-    _reflected_ops = _reflected_ops[:1]
-    _operators_arithmetic = _operators_arithmetic[:1]
-    _operators_comparison = _operators_comparison[:1]
     DATETIME_TYPES = {"datetime64[ms]"}
     NUMERIC_TYPES = {"float32"}
     FLOAT_TYPES = {"float64"}
@@ -145,11 +48,10 @@ if get_global_manager() is not None:
 
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
-@pytest.mark.parametrize("binop", _binops)
-def test_series_binop(request, binop, obj_class):
+def test_series_binop(request, arithmetic_op, obj_class):
     request.applymarker(
         pytest.mark.xfail(
-            binop is operator.floordiv,
+            arithmetic_op is operator.floordiv,
             reason="https://github.com/rapidsai/cudf/issues/17073",
         )
     )
@@ -167,8 +69,8 @@ def test_series_binop(request, binop, obj_class):
         sr1 = Index(sr1)
         sr2 = Index(sr2)
 
-    expect = binop(psr1, psr2)
-    result = binop(sr1, sr2)
+    expect = arithmetic_op(psr1, psr2)
+    result = arithmetic_op(sr1, sr2)
 
     if obj_class == "Index":
         result = Series(result)
@@ -176,19 +78,16 @@ def test_series_binop(request, binop, obj_class):
     assert_eq(result, expect)
 
 
-@pytest.mark.parametrize("binop", _binops)
-def test_series_binop_concurrent(binop):
+def test_series_binop_concurrent(arithmetic_op):
     def func(index):
         rng = np.random.default_rng(seed=0)
         arr = rng.random(100) * 10
         sr = Series(arr)
 
-        result = binop(sr.astype("int32"), sr)
-        expect = binop(arr.astype("int32"), arr)
+        result = arithmetic_op(sr.astype("int32"), sr)
+        expect = arithmetic_op(arr.astype("int32"), arr)
 
         np.testing.assert_almost_equal(result.to_numpy(), expect, decimal=5)
-
-    from concurrent.futures import ThreadPoolExecutor
 
     indices = range(10)
     with ThreadPoolExecutor(4) as e:  # four processes
@@ -196,8 +95,8 @@ def test_series_binop_concurrent(binop):
 
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
-@pytest.mark.parametrize("nelem,binop", list(product([1, 2, 100], _binops)))
-def test_series_binop_scalar(nelem, binop, obj_class):
+def test_series_binop_scalar(arithmetic_op, obj_class):
+    nelem = 10
     rng = np.random.default_rng(seed=0)
     arr = rng.random(nelem)
     rhs = rng.choice(arr).item()
@@ -206,25 +105,24 @@ def test_series_binop_scalar(nelem, binop, obj_class):
     if obj_class == "Index":
         sr = Index(sr)
 
-    result = binop(sr, rhs)
+    result = arithmetic_op(sr, rhs)
 
     if obj_class == "Index":
         result = Series(result)
 
-    np.testing.assert_almost_equal(result.to_numpy(), binop(arr, rhs))
+    np.testing.assert_almost_equal(result.to_numpy(), arithmetic_op(arr, rhs))
 
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
-@pytest.mark.parametrize("binop", _bitwise_binops)
-@pytest.mark.parametrize(
-    "lhs_dtype,rhs_dtype", list(product(_int_types, _int_types))
-)
-def test_series_bitwise_binop(binop, obj_class, lhs_dtype, rhs_dtype):
+@pytest.mark.parametrize("binop", [operator.and_, operator.or_, operator.xor])
+def test_series_bitwise_binop(
+    binop, obj_class, integer_types_as_str, integer_types_as_str2
+):
     rng = np.random.default_rng(seed=0)
-    arr1 = (rng.random(100) * 100).astype(lhs_dtype)
+    arr1 = (rng.random(100) * 100).astype(integer_types_as_str)
     sr1 = Series(arr1)
 
-    arr2 = (rng.random(100) * 100).astype(rhs_dtype)
+    arr2 = (rng.random(100) * 100).astype(integer_types_as_str2)
     sr2 = Series(arr2)
 
     if obj_class == "Index":
@@ -240,14 +138,12 @@ def test_series_bitwise_binop(binop, obj_class, lhs_dtype, rhs_dtype):
 
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
-@pytest.mark.parametrize("cmpop", _cmpops)
-@pytest.mark.parametrize(
-    "dtype", ["int8", "int32", "int64", "float32", "float64", "datetime64[ms]"]
-)
-def test_series_compare(cmpop, obj_class, dtype):
+def test_series_compare(
+    comparison_op, obj_class, numeric_and_temporal_types_as_str
+):
     rng = np.random.default_rng(seed=0)
-    arr1 = rng.integers(0, 100, 100).astype(dtype)
-    arr2 = rng.integers(0, 100, 100).astype(dtype)
+    arr1 = rng.integers(0, 100, 100).astype(numeric_and_temporal_types_as_str)
+    arr2 = rng.integers(0, 100, 100).astype(numeric_and_temporal_types_as_str)
     sr1 = Series(arr1)
     sr2 = Series(arr2)
 
@@ -255,73 +151,58 @@ def test_series_compare(cmpop, obj_class, dtype):
         sr1 = Index(sr1)
         sr2 = Index(sr2)
 
-    result1 = cmpop(sr1, sr1)
-    result2 = cmpop(sr2, sr2)
-    result3 = cmpop(sr1, sr2)
+    result1 = comparison_op(sr1, sr1)
+    result2 = comparison_op(sr2, sr2)
+    result3 = comparison_op(sr1, sr2)
 
     if obj_class == "Index":
         result1 = Series(result1)
         result2 = Series(result2)
         result3 = Series(result3)
 
-    np.testing.assert_equal(result1.to_numpy(), cmpop(arr1, arr1))
-    np.testing.assert_equal(result2.to_numpy(), cmpop(arr2, arr2))
-    np.testing.assert_equal(result3.to_numpy(), cmpop(arr1, arr2))
+    np.testing.assert_equal(result1.to_numpy(), comparison_op(arr1, arr1))
+    np.testing.assert_equal(result2.to_numpy(), comparison_op(arr2, arr2))
+    np.testing.assert_equal(result3.to_numpy(), comparison_op(arr1, arr2))
 
 
 @pytest.mark.parametrize(
     "dtype,val",
     [("int8", 200), ("int32", 2**32), ("uint8", -128), ("uint64", -1)],
 )
-@pytest.mark.parametrize(
-    "op",
-    [
-        operator.eq,
-        operator.ne,
-        operator.lt,
-        operator.le,
-        operator.gt,
-        operator.ge,
-    ],
-)
 @pytest.mark.parametrize("reverse", [False, True])
-def test_series_compare_integer(dtype, val, op, reverse):
+def test_series_compare_integer(dtype, val, comparison_op, reverse):
     # Tests that these actually work, even though they are out of bound.
     force_cast_val = np.array(val).astype(dtype)
     sr = Series(
         [np.iinfo(dtype).min, np.iinfo(dtype).max, force_cast_val, None],
         dtype=dtype,
     )
-
-    if reverse:
-        _op = op
-
-        def op(x, y):
-            return _op(y, x)
-
     # We expect the same result as comparing to a value within range (e.g. 0)
     # except that a NULL value evaluates to False
-    if op(0, val):
-        expected = Series([True, True, True, None])
+    exp = False
+    if reverse:
+        if comparison_op(val, 0):
+            exp = True
+        res = comparison_op(val, sr)
     else:
-        expected = Series([False, False, False, None])
+        if comparison_op(0, val):
+            exp = True
+        res = comparison_op(sr, val)
 
-    res = op(sr, val)
+    expected = Series([exp, exp, exp, None])
     assert_eq(res, expected)
 
 
-def _series_compare_nulls_typegen():
-    return [
-        *combinations_with_replacement(DATETIME_TYPES, 2),
-        *combinations_with_replacement(TIMEDELTA_TYPES, 2),
-        *combinations_with_replacement(NUMERIC_TYPES, 2),
-        *combinations_with_replacement(STRING_TYPES, 2),
-    ]
-
-
-@pytest.mark.parametrize("cmpop", _cmpops)
-@pytest.mark.parametrize("dtypes", _series_compare_nulls_typegen())
-def test_series_compare_nulls(cmpop, dtypes):
+@pytest.mark.parametrize(
+    "dtypes",
+    [
+        *itertools.combinations_with_replacement(DATETIME_TYPES, 2),
+        *itertools.combinations_with_replacement(TIMEDELTA_TYPES, 2),
+        *itertools.combinations_with_replacement(NUMERIC_TYPES, 2),
+        *itertools.combinations_with_replacement(STRING_TYPES, 2),
+    ],
+)
+def test_series_compare_nulls(comparison_op, dtypes):
     ltype, rtype = dtypes
 
     ldata = [1, 2, None, None, 5]
@@ -335,20 +216,15 @@ def test_series_compare_nulls(cmpop, dtypes):
 
     expect_mask = np.logical_and(lmask, rmask)
     expect = cudf.Series([None] * 5, dtype="bool")
-    expect[expect_mask] = cmpop(lser[expect_mask], rser[expect_mask])
+    expect[expect_mask] = comparison_op(lser[expect_mask], rser[expect_mask])
 
-    got = cmpop(lser, rser)
+    got = comparison_op(lser, rser)
     assert_eq(expect, got)
 
 
 @pytest.fixture
 def str_series_cmp_data():
     return pd.Series(["a", "b", None, "d", "e", None], dtype="string")
-
-
-@pytest.fixture(ids=[op.__name__ for op in _cmpops], params=_cmpops)
-def str_series_compare_str_cmpop(request):
-    return request.param
 
 
 @pytest.fixture(ids=["eq", "ne"], params=[operator.eq, operator.ne])
@@ -361,24 +237,16 @@ def cmp_scalar(request):
     return request.param
 
 
-def test_str_series_compare_str(
-    str_series_cmp_data, str_series_compare_str_cmpop
-):
-    expect = str_series_compare_str_cmpop(str_series_cmp_data, "a")
-    got = str_series_compare_str_cmpop(
-        Series.from_pandas(str_series_cmp_data), "a"
-    )
+def test_str_series_compare_str(str_series_cmp_data, comparison_op):
+    expect = comparison_op(str_series_cmp_data, "a")
+    got = comparison_op(Series.from_pandas(str_series_cmp_data), "a")
 
     assert_eq(expect, got.to_pandas(nullable=True))
 
 
-def test_str_series_compare_str_reflected(
-    str_series_cmp_data, str_series_compare_str_cmpop
-):
-    expect = str_series_compare_str_cmpop("a", str_series_cmp_data)
-    got = str_series_compare_str_cmpop(
-        "a", Series.from_pandas(str_series_cmp_data)
-    )
+def test_str_series_compare_str_reflected(str_series_cmp_data, comparison_op):
+    expect = comparison_op("a", str_series_cmp_data)
+    got = comparison_op("a", Series.from_pandas(str_series_cmp_data))
 
     assert_eq(expect, got.to_pandas(nullable=True))
 
@@ -406,10 +274,8 @@ def test_str_series_compare_num_reflected(
 
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
-@pytest.mark.parametrize("nelem", [1, 2, 100])
-@pytest.mark.parametrize("cmpop", _cmpops)
 @pytest.mark.parametrize("dtype", [*utils.NUMERIC_TYPES, "datetime64[ms]"])
-def test_series_compare_scalar(nelem, cmpop, obj_class, dtype):
+def test_series_compare_scalar(comparison_op, obj_class, dtype):
     rng = np.random.default_rng(seed=0)
     arr1 = rng.integers(0, 100, 100).astype(dtype)
     sr1 = Series(arr1)
@@ -418,23 +284,24 @@ def test_series_compare_scalar(nelem, cmpop, obj_class, dtype):
     if obj_class == "Index":
         sr1 = Index(sr1)
 
-    result1 = cmpop(sr1, rhs)
-    result2 = cmpop(rhs, sr1)
+    result1 = comparison_op(sr1, rhs)
+    result2 = comparison_op(rhs, sr1)
 
     if obj_class == "Index":
         result1 = Series(result1)
         result2 = Series(result2)
 
-    np.testing.assert_equal(result1.to_numpy(), cmpop(arr1, rhs))
-    np.testing.assert_equal(result2.to_numpy(), cmpop(rhs, arr1))
+    np.testing.assert_equal(result1.to_numpy(), comparison_op(arr1, rhs))
+    np.testing.assert_equal(result2.to_numpy(), comparison_op(rhs, arr1))
 
 
 _nulls = ["none", "some"]
 
 
-@pytest.mark.parametrize("nelem", [1, 7, 8, 9, 32, 64, 128])
-@pytest.mark.parametrize("lhs_nulls,rhs_nulls", list(product(_nulls, _nulls)))
-def test_validity_add(nelem, lhs_nulls, rhs_nulls):
+@pytest.mark.parametrize("lhs_nulls", _nulls)
+@pytest.mark.parametrize("rhs_nulls", _nulls)
+def test_validity_add(lhs_nulls, rhs_nulls):
+    nelem = 10
     rng = np.random.default_rng(seed=0)
     # LHS
     lhs_data = rng.random(nelem)
@@ -483,21 +350,14 @@ def test_validity_add(nelem, lhs_nulls, rhs_nulls):
 
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
-@pytest.mark.parametrize(
-    "binop,lhs_dtype,rhs_dtype",
-    list(
-        product(
-            [operator.add, operator.mul],
-            utils.NUMERIC_TYPES,
-            utils.NUMERIC_TYPES,
-        )
-    ),
-)
-def test_series_binop_mixed_dtype(binop, lhs_dtype, rhs_dtype, obj_class):
+@pytest.mark.parametrize("binop", [operator.add, operator.mul])
+def test_series_binop_mixed_dtype(
+    binop, numeric_types_as_str, numeric_types_as_str2, obj_class
+):
     nelem = 10
     rng = np.random.default_rng(seed=0)
-    lhs = (rng.random(nelem) * nelem).astype(lhs_dtype)
-    rhs = (rng.random(nelem) * nelem).astype(rhs_dtype)
+    lhs = (rng.random(nelem) * nelem).astype(numeric_types_as_str)
+    rhs = (rng.random(nelem) * nelem).astype(numeric_types_as_str2)
 
     sr1 = Series(lhs)
     sr2 = Series(rhs)
@@ -515,15 +375,13 @@ def test_series_binop_mixed_dtype(binop, lhs_dtype, rhs_dtype, obj_class):
 
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
-@pytest.mark.parametrize(
-    "cmpop,lhs_dtype,rhs_dtype",
-    list(product(_cmpops, utils.NUMERIC_TYPES, utils.NUMERIC_TYPES)),
-)
-def test_series_cmpop_mixed_dtype(cmpop, lhs_dtype, rhs_dtype, obj_class):
+def test_series_cmpop_mixed_dtype(
+    comparison_op, numeric_types_as_str, numeric_types_as_str2, obj_class
+):
     nelem = 5
     rng = np.random.default_rng(seed=0)
-    lhs = (rng.random(nelem) * nelem).astype(lhs_dtype)
-    rhs = (rng.random(nelem) * nelem).astype(rhs_dtype)
+    lhs = (rng.random(nelem) * nelem).astype(numeric_types_as_str)
+    rhs = (rng.random(nelem) * nelem).astype(numeric_types_as_str2)
 
     sr1 = Series(lhs)
     sr2 = Series(rhs)
@@ -532,28 +390,30 @@ def test_series_cmpop_mixed_dtype(cmpop, lhs_dtype, rhs_dtype, obj_class):
         sr1 = Index(sr1)
         sr2 = Index(sr2)
 
-    result = cmpop(Series(sr1), Series(sr2))
+    result = comparison_op(Series(sr1), Series(sr2))
 
     if obj_class == "Index":
         result = Series(result)
 
-    np.testing.assert_array_equal(result.to_numpy(), cmpop(lhs, rhs))
+    np.testing.assert_array_equal(result.to_numpy(), comparison_op(lhs, rhs))
 
 
-@pytest.mark.parametrize("obj_class", ["Series", "Index"])
-@pytest.mark.parametrize(
-    "func, dtype", list(product(_reflected_ops, utils.NUMERIC_TYPES))
+@pytest.mark.filterwarnings(
+    "ignore:invalid value encountered in power:RuntimeWarning"
 )
-def test_series_reflected_ops_scalar(func, dtype, obj_class):
+@pytest.mark.filterwarnings(
+    "ignore:divide by zero encountered in power:RuntimeWarning"
+)
+@pytest.mark.parametrize("obj_class", [cudf.Series, cudf.Index])
+@pytest.mark.parametrize("scalar", [-1, 0, 1])
+def test_series_reflected_ops_scalar(
+    arithmetic_op, scalar, numeric_types_as_str, obj_class
+):
     # create random series
-    random_series = utils.gen_rand(dtype, 100, low=10, seed=12)
+    func = lambda x: arithmetic_op(scalar, x)  # noqa: E731
+    random_series = utils.gen_rand(numeric_types_as_str, 100, low=10, seed=12)
 
-    # gpu series
-    gs = Series(random_series)
-
-    # class typing
-    if obj_class == "Index":
-        gs = Index(gs)
+    gs = obj_class(random_series)
 
     try:
         gs_result = func(gs)
@@ -575,16 +435,14 @@ def test_series_reflected_ops_scalar(func, dtype, obj_class):
     np.testing.assert_allclose(ps_result, gs_result.to_numpy())
 
 
-@pytest.mark.parametrize("binop", _binops)
-def test_different_shapes_and_columns(binop):
-    # TODO: support `pow()` on NaN values. Particularly, the cases:
-    #       `pow(1, NaN) == 1` and `pow(NaN, 0) == 1`
-    if binop is operator.pow:
-        return
+def test_different_shapes_and_columns(request, arithmetic_op):
+    if arithmetic_op is operator.pow:
+        msg = "TODO: Support `pow(1, NaN) == 1` and `pow(NaN, 0) == 1`"
+        request.applymarker(pytest.mark.xfail(reason=msg))
 
     # Empty frame on the right side
-    pd_frame = binop(pd.DataFrame({"x": [1, 2]}), pd.DataFrame({}))
-    cd_frame = binop(cudf.DataFrame({"x": [1, 2]}), cudf.DataFrame({}))
+    pd_frame = arithmetic_op(pd.DataFrame({"x": [1, 2]}), pd.DataFrame({}))
+    cd_frame = arithmetic_op(cudf.DataFrame({"x": [1, 2]}), cudf.DataFrame({}))
     assert_eq(cd_frame, pd_frame)
 
     # Empty frame on the left side
@@ -608,17 +466,11 @@ def test_different_shapes_and_columns(binop):
     assert_eq(cd_frame, pd_frame)
 
 
-@pytest.mark.parametrize("binop", _binops)
-def test_different_shapes_and_same_columns(binop):
-    # TODO: support `pow()` on NaN values. Particularly, the cases:
-    #       `pow(1, NaN) == 1` and `pow(NaN, 0) == 1`
-    if binop is operator.pow:
-        return
-
-    pd_frame = binop(
+def test_different_shapes_and_same_columns(arithmetic_op):
+    pd_frame = arithmetic_op(
         pd.DataFrame({"x": [1, 2]}), pd.DataFrame({"x": [1, 2, 3]})
     )
-    cd_frame = binop(
+    cd_frame = arithmetic_op(
         cudf.DataFrame({"x": [1, 2]}), cudf.DataFrame({"x": [1, 2, 3]})
     )
     # cast x as float64 so it matches pandas dtype
@@ -626,12 +478,12 @@ def test_different_shapes_and_same_columns(binop):
     assert_eq(cd_frame, pd_frame)
 
 
-@pytest.mark.parametrize("binop", _binops)
-def test_different_shapes_and_columns_with_unaligned_indices(binop):
-    # TODO: support `pow()` on NaN values. Particularly, the cases:
-    #       `pow(1, NaN) == 1` and `pow(NaN, 0) == 1`
-    if binop is operator.pow:
-        return
+def test_different_shapes_and_columns_with_unaligned_indices(
+    request, arithmetic_op
+):
+    if arithmetic_op is operator.pow:
+        msg = "TODO: Support `pow(1, NaN) == 1` and `pow(NaN, 0) == 1`"
+        request.applymarker(pytest.mark.xfail(reason=msg))
 
     # Test with a RangeIndex
     pdf1 = pd.DataFrame({"x": [4, 3, 2, 1], "y": [7, 3, 8, 6]})
@@ -648,95 +500,101 @@ def test_different_shapes_and_columns_with_unaligned_indices(binop):
     gdf2 = cudf.DataFrame.from_pandas(pdf2)
     gdf3 = cudf.DataFrame.from_pandas(pdf3)
 
-    pd_frame = binop(binop(pdf1, pdf2), pdf3)
-    cd_frame = binop(binop(gdf1, gdf2), gdf3)
+    pd_frame = arithmetic_op(arithmetic_op(pdf1, pdf2), pdf3)
+    cd_frame = arithmetic_op(arithmetic_op(gdf1, gdf2), gdf3)
     # cast x and y as float64 so it matches pandas dtype
     cd_frame["x"] = cd_frame["x"].astype(np.float64)
     cd_frame["y"] = cd_frame["y"].astype(np.float64)
-    assert_eq(cd_frame, pd_frame)
+
+    # Sort both frames by index and then by all columns to ensure consistent ordering
+    pd_sorted = pd_frame.sort_index().sort_values(list(pd_frame.columns))
+    cd_sorted = cd_frame.sort_index().sort_values(list(cd_frame.columns))
+    assert_eq(cd_sorted, pd_sorted)
 
     pdf1 = pd.DataFrame({"x": [1, 1]}, index=["a", "a"])
     pdf2 = pd.DataFrame({"x": [2]}, index=["a"])
     gdf1 = cudf.DataFrame.from_pandas(pdf1)
     gdf2 = cudf.DataFrame.from_pandas(pdf2)
-    pd_frame = binop(pdf1, pdf2)
-    cd_frame = binop(gdf1, gdf2)
-    assert_eq(pd_frame, cd_frame)
+    pd_frame = arithmetic_op(pdf1, pdf2)
+    cd_frame = arithmetic_op(gdf1, gdf2)
+
+    # Sort both frames consistently for comparison
+    pd_sorted = pd_frame.sort_index().sort_values(list(pd_frame.columns))
+    cd_sorted = cd_frame.sort_index().sort_values(list(cd_frame.columns))
+    assert_eq(pd_sorted, cd_sorted)
 
 
 @pytest.mark.parametrize(
-    "df2",
+    "pdf2",
     [
-        cudf.DataFrame({"a": [3, 2, 1]}, index=[3, 2, 1]),
-        cudf.DataFrame([3, 2]),
+        pd.DataFrame({"a": [3, 2, 1]}, index=[3, 2, 1]),
+        pd.DataFrame([3, 2]),
     ],
 )
-@pytest.mark.parametrize("binop", [operator.eq, operator.ne])
-def test_df_different_index_shape(df2, binop):
+def test_df_different_index_shape(pdf2, comparison_op):
     df1 = cudf.DataFrame([1, 2, 3], index=[1, 2, 3])
 
     pdf1 = df1.to_pandas()
-    pdf2 = df2.to_pandas()
+    df2 = cudf.DataFrame.from_pandas(pdf2)
 
     utils.assert_exceptions_equal(
-        lfunc=binop,
-        rfunc=binop,
+        lfunc=comparison_op,
+        rfunc=comparison_op,
         lfunc_args_and_kwargs=([pdf1, pdf2],),
         rfunc_args_and_kwargs=([df1, df2],),
     )
 
 
-@pytest.mark.parametrize("op", [operator.eq, operator.ne])
-def test_boolean_scalar_binop(op):
+def test_boolean_scalar_binop(comparison_op):
     rng = np.random.default_rng(seed=0)
     psr = pd.Series(rng.choice([True, False], 10))
     gsr = cudf.from_pandas(psr)
-    assert_eq(op(psr, True), op(gsr, True))
-    assert_eq(op(psr, False), op(gsr, False))
+    assert_eq(comparison_op(psr, True), comparison_op(gsr, True))
+    assert_eq(comparison_op(psr, False), comparison_op(gsr, False))
 
 
-@pytest.mark.parametrize("func", _operators_arithmetic)
 @pytest.mark.parametrize("has_nulls", [True, False])
 @pytest.mark.parametrize("fill_value", [None, 27])
-@pytest.mark.parametrize("dtype", ["float32", "float64"])
-def test_operator_func_between_series(dtype, func, has_nulls, fill_value):
+def test_operator_func_between_series(
+    float_types_as_str, arithmetic_op_method, has_nulls, fill_value
+):
     count = 1000
     gdf_series_a = utils.gen_rand_series(
-        dtype, count, has_nulls=has_nulls, stride=10000
+        float_types_as_str, count, has_nulls=has_nulls, stride=10000
     )
     gdf_series_b = utils.gen_rand_series(
-        dtype, count, has_nulls=has_nulls, stride=100
+        float_types_as_str, count, has_nulls=has_nulls, stride=100
     )
     pdf_series_a = gdf_series_a.to_pandas()
     pdf_series_b = gdf_series_b.to_pandas()
 
-    gdf_result = getattr(gdf_series_a, func)(
+    gdf_result = getattr(gdf_series_a, arithmetic_op_method)(
         gdf_series_b, fill_value=fill_value
     )
-    pdf_result = getattr(pdf_series_a, func)(
+    pdf_result = getattr(pdf_series_a, arithmetic_op_method)(
         pdf_series_b, fill_value=fill_value
     )
 
     assert_eq(pdf_result, gdf_result)
 
 
-@pytest.mark.parametrize("func", _operators_arithmetic)
 @pytest.mark.parametrize("has_nulls", [True, False])
 @pytest.mark.parametrize("fill_value", [None, 27])
-@pytest.mark.parametrize("dtype", ["float32", "float64"])
-def test_operator_func_series_and_scalar(dtype, func, has_nulls, fill_value):
+def test_operator_func_series_and_scalar(
+    float_types_as_str, arithmetic_op_method, has_nulls, fill_value
+):
     count = 1000
     scalar = 59
     gdf_series = utils.gen_rand_series(
-        dtype, count, has_nulls=has_nulls, stride=10000
+        float_types_as_str, count, has_nulls=has_nulls, stride=10000
     )
     pdf_series = gdf_series.to_pandas()
 
-    gdf_series_result = getattr(gdf_series, func)(
+    gdf_series_result = getattr(gdf_series, arithmetic_op_method)(
         scalar,
         fill_value=fill_value,
     )
-    pdf_series_result = getattr(pdf_series, func)(
+    pdf_series_result = getattr(pdf_series, arithmetic_op_method)(
         scalar,
         fill_value=fill_value,
     )
@@ -744,27 +602,26 @@ def test_operator_func_series_and_scalar(dtype, func, has_nulls, fill_value):
     assert_eq(pdf_series_result, gdf_series_result)
 
 
-_permu_values = [0, 1, None, np.nan]
-
-
-@pytest.mark.parametrize("fill_value", _permu_values)
-@pytest.mark.parametrize("scalar_a", _permu_values)
-@pytest.mark.parametrize("scalar_b", _permu_values)
-@pytest.mark.parametrize("func", _operators_comparison)
-@pytest.mark.parametrize("dtype", ["float32", "float64"])
+@pytest.mark.parametrize("fill_value", [0, 1, None, np.nan])
+@pytest.mark.parametrize("scalar_a", [0, 1, None, np.nan])
+@pytest.mark.parametrize("scalar_b", [0, 1, None, np.nan])
 def test_operator_func_between_series_logical(
-    dtype, func, scalar_a, scalar_b, fill_value
+    float_types_as_str, comparison_op_method, scalar_a, scalar_b, fill_value
 ):
-    gdf_series_a = Series([scalar_a], nan_as_null=False).astype(dtype)
-    gdf_series_b = Series([scalar_b], nan_as_null=False).astype(dtype)
+    gdf_series_a = Series([scalar_a], nan_as_null=False).astype(
+        float_types_as_str
+    )
+    gdf_series_b = Series([scalar_b], nan_as_null=False).astype(
+        float_types_as_str
+    )
 
     pdf_series_a = gdf_series_a.to_pandas(nullable=True)
     pdf_series_b = gdf_series_b.to_pandas(nullable=True)
 
-    gdf_series_result = getattr(gdf_series_a, func)(
+    gdf_series_result = getattr(gdf_series_a, comparison_op_method)(
         gdf_series_b, fill_value=fill_value
     )
-    pdf_series_result = getattr(pdf_series_a, func)(
+    pdf_series_result = getattr(pdf_series_a, comparison_op_method)(
         pdf_series_b, fill_value=fill_value
     )
     expect = pdf_series_result
@@ -785,33 +642,43 @@ def test_operator_func_between_series_logical(
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("dtype", ["float32", "float64"])
-@pytest.mark.parametrize("func", _operators_comparison)
 @pytest.mark.parametrize("has_nulls", [True, False])
 @pytest.mark.parametrize("scalar", [-59.0, np.nan, 0, 59.0])
 @pytest.mark.parametrize("fill_value", [None, 1.0])
 def test_operator_func_series_and_scalar_logical(
-    request, dtype, func, has_nulls, scalar, fill_value
+    request,
+    float_types_as_str,
+    comparison_op_method,
+    has_nulls,
+    scalar,
+    fill_value,
 ):
     request.applymarker(
         pytest.mark.xfail(
             PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION
             and fill_value == 1.0
             and scalar is np.nan
-            and (has_nulls or (not has_nulls and func not in {"eq", "ne"})),
+            and (
+                has_nulls
+                or (not has_nulls and comparison_op_method not in {"eq", "ne"})
+            ),
             reason="https://github.com/pandas-dev/pandas/issues/57447",
         )
     )
     if has_nulls:
-        gdf_series = cudf.Series([-1.0, 0, cudf.NA, 1.1], dtype=dtype)
+        gdf_series = cudf.Series(
+            [-1.0, 0, cudf.NA, 1.1], dtype=float_types_as_str
+        )
     else:
-        gdf_series = cudf.Series([-1.0, 0, 10.5, 1.1], dtype=dtype)
+        gdf_series = cudf.Series(
+            [-1.0, 0, 10.5, 1.1], dtype=float_types_as_str
+        )
     pdf_series = gdf_series.to_pandas(nullable=True)
-    gdf_series_result = getattr(gdf_series, func)(
+    gdf_series_result = getattr(gdf_series, comparison_op_method)(
         scalar,
         fill_value=fill_value,
     )
-    pdf_series_result = getattr(pdf_series, func)(
+    pdf_series_result = getattr(pdf_series, comparison_op_method)(
         scalar, fill_value=fill_value
     )
 
@@ -821,11 +688,12 @@ def test_operator_func_series_and_scalar_logical(
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("func", _operators_arithmetic)
 @pytest.mark.parametrize("nulls", _nulls)
 @pytest.mark.parametrize("fill_value", [None, 27])
 @pytest.mark.parametrize("other", ["df", "scalar"])
-def test_operator_func_dataframe(func, nulls, fill_value, other):
+def test_operator_func_dataframe(
+    arithmetic_op_method, nulls, fill_value, other
+):
     num_rows = 100
     num_cols = 3
 
@@ -852,16 +720,17 @@ def test_operator_func_dataframe(func, nulls, fill_value, other):
     gdf1 = cudf.DataFrame.from_pandas(pdf1)
     gdf2 = cudf.DataFrame.from_pandas(pdf2) if other == "df" else 59.0
 
-    got = getattr(gdf1, func)(gdf2, fill_value=fill_value)
-    expect = getattr(pdf1, func)(pdf2, fill_value=fill_value)[list(got._data)]
+    got = getattr(gdf1, arithmetic_op_method)(gdf2, fill_value=fill_value)
+    expect = getattr(pdf1, arithmetic_op_method)(pdf2, fill_value=fill_value)[
+        list(got._data)
+    ]
 
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("func", _operators_comparison)
 @pytest.mark.parametrize("nulls", _nulls)
 @pytest.mark.parametrize("other", ["df", "scalar"])
-def test_logical_operator_func_dataframe(func, nulls, other):
+def test_logical_operator_func_dataframe(comparison_op_method, nulls, other):
     num_rows = 100
     num_cols = 3
 
@@ -892,37 +761,26 @@ def test_logical_operator_func_dataframe(func, nulls, other):
         else 59.0
     )
 
-    got = getattr(gdf1, func)(gdf2)
-    expect = getattr(pdf1, func)(pdf2)[list(got._data)]
+    got = getattr(gdf1, comparison_op_method)(gdf2)
+    expect = getattr(pdf1, comparison_op_method)(pdf2)[list(got._data)]
 
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize(
-    "func",
-    [op for op in _operators_arithmetic if op not in {"rmod", "rfloordiv"}]
-    + _operators_comparison
-    + [
-        pytest.param(
-            "rmod",
-            marks=pytest.mark.xfail(
+@pytest.mark.parametrize("rhs", [0, 1, 10])
+def test_binop_bool_uint(request, binary_op_method, rhs):
+    if binary_op_method in {"rmod", "rfloordiv"}:
+        request.applymarker(
+            pytest.mark.xfail(
                 reason="https://github.com/rapidsai/cudf/issues/12162"
             ),
-        ),
-        pytest.param(
-            "rfloordiv",
-            marks=pytest.mark.xfail(
-                reason="https://github.com/rapidsai/cudf/issues/12162"
-            ),
-        ),
-    ],
-)
-@pytest.mark.parametrize("rhs", [0, 1, 2, 128])
-def test_binop_bool_uint(func, rhs):
+        )
     psr = pd.Series([True, False, False])
     gsr = cudf.from_pandas(psr)
     assert_eq(
-        getattr(psr, func)(rhs), getattr(gsr, func)(rhs), check_dtype=False
+        getattr(psr, binary_op_method)(rhs),
+        getattr(gsr, binary_op_method)(rhs),
+        check_dtype=False,
     )
 
 
@@ -971,30 +829,19 @@ def test_floordiv_zero_bool(scalar_divisor):
         cr // cudf_div
 
 
-@pytest.mark.parametrize(
-    "dtype",
-    (
-        pytest.param(
-            np.bool_,
-            marks=pytest_xfail(
-                reason=(
-                    "Pandas handling of division by zero-bool is too strange"
-                )
-            ),
-        ),
-        np.int8,
-        np.uint8,
-        np.int64,
-        np.uint64,
-        np.float32,
-        np.float64,
-    ),
-)
-def test_rmod_zero_nan(dtype):
-    sr = pd.Series([1, 1, 0], dtype=dtype)
+def test_rmod_zero_nan(numeric_and_bool_types_as_str, request):
+    request.applymarker(
+        pytest.mark.xfail(
+            numeric_and_bool_types_as_str == "bool",
+            reason="pandas returns int8, cuDF returns int64",
+        )
+    )
+    sr = pd.Series([1, 1, 0], dtype=numeric_and_bool_types_as_str)
     cr = cudf.from_pandas(sr)
     assert_eq(1 % sr, 1 % cr)
-    expected_dtype = np.float64 if cr.dtype.kind != "f" else dtype
+    expected_dtype = (
+        np.float64 if cr.dtype.kind != "f" else numeric_and_bool_types_as_str
+    )
     assert_eq(1 % cr, cudf.Series([0, 0, None], dtype=expected_dtype))
 
 
@@ -1034,7 +881,11 @@ def test_vector_to_none_binops(dtype):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("n_periods", [0, 1, -1, 12, -12])
+def is_timezone_aware_dtype(dtype: str) -> bool:
+    return bool(re.match(r"^datetime64\[ns, .+\]$", dtype))
+
+
+@pytest.mark.parametrize("n_periods", [0, 1, -12])
 @pytest.mark.parametrize(
     "frequency",
     [
@@ -1055,6 +906,7 @@ def test_vector_to_none_binops(dtype):
         ["datetime64[us]", "00.012345"],
         ["datetime64[ms]", "00.012"],
         ["datetime64[s]", "00"],
+        ["datetime64[ns, Asia/Kathmandu]", "00.012345678"],
     ],
 )
 @pytest.mark.parametrize("op", [operator.add, operator.sub])
@@ -1090,8 +942,17 @@ def test_datetime_dateoffset_binaryop(
         f"2000-01-31 00:00:{components}",
         f"2000-02-29 00:00:{components}",
     ]
-    gsr = cudf.Series(date_col, dtype=dtype)
-    psr = gsr.to_pandas()
+    if is_timezone_aware_dtype(dtype):
+        # Construct naive datetime64[ns] Series
+        gsr = cudf.Series(date_col, dtype="datetime64[ns]")
+        psr = gsr.to_pandas()
+
+        # Convert to timezone-aware (both cudf and pandas)
+        gsr = gsr.dt.tz_localize("UTC").dt.tz_convert("Asia/Kathmandu")
+        psr = psr.dt.tz_localize("UTC").dt.tz_convert("Asia/Kathmandu")
+    else:
+        gsr = cudf.Series(date_col, dtype=dtype)
+        psr = gsr.to_pandas()
 
     kwargs = {frequency: n_periods}
 
@@ -1101,24 +962,26 @@ def test_datetime_dateoffset_binaryop(
     expect = op(psr, poffset)
     got = op(gsr, goffset)
 
+    if is_timezone_aware_dtype(dtype):
+        assert isinstance(expect.dtype, pd.DatetimeTZDtype)
+        assert str(expect.dtype.tz) == str(got.dtype.tz)
+        expect = expect.dt.tz_convert("UTC")
+        got = got.dt.tz_convert("UTC")
+
     assert_eq(expect, got)
 
     expect = op(psr, -poffset)
     got = op(gsr, -goffset)
 
+    if is_timezone_aware_dtype(dtype):
+        assert isinstance(expect.dtype, pd.DatetimeTZDtype)
+        assert str(expect.dtype.tz) == str(got.dtype.tz)
+        expect = expect.dt.tz_convert("UTC")
+        got = got.dt.tz_convert("UTC")
+
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize(
-    "date_col",
-    [
-        [
-            "2000-01-01 00:00:00.012345678",
-            "2000-01-31 00:00:00.012345678",
-            "2000-02-29 00:00:00.012345678",
-        ]
-    ],
-)
 @pytest.mark.parametrize(
     "kwargs",
     [
@@ -1141,8 +1004,15 @@ def test_datetime_dateoffset_binaryop(
     PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
     reason="Fails in older versions of pandas",
 )
-def test_datetime_dateoffset_binaryop_multiple(request, date_col, kwargs, op):
-    gsr = cudf.Series(date_col, dtype="datetime64[ns]")
+def test_datetime_dateoffset_binaryop_multiple(request, kwargs, op):
+    gsr = cudf.Series(
+        [
+            "2000-01-01 00:00:00.012345678",
+            "2000-01-31 00:00:00.012345678",
+            "2000-02-29 00:00:00.012345678",
+        ],
+        dtype="datetime64[ns]",
+    )
     psr = gsr.to_pandas()
 
     poffset = pd.DateOffset(**kwargs)
@@ -1154,7 +1024,7 @@ def test_datetime_dateoffset_binaryop_multiple(request, date_col, kwargs, op):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("n_periods", [0, 1, -1, 12, -12])
+@pytest.mark.parametrize("n_periods", [0, 1, -12])
 @pytest.mark.parametrize(
     "frequency",
     [
@@ -1254,43 +1124,21 @@ def test_binops_with_lhs_numpy_scalar(frame, dtype):
     assert_eq(expected, got)
 
 
-@pytest.mark.parametrize(
-    "dtype",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "uint8",
-        "uint16",
-        "uint32",
-        "uint64",
-        "float32",
-        "float64",
-        "datetime64[ns]",
-        "datetime64[us]",
-        "datetime64[ms]",
-        "datetime64[s]",
-        "timedelta64[ns]",
-        "timedelta64[us]",
-        "timedelta64[ms]",
-        "timedelta64[s]",
-    ],
-)
-@pytest.mark.parametrize("op", _operators_comparison)
-def test_binops_with_NA_consistent(dtype, op):
+def test_binops_with_NA_consistent(
+    numeric_and_temporal_types_as_str, comparison_op_method
+):
     data = [1, 2, 3]
-    sr = cudf.Series(data, dtype=dtype)
+    sr = cudf.Series(data, dtype=numeric_and_temporal_types_as_str)
 
-    result = getattr(sr, op)(cudf.NA)
-    if dtype in NUMERIC_TYPES:
-        if op == "ne":
+    result = getattr(sr, comparison_op_method)(cudf.NA)
+    if sr.dtype.kind in "mM":
+        assert result.null_count == len(data)
+    else:
+        if comparison_op_method == "ne":
             expect_all = True
         else:
             expect_all = False
         assert (result == expect_all).all()
-    elif dtype in DATETIME_TYPES & TIMEDELTA_TYPES:
-        assert result._column.null_count == len(data)
 
 
 @pytest.mark.parametrize(
@@ -1731,7 +1579,7 @@ def test_binops_reflect_decimal(
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("powers", [0, 1, 2, 3])
+@pytest.mark.parametrize("powers", [0, 1, 2])
 def test_binops_decimal_pow(powers):
     s = cudf.Series(
         [
@@ -1755,157 +1603,165 @@ def test_binops_raise_error():
 
 
 @pytest.mark.parametrize(
-    "args",
+    "op, ldata, ldtype, rdata, expected1, expected2",
     [
         (
             operator.eq,
             ["100", "41", None],
             cudf.Decimal64Dtype(scale=0, precision=5),
             [100, 42, 12],
-            cudf.Series([True, False, None], dtype=bool),
-            cudf.Series([True, False, None], dtype=bool),
+            [True, False, None],
+            [True, False, None],
         ),
         (
             operator.eq,
             ["100.000", "42.001", None],
             cudf.Decimal64Dtype(scale=3, precision=6),
             [100, 42, 12],
-            cudf.Series([True, False, None], dtype=bool),
-            cudf.Series([True, False, None], dtype=bool),
+            [True, False, None],
+            [True, False, None],
         ),
         (
             operator.eq,
             ["100", "40", None],
             cudf.Decimal64Dtype(scale=-1, precision=3),
             [100, 42, 12],
-            cudf.Series([True, False, None], dtype=bool),
-            cudf.Series([True, False, None], dtype=bool),
+            [True, False, None],
+            [True, False, None],
         ),
         (
             operator.ne,
             ["100", "42", "24", None],
             cudf.Decimal64Dtype(scale=0, precision=3),
             [100, 40, 24, 12],
-            cudf.Series([False, True, False, None], dtype=bool),
-            cudf.Series([False, True, False, None], dtype=bool),
+            [False, True, False, None],
+            [False, True, False, None],
         ),
         (
             operator.ne,
             ["10.1", "88", "11", None],
             cudf.Decimal64Dtype(scale=1, precision=3),
             [10, 42, 11, 12],
-            cudf.Series([True, True, False, None], dtype=bool),
-            cudf.Series([True, True, False, None], dtype=bool),
+            [True, True, False, None],
+            [True, True, False, None],
         ),
         (
             operator.ne,
             ["100.000", "42", "23.999", None],
             cudf.Decimal64Dtype(scale=3, precision=6),
             [100, 42, 24, 12],
-            cudf.Series([False, False, True, None], dtype=bool),
-            cudf.Series([False, False, True, None], dtype=bool),
+            [False, False, True, None],
+            [False, False, True, None],
         ),
         (
             operator.lt,
             ["100", "40", "28", None],
             cudf.Decimal64Dtype(scale=0, precision=3),
             [100, 42, 24, 12],
-            cudf.Series([False, True, False, None], dtype=bool),
-            cudf.Series([False, False, True, None], dtype=bool),
+            [False, True, False, None],
+            [False, False, True, None],
         ),
         (
             operator.lt,
             ["100.000", "42.002", "23.999", None],
             cudf.Decimal64Dtype(scale=3, precision=6),
             [100, 42, 24, 12],
-            cudf.Series([False, False, True, None], dtype=bool),
-            cudf.Series([False, True, False, None], dtype=bool),
+            [False, False, True, None],
+            [False, True, False, None],
         ),
         (
             operator.lt,
             ["100", "40", "10", None],
             cudf.Decimal64Dtype(scale=-1, precision=3),
             [100, 42, 8, 12],
-            cudf.Series([False, True, False, None], dtype=bool),
-            cudf.Series([False, False, True, None], dtype=bool),
+            [False, True, False, None],
+            [False, False, True, None],
         ),
         (
             operator.gt,
             ["100", "42", "20", None],
             cudf.Decimal64Dtype(scale=0, precision=3),
             [100, 40, 24, 12],
-            cudf.Series([False, True, False, None], dtype=bool),
-            cudf.Series([False, False, True, None], dtype=bool),
+            [False, True, False, None],
+            [False, False, True, None],
         ),
         (
             operator.gt,
             ["100.000", "42.002", "23.999", None],
             cudf.Decimal64Dtype(scale=3, precision=6),
             [100, 42, 24, 12],
-            cudf.Series([False, True, False, None], dtype=bool),
-            cudf.Series([False, False, True, None], dtype=bool),
+            [False, True, False, None],
+            [False, False, True, None],
         ),
         (
             operator.gt,
             ["100", "40", "10", None],
             cudf.Decimal64Dtype(scale=-1, precision=3),
             [100, 42, 8, 12],
-            cudf.Series([False, False, True, None], dtype=bool),
-            cudf.Series([False, True, False, None], dtype=bool),
+            [False, False, True, None],
+            [False, True, False, None],
         ),
         (
             operator.le,
             ["100", "40", "28", None],
             cudf.Decimal64Dtype(scale=0, precision=3),
             [100, 42, 24, 12],
-            cudf.Series([True, True, False, None], dtype=bool),
-            cudf.Series([True, False, True, None], dtype=bool),
+            [True, True, False, None],
+            [True, False, True, None],
         ),
         (
             operator.le,
             ["100.000", "42.002", "23.999", None],
             cudf.Decimal64Dtype(scale=3, precision=6),
             [100, 42, 24, 12],
-            cudf.Series([True, False, True, None], dtype=bool),
-            cudf.Series([True, True, False, None], dtype=bool),
+            [True, False, True, None],
+            [True, True, False, None],
         ),
         (
             operator.le,
             ["100", "40", "10", None],
             cudf.Decimal64Dtype(scale=-1, precision=3),
             [100, 42, 8, 12],
-            cudf.Series([True, True, False, None], dtype=bool),
-            cudf.Series([True, False, True, None], dtype=bool),
+            [True, True, False, None],
+            [True, False, True, None],
         ),
         (
             operator.ge,
             ["100", "42", "20", None],
             cudf.Decimal64Dtype(scale=0, precision=3),
             [100, 40, 24, 12],
-            cudf.Series([True, True, False, None], dtype=bool),
-            cudf.Series([True, False, True, None], dtype=bool),
+            [True, True, False, None],
+            [True, False, True, None],
         ),
         (
             operator.ge,
             ["100.000", "42.002", "23.999", None],
             cudf.Decimal64Dtype(scale=3, precision=6),
             [100, 42, 24, 12],
-            cudf.Series([True, True, False, None], dtype=bool),
-            cudf.Series([True, False, True, None], dtype=bool),
+            [True, True, False, None],
+            [True, False, True, None],
         ),
         (
             operator.ge,
             ["100", "40", "10", None],
             cudf.Decimal64Dtype(scale=-1, precision=3),
             [100, 42, 8, 12],
-            cudf.Series([True, False, True, None], dtype=bool),
-            cudf.Series([True, True, False, None], dtype=bool),
+            [True, False, True, None],
+            [True, True, False, None],
         ),
     ],
 )
-@pytest.mark.parametrize("integer_dtype", utils.INTEGER_TYPES)
 @pytest.mark.parametrize("reflected", [True, False])
-def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
+def test_binops_decimal_comp_mixed_integer(
+    op,
+    ldata,
+    ldtype,
+    rdata,
+    expected1,
+    expected2,
+    integer_types_as_str,
+    reflected,
+):
     """
     Tested compare operations:
         eq, lt, gt, le, ge
@@ -1915,12 +1771,12 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
     of the following compare results: {True, False, None}.
     """
     if not reflected:
-        op, ldata, ldtype, rdata, expected, _ = args
+        expected = cudf.Series(expected1, dtype=bool)
     else:
-        op, ldata, ldtype, rdata, _, expected = args
+        expected = cudf.Series(expected2, dtype=bool)
 
     lhs = utils._decimal_series(ldata, ldtype)
-    rhs = cudf.Series(rdata, dtype=integer_dtype)
+    rhs = cudf.Series(rdata, dtype=integer_types_as_str)
 
     if reflected:
         rhs, lhs = lhs, rhs
@@ -1931,7 +1787,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
 
 
 @pytest.mark.parametrize(
-    "args",
+    "op, lhs, l_dtype, rhs, expect, expect_dtype, reflect",
     [
         (
             operator.add,
@@ -2160,17 +2016,17 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
         ),
     ],
 )
-def test_binops_decimal_scalar(args):
-    op, lhs, l_dtype, rhs, expect, expect_dtype, reflect = args
-
-    def decimal_series(input, dtype):
-        return cudf.Series(
-            [x if x is None else decimal.Decimal(x) for x in input],
-            dtype=dtype,
-        )
-
-    lhs = decimal_series(lhs, l_dtype)
-    expect = decimal_series(expect, expect_dtype)
+def test_binops_decimal_scalar(
+    op, lhs, l_dtype, rhs, expect, expect_dtype, reflect
+):
+    lhs = cudf.Series(
+        [x if x is None else decimal.Decimal(x) for x in lhs],
+        dtype=l_dtype,
+    )
+    expect = cudf.Series(
+        [x if x is None else decimal.Decimal(x) for x in expect],
+        dtype=expect_dtype,
+    )
 
     if reflect:
         lhs, rhs = rhs, lhs
@@ -2181,120 +2037,121 @@ def test_binops_decimal_scalar(args):
 
 
 @pytest.mark.parametrize(
-    "args",
+    "op, ldata, ldtype, rdata, expected1, expected2",
     [
         (
             operator.eq,
             ["100.00", "41", None],
             cudf.Decimal64Dtype(scale=0, precision=5),
             100,
-            cudf.Series([True, False, None], dtype=bool),
-            cudf.Series([True, False, None], dtype=bool),
+            [True, False, None],
+            [True, False, None],
         ),
         (
             operator.eq,
             ["100.123", "41", None],
             cudf.Decimal64Dtype(scale=3, precision=6),
             decimal.Decimal("100.123"),
-            cudf.Series([True, False, None], dtype=bool),
-            cudf.Series([True, False, None], dtype=bool),
+            [True, False, None],
+            [True, False, None],
         ),
         (
             operator.ne,
             ["100.00", "41", None],
             cudf.Decimal64Dtype(scale=2, precision=5),
             100,
-            cudf.Series([False, True, None], dtype=bool),
-            cudf.Series([False, True, None], dtype=bool),
+            [False, True, None],
+            [False, True, None],
         ),
         (
             operator.ne,
             ["100.123", "120.21", None],
             cudf.Decimal64Dtype(scale=3, precision=6),
             decimal.Decimal("100.123"),
-            cudf.Series([False, True, None], dtype=bool),
-            cudf.Series([False, True, None], dtype=bool),
+            [False, True, None],
+            [False, True, None],
         ),
         (
             operator.gt,
             ["100.00", "41", "120.21", None],
             cudf.Decimal64Dtype(scale=2, precision=5),
             100,
-            cudf.Series([False, False, True, None], dtype=bool),
-            cudf.Series([False, True, False, None], dtype=bool),
+            [False, False, True, None],
+            [False, True, False, None],
         ),
         (
             operator.gt,
             ["100.123", "41", "120.21", None],
             cudf.Decimal64Dtype(scale=3, precision=6),
             decimal.Decimal("100.123"),
-            cudf.Series([False, False, True, None], dtype=bool),
-            cudf.Series([False, True, False, None], dtype=bool),
+            [False, False, True, None],
+            [False, True, False, None],
         ),
         (
             operator.ge,
             ["100.00", "41", "120.21", None],
             cudf.Decimal64Dtype(scale=2, precision=5),
             100,
-            cudf.Series([True, False, True, None], dtype=bool),
-            cudf.Series([True, True, False, None], dtype=bool),
+            [True, False, True, None],
+            [True, True, False, None],
         ),
         (
             operator.ge,
             ["100.123", "41", "120.21", None],
             cudf.Decimal64Dtype(scale=3, precision=6),
             decimal.Decimal("100.123"),
-            cudf.Series([True, False, True, None], dtype=bool),
-            cudf.Series([True, True, False, None], dtype=bool),
+            [True, False, True, None],
+            [True, True, False, None],
         ),
         (
             operator.lt,
             ["100.00", "41", "120.21", None],
             cudf.Decimal64Dtype(scale=2, precision=5),
             100,
-            cudf.Series([False, True, False, None], dtype=bool),
-            cudf.Series([False, False, True, None], dtype=bool),
+            [False, True, False, None],
+            [False, False, True, None],
         ),
         (
             operator.lt,
             ["100.123", "41", "120.21", None],
             cudf.Decimal64Dtype(scale=3, precision=6),
             decimal.Decimal("100.123"),
-            cudf.Series([False, True, False, None], dtype=bool),
-            cudf.Series([False, False, True, None], dtype=bool),
+            [False, True, False, None],
+            [False, False, True, None],
         ),
         (
             operator.le,
             ["100.00", "41", "120.21", None],
             cudf.Decimal64Dtype(scale=2, precision=5),
             100,
-            cudf.Series([True, True, False, None], dtype=bool),
-            cudf.Series([True, False, True, None], dtype=bool),
+            [True, True, False, None],
+            [True, False, True, None],
         ),
         (
             operator.le,
             ["100.123", "41", "120.21", None],
             cudf.Decimal64Dtype(scale=3, precision=6),
             decimal.Decimal("100.123"),
-            cudf.Series([True, True, False, None], dtype=bool),
-            cudf.Series([True, False, True, None], dtype=bool),
+            [True, True, False, None],
+            [True, False, True, None],
         ),
     ],
 )
 @pytest.mark.parametrize("reflected", [True, False])
-def test_binops_decimal_scalar_compare(args, reflected):
+def test_binops_decimal_scalar_compare(
+    op, ldata, ldtype, rdata, expected1, expected2, reflected
+):
     """
     Tested compare operations:
         eq, lt, gt, le, ge
     Each operation has 3 data setups: pyints, Decimal, and
-    decimal cudf.Scalar
     For each data setup, there is at least one row that lead to one of the
     following compare results: {True, False, None}.
     """
     if not reflected:
-        op, ldata, ldtype, rdata, expected, _ = args
+        expected = cudf.Series(expected1, dtype=bool)
     else:
-        op, ldata, ldtype, rdata, _, expected = args
+        expected = cudf.Series(expected2, dtype=bool)
 
     lhs = utils._decimal_series(ldata, ldtype)
     rhs = rdata
@@ -2307,53 +2164,35 @@ def test_binops_decimal_scalar_compare(args, reflected):
     assert_eq(expected, actual)
 
 
-@pytest.mark.parametrize(
-    "dtype",
-    [
-        "uint8",
-        "uint16",
-        "uint32",
-        "uint64",
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "float32",
-        "float64",
-        "str",
-        "datetime64[ns]",
-        "datetime64[us]",
-        "datetime64[ms]",
-        "datetime64[s]",
-        "timedelta64[ns]",
-        "timedelta64[us]",
-        "timedelta64[ms]",
-        "timedelta64[s]",
-    ],
-)
 @pytest.mark.parametrize("null_scalar", [None, cudf.NA, np.datetime64("NaT")])
-@pytest.mark.parametrize("cmpop", _cmpops)
-def test_column_null_scalar_comparison(dtype, null_scalar, cmpop):
+def test_column_null_scalar_comparison(
+    request, all_supported_types_as_str, null_scalar, comparison_op
+):
     # This test is meant to validate that comparing
     # a series of any dtype with a null scalar produces
     # a new series where all the elements are <NA>.
+    request.applymarker(
+        pytest.mark.xfail(
+            all_supported_types_as_str == "category",
+            raises=ValueError,
+            reason="Value ... not found in column",
+        )
+    )
+    dtype = cudf.dtype(all_supported_types_as_str)
 
     if isinstance(null_scalar, np.datetime64):
-        if cudf.dtype(dtype).kind not in "mM":
-            pytest.skip()
+        if dtype.kind not in "mM":
+            pytest.skip(f"{null_scalar} not applicable for {dtype}")
         null_scalar = null_scalar.astype(dtype)
-
-    dtype = cudf.dtype(dtype)
 
     data = [1, 2, 3, 4, 5]
     sr = cudf.Series(data, dtype=dtype)
-    result = cmpop(sr, null_scalar)
+    result = comparison_op(sr, null_scalar)
 
     assert result.isnull().all()
 
 
-@pytest.mark.parametrize("fn", ["eq", "ne", "lt", "gt", "le", "ge"])
-def test_equality_ops_index_mismatch(fn):
+def test_equality_ops_index_mismatch(comparison_op_method):
     a = cudf.Series(
         [1, 2, 3, None, None, 4], index=["a", "b", "c", "d", "e", "f"]
     )
@@ -2364,13 +2203,26 @@ def test_equality_ops_index_mismatch(fn):
 
     pa = a.to_pandas(nullable=True)
     pb = b.to_pandas(nullable=True)
-    expected = getattr(pa, fn)(pb)
-    actual = getattr(a, fn)(b).to_pandas(nullable=True)
+    expected = getattr(pa, comparison_op_method)(pb)
+    actual = getattr(a, comparison_op_method)(b).to_pandas(nullable=True)
 
     assert_eq(expected, actual)
 
 
-def generate_test_null_equals_columnops_data():
+@pytest.mark.parametrize(
+    "dtype",
+    sorted(
+        itertools.chain(
+            NUMERIC_TYPES,
+            DATETIME_TYPES,
+            TIMEDELTA_TYPES,
+            STRING_TYPES,
+            ["category"],
+        )
+    ),
+)
+@pytest.mark.parametrize("null_case", ["neither", "left", "right", "both"])
+def test_null_equals_columnops(dtype, null_case):
     # Generate tuples of:
     # (left_data, right_data, compare_bool
     # where compare_bool is the correct answer to
@@ -2390,36 +2242,16 @@ def generate_test_null_equals_columnops_data():
             raise ValueError("Unknown null case")
         return column_l, column_r
 
-    null_cases = ["neither", "left", "right", "both"]
     data = [1, 2, 3]
 
-    results = []
-    # TODO: Numeric types can be cross compared as null equal
-    for dtype in (
-        list(NUMERIC_TYPES)
-        + list(DATETIME_TYPES)
-        + list(TIMEDELTA_TYPES)
-        + list(STRING_TYPES)
-        + ["category"]
-    ):
-        for case in null_cases:
-            left = cudf.Series(data, dtype=dtype)
-            right = cudf.Series(data, dtype=dtype)
-            if case in {"left", "right"}:
-                answer = False
-            else:
-                answer = True
-            left, right = set_null_cases(left, right, case)
-            results.append((left._column, right._column, answer, case))
-
-    return results
-
-
-@pytest.mark.parametrize(
-    "lcol,rcol,ans,case", generate_test_null_equals_columnops_data()
-)
-def test_null_equals_columnops(lcol, rcol, ans, case):
-    assert lcol.equals(rcol) == ans
+    left = cudf.Series(data, dtype=dtype)
+    right = cudf.Series(data, dtype=dtype)
+    if null_case in {"left", "right"}:
+        answer = False
+    else:
+        answer = True
+    left, right = set_null_cases(left, right, null_case)
+    assert left._column.equals(right._column) is answer
 
 
 def test_add_series_to_dataframe():
@@ -2435,27 +2267,25 @@ def test_add_series_to_dataframe():
 
 
 @pytest.mark.parametrize("obj_class", [cudf.Series, cudf.Index])
-@pytest.mark.parametrize("binop", _binops)
-def test_binops_cupy_array(obj_class, binop):
+def test_binops_cupy_array(obj_class, arithmetic_op):
     # Skip 0 to not deal with NaNs from division.
     data = range(1, 100)
     lhs = obj_class(data)
     rhs = cp.array(data)
-    assert (binop(lhs, rhs) == binop(lhs, lhs)).all()
+    assert (arithmetic_op(lhs, rhs) == arithmetic_op(lhs, lhs)).all()
 
 
-@pytest.mark.parametrize("binop", _binops + _binops_compare)
-@pytest.mark.parametrize("data", [None, [-9, 7], [5, -2], [12, 18]])
+@pytest.mark.parametrize("data", [None, [-9, 7], [12, 18]])
 @pytest.mark.parametrize("scalar", [1, 3, 12, np.nan])
-def test_empty_column(binop, data, scalar):
+def test_empty_column(binary_op, data, scalar):
     gdf = cudf.DataFrame(columns=["a", "b"])
     if data is not None:
         gdf["a"] = data
 
     pdf = gdf.to_pandas()
 
-    got = binop(gdf, scalar)
-    expected = binop(pdf, scalar)
+    got = binary_op(gdf, scalar)
+    expected = binary_op(pdf, scalar)
 
     assert_eq(expected, got)
 
@@ -2463,16 +2293,16 @@ def test_empty_column(binop, data, scalar):
 @pytest.mark.parametrize(
     "df",
     [
-        cudf.DataFrame(
+        lambda: cudf.DataFrame(
             [[1, 2, 3, 4], [5, 6, 7, 8], [10, 11, 12, 13], [14, 15, 16, 17]]
         ),
         pytest.param(
-            cudf.DataFrame([[1, None, None, 4], [5, 6, 7, None]]),
+            lambda: cudf.DataFrame([[1, None, None, 4], [5, 6, 7, None]]),
             marks=pytest_xfail(
                 reason="Cannot access Frame.values if frame contains nulls"
             ),
         ),
-        cudf.DataFrame(
+        lambda: cudf.DataFrame(
             [
                 [1.2, 2.3, 3.4, 4.5],
                 [5.6, 6.7, 7.8, 8.9],
@@ -2480,24 +2310,26 @@ def test_empty_column(binop, data, scalar):
                 [9.1, 2.4, 4.5, 65.34],
             ]
         ),
-        cudf.Series([14, 15, 16, 17]),
-        cudf.Series([14.15, 15.16, 16.17, 17.18]),
+        lambda: cudf.Series([14, 15, 16, 17]),
+        lambda: cudf.Series([14.15, 15.16, 16.17, 17.18]),
     ],
 )
 @pytest.mark.parametrize(
     "other",
     [
-        cudf.DataFrame([[9, 10], [11, 12], [13, 14], [15, 16]]),
-        cudf.DataFrame(
+        lambda: cudf.DataFrame([[9, 10], [11, 12], [13, 14], [15, 16]]),
+        lambda: cudf.DataFrame(
             [[9.4, 10.5], [11.6, 12.7], [13.8, 14.9], [15.1, 16.2]]
         ),
-        cudf.Series([5, 6, 7, 8]),
-        cudf.Series([5.6, 6.7, 7.8, 8.9]),
-        np.array([5, 6, 7, 8]),
-        [25.5, 26.6, 27.7, 28.8],
+        lambda: cudf.Series([5, 6, 7, 8]),
+        lambda: cudf.Series([5.6, 6.7, 7.8, 8.9]),
+        lambda: np.array([5, 6, 7, 8]),
+        lambda: [25.5, 26.6, 27.7, 28.8],
     ],
 )
 def test_binops_dot(df, other):
+    df = df()
+    other = other()
     pdf = df.to_pandas()
     host_other = other.to_pandas() if hasattr(other, "to_pandas") else other
 
@@ -2557,13 +2389,12 @@ def test_binop_integer_power_int_series():
     assert_eq(expected, got)
 
 
-@pytest.mark.parametrize("op", _binops)
-def test_binop_index_series(op):
+def test_binop_index_series(arithmetic_op):
     gi = cudf.Index([10, 11, 12])
     gs = cudf.Series([1, 2, 3])
 
-    actual = op(gi, gs)
-    expected = op(gi.to_pandas(), gs.to_pandas())
+    actual = arithmetic_op(gi, gs)
+    expected = arithmetic_op(gi.to_pandas(), gs.to_pandas())
 
     assert_eq(expected, actual)
 
@@ -2614,7 +2445,6 @@ def test_binop_lhs_numpy_datetimelike_scalar(scalar):
     assert_eq(result, expected)
 
 
-@pytest.mark.parametrize("comp_op", _cmpops)
 @pytest.mark.parametrize("ordered", [True, False])
 @pytest.mark.parametrize(
     "data_left, data_right",
@@ -2623,7 +2453,9 @@ def test_binop_lhs_numpy_datetimelike_scalar(scalar):
         [[1, 2], [1, 3]],
     ],
 )
-def test_cat_non_cat_compare_ops(comp_op, data_left, data_right, ordered):
+def test_cat_non_cat_compare_ops(
+    comparison_op, data_left, data_right, ordered
+):
     pd_non_cat = pd.Series(data_left)
     pd_cat = pd.Series(
         data_right,
@@ -2634,15 +2466,20 @@ def test_cat_non_cat_compare_ops(comp_op, data_left, data_right, ordered):
     cudf_cat = cudf.Series.from_pandas(pd_cat)
 
     if (
-        not ordered and comp_op not in {operator.eq, operator.ne}
-    ) or comp_op in {operator.gt, operator.lt, operator.le, operator.ge}:
+        not ordered and comparison_op not in {operator.eq, operator.ne}
+    ) or comparison_op in {
+        operator.gt,
+        operator.lt,
+        operator.le,
+        operator.ge,
+    }:
         with pytest.raises(TypeError):
-            comp_op(pd_non_cat, pd_cat)
+            comparison_op(pd_non_cat, pd_cat)
         with pytest.raises(TypeError):
-            comp_op(cudf_non_cat, cudf_cat)
+            comparison_op(cudf_non_cat, cudf_cat)
     else:
-        expected = comp_op(pd_non_cat, pd_cat)
-        result = comp_op(cudf_non_cat, cudf_cat)
+        expected = comparison_op(pd_non_cat, pd_cat)
+        result = comparison_op(cudf_non_cat, cudf_cat)
         assert_eq(result, expected)
 
 
@@ -2666,4 +2503,12 @@ def test_eq_ne_non_comparable_types(
     if with_na:
         expected_data[0] = None
     expected = cudf.Series(expected_data)
+    assert_eq(result, expected)
+
+
+def test_binops_compare_stdlib_date_scalar(comparison_op):
+    dt = datetime.date(2020, 1, 1)
+    data = [dt]
+    result = comparison_op(cudf.Series(data), dt)
+    expected = comparison_op(pd.Series(data), dt)
     assert_eq(result, expected)

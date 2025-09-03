@@ -3,9 +3,9 @@ from __future__ import annotations
 
 import os
 import warnings
-from collections import abc
+from collections.abc import Collection, Mapping
 from io import BytesIO, StringIO
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 import pandas as pd
@@ -28,6 +28,9 @@ from cudf.utils.dtypes import (
     _maybe_convert_to_default_type,
     dtype_to_pylibcudf_type,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Hashable
 
 
 def _get_cudf_schema_element_from_dtype(
@@ -123,7 +126,7 @@ def read_json(
 ) -> DataFrame:
     """{docstring}"""
 
-    if dtype is not None and not isinstance(dtype, (abc.Mapping, bool)):
+    if dtype is not None and not isinstance(dtype, (Mapping, bool)):
         raise TypeError(
             "'dtype' parameter only supports "
             "a dict of column names and types as key-value pairs, "
@@ -180,7 +183,7 @@ def read_json(
             raise ValueError("False value is unsupported for `dtype`")
         elif dtype is not True:
             processed_dtypes = []
-            if isinstance(dtype, abc.Mapping):
+            if isinstance(dtype, Mapping):
                 for k, v in dtype.items():
                     # Make sure keys are string
                     k = str(k)
@@ -188,7 +191,7 @@ def read_json(
                         _get_cudf_schema_element_from_dtype(v)
                     )
                     processed_dtypes.append((k, lib_type, child_types))
-            elif isinstance(dtype, abc.Collection):
+            elif isinstance(dtype, Collection):
                 for col_dtype in dtype:
                     processed_dtypes.append(
                         # Ignore child columns since we cannot specify their dtypes
@@ -274,7 +277,7 @@ def read_json(
     if dtype is None:
         dtype = True
 
-    if dtype is True or isinstance(dtype, abc.Mapping):
+    if dtype is True or isinstance(dtype, Mapping):
         # There exists some dtypes in the result columns that is inferred.
         # Find them and map them to the default dtypes.
         specified_dtypes = {} if dtype is True else dtype
@@ -306,11 +309,11 @@ def _maybe_return_nullable_pd_obj(
         return cudf_obj.to_pandas(nullable=False)
 
 
-def _dtype_to_names_list(col: ColumnBase) -> list[tuple[abc.Hashable, Any]]:
+def _dtype_to_names_list(col: ColumnBase) -> list[tuple[Hashable, Any]]:
     if isinstance(col.dtype, StructDtype):
         return [
             (name, _dtype_to_names_list(child))
-            for name, child in zip(col.dtype.fields, col.children)
+            for name, child in zip(col.dtype.fields, col.children, strict=True)
         ]
     elif isinstance(col.dtype, ListDtype):
         return [("", _dtype_to_names_list(child)) for child in col.children]
@@ -320,7 +323,7 @@ def _dtype_to_names_list(col: ColumnBase) -> list[tuple[abc.Hashable, Any]]:
 @acquire_spill_lock()
 def _plc_write_json(
     table: Series | DataFrame,
-    colnames: list[tuple[abc.Hashable, Any]],
+    colnames: list[tuple[Hashable, Any]],
     path_or_buf,
     compression: Literal[
         "gzip",

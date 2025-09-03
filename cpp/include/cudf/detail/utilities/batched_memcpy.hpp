@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+#pragma once
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/utilities/memory_resource.hpp>
@@ -28,8 +30,8 @@ namespace CUDF_EXPORT cudf {
 namespace detail {
 
 /**
- * @brief A helper function that copies a vector of vectors from source to destination addresses in
- * a batched manner.
+ * @brief Helper to batched memcpy specified numbers of bytes from source device iterators to
+ * destination device iterators
  *
  * @tparam SrcIterator **[inferred]** The type of device-accessible source addresses iterator
  * @tparam DstIterator **[inferred]** The type of device-accessible destination address iterator

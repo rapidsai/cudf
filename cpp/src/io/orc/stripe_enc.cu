@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
+#include "io/comp/compression.hpp"
 #include "io/utilities/block_utils.cuh"
 #include "io/utilities/time_utils.cuh"
 #include "orc_gpu.hpp"
 
-#include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/utilities/batched_memcpy.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/functional.hpp>
@@ -43,8 +44,8 @@
 namespace cudf::io::orc::detail {
 
 using cudf::detail::device_2dspan;
-using cudf::io::detail::compression_result;
-using cudf::io::detail::compression_status;
+using cudf::io::detail::codec_exec_result;
+using cudf::io::detail::codec_status;
 
 constexpr int scratch_buffer_size        = 512 * 4;
 constexpr int compact_streams_block_size = 1024;
@@ -1151,7 +1152,7 @@ CUDF_KERNEL void __launch_bounds__(256)
                                  device_2dspan<encoder_chunk_streams const> streams,
                                  device_span<device_span<uint8_t const>> inputs,
                                  device_span<device_span<uint8_t>> outputs,
-                                 device_span<compression_result> results,
+                                 device_span<codec_exec_result> results,
                                  device_span<uint8_t> compressed_bfr,
                                  uint32_t comp_blk_size,
                                  uint32_t max_comp_blk_size,
@@ -1183,7 +1184,7 @@ CUDF_KERNEL void __launch_bounds__(256)
     auto const dst_offset =
       padded_block_header_size + b * (padded_block_header_size + padded_comp_block_size);
     outputs[ss.first_block + b] = {dst + dst_offset, max_comp_blk_size};
-    results[ss.first_block + b] = {0, compression_status::FAILURE};
+    results[ss.first_block + b] = {0, codec_status::FAILURE};
   }
 }
 
@@ -1205,7 +1206,7 @@ CUDF_KERNEL void __launch_bounds__(1024)
   compact_compressed_blocks_kernel(device_2dspan<stripe_stream> strm_desc,
                                    device_span<device_span<uint8_t const> const> inputs,
                                    device_span<device_span<uint8_t> const> outputs,
-                                   device_span<compression_result> results,
+                                   device_span<codec_exec_result> results,
                                    device_span<uint8_t> compressed_bfr,
                                    uint32_t comp_blk_size,
                                    uint32_t max_comp_blk_size)
@@ -1231,7 +1232,7 @@ CUDF_KERNEL void __launch_bounds__(1024)
     if (t == 0) {
       auto const src_len =
         min(comp_blk_size, ss.stream_size - min(b * comp_blk_size, ss.stream_size));
-      auto dst_len = (results[ss.first_block + b].status == compression_status::SUCCESS)
+      auto dst_len = (results[ss.first_block + b].status == codec_status::SUCCESS)
                        ? results[ss.first_block + b].bytes_written
                        : src_len;
       uint32_t blk_size24{};
@@ -1368,7 +1369,7 @@ std::optional<writer_compression_statistics> compress_orc_data_streams(
   bool collect_statistics,
   device_2dspan<stripe_stream> strm_desc,
   device_2dspan<encoder_chunk_streams> enc_streams,
-  device_span<compression_result> comp_res,
+  device_span<codec_exec_result> comp_res,
   rmm::cuda_stream_view stream)
 {
   rmm::device_uvector<device_span<uint8_t const>> comp_in(num_compressed_blocks, stream);

@@ -668,7 +668,7 @@ struct sorting_column {
 };
 
 /**
- * @brief Base settings for `write_parquet()` and `parquet_chunked_writer`.
+ * @brief Base settings for `write_parquet()` and `chunked_parquet_writer`.
  */
 class parquet_writer_options_base {
   // Specify the sink to use for writer output
@@ -1394,7 +1394,7 @@ std::unique_ptr<std::vector<uint8_t>> merge_row_group_metadata(
 class chunked_parquet_writer_options_builder;
 
 /**
- * @brief Settings for `parquet_chunked_writer`.
+ * @brief Settings for `chunked_parquet_writer`.
  */
 class chunked_parquet_writer_options : public parquet_writer_options_base {
   /**
@@ -1449,7 +1449,7 @@ class chunked_parquet_writer_options_builder
 /**
  * @brief chunked parquet writer class to handle options and write tables in chunks.
  *
- * The intent of the parquet_chunked_writer is to allow writing of an
+ * The intent of the chunked_parquet_writer is to allow writing of an
  * arbitrarily large / arbitrary number of rows to a parquet file in multiple passes.
  *
  * The following code snippet demonstrates how to write a single parquet file containing
@@ -1458,21 +1458,21 @@ class chunked_parquet_writer_options_builder
  * @code
  *  auto destination = cudf::io::sink_info("dataset.parquet");
  *  auto options = cudf::io::chunked_parquet_writer_options::builder(destination, table->view());
- *  auto writer  = cudf::io::parquet_chunked_writer(options);
+ *  auto writer  = cudf::io::chunked_parquet_writer(options);
  *
  *  writer.write(table0)
  *  writer.write(table1)
  *  writer.close()
  *  @endcode
  */
-class parquet_chunked_writer {
+class chunked_parquet_writer {
  public:
   /**
    * @brief Default constructor, this should never be used.
    *        This is added just to satisfy cython.
    *        This is added to not leak detail API
    */
-  parquet_chunked_writer();
+  chunked_parquet_writer();
 
   /**
    * @brief Constructor with chunked writer options
@@ -1480,13 +1480,13 @@ class parquet_chunked_writer {
    * @param[in] options options used to write table
    * @param[in] stream CUDA stream used for device memory operations and kernel launches
    */
-  parquet_chunked_writer(chunked_parquet_writer_options const& options,
+  chunked_parquet_writer(chunked_parquet_writer_options const& options,
                          rmm::cuda_stream_view stream = cudf::get_default_stream());
   /**
    * @brief Default destructor.
    *        This is added to not leak detail API
    */
-  ~parquet_chunked_writer();
+  ~chunked_parquet_writer();
 
   /**
    * @brief Writes table to output.
@@ -1499,7 +1499,7 @@ class parquet_chunked_writer {
    * @throws rmm::bad_alloc if there is insufficient space for temporary buffers
    * @return returns reference of the class object
    */
-  parquet_chunked_writer& write(table_view const& table,
+  chunked_parquet_writer& write(table_view const& table,
                                 std::vector<partition_info> const& partitions = {});
 
   /**
@@ -1516,6 +1516,14 @@ class parquet_chunked_writer {
   /// Unique pointer to impl writer class
   std::unique_ptr<parquet::detail::writer> writer;
 };
+
+/**
+ * @brief Deprecated type alias for the `chunked_parquet_writer`
+ *
+ * @deprecated Use chunked_parquet_writer instead. This alias will be removed in a future release.
+ */
+using parquet_chunked_writer [[deprecated("Use chunked_parquet_writer instead")]] =
+  chunked_parquet_writer;
 
 /** @} */  // end of group
 

@@ -17,6 +17,7 @@
 #include "io/utilities/block_utils.cuh"
 #include "orc_gpu.hpp"
 
+#include <cudf/detail/null_mask.cuh>
 #include <cudf/io/orc_types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>

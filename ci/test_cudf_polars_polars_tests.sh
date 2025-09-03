@@ -1,7 +1,9 @@
 #!/bin/bash
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
-set -eou pipefail
+set -euo pipefail
+
+source rapids-init-pip
 
 rapids-logger "Download wheels"
 

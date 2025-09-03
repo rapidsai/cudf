@@ -130,7 +130,6 @@ channels:
   - rapidsai-nightly
   - rapidsai
   - conda-forge
-  - nvidia
 
 dependencies:
   develop:
@@ -142,14 +141,6 @@ dependencies:
     specific:
       - output_types: conda
         matrices:
-          - matrix:
-              cuda: "11"
-            packages:
-              - cuda-version=11.8
-          - matrix:
-              cuda: "11.8"
-            packages:
-              - cuda-version=11.8
           - matrix:
               cuda: "12.0"
             packages:
@@ -170,6 +161,10 @@ dependencies:
               cuda: "12.9"
             packages:
               - cuda-version=12.9
+          - matrix:
+              cuda: "13.0"
+            packages:
+              - cuda-version=13.0
   py_version:
     specific:
       - output_types: conda
@@ -197,7 +192,7 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - cudf==25.6.*,>=0.0.0a0
+          - cudf==25.10.*,>=0.0.0a0
           - pandas
           - pytest
           - pytest-xdist
@@ -273,13 +268,13 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - cuml==25.6.*,>=0.0.0a0
+          - cuml==25.10.*,>=0.0.0a0
           - scikit-learn
   test_cugraph:
     common:
       - output_types: conda
         packages:
-          - cugraph==25.6.*,>=0.0.0a0
+          - cugraph==25.10.*,>=0.0.0a0
           - networkx
   test_ibis:
     common:

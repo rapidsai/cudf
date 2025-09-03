@@ -306,27 +306,6 @@ struct table_with_metadata {
 };
 
 /**
- * @brief Non-owning view of a host memory buffer
- *
- * @deprecated Since 23.04
- *
- * Used to describe buffer input in `source_info` objects.
- */
-struct host_buffer {
-  // TODO: to be replaced by `host_span`
-  char const* data = nullptr;  //!< Pointer to the buffer
-  size_t size      = 0;        //!< Size of the buffer
-  host_buffer()    = default;
-  /**
-   * @brief Construct a new host buffer object
-   *
-   * @param data Pointer to the buffer
-   * @param size Size of the buffer
-   */
-  host_buffer(char const* data, size_t size) : data(data), size(size) {}
-};
-
-/**
  * @brief Returns `true` if the type is byte-like, meaning it is reasonable to pass as a pointer to
  * bytes.
  *
@@ -365,40 +344,6 @@ struct source_info {
    */
   explicit source_info(std::string file_path)
     : _type(io_type::FILEPATH), _filepaths({std::move(file_path)})
-  {
-  }
-
-  /**
-   * @brief Construct a new source info object for multiple buffers in host memory
-   *
-   * @deprecated Since 23.04
-   *
-   * @param host_buffers Input buffers in host memory
-   */
-  explicit source_info(std::vector<host_buffer> const& host_buffers) : _type(io_type::HOST_BUFFER)
-  {
-    _host_buffers.reserve(host_buffers.size());
-    std::transform(host_buffers.begin(),
-                   host_buffers.end(),
-                   std::back_inserter(_host_buffers),
-                   [](auto const hb) {
-                     return cudf::host_span<std::byte const>{
-                       reinterpret_cast<std::byte const*>(hb.data), hb.size};
-                   });
-  }
-
-  /**
-   * @brief Construct a new source info object for a single buffer
-   *
-   * @deprecated Since 23.04
-   *
-   * @param host_data Input buffer in host memory
-   * @param size Size of the buffer
-   */
-  explicit source_info(char const* host_data, size_t size)
-    : _type(io_type::HOST_BUFFER),
-      _host_buffers(
-        {cudf::host_span<std::byte const>(reinterpret_cast<std::byte const*>(host_data), size)})
   {
   }
 

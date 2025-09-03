@@ -47,10 +47,11 @@ def test_hash_shuffle(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
     # Add first Shuffle node
     keys = (NamedExpr("x", Col(qir.schema["x"], "x")),)
     options = ConfigOptions.from_polars_engine(engine)
-    qir1 = Shuffle(qir.schema, keys, options, qir)
+    assert options.executor.name == "streaming"
+    qir1 = Shuffle(qir.schema, keys, options.executor.shuffle_method, qir)
 
     # Add second Shuffle node (on the same keys)
-    qir2 = Shuffle(qir.schema, keys, options, qir1)
+    qir2 = Shuffle(qir.schema, keys, options.executor.shuffle_method, qir1)
 
     # Check that sequential shuffles on the same keys
     # are replaced with a single shuffle node
@@ -59,7 +60,7 @@ def test_hash_shuffle(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
 
     # Add second Shuffle node (on different keys)
     keys2 = (NamedExpr("z", Col(qir.schema["z"], "z")),)
-    qir3 = Shuffle(qir2.schema, keys2, options, qir2)
+    qir3 = Shuffle(qir2.schema, keys2, options.executor.shuffle_method, qir2)
 
     # Check that we have an additional shuffle
     # node after shuffling on different keys
@@ -68,5 +69,7 @@ def test_hash_shuffle(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
 
     # Check that streaming evaluation works
     result = evaluate_streaming(qir3, options).to_polars()
-    expect = df.collect(engine="cpu")
+    # ignore is for polars' EngineType, which isn't publicly exported.
+    # https://github.com/pola-rs/polars/issues/17420
+    expect = df.collect(engine="cpu")  # type: ignore[call-overload]
     assert_frame_equal(result, expect, check_row_order=False)

@@ -18,10 +18,12 @@
 #include "io/utilities/column_buffer.hpp"
 #include "page_decode.cuh"
 
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/hashing/detail/default_hash.cuh>
 
 #include <rmm/exec_policy.hpp>
 
+#include <cooperative_groups.h>
 #include <cuda/std/iterator>
 #include <thrust/reduce.h>
 
@@ -46,14 +48,14 @@ using unused_state_buf = page_state_buffers_s<0, 0, 0>;
 /**
  * @brief Calculate string bytes for DELTA_LENGTH_BYTE_ARRAY encoded pages
  *
- * Result is valid only on thread 0.
+ * Operates at thread block level. Result is valid only on thread 0.
  *
  * @param s The local page info
- * @param t Thread index
+ * @param block Thread block cooperative group
  */
-__device__ size_type gpuDeltaLengthPageStringSize(page_state_s* s, int t)
+__device__ size_type delta_length_page_string_size(page_state_s* s, cg::thread_block const& block)
 {
-  if (t == 0) {
+  if (block.thread_rank() == 0) {
     // find the beginning of char data
     delta_binary_decoder string_lengths;
     auto const* string_start = string_lengths.find_end_of_block(s->data_start, s->data_end);
@@ -66,61 +68,61 @@ __device__ size_type gpuDeltaLengthPageStringSize(page_state_s* s, int t)
 /**
  * @brief Calculate string bytes for DELTA_BYTE_ARRAY encoded pages
  *
- * This expects all threads in the thread block (preprocess_block_size).
+ * Operates at thread block level of size preprocess_block_size.
  *
  * @param s The local page info
- * @param t Thread index
+ * @param block Thread block cooperative group
  */
-__device__ size_type gpuDeltaPageStringSize(page_state_s* s, int t)
+__device__ size_type delta_page_string_size(page_state_s* s, cg::thread_block const& block)
 {
-  using cudf::detail::warp_size;
   using WarpReduce = cub::WarpReduce<uleb128_t>;
   __shared__ typename WarpReduce::TempStorage temp_storage[2];
 
   __shared__ __align__(16) delta_binary_decoder prefixes;
   __shared__ __align__(16) delta_binary_decoder suffixes;
 
-  int const lane_id = t % warp_size;
-  int const warp_id = t / warp_size;
+  auto const warp = cg::tiled_partition<cudf::detail::warp_size>(block);
 
-  if (t == 0) {
+  if (block.thread_rank() == 0) {
     auto const* suffix_start = prefixes.find_end_of_block(s->data_start, s->data_end);
     suffixes.init_binary_block(suffix_start, s->data_end);
   }
-  __syncthreads();
+  block.sync();
 
   // two warps will traverse the prefixes and suffixes and sum them up
-  auto const db = t < warp_size ? &prefixes : t < 2 * warp_size ? &suffixes : nullptr;
+  auto const db = warp.meta_group_rank() == 0   ? &prefixes
+                  : warp.meta_group_rank() == 1 ? &suffixes
+                                                : nullptr;
 
   size_t total_bytes = 0;
   if (db != nullptr) {
     // initialize with first value (which is stored in last_value)
-    if (lane_id == 0) { total_bytes = db->last_value; }
+    if (warp.thread_rank() == 0) { total_bytes = db->last_value; }
 
     uleb128_t lane_sum = 0;
     while (db->current_value_idx < db->num_encoded_values(true)) {
       // calculate values for current mini-block
-      db->calc_mini_block_values(lane_id);
+      db->calc_mini_block_values(warp.thread_rank());
 
       // get per lane sum for mini-block
-      for (uint32_t i = 0; i < db->values_per_mb; i += warp_size) {
-        uint32_t const idx = db->current_value_idx + i + lane_id;
+      for (uint32_t i = 0; i < db->values_per_mb; i += warp.size()) {
+        uint32_t const idx = db->current_value_idx + i + warp.thread_rank();
         if (idx < db->value_count) {
           lane_sum += db->value[rolling_index<delta_rolling_buf_size>(idx)];
         }
       }
 
-      if (lane_id == 0) { db->setup_next_mini_block(true); }
-      __syncwarp();
+      if (warp.thread_rank() == 0) { db->setup_next_mini_block(true); }
+      warp.sync();
     }
 
     // get sum for warp.
     // note: warp_sum will only be valid on lane 0.
-    auto const warp_sum = WarpReduce(temp_storage[warp_id]).Sum(lane_sum);
+    auto const warp_sum = WarpReduce(temp_storage[warp.meta_group_rank()]).Sum(lane_sum);
 
-    if (lane_id == 0) { total_bytes += warp_sum; }
+    if (warp.thread_rank() == 0) { total_bytes += warp_sum; }
   }
-  __syncthreads();
+  block.sync();
 
   // now sum up total_bytes from the two warps. result is only valid on thread 0.
   auto const final_bytes =
@@ -135,23 +137,27 @@ __device__ size_type gpuDeltaPageStringSize(page_state_s* s, int t)
  * This function expects the dictionary position to be at 0 and will traverse
  * the entire thing (for plain and dictionary encoding).
  *
- * This expects all threads in the thread block (preprocess_block_size). Result is only
+ * Operates at thread block level of size preprocess_block_size. Result is only
  * valid on thread 0.
  *
  * @param s The local page info
- * @param t Thread index
+ * @param block Thread block cooperative group
+ *
+ * @return The number of string bytes in the page
  */
-__device__ size_type gpuDecodeTotalPageStringSize(page_state_s* s, int t)
+__device__ size_type decode_total_page_string_size(page_state_s* s, cg::thread_block const& block)
 {
-  using cudf::detail::warp_size;
+  auto const warp      = cg::tiled_partition<cudf::detail::warp_size>(block);
   size_type target_pos = s->num_input_values;
   size_type str_len    = 0;
   switch (s->page.encoding) {
     case Encoding::PLAIN_DICTIONARY:
     case Encoding::RLE_DICTIONARY:
-      if (t < warp_size && s->dict_base) {
+      // Use warp 0 to decode dictionary indices and return the new target position
+      if (warp.meta_group_rank() == 0 && s->dict_base) {
         auto const [new_target_pos, len] =
-          gpuDecodeDictionaryIndices<true, unused_state_buf>(s, nullptr, target_pos, t);
+          decode_dictionary_indices<is_calc_sizes_only::YES, unused_state_buf>(
+            s, nullptr, target_pos, warp);
         target_pos = new_target_pos;
         str_len    = len;
       }
@@ -166,20 +172,22 @@ __device__ size_type gpuDecodeTotalPageStringSize(page_state_s* s, int t)
       // For V1, the choice is an overestimate (s->dict_size), or an exact number that's
       // expensive to compute. For now we're going with the latter.
       else {
-        str_len = gpuInitStringDescriptors<true, unused_state_buf>(
-          s, nullptr, target_pos, cg::this_thread_block());
+        str_len = initialize_string_descriptors<is_calc_sizes_only::YES, unused_state_buf>(
+          s, nullptr, target_pos, block);
       }
       break;
 
-    case Encoding::DELTA_LENGTH_BYTE_ARRAY: str_len = gpuDeltaLengthPageStringSize(s, t); break;
+    case Encoding::DELTA_LENGTH_BYTE_ARRAY:
+      str_len = delta_length_page_string_size(s, block);
+      break;
 
-    case Encoding::DELTA_BYTE_ARRAY: str_len = gpuDeltaPageStringSize(s, t); break;
+    case Encoding::DELTA_BYTE_ARRAY: str_len = delta_page_string_size(s, block); break;
 
     default:
       // not a valid string encoding, so just return 0
       break;
   }
-  if (!t) { s->dict_pos = target_pos; }
+  if (!block.thread_rank()) { s->dict_pos = target_pos; }
   return str_len;
 }
 
@@ -190,28 +198,27 @@ __device__ size_type gpuDecodeTotalPageStringSize(page_state_s* s, int t)
  * If bounds_set is true, computes skipped_values and skipped_leaf_values for the
  * page to indicate where we need to skip to based on min/max row.
  *
- * Operates at the block level.
+ * Operates at thread block level.
  *
  * @param s The local page info
  * @param target_value_count The target value count to process up to
  * @param rep Repetition level buffer
  * @param def Definition level buffer
- * @param t Thread index
- * @param bounds_set A boolean indicating whether or not min/max row bounds have been set
+ * @param bounds_set Boolean indicating whether min/max row bounds have been set
  */
 template <typename level_t>
-static __device__ void gpuUpdatePageSizes(page_state_s* s,
-                                          int target_value_count,
-                                          level_t const* const rep,
-                                          level_t const* const def,
-                                          int t,
-                                          bool bounds_set)
+__device__ void update_page_sizes(page_state_s* s,
+                                  int target_value_count,
+                                  level_t const* const rep,
+                                  level_t const* const def,
+                                  bool bounds_set,
+                                  cg::thread_block const& block)
 {
   // max nesting depth of the column
-  int const max_depth = s->col.max_nesting_depth;
-
-  constexpr int num_warps      = preprocess_block_size / 32;
-  constexpr int max_batch_size = num_warps * 32;
+  int const max_depth          = s->col.max_nesting_depth;
+  int const t                  = block.thread_rank();
+  constexpr int num_warps      = preprocess_block_size / cudf::detail::warp_size;
+  constexpr int max_batch_size = num_warps * cudf::detail::warp_size;
 
   using block_reduce = cub::BlockReduce<int, preprocess_block_size>;
   using block_scan   = cub::BlockScan<int, preprocess_block_size>;
@@ -230,7 +237,8 @@ static __device__ void gpuUpdatePageSizes(page_state_s* s,
   bool skipped_values_set = s->page.skipped_values >= 0;
 
   while (value_count < target_value_count) {
-    int const batch_size = min(max_batch_size, target_value_count - value_count);
+    int const batch_size =
+      cuda::std::min<int32_t>(max_batch_size, target_value_count - value_count);
 
     // start/end depth
     int start_depth, end_depth, d;
@@ -248,14 +256,14 @@ static __device__ void gpuUpdatePageSizes(page_state_s* s,
       int thread_row_count, block_row_count;
       block_scan(temp_storage.scan_storage)
         .InclusiveSum(is_new_row, thread_row_count, block_row_count);
-      __syncthreads();
+      block.sync();
 
       // get absolute thread leaf index
       int const is_new_leaf = (d >= s->nesting_info[max_depth - 1].max_def_level);
       int thread_leaf_count, block_leaf_count;
       block_scan(temp_storage.scan_storage)
         .InclusiveSum(is_new_leaf, thread_leaf_count, block_leaf_count);
-      __syncthreads();
+      block.sync();
 
       // if this thread is in row bounds
       int const row_index = (thread_row_count + row_count) - 1;
@@ -267,7 +275,7 @@ static __device__ void gpuUpdatePageSizes(page_state_s* s,
         int local_count, global_count;
         block_scan(temp_storage.scan_storage)
           .InclusiveSum(in_row_bounds, local_count, global_count);
-        __syncthreads();
+        block.sync();
 
         // we found it
         if (global_count > 0) {
@@ -289,7 +297,7 @@ static __device__ void gpuUpdatePageSizes(page_state_s* s,
     for (int s_idx = 0; s_idx < max_depth; s_idx++) {
       int const in_nesting_bounds = (s_idx >= start_depth && s_idx <= end_depth && in_row_bounds);
       int const count = block_reduce(temp_storage.reduce_storage).Sum(in_nesting_bounds);
-      __syncthreads();
+      block.sync();
       if (!t) {
         PageNestingInfo* pni = &s->page.nesting[s_idx];
         pni->batch_size += count;
@@ -326,18 +334,19 @@ static __device__ void gpuUpdatePageSizes(page_state_s* s,
  */
 template <typename level_t>
 CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
-  gpuComputePageSizes(PageInfo* pages,
-                      device_span<ColumnChunkDesc const> chunks,
-                      size_t min_row,
-                      size_t num_rows,
-                      bool is_base_pass,
-                      bool compute_string_sizes)
+  compute_page_sizes_kernel(PageInfo* pages,
+                            device_span<ColumnChunkDesc const> chunks,
+                            size_t min_row,
+                            size_t num_rows,
+                            bool is_base_pass,
+                            bool compute_string_sizes)
 {
   __shared__ __align__(16) page_state_s state_g;
 
   page_state_s* const s = &state_g;
-  int page_idx          = blockIdx.x;
-  int t                 = threadIdx.x;
+  auto const block      = cg::this_thread_block();
+  int const page_idx    = cg::this_grid().block_rank();
+  int const t           = block.thread_rank();
   PageInfo* pp          = &pages[page_idx];
 
   // whether or not we have repetition levels (lists)
@@ -350,12 +359,12 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
     decoders[level_type::NUM_LEVEL_TYPES] = {{def_runs}, {rep_runs}};
 
   // setup page info
-  if (!setupLocalPageInfo(
+  if (!setup_local_page_info(
         s, pp, chunks, min_row, num_rows, all_types_filter{}, page_processing_stage::PREPROCESS)) {
     return;
   }
 
-  // initialize the stream decoders (requires values computed in setupLocalPageInfo)
+  // initialize the stream decoders (requires values computed in setup_local_page_info)
   // the size of the rolling batch buffer
   level_t* const rep = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
   level_t* const def = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
@@ -371,7 +380,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
                                           rep,
                                           s->page.num_input_values);
   }
-  __syncthreads();
+  block.sync();
 
   if (!t) {
     s->page.skipped_values      = -1;
@@ -441,10 +450,10 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
     }
     depth += blockDim.x;
   }
-  __syncthreads();
+  block.sync();
 
   // the core loop. decode batches of level stream data using rle_stream objects
-  // and pass the results to gpuUpdatePageSizes
+  // and pass the results to update_page_sizes
   int processed = 0;
   while (processed < s->page.num_input_values) {
     // TODO:  it would not take much more work to make it so that we could run both of these
@@ -452,20 +461,20 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
     // get dealt with but that's about it.
     if (has_repetition) {
       decoders[level_type::REPETITION].decode_next(t);
-      __syncthreads();
+      block.sync();
     }
     // the # of rep/def levels will always be the same size
     processed += decoders[level_type::DEFINITION].decode_next(t);
-    __syncthreads();
+    block.sync();
 
     // update page sizes
-    gpuUpdatePageSizes<level_t>(s, processed, rep, def, t, !is_base_pass);
-    __syncthreads();
+    update_page_sizes<level_t>(s, processed, rep, def, !is_base_pass, block);
+    block.sync();
   }
 
   // retrieve total string size.
   if (compute_string_sizes && !pp->has_page_index) {
-    auto const str_bytes = gpuDecodeTotalPageStringSize(s, t);
+    auto const str_bytes = decode_total_page_string_size(s, block);
     if (t == 0) { s->page.str_bytes = str_bytes; }
   }
 
@@ -499,17 +508,19 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
 }  // anonymous namespace
 
 /**
- * @copydoc cudf::io::parquet::gpu::ComputePageSizes
+ * @copydoc cudf::io::parquet::gpu::compute_page_sizes
  */
-void ComputePageSizes(cudf::detail::hostdevice_span<PageInfo> pages,
-                      cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-                      size_t min_row,
-                      size_t num_rows,
-                      bool compute_num_rows,
-                      bool compute_string_sizes,
-                      int level_type_size,
-                      rmm::cuda_stream_view stream)
+void compute_page_sizes(cudf::detail::hostdevice_span<PageInfo> pages,
+                        cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                        size_t min_row,
+                        size_t num_rows,
+                        bool compute_num_rows,
+                        bool compute_string_sizes,
+                        int level_type_size,
+                        rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
+
   dim3 dim_block(preprocess_block_size, 1);
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
 
@@ -519,10 +530,10 @@ void ComputePageSizes(cudf::detail::hostdevice_span<PageInfo> pages,
   // If uses_custom_row_bounds is set to true, we have to do a second pass later that "trims"
   // the starting and ending read values to account for these bounds.
   if (level_type_size == 1) {
-    gpuComputePageSizes<uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
+    compute_page_sizes_kernel<uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows, compute_num_rows, compute_string_sizes);
   } else {
-    gpuComputePageSizes<uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
+    compute_page_sizes_kernel<uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows, compute_num_rows, compute_string_sizes);
   }
 }

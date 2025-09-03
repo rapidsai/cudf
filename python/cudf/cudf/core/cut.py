@@ -1,6 +1,6 @@
 # Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
-from collections import abc
+from collections.abc import Sequence
 
 import cupy
 import numpy as np
@@ -9,7 +9,6 @@ import pandas as pd
 import cudf
 from cudf.api.types import is_list_like
 from cudf.core.column import as_column
-from cudf.core.column.categorical import CategoricalColumn, as_unsigned_codes
 from cudf.core.index import IntervalIndex, interval_range
 
 
@@ -141,7 +140,7 @@ def cut(
                 )
 
     # bins can either be an int, sequence of scalars or an intervalIndex
-    if isinstance(bins, abc.Sequence):
+    if isinstance(bins, Sequence):
         if len(set(bins)) is not len(bins):
             if duplicates == "raise":
                 raise ValueError(
@@ -159,7 +158,7 @@ def cut(
 
     # create bins if given an int or single scalar
     if not isinstance(bins, pd.IntervalIndex):
-        if not isinstance(bins, (abc.Sequence)):
+        if not isinstance(bins, Sequence):
             if isinstance(
                 x, (pd.Series, cudf.Series, np.ndarray, cupy.ndarray)
             ):
@@ -286,21 +285,11 @@ def cut(
             # should allow duplicate categories.
             return interval_labels[index_labels]
 
-    index_labels = as_unsigned_codes(len(interval_labels), index_labels)  # type: ignore[arg-type]
-
-    col = CategoricalColumn(
-        data=None,
-        size=index_labels.size,
-        dtype=cudf.CategoricalDtype(
-            categories=interval_labels, ordered=ordered
-        ),
-        mask=index_labels.base_mask,
-        offset=index_labels.offset,
-        children=(index_labels,),
+    categorical_index = cudf.CategoricalIndex.from_codes(
+        categories=interval_labels,
+        codes=index_labels,
+        ordered=ordered,
     )
-
-    # we return a categorical index, as we don't have a Categorical method
-    categorical_index = cudf.CategoricalIndex._from_column(col)
 
     if isinstance(orig_x, (pd.Series, cudf.Series)):
         # if we have a series input we return a series output

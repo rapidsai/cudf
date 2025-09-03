@@ -37,13 +37,14 @@ cpdef Column wordpiece_tokenize(
     """
     Returns the token ids for the input string by looking
     up each delimited token in the given vocabulary.
+    The input is expected to be normalized.
 
     For details, see cpp:func:`cudf::nvtext::wordpiece_tokenize`
 
     Parameters
     ----------
     input : Column
-        Strings column to tokenize
+        Normalized strings column to tokenize
     vocabulary : WordPieceVocabulary
         Used to lookup tokens within ``input``
     max_words_per_row : size_type

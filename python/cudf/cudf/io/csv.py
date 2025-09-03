@@ -1,11 +1,9 @@
 # Copyright (c) 2018-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
-import errno
 import itertools
-import os
 import warnings
-from collections import abc
+from collections.abc import Collection, Mapping
 from io import BytesIO, StringIO
 from typing import TYPE_CHECKING, cast
 
@@ -34,6 +32,8 @@ from cudf.utils.dtypes import (
 from cudf.utils.performance_tracking import _performance_tracking
 
 if TYPE_CHECKING:
+    from collections.abc import Hashable
+
     from cudf._typing import DtypeObj
 
 
@@ -107,19 +107,6 @@ def read_csv(
     if na_values is not None and is_scalar(na_values):
         na_values = [na_values]
 
-    if not isinstance(filepath_or_buffer, (BytesIO, StringIO, bytes)):
-        if not os.path.isfile(filepath_or_buffer):
-            raise FileNotFoundError(
-                errno.ENOENT, os.strerror(errno.ENOENT), filepath_or_buffer
-            )
-
-    if isinstance(filepath_or_buffer, StringIO):
-        filepath_or_buffer = filepath_or_buffer.read().encode()
-    elif isinstance(filepath_or_buffer, str) and not os.path.isfile(
-        filepath_or_buffer
-    ):
-        filepath_or_buffer = filepath_or_buffer.encode()
-
     _validate_args(
         delimiter,
         sep,
@@ -168,11 +155,11 @@ def read_csv(
         elif header == "infer":
             header = 0
 
-    hex_cols: list[abc.Hashable] = []
-    cudf_dtypes: list[DtypeObj] | dict[abc.Hashable, DtypeObj] | DtypeObj = []
-    plc_dtypes: list[plc.DataType] | dict[abc.Hashable, plc.DataType] = []
+    hex_cols: list[Hashable] = []
+    cudf_dtypes: list[DtypeObj] | dict[Hashable, DtypeObj] | DtypeObj = []
+    plc_dtypes: list[plc.DataType] | dict[Hashable, plc.DataType] = []
     if dtype is not None:
-        if isinstance(dtype, abc.Mapping):
+        if isinstance(dtype, Mapping):
             plc_dtypes = {}
             cudf_dtypes = {}
             for k, col_type in dtype.items():
@@ -200,7 +187,7 @@ def read_csv(
                 dtype = cudf_dtype(dtype)
             cudf_dtypes = dtype
             cast(list, plc_dtypes).append(_get_plc_data_type_from_dtype(dtype))
-        elif isinstance(dtype, abc.Collection):
+        elif isinstance(dtype, Collection):
             for index, col_dtype in enumerate(dtype):
                 if (
                     isinstance(col_dtype, str)
@@ -284,6 +271,9 @@ def read_csv(
     table_w_meta = plc.io.csv.read_csv(options)
     df = DataFrame.from_pylibcudf(table_w_meta)
 
+    if get_option("mode.pandas_compatible") and df.empty:
+        raise pd.errors.EmptyDataError("No columns to parse from file")
+
     # Cast result to categorical if specified in dtype=
     # since categorical is not handled in pylibcudf
     if isinstance(cudf_dtypes, dict):
@@ -328,7 +318,7 @@ def read_csv(
         else:
             df = df.set_index(index_col)
 
-    if dtype is None or isinstance(dtype, abc.Mapping):
+    if dtype is None or isinstance(dtype, Mapping):
         # There exists some dtypes in the result columns that is inferred.
         # Find them and map them to the default dtypes.
         specified_dtypes = {} if dtype is None else dtype

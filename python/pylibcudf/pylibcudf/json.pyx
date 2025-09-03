@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
 from libcpp cimport bool
@@ -9,6 +9,10 @@ from pylibcudf.libcudf cimport json as cpp_json
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.scalar.scalar cimport string_scalar
 from pylibcudf.scalar cimport Scalar
+
+from rmm.pylibrmm.stream cimport Stream
+
+from .utils cimport _get_stream
 
 __all__ = ["GetJsonObjectOptions", "get_json_object"]
 
@@ -113,7 +117,8 @@ cdef class GetJsonObjectOptions:
 cpdef Column get_json_object(
     Column col,
     Scalar json_path,
-    GetJsonObjectOptions options=None
+    GetJsonObjectOptions options=None,
+    Stream stream=None
 ):
     """
     Apply a JSONPath string to all rows in an input strings column.
@@ -131,6 +136,9 @@ cpdef Column get_json_object(
     options : GetJsonObjectOptions
         Options for controlling the behavior of the function.
 
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
+
     Returns
     -------
     Column
@@ -144,12 +152,14 @@ cpdef Column get_json_object(
         options = GetJsonObjectOptions()
 
     cdef cpp_json.get_json_object_options c_options = options.options
+    stream = _get_stream(stream)
 
     with nogil:
         c_result = cpp_json.get_json_object(
             col.view(),
             dereference(c_json_path),
-            c_options
+            c_options,
+            stream.view()
         )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream)

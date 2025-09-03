@@ -7,7 +7,7 @@ import itertools
 import textwrap
 import types
 import warnings
-from collections import abc
+from collections.abc import Mapping
 from functools import cached_property, singledispatch
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -50,16 +50,17 @@ from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.mixins import GetAttrGetItemMixin, Reducible, Scannable
 from cudf.core.multiindex import MultiIndex
 from cudf.core.reshape import concat
-from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.core.udf.groupby_utils import _can_be_jitted, jit_groupby_apply
 from cudf.options import get_option
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     cudf_dtype_to_pa_type,
+    get_dtype_of_same_kind,
     is_dtype_obj_numeric,
 )
 from cudf.utils.performance_tracking import _performance_tracking
+from cudf.utils.scalar import pa_scalar_to_plc_scalar
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Hashable, Iterable, Sequence
@@ -220,15 +221,6 @@ def _is_all_scan_aggregate(all_aggs: list[list[str]]) -> bool:
     return all_scan and any_scan
 
 
-def _deprecate_collect():
-    warnings.warn(
-        "Groupby.collect is deprecated and "
-        "will be removed in a future version. "
-        "Use `.agg(list)` instead.",
-        FutureWarning,
-    )
-
-
 # The three functions below return the quantiles [25%, 50%, 75%]
 # respectively, which are called in the describe() method to output
 # the summary stats of a GroupBy object
@@ -251,7 +243,7 @@ def _is_row_of(chunk, obj):
     return (
         isinstance(chunk, Series)
         and isinstance(obj, DataFrame)
-        and len(chunk.index) == len(obj._column_names)
+        and len(chunk) == obj._num_columns
         and (chunk.index.to_pandas() == pd.Index(obj._column_names)).all()
     )
 
@@ -582,7 +574,11 @@ class GroupBy(Serializable, Reducible, Scannable):
             )
 
         return dict(
-            zip(group_names.to_pandas(), grouped_index._split(offsets[1:-1]))
+            zip(
+                group_names.to_pandas(),
+                grouped_index._split(offsets[1:-1]),
+                strict=True,
+            )
         )
 
     @cached_property
@@ -616,7 +612,11 @@ class GroupBy(Serializable, Reducible, Scannable):
         else:
             index = Index._from_column(group_keys[0])
         return dict(
-            zip(index.to_pandas(), cp.split(indices.values, offsets[1:-1]))
+            zip(
+                index.to_pandas(),
+                cp.split(indices.values, offsets[1:-1]),
+                strict=True,
+            )
         )
 
     @_performance_tracking
@@ -814,7 +814,10 @@ class GroupBy(Serializable, Reducible, Scannable):
         column_included = []
         requests = []
         result_columns: list[list[ColumnBase]] = []
-        for i, (col, aggs) in enumerate(zip(values, aggregations)):
+
+        for i, (col, aggs) in enumerate(
+            zip(values, aggregations, strict=True)
+        ):
             valid_aggregations = get_valid_aggregation(col.dtype)
             included_aggregations_i = []
             col_aggregations = []
@@ -852,7 +855,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             else self._groupby.plc_groupby.aggregate(requests)
         )
 
-        for i, result in zip(column_included, results):
+        for i, result in zip(column_included, results, strict=True):
             result_columns[i] = [
                 ColumnBase.from_pylibcudf(col) for col in result.columns()
             ]
@@ -873,7 +876,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 pa_scalar_to_plc_scalar(
                     pa.scalar(val, type=cudf_dtype_to_pa_type(col.dtype))
                 )
-                for val, col in zip(fill_values, values)
+                for val, col in zip(fill_values, values, strict=True)
             ],
         )
         return (ColumnBase.from_pylibcudf(col) for col in shifts.columns())
@@ -1019,8 +1022,9 @@ class GroupBy(Serializable, Reducible, Scannable):
             included_aggregations,
             result_columns,
             orig_dtypes,
+            strict=True,
         ):
-            for agg_tuple, col in zip(aggs, cols):
+            for agg_tuple, col in zip(aggs, cols, strict=True):
                 agg, agg_kind = agg_tuple
                 agg_name = agg.__name__ if callable(agg) else agg
                 if multilevel:
@@ -1032,10 +1036,16 @@ class GroupBy(Serializable, Reducible, Scannable):
                     and orig_dtype != col.dtype.element_type
                 ):
                     # Structs lose their labels which we reconstruct here
-                    col = col._with_type_metadata(ListDtype(orig_dtype))
+                    col = col._with_type_metadata(
+                        get_dtype_of_same_kind(
+                            orig_dtype, ListDtype(orig_dtype)
+                        )
+                    )
 
                 if agg_kind in {"COUNT", "SIZE", "ARGMIN", "ARGMAX"}:
-                    data[key] = col.astype(np.dtype(np.int64))
+                    data[key] = col.astype(
+                        get_dtype_of_same_kind(orig_dtype, np.dtype(np.int64))
+                    )
                 elif (
                     self.obj.empty
                     and (
@@ -1050,7 +1060,15 @@ class GroupBy(Serializable, Reducible, Scannable):
                 ):
                     data[key] = col.astype(orig_dtype)
                 else:
-                    data[key] = col
+                    if isinstance(orig_dtype, DecimalDtype):
+                        # `col` has a different precision than `orig_dtype`
+                        # hence we only preserve the kind of the dtype
+                        # and not the precision.
+                        data[key] = col._with_type_metadata(
+                            get_dtype_of_same_kind(orig_dtype, col.dtype)
+                        )
+                    else:
+                        data[key] = col._with_type_metadata(orig_dtype)
         data = ColumnAccessor(data, multiindex=multilevel)
         if not multilevel:
             data = data.rename_levels({np.nan: None}, level=0)
@@ -1071,11 +1089,11 @@ class GroupBy(Serializable, Reducible, Scannable):
                 right_cols = result_index._columns
                 join_keys = [
                     _match_join_keys(lcol, rcol, "inner")
-                    for lcol, rcol in zip(left_cols, right_cols)
+                    for lcol, rcol in zip(left_cols, right_cols, strict=True)
                 ]
                 # TODO: In future, see if we can centralize
                 # logic else where that has similar patterns.
-                join_keys = map(list, zip(*join_keys))
+                join_keys = map(list, zip(*join_keys, strict=True))
                 # By construction, left and right keys are related by
                 # a permutation, so we can use an inner join.
                 with acquire_spill_lock():
@@ -1556,7 +1574,9 @@ class GroupBy(Serializable, Reducible, Scannable):
                 # Empirically shuffling with cupy is faster at this scale
                 rs = cp.random.get_random_state()
                 rs.seed(seed=random_state)
-                for off, size in zip(group_offsets, size_per_group):
+                for off, size in zip(
+                    group_offsets[:-1], size_per_group, strict=True
+                ):
                     rs.shuffle(indices[off : off + size])
             else:
                 keys = cp.random.default_rng(seed=random_state).random(
@@ -1700,7 +1720,8 @@ class GroupBy(Serializable, Reducible, Scannable):
                     if isinstance(x, tuple)
                     else _raise_invalid_type(x)
                     for x in kwargs.values()
-                )
+                ),
+                strict=True,
             )
         else:
             raise TypeError("Must provide at least one aggregation function.")
@@ -2563,7 +2584,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         res = DataFrame._from_data(
             {
                 x: interleave_columns([gb_cov_corr._data[y] for y in ys])
-                for ys, x in zip(cols_split, column_names)
+                for ys, x in zip(cols_split, column_names, strict=True)
             }
         )
 
@@ -2693,12 +2714,6 @@ class GroupBy(Serializable, Reducible, Scannable):
         return self.agg(func)
 
     @_performance_tracking
-    def collect(self):
-        """Get a list of all the values for each column in each group."""
-        _deprecate_collect()
-        return self.agg(list)
-
-    @_performance_tracking
     def unique(self):
         """Get a list of the unique values for each column in each group."""
         return self.agg("unique")
@@ -2736,6 +2751,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 zip(
                     values._column_names,
                     self._replace_nulls(values._columns, method),
+                    strict=True,
                 )
             )
         )
@@ -2905,6 +2921,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 zip(
                     values._column_names,
                     self._shift(values._columns, periods, fill_value),
+                    strict=True,
                 )
             )
         )
@@ -3400,7 +3417,7 @@ class SeriesGroupBy(GroupBy):
         )
 
         # downcast the result to a Series:
-        if len(result._data):
+        if result._num_columns:
             if result.shape[1] == 1 and not is_list_like(func):
                 return result.iloc[:, 0]
 
@@ -3557,7 +3574,7 @@ class _Grouping(Serializable):
                     self._handle_series(by)
                 elif isinstance(by, Index):
                     self._handle_index(by)
-                elif isinstance(by, abc.Mapping):
+                elif isinstance(by, Mapping):
                     self._handle_mapping(by)
                 elif isinstance(by, Grouper):
                     self._handle_grouper(by)
@@ -3691,7 +3708,7 @@ def _is_multi_agg(aggs):
     Returns True if more than one aggregation is performed
     on any of the columns as specified in `aggs`.
     """
-    if isinstance(aggs, abc.Mapping):
+    if isinstance(aggs, Mapping):
         return any(is_list_like(agg) for agg in aggs.values())
     if is_list_like(aggs):
         return True

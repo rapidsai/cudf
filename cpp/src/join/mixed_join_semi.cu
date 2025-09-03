@@ -24,6 +24,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/join/mixed_join.hpp>
 #include <cudf/table/table.hpp>
@@ -122,7 +123,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   auto const preprocessed_probe =
     cudf::experimental::row::equality::preprocessed_table::create(probe, stream);
   auto const row_comparator =
-    cudf::experimental::row::equality::two_table_comparator{preprocessed_build, preprocessed_probe};
+    cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
   auto const equality_probe = row_comparator.equal_to<false>(has_nulls, compare_nulls);
 
   // Create hash table containing all keys found in right table

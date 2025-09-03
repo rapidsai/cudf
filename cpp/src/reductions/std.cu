@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,17 +32,10 @@ std::unique_ptr<cudf::scalar> standard_deviation(column_view const& col,
                                                  rmm::cuda_stream_view stream,
                                                  rmm::device_async_resource_ref mr)
 {
-  // TODO: add cuda version check when the fix is available
-#if !defined(__CUDACC_DEBUG__)
   using reducer = compound::detail::element_type_dispatcher<op::standard_deviation>;
   auto col_type =
     cudf::is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type();
   return cudf::type_dispatcher(col_type, reducer(), col, output_dtype, ddof, stream, mr);
-#else
-  // workaround for bug 200529165 which causes compilation error only at device debug build
-  // hopefully the bug will be fixed in future cuda version (still failing in 11.2)
-  CUDF_FAIL("var/std reductions are not supported at debug build.");
-#endif
 }
 
 }  // namespace detail

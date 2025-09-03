@@ -627,6 +627,22 @@ cdef class CsvReaderOptionsBuilder:
         self.c_obj.dayfirst(dayfirst)
         return self
 
+    cpdef CsvReaderOptionsBuilder delimiter(self, str delimiter):
+        """
+        Sets field delimiter.
+
+        Parameters
+        ----------
+        delimiter : str
+            A character to indicate delimiter
+
+        Returns
+        -------
+        CsvReaderOptionsBuilder
+        """
+        self.c_obj.delimiter(ord(delimiter))
+        return self
+
     cpdef CsvReaderOptions build(self):
         """Create a CsvReaderOptions object"""
         cdef CsvReaderOptions csv_options = CsvReaderOptions.__new__(

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -150,7 +150,7 @@ JNIEXPORT jbyteArray JNICALL Java_ai_rapids_cudf_Scalar_getUTF8(JNIEnv* env,
     std::string val{s->to_string()};
     if (val.size() > 0x7FFFFFFF) {
       cudf::jni::throw_java_exception(
-        env, "java/lang/IllegalArgumentException", "string scalar too large");
+        env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "string scalar too large");
     }
     cudf::jni::native_jbyteArray jbytes{
       env, reinterpret_cast<jbyte const*>(val.data()), static_cast<int>(val.size())};

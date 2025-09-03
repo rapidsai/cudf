@@ -59,14 +59,12 @@ cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
 
     cdef cppclass fixed_point_scalar[T](scalar):
         fixed_point_scalar() except +libcudf_exception_handler
-        fixed_point_scalar(int64_t value,
-                           scale_type scale,
-                           bool is_valid) except +libcudf_exception_handler
-        fixed_point_scalar(data_type value,
-                           scale_type scale,
-                           bool is_valid) except +libcudf_exception_handler
-        int64_t value() except +libcudf_exception_handler
-        # TODO: Figure out how to add an int32 overload of value()
+        fixed_point_scalar(
+            T value,
+            scale_type scale,
+            bool is_valid
+        ) except +libcudf_exception_handler
+        T value() except +libcudf_exception_handler
 
     cdef cppclass list_scalar(scalar):
         list_scalar(column_view col) except +libcudf_exception_handler

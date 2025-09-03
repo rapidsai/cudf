@@ -21,6 +21,8 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/scatter.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 #include <cudf/partitioning.hpp>
@@ -654,13 +656,13 @@ struct dispatch_map_type {
    *
    */
   template <typename MapType>
-  std::enable_if_t<is_index_type<MapType>(),
-                   std::pair<std::unique_ptr<table>, std::vector<size_type>>>
-  operator()(table_view const& t,
-             column_view const& partition_map,
-             size_type num_partitions,
-             rmm::cuda_stream_view stream,
-             rmm::device_async_resource_ref mr) const
+  std::pair<std::unique_ptr<table>, std::vector<size_type>> operator()(
+    table_view const& t,
+    column_view const& partition_map,
+    size_type num_partitions,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const
+    requires(is_index_type<MapType>())
   {
     // Build a histogram of the number of rows in each partition
     rmm::device_uvector<size_type> histogram(num_partitions + 1, stream);
@@ -719,9 +721,8 @@ struct dispatch_map_type {
   }
 
   template <typename MapType, typename... Args>
-  std::enable_if_t<not is_index_type<MapType>(),
-                   std::pair<std::unique_ptr<table>, std::vector<size_type>>>
-  operator()(Args&&...) const
+  std::pair<std::unique_ptr<table>, std::vector<size_type>> operator()(Args&&...) const
+    requires(not is_index_type<MapType>())
   {
     CUDF_FAIL("Unexpected, non-integral partition map.");
   }
@@ -742,15 +743,15 @@ struct IdentityHash {
   constexpr IdentityHash(uint32_t) {}
 
   template <typename return_type = result_type>
-  constexpr std::enable_if_t<!std::is_arithmetic_v<Key>, return_type> operator()(
-    Key const& key) const
+  constexpr return_type operator()(Key const& key) const
+    requires(!std::is_arithmetic_v<Key>)
   {
     CUDF_UNREACHABLE("IdentityHash does not support this data type");
   }
 
   template <typename return_type = result_type>
-  constexpr std::enable_if_t<std::is_arithmetic_v<Key>, return_type> operator()(
-    Key const& key) const
+  constexpr return_type operator()(Key const& key) const
+    requires(std::is_arithmetic_v<Key>)
   {
     return static_cast<result_type>(key);
   }

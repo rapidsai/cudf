@@ -11,6 +11,9 @@ EXITCODE=0
 trap "EXITCODE=1" ERR
 set +e
 
+rapids-logger "Check GPU usage"
+nvidia-smi
+
 PANDAS_TESTS_BRANCH=${1}
 RAPIDS_FULL_VERSION=$(<./VERSION)
 rapids-logger "Running Pandas tests using $PANDAS_TESTS_BRANCH branch and rapids-version $RAPIDS_FULL_VERSION"
@@ -33,9 +36,11 @@ RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
 mkdir -p "${RAPIDS_TESTS_DIR}"
 
-bash python/cudf/cudf/pandas/scripts/run-pandas-tests.sh \
-  --numprocesses 5 \
-  --tb=no \
+timeout 90m bash python/cudf/cudf/pandas/scripts/run-pandas-tests.sh \
+  --numprocesses 6 \
+  --tb=line \
+  -vv \
+  --disable-warnings \
   -m "not slow and not single_cpu and not db and not network" \
   --max-worker-restart=3 \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-pandas.xml" \
@@ -49,5 +54,6 @@ RAPIDS_ARTIFACTS_DIR=${RAPIDS_ARTIFACTS_DIR:-"${PWD}/artifacts"}
 mkdir -p "${RAPIDS_ARTIFACTS_DIR}"
 mv pandas-testing/"${SUMMARY_FILE_NAME}" "${RAPIDS_ARTIFACTS_DIR}"/
 rapids-upload-to-s3 "${RAPIDS_ARTIFACTS_DIR}"/"${SUMMARY_FILE_NAME}" "${RAPIDS_ARTIFACTS_DIR}"
+mv "${RAPIDS_ARTIFACTS_DIR}"/"${SUMMARY_FILE_NAME}" "${RAPIDS_ARTIFACTS_DIR}"/${PANDAS_TESTS_BRANCH}-results.json
 rapids-logger "Test script exiting with value: $EXITCODE"
 exit ${EXITCODE}

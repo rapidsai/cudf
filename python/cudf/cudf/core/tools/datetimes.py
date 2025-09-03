@@ -19,9 +19,9 @@ from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.dataframe import DataFrame
 from cudf.core.index import DatetimeIndex, Index, ensure_index
-from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.core.series import Series
 from cudf.utils.dtypes import CUDF_STRING_DTYPE
+from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.temporal import infer_format, unit_to_nanoseconds_conversion
 
 if TYPE_CHECKING:
@@ -437,8 +437,8 @@ class DateOffset:
 
     See Also
     --------
-    pandas.DateOffset : The equivalent Pandas object that this
-    object replicates
+    pandas.tseries.offsets.DateOffset : The equivalent Pandas object that this
+        object replicates.
 
     Examples
     --------
@@ -463,17 +463,18 @@ class DateOffset:
     -----
     Note that cuDF does not yet support DateOffset arguments
     that 'replace' units in the datetime data being operated on
-    such as
-        - year
-        - month
-        - week
-        - day
-        - hour
-        - minute
-        - second
-        - microsecond
-        - millisecond
-        - nanosecond
+    such as:
+
+    - year
+    - month
+    - week
+    - day
+    - hour
+    - minute
+    - second
+    - microsecond
+    - millisecond
+    - nanosecond
 
     cuDF does not yet support rounding via a `normalize`
     keyword argument.
@@ -650,6 +651,12 @@ class DateOffset:
                 f" and {type(datetime_col).__name__}"
             )
         if not self._is_no_op:
+            tz = (
+                datetime_col.dtype.tz
+                if isinstance(datetime_col.dtype, pd.DatetimeTZDtype)
+                else None
+            )
+
             for unit, value in self._scalars.items():
                 value = -value if op == "__sub__" else value
                 if unit == "months":
@@ -662,6 +669,9 @@ class DateOffset:
                         )
                 else:
                     datetime_col += as_column(value, length=len(datetime_col))
+
+            if tz is not None:
+                datetime_col = datetime_col.tz_localize("UTC").tz_convert(tz)
 
         return datetime_col
 
@@ -765,7 +775,7 @@ def date_range(
         ``U``, ``us``, ``N``, ``ns``.
 
     tz : str or tzinfo, optional
-        Not Supported
+        Time zone name for returning localized DatetimeIndex.
 
     normalize : bool, default False
         Not Supported

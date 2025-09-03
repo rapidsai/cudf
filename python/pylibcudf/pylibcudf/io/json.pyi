@@ -14,6 +14,7 @@ from pylibcudf.io.types import (
     SourceInfo,
     TableWithMetadata,
 )
+from pylibcudf.scalar import Scalar
 from pylibcudf.table import Table
 from pylibcudf.types import DataType
 
@@ -71,6 +72,15 @@ class JsonReaderOptionsBuilder:
 
 def read_json(
     options: JsonReaderOptions, stream: Stream = None
+) -> TableWithMetadata: ...
+def read_json_from_string_column(
+    input: Column,
+    separator: Scalar,
+    narep: Scalar,
+    dtypes: list,
+    compression: CompressionType,
+    recovery_mode: JSONRecoveryMode,
+    stream: Stream = None,
 ) -> TableWithMetadata: ...
 
 class JsonWriterOptions:

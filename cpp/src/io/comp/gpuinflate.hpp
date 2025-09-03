@@ -18,6 +18,7 @@
 
 #include "common.hpp"
 
+#include <cudf/io/detail/codec.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
@@ -45,7 +46,7 @@ enum class gzip_header_included { NO, YES };
 CUDF_EXPORT
 void gpuinflate(device_span<device_span<uint8_t const> const> inputs,
                 device_span<device_span<uint8_t> const> outputs,
-                device_span<compression_result> results,
+                device_span<codec_exec_result> results,
                 gzip_header_included parse_hdr,
                 rmm::cuda_stream_view stream);
 
@@ -74,7 +75,7 @@ void gpu_copy_uncompressed_blocks(device_span<device_span<uint8_t const> const> 
 CUDF_EXPORT
 void gpu_unsnap(device_span<device_span<uint8_t const> const> inputs,
                 device_span<device_span<uint8_t> const> outputs,
-                device_span<compression_result> results,
+                device_span<codec_exec_result> results,
                 rmm::cuda_stream_view stream);
 
 /**
@@ -103,7 +104,7 @@ size_t get_gpu_debrotli_scratch_size(int max_num_inputs = 0);
 CUDF_EXPORT
 void gpu_debrotli(device_span<device_span<uint8_t const> const> inputs,
                   device_span<device_span<uint8_t> const> outputs,
-                  device_span<compression_result> results,
+                  device_span<codec_exec_result> results,
                   rmm::cuda_stream_view stream);
 
 /**
@@ -119,7 +120,7 @@ void gpu_debrotli(device_span<device_span<uint8_t const> const> inputs,
  */
 void gpu_snap(device_span<device_span<uint8_t const> const> inputs,
               device_span<device_span<uint8_t> const> outputs,
-              device_span<compression_result> results,
+              device_span<codec_exec_result> results,
               rmm::cuda_stream_view stream);
 
 }  // namespace cudf::io::detail

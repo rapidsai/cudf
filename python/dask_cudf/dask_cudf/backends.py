@@ -438,6 +438,7 @@ def group_split_cudf(df, c, k, ignore_index=False):
                 map_size=k,
                 keep_index=not ignore_index,
             ),
+            strict=True,
         )
     )
 

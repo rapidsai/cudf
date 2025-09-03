@@ -35,6 +35,9 @@ cdef class OwnerMaskWithCAI:
     cdef create(column_view cv, object owner)
 
 
+cdef gpumemoryview _copy_array_to_device(object buf)
+
+
 cdef class Column:
     # TODO: Should we document these attributes? Should we mark them readonly?
     cdef:
@@ -62,13 +65,14 @@ cdef class Column:
     cdef Column from_column_view_of_arbitrary(const column_view& cv, object owner)
 
     @staticmethod
-    cdef Column _from_gpumemoryview(
+    cdef Column _wrap_nested_list_column(
         gpumemoryview data,
         tuple shape,
         DataType dtype,
+        Column base=*,
     )
 
-    cpdef Scalar to_scalar(self)
+    cpdef Scalar to_scalar(self, Stream stream=*)
     cpdef DataType type(self)
     cpdef Column child(self, size_type index)
     cpdef size_type num_children(self)
