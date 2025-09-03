@@ -283,11 +283,11 @@ class DatetimeColumn(TemporalBaseColumn):
             plc.datetime.days_in_month(self.to_pylibcudf(mode="read"))
         )
 
-    @property
+    @functools.cached_property
     def day_of_week(self) -> ColumnBase:
         raise NotImplementedError("day_of_week is currently not implemented.")
 
-    @property
+    @functools.cached_property
     def is_normalized(self) -> bool:
         raise NotImplementedError(
             "is_normalized is currently not implemented."
@@ -908,10 +908,6 @@ class DatetimeTZColumn(DatetimeColumn):
         elif tz == str(self.dtype.tz):
             return self.copy()
         utc_time = self._utc_time
-        return type(self)(
-            data=utc_time.base_data,  # type: ignore[arg-type]
-            dtype=pd.DatetimeTZDtype(self.time_unit, tz),
-            mask=utc_time.base_mask,
-            size=utc_time.size,
-            offset=utc_time.offset,
+        return utc_time._with_type_metadata(
+            pd.DatetimeTZDtype(self.time_unit, tz)
         )
