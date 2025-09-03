@@ -994,9 +994,6 @@ class StringMethods(BaseAccessor):
                     as_column(repl, dtype=CUDF_STRING_DTYPE),  # type: ignore[arg-type]
                 )
             return self._return_or_inplace(result)
-        # Pandas treats 0 as all
-        if n == 0:
-            n = -1
 
         # If 'pat' is re.Pattern then get the pattern string from it
         if regex and isinstance(pat, re.Pattern):
@@ -1017,6 +1014,7 @@ class StringMethods(BaseAccessor):
             result = self._column.replace_str(
                 pat,  # type: ignore[arg-type]
                 pa_repl,
+                n,
             )
         return self._return_or_inplace(result)
 
