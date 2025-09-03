@@ -129,12 +129,12 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
       auto const& agg_v = request.aggregations;
       auto const& col   = request.values;
 
-      // The target output index for writing into for each input row are not always available to
-      // reduce overhead. As such, there is no way for the finalizers to perform another aggregation
-      // operation. They can only finalize the results using the previously computed single-pass
-      // aggregations with linear transformations such as addition/multiplication (e.g. for
-      // variance/stddev). In the future, if there is more compound aggregations that require
-      // another aggregation step, we can revisit this design.
+      // The map to find target output index for each input row are not always available due to
+      // minimizing overhead. As such, there is no way for the finalizers to perform additional
+      // aggregation operations. They can only compute their output using the previously computed
+      // single-pass aggregations with linear transformations such as addition/multiplication (e.g.
+      // for variance/stddev). In the future, if there are more compound aggregations that require
+      // additional aggregation steps, we can revisit this design.
       auto finalizer = hash_compound_agg_finalizer(col, cache, row_bitmask, stream, mr);
       for (auto&& agg : agg_v) {
         agg->finalize(finalizer);

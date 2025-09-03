@@ -19,10 +19,8 @@
 #include "helpers.cuh"
 
 #include <cudf/detail/cuco_helpers.hpp>
-#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/cuda.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
-#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -123,11 +121,7 @@ CUDF_KERNEL void mapping_indices_kernel(size_type num_input_rows,
   block.sync();
 
   auto const stride = cudf::detail::grid_1d::grid_stride();
-
-  // TODO: remove block.thread_rank() from idx calculation
-  for (auto idx = cudf::detail::grid_1d::global_thread_id();
-       idx - block.thread_rank() < num_input_rows;
-       idx += stride) {
+  for (auto idx = cudf::detail::grid_1d::global_thread_id(); idx < num_input_rows; idx += stride) {
     find_local_mapping(block,
                        idx,
                        num_input_rows,

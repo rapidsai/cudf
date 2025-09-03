@@ -42,6 +42,7 @@ std::tuple<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_globa
     compute_key_indices(row_bitmask, key_set.ref(cuco::op::insert_and_find), num_rows, stream);
   auto [unique_key_indices, key_transform_map] = extract_populated_keys(key_set, num_rows, stream);
   transform_key_indices(target_indices, key_transform_map, stream);
+  key_transform_map = rmm::device_uvector<size_type>{0, stream};  // done, free up memory
 
   auto const d_values = table_device_view::create(values, stream);
   auto agg_results    = create_results_table(
@@ -52,7 +53,7 @@ std::tuple<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_globa
                      thrust::make_counting_iterator(int64_t{0}),
                      num_rows * static_cast<int64_t>(h_agg_kinds.size()),
                      compute_single_pass_aggs_fn{
-                       target_indices.begin(), *d_values, d_agg_kinds.data(), *d_results_ptr});
+                       target_indices.begin(), d_agg_kinds.data(), *d_values, *d_results_ptr});
 
   return {std::move(agg_results), std::move(unique_key_indices)};
 }

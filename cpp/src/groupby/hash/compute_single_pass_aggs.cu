@@ -18,6 +18,7 @@
 #include "compute_single_pass_aggs.hpp"
 
 #include <rmm/device_scalar.hpp>
+#include <rmm/device_uvector.hpp>
 
 #include <cub/device/device_select.cuh>
 
@@ -55,28 +56,24 @@ std::pair<size_type, rmm::device_uvector<size_type>> find_fallback_blocks(
   rmm::device_uvector<size_type> fallback_block_ids(grid_size, stream);
   rmm::device_scalar<size_type> d_num_fallback_blocks(stream);
 
-  auto const select_cond = [block_cardinality] __device__(auto const idx) {
+  std::size_t storage_bytes = 0;
+  auto const select_cond    = [block_cardinality] __device__(auto const idx) {
     return block_cardinality[idx] >= GROUPBY_CARDINALITY_THRESHOLD;
   };
+  auto const exec_copy_if = [&](auto const storage_ptr) {
+    cub::DeviceSelect::If(storage_ptr,
+                          storage_bytes,
+                          thrust::make_counting_iterator(0),
+                          fallback_block_ids.begin(),
+                          d_num_fallback_blocks.data(),
+                          grid_size,
+                          select_cond,
+                          stream.value());
+  };
 
-  std::size_t storage_bytes = 0;
-  cub::DeviceSelect::If(nullptr,
-                        storage_bytes,
-                        thrust::make_counting_iterator(0),
-                        fallback_block_ids.begin(),
-                        d_num_fallback_blocks.data(),
-                        grid_size,
-                        select_cond,
-                        stream.value());
+  exec_copy_if(nullptr);
   rmm::device_buffer tmp_storage(storage_bytes, stream);
-  cub::DeviceSelect::If(tmp_storage.data(),
-                        storage_bytes,
-                        thrust::make_counting_iterator(0),
-                        fallback_block_ids.begin(),
-                        d_num_fallback_blocks.data(),
-                        grid_size,
-                        select_cond,
-                        stream.value());
+  exec_copy_if(tmp_storage.data());
 
   size_type num_fallback_blocks = 0;
   CUDF_CUDA_TRY(cudaMemcpyAsync(&num_fallback_blocks,

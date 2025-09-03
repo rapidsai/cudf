@@ -19,8 +19,6 @@
 
 #include <cudf/detail/aggregation/device_aggregators.cuh>
 #include <cudf/detail/utilities/assert.cuh>
-#include <cudf/detail/utilities/device_atomics.cuh>
-#include <cudf/utilities/traits.cuh>
 
 #include <cuda/std/cstddef>
 
@@ -115,120 +113,57 @@ struct initialize_shmem {
   }
 };
 
-template <typename Target, cudf::aggregation::Kind k, typename Enable = void>
-struct initialize_target_element_gmem {
-  __device__ void operator()(cudf::mutable_column_device_view, cudf::size_type) const noexcept
-  {
-    CUDF_UNREACHABLE("Invalid source type and aggregation combination.");
-  }
-};
-
-template <typename Target, cudf::aggregation::Kind k>
-struct initialize_target_element_gmem<
-  Target,
-  k,
-  std::enable_if_t<is_supported<Target, k>() && cudf::is_fixed_width<Target>() &&
-                   !cudf::is_fixed_point<Target>()>> {
-  __device__ void operator()(cudf::mutable_column_device_view target,
-                             cudf::size_type target_index) const noexcept
-  {
-    using DeviceType                     = cudf::device_storage_type_t<Target>;
-    target.element<Target>(target_index) = get_identity<DeviceType, k>();
-  }
-};
-
-template <typename Target, cudf::aggregation::Kind k>
-struct initialize_target_element_gmem<
-  Target,
-  k,
-  std::enable_if_t<is_supported<Target, k>() && cudf::is_fixed_point<Target>()>> {
-  __device__ void operator()(cudf::mutable_column_device_view target,
-                             cudf::size_type target_index) const noexcept
-  {
-    using DeviceType                         = cudf::device_storage_type_t<Target>;
-    target.element<DeviceType>(target_index) = get_identity<DeviceType, k>();
-  }
-};
-
-struct initialize_gmem {
-  template <typename Target, cudf::aggregation::Kind k>
-  __device__ void operator()(cudf::mutable_column_device_view target,
-                             cudf::size_type target_index) const noexcept
-  {
-    initialize_target_element_gmem<Target, k>{}(target, target_index);
-  }
-};
-
-struct initialize_sparse_table {
-  cudf::size_type const* row_indices;
-  cudf::mutable_table_device_view sparse_table;
-  cudf::aggregation::Kind const* __restrict__ aggs;
-  initialize_sparse_table(cudf::size_type const* row_indices,
-                          cudf::mutable_table_device_view sparse_table,
-                          cudf::aggregation::Kind const* aggs)
-    : row_indices(row_indices), sparse_table(sparse_table), aggs(aggs)
-  {
-  }
-  __device__ void operator()(cudf::size_type i)
-  {
-    auto key_idx = row_indices[i];
-    for (auto col_idx = 0; col_idx < sparse_table.num_columns(); col_idx++) {
-      cudf::detail::dispatch_type_and_aggregation(sparse_table.column(col_idx).type(),
-                                                  aggs[col_idx],
-                                                  initialize_gmem{},
-                                                  sparse_table.column(col_idx),
-                                                  key_idx);
-    }
-  }
-};
-
+/**
+ * @brief Functor to compute single-pass aggregations and store the results into an output table,
+ * executing only for rows processed by some given specific thread blocks.
+ */
 struct global_memory_fallback_fn {
-  size_type const* key_indices;
-  cudf::table_device_view input_values;
-  cudf::mutable_table_device_view output_values;
-  cudf::aggregation::Kind const* __restrict__ aggs;
-  cudf::size_type const* fallback_block_ids;
-  cudf::size_type stride;
-  cudf::size_type num_strides;
-  cudf::size_type full_stride;
-  size_type num_processing_rows;
-  size_type num_rows;
+  size_type const* target_indices;
+  aggregation::Kind const* aggs;
+  table_device_view input_values;
+  mutable_table_device_view output_values;
+  size_type const* fallback_blocks;
+  size_type fallback_stride;
+  size_type full_stride;
+  size_type num_strides;
+  size_type num_fallback_rows;
+  size_type num_total_rows;
 
-  global_memory_fallback_fn(size_type const* key_indices,
-                            cudf::table_device_view input_values,
-                            cudf::mutable_table_device_view output_values,
-                            cudf::aggregation::Kind const* aggs,
-                            cudf::size_type const* fallback_block_ids,
-                            cudf::size_type stride,
-                            cudf::size_type num_strides,
-                            cudf::size_type full_stride,
-                            size_type num_processing_rows,
-                            size_type num_rows)
-    : key_indices(key_indices),
+  global_memory_fallback_fn(size_type const* target_indices,
+                            aggregation::Kind const* aggs,
+                            table_device_view const& input_values,
+                            mutable_table_device_view const& output_values,
+                            size_type const* fallback_blocks,
+                            size_type fallback_stride,
+                            size_type full_stride,
+                            size_type num_strides,
+                            size_type num_fallback_rows,
+                            size_type num_total_rows)
+    : target_indices(target_indices),
+      aggs(aggs),
       input_values(input_values),
       output_values(output_values),
-      aggs(aggs),
-      fallback_block_ids(fallback_block_ids),
-      stride(stride),
-      num_strides(num_strides),
+      fallback_blocks(fallback_blocks),
+      fallback_stride(fallback_stride),
       full_stride(full_stride),
-      num_processing_rows(num_processing_rows),
-      num_rows(num_rows)
+      num_strides(num_strides),
+      num_fallback_rows(num_fallback_rows),
+      num_total_rows(num_total_rows)
   {
   }
 
   __device__ void operator()(int64_t idx) const
   {
-    auto const agg_idx       = static_cast<size_type>(idx / num_processing_rows);
-    auto const local_agg_idx = static_cast<size_type>(idx % num_processing_rows);
-    auto const idx_in_agg    = local_agg_idx % stride;
+    auto const agg_idx       = static_cast<size_type>(idx / num_fallback_rows);
+    auto const local_agg_idx = static_cast<size_type>(idx % num_fallback_rows);
+    auto const idx_in_agg    = local_agg_idx % fallback_stride;
     auto const thread_rank   = idx_in_agg % GROUPBY_BLOCK_SIZE;
-    auto const block_idx     = fallback_block_ids[idx_in_agg / GROUPBY_BLOCK_SIZE];
-    auto const row_idx =
-      full_stride * (local_agg_idx / stride) + GROUPBY_BLOCK_SIZE * block_idx + thread_rank;
-    if (row_idx >= num_rows) { return; }
+    auto const block_idx     = fallback_blocks[idx_in_agg / GROUPBY_BLOCK_SIZE];
+    auto const row_idx       = full_stride * (local_agg_idx / fallback_stride) +
+                         GROUPBY_BLOCK_SIZE * block_idx + thread_rank;
+    if (row_idx >= num_total_rows) { return; }
 
-    if (auto const target_idx = key_indices[row_idx];
+    if (auto const target_idx = target_indices[row_idx];
         target_idx != cudf::detail::CUDF_SIZE_TYPE_SENTINEL) {
       cudf::detail::aggregate_row(agg_idx, output_values, target_idx, input_values, row_idx, aggs);
     }
@@ -236,53 +171,23 @@ struct global_memory_fallback_fn {
 };
 
 /**
- * @brief Computes single-pass aggregations and store results into a sparse `output_values` table,
- * and populate `set` with indices of unique keys
- *
- * The hash set is built by inserting every row index `i` from the `keys` and `values` tables. If
- * the index was not present in the set, insert they index and then copy it to the output. If the
- * key was already present in the set, then the inserted index is aggregated with the existing row.
- * This aggregation is done for every element `j` in the row by applying aggregation operation `j`
- * between the new and existing element.
- *
- * Instead of storing the entire rows from `input_keys` and `input_values` in
- * the hashset, we instead store the row indices. For example, when inserting
- * row at index `i` from `input_keys` into the hash set, the value `i` is what
- * gets stored for the hash set's "key". It is assumed the `set` was constructed
- * with a custom comparator that uses these row indices to check for equality
- * between key rows. For example, comparing two keys `k0` and `k1` will compare
- * the two rows `input_keys[k0] ?= input_keys[k1]`
- *
- * The exact size of the result is not known a priori, but can be upper bounded
- * by the number of rows in `input_keys` & `input_values`. Therefore, it is
- * assumed `output_values` has sufficient storage for an equivalent number of
- * rows. In this way, after all rows are aggregated, `output_values` will likely
- * be "sparse", meaning that not all rows contain the result of an aggregation.
- *
- * @tparam SetType The type of the hash set device ref
+ * @brief Functor to compute single-pass aggregations and store the results into an output table,
+ * executing for all input rows.
  */
 struct compute_single_pass_aggs_fn {
-  size_type const* key_indices;
+  size_type const* target_indices;
+  aggregation::Kind const* aggs;
   table_device_view input_values;
-  aggregation::Kind const* __restrict__ aggs;
   mutable_table_device_view output_values;
 
-  /**
-   * @brief Construct a new compute_single_pass_aggs_fn functor object
-   *
-   * @param set_ref Hash set object to insert key,value pairs into.
-   * @param input_values The table whose rows will be aggregated in the values
-   * of the hash set
-   * @param aggs The set of aggregation operations to perform across the
-   * @param output_values Table that stores the results of aggregating rows of
-   * `input_values`.
-   * columns of the `input_values` rows
-   */
-  compute_single_pass_aggs_fn(size_type const* key_indices,
-                              table_device_view input_values,
+  compute_single_pass_aggs_fn(size_type const* target_indices,
                               aggregation::Kind const* aggs,
-                              mutable_table_device_view output_values)
-    : key_indices(key_indices), input_values(input_values), aggs(aggs), output_values(output_values)
+                              table_device_view const& input_values,
+                              mutable_table_device_view const& output_values)
+    : target_indices(target_indices),
+      aggs(aggs),
+      input_values(input_values),
+      output_values(output_values)
   {
   }
 
@@ -291,7 +196,7 @@ struct compute_single_pass_aggs_fn {
     auto const num_rows = input_values.num_rows();
     auto const agg_idx  = static_cast<size_type>(idx / num_rows);
     auto const row_idx  = static_cast<size_type>(idx % num_rows);
-    if (auto const target_idx = key_indices[row_idx];
+    if (auto const target_idx = target_indices[row_idx];
         target_idx != cudf::detail::CUDF_SIZE_TYPE_SENTINEL) {
       cudf::detail::aggregate_row(agg_idx, output_values, target_idx, input_values, row_idx, aggs);
     }

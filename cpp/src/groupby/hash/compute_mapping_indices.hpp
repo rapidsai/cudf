@@ -24,12 +24,6 @@
 namespace cudf::groupby::detail::hash {
 
 /*
- * @brief Computes the maximum number of active blocks of the shared memory aggregation kernel that
- * can be executed on the underlying device.
- */
-int32_t max_active_blocks_shmem_aggs_kernel();
-
-/*
  * @brief Computes the maximum number of active blocks of the mapping indices kernel that can be
  * executed on the underlying device.
  */

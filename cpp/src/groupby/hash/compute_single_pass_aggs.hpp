@@ -26,7 +26,7 @@
 namespace cudf::groupby::detail::hash {
 
 /**
- * @brief Determines if all of provided aggregations can be computed using shared memory kernels.
+ * @brief Determine if all of provided aggregations can be computed using shared memory kernels.
  *
  * @param agg_kinds The aggregation kinds to check
  * @param values The input values table corresponding to the aggregation kinds
@@ -39,13 +39,13 @@ std::pair<bool, size_type> is_shared_memory_compatible(host_span<aggregation::Ki
                                                        size_type grid_size);
 
 /**
- * @brief Identifies thread blocks that cannot be processed using shared memory kernels and need to
- *        fall back to use the global memory aggregation code path.
+ * @brief Identify thread blocks that cannot be processed using shared memory kernels and need to
+ *        fallback to use the global memory aggregation code path.
  *
  * @param grid_size The CUDA grid size to be used for launching the aggregation kernels
  * @param block_cardinality An array containing the cardinality of each thread block
  * @param stream The CUDA stream to use for device memory operations and kernel launches
- * @return A pair consisting of the number of thread blocks that need to fall back to global memory
+ * @return A pair consisting of the number of thread blocks that need to fallback to global memory
  *         aggregation code path, and an array containing the indices of these fallback blocks
  */
 std::pair<size_type, rmm::device_uvector<size_type>> find_fallback_blocks(
