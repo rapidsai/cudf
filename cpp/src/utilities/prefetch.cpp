@@ -89,11 +89,11 @@ void prefetch(void const* ptr,
 
 }  // namespace detail
 
-void enable() { detail::enabled() = true; }
+void enable() noexcept { detail::enabled() = true; }
 
-void disable() { detail::enabled() = false; }
+void disable() noexcept { detail::enabled() = false; }
 
-void enable_debugging() { detail::debug() = true; }
+void enable_debugging() noexcept { detail::debug() = true; }
 
-void disable_debugging() { detail::debug() = false; }
+void disable_debugging() noexcept { detail::debug() = false; }
 }  // namespace cudf::prefetch

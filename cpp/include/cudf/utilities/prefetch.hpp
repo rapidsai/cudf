@@ -88,26 +88,26 @@ void prefetch(rmm::device_uvector<T> const& v,
 /**
  * @brief Enable prefetching.
  */
-void enable();
+void enable() noexcept;
 
 /**
  * @brief Disable prefetching.
  */
-void disable();
+void disable() noexcept;
 
 /**
  * @brief Enable debug mode for prefetching.
  *
  * In debug mode, the pointers being prefetched are printed to stderr.
  */
-void enable_debugging();
+void enable_debugging() noexcept;
 
 /**
  * @brief Enable debug mode for prefetching.
  *
  * In debug mode, the pointers being prefetched are printed to stderr.
  */
-void disable_debugging();
+void disable_debugging() noexcept;
 
 }  // namespace prefetch
 }  // namespace CUDF_EXPORT cudf

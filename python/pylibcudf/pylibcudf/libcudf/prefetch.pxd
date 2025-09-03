@@ -2,7 +2,7 @@
 
 
 cdef extern from "cudf/utilities/prefetch.hpp" namespace "cudf::prefetch" nogil:
-    void enable()
-    void disable()
-    void enable_debugging()
-    void disable_debugging()
+    void enable() noexcept
+    void disable() noexcept
+    void enable_debugging() noexcept
+    void disable_debugging() noexcept
