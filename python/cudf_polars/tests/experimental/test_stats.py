@@ -447,9 +447,9 @@ def test_base_stats_join_key_info():
     )
 
 
-@pytest.mark.parametrize("use_parquet", [True, False])
+@pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
 @pytest.mark.parametrize("nrows", [None, 3])
-def test_explain_io_then_distinct(tmp_path, use_parquet, nrows):
+def test_explain_io_then_distinct(tmp_path, kind, nrows):
     _clear_source_info_cache()
 
     engine = pl.GPUEngine(
@@ -471,12 +471,15 @@ def test_explain_io_then_distinct(tmp_path, use_parquet, nrows):
         }
     )
 
-    if use_parquet:
+    if kind == "parquet":
         make_partitioned_source(
             df, tmp_path, fmt="parquet", n_files=2, row_group_size=10
         )
         df = pl.scan_parquet(tmp_path, n_rows=nrows)
-    else:
+    elif kind == "csv":
+        make_partitioned_source(df, tmp_path, fmt="csv", n_files=2)
+        df = pl.scan_csv(tmp_path, n_rows=nrows)
+    elif kind == "frame":
         df = df.lazy()
         if nrows is not None:
             df = df.slice(0, nrows)
@@ -489,8 +492,19 @@ def test_explain_io_then_distinct(tmp_path, use_parquet, nrows):
 
     # Check query plan
     repr = explain_query(q, engine, physical=False)
-    count = q.collect().height
-    assert re.search(rf"^\s*SORT.*row_count=\'~{count}\'\s*$", repr, re.MULTILINE)
+    if kind == "csv":
+        # CSV will NOT provide row-count statistics unless nrows is provided,
+        # and it will never provide unique-count statistics.
+        if nrows is None:
+            assert re.search(r"^\s*SORT.*row_count='unknown'\s*$", repr, re.MULTILINE)
+        else:
+            assert re.search(
+                rf"^\s*SORT.*row_count=\'~{nrows}\'\s*$", repr, re.MULTILINE
+            )
+    else:
+        assert re.search(
+            rf"^\s*SORT.*row_count=\'~{q.collect().height}\'\s*$", repr, re.MULTILINE
+        )
 
 
 def test_explain_join_then_groupby():
@@ -542,11 +556,11 @@ def test_explain_join_then_groupby():
     join_count = q_join.collect().height
     gb_count = q_gb.collect().height
     final_count = q.collect().height
-    assert re.search(rf"^\s*GROUPBY.*row_count=\'~{gb_count}\'\s*$", repr, re.MULTILINE)
+    assert re.search(rf"^\s*GROUPBY.*row_count='~{gb_count}'\s*$", repr, re.MULTILINE)
     assert re.search(
-        rf"^\s*JOIN Inner.*row_count=\'~{join_count}\'\s*$", repr, re.MULTILINE
+        rf"^\s*JOIN Inner.*row_count='~{join_count}'\s*$", repr, re.MULTILINE
     )
-    assert re.search(rf"^\s*SORT.*row_count=\'~{final_count}\'\s*$", repr, re.MULTILINE)
+    assert re.search(rf"^\s*SORT.*row_count='~{final_count}'\s*$", repr, re.MULTILINE)
 
 
 @pytest.mark.parametrize("use_parquet", [True, False])
@@ -648,14 +662,10 @@ def test_explain_concat_then_groupby(tmp_path, use_parquet):
     gb_count_1 = q_gb_1.collect().height
     final_count_1 = q_1.collect().height
     assert re.search(
-        rf"^\s*UNION.*row_count=\'~{concat_count_1}\'\s*$", repr, re.MULTILINE
+        rf"^\s*UNION.*row_count='~{concat_count_1}'\s*$", repr, re.MULTILINE
     )
-    assert re.search(
-        rf"^\s*GROUPBY.*row_count=\'~{gb_count_1}\'\s*$", repr, re.MULTILINE
-    )
-    assert re.search(
-        rf"^\s*SORT.*row_count=\'~{final_count_1}\'\s*$", repr, re.MULTILINE
-    )
+    assert re.search(rf"^\s*GROUPBY.*row_count='~{gb_count_1}'\s*$", repr, re.MULTILINE)
+    assert re.search(rf"^\s*SORT.*row_count='~{final_count_1}'\s*$", repr, re.MULTILINE)
 
     # Check query plan q_2
     repr = explain_query(q_2, engine, physical=False)
@@ -665,17 +675,11 @@ def test_explain_concat_then_groupby(tmp_path, use_parquet):
     gb_count_2 = q_gb_2.collect().height
     final_count_2 = q_2.collect().height
     assert re.search(
-        rf"^\s*UNION.*row_count=\'~{concat_count_1}\'\s*$", repr, re.MULTILINE
+        rf"^\s*UNION.*row_count='~{concat_count_1}'\s*$", repr, re.MULTILINE
     )
     assert re.search(
-        rf"^\s*UNION.*row_count=\'~{concat_count_2}\'\s*$", repr, re.MULTILINE
+        rf"^\s*UNION.*row_count='~{concat_count_2}'\s*$", repr, re.MULTILINE
     )
-    assert re.search(
-        rf"^\s*GROUPBY.*row_count=\'~{gb_count_1}\'\s*$", repr, re.MULTILINE
-    )
-    assert re.search(
-        rf"^\s*GROUPBY.*row_count=\'~{gb_count_2}\'\s*$", repr, re.MULTILINE
-    )
-    assert re.search(
-        rf"^\s*SORT.*row_count=\'~{final_count_2}\'\s*$", repr, re.MULTILINE
-    )
+    assert re.search(rf"^\s*GROUPBY.*row_count='~{gb_count_1}'\s*$", repr, re.MULTILINE)
+    assert re.search(rf"^\s*GROUPBY.*row_count='~{gb_count_2}'\s*$", repr, re.MULTILINE)
+    assert re.search(rf"^\s*SORT.*row_count='~{final_count_2}'\s*$", repr, re.MULTILINE)
