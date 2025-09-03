@@ -79,14 +79,12 @@ class prefetch_config {
 /**
  * @brief Enable prefetching for a particular structure or algorithm.
  *
- * @param key The key to enable prefetching for.
  * @param ptr The pointer to prefetch.
  * @param size The size of the memory region to prefetch.
  * @param stream The stream to prefetch on.
  * @param device_id The device to prefetch on.
  */
-void prefetch(std::string_view key,
-              void const* ptr,
+void prefetch(void const* ptr,
               std::size_t size,
               rmm::cuda_stream_view stream,
               rmm::cuda_device_id device_id = rmm::get_current_cuda_device());
@@ -100,14 +98,12 @@ void prefetch(std::string_view key,
  * removed once an method for stream-ordered data pointer access is added to
  * those data structures.
  *
- * @param key The key to enable prefetching for.
  * @param ptr The pointer to prefetch.
  * @param size The size of the memory region to prefetch.
  * @param stream The stream to prefetch on.
  * @param device_id The device to prefetch on.
  */
 cudaError_t prefetch_noexcept(
-  std::string_view key,
   void const* ptr,
   std::size_t size,
   rmm::cuda_stream_view stream,
@@ -119,19 +115,17 @@ cudaError_t prefetch_noexcept(
  * @note At present this function does not support stream-ordered execution. Prefetching always
  * occurs on the default stream.
  *
- * @param key The key to enable prefetching for.
  * @param v The device_uvector to prefetch.
  * @param stream The stream to prefetch on.
  * @param device_id The device to prefetch on.
  */
 template <typename T>
-void prefetch(std::string_view key,
-              rmm::device_uvector<T> const& v,
+void prefetch(rmm::device_uvector<T> const& v,
               rmm::cuda_stream_view stream,
               rmm::cuda_device_id device_id = rmm::get_current_cuda_device())
 {
   if (v.is_empty()) { return; }
-  prefetch(key, v.data(), v.size(), stream, device_id);
+  prefetch(v.data(), v.size(), stream, device_id);
 }
 
 }  // namespace detail

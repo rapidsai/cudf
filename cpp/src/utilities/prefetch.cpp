@@ -44,8 +44,7 @@ void prefetch_config::set(std::string_view key, bool value)
   config_values[key.data()] = value;
 }
 
-cudaError_t prefetch_noexcept(std::string_view key,
-                              void const* ptr,
+cudaError_t prefetch_noexcept(void const* ptr,
                               std::size_t size,
                               rmm::cuda_stream_view stream,
                               rmm::cuda_device_id device_id) noexcept
@@ -64,35 +63,30 @@ cudaError_t prefetch_noexcept(std::string_view key,
     }
     return cudaSuccess;
   }
-  if (prefetch_config::instance().get(key)) {
-    if (prefetch_config::instance().debug) {
-      std::cerr << "Prefetching " << size << " bytes for key " << key << " at location " << ptr
-                << std::endl;
-    }
+  if (prefetch_config::instance().debug) {
+    std::cerr << "Prefetching " << size << " bytes at location " << ptr << std::endl;
+  }
 
 #if defined(CUDART_VERSION) && CUDART_VERSION >= 13000
-    cudaMemLocation location{
-      (device_id.value() == cudaCpuDeviceId) ? cudaMemLocationTypeHost : cudaMemLocationTypeDevice,
-      device_id.value()};
-    constexpr int flags = 0;
-    auto result         = cudaMemPrefetchAsync(ptr, size, location, flags, stream.value());
+  cudaMemLocation location{
+    (device_id.value() == cudaCpuDeviceId) ? cudaMemLocationTypeHost : cudaMemLocationTypeDevice,
+    device_id.value()};
+  constexpr int flags = 0;
+  auto result         = cudaMemPrefetchAsync(ptr, size, location, flags, stream.value());
 #else
-    auto result = cudaMemPrefetchAsync(ptr, size, device_id.value(), stream.value());
+  auto result = cudaMemPrefetchAsync(ptr, size, device_id.value(), stream.value());
 #endif
-    // Need to flush the CUDA error so that the context is not corrupted.
-    if (result == cudaErrorInvalidValue) { cudaGetLastError(); }
-    return result;
-  }
-  return cudaSuccess;
+  // Need to flush the CUDA error so that the context is not corrupted.
+  if (result == cudaErrorInvalidValue) { cudaGetLastError(); }
+  return result;
 }
 
-void prefetch(std::string_view key,
-              void const* ptr,
+void prefetch(void const* ptr,
               std::size_t size,
               rmm::cuda_stream_view stream,
               rmm::cuda_device_id device_id)
 {
-  auto result = prefetch_noexcept(key, ptr, size, stream, device_id);
+  auto result = prefetch_noexcept(ptr, size, stream, device_id);
   // Ignore cudaErrorInvalidValue because that will be raised if prefetching is
   // attempted on unmanaged memory.
   if ((result != cudaErrorInvalidValue) && (result != cudaSuccess)) {

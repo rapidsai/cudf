@@ -43,7 +43,7 @@ void prefetch_col_data(ColumnView& col, void const* data_ptr, std::string_view k
       return;
     } else if (cudf::is_fixed_width(col.type())) {
       cudf::prefetch::detail::prefetch_noexcept(
-        key, data_ptr, col.size() * size_of(col.type()), cudf::get_default_stream());
+        data_ptr, col.size() * size_of(col.type()), cudf::get_default_stream());
     } else if (col.type().id() == type_id::STRING) {
       strings_column_view const scv{col};
       if (data_ptr == nullptr) {
@@ -51,7 +51,6 @@ void prefetch_col_data(ColumnView& col, void const* data_ptr, std::string_view k
         return;
       }
       cudf::prefetch::detail::prefetch_noexcept(
-        key,
         data_ptr,
         scv.chars_size(cudf::get_default_stream()) * sizeof(char),
         cudf::get_default_stream());

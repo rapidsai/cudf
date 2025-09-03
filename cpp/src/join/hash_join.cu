@@ -316,8 +316,8 @@ probe_join_hash_table(
 
   auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
   auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
-  cudf::prefetch::detail::prefetch("hash_join", *left_indices, stream);
-  cudf::prefetch::detail::prefetch("hash_join", *right_indices, stream);
+  cudf::prefetch::detail::prefetch(*left_indices, stream);
+  cudf::prefetch::detail::prefetch(*right_indices, stream);
 
   auto const probe_table_num_rows = probe_table.num_rows();
   auto const out_probe_begin =
