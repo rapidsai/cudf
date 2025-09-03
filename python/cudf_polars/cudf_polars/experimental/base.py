@@ -202,29 +202,13 @@ class ColumnSourceInfo:
             If True, return unique-value statistics even if the column
             wasn't marked as needing unique-value information.
         """
-        if force or self.is_unique_stats_column:
-            if len(self.table_source_pairs) == 1:
-                # Single table source
-                table_source, column_name = self.table_source_pairs[0]
-                return table_source.unique_stats(column_name)
-            else:
-                # Multiple tables sources were concatenated in a Union.
-                # Drop fraction statstics and take a sum of the unique counts.
-                # (This is a very conservative unique-count estimate)
-                unique_count = (
-                    sum(
-                        value
-                        for p in self.table_source_pairs
-                        if (
-                            value := p.table_source.unique_stats(
-                                p.column_name
-                            ).count.value
-                        )
-                        is not None
-                    )
-                    or None
-                )
-                return UniqueStats(count=ColumnStat[int](unique_count))
+        if (force or self.is_unique_stats_column) and len(self.table_source_pairs) == 1:
+            # Single table source.
+            # TODO: Handle multiple tables sources if/when necessary.
+            # We may never need to do this if the source unique-value
+            # statistics are only "used" by the Scan/DataFrameScan nodes.
+            table_source, column_name = self.table_source_pairs[0]
+            return table_source.unique_stats(column_name)
         else:
             # Avoid sampling unique-stats if this column
             # wasn't marked as "needing" unique-stats.

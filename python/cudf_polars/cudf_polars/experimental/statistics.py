@@ -485,7 +485,7 @@ def _(ir: DataFrameScan, stats: StatsCollector, config_options: ConfigOptions) -
         stats.row_count[ir] = next(
             iter(stats.column_stats[ir].values())
         ).source_info.row_count
-    else:
+    else:  # pragma: no cover; We always have row-count (for now).
         stats.row_count[ir] = ColumnStat[int](None)
 
     # Update unique-count estimates with sampled statistics
@@ -509,7 +509,7 @@ def _(ir: Scan, stats: StatsCollector, config_options: ConfigOptions) -> None:
         stats.row_count[ir] = next(
             iter(stats.column_stats[ir].values())
         ).source_info.row_count
-    else:
+    else:  # pragma: no cover; We always have row-count (for now).
         # No column stats available.
         stats.row_count[ir] = ColumnStat[int](None)
 
@@ -530,30 +530,40 @@ def _(ir: Scan, stats: StatsCollector, config_options: ConfigOptions) -> None:
             column_stats.unique_count = column_stats.source_info.implied_unique_count
 
 
-@update_column_stats.register(GroupBy)
-def _(ir: GroupBy, stats: StatsCollector, config_options: ConfigOptions) -> None:
-    key_names = [n.name for n in ir.keys]
+def _update_distinct_stats(
+    ir: Distinct | GroupBy,
+    stats: StatsCollector,
+    key_names: list[str],
+) -> None:
+    """Update statistics for a Distinct or GroupBy node."""
     (child,) = ir.children
     child_column_stats = stats.column_stats[child]
-    child_row_count_estimate = stats.row_count[child].value
-
+    child_row_count = stats.row_count[child].value
     unique_counts = [child_column_stats[k].unique_count.value for k in key_names]
     known_unique_count = sum(c for c in unique_counts if c is not None)
     unknown_unique_count = sum(c is None for c in unique_counts)
-    if unknown_unique_count == len(unique_counts):
-        # Total guess
-        stats.row_count[ir] = ColumnStat[int](
-            None
-            if child_row_count_estimate is None
-            else max(1, child_row_count_estimate // 100)
-        )
+    if unknown_unique_count == len(unique_counts):  # pragma: no cover
+        # No unique-count estimates, so use the child row-count.
+        stats.row_count[ir] = ColumnStat[int](child_row_count)
     else:
         # Guess each unknown key introduces a factor of 3
-        stats.row_count[ir] = ColumnStat[int](
-            known_unique_count * 3**unknown_unique_count
-        )
+        unique_count = known_unique_count * 3**unknown_unique_count
+        if child_row_count is not None:
+            # Don't allow the unique-count to exceed the child row-count.
+            unique_count = min(child_row_count, unique_count)
+        stats.row_count[ir] = ColumnStat[int](unique_count)
 
     copy_child_unique_counts(stats.column_stats[ir])
+
+
+@update_column_stats.register(Distinct)
+def _(ir: Distinct, stats: StatsCollector, config_options: ConfigOptions) -> None:
+    _update_distinct_stats(ir, stats, list(ir.subset or ir.schema))
+
+
+@update_column_stats.register(GroupBy)
+def _(ir: GroupBy, stats: StatsCollector, config_options: ConfigOptions) -> None:
+    _update_distinct_stats(ir, stats, [n.name for n in ir.keys])
 
 
 @update_column_stats.register(Join)
@@ -561,7 +571,7 @@ def _(ir: Join, stats: StatsCollector, config_options: ConfigOptions) -> None:
     # Apply basic join-cardinality estimation.
     try:
         left_rows, right_rows = child_row_counts(ir, stats)
-    except ValueError:
+    except ValueError:  # pragma: no cover; We always have row-count (for now).
         # One or more children have an unknown row-count estimate.
         stats.row_count[ir] = ColumnStat[int](None)
     else:
@@ -580,7 +590,7 @@ def _(ir: Join, stats: StatsCollector, config_options: ConfigOptions) -> None:
             stats.row_count[ir] = ColumnStat[int](
                 max(1, (left_rows * right_rows) // join_key_implied_unique_count)
             )
-        else:
+        else:  # pragma: no cover; We always have pk-fk heuristics (for now).
             stats.row_count[ir] = ColumnStat[int](max((1, left_rows, right_rows)))
 
     copy_child_unique_counts(stats.column_stats[ir])

@@ -447,8 +447,53 @@ def test_base_stats_join_key_info():
     )
 
 
+@pytest.mark.parametrize("use_parquet", [True, False])
+@pytest.mark.parametrize("nrows", [None, 3])
+def test_explain_io_then_distinct(tmp_path, use_parquet, nrows):
+    _clear_source_info_cache()
+
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "scheduler": DEFAULT_SCHEDULER,
+            "shuffle_method": "tasks",
+            "target_partition_size": 10_000,
+        },
+    )
+
+    df = pl.DataFrame(
+        {
+            "order_id": [1, 2, 3, 4, 5, 6],
+            "customer_id": [101, 102, 101, 103, 103, 104],
+            "amount": [50.0, 75.0, 30.0, 120.0, 85.0, 40.0],
+            "year": [2023, 2023, 2023, 2024, 2024, 2024],
+        }
+    )
+
+    if use_parquet:
+        make_partitioned_source(
+            df, tmp_path, fmt="parquet", n_files=2, row_group_size=10
+        )
+        df = pl.scan_parquet(tmp_path, n_rows=nrows)
+    else:
+        df = df.lazy()
+        if nrows is not None:
+            df = df.slice(0, nrows)
+
+    # Group by customer_id after concatenation
+    q = df.unique(subset=["customer_id"]).sort("order_id")
+
+    # Verify the query runs correctly
+    assert_gpu_result_equal(q, engine=engine)
+
+    # Check query plan
+    repr = explain_query(q, engine, physical=False)
+    count = q.collect().height
+    assert re.search(rf"^\s*SORT.*row_count=\'~{count}\'\s*$", repr, re.MULTILINE)
+
+
 def test_explain_join_then_groupby():
-    """Test joining two tables and performing groupby aggregation on a join key."""
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
@@ -504,8 +549,8 @@ def test_explain_join_then_groupby():
     assert re.search(rf"^\s*SORT.*row_count=\'~{final_count}\'\s*$", repr, re.MULTILINE)
 
 
-def test_explain_concat_then_groupby(tmp_path):
-    """Test concatenating two parquet tables and performing groupby aggregation."""
+@pytest.mark.parametrize("use_parquet", [True, False])
+def test_explain_concat_then_groupby(tmp_path, use_parquet):
     _clear_source_info_cache()
 
     engine = pl.GPUEngine(
@@ -514,6 +559,7 @@ def test_explain_concat_then_groupby(tmp_path):
         executor_options={
             "scheduler": DEFAULT_SCHEDULER,
             "shuffle_method": "tasks",
+            "target_partition_size": 10_000,
         },
     )
 
@@ -547,27 +593,32 @@ def test_explain_concat_then_groupby(tmp_path):
         }
     )
 
-    # Create separate parquet files
-    path_2023 = tmp_path / "sales_2023"
-    path_2024 = tmp_path / "sales_2024"
-    path_2025 = tmp_path / "sales_2025"
+    if use_parquet:
+        # Create separate parquet files
+        path_2023 = tmp_path / "sales_2023"
+        path_2024 = tmp_path / "sales_2024"
+        path_2025 = tmp_path / "sales_2025"
 
-    # Make sure we use a large-enough row-group for reasonable unique-count statistics
-    make_partitioned_source(
-        sales_2023, path_2023, fmt="parquet", n_files=1, row_group_size=10
-    )
-    make_partitioned_source(
-        sales_2024, path_2024, fmt="parquet", n_files=1, row_group_size=10
-    )
-    make_partitioned_source(
-        sales_2025, path_2025, fmt="parquet", n_files=1, row_group_size=10
-    )
+        # Make sure we use a large-enough row-group for reasonable unique-count statistics
+        make_partitioned_source(
+            sales_2023, path_2023, fmt="parquet", n_files=1, row_group_size=10
+        )
+        make_partitioned_source(
+            sales_2024, path_2024, fmt="parquet", n_files=1, row_group_size=10
+        )
+        make_partitioned_source(
+            sales_2025, path_2025, fmt="parquet", n_files=1, row_group_size=10
+        )
 
-    # Read parquet files and concatenate them
-    df_2023 = pl.scan_parquet(path_2023)
-    df_2024 = pl.scan_parquet(path_2024)
-    df_2025 = pl.scan_parquet(path_2025)
-    q_concat_1 = pl.concat([df_2023, df_2024])
+        # Read parquet files and concatenate them
+        df_2023 = pl.scan_parquet(path_2023)
+        df_2024 = pl.scan_parquet(path_2024)
+        df_2025 = pl.scan_parquet(path_2025)
+    else:
+        # Convert to lazy frames
+        df_2023 = sales_2023.lazy()
+        df_2024 = sales_2024.lazy()
+        df_2025 = sales_2025.lazy()
 
     def _gb(df):
         return df.group_by("customer_id").agg(
@@ -580,21 +631,39 @@ def test_explain_concat_then_groupby(tmp_path):
         )
 
     # Group by customer_id after concatenation
+    q_concat_1 = pl.concat([df_2023, df_2024])
     q_gb_1 = _gb(q_concat_1)
+    q_1 = q_gb_1.sort("customer_id").head(2)
     q_gb_2 = _gb(df_2025)
     q_concat_2 = pl.concat([q_gb_1, q_gb_2])
-    q = q_concat_2.sort("customer_id").head(2)
+    q_2 = q_concat_2.sort("customer_id").head(2)
 
     # Verify the query runs correctly
-    assert_gpu_result_equal(q, engine=engine)
+    assert_gpu_result_equal(q_1, engine=engine)
+    assert_gpu_result_equal(q_2, engine=engine)
 
-    # Check the query plan
-    repr = explain_query(q, engine, physical=False)
+    # Check query plan q_1
+    repr = explain_query(q_1, engine, physical=False)
+    concat_count_1 = q_concat_1.collect().height
+    gb_count_1 = q_gb_1.collect().height
+    final_count_1 = q_1.collect().height
+    assert re.search(
+        rf"^\s*UNION.*row_count=\'~{concat_count_1}\'\s*$", repr, re.MULTILINE
+    )
+    assert re.search(
+        rf"^\s*GROUPBY.*row_count=\'~{gb_count_1}\'\s*$", repr, re.MULTILINE
+    )
+    assert re.search(
+        rf"^\s*SORT.*row_count=\'~{final_count_1}\'\s*$", repr, re.MULTILINE
+    )
+
+    # Check query plan q_2
+    repr = explain_query(q_2, engine, physical=False)
     concat_count_1 = q_concat_1.collect().height
     concat_count_2 = q_concat_2.collect().height
     gb_count_1 = q_gb_1.collect().height
     gb_count_2 = q_gb_2.collect().height
-    final_count = q.collect().height
+    final_count_2 = q_2.collect().height
     assert re.search(
         rf"^\s*UNION.*row_count=\'~{concat_count_1}\'\s*$", repr, re.MULTILINE
     )
@@ -607,4 +676,6 @@ def test_explain_concat_then_groupby(tmp_path):
     assert re.search(
         rf"^\s*GROUPBY.*row_count=\'~{gb_count_2}\'\s*$", repr, re.MULTILINE
     )
-    assert re.search(rf"^\s*SORT.*row_count=\'~{final_count}\'\s*$", repr, re.MULTILINE)
+    assert re.search(
+        rf"^\s*SORT.*row_count=\'~{final_count_2}\'\s*$", repr, re.MULTILINE
+    )
