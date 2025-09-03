@@ -363,6 +363,12 @@ def datetime_types_as_str(request):
     return request.param
 
 
+@pytest.fixture
+def datetime_types_as_str2(datetime_types_as_str):
+    """Used for testing cartesian product of datetime_types_as_str"""
+    return datetime_types_as_str
+
+
 @pytest.fixture(params=timedelta_types)
 def timedelta_types_as_str(request):
     """

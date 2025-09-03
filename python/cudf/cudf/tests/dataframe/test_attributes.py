@@ -309,3 +309,20 @@ def test_cudf_arrow_array_error():
         "__arrow_array__ is not allowed. Consider using .to_arrow()",
     ):
         sr.__arrow_array__()
+
+
+@pytest.mark.parametrize(
+    "index",
+    [
+        ["a", "b", "c", "d", "e"],
+        np.array(["a", "b", "c", "d", "e"]),
+        pd.Index(["a", "b", "c", "d", "e"], name="name"),
+    ],
+)
+def test_string_index(index):
+    rng = np.random.default_rng(seed=0)
+    pdf = pd.DataFrame(rng.random(size=(5, 5)))
+    gdf = cudf.DataFrame.from_pandas(pdf)
+    pdf.index = index
+    gdf.index = index
+    assert_eq(pdf, gdf)

@@ -1,4 +1,5 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
+import re
 
 import numpy as np
 import pandas as pd
@@ -139,6 +140,25 @@ def test_loc_setitem_extend_existing_12505():
     cdf.loc[1] = 1
 
     assert_eq(df, cdf)
+
+
+def test_loc_setitem_list_arg_missing_raises():
+    data = {"a": [0]}
+    gdf = cudf.DataFrame(data)
+    pdf = pd.DataFrame(data)
+
+    cudf_msg = re.escape("[1] not in the index.")
+    with pytest.raises(KeyError, match=cudf_msg):
+        gdf.loc[[1]] = 1
+
+    with pytest.raises(KeyError, match=cudf_msg):
+        gdf.loc[[1], "a"] = 1
+
+    with pytest.raises(KeyError):
+        pdf.loc[[1]] = 1
+
+    with pytest.raises(KeyError):
+        pdf.loc[[1], "a"] = 1
 
 
 @pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/12801")

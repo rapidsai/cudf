@@ -158,3 +158,54 @@ def test_dataframe_setitem_cupy_array():
     gdf[gpu_array] = 1.5
 
     assert_eq(pdf, gdf)
+
+
+def test_setitem_datetime():
+    df = cudf.DataFrame({"date": pd.date_range("20010101", "20010105").values})
+    assert df.date.dtype.kind == "M"
+
+
+@pytest.mark.parametrize("scalar", ["a", None])
+def test_string_set_scalar(scalar):
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 2, 3, 4, 5],
+        }
+    )
+    gdf = cudf.DataFrame.from_pandas(pdf)
+
+    pdf["b"] = "a"
+    gdf["b"] = "a"
+
+    assert_eq(pdf["b"], gdf["b"])
+    assert_eq(pdf, gdf)
+
+
+def test_dataframe_cow_slice_setitem():
+    with cudf.option_context("copy_on_write", True):
+        df = cudf.DataFrame(
+            {"a": [10, 11, 12, 13, 14], "b": [20, 30, 40, 50, 60]}
+        )
+        slice_df = df[1:4]
+
+        assert_eq(
+            slice_df,
+            cudf.DataFrame(
+                {"a": [11, 12, 13], "b": [30, 40, 50]}, index=[1, 2, 3]
+            ),
+        )
+
+        slice_df["a"][2] = 1111
+
+        assert_eq(
+            slice_df,
+            cudf.DataFrame(
+                {"a": [11, 1111, 13], "b": [30, 40, 50]}, index=[1, 2, 3]
+            ),
+        )
+        assert_eq(
+            df,
+            cudf.DataFrame(
+                {"a": [10, 11, 12, 13, 14], "b": [20, 30, 40, 50, 60]}
+            ),
+        )
