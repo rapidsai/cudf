@@ -1246,3 +1246,76 @@ def test_typecast_from_decimal(precision, scale, signed_integer_types_as_str):
 
     assert_eq(got, expected)
     assert_eq(got.dtype, expected.dtype)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pd.Series([1, 2, 3, 89]),
+        pd.Series([1, 2, 3, 89, 3, 1, 89], dtype="category"),
+        pd.Series(["1", "2", "3", "4", "5"], dtype="category"),
+        pd.Series(["1.0", "2.5", "3.001", "9"], dtype="category"),
+        pd.Series(["1", "2", "3", None, "4", "5"], dtype="category"),
+        pd.Series(["1.0", "2.5", "3.001", None, "9"], dtype="category"),
+        pd.Series(["a", "b", "c", "c", "b", "a", "b", "b"]),
+        pd.Series(["aa", "b", "c", "c", "bb", "bb", "a", "b", "b"]),
+        pd.Series([1, 2, 3, 89, None, np.nan, np.nan], dtype="float64"),
+        pd.Series([1, 2, 3, 89], dtype="float64"),
+        pd.Series([1, 2.5, 3.001, 89], dtype="float64"),
+        pd.Series([None, None, None]),
+        pd.Series([], dtype="float64"),
+    ],
+)
+@pytest.mark.parametrize(
+    "categories",
+    [
+        ["aa", "bb", "cc"],
+        [2, 4, 10, 100],
+        ["aa", "bb", "c"],
+        ["a", "bb", "c"],
+        ["a", "b", "c"],
+        ["1", "2", "3", "4"],
+        ["1.0", "2.5", "3.001", "9"],
+        [],
+    ],
+)
+def test_categorical_typecast(data, categories):
+    pd_data = data
+    gd_data = cudf.from_pandas(data)
+    cat_type = pd.CategoricalDtype(categories)
+
+    assert_eq(pd_data.astype(cat_type), gd_data.astype(cat_type))
+
+
+@pytest.mark.parametrize(
+    ("values", "expected"),
+    [
+        ([1], np.uint8),
+        ([1, None], np.uint8),
+        (np.arange(np.iinfo(np.int8).max), np.uint8),
+        (np.append(np.arange(np.iinfo(np.int8).max), [None]), np.uint8),
+        (np.arange(np.iinfo(np.int16).max), np.uint16),
+        (np.append(np.arange(np.iinfo(np.int16).max), [None]), np.uint16),
+        (np.arange(np.iinfo(np.uint8).max), np.uint8),
+        (np.append(np.arange(np.iinfo(np.uint8).max), [None]), np.uint8),
+        (np.arange(np.iinfo(np.uint16).max), np.uint16),
+        (np.append(np.arange(np.iinfo(np.uint16).max), [None]), np.uint16),
+    ],
+)
+def test_astype_dtype(values, expected):
+    data = cudf.Series(values)
+    got = data.astype("category").cat.codes.dtype
+    np.testing.assert_equal(got, expected)
+
+
+@pytest.mark.parametrize("ordered", [True, False])
+def test_empty_series_category_cast(ordered):
+    dtype = cudf.CategoricalDtype(ordered=ordered)
+    ps = pd.Series([], dtype="str")
+    gs = cudf.from_pandas(ps)
+
+    expected = ps.astype(dtype.to_pandas())
+    actual = gs.astype(dtype)
+
+    assert_eq(expected, actual)
+    assert_eq(expected.dtype.ordered, actual.dtype.ordered)
