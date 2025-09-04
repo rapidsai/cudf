@@ -145,3 +145,17 @@ def test_sort_index_axis_1_ignore_index_true_columnaccessor_state_names():
     gdf = cudf.DataFrame([[1, 2, 3]], columns=["b", "a", "c"])
     result = gdf.sort_index(axis=1, ignore_index=True)
     assert result._data.names == tuple(result._data.keys())
+
+
+def test_df_cat_sort_index():
+    df = cudf.DataFrame(
+        {
+            "a": pd.Categorical(list("aababcabbc"), categories=list("abc")),
+            "b": np.arange(10),
+        }
+    )
+
+    got = df.set_index("a").sort_index()
+    expect = df.to_pandas().set_index("a").sort_index()
+
+    assert_eq(got, expect)
