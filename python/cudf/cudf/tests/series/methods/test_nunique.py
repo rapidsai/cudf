@@ -1,5 +1,5 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
-
+import string
 
 import numpy as np
 import pandas as pd
@@ -50,3 +50,22 @@ def test_datetime_nunique(data, nulls):
     expected = psr.nunique()
     got = gsr.nunique()
     assert_eq(got, expected)
+
+
+def test_categorical_nunique():
+    nelem = 20
+    rng = np.random.default_rng(seed=0)
+    pd_cat = pd.Categorical(
+        pd.Series(
+            rng.choice(list(string.ascii_letters + string.digits), nelem),
+            dtype="category",
+        )
+    )
+
+    gser = cudf.Series(pd_cat)
+    gdf_unique_count = gser.nunique()
+
+    pser = pd.Series(pd_cat)
+    pdf_unique = pser.unique()
+
+    assert gdf_unique_count == len(pdf_unique)

@@ -10,6 +10,7 @@ from cudf.core._compat import (
     PANDAS_VERSION,
 )
 from cudf.testing import assert_groupby_results_equal
+from cudf.testing._utils import assert_exceptions_equal
 from cudf.testing.dataset_generator import rand_dataframe
 
 
@@ -188,4 +189,24 @@ def test_groupby_fillna_method(method):
 
     assert_groupby_results_equal(
         expect[value_cols], got[value_cols], sort=False
+    )
+
+
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Does not warn on older versions of pandas",
+)
+def test_cat_groupby_fillna():
+    ps = pd.Series(["a", "b", "c"], dtype="category")
+    gs = cudf.from_pandas(ps)
+
+    with pytest.warns(FutureWarning):
+        pg = ps.groupby(ps)
+    gg = gs.groupby(gs)
+
+    assert_exceptions_equal(
+        lfunc=pg.fillna,
+        rfunc=gg.fillna,
+        lfunc_args_and_kwargs=(("d",), {}),
+        rfunc_args_and_kwargs=(("d",), {}),
     )
