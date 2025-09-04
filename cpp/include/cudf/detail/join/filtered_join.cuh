@@ -28,7 +28,6 @@
 
 #include <cuco/bucket_storage.cuh>
 #include <cuco/extent.cuh>
-#include <cuco/static_multiset_ref.cuh>
 #include <cuco/static_set_ref.cuh>
 #include <cuco/types.cuh>
 #include <cuda/std/type_traits>
@@ -59,7 +58,6 @@ class filtered_join {
    */
   struct build_properties {
     bool has_nulls;           ///< True if nested nulls are present in build table
-    bool has_floating_point;  ///< True if the build table contains floating point columns
     bool has_nested_columns;  ///< True if the build table contains nested columns
   };
 

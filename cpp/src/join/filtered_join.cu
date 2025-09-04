@@ -18,7 +18,6 @@
 
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/join/filtered_join.cuh>
-#include <cudf/detail/join/join.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -33,20 +32,14 @@
 
 #include <cuco/bucket_storage.cuh>
 #include <cuco/detail/open_addressing/kernels.cuh>
-#include <cuco/detail/storage/counter_storage.cuh>
 #include <cuco/extent.cuh>
 #include <cuco/operator.hpp>
-#include <cuco/static_multiset_ref.cuh>
 #include <cuco/static_set_ref.cuh>
 #include <cuco/types.cuh>
 #include <cuco/utility/cuda_thread_scope.cuh>
 #include <cuda/std/iterator>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
-
-#include <algorithm>
-#include <memory>
-#include <type_traits>
 
 namespace cudf {
 namespace detail {
@@ -86,7 +79,7 @@ std::pair<rmm::device_buffer, bitmask_type const*> build_row_bitmask(table_view 
 struct gather_mask {
   join_kind kind;
   device_span<bool const> flagged;
-  __device__ bool operator()(size_type idx)
+  __device__ bool operator()(size_type idx) const noexcept
   {
     return flagged[idx] == (kind == join_kind::LEFT_SEMI_JOIN);
   }
@@ -137,7 +130,7 @@ void filtered_join::insert_build_table(Ref const& insert_ref, rmm::cuda_stream_v
     }
   };
 
-  if (cudf::is_primitive_row_op_compatible(_build) && !_build_props.has_floating_point) {
+  if (cudf::is_primitive_row_op_compatible(_build)) {
     auto const d_build_hasher =
       primitive_row_hasher{nullate::DYNAMIC{_build_props.has_nulls}, _preprocessed_build};
     auto const build_iter = cudf::detail::make_counting_transform_iterator(
@@ -199,7 +192,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> filtered_join_with_set::qu
   };
 
   auto contains_map = rmm::device_uvector<bool>(probe.num_rows(), stream);
-  if (cudf::is_primitive_row_op_compatible(_build) && !_build_props.has_floating_point) {
+  if (cudf::is_primitive_row_op_compatible(_build)) {
     auto const d_probe_hasher =
       primitive_row_hasher{nullate::DYNAMIC{has_any_nulls}, preprocessed_probe};
     auto const probe_iter = cudf::detail::make_counting_transform_iterator(
@@ -229,12 +222,7 @@ filtered_join::filtered_join(cudf::table_view const& build,
                              cudf::null_equality compare_nulls,
                              double load_factor,
                              rmm::cuda_stream_view stream)
-  : _build_props{build_properties{
-      cudf::has_nested_nulls(build),
-      std::any_of(build.begin(),
-                  build.end(),
-                  [](auto const& col) { return cudf::is_floating_point(col.type()); }),
-      cudf::has_nested_columns(build)}},
+  : _build_props{build_properties{cudf::has_nested_nulls(build), cudf::has_nested_columns(build)}},
     _nulls_equal{compare_nulls},
     _build{build},
     _preprocessed_build{
@@ -252,7 +240,7 @@ filtered_join_with_set::filtered_join_with_set(cudf::table_view const& build,
   : filtered_join(build, compare_nulls, load_factor, stream)
 {
   cudf::scoped_range range{"filtered_join_with_set::filtered_join_with_set"};
-  if (cudf::is_primitive_row_op_compatible(build) && !_build_props.has_floating_point) {
+  if (cudf::is_primitive_row_op_compatible(build)) {
     auto const d_build_comparator =
       primitive_row_comparator{nullate::DYNAMIC{_build_props.has_nulls},
                                _preprocessed_build,
@@ -308,7 +296,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> filtered_join_with_set::se
     cudf::experimental::row::equality::preprocessed_table::create(probe, stream);
   nvtxRangePop();
 
-  if (cudf::is_primitive_row_op_compatible(_build) && !_build_props.has_floating_point) {
+  if (cudf::is_primitive_row_op_compatible(_build)) {
     auto const d_build_probe_comparator = primitive_row_comparator{
       nullate::DYNAMIC{has_any_nulls}, _preprocessed_build, preprocessed_probe, _nulls_equal};
 

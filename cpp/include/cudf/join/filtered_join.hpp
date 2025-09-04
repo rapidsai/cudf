@@ -46,7 +46,7 @@ class filtered_join;
  * @brief Specifies which table to use as the build table in a hash join operation
  * @see filtered_join
  */
-enum set_as_build_table { LEFT, RIGHT };
+enum class set_as_build_table { LEFT, RIGHT };
 
 /**
  * @brief Filtered hash join that builds hash table in creation and probes results in subsequent
