@@ -55,6 +55,17 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
     spass_agg_kinds, stream, rmm::mr::get_current_device_resource());
   auto const num_rows = spass_values.num_rows();
 
+  // Performs naive global memory aggregations when the workload is not compatible with shared
+  // memory, such as when aggregating dictionary columns, when there is insufficient dynamic
+  // shared memory for shared memory aggregations, or when SUM_WITH_OVERFLOW aggregations are
+  // present.
+  auto const run_aggs_by_global_mem_kernel = [&] {
+    auto [spass_results, unique_key_indices] = compute_global_memory_aggs(
+      row_bitmask, spass_values, global_set, spass_agg_kinds, d_spass_agg_kinds, stream, mr);
+    collect_output_to_cache(spass_values, spass_aggs, spass_results, cache, stream);
+    return std::pair{std::move(unique_key_indices), has_compound_aggs};
+  };
+
   // Grid size used for both index mapping and shared memory aggregation kernels.
   auto const grid_size = [&] {
     auto const max_blocks_mapping =
@@ -66,23 +77,14 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
     auto const num_blocks    = cudf::util::div_rounding_up_safe(num_rows, GROUPBY_BLOCK_SIZE);
     return std::min(max_grid_size, num_blocks);
   }();
-  // Just to make sure everything is fine, since zero grid_size is zero only if the input is empty,
-  // which should have already been handled before reaching here.
-  CUDF_EXPECTS(grid_size > 0, "Invalid grid size computation.");
+
+  // grid_size is zero means the shared memory kernel cannot be launched, since input cannot be
+  // empty: empty input should already been handled before reaching here.
+  if (grid_size <= 0) { return run_aggs_by_global_mem_kernel(); }
 
   auto const [can_run_by_shared_mem_kernel, available_shmem_size] =
     is_shared_memory_compatible(spass_agg_kinds, spass_values, grid_size);
 
-  // Performs naive global memory aggregations when the workload is not compatible with shared
-  // memory, such as when aggregating dictionary columns, when there is insufficient dynamic
-  // shared memory for shared memory aggregations, or when SUM_WITH_OVERFLOW aggregations are
-  // present.
-  auto const run_aggs_by_global_mem_kernel = [&] {
-    auto [spass_results, unique_key_indices] = compute_global_memory_aggs(
-      row_bitmask, spass_values, global_set, spass_agg_kinds, d_spass_agg_kinds, stream, mr);
-    collect_output_to_cache(spass_values, spass_aggs, spass_results, cache, stream);
-    return std::pair{std::move(unique_key_indices), has_compound_aggs};
-  };
   if (!can_run_by_shared_mem_kernel) { return run_aggs_by_global_mem_kernel(); }
 
   // Maps from the global row index of the input table to its block-wise rank.
