@@ -34,7 +34,9 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
+#include <exception>
 #include <regex>
+#include <stdexcept>
 #include <vector>
 
 #ifdef CUDF_KVIKIO_REMOTE_IO
@@ -417,8 +419,14 @@ std::unique_ptr<datasource> datasource::create(std::string const& filepath,
 
     CUDF_FAIL("Invalid LIBCUDF_MMAP_ENABLED value: " + policy);
   }();
+
   if (remote_file_source::could_be_remote_url(filepath)) {
-    return std::make_unique<remote_file_source>(filepath.c_str());
+    try {
+      return std::make_unique<remote_file_source>(filepath.c_str());
+    } catch (std::exception const& ex) {
+      CUDF_FAIL("Error accessing the remote file \"" + filepath + "\". Reason: " + ex.what(),
+                std::runtime_error);
+    }
   } else if (use_memory_mapping) {
     return std::make_unique<memory_mapped_source>(filepath.c_str(), offset, max_size_estimate);
   } else {
