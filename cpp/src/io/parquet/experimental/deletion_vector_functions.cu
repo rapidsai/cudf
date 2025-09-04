@@ -52,11 +52,8 @@ auto compute_row_indices(cudf::host_span<size_t const> row_group_offsets,
                          size_type num_rows,
                          rmm::cuda_stream_view stream)
 {
-  // Total number of row groups
   auto const num_row_groups = static_cast<size_type>(row_group_num_rows.size());
 
-  // If no row group offsets and counts are specified, simply return the range: [0, num_rows) as row
-  // indices
   if (row_group_offsets.empty()) {
     auto host_row_indices = cudf::detail::make_host_vector<size_t>(num_rows, stream);
     std::iota(host_row_indices.begin(), host_row_indices.end(), 0);
@@ -77,12 +74,10 @@ auto compute_row_indices(cudf::host_span<size_t const> row_group_offsets,
 
   // Host vector to store the row indices
   auto row_indices = cudf::detail::make_host_vector<size_t>(num_rows, stream);
-  // Initialize all row indices to 1 so that we can do a segmented inclusive scan
   std::fill(row_indices.begin(), row_indices.end(), 1);
 
   // Host vector to store the row group index (or span) for each row that it belongs to
   auto row_group_keys = cudf::detail::make_host_vector<size_type>(num_rows, stream);
-  // Initialize all row group keys to 0
   std::fill(row_group_keys.begin(), row_group_keys.end(), 0);
 
   // Scatter row group offsets and row group indices (or span indices) to their corresponding
@@ -92,8 +87,7 @@ auto compute_row_indices(cudf::host_span<size_t const> row_group_offsets,
   auto out_iter = thrust::make_zip_iterator(row_indices.begin(), row_group_keys.begin());
   thrust::scatter(in_iter, in_iter + num_row_groups, row_group_span_offsets.begin(), out_iter);
 
-  // Fill in the the rest of the row group span indices using inclusive scan with the maximum
-  // operator
+  // Fill in the the rest of the row group span indices
   thrust::inclusive_scan(row_group_keys.begin(),
                          row_group_keys.end(),
                          row_group_keys.begin(),
@@ -150,7 +144,6 @@ auto build_row_mask_column(cudf::host_span<size_t const> row_indices,
                            rmm::cuda_stream_view stream,
                            rmm::device_async_resource_ref mr)
 {
-  // Host vector to store the row mask
   auto row_mask = cudf::detail::make_host_vector<bool>(num_rows, stream);
 
   auto constexpr thread_pool_size = 16;
@@ -164,11 +157,10 @@ auto build_row_mask_column(cudf::host_span<size_t const> row_indices,
     [&](auto const thread_idx) {
       row_mask_tasks.emplace_back(
         cudf::detail::host_worker_pool().submit_task([&, thread_idx = thread_idx] {
-          // Thread local roaring64 context for faster (bulk) contains operations
+          // Thread-local roaring64 context for faster (bulk) contains operations
           auto roaring64_context =
             roaring64_bulk_context_t{.high_bytes = {0, 0, 0, 0, 0, 0}, .leaf = nullptr};
 
-          // Fill up the row mask using the deletion vector
           for (auto row_idx = thread_idx; row_idx < num_rows; row_idx += thread_pool_size) {
             // Check if each row index is not present in the deletion vector
             row_mask[row_idx] = not roaring::api::roaring64_bitmap_contains_bulk(
@@ -177,7 +169,6 @@ auto build_row_mask_column(cudf::host_span<size_t const> row_indices,
         }));
     });
 
-  // Wait for all tasks to complete
   std::for_each(
     row_mask_tasks.begin(), row_mask_tasks.end(), [&](auto& task) { std::move(task).get(); });
 
@@ -209,22 +200,21 @@ table_with_metadata read_parquet_and_apply_deletion_vector(
   // Compute a row index host vector from the specified row group offsets and counts
   auto row_indices = compute_row_indices(row_group_offsets, row_group_num_rows, num_rows, stream);
 
-  // Build the index column and prepend it to the table columns
+  // Build and prepend the index column to the table columns
   auto row_index_column =
     build_column_from_host_data<size_t>(row_indices, cudf::type_id::UINT64, stream, mr);
-  // Vector to store the index and table columns
   auto index_and_table_columns = std::vector<std::unique_ptr<cudf::column>>{};
   index_and_table_columns.reserve(table->num_columns() + 1);
   index_and_table_columns.push_back(std::move(row_index_column));
   auto table_columns = table->release();
-  // Insert table columns after the index column
   index_and_table_columns.insert(index_and_table_columns.end(),
                                  std::make_move_iterator(table_columns.begin()),
                                  std::make_move_iterator(table_columns.end()));
+
   // Table with the index and table columns
   auto table_with_index = std::make_unique<cudf::table>(std::move(index_and_table_columns));
 
-  // Likewise, prepend the `index` column metadata to the table schema information
+  // Likewise, prepend the `index` column metadata to the schema information
   auto updated_schema_info = std::vector<cudf::io::column_name_info>{};
   updated_schema_info.reserve(metadata.schema_info.size() + 1);
   updated_schema_info.emplace_back("index");
@@ -233,17 +223,16 @@ table_with_metadata read_parquet_and_apply_deletion_vector(
                              std::make_move_iterator(metadata.schema_info.end()));
   metadata.schema_info = std::move(updated_schema_info);
 
-  // If roaring bitmap is nullptr or empty, return the table with index column and the
-  // updated metadata
+  // Roaring bitmap is nullptr or empty, return early
   if (not deletion_vector or not roaring::api::roaring64_bitmap_get_cardinality(deletion_vector)) {
     return table_with_metadata{std::move(table_with_index), std::move(metadata)};
   }
 
-  // Build the row mask column using the host row indices and the deletion (roaring64) vector
+  // Build the row mask column using row indices and the deletion vector
   auto row_mask_column = build_row_mask_column(
     row_indices, deletion_vector, num_rows, stream, cudf::get_current_device_resource_ref());
 
-  // Apply the row mask to the table and return the resultant table along with the updated metadata
+  // Apply the row mask to the table and return the resultant table
   return table_with_metadata{
     cudf::apply_boolean_mask(table_with_index->view(), row_mask_column->view(), stream, mr),
     std::move(metadata)};
