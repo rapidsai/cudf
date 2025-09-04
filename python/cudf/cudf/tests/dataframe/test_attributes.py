@@ -401,3 +401,157 @@ def test_multiindex_index_and_columns():
     pdf.index = mi.to_pandas()
     pdf.columns = mc.to_pandas()
     assert_eq(pdf, gdf)
+
+
+def test_dataframe_column_drop_via_attr():
+    df = cudf.DataFrame({"a": []})
+
+    with pytest.raises(AttributeError):
+        del df.a
+
+    assert tuple(df.columns) == tuple("a")
+
+
+@pytest.mark.parametrize("nelem", [0, 100])
+def test_index_astype(nelem):
+    df = cudf.DataFrame()
+    data = np.asarray(range(nelem), dtype=np.int32)
+    df["a"] = data
+    assert df.index.dtype is np.dtype(np.int64)
+    df.index = df.index.astype(np.float32)
+    assert df.index.dtype is np.dtype(np.float32)
+    df["a"] = df["a"].astype(np.float32)
+    np.testing.assert_equal(df.index.to_numpy(), df["a"].to_numpy())
+    df["b"] = df["a"]
+    df = df.set_index("b")
+    df["a"] = df["a"].astype(np.int16)
+    df.index = df.index.astype(np.int16)
+    np.testing.assert_equal(df.index.to_numpy(), df["a"].to_numpy())
+
+
+def test_dataframe_dtypes():
+    dtypes = pd.Series(
+        [np.int32, np.float32, np.float64], index=["c", "a", "b"]
+    )
+    df = cudf.DataFrame({k: np.ones(10, dtype=v) for k, v in dtypes.items()})
+    assert df.dtypes.equals(dtypes)
+
+
+def test_dataframe_dir_and_getattr():
+    df = cudf.DataFrame(
+        {
+            "a": np.ones(10),
+            "b": np.ones(10),
+            "not an id": np.ones(10),
+            "oop$": np.ones(10),
+        }
+    )
+    o = dir(df)
+    assert {"a", "b"}.issubset(o)
+    assert "not an id" not in o
+    assert "oop$" not in o
+
+    # Getattr works
+    assert df.a.equals(df["a"])
+    assert df.b.equals(df["b"])
+    with pytest.raises(AttributeError):
+        df.not_a_column
+
+
+def test_dataframe_shape():
+    pdf = pd.DataFrame({"a": [0, 1, 2, 3], "b": [0.1, 0.2, None, 0.3]})
+    gdf = cudf.DataFrame.from_pandas(pdf)
+
+    assert pdf.shape == gdf.shape
+
+
+def test_dataframe_shape_empty():
+    pdf = pd.DataFrame()
+    gdf = cudf.DataFrame()
+
+    assert pdf.shape == gdf.shape
+
+
+@pytest.mark.parametrize(
+    "func",
+    [
+        lambda df: df.empty,
+        lambda df: df.x.empty,
+        lambda df: df.x.fillna(123, limit=None, method=None, axis=None),
+        lambda df: df.drop("x", axis=1, errors="raise"),
+    ],
+)
+def test_unary_operators(func):
+    pdf = pd.DataFrame({"x": range(10), "y": range(10)})
+    gdf = cudf.DataFrame({"x": range(10), "y": range(10)})
+    p = func(pdf)
+    g = func(gdf)
+    assert_eq(p, g)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"A": [1, 2, 3], "B": [4, 5, 6]},
+        {"A": [1.0, 2.0, 3.0], "B": [4.0, 5.0, 6.0]},
+        {"A": [1, 2, 3], "B": [1.0, 2.0, 3.0]},
+        {"A": np.float32(np.arange(3)), "B": np.float64(np.arange(3))},
+        pytest.param(
+            {"A": [1, None, 3], "B": [1, 2, None]},
+            marks=pytest.mark.xfail(
+                reason="Nulls not supported by values accessor"
+            ),
+        ),
+        pytest.param(
+            {"A": [None, None, None], "B": [None, None, None]},
+            marks=pytest.mark.xfail(
+                reason="Nulls not supported by values accessor"
+            ),
+        ),
+        {"A": [], "B": []},
+        pytest.param(
+            {"A": [1, 2, 3], "B": ["a", "b", "c"]},
+            marks=pytest.mark.xfail(
+                reason="str or categorical not supported by values accessor"
+            ),
+        ),
+        pytest.param(
+            {"A": pd.Categorical(["a", "b", "c"]), "B": ["d", "e", "f"]},
+            marks=pytest.mark.xfail(
+                reason="str or categorical not supported by values accessor"
+            ),
+        ),
+    ],
+)
+def test_df_values_property(data):
+    pdf = pd.DataFrame.from_dict(data)
+    gdf = cudf.DataFrame.from_pandas(pdf)
+
+    pmtr = pdf.values
+    gmtr = gdf.values.get()
+
+    np.testing.assert_array_equal(pmtr, gmtr)
+
+
+def test_constructor_properties():
+    df = cudf.DataFrame()
+    key1 = "a"
+    key2 = "b"
+    val1 = np.array([123], dtype=np.float64)
+    val2 = np.array([321], dtype=np.float64)
+    df[key1] = val1
+    df[key2] = val2
+
+    # Correct use of _constructor_sliced (for DataFrame)
+    assert_eq(df[key1], df._constructor_sliced(val1, name=key1))
+
+    # Correct use of _constructor_expanddim (for cudf.Series)
+    assert_eq(df, df[key2]._constructor_expanddim({key1: val1, key2: val2}))
+
+    # Incorrect use of _constructor_sliced (Raises for cudf.Series)
+    with pytest.raises(NotImplementedError):
+        df[key1]._constructor_sliced
+
+    # Incorrect use of _constructor_expanddim (Raises for DataFrame)
+    with pytest.raises(NotImplementedError):
+        df._constructor_expanddim
