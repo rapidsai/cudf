@@ -215,7 +215,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> filtered_join_with_set::qu
 
     query_set(probe_iter, contains_map.begin());
   }
-  auto gather_map     = detail::make_zeroed_device_uvector<size_type>(probe.num_rows(), stream, mr);
+  rmm::device_uvector<size_type> gather_map(probe.num_rows(), stream, mr);
   auto gather_map_end = thrust::copy_if(rmm::exec_policy(stream),
                                         thrust::counting_iterator<size_type>(0),
                                         thrust::counting_iterator<size_type>(probe.num_rows()),
@@ -375,10 +375,9 @@ filtered_join::filtered_join(cudf::table_view const& build,
                              set_as_build_table reuse_tbl,
                              double load_factor,
                              rmm::cuda_stream_view stream)
-  : _reuse_tbl{reuse_tbl}
+  : _reuse_tbl{reuse_tbl}, _impl{std::make_unique<cudf::detail::filtered_join_with_set>(
+    build, compare_nulls, load_factor, stream)}
 {
-  _impl = std::make_unique<cudf::detail::filtered_join_with_set>(
-    build, compare_nulls, load_factor, stream);
 }
 
 filtered_join::filtered_join(cudf::table_view const& build,
