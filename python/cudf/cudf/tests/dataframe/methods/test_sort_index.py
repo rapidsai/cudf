@@ -1,5 +1,5 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
-
+import itertools
 
 import numpy as np
 import pandas as pd
@@ -145,3 +145,40 @@ def test_sort_index_axis_1_ignore_index_true_columnaccessor_state_names():
     gdf = cudf.DataFrame([[1, 2, 3]], columns=["b", "a", "c"])
     result = gdf.sort_index(axis=1, ignore_index=True)
     assert result._data.names == tuple(result._data.keys())
+
+
+@pytest.mark.parametrize(
+    "levels",
+    itertools.chain.from_iterable(
+        itertools.permutations(range(3), n) for n in range(1, 4)
+    ),
+    ids=str,
+)
+def test_multiindex_sort_index_partial(levels):
+    df = pd.DataFrame(
+        {
+            "a": [3, 3, 3, 1, 1, 1, 2, 2],
+            "b": [4, 2, 7, -1, 11, -2, 7, 7],
+            "c": [4, 4, 2, 3, 3, 3, 1, 1],
+            "val": [1, 2, 3, 4, 5, 6, 7, 8],
+        }
+    ).set_index(["a", "b", "c"])
+    cdf = cudf.from_pandas(df)
+
+    expect = df.sort_index(level=levels, sort_remaining=True)
+    got = cdf.sort_index(level=levels, sort_remaining=True)
+    assert_eq(expect, got)
+
+
+def test_df_cat_sort_index():
+    df = cudf.DataFrame(
+        {
+            "a": pd.Categorical(list("aababcabbc"), categories=list("abc")),
+            "b": np.arange(10),
+        }
+    )
+
+    got = df.set_index("a").sort_index()
+    expect = df.to_pandas().set_index("a").sort_index()
+
+    assert_eq(got, expect)

@@ -1361,6 +1361,34 @@ def test_timezone_pyarrow_array():
     assert_eq(result, expected)
 
 
+def test_string_ingest(one_dimensional_array_types):
+    expect = ["a", "a", "b", "c", "a"]
+    data = one_dimensional_array_types(expect)
+    got = cudf.Series(data)
+    assert got.dtype == np.dtype("object")
+    assert len(got) == 5
+    for idx, val in enumerate(expect):
+        assert expect[idx] == got[idx]
+
+
+def test_decimal_invalid_precision():
+    with pytest.raises(pa.ArrowInvalid):
+        cudf.Series([10, 20, 30], dtype=cudf.Decimal64Dtype(2, 2))
+
+    with pytest.raises(pa.ArrowInvalid):
+        cudf.Series([decimal.Decimal("300")], dtype=cudf.Decimal64Dtype(2, 1))
+
+
+@pytest.mark.parametrize(
+    "input_obj", [[decimal.Decimal(1), cudf.NA, decimal.Decimal(3)]]
+)
+def test_series_construction_decimals_with_nulls(input_obj):
+    expect = pa.array(input_obj, from_pandas=True)
+    got = cudf.Series(input_obj).to_arrow()
+
+    assert expect.equals(got)
+
+
 @pytest.mark.parametrize(
     "klass", ["Series", "DatetimeIndex", "Index", "CategoricalIndex"]
 )
@@ -1395,3 +1423,81 @@ def test_from_pandas_obj_tz_aware_unsupported(klass):
     pandas_obj = getattr(pd, klass)(tz_aware_data)
     with pytest.raises(NotImplementedError):
         cudf.from_pandas(pandas_obj)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3, 4],
+        ["a", "1", "2", "1", "a"],
+        pd.Series(["a", "1", "22", "1", "aa"]),
+        pd.Series(["a", "1", "22", "1", "aa"], dtype="category"),
+        pd.Series([1, 2, 3, -4], dtype="int64"),
+        pd.Series([1, 2, 3, 4], dtype="uint64"),
+        pd.Series([1, 2.3, 3, 4], dtype="float"),
+        np.asarray([0, 2, 1]),
+        [None, 1, None, 2, None],
+        [],
+    ],
+)
+@pytest.mark.parametrize(
+    "categories",
+    [
+        ["aa", "bb", "cc"],
+        [2, 4, 10, 100],
+        ["a", "b", "c"],
+        ["22", "b", "c"],
+        [],
+    ],
+)
+def test_categorical_creation(data, categories):
+    dtype = pd.CategoricalDtype(categories)
+    expected = pd.Series(data, dtype=dtype)
+    got = cudf.Series(data, dtype=dtype)
+    assert_eq(expected, got)
+
+    got = cudf.Series(data, dtype=cudf.from_pandas(dtype))
+    assert_eq(expected, got)
+
+    expected = pd.Series(data, dtype="category")
+    got = cudf.Series(data, dtype="category")
+    assert_eq(expected, got)
+
+
+@pytest.mark.parametrize("input_obj", [[1, cudf.NA, 3]])
+def test_series_construction_with_nulls_as_category(
+    input_obj, all_supported_types_as_str
+):
+    if all_supported_types_as_str == "category":
+        pytest.skip(f"No {all_supported_types_as_str} scalar.")
+    if all_supported_types_as_str.startswith(
+        "datetime"
+    ) or all_supported_types_as_str.startswith("timedelta"):
+        pytest.skip("Test intended for numeric and string scalars.")
+    dtype = cudf.dtype(all_supported_types_as_str)
+    input_obj = [
+        dtype.type(v) if v is not cudf.NA else cudf.NA for v in input_obj
+    ]
+
+    expect = pd.Series(input_obj, dtype="category")
+    got = cudf.Series(input_obj, dtype="category")
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("scalar", [1, "a", None, 10.2])
+def test_cat_from_scalar(scalar):
+    ps = pd.Series(scalar, dtype="category")
+    gs = cudf.Series(scalar, dtype="category")
+
+    assert_eq(ps, gs)
+
+
+def test_categorical_interval_pandas_roundtrip():
+    expected = cudf.Series(cudf.interval_range(0, 5)).astype("category")
+    result = cudf.Series.from_pandas(expected.to_pandas())
+    assert_eq(result, expected)
+
+    expected = pd.Series(pd.interval_range(0, 5)).astype("category")
+    result = cudf.Series.from_pandas(expected).to_pandas()
+    assert_eq(result, expected)

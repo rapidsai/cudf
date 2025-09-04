@@ -428,6 +428,11 @@ ConfigureNVBench(
 )
 
 # ##################################################################################################
+# * strings experimental benchmark ---------------------------------------------------
+ConfigureNVBench(STRINGS_EXPERIMENTAL_NVBENCH string/experimental/stringview_compare.cu)
+target_link_libraries(STRINGS_EXPERIMENTAL_NVBENCH PRIVATE nanoarrow)
+
+# ##################################################################################################
 # * json benchmark -------------------------------------------------------------------
 ConfigureNVBench(JSON_NVBENCH json/json.cu)
 ConfigureNVBench(FST_NVBENCH io/fst.cu)
