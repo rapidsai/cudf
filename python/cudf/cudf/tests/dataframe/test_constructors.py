@@ -1904,3 +1904,24 @@ def test_numpy_non_contiguous():
 
     gdf = cudf.DataFrame.from_records(rec, index="index")
     assert_eq(aa, gdf["a"].values)
+
+
+def test_from_pandas_series():
+    pdf = pd.DataFrame(
+        {"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}
+    ).set_index(["a", "b"])
+
+    result = cudf.from_pandas(pdf)
+    assert_eq(pdf, result)
+
+    test_pdf = pdf["c"]
+    result = cudf.from_pandas(test_pdf)
+    assert_eq(test_pdf, result)
+
+
+def test_from_pandas_with_multiindex():
+    rng = np.random.default_rng(seed=0)
+    pdf = pd.DataFrame(rng.random(size=(7, 5)))
+    pdf.index = pd.MultiIndex.from_arrays([range(7)])
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(pdf, gdf)

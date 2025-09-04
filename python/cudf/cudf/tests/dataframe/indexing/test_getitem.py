@@ -34,3 +34,11 @@ def test_dataframe_midx_cols_getitem():
     )
     df = df.assign(bools=cudf.Series([True, False], dtype="bool"))
     assert_eq(df["bools"], df.to_pandas()["bools"])
+
+
+def test_multicolumn_item():
+    gdf = cudf.DataFrame({"x": range(10), "y": range(10), "z": range(10)})
+    gdg = gdf.groupby(["x", "y"]).min()
+    gdgT = gdg.T
+    pdgT = gdgT.to_pandas()
+    assert_eq(gdgT[(0, 0)], pdgT[(0, 0)])

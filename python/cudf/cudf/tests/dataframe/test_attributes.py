@@ -367,3 +367,37 @@ def test_index_assignment_no_shallow_copy(index):
     df = cudf.DataFrame(range(1))
     df.index = index
     assert df.index is index
+
+
+def test_multiindex_df_assignment():
+    pdf = pd.DataFrame({"x": [1, 2, 3]})
+    gdf = cudf.from_pandas(pdf)
+    pdf.index = pd.MultiIndex([["a", "b"], ["c", "d"]], [[0, 1, 0], [1, 0, 1]])
+    gdf.index = cudf.MultiIndex(
+        levels=[["a", "b"], ["c", "d"]], codes=[[0, 1, 0], [1, 0, 1]]
+    )
+    assert_eq(pdf, gdf)
+
+
+def test_multiindex_index_and_columns():
+    rng = np.random.default_rng(seed=0)
+    gdf = cudf.DataFrame(
+        {
+            "x": rng.integers(0, 5, 5),
+            "y": rng.integers(0, 5, 5),
+        }
+    )
+    pdf = gdf.to_pandas()
+    mi = cudf.MultiIndex(
+        levels=[[0, 1, 2], [3, 4]],
+        codes=[[0, 0, 1, 1, 2], [0, 1, 0, 1, 1]],
+        names=["x", "y"],
+    )
+    gdf.index = mi
+    mc = cudf.MultiIndex(
+        levels=[["val"], ["mean", "min"]], codes=[[0, 0], [0, 1]]
+    )
+    gdf.columns = mc
+    pdf.index = mi.to_pandas()
+    pdf.columns = mc.to_pandas()
+    assert_eq(pdf, gdf)
