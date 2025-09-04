@@ -17,10 +17,11 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
+from cudf.api.extensions import no_default
 
 # TODO: The `numpy` import is needed for typing purposes during doc builds
 # only, need to figure out why the `np` alias is insufficient then remove.
-from cudf.api.types import is_dtype_equal, is_scalar
+from cudf.api.types import is_dtype_equal, is_scalar, is_string_dtype
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core._internals import copying, sorting
 from cudf.core.abc import Serializable
@@ -403,7 +404,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
     @_performance_tracking
     def astype(
-        self, dtype: dict[Hashable, DtypeObj], copy: bool = False
+        self, dtype: dict[Hashable, DtypeObj], copy: bool | None = None
     ) -> Self:
         casted = (
             col.astype(dtype.get(col_name, col.dtype), copy=copy)
@@ -552,20 +553,56 @@ class Frame(BinaryOperand, Scannable, Serializable):
         module: ModuleType,
         copy: bool,
         dtype: Dtype | None = None,
-        na_value=None,
+        na_value=no_default,
     ) -> cupy.ndarray | numpy.ndarray:
         # Internal function to implement to_cupy and to_numpy, which are nearly
         # identical except for the attribute they access to generate values.
 
         def to_array(
-            col: ColumnBase, dtype: np.dtype
+            col: ColumnBase, to_dtype: np.dtype
         ) -> cupy.ndarray | numpy.ndarray:
-            if na_value is not None:
+            if (
+                col.has_nulls()
+                and dtype is not None
+                and not is_string_dtype(dtype)
+                and na_value is no_default
+            ):
+                raise ValueError(
+                    f"cannot convert to '{dtype}'-dtype NumPy array "
+                    "with missing values. Specify an appropriate 'na_value' "
+                    "for this dtype."
+                )
+            if na_value is not no_default:
                 col = col.fillna(na_value)
+
             if isinstance(col.dtype, cudf.CategoricalDtype):
                 col = col._get_decategorized_column()  # type: ignore[attr-defined]
+
             array = get_array(col)
-            casted_array = module.asarray(array, dtype=dtype)
+
+            if (
+                cudf.get_option("mode.pandas_compatible")
+                and is_pandas_nullable_extension_dtype(col.dtype)
+                and col.dtype.kind in "iuf"
+                and to_dtype is None
+            ):
+                to_dtype = array.dtype
+            if (
+                to_dtype != array.dtype
+                and dtype is None
+                and array.dtype.kind in "f"
+                and col.has_nulls()
+            ):
+                to_dtype = None
+            casted_array = module.asarray(array, dtype=to_dtype)
+            if (
+                col.has_nulls()
+                and dtype is not None
+                and is_string_dtype(dtype)
+            ):
+                casted_array[col.isnull().values_host] = (
+                    cudf.NA if na_value is no_default else na_value
+                )
             if copy and casted_array is array:
                 # Don't double copy after asarray
                 casted_array = casted_array.copy()
@@ -581,29 +618,43 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
         if dtype is None:
             if ncol == 1:
-                dtype = next(self._dtypes)[1]
+                to_dtype = next(self._dtypes)[1]
             else:
-                dtype = find_common_type([dtype for _, dtype in self._dtypes])
+                to_dtype = find_common_type(
+                    [dtype for _, dtype in self._dtypes]
+                )
 
-            if isinstance(dtype, cudf.CategoricalDtype):
-                dtype = dtype.categories.dtype
+            if cudf.get_option(
+                "mode.pandas_compatible"
+            ) and is_pandas_nullable_extension_dtype(to_dtype):
+                to_dtype = getattr(to_dtype, "numpy_dtype", to_dtype)
+                if getattr(to_dtype, "kind", None) == "U":
+                    to_dtype = np.dtype(object)
+            if isinstance(to_dtype, cudf.CategoricalDtype):
+                to_dtype = to_dtype.categories.dtype
 
-            if not isinstance(dtype, numpy.dtype):
+            if not isinstance(to_dtype, numpy.dtype):
                 raise NotImplementedError(
-                    f"{dtype} cannot be exposed as an array"
+                    f"{to_dtype} cannot be exposed as an array"
                 )
 
         if self.ndim == 1:
-            return to_array(self._columns[0], dtype)
+            return to_array(
+                self._columns[0], to_dtype if dtype is None else dtype
+            )
         else:
             matrix = module.empty(
-                shape=(len(self), ncol), dtype=dtype, order="F"
+                shape=(len(self), ncol),
+                dtype=to_dtype if dtype is None else dtype,
+                order="F",
             )
             for i, col in enumerate(self._columns):
                 # TODO: col.values may fail if there is nullable data or an
                 # unsupported dtype. We may want to catch and provide a more
                 # suitable error.
-                matrix[:, i] = to_array(col, dtype)
+                matrix[:, i] = to_array(
+                    col, to_dtype if dtype is None else dtype
+                )
             return matrix
 
     @_performance_tracking
@@ -735,7 +786,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         self,
         dtype: Dtype | None = None,
         copy: bool = True,
-        na_value=None,
+        na_value=no_default,
     ) -> numpy.ndarray:
         """Convert the Frame to a NumPy array.
 
@@ -1466,10 +1517,11 @@ class Frame(BinaryOperand, Scannable, Serializable):
             values = [*values._columns]
         if len(values) != self._num_columns:
             raise ValueError("Mismatch number of columns to search for.")
+
         if cudf.get_option("mode.pandas_compatible"):
             if any(
-                col.has_nulls()
-                and is_pandas_nullable_extension_dtype(col.dtype)
+                is_pandas_nullable_extension_dtype(col.dtype)
+                and col.has_nulls(include_nan=True)
                 for col in self._columns
             ):
                 raise ValueError(
