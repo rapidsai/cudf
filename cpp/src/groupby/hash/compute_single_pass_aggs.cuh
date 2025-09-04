@@ -64,17 +64,8 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
     auto const max_blocks    = std::min(max_blocks_mapping, max_blocks_aggs);
     auto const max_grid_size = max_blocks * cudf::detail::num_multiprocessors();
     auto const num_blocks    = cudf::util::div_rounding_up_safe(num_rows, GROUPBY_BLOCK_SIZE);
-
-    std::string const s = "Exception: max block mapping: " + std::to_string(max_blocks_mapping) +
-                          ", max block aggs: " + std::to_string(max_blocks_aggs) +
-                          ", max grid size: " + std::to_string(max_grid_size) +
-                          ", num blocks: " + std::to_string(num_blocks) + "\n";
-
-    if (num_blocks <= 0 || max_grid_size <= 0) { throw std::runtime_error(s.c_str()); }
-
     return std::min(max_grid_size, num_blocks);
   }();
-
   // Just to make sure everything is fine, since zero grid_size is zero only if the input is empty,
   // which should have already been handled before reaching here.
   CUDF_EXPECTS(grid_size > 0, "Invalid grid size computation.");
