@@ -96,16 +96,16 @@ struct gather_mask {
 
 auto filtered_join::compute_bucket_storage_size(cudf::table_view tbl, double load_factor)
 {
-  return std::max(
-    {static_cast<cudf::size_type>(
-       cuco::make_valid_extent<primitive_probing_scheme, storage_type, cudf::size_type>(
-         tbl.num_rows(), load_factor)),
-     static_cast<cudf::size_type>(
-       cuco::make_valid_extent<nested_probing_scheme, storage_type, cudf::size_type>(tbl.num_rows(),
-                                                                                     load_factor)),
-     static_cast<cudf::size_type>(
-       cuco::make_valid_extent<simple_probing_scheme, storage_type, cudf::size_type>(
-         tbl.num_rows(), load_factor))});
+  auto const size_with_primitive_probe = static_cast<cudf::size_type>(
+    cuco::make_valid_extent<primitive_probing_scheme, storage_type, cudf::size_type>(tbl.num_rows(),
+                                                                                     load_factor));
+  auto const size_with_nested_probe = static_cast<cudf::size_type>(
+    cuco::make_valid_extent<nested_probing_scheme, storage_type, cudf::size_type>(tbl.num_rows(),
+                                                                                  load_factor));
+  auto const size_with_simple_probe = static_cast<cudf::size_type>(
+    cuco::make_valid_extent<simple_probing_scheme, storage_type, cudf::size_type>(tbl.num_rows(),
+                                                                                  load_factor));
+  return std::max({size_with_primitive_probe, size_with_nested_probe, size_with_simple_probe});
 }
 
 template <int32_t CGSize, typename Ref>
@@ -375,8 +375,9 @@ filtered_join::filtered_join(cudf::table_view const& build,
                              set_as_build_table reuse_tbl,
                              double load_factor,
                              rmm::cuda_stream_view stream)
-  : _reuse_tbl{reuse_tbl}, _impl{std::make_unique<cudf::detail::filtered_join_with_set>(
-    build, compare_nulls, load_factor, stream)}
+  : _reuse_tbl{reuse_tbl},
+    _impl{std::make_unique<cudf::detail::filtered_join_with_set>(
+      build, compare_nulls, load_factor, stream)}
 {
 }
 
