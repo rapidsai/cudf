@@ -441,7 +441,7 @@ TYPED_TEST(Roaring64BitmapBasicsTest, TestRoaring64BitmapSerialization)
 // Base test fixture for API tests
 struct ParquetExperimentalApisTest : public cudf::test::BaseFixture {};
 
-TEST_F(ParquetExperimentalApisTest, TestDeletionVectors)
+TEST_F(ParquetExperimentalApisTest, TestDeletionVectorsNoRowIndexColumn)
 {
   auto constexpr num_rows             = 50'000;
   auto constexpr num_row_groups       = 5;
@@ -461,92 +461,106 @@ TEST_F(ParquetExperimentalApisTest, TestDeletionVectors)
                     .build();
   cudf::io::write_parquet(out_opts);
 
-  // Test read parquet with a simple row index column and apply deletion vector
+  auto expected_row_indices = thrust::host_vector<size_t>(num_rows);
+  std::iota(expected_row_indices.begin(), expected_row_indices.end(), size_t{0});
+
+  // Build the expected row index column
+  auto expected_row_index_column =
+    build_column_from_host_data<size_t>(expected_row_indices, cudf::type_id::UINT64, stream, mr);
+
+  // Construct a roaring64 deletion vector and corresponding row mask
+  auto [deletion_vector, input_row_mask] =
+    build_deletion_vector(num_rows, deletion_probability, expected_row_indices);
+
+  test_read_parquet_and_apply_deletion_vector(parquet_buffer,
+                                              deletion_vector,
+                                              {},
+                                              {},
+                                              input_table->view(),
+                                              input_row_mask,
+                                              expected_row_index_column->view(),
+                                              stream,
+                                              mr);
+
+  // Free the deletion vector
+  roaring64_bitmap_free(deletion_vector);
+}
+
+TEST_F(ParquetExperimentalApisTest, TestDeletionVectorsCustomRowIndexColumn)
+{
+  auto constexpr num_rows             = 50'000;
+  auto constexpr num_row_groups       = 5;
+  auto constexpr num_columns          = 8;
+  auto constexpr include_validity     = false;
+  auto constexpr deletion_probability = 0.4;  ///< 40% of the rows are deleted
+  auto const stream                   = cudf::get_default_stream();
+  auto const mr                       = cudf::get_current_device_resource_ref();
+
+  auto input_table = create_random_fixed_table<float>(num_columns, num_rows, include_validity);
+
+  // Write table to parquet buffer
+  auto parquet_buffer = std::vector<char>{};
+  auto out_opts = cudf::io::parquet_writer_options::builder(cudf::io::sink_info(&parquet_buffer),
+                                                            input_table->view())
+                    .row_group_size_rows(num_rows / num_row_groups)
+                    .build();
+  cudf::io::write_parquet(out_opts);
+
+  std::mt19937 engine{0xf00d};
+
+  // Row index offsets for each row group
+  auto row_group_offsets = thrust::host_vector<size_t>{static_cast<size_t>(std::llround(2e9)),
+                                                       static_cast<size_t>(std::llround(2.5e9)),
+                                                       static_cast<size_t>(std::llround(3e9)),
+                                                       static_cast<size_t>(std::llround(3.5e9)),
+                                                       static_cast<size_t>(std::llround(4e9))};
+
+  // Split the `num_rows` into `num_row_groups` spans
+  auto row_group_splits = std::vector<cudf::size_type>(num_row_groups - 1);
   {
-    auto expected_row_indices = thrust::host_vector<size_t>(num_rows);
-    std::iota(expected_row_indices.begin(), expected_row_indices.end(), size_t{0});
-
-    // Build the expected row index column
-    auto expected_row_index_column =
-      build_column_from_host_data<size_t>(expected_row_indices, cudf::type_id::UINT64, stream, mr);
-
-    // Construct a roaring64 deletion vector and corresponding row mask
-    auto [deletion_vector, input_row_mask] =
-      build_deletion_vector(num_rows, deletion_probability, expected_row_indices);
-
-    test_read_parquet_and_apply_deletion_vector(parquet_buffer,
-                                                deletion_vector,
-                                                {},
-                                                {},
-                                                input_table->view(),
-                                                input_row_mask,
-                                                expected_row_index_column->view(),
-                                                stream,
-                                                mr);
-
-    // Free the deletion vector
-    roaring64_bitmap_free(deletion_vector);
+    std::uniform_int_distribution<cudf::size_type> dist{1, num_rows};
+    std::generate(row_group_splits.begin(), row_group_splits.end(), [&]() { return dist(engine); });
+    std::sort(row_group_splits.begin(), row_group_splits.end());
   }
 
-  // Test read parquet with a custom row index column and apply deletion vector
+  // Number of rows in each row group span
+  auto row_group_num_rows = std::vector<cudf::size_type>{};
   {
-    std::mt19937 engine{0xf00d};
-
-    // Row index offsets for each row group
-    auto row_group_offsets = thrust::host_vector<size_t>{static_cast<size_t>(std::llround(2e9)),
-                                                         static_cast<size_t>(std::llround(2.5e9)),
-                                                         static_cast<size_t>(std::llround(3e9)),
-                                                         static_cast<size_t>(std::llround(3.5e9)),
-                                                         static_cast<size_t>(std::llround(4e9))};
-
-    // Split the `num_rows` into `num_row_groups` spans
-    auto row_group_splits = std::vector<cudf::size_type>(num_row_groups - 1);
-    {
-      std::uniform_int_distribution<cudf::size_type> dist{1, num_rows};
-      std::generate(
-        row_group_splits.begin(), row_group_splits.end(), [&]() { return dist(engine); });
-      std::sort(row_group_splits.begin(), row_group_splits.end());
-    }
-
-    // Number of rows in each row group span
-    auto row_group_num_rows = std::vector<cudf::size_type>{};
-    {
-      row_group_num_rows.reserve(num_row_groups);
-      auto previous_split = cudf::size_type{0};
-      std::transform(row_group_splits.begin(),
-                     row_group_splits.end(),
-                     std::back_inserter(row_group_num_rows),
-                     [&](auto current_split) {
-                       auto current_split_size = current_split - previous_split;
-                       previous_split          = current_split;
-                       return current_split_size;
-                     });
-      row_group_num_rows.push_back(num_rows - row_group_splits.back());
-    }
-
-    // Build the host vector of expected row indices
-    auto expected_row_indices =
-      build_expected_row_indices(row_group_offsets, row_group_num_rows, num_rows);
-
-    // Build the expected row index column
-    auto expected_row_index_column =
-      build_column_from_host_data<size_t>(expected_row_indices, cudf::type_id::UINT64, stream, mr);
-
-    // Construct a roaring64 deletion vector and corresponding row mask
-    auto [deletion_vector, input_row_mask] =
-      build_deletion_vector(num_rows, deletion_probability, expected_row_indices);
-
-    test_read_parquet_and_apply_deletion_vector(parquet_buffer,
-                                                deletion_vector,
-                                                row_group_offsets,
-                                                row_group_num_rows,
-                                                input_table->view(),
-                                                input_row_mask,
-                                                expected_row_index_column->view(),
-                                                stream,
-                                                mr);
-
-    // Free the deletion vector
-    roaring64_bitmap_free(deletion_vector);
+    row_group_num_rows.reserve(num_row_groups);
+    auto previous_split = cudf::size_type{0};
+    std::transform(row_group_splits.begin(),
+                   row_group_splits.end(),
+                   std::back_inserter(row_group_num_rows),
+                   [&](auto current_split) {
+                     auto current_split_size = current_split - previous_split;
+                     previous_split          = current_split;
+                     return current_split_size;
+                   });
+    row_group_num_rows.push_back(num_rows - row_group_splits.back());
   }
+
+  // Build the host vector of expected row indices
+  auto expected_row_indices =
+    build_expected_row_indices(row_group_offsets, row_group_num_rows, num_rows);
+
+  // Build the expected row index column
+  auto expected_row_index_column =
+    build_column_from_host_data<size_t>(expected_row_indices, cudf::type_id::UINT64, stream, mr);
+
+  // Construct a roaring64 deletion vector and corresponding row mask
+  auto [deletion_vector, input_row_mask] =
+    build_deletion_vector(num_rows, deletion_probability, expected_row_indices);
+
+  test_read_parquet_and_apply_deletion_vector(parquet_buffer,
+                                              deletion_vector,
+                                              row_group_offsets,
+                                              row_group_num_rows,
+                                              input_table->view(),
+                                              input_row_mask,
+                                              expected_row_index_column->view(),
+                                              stream,
+                                              mr);
+
+  // Free the deletion vector
+  roaring64_bitmap_free(deletion_vector);
 }
