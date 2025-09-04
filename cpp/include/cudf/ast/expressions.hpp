@@ -43,8 +43,8 @@ namespace row_ir {
 struct node;
 
 /**
-* @brief A converter that converts AST expressions to IR nodes and CUDA UDFs.
-*/
+ * @brief A converter that converts AST expressions to IR nodes and CUDA UDFs.
+ */
 struct ast_converter;
 
 }  // namespace row_ir
@@ -301,9 +301,9 @@ class literal : public expression {
   std::reference_wrapper<expression const> accept(
     detail::expression_transformer& visitor) const override;
 
-  /** 
-  * @copydoc expression::accept
-  */
+  /**
+   * @copydoc expression::accept
+   */
   [[nodiscard]] std::unique_ptr<cudf::detail::row_ir::node> accept(
     cudf::detail::row_ir::ast_converter& visitor) const override;
 
@@ -414,8 +414,8 @@ class column_reference : public expression {
   }
 
   /**
-  * @copydoc expression::accept
-  */
+   * @copydoc expression::accept
+   */
   [[nodiscard]] std::unique_ptr<cudf::detail::row_ir::node> accept(
     cudf::detail::row_ir::ast_converter& visitor) const override;
 
@@ -486,8 +486,8 @@ class operation : public expression {
                                        rmm::cuda_stream_view stream) const override;
 
   /**
-  * @copydoc expression::accept
-  */
+   * @copydoc expression::accept
+   */
   [[nodiscard]] std::unique_ptr<cudf::detail::row_ir::node> accept(
     cudf::detail::row_ir::ast_converter& visitor) const override;
 
@@ -534,9 +534,9 @@ class column_name_reference : public expression {
     return true;
   }
 
-  /** 
-  * @copydoc expression::accept
-  */
+  /**
+   * @copydoc expression::accept
+   */
   [[nodiscard]] std::unique_ptr<cudf::detail::row_ir::node> accept(
     cudf::detail::row_ir::ast_converter& visitor) const override;
 
