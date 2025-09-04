@@ -121,7 +121,17 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
 
   // Maps from each row to the index of its corresponding aggregation result.
   // This is only used when there are fallback blocks.
-  auto target_indices = rmm::device_uvector<size_type>(num_fallback_blocks ? num_rows : 0, stream);
+  auto target_indices = [&] {
+    auto target_indices =
+      rmm::device_uvector<size_type>(num_fallback_blocks ? num_rows : 0, stream);
+    if (num_fallback_blocks) {
+      thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
+                                 target_indices.begin(),
+                                 target_indices.end(),
+                                 cudf::detail::CUDF_SIZE_TYPE_SENTINEL);
+    }
+    return target_indices;
+  }();
 
   if (num_fallback_blocks) {
     // We compute number of jumping steps when using all blocks (`num_strides`).
