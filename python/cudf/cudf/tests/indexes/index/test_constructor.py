@@ -47,3 +47,13 @@ def test_infer_timedelta_index(data, timedelta_types_as_str):
     pdi = gdi.to_pandas()
 
     assert_eq(pdi, gdi)
+
+
+def test_categorical_index_with_dtype():
+    dtype = cudf.CategoricalDtype(categories=["a", "z", "c"])
+    gi = cudf.Index(["z", "c", "a"], dtype=dtype)
+    pi = pd.Index(["z", "c", "a"], dtype=dtype.to_pandas())
+
+    assert_eq(gi, pi)
+    assert_eq(gi.dtype, pi.dtype)
+    assert_eq(gi.dtype.categories, pi.dtype.categories)
