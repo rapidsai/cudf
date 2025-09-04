@@ -300,7 +300,6 @@ public final class MemoryCleaner {
 
       // check the remaining references
       for (CleanerWeakReference cwr : MemoryCleaner.all.values()) {
-        log.error("my debug: remaining reference found " + cwr.cleaner.id);
         cwr.clean();
       }
     }
