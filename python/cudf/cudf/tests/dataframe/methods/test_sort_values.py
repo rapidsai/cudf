@@ -218,3 +218,13 @@ def test_sort_values_datetime():
     s_gdf = gdf.sort_values(by="date")
 
     assert_eq(s_df, s_gdf)
+
+
+def test_dataframe_loc_duplicate_index_scalar():
+    pdf = pd.DataFrame({"a": [1, 2, 3, 4, 5]}, index=[1, 2, 1, 4, 2])
+    gdf = cudf.DataFrame.from_pandas(pdf)
+
+    pdf_sorted = pdf.sort_values(by=list(pdf.columns), axis=0)
+    gdf_sorted = gdf.sort_values(by=list(gdf.columns), axis=0)
+
+    assert_eq(pdf_sorted, gdf_sorted)
