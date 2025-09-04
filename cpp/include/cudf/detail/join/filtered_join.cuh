@@ -168,6 +168,11 @@ class filtered_join {
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) = 0;
 
+  /**
+   * Virtual abstract base class destructor
+   */
+  virtual ~filtered_join() = default;
+
  protected:
   // Key type used in the hash table
   using key = cuco::pair<hash_value_type, lhs_index_type>;
