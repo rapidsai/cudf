@@ -1,5 +1,6 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
 
+import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
@@ -238,3 +239,29 @@ def test_string_slice_with_mask():
     assert_eq(actual._column.null_count, expected._column.null_count)
 
     assert_eq(actual, expected)
+
+
+def test_categorical_masking():
+    """
+    Test common operation for getting a all rows that matches a certain
+    category.
+    """
+    cat = pd.Categorical(["a", "a", "b", "c", "a"], categories=["a", "b", "c"])
+    pdsr = pd.Series(cat)
+    sr = cudf.Series(cat)
+
+    # check scalar comparison
+    expect_matches = pdsr == "a"
+    got_matches = sr == "a"
+
+    np.testing.assert_array_equal(
+        expect_matches.values, got_matches.to_numpy()
+    )
+
+    # mask series
+    expect_masked = pdsr[expect_matches]
+    got_masked = sr[got_matches]
+
+    assert len(expect_masked) == len(got_masked)
+    assert got_masked.null_count == 0
+    assert_eq(got_masked, expect_masked)

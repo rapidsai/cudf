@@ -856,3 +856,29 @@ def test_categorical_binary_add():
         lfunc_args_and_kwargs=([pdsr, pdsr],),
         rfunc_args_and_kwargs=([sr, sr],),
     )
+
+
+def test_cat_series_binop_error():
+    data_a = pd.Categorical(list("aababcabbc"), categories=list("abc"))
+    data_b = np.arange(len(data_a))
+
+    pd_ser_a = pd.Series(data_a)
+    pd_ser_b = pd.Series(data_b)
+    gdf_ser_a = cudf.Series(data_a)
+    gdf_ser_b = cudf.Series(data_b)
+
+    # lhs is categorical
+    assert_exceptions_equal(
+        lfunc=operator.add,
+        rfunc=operator.add,
+        lfunc_args_and_kwargs=([pd_ser_a, pd_ser_b],),
+        rfunc_args_and_kwargs=([gdf_ser_a, gdf_ser_b],),
+    )
+
+    # lhs is numerical
+    assert_exceptions_equal(
+        lfunc=operator.add,
+        rfunc=operator.add,
+        lfunc_args_and_kwargs=([pd_ser_b, pd_ser_a],),
+        rfunc_args_and_kwargs=([gdf_ser_b, gdf_ser_a],),
+    )
