@@ -146,7 +146,9 @@ flatten_single_pass_aggs(host_span<aggregation_request const> requests,
     for (auto const& agg : agg_v) {
       groupby_simple_aggregations_collector collector;
       auto spass_aggs = agg->get_simple_aggregations(values_type, collector);
-      if (spass_aggs.size() > 1 || spass_aggs.front()->is_equal(*agg)) { has_compound_aggs = true; }
+      if (spass_aggs.size() > 1 || !spass_aggs.front()->is_equal(*agg)) {
+        has_compound_aggs = true;
+      }
 
       for (auto& agg_s : spass_aggs) {
         insert_agg(request.values, std::move(agg_s));
