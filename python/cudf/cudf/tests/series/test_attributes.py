@@ -207,6 +207,23 @@ def test_axes(data):
 
 
 @pytest.mark.parametrize(
+    "ps",
+    [
+        pd.Series(dtype="float64"),
+        pd.Series(index=[100, 10, 1, 0], dtype="float64"),
+        pd.Series([], dtype="float64"),
+        pd.Series(["a", "b", "c", "d"]),
+        pd.Series(["a", "b", "c", "d"], index=[0, 1, 10, 11]),
+    ],
+)
+def test_series_empty(ps):
+    ps = ps
+    gs = cudf.from_pandas(ps)
+
+    assert_eq(ps.empty, gs.empty)
+
+
+@pytest.mark.parametrize(
     "data",
     [
         [1, 2, 3],

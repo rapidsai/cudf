@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,18 +22,16 @@ namespace detail {
 template std::size_t launch_compute_mixed_join_output_size<true>(
   table_device_view left_table,
   table_device_view right_table,
-  table_device_view probe,
-  table_device_view build,
-  row_hash const hash_probe,
-  row_equality const equality_probe,
-  join_kind const join_type,
-  cudf::detail::mixed_multimap_type::device_view hash_table_view,
+  join_kind join_type,
+  row_equality equality_probe,
+  cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
+  cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
+  cuda::std::pair<cudf::size_type, cudf::size_type> const* hash_indices,
   ast::detail::expression_device_view device_expression_data,
-  bool const swap_tables,
-  cudf::device_span<cudf::size_type> matches_per_row,
-  detail::grid_1d const config,
+  bool swap_tables,
+  detail::grid_1d const& config,
   int64_t shmem_size_per_block,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);
+  rmm::cuda_stream_view stream);
+
 }  // namespace detail
 }  // namespace cudf
