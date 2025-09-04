@@ -2217,3 +2217,647 @@ def test_series_concat_existing_buffers():
     np.testing.assert_equal(
         gs.to_numpy(), np.hstack([a6.to_numpy(), a5.to_numpy()])
     )
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        pd.DataFrame(),
+        pd.DataFrame([[1, 2], [3, 4]], columns=list("AB")),
+        pd.DataFrame([[1, 2], [3, 4]], columns=list("AB"), index=[10, 20]),
+        pd.DataFrame([[1, 2], [3, 4]], columns=list("AB"), index=[7, 8]),
+        pd.DataFrame(
+            {
+                "a": [315.3324, 3243.32432, 3232.332, -100.32],
+                "z": [0.3223, 0.32, 0.0000232, 0.32224],
+            }
+        ),
+        pd.DataFrame(
+            {
+                "a": [315.3324, 3243.32432, 3232.332, -100.32],
+                "z": [0.3223, 0.32, 0.0000232, 0.32224],
+            },
+            index=[7, 20, 11, 9],
+        ),
+        pd.DataFrame({"l": [10]}),
+        pd.DataFrame({"l": [10]}, index=[100]),
+        pd.DataFrame({"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
+        pd.DataFrame(
+            {"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]},
+            index=[100, 200, 300, 400, 500, 0],
+        ),
+        pd.DataFrame({"first_col": [], "second_col": [], "third_col": []}),
+    ],
+)
+@pytest.mark.parametrize(
+    "other",
+    [
+        [[1, 2], [10, 100]],
+        [[1, 2, 10, 100, 0.1, 0.2, 0.0021]],
+        [[]],
+        [[], [], [], []],
+        [[0.23, 0.00023, -10.00, 100, 200, 1000232, 1232.32323]],
+    ],
+)
+def test_dataframe_concat_lists(df, other, sort, ignore_index):
+    pdf = df
+    other_pd = [pd.DataFrame(o) for o in other]
+
+    gdf = cudf.from_pandas(df)
+    other_gd = [cudf.from_pandas(o) for o in other_pd]
+
+    with _hide_concat_empty_dtype_warning():
+        expected = pd.concat(
+            [pdf, *other_pd], sort=sort, ignore_index=ignore_index
+        )
+        actual = cudf.concat(
+            [gdf, *other_gd], sort=sort, ignore_index=ignore_index
+        )
+
+    if expected.shape != df.shape:
+        assert_eq(
+            expected.fillna(-1),
+            actual.fillna(-1),
+            check_dtype=False,
+            check_column_type=not gdf.empty,
+        )
+    else:
+        assert_eq(
+            expected,
+            actual,
+            check_index_type=not gdf.empty,
+            check_column_type=len(gdf.columns) != 0,
+        )
+
+
+def test_dataframe_concat_series_without_name():
+    df = cudf.DataFrame({"a": [1, 2, 3]})
+    pdf = df.to_pandas()
+    gs = cudf.Series([1, 2, 3])
+    ps = gs.to_pandas()
+
+    assert_eq(pd.concat([pdf, ps]), cudf.concat([df, gs]))
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        pd.DataFrame(),
+        pd.DataFrame(index=[10, 20, 30]),
+        pd.DataFrame({"first_col": [], "second_col": [], "third_col": []}),
+        pd.DataFrame([[1, 2], [3, 4]], columns=list("AB")),
+        pd.DataFrame([[1, 2], [3, 4]], columns=list("AB"), index=[10, 20]),
+        pd.DataFrame([[1, 2], [3, 4]], columns=list("AB"), index=[7, 8]),
+        pd.DataFrame(
+            {
+                "a": [315.3324, 3243.32432, 3232.332, -100.32],
+                "z": [0.3223, 0.32, 0.0000232, 0.32224],
+            }
+        ),
+        pd.DataFrame(
+            {
+                "a": [315.3324, 3243.32432, 3232.332, -100.32],
+                "z": [0.3223, 0.32, 0.0000232, 0.32224],
+            },
+            index=[7, 20, 11, 9],
+        ),
+        pd.DataFrame({"l": [10]}),
+        pd.DataFrame({"l": [10]}, index=[100]),
+        pd.DataFrame({"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
+        pd.DataFrame(
+            {"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]},
+            index=[100, 200, 300, 400, 500, 0],
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "other",
+    [
+        [pd.DataFrame([[5, 6], [7, 8]], columns=list("AB"))],
+        [
+            pd.DataFrame([[5, 6], [7, 8]], columns=list("AB")),
+            pd.DataFrame([[5, 6], [7, 8]], columns=list("BD")),
+            pd.DataFrame([[5, 6], [7, 8]], columns=list("DE")),
+        ],
+        [pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()],
+        [
+            pd.DataFrame(
+                {"c": [10, 11, 22, 33, 44, 100]}, index=[7, 8, 9, 10, 11, 20]
+            ),
+            pd.DataFrame(),
+            pd.DataFrame(),
+            pd.DataFrame([[5, 6], [7, 8]], columns=list("AB")),
+        ],
+        [
+            pd.DataFrame({"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
+            pd.DataFrame({"l": [10]}),
+            pd.DataFrame({"l": [10]}, index=[200]),
+        ],
+        [pd.DataFrame([]), pd.DataFrame([], index=[100])],
+        [
+            pd.DataFrame([]),
+            pd.DataFrame([], index=[100]),
+            pd.DataFrame({"first_col": [], "second_col": [], "third_col": []}),
+        ],
+        [
+            pd.DataFrame(
+                {
+                    "a": [315.3324, 3243.32432, 3232.332, -100.32],
+                    "z": [0.3223, 0.32, 0.0000232, 0.32224],
+                }
+            ),
+            pd.DataFrame(
+                {
+                    "a": [315.3324, 3243.32432, 3232.332, -100.32],
+                    "z": [0.3223, 0.32, 0.0000232, 0.32224],
+                },
+                index=[0, 100, 200, 300],
+            ),
+        ],
+        [
+            pd.DataFrame(
+                {
+                    "a": [315.3324, 3243.32432, 3232.332, -100.32],
+                    "z": [0.3223, 0.32, 0.0000232, 0.32224],
+                },
+                index=[0, 100, 200, 300],
+            ),
+        ],
+        [
+            pd.DataFrame(
+                {
+                    "a": [315.3324, 3243.32432, 3232.332, -100.32],
+                    "z": [0.3223, 0.32, 0.0000232, 0.32224],
+                },
+                index=[0, 100, 200, 300],
+            ),
+            pd.DataFrame(
+                {
+                    "a": [315.3324, 3243.32432, 3232.332, -100.32],
+                    "z": [0.3223, 0.32, 0.0000232, 0.32224],
+                },
+                index=[0, 100, 200, 300],
+            ),
+        ],
+        [
+            pd.DataFrame(
+                {
+                    "a": [315.3324, 3243.32432, 3232.332, -100.32],
+                    "z": [0.3223, 0.32, 0.0000232, 0.32224],
+                },
+                index=[0, 100, 200, 300],
+            ),
+            pd.DataFrame(
+                {
+                    "a": [315.3324, 3243.32432, 3232.332, -100.32],
+                    "z": [0.3223, 0.32, 0.0000232, 0.32224],
+                },
+                index=[0, 100, 200, 300],
+            ),
+            pd.DataFrame({"first_col": [], "second_col": [], "third_col": []}),
+        ],
+    ],
+)
+def test_dataframe_concat_dataframe_lists(df, other, sort, ignore_index):
+    pdf = df
+    other_pd = other
+
+    gdf = cudf.from_pandas(df)
+    other_gd = [cudf.from_pandas(o) for o in other]
+
+    with _hide_concat_empty_dtype_warning():
+        expected = pd.concat(
+            [pdf, *other_pd], sort=sort, ignore_index=ignore_index
+        )
+        actual = cudf.concat(
+            [gdf, *other_gd], sort=sort, ignore_index=ignore_index
+        )
+
+    # In some cases, Pandas creates an empty Index([], dtype="object") for
+    # columns whereas cudf creates a RangeIndex(0, 0).
+    check_column_type = (
+        False if len(expected.columns) == len(df.columns) == 0 else True
+    )
+
+    if expected.shape != df.shape:
+        assert_eq(
+            expected.fillna(-1),
+            actual.fillna(-1),
+            check_dtype=False,
+            check_column_type=check_column_type,
+        )
+    else:
+        assert_eq(
+            expected,
+            actual,
+            check_index_type=not gdf.empty,
+            check_column_type=check_column_type,
+        )
+
+
+def test_dataframe_concat_series_mixed_index():
+    df = cudf.DataFrame({"first": [], "d": []})
+    pdf = df.to_pandas()
+
+    sr = cudf.Series([1, 2, 3, 4])
+    psr = sr.to_pandas()
+
+    assert_eq(
+        cudf.concat([df, sr], ignore_index=True),
+        pd.concat([pdf, psr], ignore_index=True),
+        check_dtype=False,
+    )
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        pd.DataFrame(),
+        pd.DataFrame(index=[10, 20, 30]),
+        pd.DataFrame({12: [], 22: []}),
+        pd.DataFrame([[1, 2], [3, 4]], columns=[10, 20]),
+        pd.DataFrame([[1, 2], [3, 4]], columns=[0, 1], index=[10, 20]),
+        pd.DataFrame([[1, 2], [3, 4]], columns=[1, 0], index=[7, 8]),
+        pd.DataFrame(
+            {
+                23: [315.3324, 3243.32432, 3232.332, -100.32],
+                33: [0.3223, 0.32, 0.0000232, 0.32224],
+            }
+        ),
+        pd.DataFrame(
+            {
+                0: [315.3324, 3243.32432, 3232.332, -100.32],
+                1: [0.3223, 0.32, 0.0000232, 0.32224],
+            },
+            index=[7, 20, 11, 9],
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "other",
+    [
+        pd.Series([10, 11, 23, 234, 13]),
+        pd.Series([10, 11, 23, 234, 13], index=[11, 12, 13, 44, 33]),
+        {1: 1},
+        {0: 10, 1: 100, 2: 102},
+    ],
+)
+def test_dataframe_concat_series(df, other, sort):
+    pdf = df
+    gdf = cudf.from_pandas(df)
+
+    if isinstance(other, dict):
+        other_pd = pd.Series(other)
+    else:
+        other_pd = other
+    other_gd = cudf.from_pandas(other_pd)
+
+    expected = pd.concat([pdf, other_pd], ignore_index=True, sort=sort)
+    actual = cudf.concat([gdf, other_gd], ignore_index=True, sort=sort)
+
+    if expected.shape != df.shape:
+        # Ignore the column type comparison because pandas incorrectly
+        # returns pd.Index([1, 2, 3], dtype="object") instead
+        # of pd.Index([1, 2, 3], dtype="int64")
+        assert_eq(
+            expected.fillna(-1),
+            actual.fillna(-1),
+            check_dtype=False,
+            check_column_type=False,
+            check_index_type=True,
+        )
+    else:
+        assert_eq(expected, actual, check_index_type=not gdf.empty)
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        pd.DataFrame(),
+        pd.DataFrame(index=[10, 20, 30]),
+        pd.DataFrame({"first_col": [], "second_col": [], "third_col": []}),
+        pd.DataFrame([[1, 2], [3, 4]], columns=list("AB")),
+        pd.DataFrame([[1, 2], [3, 4]], columns=list("AB"), index=[10, 20]),
+        pd.DataFrame([[1, 2], [3, 4]], columns=list("AB"), index=[7, 8]),
+        pd.DataFrame(
+            {
+                "a": [315.3324, 3243.32432, 3232.332, -100.32],
+                "z": [0.3223, 0.32, 0.0000232, 0.32224],
+            }
+        ),
+        pd.DataFrame(
+            {
+                "a": [315.3324, 3243.32432, 3232.332, -100.32],
+                "z": [0.3223, 0.32, 0.0000232, 0.32224],
+            },
+            index=[7, 20, 11, 9],
+        ),
+        pd.DataFrame({"l": [10]}),
+        pd.DataFrame({"l": [10]}, index=[100]),
+        pd.DataFrame({"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
+        pd.DataFrame(
+            {"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]},
+            index=[100, 200, 300, 400, 500, 0],
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "other",
+    [
+        pd.DataFrame([[5, 6], [7, 8]], columns=list("AB")),
+        pd.DataFrame([[5, 6], [7, 8]], columns=list("BD")),
+        pd.DataFrame([[5, 6], [7, 8]], columns=list("DE")),
+        pd.DataFrame(),
+        pd.DataFrame(
+            {"c": [10, 11, 22, 33, 44, 100]}, index=[7, 8, 9, 10, 11, 20]
+        ),
+        pd.DataFrame({"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
+        pd.DataFrame({"l": [10]}),
+        pd.DataFrame({"l": [10]}, index=[200]),
+        pd.DataFrame([]),
+        pd.DataFrame({"first_col": [], "second_col": [], "third_col": []}),
+        pd.DataFrame([], index=[100]),
+        pd.DataFrame(
+            {
+                "a": [315.3324, 3243.32432, 3232.332, -100.32],
+                "z": [0.3223, 0.32, 0.0000232, 0.32224],
+            }
+        ),
+        pd.DataFrame(
+            {
+                "a": [315.3324, 3243.32432, 3232.332, -100.32],
+                "z": [0.3223, 0.32, 0.0000232, 0.32224],
+            },
+            index=[0, 100, 200, 300],
+        ),
+    ],
+)
+def test_dataframe_concat_dataframe(df, other, sort, ignore_index):
+    pdf = df
+    other_pd = other
+
+    gdf = cudf.from_pandas(df)
+    other_gd = cudf.from_pandas(other)
+
+    with _hide_concat_empty_dtype_warning():
+        expected = pd.concat(
+            [pdf, other_pd], sort=sort, ignore_index=ignore_index
+        )
+        actual = cudf.concat(
+            [gdf, other_gd], sort=sort, ignore_index=ignore_index
+        )
+
+    # In empty dataframe cases, Pandas & cudf differ in columns
+    # creation, pandas creates RangeIndex(0, 0)
+    # whereas cudf creates an empty Index([], dtype="object").
+    check_column_type = (
+        False if len(expected.columns) == len(df.columns) == 0 else True
+    )
+
+    if expected.shape != df.shape:
+        assert_eq(
+            expected.fillna(-1),
+            actual.fillna(-1),
+            check_dtype=False,
+            check_column_type=check_column_type,
+        )
+    else:
+        assert_eq(
+            expected,
+            actual,
+            check_index_type=not gdf.empty,
+            check_column_type=check_column_type,
+        )
+
+
+@pytest.mark.parametrize("df_1_data", [{"a": [1, 2], "b": [1, 3]}, {}])
+@pytest.mark.parametrize("df_2_data", [{"a": [], "b": []}, {}])
+def test_concat_empty_dataframe(df_1_data, df_2_data):
+    df_1 = cudf.DataFrame(df_1_data)
+    df_2 = cudf.DataFrame(df_2_data)
+    with _hide_concat_empty_dtype_warning():
+        got = cudf.concat([df_1, df_2])
+        expect = pd.concat([df_1.to_pandas(), df_2.to_pandas()], sort=False)
+
+    # ignoring dtypes as pandas upcasts int to float
+    # on concatenation with empty dataframes
+
+    assert_eq(got, expect, check_dtype=False, check_index_type=True)
+
+
+@pytest.mark.parametrize(
+    "df1_d",
+    [
+        {"a": [1, 2], "b": [1, 2], "c": ["s1", "s2"], "d": [1.0, 2.0]},
+        {"b": [1.9, 10.9], "c": ["s1", "s2"]},
+        {"c": ["s1"], "b": pd.Series([None], dtype="float"), "a": [False]},
+    ],
+)
+@pytest.mark.parametrize(
+    "df2_d",
+    [
+        {"a": [1, 2, 3]},
+        {"a": [1, None, 3], "b": [True, True, False], "c": ["s3", None, "s4"]},
+        {"a": [], "b": []},
+        {},
+    ],
+)
+def test_concat_different_column_dataframe(df1_d, df2_d):
+    with _hide_concat_empty_dtype_warning():
+        got = cudf.concat(
+            [
+                cudf.DataFrame(df1_d),
+                cudf.DataFrame(df2_d),
+                cudf.DataFrame(df1_d),
+            ],
+            sort=False,
+        )
+
+    pdf1 = pd.DataFrame(df1_d)
+    pdf2 = pd.DataFrame(df2_d)
+
+    expect = pd.concat([pdf1, pdf2, pdf1], sort=False)
+
+    # numerical columns are upcasted to float in cudf.DataFrame.to_pandas()
+    # casts nan to 0 in non-float numerical columns
+
+    numeric_cols = got.dtypes[got.dtypes != "object"].index
+    for col in numeric_cols:
+        got[col] = got[col].astype(np.float64).fillna(np.nan)
+
+    assert_eq(got, expect, check_dtype=False, check_index_type=True)
+
+
+@pytest.mark.parametrize(
+    "ser_1", [pd.Series([1, 2, 3]), pd.Series([], dtype="float64")]
+)
+def test_concat_empty_series(ser_1):
+    ser_2 = pd.Series([], dtype="float64")
+    with _hide_concat_empty_dtype_warning():
+        got = cudf.concat([cudf.Series(ser_1), cudf.Series(ser_2)])
+        expect = pd.concat([ser_1, ser_2])
+
+    assert_eq(got, expect, check_index_type=True)
+
+
+def test_dataframe_concat_different_numerical_columns(
+    numeric_and_temporal_types_as_str, numeric_and_temporal_types_as_str2
+):
+    df1 = pd.DataFrame(
+        dict(
+            x=pd.Series(np.arange(5)).astype(numeric_and_temporal_types_as_str)
+        )
+    )
+    df2 = pd.DataFrame(
+        dict(
+            x=pd.Series(np.arange(5)).astype(
+                numeric_and_temporal_types_as_str2
+            )
+        )
+    )
+    if (
+        numeric_and_temporal_types_as_str != numeric_and_temporal_types_as_str2
+        and "datetime" in numeric_and_temporal_types_as_str
+        or "datetime" in numeric_and_temporal_types_as_str2
+    ):
+        with pytest.raises(TypeError):
+            cudf.concat([df1, df2])
+    else:
+        pres = pd.concat([df1, df2])
+        gres = cudf.concat([cudf.from_pandas(df1), cudf.from_pandas(df2)])
+        assert_eq(pres, gres, check_dtype=False, check_index_type=True)
+
+
+def test_dataframe_concat_different_column_types():
+    df1 = cudf.Series([42], dtype=np.float64)
+    df2 = cudf.Series(["a"], dtype="category")
+    with pytest.raises(ValueError):
+        cudf.concat([df1, df2])
+
+    df2 = cudf.Series(["a string"])
+    with pytest.raises(TypeError):
+        cudf.concat([df1, df2])
+
+
+@pytest.mark.parametrize("a", [[1, 2, 3], [1, 10, 30]])
+@pytest.mark.parametrize("b", [[4, 5, 6], [-11, -100, 30]])
+def test_concat_index(a, b):
+    ser_a = pd.Series(a)
+    ser_b = pd.Series(b)
+
+    gser_a = cudf.Series(a)
+    gser_b = cudf.Series(b)
+
+    expected = pd.concat([ser_a, ser_b])
+    actual = cudf.concat([gser_a, gser_b])
+
+    assert len(expected) == len(actual)
+    assert_eq(expected.index, actual.index)
+
+    expected = pd.concat([ser_a, ser_b], ignore_index=True)
+    actual = cudf.concat([gser_a, gser_b], ignore_index=True)
+
+    assert len(expected) == len(actual)
+    assert_eq(expected.index, actual.index)
+
+
+def test_concat_with_axis():
+    df1 = pd.DataFrame(dict(x=np.arange(5), y=np.arange(5)))
+    df2 = pd.DataFrame(dict(a=np.arange(5), b=np.arange(5)))
+
+    concat_df = pd.concat([df1, df2], axis=1)
+    cdf1 = cudf.from_pandas(df1)
+    cdf2 = cudf.from_pandas(df2)
+
+    # concat only dataframes
+    concat_cdf = cudf.concat([cdf1, cdf2], axis=1)
+    assert_eq(concat_cdf, concat_df, check_index_type=True)
+
+    # concat only series
+    concat_s = pd.concat([df1.x, df1.y], axis=1)
+    cs1 = cudf.Series.from_pandas(df1.x)
+    cs2 = cudf.Series.from_pandas(df1.y)
+    concat_cdf_s = cudf.concat([cs1, cs2], axis=1)
+
+    assert_eq(concat_cdf_s, concat_s, check_index_type=True)
+
+    rng = np.random.default_rng(seed=0)
+    # concat series and dataframes
+    s3 = pd.Series(rng.random(5))
+    cs3 = cudf.Series.from_pandas(s3)
+
+    concat_cdf_all = cudf.concat([cdf1, cs3, cdf2], axis=1)
+    concat_df_all = pd.concat([df1, s3, df2], axis=1)
+    assert_eq(concat_cdf_all, concat_df_all, check_index_type=True)
+
+    # concat manual multi index
+    midf1 = cudf.from_pandas(df1)
+    midf1.index = cudf.MultiIndex(
+        levels=[[0, 1, 2, 3], [0, 1]], codes=[[0, 1, 2, 3, 2], [0, 1, 0, 1, 0]]
+    )
+    midf2 = midf1[2:]
+    midf2.index = cudf.MultiIndex(
+        levels=[[3, 4, 5], [2, 0]], codes=[[0, 1, 2], [1, 0, 1]]
+    )
+    mipdf1 = midf1.to_pandas()
+    mipdf2 = midf2.to_pandas()
+
+    assert_eq(
+        cudf.concat([midf1, midf2]),
+        pd.concat([mipdf1, mipdf2]),
+        check_index_type=True,
+    )
+    assert_eq(
+        cudf.concat([midf2, midf1]),
+        pd.concat([mipdf2, mipdf1]),
+        check_index_type=True,
+    )
+    assert_eq(
+        cudf.concat([midf1, midf2, midf1]),
+        pd.concat([mipdf1, mipdf2, mipdf1]),
+        check_index_type=True,
+    )
+
+    rng = np.random.default_rng(seed=0)
+    # concat groupby multi index
+    gdf1 = cudf.DataFrame(
+        {
+            "x": rng.integers(0, 10, 10),
+            "y": rng.integers(0, 10, 10),
+            "z": rng.integers(0, 10, 10),
+            "v": rng.integers(0, 10, 10),
+        }
+    )
+    gdf2 = gdf1[5:]
+    gdg1 = gdf1.groupby(["x", "y"]).min()
+    gdg2 = gdf2.groupby(["x", "y"]).min()
+    pdg1 = gdg1.to_pandas()
+    pdg2 = gdg2.to_pandas()
+
+    assert_eq(
+        cudf.concat([gdg1, gdg2]),
+        pd.concat([pdg1, pdg2]),
+        check_index_type=True,
+    )
+    assert_eq(
+        cudf.concat([gdg2, gdg1]),
+        pd.concat([pdg2, pdg1]),
+        check_index_type=True,
+    )
+
+    # series multi index concat
+    gdgz1 = gdg1.z
+    gdgz2 = gdg2.z
+    pdgz1 = gdgz1.to_pandas()
+    pdgz2 = gdgz2.to_pandas()
+
+    assert_eq(
+        cudf.concat([gdgz1, gdgz2]),
+        pd.concat([pdgz1, pdgz2]),
+        check_index_type=True,
+    )
+    assert_eq(
+        cudf.concat([gdgz2, gdgz1]),
+        pd.concat([pdgz2, pdgz1]),
+        check_index_type=True,
+    )

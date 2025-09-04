@@ -1,17 +1,17 @@
 # Copyright (c) 2018-2025, NVIDIA CORPORATION.
-
+import decimal
 import itertools
 import pickle
 
 import msgpack
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 from packaging import version
 
 import cudf
-from cudf.core.column import as_column
-from cudf.testing import _utils as utils, assert_eq
+from cudf.testing import assert_eq
 
 
 @pytest.mark.parametrize(
@@ -230,14 +230,7 @@ def test_serialize_multi_index():
 
 
 def test_serialize_masked_series():
-    nelem = 50
-    rng = np.random.default_rng(seed=0)
-    data = rng.random(nelem)
-    mask = utils.random_bitmask(nelem)
-    bitmask = utils.expand_bits_to_bytes(mask)[:nelem]
-    null_count = utils.count_zero(bitmask)
-    assert null_count >= 0
-    sr = cudf.Series._from_column(as_column(data).set_mask(mask))
+    sr = cudf.Series(pa.array([1, None, 2]))
     outsr = cudf.Series.deserialize(*sr.serialize())
     assert_eq(sr, outsr)
 
@@ -440,3 +433,55 @@ def test_serialize_column_types_preserved(columns):
     expected = cudf.DataFrame([[10, 11]], columns=columns())
     result = cudf.DataFrame.deserialize(*expected.serialize())
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [(["1", "2", "3"], cudf.Decimal64Dtype(1, 0))],
+        [
+            (["1", "2", "3"], cudf.Decimal64Dtype(1, 0)),
+            (["1.0", "2.0", "3.0"], cudf.Decimal64Dtype(2, 1)),
+            (["10.1", "20.2", "30.3"], cudf.Decimal64Dtype(3, 1)),
+        ],
+        [
+            (["1", None, "3"], cudf.Decimal64Dtype(1, 0)),
+            (["1.0", "2.0", None], cudf.Decimal64Dtype(2, 1)),
+            ([None, "20.2", "30.3"], cudf.Decimal64Dtype(3, 1)),
+        ],
+    ],
+)
+def test_serialize_decimal_columns(data):
+    df = cudf.DataFrame(
+        {
+            str(i): cudf.Series(
+                [decimal.Decimal(x) if x is not None else x for x in values],
+                dtype=dtype,
+            )
+            for i, (values, dtype) in enumerate(data)
+        }
+    )
+    recreated = df.__class__.deserialize(*df.serialize())
+    assert_eq(recreated, df)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": pd.Series(["a", "b", "c", "a", "c", "b"]).astype("category")},
+        {
+            "a": pd.Series(["a", "a", "b", "b"]).astype("category"),
+            "b": pd.Series(["b", "b", "c", "c"]).astype("category"),
+            "c": pd.Series(["c", "c", "a", "a"]).astype("category"),
+        },
+        {
+            "a": pd.Series(["a", None, "b", "b"]).astype("category"),
+            "b": pd.Series(["b", "b", None, "c"]).astype("category"),
+            "c": pd.Series(["c", "c", "a", None]).astype("category"),
+        },
+    ],
+)
+def test_serialize_categorical_columns(data):
+    df = cudf.DataFrame(data)
+    recreated = df.__class__.deserialize(*df.serialize())
+    assert_eq(recreated, df)
