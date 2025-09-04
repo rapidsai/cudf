@@ -414,9 +414,21 @@ struct ast_converter {
   std::vector<untyped_var_info> output_vars_;            ///< The output variables for the IR
   std::vector<std::unique_ptr<set_output>> output_irs_;  ///< The output IR nodes
   std::string code_;                                     ///< The generated code for the IR
+  rmm::cuda_stream_view
+    stream_;  ///< CUDA stream used for device memory operations and kernel launches.
+  rmm::device_async_resource_ref
+    mr_;  ///< Device memory resource used to allocate the returned table's device memory
 
  public:
-  ast_converter() = default;  ///< Default constructor
+  /**
+   * @brief Construct a new AST Converter object
+   * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param mr Device memory resource used to allocate the returned table's device memory
+   */
+  ast_converter(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+    : stream_(stream), mr_(mr)
+  {
+  }
 
   ast_converter(ast_converter const&)            = delete;
   ast_converter& operator=(ast_converter const&) = delete;
@@ -452,13 +464,7 @@ struct ast_converter {
 
   void add_output_var();
 
-  void clear();
-
-  void generate_code(target target,
-                     ast::expression const& expr,
-                     ast_args const& args,
-                     rmm::cuda_stream_view stream,
-                     rmm::device_async_resource_ref const& resource_ref);
+  void generate_code(target target, ast::expression const& expr, ast_args const& args);
 
  public:
   /**
@@ -467,15 +473,15 @@ struct ast_converter {
    * @param expr The AST expression to convert
    * @param null_aware Whether to use null-aware operators
    * @param args The arguments needed to resolve the AST expression
-   * @param stream The CUDA stream to use for device memory operations and kernel launches
-   * @param resource_ref The device async resource reference for the operation
+   * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param mr Device memory resource used to allocate the returned table's device memory
    * @return The result of the conversion, containing the transform arguments and scalar columns
    */
-  transform_args compute_column(target target,
-                                ast::expression const& expr,
-                                ast_args const& args,
-                                rmm::cuda_stream_view stream,
-                                rmm::device_async_resource_ref const& resource_ref);
+  static transform_args compute_column(target target,
+                                       ast::expression const& expr,
+                                       ast_args const& args,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::device_async_resource_ref mr);
 
   /**
    * @brief Convert an AST `filter` expression to a `cudf::filter`
@@ -484,16 +490,16 @@ struct ast_converter {
    * @param null_aware Whether to use null-aware operators
    * @param args The arguments needed to resolve the AST expression
    * @param filter_table The table to be filtered
-   * @param stream The CUDA stream to use for device memory operations and kernel launches
-   * @param resource_ref The device async resource reference for the operation
+   * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param mr Device memory resource used to allocate the returned table's device memory
    * @return The result of the conversion, containing the filter arguments and scalar columns
    */
-  filter_args filter(target target,
-                     ast::expression const& expr,
-                     ast_args const& args,
-                     table_view const& filter_table,
-                     rmm::cuda_stream_view stream,
-                     rmm::device_async_resource_ref const& resource_ref);
+  static filter_args filter(target target,
+                            ast::expression const& expr,
+                            ast_args const& args,
+                            table_view const& filter_table,
+                            rmm::cuda_stream_view stream,
+                            rmm::device_async_resource_ref mr);
 };
 
 }  // namespace row_ir

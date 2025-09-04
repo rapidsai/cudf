@@ -449,15 +449,15 @@ cudf::size_type distinct_count(table_view const& input,
  *
  * The size of the resulting column is the size of the largest column.
  *
- * @param predicate_columns       Immutable views of the predicate columns
+ * @param predicate_columns Immutable views of the predicate columns
  * @param predicate_udf The PTX/CUDA string of the transform function to apply
- * @param filter_columns     Immutable view of the columns to be filtered
- * @param is_ptx        true: the UDF is treated as PTX code; false: the UDF is treated as CUDA code
- * @param user_data     User-defined device data to pass to the UDF.
+ * @param filter_columns Immutable view of the columns to be filtered
+ * @param is_ptx true: the UDF is treated as PTX code; false: the UDF is treated as CUDA code
+ * @param user_data User-defined device data to pass to the UDF.
  * @param is_null_aware Signifies the UDF will receive row inputs as optional values
- * @param stream        CUDA stream used for device memory operations and kernel launches
- * @param mr            Device memory resource used to allocate the returned column's device memory
- * @return              The filtered target columns
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return The filtered target columns
  */
 std::vector<std::unique_ptr<column>> filter(
   std::vector<column_view> const& predicate_columns,
@@ -482,12 +482,12 @@ std::vector<std::unique_ptr<column>> filter(
  * types
  * @throws cudf::logic_error if JIT is not supported by the runtime
  *
- * @param predicate_table        The table used for predicate expression evaluation
- * @param predicate_expr        The predicate filter expression
- * @param filter_table     The table to be filtered
- * @param stream        CUDA stream used for device memory operations and kernel launches
- * @param mr            Device memory resource used to allocate the returned column's device memory
- * @return              The filtered table
+ * @param predicate_table The table used for predicate expression evaluation
+ * @param predicate_expr The predicate filter expression
+ * @param filter_table The table to be filtered
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return The filtered table
  */
 std::unique_ptr<table> filter(
   table_view const& predicate_table,

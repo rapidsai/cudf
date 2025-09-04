@@ -260,8 +260,6 @@ TEST_F(RowIRCudaCodeGenTest, VectorLengthOperation)
 
 TEST_F(RowIRCudaCodeGenTest, AstConversionBasic)
 {
-  row_ir::ast_converter converter;
-
   ast::tree ast_tree;
   auto forty_two          = cudf::numeric_scalar(42);
   auto& column_ref        = ast_tree.push(ast::column_reference{0, ast::table_reference::LEFT});
@@ -277,11 +275,12 @@ TEST_F(RowIRCudaCodeGenTest, AstConversionBasic)
 
   row_ir::ast_args args{.table = cudf::table_view{{column->view()}}};
 
-  auto transform_args = converter.compute_column(row_ir::target::CUDA,
-                                                 add_op,
-                                                 args,
-                                                 cudf::get_default_stream(),
-                                                 cudf::get_current_device_resource_ref());
+  auto transform_args =
+    row_ir::ast_converter::compute_column(row_ir::target::CUDA,
+                                          add_op,
+                                          args,
+                                          cudf::get_default_stream(),
+                                          cudf::get_current_device_resource_ref());
 
   ASSERT_EQ(transform_args.scalar_columns.size(), 1);
   ASSERT_EQ(transform_args.scalar_columns[0]->view().size(), 1);

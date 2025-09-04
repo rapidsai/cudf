@@ -276,8 +276,10 @@ int32_t ast_converter::add_ast_input(ast_input_spec in)
 
 std::unique_ptr<row_ir::node> ast_converter::add_ir_node(ast::literal const& expr)
 {
-  auto index = add_ast_input(ast_scalar_input_spec{
-    expr.get_scalar(), expr.get_value(), make_column_from_scalar(expr.get_scalar(), 1)});
+  auto index = add_ast_input(
+    ast_scalar_input_spec{expr.get_scalar(),
+                          expr.get_value(),
+                          make_column_from_scalar(expr.get_scalar(), 1, stream_, mr_)});
   return std::make_unique<row_ir::get_input>(index);
 }
 
@@ -322,15 +324,6 @@ void ast_converter::add_output_var()
   output_vars_.emplace_back(std::move(id));
 }
 
-void ast_converter::clear()
-{
-  input_specs_.clear();
-  input_vars_.clear();
-  output_vars_.clear();
-  output_irs_.clear();
-  code_.clear();
-}
-
 template <typename Fn, typename... Args>
 decltype(auto) dispatch_input_spec(ast_input_spec const& in, Fn&& fn, Args&&... args)
 {
@@ -358,9 +351,7 @@ column_view get_column_view(ast_scalar_input_spec const& spec, ast_args const& a
 
 void ast_converter::generate_code(target target_id,
                                   ast::expression const& expr,
-                                  ast_args const& args,
-                                  rmm::cuda_stream_view stream,
-                                  rmm::device_async_resource_ref const& resource_ref)
+                                  ast_args const& args)
 {
   auto output_expr_ir = expr.accept(*this);
   output_irs_.emplace_back(std::make_unique<row_ir::set_output>(0, std::move(output_expr_ir)));
@@ -467,21 +458,21 @@ transform_args ast_converter::compute_column(target target_id,
                                              ast::expression const& expr,
                                              ast_args const& args,
                                              rmm::cuda_stream_view stream,
-                                             rmm::device_async_resource_ref const& resource_ref)
+                                             rmm::device_async_resource_ref mr)
 {
-  clear();
+  ast_converter converter{stream, mr};
 
   // TODO(lamarrr): support null-sensitive operators
 
   // TODO(lamarrr): consider deduplicating ast expression's input column references. See
   // TransformTest/1.DeeplyNestedArithmeticLogicalExpression for reference
 
-  generate_code(target_id, expr, args, stream, resource_ref);
+  converter.generate_code(target_id, expr, args);
 
   std::vector<column_view> columns;
   std::vector<std::unique_ptr<column>> scalar_columns;
 
-  for (auto& input : input_specs_) {
+  for (auto& input : converter.input_specs_) {
     auto column_view =
       dispatch_input_spec(input, [](auto&... args) { return get_column_view(args...); }, args);
     columns.push_back(column_view);
@@ -492,17 +483,15 @@ transform_args ast_converter::compute_column(target target_id,
     }
   }
 
-  auto output_column_type = output_irs_[0]->get_type();
+  auto output_column_type = converter.output_irs_[0]->get_type();
 
   transform_args transform{std::move(scalar_columns),
                            std::move(columns),
-                           std::move(code_),
+                           std::move(converter.code_),
                            output_column_type.type,
                            false,
                            std::nullopt,
                            null_aware::NO};
-
-  clear();
 
   if (get_context().dump_codegen()) {
     std::cout << "Generated code for transform: " << transform.udf << std::endl;
@@ -516,23 +505,22 @@ filter_args ast_converter::filter(target target_id,
                                   ast_args const& args,
                                   table_view const& filter_table,
                                   rmm::cuda_stream_view stream,
-                                  rmm::device_async_resource_ref const& resource_ref)
+                                  rmm::device_async_resource_ref mr)
 {
-  clear();
+  ast_converter converter{stream, mr};
+  converter.generate_code(target_id, expr, args);
 
-  generate_code(target_id, expr, args, stream, resource_ref);
-
-  CUDF_EXPECTS(output_irs_.size() == 1,
+  CUDF_EXPECTS(converter.output_irs_.size() == 1,
                "Filter expression must return a single output.",
                std::invalid_argument);
-  CUDF_EXPECTS(output_irs_[0]->get_type().type == data_type{type_id::BOOL8},
+  CUDF_EXPECTS(converter.output_irs_[0]->get_type().type == data_type{type_id::BOOL8},
                "Filter expression must return a boolean type.",
                std::invalid_argument);
 
   std::vector<column_view> columns;
   std::vector<std::unique_ptr<column>> scalar_columns;
 
-  for (auto& input : input_specs_) {
+  for (auto& input : converter.input_specs_) {
     auto column_view =
       dispatch_input_spec(input, [](auto&... args) { return get_column_view(args...); }, args);
     columns.push_back(column_view);
@@ -553,13 +541,11 @@ filter_args ast_converter::filter(target target_id,
 
   filter_args filter{std::move(scalar_columns),
                      std::move(columns),
-                     std::move(code_),
+                     std::move(converter.code_),
                      std::move(filter_columns),
                      false,
                      std::nullopt,
                      null_aware::NO};
-
-  clear();
 
   if (get_context().dump_codegen()) {
     std::cout << "Generated code for filter: " << filter.predicate_udf << std::endl;

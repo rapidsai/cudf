@@ -344,9 +344,8 @@ std::unique_ptr<table> filter(table_view const& predicate_table,
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr)
 {
-  cudf::detail::row_ir::ast_converter converter;
   cudf::detail::row_ir::ast_args ast_args{.table = predicate_table};
-  auto args = converter.filter(
+  auto args = cudf::detail::row_ir::ast_converter::filter(
     cudf::detail::row_ir::target::CUDA, predicate_expr, ast_args, filter_table, stream, mr);
 
   return std::make_unique<table>(cudf::detail::filter(args.predicate_columns,
