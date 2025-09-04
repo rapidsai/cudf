@@ -72,11 +72,9 @@ auto compute_row_indices(cudf::host_span<size_t const> row_group_offsets,
   CUDF_EXPECTS(row_group_span_offsets.back() == num_rows,
                "Mismatch in number of rows in table and specified row group offsets");
 
-  // Host vector to store the row indices
   auto row_indices = cudf::detail::make_host_vector<size_t>(num_rows, stream);
   std::fill(row_indices.begin(), row_indices.end(), 1);
 
-  // Host vector to store the row group index (or span) for each row that it belongs to
   auto row_group_keys = cudf::detail::make_host_vector<size_type>(num_rows, stream);
   std::fill(row_group_keys.begin(), row_group_keys.end(), 0);
 
@@ -162,7 +160,6 @@ auto build_row_mask_column(cudf::host_span<size_t const> row_indices,
             roaring64_bulk_context_t{.high_bytes = {0, 0, 0, 0, 0, 0}, .leaf = nullptr};
 
           for (auto row_idx = thread_idx; row_idx < num_rows; row_idx += thread_pool_size) {
-            // Check if each row index is not present in the deletion vector
             row_mask[row_idx] = not roaring::api::roaring64_bitmap_contains_bulk(
               deletion_vector, &roaring64_context, static_cast<uint64_t>(row_indices[row_idx]));
           }
