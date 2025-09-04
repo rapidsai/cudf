@@ -1,0 +1,10 @@
+{
+  "packages": {
+    "RMM": {
+      "version": "25.10",
+      "git_shallow": false,
+      "git_url": "https://github.com/rapidsai/rmm.git",
+      "git_tag": "68389a1512007926523454b40b4a9841c438a759"
+    }
+  }
+}

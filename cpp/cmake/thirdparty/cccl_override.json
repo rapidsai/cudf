@@ -1,0 +1,10 @@
+{
+  "packages": {
+    "CCCL": {
+      "version": "3.1.0",
+      "git_shallow": false,
+      "git_url": "https://github.com/NVIDIA/cccl.git",
+      "git_tag": "7a086dbaf2a1af9427715511b79edbea325fedc4"
+    }
+  }
+}

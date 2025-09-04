@@ -37,6 +37,41 @@ namespace cudf {
 
 namespace {
 
+#if CCCL_MAJOR_VERSION > 3 || (CCCL_MAJOR_VERSION == 3 && CCCL_MINOR_VERSION >= 1)
+#define CUDF_CCCL_MR_METHODS                                                \
+ public:                                                                    \
+  void* allocate_sync(std::size_t bytes, std::size_t alignment)             \
+  {                                                                         \
+    return this->allocate(bytes, alignment);                                \
+  }                                                                         \
+                                                                            \
+  void deallocate_sync(void* ptr, std::size_t bytes, std::size_t alignment) \
+  {                                                                         \
+    return this->deallocate(ptr, bytes, alignment);                         \
+  }
+#else
+#define CUDF_CCCL_MR_METHODS
+#endif
+
+#if CCCL_MAJOR_VERSION > 3 || (CCCL_MAJOR_VERSION == 3 && CCCL_MINOR_VERSION >= 1)
+#define CUDF_CCCL_ASYNC_MR_METHODS                                                       \
+  CUDF_CCCL_MR_METHODS                                                                   \
+                                                                                         \
+ public:                                                                                 \
+  void* allocate(rmm::cuda_stream_view stream, std::size_t bytes, std::size_t alignment) \
+  {                                                                                      \
+    return this->allocate_async(bytes, alignment, stream);                               \
+  }                                                                                      \
+                                                                                         \
+  void deallocate(                                                                       \
+    rmm::cuda_stream_view stream, void* ptr, std::size_t bytes, std::size_t alignment)   \
+  {                                                                                      \
+    return this->deallocate_async(ptr, bytes, alignment, stream);                        \
+  }
+#else
+#define CUDF_CCCL_ASYNC_MR_METHODS
+#endif
+
 class fixed_pinned_pool_memory_resource {
   using upstream_mr    = rmm::mr::pinned_host_memory_resource;
   using host_pooled_mr = rmm::mr::pool_memory_resource<upstream_mr>;
@@ -140,6 +175,8 @@ class fixed_pinned_pool_memory_resource {
                            cuda::mr::host_accessible) noexcept
   {
   }
+
+  CUDF_CCCL_ASYNC_MR_METHODS;
 };
 
 static_assert(cuda::mr::resource_with<fixed_pinned_pool_memory_resource,
@@ -254,6 +291,8 @@ class new_delete_memory_resource {
   // NOLINTBEGIN
   friend void get_property(new_delete_memory_resource const&, cuda::mr::host_accessible) noexcept {}
   // NOLINTEND
+
+  CUDF_CCCL_ASYNC_MR_METHODS
 };
 
 static_assert(cuda::mr::resource_with<new_delete_memory_resource, cuda::mr::host_accessible>,
