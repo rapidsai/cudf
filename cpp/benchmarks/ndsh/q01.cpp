@@ -73,16 +73,12 @@
                      : cudf::make_fixed_width_scalar<double>(1);
   auto const one_minus_discount =
     cudf::binary_operation(*one, discount, cudf::binary_operator::SUB, discount.type(), stream, mr);
-  auto const disc_price_type = discount.type().id() == cudf::type_id::DECIMAL64
-                                 ? cudf::data_type{cudf::type_id::DECIMAL64}
-                                 : cudf::data_type{cudf::type_id::FLOAT64};
-  auto disc_price            = cudf::binary_operation(extendedprice,
-                                           one_minus_discount->view(),
-                                           cudf::binary_operator::MUL,
-                                           disc_price_type,
-                                           stream,
-                                           mr);
-  return disc_price;
+  return cudf::binary_operation(extendedprice,
+                                one_minus_discount->view(),
+                                cudf::binary_operator::MUL,
+                                discount.type(),
+                                stream,
+                                mr);
 }
 
 /**
@@ -104,12 +100,8 @@
                      : cudf::make_fixed_width_scalar<double>(1);
   auto const one_plus_tax =
     cudf::binary_operation(*one, tax, cudf::binary_operator::ADD, tax.type(), stream, mr);
-  auto const charge_type = tax.type().id() == cudf::type_id::DECIMAL64
-                             ? cudf::data_type{cudf::type_id::DECIMAL64}
-                             : cudf::data_type{cudf::type_id::FLOAT64};
-  auto charge            = cudf::binary_operation(
-    disc_price, one_plus_tax->view(), cudf::binary_operator::MUL, charge_type, stream, mr);
-  return charge;
+  return cudf::binary_operation(
+    disc_price, one_plus_tax->view(), cudf::binary_operator::MUL, tax.type(), stream, mr);
 }
 
 void run_ndsh_q1(nvbench::state& state, cudf::io::source_info const& source)
