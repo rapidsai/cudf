@@ -30,9 +30,11 @@
 
 #include <random>
 
+namespace {
+
 enum class engine_type : uint8_t { AST = 0, JIT = 1 };
 
-static engine_type engine_from_string(std::string_view str)
+engine_type engine_from_string(std::string_view str)
 {
   if (str == "ast") {
     return engine_type::AST;
@@ -44,7 +46,7 @@ static engine_type engine_from_string(std::string_view str)
 }
 
 template <typename key_type>
-static void BM_ast_polynomials(nvbench::state& state)
+void BM_ast_polynomials(nvbench::state& state)
 {
   auto const num_rows         = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const order            = static_cast<cudf::size_type>(state.get_int64("order"));
@@ -117,6 +119,8 @@ static void BM_ast_polynomials(nvbench::state& state)
     .add_int64_axis("order", {1, 2, 4, 8, 16, 32})                               \
     .add_float64_axis("null_probability", {0.01})                                \
     .add_string_axis("engine", {"ast", "jit"})
+
+}  // namespace
 
 AST_POLYNOMIAL_BENCHMARK_DEFINE(ast_polynomials_float32, float);
 

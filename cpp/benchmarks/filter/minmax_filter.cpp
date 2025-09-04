@@ -32,6 +32,8 @@
 #include <concepts>
 #include <vector>
 
+namespace {
+
 template <typename T>
 struct benchmark_data;
 
@@ -59,7 +61,7 @@ struct benchmark_data<T> {
 
 enum class engine_type : uint8_t { AST = 0, JIT = 1 };
 
-static engine_type engine_from_string(std::string_view str)
+engine_type engine_from_string(std::string_view str)
 {
   if (str == "ast") {
     return engine_type::AST;
@@ -70,7 +72,7 @@ static engine_type engine_from_string(std::string_view str)
   }
 }
 
-static bool boolean_from_string(std::string_view str)
+bool boolean_from_string(std::string_view str)
 {
   if (str == "true") {
     return true;
@@ -82,7 +84,7 @@ static bool boolean_from_string(std::string_view str)
 }
 
 template <typename key_type>
-static void BM_filter_min_max(nvbench::state& state)
+void BM_filter_min_max(nvbench::state& state)
 {
   auto const num_rows    = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const engine_name = state.get_string("engine");
@@ -168,6 +170,7 @@ static void BM_filter_min_max(nvbench::state& state)
     .add_string_axis("engine", {"ast", "jit"})                                  \
     .add_int64_axis("num_rows", {100'000, 1'000'000, 10'000'000, 100'000'000})  \
     .add_string_axis("nullable", {"true", "false"})
+}  // namespace
 
 FILTER_BENCHMARK_DEFINE(filter_min_max_int32, int32_t);
 FILTER_BENCHMARK_DEFINE(filter_min_max_int64, int64_t);

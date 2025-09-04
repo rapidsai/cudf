@@ -285,20 +285,20 @@ TEST_F(RowIRCudaCodeGenTest, AstConversionBasic)
 
   ASSERT_EQ(transform_args.scalar_columns.size(), 1);
   ASSERT_EQ(transform_args.scalar_columns[0]->view().size(), 1);
-  ASSERT_FALSE(transform_args.is_ptx);
-  ASSERT_EQ(transform_args.is_null_aware, null_aware::NO);
-  ASSERT_EQ(transform_args.output_type, data_type{type_id::INT32});
+  EXPECT_FALSE(transform_args.is_ptx);
+  EXPECT_EQ(transform_args.is_null_aware, null_aware::NO);
+  EXPECT_EQ(transform_args.output_type, data_type{type_id::INT32});
   ASSERT_EQ(transform_args.columns.size(), 2);
 
   /// Scalar column should be represented as a column of size 1
   ASSERT_EQ(transform_args.columns[0].size(), 1);
-  ASSERT_EQ(transform_args.columns[0].type(), data_type{type_id::INT32});
-  ASSERT_EQ(transform_args.columns[0].null_count(), 0);
+  EXPECT_EQ(transform_args.columns[0].type(), data_type{type_id::INT32});
+  EXPECT_EQ(transform_args.columns[0].null_count(), 0);
 
   /// The input column should be the second column in the transform args
   ASSERT_EQ(transform_args.columns[1].size(), column->size());
-  ASSERT_EQ(transform_args.columns[1].type(), column->type());
-  ASSERT_EQ(transform_args.columns[1].null_count(), column->null_count());
+  EXPECT_EQ(transform_args.columns[1].type(), column->type());
+  EXPECT_EQ(transform_args.columns[1].null_count(), column->null_count());
 
   auto expected_udf = R"***(
 __device__ void expression(int32_t* out_0, int32_t in_0, int32_t in_1)
