@@ -691,7 +691,8 @@ void reader_impl::load_next_stripe_data(read_mode mode)
         // Cache these parsed numbers so they can be reused in the decompression/decoding step.
         compinfo_map[info.source] = {stream_compinfo.num_compressed_blocks,
                                      stream_compinfo.num_uncompressed_blocks,
-                                     stream_compinfo.max_uncompressed_size};
+                                     stream_compinfo.max_uncompressed_size,
+                                     stream_compinfo.max_uncompressed_block_size};
         stripe_decomp_sizes[info.source.stripe_idx - stripe_start].size_bytes +=
           stream_compinfo.max_uncompressed_size;
       }

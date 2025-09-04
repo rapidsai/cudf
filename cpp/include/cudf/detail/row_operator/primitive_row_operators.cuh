@@ -16,19 +16,15 @@
 
 #pragma once
 
-/**
- * @file
- * @deprecated This header is deprecated in 25.10 and will be removed in 25.12.
- * Users should use cudf/detail/row_operator/primitive_row_operators.cuh instead.
- */
-
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/row_operator/common_utils.cuh>
+#include <cudf/detail/row_operator/row_operators.cuh>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/hashing/detail/hash_functions.cuh>
 #include <cudf/hashing/detail/hashing.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -40,6 +36,8 @@
 
 namespace CUDF_EXPORT cudf {
 
+namespace detail {
+
 /**
  * @brief Checks if a table is compatible with primitive row operations
  *
@@ -48,9 +46,6 @@ namespace CUDF_EXPORT cudf {
  *
  * @param table The table to check for compatibility
  * @return Boolean indicating if the table is compatible with primitive row operations
- *
- * @deprecated This function is deprecated in 25.10 and will be removed in 25.12.
- * Users should use cudf/detail/row_operator/primitive_row_operators.cuh instead.
  */
 bool is_primitive_row_op_compatible(cudf::table_view const& table);
 
@@ -58,18 +53,12 @@ namespace row::primitive {
 
 /**
  * @brief Returns `void` if it's not a primitive type
- *
- * @deprecated This type alias is deprecated in 25.10 and will be removed in 25.12.
- * Users should use cudf/detail/row_operator/primitive_row_operators.cuh instead.
  */
 template <typename T>
 using primitive_type_t = cuda::std::conditional_t<cudf::is_numeric<T>(), T, void>;
 
 /**
  * @brief Custom dispatcher for primitive types
- *
- * @deprecated This struct is deprecated in 25.10 and will be removed in 25.12.
- * Users should use cudf/detail/row_operator/primitive_row_operators.cuh instead.
  */
 template <cudf::type_id Id>
 struct dispatch_primitive_type {
@@ -78,9 +67,6 @@ struct dispatch_primitive_type {
 
 /**
  * @brief Performs an equality comparison between two elements in two columns.
- *
- * @deprecated This class is deprecated in 25.10 and will be removed in 25.12.
- * Users should use cudf/detail/row_operator/primitive_row_operators.cuh instead.
  */
 class element_equality_comparator {
  public:
@@ -99,8 +85,8 @@ class element_equality_comparator {
                              size_type lhs_element_index,
                              size_type rhs_element_index) const
   {
-    return cudf::equality_compare(lhs.element<Element>(lhs_element_index),
-                                  rhs.element<Element>(rhs_element_index));
+    return cudf::detail::equality_compare(lhs.element<Element>(lhs_element_index),
+                                          rhs.element<Element>(rhs_element_index));
   }
 
   // @cond
@@ -117,9 +103,6 @@ class element_equality_comparator {
 
 /**
  * @brief Performs a relational comparison between two elements in two tables.
- *
- * @deprecated This class is deprecated in 25.10 and will be removed in 25.12.
- * Users should use cudf/detail/row_operator/primitive_row_operators.cuh instead.
  */
 class row_equality_comparator {
  public:
@@ -131,11 +114,10 @@ class row_equality_comparator {
    * @param rhs Preprocessed table containing the second element (may be the same as lhs)
    * @param nulls_are_equal Indicates if two null elements are treated as equivalent
    */
-  row_equality_comparator(
-    cudf::nullate::DYNAMIC const& has_nulls,
-    std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> lhs,
-    std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> rhs,
-    null_equality nulls_are_equal)
+  row_equality_comparator(cudf::nullate::DYNAMIC const& has_nulls,
+                          std::shared_ptr<cudf::detail::row::equality::preprocessed_table> lhs,
+                          std::shared_ptr<cudf::detail::row::equality::preprocessed_table> rhs,
+                          null_equality nulls_are_equal)
     : _has_nulls{has_nulls}, _lhs{*lhs}, _rhs{*rhs}, _nulls_are_equal{nulls_are_equal}
   {
     CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(), "Mismatched number of columns.");
@@ -179,8 +161,8 @@ class row_equality_comparator {
    * @param rhs_index The index of the second row to compare (in the rhs table)
    * @return Boolean indicating if both rows are equal
    */
-  __device__ bool operator()(cudf::experimental::row::lhs_index_type lhs_index,
-                             cudf::experimental::row::rhs_index_type rhs_index) const
+  __device__ bool operator()(cudf::detail::row::lhs_index_type lhs_index,
+                             cudf::detail::row::rhs_index_type rhs_index) const
   {
     return (*this)(static_cast<size_type>(lhs_index), static_cast<size_type>(rhs_index));
   }
@@ -196,9 +178,6 @@ class row_equality_comparator {
  * @brief Function object for computing the hash value of a row in a column.
  *
  * @tparam Hash Hash functor to use for hashing elements
- *
- * @deprecated This class is deprecated in 25.10 and will be removed in 25.12.
- * Users should use cudf/detail/row_operator/primitive_row_operators.cuh instead.
  */
 template <template <typename> class Hash>
 class element_hasher {
@@ -233,9 +212,6 @@ class element_hasher {
  * @brief Computes the hash value of a row in the given table.
  *
  * @tparam Hash Hash functor to use for hashing elements.
- *
- * @deprecated This class is deprecated in 25.10 and will be removed in 25.12.
- * Users should use cudf/detail/row_operator/primitive_row_operators.cuh instead.
  */
 template <template <typename> class Hash = cudf::hashing::detail::default_hash>
 class row_hasher {
@@ -264,7 +240,7 @@ class row_hasher {
    * @param seed A seed value to use for hashing
    */
   row_hasher(cudf::nullate::DYNAMIC const& has_nulls,
-             std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> t,
+             std::shared_ptr<cudf::detail::row::equality::preprocessed_table> t,
              hash_value_type seed = DEFAULT_HASH_SEED)
     : _has_nulls{has_nulls}, _table{*t}, _seed{seed}
   {
@@ -307,4 +283,5 @@ class row_hasher {
 };
 
 }  // namespace row::primitive
+}  // namespace detail
 }  // namespace CUDF_EXPORT cudf
