@@ -154,13 +154,6 @@ std::unique_ptr<column> from_arrow_stream_column(ArrowArrayStream* input,
   input->release(input);
 
   if (chunks.empty()) {
-    if (schema.n_children == 0) {
-      schema.release(&schema);
-      return std::make_unique<cudf::column>();
-    }
-
-    // If there are no chunks but the schema has children, we need to construct a suitable empty
-    // column.
     auto empty_column = make_empty_column_from_schema(&schema, stream, mr);
     schema.release(&schema);
     return empty_column;
