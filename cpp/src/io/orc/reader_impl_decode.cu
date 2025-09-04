@@ -106,12 +106,12 @@ rmm::device_buffer decompress_stripe_data(
         stripe_data[info.source.stripe_idx - loaded_stripe_range.begin].data()) +
         info.dst_pos,
       info.length);
-
     if (compinfo_ready) {
       auto const& cached_comp_info             = compinfo_map.at(info.source);
       stream_comp_info.num_compressed_blocks   = cached_comp_info.num_compressed_blocks;
       stream_comp_info.num_uncompressed_blocks = cached_comp_info.num_uncompressed_blocks;
       stream_comp_info.max_uncompressed_size   = cached_comp_info.total_decomp_size;
+      stream_comp_info.max_uncompressed_block_size = cached_comp_info.max_uncompressed_block_size;
 
       num_compressed_blocks += cached_comp_info.num_compressed_blocks;
       num_uncompressed_blocks += cached_comp_info.num_uncompressed_blocks;
