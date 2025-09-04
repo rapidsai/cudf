@@ -193,6 +193,8 @@ class TemporalBaseColumn(ColumnBase):
 
     @functools.cached_property
     def time_unit(self) -> str:
+        if isinstance(self.dtype, pd.ArrowDtype):
+            return self.dtype.pyarrow_dtype.unit
         return np.datetime_data(self.dtype)[0]
 
     @property
