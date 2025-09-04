@@ -1039,3 +1039,22 @@ def test_datetime_reductions(data, reduction_methods, datetime_types_as_str):
         assert True
     else:
         assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("op", ["min", "max"])
+def test_categorical_maxima(op):
+    ser = cudf.Series(
+        ["a", "d", "c", "z", "g"],
+        dtype=cudf.CategoricalDtype(["z", "c", "g", "d", "a"], ordered=False),
+    )
+    assert not ser.cat.ordered
+
+    # Cannot get extrema of unordered Categorical column
+    with pytest.raises(TypeError, match="Categorical is not ordered"):
+        getattr(ser, op)()
+
+    # Max/min should work after converting to "ordered"
+    ser_pd = ser.to_pandas()
+    result = getattr(ser.cat.as_ordered(), op)()
+    result_pd = getattr(ser_pd.cat.as_ordered(), op)()
+    assert_eq(result, result_pd)
