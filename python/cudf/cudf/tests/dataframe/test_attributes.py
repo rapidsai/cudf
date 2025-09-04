@@ -326,3 +326,44 @@ def test_string_index(index):
     pdf.index = index
     gdf.index = index
     assert_eq(pdf, gdf)
+
+
+def test_set_index_as_property():
+    cdf = cudf.DataFrame()
+    col1 = np.arange(10)
+    col2 = np.arange(0, 20, 2)
+    cdf["a"] = col1
+    cdf["b"] = col2
+
+    # Check set_index(Series)
+    cdf.index = cdf["b"]
+
+    assert_eq(cdf.index.to_numpy(), col2)
+
+    with pytest.raises(ValueError):
+        cdf.index = [list(range(10))]
+
+    idx = pd.Index(np.arange(0, 1000, 100))
+    cdf.index = idx
+    assert_eq(cdf.index.to_pandas(), idx)
+
+    df = cdf.to_pandas()
+    assert_eq(df.index, idx)
+
+    head = cdf.head().to_pandas()
+    assert_eq(head.index, idx[:5])
+
+
+@pytest.mark.parametrize(
+    "index",
+    [
+        lambda: cudf.Index([1]),
+        lambda: cudf.RangeIndex(1),
+        lambda: cudf.MultiIndex(levels=[[0]], codes=[[0]]),
+    ],
+)
+def test_index_assignment_no_shallow_copy(index):
+    index = index()
+    df = cudf.DataFrame(range(1))
+    df.index = index
+    assert df.index is index
