@@ -850,3 +850,15 @@ def test_series_setitem_decimal(data, dtype, item, to, expect):
         expect = cudf.Series([decimal.Decimal(x) for x in expect], dtype=dtype)
         data[to] = item
         assert_eq(data, expect)
+
+
+def test_categorical_setitem_with_nan():
+    gs = cudf.Series(
+        [1, 2, np.nan, 10, np.nan, None], nan_as_null=False
+    ).astype("category")
+    gs[[1, 3]] = np.nan
+
+    expected_series = cudf.Series(
+        [1, np.nan, np.nan, np.nan, np.nan, None], nan_as_null=False
+    ).astype(gs.dtype)
+    assert_eq(gs, expected_series)

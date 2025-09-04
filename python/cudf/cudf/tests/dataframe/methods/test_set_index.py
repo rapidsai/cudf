@@ -103,3 +103,18 @@ def test_set_index_multi(drop):
         df.set_index(["b", "d", "e"], drop=drop),
         gdf.set_index(["b", "d", "e"], drop=drop),
     )
+
+
+def test_df_cat_set_index():
+    df = cudf.DataFrame(
+        {
+            "a": pd.Categorical(list("aababcabbc"), categories=list("abc")),
+            "b": np.arange(10),
+        }
+    )
+    got = df.set_index("a")
+
+    pddf = df.to_pandas()
+    expect = pddf.set_index("a")
+
+    assert_eq(got, expect)

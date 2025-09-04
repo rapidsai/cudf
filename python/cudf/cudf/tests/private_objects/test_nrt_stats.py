@@ -1,4 +1,5 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
+import pytest
 from numba import config
 from numba.cuda.memory_management.nrt import rtsys
 
@@ -14,6 +15,7 @@ from cudf.core.udf.utils import (
 from cudf.utils._numba import _CUDFNumbaConfig
 
 
+@pytest.mark.skip(reason="https://github.com/rapidsai/cudf/issues/19880")
 def test_string_udf_basic(monkeypatch):
     monkeypatch.setattr(config, "CUDA_NRT_STATS", True)
 
@@ -34,6 +36,7 @@ def test_string_udf_basic(monkeypatch):
     assert stats.alloc - stats.free == 0
 
 
+@pytest.mark.skip(reason="https://github.com/rapidsai/cudf/issues/19880")
 def test_string_udf_conditional_allocations(monkeypatch):
     monkeypatch.setattr(config, "CUDA_NRT_STATS", True)
 
@@ -54,6 +57,7 @@ def test_string_udf_conditional_allocations(monkeypatch):
     assert after_stats.alloc - before_stats.free == 1
 
 
+@pytest.mark.skip(reason="https://github.com/rapidsai/cudf/issues/19880")
 def test_string_udf_free_kernel(monkeypatch):
     monkeypatch.setattr(config, "CUDA_NRT_STATS", True)
 
