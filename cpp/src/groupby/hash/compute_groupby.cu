@@ -120,6 +120,33 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
     cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
     stream.value()};
 
+  auto const gather_keys = [&](auto const& gather_map) {
+    return cudf::detail::gather(keys,
+                                gather_map,
+                                out_of_bounds_policy::DONT_CHECK,
+                                cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                stream,
+                                mr);
+  };
+
+  // In case of no requests, we still need to generate a set of unique keys.
+  if (requests.empty()) {
+    thrust::for_each_n(
+      rmm::exec_policy_nosync(stream),
+      thrust::make_counting_iterator(0),
+      num_keys,
+      [set_ref = set.ref(cuco::op::insert), row_bitmask] __device__(size_type const idx) mutable {
+        if (!row_bitmask || cudf::bit_is_set(row_bitmask, idx)) { set_ref.insert(idx); }
+      });
+
+    rmm::device_uvector<size_type> unique_key_indices(num_keys, stream);
+    auto const keys_end       = set.retrieve_all(unique_key_indices.begin(), stream.value());
+    auto const key_gather_map = device_span<size_type const>{
+      unique_key_indices.data(),
+      static_cast<std::size_t>(thrust::distance(unique_key_indices.begin(), keys_end))};
+    return gather_keys(key_gather_map);
+  }
+
   // Compute all single pass aggs first.
   auto [key_gather_map, has_compound_aggs] =
     compute_single_pass_aggs(set, row_bitmask, requests, cache, stream, mr);
@@ -142,12 +169,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
     }
   }
 
-  return cudf::detail::gather(keys,
-                              key_gather_map,
-                              out_of_bounds_policy::DONT_CHECK,
-                              cudf::detail::negative_index_policy::NOT_ALLOWED,
-                              stream,
-                              mr);
+  return gather_keys(key_gather_map);
 }
 
 template std::unique_ptr<table> compute_groupby<row_comparator_t, row_hash_t>(
