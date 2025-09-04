@@ -123,7 +123,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   auto const preprocessed_probe =
     cudf::detail::row::equality::preprocessed_table::create(probe, stream);
   auto const row_comparator =
-    cudf::detail::row::equality::two_table_comparator{preprocessed_build, preprocessed_probe};
+    cudf::detail::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
   auto const equality_probe = row_comparator.equal_to<false>(has_nulls, compare_nulls);
 
   // Create hash table containing all keys found in right table
