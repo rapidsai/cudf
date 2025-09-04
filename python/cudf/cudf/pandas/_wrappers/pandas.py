@@ -680,6 +680,7 @@ if cudf.core._compat.PANDAS_GE_210:
         slow_to_fast=_Unusable(),
         additional_attributes={
             "_pa_array": _FastSlowAttribute("_pa_array", private=True),
+            "__array__": _FastSlowAttribute("__array__", private=True),
         },
     )
 
@@ -702,6 +703,7 @@ ArrowStringArray = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "_pa_array": _FastSlowAttribute("_pa_array", private=True),
+        "__array__": _FastSlowAttribute("__array__", private=True),
     },
 )
 
@@ -1899,6 +1901,7 @@ ArrowExtensionArray = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "_pa_array": _FastSlowAttribute("_pa_array", private=True),
+        "__array__": _FastSlowAttribute("__array__", private=True),
     },
 )
 
