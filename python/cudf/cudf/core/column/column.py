@@ -781,7 +781,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
             col = col.fillna(np.nan)
             with acquire_spill_lock():
-                res = col.data_array_view(mode="read").copy_to_host()
+                res = col.data_array_view(mode="read").get()
             return res
 
         if self.has_nulls():
