@@ -223,9 +223,6 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::aggr
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-
-  if (requests.size() == 0) { return {empty_like(_keys), std::vector<aggregation_result>{}}; }
-
   CUDF_EXPECTS(
     std::all_of(requests.begin(),
                 requests.end(),
@@ -246,9 +243,6 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::scan
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-
-  if (requests.size() == 0) { return {empty_like(_keys), std::vector<aggregation_result>{}}; }
-
   CUDF_EXPECTS(
     std::all_of(requests.begin(),
                 requests.end(),
