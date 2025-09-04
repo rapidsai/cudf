@@ -30,11 +30,19 @@ function(find_and_configure_croaring VERSION)
             "ROARING_DISABLE_AVX2 ON"
             "ROARING_DISABLE_AVX512 ON"
   )
+  if(croaring_ADDED)
+    # Position independent code to link the static library
+    target_compile_options(roaring PRIVATE -fPIC)
+  endif()
+
+  if(DEFINED croaring_SOURCE_DIR)
   set(croaring_INCLUDE_DIR
-      "${croaring_SOURCE_DIR}"
-      PARENT_SCOPE
-  )
+        "${croaring_SOURCE_DIR}"
+        PARENT_SCOPE
+    )
+  endif()
+
 endfunction()
 
-set(croaring_VERSION_cudf "4.3.6")
+set(croaring_VERSION_cudf "4.3.10")
 find_and_configure_croaring(${croaring_VERSION_cudf})
