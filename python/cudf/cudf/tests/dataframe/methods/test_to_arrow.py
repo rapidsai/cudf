@@ -161,3 +161,71 @@ def test_to_arrow_categorical():
 
     assert isinstance(pa_gs, pa.Array)
     assert pa.Array.equals(pa_s, pa_gs)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {0: [1, 2, 3], 2: [10, 11, 23]},
+        {("a", "b"): [1, 2, 3], ("2",): [10, 11, 23]},
+    ],
+)
+def test_non_string_column_name_to_arrow(data):
+    df = cudf.DataFrame(data)
+
+    expected = df.to_arrow()
+    actual = pa.Table.from_pandas(df.to_pandas())
+
+    assert expected.equals(actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [{"one": 3, "two": 4, "three": 10}]},
+        {
+            "left-a": [0, 1, 2],
+            "a": [{"x": 0.23, "y": 43}, None, {"x": 23.9, "y": 4.3}],
+            "right-a": ["abc", "def", "ghi"],
+        },
+        {
+            "left-a": [{"a": 1}, None, None],
+            "a": [
+                {"one": 324, "two": 23432, "three": 324},
+                None,
+                {"one": 3.24, "two": 1, "three": 324},
+            ],
+            "right-a": ["abc", "def", "ghi"],
+        },
+    ],
+)
+def test_dataframe_roundtrip_arrow_struct_dtype(data):
+    gdf = cudf.DataFrame(data)
+    table = gdf.to_arrow()
+    expected = cudf.DataFrame.from_arrow(table)
+
+    assert_eq(gdf, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [[1], [2], [3]]},
+        {
+            "left-a": [0, 1, 2],
+            "a": [[1], None, [3]],
+            "right-a": ["abc", "def", "ghi"],
+        },
+        {
+            "left-a": [[], None, None],
+            "a": [[1], None, [3]],
+            "right-a": ["abc", "def", "ghi"],
+        },
+    ],
+)
+def test_dataframe_roundtrip_arrow_list_dtype(data):
+    gdf = cudf.DataFrame(data)
+    table = gdf.to_arrow()
+    expected = cudf.DataFrame.from_arrow(table)
+
+    assert_eq(gdf, expected)

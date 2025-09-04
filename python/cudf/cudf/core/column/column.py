@@ -2540,7 +2540,6 @@ def _has_any_nat(arbitrary: pd.Series | np.ndarray) -> bool:
 def column_empty(
     row_count: int,
     dtype: DtypeObj = CUDF_STRING_DTYPE,
-    for_numba: bool = False,
 ) -> ColumnBase:
     """
     Allocate a new column with the given row_count and dtype.
@@ -2555,59 +2554,50 @@ def column_empty(
 
     dtype : Dtype
         Type of the column.
-
-    for_numba : bool, default False
-        If True, don't allocate a mask as it's not supported by numba.
     """
-    children: tuple[ColumnBase, ...] = ()
-
-    if isinstance(dtype, StructDtype):
-        data = None
-        children = tuple(
-            column_empty(row_count, field_dtype)
-            for field_dtype in dtype.fields.values()
-        )
-    elif isinstance(dtype, ListDtype):
-        data = None
-        children = (
-            as_column(0, length=row_count + 1, dtype=SIZE_TYPE_DTYPE),
-            column_empty(row_count, dtype=dtype.element_type),
-        )
-    elif isinstance(dtype, CategoricalDtype):
-        data = None
-        children = (
-            ColumnBase.from_pylibcudf(
-                plc.Column.from_scalar(
-                    plc.Scalar.from_py(
-                        None, dtype_to_pylibcudf_type(SIZE_TYPE_DTYPE)
-                    ),
-                    row_count,
+    if isinstance(dtype, (StructDtype, ListDtype)):
+        if isinstance(dtype, StructDtype):
+            children = tuple(
+                column_empty(row_count, field_dtype)
+                for field_dtype in dtype.fields.values()
+            )
+        elif isinstance(dtype, ListDtype):
+            children = (
+                as_column(0, length=row_count + 1, dtype=SIZE_TYPE_DTYPE),
+                column_empty(row_count, dtype=dtype.element_type),
+            )
+        mask = (
+            None
+            if row_count == 0
+            else plc.gpumemoryview(
+                plc.null_mask.create_null_mask(
+                    row_count, plc.null_mask.MaskState.ALL_NULL
                 )
-            ),
+            )
         )
+        return ColumnBase.from_pylibcudf(
+            plc.Column(
+                dtype_to_pylibcudf_type(dtype),
+                row_count,
+                None,
+                mask,
+                row_count,
+                0,
+                [child.to_pylibcudf(mode="read") for child in children],
+            )
+        )._with_type_metadata(dtype)
     else:
-        col = ColumnBase.from_pylibcudf(
+        if isinstance(dtype, CategoricalDtype):
+            # May get downcast in _with_type_metadata
+            plc_dtype = plc.DataType(plc.TypeId.INT64)
+        else:
+            plc_dtype = dtype_to_pylibcudf_type(dtype)
+        return ColumnBase.from_pylibcudf(
             plc.Column.from_scalar(
-                plc.Scalar.from_py(None, dtype_to_pylibcudf_type(dtype)),
+                plc.Scalar.from_py(None, plc_dtype),
                 row_count,
             )
         )._with_type_metadata(dtype)
-        if for_numba:
-            col = col.set_mask(None)
-        return col
-
-    if row_count > 0 and not for_numba:
-        mask = as_buffer(
-            plc.null_mask.create_null_mask(
-                row_count, plc.null_mask.MaskState.ALL_NULL
-            )
-        )
-    else:
-        mask = None
-
-    return build_column(
-        data, dtype, mask=mask, size=row_count, children=children
-    )
 
 
 def build_column(
