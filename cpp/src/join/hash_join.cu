@@ -26,6 +26,7 @@
 #include <cudf/table/primitive_row_operators.cuh>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/prefetch.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -303,8 +304,8 @@ probe_join_hash_table(
 
   auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
   auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
-  cudf::experimental::prefetch::detail::prefetch("hash_join", *left_indices, stream);
-  cudf::experimental::prefetch::detail::prefetch("hash_join", *right_indices, stream);
+  cudf::prefetch::detail::prefetch(*left_indices, stream);
+  cudf::prefetch::detail::prefetch(*right_indices, stream);
 
   auto const probe_table_num_rows = probe_table.num_rows();
   auto const out_probe_begin =
