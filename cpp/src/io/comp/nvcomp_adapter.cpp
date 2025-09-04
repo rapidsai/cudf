@@ -715,6 +715,12 @@ void batched_decompress(compression_type compression,
                         size_t max_total_uncomp_size,
                         rmm::cuda_stream_view stream)
 {
+  CUDF_EXPECTS(inputs.size() > 0, "inputs must be non-empty");
+  CUDF_EXPECTS(inputs.size() == outputs.size(), "inputs and outputs must have the same size");
+  CUDF_EXPECTS(inputs.size() == results.size(), "inputs and results must have the same size");
+  CUDF_EXPECTS(max_total_uncomp_size > 0, "max_total_uncomp_size must be greater than 0");
+  CUDF_EXPECTS(max_uncomp_chunk_size > 0, "max_uncomp_chunk_size must be greater than 0");
+
   auto const num_chunks = inputs.size();
 
   // cuDF inflate inputs converted to nvcomp inputs
@@ -837,6 +843,10 @@ void batched_compress(compression_type compression,
                       device_span<codec_exec_result> results,
                       rmm::cuda_stream_view stream)
 {
+  CUDF_EXPECTS(inputs.size() > 0, "inputs must be non-empty");
+  CUDF_EXPECTS(inputs.size() == outputs.size(), "inputs and outputs must have the same size");
+  CUDF_EXPECTS(inputs.size() == results.size(), "inputs and results must have the same size");
+
   auto const num_chunks = inputs.size();
 
   auto nvcomp_args = create_batched_nvcomp_args(inputs, outputs, stream);
