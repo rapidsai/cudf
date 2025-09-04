@@ -65,7 +65,7 @@ public final class MemoryCleaner {
    * @return true if configured, false otherwise.
    */
   public static boolean configuredDefaultShutdownHook() {
-    return true;
+    return REF_COUNT_DEBUG;
   }
 
   /**
@@ -154,6 +154,9 @@ public final class MemoryCleaner {
 
   private static class CleanerWeakReference<T> extends WeakReference<T> {
 
+    // For avoiding double closes
+    private volatile boolean isCleaned = false;
+
     private final Cleaner cleaner;
     final boolean isRmmBlocker;
 
@@ -163,7 +166,12 @@ public final class MemoryCleaner {
       this.isRmmBlocker = isRmmBlocker;
     }
 
-    public void clean() {
+    public synchronized void clean() {
+      if (isCleaned) {
+        return;
+      }
+      isCleaned = true;
+
       if (cleaner.clean(true)) {
         leakCount.incrementAndGet();
       }
@@ -230,7 +238,7 @@ public final class MemoryCleaner {
       stopped = true;
     }
 
-    public void stopLoops() {
+    void stopLoops() {
       stopFlag = true;
       while (!stopped) {
         try {
@@ -242,13 +250,31 @@ public final class MemoryCleaner {
     }
   }
 
+  /**
+   * This is used to close all Rmm resources to check leaks.
+   * Should invoke this before closing Rmm.
+   */
+  public static void cleanAllRmmBlockers() {
+    // set the device for the current thread
+    if (defaultGpu >= 0) {
+      Cuda.setDevice(defaultGpu);
+    }
+
+    for (CleanerWeakReference cwr : MemoryCleaner.all.values()) {
+      if (cwr.isRmmBlocker) {
+        cwr.clean();
+      }
+    }
+  }
+
   private static final CleanerThread t = new CleanerThread();
 
   /**
-   * Default shutdown runnable used to be added to Java default shutdown hook.
-   * It checks the leaks at shutdown time.
+   * Default shutdown runnable used to be added to Spark shutdown hook.
+   * Spark-Rapids get this hook and register it into Spark shutdown hooks.
+   * Note: `cleanAllRmmBlocker` should be called to clean up RMM resources.
+   * It checks the leaks at shutdown time for non-RMM resources.
    */
-
   static class ShutdownHookThread implements Runnable {
 
     CleanerThread ct;
@@ -261,13 +287,13 @@ public final class MemoryCleaner {
       // stop cleaner thread first
       ct.stopLoops();
 
-      // force gc
-      System.gc();
-
       // set the device for the current thread
       if (defaultGpu >= 0) {
         Cuda.setDevice(defaultGpu);
       }
+
+      // force gc
+      System.gc();
 
       // clean up anything that got collected
       ct.cleanCollected();
@@ -281,7 +307,6 @@ public final class MemoryCleaner {
 
     @Override
     public void run() {
-      log.error("my debug: begin to run shutdow hook...");
       cleanAtShutdown();
     }
   }
@@ -363,10 +388,6 @@ public final class MemoryCleaner {
    */
   static boolean bestEffortHasRmmBlockers() {
     return all.values().stream().anyMatch(cwr -> cwr.isRmmBlocker && !cwr.cleaner.isClean());
-  }
-
-  public static void stopLoops() {
-    t.stopLoops();
   }
 
   /**
