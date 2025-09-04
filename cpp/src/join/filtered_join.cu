@@ -36,11 +36,8 @@
 #include <cuco/extent.cuh>
 #include <cuco/operator.hpp>
 #include <cuco/static_set_ref.cuh>
-#include <cuco/types.cuh>
-#include <cuco/utility/cuda_thread_scope.cuh>
 #include <cuda/std/iterator>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/transform_output_iterator.h>
 
 namespace cudf {
 namespace detail {
