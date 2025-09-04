@@ -248,3 +248,22 @@ def test_to_from_pandas_nulls(nulls):
     got = gdf_data.to_pandas()
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("data", [["a"], ["a", None], [None]])
+def test_string_export(data):
+    ps = pd.Series(data, dtype="str", name="nice name")
+    gs = cudf.Series(data, dtype="str", name="nice name")
+
+    expect = ps
+    got = gs.to_pandas()
+    assert_eq(expect, got)
+
+    expect = np.array(ps)
+    got = gs.to_numpy()
+    assert_eq(expect, got)
+
+    expect = pa.Array.from_pandas(ps)
+    got = gs.to_arrow()
+
+    assert pa.Array.equals(expect, got)

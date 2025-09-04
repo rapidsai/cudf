@@ -25,6 +25,7 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cub/cub.cuh>
+#include <cuco/static_multiset.cuh>
 #include <cuco/static_set.cuh>
 
 namespace cudf {
@@ -36,6 +37,56 @@ using row_hash = cudf::detail::row::hash::device_row_hasher<cudf::hashing::detai
 // // This alias is used by mixed_joins, which support only non-nested types
 using row_equality = cudf::detail::row::equality::strong_index_comparator_adapter<
   cudf::detail::row::equality::device_row_comparator<false, cudf::nullate::DYNAMIC>>;
+
+// Comparator that always returns false to ensure all values are inserted (like hash_join)
+struct mixed_join_always_not_equal {
+  __device__ constexpr bool operator()(cuco::pair<hash_value_type, size_type> const&,
+                                       cuco::pair<hash_value_type, size_type> const&) const noexcept
+  {
+    // multiset always insert
+    return false;
+  }
+};
+
+// hasher1 and hasher2 used for double hashing. The first hash is used to determine the initial slot
+// and the second hash is used to determine the step size.
+//
+// For the first hash, we use the row hash value directly so there is no need to hash it again.
+//
+// For the second hash, we hash the row hash value again to determine the step size.
+struct mixed_join_hasher1 {
+  __device__ constexpr hash_value_type operator()(
+    cuco::pair<hash_value_type, size_type> const& key) const noexcept
+  {
+    return key.first;
+  }
+};
+
+struct mixed_join_hasher2 {
+  mixed_join_hasher2(hash_value_type seed) : _hash{seed} {}
+
+  __device__ constexpr hash_value_type operator()(
+    cuco::pair<hash_value_type, size_type> const& key) const noexcept
+  {
+    return _hash(key.first);
+  }
+
+ private:
+  using hash_type = cuco::murmurhash3_32<hash_value_type>;
+  hash_type _hash;
+};
+
+// Hash table type used for mixed joins
+using mixed_join_hash_table_t =
+  cuco::static_multiset<cuco::pair<hash_value_type, size_type>,
+                        cuco::extent<std::size_t>,
+                        cuda::thread_scope_device,
+                        mixed_join_always_not_equal,
+                        cuco::double_hashing<1, mixed_join_hasher1, mixed_join_hasher2>,
+                        cudf::detail::cuco_allocator<char>,
+                        cuco::storage<2>>;
+template <typename Tag>
+using mixed_join_hash_table_ref_t = mixed_join_hash_table_t::ref_type<Tag>;
 
 /**
  * @brief Equality comparator for use with cuco map methods that require expression evaluation.
@@ -76,17 +127,8 @@ template <bool has_nulls>
 struct single_expression_equality : expression_equality<has_nulls> {
   using expression_equality<has_nulls>::expression_equality;
 
-  // The parameters are build/probe rather than left/right because the operator
-  // is called by cuco's kernels with parameters in this order (note that this
-  // is an implementation detail that we should eventually stop relying on by
-  // defining operators with suitable heterogeneous typing). Rather than
-  // converting to left/right semantics, we can operate directly on build/probe
-  // until we get to the expression evaluator, which needs to convert back to
-  // left/right semantics because the conditional expression need not be
-  // commutative.
-  // TODO: The input types should really be size_type.
-  __device__ __forceinline__ bool operator()(hash_value_type const build_row_index,
-                                             hash_value_type const probe_row_index) const noexcept
+  __device__ __forceinline__ bool operator()(size_type const left_index,
+                                             size_type const right_index) const noexcept
   {
     using cudf::detail::row::lhs_index_type;
     using cudf::detail::row::rhs_index_type;
@@ -96,12 +138,13 @@ struct single_expression_equality : expression_equality<has_nulls> {
     // 1. The contents of the columns involved in the equality condition are equal.
     // 2. The predicate evaluated on the relevant columns (already encoded in the evaluator)
     // evaluates to true.
-    if (this->equality_probe(lhs_index_type{probe_row_index}, rhs_index_type{build_row_index})) {
-      auto const lrow_idx = this->swap_tables ? build_row_index : probe_row_index;
-      auto const rrow_idx = this->swap_tables ? probe_row_index : build_row_index;
+    if (this->equality_probe(lhs_index_type{left_index}, rhs_index_type{right_index})) {
+      // For the AST evaluator, we need to map back to left/right table semantics
+      auto const left_table_idx  = this->swap_tables ? right_index : left_index;
+      auto const right_table_idx = this->swap_tables ? left_index : right_index;
       this->evaluator.evaluate(output_dest,
-                               static_cast<size_type>(lrow_idx),
-                               static_cast<size_type>(rrow_idx),
+                               static_cast<size_type>(left_table_idx),
+                               static_cast<size_type>(right_table_idx),
                                0,
                                this->thread_intermediate_storage);
       return (output_dest.is_valid() && output_dest.value());
@@ -128,16 +171,8 @@ template <bool has_nulls>
 struct pair_expression_equality : public expression_equality<has_nulls> {
   using expression_equality<has_nulls>::expression_equality;
 
-  // The parameters are build/probe rather than left/right because the operator
-  // is called by cuco's kernels with parameters in this order (note that this
-  // is an implementation detail that we should eventually stop relying on by
-  // defining operators with suitable heterogeneous typing). Rather than
-  // converting to left/right semantics, we can operate directly on build/probe
-  // until we get to the expression evaluator, which needs to convert back to
-  // left/right semantics because the conditional expression need not be
-  // commutative.
-  __device__ __forceinline__ bool operator()(pair_type const& build_row,
-                                             pair_type const& probe_row) const noexcept
+  __device__ __forceinline__ bool operator()(pair_type const& left_row,
+                                             pair_type const& right_row) const noexcept
   {
     using cudf::detail::row::lhs_index_type;
     using cudf::detail::row::rhs_index_type;
@@ -148,10 +183,10 @@ struct pair_expression_equality : public expression_equality<has_nulls> {
     // 2. The contents of the columns involved in the equality condition are equal.
     // 3. The predicate evaluated on the relevant columns (already encoded in the evaluator)
     // evaluates to true.
-    if ((probe_row.first == build_row.first) &&
-        this->equality_probe(lhs_index_type{probe_row.second}, rhs_index_type{build_row.second})) {
-      auto const lrow_idx = this->swap_tables ? build_row.second : probe_row.second;
-      auto const rrow_idx = this->swap_tables ? probe_row.second : build_row.second;
+    if ((left_row.first == right_row.first) &&
+        this->equality_probe(lhs_index_type{left_row.second}, rhs_index_type{right_row.second})) {
+      auto const lrow_idx = this->swap_tables ? right_row.second : left_row.second;
+      auto const rrow_idx = this->swap_tables ? left_row.second : right_row.second;
       this->evaluator.evaluate(
         output_dest, lrow_idx, rrow_idx, 0, this->thread_intermediate_storage);
       return (output_dest.is_valid() && output_dest.value());

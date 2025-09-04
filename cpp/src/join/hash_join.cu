@@ -52,20 +52,7 @@ namespace {
 using hash_table_t = cudf::hash_join::impl_type::hash_table_t;
 
 // Multimap type used for mixed joins. TODO: This is a temporary alias used
-// TODO: `pair_equal` and `pair_fn` to be moved to common utils during
-// mixed-join migration
-template <typename Hasher>
-struct pair_fn {
-  pair_fn(Hasher hash) : _hash{std::move(hash)} {}
-
-  __device__ cuco::pair<hash_value_type, size_type> operator()(size_type i) const noexcept
-  {
-    return cuco::pair{_hash(i), i};
-  }
-
- private:
-  Hasher _hash;
-};
+// TODO: `pair_equal` to be moved to common utils during mixed-join migration
 
 template <typename Equal>
 class pair_equal {
