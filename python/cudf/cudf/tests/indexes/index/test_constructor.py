@@ -321,3 +321,13 @@ def test_roundtrip_index_plc_column():
     expect = cudf.Index(index)
     actual = cudf.Index.from_pylibcudf(*expect.to_pylibcudf())
     assert_eq(expect, actual)
+
+
+def test_categorical_index_with_dtype():
+    dtype = cudf.CategoricalDtype(categories=["a", "z", "c"])
+    gi = cudf.Index(["z", "c", "a"], dtype=dtype)
+    pi = pd.Index(["z", "c", "a"], dtype=dtype.to_pandas())
+
+    assert_eq(gi, pi)
+    assert_eq(gi.dtype, pi.dtype)
+    assert_eq(gi.dtype.categories, pi.dtype.categories)

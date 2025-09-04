@@ -4,6 +4,7 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.testing import assert_eq
 
 
 @pytest.mark.parametrize(
@@ -18,3 +19,21 @@ def test_categorical_index_is_unique_monotonic(testlist):
     assert index.is_unique == index_pd.is_unique
     assert index.is_monotonic_increasing == index_pd.is_monotonic_increasing
     assert index.is_monotonic_decreasing == index_pd.is_monotonic_decreasing
+
+
+@pytest.mark.parametrize(
+    "data", [["$ 1", "$ 2", "hello"], ["($) 1", "( 2", "hello", "^1$"]]
+)
+@pytest.mark.parametrize("value", ["$ 1", "hello", "$", "^1$"])
+def test_categorical_string_index_contains(data, value):
+    idx = cudf.CategoricalIndex(data)
+    pidx = idx.to_pandas()
+
+    assert_eq(value in idx, value in pidx)
+
+
+@pytest.mark.parametrize("ordered", [True, False])
+def test_index_ordered(ordered):
+    pd_ci = pd.CategoricalIndex([1, 2, 3], ordered=ordered)
+    cudf_ci = cudf.from_pandas(pd_ci)
+    assert pd_ci.ordered == cudf_ci.ordered

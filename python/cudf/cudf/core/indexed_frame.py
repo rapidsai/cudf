@@ -4935,7 +4935,7 @@ class IndexedFrame(Frame):
     def astype(
         self,
         dtype: Dtype | dict[Hashable, Dtype],
-        copy: bool = False,
+        copy: bool | None = None,
         errors: Literal["raise", "ignore"] = "raise",
     ) -> Self:
         """Cast the object to the given dtype.
@@ -6821,30 +6821,43 @@ def _append_new_row_inplace(col: ColumnBase, value: ScalarLike) -> None:
     """Append a scalar `value` to the end of `col` inplace.
     Cast to common type if possible
     """
-    val_col = as_column(value, dtype=col.dtype if value is None else None)
-    if (
-        cudf.get_option("mode.pandas_compatible")
-        and is_pandas_nullable_extension_dtype(col.dtype)
-        and val_col.dtype.kind == "f"
-    ):
-        # If the column is a pandas nullable extension type, we need to
-        # convert the nans to a nullable type as well.
-        val_col = val_col.nans_to_nulls()
-        if len(val_col) == val_col.null_count:
-            # If the column is all nulls, we can use the column dtype
-            # to avoid unnecessary casting.
-            val_col = val_col.astype(col.dtype)
-    to_type = find_common_type([val_col.dtype, col.dtype])
-    if (
-        cudf.get_option("mode.pandas_compatible")
-        and is_string_dtype(to_type)
-        and is_mixed_with_object_dtype(val_col, col)
-    ):
-        raise MixedTypeError("Cannot append mixed types")
-    if cudf.get_option("mode.pandas_compatible") and val_col.can_cast_safely(
-        col.dtype
-    ):
+    val_col = as_column(
+        value,
+        dtype=col.dtype
+        if (
+            cudf.utils.utils._is_null_host_scalar(value)
+            or value in {None, np.nan}
+        )
+        else None,
+    )
+    if val_col.dtype.kind != "f" and val_col.can_cast_safely(col.dtype):
+        # If the value can be cast to the column dtype, do so
+        val_col = val_col.astype(col.dtype)
         to_type = col.dtype
+    else:
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and is_pandas_nullable_extension_dtype(col.dtype)
+            and val_col.dtype.kind == "f"
+        ):
+            # If the column is a pandas nullable extension type, we need to
+            # convert the nans to a nullable type as well.
+            val_col = val_col.nans_to_nulls()
+            if len(val_col) == val_col.null_count:
+                # If the column is all nulls, we can use the column dtype
+                # to avoid unnecessary casting.
+                val_col = val_col.astype(col.dtype)
+        to_type = find_common_type([val_col.dtype, col.dtype])
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and is_string_dtype(to_type)
+            and is_mixed_with_object_dtype(val_col, col)
+        ):
+            raise MixedTypeError("Cannot append mixed types")
+        if cudf.get_option(
+            "mode.pandas_compatible"
+        ) and val_col.can_cast_safely(col.dtype):
+            to_type = col.dtype
     val_col = val_col.astype(to_type)
     old_col = col.astype(to_type)
     res_col = concat_columns([old_col, val_col])._with_type_metadata(to_type)

@@ -908,10 +908,6 @@ class DatetimeTZColumn(DatetimeColumn):
         elif tz == str(self.dtype.tz):
             return self.copy()
         utc_time = self._utc_time
-        return type(self)(
-            data=utc_time.base_data,  # type: ignore[arg-type]
-            dtype=pd.DatetimeTZDtype(self.time_unit, tz),
-            mask=utc_time.base_mask,
-            size=utc_time.size,
-            offset=utc_time.offset,
+        return utc_time._with_type_metadata(
+            pd.DatetimeTZDtype(self.time_unit, tz)
         )

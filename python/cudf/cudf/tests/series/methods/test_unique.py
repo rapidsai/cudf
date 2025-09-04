@@ -1,5 +1,5 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
-
+import string
 
 import numpy as np
 import pandas as pd
@@ -50,14 +50,6 @@ def test_series_unique():
 
 
 def test_series_nunique(request, nan_as_null, dropna):
-    # We remove nulls as opposed to NaNs using the dropna parameter,
-    # so to test against pandas we replace NaN with another discrete value
-    request.applymarker(
-        pytest.mark.xfail(
-            nan_as_null is None,
-            reason=f"{nan_as_null=} returns wrong result",
-        )
-    )
     cudf_series = cudf.Series([1, 2, 2, 3, 3], nan_as_null=nan_as_null)
     pd_series = pd.Series([1, 2, 2, 3, 3])
     expect = pd_series.nunique(dropna=dropna)
@@ -67,20 +59,20 @@ def test_series_nunique(request, nan_as_null, dropna):
     cudf_series = cudf.Series(
         [1.0, 2.0, 3.0, np.nan, None], nan_as_null=nan_as_null
     )
-    if nan_as_null is True:
-        pd_series = pd.Series([1.0, 2.0, 3.0, np.nan, None])
+    if nan_as_null in {True, None}:
+        pd_series = pd.Series([1.0, 2.0, 3.0, None, None])
     else:
-        pd_series = pd.Series([1.0, 2.0, 3.0, -1.0, None])
+        pd_series = pd.Series([1.0, 2.0, 3.0, np.nan, None], dtype=object)
 
     expect = pd_series.nunique(dropna=dropna)
     got = cudf_series.nunique(dropna=dropna)
     assert expect == got
 
     cudf_series = cudf.Series([1.0, np.nan, np.nan], nan_as_null=nan_as_null)
-    if nan_as_null is True:
+    if nan_as_null in {True, None}:
         pd_series = pd.Series([1.0, np.nan, np.nan])
     else:
-        pd_series = pd.Series([1.0, -1.0, -1.0])
+        pd_series = pd.Series([1.0, None, None])
     expect = pd_series.nunique(dropna=dropna)
     got = cudf_series.nunique(dropna=dropna)
     assert expect == got
@@ -104,3 +96,24 @@ def test_string_unique(item):
     # cudf returns a cudf.Series
     gres = gs.unique()
     assert_eq(pres, gres)
+
+
+def test_categorical_unique():
+    num_elements = 20
+    rng = np.random.default_rng(seed=12)
+    pd_cat = pd.Categorical(
+        pd.Series(
+            rng.choice(
+                list(string.ascii_letters + string.digits), num_elements
+            ),
+            dtype="category",
+        )
+    )
+
+    gser = cudf.Series(pd_cat)
+    gdf_unique_sorted = np.sort(gser.unique().to_pandas())
+
+    pser = pd.Series(pd_cat)
+    pdf_unique_sorted = np.sort(pser.unique())
+
+    np.testing.assert_array_equal(pdf_unique_sorted, gdf_unique_sorted)

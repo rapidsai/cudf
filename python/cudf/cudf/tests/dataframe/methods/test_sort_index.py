@@ -168,3 +168,17 @@ def test_multiindex_sort_index_partial(levels):
     expect = df.sort_index(level=levels, sort_remaining=True)
     got = cdf.sort_index(level=levels, sort_remaining=True)
     assert_eq(expect, got)
+
+
+def test_df_cat_sort_index():
+    df = cudf.DataFrame(
+        {
+            "a": pd.Categorical(list("aababcabbc"), categories=list("abc")),
+            "b": np.arange(10),
+        }
+    )
+
+    got = df.set_index("a").sort_index()
+    expect = df.to_pandas().set_index("a").sort_index()
+
+    assert_eq(got, expect)

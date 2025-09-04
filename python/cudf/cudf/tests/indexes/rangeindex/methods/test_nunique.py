@@ -1,6 +1,7 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
 
 import numpy as np
+import pandas as pd
 import pytest
 
 import cudf
@@ -35,3 +36,13 @@ def test_rangeindex_methods(rangeindex, func):
         actual = getattr(gidx, func)()
 
     assert_eq(expected, actual)
+
+
+def test_nunique():
+    gidx = cudf.RangeIndex(5)
+    pidx = pd.RangeIndex(5)
+
+    actual = gidx.nunique()
+    expected = pidx.nunique()
+
+    assert actual == expected
