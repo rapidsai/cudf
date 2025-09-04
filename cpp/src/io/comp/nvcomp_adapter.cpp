@@ -720,7 +720,7 @@ void batched_decompress(compression_type compression,
   CUDF_EXPECTS(inputs.size() == results.size(), "inputs and results must have the same size");
   CUDF_EXPECTS(max_total_uncomp_size > 0, "max_total_uncomp_size must be greater than 0");
   CUDF_EXPECTS(max_uncomp_chunk_size > 0, "max_uncomp_chunk_size must be greater than 0");
-  
+
   auto const num_chunks = inputs.size();
 
   // cuDF inflate inputs converted to nvcomp inputs
