@@ -184,7 +184,7 @@ public final class MemoryCleaner {
 
   private static class CleanerThread extends Thread {
     private volatile boolean stopFlag = false;
-    private volatile boolean stoped = false;
+    private volatile boolean stopped = false;
 
     CleanerThread() {
       super("Cleaner Thread");
@@ -227,12 +227,12 @@ public final class MemoryCleaner {
       while(!stopFlag) {
         cleanCollected();
       }
-      stoped = true;
+      stopped = true;
     }
 
     public void stopLoops() {
       stopFlag = true;
-      while (!stoped) {
+      while (!stopped) {
         try {
           Thread.sleep(10);
         } catch (InterruptedException e) {
