@@ -220,7 +220,15 @@ class StructColumn(ColumnBase):
 
         # Check IntervalDtype first because it's a subclass of StructDtype
         if isinstance(dtype, IntervalDtype):
-            return IntervalColumn.from_struct_column(self, closed=dtype.closed)
+            return IntervalColumn(
+                data=None,
+                size=self.size,
+                dtype=dtype,
+                mask=self.base_mask,
+                offset=self.offset,
+                null_count=self.null_count,
+                children=self.base_children,  # type: ignore[arg-type]
+            )
         elif isinstance(dtype, StructDtype):
             return StructColumn(
                 data=None,
