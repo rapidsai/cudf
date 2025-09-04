@@ -293,7 +293,7 @@ std::vector<std::unique_ptr<column>> filter_operation(
                      // broadcast scalar columns
                      auto tiled = cudf::tile(cudf::table_view{{column}}, num_selected, stream, mr);
                      auto tiled_columns = tiled->release();
-                     return std::move(tiled_columns[0]);
+                     return std::move(tiled_columns.front());
                    } else {
                      auto d_column = cudf::column_device_view::create(column, stream);
                      return filter_column(
