@@ -51,8 +51,9 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   auto const evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
     left_table, right_table, device_expression_data);
 
-  // Make sure to swap_tables here as hash_set will use probe table as the left one
-  auto constexpr swap_tables = true;
+  // The cuco API passes parameters in the same (left, right) order we use here,
+  // so no swapping needed
+  auto constexpr swap_tables = false;
   auto const equality        = single_expression_equality<has_nulls>{
     evaluator, thread_intermediate_storage, swap_tables, equality_probe};
 
