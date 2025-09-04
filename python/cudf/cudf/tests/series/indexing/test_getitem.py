@@ -1,5 +1,6 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
 
+import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
@@ -216,3 +217,51 @@ def test_datetime_getitem_na():
 def test_timedelta_getitem_na():
     s = cudf.Series([1, 2, None, 3], dtype="timedelta64[ns]")
     assert s[2] is cudf.NaT
+
+
+def test_string_table_view_creation():
+    data = ["hi"] * 25 + [None] * 2027
+    psr = pd.Series(data)
+    gsr = cudf.Series.from_pandas(psr)
+
+    expect = psr[:1]
+    got = gsr[:1]
+
+    assert_eq(expect, got)
+
+
+def test_string_slice_with_mask():
+    actual = cudf.Series(["hi", "hello", None])
+    expected = actual[0:3]
+
+    assert actual._column.base_size == 3
+    assert_eq(actual._column.base_size, expected._column.base_size)
+    assert_eq(actual._column.null_count, expected._column.null_count)
+
+    assert_eq(actual, expected)
+
+
+def test_categorical_masking():
+    """
+    Test common operation for getting a all rows that matches a certain
+    category.
+    """
+    cat = pd.Categorical(["a", "a", "b", "c", "a"], categories=["a", "b", "c"])
+    pdsr = pd.Series(cat)
+    sr = cudf.Series(cat)
+
+    # check scalar comparison
+    expect_matches = pdsr == "a"
+    got_matches = sr == "a"
+
+    np.testing.assert_array_equal(
+        expect_matches.values, got_matches.to_numpy()
+    )
+
+    # mask series
+    expect_masked = pdsr[expect_matches]
+    got_masked = sr[got_matches]
+
+    assert len(expect_masked) == len(got_masked)
+    assert got_masked.null_count == 0
+    assert_eq(got_masked, expect_masked)
