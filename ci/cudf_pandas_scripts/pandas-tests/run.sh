@@ -49,7 +49,7 @@ timeout 90m bash python/cudf/cudf/pandas/scripts/run-pandas-tests.sh \
 
 SUMMARY_FILE_NAME=${PANDAS_TESTS_BRANCH}-${RAPIDS_FULL_VERSION}-results.json
 # summarize the results and save them to artifacts:
-python python/cudf/cudf/pandas/scripts/summarize-test-results.py --output json ./"${PANDAS_TESTS_BRANCH}.json" > "pandas-testing/${SUMMARY_FILE_NAME}"
+python python/cudf/cudf/pandas/scripts/summarize-test-results.py --output json pandas-testng/"${PANDAS_TESTS_BRANCH}.json" > "./${SUMMARY_FILE_NAME}"
 # RAPIDS_ARTIFACTS_DIR=${RAPIDS_ARTIFACTS_DIR:-"${PWD}/artifacts"}
 # mkdir -p "${RAPIDS_ARTIFACTS_DIR}"
 # cp ./"${SUMMARY_FILE_NAME}" "${RAPIDS_ARTIFACTS_DIR}"/
