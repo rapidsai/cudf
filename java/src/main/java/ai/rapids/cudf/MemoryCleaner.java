@@ -65,7 +65,7 @@ public final class MemoryCleaner {
    * @return true if configured, false otherwise.
    */
   public static boolean configuredDefaultShutdownHook() {
-    return false;
+    return true;
   }
 
   /**
@@ -190,7 +190,7 @@ public final class MemoryCleaner {
       super("Cleaner Thread");
     }
 
-    private void cleanCollected() {
+    void cleanCollected() {
       int currentGpuId = -1;
       while (true) {
         CleanerWeakReference next = null;
@@ -248,13 +248,41 @@ public final class MemoryCleaner {
    * Default shutdown runnable used to be added to Java default shutdown hook.
    * It checks the leaks at shutdown time.
    */
-  public static void cleanAtShutdown() {
-    if (defaultGpu >= 0) {
-      Cuda.setDevice(defaultGpu);
+
+  static class ShutdownHookThread implements Runnable {
+
+    CleanerThread ct;
+
+    ShutdownHookThread() {
+      this.ct = t;
     }
 
-    for (CleanerWeakReference cwr : all.values()) {
-      cwr.clean();
+    public void cleanAtShutdown() {
+      // stop cleaner thread first
+      ct.stopLoops();
+
+      // force gc
+      System.gc();
+
+      // set the device for the current thread
+      if (defaultGpu >= 0) {
+        Cuda.setDevice(defaultGpu);
+      }
+
+      // clean up anything that got collected
+      ct.cleanCollected();
+
+      // check the remaining references
+      for (CleanerWeakReference cwr : MemoryCleaner.all.values()) {
+        log.error("my debug: remaining reference found " + cwr.cleaner.id);
+        cwr.clean();
+      }
+    }
+
+    @Override
+    public void run() {
+      log.error("my debug: begin to run shutdow hook...");
+      cleanAtShutdown();
     }
   }
 
@@ -272,7 +300,7 @@ public final class MemoryCleaner {
    * @return the default shutdown runnable
    */
   public static Runnable removeDefaultShutdownHook() {
-    return null;
+    return new ShutdownHookThread();
   }
 
   static void register(ColumnVector vec, Cleaner cleaner) {
