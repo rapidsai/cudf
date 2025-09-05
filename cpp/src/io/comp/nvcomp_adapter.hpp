@@ -121,6 +121,13 @@ size_t batched_decompress_temp_size(compression_type compression,
  */
 [[nodiscard]] std::optional<size_t> compress_max_allowed_chunk_size(compression_type compression);
 
+/**
+ * @brief Loads the nvCOMP library.
+ *
+ * Can be used to load the nvCOMP library before its first use. Eager loading can help avoid issues
+ * due to the device memory allocations performed during the dynamic loading of the library (e.g.
+ * when loading after the memory pools have been created).
+ */
 void load_nvcomp_library();
 
 /**
