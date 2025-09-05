@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass
 from functools import singledispatchmethod
 from typing import TYPE_CHECKING, Any
@@ -38,6 +39,11 @@ class UnaryOp:
 @dataclass(frozen=True)
 class RankOp(UnaryOp):
     pass
+
+
+@dataclass(frozen=True)
+class FillNullWithStrategyOp(UnaryOp):
+    policy: plc.replace.ReplacePolicy = plc.replace.ReplacePolicy.PRECEDING
 
 
 def to_request(
@@ -223,7 +229,7 @@ class GroupedRollingWindow(Expr):
                 isinstance(named_expr.value, (expr.Len, expr.Agg))
                 or (
                     isinstance(named_expr.value, expr.UnaryFunction)
-                    and named_expr.value.name in {"rank"}
+                    and named_expr.value.name in {"rank", "fill_null_with_strategy"}
                 )
             )
         ]
@@ -248,7 +254,10 @@ class GroupedRollingWindow(Expr):
             for ne in self.named_aggs
             for v in (ne.value,)
             if isinstance(v, expr.Agg)
-            or (isinstance(v, expr.UnaryFunction) and v.name in {"rank"})
+            or (
+                isinstance(v, expr.UnaryFunction)
+                and v.name in {"rank", "fill_null_with_strategy"}
+            )
         ]
         self.by_count = len(by_expr)
         self.children = tuple(by_expr) + tuple(self._order_by_exprs) + tuple(child_deps)
@@ -334,6 +343,60 @@ class GroupedRollingWindow(Expr):
             _, rank_tables = grouper.scan(rank_requests)
         return rank_out_names, rank_out_dtypes, rank_tables
 
+    @_apply_unary_op.register
+    def _(
+        self,
+        op: FillNullWithStrategyOp,
+        df: DataFrame,
+        grouper: plc.groupby.GroupBy,
+    ) -> tuple[list[str], list[DataType], list[plc.Table]]:
+        by_cols_for_scan = op.by_cols_for_scan
+        named_exprs = op.named_exprs
+        order_index = op.order_index
+        policy = op.policy
+
+        val_cols = [
+            Column(
+                plc.copying.gather(
+                    plc.Table(
+                        [
+                            ne.value.children[0]
+                            .evaluate(df, context=ExecutionContext.FRAME)
+                            .obj
+                        ]
+                    ),
+                    order_index,
+                    plc.copying.OutOfBoundsPolicy.NULLIFY,
+                ).columns()[0],
+                dtype=ne.value.children[0].dtype,
+            )
+            for ne in named_exprs
+        ]
+
+        assert by_cols_for_scan is not None
+        order_by_tbl = plc.Table([c.obj for c in by_cols_for_scan])
+        local = plc.groupby.GroupBy(
+            order_by_tbl,
+            null_handling=plc.types.NullPolicy.INCLUDE,
+            keys_are_sorted=plc.types.Sorted.YES,
+            column_order=[k.order for k in by_cols_for_scan],
+            null_precedence=[k.null_order for k in by_cols_for_scan],
+        )
+
+        vals_tbl = plc.Table([c.obj for c in val_cols])
+        _, filled_tbl = local.replace_nulls(
+            vals_tbl,
+            [policy] * len(val_cols),
+        )
+
+        tables = [
+            plc.Table([filled_tbl.columns()[i]])
+            for i in range(filled_tbl.num_columns())
+        ]
+        names = [ne.name for ne in named_exprs]
+        dtypes = [ne.value.dtype for ne in named_exprs]
+        return names, dtypes, tables
+
     def _reorder_to_input(
         self,
         row_id: plc.Column,
@@ -382,7 +445,10 @@ class GroupedRollingWindow(Expr):
     ) -> tuple[list[expr.NamedExpr], dict[str, list[expr.NamedExpr]]]:
         """Split into reductions vs unary window operations."""
         reductions: list[expr.NamedExpr] = []
-        unary_window_ops: dict[str, list[expr.NamedExpr]] = {"rank": []}
+        unary_window_ops: dict[str, list[expr.NamedExpr]] = {
+            "rank": [],
+            "fill_null_with_strategy": [],
+        }
 
         for ne in self.named_aggs:
             v = ne.value
@@ -617,6 +683,53 @@ class GroupedRollingWindow(Expr):
                 broadcasted_cols.extend(
                     self._reorder_to_input(
                         row_id, by_cols, df.num_rows, tables, names, dtypes
+                    )
+                )
+
+        if fill_named := unary_window_ops["fill_null_with_strategy"]:
+            order_index = self._build_window_order_index(
+                by_cols,
+                row_id=row_id,
+                order_by_cols=order_by_cols if self._order_by_count else None,
+                ob_desc=self.options[2] if self._order_by_count else False,
+                ob_nulls_last=self.options[3] if self._order_by_count else False,
+            )
+
+            by_cols_for_scan = self._gather_by_cols_for_index(by_cols, order_index)
+
+            strategy_sets: dict[str, list[expr.NamedExpr]] = defaultdict(list)
+            for ne in fill_named:
+                fill_null_expr = ne.value
+                assert isinstance(fill_null_expr, expr.UnaryFunction)
+                strategy_sets[fill_null_expr.options[0]].append(ne)
+
+            replace_policy = {
+                "forward": plc.replace.ReplacePolicy.PRECEDING,
+                "backward": plc.replace.ReplacePolicy.FOLLOWING,
+            }
+
+            for strategy, bucket in strategy_sets.items():
+                if not bucket:
+                    continue
+                names, dtypes, tables = self._apply_unary_op(
+                    FillNullWithStrategyOp(
+                        named_exprs=bucket,
+                        order_index=order_index,
+                        by_cols_for_scan=by_cols_for_scan,
+                        policy=replace_policy[strategy],
+                    ),
+                    df,
+                    grouper,
+                )
+                broadcasted_cols.extend(
+                    self._reorder_to_input(
+                        row_id,
+                        by_cols,
+                        df.num_rows,
+                        tables,
+                        names,
+                        dtypes,
+                        order_index=order_index,
                     )
                 )
 

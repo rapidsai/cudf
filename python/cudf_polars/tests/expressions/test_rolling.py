@@ -357,3 +357,42 @@ def test_rank_over_with_null_group_keys(
         .over("g_null", order_by=order_by)
     )
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("strategy", ["forward", "backward"])
+@pytest.mark.parametrize("order_by", [None, ["g2", pl.col("x2") * 2]])
+def test_fill_over(
+    df: pl.LazyFrame,
+    strategy: str,
+    *,
+    order_by: None | list[str | pl.Expr],
+) -> None:
+    val = pl.when((pl.col("x") % 3) == 0).then(None).otherwise(pl.col("x"))
+    q = df.select(val.fill_null(strategy=strategy).over("g", order_by=order_by))
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("strategy", ["forward", "backward"])
+@pytest.mark.parametrize("order_by", [None, ["g2", pl.col("x2") * 2]])
+def test_fill_over_with_null_group_keys(
+    df: pl.LazyFrame,
+    strategy: str,
+    *,
+    order_by: None | list[str | pl.Expr],
+) -> None:
+    val = pl.when((pl.col("x") % 2) == 0).then(None).otherwise(pl.col("x"))
+    q = df.select(val.fill_null(strategy=strategy).over("g_null", order_by=order_by))
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("strategy", ["forward", "backward"])
+@pytest.mark.parametrize("order_by", [None, ["g2", pl.col("x2") * 2]])
+def test_fill_over_all_nulls_in_group(
+    df: pl.LazyFrame,
+    strategy: str,
+    *,
+    order_by: None | list[str | pl.Expr],
+) -> None:
+    val = pl.when(pl.col("g") == 2).then(None).otherwise(pl.col("x"))
+    q = df.select(val.fill_null(strategy=strategy).over("g", order_by=order_by))
+    assert_gpu_result_equal(q)
