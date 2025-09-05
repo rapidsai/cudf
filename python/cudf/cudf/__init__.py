@@ -10,12 +10,6 @@ else:
     libcudf.load_library()
     del libcudf
 
-import cupy
-from numba import cuda
-
-from rmm.allocators.cupy import rmm_cupy_allocator
-from rmm.allocators.numba import RMMNumbaManager
-
 from cudf import api, core, datasets, testing
 from cudf._version import __git_commit__, __version__
 from cudf.api.extensions import (
@@ -78,16 +72,18 @@ from cudf.options import (
     set_option,
 )
 
-cuda.set_memory_manager(RMMNumbaManager)
-cupy.cuda.set_allocator(rmm_cupy_allocator)
-
 
 def configure_mr():
     import os
     import warnings
 
+    import cupy
+    from numba import cuda
+
     import pylibcudf
     import rmm.mr
+    from rmm.allocators.cupy import rmm_cupy_allocator
+    from rmm.allocators.numba import RMMNumbaManager
 
     if (
         "RAPIDS_NO_INITIALIZE" in os.environ
@@ -95,6 +91,12 @@ def configure_mr():
     ):
         return
 
+    # Set up cupy and numba to use RMM for allocations
+    cuda.set_memory_manager(RMMNumbaManager)
+    cupy.cuda.set_allocator(rmm_cupy_allocator)
+
+    # Configure rmm's default allocator to be a managed pool if supported unless the
+    # user has specified otherwise.
     try:
         # The default mode is "managed_pool" if UVM is supported, otherwise "pool"
         managed_memory_is_supported = (
@@ -167,11 +169,6 @@ def configure_mr():
 
 configure_mr()
 
-
-del cuda
-del cupy
-del rmm_cupy_allocator
-del RMMNumbaManager
 
 __all__ = [
     "NA",
