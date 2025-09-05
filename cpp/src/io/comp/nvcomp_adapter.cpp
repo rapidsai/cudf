@@ -1068,9 +1068,8 @@ std::optional<size_t> compress_max_allowed_chunk_size(compression_type compressi
 
 void load_nvcomp_library()
 {
-  std::cout << "Loading nvCOMP library" << std::endl;
   auto const stream = cudf::get_default_stream();
-  auto mr           = cudf::get_current_device_resource_ref();
+  auto const mr     = cudf::get_current_device_resource_ref();
 
   // Allocate device memory for the test
   auto const d_input = rmm::device_uvector<uint8_t>(1, stream, mr);
