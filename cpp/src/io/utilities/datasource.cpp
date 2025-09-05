@@ -424,7 +424,15 @@ std::unique_ptr<datasource> datasource::create(std::string const& filepath,
     try {
       return std::make_unique<remote_file_source>(filepath.c_str());
     } catch (std::exception const& ex) {
-      CUDF_FAIL("Error accessing the remote file. Reason: " + ex.what(), std::runtime_error);
+      std::string redacted_msg;
+      try {
+        // For security reasons, redact the file path if any from KvikIO's exception message
+        redacted_msg =
+          std::regex_replace(ex.what(), std::regex{filepath}, "<redacted-remote-file-path>");
+      } catch (std::exception const& ex) {
+        redacted_msg = " unknown due to additional process error";
+      }
+      CUDF_FAIL("Error accessing the remote file. Reason: " + redacted_msg, std::runtime_error);
     }
   } else if (use_memory_mapping) {
     return std::make_unique<memory_mapped_source>(filepath.c_str(), offset, max_size_estimate);
