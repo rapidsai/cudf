@@ -40,16 +40,6 @@ class RankOp(UnaryOp):
     pass
 
 
-@dataclass(frozen=True)
-class FillNullWithStrategyOp(UnaryOp):
-    policy: plc.replace.ReplacePolicy = plc.replace.ReplacePolicy.PRECEDING
-
-
-@dataclass(frozen=True)
-class CumSumOp(UnaryOp):
-    pass
-
-
 def to_request(
     value: expr.Expr, orderby: Column, df: DataFrame
 ) -> plc.rolling.RollingRequest:
