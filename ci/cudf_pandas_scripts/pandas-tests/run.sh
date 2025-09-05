@@ -79,7 +79,7 @@ gh run download $MAIN_RUN_ID -n main-results.json
 ls -al
 # gh run download $GITHUB_RUN_ID -n pr-results.json
 # Compute the diff and prepare job summary:
-python ci/cudf_pandas_scripts/pandas-tests/job-summary.py main-results.json pr-results.json "${RAPIDS_FULL_VERSION}" | tee summary.txt >> "$GITHUB_STEP_SUMMARY"
+python ci/cudf_pandas_scripts/pandas-tests/job-summary.py main-results.json "${SUMMARY_FILE_NAME}" "${RAPIDS_FULL_VERSION}" | tee summary.txt >> "$GITHUB_STEP_SUMMARY"
 
 COMMENT=$(head -1 summary.txt | grep -oP '\d+/\d+ \(\d+\.\d+%\).*?(a decrease by|an increase by) \d+\.\d+%')
 echo "$COMMENT"
