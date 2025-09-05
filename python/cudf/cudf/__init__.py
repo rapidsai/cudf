@@ -74,6 +74,7 @@ from cudf.options import (
 
 
 def configure_mr():
+    """Configure all libraries to use the best available or selected rmm mr."""
     import os
     import warnings
 
