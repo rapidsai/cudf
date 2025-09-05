@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import warnings
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import numpy as np
 import pandas as pd
@@ -31,7 +31,7 @@ from cudf.utils.utils import _is_null_host_scalar
 if TYPE_CHECKING:
     from collections.abc import Mapping, MutableSequence, Sequence
 
-    import numba.cuda
+    import cupy as cp
 
     from cudf._typing import (
         ColumnBinaryOperand,
@@ -411,8 +411,8 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     def data_array_view(
-        self, *, mode="write"
-    ) -> numba.cuda.devicearray.DeviceNDArray:
+        self, *, mode: Literal["write", "read"] = "write"
+    ) -> cp.ndarray:
         return self.codes.data_array_view(mode=mode)
 
     def unique(self) -> Self:
