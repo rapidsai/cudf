@@ -259,9 +259,10 @@ void reader_impl::preprocess_file(read_mode mode)
         });
       });
 
-    return has_timestamp_column ? cudf::detail::make_timezone_transition_table(
-                                    {}, selected_stripes[0].stripe_footer->writerTimezone, _stream)
-                                : std::make_unique<cudf::table>();
+    return (has_timestamp_column && !_options.ignore_timezone_in_stripe_footer)
+             ? cudf::detail::make_timezone_transition_table(
+                 {}, selected_stripes[0].stripe_footer->writerTimezone, _stream)
+             : std::make_unique<cudf::table>();
   }();
 
   //
