@@ -36,7 +36,7 @@ function(find_and_configure_croaring VERSION)
   endif()
 
   if(DEFINED croaring_SOURCE_DIR)
-  set(croaring_INCLUDE_DIR
+    set(croaring_INCLUDE_DIR
         "${croaring_SOURCE_DIR}"
         PARENT_SCOPE
     )
