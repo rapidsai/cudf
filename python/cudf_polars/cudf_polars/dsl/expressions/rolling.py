@@ -46,6 +46,11 @@ class FillNullWithStrategyOp(UnaryOp):
     policy: plc.replace.ReplacePolicy = plc.replace.ReplacePolicy.PRECEDING
 
 
+@dataclass(frozen=True)
+class CumSumOp(UnaryOp):
+    pass
+
+
 def to_request(
     value: expr.Expr, orderby: Column, df: DataFrame
 ) -> plc.rolling.RollingRequest:
@@ -229,7 +234,8 @@ class GroupedRollingWindow(Expr):
                 isinstance(named_expr.value, (expr.Len, expr.Agg))
                 or (
                     isinstance(named_expr.value, expr.UnaryFunction)
-                    and named_expr.value.name in {"rank", "fill_null_with_strategy"}
+                    and named_expr.value.name
+                    in {"rank", "fill_null_with_strategy", "cum_sum"}
                 )
             )
         ]
@@ -256,7 +262,7 @@ class GroupedRollingWindow(Expr):
             if isinstance(v, expr.Agg)
             or (
                 isinstance(v, expr.UnaryFunction)
-                and v.name in {"rank", "fill_null_with_strategy"}
+                and v.name in {"rank", "fill_null_with_strategy", "cum_sum"}
             )
         ]
         self.by_count = len(by_expr)
@@ -397,6 +403,53 @@ class GroupedRollingWindow(Expr):
         dtypes = [ne.value.dtype for ne in named_exprs]
         return names, dtypes, tables
 
+    @_apply_unary_op.register
+    def _(
+        self,
+        op: CumSumOp,
+        df: DataFrame,
+        grouper: plc.groupby.GroupBy,
+    ) -> tuple[list[str], list[DataType], list[plc.Table]]:
+        cum_named = op.named_exprs
+        order_index = op.order_index
+        by_cols_for_scan = op.by_cols_for_scan
+
+        requests: list[plc.groupby.GroupByRequest] = []
+        out_names: list[str] = []
+        out_dtypes: list[DataType] = []
+
+        for ne in cum_named:
+            cum_sum_expr = ne.value
+            assert isinstance(cum_sum_expr, expr.UnaryFunction)
+            (child_expr,) = cum_sum_expr.children
+            val_col = child_expr.evaluate(df, context=ExecutionContext.FRAME).obj
+            if order_index is not None:
+                val_col = plc.copying.gather(
+                    plc.Table([val_col]),
+                    order_index,
+                    plc.copying.OutOfBoundsPolicy.NULLIFY,
+                ).columns()[0]
+
+            agg = plc.aggregation.sum()
+            requests.append(plc.groupby.GroupByRequest(val_col, [agg]))
+            out_names.append(ne.name)
+            out_dtypes.append(cum_sum_expr.dtype)
+
+        if order_index is not None and by_cols_for_scan is not None:
+            order_by_tbl = plc.Table([c.obj for c in by_cols_for_scan])
+            local = plc.groupby.GroupBy(
+                order_by_tbl,
+                null_handling=plc.types.NullPolicy.INCLUDE,
+                keys_are_sorted=plc.types.Sorted.YES,
+                column_order=[k.order for k in by_cols_for_scan],
+                null_precedence=[k.null_order for k in by_cols_for_scan],
+            )
+            _, tables = local.scan(requests)
+        else:
+            _, tables = grouper.scan(requests)
+
+        return out_names, out_dtypes, tables
+
     def _reorder_to_input(
         self,
         row_id: plc.Column,
@@ -448,6 +501,7 @@ class GroupedRollingWindow(Expr):
         unary_window_ops: dict[str, list[expr.NamedExpr]] = {
             "rank": [],
             "fill_null_with_strategy": [],
+            "cum_sum": [],
         }
 
         for ne in self.named_aggs:
@@ -466,6 +520,7 @@ class GroupedRollingWindow(Expr):
         order_by_cols: list[Column] | None,
         ob_desc: bool,
         ob_nulls_last: bool,
+        reverse: bool = False,
         value_col: plc.Column | None = None,
         value_desc: bool = False,
     ) -> plc.Column:
@@ -485,23 +540,39 @@ class GroupedRollingWindow(Expr):
             )
 
         if order_by_cols:
+            base_dir = (
+                plc.types.Order.DESCENDING if ob_desc else plc.types.Order.ASCENDING
+            )
+            base_null = (
+                plc.types.NullOrder.AFTER
+                if ob_nulls_last
+                else plc.types.NullOrder.BEFORE
+            )
+
+            if reverse:
+                ob_dir = [
+                    plc.types.Order.ASCENDING
+                    if base_dir == plc.types.Order.DESCENDING
+                    else plc.types.Order.DESCENDING
+                ] * len(order_by_cols)
+                ob_null = [
+                    plc.types.NullOrder.BEFORE
+                    if base_null == plc.types.NullOrder.AFTER
+                    else plc.types.NullOrder.AFTER
+                ] * len(order_by_cols)
+            else:
+                ob_dir = [base_dir] * len(order_by_cols)
+                ob_null = [base_null] * len(order_by_cols)
+
             cols.extend(c.obj for c in order_by_cols)
-            orders.extend(
-                [plc.types.Order.DESCENDING if ob_desc else plc.types.Order.ASCENDING]
-                * len(order_by_cols)
-            )
-            nulls.extend(
-                [
-                    plc.types.NullOrder.AFTER
-                    if ob_nulls_last
-                    else plc.types.NullOrder.BEFORE
-                ]
-                * len(order_by_cols)
-            )
+            orders.extend(ob_dir)
+            nulls.extend(ob_null)
 
         # Use the row id to break ties
         cols.append(row_id)
-        orders.append(plc.types.Order.ASCENDING)
+        orders.append(
+            plc.types.Order.DESCENDING if reverse else plc.types.Order.ASCENDING
+        )
         nulls.append(plc.types.NullOrder.AFTER)
 
         return plc.sorting.stable_sorted_order(plc.Table(cols), orders, nulls)
@@ -695,8 +766,6 @@ class GroupedRollingWindow(Expr):
                 ob_nulls_last=self.options[3] if self._order_by_count else False,
             )
 
-            by_cols_for_scan = self._gather_by_cols_for_index(by_cols, order_index)
-
             strategy_sets: dict[str, list[expr.NamedExpr]] = defaultdict(list)
             for ne in fill_named:
                 fill_null_expr = ne.value
@@ -715,8 +784,54 @@ class GroupedRollingWindow(Expr):
                     FillNullWithStrategyOp(
                         named_exprs=bucket,
                         order_index=order_index,
-                        by_cols_for_scan=by_cols_for_scan,
+                        by_cols_for_scan=self._gather_by_cols_for_index(
+                            by_cols, order_index
+                        ),
                         policy=replace_policy[strategy],
+                    ),
+                    df,
+                    grouper,
+                )
+                broadcasted_cols.extend(
+                    self._reorder_to_input(
+                        row_id,
+                        by_cols,
+                        df.num_rows,
+                        tables,
+                        names,
+                        dtypes,
+                        order_index=order_index,
+                    )
+                )
+
+        if cum_named := unary_window_ops["cum_sum"]:
+            forward: list[expr.NamedExpr] = []
+            backward: list[expr.NamedExpr] = []
+            for ne in cum_named:
+                cum_sum_expr = ne.value
+                assert isinstance(cum_sum_expr, expr.UnaryFunction)
+                reverse = cum_sum_expr.options[0]
+                (backward if reverse else forward).append(ne)
+
+            for bucket, reverse in ((forward, False), (backward, True)):
+                if not bucket:
+                    continue
+                order_index = self._build_window_order_index(
+                    by_cols,
+                    row_id=row_id,
+                    order_by_cols=order_by_cols if self._order_by_count else None,
+                    ob_desc=self.options[2] if self._order_by_count else False,
+                    ob_nulls_last=self.options[3] if self._order_by_count else False,
+                    reverse=reverse,
+                )
+
+                names, dtypes, tables = self._apply_unary_op(
+                    CumSumOp(
+                        named_exprs=bucket,
+                        order_index=order_index,
+                        by_cols_for_scan=self._gather_by_cols_for_index(
+                            by_cols, order_index
+                        ),
                     ),
                     df,
                     grouper,

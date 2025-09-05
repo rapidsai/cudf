@@ -92,6 +92,7 @@ def decompose_single_agg(
     if isinstance(agg, expr.UnaryFunction) and agg.name in {
         "rank",
         "fill_null_with_strategy",
+        "cum_sum",
     }:
         if context != ExecutionContext.WINDOW:
             raise NotImplementedError(

@@ -396,3 +396,34 @@ def test_fill_over_all_nulls_in_group(
     val = pl.when(pl.col("g") == 2).then(None).otherwise(pl.col("x"))
     q = df.select(val.fill_null(strategy=strategy).over("g", order_by=order_by))
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("order_by", [None, ["g2", pl.col("x2") * 2]])
+def test_cum_sum_over(
+    df: pl.LazyFrame,
+    *,
+    order_by: None | list[str | pl.Expr],
+) -> None:
+    q = df.select(pl.col("x").cum_sum().over("g", order_by=order_by))
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("order_by", [None, ["g2", pl.col("x2") * 2]])
+def test_cum_sum_over_with_null_values(
+    df: pl.LazyFrame,
+    *,
+    order_by: None | list[str | pl.Expr],
+) -> None:
+    val = pl.when((pl.col("x") % 4) == 1).then(None).otherwise(pl.col("x"))
+    q = df.select(val.cum_sum().over("g", order_by=order_by))
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("order_by", [None, ["g2", pl.col("x2") * 2]])
+def test_cum_sum_over_with_null_group_keys(
+    df: pl.LazyFrame,
+    *,
+    order_by: None | list[str | pl.Expr],
+) -> None:
+    q = df.select(pl.col("x").cum_sum().over("g_null", order_by=order_by))
+    assert_gpu_result_equal(q)
