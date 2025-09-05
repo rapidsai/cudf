@@ -1,4 +1,6 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
+import operator
+from contextlib import contextmanager
 
 import cupy as cp
 import numpy as np
@@ -7,6 +9,7 @@ import pytest
 
 import cudf
 from cudf.testing import assert_eq
+from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
 
 
 @pytest.mark.parametrize("arg", [[True, False, True], [True, True, True]])
@@ -209,3 +212,131 @@ def test_dataframe_cow_slice_setitem():
                 {"a": [10, 11, 12, 13, 14], "b": [20, 30, 40, 50, 60]}
             ),
         )
+
+
+def test_multiindex_row_shape():
+    rng = np.random.default_rng(seed=0)
+    pdf = pd.DataFrame(rng.random(size=(0, 5)))
+    gdf = cudf.from_pandas(pdf)
+    pdfIndex = pd.MultiIndex([["a", "b", "c"]], [[0]])
+    pdfIndex.names = ["alpha"]
+    gdfIndex = cudf.from_pandas(pdfIndex)
+    assert_eq(pdfIndex, gdfIndex)
+
+    assert_exceptions_equal(
+        lfunc=operator.setitem,
+        rfunc=operator.setitem,
+        lfunc_args_and_kwargs=([], {"a": pdf, "b": "index", "c": pdfIndex}),
+        rfunc_args_and_kwargs=([], {"a": gdf, "b": "index", "c": gdfIndex}),
+    )
+
+
+def test_multiindex_column_shape():
+    rng = np.random.default_rng(seed=0)
+    pdf = pd.DataFrame(rng.random(size=(5, 0)))
+    gdf = cudf.from_pandas(pdf)
+    pdfIndex = pd.MultiIndex([["a", "b", "c"]], [[0]])
+    pdfIndex.names = ["alpha"]
+    gdfIndex = cudf.from_pandas(pdfIndex)
+    assert_eq(pdfIndex, gdfIndex)
+
+    assert_exceptions_equal(
+        lfunc=operator.setitem,
+        rfunc=operator.setitem,
+        lfunc_args_and_kwargs=([], {"a": pdf, "b": "columns", "c": pdfIndex}),
+        rfunc_args_and_kwargs=([], {"a": gdf, "b": "columns", "c": gdfIndex}),
+    )
+
+
+@contextmanager
+def expect_pandas_performance_warning(idx):
+    with expect_warning_if(
+        (not isinstance(idx[0], tuple) and len(idx) > 2)
+        or (isinstance(idx[0], tuple) and len(idx[0]) > 2),
+        pd.errors.PerformanceWarning,
+    ):
+        yield
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        ("a", "store", "clouds", "fire"),
+        ("a", "store", "storm", "smoke"),
+        ("a", "store"),
+        ("b", "house"),
+        ("a", "store", "storm"),
+        ("a",),
+        ("c", "forest", "clear"),
+    ],
+)
+def test_multiindex_columns(query):
+    rng = np.random.default_rng(seed=0)
+    pdf = pd.DataFrame(rng.random(size=(7, 5)))
+    pdf = pdf.T
+    gdf = cudf.from_pandas(pdf)
+    pdfIndex = pd.MultiIndex(
+        [
+            ["a", "b", "c"],
+            ["house", "store", "forest"],
+            ["clouds", "clear", "storm"],
+            ["fire", "smoke", "clear"],
+            [
+                np.datetime64("2001-01-01", "ns"),
+                np.datetime64("2002-01-01", "ns"),
+                np.datetime64("2003-01-01", "ns"),
+            ],
+        ],
+        [
+            [0, 0, 0, 0, 1, 1, 2],
+            [1, 1, 1, 1, 0, 0, 2],
+            [0, 0, 2, 2, 2, 0, 1],
+            [0, 0, 0, 1, 2, 0, 1],
+            [1, 0, 1, 2, 0, 0, 1],
+        ],
+    )
+    pdfIndex.names = ["alpha", "location", "weather", "sign", "timestamp"]
+    gdfIndex = cudf.from_pandas(pdfIndex)
+    assert_eq(pdfIndex, gdfIndex)
+    pdf.columns = pdfIndex
+    gdf.columns = gdfIndex
+    # The index is unsorted, which makes things slow but is fine for testing.
+    with expect_pandas_performance_warning(query):
+        expected = pdf[query]
+    got = gdf[query]
+    assert_eq(expected, got)
+
+
+@pytest.mark.xfail(
+    reason="https://github.com/pandas-dev/pandas/issues/43351",
+)
+def test_multicolumn_set_item():
+    rng = np.random.default_rng(seed=0)
+    pdf = pd.DataFrame(rng.random(size=(7, 5)))
+    pdfIndex = pd.MultiIndex(
+        [
+            ["a", "b", "c"],
+            ["house", "store", "forest"],
+            ["clouds", "clear", "storm"],
+            ["fire", "smoke", "clear"],
+            [
+                np.datetime64("2001-01-01", "ns"),
+                np.datetime64("2002-01-01", "ns"),
+                np.datetime64("2003-01-01", "ns"),
+            ],
+        ],
+        [
+            [0, 0, 0, 0, 1, 1, 2],
+            [1, 1, 1, 1, 0, 0, 2],
+            [0, 0, 2, 2, 2, 0, 1],
+            [0, 0, 0, 1, 2, 0, 1],
+            [1, 0, 1, 2, 0, 0, 1],
+        ],
+    )
+    pdfIndex.names = ["alpha", "location", "weather", "sign", "timestamp"]
+    pdf = pdf.T
+    pdf.columns = pdfIndex
+    gdf = cudf.from_pandas(pdf)
+    pdf["d"] = [1, 2, 3, 4, 5]
+    gdf["d"] = [1, 2, 3, 4, 5]
+    assert_eq(pdf, gdf)

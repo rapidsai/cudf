@@ -352,3 +352,23 @@ def test_ndim():
     s = pd.Series(dtype="float64")
     gs = cudf.Series()
     assert s.ndim == gs.ndim
+
+
+def test_multiindex_series_assignment():
+    ps = pd.Series([1, 2, 3])
+    gs = cudf.from_pandas(ps)
+    ps.index = pd.MultiIndex([["a", "b"], ["c", "d"]], [[0, 1, 0], [1, 0, 1]])
+    gs.index = cudf.MultiIndex(
+        levels=[["a", "b"], ["c", "d"]], codes=[[0, 1, 0], [1, 0, 1]]
+    )
+    assert_eq(ps, gs)
+
+
+def test_series_multiindex():
+    pdfIndex = pd.MultiIndex.from_arrays([range(7)])
+    rng = np.random.default_rng(seed=0)
+    ps = pd.Series(rng.random(7))
+    gs = cudf.from_pandas(ps)
+    ps.index = pdfIndex
+    gs.index = cudf.from_pandas(pdfIndex)
+    assert_eq(ps, gs)
