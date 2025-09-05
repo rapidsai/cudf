@@ -361,10 +361,13 @@ filtered_join::filtered_join(cudf::table_view const& build,
                              set_as_build_table reuse_tbl,
                              double load_factor,
                              rmm::cuda_stream_view stream)
-  : _reuse_tbl{reuse_tbl},
-    _impl{std::make_unique<cudf::detail::distinct_filtered_join>(
-      build, compare_nulls, load_factor, stream)}
 {
+  CUDF_EXPECTS(reuse_tbl == set_as_build_table::RIGHT,
+               "Left table reuse is unsupported. Filtered join assumes that the right table is the "
+               "build table");
+  _reuse_tbl = reuse_tbl;
+  _impl      = std::make_unique<cudf::detail::distinct_filtered_join>(
+    build, compare_nulls, load_factor, stream);
 }
 
 filtered_join::filtered_join(cudf::table_view const& build,

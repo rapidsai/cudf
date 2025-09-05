@@ -49,11 +49,16 @@ class filtered_join;
 enum class set_as_build_table { LEFT, RIGHT };
 
 /**
- * @brief Filtered hash join that builds hash table in creation and probes results in subsequent
+ * @brief Filtered hash join that builds hash table on creation and probes results in subsequent
  * `*_join` member functions
  *
  * This class enables the filtered hash join scheme that builds hash table once, and probes as many
- * times as needed (possibly in parallel).
+ * times as needed (possibly in parallel). When the hash table is created from the right table i.e.
+ * the table that acts as the filter to be applied on subsequent left `_join` operations, the
+ * `cuco::static_set` data structure is used. On the other hand, when the left table is to be
+ * reused, the underlying hash table data structure is the `cuco::static_multiset`. Since multiset
+ * operations are computationally more expensive that set operations, right table reuse should be
+ * preferred if possible.
  *
  * @note All NaNs are considered as equal
  */
