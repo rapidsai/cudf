@@ -79,16 +79,16 @@ gh run download $MAIN_RUN_ID -n main-results.json
 ls -al
 # gh run download $GITHUB_RUN_ID -n pr-results.json
 # Compute the diff and prepare job summary:
-python ci/cudf_pandas_scripts/pandas-tests/job-summary.py main-results.json "${SUMMARY_FILE_NAME}" "${RAPIDS_FULL_VERSION}" | tee summary.txt >> "$GITHUB_STEP_SUMMARY"
+python ci/cudf_pandas_scripts/pandas-tests/job-summary.py main-results.json "${SUMMARY_FILE_NAME}" "${RAPIDS_FULL_VERSION}" >> "$GITHUB_STEP_SUMMARY"
 
-COMMENT=$(head -1 summary.txt | grep -oP '\d+/\d+ \(\d+\.\d+%\).*?(a decrease by|an increase by) \d+\.\d+%')
-echo "$COMMENT"
-jq --arg COMMENT "$COMMENT" --arg GH_JOB_NAME "$GH_JOB_NAME" -n \
-  '{"context": "Pandas tests",
-    "description": $COMMENT,
-    "state":"success",
-    "job_name": $GH_JOB_NAME}' \
-    > gh-status.json
+# COMMENT=$(head -1 summary.txt | grep -oP '\d+/\d+ \(\d+\.\d+%\).*?(a decrease by|an increase by) \d+\.\d+%')
+# echo "$COMMENT"
+# jq --arg COMMENT "$COMMENT" --arg GH_JOB_NAME "$GH_JOB_NAME" -n \
+#   '{"context": "Pandas tests",
+#     "description": $COMMENT,
+#     "state":"success",
+#     "job_name": $GH_JOB_NAME}' \
+#     > gh-status.json
 
 rapids-logger "Last Test script exiting with value: $EXITCODE"
 exit ${EXITCODE}
