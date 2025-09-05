@@ -34,7 +34,6 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
-#include <exception>
 #include <regex>
 #include <stdexcept>
 #include <vector>
