@@ -146,20 +146,24 @@ class ApplyKernelCompilerBase:
         # Get input columns
         if isinstance(self.incols, dict):
             inputs = {
-                v: df[k]._column.data_array_view(mode="read")
+                v: cuda.as_cuda_array(
+                    df[k]._column.data_array_view(mode="read")
+                )
                 for (k, v) in self.incols.items()
             }
         else:
             inputs = {
-                k: df[k]._column.data_array_view(mode="read")
+                k: cuda.as_cuda_array(
+                    df[k]._column.data_array_view(mode="read")
+                )
                 for k in self.incols
             }
         # Allocate output columns
-        outputs = {}
-        for k, dt in self.outcols.items():
-            outputs[k] = column.column_empty(
-                len(df), np.dtype(dt)
-            ).data_array_view(mode="write")
+        outputs = {
+            k: cuda.device_array(len(df), dtype=np.dtype(dt))
+            for k, dt in self.outcols.items()
+        }
+
         # Bind argument
         args = {}
         for dct in [inputs, outputs, self.kwargs]:
@@ -179,9 +183,7 @@ class ApplyKernelCompilerBase:
                 outputs[k], index=outdf.index, nan_as_null=False
             )
             if out_mask is not None:
-                outdf._data[k] = outdf[k]._column.set_mask(
-                    out_mask.data_array_view(mode="write")
-                )
+                outdf._data[k] = outdf[k]._column.set_mask(out_mask.values)
 
         return outdf
 
