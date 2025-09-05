@@ -182,6 +182,135 @@ def test_ndim():
     assert pdf.ndim == gdf.ndim
 
 
+@pytest.mark.parametrize("names", [["abc", "def"], [1, 2], ["abc", 10]])
+def test_dataframe_multiindex_column_names(names):
+    arrays = [["A", "A", "B", "B"], ["one", "two", "one", "two"]]
+    tuples = list(zip(*arrays, strict=True))
+    index = pd.MultiIndex.from_tuples(tuples, names=["first", "second"])
+
+    pdf = pd.DataFrame([[1, 2, 3, 4], [5, 6, 7, 8]], columns=index)
+    df = cudf.from_pandas(pdf)
+
+    assert_eq(df, pdf)
+    assert_eq(df.columns.names, pdf.columns.names)
+    pdf.columns.names = names
+    df.columns.names = names
+    assert_eq(df, pdf)
+    assert_eq(df.columns.names, pdf.columns.names)
+
+
+@pytest.mark.parametrize("name", ["a", 0, None, np.nan, cudf.NA])
+@pytest.mark.parametrize("contains", ["a", 0, None, np.nan, cudf.NA])
+@pytest.mark.parametrize("other_names", [[], ["b", "c"], [1, 2]])
+def test_dataframe_contains(name, contains, other_names):
+    column_names = [name, *other_names]
+    gdf = cudf.DataFrame({c: [0] for c in column_names})
+    pdf = pd.DataFrame({c: [0] for c in column_names})
+
+    assert_eq(gdf, pdf)
+
+    if contains is cudf.NA or name is cudf.NA:
+        expectation = contains is cudf.NA and name is cudf.NA
+        assert (contains in pdf) == expectation
+        assert (contains in gdf) == expectation
+    elif gdf.columns.dtype.kind == "f":
+        # In some cases, the columns are converted to an Index[float] based on
+        # the other column names. That casts name values from None to np.nan.
+        expectation = contains is np.nan and (name is None or name is np.nan)
+        assert (contains in pdf) == expectation
+        assert (contains in gdf) == expectation
+    else:
+        expectation = contains == name or (
+            contains is np.nan and name is np.nan
+        )
+        assert (contains in pdf) == expectation
+        assert (contains in gdf) == expectation
+
+    assert (contains in pdf) == (contains in gdf)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"col": [{"a": 1.1}, {"a": 2.1}, {"a": 10.0}, {"a": 11.2323}, None]},
+        {"a": [[{"b": 567}], None] * 10},
+        {"a": [decimal.Decimal(10), decimal.Decimal(20), None]},
+    ],
+)
+def test_dataframe_values_complex_types(data):
+    gdf = cudf.DataFrame(data)
+    with pytest.raises(NotImplementedError):
+        gdf.values
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        pd.DataFrame(),
+        pd.DataFrame(index=[100, 10, 1, 0]),
+        pd.DataFrame(columns=["a", "b", "c", "d"]),
+        pd.DataFrame(columns=["a", "b", "c", "d"], index=[100]),
+        pd.DataFrame(
+            columns=["a", "b", "c", "d"], index=[100, 10000, 2131, 133]
+        ),
+        pd.DataFrame({"a": [1, 2, 3], "b": ["abc", "xyz", "klm"]}),
+    ],
+)
+def test_dataframe_size(df):
+    pdf = df
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(pdf.size, gdf.size)
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        pd.DataFrame(),
+        pd.DataFrame(index=[100, 10, 1, 0]),
+        pd.DataFrame(columns=["a", "b", "c", "d"]),
+        pd.DataFrame(columns=["a", "b", "c", "d"], index=[100]),
+        pd.DataFrame(
+            columns=["a", "b", "c", "d"], index=[100, 10000, 2131, 133]
+        ),
+        pd.DataFrame({"a": [1, 2, 3], "b": ["abc", "xyz", "klm"]}),
+    ],
+)
+def test_dataframe_empty(df):
+    pdf = df
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(pdf.empty, gdf.empty)
+
+
+def test_cudf_arrow_array_error():
+    df = cudf.DataFrame({"a": [1, 2, 3]})
+
+    with pytest.raises(
+        TypeError,
+        match="Implicit conversion to a host PyArrow object via "
+        "__arrow_array__ is not allowed. Consider using .to_arrow()",
+    ):
+        df.__arrow_array__()
+
+    sr = cudf.Series([1, 2, 3])
+
+    with pytest.raises(
+        TypeError,
+        match="Implicit conversion to a host PyArrow object via "
+        "__arrow_array__ is not allowed. Consider using .to_arrow()",
+    ):
+        sr.__arrow_array__()
+
+    sr = cudf.Series(["a", "b", "c"])
+    with pytest.raises(
+        TypeError,
+        match="Implicit conversion to a host PyArrow object via "
+        "__arrow_array__ is not allowed. Consider using .to_arrow()",
+    ):
+        sr.__arrow_array__()
+
+
 @pytest.mark.parametrize(
     "index",
     [
@@ -196,4 +325,79 @@ def test_string_index(index):
     gdf = cudf.DataFrame.from_pandas(pdf)
     pdf.index = index
     gdf.index = index
+    assert_eq(pdf, gdf)
+
+
+def test_set_index_as_property():
+    cdf = cudf.DataFrame()
+    col1 = np.arange(10)
+    col2 = np.arange(0, 20, 2)
+    cdf["a"] = col1
+    cdf["b"] = col2
+
+    # Check set_index(Series)
+    cdf.index = cdf["b"]
+
+    assert_eq(cdf.index.to_numpy(), col2)
+
+    with pytest.raises(ValueError):
+        cdf.index = [list(range(10))]
+
+    idx = pd.Index(np.arange(0, 1000, 100))
+    cdf.index = idx
+    assert_eq(cdf.index.to_pandas(), idx)
+
+    df = cdf.to_pandas()
+    assert_eq(df.index, idx)
+
+    head = cdf.head().to_pandas()
+    assert_eq(head.index, idx[:5])
+
+
+@pytest.mark.parametrize(
+    "index",
+    [
+        lambda: cudf.Index([1]),
+        lambda: cudf.RangeIndex(1),
+        lambda: cudf.MultiIndex(levels=[[0]], codes=[[0]]),
+    ],
+)
+def test_index_assignment_no_shallow_copy(index):
+    index = index()
+    df = cudf.DataFrame(range(1))
+    df.index = index
+    assert df.index is index
+
+
+def test_multiindex_df_assignment():
+    pdf = pd.DataFrame({"x": [1, 2, 3]})
+    gdf = cudf.from_pandas(pdf)
+    pdf.index = pd.MultiIndex([["a", "b"], ["c", "d"]], [[0, 1, 0], [1, 0, 1]])
+    gdf.index = cudf.MultiIndex(
+        levels=[["a", "b"], ["c", "d"]], codes=[[0, 1, 0], [1, 0, 1]]
+    )
+    assert_eq(pdf, gdf)
+
+
+def test_multiindex_index_and_columns():
+    rng = np.random.default_rng(seed=0)
+    gdf = cudf.DataFrame(
+        {
+            "x": rng.integers(0, 5, 5),
+            "y": rng.integers(0, 5, 5),
+        }
+    )
+    pdf = gdf.to_pandas()
+    mi = cudf.MultiIndex(
+        levels=[[0, 1, 2], [3, 4]],
+        codes=[[0, 0, 1, 1, 2], [0, 1, 0, 1, 1]],
+        names=["x", "y"],
+    )
+    gdf.index = mi
+    mc = cudf.MultiIndex(
+        levels=[["val"], ["mean", "min"]], codes=[[0, 0], [0, 1]]
+    )
+    gdf.columns = mc
+    pdf.index = mi.to_pandas()
+    pdf.columns = mc.to_pandas()
     assert_eq(pdf, gdf)

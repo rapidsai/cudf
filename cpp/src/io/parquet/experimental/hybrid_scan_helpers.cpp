@@ -81,6 +81,16 @@ metadata::metadata(cudf::host_span<uint8_t const> footer_bytes)
   sanitize_schema();
 }
 
+aggregate_reader_metadata::aggregate_reader_metadata(FileMetaData const& parquet_metadata,
+                                                     bool use_arrow_schema,
+                                                     bool has_cols_from_mismatched_srcs)
+  : aggregate_reader_metadata_base({}, false, false)
+{
+  // Just copy over the FileMetaData struct to the internal metadata struct
+  per_file_metadata = std::vector<metadata_base>{metadata{parquet_metadata}.get_file_metadata()};
+  initialize_internals(use_arrow_schema, has_cols_from_mismatched_srcs);
+}
+
 aggregate_reader_metadata::aggregate_reader_metadata(cudf::host_span<uint8_t const> footer_bytes,
                                                      bool use_arrow_schema,
                                                      bool has_cols_from_mismatched_srcs)
@@ -88,10 +98,16 @@ aggregate_reader_metadata::aggregate_reader_metadata(cudf::host_span<uint8_t con
 {
   // Re-initialize internal variables here as base class was initialized without a source
   per_file_metadata = std::vector<metadata_base>{metadata{footer_bytes}.get_file_metadata()};
-  keyval_maps       = collect_keyval_metadata();
-  schema_idx_maps   = init_schema_idx_maps(has_cols_from_mismatched_srcs);
-  num_rows          = calc_num_rows();
-  num_row_groups    = calc_num_row_groups();
+  initialize_internals(use_arrow_schema, has_cols_from_mismatched_srcs);
+}
+
+void aggregate_reader_metadata::initialize_internals(bool use_arrow_schema,
+                                                     bool has_cols_from_mismatched_srcs)
+{
+  keyval_maps     = collect_keyval_metadata();
+  schema_idx_maps = init_schema_idx_maps(has_cols_from_mismatched_srcs);
+  num_rows        = calc_num_rows();
+  num_row_groups  = calc_num_row_groups();
 
   // Force all non-nullable (REQUIRED) columns to be nullable without modifying REPEATED columns to
   // preserve list structures

@@ -21,8 +21,8 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/row_operator/row_operators.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -106,8 +106,7 @@ std::unique_ptr<column> rank_generator(column_view const& grouped_values,
                                        rmm::device_async_resource_ref mr)
 {
   auto const grouped_values_view = table_view{{grouped_values}};
-  auto const comparator =
-    cudf::experimental::row::equality::self_comparator{grouped_values_view, stream};
+  auto const comparator = cudf::detail::row::equality::self_comparator{grouped_values_view, stream};
 
   auto ranks = make_fixed_width_column(
     data_type{type_to_id<size_type>()}, grouped_values.size(), mask_state::UNALLOCATED, stream, mr);

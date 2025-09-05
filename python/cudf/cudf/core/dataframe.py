@@ -56,7 +56,6 @@ from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
     StringColumn,
-    StructColumn,
     as_column,
     column_empty,
     concat_columns,
@@ -105,6 +104,8 @@ from cudf.utils.dtypes import (
     get_dtype_of_same_kind,
     is_column_like,
     is_dtype_obj_numeric,
+    is_mixed_with_object_dtype,
+    is_pandas_nullable_extension_dtype,
     min_signed_type,
 )
 from cudf.utils.ioutils import (
@@ -130,6 +131,7 @@ _cupy_nan_methods_map = {
     "mean": "nanmean",
     "std": "nanstd",
     "var": "nanvar",
+    "median": "nanmedian",
 }
 
 
@@ -2047,9 +2049,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     def astype(
         self,
         dtype: Dtype | dict[Hashable, Dtype],
-        copy: bool = False,
+        copy: bool | None = None,
         errors: Literal["raise", "ignore"] = "raise",
     ) -> Self:
+        if copy is None:
+            copy = True
         if is_dict_like(dtype):
             if len(set(dtype.keys()) - set(self._column_names)) > 0:  # type: ignore[union-attr]
                 raise KeyError(
@@ -5047,93 +5051,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         return DataFrame._from_data(result, index=self.index)
 
     @_performance_tracking
-    @applyutils.doc_apply()
-    def apply_rows(
-        self,
-        func,
-        incols,
-        outcols,
-        kwargs,
-        pessimistic_nulls=True,
-        cache_key=None,
-    ):
-        """
-        Apply a row-wise user defined function.
-
-        Parameters
-        ----------
-        {params}
-
-        Examples
-        --------
-        The user function should loop over the columns and set the output for
-        each row. Loop execution order is arbitrary, so each iteration of
-        the loop **MUST** be independent of each other.
-
-        When ``func`` is invoked, the array args corresponding to the
-        input/output are strided so as to improve GPU parallelism.
-        The loop in the function resembles serial code, but executes
-        concurrently in multiple threads.
-
-        >>> import cudf
-        >>> import numpy as np
-        >>> df = cudf.DataFrame()
-        >>> nelem = 3
-        >>> df['in1'] = np.arange(nelem)
-        >>> df['in2'] = np.arange(nelem)
-        >>> df['in3'] = np.arange(nelem)
-
-        Define input columns for the kernel
-
-        >>> in1 = df['in1']
-        >>> in2 = df['in2']
-        >>> in3 = df['in3']
-        >>> def kernel(in1, in2, in3, out1, out2, kwarg1, kwarg2):
-        ...     for i, (x, y, z) in enumerate(zip(in1, in2, in3)):
-        ...         out1[i] = kwarg2 * x - kwarg1 * y
-        ...         out2[i] = y - kwarg1 * z
-
-        Call ``.apply_rows`` with the name of the input columns, the name and
-        dtype of the output columns, and, optionally, a dict of extra
-        arguments.
-
-        >>> df.apply_rows(kernel,
-        ...               incols=['in1', 'in2', 'in3'],
-        ...               outcols=dict(out1=np.float64, out2=np.float64),
-        ...               kwargs=dict(kwarg1=3, kwarg2=4))
-           in1  in2  in3 out1 out2
-        0    0    0    0  0.0  0.0
-        1    1    1    1  1.0 -2.0
-        2    2    2    2  2.0 -4.0
-        """
-        warnings.warn(
-            "DataFrame.apply_rows is deprecated and will be "
-            "removed in a future release. Please use `apply` "
-            "or use a custom numba kernel instead or refer "
-            "to the UDF guidelines for more information "
-            "https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html",
-            FutureWarning,
-        )
-        for col in incols:
-            current_col_dtype = self._data[col].dtype
-            if current_col_dtype == CUDF_STRING_DTYPE or isinstance(
-                current_col_dtype, CategoricalDtype
-            ):
-                raise TypeError(
-                    "User defined functions are currently not "
-                    "supported on Series with dtypes `str` and `category`."
-                )
-        return applyutils.apply_rows(
-            self,
-            func,
-            incols,
-            outcols,
-            kwargs,
-            pessimistic_nulls,
-            cache_key=cache_key,
-        )
-
-    @_performance_tracking
     @applyutils.doc_applychunks()
     def apply_chunks(
         self,
@@ -5152,7 +5069,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         Parameters
         ----------
         {params}
-        {params_chunks}
 
         Examples
         --------
@@ -5183,8 +5099,16 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         See Also
         --------
-        DataFrame.apply_rows
+        DataFrame.apply
         """
+        warnings.warn(
+            "DataFrame.apply_chunks is deprecated and will be "
+            "removed in a future release. Please use `apply` "
+            "or use a custom numba kernel instead or refer "
+            "to the UDF guidelines for more information "
+            "https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html",
+            FutureWarning,
+        )
         if kwargs is None:
             kwargs = {}
         if chunks is None:
@@ -6994,6 +6918,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         prepared, mask, common_dtype = self._prepare_for_rowwise_op(
             method, skipna, numeric_only
         )
+
         for col in prepared._column_names:
             if prepared._data[col].nullable:
                 prepared._data[col] = (
@@ -7012,15 +6937,25 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         if skipna is not False and method in _cupy_nan_methods_map:
             method = _cupy_nan_methods_map[method]
 
+        if len(arr) == 0 and method == "nanmedian":
+            # Workaround for a cupy limitation, cupy
+            # errors for zero dim array in nanmedian
+            # https://github.com/cupy/cupy/issues/9332
+            method = "median"
         result = getattr(cupy, method)(arr, axis=1, **kwargs)
 
         if result.ndim == 1:
             type_coerced_methods = {
                 "count",
                 "min",
+                "nanmin",
                 "max",
+                "nanmax",
                 "sum",
+                "nansum",
                 "prod",
+                "nanprod",
+                "product",
                 "cummin",
                 "cummax",
                 "cumsum",
@@ -7032,6 +6967,45 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 or (common_dtype is not None and common_dtype.kind == "M")
                 else None
             )
+
+            if (
+                cudf.get_option("mode.pandas_compatible")
+                and result_dtype is None
+                and is_pandas_nullable_extension_dtype(common_dtype)
+            ):
+                if (
+                    method
+                    in {
+                        "kurt",
+                        "kurtosis",
+                        "mean",
+                        "nanmean",
+                        "median",
+                        "nanmedian",
+                        "sem",
+                        "skew",
+                        "std",
+                        "nanstd",
+                        "var",
+                        "nanvar",
+                    }
+                    and common_dtype.kind != "f"
+                ):
+                    result_dtype = get_dtype_of_same_kind(
+                        common_dtype, np.dtype(np.float64)
+                    )
+                else:
+                    result_dtype = get_dtype_of_same_kind(
+                        common_dtype, result.dtype
+                    )
+            if (
+                result_dtype is not None
+                and result_dtype.kind == "b"
+                and result.dtype.kind != "b"
+            ):
+                result_dtype = get_dtype_of_same_kind(
+                    common_dtype, result.dtype
+                )
             result = as_column(result, dtype=result_dtype)
             if mask is not None:
                 result = result.set_mask(mask._column.as_mask())
@@ -7633,6 +7607,16 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 col.astype(common_type) if col is not None else all_nulls()
                 for col in columns
             )
+            if (
+                cudf.get_option("mode.pandas_compatible")
+                and common_type == "object"
+            ):
+                for col, hcol in zip(columns, homogenized, strict=True):
+                    if is_mixed_with_object_dtype(col, hcol):
+                        raise TypeError(
+                            "Stacking a DataFrame with mixed object and "
+                            "non-object dtypes is not supported. "
+                        )
 
             with acquire_spill_lock():
                 interleaved_col = ColumnBase.from_pylibcudf(
@@ -7783,14 +7767,34 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 "requires field name to be string. Non-string column names "
                 "will be casted to string as the field name."
             )
-        fields = {str(name): dtype for name, dtype in self._dtypes}
-        col = StructColumn(
-            data=None,
-            dtype=StructDtype(fields=fields),
-            children=tuple(col.copy(deep=True) for col in self._columns),
-            size=len(self),
-            offset=0,
+        dtype = StructDtype(
+            fields={str(name): dtype for name, dtype in self._dtypes}
         )
+        if self._num_columns == 0:
+            col = column_empty(len(self), dtype=dtype)
+        else:
+            first_null_count = self._columns[0].null_count
+            children = (
+                col.copy(deep=True).to_pylibcudf(mode="read")
+                for col in self._columns
+            )
+            if all(
+                col.null_count == first_null_count for col in self._columns
+            ):
+                plc_column = plc.Column.struct_from_children(children)
+            else:
+                plc_column = plc.Column(
+                    plc.DataType(plc.TypeId.STRUCT),
+                    len(self),
+                    None,
+                    None,
+                    0,
+                    0,
+                    list(children),
+                )
+            col = ColumnBase.from_pylibcudf(plc_column)._with_type_metadata(
+                dtype
+            )
         return Series._from_column(
             col,
             index=self.index,
