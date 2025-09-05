@@ -17,9 +17,9 @@
 #include "parquet_gpu.cuh"
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/row_operator/row_operators.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
-#include <cudf/table/experimental/row_operators.cuh>
 
 #include <rmm/exec_policy.hpp>
 
@@ -38,8 +38,7 @@ struct equality_functor {
   __device__ bool operator()(key_type lhs_idx, key_type rhs_idx) const
   {
     // We don't call this for nulls so this is fine.
-    auto constexpr equal =
-      cudf::experimental::row::equality::nan_equal_physical_equality_comparator{};
+    auto constexpr equal = cudf::detail::row::equality::nan_equal_physical_equality_comparator{};
     return equal(col.element<T>(lhs_idx), col.element<T>(rhs_idx));
   }
 };

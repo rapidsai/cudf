@@ -1432,7 +1432,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
         # Return result as cupy array if the values is non-scalar
         # If values is scalar, result is expected to be scalar.
-        result = cupy.asarray(outcol.data_array_view(mode="read"))
+        result = outcol.values
         if scalar_flag:
             return result[0].item()
         else:
