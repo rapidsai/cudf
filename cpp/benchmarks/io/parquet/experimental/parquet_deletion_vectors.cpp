@@ -29,8 +29,6 @@
 
 #include <random>
 
-constexpr cudf::size_type num_rows_per_row_group = 5'000;
-
 namespace {
 /**
  * @brief Serializes a roaring64 bitmap to a vector of cuda::std::byte
@@ -144,20 +142,23 @@ auto build_deletion_vector(cudf::host_span<size_t const> row_group_offsets,
 
 auto setup_table_and_deletion_vector(nvbench::state& state)
 {
-  auto const num_columns          = static_cast<cudf::size_type>(state.get_int64("num_cols"));
+  auto const num_columns = static_cast<cudf::size_type>(state.get_int64("num_cols"));
+  auto const rows_per_row_group =
+    static_cast<cudf::size_type>(state.get_int64("rows_per_row_group"));
   auto const num_row_groups       = static_cast<cudf::size_type>(state.get_int64("num_row_groups"));
   auto const deletion_probability = static_cast<float>(state.get_float64("deletion_probability"));
   auto const source_type          = retrieve_io_type_enum(state.get_string("io_type"));
-  auto const num_rows             = num_rows_per_row_group * num_row_groups;
+  auto const num_rows             = rows_per_row_group * num_row_groups;
+
   cuio_source_sink_pair source_sink(source_type);
 
   // Create a table and write it to parquet sink
   {
     auto const d_types = std::vector<cudf::type_id>{
-      cudf::type_id::STRING,
-      cudf::type_id::LIST,
       cudf::type_id::FLOAT64,
-      cudf::type_id::UINT32,
+      cudf::type_id::DURATION_MICROSECONDS,
+      cudf::type_id::TIMESTAMP_MILLISECONDS,
+      cudf::type_id::STRING,
     };
 
     auto const table = create_random_table(cycle_dtypes(d_types, num_columns),
@@ -166,7 +167,7 @@ auto setup_table_and_deletion_vector(nvbench::state& state)
                                            0xbad);
     cudf::io::parquet_writer_options write_opts =
       cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), table->view())
-        .row_group_size_rows(num_rows_per_row_group)
+        .row_group_size_rows(rows_per_row_group)
         .compression(cudf::io::compression_type::NONE);
     cudf::io::write_parquet(write_opts);
   }
@@ -218,7 +219,9 @@ auto setup_table_and_deletion_vector(nvbench::state& state)
 void BM_parquet_deletion_vectors_cpu(nvbench::state& state)
 {
   auto const num_row_groups = static_cast<cudf::size_type>(state.get_int64("num_row_groups"));
-  auto const num_rows       = num_rows_per_row_group * num_row_groups;
+  auto const rows_per_row_group =
+    static_cast<cudf::size_type>(state.get_int64("rows_per_row_group"));
+  auto const num_rows = rows_per_row_group * num_row_groups;
 
   auto [source_sink, row_group_offsets, row_group_num_rows, deletion_vector] =
     setup_table_and_deletion_vector(state);
@@ -248,7 +251,9 @@ void BM_parquet_deletion_vectors_cpu(nvbench::state& state)
 void BM_parquet_deletion_vectors_gpu(nvbench::state& state)
 {
   auto const num_row_groups = static_cast<cudf::size_type>(state.get_int64("num_row_groups"));
-  auto const num_rows       = num_rows_per_row_group * num_row_groups;
+  auto const rows_per_row_group =
+    static_cast<cudf::size_type>(state.get_int64("rows_per_row_group"));
+  auto const num_rows = rows_per_row_group * num_row_groups;
 
   auto [source_sink, row_group_offsets, row_group_num_rows, deletion_vector] =
     setup_table_and_deletion_vector(state);
@@ -280,6 +285,7 @@ NVBENCH_BENCH(BM_parquet_deletion_vectors_cpu)
   .set_name("parquet_deletion_vectors_cpu")
   .set_min_samples(4)
   .add_int64_power_of_two_axis("num_row_groups", nvbench::range(4, 14, 2))
+  .add_int64_axis("rows_per_row_group", {5'000, 10'000})
   .add_string_axis("io_type", {"DEVICE_BUFFER"})
   .add_float64_axis("deletion_probability", {0.15, 0.5, 0.75})
   .add_int64_axis("num_cols", {4});
@@ -288,6 +294,7 @@ NVBENCH_BENCH(BM_parquet_deletion_vectors_gpu)
   .set_name("parquet_deletion_vectors_gpu")
   .set_min_samples(4)
   .add_int64_power_of_two_axis("num_row_groups", nvbench::range(4, 14, 2))
+  .add_int64_axis("rows_per_row_group", {5'000, 10'000})
   .add_string_axis("io_type", {"DEVICE_BUFFER"})
   .add_float64_axis("deletion_probability", {0.15, 0.5, 0.75})
   .add_int64_axis("num_cols", {4});
