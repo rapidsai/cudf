@@ -97,8 +97,6 @@ def decompose_single_agg(
         # Ensure Polars semantics for dtype:
         # - average -> Float64
         # - min/max/dense/ordinal -> IDX_DTYPE (UInt32/UInt64)
-        # Push the cast into the post step so evaluation paths don't need
-        # to guess libcudf's output type.
         return [(named_expr, True)], named_expr.reconstruct(
             expr.Cast(agg.dtype, expr.Col(agg.dtype, name))
         )
