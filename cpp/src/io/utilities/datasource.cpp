@@ -35,7 +35,6 @@
 #include <unistd.h>
 
 #include <regex>
-#include <stdexcept>
 #include <vector>
 
 #ifdef CUDF_KVIKIO_REMOTE_IO
