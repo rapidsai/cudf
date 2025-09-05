@@ -476,15 +476,27 @@ public class Rmm {
    */
   public static synchronized void shutdown(long forceGCInterval, long maxWaitTime, TimeUnit units)
       throws RmmException {
-
-    // Close all Rmm resources.
-    MemoryCleaner.cleanAllRmmBlockers();
-
+    long now = System.currentTimeMillis();
+    final long endTime = now + units.toMillis(maxWaitTime);
+    long nextGcTime = now;
+    try {
+      if (MemoryCleaner.bestEffortHasRmmBlockers()) {
+        do {
+          if (nextGcTime <= now) {
+            System.gc();
+            nextGcTime = nextGcTime + units.toMillis(forceGCInterval);
+          }
+          // Check if everything is ready about every 10 ms
+          Thread.sleep(10);
+          now = System.currentTimeMillis();
+        } while (endTime > now && MemoryCleaner.bestEffortHasRmmBlockers());
+      }
+    } catch (InterruptedException e) {
+      // Ignored
+    }
     if (MemoryCleaner.bestEffortHasRmmBlockers()) {
-      // Should never happen, but just in case.
       throw new RmmException("Could not shut down RMM there appear to be outstanding allocations");
     }
-
     if (initialized) {
       if (deviceResource != null) {
         setCurrentDeviceResource(null, deviceResource, true).close();
