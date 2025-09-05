@@ -5102,6 +5102,14 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         --------
         DataFrame.apply
         """
+        warnings.warn(
+            "DataFrame.apply_chunks is deprecated and will be "
+            "removed in a future release. Please use `apply` "
+            "or use a custom numba kernel instead or refer "
+            "to the UDF guidelines for more information "
+            "https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html",
+            FutureWarning,
+        )
         if kwargs is None:
             kwargs = {}
         if chunks is None:
