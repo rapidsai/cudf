@@ -506,8 +506,9 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
         mr);
       // Since some rows in child column may need to be nullified due to mixed types, we can not
       // skip the purge_nonempty_nulls call.
-      if (auto const output_cv = ret_col->view(); detail::has_nonempty_nulls(output_cv, stream)) {
-        ret_col = detail::purge_nonempty_nulls(output_cv, stream, mr);
+      if (auto const output_cv = ret_col->view();
+          cudf::detail::has_nonempty_nulls(output_cv, stream)) {
+        ret_col = cudf::detail::purge_nonempty_nulls(output_cv, stream, mr);
       }
       return {std::move(ret_col), std::move(column_names)};
     }
