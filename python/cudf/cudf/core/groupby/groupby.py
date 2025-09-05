@@ -2194,12 +2194,22 @@ class GroupBy(Serializable, Reducible, Scannable):
         <https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.rolling.html>`_
 
         """
+        warnings.warn(
+            "apply_grouped is deprecated and will be "
+            "removed in a future release. Please use `apply` "
+            "or use a custom numba kernel instead or refer "
+            "to the UDF guidelines for more information "
+            "https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html",
+            FutureWarning,
+        )
         if not callable(function):
             raise TypeError(f"type {type(function)} is not callable")
 
         _, offsets, _, grouped_values = self._grouped()
         kwargs.update({"chunks": offsets})
-        return grouped_values.apply_chunks(function, **kwargs)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            return grouped_values.apply_chunks(function, **kwargs)
 
     @_performance_tracking
     def _broadcast(self, values: Series) -> Series:
