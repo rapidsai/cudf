@@ -77,6 +77,7 @@ from cudf.options import (
     option_context,
     set_option,
 )
+from cudf import utils
 
 cuda.set_memory_manager(RMMNumbaManager)
 cupy.cuda.set_allocator(rmm_cupy_allocator)
