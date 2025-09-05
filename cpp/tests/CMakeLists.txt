@@ -344,7 +344,7 @@ ConfigureTest(
 )
 ConfigureTest(
   PARQUET_EXPERIMENTAL_API_TEST
-  io/parquet_experimental_apis_test.cu
+  io/parquet_experimental_apis_test.cpp
   io/parquet_common.cpp
   io/parquet_test.cpp
   EXTRA_LIBS

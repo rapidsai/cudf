@@ -100,7 +100,7 @@ auto serialize_deletion_vector(roaring64_bitmap_t const* deletion_vector)
 {
   auto const num_bytes = roaring64_bitmap_portable_size_in_bytes(deletion_vector);
   EXPECT_GT(num_bytes, 0);
-  auto serialized_bitmap = thrust::host_vector<std::byte>(num_bytes);
+  auto serialized_bitmap = thrust::host_vector<cuda::std::byte>(num_bytes);
   std::ignore            = roaring64_bitmap_portable_serialize(
     deletion_vector, reinterpret_cast<char*>(serialized_bitmap.data()));
   return serialized_bitmap;
@@ -248,24 +248,26 @@ void test_read_parquet_and_apply_deletion_vector(
   // Source info for parquet reader
   auto const source_info = cudf::io::source_info{
     cudf::host_span<char const>(parquet_buffer.data(), parquet_buffer.size())};
-
-  // Read parquet with deletion vector
   auto in_opts = cudf::io::parquet_reader_options::builder(source_info).build();
+
+  // Serialize the deletion vector
+  auto serialized_deletion_vector = serialize_deletion_vector(deletion_vector);
+
+  // Read parquet and apply deletion vector (roaring64 bitmap)
   auto const read_table_with_deletion_vector =
     read_parquet_and_apply_deletion_vector(
-      in_opts, deletion_vector, row_group_offsets, row_group_num_rows, stream, mr)
+      in_opts, serialized_deletion_vector, row_group_offsets, row_group_num_rows, stream, mr)
       .tbl;
 
-  // Serialize the deletion vector and read parquet with the serialized deletion vector
-  auto serialized_deletion_vector = serialize_deletion_vector(deletion_vector);
-  auto const read_table_with_serialized_deletion_vector =
-    read_parquet_and_apply_serialized_deletion_vector(
+  // Read parquet and apply deletion vector (cuco::experimental::roaring_bitmap)
+  auto const read_table_with_deletion_vector_gpu =
+    read_parquet_and_apply_deletion_vector_gpu(
       in_opts, serialized_deletion_vector, row_group_offsets, row_group_num_rows, stream, mr)
       .tbl;
 
   // Compare the read tables to the expected table
   CUDF_TEST_EXPECT_TABLES_EQUAL(read_table_with_deletion_vector->view(), expected_table->view());
-  CUDF_TEST_EXPECT_TABLES_EQUAL(read_table_with_serialized_deletion_vector->view(),
+  CUDF_TEST_EXPECT_TABLES_EQUAL(read_table_with_deletion_vector_gpu->view(),
                                 expected_table->view());
 }
 

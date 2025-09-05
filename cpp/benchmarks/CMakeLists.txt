@@ -330,6 +330,13 @@ ConfigureNVBench(
 )
 
 # ##################################################################################################
+# * parquet experimental deletion vector APIs benchmark
+# ----------------------------------------------------------------------
+ConfigureNVBench(
+  PARQUET_EXPERIMENTAL_APIS_NVBENCH io/parquet/experimental/parquet_deletion_vectors.cpp
+)
+
+# ##################################################################################################
 # * parquet multithread reader benchmark
 # ----------------------------------------------------------------------
 ConfigureNVBench(PARQUET_MULTITHREAD_READER_NVBENCH io/parquet/parquet_reader_multithread.cpp)

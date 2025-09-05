@@ -25,8 +25,6 @@
 
 #include <thrust/host_vector.h>
 
-#include <roaring/roaring64.h>
-
 #include <memory>
 #include <utility>
 #include <vector>
@@ -485,13 +483,13 @@ class hybrid_scan_reader {
 };
 
 /**
- * @brief Reads a table from parquet source, prepends an index column to it, and applies the
- * roaring64 deletion vector to the read table
+ * @brief Reads a table from parquet source, prepends an index column to it, deserializes the
+ * roaring64 deletion vector and applies it to the read table
  *
  * @ingroup io_readers
  *
  * @param options The options used to read Parquet file
- * @param deletion_vector Roaring bitmap deletion vector to apply
+ * @param serialized_roaring64_bytes Span of `portable` serialized roaring bitmap buffer
  * @param row_group_offsets Row index offsets for each input row group
  * @param row_group_num_rows Number of rows in each input row group
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -502,7 +500,7 @@ class hybrid_scan_reader {
  */
 table_with_metadata read_parquet_and_apply_deletion_vector(
   parquet_reader_options const& options,
-  roaring64_bitmap_t const* deletion_vector,
+  cudf::host_span<cuda::std::byte const> serialized_roaring64_bytes,
   cudf::host_span<size_t const> row_group_offsets,
   cudf::host_span<size_type const> row_group_num_rows,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
@@ -524,9 +522,9 @@ table_with_metadata read_parquet_and_apply_deletion_vector(
  *
  * @return Read table with index column and deletions applied, along with its metadata
  */
-table_with_metadata read_parquet_and_apply_serialized_deletion_vector(
+table_with_metadata read_parquet_and_apply_deletion_vector_gpu(
   parquet_reader_options const& options,
-  cudf::host_span<std::byte const> serialized_roaring64_bytes,
+  cudf::host_span<cuda::std::byte const> serialized_roaring64_bytes,
   cudf::host_span<size_t const> row_group_offsets,
   cudf::host_span<size_type const> row_group_num_rows,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
