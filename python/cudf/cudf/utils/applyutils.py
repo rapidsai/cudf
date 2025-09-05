@@ -146,21 +146,17 @@ class ApplyKernelCompilerBase:
         # Get input columns
         if isinstance(self.incols, dict):
             inputs = {
-                v: cuda.as_cuda_array(
-                    df[k]._column.data_array_view(mode="read")
-                )
+                v: df[k]._column.data_array_view(mode="read")
                 for (k, v) in self.incols.items()
             }
         else:
             inputs = {
-                k: cuda.as_cuda_array(
-                    df[k]._column.data_array_view(mode="read")
-                )
+                k: df[k]._column.data_array_view(mode="read")
                 for k in self.incols
             }
         # Allocate output columns
         outputs = {
-            k: cuda.device_array(len(df), dtype=np.dtype(dt))
+            k: cp.empty(len(df), dtype=np.dtype(dt))
             for k, dt in self.outcols.items()
         }
 
@@ -222,14 +218,13 @@ class ApplyChunksCompiler(ApplyKernelCompilerBase):
                 self.kernel[blkct, tpb](len(df), chunks, *args)
 
     def normalize_chunks(self, size, chunks):
+        i64 = np.dtype(np.int64)
         if isinstance(chunks, int):
             # *chunks* is the chunksize
-            return cuda.as_cuda_array(
-                cp.arange(start=0, stop=size, step=chunks)
-            ).view("int64")
+            return cp.arange(start=0, stop=size, step=chunks, dtype=i64)
         else:
             # *chunks* is an array of chunk leading offset
-            return cuda.as_cuda_array(cp.asarray(chunks)).view("int64")
+            return cp.asarray(chunks).view(i64)
 
 
 def _make_row_wise_kernel(func, argnames, extras):
