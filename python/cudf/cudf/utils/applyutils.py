@@ -17,7 +17,7 @@ from cudf.utils._numba import _CUDFNumbaConfig
 from cudf.utils.docutils import docfmt_partial
 from cudf.utils.dtypes import SIZE_TYPE_DTYPE
 
-_doc_applyparams = """
+_doc_applychunkparams = """
 df : DataFrame
     The source dataframe.
 func : function
@@ -36,9 +36,6 @@ pessimistic_nulls : bool
     input is null. If False, all outputs will be non-null, but will be the
     result of applying func against the underlying column data, which
     may be garbage.
-"""
-
-_doc_applychunkparams = """
 chunks : int or Series-like
     If it is an ``int``, it is the chunksize.
     If it is an array, it contains integer offset for the start of each chunk.
@@ -61,26 +58,7 @@ blkct : int; optional
     number of blocks.
 """
 
-doc_apply = docfmt_partial(params=_doc_applyparams)
-doc_applychunks = docfmt_partial(
-    params=_doc_applyparams, params_chunks=_doc_applychunkparams
-)
-
-
-@doc_apply()
-def apply_rows(
-    df, func, incols, outcols, kwargs, pessimistic_nulls, cache_key
-):
-    """Row-wise transformation
-
-    Parameters
-    ----------
-    {params}
-    """
-    applyrows = ApplyRowsCompiler(
-        func, incols, outcols, kwargs, pessimistic_nulls, cache_key=cache_key
-    )
-    return applyrows.run(df)
+doc_applychunks = docfmt_partial(params=_doc_applychunkparams)
 
 
 @doc_applychunks()
@@ -100,7 +78,6 @@ def apply_chunks(
     Parameters
     ----------
     {params}
-    {params_chunks}
     """
     applychunks = ApplyChunksCompiler(
         func, incols, outcols, kwargs, pessimistic_nulls, cache_key=None
@@ -184,19 +161,6 @@ class ApplyKernelCompilerBase:
         return outdf
 
 
-class ApplyRowsCompiler(ApplyKernelCompilerBase):
-    def compile(self, func, argnames, extra_argnames):
-        # Compile kernel
-        kernel = _load_cache_or_make_row_wise_kernel(
-            self.cache_key, func, argnames, extra_argnames
-        )
-        return kernel
-
-    def launch_kernel(self, df, args):
-        with _CUDFNumbaConfig():
-            self.kernel.forall(len(df))(*args)
-
-
 class ApplyChunksCompiler(ApplyKernelCompilerBase):
     def compile(self, func, argnames, extra_argnames):
         # Compile kernel
@@ -225,52 +189,6 @@ class ApplyChunksCompiler(ApplyKernelCompilerBase):
         else:
             # *chunks* is an array of chunk leading offset
             return cp.asarray(chunks).view(i64)
-
-
-def _make_row_wise_kernel(func, argnames, extras):
-    """
-    Make a kernel that does a stride loop over the input rows.
-
-    Each thread is responsible for a row in each iteration.
-    Several iteration may be needed to handling a large number of rows.
-
-    The resulting kernel can be used with any 1D grid size and 1D block size.
-    """
-    # Build kernel source
-    argnames = list(map(_mangle_user, argnames))
-    extras = list(map(_mangle_user, extras))
-    source = """
-def row_wise_kernel({args}):
-{body}
-"""
-
-    args = ", ".join(argnames)
-    body = []
-
-    body.append("tid = cuda.grid(1)")
-    body.append("ntid = cuda.gridsize(1)")
-
-    for a in argnames:
-        if a not in extras:
-            start = "tid"
-            stop = ""
-            stride = "ntid"
-            srcidx = "{a} = {a}[{start}:{stop}:{stride}]"
-            body.append(
-                srcidx.format(a=a, start=start, stop=stop, stride=stride)
-            )
-
-    body.append(f"inner({args})")
-
-    indented = ["{}{}".format(" " * 4, ln) for ln in body]
-    # Finalize source
-    concrete = source.format(args=args, body="\n".join(indented))
-    # Get bytecode
-    glbs = {"inner": cuda.jit(device=True)(func), "cuda": cuda}
-    exec(concrete, glbs)
-    # Compile as CUDA kernel
-    kernel = cuda.jit(glbs["row_wise_kernel"])
-    return kernel
 
 
 def _make_chunk_wise_kernel(func, argnames, extras):
@@ -339,23 +257,9 @@ def chunk_wise_kernel(nrows, chunks, {args}):
 _cache: dict[Any, Any] = dict()
 
 
-@functools.wraps(_make_row_wise_kernel)
-def _load_cache_or_make_row_wise_kernel(cache_key, func, *args, **kwargs):
-    """Caching version of ``_make_row_wise_kernel``."""
-    if cache_key is None:
-        cache_key = func
-    try:
-        out = _cache[cache_key]
-        return out
-    except KeyError:
-        kernel = _make_row_wise_kernel(func, *args, **kwargs)
-        _cache[cache_key] = kernel
-        return kernel
-
-
 @functools.wraps(_make_chunk_wise_kernel)
 def _load_cache_or_make_chunk_wise_kernel(func, *args, **kwargs):
-    """Caching version of ``_make_row_wise_kernel``."""
+    """Caching version of ``_make_chunk_wise_kernel``."""
     try:
         return _cache[func]
     except KeyError:
