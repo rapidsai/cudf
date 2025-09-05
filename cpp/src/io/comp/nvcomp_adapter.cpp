@@ -23,6 +23,7 @@
 #include <cudf/logger.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <io/utilities/hostdevice_vector.hpp>
 #include <nvcomp/deflate.h>
 #include <nvcomp/gzip.h>
 #include <nvcomp/lz4.h>
@@ -1063,6 +1064,36 @@ std::optional<size_t> compress_max_allowed_chunk_size(compression_type compressi
     case compression_type::LZ4: return nvcompLZ4CompressionMaxAllowedChunkSize;
     default: UNSUPPORTED_COMPRESSION(compression);
   }
+}
+
+void load_nvcomp_library()
+{
+  std::cout << "Loading nvCOMP library" << std::endl;
+  auto const stream = cudf::get_default_stream();
+  auto mr           = cudf::get_current_device_resource_ref();
+
+  // Allocate device memory for the test
+  auto const d_input = rmm::device_uvector<uint8_t>(1, stream, mr);
+
+  // Calculate maximum compressed size
+  auto const max_compressed_size = compress_max_output_chunk_size(compression_type::SNAPPY, 1);
+  rmm::device_uvector<uint8_t> d_compressed(max_compressed_size, stream);
+
+  // Prepare input and output spans for compression
+  cudf::detail::hostdevice_vector<device_span<uint8_t const>> hd_inputs(1, stream);
+  hd_inputs[0] = d_input;
+  hd_inputs.host_to_device_async(stream);
+
+  cudf::detail::hostdevice_vector<device_span<uint8_t>> hd_outputs(1, stream);
+  hd_outputs[0] = d_compressed;
+  hd_outputs.host_to_device_async(stream);
+
+  cudf::detail::hostdevice_vector<codec_exec_result> hd_results(1, stream);
+  hd_results[0] = codec_exec_result{0, codec_status::FAILURE};
+  hd_results.host_to_device_async(stream);
+
+  // Perform compression - this will execute nvCOMP kernels
+  batched_compress(compression_type::SNAPPY, hd_inputs, hd_outputs, hd_results, stream);
 }
 
 }  // namespace cudf::io::detail::nvcomp

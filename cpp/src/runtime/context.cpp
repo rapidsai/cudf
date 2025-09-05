@@ -16,6 +16,7 @@
 
 #include "runtime/context.hpp"
 
+#include "io/comp/nvcomp_adapter.hpp"
 #include "jit/cache.hpp"
 
 #include <cudf/context.hpp>
@@ -25,7 +26,10 @@
 
 namespace cudf {
 
-context::context() : _program_cache{std::make_unique<jit::program_cache>()} {}
+context::context() : _program_cache{std::make_unique<jit::program_cache>()}
+{
+  io::detail::nvcomp::load_nvcomp_library();
+}
 
 jit::program_cache& context::program_cache() { return *_program_cache; }
 

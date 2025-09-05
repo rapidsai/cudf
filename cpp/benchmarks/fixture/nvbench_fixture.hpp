@@ -15,6 +15,8 @@
  */
 #pragma once
 
+#include "cudf/context.hpp"
+
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/pinned_memory.hpp>
@@ -97,6 +99,8 @@ struct nvbench_base_fixture {
 
   nvbench_base_fixture(int argc, char const* const* argv)
   {
+    cudf::initialize();
+
     for (int i = 1; i < argc - 1; ++i) {
       std::string arg = argv[i];
       if (arg == detail::rmm_mode_param) {
