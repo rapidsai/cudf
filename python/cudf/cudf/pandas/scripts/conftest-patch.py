@@ -3545,6 +3545,7 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/extension/test_arrow.py::test_dt_tz_convert[us]",
     "tests/extension/test_arrow.py::test_dt_tz_convert_none",
     "tests/extension/test_arrow.py::test_dt_tz_localize_nonexistent[shift_backward-exp_date1]",
+    "tests/extension/test_arrow.py::test_duration_overflow_from_ndarray_containing_nat",
     "tests/extension/test_arrow.py::test_from_arrow_respecting_given_dtype",
     "tests/extension/test_arrow.py::test_groupby_series_size_returns_pa_int[bool]",
     "tests/extension/test_arrow.py::test_groupby_series_size_returns_pa_int[decimal128(7, 3)]",
