@@ -89,19 +89,19 @@ def decompose_single_agg(
     """
     agg = named_expr.value
     name = named_expr.name
-    if isinstance(agg, expr.UnaryFunction) and agg.name == "rank":
+    if isinstance(agg, expr.UnaryFunction) and agg.name in {"rank"}:
         if context != ExecutionContext.WINDOW:
             raise NotImplementedError(
-                "rank is not supported in groupby or rolling context"
+                f"{agg.name} is not supported in groupby or rolling context"
             )
         # Ensure Polars semantics for dtype:
         # - average -> Float64
         # - min/max/dense/ordinal -> IDX_DTYPE (UInt32/UInt64)
-        # Push the cast into the post step so evaluation paths don't need
-        # to guess libcudf's output type.
-        return [(named_expr, True)], named_expr.reconstruct(
-            expr.Cast(agg.dtype, expr.Col(agg.dtype, name))
-        )
+        post_col: expr.Expr = expr.Col(agg.dtype, name)
+        if agg.name == "rank":
+            post_col = expr.Cast(agg.dtype, post_col)
+
+        return [(named_expr, True)], named_expr.reconstruct(post_col)
     if isinstance(agg, expr.UnaryFunction) and agg.name == "null_count":
         (child,) = agg.children
 
