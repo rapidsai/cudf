@@ -89,6 +89,14 @@ def to_request(
     return plc.rolling.RollingRequest(col.obj, min_periods, value.agg_request)
 
 
+def _by_exprs(b: Expr | tuple) -> list[Expr]:
+    if isinstance(b, Expr):
+        return [b]
+    if isinstance(b, tuple):
+        return [e for item in b for e in _by_exprs(item)]
+    return [expr.Literal(DataType(pl.Int64()), b)]
+
+
 class RollingWindow(Expr):
     __slots__ = (
         "closed_window",
@@ -250,10 +258,7 @@ class GroupedRollingWindow(Expr):
         # Ensures every partition-by is an Expr
         # Fixes over(1) cases with the streaming
         # executor and a small blocksize
-        by_expr = [
-            (b if isinstance(b, Expr) else expr.Literal(DataType(pl.Int64()), b))
-            for b in by
-        ]
+        by_expr = [e for b in by for e in _by_exprs(b)]
 
         # Expose agg dependencies as children so the streaming
         # executor retains required source columns
