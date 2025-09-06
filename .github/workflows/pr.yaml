@@ -38,7 +38,6 @@ jobs:
       - devcontainer
       - unit-tests-cudf-pandas
       - pandas-tests
-      # - pandas-tests-diff
       - narwhals-tests
       - telemetry-setup
       - third-party-integration-tests-cudf-pandas

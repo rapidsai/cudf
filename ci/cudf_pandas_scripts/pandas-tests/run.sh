@@ -50,11 +50,6 @@ timeout 90m bash python/cudf/cudf/pandas/scripts/run-pandas-tests.sh \
 SUMMARY_FILE_NAME=${PANDAS_TESTS_BRANCH}-${RAPIDS_FULL_VERSION}-results.json
 # summarize the results and save them to artifacts:
 python python/cudf/cudf/pandas/scripts/summarize-test-results.py --output json pandas-testing/"${PANDAS_TESTS_BRANCH}.json" > "./${SUMMARY_FILE_NAME}"
-# RAPIDS_ARTIFACTS_DIR=${RAPIDS_ARTIFACTS_DIR:-"${PWD}/artifacts"}
-# mkdir -p "${RAPIDS_ARTIFACTS_DIR}"
-# cp ./"${SUMMARY_FILE_NAME}" "${RAPIDS_ARTIFACTS_DIR}"/
-# rapids-upload-to-s3 "${RAPIDS_ARTIFACTS_DIR}"/"${SUMMARY_FILE_NAME}" "${RAPIDS_ARTIFACTS_DIR}"
-# mv "${RAPIDS_ARTIFACTS_DIR}"/"${SUMMARY_FILE_NAME}" "${RAPIDS_ARTIFACTS_DIR}"/${PANDAS_TESTS_BRANCH}-results.json
 
 
 # Exit early if running tests for main branch
@@ -63,7 +58,6 @@ if [[ "${PANDAS_TESTS_BRANCH}" == "main" ]]; then
     exit ${EXITCODE}
 fi
 
-# mv "${RAPIDS_ARTIFACTS_DIR}"/${PANDAS_TESTS_BRANCH}-results.json ./${PANDAS_TESTS_BRANCH}-results.json
 
 # Hard-coded needs to match the version deduced by rapids-upload-artifacts-dir
 GH_JOB_NAME="pandas-tests / build"
@@ -80,15 +74,6 @@ ls -al
 # gh run download $GITHUB_RUN_ID -n pr-results.json
 # Compute the diff and prepare job summary:
 python ci/cudf_pandas_scripts/pandas-tests/job-summary.py main-results.json "${SUMMARY_FILE_NAME}" "${RAPIDS_FULL_VERSION}" >> "$GITHUB_STEP_SUMMARY"
-
-# COMMENT=$(head -1 summary.txt | grep -oP '\d+/\d+ \(\d+\.\d+%\).*?(a decrease by|an increase by) \d+\.\d+%')
-# echo "$COMMENT"
-# jq --arg COMMENT "$COMMENT" --arg GH_JOB_NAME "$GH_JOB_NAME" -n \
-#   '{"context": "Pandas tests",
-#     "description": $COMMENT,
-#     "state":"success",
-#     "job_name": $GH_JOB_NAME}' \
-#     > gh-status.json
 
 rapids-logger "Last Test script exiting with value: $EXITCODE"
 exit ${EXITCODE}
