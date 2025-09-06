@@ -57,8 +57,9 @@ if [[ "${PANDAS_TESTS_BRANCH}" == "main" ]]; then
     exit ${EXITCODE}
 fi
 
-rapids-logger "Fetching latest available results from nightly"
+
 MAIN_RUN_ID=$(gh run list -w "Pandas Test Job" -b branch-25.10 --status success --limit 7 --json databaseId --jq ".[0].databaseId")
+rapids-logger "Fetching latest available results from nightly: ${MAIN_RUN_ID}"
 gh run download $MAIN_RUN_ID -n main-results.json
 
 # Compute the diff and prepare job summary:
