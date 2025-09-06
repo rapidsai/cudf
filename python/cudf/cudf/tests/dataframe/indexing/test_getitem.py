@@ -267,3 +267,87 @@ def test_duplicate_labels_raises():
         df[["a", "a"]]
     with pytest.raises(ValueError):
         df.loc[:, ["a", "a"]]
+
+
+def test_boolmask():
+    pdf = pd.DataFrame({"x": range(10), "y": range(10)})
+    gdf = cudf.DataFrame({"x": range(10), "y": range(10)})
+    rng = np.random.default_rng(seed=0)
+    boolmask = rng.choice([True, False], size=len(pdf))
+    gdf = gdf[boolmask]
+    pdf = pdf[boolmask]
+    assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize(
+    "mask_shape",
+    [
+        (2, "ab"),
+        (2, "abc"),
+        (3, "ab"),
+        (3, "abc"),
+        (3, "abcd"),
+        (4, "abc"),
+        (4, "abcd"),
+    ],
+)
+def test_dataframe_boolmask(mask_shape):
+    rng = np.random.default_rng(seed=0)
+    pdf = pd.DataFrame({col: rng.integers(0, 10, 3) for col in "abc"})
+    pdf_mask = pd.DataFrame(
+        {col: rng.integers(0, 2, mask_shape[0]) > 0 for col in mask_shape[1]}
+    )
+    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf_mask = cudf.DataFrame.from_pandas(pdf_mask)
+    gdf = gdf[gdf_mask]
+    pdf = pdf[pdf_mask]
+
+    assert np.array_equal(gdf.columns, pdf.columns)
+    for col in gdf.columns:
+        assert np.array_equal(
+            gdf[col].fillna(-1).to_pandas().values, pdf[col].fillna(-1).values
+        )
+
+
+@pytest.mark.parametrize(
+    "box",
+    [
+        list,
+        pytest.param(
+            cudf.Series,
+            marks=pytest.mark.xfail(
+                reason="Pandas can't index a multiindex with a Series"
+            ),
+        ),
+    ],
+)
+def test_dataframe_multiindex_boolmask(box):
+    mask = box([True, False, True])
+    gdf = cudf.DataFrame(
+        {"w": [3, 2, 1], "x": [1, 2, 3], "y": [0, 1, 0], "z": [1, 1, 1]}
+    )
+    gdg = gdf.groupby(["w", "x"]).count()
+    pdg = gdg.to_pandas()
+    assert_eq(gdg[mask], pdg[mask])
+
+
+@pytest.mark.parametrize(
+    "arg", [slice(2, 8, 3), slice(1, 20, 4), slice(-2, -6, -2)]
+)
+def test_dataframe_strided_slice(arg):
+    mul = pd.DataFrame(
+        {
+            "Index": [1, 2, 3, 4, 5, 6, 7, 8, 9],
+            "AlphaIndex": ["a", "b", "c", "d", "e", "f", "g", "h", "i"],
+        }
+    )
+    pdf = pd.DataFrame(
+        {"Val": [10, 9, 8, 7, 6, 5, 4, 3, 2]},
+        index=pd.MultiIndex.from_frame(mul),
+    )
+    gdf = cudf.DataFrame.from_pandas(pdf)
+
+    expect = pdf[arg]
+    got = gdf[arg]
+
+    assert_eq(expect, got)
