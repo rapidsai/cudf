@@ -31,5 +31,5 @@ jobs:
         node_type: "gpu-l4-latest-1"
         container_image: "rapidsai/citestwheel:25.10-cuda13.0.0-ubuntu24.04-py3.13"
         script: ci/cudf_pandas_scripts/pandas-tests/run.sh main
-        file_to_upload: ./artifacts/main-results.json
+        file_to_upload: ./main-results.json
         artifact-name: main-results.json
