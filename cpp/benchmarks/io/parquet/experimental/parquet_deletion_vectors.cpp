@@ -61,27 +61,25 @@ auto build_row_indices(cudf::host_span<size_t const> row_group_offsets,
                        cudf::host_span<cudf::size_type const> row_group_num_rows,
                        cudf::size_type num_rows)
 {
-  // Total number of row groups
   auto const num_row_groups = static_cast<cudf::size_type>(row_group_num_rows.size());
 
-  // Row span offsets for each row group
+  // Row group span offsets
   auto row_group_span_offsets = thrust::host_vector<cudf::size_type>(num_row_groups + 1);
   row_group_span_offsets[0]   = 0;
   thrust::inclusive_scan(
     row_group_num_rows.begin(), row_group_num_rows.end(), row_group_span_offsets.begin() + 1);
 
-  // Host vector to store expected row indices data
+  // Expected row indices data
   auto expected_row_indices = thrust::host_vector<size_t>(num_rows);
-  // Initialize all row indices to 1 so that we can do a segmented inclusive scan
   std::fill(expected_row_indices.begin(), expected_row_indices.end(), 1);
 
-  // Scatter row group offsets to their corresponding row group span offsets
+  // Scatter row group row offsets to expected row indices
   thrust::scatter(row_group_offsets.begin(),
                   row_group_offsets.end(),
                   row_group_span_offsets.begin(),
                   expected_row_indices.begin());
 
-  // Inclusive scan each row group span to compute the rest of the row indices
+  // Inclusive scan to compute the rest of the expected row indices
   std::for_each(
     thrust::counting_iterator(0), thrust::counting_iterator(num_row_groups), [&](auto i) {
       auto start_row_index = row_group_span_offsets[i];
@@ -172,7 +170,7 @@ auto setup_table_and_deletion_vector(nvbench::state& state)
     cudf::io::write_parquet(write_opts);
   }
 
-  // Row index offsets for each row group
+  // Row offsets for each row group - arbitrary, only used to build the index column
   auto row_group_offsets = thrust::host_vector<size_t>(num_row_groups);
   row_group_offsets[0]   = static_cast<size_t>(std::llround(2e9));
   std::for_each(

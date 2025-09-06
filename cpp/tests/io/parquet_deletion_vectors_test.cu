@@ -78,28 +78,27 @@ auto build_expected_row_indices(cudf::host_span<size_t const> row_group_offsets,
                                 cudf::host_span<cudf::size_type const> row_group_num_rows,
                                 cudf::size_type num_rows)
 {
-  // Total number of row groups
   auto const num_row_groups = static_cast<cudf::size_type>(row_group_num_rows.size());
 
-  // Row span offsets for each row group
+  // Row span offsets
   auto row_group_span_offsets = std::vector<cudf::size_type>(num_row_groups + 1);
   row_group_span_offsets[0]   = 0;
   std::inclusive_scan(
     row_group_num_rows.begin(), row_group_num_rows.end(), row_group_span_offsets.begin() + 1);
 
-  // Host vector to store expected row indices data
+  // Expected row indices data
   auto expected_row_indices = thrust::host_vector<size_t>(num_rows);
   // Initialize all row indices to 1 so that we can do a segmented inclusive scan
   std::fill(expected_row_indices.begin(), expected_row_indices.end(), 1);
 
-  // Scatter row group offsets to their corresponding row group span offsets
+  // Scatter row group offsets to expected row indices
   thrust::scatter(thrust::host,
                   row_group_offsets.begin(),
                   row_group_offsets.end(),
                   row_group_span_offsets.begin(),
                   expected_row_indices.begin());
 
-  // Inclusive scan each row group span to compute the rest of the row indices
+  // Inclusive scan to compute the rest of the row indices
   std::for_each(
     thrust::counting_iterator(0), thrust::counting_iterator(num_row_groups), [&](auto i) {
       auto start_row_index = row_group_span_offsets[i];
@@ -243,16 +242,18 @@ void test_read_parquet_and_apply_deletion_vector(
   auto expected_table = build_expected_table(
     input_table_view, expected_row_index_column, expected_row_mask_column, stream, mr);
 
-  // Read parquet and apply deletion vector (roaring64 bitmap)
-  auto const source_info = cudf::io::source_info{
-    cudf::host_span<char const>(parquet_buffer.data(), parquet_buffer.size())};
-  auto in_opts = cudf::io::parquet_reader_options::builder(source_info).build();
+  // Read parquet and apply deletion vector
+  auto in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{cudf::host_span<char const>(
+                                                parquet_buffer.data(), parquet_buffer.size())})
+      .build();
+
   auto const read_table_with_deletion_vector =
     cudf::io::parquet::experimental::read_parquet_and_apply_deletion_vector(
       in_opts, serialized_deletion_vector, row_group_offsets, row_group_num_rows, stream, mr)
       .tbl;
 
-  // Compare the read tables to the expected table
+  // Compare
   CUDF_TEST_EXPECT_TABLES_EQUAL(read_table_with_deletion_vector->view(), expected_table->view());
 }
 
@@ -383,7 +384,7 @@ TEST_F(ParquetDeletionVectorsTest, NoRowIndexColumn)
   auto expected_row_index_column =
     build_column_from_host_data<size_t>(expected_row_indices, cudf::type_id::UINT64, stream, mr);
 
-  // Build a roaring64 deletion vector and the expected row mask column
+  // Build deletion vector and the expected row mask column
   auto [deletion_vector, expected_row_mask_column] = build_deletion_vector_and_expected_row_mask(
     num_rows, deletion_probability, expected_row_indices, stream, mr);
 
@@ -463,7 +464,7 @@ TEST_F(ParquetDeletionVectorsTest, CustomRowIndexColumn)
   auto expected_row_index_column =
     build_column_from_host_data<size_t>(expected_row_indices, cudf::type_id::UINT64, stream, mr);
 
-  // Build a roaring64 deletion vector and the expected row mask column
+  // Build deletion vector and the expected row mask column
   auto [deletion_vector, expected_row_mask_column] = build_deletion_vector_and_expected_row_mask(
     num_rows, deletion_probability, expected_row_indices, stream, mr);
 
