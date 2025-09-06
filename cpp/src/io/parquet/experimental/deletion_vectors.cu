@@ -155,7 +155,7 @@ std::unique_ptr<cudf::column> build_row_mask_column(
 
 table_with_metadata read_parquet_and_apply_deletion_vector(
   parquet_reader_options const& options,
-  cudf::host_span<cuda::std::byte const> serialized_roaring64_bytes,
+  cudf::host_span<cuda::std::byte const> serialized_roaring64,
   cudf::host_span<size_t const> row_group_offsets,
   cudf::host_span<size_type const> row_group_num_rows,
   rmm::cuda_stream_view stream,
@@ -204,12 +204,12 @@ table_with_metadata read_parquet_and_apply_deletion_vector(
                              std::make_move_iterator(metadata.schema_info.end()));
   metadata.schema_info = std::move(updated_schema_info);
 
-  if (serialized_roaring64_bytes.empty()) {
+  if (serialized_roaring64.empty()) {
     return table_with_metadata{std::move(table_with_index), std::move(metadata)};
   } else {
     // Filter the table using the deletion vector
     auto row_mask = build_row_mask_column(table_with_index->get_column(0).view(),
-                                          serialized_roaring64_bytes,
+                                          serialized_roaring64,
                                           num_rows,
                                           stream,
                                           cudf::get_current_device_resource_ref());

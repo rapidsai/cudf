@@ -36,7 +36,7 @@ namespace io::parquet::experimental {
  * @ingroup io_readers
  *
  * @param options Parquet reader options
- * @param serialized_roaring64 Host span of serialized`portable` roaring64 bitmap bytes
+ * @param serialized_roaring64 Host span of `portable` serialized roaring64 bitmap
  * @param row_group_offsets Host span of row index offsets for each row group
  * @param row_group_num_rows Number of rows in each row group
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -47,7 +47,7 @@ namespace io::parquet::experimental {
  */
 table_with_metadata read_parquet_and_apply_deletion_vector(
   parquet_reader_options const& options,
-  cudf::host_span<cuda::std::byte const> serialized_roaring64_bytes,
+  cudf::host_span<cuda::std::byte const> serialized_roaring64,
   cudf::host_span<size_t const> row_group_offsets,
   cudf::host_span<size_type const> row_group_num_rows,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
