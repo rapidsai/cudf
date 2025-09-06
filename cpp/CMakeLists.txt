@@ -328,7 +328,7 @@ include(cmake/thirdparty/get_zstd.cmake)
 if(NOT BUILD_SHARED_LIBS)
   include("${rapids-cmake-dir}/export/find_package_file.cmake")
   list(APPEND METADATA_KINDS BUILD INSTALL)
-  list(APPEND dependencies KvikIO ZLIB nvcomp nanoarrow zstd croaring)
+  list(APPEND dependencies KvikIO ZLIB nvcomp nanoarrow zstd)
 
   foreach(METADATA_KIND IN LISTS METADATA_KINDS)
     foreach(dep IN LISTS dependencies)
@@ -539,7 +539,7 @@ add_library(
   src/io/parquet/compact_protocol_writer.cpp
   src/io/parquet/decode_preprocess.cu
   src/io/parquet/experimental/dictionary_page_filter.cu
-  src/io/parquet/experimental/deletion_vector_functions.cu
+  src/io/parquet/experimental/deletion_vectors.cu
   src/io/parquet/experimental/hybrid_scan.cpp
   src/io/parquet/experimental/hybrid_scan_chunking.cu
   src/io/parquet/experimental/hybrid_scan_helpers.cpp
@@ -920,8 +920,6 @@ target_include_directories(
          "$<BUILD_INTERFACE:${JITIFY_INCLUDE_DIR}>"
          "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
          "$<BUILD_INTERFACE:${CUDF_GENERATED_INCLUDE_DIR}/include>"
-         "$<BUILD_INTERFACE:${croaring_INCLUDE_DIR}/cpp>"
-         "$<BUILD_INTERFACE:${croaring_INCLUDE_DIR}/include>"
   PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
           "$<BUILD_INTERFACE:${nanoarrow_SOURCE_DIR}/src>"
           "$<BUILD_INTERFACE:${FlatBuffers_SOURCE_DIR}/include>"
@@ -985,7 +983,7 @@ target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL rapids_logger::rapids_logger rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
   PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
-          kvikio::kvikio nanoarrow zstd roaring
+          kvikio::kvikio nanoarrow zstd
 )
 
 # Add Conda library, and include paths if specified

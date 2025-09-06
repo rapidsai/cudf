@@ -343,8 +343,8 @@ ConfigureTest(
   io/parquet_test.cpp
 )
 ConfigureTest(
-  PARQUET_EXPERIMENTAL_API_TEST
-  io/parquet_experimental_apis_test.cpp
+  PARQUET_DELETION_VECTORS_TEST
+  io/parquet_deletion_vectors_test.cu
   io/parquet_common.cpp
   io/parquet_test.cpp
   EXTRA_LIBS

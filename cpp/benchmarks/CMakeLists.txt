@@ -333,8 +333,9 @@ ConfigureNVBench(
 # * parquet experimental deletion vector APIs benchmark
 # ----------------------------------------------------------------------
 ConfigureNVBench(
-  PARQUET_EXPERIMENTAL_APIS_NVBENCH io/parquet/experimental/parquet_deletion_vectors.cpp
+  PARQUET_DELETION_VECTORS_NVBENCH io/parquet/experimental/parquet_deletion_vectors.cpp
 )
+target_link_libraries(PARQUET_DELETION_VECTORS_NVBENCH PRIVATE roaring)
 
 # ##################################################################################################
 # * parquet multithread reader benchmark

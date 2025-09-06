@@ -482,54 +482,6 @@ class hybrid_scan_reader {
   std::unique_ptr<detail::hybrid_scan_reader_impl> _impl;
 };
 
-/**
- * @brief Reads a table from parquet source, prepends an index column to it, deserializes the
- * roaring64 deletion vector and applies it to the read table
- *
- * @ingroup io_readers
- *
- * @param options The options used to read Parquet file
- * @param serialized_roaring64_bytes Span of `portable` serialized roaring bitmap buffer
- * @param row_group_offsets Row index offsets for each input row group
- * @param row_group_num_rows Number of rows in each input row group
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate device memory of the table in the returned
- * table_with_metadata
- *
- * @return Read table with index column and deletions applied, along with its metadata
- */
-table_with_metadata read_parquet_and_apply_deletion_vector(
-  parquet_reader_options const& options,
-  cudf::host_span<cuda::std::byte const> serialized_roaring64_bytes,
-  cudf::host_span<size_t const> row_group_offsets,
-  cudf::host_span<size_type const> row_group_num_rows,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource_ref());
-
-/**
- * @brief Reads a table from parquet source, prepends an index column to it, deserializes the
- * roaring64 deletion vector and applies it to the read table
- *
- * @ingroup io_readers
- *
- * @param options The options used to read Parquet file
- * @param serialized_roaring64_bytes Span of `portable` serialized roaring bitmap buffer
- * @param row_group_offsets Row index offsets for each input row group
- * @param row_group_num_rows Number of rows in each input row group
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate device memory of the table in the returned
- * table_with_metadata
- *
- * @return Read table with index column and deletions applied, along with its metadata
- */
-table_with_metadata read_parquet_and_apply_deletion_vector_gpu(
-  parquet_reader_options const& options,
-  cudf::host_span<cuda::std::byte const> serialized_roaring64_bytes,
-  cudf::host_span<size_t const> row_group_offsets,
-  cudf::host_span<size_type const> row_group_num_rows,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource_ref());
-
 /** @} */  // end of group
 
 }  // namespace io::parquet::experimental

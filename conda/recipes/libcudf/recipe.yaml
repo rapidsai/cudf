@@ -180,7 +180,6 @@ outputs:
           - libcudf
           - libkvikio
           - librdkafka
-          - libroaring
           - librmm
           - libzlib
           - libnvcomp
