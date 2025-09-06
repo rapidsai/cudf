@@ -418,7 +418,6 @@ _names_to_skip_in_cpp = {
     "arrow",
     "DLManagedTensor",
     "ARROW_DEVICE_CUDA",
-    "roaring64_bitmap_t",
     # Unknown types
     "int8_t",
     "int16_t",
