@@ -423,7 +423,7 @@ TEST_F(ParquetDeletionVectorsTest, CustomRowIndexColumn)
     cudf::io::write_parquet(out_opts);
   }
 
-  // Row index offsets for each row group
+  // Row offsets for each row group - arbitrary, only used to build the UINT64 `index` column
   auto row_group_offsets = thrust::host_vector<size_t>(num_row_groups);
   row_group_offsets[0]   = static_cast<size_t>(std::llround(1e9));
   std::transform(
