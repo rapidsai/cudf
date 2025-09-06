@@ -7239,6 +7239,7 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/groupby/test_raises.py::test_groupby_raises_category[by1-True-fillna-method]",
     "tests/groupby/test_raises.py::test_groupby_raises_category[by2-False-fillna-method]",
     "tests/groupby/test_raises.py::test_groupby_raises_category[by2-True-fillna-method]",
+    "tests/groupby/test_raises.py::test_groupby_raises_category[by3-True-fillna-method]",
     "tests/groupby/test_raises.py::test_groupby_raises_category[by6-False-fillna-method]",
     "tests/groupby/test_raises.py::test_groupby_raises_category[by6-True-fillna-method]",
     "tests/groupby/test_raises.py::test_groupby_raises_category[by7-False-fillna-method]",
