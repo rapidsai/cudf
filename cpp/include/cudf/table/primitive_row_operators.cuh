@@ -16,6 +16,12 @@
 
 #pragma once
 
+/**
+ * @file
+ * @deprecated This header is deprecated in 25.10 and will be removed in 25.12.
+ * Users should use cudf/detail/row_operator/primitive_row_operators.cuh instead.
+ */
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/hashing/detail/hash_functions.cuh>
@@ -42,6 +48,9 @@ namespace CUDF_EXPORT cudf {
  *
  * @param table The table to check for compatibility
  * @return Boolean indicating if the table is compatible with primitive row operations
+ *
+ * @deprecated This function is deprecated in 25.10 and will be removed in 25.12.
+ * Users should use cudf/detail/row_operator/primitive_row_operators.cuh instead.
  */
 bool is_primitive_row_op_compatible(cudf::table_view const& table);
 
@@ -49,12 +58,18 @@ namespace row::primitive {
 
 /**
  * @brief Returns `void` if it's not a primitive type
+ *
+ * @deprecated This type alias is deprecated in 25.10 and will be removed in 25.12.
+ * Users should use cudf/detail/row_operator/primitive_row_operators.cuh instead.
  */
 template <typename T>
 using primitive_type_t = cuda::std::conditional_t<cudf::is_numeric<T>(), T, void>;
 
 /**
  * @brief Custom dispatcher for primitive types
+ *
+ * @deprecated This struct is deprecated in 25.10 and will be removed in 25.12.
+ * Users should use cudf/detail/row_operator/primitive_row_operators.cuh instead.
  */
 template <cudf::type_id Id>
 struct dispatch_primitive_type {
@@ -63,6 +78,9 @@ struct dispatch_primitive_type {
 
 /**
  * @brief Performs an equality comparison between two elements in two columns.
+ *
+ * @deprecated This class is deprecated in 25.10 and will be removed in 25.12.
+ * Users should use cudf/detail/row_operator/primitive_row_operators.cuh instead.
  */
 class element_equality_comparator {
  public:
@@ -99,6 +117,9 @@ class element_equality_comparator {
 
 /**
  * @brief Performs a relational comparison between two elements in two tables.
+ *
+ * @deprecated This class is deprecated in 25.10 and will be removed in 25.12.
+ * Users should use cudf/detail/row_operator/primitive_row_operators.cuh instead.
  */
 class row_equality_comparator {
  public:
@@ -175,6 +196,9 @@ class row_equality_comparator {
  * @brief Function object for computing the hash value of a row in a column.
  *
  * @tparam Hash Hash functor to use for hashing elements
+ *
+ * @deprecated This class is deprecated in 25.10 and will be removed in 25.12.
+ * Users should use cudf/detail/row_operator/primitive_row_operators.cuh instead.
  */
 template <template <typename> class Hash>
 class element_hasher {
@@ -209,6 +233,9 @@ class element_hasher {
  * @brief Computes the hash value of a row in the given table.
  *
  * @tparam Hash Hash functor to use for hashing elements.
+ *
+ * @deprecated This class is deprecated in 25.10 and will be removed in 25.12.
+ * Users should use cudf/detail/row_operator/primitive_row_operators.cuh instead.
  */
 template <template <typename> class Hash = cudf::hashing::detail::default_hash>
 class row_hasher {

@@ -422,7 +422,7 @@ void apply_sorting_struct_binary_op(mutable_column_view& out,
         is_lhs_scalar,
         is_rhs_scalar,
         op,
-        cudf::experimental::row::equality::nan_equal_physical_equality_comparator{},
+        cudf::detail::row::equality::nan_equal_physical_equality_comparator{},
         stream);
       break;
     case binary_operator::LESS:
@@ -432,7 +432,7 @@ void apply_sorting_struct_binary_op(mutable_column_view& out,
         rhs,
         is_lhs_scalar,
         is_rhs_scalar,
-        cudf::experimental::row::lexicographic::sorting_physical_element_comparator{},
+        cudf::detail::row::lexicographic::sorting_physical_element_comparator{},
         stream);
       break;
     case binary_operator::GREATER:
@@ -442,7 +442,7 @@ void apply_sorting_struct_binary_op(mutable_column_view& out,
         rhs,
         is_lhs_scalar,
         is_rhs_scalar,
-        cudf::experimental::row::lexicographic::sorting_physical_element_comparator{},
+        cudf::detail::row::lexicographic::sorting_physical_element_comparator{},
         stream);
       break;
     case binary_operator::LESS_EQUAL:
@@ -452,7 +452,7 @@ void apply_sorting_struct_binary_op(mutable_column_view& out,
         rhs,
         is_lhs_scalar,
         is_rhs_scalar,
-        cudf::experimental::row::lexicographic::sorting_physical_element_comparator{},
+        cudf::detail::row::lexicographic::sorting_physical_element_comparator{},
         stream);
       break;
     case binary_operator::GREATER_EQUAL:
@@ -462,7 +462,7 @@ void apply_sorting_struct_binary_op(mutable_column_view& out,
         rhs,
         is_lhs_scalar,
         is_rhs_scalar,
-        cudf::experimental::row::lexicographic::sorting_physical_element_comparator{},
+        cudf::detail::row::lexicographic::sorting_physical_element_comparator{},
         stream);
       break;
     default: CUDF_FAIL("Unsupported operator for structs");

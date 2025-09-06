@@ -687,6 +687,8 @@ add_library(
   src/rolling/range_window_bounds.cpp
   src/rolling/rolling.cpp
   src/round/round.cu
+  src/row_operator/primitive_row_operators.cu
+  src/row_operator/row_operators.cu
   src/runtime/context.cpp
   src/scalar/scalar.cpp
   src/scalar/scalar_factories.cpp
