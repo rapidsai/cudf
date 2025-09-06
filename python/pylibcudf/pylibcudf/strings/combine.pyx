@@ -234,7 +234,6 @@ cpdef Column join_list_elements(
                     lists_strings_column.view(),
                     dereference(c_separator),
                     dereference(c_separator_narep),
-                    dereference(c_string_narep),
                     separate_nulls,
                     empty_list_policy,
                     stream.view()
