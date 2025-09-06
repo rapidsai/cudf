@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import itertools
 from collections import defaultdict
 from dataclasses import dataclass
 from functools import singledispatchmethod
@@ -34,6 +35,7 @@ class UnaryOp:
     named_exprs: list[expr.NamedExpr]
     order_index: plc.Column | None = None
     by_cols_for_scan: list[Column] | None = None
+    local_grouper: plc.groupby.GroupBy | None = None
 
 
 @dataclass(frozen=True)
@@ -266,7 +268,18 @@ class GroupedRollingWindow(Expr):
             )
         ]
         self.by_count = len(by_expr)
-        self.children = tuple(by_expr) + tuple(self._order_by_exprs) + tuple(child_deps)
+        self.children = tuple(
+            itertools.chain(by_expr, self._order_by_exprs, child_deps)
+        )
+
+    def _sorted_grouper(self, by_cols_for_scan: list[Column]) -> plc.groupby.GroupBy:
+        return plc.groupby.GroupBy(
+            plc.Table([c.obj for c in by_cols_for_scan]),
+            null_handling=plc.types.NullPolicy.INCLUDE,
+            keys_are_sorted=plc.types.Sorted.YES,
+            column_order=[k.order for k in by_cols_for_scan],
+            null_precedence=[k.null_order for k in by_cols_for_scan],
+        )
 
     @singledispatchmethod
     def _apply_unary_op(
@@ -336,15 +349,9 @@ class GroupedRollingWindow(Expr):
 
         if order_index is not None and by_cols_for_scan is not None:
             # order_by expressions require us order each group
-            order_by_tbl = plc.Table([c.obj for c in by_cols_for_scan])
-            local = plc.groupby.GroupBy(
-                order_by_tbl,
-                null_handling=plc.types.NullPolicy.INCLUDE,
-                keys_are_sorted=plc.types.Sorted.YES,
-                column_order=[k.order for k in by_cols_for_scan],
-                null_precedence=[k.null_order for k in by_cols_for_scan],
-            )
-            _, rank_tables = local.scan(rank_requests)
+            lg = op.local_grouper
+            assert isinstance(lg, plc.groupby.GroupBy)
+            _, rank_tables = lg.scan(rank_requests)
         else:
             _, rank_tables = grouper.scan(rank_requests)
         return rank_out_names, rank_out_dtypes, rank_tables
@@ -361,36 +368,21 @@ class GroupedRollingWindow(Expr):
         order_index = op.order_index
         policy = op.policy
 
-        val_cols = [
-            Column(
-                plc.copying.gather(
-                    plc.Table(
-                        [
-                            ne.value.children[0]
-                            .evaluate(df, context=ExecutionContext.FRAME)
-                            .obj
-                        ]
-                    ),
-                    order_index,
-                    plc.copying.OutOfBoundsPolicy.NULLIFY,
-                ).columns()[0],
-                dtype=ne.value.children[0].dtype,
-            )
-            for ne in named_exprs
-        ]
-
-        assert by_cols_for_scan is not None
-        order_by_tbl = plc.Table([c.obj for c in by_cols_for_scan])
-        local = plc.groupby.GroupBy(
-            order_by_tbl,
-            null_handling=plc.types.NullPolicy.INCLUDE,
-            keys_are_sorted=plc.types.Sorted.YES,
-            column_order=[k.order for k in by_cols_for_scan],
-            null_precedence=[k.null_order for k in by_cols_for_scan],
+        val_cols = self._gather_columns(
+            [
+                ne.value.children[0].evaluate(df, context=ExecutionContext.FRAME).obj
+                for ne in named_exprs
+            ],
+            order_index,
+            cudf_polars_column=False,
         )
 
-        vals_tbl = plc.Table([c.obj for c in val_cols])
-        _, filled_tbl = local.replace_nulls(
+        assert by_cols_for_scan is not None
+
+        vals_tbl = plc.Table(val_cols)
+        lg = op.local_grouper
+        assert isinstance(lg, plc.groupby.GroupBy)
+        _, filled_tbl = lg.replace_nulls(
             vals_tbl,
             [policy] * len(val_cols),
         )
@@ -418,33 +410,33 @@ class GroupedRollingWindow(Expr):
         out_names: list[str] = []
         out_dtypes: list[DataType] = []
 
-        for ne in cum_named:
-            cum_sum_expr = ne.value
-            assert isinstance(cum_sum_expr, expr.UnaryFunction)
-            (child_expr,) = cum_sum_expr.children
-            val_col = child_expr.evaluate(df, context=ExecutionContext.FRAME).obj
-            if order_index is not None:
-                val_col = plc.copying.gather(
-                    plc.Table([val_col]),
-                    order_index,
-                    plc.copying.OutOfBoundsPolicy.NULLIFY,
-                ).columns()[0]
+        if order_index is not None:
+            val_cols = self._gather_columns(
+                [
+                    ne.value.children[0]
+                    .evaluate(df, context=ExecutionContext.FRAME)
+                    .obj
+                    for ne in cum_named
+                ],
+                order_index,
+                cudf_polars_column=False,
+            )
+        else:
+            val_cols = [
+                ne.value.children[0].evaluate(df, context=ExecutionContext.FRAME).obj
+                for ne in cum_named
+            ]
+        agg = plc.aggregation.sum()
 
-            agg = plc.aggregation.sum()
+        for ne, val_col in zip(cum_named, val_cols, strict=True):
             requests.append(plc.groupby.GroupByRequest(val_col, [agg]))
             out_names.append(ne.name)
-            out_dtypes.append(cum_sum_expr.dtype)
+            out_dtypes.append(ne.value.dtype)
 
         if order_index is not None and by_cols_for_scan is not None:
-            order_by_tbl = plc.Table([c.obj for c in by_cols_for_scan])
-            local = plc.groupby.GroupBy(
-                order_by_tbl,
-                null_handling=plc.types.NullPolicy.INCLUDE,
-                keys_are_sorted=plc.types.Sorted.YES,
-                column_order=[k.order for k in by_cols_for_scan],
-                null_precedence=[k.null_order for k in by_cols_for_scan],
-            )
-            _, tables = local.scan(requests)
+            lg = op.local_grouper
+            assert isinstance(lg, plc.groupby.GroupBy)
+            _, tables = lg.scan(requests)
         else:
             _, tables = grouper.scan(requests)
 
@@ -520,81 +512,75 @@ class GroupedRollingWindow(Expr):
         order_by_cols: list[Column] | None,
         ob_desc: bool,
         ob_nulls_last: bool,
-        reverse: bool = False,
         value_col: plc.Column | None = None,
         value_desc: bool = False,
     ) -> plc.Column:
         """Compute a stable row ordering for unary operations in a grouped context."""
-        cols: list[plc.Column] = [*(c.obj for c in by_cols)]
-        orders: list[plc.types.Order] = [*(k.order for k in by_cols)]
-        nulls: list[plc.types.NullOrder] = [*(k.null_order for k in by_cols)]
+        cols: list[plc.Column] = [c.obj for c in by_cols]
+        orders: list[plc.types.Order] = [k.order for k in by_cols]
+        nulls: list[plc.types.NullOrder] = [k.null_order for k in by_cols]
 
         if value_col is not None:
             # for rank(...).over(...) the ranked ("sorted") order takes precedence over order_by
             cols.append(value_col)
             orders.append(
-                plc.types.NullOrder.BEFORE if value_desc else plc.types.NullOrder.AFTER
+                plc.types.Order.DESCENDING if value_desc else plc.types.Order.ASCENDING
             )
             nulls.append(
                 plc.types.NullOrder.BEFORE if value_desc else plc.types.NullOrder.AFTER
             )
 
         if order_by_cols:
-            base_dir = (
-                plc.types.Order.DESCENDING if ob_desc else plc.types.Order.ASCENDING
-            )
-            base_null = (
-                plc.types.NullOrder.AFTER
-                if ob_nulls_last
-                else plc.types.NullOrder.BEFORE
-            )
-
-            if reverse:
-                ob_dir = [
-                    plc.types.Order.ASCENDING
-                    if base_dir == plc.types.Order.DESCENDING
-                    else plc.types.Order.DESCENDING
-                ] * len(order_by_cols)
-                ob_null = [
-                    plc.types.NullOrder.BEFORE
-                    if base_null == plc.types.NullOrder.AFTER
-                    else plc.types.NullOrder.AFTER
-                ] * len(order_by_cols)
-            else:
-                ob_dir = [base_dir] * len(order_by_cols)
-                ob_null = [base_null] * len(order_by_cols)
-
             cols.extend(c.obj for c in order_by_cols)
-            orders.extend(ob_dir)
-            nulls.extend(ob_null)
+            orders.extend(
+                [plc.types.Order.DESCENDING if ob_desc else plc.types.Order.ASCENDING]
+                * len(order_by_cols)
+            )
+            nulls.extend(
+                [
+                    plc.types.NullOrder.AFTER
+                    if ob_nulls_last
+                    else plc.types.NullOrder.BEFORE
+                ]
+                * len(order_by_cols)
+            )
 
         # Use the row id to break ties
         cols.append(row_id)
-        orders.append(
-            plc.types.Order.DESCENDING if reverse else plc.types.Order.ASCENDING
-        )
+        orders.append(plc.types.Order.ASCENDING)
         nulls.append(plc.types.NullOrder.AFTER)
 
         return plc.sorting.stable_sorted_order(plc.Table(cols), orders, nulls)
 
-    def _gather_by_cols_for_index(
-        self, by_cols: list[Column], order_index: plc.Column
-    ) -> list[Column]:
-        return [
-            Column(
-                plc.copying.gather(
-                    plc.Table([c.obj]),
-                    order_index,
-                    plc.copying.OutOfBoundsPolicy.NULLIFY,
-                ).columns()[0],
-                name=c.name,
-                dtype=c.dtype,
-                order=c.order,
-                null_order=c.null_order,
-                is_sorted=True,
-            )
-            for c in by_cols
-        ]
+    def _gather_columns(
+        self,
+        cols: list[plc.Column] | list[Column],
+        order_index: plc.Column,
+        *,
+        cudf_polars_column: bool = True,
+    ) -> list[plc.Column] | list[Column]:
+        gathered_tbl = plc.copying.gather(
+            plc.Table([c.obj if cudf_polars_column else c for c in cols]),
+            order_index,
+            plc.copying.OutOfBoundsPolicy.NULLIFY,
+        )
+
+        if cudf_polars_column:
+            return [
+                Column(
+                    gathered_tbl.columns()[i],
+                    name=c.name,
+                    dtype=c.dtype,
+                    order=c.order,
+                    null_order=c.null_order,
+                    is_sorted=True,
+                )
+                for i, c in enumerate(cols)
+            ]
+        else:
+            return [
+                gathered_tbl.columns()[i] for i in range(gathered_tbl.num_columns())
+            ]
 
     def do_evaluate(  # noqa: D102
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
@@ -709,7 +695,7 @@ class GroupedRollingWindow(Expr):
                     assert isinstance(rank_expr, expr.UnaryFunction)
                     (child,) = rank_expr.children
                     val = child.evaluate(df, context=ExecutionContext.FRAME).obj
-                    desc = bool(rank_expr.options[1])
+                    desc = rank_expr.options[1]
 
                     order_index = self._build_window_order_index(
                         by_cols,
@@ -720,14 +706,14 @@ class GroupedRollingWindow(Expr):
                         value_col=val,
                         value_desc=desc,
                     )
-
+                    by_cols_for_scan = self._gather_columns(by_cols, order_index)
+                    local = self._sorted_grouper(by_cols_for_scan)
                     names, dtypes, tables = self._apply_unary_op(
                         RankOp(
                             named_exprs=[ne],
                             order_index=order_index,
-                            by_cols_for_scan=self._gather_by_cols_for_index(
-                                by_cols, order_index
-                            ),
+                            by_cols_for_scan=by_cols_for_scan,
+                            local_grouper=local,
                         ),
                         df,
                         grouper,
@@ -765,6 +751,8 @@ class GroupedRollingWindow(Expr):
                 ob_desc=self.options[2] if self._order_by_count else False,
                 ob_nulls_last=self.options[3] if self._order_by_count else False,
             )
+            by_cols_for_scan = self._gather_columns(by_cols, order_index)
+            local = self._sorted_grouper(by_cols_for_scan)
 
             strategy_sets: dict[str, list[expr.NamedExpr]] = defaultdict(list)
             for ne in fill_named:
@@ -784,9 +772,8 @@ class GroupedRollingWindow(Expr):
                     FillNullWithStrategyOp(
                         named_exprs=bucket,
                         order_index=order_index,
-                        by_cols_for_scan=self._gather_by_cols_for_index(
-                            by_cols, order_index
-                        ),
+                        by_cols_for_scan=by_cols_for_scan,
+                        local_grouper=local,
                         policy=replace_policy[strategy],
                     ),
                     df,
@@ -805,48 +792,36 @@ class GroupedRollingWindow(Expr):
                 )
 
         if cum_named := unary_window_ops["cum_sum"]:
-            forward: list[expr.NamedExpr] = []
-            backward: list[expr.NamedExpr] = []
-            for ne in cum_named:
-                cum_sum_expr = ne.value
-                assert isinstance(cum_sum_expr, expr.UnaryFunction)
-                reverse = cum_sum_expr.options[0]
-                (backward if reverse else forward).append(ne)
-
-            for bucket, reverse in ((forward, False), (backward, True)):
-                if not bucket:
-                    continue
-                order_index = self._build_window_order_index(
+            order_index = self._build_window_order_index(
+                by_cols,
+                row_id=row_id,
+                order_by_cols=order_by_cols if self._order_by_count else None,
+                ob_desc=self.options[2] if self._order_by_count else False,
+                ob_nulls_last=self.options[3] if self._order_by_count else False,
+            )
+            by_cols_for_scan = self._gather_columns(by_cols, order_index)
+            local = self._sorted_grouper(by_cols_for_scan)
+            names, dtypes, tables = self._apply_unary_op(
+                CumSumOp(
+                    named_exprs=cum_named,
+                    order_index=order_index,
+                    by_cols_for_scan=by_cols_for_scan,
+                    local_grouper=local,
+                ),
+                df,
+                grouper,
+            )
+            broadcasted_cols.extend(
+                self._reorder_to_input(
+                    row_id,
                     by_cols,
-                    row_id=row_id,
-                    order_by_cols=order_by_cols if self._order_by_count else None,
-                    ob_desc=self.options[2] if self._order_by_count else False,
-                    ob_nulls_last=self.options[3] if self._order_by_count else False,
-                    reverse=reverse,
+                    df.num_rows,
+                    tables,
+                    names,
+                    dtypes,
+                    order_index=order_index,
                 )
-
-                names, dtypes, tables = self._apply_unary_op(
-                    CumSumOp(
-                        named_exprs=bucket,
-                        order_index=order_index,
-                        by_cols_for_scan=self._gather_by_cols_for_index(
-                            by_cols, order_index
-                        ),
-                    ),
-                    df,
-                    grouper,
-                )
-                broadcasted_cols.extend(
-                    self._reorder_to_input(
-                        row_id,
-                        by_cols,
-                        df.num_rows,
-                        tables,
-                        names,
-                        dtypes,
-                        order_index=order_index,
-                    )
-                )
+            )
 
         # Create a temporary DataFrame with the broadcasted columns named by their
         # placeholder names from agg decomposition, then evaluate the post-expression.
