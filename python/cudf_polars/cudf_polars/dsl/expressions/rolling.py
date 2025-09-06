@@ -285,8 +285,8 @@ class GroupedRollingWindow(Expr):
     def _apply_unary_op(
         self,
         op: UnaryOp,
-        df: DataFrame,
-        grouper: plc.groupby.GroupBy,
+        _: DataFrame,
+        __: plc.groupby.GroupBy,
     ) -> tuple[list[str], list[DataType], list[plc.Table]]:
         raise NotImplementedError(
             f"Unsupported unary op: {type(op).__name__}"
@@ -361,7 +361,7 @@ class GroupedRollingWindow(Expr):
         self,
         op: FillNullWithStrategyOp,
         df: DataFrame,
-        grouper: plc.groupby.GroupBy,
+        _: plc.groupby.GroupBy,
     ) -> tuple[list[str], list[DataType], list[plc.Table]]:
         by_cols_for_scan = op.by_cols_for_scan
         named_exprs = op.named_exprs
@@ -400,32 +400,23 @@ class GroupedRollingWindow(Expr):
         self,
         op: CumSumOp,
         df: DataFrame,
-        grouper: plc.groupby.GroupBy,
+        _: plc.groupby.GroupBy,
     ) -> tuple[list[str], list[DataType], list[plc.Table]]:
         cum_named = op.named_exprs
         order_index = op.order_index
-        by_cols_for_scan = op.by_cols_for_scan
 
         requests: list[plc.groupby.GroupByRequest] = []
         out_names: list[str] = []
         out_dtypes: list[DataType] = []
 
-        if order_index is not None:
-            val_cols = self._gather_columns(
-                [
-                    ne.value.children[0]
-                    .evaluate(df, context=ExecutionContext.FRAME)
-                    .obj
-                    for ne in cum_named
-                ],
-                order_index,
-                cudf_polars_column=False,
-            )
-        else:
-            val_cols = [
+        val_cols = self._gather_columns(
+            [
                 ne.value.children[0].evaluate(df, context=ExecutionContext.FRAME).obj
                 for ne in cum_named
-            ]
+            ],
+            order_index,
+            cudf_polars_column=False,
+        )
         agg = plc.aggregation.sum()
 
         for ne, val_col in zip(cum_named, val_cols, strict=True):
@@ -433,12 +424,9 @@ class GroupedRollingWindow(Expr):
             out_names.append(ne.name)
             out_dtypes.append(ne.value.dtype)
 
-        if order_index is not None and by_cols_for_scan is not None:
-            lg = op.local_grouper
-            assert isinstance(lg, plc.groupby.GroupBy)
-            _, tables = lg.scan(requests)
-        else:
-            _, tables = grouper.scan(requests)
+        lg = op.local_grouper
+        assert isinstance(lg, plc.groupby.GroupBy)
+        _, tables = lg.scan(requests)
 
         return out_names, out_dtypes, tables
 
@@ -766,8 +754,6 @@ class GroupedRollingWindow(Expr):
             }
 
             for strategy, bucket in strategy_sets.items():
-                if not bucket:
-                    continue
                 names, dtypes, tables = self._apply_unary_op(
                     FillNullWithStrategyOp(
                         named_exprs=bucket,

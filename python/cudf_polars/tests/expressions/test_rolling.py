@@ -369,7 +369,10 @@ def test_fill_over(
 ) -> None:
     val = pl.when((pl.col("x") % 3) == 0).then(None).otherwise(pl.col("x"))
     q = df.select(val.fill_null(strategy=strategy).over("g", order_by=order_by))
-    assert_gpu_result_equal(q)
+    if not POLARS_VERSION_LT_132:
+        assert_gpu_result_equal(q)
+    else:
+        assert_ir_translation_raises(q, NotImplementedError)
 
 
 @pytest.mark.parametrize("strategy", ["forward", "backward"])
@@ -382,7 +385,10 @@ def test_fill_over_with_null_group_keys(
 ) -> None:
     val = pl.when((pl.col("x") % 2) == 0).then(None).otherwise(pl.col("x"))
     q = df.select(val.fill_null(strategy=strategy).over("g_null", order_by=order_by))
-    assert_gpu_result_equal(q)
+    if not POLARS_VERSION_LT_132:
+        assert_gpu_result_equal(q)
+    else:
+        assert_ir_translation_raises(q, NotImplementedError)
 
 
 @pytest.mark.parametrize("strategy", ["forward", "backward"])
@@ -395,7 +401,10 @@ def test_fill_over_all_nulls_in_group(
 ) -> None:
     val = pl.when(pl.col("g") == 2).then(None).otherwise(pl.col("x"))
     q = df.select(val.fill_null(strategy=strategy).over("g", order_by=order_by))
-    assert_gpu_result_equal(q)
+    if not POLARS_VERSION_LT_132:
+        assert_gpu_result_equal(q)
+    else:
+        assert_ir_translation_raises(q, NotImplementedError)
 
 
 @pytest.mark.parametrize("order_by", [None, ["g2", pl.col("x2") * 2]])
