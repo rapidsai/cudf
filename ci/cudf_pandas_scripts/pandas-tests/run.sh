@@ -47,33 +47,22 @@ timeout 90m bash python/cudf/cudf/pandas/scripts/run-pandas-tests.sh \
   --dist worksteal \
   --report-log="${PANDAS_TESTS_BRANCH}.json" 2>&1
 
-SUMMARY_FILE_NAME=${PANDAS_TESTS_BRANCH}-${RAPIDS_FULL_VERSION}-results.json
+SUMMARY_FILE_NAME=${PANDAS_TESTS_BRANCH}-results.json
 # summarize the results and save them to artifacts:
 python python/cudf/cudf/pandas/scripts/summarize-test-results.py --output json pandas-testing/"${PANDAS_TESTS_BRANCH}.json" > "./${SUMMARY_FILE_NAME}"
 
-
 # Exit early if running tests for main branch
 if [[ "${PANDAS_TESTS_BRANCH}" == "main" ]]; then
-    rapids-logger "Exiting early for main branch testing"
+    rapids-logger "Exiting early for main branch testing: ${EXITCODE}"
     exit ${EXITCODE}
 fi
 
-
-# Hard-coded needs to match the version deduced by rapids-upload-artifacts-dir
-GH_JOB_NAME="pandas-tests / build"
-RAPIDS_FULL_VERSION=$(<./VERSION)
-rapids-logger "Github job name: ${GH_JOB_NAME}"
-rapids-logger "Rapids version: ${RAPIDS_FULL_VERSION}"
-
-
 rapids-logger "Fetching latest available results from nightly"
-
 MAIN_RUN_ID=$(gh run list -w "Pandas Test Job" -b branch-25.10 --status success --limit 7 --json databaseId --jq ".[0].databaseId")
 gh run download $MAIN_RUN_ID -n main-results.json
-ls -al
-# gh run download $GITHUB_RUN_ID -n pr-results.json
-# Compute the diff and prepare job summary:
-python ci/cudf_pandas_scripts/pandas-tests/job-summary.py main-results.json "${SUMMARY_FILE_NAME}" "${RAPIDS_FULL_VERSION}" >> "$GITHUB_STEP_SUMMARY"
 
-rapids-logger "Last Test script exiting with value: $EXITCODE"
+# Compute the diff and prepare job summary:
+python ci/cudf_pandas_scripts/pandas-tests/job-summary.py main-results.json pr-results.json "${RAPIDS_FULL_VERSION}" >> "$GITHUB_STEP_SUMMARY"
+
+rapids-logger "Test script exiting with value: $EXITCODE"
 exit ${EXITCODE}
