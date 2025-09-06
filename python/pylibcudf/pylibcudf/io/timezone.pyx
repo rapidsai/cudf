@@ -9,7 +9,7 @@ from pylibcudf.libcudf.io.timezone cimport (
 )
 from pylibcudf.libcudf.table.table cimport table
 
-from ..gpu_memory cimport _get_stream
+from ..utils cimport _get_stream
 from ..table cimport Table
 from .types cimport Stream
 

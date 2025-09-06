@@ -7,7 +7,7 @@ from libcpp.string cimport string
 from libcpp.utility cimport move
 
 from pylibcudf.column cimport Column
-from pylibcudf.gpu_memory cimport _get_stream
+from pylibcudf.utils cimport _get_stream
 from pylibcudf.io.types cimport Stream
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.io cimport text as cpp_text
