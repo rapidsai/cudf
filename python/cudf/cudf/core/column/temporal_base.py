@@ -195,13 +195,6 @@ class TemporalBaseColumn(ColumnBase):
     def time_unit(self) -> str:
         return np.datetime_data(self.dtype)[0]
 
-    @property
-    def values(self) -> cp.ndarray:
-        """
-        Return a CuPy representation of the DateTimeColumn.
-        """
-        raise NotImplementedError(f"cupy does not support {self.dtype}")
-
     def element_indexing(self, index: int) -> ScalarLike:
         result = super().element_indexing(index)
         if result is self._PANDAS_NA_VALUE:
