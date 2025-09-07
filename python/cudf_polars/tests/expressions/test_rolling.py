@@ -410,7 +410,7 @@ def test_fill_over_all_nulls_in_group(
 def test_fill_over_with_unsupported_strategy(
     df: pl.LazyFrame,
 ) -> None:
-    q = df.select(pl.col("x").fill_null(strategy="average").over("g"))
+    q = df.select(pl.col("x").fill_null(strategy="mean").over("g"))
     assert_ir_translation_raises(q, NotImplementedError)
 
 
