@@ -407,6 +407,13 @@ def test_fill_over_all_nulls_in_group(
         assert_ir_translation_raises(q, NotImplementedError)
 
 
+def test_fill_over_with_unsupported_strategy(
+    df: pl.LazyFrame,
+) -> None:
+    q = df.select(pl.col("x").fill_null(strategy="average").over("g"))
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
 @pytest.mark.parametrize("order_by", [None, ["g2", pl.col("x2") * 2]])
 def test_cum_sum_over(
     df: pl.LazyFrame,

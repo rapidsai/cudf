@@ -92,9 +92,10 @@ def to_request(
 def _by_exprs(b: Expr | tuple) -> list[Expr]:
     if isinstance(b, Expr):
         return [b]
-    if isinstance(b, tuple):
+    if isinstance(b, tuple):  # pragma: no cover; tests cover this path when
+        # run with the distributed scheduler only
         return [e for item in b for e in _by_exprs(item)]
-    return [expr.Literal(DataType(pl.Int64()), b)]
+    return [expr.Literal(DataType(pl.Int64()), b)]  # pragma: no cover
 
 
 class RollingWindow(Expr):
