@@ -58,9 +58,21 @@ if [[ "${PANDAS_TESTS_BRANCH}" == "main" ]]; then
 fi
 
 
-MAIN_RUN_ID=$(gh run list -w "Pandas Test Job" -b branch-25.10 --status success --limit 7 --json databaseId --jq ".[0].databaseId")
+MAIN_RUN_ID=$(
+    gh run list                       \
+        -w "Pandas Test Job"          \
+        -b branch-25.10               \
+        --repo 'rapidsai/cudf'        \
+        --status success              \
+        --limit 7                     \
+        --json 'createdAt,databaseId' \
+        --jq 'sort_by(.createdAt) | reverse | .[0] | .databaseId'
+)
 rapids-logger "Fetching latest available results from nightly: ${MAIN_RUN_ID}"
-gh run download $MAIN_RUN_ID -n main-results.json
+gh run download                  \
+    --repo 'rapidsai/cudf'        \
+    --name main-results.json \
+    $MAIN_RUN_ID
 
 # Compute the diff and prepare job summary:
 python ci/cudf_pandas_scripts/pandas-tests/job-summary.py main-results.json pr-results.json "${RAPIDS_FULL_VERSION}" >> "$GITHUB_STEP_SUMMARY"
