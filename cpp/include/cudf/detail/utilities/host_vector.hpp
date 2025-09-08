@@ -107,7 +107,7 @@ class rmm_host_allocator {
    * @brief Construct from a `cudf::host_async_resource_ref`
    */
   template <class... Properties>
-  rmm_host_allocator(cuda::mr::async_resource_ref<cuda::mr::host_accessible, Properties...> _mr,
+  rmm_host_allocator(cuda::mr::resource_ref<cuda::mr::host_accessible, Properties...> _mr,
                      rmm::cuda_stream_view _stream)
     : mr(_mr),
       stream(_stream),
