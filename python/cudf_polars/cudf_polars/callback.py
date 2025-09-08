@@ -40,14 +40,6 @@ if TYPE_CHECKING:
 __all__: list[str] = ["execute_with_cudf"]
 
 
-_SUPPORTED_PREFETCHES = {
-    "column_view::get_data",
-    "mutable_column_view::get_data",
-    "gather",
-    "hash_join",
-}
-
-
 @cache
 def default_memory_resource(
     device: int,
@@ -80,8 +72,7 @@ def default_memory_resource(
             # Leaving a 20% headroom to avoid OOM errors.
             free_memory, _ = rmm.mr.available_device_memory()
             free_memory = int(round(float(free_memory) * 0.80 / 256) * 256)
-            for key in _SUPPORTED_PREFETCHES:
-                pylibcudf.experimental.enable_prefetching(key)
+            pylibcudf.prefetch.enable()
             mr = rmm.mr.PrefetchResourceAdaptor(
                 rmm.mr.PoolMemoryResource(
                     rmm.mr.ManagedMemoryResource(),
