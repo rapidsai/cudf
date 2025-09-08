@@ -643,6 +643,7 @@ template <typename InputType>
 struct create_rolling_operator<InputType, aggregation::Kind::STD> {
   auto operator()(size_type min_periods, rolling_aggregation const& agg)
   {
+    // uses the variance agg
     return DeviceRollingVariance<InputType>{
       min_periods, dynamic_cast<cudf::detail::var_aggregation const&>(agg)._ddof};
   }
