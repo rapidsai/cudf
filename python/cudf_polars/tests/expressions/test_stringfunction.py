@@ -18,6 +18,7 @@ from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_129,
     POLARS_VERSION_LT_130,
     POLARS_VERSION_LT_131,
+    POLARS_VERSION_LT_132,
 )
 
 
@@ -440,7 +441,7 @@ def test_invalid_regex_raises():
     )
 
 
-@pytest.mark.parametrize("pattern", ["a{1000}", "a(?i:B)"])
+@pytest.mark.parametrize("pattern", ["a{1000}", "a(?i:B)", ""])
 def test_unsupported_regex_raises(pattern):
     df = pl.LazyFrame({"a": ["abc"]})
 
@@ -530,10 +531,15 @@ def test_string_zfill(fill, input_strings):
     q = ldf.select(pl.col("a").str.zfill(fill))
 
     if fill is not None and fill < 0:
+        cudf_except = (
+            pl.exceptions.InvalidOperationError
+            if not POLARS_VERSION_LT_132
+            else pl.exceptions.ComputeError
+        )
         assert_collect_raises(
             q,
             polars_except=pl.exceptions.InvalidOperationError,
-            cudf_except=pl.exceptions.ComputeError,
+            cudf_except=cudf_except,
         )
     else:
         assert_gpu_result_equal(q)
@@ -581,12 +587,19 @@ def test_string_zfill_column(fill):
     ).lazy()
     q = ldf.select(pl.col("input_strings").str.zfill(pl.col("fill")))
     if fill is not None and fill < 0:
+        cudf_except = (
+            (
+                pl.exceptions.InvalidOperationError
+                if not POLARS_VERSION_LT_130
+                else pl.exceptions.ComputeError
+            )
+            if POLARS_VERSION_LT_132
+            else ()
+        )
         assert_collect_raises(
             q,
             polars_except=pl.exceptions.InvalidOperationError,
-            cudf_except=pl.exceptions.InvalidOperationError
-            if not POLARS_VERSION_LT_130
-            else pl.exceptions.ComputeError,
+            cudf_except=cudf_except,
         )
     else:
         assert_gpu_result_equal(q)
@@ -854,4 +867,11 @@ def test_len_bytes(ldf):
 
 def test_len_chars(ldf):
     q = ldf.select(pl.col("a").str.len_chars())
+    assert_gpu_result_equal(q)
+
+
+def test_string_concat_empty_frame():
+    lf = pl.LazyFrame({"a": pl.Series([], dtype=pl.String)})
+    q = lf.select(pl.lit(", ") + pl.col("a"))
+
     assert_gpu_result_equal(q)

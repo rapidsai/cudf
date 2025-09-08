@@ -137,9 +137,13 @@ void codec_stats::add_pages(host_span<ColumnChunkDesc const> chunks,
 
   std::for_each(zip_iter, zip_iter + pages.size(), [&](auto const& item) {
     auto& [page, is_page_needed] = item;
+    // If this is a V2 page, use the `is_compressed` field to determine if it's compressed.
+    // For V1 pages, it's always compressed if the chunk.codec is specified.
+    auto const is_page_compressed = (page.flags & PAGEINFO_FLAGS_V2) ? page.is_compressed : true;
     if (is_page_needed && chunks[page.chunk_idx].codec == compression_type &&
         (page.flags & cudf::io::parquet::detail::PAGEINFO_FLAGS_DICTIONARY) ==
-          (selection == page_selection::DICT_PAGES)) {
+          (selection == page_selection::DICT_PAGES) and
+        is_page_compressed) {
       ++num_pages;
       total_decomp_size += page.uncompressed_page_size;
       max_decompressed_size = std::max(max_decompressed_size, page.uncompressed_page_size);
@@ -540,8 +544,11 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
     for (auto page_idx = 0; std::cmp_less(page_idx, pages.size()); ++page_idx) {
       auto& page                = pages[page_idx];
       auto const is_page_needed = page_mask_iter[page_idx];
+      // If this is a V2 page, use the `is_compressed` field to determine if it's compressed.
+      // For V1 pages, it's always compressed if the chunk.codec is specified.
+      auto const is_page_compressed = (page.flags & PAGEINFO_FLAGS_V2) ? page.is_compressed : true;
       if (is_page_needed && chunks[page.chunk_idx].codec == codec.compression_type &&
-          (page.flags & PAGEINFO_FLAGS_DICTIONARY) == select_dict_pages) {
+          (page.flags & PAGEINFO_FLAGS_DICTIONARY) == select_dict_pages and is_page_compressed) {
         auto const dst_base = static_cast<uint8_t*>(decomp_data) + decomp_offset;
         // offset will only be non-zero for V2 pages
         auto const offset =
