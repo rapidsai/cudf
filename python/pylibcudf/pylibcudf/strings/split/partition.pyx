@@ -17,7 +17,7 @@ from cython.operator import dereference
 
 __all__ = ["partition", "rpartition"]
 
-cpdef Table partition(Column input, Scalar delimiter=None):
+cpdef Table partition(Column input, Scalar delimiter=None, Stream stream=None):
     """
     Returns a set of 3 columns by splitting each string using the
     specified delimiter.
@@ -41,23 +41,25 @@ cpdef Table partition(Column input, Scalar delimiter=None):
     cdef const string_scalar* c_delimiter = <const string_scalar*>(
         delimiter.c_obj.get()
     )
-    cdef Stream stream
+    cdef Stream stream_local
+
+    stream_local = _get_stream(stream)
 
     if delimiter is None:
-        stream = _get_stream(None)
         delimiter = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), stream.view())
+            cpp_make_string_scalar("".encode(), stream_local.view())
         )
 
     with nogil:
         c_result = cpp_partition.partition(
             input.view(),
-            dereference(c_delimiter)
+            dereference(c_delimiter),
+            stream_local.view()
         )
 
-    return Table.from_libcudf(move(c_result))
+    return Table.from_libcudf(move(c_result), stream_local)
 
-cpdef Table rpartition(Column input, Scalar delimiter=None):
+cpdef Table rpartition(Column input, Scalar delimiter=None, Stream stream=None):
     """
     Returns a set of 3 columns by splitting each string using the
     specified delimiter starting from the end of each string.
@@ -81,18 +83,20 @@ cpdef Table rpartition(Column input, Scalar delimiter=None):
     cdef const string_scalar* c_delimiter = <const string_scalar*>(
         delimiter.c_obj.get()
     )
-    cdef Stream stream
+    cdef Stream stream_local
+
+    stream_local = _get_stream(stream)
 
     if delimiter is None:
-        stream = _get_stream(None)
         delimiter = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), stream.view())
+            cpp_make_string_scalar("".encode(), stream_local.view())
         )
 
     with nogil:
         c_result = cpp_partition.rpartition(
             input.view(),
-            dereference(c_delimiter)
+            dereference(c_delimiter),
+            stream_local.view()
         )
 
-    return Table.from_libcudf(move(c_result))
+    return Table.from_libcudf(move(c_result), stream_local)
