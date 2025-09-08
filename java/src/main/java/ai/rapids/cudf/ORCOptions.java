@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -32,12 +32,14 @@ public class ORCOptions extends ColumnFilterOptions {
   private final boolean useNumPyTypes;
   private final DType unit;
   private final String[] decimal128Columns;
+  private final boolean ignoreTimezoneInStripeFooter;
 
   private ORCOptions(Builder builder) {
     super(builder);
     decimal128Columns = builder.decimal128Columns.toArray(new String[0]);
     useNumPyTypes = builder.useNumPyTypes;
     unit = builder.unit;
+    ignoreTimezoneInStripeFooter = builder.ignoreTimezoneInStripeFooter;
   }
 
   boolean usingNumPyTypes() {
@@ -52,6 +54,10 @@ public class ORCOptions extends ColumnFilterOptions {
     return decimal128Columns;
   }
 
+  boolean ignoreTimezoneInStripeFooter() {
+    return ignoreTimezoneInStripeFooter;
+  }
+
   public static Builder builder() {
     return new Builder();
   }
@@ -61,6 +67,8 @@ public class ORCOptions extends ColumnFilterOptions {
     private DType unit = DType.EMPTY;
 
     final List<String> decimal128Columns = new ArrayList<>();
+
+    private boolean ignoreTimezoneInStripeFooter = false;
 
     /**
      * Specify whether the parser should implicitly promote TIMESTAMP_DAYS
@@ -99,6 +107,11 @@ public class ORCOptions extends ColumnFilterOptions {
      */
     public Builder decimal128Column(String... names) {
       decimal128Columns.addAll(Arrays.asList(names));
+      return this;
+    }
+
+    public Builder ignoreTimezoneInStripeFooter() {
+      this.ignoreTimezoneInStripeFooter = true;
       return this;
     }
 
