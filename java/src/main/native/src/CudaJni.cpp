@@ -220,7 +220,8 @@ JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Cuda_getNativeComputeMode(JNIEnv* env
 
 JNIEXPORT jbyteArray JNICALL Java_ai_rapids_cudf_Cuda_getNativeGpuUuid(JNIEnv* env, jclass)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     int device;
     CUDF_CUDA_TRY(cudaGetDevice(&device));
@@ -229,7 +230,7 @@ JNIEXPORT jbyteArray JNICALL Java_ai_rapids_cudf_Cuda_getNativeGpuUuid(JNIEnv* e
     cudf::jni::native_jbyteArray jbytes{env, (jbyte*)device_prop.uuid.bytes, 16};
     return jbytes.get_jArray();
   }
-  CATCH_STD(env, nullptr);
+  JNI_CATCH(env, nullptr);
 }
 
 JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Cuda_getComputeCapabilityMajor(JNIEnv* env, jclass)
