@@ -132,12 +132,13 @@ def test_groupby_apply_grouped():
             com1[i] = key1[i] * 10000 + val1[i]
             com2[i] = i
 
-    got = got_grpby.apply_grouped(
-        foo,
-        incols=["key1", "val1"],
-        outcols={"com1": np.float64, "com2": np.int32},
-        tpb=8,
-    )
+    with pytest.warns(FutureWarning):
+        got = got_grpby.apply_grouped(
+            foo,
+            incols=["key1", "val1"],
+            outcols={"com1": np.float64, "com2": np.int32},
+            tpb=8,
+        )
 
     got = got.to_pandas()
 

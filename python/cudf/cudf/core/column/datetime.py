@@ -748,13 +748,7 @@ class DatetimeColumn(TemporalBaseColumn):
         )
         offsets_to_utc = offsets.take(indices, nullify=True)
         gmt_data = localized - offsets_to_utc
-        return DatetimeTZColumn(
-            data=gmt_data.base_data,
-            dtype=dtype,
-            mask=localized.base_mask,
-            size=gmt_data.size,
-            offset=gmt_data.offset,
-        )
+        return gmt_data._with_type_metadata(dtype)
 
     def tz_convert(self, tz: str | None):
         raise TypeError(
