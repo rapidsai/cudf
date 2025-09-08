@@ -193,8 +193,7 @@ class GroupedRollingWindow(Expr):
     """
 
     __slots__ = (
-        "_order_by_count",
-        "_order_by_exprs",
+        "_order_by_expr",
         "by_count",
         "named_aggs",
         "options",
@@ -206,8 +205,7 @@ class GroupedRollingWindow(Expr):
         "named_aggs",
         "post",
         "by_count",
-        "_order_by_exprs",
-        "_order_by_count",
+        "_order_by_expr",
     )
 
     def __init__(
@@ -217,15 +215,14 @@ class GroupedRollingWindow(Expr):
         named_aggs: Sequence[expr.NamedExpr],
         post: expr.NamedExpr,
         *by: Expr,
-        _order_by_exprs: Sequence[Expr] | None = None,
+        _order_by_expr: Expr | None = None,
     ) -> None:
         self.dtype = dtype
         self.options = options
         self.named_aggs = tuple(named_aggs)
         self.post = post
         self.is_pointwise = False
-        self._order_by_exprs = tuple(_order_by_exprs or ())
-        self._order_by_count = len(self._order_by_exprs)
+        self._order_by_expr = _order_by_expr
 
         unsupported = [
             type(named_expr.value).__name__
@@ -260,7 +257,11 @@ class GroupedRollingWindow(Expr):
         ]
         self.by_count = len(by_expr)
         self.children = tuple(
-            itertools.chain(by_expr, self._order_by_exprs, child_deps)
+            itertools.chain(
+                by_expr,
+                (() if self._order_by_expr is None else (self._order_by_expr,)),
+                child_deps,
+            )
         )
 
     def _sorted_grouper(self, by_cols_for_scan: list[Column]) -> plc.groupby.GroupBy:
@@ -412,7 +413,7 @@ class GroupedRollingWindow(Expr):
         by_cols: list[Column],
         *,
         row_id: plc.Column,
-        order_by_cols: list[Column] | None,
+        order_by_col: Column | None,
         ob_desc: bool,
         ob_nulls_last: bool,
         value_col: plc.Column | None = None,
@@ -433,19 +434,15 @@ class GroupedRollingWindow(Expr):
                 plc.types.NullOrder.BEFORE if value_desc else plc.types.NullOrder.AFTER
             )
 
-        if order_by_cols:
-            cols.extend(c.obj for c in order_by_cols)
-            orders.extend(
-                [plc.types.Order.DESCENDING if ob_desc else plc.types.Order.ASCENDING]
-                * len(order_by_cols)
+        if order_by_col is not None:
+            cols.append(order_by_col.obj)
+            orders.append(
+                plc.types.Order.DESCENDING if ob_desc else plc.types.Order.ASCENDING
             )
-            nulls.extend(
-                [
-                    plc.types.NullOrder.AFTER
-                    if ob_nulls_last
-                    else plc.types.NullOrder.BEFORE
-                ]
-                * len(order_by_cols)
+            nulls.append(
+                plc.types.NullOrder.AFTER
+                if ob_nulls_last
+                else plc.types.NullOrder.BEFORE
             )
 
         # Use the row id to break ties
@@ -577,19 +574,17 @@ class GroupedRollingWindow(Expr):
             )  # pragma: no cover; translation raises first
 
         by_exprs = self.children[: self.by_count]
-        order_by_exprs = self.children[
-            self.by_count : self.by_count + self._order_by_count
-        ]
+        order_by_expr = (
+            self.children[self.by_count] if self._order_by_expr is not None else None
+        )
         by_cols = broadcast(
             *(b.evaluate(df) for b in by_exprs),
             target_length=df.num_rows,
         )
-        order_by_cols = (
-            broadcast(
-                *(e.evaluate(df) for e in order_by_exprs), target_length=df.num_rows
-            )
-            if self._order_by_count
-            else []
+        order_by_col = (
+            broadcast(order_by_expr.evaluate(df), target_length=df.num_rows)[0]
+            if order_by_expr is not None
+            else None
         )
 
         by_tbl = plc.Table([c.obj for c in by_cols])
@@ -674,7 +669,7 @@ class GroupedRollingWindow(Expr):
         )
 
         if rank_named := unary_window_ops["rank"]:
-            if self._order_by_count:
+            if self._order_by_expr is not None:
                 _, _, ob_desc, ob_nulls_last = self.options
                 for ne in rank_named:
                     rank_expr = ne.value
@@ -686,7 +681,7 @@ class GroupedRollingWindow(Expr):
                     order_index = self._build_window_order_index(
                         by_cols,
                         row_id=row_id,
-                        order_by_cols=order_by_cols,
+                        order_by_col=order_by_col,
                         ob_desc=ob_desc,
                         ob_nulls_last=ob_nulls_last,
                         value_col=val,
