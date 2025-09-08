@@ -22,6 +22,7 @@ from cudf.utils.dtypes import (
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
     find_common_type,
+    is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.utils import is_na_like
 
@@ -190,6 +191,24 @@ class TemporalBaseColumn(ColumnBase):
             else:
                 return NotImplemented
         return NotImplemented
+
+    @property
+    def values(self) -> cp.ndarray:
+        """
+        Return a CuPy representation of the TemporalBaseColumn.
+        """
+        if is_pandas_nullable_extension_dtype(self.dtype):
+            dtype = getattr(self.dtype, "numpy_dtype", self.dtype)
+        else:
+            dtype = self.dtype
+
+        if len(self) == 0:
+            return cp.empty(0, dtype=self._UNDERLYING_DTYPE).view(dtype)
+
+        col = self
+        if col.has_nulls():
+            col = col.fillna(self._PANDAS_NA_VALUE)
+        return cp.asarray(col.data).view(dtype)
 
     @functools.cached_property
     def time_unit(self) -> str:
