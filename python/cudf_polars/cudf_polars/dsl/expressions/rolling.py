@@ -457,33 +457,26 @@ class GroupedRollingWindow(Expr):
 
     def _gather_columns(
         self,
-        cols: list[plc.Column] | list[Column],
+        cols: list[Column],
         order_index: plc.Column,
-        *,
-        cudf_polars_column: bool = True,
     ) -> list[plc.Column] | list[Column]:
         gathered_tbl = plc.copying.gather(
-            plc.Table([c.obj if cudf_polars_column else c for c in cols]),
+            plc.Table([c.obj for c in cols]),
             order_index,
             plc.copying.OutOfBoundsPolicy.NULLIFY,
         )
 
-        if cudf_polars_column:
-            return [
-                Column(
-                    gathered_tbl.columns()[i],
-                    name=c.name,
-                    dtype=c.dtype,
-                    order=c.order,
-                    null_order=c.null_order,
-                    is_sorted=True,
-                )
-                for i, c in enumerate(cols)
-            ]
-        else:
-            return [
-                gathered_tbl.columns()[i] for i in range(gathered_tbl.num_columns())
-            ]
+        return [
+            Column(
+                gathered_tbl.columns()[i],
+                name=c.name,
+                dtype=c.dtype,
+                order=c.order,
+                null_order=c.null_order,
+                is_sorted=True,
+            )
+            for i, c in enumerate(cols)
+        ]
 
     def do_evaluate(  # noqa: D102
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
