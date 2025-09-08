@@ -21,9 +21,9 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/detail/groupby.hpp>
+#include <cudf/detail/row_operator/row_operators.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -87,9 +87,9 @@ std::unique_ptr<table> dispatch_groupby(table_view const& keys,
   auto const has_null             = nullate::DYNAMIC{cudf::has_nested_nulls(keys)};
   auto const skip_rows_with_nulls = keys_have_nulls and include_null_keys == null_policy::EXCLUDE;
 
-  auto preprocessed_keys = cudf::experimental::row::hash::preprocessed_table::create(keys, stream);
-  auto const comparator  = cudf::experimental::row::equality::self_comparator{preprocessed_keys};
-  auto const row_hash    = cudf::experimental::row::hash::row_hasher{std::move(preprocessed_keys)};
+  auto preprocessed_keys = cudf::detail::row::hash::preprocessed_table::create(keys, stream);
+  auto const comparator  = cudf::detail::row::equality::self_comparator{preprocessed_keys};
+  auto const row_hash    = cudf::detail::row::hash::row_hasher{std::move(preprocessed_keys)};
   auto const d_row_hash  = row_hash.device_hasher(has_null);
 
   if (cudf::detail::has_nested_columns(keys)) {

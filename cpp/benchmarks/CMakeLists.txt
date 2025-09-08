@@ -368,7 +368,9 @@ ConfigureNVBench(
 # ##################################################################################################
 # * transform benchmark
 # ---------------------------------------------------------------------------------
-ConfigureNVBench(TRANSFORM_NVBENCH transform/polynomials.cpp transform/transform.cpp)
+ConfigureNVBench(
+  TRANSFORM_NVBENCH transform/encode.cpp transform/polynomials.cpp transform/transform.cpp
+)
 
 # ##################################################################################################
 # * nvtext benchmark -------------------------------------------------------------------
@@ -424,6 +426,11 @@ ConfigureNVBench(
   string/translate.cpp
   string/url_decode.cu
 )
+
+# ##################################################################################################
+# * strings experimental benchmark ---------------------------------------------------
+ConfigureNVBench(STRINGS_EXPERIMENTAL_NVBENCH string/experimental/stringview_compare.cu)
+target_link_libraries(STRINGS_EXPERIMENTAL_NVBENCH PRIVATE nanoarrow)
 
 # ##################################################################################################
 # * json benchmark -------------------------------------------------------------------

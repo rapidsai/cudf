@@ -24,6 +24,16 @@ def test_contains_tz_aware(item, expected):
     assert result == expected
 
 
+@pytest.mark.parametrize("tz", ["UTC", None])
+def test_tz_attribute(tz):
+    dti = cudf.date_range("2020", periods=2, freq="D", tz=tz)
+    if tz is None:
+        assert dti.tz is None
+    else:
+        # TODO(pandas3.0-min): Assert zoneinfo.ZoneInfo(tz) == dti.tz
+        assert str(dti.tz) == tz
+
+
 def test_tz_aware_attributes_local():
     data = [
         "2008-05-12 13:50:00",
