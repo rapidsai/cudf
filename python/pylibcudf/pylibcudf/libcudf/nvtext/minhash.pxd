@@ -6,6 +6,7 @@ from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.scalar.scalar cimport numeric_scalar
 from pylibcudf.libcudf.types cimport size_type
+from rmm.librmm.cuda_stream_view cimport cuda_stream_view
 
 
 cdef extern from "nvtext/minhash.hpp" namespace "nvtext" nogil:
@@ -16,6 +17,7 @@ cdef extern from "nvtext/minhash.hpp" namespace "nvtext" nogil:
         const column_view &a,
         const column_view &b,
         const size_type width,
+        cuda_stream_view stream
     ) except +
 
     cdef unique_ptr[column] minhash64(
@@ -24,6 +26,7 @@ cdef extern from "nvtext/minhash.hpp" namespace "nvtext" nogil:
         const column_view &a,
         const column_view &b,
         const size_type width,
+        cuda_stream_view stream
     ) except +
 
     cdef unique_ptr[column] minhash_ngrams(
@@ -32,6 +35,7 @@ cdef extern from "nvtext/minhash.hpp" namespace "nvtext" nogil:
         const uint32_t seed,
         const column_view &a,
         const column_view &b,
+        cuda_stream_view stream
     ) except +
 
     cdef unique_ptr[column] minhash64_ngrams(
@@ -40,4 +44,5 @@ cdef extern from "nvtext/minhash.hpp" namespace "nvtext" nogil:
         const uint64_t seed,
         const column_view &a,
         const column_view &b,
+        cuda_stream_view stream
     ) except +
