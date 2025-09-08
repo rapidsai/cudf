@@ -2213,12 +2213,9 @@ class MergeSorted(IR):
     """Key that is sorted."""
 
     def __init__(self, schema: Schema, key: str, left: IR, right: IR):
-        assert isinstance(left, Sort) or isinstance(left.children[0], Sort)
-        assert isinstance(right, Sort) or isinstance(right.children[0], Sort)
-        assert (
-            (left if isinstance(left, Sort) else left.children[0]).order  # type: ignore
-            == (right if isinstance(right, Sort) else right.children[0]).order  # type: ignore
-        )
+        assert isinstance(left, Sort)
+        assert isinstance(right, Sort)
+        assert left.order == right.order
         assert len(left.schema.keys()) <= len(right.schema.keys())
         self.schema = schema
         self.key = key

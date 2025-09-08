@@ -19,7 +19,7 @@ from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.experimental.repartition import Repartition
-from cudf_polars.experimental.shuffle import _simple_shuffle_graph
+from cudf_polars.experimental.shuffle import ShuffleMethod, _simple_shuffle_graph
 from cudf_polars.experimental.utils import _concat, _lower_ir_fallback
 
 if TYPE_CHECKING:
@@ -28,7 +28,6 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.typing import Schema
-    from cudf_polars.utils.config import ConfigOptions
 
 
 def find_sort_splits(
@@ -392,16 +391,16 @@ class ShuffleSorted(IR):
     merge the partitions.
     """
 
-    __slots__ = ("by", "config_options", "null_order", "order")
-    _non_child = ("schema", "by", "order", "null_order", "config_options")
+    __slots__ = ("by", "null_order", "order", "shuffle_method")
+    _non_child = ("schema", "by", "order", "null_order", "shuffle_method")
     by: tuple[NamedExpr, ...]
     """Keys by which the data was sorted."""
     order: tuple[plc.types.Order, ...]
     """Sort order if sorted."""
     null_order: tuple[plc.types.NullOrder, ...]
     """Null precedence if sorted."""
-    config_options: ConfigOptions
-    """Configuration options."""
+    shuffle_method: ShuffleMethod
+    """Shuffle method to use."""
 
     def __init__(
         self,
@@ -409,15 +408,15 @@ class ShuffleSorted(IR):
         by: tuple[NamedExpr, ...],
         order: tuple[plc.types.Order, ...],
         null_order: tuple[plc.types.NullOrder, ...],
-        config_options: ConfigOptions,
+        shuffle_method: ShuffleMethod,
         df: IR,
     ):
         self.schema = schema
         self.by = by
         self.order = order
         self.null_order = null_order
-        self.config_options = config_options
-        self._non_child_args = (schema, by, order, null_order, config_options)
+        self.shuffle_method = shuffle_method
+        self._non_child_args = (schema, by, order, null_order, shuffle_method)
         self.children = (df,)
 
     @classmethod
@@ -427,7 +426,7 @@ class ShuffleSorted(IR):
         by: tuple[NamedExpr, ...],
         order: tuple[plc.types.Order, ...],
         null_order: tuple[plc.types.NullOrder, ...],
-        config_options: ConfigOptions,
+        shuffle_method: ShuffleMethod,
         df: DataFrame,
     ) -> DataFrame:  # pragma: no cover
         """Evaluate and return a dataframe."""
@@ -486,6 +485,17 @@ def _(
     # Extract child partitioning
     child, partition_info = rec(ir.children[0])
 
+    # Extract shuffle method
+    assert rec.state["config_options"].executor.name == "streaming", (
+        "'in-memory' executor not supported in 'lower_ir_node'"
+    )
+    # Avoid rapidsmpf shuffle with maintain_order=True (for now)
+    shuffle_method = (
+        ShuffleMethod("tasks")
+        if ir.stable
+        else rec.state["config_options"].executor.shuffle_method
+    )
+
     # Handle single-partition case
     if partition_info[child].count == 1:
         single_part_node = ir.reconstruct([child])
@@ -500,15 +510,13 @@ def _(
         ir.by,
         ir.order,
         ir.null_order,
-        rec.state["config_options"],
+        shuffle_method,
         local_sort_node,
     )
     partition_info[shuffle] = partition_info[child]
 
     # We sort again locally.
     assert ir.zlice is None  # zlice handling would be incorrect without adjustment
-    # TODO: We should integrate this with the shuffling step as a merge or merge_stable.
-    #       (as of 25.06, merge_stable is missing in libcudf). (May need zslice in shuffle step)
     final_sort_node = ir.reconstruct([shuffle])
     partition_info[final_sort_node] = partition_info[shuffle]
 
@@ -519,12 +527,6 @@ def _(
 def _(
     ir: ShuffleSorted, partition_info: MutableMapping[IR, PartitionInfo]
 ) -> MutableMapping[Any, Any]:
-    # Extract "shuffle_method" configuration
-    assert ir.config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'generate_ir_tasks'"
-    )
-    shuffle_method = ir.config_options.executor.shuffle_method
-
     by = [ne.value.name for ne in ir.by if isinstance(ne.value, Col)]
     if len(by) != len(ir.by):  # pragma: no cover
         # We should not reach here as this is checked in the lower_ir_node
@@ -550,6 +552,7 @@ def _(
 
     # Try using rapidsmpf shuffler if we have "simple" shuffle
     # keys, and the "shuffle_method" config is set to "rapidsmpf"
+    shuffle_method = ir.shuffle_method
     if shuffle_method in ("rapidsmpf", "rapidsmpf-single"):  # pragma: no cover
         try:
             if shuffle_method == "rapidsmpf-single":
