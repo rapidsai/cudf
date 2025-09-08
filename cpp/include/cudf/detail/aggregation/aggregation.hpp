@@ -1517,17 +1517,15 @@ struct target_type_impl<Source, aggregation::LAG> {
 
 // Always use list for MERGE_LISTS
 template <typename Source>
-struct target_type_impl<Source,
-                        aggregation::MERGE_LISTS,
-                        std::enable_if_t<cuda::std::is_same_v<Source, cudf::list_view>>> {
+  requires cuda::std::is_same_v<Source, cudf::list_view>
+struct target_type_impl<Source, aggregation::MERGE_LISTS> {
   using type = list_view;
 };
 
 // Always use list for MERGE_SETS
 template <typename Source>
-struct target_type_impl<Source,
-                        aggregation::MERGE_SETS,
-                        std::enable_if_t<cuda::std::is_same_v<Source, cudf::list_view>>> {
+  requires cuda::std::is_same_v<Source, cudf::list_view>
+struct target_type_impl<Source, aggregation::MERGE_SETS> {
   using type = list_view;
 };
 
