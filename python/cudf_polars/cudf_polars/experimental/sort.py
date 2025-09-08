@@ -20,7 +20,7 @@ from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import _simple_shuffle_graph
-from cudf_polars.experimental.utils import _concat, _lower_ir_fallback
+from cudf_polars.experimental.utils import _concat, _fallback_inform, _lower_ir_fallback
 from cudf_polars.utils.config import ShuffleMethod
 
 if TYPE_CHECKING:
@@ -487,15 +487,22 @@ def _(
     child, partition_info = rec(ir.children[0])
 
     # Extract shuffle method
-    assert rec.state["config_options"].executor.name == "streaming", (
+    config_options = rec.state["config_options"]
+    assert config_options.executor.name == "streaming", (
         "'in-memory' executor not supported in 'lower_ir_node'"
     )
     # Avoid rapidsmpf shuffle with maintain_order=True (for now)
     shuffle_method = (
-        ShuffleMethod("tasks")
-        if ir.stable
-        else rec.state["config_options"].executor.shuffle_method
+        ShuffleMethod("tasks") if ir.stable else config_options.executor.shuffle_method
     )
+    if (
+        shuffle_method != config_options.executor.shuffle_method
+    ):  # pragma: no cover; Requires rapidsmpf
+        _fallback_inform(
+            f"shuffle_method={shuffle_method} does not support maintain_order=True. "
+            "Falling back to shuffle_method='tasks'.",
+            config_options,
+        )
 
     # Handle single-partition case
     if partition_info[child].count == 1:
