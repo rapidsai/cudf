@@ -837,7 +837,8 @@ cpdef TableWithMetadata read_json_from_string_column(
             cpp_combine.join_strings(
                 input.view(),
                 dereference(c_separator),
-                dereference(c_narep)
+                dereference(c_narep),
+                s.view()
             )
         )
         c_contents = c_join_string_column.get().release()
