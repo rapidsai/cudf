@@ -144,8 +144,10 @@ class NumericalColumn(NumericalBaseColumn):
                 raise ValueError(
                     f"Column must have no nulls for dtype={col.dtype}"
                 )
-            else:
-                col = col.fillna(np.nan)
+            elif dtype.kind != "f":
+                dtype = np.dtype(np.float64)
+                col = col.astype(dtype)  # type: ignore[assignment]
+            col = col.fillna(np.nan)
 
         return cp.asarray(col.data).view(dtype)
 
