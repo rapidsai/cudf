@@ -35,7 +35,6 @@ from cudf.core.accessors import (
 )
 from cudf.core.column import (
     ColumnBase,
-    IntervalColumn,
     as_column,
 )
 from cudf.core.column.column import concat_columns
@@ -221,9 +220,21 @@ class _SeriesIlocIndexer(_FrameIndexer):
                         and tmp_value.dtype.kind == "b"
                     )
                 ):
-                    to_dtype = find_common_type(
-                        (tmp_value.dtype, self._frame.dtype)
-                    )
+                    if not tmp_value.can_cast_safely(
+                        self._frame.dtype
+                    ) and is_pandas_nullable_extension_dtype(
+                        self._frame.dtype
+                    ):
+                        raise TypeError(
+                            f"Invalid value '{value!s}' for dtype "
+                            f"'{self._frame.dtype}'"
+                        )
+                    if tmp_value.can_cast_safely(self._frame.dtype):
+                        to_dtype = self._frame.dtype
+                    else:
+                        to_dtype = find_common_type(
+                            (tmp_value.dtype, self._frame.dtype)
+                        )
                     tmp_value = tmp_value.astype(to_dtype)
                     if to_dtype != self._frame.dtype:
                         # Do not remove until pandas-3.0 support is added.
@@ -379,7 +390,10 @@ class _SeriesLocIndexer(_FrameIndexer):
                     self._frame, Index._from_column(col)
                 )
                 if indices.null_count > 0:
-                    raise KeyError("label scalar is out of bound")
+                    missing = (
+                        indices[indices.isnull()].index.to_pandas().tolist()
+                    )
+                    raise KeyError(f"{missing} not in the index.")
                 return indices
 
 
@@ -1965,9 +1979,11 @@ class Series(SingleColumnFrame, IndexedFrame):
     def astype(
         self,
         dtype: Dtype | dict[Hashable, Dtype],
-        copy: bool = False,
+        copy: bool | None = None,
         errors: Literal["raise", "ignore"] = "raise",
     ) -> Self:
+        if copy is None:
+            copy = True
         if cudf.get_option("mode.pandas_compatible"):
             if inspect.isclass(dtype) and issubclass(
                 dtype, pd.api.extensions.ExtensionDtype
@@ -2958,6 +2974,10 @@ class Series(SingleColumnFrame, IndexedFrame):
         """
         res = self._column.unique()
         if cudf.get_option("mode.pandas_compatible"):
+            if is_pandas_nullable_extension_dtype(self.dtype):
+                raise NotImplementedError(
+                    "cudf does not support ExtensionArrays"
+                )
             return res.values
         return Series._from_column(res, name=self.name)
 
@@ -3109,8 +3129,9 @@ class Series(SingleColumnFrame, IndexedFrame):
         # Pandas returns an IntervalIndex as the index of res
         # this condition makes sure we do too if bins is given
         if bins is not None and len(res) == len(res.index.categories):
-            interval_col = IntervalColumn.from_struct_column(
-                res.index._column._get_decategorized_column()
+            struct_col = res.index._column._get_decategorized_column()
+            interval_col = struct_col._with_type_metadata(
+                res.index.dtype.categories.dtype
             )
             res.index = cudf.IntervalIndex._from_column(
                 interval_col, name=res.index.name
