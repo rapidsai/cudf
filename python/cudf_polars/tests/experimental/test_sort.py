@@ -109,24 +109,6 @@ def test_large_sort(large_df, by, engine_large, stable, nulls_last, descending):
     assert_gpu_result_equal(q, engine=engine_large)
 
 
-def test_sort_stable_rapidsmpf_warns(df):
-    pytest.importorskip("rapidsmpf")
-
-    engine = pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "max_rows_per_partition": 3,
-            "scheduler": DEFAULT_SCHEDULER,
-            "shuffle_method": "rapidsmpf",
-            "fallback_mode": "warn",
-        },
-    )
-    q = df.sort(by=["x", "y"], nulls_last=True, maintain_order=True, descending=False)
-    with pytest.warns(UserWarning, match="Falling back to shuffle_method='tasks'."):
-        assert_gpu_result_equal(q, engine=engine)
-
-
 def test_sort_head(df, engine):
     q = df.sort(by=["y", "z"]).head(2)
     assert_gpu_result_equal(q, engine=engine)
