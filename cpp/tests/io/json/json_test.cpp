@@ -3652,7 +3652,7 @@ TEST_F(JsonReaderTest, MixedTypeListNullPropagationOptimization)
   // Test for issue #19899: Skip non-empty nulls when creating mixed type columns in read_json
   // This test verifies that the optimization correctly propagates null masks to list-type children
   // instead of creating non-empty nulls, which improves performance and memory usage.
-  
+
   std::string json_string = R"(
 {"list_col": [1, 2, 3], "other_col": "value1"}
 {"list_col": {"mixed": "type"}, "other_col": "value2"}
@@ -3673,38 +3673,29 @@ TEST_F(JsonReaderTest, MixedTypeListNullPropagationOptimization)
   // Verify we have the expected columns
   EXPECT_EQ(result.tbl->num_columns(), 2);
   EXPECT_EQ(result.tbl->num_rows(), 4);
-  
+
   // Verify column types
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::STRING);
   EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::STRING);
-  
+
   // Verify column names
   EXPECT_EQ(result.metadata.schema_info[0].name, "list_col");
   EXPECT_EQ(result.metadata.schema_info[1].name, "other_col");
-  
+
   // Verify the content - list_col should contain the mixed types as strings
-  cudf::test::strings_column_wrapper expected_list_col({
-    "[1, 2, 3]",
-    "{\"mixed\": \"type\"}",
-    "[4, 5]",
-    ""
-  });
-  
-  cudf::test::strings_column_wrapper expected_other_col({
-    "value1",
-    "value2", 
-    "value3",
-    "value4"
-  });
-  
+  cudf::test::strings_column_wrapper expected_list_col(
+    {"[1, 2, 3]", "{\"mixed\": \"type\"}", "[4, 5]", ""});
+
+  cudf::test::strings_column_wrapper expected_other_col({"value1", "value2", "value3", "value4"});
+
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), expected_list_col);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), expected_other_col);
-  
+
   // Verify that the optimization doesn't create non-empty nulls
   // The null handling should be efficient without unnecessary null propagation
   auto list_col_view = result.tbl->get_column(0);
   EXPECT_TRUE(list_col_view.has_nulls());
-  EXPECT_EQ(list_col_view.null_count(), 1); // Only the last row should be null
+  EXPECT_EQ(list_col_view.null_count(), 1);  // Only the last row should be null
 }
 
 CUDF_TEST_PROGRAM_MAIN()

@@ -944,7 +944,7 @@ void scatter_offsets(tree_meta_t const& tree,
              column_categories[col_ids[parent_node_id]] == NC_LIST and
              (!d_ignore_vals[col_ids[parent_node_id]]);
     });
-  
+
   // For children of list and in ignore_vals, propagate parent's null mask to list-type children
   // instead of setting parent's null mask to null. This optimization skips non-empty nulls
   // and avoids unnecessary null propagation for mixed-type list columns.
@@ -972,8 +972,8 @@ void scatter_offsets(tree_meta_t const& tree,
         // This avoids creating non-empty nulls and optimizes device column construction
         if (d_columns_data[col_ids[parent_node_id]].validity != nullptr) {
           // Copy parent's null state to child's null state
-          auto const parent_is_null = !test_bit(d_columns_data[col_ids[parent_node_id]].validity, 
-                                               row_offsets[parent_node_id]);
+          auto const parent_is_null = !test_bit(d_columns_data[col_ids[parent_node_id]].validity,
+                                                row_offsets[parent_node_id]);
           if (parent_is_null) {
             clear_bit(d_columns_data[col_ids[node_id]].validity, row_offsets[node_id]);
           }
