@@ -1904,3 +1904,62 @@ def test_numpy_non_contiguous():
 
     gdf = cudf.DataFrame.from_records(rec, index="index")
     assert_eq(aa, gdf["a"].values)
+
+
+def test_from_pandas_series():
+    pdf = pd.DataFrame(
+        {"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}
+    ).set_index(["a", "b"])
+
+    result = cudf.from_pandas(pdf)
+    assert_eq(pdf, result)
+
+    test_pdf = pdf["c"]
+    result = cudf.from_pandas(test_pdf)
+    assert_eq(test_pdf, result)
+
+
+def test_from_pandas_with_multiindex():
+    rng = np.random.default_rng(seed=0)
+    pdf = pd.DataFrame(rng.random(size=(7, 5)))
+    pdf.index = pd.MultiIndex.from_arrays([range(7)])
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize("dtype", ["int", "int64[pyarrow]"])
+def test_from_pandas_with_nullable_pandas_type(dtype):
+    df = pd.DataFrame({"x": [1, 2, 3]}, index=[4.0, 5.0, 6.0], dtype=dtype)
+    df.columns.name = "custom_column_name"
+    gdf = cudf.DataFrame.from_pandas(df)
+    assert isinstance(gdf, cudf.DataFrame)
+
+    assert_eq(df, gdf, check_dtype="pyarrow" not in dtype)
+
+    s = df.x
+    gs = cudf.Series.from_pandas(s)
+    assert isinstance(gs, cudf.Series)
+
+    assert_eq(s, gs, check_dtype="pyarrow" not in dtype)
+
+
+def test_df_constructor_dtype(all_supported_types_as_str):
+    if "datetime" in all_supported_types_as_str:
+        data = ["1991-11-20", "2004-12-04", "2016-09-13", None]
+    elif all_supported_types_as_str == "str":
+        data = ["a", "b", "c", None]
+    elif "float" in all_supported_types_as_str:
+        data = [1.0, 0.5, -1.1, np.nan, None]
+    elif "bool" in all_supported_types_as_str:
+        data = [True, False, None]
+    else:
+        data = [1, 2, 3, None]
+
+    sr = cudf.Series(data, dtype=all_supported_types_as_str)
+
+    expect = cudf.DataFrame({"foo": sr, "bar": sr})
+    got = cudf.DataFrame(
+        {"foo": data, "bar": data}, dtype=all_supported_types_as_str
+    )
+
+    assert_eq(expect, got)

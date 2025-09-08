@@ -2397,6 +2397,7 @@ Java_ai_rapids_cudf_Table_readORCFromDataSource(JNIEnv* env,
                                                 jboolean usingNumPyTypes,
                                                 jint unit,
                                                 jobjectArray dec128_col_names,
+                                                jboolean ignore_timezone_in_stripe_footer,
                                                 jlong ds_handle)
 {
   JNI_NULL_CHECK(env, ds_handle, "no data source handle given", 0);
@@ -2421,21 +2422,24 @@ Java_ai_rapids_cudf_Table_readORCFromDataSource(JNIEnv* env,
         .use_np_dtypes(static_cast<bool>(usingNumPyTypes))
         .timestamp_type(cudf::data_type(static_cast<cudf::type_id>(unit)))
         .decimal128_columns(n_dec128_col_names.as_cpp_vector())
+        .ignore_timezone_in_stripe_footer(ignore_timezone_in_stripe_footer)
         .build();
     return convert_table_for_return(env, cudf::io::read_orc(opts).tbl);
   }
   CATCH_STD(env, NULL);
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readORC(JNIEnv* env,
-                                                               jclass,
-                                                               jobjectArray filter_col_names,
-                                                               jstring inputfilepath,
-                                                               jlong buffer,
-                                                               jlong buffer_length,
-                                                               jboolean usingNumPyTypes,
-                                                               jint unit,
-                                                               jobjectArray dec128_col_names)
+JNIEXPORT jlongArray JNICALL
+Java_ai_rapids_cudf_Table_readORC(JNIEnv* env,
+                                  jclass,
+                                  jobjectArray filter_col_names,
+                                  jstring inputfilepath,
+                                  jlong buffer,
+                                  jlong buffer_length,
+                                  jboolean usingNumPyTypes,
+                                  jint unit,
+                                  jobjectArray dec128_col_names,
+                                  jboolean ignore_timezone_in_stripe_footer)
 {
   bool read_buffer = true;
   if (buffer == 0) {
@@ -2477,6 +2481,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readORC(JNIEnv* env,
         .use_np_dtypes(static_cast<bool>(usingNumPyTypes))
         .timestamp_type(cudf::data_type(static_cast<cudf::type_id>(unit)))
         .decimal128_columns(n_dec128_col_names.as_cpp_vector())
+        .ignore_timezone_in_stripe_footer(ignore_timezone_in_stripe_footer)
         .build();
     return convert_table_for_return(env, cudf::io::read_orc(opts).tbl);
   }
