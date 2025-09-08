@@ -14944,6 +14944,7 @@ NODEIDS_THAT_XPASS_WITH_CUDF_PANDAS = {
     "tests/groupby/test_numeric_only.py::test_axis1_numeric_only[corrwith-None]",
     "tests/groupby/test_numeric_only.py::test_axis1_numeric_only[skew-False]",
     "tests/groupby/test_numeric_only.py::test_axis1_numeric_only[skew-None]",
+    "tests/groupby/test_raises.py::test_groupby_raises_category[by3-True-fillna-method]",
     "tests/indexing/test_loc.py::TestLocBaseIndependent::test_loc_copy_vs_view",
     "tests/io/json/test_pandas.py::TestPandasContainer::test_json_pandas_nulls[Decimal]",
     "tests/io/parser/test_unsupported.py::test_invalid_file_inputs[python]",
