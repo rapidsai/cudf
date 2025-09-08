@@ -774,16 +774,11 @@ def _(
                 f"expected 'groups_to_rows'"
             )
 
-        order_by_exprs = []
-        if has_order_by:
-            pl_order_by_exprs = (
-                node.order_by
-                if isinstance(node.order_by, (list, tuple))
-                else [node.order_by]
-            )
-            order_by_exprs = [
-                translator.translate_expr(n=n, schema=schema) for n in pl_order_by_exprs
-            ]
+        order_by_expr = (
+            translator.translate_expr(n=node.order_by, schema=schema)
+            if has_order_by
+            else None
+        )
 
         return expr.GroupedRollingWindow(
             dtype,
@@ -791,7 +786,7 @@ def _(
             [agg for agg, _ in aggs],
             post,
             *(translator.translate_expr(n=n, schema=schema) for n in node.partition_by),
-            _order_by_exprs=order_by_exprs,
+            _order_by_expr=order_by_expr,
         )
     assert_never(node.options)
 

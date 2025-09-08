@@ -203,22 +203,14 @@ class GroupedRollingWindow(Expr):
       when polars supports that expression.
     """
 
-    __slots__ = (
-        "_order_by_count",
-        "_order_by_exprs",
-        "by_count",
-        "named_aggs",
-        "options",
-        "post",
-    )
+    __slots__ = ("_order_by_expr", "by_count", "named_aggs", "options", "post")
     _non_child = (
         "dtype",
         "options",
         "named_aggs",
         "post",
         "by_count",
-        "_order_by_exprs",
-        "_order_by_count",
+        "_order_by_expr",
     )
 
     def __init__(
@@ -228,15 +220,14 @@ class GroupedRollingWindow(Expr):
         named_aggs: Sequence[expr.NamedExpr],
         post: expr.NamedExpr,
         *by: Expr,
-        _order_by_exprs: Sequence[Expr] | None = None,
+        _order_by_expr: Expr | None = None,
     ) -> None:
         self.dtype = dtype
         self.options = options
         self.named_aggs = tuple(named_aggs)
         self.post = post
         self.is_pointwise = False
-        self._order_by_exprs = tuple(_order_by_exprs or ())
-        self._order_by_count = len(self._order_by_exprs)
+        self._order_by_expr = _order_by_expr
 
         unsupported = [
             type(named_expr.value).__name__
@@ -275,7 +266,11 @@ class GroupedRollingWindow(Expr):
         ]
         self.by_count = len(by_expr)
         self.children = tuple(
-            itertools.chain(by_expr, self._order_by_exprs, child_deps)
+            itertools.chain(
+                by_expr,
+                (() if self._order_by_expr is None else (self._order_by_expr,)),
+                child_deps,
+            )
         )
 
     def _sorted_grouper(self, by_cols_for_scan: list[Column]) -> plc.groupby.GroupBy:
@@ -503,7 +498,7 @@ class GroupedRollingWindow(Expr):
         by_cols: list[Column],
         *,
         row_id: plc.Column,
-        order_by_cols: list[Column] | None,
+        order_by_col: Column | None,
         ob_desc: bool,
         ob_nulls_last: bool,
         value_col: plc.Column | None = None,
@@ -524,19 +519,15 @@ class GroupedRollingWindow(Expr):
                 plc.types.NullOrder.BEFORE if value_desc else plc.types.NullOrder.AFTER
             )
 
-        if order_by_cols:
-            cols.extend(c.obj for c in order_by_cols)
-            orders.extend(
-                [plc.types.Order.DESCENDING if ob_desc else plc.types.Order.ASCENDING]
-                * len(order_by_cols)
+        if order_by_col is not None:
+            cols.append(order_by_col.obj)
+            orders.append(
+                plc.types.Order.DESCENDING if ob_desc else plc.types.Order.ASCENDING
             )
-            nulls.extend(
-                [
-                    plc.types.NullOrder.AFTER
-                    if ob_nulls_last
-                    else plc.types.NullOrder.BEFORE
-                ]
-                * len(order_by_cols)
+            nulls.append(
+                plc.types.NullOrder.AFTER
+                if ob_nulls_last
+                else plc.types.NullOrder.BEFORE
             )
 
         # Use the row id to break ties
@@ -576,6 +567,96 @@ class GroupedRollingWindow(Expr):
                 gathered_tbl.columns()[i] for i in range(gathered_tbl.num_columns())
             ]
 
+    def _rank_group_by_scan(
+        self,
+        df: DataFrame,
+        grouper: plc.groupby.GroupBy,
+        rank_named: list[expr.NamedExpr],
+    ) -> tuple[list[str], list[DataType], list[plc.Table]]:
+        rank_requests: list[plc.groupby.GroupByRequest] = []
+        rank_out_names: list[str] = []
+        rank_out_dtypes: list[DataType] = []
+
+        for ne in rank_named:
+            rank_expr = ne.value
+            (child_expr,) = rank_expr.children
+            val_col = child_expr.evaluate(df, context=ExecutionContext.FRAME).obj
+            assert isinstance(rank_expr, expr.UnaryFunction)
+            method_str, descending, _ = rank_expr.options
+
+            rank_method = {
+                "average": plc.aggregation.RankMethod.AVERAGE,
+                "min": plc.aggregation.RankMethod.MIN,
+                "max": plc.aggregation.RankMethod.MAX,
+                "dense": plc.aggregation.RankMethod.DENSE,
+                "ordinal": plc.aggregation.RankMethod.FIRST,
+            }[method_str]
+
+            order = (
+                plc.types.Order.DESCENDING if descending else plc.types.Order.ASCENDING
+            )
+            # Polars semantics: exclude nulls from domain; nulls get null ranks.
+            null_precedence = (
+                plc.types.NullOrder.BEFORE if descending else plc.types.NullOrder.AFTER
+            )
+            agg = plc.aggregation.rank(
+                rank_method,
+                column_order=order,
+                null_handling=plc.types.NullPolicy.EXCLUDE,
+                null_precedence=null_precedence,
+                percentage=plc.aggregation.RankPercentage.NONE,
+            )
+
+            rank_requests.append(plc.groupby.GroupByRequest(val_col, [agg]))
+            rank_out_names.append(ne.name)
+            rank_out_dtypes.append(rank_expr.dtype)
+
+        _, rank_tables = grouper.scan(rank_requests)
+        return rank_out_names, rank_out_dtypes, rank_tables
+
+    def _reorder_grouped_to_input(
+        self,
+        by_cols: list[Column],
+        n_rows: int,
+        rank_tables: list[plc.Table],
+        rank_out_names: list[str],
+        rank_out_dtypes: list[DataType],
+    ) -> list[Column]:
+        # Reorder scan results from grouped-order back to input row order
+        zero = plc.Scalar.from_py(0, plc.types.SIZE_TYPE)
+        one = plc.Scalar.from_py(1, plc.types.SIZE_TYPE)
+        row_id = plc.filling.sequence(n_rows, zero, one)
+
+        key_orders = [k.order for k in by_cols]
+        key_nulls = [k.null_order for k in by_cols]
+        grouped_order = plc.sorting.stable_sorted_order(
+            plc.Table([*(c.obj for c in by_cols), row_id]),
+            [*key_orders, plc.types.Order.ASCENDING],
+            [*key_nulls, plc.types.NullOrder.AFTER],
+        )
+
+        return [
+            Column(
+                plc.copying.scatter(
+                    plc.Table([tbl.columns()[0]]),
+                    grouped_order,
+                    plc.Table(
+                        [
+                            plc.Column.from_scalar(
+                                plc.Scalar.from_py(None, tbl.columns()[0].type()),
+                                n_rows,
+                            )
+                        ]
+                    ),
+                ).columns()[0],
+                name=name,
+                dtype=dtype,
+            )
+            for name, dtype, tbl in zip(
+                rank_out_names, rank_out_dtypes, rank_tables, strict=True
+            )
+        ]
+
     def do_evaluate(  # noqa: D102
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
@@ -585,19 +666,17 @@ class GroupedRollingWindow(Expr):
             )  # pragma: no cover; translation raises first
 
         by_exprs = self.children[: self.by_count]
-        order_by_exprs = self.children[
-            self.by_count : self.by_count + self._order_by_count
-        ]
+        order_by_expr = (
+            self.children[self.by_count] if self._order_by_expr is not None else None
+        )
         by_cols = broadcast(
             *(b.evaluate(df) for b in by_exprs),
             target_length=df.num_rows,
         )
-        order_by_cols = (
-            broadcast(
-                *(e.evaluate(df) for e in order_by_exprs), target_length=df.num_rows
-            )
-            if self._order_by_count
-            else []
+        order_by_col = (
+            broadcast(order_by_expr.evaluate(df), target_length=df.num_rows)[0]
+            if order_by_expr is not None
+            else None
         )
 
         by_tbl = plc.Table([c.obj for c in by_cols])
@@ -682,7 +761,7 @@ class GroupedRollingWindow(Expr):
         )
 
         if rank_named := unary_window_ops["rank"]:
-            if self._order_by_count:
+            if self._order_by_expr is not None:
                 _, _, ob_desc, ob_nulls_last = self.options
                 for ne in rank_named:
                     rank_expr = ne.value
@@ -694,7 +773,7 @@ class GroupedRollingWindow(Expr):
                     order_index = self._build_window_order_index(
                         by_cols,
                         row_id=row_id,
-                        order_by_cols=order_by_cols,
+                        order_by_col=order_by_col,
                         ob_desc=ob_desc,
                         ob_nulls_last=ob_nulls_last,
                         value_col=val,
@@ -741,9 +820,11 @@ class GroupedRollingWindow(Expr):
             order_index = self._build_window_order_index(
                 by_cols,
                 row_id=row_id,
-                order_by_cols=order_by_cols if self._order_by_count else None,
-                ob_desc=self.options[2] if self._order_by_count else False,
-                ob_nulls_last=self.options[3] if self._order_by_count else False,
+                order_by_col=order_by_col if self._order_by_expr is not None else None,
+                ob_desc=self.options[2] if self._order_by_expr is not None else False,
+                ob_nulls_last=self.options[3]
+                if self._order_by_expr is not None
+                else False,
             )
             by_cols_for_scan = self._gather_columns(by_cols, order_index)
             local = self._sorted_grouper(by_cols_for_scan)
@@ -787,9 +868,11 @@ class GroupedRollingWindow(Expr):
             order_index = self._build_window_order_index(
                 by_cols,
                 row_id=row_id,
-                order_by_cols=order_by_cols if self._order_by_count else None,
-                ob_desc=self.options[2] if self._order_by_count else False,
-                ob_nulls_last=self.options[3] if self._order_by_count else False,
+                order_by_col=order_by_col if self._order_by_expr is not None else None,
+                ob_desc=self.options[2] if self._order_by_expr is not None else False,
+                ob_nulls_last=self.options[3]
+                if self._order_by_expr is not None
+                else False,
             )
             by_cols_for_scan = self._gather_columns(by_cols, order_index)
             local = self._sorted_grouper(by_cols_for_scan)
