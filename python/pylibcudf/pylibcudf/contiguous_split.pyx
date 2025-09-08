@@ -316,8 +316,15 @@ cpdef PackedColumns pack(Table input, Stream stream=None):
 
     Parameters
     ----------
+    input : Table
+        Table to pack.
     stream : Stream | None
         CUDA stream on which to perform the operation.
+
+    Returns
+    -------
+    PackedColumns
+        The packed columns.
 
     Examples
     --------
@@ -329,16 +336,6 @@ cpdef PackedColumns pack(Table input, Stream stream=None):
     >>> pylibcudf.contiguous_split.unpack_from_memoryviews(metadata, gpu_data)
 
     For details, see :cpp:func:`cudf::pack`.
-
-    Parameters
-    ----------
-    input : Table
-        Table to pack.
-
-    Returns
-    -------
-    PackedColumns
-        The packed columns.
     """
     cdef unique_ptr[packed_columns] pack
     stream = _get_stream(stream)
