@@ -16,6 +16,7 @@ from __future__ import annotations
 import itertools
 import json
 import random
+import re
 import time
 from functools import cache
 from pathlib import Path
@@ -268,6 +269,10 @@ class Scan(IR):
     PARQUET_DEFAULT_CHUNK_SIZE: int = 0  # unlimited
     PARQUET_DEFAULT_PASS_LIMIT: int = 16 * 1024**3  # 16GiB
 
+    @staticmethod
+    def _is_url(p: str) -> bool:
+        return re.match(r"^[a-zA-Z][a-zA-Z0-9+.\-]*://", str(p)) is not None
+
     def __init__(
         self,
         schema: Schema,
@@ -325,18 +330,22 @@ class Scan(IR):
             raise NotImplementedError(
                 "Read from cloud storage"
             )  # pragma: no cover; no test yet
-        if any(
-            str(p).startswith("https:/" if POLARS_VERSION_LT_131 else "https://")
-            for p in self.paths
+        if (
+            any(str(p).startswith("https:/") for p in self.paths)
+            and POLARS_VERSION_LT_131
         ):
             raise NotImplementedError("Read from https")
         if any(
             str(p).startswith("file:/" if POLARS_VERSION_LT_131 else "file://")
             for p in self.paths
         ):
-            # TODO: removing the file:// may work
             raise NotImplementedError("Read from file URI")
         if self.typ == "csv":
+            if any(self._is_url(p) for p in self.paths):
+                # cannot because we do some file introspection
+                raise NotImplementedError(
+                    "Reading CSV from remote is not yet supported"
+                )
             if self.reader_options["skip_rows_after_header"] != 0:
                 raise NotImplementedError("Skipping rows after header in CSV reader")
             parse_options = self.reader_options["parse_options"]

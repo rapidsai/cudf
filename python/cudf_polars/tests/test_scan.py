@@ -487,3 +487,13 @@ def test_scan_from_file_uri(tmp_path: Path) -> None:
     df.write_parquet(path)
     q = pl.scan_parquet(f"file://{path}")
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_scan_parquet_remote_https():
+    q = pl.scan_parquet("https://www.timestored.com/data/sample/titanic.parquet")
+    assert_gpu_result_equal(q)
+
+
+def test_scan_csv_remote_https():
+    q = pl.scan_csv("https://www.timestored.com/data/sample/titanic.csv")
+    assert_ir_translation_raises(q, NotImplementedError)
