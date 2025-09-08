@@ -9,7 +9,6 @@ import pytest
 from hypothesis import given, settings, strategies as st
 
 import cudf
-from cudf.utils.dtypes import np_dtypes_to_pandas_dtypes
 
 
 @pytest.mark.parametrize("nrows", [0, 5, 10])
@@ -29,14 +28,7 @@ def test_null_series(nrows, all_supported_types_as_str, request):
     if all_supported_types_as_str != "category" and cudf.dtype(
         all_supported_types_as_str
     ).kind in {"u", "i"}:
-        ps = pd.Series(
-            sr._column.data_array_view(mode="read").copy_to_host(),
-            dtype=np_dtypes_to_pandas_dtypes.get(
-                cudf.dtype(all_supported_types_as_str),
-                cudf.dtype(all_supported_types_as_str),
-            ),
-        )
-        ps[sr.isnull().to_pandas()] = pd.NA
+        ps = sr.to_pandas(nullable=True)
     else:
         ps = sr.to_pandas()
 
@@ -519,3 +511,23 @@ def test_empty_series_name():
     gs = cudf.from_pandas(ps)
 
     assert repr(ps) == repr(gs)
+
+
+@pytest.mark.parametrize("item", [0, slice(0, 1)])
+@pytest.mark.parametrize("data", [["a"], ["a", None], [None]])
+def test_string_repr(data, item, request):
+    if data == [None]:
+        request.applymarker(
+            pytest.mark.xfail(
+                reason="Missing value repr should be <NA> instead of None",
+            )
+        )
+    ps = pd.Series(data, dtype="str", name="nice name")
+    gs = cudf.Series(data, dtype="str", name="nice name")
+
+    got_out = gs.iloc[item]
+    expect_out = ps.iloc[item]
+
+    expect = str(expect_out)
+    got = str(got_out)
+    assert expect == got

@@ -18,6 +18,7 @@ from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column, column_empty
+from cudf.errors import MixedTypeError
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
@@ -251,6 +252,18 @@ class StringColumn(ColumnBase):
             f"dtype {self.dtype} is not yet supported via "
             "`__cuda_array_interface__`"
         )
+
+    def _validate_fillna_value(
+        self, fill_value: ScalarLike | ColumnLike
+    ) -> plc.Scalar | ColumnBase:
+        """Align fill_value for .fillna based on column type."""
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and is_scalar(fill_value)
+            and fill_value is np.nan
+        ):
+            raise MixedTypeError("Cannot fill `np.nan` in string column")
+        return super()._validate_fillna_value(fill_value)
 
     def element_indexing(self, index: int):
         result = super().element_indexing(index)
@@ -1279,11 +1292,14 @@ class StringColumn(ColumnBase):
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
     @acquire_spill_lock()
-    def replace_str(self, pattern: str, replacement: pa.Scalar) -> Self:
+    def replace_str(
+        self, pattern: str, replacement: pa.Scalar, max_replace_count: int = -1
+    ) -> Self:
         plc_result = plc.strings.replace.replace(
             self.to_pylibcudf(mode="read"),
             pa_scalar_to_plc_scalar(pa.scalar(pattern)),
             pa_scalar_to_plc_scalar(replacement),
+            max_replace_count,
         )
         return type(self).from_pylibcudf(plc_result)  # type: ignore[return-value]
 

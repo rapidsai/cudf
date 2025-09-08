@@ -74,6 +74,7 @@ struct stripe_level_comp_info {
   std::size_t num_compressed_blocks{0};
   std::size_t num_uncompressed_blocks{0};
   std::size_t total_decomp_size{0};
+  std::size_t max_uncompressed_block_size{0};
 };
 
 /**

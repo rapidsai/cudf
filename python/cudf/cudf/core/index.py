@@ -4947,15 +4947,8 @@ class CategoricalIndex(Index):
         """
         codes = as_column(codes, dtype=np.dtype(np.int32))
         categories = as_column(categories)
-        cat_col = CategoricalColumn(
-            data=None,
-            size=len(codes),
-            dtype=cudf.CategoricalDtype(
-                categories=categories, ordered=ordered
-            ),
-            offset=0,
-            null_count=0,
-            children=(codes,),
+        cat_col = codes._with_type_metadata(
+            cudf.CategoricalDtype(categories=categories, ordered=ordered)
         )
         return cls._from_column(cat_col, name=name)
 
