@@ -215,8 +215,7 @@ mixed_join(table_view const& left_equality,
   // won't be able to support AST conditions for those types anyway.
   auto const row_bitmask =
     cudf::detail::bitmask_and(build, stream, cudf::get_current_device_resource_ref()).first;
-  auto const preprocessed_build =
-    experimental::row::equality::preprocessed_table::create(build, stream);
+  auto const preprocessed_build = detail::row::equality::preprocessed_table::create(build, stream);
   build_join_hash_table(build,
                         preprocessed_build,
                         hash_table,
@@ -240,12 +239,11 @@ mixed_join(table_view const& left_equality,
   // If the join size was not provided as an input, compute it here.
   std::size_t join_size;
 
-  auto const preprocessed_probe =
-    experimental::row::equality::preprocessed_table::create(probe, stream);
-  auto const row_hash   = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
-  auto const hash_probe = row_hash.device_hasher(has_nulls);
+  auto const preprocessed_probe = detail::row::equality::preprocessed_table::create(probe, stream);
+  auto const row_hash           = cudf::detail::row::hash::row_hasher{preprocessed_probe};
+  auto const hash_probe         = row_hash.device_hasher(has_nulls);
   auto const row_comparator =
-    cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
+    cudf::detail::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
   auto const equality_probe = row_comparator.equal_to<false>(has_nulls, compare_nulls);
 
   auto [input_pairs, hash_indices] =
@@ -440,9 +438,8 @@ std::size_t compute_mixed_join_output_size(table_view const& left_equality,
   // TODO: To add support for nested columns we will need to flatten in many
   // places. However, this probably isn't worth adding any time soon since we
   // won't be able to support AST conditions for those types anyway.
-  auto const row_bitmask = cudf::detail::bitmask_and(build, stream, mr).first;
-  auto const preprocessed_build =
-    experimental::row::equality::preprocessed_table::create(build, stream);
+  auto const row_bitmask        = cudf::detail::bitmask_and(build, stream, mr).first;
+  auto const preprocessed_build = detail::row::equality::preprocessed_table::create(build, stream);
   build_join_hash_table(build,
                         preprocessed_build,
                         hash_table,
@@ -461,12 +458,11 @@ std::size_t compute_mixed_join_output_size(table_view const& left_equality,
   detail::grid_1d const config(probe_table_num_rows, DEFAULT_JOIN_BLOCK_SIZE);
   auto const shmem_size_per_block = parser.shmem_per_thread * config.num_threads_per_block;
 
-  auto const preprocessed_probe =
-    experimental::row::equality::preprocessed_table::create(probe, stream);
-  auto const row_hash   = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
-  auto const hash_probe = row_hash.device_hasher(has_nulls);
+  auto const preprocessed_probe = detail::row::equality::preprocessed_table::create(probe, stream);
+  auto const row_hash           = cudf::detail::row::hash::row_hasher{preprocessed_probe};
+  auto const hash_probe         = row_hash.device_hasher(has_nulls);
   auto const row_comparator =
-    cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
+    cudf::detail::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
   auto const equality_probe = row_comparator.equal_to<false>(has_nulls, compare_nulls);
 
   // Precompute input pairs and hash indices using common utility function

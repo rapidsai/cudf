@@ -18,8 +18,8 @@
 #include "join/join_common_utils.hpp"
 
 #include <cudf/ast/detail/expression_evaluator.cuh>
+#include <cudf/detail/row_operator/row_operators.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/table/experimental/row_operators.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -31,13 +31,12 @@
 namespace cudf {
 namespace detail {
 
-using row_hash =
-  cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
-                                                   cudf::nullate::DYNAMIC>;
+using row_hash = cudf::detail::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
+                                                            cudf::nullate::DYNAMIC>;
 
 // // This alias is used by mixed_joins, which support only non-nested types
-using row_equality = cudf::experimental::row::equality::strong_index_comparator_adapter<
-  cudf::experimental::row::equality::device_row_comparator<false, cudf::nullate::DYNAMIC>>;
+using row_equality = cudf::detail::row::equality::strong_index_comparator_adapter<
+  cudf::detail::row::equality::device_row_comparator<false, cudf::nullate::DYNAMIC>>;
 
 // Comparator that always returns false to ensure all values are inserted (like hash_join)
 struct mixed_join_always_not_equal {
@@ -131,8 +130,8 @@ struct single_expression_equality : expression_equality<has_nulls> {
   __device__ __forceinline__ bool operator()(size_type const left_index,
                                              size_type const right_index) const noexcept
   {
-    using cudf::experimental::row::lhs_index_type;
-    using cudf::experimental::row::rhs_index_type;
+    using cudf::detail::row::lhs_index_type;
+    using cudf::detail::row::rhs_index_type;
 
     auto output_dest = cudf::ast::detail::value_expression_result<bool, has_nulls>();
     // Two levels of checks:
@@ -175,8 +174,8 @@ struct pair_expression_equality : public expression_equality<has_nulls> {
   __device__ __forceinline__ bool operator()(pair_type const& left_row,
                                              pair_type const& right_row) const noexcept
   {
-    using cudf::experimental::row::lhs_index_type;
-    using cudf::experimental::row::rhs_index_type;
+    using cudf::detail::row::lhs_index_type;
+    using cudf::detail::row::rhs_index_type;
 
     auto output_dest = cudf::ast::detail::value_expression_result<bool, has_nulls>();
     // Three levels of checks:
@@ -205,8 +204,8 @@ struct double_row_equality_comparator {
 
   __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const noexcept
   {
-    using experimental::row::lhs_index_type;
-    using experimental::row::rhs_index_type;
+    using detail::row::lhs_index_type;
+    using detail::row::rhs_index_type;
 
     return equality_comparator(lhs_index_type{lhs_row_index}, rhs_index_type{rhs_row_index}) &&
            conditional_comparator(lhs_index_type{lhs_row_index}, rhs_index_type{rhs_row_index});
