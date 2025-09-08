@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from pylibcudf.column cimport Column
@@ -10,6 +10,8 @@ from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.scalar cimport Scalar
 from pylibcudf.strings.regex_program cimport RegexProgram
 from pylibcudf.table cimport Table
+from pylibcudf.utils cimport _get_stream
+from rmm.pylibrmm.stream cimport Stream
 
 from cython.operator import dereference
 
@@ -24,7 +26,9 @@ __all__ = [
     "split_record_re",
 ]
 
-cpdef Table split(Column strings_column, Scalar delimiter, size_type maxsplit):
+cpdef Table split(
+    Column strings_column, Scalar delimiter, size_type maxsplit, Stream stream=None
+):
     """
     Returns a list of columns by splitting each string using the
     specified delimiter.
@@ -43,6 +47,9 @@ cpdef Table split(Column strings_column, Scalar delimiter, size_type maxsplit):
         Maximum number of splits to perform. -1 indicates all possible
         splits on each string.
 
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
+
     Returns
     -------
     Table
@@ -52,18 +59,22 @@ cpdef Table split(Column strings_column, Scalar delimiter, size_type maxsplit):
     cdef const string_scalar* c_delimiter = <const string_scalar*>(
         delimiter.c_obj.get()
     )
+    stream = _get_stream(stream)
 
     with nogil:
         c_result = cpp_split.split(
             strings_column.view(),
             dereference(c_delimiter),
             maxsplit,
+            stream.view()
         )
 
-    return Table.from_libcudf(move(c_result))
+    return Table.from_libcudf(move(c_result), stream)
 
 
-cpdef Table rsplit(Column strings_column, Scalar delimiter, size_type maxsplit):
+cpdef Table rsplit(
+    Column strings_column, Scalar delimiter, size_type maxsplit, Stream stream=None
+):
     """
     Returns a list of columns by splitting each string using the
     specified delimiter starting from the end of each string.
@@ -82,6 +93,9 @@ cpdef Table rsplit(Column strings_column, Scalar delimiter, size_type maxsplit):
         Maximum number of splits to perform. -1 indicates all possible
         splits on each string.
 
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
+
     Returns
     -------
     Table
@@ -91,17 +105,21 @@ cpdef Table rsplit(Column strings_column, Scalar delimiter, size_type maxsplit):
     cdef const string_scalar* c_delimiter = <const string_scalar*>(
         delimiter.c_obj.get()
     )
+    stream = _get_stream(stream)
 
     with nogil:
         c_result = cpp_split.rsplit(
             strings_column.view(),
             dereference(c_delimiter),
             maxsplit,
+            stream.view()
         )
 
-    return Table.from_libcudf(move(c_result))
+    return Table.from_libcudf(move(c_result), stream)
 
-cpdef Column split_record(Column strings, Scalar delimiter, size_type maxsplit):
+cpdef Column split_record(
+    Column strings, Scalar delimiter, size_type maxsplit, Stream stream=None
+):
     """
     Splits individual strings elements into a list of strings.
 
@@ -128,18 +146,22 @@ cpdef Column split_record(Column strings, Scalar delimiter, size_type maxsplit):
     cdef const string_scalar* c_delimiter = <const string_scalar*>(
         delimiter.c_obj.get()
     )
+    stream = _get_stream(stream)
 
     with nogil:
         c_result = cpp_split.split_record(
             strings.view(),
             dereference(c_delimiter),
             maxsplit,
+            stream.view()
         )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream)
 
 
-cpdef Column rsplit_record(Column strings, Scalar delimiter, size_type maxsplit):
+cpdef Column rsplit_record(
+    Column strings, Scalar delimiter, size_type maxsplit, Stream stream=None
+):
     """
     Splits individual strings elements into a list of strings starting
     from the end of each string.
@@ -167,18 +189,22 @@ cpdef Column rsplit_record(Column strings, Scalar delimiter, size_type maxsplit)
     cdef const string_scalar* c_delimiter = <const string_scalar*>(
         delimiter.c_obj.get()
     )
+    stream = _get_stream(stream)
 
     with nogil:
         c_result = cpp_split.rsplit_record(
             strings.view(),
             dereference(c_delimiter),
             maxsplit,
+            stream.view()
         )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream)
 
 
-cpdef Table split_re(Column input, RegexProgram prog, size_type maxsplit):
+cpdef Table split_re(
+    Column input, RegexProgram prog, size_type maxsplit, Stream stream=None
+):
     """
     Splits strings elements into a table of strings columns
     using a regex_program's pattern to delimit each string.
@@ -203,17 +229,21 @@ cpdef Table split_re(Column input, RegexProgram prog, size_type maxsplit):
         A table of columns of strings.
     """
     cdef unique_ptr[table] c_result
+    stream = _get_stream(stream)
 
     with nogil:
         c_result = cpp_split.split_re(
             input.view(),
             prog.c_obj.get()[0],
             maxsplit,
+            stream.view()
         )
 
-    return Table.from_libcudf(move(c_result))
+    return Table.from_libcudf(move(c_result), stream)
 
-cpdef Table rsplit_re(Column input, RegexProgram prog, size_type maxsplit):
+cpdef Table rsplit_re(
+    Column input, RegexProgram prog, size_type maxsplit, Stream stream=None
+):
     """
     Splits strings elements into a table of strings columns
     using a regex_program's pattern to delimit each string starting from
@@ -239,17 +269,21 @@ cpdef Table rsplit_re(Column input, RegexProgram prog, size_type maxsplit):
         A table of columns of strings.
     """
     cdef unique_ptr[table] c_result
+    stream = _get_stream(stream)
 
     with nogil:
         c_result = cpp_split.rsplit_re(
             input.view(),
             prog.c_obj.get()[0],
             maxsplit,
+            stream.view()
         )
 
-    return Table.from_libcudf(move(c_result))
+    return Table.from_libcudf(move(c_result), stream)
 
-cpdef Column split_record_re(Column input, RegexProgram prog, size_type maxsplit):
+cpdef Column split_record_re(
+    Column input, RegexProgram prog, size_type maxsplit, Stream stream=None
+):
     """
     Splits strings elements into a list column of strings using the given
     regex_program to delimit each string.
@@ -274,17 +308,21 @@ cpdef Column split_record_re(Column input, RegexProgram prog, size_type maxsplit
         Lists column of strings.
     """
     cdef unique_ptr[column] c_result
+    stream = _get_stream(stream)
 
     with nogil:
         c_result = cpp_split.split_record_re(
             input.view(),
             prog.c_obj.get()[0],
             maxsplit,
+            stream.view()
         )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream)
 
-cpdef Column rsplit_record_re(Column input, RegexProgram prog, size_type maxsplit):
+cpdef Column rsplit_record_re(
+    Column input, RegexProgram prog, size_type maxsplit, Stream stream=None
+):
     """
     Splits strings elements into a list column of strings using the given
     regex_program to delimit each string starting from the end of the string.
@@ -309,12 +347,14 @@ cpdef Column rsplit_record_re(Column input, RegexProgram prog, size_type maxspli
         Lists column of strings.
     """
     cdef unique_ptr[column] c_result
+    stream = _get_stream(stream)
 
     with nogil:
         c_result = cpp_split.rsplit_record_re(
             input.view(),
             prog.c_obj.get()[0],
             maxsplit,
+            stream.view()
         )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream)
