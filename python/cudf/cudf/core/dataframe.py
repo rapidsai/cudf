@@ -73,6 +73,7 @@ from cudf.core.dtypes import (
 )
 from cudf.core.groupby.groupby import DataFrameGroupBy, groupby_doc_template
 from cudf.core.index import (
+    DatetimeIndex,
     Index,
     RangeIndex,
     _index_from_data,
@@ -2044,6 +2045,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             out.index.name = objs[0].index.name
             out.index.names = objs[0].index.names
 
+        if isinstance(out.index, DatetimeIndex):
+            out.index._freq = out.index.inferred_freq
         return out
 
     def astype(

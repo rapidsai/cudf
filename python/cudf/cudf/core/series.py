@@ -1540,7 +1540,10 @@ class Series(SingleColumnFrame, IndexedFrame):
         if len(objs):
             col = col._with_type_metadata(objs[0].dtype)
 
-        return cls._from_column(col, name=name, index=result_index)
+        result = cls._from_column(col, name=name, index=result_index)
+        if isinstance(result.index, DatetimeIndex):
+            result.index._freq = result.index.inferred_freq
+        return result
 
     @property  # type: ignore
     @_performance_tracking
