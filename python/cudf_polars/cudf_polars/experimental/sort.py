@@ -19,8 +19,9 @@ from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.experimental.repartition import Repartition
-from cudf_polars.experimental.shuffle import ShuffleMethod, _simple_shuffle_graph
+from cudf_polars.experimental.shuffle import _simple_shuffle_graph
 from cudf_polars.experimental.utils import _concat, _lower_ir_fallback
+from cudf_polars.utils.config import ShuffleMethod
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping, Sequence
