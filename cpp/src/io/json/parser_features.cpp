@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -192,14 +192,16 @@ struct allnull_column_functor {
         schema.child_types.at(child_name).type, *this, schema.child_types.at(child_name), size));
     }
     auto null_mask = cudf::detail::create_null_mask(size, mask_state::ALL_NULL, stream, mr);
-    // Do not use `cudf::make_structs_column` since we do not need to call `superimpose_nulls` on
-    // the children columns. Look issue #17356
-    return std::make_unique<column>(cudf::data_type{type_id::STRUCT},
-                                    size,
-                                    rmm::device_buffer{},
-                                    std::move(null_mask),
-                                    size,
-                                    std::move(child_columns));
+    // Do not use `cudf::make_structs_column` since we do not need to call
+    // `superimpose_and_sanitize_nulls` on the children columns. Creating the struct hierarchy is
+    // sufficient.
+    return create_structs_hierarchy(
+      size,
+      std::move(child_columns),
+      size,
+      cudf::detail::create_null_mask(size, mask_state::ALL_NULL, stream, mr),
+      stream,
+      mr);
   }
 };
 

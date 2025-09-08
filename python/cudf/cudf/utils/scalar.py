@@ -24,7 +24,7 @@ def pa_scalar_to_plc_scalar(pa_scalar: pa.Scalar) -> plc.Scalar:
     pylibcudf.Scalar
         pylibcudf.Scalar to use in pylibcudf APIs
     """
-    return plc.interop.from_arrow(pa_scalar)
+    return plc.Scalar.from_arrow(pa_scalar)
 
 
 def maybe_nested_pa_scalar_to_py(pa_scalar: pa.Scalar) -> Any:

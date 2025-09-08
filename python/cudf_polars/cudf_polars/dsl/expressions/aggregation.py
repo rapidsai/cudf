@@ -142,7 +142,9 @@ class Agg(Expr):
             plc.Column.from_scalar(
                 plc.reduce.reduce(column.obj, request, self.dtype.plc),
                 1,
-            )
+            ),
+            name=column.name,
+            dtype=self.dtype,
         )
 
     def _count(self, column: Column, *, include_nulls: bool) -> Column:
@@ -151,7 +153,9 @@ class Agg(Expr):
             plc.Column.from_scalar(
                 plc.Scalar.from_py(column.size - null_count, self.dtype.plc),
                 1,
-            )
+            ),
+            name=column.name,
+            dtype=self.dtype,
         )
 
     def _sum(self, column: Column) -> Column:
@@ -160,7 +164,9 @@ class Agg(Expr):
                 plc.Column.from_scalar(
                     plc.Scalar.from_py(0, self.dtype.plc),
                     1,
-                )
+                ),
+                name=column.name,
+                dtype=self.dtype,
             )
         return self._reduce(column, request=plc.aggregation.sum())
 
@@ -170,7 +176,9 @@ class Agg(Expr):
                 plc.Column.from_scalar(
                     plc.Scalar.from_py(float("nan"), self.dtype.plc),
                     1,
-                )
+                ),
+                name=column.name,
+                dtype=self.dtype,
             )
         if column.nan_count > 0:
             column = column.mask_nans()
@@ -182,18 +190,26 @@ class Agg(Expr):
                 plc.Column.from_scalar(
                     plc.Scalar.from_py(float("nan"), self.dtype.plc),
                     1,
-                )
+                ),
+                name=column.name,
+                dtype=self.dtype,
             )
         if column.nan_count > 0:
             column = column.mask_nans()
         return self._reduce(column, request=plc.aggregation.max())
 
     def _first(self, column: Column) -> Column:
-        return Column(plc.copying.slice(column.obj, [0, 1])[0])
+        return Column(
+            plc.copying.slice(column.obj, [0, 1])[0], name=column.name, dtype=self.dtype
+        )
 
     def _last(self, column: Column) -> Column:
         n = column.size
-        return Column(plc.copying.slice(column.obj, [n - 1, n])[0])
+        return Column(
+            plc.copying.slice(column.obj, [n - 1, n])[0],
+            name=column.name,
+            dtype=self.dtype,
+        )
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME

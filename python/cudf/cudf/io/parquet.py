@@ -1,6 +1,7 @@
 # Copyright (c) 2019-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
+import datetime
 import io
 import itertools
 import math
@@ -16,14 +17,13 @@ from uuid import uuid4
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 
 import pylibcudf as plc
+from pylibcudf import expressions as plc_expr
 
 from cudf.api.types import is_list_like
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import ColumnBase, as_column, column_empty
-from cudf.core.column.categorical import CategoricalColumn, as_unsigned_codes
 from cudf.core.dataframe import DataFrame
 from cudf.core.dtypes import (
     CategoricalDtype,
@@ -132,7 +132,7 @@ def _plc_write_parquet(
             tbl_meta.column_metadata[level].set_name(
                 ioutils._index_level_name(idx_name, level, table._column_names)
             )
-        num_index_cols_meta = len(table.index.names)
+        num_index_cols_meta = table.index.nlevels
     else:
         plc_table = plc.Table(
             [col.to_pylibcudf(mode="read") for col in table._columns]
@@ -535,6 +535,140 @@ def write_to_dataset(
     return metadata
 
 
+_BIN_OPS = {
+    "==": plc_expr.ASTOperator.EQUAL,
+    "!=": plc_expr.ASTOperator.NOT_EQUAL,
+    "<": plc_expr.ASTOperator.LESS,
+    "<=": plc_expr.ASTOperator.LESS_EQUAL,
+    ">": plc_expr.ASTOperator.GREATER,
+    ">=": plc_expr.ASTOperator.GREATER_EQUAL,
+}
+
+
+def _raise_for_unsupported_scalar_types(val: Any):
+    if not (
+        isinstance(val, (int, float))
+        or isinstance(val, (datetime.date, datetime.timedelta))
+        or isinstance(val, str)
+    ):
+        return val
+    raise NotImplementedError(
+        "Only numeric, string, or timestamp/duration scalars are accepted"
+    )
+
+
+def make_literal(v: Any) -> plc_expr.Literal:
+    return plc_expr.Literal(
+        plc.Scalar.from_py(_raise_for_unsupported_scalar_types(v))
+    )
+
+
+def make_expr(col: str, op: str, val: Any) -> plc_expr.Expression:
+    col_ref = plc_expr.ColumnNameReference(col)
+
+    match op:
+        case op if op in _BIN_OPS:
+            return plc_expr.Operation(
+                _BIN_OPS[op],
+                col_ref,
+                make_literal(val),
+            )
+
+        case "in":
+            equal_ops = [
+                plc_expr.Operation(
+                    plc_expr.ASTOperator.EQUAL, col_ref, make_literal(v)
+                )
+                for v in val
+            ]
+            return reduce(
+                partial(plc_expr.Operation, plc_expr.ASTOperator.LOGICAL_OR),
+                equal_ops,
+            )
+
+        case "not in":
+            not_equal_ops = [
+                plc_expr.Operation(
+                    plc_expr.ASTOperator.NOT_EQUAL, col_ref, make_literal(v)
+                )
+                for v in val
+            ]
+            return reduce(
+                partial(plc_expr.Operation, plc_expr.ASTOperator.LOGICAL_AND),
+                not_equal_ops,
+            )
+
+        case "is":
+            if val is None:
+                return plc_expr.Operation(
+                    plc_expr.ASTOperator.IS_NULL, col_ref
+                )
+            raise NotImplementedError("Only `is None` supported")
+
+        case "is not":
+            if val is None:
+                return plc_expr.Operation(
+                    plc_expr.ASTOperator.NOT,
+                    plc_expr.Operation(plc_expr.ASTOperator.IS_NULL, col_ref),
+                )
+            raise NotImplementedError("Only `is not None` supported")
+
+        case _:
+            raise NotImplementedError(f"Unsupported op: {op}")
+
+
+def translate_filters_to_ast(
+    filters: list[list[tuple[str, str, Any]]],
+) -> plc_expr.Expression:
+    """
+    Convert a filter expression in Disjunctive Normal Form (DNF) to a pylibcudf AST.
+
+    Parameters
+    ----------
+    filters : list[list[tuple[str, str, Any]]]
+        A filter expression in DNF.
+        DNF is represented as a list of OR-ed clauses, where each clause is a list of
+        AND-ed predicates. Each predicate is a tuple of the form:
+            (column_name, operator, value)
+
+    Returns
+    -------
+    plc.expressions.Expression
+        A pylibcudf AST expression representing the filter.
+
+    Notes
+    -----
+    This function supports the following operators:
+      - Binary comparisons: ==, !=, <, <=, >, >=
+      - Membership tests: "in", "not in"
+      - Null checks: "is None", "is not None"
+
+    The translation is performed by recursively reducing:
+      - Each clause's predicates into a conjunction (AND)
+      - All clauses into a disjunction (OR) of those conjunctions
+    """
+
+    clauses = [
+        reduce(
+            partial(plc_expr.Operation, plc_expr.ASTOperator.LOGICAL_AND),
+            (make_expr(*pred) for pred in clause),
+        )
+        for clause in filters
+    ]
+
+    if not clauses:
+        raise ValueError("Empty filter expression")
+
+    return (
+        reduce(
+            partial(plc_expr.Operation, plc_expr.ASTOperator.LOGICAL_OR),
+            clauses,
+        )
+        if len(clauses) > 1
+        else clauses[0]
+    )
+
+
 def _parse_metadata(meta) -> tuple[bool, Any, None | np.dtype]:
     file_is_range_index = False
     file_index_cols = None
@@ -710,7 +844,9 @@ def _process_dataset(
             raise ValueError(
                 "Cannot specify a row_group selection for a directory path."
             )
-        row_groups_map = {path: rgs for path, rgs in zip(paths, row_groups)}
+        row_groups_map = {
+            path: rgs for path, rgs in zip(paths, row_groups, strict=True)
+        }
 
     # Apply filters and discover partition columns
     partition_keys = []
@@ -823,13 +959,26 @@ def read_parquet(
     # Normalize and validate filters
     filters = _normalize_filters(filters)
 
+    # Attempt to translate filters to a libcudf AST
+    ast_filter = None
+    if (
+        engine == "cudf"
+        and filters is not None
+        and categorical_partitions is None
+        and dataset_kwargs is None
+    ):
+        try:
+            ast_filter = translate_filters_to_ast(filters)
+        except NotImplementedError:
+            pass
+
     # Use pyarrow dataset to detect/process directory-partitioned
     # data and apply filters. Note that we can only support partitioned
     # data and filtering if the input is a single directory or list of
     # paths.
     partition_keys = []
     partition_categories = {}
-    if fs and paths:
+    if ast_filter is None and fs and paths:
         (
             paths,
             row_groups,
@@ -847,7 +996,7 @@ def read_parquet(
 
     # Prepare remote-IO options
     prefetch_options = kwargs.pop("prefetch_options", {})
-    if not ioutils._is_local_filesystem(fs):
+    if ast_filter is None and not ioutils._is_local_filesystem(fs):
         # The default prefetch method depends on the
         # `row_groups` argument. In most cases we will use
         # method="all" by default, because it is fastest
@@ -911,7 +1060,7 @@ def read_parquet(
     # will be dropped almost immediately after IO. However,
     # we do NEED these columns for accurate filtering.
     projected_columns = None
-    if columns and filters:
+    if ast_filter is None and columns and filters:
         projected_columns = columns
         columns = sorted(
             set(v[0] for v in itertools.chain.from_iterable(filters))
@@ -932,10 +1081,13 @@ def read_parquet(
         nrows=nrows,
         skip_rows=skip_rows,
         allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
+        filters=ast_filter,
         **kwargs,
     )
     # Apply filters row-wise (if any are defined), and return
-    df = _apply_post_filters(df, filters)
+    if ast_filter is None:
+        df = _apply_post_filters(df, filters)
+
     if projected_columns:
         # Elements of `projected_columns` may now be in the index.
         # We must filter these names from our projection
@@ -1092,7 +1244,9 @@ def _parquet_to_frame(
     # unique set of partition keys. Therefore, we start by
     # aggregating all paths with matching keys using a dict
     plan = {}
-    for i, (keys, path) in enumerate(zip(partition_keys, paths_or_buffers)):
+    for i, (keys, path) in enumerate(
+        zip(partition_keys, paths_or_buffers, strict=True)
+    ):
         rgs = row_groups[i] if row_groups else None
         tkeys = tuple(keys)
         if tkeys in plan:
@@ -1122,17 +1276,10 @@ def _parquet_to_frame(
                     partition_categories[name].index(value),
                     length=_len,
                 )
-                codes = as_unsigned_codes(
-                    len(partition_categories[name]), codes
-                )
-                col = CategoricalColumn(
-                    data=None,
-                    size=codes.size,
-                    dtype=CategoricalDtype(
+                col = codes._with_type_metadata(
+                    CategoricalDtype(
                         categories=partition_categories[name], ordered=False
-                    ),
-                    offset=codes.offset,
-                    children=(codes,),
+                    )
                 )
             else:
                 # Not building categorical columns, so
@@ -1166,6 +1313,7 @@ def _read_parquet(
     nrows: int | None = None,
     skip_rows: int | None = None,
     allow_mismatched_pq_schemas: bool = False,
+    filters: plc_expr.Expression | None = None,
     *args,
     **kwargs,
 ) -> DataFrame:
@@ -1173,7 +1321,7 @@ def _read_parquet(
     # cudf and pyarrow to read parquet data
     if engine == "cudf":
         if set(kwargs.keys()).difference(
-            set(("_chunk_read_limit", "_pass_read_limit"))
+            set(("_chunk_read_limit", "_pass_read_limit", "filters"))
         ):
             raise ValueError(
                 "cudf engine doesn't support the "
@@ -1189,10 +1337,11 @@ def _read_parquet(
         if skip_rows is None:
             skip_rows = 0
         if get_option("io.parquet.low_memory"):
-            # Note: If this function ever takes accepts filters
-            # allow_range_index needs to be False when a filter is passed
-            # (see read_parquet)
-            allow_range_index = columns is not None and len(columns) != 0
+            # If filters are used, we can't rely on a RangeIndex
+            # (row count may be reduced)
+            allow_range_index = (
+                filters is None and columns is not None and len(columns) != 0
+            )
 
             options = (
                 plc.io.parquet.ParquetReaderOptions.builder(
@@ -1210,6 +1359,8 @@ def _read_parquet(
                 options.set_skip_rows(skip_rows)
             if columns is not None:
                 options.set_columns(columns)
+            if filters is not None:
+                options.set_filter(filters)
 
             reader = plc.io.parquet.ChunkedParquetReader(
                 options,
@@ -1238,7 +1389,9 @@ def _read_parquet(
 
             data = {
                 name: ColumnBase.from_pylibcudf(col)
-                for name, col in zip(column_names, concatenated_columns)
+                for name, col in zip(
+                    column_names, concatenated_columns, strict=True
+                )
             }
             df = DataFrame._from_data(data)
             ioutils._add_df_col_struct_names(df, child_names)
@@ -1256,7 +1409,6 @@ def _read_parquet(
             return df
         else:
             allow_range_index = True
-            filters = kwargs.get("filters", None)
             if columns is not None and len(columns) == 0 or filters:
                 allow_range_index = False
 
@@ -1516,7 +1668,7 @@ def _get_partitioned(
         subdir = fs.sep.join(
             [
                 _hive_dirname(name, val)
-                for name, val in zip(partition_cols, keys)
+                for name, val in zip(partition_cols, keys, strict=True)
             ]
         )
         prefix = fs.sep.join([root_path, subdir])
@@ -1748,7 +1900,7 @@ class ParquetWriter:
             .build()
         )
         options.set_dictionary_policy(dict_policy)
-        self.writer = plc.io.parquet.ParquetChunkedWriter.from_options(options)
+        self.writer = plc.io.parquet.ChunkedParquetWriter.from_options(options)
         self.initialized = True
 
 
@@ -1952,7 +2104,9 @@ class ParquetDatasetWriter:
             subdir = fs.sep.join(
                 [
                     f"{name}={val}"
-                    for name, val in zip(self.partition_cols, keys)
+                    for name, val in zip(
+                        self.partition_cols, keys, strict=True
+                    )
                 ]
             )
             prefix = fs.sep.join([self.path, subdir])
@@ -2030,6 +2184,7 @@ class ParquetDatasetWriter:
             paths,
             partition_info,
             metadata_file_paths,
+            strict=True,
         ):
             if path in self.path_cw_map:  # path is a currently open file
                 cw_idx = self.path_cw_map[path]
@@ -2050,7 +2205,7 @@ class ParquetDatasetWriter:
 
         if new_cw_paths:
             # Create new cw for unhandled paths encountered in this write_table
-            new_paths, part_info, meta_paths = zip(*new_cw_paths)
+            new_paths, part_info, meta_paths = zip(*new_cw_paths, strict=True)
             self._chunked_writers.append(
                 (
                     ParquetWriter(new_paths, **self.common_args),
@@ -2168,7 +2323,7 @@ def _set_col_metadata(
 
     if isinstance(col.dtype, StructDtype):
         for i, (child_col, name) in enumerate(
-            zip(col.children, list(col.dtype.fields))
+            zip(col.children, list(col.dtype.fields), strict=True)
         ):
             col_meta.child(i).set_name(name)
             _set_col_metadata(
@@ -2291,8 +2446,10 @@ def _process_metadata(
                 range_index_meta = index_col[0]
 
             if row_groups is not None:
+                import pyarrow.parquet as pq
+
                 per_file_metadata = [
-                    pa.parquet.read_metadata(
+                    pq.read_metadata(
                         # Pyarrow cannot read directly from bytes
                         io.BytesIO(s) if isinstance(s, bytes) else s
                     )

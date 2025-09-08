@@ -21,6 +21,7 @@
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/utilities.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -259,7 +260,7 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
 
   // Now build the chars column
   rmm::device_uvector<char> chars(bytes, stream, mr);
-  cudf::experimental::prefetch::detail::prefetch("gather", chars, stream);
+  cudf::prefetch::detail::prefetch(chars, stream);
   size_and_exec_fn.d_chars = chars.data();
 
   // Execute the function fn again to fill in the chars data.

@@ -1,10 +1,8 @@
 c_compiler_version:
-  - 13  # [not os.environ.get("RAPIDS_CUDA_VERSION", "").startswith("11")]
-  - 11  # [os.environ.get("RAPIDS_CUDA_VERSION", "").startswith("11")]
+  - 14
 
 cxx_compiler_version:
-  - 13  # [not os.environ.get("RAPIDS_CUDA_VERSION", "").startswith("11")]
-  - 11  # [os.environ.get("RAPIDS_CUDA_VERSION", "").startswith("11")]
+  - 14
 
 c_stdlib:
   - sysroot
@@ -16,5 +14,4 @@ cmake_version:
   - ">=3.30.4"
 
 cuda_compiler:
-  - cuda-nvcc  # [not os.environ.get("RAPIDS_CUDA_VERSION", "").startswith("11")]
-  - nvcc  # [os.environ.get("RAPIDS_CUDA_VERSION", "").startswith("11")]
+  - cuda-nvcc

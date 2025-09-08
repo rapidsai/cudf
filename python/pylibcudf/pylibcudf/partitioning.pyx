@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 cimport pylibcudf.libcudf.types as libcudf_types
 from libcpp.memory cimport unique_ptr
@@ -7,9 +7,11 @@ from libcpp.utility cimport move
 from libcpp.vector cimport vector
 from pylibcudf.libcudf cimport partitioning as cpp_partitioning
 from pylibcudf.libcudf.table.table cimport table
+from rmm.pylibrmm.stream cimport Stream
 
 from .column cimport Column
 from .table cimport Table
+from .utils cimport _get_stream
 
 __all__ = [
     "hash_partition",
@@ -20,7 +22,8 @@ __all__ = [
 cpdef tuple[Table, list] hash_partition(
     Table input,
     list columns_to_hash,
-    int num_partitions
+    int num_partitions,
+    Stream stream=None
 ):
     """
     Partitions rows from the input table into multiple output tables.
@@ -35,6 +38,8 @@ cpdef tuple[Table, list] hash_partition(
         Indices of input columns to hash
     num_partitions : int
         The number of partitions to use
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -45,16 +50,26 @@ cpdef tuple[Table, list] hash_partition(
     cdef vector[libcudf_types.size_type] c_columns_to_hash = columns_to_hash
     cdef int c_num_partitions = num_partitions
 
+    stream = _get_stream(stream)
+
     with nogil:
         c_result = cpp_partitioning.hash_partition(
             input.view(),
             c_columns_to_hash,
-            c_num_partitions
+            c_num_partitions,
+            cpp_partitioning.hash_id.HASH_MURMUR3,
+            cpp_partitioning.DEFAULT_HASH_SEED,
+            stream.view()
         )
 
-    return Table.from_libcudf(move(c_result.first)), list(c_result.second)
+    return Table.from_libcudf(move(c_result.first), stream), list(c_result.second)
 
-cpdef tuple[Table, list] partition(Table t, Column partition_map, int num_partitions):
+cpdef tuple[Table, list] partition(
+    Table t,
+    Column partition_map,
+    int num_partitions,
+    Stream stream=None,
+):
     """
     Partitions rows of `t` according to the mapping specified by `partition_map`.
 
@@ -69,6 +84,8 @@ cpdef tuple[Table, list] partition(Table t, Column partition_map, int num_partit
         in `t` to it's partition.
     num_partitions : int
         The total number of partitions
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -78,20 +95,24 @@ cpdef tuple[Table, list] partition(Table t, Column partition_map, int num_partit
     cdef pair[unique_ptr[table], vector[libcudf_types.size_type]] c_result
     cdef int c_num_partitions = num_partitions
 
+    stream = _get_stream(stream)
+
     with nogil:
         c_result = cpp_partitioning.partition(
             t.view(),
             partition_map.view(),
-            c_num_partitions
+            c_num_partitions,
+            stream.view()
         )
 
-    return Table.from_libcudf(move(c_result.first)), list(c_result.second)
+    return Table.from_libcudf(move(c_result.first), stream), list(c_result.second)
 
 
 cpdef tuple[Table, list] round_robin_partition(
     Table input,
     int num_partitions,
-    int start_partition=0
+    int start_partition=0,
+    Stream stream=None
 ):
     """
     Round-robin partition.
@@ -106,6 +127,8 @@ cpdef tuple[Table, list] round_robin_partition(
         Number of partitions for the table
     start_partition : int, default 0
         Index of the 1st partition
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -117,9 +140,11 @@ cpdef tuple[Table, list] round_robin_partition(
     cdef int c_num_partitions = num_partitions
     cdef int c_start_partition = start_partition
 
+    stream = _get_stream(stream)
+
     with nogil:
         c_result = cpp_partitioning.round_robin_partition(
-            input.view(), c_num_partitions, c_start_partition
+            input.view(), c_num_partitions, c_start_partition, stream.view()
         )
 
-    return Table.from_libcudf(move(c_result.first)), list(c_result.second)
+    return Table.from_libcudf(move(c_result.first), stream), list(c_result.second)

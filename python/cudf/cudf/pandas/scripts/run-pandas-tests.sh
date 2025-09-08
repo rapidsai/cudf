@@ -28,6 +28,7 @@ set +e
 # of Pandas installed.
 PANDAS_VERSION=$(python -c "import pandas; print(pandas.__version__)")
 
+echo "Running Pandas tests for version ${PANDAS_VERSION}"
 mkdir -p pandas-testing
 cd pandas-testing
 
@@ -50,10 +51,6 @@ if [ ! -d "pandas-tests" ]; then
     cat > pandas-tests/pyproject.toml << \EOF
 [tool.pytest.ini_options]
 xfail_strict = true
-filterwarnings = [
-  # Will be fixed in numba 0.56: https://github.com/numba/numba/issues/7758
-  "ignore:`np.MachAr` is deprecated:DeprecationWarning:numba",
-]
 markers = [
   "single_cpu: tests that should run on a single cpu only",
   "slow: mark a test as slow",
@@ -68,16 +65,16 @@ EOF
     # Substitute `pandas.tests` with a relative import.
     # This will depend on the location of the test module relative to
     # the pandas-tests directory.
-    for hit in $(find . -iname '*.py' | xargs grep "pandas.tests" | cut -d ":" -f 1 | sort | uniq); do
+    for hit in $(find . -iname '*.py' -print0 | xargs -0 grep "pandas.tests" | cut -d ":" -f 1 | sort | uniq); do
         # Get the relative path to the test module
-        test_module=$(echo $hit | cut -d "/" -f 2-)
+        test_module=$(echo "$hit" | cut -d "/" -f 2-)
         # Get the number of directories to go up
-        num_dirs=$(echo $test_module | grep -o "/" | wc -l)
-        num_dots=$(($num_dirs - 2))
+        num_dirs=$(echo "$test_module" | grep -o "/" | wc -l)
+        num_dots=$((num_dirs - 2))
         # Construct the relative import
         relative_import=$(printf "%0.s." $(seq 1 $num_dots))
         # Replace the import
-        sed -i "s/pandas.tests/${relative_import}/g" $hit
+        sed -i "s/pandas.tests/${relative_import}/g" "$hit"
     done
 fi
 
@@ -135,6 +132,10 @@ and not test_eof_states \
 and not test_array_tz \
 and not test_resample_empty_dataframe"
 
+# these weakref tests are flaky, since they rely on the timing of the cyclic GC
+# We skip them always
+TEST_THAT_USE_WEAKREFS="not test_no_reference_cycle"
+TEST_THAT_USE_STRING_DTYPE_GROUPBY="not test_string_dtype_all_na"
 
 # TODO: Add reason to skip these tests
 TEST_THAT_NEED_REASON_TO_SKIP="not test_groupby_raises_category_on_category \
@@ -145,17 +146,18 @@ and not test_frame_op_subclass_nonclass_constructor \
 and not test_round_trip_current \
 and not test_pickle_frame_v124_unpickle_130"
 
-PYTEST_IGNORES="--ignore=tests/io/parser/common/test_read_errors.py \
---ignore=tests/io/test_clipboard.py" # crashes pytest workers (possibly due to fixture patching clipboard functionality)
+PYTEST_IGNORES=("--ignore=tests/io/parser/common/test_read_errors.py"
+                "--ignore=tests/io/test_clipboard.py" # crashes pytest workers (possibly due to fixture patching clipboard functionality)
+)
 
 
-PANDAS_CI="1" timeout 90m python -m pytest -p cudf.pandas \
+PANDAS_CI="1" python -m pytest -p cudf.pandas \
     --import-mode=importlib \
-    -k "$TEST_THAT_NEED_MOTO_SERVER and $TEST_THAT_CRASH_PYTEST_WORKERS and $TEST_THAT_NEED_REASON_TO_SKIP" \
-    ${PYTEST_IGNORES} \
+    -k "$TEST_THAT_NEED_MOTO_SERVER and $TEST_THAT_CRASH_PYTEST_WORKERS and $TEST_THAT_NEED_REASON_TO_SKIP and $TEST_THAT_USE_STRING_DTYPE_GROUPBY and $TEST_THAT_USE_WEAKREFS" \
+    "${PYTEST_IGNORES[@]}" \
     "$@"
 
-mv *.json ..
+mv ./*.json ..
 cd ..
 rm -rf pandas-testing/pandas-tests/
 rapids-logger "Test script exiting with value: $EXITCODE"

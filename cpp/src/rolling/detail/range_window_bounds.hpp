@@ -139,7 +139,9 @@ range_rep_type<OrderByType> range_comparable_value(range_window_bounds const& ra
                                                    rmm::cuda_stream_view stream)
 {
   auto const& range_scalar = range_bounds.range_scalar();
-  using range_type         = cudf::detail::range_type<OrderByType>;
+  CUDF_EXPECTS(
+    range_scalar.is_valid(stream), "Range bounds scalar must be valid.", std::invalid_argument);
+  using range_type = cudf::detail::range_type<OrderByType>;
 
   CUDF_EXPECTS(range_scalar.type().id() == cudf::type_to_id<range_type>(),
                "Range bounds scalar must match the type of the orderby column.");

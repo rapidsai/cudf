@@ -24,6 +24,7 @@
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 #include <cudf/lists/detail/lists_column_factories.hpp>
 #include <cudf/strings/detail/utilities.hpp>
@@ -790,8 +791,9 @@ rmm::device_uvector<cudf::size_type> compute_some_tokens(
 
   // find start/end for each row up to max_words_per_row words;
   // store word positions in start_words and sizes in word_sizes
-  cudf::detail::grid_1d grid_find{input.size() * cudf::detail::warp_size, block_size};
-  find_words_kernel<cudf::detail::warp_size>
+  constexpr cudf::thread_index_type warp_size = cudf::detail::warp_size;
+  cudf::detail::grid_1d grid_find{input.size() * warp_size, block_size};
+  find_words_kernel<warp_size>
     <<<grid_find.num_blocks, grid_find.num_threads_per_block, 0, stream.value()>>>(
       *d_strings, d_input_chars, max_word_offsets.data(), start_words.data(), word_sizes.data());
 

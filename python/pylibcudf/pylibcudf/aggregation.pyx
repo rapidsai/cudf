@@ -7,6 +7,7 @@ from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from pylibcudf.libcudf.aggregation cimport (
     aggregation,
+    bitwise_op,
     correlation_type,
     ewm_history,
     groupby_aggregation,
@@ -16,6 +17,7 @@ from pylibcudf.libcudf.aggregation cimport (
     make_any_aggregation,
     make_argmax_aggregation,
     make_argmin_aggregation,
+    make_bitwise_aggregation,
     make_collect_list_aggregation,
     make_collect_set_aggregation,
     make_correlation_aggregation,
@@ -23,6 +25,8 @@ from pylibcudf.libcudf.aggregation cimport (
     make_covariance_aggregation,
     make_ewma_aggregation,
     make_histogram_aggregation,
+    make_lag_aggregation,
+    make_lead_aggregation,
     make_m2_aggregation,
     make_max_aggregation,
     make_mean_aggregation,
@@ -38,6 +42,7 @@ from pylibcudf.libcudf.aggregation cimport (
     make_product_aggregation,
     make_quantile_aggregation,
     make_rank_aggregation,
+    make_row_number_aggregation,
     make_std_aggregation,
     make_sum_aggregation,
     make_sum_of_squares_aggregation,
@@ -62,6 +67,8 @@ from pylibcudf.libcudf.types cimport (
 
 from pylibcudf.libcudf.aggregation import Kind  # no-cython-lint
 from pylibcudf.libcudf.aggregation import \
+    bitwise_op as BitwiseOp  # no-cython-lint
+from pylibcudf.libcudf.aggregation import \
     correlation_type as CorrelationType  # no-cython-lint
 from pylibcudf.libcudf.aggregation import \
     ewm_history as EWMHistory  # no-cython-lint
@@ -76,6 +83,7 @@ from .types cimport DataType
 
 __all__ = [
     "Aggregation",
+    "BitwiseOp",
     "CorrelationType",
     "EWMHistory",
     "Kind",
@@ -86,6 +94,7 @@ __all__ = [
     "any",
     "argmax",
     "argmin",
+    "bitwise",
     "collect_list",
     "collect_set",
     "correlation",
@@ -93,6 +102,9 @@ __all__ = [
     "covariance",
     "ewma",
     "histogram",
+    "is_valid_aggregation",
+    "lag",
+    "lead",
     "m2",
     "max",
     "mean",
@@ -108,6 +120,7 @@ __all__ = [
     "product",
     "quantile",
     "rank",
+    "row_number",
     "std",
     "sum",
     "sum_of_squares",
@@ -148,11 +161,10 @@ cdef class Aggregation:
         return dereference(self.c_obj).kind
 
     cdef void _unsupported_agg_error(self, str alg):
-        # Te functions calling this all use a dynamic cast between aggregation types,
+        # The functions calling this all use a dynamic cast between aggregation types,
         # and the cast returning a null pointer is how we capture whether or not
         # libcudf supports a given aggregation for a particular algorithm.
-        agg_repr = str(self.kind()).split(".")[1].title()
-        raise TypeError(f"{agg_repr} aggregations are not supported by {alg}")
+        raise NotImplementedError(f"{self} aggregations are not supported by {alg}")
 
     cdef unique_ptr[groupby_aggregation] clone_underlying_as_groupby(self) except *:
         """Make a copy of the aggregation that can be used in a groupby."""
@@ -212,6 +224,9 @@ cdef class Aggregation:
         cdef Aggregation out = Aggregation.__new__(Aggregation)
         out.c_obj = move(agg)
         return out
+
+    def __repr__(self):
+        return f"<Aggregation({self.kind()!r})>"
 
 
 cpdef Aggregation sum():
@@ -816,6 +831,77 @@ cpdef Aggregation tdigest(int max_centroids):
         move(make_tdigest_aggregation[aggregation](max_centroids))
     )
 
+cpdef Aggregation bitwise(bitwise_op op):
+    """Create a bitwise aggregation.
+
+    For details, see :cpp:func:`make_bitwise_aggregation`.
+
+    Parameters
+    ----------
+    op : BitwiseOp
+        The bitwise operation to perform on the input column
+
+    Returns
+    -------
+    Aggregation
+        The bitwise aggregation.
+    """
+    return Aggregation.from_libcudf(
+        move(make_bitwise_aggregation[aggregation](op))
+    )
+
+cpdef Aggregation lag(size_type offset):
+    """Create a lag aggregation.
+
+    For details, see :cpp:func:`make_lag_aggregation`.
+
+    Parameters
+    ----------
+    offset : int
+        The number of rows to lag the input
+
+    Returns
+    -------
+    Aggregation
+        The lag aggregation.
+    """
+    return Aggregation.from_libcudf(
+        move(make_lag_aggregation[aggregation](offset))
+    )
+
+cpdef Aggregation lead(size_type offset):
+    """Create a lead aggregation.
+
+    For details, see :cpp:func:`make_lead_aggregation`.
+
+    Parameters
+    ----------
+    offset : int
+        The number of rows to lead the input
+
+    Returns
+    -------
+    Aggregation
+        The lead aggregation.
+    """
+    return Aggregation.from_libcudf(
+        move(make_lead_aggregation[aggregation](offset))
+    )
+
+cpdef Aggregation row_number():
+    """Create a row_number aggregation.
+
+    For details, see :cpp:func:`make_row_number_aggregation`.
+
+    Returns
+    -------
+    Aggregation
+        The row_number aggregation.
+    """
+    return Aggregation.from_libcudf(
+        move(make_row_number_aggregation[aggregation]())
+    )
+
 cpdef bool is_valid_aggregation(DataType source, Aggregation agg):
     """
     Return if an aggregation is supported for a given datatype.
@@ -832,3 +918,11 @@ cpdef bool is_valid_aggregation(DataType source, Aggregation agg):
     True if the aggregation is supported.
     """
     return cpp_is_valid_aggregation(source.c_obj, agg.kind())
+
+Kind.__str__ = Kind.__repr__
+BitwiseOp.__str__ = BitwiseOp.__repr__
+CorrelationType.__str__ = CorrelationType.__repr__
+EWMHistory.__str__ = EWMHistory.__repr__
+RankMethod.__str__ = RankMethod.__repr__
+RankPercentage.__str__ = RankPercentage.__repr__
+UdfType.__str__ = UdfType.__repr__

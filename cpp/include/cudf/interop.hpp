@@ -113,11 +113,12 @@ DLManagedTensor* to_dlpack(
 /**
  * @brief Detailed metadata information for arrow array.
  *
- * As of now this contains only name in the hierarchy of children of cudf column,
- * but in future this can be updated as per requirement.
+ * This contains attributes of the column or type not natively supported by cudf.
  */
 struct column_metadata {
   std::string name;                            ///< Name of the column
+  std::string timezone;                        ///< Timezone of the column
+  std::optional<int32_t> precision;            ///< Resulting decimal precision of the column
   std::vector<column_metadata> children_meta;  ///< Metadata of children of the column
 
   /**

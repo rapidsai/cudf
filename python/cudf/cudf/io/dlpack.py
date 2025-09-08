@@ -6,10 +6,7 @@ import pylibcudf as plc
 from cudf.core.column import ColumnBase
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.dataframe import DataFrame
-from cudf.core.index import Index
 from cudf.core.series import Series
-from cudf.utils import ioutils
-from cudf.utils.dtypes import find_common_type, is_dtype_obj_numeric
 
 
 def from_dlpack(pycapsule_obj) -> Series | DataFrame:
@@ -53,53 +50,3 @@ def from_dlpack(pycapsule_obj) -> Series | DataFrame:
         return Series._from_data(data)
     else:
         return DataFrame._from_data(data)
-
-
-@ioutils.doc_to_dlpack()
-def to_dlpack(cudf_obj: Series | DataFrame | Index):
-    """Converts a cuDF object to a DLPack tensor.
-
-    DLPack is an open-source memory tensor structure:
-    `dmlc/dlpack <https://github.com/dmlc/dlpack>`_.
-
-    This function takes a cuDF object as input, and returns a PyCapsule object
-    which contains a pointer to DLPack tensor. This function deep copies
-    the data in the cuDF object into the DLPack tensor.
-
-    Parameters
-    ----------
-    cudf_obj : cuDF Object
-        Input cuDF object.
-
-    Returns
-    -------
-    A  DLPack tensor pointer which is encapsulated in a PyCapsule object.
-
-    Notes
-    -----
-    cuDF to_dlpack() produces column-major (Fortran order) output. If the
-    output tensor needs to be row major, transpose the output of this function.
-    """
-    if isinstance(cudf_obj, (DataFrame, Series, Index)):
-        gdf = cudf_obj
-    elif isinstance(cudf_obj, ColumnBase):
-        gdf = Series._from_column(cudf_obj)
-    else:
-        raise TypeError(
-            f"Input of type {type(cudf_obj)} cannot be converted "
-            "to DLPack tensor"
-        )
-
-    if any(
-        not is_dtype_obj_numeric(dtype, include_decimal=False)
-        for _, dtype in gdf._dtypes  # type: ignore[union-attr]
-    ):
-        raise TypeError("non-numeric data not yet supported")
-
-    dtype = find_common_type(
-        [dtype for _, dtype in gdf._dtypes]  # type: ignore[union-attr]
-    )
-    gdf = gdf.astype(dtype)
-    return plc.interop.to_dlpack(
-        plc.Table([col.to_pylibcudf(mode="read") for col in gdf._columns])
-    )

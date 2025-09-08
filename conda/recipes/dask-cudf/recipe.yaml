@@ -28,13 +28,15 @@ requirements:
   host:
     - python =${{ py_version }}
     - pip
-    - rapids-build-backend >=0.3.0,<0.4.0.dev0
+    - rapids-build-backend >=0.4.0,<0.5.0.dev0
     - setuptools
     - cuda-version =${{ cuda_version }}
   run:
     - python
     - cudf =${{ version }}
-    - pynvml >=12.0.0,<13.0.0a0
+    # 'nvidia-ml-py' provides the 'pynvml' module, since v12.560.30
+    # ref: https://github.com/conda-forge/nvidia-ml-py-feedstock/pull/24
+    - nvidia-ml-py>=12.560.30
     - rapids-dask-dependency =${{ minor_version }}
     - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
 

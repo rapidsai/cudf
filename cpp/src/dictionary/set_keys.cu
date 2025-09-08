@@ -61,11 +61,11 @@ namespace {
  */
 struct dispatch_compute_indices {
   template <typename Element>
-  std::enable_if_t<cudf::is_relationally_comparable<Element, Element>(), std::unique_ptr<column>>
-  operator()(dictionary_column_view const& input,
-             column_view const& new_keys,
-             rmm::cuda_stream_view stream,
-             rmm::device_async_resource_ref mr)
+  std::unique_ptr<column> operator()(dictionary_column_view const& input,
+                                     column_view const& new_keys,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
+    requires(cudf::is_relationally_comparable<Element, Element>())
   {
     auto dictionary_view = column_device_view::create(input.parent(), stream);
     auto dictionary_itr  = make_dictionary_iterator<Element>(*dictionary_view);
@@ -110,8 +110,8 @@ struct dispatch_compute_indices {
   }
 
   template <typename Element, typename... Args>
-  std::enable_if_t<!cudf::is_relationally_comparable<Element, Element>(), std::unique_ptr<column>>
-  operator()(Args&&...)
+  std::unique_ptr<column> operator()(Args&&...)
+    requires(!cudf::is_relationally_comparable<Element, Element>())
   {
     CUDF_FAIL("dictionary set_keys not supported for this column type");
   }

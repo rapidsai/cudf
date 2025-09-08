@@ -16,7 +16,12 @@
 
 #pragma once
 
-#include "text/subword/detail/cp_data.h"
+#include "text/detail/cp_data.h"
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
+
+#include <cstdint>
 
 namespace nvtext {
 namespace detail {
@@ -95,6 +100,20 @@ __device__ constexpr bool is_multi_char_transform(uint32_t metadata)
  * a utf8 character. That is, not binary `10xxxxxx`
  */
 __device__ constexpr bool is_head_byte(unsigned char utf8_byte) { return (utf8_byte >> 6) != 2; }
+
+/**
+ * @brief Retrieve the code point metadata table.
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+rmm::device_uvector<codepoint_metadata_type> get_codepoint_metadata(rmm::cuda_stream_view stream);
+
+/**
+ * @brief Retrieve the auxiliary code point metadata table.
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+rmm::device_uvector<aux_codepoint_data_type> get_aux_codepoint_data(rmm::cuda_stream_view stream);
 
 }  // namespace detail
 }  // namespace nvtext

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,14 @@
 
 #pragma once
 
-#include "common_sort_impl.cuh"
+#include "sort.hpp"
 #include "sort_column_impl.cuh"
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+
+#include <thrust/sequence.h>
+#include <thrust/sort.h>
 
 namespace cudf {
 namespace detail {
@@ -87,8 +90,8 @@ std::unique_ptr<column> sorted_order(table_view input,
     }
   };
 
-  auto const comp = cudf::experimental::row::lexicographic::self_comparator(
-    input, column_order, null_precedence, stream);
+  auto const comp =
+    cudf::detail::row::lexicographic::self_comparator(input, column_order, null_precedence, stream);
   if (cudf::detail::has_nested_columns(input)) {
     auto const comparator = comp.less<true>(nullate::DYNAMIC{has_nested_nulls(input)});
     do_sort(comparator);

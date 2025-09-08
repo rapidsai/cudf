@@ -6,12 +6,19 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from cudf_polars.dsl.ir import HConcat, Select
+import polars as pl
+
+from cudf_polars.dsl import expr
+from cudf_polars.dsl.expr import Col, Len
+from cudf_polars.dsl.ir import Empty, HConcat, Scan, Select, Union
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.dispatch import lower_ir_node
 from cudf_polars.experimental.expressions import decompose_expr_graph
-from cudf_polars.experimental.utils import _lower_ir_fallback
+from cudf_polars.experimental.utils import (
+    _contains_unsupported_fill_strategy,
+    _lower_ir_fallback,
+)
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -103,9 +110,56 @@ def _(
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     child, partition_info = rec(ir.children[0])
     pi = partition_info[child]
+    if pi.count > 1 and _contains_unsupported_fill_strategy(
+        [e.value for e in ir.exprs]
+    ):
+        return _lower_ir_fallback(
+            ir.reconstruct([child]),
+            rec,
+            msg=(
+                "fill_null with strategy other than 'zero' or 'one' is not supported "
+                "for multiple partitions; falling back to in-memory evaluation."
+            ),
+        )
+    if (
+        pi.count == 1
+        and Select._is_len_expr(ir.exprs)
+        and isinstance(child, Union)
+        and len(child.children) == 1
+        and isinstance(child.children[0], Scan)
+        and child.children[0].predicate is None
+    ):
+        # Special Case: Fast count.
+        scan = child.children[0]
+        count = scan.fast_count()
+        dtype = ir.exprs[0].value.dtype
+
+        lit_expr = expr.LiteralColumn(
+            dtype, pl.Series(values=[count], dtype=dtype.polars)
+        )
+        named_expr = expr.NamedExpr(ir.exprs[0].name or "len", lit_expr)
+
+        new_node = Select(
+            {named_expr.name: named_expr.value.dtype},
+            [named_expr],
+            should_broadcast=True,
+            df=child,
+        )
+        partition_info[new_node] = PartitionInfo(count=1)
+        return new_node, partition_info
+
+    if not any(
+        isinstance(expr, (Col, Len)) for expr in traversal([e.value for e in ir.exprs])
+    ):
+        # Special Case: Selection does not depend on any columns.
+        new_node = ir.reconstruct([input_ir := Empty({})])
+        partition_info[input_ir] = partition_info[new_node] = PartitionInfo(count=1)
+        return new_node, partition_info
+
     if pi.count > 1 and not all(
         expr.is_pointwise for expr in traversal([e.value for e in ir.exprs])
     ):
+        # Special Case: Multiple partitions with 1+ non-pointwise expressions.
         try:
             # Try decomposing the underlying expressions
             return decompose_select(

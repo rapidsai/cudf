@@ -53,13 +53,15 @@ struct tabulator {
   size_type const* const offsets;
 
   template <typename U>
-  static std::enable_if_t<!cudf::is_duration<U>(), T> __device__ multiply(U x, size_type times)
+  static T __device__ multiply(U x, size_type times)
+    requires(!cudf::is_duration<U>())
   {
     return x * static_cast<T>(times);
   }
 
   template <typename U>
-  static std::enable_if_t<cudf::is_duration<U>(), T> __device__ multiply(U x, size_type times)
+  static T __device__ multiply(U x, size_type times)
+    requires(cudf::is_duration<U>())
   {
     return T{x.count() * times};
   }

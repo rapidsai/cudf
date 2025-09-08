@@ -215,7 +215,8 @@ jlong create_chunked_orc_reader(JNIEnv* env,
                                 jlong buffer_length,
                                 jboolean using_numpy_Types,
                                 jint unit,
-                                jobjectArray dec128_col_names)
+                                jobjectArray dec128_col_names,
+                                jboolean ignoreTimezoneInStripeFooter)
 {
   JNI_NULL_CHECK(env, buffer, "buffer is null", 0);
   if (buffer_length <= 0) {
@@ -238,6 +239,7 @@ jlong create_chunked_orc_reader(JNIEnv* env,
                              .use_np_dtypes(static_cast<bool>(using_numpy_Types))
                              .timestamp_type(cudf::data_type(static_cast<cudf::type_id>(unit)))
                              .decimal128_columns(n_dec128_col_names.as_cpp_vector())
+                             .ignore_timezone_in_stripe_footer(ignoreTimezoneInStripeFooter)
                              .build();
 
     if (output_granularity) {
@@ -268,7 +270,8 @@ Java_ai_rapids_cudf_ORCChunkedReader_createReader(JNIEnv* env,
                                                   jlong buffer_length,
                                                   jboolean using_numpy_Types,
                                                   jint unit,
-                                                  jobjectArray dec128_col_names)
+                                                  jobjectArray dec128_col_names,
+                                                  jboolean ignoreTimezoneInStripeFooter)
 {
   return create_chunked_orc_reader(env,
                                    chunk_read_limit,
@@ -279,7 +282,8 @@ Java_ai_rapids_cudf_ORCChunkedReader_createReader(JNIEnv* env,
                                    buffer_length,
                                    using_numpy_Types,
                                    unit,
-                                   dec128_col_names);
+                                   dec128_col_names,
+                                   ignoreTimezoneInStripeFooter);
 }
 
 // This function should take all the parameters that `Table.readORC` takes,
@@ -295,7 +299,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ORCChunkedReader_createReaderWithOut
   jlong buffer_length,
   jboolean using_numpy_Types,
   jint unit,
-  jobjectArray dec128_col_names)
+  jobjectArray dec128_col_names,
+  jboolean ignoreTimezoneInStripeFooter)
 {
   return create_chunked_orc_reader(env,
                                    chunk_read_limit,
@@ -306,7 +311,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ORCChunkedReader_createReaderWithOut
                                    buffer_length,
                                    using_numpy_Types,
                                    unit,
-                                   dec128_col_names);
+                                   dec128_col_names,
+                                   ignoreTimezoneInStripeFooter);
 }
 
 JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_ORCChunkedReader_hasNext(JNIEnv* env,

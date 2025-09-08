@@ -14,16 +14,15 @@
  * limitations under the License.
  */
 
-#include "cudf/io/types.hpp"
-#include "io/comp/comp.hpp"
+#include "io/comp/compression.hpp"
+#include "io/comp/decompression.hpp"
 #include "io/comp/gpuinflate.hpp"
-#include "io/comp/io_uncomp.hpp"
 #include "io/utilities/hostdevice_vector.hpp"
 
 #include <cudf_test/base_fixture.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/testing_main.hpp>
 
+#include <cudf/io/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/device_buffer.hpp>
@@ -34,8 +33,8 @@
 #include <vector>
 
 using cudf::device_span;
-using cudf::io::detail::compression_result;
-using cudf::io::detail::compression_status;
+using cudf::io::detail::codec_exec_result;
+using cudf::io::detail::codec_status;
 namespace nvcomp = cudf::io::detail::nvcomp;
 
 enum class hw { CPU, GPU };
@@ -93,7 +92,7 @@ struct DecompressTest
     inf_out[0] = dst;
     inf_out.host_to_device_async(stream);
 
-    cudf::detail::hostdevice_vector<compression_result> inf_stat(1, stream);
+    cudf::detail::hostdevice_vector<codec_exec_result> inf_stat(1, stream);
     inf_stat[0] = {};
     inf_stat.host_to_device_async(stream);
 
@@ -101,8 +100,7 @@ struct DecompressTest
     CUDF_CUDA_TRY(cudaMemcpyAsync(
       decompressed.data(), dst.data(), dst.size(), cudaMemcpyDefault, stream.value()));
     inf_stat.device_to_host(stream);
-    CUDF_EXPECTS(inf_stat[0].status == compression_status::SUCCESS,
-                 "Failure in device decompression");
+    CUDF_EXPECTS(inf_stat[0].status == codec_status::SUCCESS, "Failure in device decompression");
 
     return decompressed;
   }
@@ -162,7 +160,7 @@ struct HostDecompressTest : public cudf::test::BaseFixture,
 struct GzipDecompressTest : public DecompressTest<GzipDecompressTest> {
   void device_dispatch(device_span<device_span<uint8_t const>> d_inf_in,
                        device_span<device_span<uint8_t>> d_inf_out,
-                       device_span<compression_result> d_inf_stat)
+                       device_span<codec_exec_result> d_inf_stat)
   {
     cudf::io::detail::gpuinflate(d_inf_in,
                                  d_inf_out,
@@ -209,7 +207,7 @@ struct ZstdDecompressTest : public DecompressTest<ZstdDecompressTest> {
 struct SnappyDecompressTest : public DecompressTest<SnappyDecompressTest> {
   void device_dispatch(device_span<device_span<uint8_t const>> d_inf_in,
                        device_span<device_span<uint8_t>> d_inf_out,
-                       device_span<compression_result> d_inf_stat)
+                       device_span<codec_exec_result> d_inf_stat)
   {
     cudf::io::detail::gpu_unsnap(d_inf_in, d_inf_out, d_inf_stat, cudf::get_default_stream());
   }
@@ -234,7 +232,7 @@ struct SnappyDecompressTest : public DecompressTest<SnappyDecompressTest> {
 struct BrotliDecompressTest : public DecompressTest<BrotliDecompressTest> {
   void device_dispatch(device_span<device_span<uint8_t const>> d_inf_in,
                        device_span<device_span<uint8_t>> d_inf_out,
-                       device_span<compression_result> d_inf_stat)
+                       device_span<codec_exec_result> d_inf_stat)
   {
     rmm::device_buffer d_scratch{cudf::io::detail::get_gpu_debrotli_scratch_size(1),
                                  cudf::get_default_stream()};
@@ -342,8 +340,9 @@ TEST_F(NvcompConfigTest, Compression)
   auto const& comp_disabled = nvcomp::is_compression_disabled;
 
   EXPECT_FALSE(comp_disabled(compression_type::DEFLATE, {true, true}));
-  // all integrations enabled required
-  EXPECT_TRUE(comp_disabled(compression_type::DEFLATE, {false, true}));
+  EXPECT_FALSE(comp_disabled(compression_type::DEFLATE, {false, true}));
+  // stable integrations enabled required
+  EXPECT_TRUE(comp_disabled(compression_type::DEFLATE, {false, false}));
 
   EXPECT_FALSE(comp_disabled(compression_type::ZSTD, {true, true}));
   EXPECT_FALSE(comp_disabled(compression_type::ZSTD, {false, true}));
@@ -362,8 +361,9 @@ TEST_F(NvcompConfigTest, Decompression)
   auto const& decomp_disabled = nvcomp::is_decompression_disabled;
 
   EXPECT_FALSE(decomp_disabled(compression_type::DEFLATE, {true, true}));
-  // all integrations enabled required
-  EXPECT_TRUE(decomp_disabled(compression_type::DEFLATE, {false, true}));
+  EXPECT_FALSE(decomp_disabled(compression_type::DEFLATE, {false, true}));
+  // stable integrations enabled required
+  EXPECT_TRUE(decomp_disabled(compression_type::DEFLATE, {false, false}));
 
   EXPECT_FALSE(decomp_disabled(compression_type::ZSTD, {true, true}));
   EXPECT_FALSE(decomp_disabled(compression_type::ZSTD, {false, true}));
@@ -407,13 +407,13 @@ void roundtrip_test(cudf::io::compression_type compression)
       hd_dsts[0]   = d_comp;
       hd_dsts.host_to_device_async(stream);
 
-      auto hd_stats = cudf::detail::hostdevice_vector<compression_result>(1, stream);
-      hd_stats[0]   = compression_result{0, compression_status::FAILURE};
+      auto hd_stats = cudf::detail::hostdevice_vector<codec_exec_result>(1, stream);
+      hd_stats[0]   = codec_exec_result{0, codec_status::FAILURE};
       hd_stats.host_to_device_async(stream);
 
       cudf::io::detail::compress(compression, hd_srcs, hd_dsts, hd_stats, stream);
       hd_stats.device_to_host(stream);
-      ASSERT_EQ(hd_stats[0].status, compression_status::SUCCESS);
+      ASSERT_EQ(hd_stats[0].status, codec_status::SUCCESS);
       d_comp.resize(hd_stats[0].bytes_written, stream);
     }
 
@@ -427,14 +427,14 @@ void roundtrip_test(cudf::io::compression_type compression)
       hd_dsts[0]   = d_got;
       hd_dsts.host_to_device_async(stream);
 
-      auto hd_stats = cudf::detail::hostdevice_vector<compression_result>(1, stream);
-      hd_stats[0]   = compression_result{0, compression_status::FAILURE};
+      auto hd_stats = cudf::detail::hostdevice_vector<codec_exec_result>(1, stream);
+      hd_stats[0]   = codec_exec_result{0, codec_status::FAILURE};
       hd_stats.host_to_device_async(stream);
 
       cudf::io::detail::decompress(
         compression, hd_srcs, hd_dsts, hd_stats, expected.size(), expected.size(), stream);
       hd_stats.device_to_host(stream);
-      ASSERT_EQ(hd_stats[0].status, compression_status::SUCCESS);
+      ASSERT_EQ(hd_stats[0].status, codec_status::SUCCESS);
     }
 
     auto const got = cudf::detail::make_std_vector(d_got, stream);

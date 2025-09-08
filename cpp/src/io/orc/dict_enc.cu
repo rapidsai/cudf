@@ -17,10 +17,10 @@
 #include "orc_gpu.hpp"
 
 #include <cudf/detail/offsets_iterator.cuh>
+#include <cudf/detail/row_operator/row_operators.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 #include <cudf/io/orc_types.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -82,7 +82,7 @@ struct equality_functor {
   __device__ bool operator()(size_type lhs_idx, size_type rhs_idx) const
   {
     // We don't call this for nulls so this is fine
-    auto const equal = cudf::experimental::row::equality::nan_equal_physical_equality_comparator{};
+    auto const equal = cudf::detail::row::equality::nan_equal_physical_equality_comparator{};
     return equal(col.element<string_view>(lhs_idx), col.element<string_view>(rhs_idx));
   }
 };
@@ -180,15 +180,12 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 
   for (size_type i = 0; i < dict.map_slots.size(); i += block_size) {
     if (t + i < dict.map_slots.size()) {
-      auto bucket = dict.map_slots.begin() + t + i;
-      // Collect all slots from each bucket.
-      for (auto& slot : *bucket) {
-        auto const key = slot.first;
-        if (key != KEY_SENTINEL) {
-          auto loc       = counter.fetch_add(1, memory_order_relaxed);
-          dict.data[loc] = key;
-          slot.second    = loc;
-        }
+      auto* slot     = dict.map_slots.begin() + t + i;
+      auto const key = slot->first;
+      if (key != KEY_SENTINEL) {
+        auto loc       = counter.fetch_add(1, memory_order_relaxed);
+        dict.data[loc] = key;
+        slot->second   = loc;
       }
     }
   }

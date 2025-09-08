@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
 from libcpp.memory cimport unique_ptr
@@ -13,10 +13,12 @@ from pylibcudf.libcudf.filling cimport (
 )
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.types cimport size_type
+from rmm.pylibrmm.stream cimport Stream
 
 from .column cimport Column
 from .scalar cimport Scalar
 from .table cimport Table
+from .utils cimport _get_stream
 
 
 __all__ = [
@@ -32,6 +34,7 @@ cpdef Column fill(
     size_type begin,
     size_type end,
     Scalar value,
+    Stream stream=None,
 ):
 
     """Fill destination column from begin to end with value.
@@ -56,20 +59,25 @@ cpdef Column fill(
     """
 
     cdef unique_ptr[column] result
+
+    stream = _get_stream(stream)
+
     with nogil:
         result = cpp_fill(
             destination.view(),
             begin,
             end,
-            dereference((<Scalar> value).c_obj)
+            dereference((<Scalar> value).c_obj),
+            stream.view()
         )
-    return Column.from_libcudf(move(result))
+    return Column.from_libcudf(move(result), stream)
 
 cpdef void fill_in_place(
     Column destination,
     size_type begin,
     size_type end,
     Scalar value,
+    Stream stream=None,
 ):
 
     """Fill destination column in place from begin to end with value.
@@ -92,15 +100,18 @@ cpdef void fill_in_place(
     None
     """
 
+    stream = _get_stream(stream)
+
     with nogil:
         cpp_fill_in_place(
             destination.mutable_view(),
             begin,
             end,
-            dereference(value.c_obj)
+            dereference(value.c_obj),
+            stream.view()
         )
 
-cpdef Column sequence(size_type size, Scalar init, Scalar step):
+cpdef Column sequence(size_type size, Scalar init, Scalar step, Stream stream=None):
     """Create a sequence column of size ``size`` with initial value ``init`` and step
     ``step``.
 
@@ -123,18 +134,23 @@ cpdef Column sequence(size_type size, Scalar init, Scalar step):
 
     cdef unique_ptr[column] result
     cdef size_type c_size = size
+
+    stream = _get_stream(stream)
+
     with nogil:
         result = cpp_sequence(
             c_size,
             dereference(init.c_obj),
             dereference(step.c_obj),
+            stream.view()
         )
-    return Column.from_libcudf(move(result))
+    return Column.from_libcudf(move(result), stream)
 
 
 cpdef Table repeat(
     Table input_table,
-    ColumnOrSize count
+    ColumnOrSize count,
+    Stream stream=None,
 ):
     """Repeat rows of a Table.
 
@@ -160,25 +176,30 @@ cpdef Table repeat(
 
     cdef unique_ptr[table] result
 
+    stream = _get_stream(stream)
+
     if ColumnOrSize is Column:
         with nogil:
             result = cpp_repeat(
                 input_table.view(),
-                count.view()
+                count.view(),
+                stream.view()
             )
     if ColumnOrSize is size_type:
         with nogil:
             result = cpp_repeat(
                 input_table.view(),
-                count
+                count,
+                stream.view()
             )
-    return Table.from_libcudf(move(result))
+    return Table.from_libcudf(move(result), stream)
 
 
 cpdef Column calendrical_month_sequence(
     size_type n,
     Scalar init,
     size_type months,
+    Stream stream=None,
 ):
 
     """Fill destination column from begin to end with value.
@@ -202,10 +223,13 @@ cpdef Column calendrical_month_sequence(
 
     cdef unique_ptr[column] c_result
 
+    stream = _get_stream(stream)
+
     with nogil:
         c_result = cpp_calendrical_month_sequence(
             n,
             dereference(init.c_obj),
-            months
+            months,
+            stream.view()
         )
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream)

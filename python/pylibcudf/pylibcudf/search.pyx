@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -6,9 +6,11 @@ from libcpp.vector cimport vector
 from pylibcudf.libcudf cimport search as cpp_search
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.types cimport null_order, order
+from rmm.pylibrmm.stream cimport Stream
 
 from .column cimport Column
 from .table cimport Table
+from .utils cimport _get_stream
 
 __all__ = ["contains", "lower_bound", "upper_bound"]
 
@@ -17,6 +19,7 @@ cpdef Column lower_bound(
     Table needles,
     list column_order,
     list null_precedence,
+    Stream stream=None
 ):
     """Find smallest indices in haystack where needles may be inserted to retain order.
 
@@ -32,6 +35,8 @@ cpdef Column lower_bound(
         Whether each column should be sorted in ascending or descending order.
     null_precedence : List[NullOrder]
         Whether nulls should come before or after non-nulls.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -41,14 +46,18 @@ cpdef Column lower_bound(
     cdef unique_ptr[column] c_result
     cdef vector[order] c_orders = column_order
     cdef vector[null_order] c_null_precedence = null_precedence
+
+    stream = _get_stream(stream)
+
     with nogil:
         c_result = cpp_search.lower_bound(
             haystack.view(),
             needles.view(),
             c_orders,
             c_null_precedence,
+            stream.view(),
         )
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream)
 
 
 cpdef Column upper_bound(
@@ -56,6 +65,7 @@ cpdef Column upper_bound(
     Table needles,
     list column_order,
     list null_precedence,
+    Stream stream=None
 ):
     """Find largest indices in haystack where needles may be inserted to retain order.
 
@@ -71,6 +81,8 @@ cpdef Column upper_bound(
         Whether each column should be sorted in ascending or descending order.
     null_precedence : List[NullOrder]
         Whether nulls should come before or after non-nulls.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -80,27 +92,33 @@ cpdef Column upper_bound(
     cdef unique_ptr[column] c_result
     cdef vector[order] c_orders = column_order
     cdef vector[null_order] c_null_precedence = null_precedence
+
+    stream = _get_stream(stream)
+
     with nogil:
         c_result = cpp_search.upper_bound(
             haystack.view(),
             needles.view(),
             c_orders,
             c_null_precedence,
+            stream.view(),
         )
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream)
 
 
-cpdef Column contains(Column haystack, Column needles):
+cpdef Column contains(Column haystack, Column needles, Stream stream=None):
     """Check whether needles are present in haystack.
 
     For details, see :cpp:func:`contains`.
 
     Parameters
     ----------
-    haystack : Table
+    haystack : Column
         The search space.
-    needles : Table
+    needles : Column
         The values for which to search.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -108,9 +126,13 @@ cpdef Column contains(Column haystack, Column needles):
         Boolean indicator for each needle.
     """
     cdef unique_ptr[column] c_result
+
+    stream = _get_stream(stream)
+
     with nogil:
         c_result = cpp_search.contains(
             haystack.view(),
             needles.view(),
+            stream.view(),
         )
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream)

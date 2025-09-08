@@ -18,6 +18,9 @@
 
 #include <cudf/io/parquet.hpp>
 
+#include <format>
+#include <string>
+
 // Global environment for temporary files
 cudf::test::TempDirTestEnvironment* const temp_env =
   static_cast<cudf::test::TempDirTestEnvironment*>(
@@ -136,8 +139,8 @@ std::unique_ptr<cudf::column> make_parquet_list_list_col(
 
   // child values
   std::vector<T> child_values(num_rows * lists_per_row * list_size);
-  T first_child_value_index = skip_rows * lists_per_row * list_size;
-  int child_value_count     = 0;
+  auto first_child_value_index = skip_rows * lists_per_row * list_size;
+  int child_value_count        = 0;
   {
     for (int idx = 0; idx < (num_rows * lists_per_row * list_size); idx++) {
       int row_index = idx / (lists_per_row * list_size);
@@ -174,6 +177,8 @@ std::unique_ptr<cudf::column> make_parquet_list_list_col(
 }
 
 template std::unique_ptr<cudf::column> make_parquet_list_list_col<int>(
+  int skip_rows, int num_rows, int lists_per_row, int list_size, bool include_validity);
+template std::unique_ptr<cudf::column> make_parquet_list_list_col<bool>(
   int skip_rows, int num_rows, int lists_per_row, int list_size, bool include_validity);
 
 template <typename T>
@@ -478,11 +483,8 @@ template <typename T>
 std::enable_if_t<std::is_same_v<T, cudf::string_view>, cudf::test::strings_column_wrapper>
 ascending()
 {
-  std::array<char, 10> buf;
-  auto elements = cudf::detail::make_counting_transform_iterator(0, [&buf](auto i) {
-    sprintf(buf.data(), "%09d", i);
-    return std::string(buf.data());
-  });
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return std::format("{:09d}", i); });
   return cudf::test::strings_column_wrapper(elements, elements + num_ordered_rows);
 }
 
@@ -490,11 +492,8 @@ template <typename T>
 std::enable_if_t<std::is_same_v<T, cudf::string_view>, cudf::test::strings_column_wrapper>
 descending()
 {
-  std::array<char, 10> buf;
-  auto elements = cudf::detail::make_counting_transform_iterator(0, [&buf](auto i) {
-    sprintf(buf.data(), "%09d", static_cast<short>(num_ordered_rows - i));
-    return std::string(buf.data());
-  });
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return std::format("{:09d}", static_cast<short>(num_ordered_rows - i)); });
   return cudf::test::strings_column_wrapper(elements, elements + num_ordered_rows);
 }
 
@@ -502,11 +501,8 @@ template <typename T>
 std::enable_if_t<std::is_same_v<T, cudf::string_view>, cudf::test::strings_column_wrapper>
 unordered()
 {
-  std::array<char, 10> buf;
-  auto elements = cudf::detail::make_counting_transform_iterator(0, [&buf](auto i) {
-    sprintf(buf.data(), "%09d", (i % 2 == 0) ? i : (num_ordered_rows - i));
-    return std::string(buf.data());
-  });
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return std::format("{:09d}", (i % 2 == 0) ? i : (num_ordered_rows - i)); });
   return cudf::test::strings_column_wrapper(elements, elements + num_ordered_rows);
 }
 

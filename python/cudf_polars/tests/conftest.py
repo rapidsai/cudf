@@ -18,7 +18,7 @@ def pytest_addoption(parser):
     parser.addoption(
         "--executor",
         action="store",
-        default="in-memory",
+        default="streaming",
         choices=("in-memory", "streaming"),
         help="Executor to use for GPUEngine.",
     )
@@ -29,6 +29,17 @@ def pytest_addoption(parser):
         default="synchronous",
         choices=("synchronous", "distributed"),
         help="Scheduler to use for 'streaming' executor.",
+    )
+
+    parser.addoption(
+        "--blocksize-mode",
+        action="store",
+        default="default",
+        choices=("small", "default"),
+        help=(
+            "Blocksize to use for 'streaming' executor. Set to 'small' "
+            "to run most tests with multiple partitions."
+        ),
     )
 
 
@@ -43,6 +54,9 @@ def pytest_configure(config):
 
     cudf_polars.testing.asserts.DEFAULT_EXECUTOR = config.getoption("--executor")
     cudf_polars.testing.asserts.DEFAULT_SCHEDULER = config.getoption("--scheduler")
+    cudf_polars.testing.asserts.DEFAULT_BLOCKSIZE_MODE = config.getoption(
+        "--blocksize-mode"
+    )
 
 
 def pytest_sessionstart(session):

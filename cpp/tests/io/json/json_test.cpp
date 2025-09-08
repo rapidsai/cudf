@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#include "io/comp/comp.hpp"
-#include "io/comp/io_uncomp.hpp"
+#include "../io_test_utils.hpp"
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
@@ -29,6 +28,7 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/io/detail/codec.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/strings/convert/convert_fixed_point.hpp>
 #include <cudf/strings/repeat_strings.hpp>
@@ -3591,6 +3591,60 @@ TEST_F(JsonBatchedReaderTest, EmptyLastBatch)
   EXPECT_EQ(result.metadata.schema_info[0].name, "a");
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
                                  cudf::test::strings_column_wrapper{{"b", "b", "b", "b"}});
+}
+
+TEST_F(JsonReaderTest, DeviceReadAsyncThrows)
+{
+  // Create simple JSON data
+  std::string json_string = R"({"a": 1}
+{"a": 2}
+{"a": 3}
+{"a": 4}
+{"a": 5})";
+
+  // Convert to char vector
+  std::vector<char> json_data(json_string.begin(), json_string.end());
+
+  // Create our throwing datasource
+  auto throwing_source = std::make_unique<cudf::test::ThrowingDeviceReadDatasource>(json_data);
+  cudf::io::source_info source_info(throwing_source.get());
+
+  // Try to read the JSON data - this should either succeed or propagate AsyncException
+  // from device_read_async.
+  cudf::io::json_reader_options read_args =
+    cudf::io::json_reader_options::builder(source_info).lines(true);
+  try {
+    cudf::io::read_json(read_args);
+    // Test passes if no exception is thrown
+  } catch (const cudf::test::AsyncException&) {
+    // Test passes if AsyncException is thrown (expected test exception)
+  } catch (const std::exception& e) {
+    // Test fails if any other exception is thrown
+    FAIL() << "Unexpected exception thrown: " << e.what();
+  }
+}
+
+TEST_F(JsonReaderTest, DeviceWriteAsyncThrows)
+{
+  // Create a simple table to write
+  auto col0           = cudf::test::fixed_width_column_wrapper<int>{{1, 2, 3, 4, 5}};
+  auto table_to_write = cudf::table_view{{col0}};
+
+  auto throwing_sink = std::make_unique<cudf::test::ThrowingDeviceWriteDataSink>();
+
+  cudf::io::json_writer_options write_args = cudf::io::json_writer_options::builder(
+    cudf::io::sink_info{throwing_sink.get()}, table_to_write);
+
+  // The write_json call should either succeed or throw AsyncException.
+  try {
+    cudf::io::write_json(write_args);
+    // Test passes if no exception is thrown
+  } catch (const cudf::test::AsyncException&) {
+    // Test passes if AsyncException is thrown (expected test exception)
+  } catch (const std::exception& e) {
+    // Test fails if any other exception is thrown
+    FAIL() << "Unexpected exception thrown: " << e.what();
+  }
 }
 
 CUDF_TEST_PROGRAM_MAIN()

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
-#include "rolling/detail/rolling_jit.hpp"
-#include "rolling/jit/operation.hpp"
-
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
+
+#include <rolling/detail/rolling_jit.hpp>
+#include <rolling/jit/operation.hpp>
 
 namespace cudf {
 namespace rolling {
@@ -51,8 +52,8 @@ CUDF_KERNEL void gpu_rolling_new(cudf::size_type nrows,
                                  FollowingWindowType following_window_begin,
                                  cudf::size_type min_periods)
 {
-  cudf::thread_index_type i            = blockIdx.x * blockDim.x + threadIdx.x;
-  cudf::thread_index_type const stride = blockDim.x * gridDim.x;
+  auto i            = cudf::detail::grid_1d::global_thread_id();
+  auto const stride = cudf::detail::grid_1d::grid_stride();
 
   cudf::size_type warp_valid_count{0};
 

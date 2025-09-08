@@ -15,8 +15,8 @@
  */
 #pragma once
 
+#include <cudf/detail/row_operator/row_operators.cuh>
 #include <cudf/hashing/detail/helper_functions.cuh>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
@@ -32,8 +32,8 @@
 
 namespace cudf::detail {
 
-using cudf::experimental::row::lhs_index_type;
-using cudf::experimental::row::rhs_index_type;
+using cudf::detail::row::lhs_index_type;
+using cudf::detail::row::rhs_index_type;
 
 /**
  * @brief A custom comparator used for the build table insertion
@@ -170,7 +170,7 @@ class distinct_hash_join {
   bool _has_nested_columns;  ///< True if nested columns are present in build and probe tables
   cudf::null_equality _nulls_equal;  ///< Whether to consider nulls as equal
   cudf::table_view _build;           ///< Input table to build the hash map
-  std::shared_ptr<cudf::experimental::row::equality::preprocessed_table>
+  std::shared_ptr<cudf::detail::row::equality::preprocessed_table>
     _preprocessed_build;        ///< Input table preprocssed for row operators
   hash_table_type _hash_table;  ///< Hash table built on `_build`
 };

@@ -23,6 +23,7 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/cuda.hpp>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
@@ -104,7 +105,6 @@ __device__ void initialize_shmem_aggregations(cooperative_groups::thread_block c
 __device__ void compute_pre_aggregrations(cudf::size_type col_start,
                                           cudf::size_type col_end,
                                           bitmask_type const* row_bitmask,
-                                          bool skip_rows_with_nulls,
                                           cudf::table_device_view source,
                                           cudf::size_type num_input_rows,
                                           cudf::size_type* local_mapping_index,
@@ -117,7 +117,7 @@ __device__ void compute_pre_aggregrations(cudf::size_type col_start,
   // Aggregates global memory sources to shared memory targets
   for (auto source_idx = cudf::detail::grid_1d::global_thread_id(); source_idx < num_input_rows;
        source_idx += cudf::detail::grid_1d::grid_stride()) {
-    if (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, source_idx)) {
+    if (not row_bitmask or cudf::bit_is_set(row_bitmask, source_idx)) {
       auto const target_idx = local_mapping_index[source_idx] + agg_location_offset;
       for (auto col_idx = col_start; col_idx < col_end; col_idx++) {
         auto const source_col = source.column(col_idx);
@@ -182,7 +182,6 @@ __device__ void compute_final_aggregations(cooperative_groups::thread_block cons
  * pre (shared) and final (global) aggregates*/
 CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
                                                bitmask_type const* row_bitmask,
-                                               bool skip_rows_with_nulls,
                                                cudf::size_type* local_mapping_index,
                                                cudf::size_type* global_mapping_index,
                                                cudf::size_type* block_cardinality,
@@ -247,7 +246,6 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
     compute_pre_aggregrations(col_start,
                               col_end,
                               row_bitmask,
-                              skip_rows_with_nulls,
                               input_values,
                               num_rows,
                               local_mapping_index,
@@ -286,11 +284,18 @@ size_type get_available_shared_memory_size(cudf::size_type grid_size)
                                      ALIGNMENT);
 }
 
+int32_t max_active_blocks_shmem_aggs_kernel()
+{
+  int32_t max_active_blocks{-1};
+  CUDF_CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+    &max_active_blocks, single_pass_shmem_aggs_kernel, GROUPBY_BLOCK_SIZE, 0));
+  return max_active_blocks;
+}
+
 void compute_shared_memory_aggs(cudf::size_type grid_size,
                                 size_type available_shmem_size,
                                 cudf::size_type num_input_rows,
                                 bitmask_type const* row_bitmask,
-                                bool skip_rows_with_nulls,
                                 cudf::size_type* local_mapping_index,
                                 cudf::size_type* global_mapping_index,
                                 cudf::size_type* block_cardinality,
@@ -309,7 +314,6 @@ void compute_shared_memory_aggs(cudf::size_type grid_size,
   single_pass_shmem_aggs_kernel<<<grid_size, GROUPBY_BLOCK_SIZE, available_shmem_size, stream>>>(
     num_input_rows,
     row_bitmask,
-    skip_rows_with_nulls,
     local_mapping_index,
     global_mapping_index,
     block_cardinality,

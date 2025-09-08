@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from functools import singledispatch
+from typing import TypeAlias, TypedDict
 
 import polars as pl
 from polars.testing import assert_frame_equal
@@ -13,13 +14,22 @@ import pylibcudf as plc
 from cudf_polars import Translator
 from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr, ir
+from cudf_polars.dsl.to_ast import ExprTransformer
 from cudf_polars.dsl.traversal import (
     CachingVisitor,
     make_recursive,
+    post_traversal,
     reuse_if_unchanged,
     traversal,
 )
-from cudf_polars.typing import ExprTransformer, IRTransformer
+from cudf_polars.typing import GenericTransformer
+
+
+class State(TypedDict):
+    expr_mapper: ExprTransformer
+
+
+IRTransformer: TypeAlias = GenericTransformer[ir.IR, ir.IR, State]
 
 
 def make_expr(dt, n1, n2):
@@ -30,7 +40,7 @@ def make_expr(dt, n1, n2):
 
 
 def test_traversal_unique():
-    dt = DataType(pl.datatypes.Int8())
+    dt = DataType(pl.Int8())
 
     e1 = make_expr(dt, "a", "a")
     unique_exprs = list(traversal([e1]))
@@ -54,6 +64,40 @@ def test_traversal_unique():
     assert unique_exprs == [e3, expr.Col(dt, "b"), expr.Col(dt, "a")]
 
 
+def test_post_traversal_unique():
+    dt = DataType(pl.Int8())
+
+    e1 = make_expr(dt, "a", "a")
+    unique_exprs = list(post_traversal([e1]))
+    assert unique_exprs == [expr.Col(dt, "a"), e1]
+
+    e2 = make_expr(dt, "a", "b")
+    unique_exprs = list(post_traversal([e2]))
+    assert unique_exprs == [expr.Col(dt, "a"), expr.Col(dt, "b"), e2]
+
+    e3 = make_expr(dt, "b", "a")
+    unique_exprs = list(post_traversal([e3]))
+    assert unique_exprs == [expr.Col(dt, "b"), expr.Col(dt, "a"), e3]
+
+
+def test_post_traversal_multi():
+    dt = DataType(pl.Int8())
+
+    e1 = make_expr(dt, "a", "a")
+    e2 = make_expr(dt, "a", "b")
+    e3 = make_expr(dt, "b", "a")
+
+    unique_exprs = list(post_traversal([e1, e2, e3]))
+    assert len(unique_exprs) == 5
+    assert unique_exprs == [
+        expr.Col(dt, "b"),
+        expr.Col(dt, "a"),
+        e3,
+        e2,
+        e1,
+    ]
+
+
 def rename(e, rec):
     mapping = rec.state["mapping"]
     if isinstance(e, expr.Col) and e.name in mapping:
@@ -62,7 +106,7 @@ def rename(e, rec):
 
 
 def test_caching_visitor():
-    dt = DataType(pl.datatypes.Int8())
+    dt = DataType(pl.Int8())
 
     e1 = make_expr(dt, "a", "b")
 
@@ -86,7 +130,7 @@ def test_caching_visitor():
 
 
 def test_noop_visitor():
-    dt = DataType(pl.datatypes.Int8())
+    dt = DataType(pl.Int8())
 
     e1 = make_expr(dt, "a", "b")
 
@@ -120,11 +164,10 @@ def test_rewrite_ir_node():
                 node.schema,
                 new_df._df,
                 node.projection,
-                node.config_options,
             )
         return reuse_if_unchanged(node, rec)
 
-    mapper = CachingVisitor(replace_df)
+    mapper = CachingVisitor(replace_df, state={})
 
     new = mapper(orig)
 
@@ -151,11 +194,10 @@ def test_rewrite_scan_node(tmp_path):
                 node.schema,
                 right._df,
                 node.with_columns,
-                node.config_options,
             )
         return reuse_if_unchanged(node, rec)
 
-    mapper = CachingVisitor(replace_scan)
+    mapper = CachingVisitor(replace_scan, state={})
 
     orig = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
     new = mapper(orig)
@@ -189,7 +231,8 @@ def test_rewrite_names_and_ops():
 
     @_transform.register
     def _(e: expr.Col, fn: ExprTransformer):
-        mapping = fn.state["mapping"]
+        # We've added an extra key to the state, so ignore this type error.
+        mapping = fn.state["mapping"]  # type: ignore
         if e.name in mapping:
             return type(e)(e.dtype, mapping[e.name])
         return e

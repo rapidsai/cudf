@@ -49,6 +49,7 @@ class Sort(Expr):
             is_sorted=plc.types.Sorted.YES,
             order=order[0],
             null_order=null_order[0],
+            dtype=self.dtype,
         )
 
 
@@ -81,4 +82,4 @@ class SortBy(Expr):
         table = do_sort(
             plc.Table([column.obj]), plc.Table([c.obj for c in by]), order, null_order
         )
-        return Column(table.columns()[0])
+        return Column(table.columns()[0], dtype=self.dtype)

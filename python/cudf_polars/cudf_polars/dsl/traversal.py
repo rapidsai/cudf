@@ -1,16 +1,21 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Traversal and visitor utilities for nodes."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Generic
+from collections import deque
+from typing import TYPE_CHECKING, Generic
 
-from cudf_polars.typing import U_contra, V_co
+from cudf_polars.typing import (
+    StateT_co,
+    U_contra,
+    V_co,
+)
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator, Mapping, MutableMapping, Sequence
+    from collections.abc import Callable, Generator, MutableMapping, Sequence
 
     from cudf_polars.typing import GenericTransformer, NodeT
 
@@ -37,8 +42,13 @@ def traversal(nodes: Sequence[NodeT]) -> Generator[NodeT, None, None]:
     Unique nodes in the expressions, parent before child, children
     in-order from left to right.
     """
-    seen = set(nodes)
-    lifo = list(nodes)
+    seen: set[NodeT] = set()
+    lifo: deque[NodeT] = deque()
+
+    for node in nodes:
+        if node not in seen:
+            lifo.append(node)
+            seen.add(node)
 
     while lifo:
         node = lifo.pop()
@@ -49,7 +59,43 @@ def traversal(nodes: Sequence[NodeT]) -> Generator[NodeT, None, None]:
                 lifo.append(child)
 
 
-def reuse_if_unchanged(node: NodeT, fn: GenericTransformer[NodeT, NodeT]) -> NodeT:
+def post_traversal(nodes: Sequence[NodeT]) -> Generator[NodeT, None, None]:
+    """
+    Post-order traversal of nodes in an expression.
+
+    Parameters
+    ----------
+    nodes
+        Roots of expressions to traverse.
+
+    Yields
+    ------
+    Unique nodes in the expressions, child before parent, children
+    in-order from left to right.
+    """
+    seen: set[NodeT] = set()
+    lifo: deque[NodeT] = deque()
+
+    for node in nodes:
+        if node not in seen:
+            lifo.append(node)
+            seen.add(node)
+
+    while lifo:
+        node = lifo[-1]
+        for child in node.children:
+            if child not in seen:
+                lifo.append(child)
+                seen.add(child)
+                break
+        else:
+            yield node
+            lifo.pop()
+
+
+def reuse_if_unchanged(
+    node: NodeT, fn: GenericTransformer[NodeT, NodeT, StateT_co]
+) -> NodeT:
     """
     Recipe for transforming nodes that returns the old object if unchanged.
 
@@ -77,10 +123,13 @@ def reuse_if_unchanged(node: NodeT, fn: GenericTransformer[NodeT, NodeT]) -> Nod
 
 
 def make_recursive(
-    fn: Callable[[U_contra, GenericTransformer[U_contra, V_co]], V_co],
+    fn: Callable[[U_contra, GenericTransformer[U_contra, V_co, StateT_co]], V_co],
     *,
-    state: Mapping[str, Any] | None = None,
-) -> GenericTransformer[U_contra, V_co]:
+    # make_recursive is a type constructor with covariant state parameter
+    # not a normal function for which the parameter would be contravariant
+    # hence the type ignore
+    state: StateT_co,  # type: ignore[misc]
+) -> GenericTransformer[U_contra, V_co, StateT_co]:
     """
     No-op wrapper for recursive visitors.
 
@@ -116,11 +165,11 @@ def make_recursive(
     def rec(node: U_contra) -> V_co:
         return fn(node, rec)  # type: ignore[arg-type]
 
-    rec.state = state if state is not None else {}  # type: ignore[attr-defined]
+    rec.state = state  # type: ignore[attr-defined]
     return rec  # type: ignore[return-value]
 
 
-class CachingVisitor(Generic[U_contra, V_co]):
+class CachingVisitor(Generic[U_contra, V_co, StateT_co]):
     """
     Caching wrapper for recursive visitors.
 
@@ -148,13 +197,13 @@ class CachingVisitor(Generic[U_contra, V_co]):
 
     def __init__(
         self,
-        fn: Callable[[U_contra, GenericTransformer[U_contra, V_co]], V_co],
+        fn: Callable[[U_contra, GenericTransformer[U_contra, V_co, StateT_co]], V_co],
         *,
-        state: Mapping[str, Any] | None = None,
+        state: StateT_co,
     ) -> None:
         self.fn = fn
         self.cache: MutableMapping[U_contra, V_co] = {}
-        self.state = state if state is not None else {}
+        self.state = state
 
     def __call__(self, value: U_contra) -> V_co:
         """

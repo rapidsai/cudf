@@ -49,6 +49,10 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         EQUAL
         UNEQUAL
 
+    cpdef enum class null_aware(bool):
+        NO
+        YES
+
     cpdef enum class nan_equality(bool):
         ALL_EQUAL
         UNEQUAL

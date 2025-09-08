@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -410,8 +410,8 @@ struct typesAtomicCASImpl<T, 8> {
  * @returns The old value at `address`
  */
 template <typename T, typename BinaryOp>
-std::enable_if_t<cudf::is_numeric<T>(), T> __forceinline__ __device__
-genericAtomicOperation(T* address, T const& update_value, BinaryOp op)
+T __forceinline__ __device__ genericAtomicOperation(T* address, T const& update_value, BinaryOp op)
+  requires(cudf::is_numeric<T>())
 {
   auto fun = cudf::detail::genericAtomicOperationImpl<T, BinaryOp>{};
   return T(fun(address, update_value, op));
@@ -419,8 +419,8 @@ genericAtomicOperation(T* address, T const& update_value, BinaryOp op)
 
 // specialization for cudf::detail::timestamp types
 template <typename T, typename BinaryOp>
-std::enable_if_t<cudf::is_timestamp<T>(), T> __forceinline__ __device__
-genericAtomicOperation(T* address, T const& update_value, BinaryOp op)
+T __forceinline__ __device__ genericAtomicOperation(T* address, T const& update_value, BinaryOp op)
+  requires(cudf::is_timestamp<T>())
 {
   using R = typename T::rep;
   // Unwrap the input timestamp to its underlying duration value representation.
@@ -432,8 +432,8 @@ genericAtomicOperation(T* address, T const& update_value, BinaryOp op)
 
 // specialization for cudf::detail::duration types
 template <typename T, typename BinaryOp>
-std::enable_if_t<cudf::is_duration<T>(), T> __forceinline__ __device__
-genericAtomicOperation(T* address, T const& update_value, BinaryOp op)
+T __forceinline__ __device__ genericAtomicOperation(T* address, T const& update_value, BinaryOp op)
+  requires(cudf::is_duration<T>())
 {
   using R = typename T::rep;
   // Unwrap the input duration to its underlying duration value representation.

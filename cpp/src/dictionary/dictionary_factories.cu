@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,20 +28,22 @@
 namespace cudf {
 namespace {
 struct dispatch_create_indices {
-  template <typename IndexType, std::enable_if_t<is_index_type<IndexType>()>* = nullptr>
+  template <typename IndexType>
   std::unique_ptr<column> operator()(column_view const& indices,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
+    requires(is_index_type<IndexType>())
   {
     CUDF_EXPECTS(cudf::is_signed<IndexType>(), "indices must be a signed type");
     column_view indices_view{
       indices.type(), indices.size(), indices.data<IndexType>(), nullptr, 0, indices.offset()};
     return std::make_unique<column>(indices_view, stream, mr);
   }
-  template <typename IndexType, std::enable_if_t<!is_index_type<IndexType>()>* = nullptr>
+  template <typename IndexType>
   std::unique_ptr<column> operator()(column_view const&,
                                      rmm::cuda_stream_view,
                                      rmm::device_async_resource_ref)
+    requires(!is_index_type<IndexType>())
   {
     CUDF_FAIL("indices must be an integer type.");
   }
@@ -104,13 +106,15 @@ namespace {
  * @brief This functor maps signed type_ids to unsigned counterparts.
  */
 struct make_unsigned_fn {
-  template <typename T, std::enable_if_t<is_index_type<T>()>* = nullptr>
+  template <typename T>
   constexpr cudf::type_id operator()()
+    requires(is_index_type<T>())
   {
     return cudf::type_to_id<std::make_unsigned_t<T>>();
   }
-  template <typename T, std::enable_if_t<not is_index_type<T>()>* = nullptr>
+  template <typename T>
   constexpr cudf::type_id operator()()
+    requires(not is_index_type<T>())
   {
     return cudf::type_to_id<T>();
   }

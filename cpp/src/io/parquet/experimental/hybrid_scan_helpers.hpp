@@ -46,10 +46,41 @@ using parquet::detail::row_group_info;
  */
 struct metadata : private metadata_base {
   explicit metadata(cudf::host_span<uint8_t const> footer_bytes);
+  explicit metadata(FileMetaData const& other) { static_cast<FileMetaData&>(*this) = other; }
   metadata_base get_file_metadata() && { return std::move(*this); }
 };
 
 class aggregate_reader_metadata : public aggregate_reader_metadata_base {
+ private:
+  /**
+   * @brief Filters the row groups using dictionary pages
+   *
+   * @param chunks Host device span of column chunk descriptors, one per column chunk with
+   *               dictionary page and (in)equality predicate
+   * @param pages Host device span of decoded page headers, one per column chunk with dictionary
+   *              page and (in)equality predicate
+   * @param input_row_group_indices Lists of input row groups, one per source
+   * @param literals Lists of literals, one per column with (in)equality predicate
+   * @param operators Lists of operators, one per column with (in)equality predicate
+   * @param total_row_groups Total number of row groups in `input_row_group_indices`
+   * @param dictionary_col_schemas Schema indices of columns with (in)equality predicate
+   * @param filter AST expression to filter row groups based on dictionary pages
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   *
+   * @return A pair of filtered row group indices if any is filtered.
+   */
+  [[nodiscard]] std::optional<std::vector<std::vector<cudf::size_type>>> apply_dictionary_filter(
+    cudf::detail::hostdevice_span<parquet::detail::ColumnChunkDesc const> chunks,
+    cudf::detail::hostdevice_span<parquet::detail::PageInfo const> pages,
+    host_span<std::vector<size_type> const> input_row_group_indices,
+    host_span<std::vector<ast::literal*> const> literals,
+    cudf::host_span<std::vector<ast::ast_operator> const> operators,
+    size_t total_row_groups,
+    host_span<data_type const> output_dtypes,
+    host_span<int const> dictionary_col_schemas,
+    std::reference_wrapper<ast::expression const> filter,
+    rmm::cuda_stream_view stream) const;
+
  public:
   /**
    * @brief Constructor for aggregate_reader_metadata
@@ -61,6 +92,22 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
   aggregate_reader_metadata(cudf::host_span<uint8_t const> footer_bytes,
                             bool use_arrow_schema,
                             bool has_cols_from_mismatched_srcs);
+
+  /**
+   * @brief Constructor for aggregate_reader_metadata
+   *
+   * @param parquet_metadata Pre-populated Parquet file metadata
+   * @param use_arrow_schema Whether to use Arrow schema
+   * @param has_cols_from_mismatched_srcs Whether to have columns from mismatched sources
+   */
+  aggregate_reader_metadata(FileMetaData const& parquet_metadata,
+                            bool use_arrow_schema,
+                            bool has_cols_from_mismatched_srcs);
+
+  /**
+   * @brief Initialize the internal variables
+   */
+  void initialize_internals(bool use_arrow_schema, bool has_cols_from_mismatched_srcs);
 
   /**
    * @brief Fetch the byte range of the page index in the Parquet file
@@ -167,8 +214,9 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    *              page and (in)equality predicate
    * @param row_group_indices Input row groups indices
    * @param literals Lists of literals, one per input column
+   * @param operators Lists of operators, one per input column
    * @param output_dtypes Datatypes of output columns
-   * @param dictionary_col_schemas schema indices of dictionary columns only
+   * @param dictionary_col_schemas Schema indices of output columns with (in)equality predicate
    * @param filter AST expression to filter row groups based on dictionary pages
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
@@ -179,8 +227,9 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
     cudf::detail::hostdevice_span<parquet::detail::PageInfo const> pages,
     cudf::host_span<std::vector<cudf::size_type> const> row_group_indices,
     cudf::host_span<std::vector<ast::literal*> const> literals,
+    cudf::host_span<std::vector<ast::ast_operator> const> operators,
     cudf::host_span<data_type const> output_dtypes,
-    cudf::host_span<cudf::size_type const> output_column_schemas,
+    cudf::host_span<cudf::size_type const> dictionary_col_schemas,
     std::reference_wrapper<ast::expression const> filter,
     rmm::cuda_stream_view stream) const;
 
@@ -198,16 +247,61 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    */
   [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_bloom_filters(
     cudf::host_span<rmm::device_buffer> bloom_filter_data,
-    host_span<std::vector<size_type> const> row_group_indices,
-    host_span<data_type const> output_dtypes,
-    host_span<cudf::size_type const> output_column_schemas,
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    cudf::host_span<data_type const> output_dtypes,
+    cudf::host_span<cudf::size_type const> output_column_schemas,
     std::reference_wrapper<ast::expression const> filter,
+    rmm::cuda_stream_view stream) const;
+
+  /**
+   * @brief Builds a row mask based on the data pages that survive page-level statistics based on
+   * predicate filter
+   *
+   * @param row_group_indices Input row groups indices
+   * @param output_dtypes Datatypes of output columns
+   * @param output_column_schemas schema indices of output columns
+   * @param filter AST expression to filter data pages based on page index statistics
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the returned column's device memory
+   *
+   * @return A boolean column representing a mask of rows surviving the predicate filter at
+   *         page-level
+   */
+  [[nodiscard]] std::unique_ptr<cudf::column> build_row_mask_with_page_index_stats(
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    cudf::host_span<cudf::data_type const> output_dtypes,
+    cudf::host_span<cudf::size_type const> output_column_schemas,
+    std::reference_wrapper<ast::expression const> filter,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
+
+  /**
+   * @brief Computes which data pages need decoding to construct input columns based on the row mask
+   *
+   * Compute a vector of boolean vectors indicating which data pages need to be decoded to
+   * construct each input column based on the row mask, one vector per column
+   *
+   * @param row_mask Boolean column indicating which rows need to be read after page-pruning
+   * @param row_group_indices Input row groups indices
+   * @param output_dtypes Datatypes of output columns
+   * @param output_column_schemas schema indices of output columns
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   *
+   * @return A vector of boolean vectors indicating which data pages need to be decoded to produce
+   *         the output table based on the input row mask, one per input column
+   */
+  [[nodiscard]] std::vector<std::vector<bool>> compute_data_page_mask(
+    cudf::column_view row_mask,
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    cudf::host_span<cudf::data_type const> output_dtypes,
+    cudf::host_span<cudf::size_type const> output_column_schemas,
     rmm::cuda_stream_view stream) const;
 };
 
 /**
- * @brief Collects lists of equal and not-equal predicate literals in the AST expression, one list
- * per input table column. This is used in row group filtering based on dictionary pages.
+ * @brief Collects lists of equal and not-equal predicate literals and operators in the AST
+ * expression, one per input table column. This is used in row group filtering based on dictionary
+ * pages
  */
 class dictionary_literals_collector : public equality_literals_collector {
  public:
@@ -215,12 +309,27 @@ class dictionary_literals_collector : public equality_literals_collector {
 
   dictionary_literals_collector(ast::expression const& expr, cudf::size_type num_input_columns);
 
+  // Bring all overloads of `visit` from equality_literals_collector into scope
   using equality_literals_collector::visit;
 
   /**
    * @copydoc ast::detail::expression_transformer::visit(ast::operation const& )
    */
   std::reference_wrapper<ast::expression const> visit(ast::operation const& expr) override;
+
+  /**
+   * @brief Returns vectors of collected literals and (in)equality operators in the AST expression,
+   * one per input table column
+   *
+   * @return A pair of vectors of collected literals and (in)equality operators, one per input table
+   * column
+   */
+  [[nodiscard]] std::pair<std::vector<std::vector<ast::literal*>>,
+                          std::vector<std::vector<ast::ast_operator>>>
+  get_literals_and_operators() &&;
+
+ private:
+  std::vector<std::vector<ast::ast_operator>> _operators;
 };
 
 }  // namespace cudf::io::parquet::experimental::detail

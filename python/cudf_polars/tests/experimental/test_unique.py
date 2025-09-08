@@ -9,6 +9,7 @@ import polars as pl
 from polars.testing import assert_frame_equal
 
 from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
+from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 
 @pytest.fixture(scope="module")
@@ -33,8 +34,8 @@ def test_unique(df, keep, subset, maintain_order, cardinality):
         executor_options={
             "max_rows_per_partition": 50,
             "scheduler": DEFAULT_SCHEDULER,
-            "cardinality_factor": cardinality,
-            "fallback_mode": "silent",
+            "unique_fraction": cardinality,
+            "fallback_mode": "warn",
         },
     )
 
@@ -44,7 +45,19 @@ def test_unique(df, keep, subset, maintain_order, cardinality):
         q = q.select(*(pl.col(col) for col in subset))
         check_row_order = False
 
-    assert_gpu_result_equal(q, engine=engine, check_row_order=check_row_order)
+    is_cardinality0 = cardinality == {}
+
+    should_warn = (maintain_order and (not is_cardinality0 or keep == "none")) or (
+        not maintain_order and (not is_cardinality0) and keep in {"first", "last"}
+    )
+
+    if should_warn:
+        with pytest.warns(
+            UserWarning, match="Unsupported unique options for multiple partitions"
+        ):
+            assert_gpu_result_equal(q, engine=engine, check_row_order=check_row_order)
+    else:
+        assert_gpu_result_equal(q, engine=engine, check_row_order=check_row_order)
 
 
 def test_unique_fallback(df):
@@ -54,12 +67,15 @@ def test_unique_fallback(df):
         executor_options={
             "max_rows_per_partition": 50,
             "scheduler": DEFAULT_SCHEDULER,
-            "cardinality_factor": {"y": 1.0},
+            "unique_fraction": {"y": 1.0},
             "fallback_mode": "raise",
         },
     )
     q = df.unique(keep="first", maintain_order=True)
-    with pytest.raises(pl.exceptions.ComputeError, match="Unsupported unique options"):
+    with pytest.raises(
+        pl.exceptions.ComputeError if POLARS_VERSION_LT_130 else NotImplementedError,
+        match="Unsupported unique options",
+    ):
         assert_gpu_result_equal(q, engine=engine)
 
 
@@ -72,13 +88,19 @@ def test_unique_select(df, maintain_order, cardinality):
         executor_options={
             "max_rows_per_partition": 4,
             "scheduler": DEFAULT_SCHEDULER,
-            "cardinality_factor": cardinality,
-            "fallback_mode": "silent",
+            "unique_fraction": cardinality,
+            "fallback_mode": "warn",
         },
     )
 
     q = df.select(pl.col("y").unique(maintain_order=maintain_order))
-    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+    if cardinality == {"y": 0.5} and maintain_order:
+        with pytest.warns(
+            UserWarning, match="Unsupported unique options for multiple partitions."
+        ):
+            assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+    else:
+        assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
 @pytest.mark.parametrize("keep", ["first", "last", "any"])

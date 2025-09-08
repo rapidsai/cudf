@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import warnings
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import numpy as np
 import pandas as pd
@@ -16,7 +16,6 @@ import pylibcudf as plc
 import cudf
 from cudf.api.types import is_scalar
 from cudf.core.column import column
-from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 from cudf.utils.dtypes import (
     SIZE_TYPE_DTYPE,
@@ -32,7 +31,7 @@ from cudf.utils.utils import _is_null_host_scalar
 if TYPE_CHECKING:
     from collections.abc import Mapping, MutableSequence, Sequence
 
-    import numba.cuda
+    import cupy as cp
 
     from cudf._typing import (
         ColumnBinaryOperand,
@@ -40,8 +39,6 @@ if TYPE_CHECKING:
         Dtype,
         DtypeObj,
         ScalarLike,
-        SeriesOrIndex,
-        SeriesOrSingleColumnIndex,
     )
     from cudf.core.buffer import Buffer
     from cudf.core.column import (
@@ -51,8 +48,6 @@ if TYPE_CHECKING:
         StringColumn,
         TimeDeltaColumn,
     )
-    from cudf.core.index import Index
-    from cudf.core.series import Series
 
 
 # Using np.int8(-1) to allow silent wrap-around when casting to uint
@@ -67,419 +62,6 @@ def as_unsigned_codes(
     return cast(
         cudf.core.column.numerical.NumericalColumn, codes.astype(codes_dtype)
     )
-
-
-class CategoricalAccessor(ColumnMethods):
-    """
-    Accessor object for categorical properties of the Series values.
-    Be aware that assigning to `categories` is a inplace operation,
-    while all methods return new categorical data per default.
-
-    Parameters
-    ----------
-    column : Column
-    parent : Series or CategoricalIndex
-
-    Examples
-    --------
-    >>> s = cudf.Series([1,2,3], dtype='category')
-    >>> s
-    0    1
-    1    2
-    2    3
-    dtype: category
-    Categories (3, int64): [1, 2, 3]
-    >>> s.cat.categories
-    Index([1, 2, 3], dtype='int64')
-    >>> s.cat.reorder_categories([3,2,1])
-    0    1
-    1    2
-    2    3
-    dtype: category
-    Categories (3, int64): [3, 2, 1]
-    >>> s.cat.remove_categories([1])
-    0    <NA>
-    1       2
-    2       3
-    dtype: category
-    Categories (2, int64): [2, 3]
-    >>> s.cat.set_categories(list('abcde'))
-    0    <NA>
-    1    <NA>
-    2    <NA>
-    dtype: category
-    Categories (5, object): ['a', 'b', 'c', 'd', 'e']
-    >>> s.cat.as_ordered()
-    0    1
-    1    2
-    2    3
-    dtype: category
-    Categories (3, int64): [1 < 2 < 3]
-    >>> s.cat.as_unordered()
-    0    1
-    1    2
-    2    3
-    dtype: category
-    Categories (3, int64): [1, 2, 3]
-    """
-
-    _column: CategoricalColumn
-
-    def __init__(self, parent: SeriesOrSingleColumnIndex):
-        if not isinstance(parent.dtype, CategoricalDtype):
-            raise AttributeError(
-                "Can only use .cat accessor with a 'category' dtype"
-            )
-        super().__init__(parent=parent)
-
-    @property
-    def categories(self) -> Index:
-        """
-        The categories of this categorical.
-        """
-        return self._column.dtype.categories
-
-    @property
-    def codes(self) -> Series:
-        """
-        Return Series of codes as well as the index.
-        """
-        index = (
-            self._parent.index
-            if isinstance(self._parent, cudf.Series)
-            else None
-        )
-        return cudf.Series._from_column(self._column.codes, index=index)
-
-    @property
-    def ordered(self) -> bool | None:
-        """
-        Whether the categories have an ordered relationship.
-        """
-        return self._column.ordered
-
-    def as_ordered(self) -> SeriesOrIndex | None:
-        """
-        Set the Categorical to be ordered.
-
-        Returns
-        -------
-        Categorical
-            Ordered Categorical.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series([10, 1, 1, 2, 10, 2, 10], dtype="category")
-        >>> s
-        0    10
-        1     1
-        2     1
-        3     2
-        4    10
-        5     2
-        6    10
-        dtype: category
-        Categories (3, int64): [1, 2, 10]
-        >>> s.cat.as_ordered()
-        0    10
-        1     1
-        2     1
-        3     2
-        4    10
-        5     2
-        6    10
-        dtype: category
-        Categories (3, int64): [1 < 2 < 10]
-        """
-        return self._return_or_inplace(self._column.as_ordered(ordered=True))
-
-    def as_unordered(self) -> SeriesOrIndex | None:
-        """
-        Set the Categorical to be unordered.
-
-        Returns
-        -------
-        Categorical
-            Unordered Categorical or None if inplace.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series([10, 1, 1, 2, 10, 2, 10], dtype="category")
-        >>> s
-        0    10
-        1     1
-        2     1
-        3     2
-        4    10
-        5     2
-        6    10
-        dtype: category
-        Categories (3, int64): [1, 2, 10]
-        >>> s = s.cat.as_ordered()
-        >>> s
-        0    10
-        1     1
-        2     1
-        3     2
-        4    10
-        5     2
-        6    10
-        dtype: category
-        Categories (3, int64): [1 < 2 < 10]
-        >>> s.cat.as_unordered()
-        0    10
-        1     1
-        2     1
-        3     2
-        4    10
-        5     2
-        6    10
-        dtype: category
-        Categories (3, int64): [1, 2, 10]
-        """
-        return self._return_or_inplace(self._column.as_ordered(ordered=False))
-
-    def add_categories(self, new_categories: Any) -> SeriesOrIndex | None:
-        """
-        Add new categories.
-
-        `new_categories` will be included at the last/highest
-        place in the categories and will be unused directly
-        after this call.
-
-        Parameters
-        ----------
-        new_categories : category or list-like of category
-            The new categories to be included.
-
-        Returns
-        -------
-        cat
-            Categorical with new categories added.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series([1, 2], dtype="category")
-        >>> s
-        0    1
-        1    2
-        dtype: category
-        Categories (2, int64): [1, 2]
-        >>> s.cat.add_categories([0, 3, 4])
-        0    1
-        1    2
-        dtype: category
-        Categories (5, int64): [1, 2, 0, 3, 4]
-        >>> s
-        0    1
-        1    2
-        dtype: category
-        Categories (2, int64): [1, 2]
-        """
-        return self._return_or_inplace(
-            self._column.add_categories(new_categories=new_categories)
-        )
-
-    def remove_categories(
-        self,
-        removals: Any,
-    ) -> SeriesOrIndex | None:
-        """
-        Remove the specified categories.
-
-        `removals` must be included in the
-        old categories. Values which were in the
-        removed categories will be set to null.
-
-        Parameters
-        ----------
-        removals : category or list-like of category
-            The categories which should be removed.
-
-        Returns
-        -------
-        cat
-            Categorical with removed categories
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series([10, 1, 1, 2, 10, 2, 10], dtype="category")
-        >>> s
-        0    10
-        1     1
-        2     1
-        3     2
-        4    10
-        5     2
-        6    10
-        dtype: category
-        Categories (3, int64): [1, 2, 10]
-        >>> s.cat.remove_categories([1])
-        0      10
-        1    <NA>
-        2    <NA>
-        3       2
-        4      10
-        5       2
-        6      10
-        dtype: category
-        Categories (2, int64): [2, 10]
-        >>> s
-        0    10
-        1     1
-        2     1
-        3     2
-        4    10
-        5     2
-        6    10
-        dtype: category
-        Categories (3, int64): [1, 2, 10]
-        """
-        return self._return_or_inplace(
-            self._column.remove_categories(removals=removals)
-        )
-
-    def set_categories(
-        self,
-        new_categories: Any,
-        ordered: bool = False,
-        rename: bool = False,
-    ) -> SeriesOrIndex | None:
-        """
-        Set the categories to the specified new_categories.
-
-
-        `new_categories` can include new categories (which
-        will result in unused categories) or remove old categories
-        (which results in values set to null). If `rename==True`,
-        the categories will simple be renamed (less or more items
-        than in old categories will result in values set to null or
-        in unused categories respectively).
-
-        This method can be used to perform more than one action
-        of adding, removing, and reordering simultaneously and
-        is therefore faster than performing the individual steps
-        via the more specialised methods.
-
-        On the other hand this methods does not do checks
-        (e.g., whether the old categories are included in the
-        new categories on a reorder), which can result in
-        surprising changes.
-
-        Parameters
-        ----------
-        new_categories : list-like
-            The categories in new order.
-        ordered : bool, default None
-            Whether or not the categorical is treated as
-            a ordered categorical. If not given, do
-            not change the ordered information.
-        rename : bool, default False
-            Whether or not the `new_categories` should be
-            considered as a rename of the old categories
-            or as reordered categories.
-
-        Returns
-        -------
-        cat
-            Categorical with reordered categories
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series([1, 1, 2, 10, 2, 10], dtype='category')
-        >>> s
-        0     1
-        1     1
-        2     2
-        3    10
-        4     2
-        5    10
-        dtype: category
-        Categories (3, int64): [1, 2, 10]
-        >>> s.cat.set_categories([1, 10])
-        0       1
-        1       1
-        2    <NA>
-        3      10
-        4    <NA>
-        5      10
-        dtype: category
-        Categories (2, int64): [1, 10]
-        """
-        return self._return_or_inplace(
-            self._column.set_categories(
-                new_categories=new_categories, ordered=ordered, rename=rename
-            )
-        )
-
-    def reorder_categories(
-        self,
-        new_categories: Any,
-        ordered: bool = False,
-    ) -> SeriesOrIndex | None:
-        """
-        Reorder categories as specified in new_categories.
-
-        `new_categories` need to include all old categories
-        and no new category items.
-
-        Parameters
-        ----------
-        new_categories : Index-like
-            The categories in new order.
-        ordered : bool, optional
-            Whether or not the categorical is treated
-            as a ordered categorical. If not given, do
-            not change the ordered information.
-
-        Returns
-        -------
-        cat
-            Categorical with reordered categories
-
-        Raises
-        ------
-        ValueError
-            If the new categories do not contain all old
-            category items or any new ones.
-
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series([10, 1, 1, 2, 10, 2, 10], dtype="category")
-        >>> s
-        0    10
-        1     1
-        2     1
-        3     2
-        4    10
-        5     2
-        6    10
-        dtype: category
-        Categories (3, int64): [1, 2, 10]
-        >>> s.cat.reorder_categories([10, 1, 2])
-        0    10
-        1     1
-        2     1
-        3     2
-        4    10
-        5     2
-        6    10
-        dtype: category
-        Categories (3, int64): [10, 1, 2]
-        >>> s.cat.reorder_categories([10, 1])
-        ValueError: items in new_categories are not the same as in
-        old categories
-        """
-        return self._return_or_inplace(
-            self._column.reorder_categories(new_categories, ordered=ordered),
-        )
 
 
 def validate_categorical_children(children) -> None:
@@ -649,13 +231,7 @@ class CategoricalColumn(column.ColumnBase):
             value = value.codes
         codes = self.codes
         codes[key] = value
-        out = type(self)(
-            data=self.data,
-            size=codes.size,
-            dtype=self.dtype,
-            mask=codes.base_mask,
-            children=(codes,),
-        )
+        out = codes._with_type_metadata(self.dtype)
         self._mimic_inplace(out, inplace=True)
 
     def _fill(
@@ -679,14 +255,8 @@ class CategoricalColumn(column.ColumnBase):
         return result
 
     def slice(self, start: int, stop: int, stride: int | None = None) -> Self:
-        codes = self.codes.slice(start, stop, stride)
-        return type(self)(
-            data=self.data,  # type: ignore[arg-type]
-            size=codes.size,
-            dtype=self.dtype,
-            mask=codes.base_mask,
-            offset=codes.offset,
-            children=(codes,),
+        return self.codes.slice(start, stop, stride)._with_type_metadata(  # type: ignore[return-value]
+            self.dtype
         )
 
     def _reduce(
@@ -746,23 +316,12 @@ class CategoricalColumn(column.ColumnBase):
         codes = column.as_column(
             self._encode(other), length=len(self), dtype=self.codes.dtype
         )
-        return type(self)(
-            data=None,
-            size=self.size,
-            dtype=self.dtype,
-            mask=self.base_mask,
-            children=(codes,),  # type: ignore[arg-type]
-        )
+        return codes._with_type_metadata(self.dtype)
 
     def sort_values(self, ascending: bool = True, na_position="last") -> Self:
-        codes = self.codes.sort_values(ascending, na_position)
-        return type(self)(
-            data=self.data,  # type: ignore[arg-type]
-            size=codes.size,
-            dtype=self.dtype,
-            mask=codes.base_mask,
-            children=(codes,),
-        )
+        return self.codes.sort_values(  # type: ignore[return-value]
+            ascending, na_position
+        )._with_type_metadata(self.dtype)
 
     def element_indexing(self, index: int) -> ScalarLike:
         val = self.codes.element_indexing(index)
@@ -785,9 +344,9 @@ class CategoricalColumn(column.ColumnBase):
         arrow_type: bool = False,
     ) -> pd.Index:
         if nullable:
-            return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
-        elif arrow_type:
-            raise NotImplementedError(f"{arrow_type=} is not implemented.")
+            raise NotImplementedError(f"{nullable=} is not supported.")
+        if arrow_type:
+            raise NotImplementedError(f"{arrow_type=} is not supported.")
 
         if self.categories.dtype.kind == "f":
             col = type(self)(
@@ -852,20 +411,12 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     def data_array_view(
-        self, *, mode="write"
-    ) -> numba.cuda.devicearray.DeviceNDArray:
+        self, *, mode: Literal["write", "read"] = "write"
+    ) -> cp.ndarray:
         return self.codes.data_array_view(mode=mode)
 
     def unique(self) -> Self:
-        codes = self.codes.unique()
-        return type(self)(
-            data=self.data,  # type: ignore[arg-type]
-            size=codes.size,
-            dtype=self.dtype,
-            mask=codes.base_mask,
-            offset=codes.offset,
-            children=(codes,),
-        )
+        return self.codes.unique()._with_type_metadata(self.dtype)  # type: ignore[return-value]
 
     def _cast_self_and_other_for_where(
         self, other: ScalarLike | ColumnBase, inplace: bool
@@ -1013,18 +564,11 @@ class CategoricalColumn(column.ColumnBase):
         replacement_col = catmap._data["index"].astype(replaced.codes.dtype)
 
         replaced_codes = column.as_column(replaced.codes)
-        output = replaced_codes.replace(to_replace_col, replacement_col)
-        codes = as_unsigned_codes(len(new_cats["cats"]), output)  # type: ignore[arg-type]
-
-        result = type(self)(
-            data=self.data,  # type: ignore[arg-type]
-            size=codes.size,
-            dtype=CategoricalDtype(
+        new_codes = replaced_codes.replace(to_replace_col, replacement_col)
+        result = new_codes._with_type_metadata(
+            CategoricalDtype(
                 categories=new_cats["cats"], ordered=self.dtype.ordered
-            ),
-            mask=codes.base_mask,
-            offset=codes.offset,
-            children=(codes,),
+            )
         )
         if result.dtype != self.dtype:
             warnings.warn(
@@ -1035,7 +579,7 @@ class CategoricalColumn(column.ColumnBase):
                 "instead.",
                 FutureWarning,
             )
-        return result
+        return result  # type: ignore[return-value]
 
     def isnull(self) -> ColumnBase:
         """
@@ -1118,7 +662,7 @@ class CategoricalColumn(column.ColumnBase):
             if isinstance(
                 self.categories.dtype, cudf.StructDtype
             ) and isinstance(dtype.categories.dtype, cudf.IntervalDtype):
-                codes = self.codes
+                return self._with_type_metadata(dtype)
             else:
                 # Otherwise if both categories are of different Column types,
                 # return a column full of nulls.
@@ -1130,15 +674,7 @@ class CategoricalColumn(column.ColumnBase):
                         dtype=self.codes.dtype,
                     ),
                 )
-                codes = as_unsigned_codes(len(dtype.categories), codes)
-            return type(self)(
-                data=self.data,  # type: ignore[arg-type]
-                size=self.size,
-                dtype=dtype,
-                mask=self.base_mask,
-                offset=self.offset,
-                children=(codes,),
-            )
+                return codes._with_type_metadata(dtype)  # type: ignore[return-value]
 
         return self.set_categories(
             new_categories=dtype.categories, ordered=bool(dtype.ordered)
@@ -1147,8 +683,8 @@ class CategoricalColumn(column.ColumnBase):
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
         return self._get_decategorized_column().as_numerical_column(dtype)
 
-    def as_string_column(self) -> StringColumn:
-        return self._get_decategorized_column().as_string_column()
+    def as_string_column(self, dtype) -> StringColumn:
+        return self._get_decategorized_column().as_string_column(dtype)
 
     def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:
         return self._get_decategorized_column().as_datetime_column(dtype)
@@ -1225,26 +761,20 @@ class CategoricalColumn(column.ColumnBase):
             len(cats),
             cast(cudf.core.column.numerical.NumericalColumn, codes_col),
         )
-        return CategoricalColumn(
-            data=None,
-            size=codes_col.size,
-            dtype=CategoricalDtype(categories=cats),
-            mask=codes_col.base_mask,
-            offset=codes_col.offset,
-            children=(codes_col,),  # type: ignore[arg-type]
-        )
+        return codes_col._with_type_metadata(CategoricalDtype(categories=cats))  # type: ignore[return-value]
 
     def _with_type_metadata(self: Self, dtype: Dtype) -> Self:
         if isinstance(dtype, CategoricalDtype):
             return type(self)(
                 data=self.data,  # type: ignore[arg-type]
-                size=self.codes.size,
+                size=self.size,
                 dtype=dtype,
-                mask=self.codes.base_mask,
-                offset=self.codes.offset,
-                null_count=self.codes.null_count,
-                children=(self.codes,),
+                mask=self.base_mask,
+                offset=self.offset,
+                null_count=self.null_count,
+                children=self.base_children,  # type: ignore[arg-type]
             )
+
         return self
 
     def set_categories(
@@ -1271,15 +801,8 @@ class CategoricalColumn(column.ColumnBase):
                     "new_categories must have the same "
                     "number of items as old categories"
                 )
-            out_col = type(self)(
-                data=self.data,  # type: ignore[arg-type]
-                size=self.size,
-                dtype=CategoricalDtype(
-                    categories=new_categories, ordered=ordered
-                ),
-                mask=self.base_mask,
-                offset=self.offset,
-                children=(self.codes,),
+            return self._with_type_metadata(
+                CategoricalDtype(categories=new_categories, ordered=ordered)
             )
         else:
             out_col = self
@@ -1294,16 +817,10 @@ class CategoricalColumn(column.ColumnBase):
                         dtype=self.codes.dtype,
                     ),
                 )
-                new_codes = as_unsigned_codes(len(new_categories), new_codes)
-                out_col = type(self)(
-                    data=self.data,  # type: ignore[arg-type]
-                    size=self.size,
-                    dtype=CategoricalDtype(
+                out_col = new_codes._with_type_metadata(  # type: ignore[assignment]
+                    CategoricalDtype(
                         categories=new_categories, ordered=ordered
-                    ),
-                    mask=self.base_mask,
-                    offset=self.offset,
-                    children=(new_codes,),
+                    )
                 )
             elif (
                 not out_col._categories_equal(new_categories, ordered=True)
@@ -1391,16 +908,8 @@ class CategoricalColumn(column.ColumnBase):
         new_codes = cast(
             cudf.core.column.numerical.NumericalColumn, df._data["new_codes"]
         )
-
-        # codes can't have masks, so take mask out before moving in
-        new_codes = as_unsigned_codes(len(new_cats), new_codes)
-        return type(self)(
-            data=self.data,  # type: ignore[arg-type]
-            size=new_codes.size,
-            dtype=CategoricalDtype(categories=new_cats, ordered=ordered),
-            mask=new_codes.base_mask,
-            offset=new_codes.offset,
-            children=(new_codes,),
+        return new_codes._with_type_metadata(  # type: ignore[return-value]
+            CategoricalDtype(categories=new_cats, ordered=ordered)
         )
 
     def add_categories(self, new_categories: Any) -> Self:
@@ -1480,13 +989,6 @@ class CategoricalColumn(column.ColumnBase):
     def as_ordered(self, ordered: bool) -> Self:
         if self.dtype.ordered == ordered:
             return self
-        return type(self)(
-            data=self.data,  # type: ignore[arg-type]
-            size=self.size,
-            dtype=CategoricalDtype(
-                categories=self.categories, ordered=ordered
-            ),
-            mask=self.base_mask,
-            offset=self.offset,
-            children=self.children,
+        return self._with_type_metadata(
+            CategoricalDtype(categories=self.categories, ordered=ordered)
         )

@@ -563,6 +563,40 @@ std::unique_ptr<cudf::column> make_structs_column(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
+ * @brief Construct a STRUCT column using specified child columns as members
+ *
+ * Specified child/member columns and null_mask are adopted by resultant
+ * struct column i.e. the struct column hierarchy is created with the specified child
+ * columns as its children. This function does not ensure null consistency with the
+ * child columns or the descendant columns i.e. there are no guarantees that if a row of a struct
+ * column is null, then the corresponding rows of the descendant columns would also be null.
+ *
+ * A struct column requires that all specified child columns have the same
+ * number of rows. A struct column's row count equals that of any/all
+ * of its child columns. A single struct row at any index is comprised of
+ * all the individual child column values at the same index, in the order
+ * specified in the list of child columns.
+ *
+ * The specified null mask governs which struct row has a null value. This
+ * is orthogonal to the null values of individual child columns.
+ *
+ * @param[in] num_rows The number of struct values in the struct column.
+ * @param[in] child_columns The list of child/members that the struct is comprised of.
+ * @param[in] null_count The number of null values in the struct column.
+ * @param[in] null_mask The bits specifying the null struct values in the column.
+ * @param[in] stream Optional stream for use with all memory allocation and device kernels.
+ * @param[in] mr Optional resource to use for device memory allocation.
+ * @return Constructed structs column
+ */
+std::unique_ptr<cudf::column> create_structs_hierarchy(
+  size_type num_rows,
+  std::vector<std::unique_ptr<column>>&& child_columns,
+  size_type null_count,
+  rmm::device_buffer&& null_mask,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
  * @brief Construct a column with size elements that are all equal to the given scalar.
  *
  * The output column will have the same type as `s.type()`

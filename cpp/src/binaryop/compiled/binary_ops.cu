@@ -139,10 +139,9 @@ struct compare_functor {
 
   // This is used to compare a scalar and a column value
   template <typename LhsViewT = LhsDeviceViewT, typename RhsViewT = RhsDeviceViewT>
-  __device__ inline std::enable_if_t<std::is_same_v<LhsViewT, column_device_view> &&
-                                       !std::is_same_v<RhsViewT, column_device_view>,
-                                     OutT>
-  operator()(cudf::size_type i) const
+  __device__ inline OutT operator()(cudf::size_type i) const
+    requires(std::is_same_v<LhsViewT, column_device_view> &&
+             !std::is_same_v<RhsViewT, column_device_view>)
   {
     return cfunc_(lhs_dev_view_.is_valid(i),
                   rhs_dev_view_.is_valid(),
@@ -153,10 +152,9 @@ struct compare_functor {
 
   // This is used to compare a scalar and a column value
   template <typename LhsViewT = LhsDeviceViewT, typename RhsViewT = RhsDeviceViewT>
-  __device__ inline std::enable_if_t<!std::is_same_v<LhsViewT, column_device_view> &&
-                                       std::is_same_v<RhsViewT, column_device_view>,
-                                     OutT>
-  operator()(cudf::size_type i) const
+  __device__ inline OutT operator()(cudf::size_type i) const
+    requires(!std::is_same_v<LhsViewT, column_device_view> &&
+             std::is_same_v<RhsViewT, column_device_view>)
   {
     return cfunc_(lhs_dev_view_.is_valid(),
                   rhs_dev_view_.is_valid(i),
@@ -167,10 +165,9 @@ struct compare_functor {
 
   // This is used to compare 2 column values
   template <typename LhsViewT = LhsDeviceViewT, typename RhsViewT = RhsDeviceViewT>
-  __device__ inline std::enable_if_t<std::is_same_v<LhsViewT, column_device_view> &&
-                                       std::is_same_v<RhsViewT, column_device_view>,
-                                     OutT>
-  operator()(cudf::size_type i) const
+  __device__ inline OutT operator()(cudf::size_type i) const
+    requires(std::is_same_v<LhsViewT, column_device_view> &&
+             std::is_same_v<RhsViewT, column_device_view>)
   {
     return cfunc_(lhs_dev_view_.is_valid(i),
                   rhs_dev_view_.is_valid(i),
@@ -425,7 +422,7 @@ void apply_sorting_struct_binary_op(mutable_column_view& out,
         is_lhs_scalar,
         is_rhs_scalar,
         op,
-        cudf::experimental::row::equality::nan_equal_physical_equality_comparator{},
+        cudf::detail::row::equality::nan_equal_physical_equality_comparator{},
         stream);
       break;
     case binary_operator::LESS:
@@ -435,7 +432,7 @@ void apply_sorting_struct_binary_op(mutable_column_view& out,
         rhs,
         is_lhs_scalar,
         is_rhs_scalar,
-        cudf::experimental::row::lexicographic::sorting_physical_element_comparator{},
+        cudf::detail::row::lexicographic::sorting_physical_element_comparator{},
         stream);
       break;
     case binary_operator::GREATER:
@@ -445,7 +442,7 @@ void apply_sorting_struct_binary_op(mutable_column_view& out,
         rhs,
         is_lhs_scalar,
         is_rhs_scalar,
-        cudf::experimental::row::lexicographic::sorting_physical_element_comparator{},
+        cudf::detail::row::lexicographic::sorting_physical_element_comparator{},
         stream);
       break;
     case binary_operator::LESS_EQUAL:
@@ -455,7 +452,7 @@ void apply_sorting_struct_binary_op(mutable_column_view& out,
         rhs,
         is_lhs_scalar,
         is_rhs_scalar,
-        cudf::experimental::row::lexicographic::sorting_physical_element_comparator{},
+        cudf::detail::row::lexicographic::sorting_physical_element_comparator{},
         stream);
       break;
     case binary_operator::GREATER_EQUAL:
@@ -465,7 +462,7 @@ void apply_sorting_struct_binary_op(mutable_column_view& out,
         rhs,
         is_lhs_scalar,
         is_rhs_scalar,
-        cudf::experimental::row::lexicographic::sorting_physical_element_comparator{},
+        cudf::detail::row::lexicographic::sorting_physical_element_comparator{},
         stream);
       break;
     default: CUDF_FAIL("Unsupported operator for structs");

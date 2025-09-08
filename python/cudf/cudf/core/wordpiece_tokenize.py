@@ -24,12 +24,14 @@ class WordPieceVocabulary:
 
     def tokenize(self, text, max_words_per_row: int = 0) -> Series:
         """
+        Produces tokens for the input strings.
+        The input is expected to be the output of NormalizeCharacters or a
+        similar normalizer.
+
         Parameters
         ----------
         text : cudf.Series
-            The strings to be tokenized.
-            This input is expected to be the output of NormalizeCharacters
-            or similar.
+            Normalized strings to be tokenized.
         max_words_per_row : int
             Maximum number of words to tokenize per row.
             Default 0 tokenizes all words.

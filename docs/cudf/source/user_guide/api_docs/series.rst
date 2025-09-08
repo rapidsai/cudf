@@ -334,7 +334,7 @@ String handling
 
    Series.str
 
-.. currentmodule:: cudf.core.column.string.StringMethods
+.. currentmodule:: cudf.core.accessors.string.StringMethods
 .. autosummary::
    :toctree: api/
 
@@ -441,7 +441,7 @@ the ``Series.cat`` accessor.
 
    Series.cat
 
-.. currentmodule:: cudf.core.column.categorical.CategoricalAccessor
+.. currentmodule:: cudf.core.accessors.categorical.CategoricalAccessor
 .. autosummary::
    :toctree: api/
 
@@ -466,7 +466,7 @@ List handling
 
    Series.list
 
-.. currentmodule:: cudf.core.column.lists.ListMethods
+.. currentmodule:: cudf.core.accessors.lists.ListMethods
 .. autosummary::
    :toctree: api/
 
@@ -492,7 +492,7 @@ Struct handling
 
    Series.struct
 
-.. currentmodule:: cudf.core.column.struct.StructMethods
+.. currentmodule:: cudf.core.accessors.struct.StructMethods
 .. autosummary::
    :toctree: api/
 

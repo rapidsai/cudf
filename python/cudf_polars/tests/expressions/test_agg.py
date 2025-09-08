@@ -71,24 +71,12 @@ def df(dtype, with_nulls, is_sorted):
 def test_agg(df, agg):
     expr = getattr(pl.col("a"), agg)()
     q = df.select(expr)
-
-    # https://github.com/rapidsai/cudf/issues/15852
-    check_dtypes = agg not in {"n_unique", "median"}
-    if not check_dtypes and q.collect_schema()["a"] != pl.Float64:
-        with pytest.raises(AssertionError):
-            assert_gpu_result_equal(q)
-    assert_gpu_result_equal(q, check_dtypes=check_dtypes, check_exact=False)
+    assert_gpu_result_equal(q, check_exact=False)
 
 
 def test_bool_agg(agg, request):
     if agg == "cum_min" or agg == "cum_max":
         pytest.skip("Does not apply")
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=agg == "n_unique",
-            reason="Wrong dtype we get Int32, polars gets UInt32",
-        )
-    )
     df = pl.LazyFrame({"a": [True, False, None, True]})
     expr = getattr(pl.col("a"), agg)()
     q = df.select(expr)
@@ -110,13 +98,7 @@ def test_cum_agg_reverse_unsupported(cum_agg):
 def test_quantile(df, q, interp):
     expr = pl.col("a").quantile(q, interp)
     q = df.select(expr)
-
-    # https://github.com/rapidsai/cudf/issues/15852
-    check_dtypes = q.collect_schema()["a"] == pl.Float64
-    if not check_dtypes:
-        with pytest.raises(AssertionError):
-            assert_gpu_result_equal(q)
-    assert_gpu_result_equal(q, check_dtypes=check_dtypes, check_exact=False)
+    assert_gpu_result_equal(q, check_exact=False)
 
 
 def test_quantile_invalid_q(df):

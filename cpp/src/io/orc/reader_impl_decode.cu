@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
+#include "io/comp/decompression.hpp"
 #include "io/comp/gpuinflate.hpp"
-#include "io/comp/io_uncomp.hpp"
 #include "io/orc/reader_impl.hpp"
 #include "io/orc/reader_impl_chunking.hpp"
 #include "io/orc/reader_impl_helpers.hpp"
@@ -24,6 +24,7 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -105,12 +106,12 @@ rmm::device_buffer decompress_stripe_data(
         stripe_data[info.source.stripe_idx - loaded_stripe_range.begin].data()) +
         info.dst_pos,
       info.length);
-
     if (compinfo_ready) {
-      auto const& cached_comp_info             = compinfo_map.at(info.source);
-      stream_comp_info.num_compressed_blocks   = cached_comp_info.num_compressed_blocks;
-      stream_comp_info.num_uncompressed_blocks = cached_comp_info.num_uncompressed_blocks;
-      stream_comp_info.max_uncompressed_size   = cached_comp_info.total_decomp_size;
+      auto const& cached_comp_info                 = compinfo_map.at(info.source);
+      stream_comp_info.num_compressed_blocks       = cached_comp_info.num_compressed_blocks;
+      stream_comp_info.num_uncompressed_blocks     = cached_comp_info.num_uncompressed_blocks;
+      stream_comp_info.max_uncompressed_size       = cached_comp_info.total_decomp_size;
+      stream_comp_info.max_uncompressed_block_size = cached_comp_info.max_uncompressed_block_size;
 
       num_compressed_blocks += cached_comp_info.num_compressed_blocks;
       num_uncompressed_blocks += cached_comp_info.num_uncompressed_blocks;
@@ -150,11 +151,11 @@ rmm::device_buffer decompress_stripe_data(
     num_compressed_blocks + num_uncompressed_blocks, stream);
   rmm::device_uvector<device_span<uint8_t>> inflate_out(
     num_compressed_blocks + num_uncompressed_blocks, stream);
-  rmm::device_uvector<compression_result> inflate_res(num_compressed_blocks, stream);
+  rmm::device_uvector<codec_exec_result> inflate_res(num_compressed_blocks, stream);
   thrust::fill(rmm::exec_policy_nosync(stream),
                inflate_res.begin(),
                inflate_res.end(),
-               compression_result{0, compression_status::FAILURE});
+               codec_exec_result{0, codec_status::FAILURE});
 
   // Parse again to populate the decompression input/output buffers
   std::size_t decomp_offset      = 0;
@@ -207,7 +208,7 @@ rmm::device_buffer decompress_stripe_data(
                    thrust::make_counting_iterator(inflate_res.size()),
                    [results           = inflate_res.begin(),
                     any_block_failure = any_block_failure.device_ptr()] __device__(auto const idx) {
-                     if (results[idx].status != compression_status::SUCCESS) {
+                     if (results[idx].status != codec_status::SUCCESS) {
                        *any_block_failure = true;
                      }
                    });
@@ -1006,6 +1007,9 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
       return make_column(col_buffer, &_out_metadata.schema_info.back(), std::nullopt, _stream);
     });
   _chunk_read_data.decoded_table = std::make_unique<table>(std::move(out_columns));
+
+  out_columns =
+    cudf::structs::detail::enforce_null_consistency(std::move(out_columns), _stream, _mr);
 
   // Free up temp memory used for decoding.
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {

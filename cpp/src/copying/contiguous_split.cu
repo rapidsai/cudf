@@ -24,6 +24,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
@@ -524,8 +525,8 @@ struct buf_info_functor {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<std::is_same_v<T, cudf::dictionary32>, std::pair<src_buf_info*, size_type>>
-  operator()(Args&&...)
+  std::pair<src_buf_info*, size_type> operator()(Args&&...)
+    requires(std::is_same_v<T, cudf::dictionary32>)
   {
     CUDF_FAIL("Unsupported type");
   }
@@ -972,21 +973,22 @@ struct dst_valid_count_output_iterator {
  */
 struct size_of_helper {
   template <typename T>
-  constexpr std::enable_if_t<!is_fixed_width<T>() && !std::is_same_v<T, cudf::string_view>, int>
-    __device__ operator()() const
+  constexpr int __device__ operator()() const
+    requires(!is_fixed_width<T>() && !std::is_same_v<T, cudf::string_view>)
   {
     return 0;
   }
 
   template <typename T>
-  constexpr std::enable_if_t<!is_fixed_width<T>() && std::is_same_v<T, cudf::string_view>, int>
-    __device__ operator()() const
+  constexpr int __device__ operator()() const
+    requires(!is_fixed_width<T>() && std::is_same_v<T, cudf::string_view>)
   {
     return sizeof(cudf::device_storage_type_t<int8_t>);
   }
 
   template <typename T>
-  constexpr std::enable_if_t<is_fixed_width<T>(), int> __device__ operator()() const noexcept
+  constexpr int __device__ operator()() const noexcept
+    requires(is_fixed_width<T>())
   {
     return sizeof(cudf::device_storage_type_t<T>);
   }

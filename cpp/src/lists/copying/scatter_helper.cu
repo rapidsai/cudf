@@ -145,8 +145,8 @@ struct list_child_constructor {
  public:
   // SFINAE catch-all, for unsupported child column types.
   template <typename T, typename... Args>
-  std::enable_if_t<!is_supported_child_type<T>::value, std::unique_ptr<column>> operator()(
-    Args&&... args)
+  std::unique_ptr<column> operator()(Args&&... args)
+    requires(!is_supported_child_type<T>::value)
   {
     CUDF_FAIL("list_child_constructor unsupported!");
   }
@@ -155,13 +155,13 @@ struct list_child_constructor {
    * @brief Implementation for fixed_width child column types.
    */
   template <typename T>
-  std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<column>> operator()(
-    rmm::device_uvector<unbound_list_view> const& list_vector,
-    cudf::column_view const& list_offsets,
-    cudf::lists_column_view const& source_lists_column_view,
-    cudf::lists_column_view const& target_lists_column_view,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr) const
+  std::unique_ptr<column> operator()(rmm::device_uvector<unbound_list_view> const& list_vector,
+                                     cudf::column_view const& list_offsets,
+                                     cudf::lists_column_view const& source_lists_column_view,
+                                     cudf::lists_column_view const& target_lists_column_view,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr) const
+    requires(cudf::is_fixed_width<T>())
   {
     auto source_column_device_view =
       column_device_view::create(source_lists_column_view.parent(), stream);
@@ -214,13 +214,13 @@ struct list_child_constructor {
    * @brief Implementation for list child columns that contain strings.
    */
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, string_view>, std::unique_ptr<column>> operator()(
-    rmm::device_uvector<unbound_list_view> const& list_vector,
-    cudf::column_view const& list_offsets,
-    cudf::lists_column_view const& source_lists_column_view,
-    cudf::lists_column_view const& target_lists_column_view,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr) const
+  std::unique_ptr<column> operator()(rmm::device_uvector<unbound_list_view> const& list_vector,
+                                     cudf::column_view const& list_offsets,
+                                     cudf::lists_column_view const& source_lists_column_view,
+                                     cudf::lists_column_view const& target_lists_column_view,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr) const
+    requires(std::is_same_v<T, string_view>)
   {
     auto source_column_device_view =
       column_device_view::create(source_lists_column_view.parent(), stream);
@@ -277,13 +277,13 @@ struct list_child_constructor {
    * @brief (Recursively) Constructs a child column that is itself a list column.
    */
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, list_view>, std::unique_ptr<column>> operator()(
-    rmm::device_uvector<unbound_list_view> const& list_vector,
-    cudf::column_view const& list_offsets,
-    cudf::lists_column_view const& source_lists_column_view,
-    cudf::lists_column_view const& target_lists_column_view,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr) const
+  std::unique_ptr<column> operator()(rmm::device_uvector<unbound_list_view> const& list_vector,
+                                     cudf::column_view const& list_offsets,
+                                     cudf::lists_column_view const& source_lists_column_view,
+                                     cudf::lists_column_view const& target_lists_column_view,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr) const
+    requires(std::is_same_v<T, list_view>)
   {
     auto source_column_device_view =
       column_device_view::create(source_lists_column_view.parent(), stream);
@@ -373,13 +373,13 @@ struct list_child_constructor {
    * @brief (Recursively) constructs child columns that are structs.
    */
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, struct_view>, std::unique_ptr<column>> operator()(
-    rmm::device_uvector<unbound_list_view> const& list_vector,
-    cudf::column_view const& list_offsets,
-    cudf::lists_column_view const& source_lists_column_view,
-    cudf::lists_column_view const& target_lists_column_view,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr) const
+  std::unique_ptr<column> operator()(rmm::device_uvector<unbound_list_view> const& list_vector,
+                                     cudf::column_view const& list_offsets,
+                                     cudf::lists_column_view const& source_lists_column_view,
+                                     cudf::lists_column_view const& target_lists_column_view,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr) const
+    requires(std::is_same_v<T, struct_view>)
   {
     auto const source_column_device_view =
       column_device_view::create(source_lists_column_view.parent(), stream);

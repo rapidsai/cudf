@@ -16,10 +16,10 @@
 
 #pragma once
 
-#include "common_sort_impl.cuh"
+#include "sort.hpp"
 
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/table/experimental/row_operators.cuh>
+#include <cudf/detail/row_operator/row_operators.cuh>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -27,8 +27,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/sequence.h>
-#include <thrust/sort.h>
+#include <cub/device/device_merge_sort.cuh>
 
 namespace cudf {
 namespace detail {
@@ -43,7 +42,6 @@ namespace detail {
  * @param input Column to sort. The column data is not modified.
  * @param column_order Ascending or descending sort order
  * @param null_precedence How null rows are to be ordered
- * @param stable True if sort should be stable
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Sorted indices for the input column.
@@ -84,69 +82,6 @@ struct simple_comparator {
 template <sort_method method>
 struct column_sorted_order_fn {
   /**
-   * @brief Compile time check for allowing faster sort.
-   *
-   * Faster sort is defined for fixed-width types where only
-   * the primitive comparators cuda::std::greater or cuda::std::less
-   * are needed.
-   *
-   * Floating point is removed here for special handling of NaNs
-   * which require the row-comparator.
-   */
-  template <typename T>
-  static constexpr bool is_faster_sort_supported()
-  {
-    return cudf::is_fixed_width<T>() && !cudf::is_floating_point<T>();
-  }
-
-  /**
-   * @brief Sorts fixed-width columns using faster thrust sort.
-   *
-   * Should not be called if `input.has_nulls()==true`
-   *
-   * @param input Column to sort
-   * @param indices Output sorted indices
-   * @param ascending True if sort order is ascending
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   */
-  template <typename T>
-  void faster_sort(column_view const& input,
-                   mutable_column_view& indices,
-                   bool ascending,
-                   rmm::cuda_stream_view stream)
-  {
-    // A thrust sort on a column of primitive types will use a radix sort.
-    // For other fixed-width types, thrust will use merge-sort.
-    // But this also requires making a copy of the input data.
-    auto temp_col = column(input, stream);
-    auto d_col    = temp_col.mutable_view();
-
-    auto const do_sort = [&](auto const comp) {
-      // Compiling `thrust::*sort*` APIs is expensive.
-      // Thus, we should optimize that by using constexpr condition to only compile what we need.
-      if constexpr (method == sort_method::STABLE) {
-        thrust::stable_sort_by_key(rmm::exec_policy(stream),
-                                   d_col.begin<T>(),
-                                   d_col.end<T>(),
-                                   indices.begin<size_type>(),
-                                   comp);
-      } else {
-        thrust::sort_by_key(rmm::exec_policy(stream),
-                            d_col.begin<T>(),
-                            d_col.end<T>(),
-                            indices.begin<size_type>(),
-                            comp);
-      }
-    };
-
-    if (ascending) {
-      do_sort(cuda::std::less<T>{});
-    } else {
-      do_sort(cuda::std::greater<T>{});
-    }
-  }
-
-  /**
    * @brief Sorts a single column with a relationally comparable type.
    *
    * This is used when a comparator is required.
@@ -164,16 +99,23 @@ struct column_sorted_order_fn {
                     null_order null_precedence,
                     rmm::cuda_stream_view stream)
   {
-    auto keys = column_device_view::create(input, stream);
-    auto comp = simple_comparator<T>{*keys, input.has_nulls(), ascending, null_precedence};
-    // Compiling `thrust::*sort*` APIs is expensive.
-    // Thus, we should optimize that by using constexpr condition to only compile what we need.
+    auto keys      = column_device_view::create(input, stream);
+    auto comp      = simple_comparator<T>{*keys, input.has_nulls(), ascending, null_precedence};
+    auto in_keys   = thrust::make_counting_iterator<cudf::size_type>(0);
+    auto out_keys  = indices.begin<size_type>();
+    auto tmp_bytes = std::size_t{0};
     if constexpr (method == sort_method::STABLE) {
-      thrust::stable_sort(
-        rmm::exec_policy(stream), indices.begin<size_type>(), indices.end<size_type>(), comp);
+      cub::DeviceMergeSort::StableSortKeysCopy(
+        nullptr, tmp_bytes, in_keys, out_keys, indices.size(), comp, stream.value());
+      auto tmp_stg = rmm::device_buffer(tmp_bytes, stream);
+      cub::DeviceMergeSort::StableSortKeysCopy(
+        tmp_stg.data(), tmp_bytes, in_keys, out_keys, indices.size(), comp, stream.value());
     } else {
-      thrust::sort(
-        rmm::exec_policy(stream), indices.begin<size_type>(), indices.end<size_type>(), comp);
+      cub::DeviceMergeSort::SortKeysCopy(
+        nullptr, tmp_bytes, in_keys, out_keys, indices.size(), comp, stream.value());
+      auto tmp_stg = rmm::device_buffer(tmp_bytes, stream);
+      cub::DeviceMergeSort::SortKeysCopy(
+        tmp_stg.data(), tmp_bytes, in_keys, out_keys, indices.size(), comp, stream.value());
     }
   }
 
@@ -184,15 +126,7 @@ struct column_sorted_order_fn {
                   null_order null_precedence,
                   rmm::cuda_stream_view stream)
   {
-    if constexpr (is_faster_sort_supported<T>()) {
-      if (input.has_nulls()) {
-        sorted_order<T>(input, indices, ascending, null_precedence, stream);
-      } else {
-        faster_sort<T>(input, indices, ascending, stream);
-      }
-    } else {
-      sorted_order<T>(input, indices, ascending, null_precedence, stream);
-    }
+    sorted_order<T>(input, indices, ascending, null_precedence, stream);
   }
 
   template <typename T, CUDF_ENABLE_IF(not cudf::is_relationally_comparable<T, T>())>

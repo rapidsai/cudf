@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,6 +77,17 @@ auto operation::accept(detail::expression_transformer& visitor) const
 {
   return visitor.visit(*this);
 }
+
+bool operation::may_evaluate_null(table_view const& left,
+                                  table_view const& right,
+                                  rmm::cuda_stream_view stream) const
+{
+  return std::any_of(operands.cbegin(),
+                     operands.cend(),
+                     [&left, &right, &stream](std::reference_wrapper<expression const> subexpr) {
+                       return subexpr.get().may_evaluate_null(left, right, stream);
+                     });
+};
 
 auto column_name_reference::accept(detail::expression_transformer& visitor) const
   -> decltype(visitor.visit(*this))

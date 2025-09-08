@@ -8,7 +8,7 @@ You will need:
    preferred configuration. Or else, use
    [rustup](https://www.rust-lang.org/tools/install)
 2. A [cudf development
-   environment](https://github.com/rapidsai/cudf/blob/branch-25.08/CONTRIBUTING.md#setting-up-your-build-environment).
+   environment](https://github.com/rapidsai/cudf/blob/branch-25.10/CONTRIBUTING.md#setting-up-your-build-environment).
    The combined devcontainer works, or whatever your favourite approach is.
 
 :::{note}
@@ -278,9 +278,14 @@ function `rewrite` with type `Expr -> (Expr -> T) -> T`:
 
 ```python
 from cudf_polars.typing import GenericTransformer
+from typing import TypedDict
+
+class State(TypedDict):
+    ...
+
 
 @singledispatch
-def rewrite(e: Expr, rec: GenericTransformer[Expr, T]) -> T:
+def rewrite(e: Expr, rec: GenericTransformer[Expr, T, State]) -> T:
     ...
 ```
 
@@ -302,9 +307,10 @@ two utilities in `traversal.py`:
 These both implement the `GenericTransformer` protocol, and can be
 wrapped around a transformation function like `rewrite` to provide a
 function `Expr -> T`. They also allow us to attach arbitrary
-*immutable* state to our visitor by passing a `state` dictionary. This
-dictionary can then be inspected by the concrete transformation
-function. `make_recursive` is very simple, and provides no caching of
+*immutable* state to our visitor by passing a `state` dictionary. The
+`state` dictionary should be given as some `TypedDict` so that the
+transformation function knows which fields are available.
+`make_recursive` is very simple, and provides no caching of
 intermediate results (so any DAGs that are visited will be viewed as
 trees). `CachingVisitor` provides the same interface, but maintains a
 cache of intermediate results, and reuses them if the same expression
@@ -331,7 +337,7 @@ from cudf_polars.dsl.traversal import (
     CachingVisitor, make_recursive, reuse_if_unchanged
 )
 from cudf_polars.dsl.expr import Col, Expr
-from cudf_polars.typing import ExprTransformer
+from cudf_polars.dsl.to_ast import ExprTransformer
 
 
 @singledispatch
@@ -363,13 +369,119 @@ accidentally sent in an object of the incorrect type.
 Finally we tie everything together with a public function:
 
 ```python
+from typing import TypedDict
+
+class State(TypedDict):
+    mapping: Mapping[str, str]
+
+
 def rename(e: Expr, mapping: Mapping[str, str]) -> Expr:
     """Rename column references in an expression."""
-    mapper = CachingVisitor(_rename, state={"mapping": mapping})
+    mapper = CachingVisitor(_rename, state=State(mapping=mapping))
     # or
-    # mapper = make_recursive(_rename, state={"mapping": mapping})
+    # mapper = make_recursive(_rename, state=State(mapping=mapping))
     return mapper(e)
 ```
+
+# Estimated column statistics
+
+:::{note}
+Column-statistics estimation is experimental and the details are
+likely to change in the future.
+:::
+
+The `cudf-polars` streaming executor (enabled by default) may use
+estimated column statistics to transform translated logical-plan
+IR nodes into the final "physical-plan" IR nodes.
+
+## Storing statistics
+
+The following classes are used to store column statistics (listed
+in order of decreasing granularity):
+
+- `ColumnStat`: This class is used to store an individual column
+statistic (e.g. row count or unique-value count). Each object
+has two important attributes:
+  - `ColumnStat.value`: Returns the actual column-statistic value
+  (e.g. an `int` if the statistic is a row-count) or `None` if no
+  estimate is available.
+  - `ColumnStat.exact`: Whether the statistic is known "exactly".
+- `UniqueStats`: Since we usually sample both the unique-value
+**count** and the unique-value **fraction** of a column at once,
+we use `UniqueStats` to group these `ColumnStat`s into one object.
+- `DataSourceInfo`: This class is used to sample and store
+`ColumnStat`/`UniqueStats` objects associated with a single
+datasource (e.g. a Parquet dataset or in-memory `DataFrame`).
+  - Since it can be expensive to sample datasource statistics,
+  this class is specifically designed to enable **lazy** and
+  **aggregated** column sampling via sub-classing. For example,
+  The `ParquetSourceInfo` sub-class uses caching to avoid
+  redundant file-system access.
+- `ColumnSourceInfo`: This class wraps a `DataSourceInfo` object.
+Since `DataSourceInfo` tracks information for an entire table, we use
+`ColumnSourceInfo` to provide a single-column view of the object.
+- `ColumnStats`: This class is used to group together the "base"
+`ColumnSourceInfo` reference and the local unique-count estimate
+for a specific IR + column combination. We bundle these references
+together to simplify the design and maintenance of `StatsCollector`.
+**NOTE:** The local unique-count estimate is not yet populated.
+- `JoinKey`: This class is used to define a set of columns being
+joined on and the estimated unique-value count of the key.
+- `JoinInfo`: This class is used to define the necessary data
+structures for applying join heuristics to our query plan.
+Each object contains the following attributes:
+  - `JoinInfo.key_map`: Returns a mapping between distinct
+  `JoinKey` objects that are joined on in the query plan.
+  - `JoinInfo.col_map`: Returns a mapping between distinct
+  `ColumnStats` objects that are joined on in the query plan.
+  - `JoinInfo.join_map`: Returns a mapping between each IR node
+  and the associated `JoinKey` objects.
+- `StatsCollector`: This class is used to collect and store
+statistics for all IR nodes within a single query. The statistics
+attached to each IR node refer to the **output** columns of the
+IR node in question. The `StatsCollector` class is especially important,
+because it is used to organize **all** statistics within a logical plan.
+Each object has two important attributes:
+  - `StatsCollector.row_count`: Returns a mapping between each IR
+  node and the row-count `ColumnStat` estimate for that node.
+  **NOTE:** This attribute is not yet populated.
+  - `StatsCollector.column_stats`: Returns a mapping between each IR
+  node and the `dict[str, ColumnStats]` mapping for that node.
+  - `StatsCollector.join_info`: Returns a `JoinInfo` object.
+
+## Collecting and using statistics
+
+:::{note}
+Column-statistics collection is under active development.
+The existing APIs only support the sampling of base
+datasource statistics. The current row-count and unique-value
+statistics for each IR node are not populated by any traversal
+logic yet.
+:::
+
+### Collecting base statistics
+
+The top-level API for sampling base datasource statistics is
+`cudf_polars.experimental.statistics.collect_base_stats`. This
+function calls into the `initialize_column_stats` single-dispatch
+function to collect a `dict[str, ColumnStats]` mapping for each
+IR node in the logical plan.
+
+The IR-specific logic for each `initialize_column_stats` dispatch is
+relatively simple, because the only goal is to collect and propagate
+the underlying `DataSourceInfo` reference and child-`ColumnStats`
+references for each column. This means that `Scan` and `DataFrameScan`
+are the only IR classes needing specialized sampling logic. All other
+IR classes are typically propagating reference from child-IR nodes.
+
+### Using base statistics
+
+Base `DataSourceInfo` references are currently used to calculate
+the partition count when a Parquet-based `Scan` node is lowered
+by the `cudf-polars` streaming executor.
+
+In the future, these statistics will also be used for
+parallel-algorithm selection and intermediate repartitioning.
 
 # Containers
 
@@ -488,3 +600,22 @@ To centralize validation and keep things well-typed internally, we model our
 additional configuration as a set of dataclasses defined in
 `cudf_polars/utils/config.py`. To transition from user-provided options to our
 (validated) internal options, use `ConfigOptions.from_polars_engine`.
+
+# Profiling
+
+You can profile `cudf_polars` using NVIDIA NSight Systems. Each `.collect()` or
+`.sink()` call has two top-level ranges under the `cudf_polars` domain:
+
+1. `ConvertIR`: measures the time spent converting the polars query plan to
+   cudf-polars' IR.
+2. `ExecuteIR`: measures the time spent executing the cudf-polars IR.
+
+The majority of time should be spent in the `ExecuteIR` range. Within
+`ExecuteIR`, each individual IR node's `do_evaluate` method is wrapped in
+another `nvtx` range (e.g. `Scan.do_evaluate`, `GroupBy.do_evaluate`, etc.).
+These provide a higher-level grouping over the lower-level libcudf calls (e.g.
+`read_chunk`, `aggregate`).
+
+Finally, if using [rapidsmpf](https://docs.rapids.ai/api/rapidsmpf/nightly/)
+for shuffling, the methods inserting and extracting partitions to shuffle are
+annotated with nvtx ranges.

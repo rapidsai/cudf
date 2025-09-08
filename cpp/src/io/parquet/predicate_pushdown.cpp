@@ -121,18 +121,24 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
 {
   auto mr = cudf::get_current_device_resource_ref();
 
+  // Get a boolean mask indicating which columns can participate in stats based filtering
+  auto const stats_columns_mask =
+    stats_columns_collector{filter.get(), static_cast<size_type>(output_dtypes.size())}
+      .get_stats_columns_mask();
+
   // Converts Column chunk statistics to a table
   // where min(col[i]) = columns[i*2], max(col[i])=columns[i*2+1]
-  // For each column, it contains #sources * #column_chunks_per_src rows.
+  // For each column, it contains #sources * #column_chunks_per_src rows
   std::vector<std::unique_ptr<column>> columns;
   row_group_stats_caster const stats_col{
     static_cast<size_type>(total_row_groups), per_file_metadata, input_row_group_indices};
   for (size_t col_idx = 0; col_idx < output_dtypes.size(); col_idx++) {
     auto const schema_idx = output_column_schemas[col_idx];
     auto const& dtype     = output_dtypes[col_idx];
-    // Only comparable types except fixed point are supported.
-    if (cudf::is_compound(dtype) && dtype.id() != cudf::type_id::STRING) {
-      // placeholder only for unsupported types.
+    // Only participating columns and comparable types except fixed point are supported
+    if (not stats_columns_mask[col_idx] or
+        (cudf::is_compound(dtype) && dtype.id() != cudf::type_id::STRING)) {
+      // Placeholder for unsupported types and non-participating columns
       columns.push_back(cudf::make_numeric_column(
         data_type{cudf::type_id::BOOL8}, total_row_groups, rmm::device_buffer{}, 0, stream, mr));
       columns.push_back(cudf::make_numeric_column(

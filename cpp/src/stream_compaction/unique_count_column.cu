@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,9 +18,9 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/row_operator/row_operators.cuh>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/stream_compaction.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -43,14 +43,16 @@ namespace {
  */
 struct check_nan {
   // Check if a value is `NaN` for floating point type columns
-  template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
+  template <typename T>
   __device__ inline bool operator()(column_device_view const& input, size_type index)
+    requires(std::is_floating_point_v<T>)
   {
     return std::isnan(input.data<T>()[index]);
   }
   // Non-floating point type columns can never have `NaN`, so it will always return false.
-  template <typename T, std::enable_if_t<not std::is_floating_point_v<T>>* = nullptr>
+  template <typename T>
   __device__ inline bool operator()(column_device_view const&, size_type)
+    requires(not std::is_floating_point_v<T>)
   {
     return false;
   }

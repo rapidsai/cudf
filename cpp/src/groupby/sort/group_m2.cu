@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -84,12 +84,12 @@ void compute_m2_fn(column_device_view const& values,
 
 struct m2_functor {
   template <typename T>
-  std::enable_if_t<std::is_arithmetic_v<T>, std::unique_ptr<column>> operator()(
-    column_view const& values,
-    column_view const& group_means,
-    cudf::device_span<size_type const> group_labels,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr)
+  std::unique_ptr<column> operator()(column_view const& values,
+                                     column_view const& group_means,
+                                     cudf::device_span<size_type const> group_labels,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
+    requires(std::is_arithmetic_v<T>)
   {
     using result_type = cudf::detail::target_type_t<T, aggregation::Kind::M2>;
     auto result       = make_numeric_column(data_type(type_to_id<result_type>()),
@@ -122,7 +122,8 @@ struct m2_functor {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<!std::is_arithmetic_v<T>, std::unique_ptr<column>> operator()(Args&&...)
+  std::unique_ptr<column> operator()(Args&&...)
+    requires(!std::is_arithmetic_v<T>)
   {
     CUDF_FAIL("Only numeric types are supported in M2 groupby aggregation");
   }
