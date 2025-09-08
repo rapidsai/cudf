@@ -1,4 +1,5 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
+import operator
 
 import pytest
 
@@ -31,3 +32,15 @@ def test_rangeindex_binops_user_option(
         expected,
         actual,
     )
+
+
+@pytest.mark.parametrize(
+    "op", [operator.add, operator.sub, operator.mul, operator.truediv]
+)
+def test_rangeindex_binop_diff_names_none(op):
+    idx1 = cudf.RangeIndex(10, 13, name="foo")
+    idx2 = cudf.RangeIndex(13, 16, name="bar")
+    result = op(idx1, idx2)
+    expected = op(idx1.to_pandas(), idx2.to_pandas())
+    assert_eq(result, expected)
+    assert result.name is None
