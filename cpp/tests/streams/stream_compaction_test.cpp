@@ -380,9 +380,10 @@ TEST_F(StreamCompactionTest, ApplyBooleanMask)
 
 TEST_F(StreamCompactionTest, ASTFilterJitExec)
 {
-  auto const col         = int32s_col{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14};
-  auto col_ref_0         = cudf::ast::column_reference(0);
-  auto max_scalar        = cudf::numeric_scalar<cudf::size_type>(10);
+  auto const col  = int32s_col{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14};
+  auto col_ref_0  = cudf::ast::column_reference(0);
+  auto max_scalar = cudf::numeric_scalar<int32_t>(
+    10, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref());
   auto const max_literal = cudf::ast::literal(max_scalar);
   auto expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, max_literal);
   cudf::table_view input({col});
