@@ -137,7 +137,8 @@ std::unique_ptr<cudf::column> build_row_mask_column(
   rmm::device_async_resource_ref mr)
 {
   auto row_mask = rmm::device_buffer(num_rows, stream, mr);
-  cuco::experimental::roaring_bitmap<cuda::std::uint64_t> roaring_bitmap(deletion_vector.data());
+  cuco::experimental::roaring_bitmap<cuda::std::uint64_t> roaring_bitmap(
+    deletion_vector.data(), {}, stream);
 
   auto row_mask_iter = static_cast<bool*>(row_mask.data());
   roaring_bitmap.contains_async(

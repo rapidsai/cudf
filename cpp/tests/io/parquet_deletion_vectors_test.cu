@@ -23,11 +23,8 @@
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
-#include <cudf/utilities/default_stream.hpp>
-#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/exec_policy.hpp>
 
 #include <cuco/roaring_bitmap.cuh>
 #include <thrust/iterator/counting_iterator.h>
@@ -329,11 +326,12 @@ TYPED_TEST(RoaringBitmapBasicsTest, BitmapSerialization)
     CUDF_FAIL("Roaring bitmap key must be either uint32_t or uint64_t");
   }
 
-  // cuCollections roaring bitmap from the serialized roaring64 bitmap bytes
-  cuco::experimental::roaring_bitmap<Key> roaring_bitmap(serialized_bitmap.data());
-
   auto const stream = cudf::get_default_stream();
   auto const mr     = cudf::get_current_device_resource_ref();
+
+  // cuCollections roaring bitmap from the serialized roaring64 bitmap bytes
+  auto roaring_bitmap =
+    cuco::experimental::roaring_bitmap<Key>(serialized_bitmap.data(), {}, stream);
 
   // Query the roaring bitmap
   auto contained = rmm::device_uvector<bool>(num_keys, stream, mr);
