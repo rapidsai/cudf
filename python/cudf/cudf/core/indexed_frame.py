@@ -3831,19 +3831,21 @@ class IndexedFrame(Frame):
             # These are positions where the original data had no corresponding index
             original_index_set = set(self.index)
             new_positions_mask = ~result.index.isin(original_index_set)
-            
+
             # Only fill NA values at new positions
             for col_name in result._column_names:
                 col = result._data[col_name]
-                if hasattr(col, 'fillna'):
+                if hasattr(col, "fillna"):
                     # Create a mask for NA values at new positions only
                     na_mask = col.isna()
                     fill_mask = na_mask & new_positions_mask
-                    
+
                     if fill_mask.any():
                         # Fill only the NA values at new positions
-                        result._data[col_name] = col.where(~fill_mask, fill_value)
-        
+                        result._data[col_name] = col.where(
+                            ~fill_mask, fill_value
+                        )
+
         return self._mimic_inplace(result, inplace=inplace)
 
     def round(self, decimals=0, how="half_even"):
