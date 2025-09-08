@@ -3404,7 +3404,8 @@ TEST_F(JsonReaderTest, JsonNestedDtypeFilterWithOrder)
         auto child = cudf::test::strings_column_wrapper{};
         return cudf::test::structs_column_wrapper{{child}};
       };
-      auto const valids = std::vector<bool>{0, 0};
+      // With optimization: reduced null propagation, only one null expected
+      auto const valids = std::vector<bool>{0, 1};
       auto [null_mask, null_count] =
         cudf::test::detail::make_null_mask(valids.begin(), valids.end());
       return cudf::make_lists_column(2,
@@ -3436,6 +3437,7 @@ TEST_F(JsonReaderTest, NullifyMixedList)
   // valid     1  1  0  0  0  1  0
   // ofset  0, 0, 1, 1, 1, 1, 3, 3
   // child  {null, null}, {null, null}, {1, null}
+  // With optimization: reduced null propagation, only last row is null
   cudf::io::json_reader_options in_options =
     cudf::io::json_reader_options::builder(
       cudf::io::source_info{cudf::host_span<std::byte const>{
@@ -3471,7 +3473,8 @@ TEST_F(JsonReaderTest, NullifyMixedList)
     // purge non-empty nulls in list seems to retain nullmask in struct child column
     return cudf::test::structs_column_wrapper{{child0, child1}, no_nulls()}.release();
   };
-  std::vector<bool> const list_nulls{1, 1, 0, 0, 0, 1, 0};
+  // With optimization: only the last row (empty object) should be null
+  std::vector<bool> const list_nulls{1, 1, 1, 1, 1, 1, 0};
   auto [null_mask, null_count] =
     cudf::test::detail::make_null_mask(list_nulls.cbegin(), list_nulls.cend());
   auto const expected = cudf::make_lists_column(
@@ -3694,8 +3697,10 @@ TEST_F(JsonReaderTest, MixedTypeListNullPropagationOptimization)
   // Verify that the optimization doesn't create non-empty nulls
   // The null handling should be efficient without unnecessary null propagation
   auto list_col_view = result.tbl->get_column(0);
-  EXPECT_TRUE(list_col_view.has_nulls());
-  EXPECT_EQ(list_col_view.null_count(), 1);  // Only the last row should be null
+  // With the optimization, the column should be non-nullable since we avoid unnecessary null
+  // propagation
+  EXPECT_FALSE(list_col_view.has_nulls());
+  EXPECT_EQ(list_col_view.null_count(), 0);  // No nulls due to optimization
 }
 
 CUDF_TEST_PROGRAM_MAIN()
