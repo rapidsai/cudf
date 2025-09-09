@@ -114,7 +114,7 @@ def make_lazy_frame(
             row_group_size = 10
         elif fmt == "csv":
             read = pl.scan_csv
-        else:
+        else:  # pragma: no cover
             raise ValueError(f"Unsupported format: {fmt}")
         make_partitioned_source(
             df, path, fmt=fmt, n_files=n_files, row_group_size=row_group_size
