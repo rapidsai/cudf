@@ -619,12 +619,21 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 to_dtype = find_common_type(
                     [dtype for _, dtype in self._dtypes]
                 )
-                if (
-                    to_dtype is not None
-                    and to_dtype.kind in "ui"
-                    and any(col.has_nulls() for col in self._columns)
+                if to_dtype is not None and any(
+                    col.has_nulls() for col in self._columns
                 ):
-                    to_dtype = numpy.dtype("float64")
+                    if to_dtype.kind == "b" or any(
+                        dtype.kind == "b"  # type: ignore[union-attr]
+                        for _, dtype in self._dtypes
+                    ):
+                        if module == cupy:
+                            raise ValueError(
+                                "Cannot convert to cupy bool array with nulls."
+                            )
+                        else:
+                            to_dtype = numpy.dtype("object")
+                    elif to_dtype.kind in "ui":
+                        to_dtype = numpy.dtype("float64")
 
             if cudf.get_option(
                 "mode.pandas_compatible"

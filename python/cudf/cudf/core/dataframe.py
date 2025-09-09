@@ -7729,6 +7729,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         DataFrame
             The requested correlation matrix.
         """
+        if self.isna().any().any():
+            raise NotImplementedError("cupy-based corr does not support nulls")
+
         if method == "pearson":
             values = self.values
         elif method == "spearman":
