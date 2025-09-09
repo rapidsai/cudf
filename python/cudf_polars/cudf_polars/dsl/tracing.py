@@ -151,4 +151,4 @@ def log_do_evaluate(
         else:
             return func(cls, *args, **kwargs)  # type: ignore[arg-type]
 
-    return wrapper  # type: ignore
+    return wrapper  # type: ignore[return-value]
