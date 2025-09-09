@@ -7698,6 +7698,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 "numeric_only is currently not supported."
             )
 
+        if self.isna().any().any():
+            raise NotImplementedError("cupy-based cov does not support nulls")
+
         cov = cupy.cov(self.values, ddof=ddof, rowvar=False)
         cols = self._data.to_pandas_index
         df = DataFrame(cupy.asfortranarray(cov), index=cols)

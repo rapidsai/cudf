@@ -619,6 +619,12 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 to_dtype = find_common_type(
                     [dtype for _, dtype in self._dtypes]
                 )
+                if (
+                    to_dtype is not None
+                    and to_dtype.kind in "ui"
+                    and any(col.has_nulls() for col in self._columns)
+                ):
+                    to_dtype = numpy.dtype("float64")
 
             if cudf.get_option(
                 "mode.pandas_compatible"
