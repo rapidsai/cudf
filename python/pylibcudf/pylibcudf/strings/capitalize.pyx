@@ -20,7 +20,8 @@ __all__ = ["capitalize", "is_title", "title"]
 
 cpdef Column capitalize(
     Column input,
-    Scalar delimiters=None
+    Scalar delimiters=None,
+    Stream stream=None
     # TODO: default scalar values
     # https://github.com/rapidsai/cudf/issues/15505
 ):
@@ -41,10 +42,9 @@ cpdef Column capitalize(
         Column of strings capitalized from the input column
     """
     cdef unique_ptr[column] c_result
-    cdef Stream stream
+    stream = _get_stream(stream)
 
     if delimiters is None:
-        stream = _get_stream(None)
         delimiters = Scalar.from_libcudf(
             cpp_make_string_scalar("".encode(), stream.view())
         )
@@ -56,15 +56,17 @@ cpdef Column capitalize(
     with nogil:
         c_result = cpp_capitalize.capitalize(
             input.view(),
-            dereference(cpp_delimiters)
+            dereference(cpp_delimiters),
+            stream.view()
         )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream)
 
 
 cpdef Column title(
     Column input,
-    string_character_types sequence_type=string_character_types.ALPHA
+    string_character_types sequence_type=string_character_types.ALPHA,
+    Stream stream=None
 ):
     """Modifies first character of each word to upper-case and lower-cases
     the rest.
@@ -84,13 +86,14 @@ cpdef Column title(
         Column of titled strings
     """
     cdef unique_ptr[column] c_result
+    stream = _get_stream(stream)
     with nogil:
-        c_result = cpp_capitalize.title(input.view(), sequence_type)
+        c_result = cpp_capitalize.title(input.view(), sequence_type, stream.view())
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream)
 
 
-cpdef Column is_title(Column input):
+cpdef Column is_title(Column input, Stream stream=None):
     """Checks if the strings in the input column are title formatted.
 
     For details, see :cpp:func:`cudf::strings::is_title`.
@@ -106,7 +109,8 @@ cpdef Column is_title(Column input):
         Column of type BOOL8
     """
     cdef unique_ptr[column] c_result
+    stream = _get_stream(stream)
     with nogil:
-        c_result = cpp_capitalize.is_title(input.view())
+        c_result = cpp_capitalize.is_title(input.view(), stream.view())
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream)
