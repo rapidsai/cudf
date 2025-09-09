@@ -3437,7 +3437,6 @@ TEST_F(JsonReaderTest, NullifyMixedList)
   // valid     1  1  0  0  0  1  0
   // ofset  0, 0, 1, 1, 1, 1, 3, 3
   // child  {null, null}, {null, null}, {1, null}
-  // With optimization: reduced null propagation, only last row is null
   cudf::io::json_reader_options in_options =
     cudf::io::json_reader_options::builder(
       cudf::io::source_info{cudf::host_span<std::byte const>{
@@ -3473,7 +3472,7 @@ TEST_F(JsonReaderTest, NullifyMixedList)
     // purge non-empty nulls in list seems to retain nullmask in struct child column
     return cudf::test::structs_column_wrapper{{child0, child1}, no_nulls()}.release();
   };
-  // With optimization: only the last row (empty object) should be null
+  // With optimization: reduced null propagation, only last row is null
   std::vector<bool> const list_nulls{1, 1, 1, 1, 1, 1, 0};
   auto [null_mask, null_count] =
     cudf::test::detail::make_null_mask(list_nulls.cbegin(), list_nulls.cend());
