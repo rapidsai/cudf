@@ -963,8 +963,8 @@ def setup_logging(query_id: int, iteration: int) -> None:  # noqa: D103
         # the contextvars set via `client.run` aren't visible to the actual
         # tasks.
         #
-        # So instead we make a new logger each time we need a new context
-        # i.e. for each query/iteration pair).
+        # So instead we make a new logger each time we need a new context,
+        # i.e. for each query/iteration pair.
 
         def make_injector(
             query_id: int, iteration: int
