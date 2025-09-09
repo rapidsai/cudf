@@ -25,6 +25,7 @@
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
@@ -52,7 +53,7 @@ __device__ __forceinline__ void retrieve(
   cuda::std::pair<cudf::size_type, cudf::size_type> const* input_hash_begin,
   cudf::size_type* output_probe,
   cudf::size_type* output_match,
-  cuda::atomic<size_t, cuda::thread_scope_device>& atomic_counter) noexcept
+  cuda::atomic_ref<std::size_t, cuda::thread_scope_device> atomic_counter) noexcept
 {
   static constexpr auto bucket_size = 2;
   static constexpr auto block_size  = DEFAULT_JOIN_BLOCK_SIZE;
@@ -68,8 +69,8 @@ __device__ __forceinline__ void retrieve(
 
   auto const warp    = cg::tiled_partition<warp_size>(block);
   auto const warp_id = warp.meta_group_rank();
-  auto const stride  = block_size;
-  auto idx           = threadIdx.x;
+  auto const stride  = static_cast<thread_index_type>(block_size);
+  auto idx           = static_cast<thread_index_type>(threadIdx.x);
 
   __shared__ cudf::size_type probe_output_buffer[num_warps][buffer_size];
   __shared__ cudf::size_type match_output_buffer[num_warps][buffer_size];
@@ -83,20 +84,22 @@ __device__ __forceinline__ void retrieve(
   warp.sync();
 
   auto flush_output_buffer = [&](auto const& warp_group) {
-    size_type offset = 0;
-    auto const count = warp_counter[warp_id];
-    auto const rank  = warp_group.thread_rank();
+    std::size_t offset = 0;
+    auto const count   = warp_counter[warp_id];
+    auto const rank    = warp_group.thread_rank();
     if (rank == 0) { offset = atomic_counter.fetch_add(count, cuda::memory_order_relaxed); }
     offset = warp_group.shfl(offset, 0);
 
     for (auto i = rank; i < count; i += warp_group.size()) {
-      *(output_probe + offset + i) = probe_output_buffer[warp_id][i];
-      *(output_match + offset + i) = match_output_buffer[warp_id][i];
+      auto const output_index =
+        static_cast<thread_index_type>(offset) + static_cast<thread_index_type>(i);
+      *(output_probe + output_index) = probe_output_buffer[warp_id][i];
+      *(output_match + output_index) = match_output_buffer[warp_id][i];
     }
   };
 
-  while (warp.any(idx < n)) {
-    bool active_flag       = idx < n;
+  while (warp.any(idx < static_cast<thread_index_type>(n))) {
+    bool active_flag       = idx < static_cast<thread_index_type>(n);
     auto const active_warp = cg::binary_partition<warp_size>(warp, active_flag);
 
     if (active_flag) {
@@ -104,8 +107,8 @@ __device__ __forceinline__ void retrieve(
       auto const& hash_idx  = *(input_hash_begin + idx);
 
       auto const extent     = hash_table_storage.size();
-      auto current_slot_idx = static_cast<std::size_t>(hash_idx.first);
-      auto const step       = static_cast<std::size_t>(hash_idx.second);
+      auto current_slot_idx = static_cast<thread_index_type>(hash_idx.first);
+      auto const step       = static_cast<thread_index_type>(hash_idx.second);
 
       bool running                      = true;
       [[maybe_unused]] bool found_match = false;
@@ -114,7 +117,7 @@ __device__ __forceinline__ void retrieve(
         if (running) {
           auto const bucket_slots = *reinterpret_cast<
             cuda::std::array<cuco::pair<hash_value_type, cudf::size_type>, 2> const*>(
-            hash_table_storage.data() + current_slot_idx);
+            hash_table_storage.data() + static_cast<std::size_t>(current_slot_idx));
 
           auto const first_slot_is_empty  = bucket_slots[0].second == cudf::detail::JoinNoneValue;
           auto const second_slot_is_empty = bucket_slots[1].second == cudf::detail::JoinNoneValue;
@@ -138,8 +141,10 @@ __device__ __forceinline__ void retrieve(
               probe_output_buffer[warp_id][output_idx] = probe_row_index;
               match_output_buffer[warp_id][output_idx] = bucket_slots[0].second;
               if (second_equals) {
-                probe_output_buffer[warp_id][output_idx + 1] = probe_row_index;
-                match_output_buffer[warp_id][output_idx + 1] = bucket_slots[1].second;
+                auto const second_idx =
+                  static_cast<thread_index_type>(output_idx) + thread_index_type{1};
+                probe_output_buffer[warp_id][second_idx] = probe_row_index;
+                match_output_buffer[warp_id][second_idx] = bucket_slots[1].second;
               }
             } else if (second_equals) {
               probe_output_buffer[warp_id][output_idx] = probe_row_index;
@@ -173,8 +178,9 @@ __device__ __forceinline__ void retrieve(
           active_warp.sync();
         }
 
-        current_slot_idx = (current_slot_idx + step) % extent;
-        if (current_slot_idx == static_cast<std::size_t>(hash_idx.first)) { running = false; }
+        auto const extent_thread = static_cast<thread_index_type>(extent);
+        current_slot_idx         = (current_slot_idx + step) % extent_thread;
+        if (current_slot_idx == static_cast<thread_index_type>(hash_idx.first)) { running = false; }
       }
     }
 
@@ -183,7 +189,6 @@ __device__ __forceinline__ void retrieve(
   }
 
   warp.sync();
-  // Final flush: ensure any remaining buffered matches are written to global memory
   cuda::atomic_ref<cudf::size_type, cuda::thread_scope_block> final_counter_ref{
     warp_counter[warp_id]};
   if (final_counter_ref.load(cuda::memory_order_relaxed) > 0) { flush_output_buffer(warp); }
@@ -201,7 +206,8 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
              size_type* join_output_l,
              size_type* join_output_r,
              cudf::ast::detail::expression_device_view device_expression_data,
-             bool swap_tables)
+             bool swap_tables,
+             std::size_t* global_counter)
 {
   extern __shared__ char raw_intermediate_storage[];
   auto intermediate_storage =
@@ -221,11 +227,17 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
   namespace cg = cooperative_groups;
 
   auto const block = cg::this_thread_block();
-  cuda::atomic<size_t, cuda::thread_scope_device> counter_ref{0};
 
-  auto const block_begin_offset = block.group_index().x * DEFAULT_JOIN_BLOCK_SIZE;
-  auto const block_end_offset   = cuda::std::min(
-    outer_num_rows, static_cast<cudf::size_type>(block_begin_offset + DEFAULT_JOIN_BLOCK_SIZE));
+  cuda::atomic_ref<std::size_t, cuda::thread_scope_device> atomic_counter{*global_counter};
+
+  auto const block_begin_offset_thread = static_cast<thread_index_type>(block.group_index().x) *
+                                         static_cast<thread_index_type>(DEFAULT_JOIN_BLOCK_SIZE);
+  auto const block_end_offset_thread = cuda::std::min(
+    static_cast<thread_index_type>(outer_num_rows),
+    block_begin_offset_thread + static_cast<thread_index_type>(DEFAULT_JOIN_BLOCK_SIZE));
+
+  auto const block_begin_offset = static_cast<cudf::size_type>(block_begin_offset_thread);
+  auto const block_end_offset   = static_cast<cudf::size_type>(block_end_offset_thread);
 
   if (block_begin_offset < block_end_offset) {
     if (join_type == join_kind::LEFT_JOIN || join_type == join_kind::FULL_JOIN) {
@@ -237,7 +249,7 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
                      hash_indices + block_begin_offset,
                      swap_tables ? join_output_r : join_output_l,
                      swap_tables ? join_output_l : join_output_r,
-                     counter_ref);
+                     atomic_counter);
     } else {
       retrieve<false>(block,
                       hash_table_storage,
@@ -247,7 +259,7 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
                       hash_indices + block_begin_offset,
                       swap_tables ? join_output_r : join_output_l,
                       swap_tables ? join_output_l : join_output_r,
-                      counter_ref);
+                      atomic_counter);
     }
   }
 }
@@ -269,6 +281,8 @@ void launch_mixed_join(
   int64_t shmem_size_per_block,
   rmm::cuda_stream_view stream)
 {
+  cudf::detail::device_scalar<std::size_t> global_counter{0, stream};
+
   mixed_join<has_nulls>
     <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
       left_table,
@@ -281,7 +295,8 @@ void launch_mixed_join(
       join_output_l,
       join_output_r,
       device_expression_data,
-      swap_tables);
+      swap_tables,
+      global_counter.data());
 }
 
 }  // namespace cudf::detail

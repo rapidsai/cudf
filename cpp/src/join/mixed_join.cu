@@ -93,14 +93,25 @@ precompute_mixed_join_data(mixed_join_hash_table_t const& hash_table,
     auto const hash1_val = cuda::std::get<0>(probe_hash_fn)(probe_key);
     auto const hash2_val = cuda::std::get<1>(probe_hash_fn)(probe_key);
 
-    // Double hashing logic: initial position and step size
-    auto const init_idx = (hash1_val % (extent / bucket_size)) * bucket_size;
-    auto const step_val =
-      ((hash2_val % (extent / bucket_size - std::size_t{1})) + std::size_t{1}) * bucket_size;
+    // Double hashing logic using thread_index_type for overflow prevention
+    // Convert to thread_index_type (int64_t) for intermediate calculations
+    auto const extent_thread      = static_cast<thread_index_type>(extent);
+    auto const bucket_size_thread = static_cast<thread_index_type>(bucket_size);
+    auto const hash1_thread       = static_cast<thread_index_type>(hash1_val);
+    auto const hash2_thread       = static_cast<thread_index_type>(hash2_val);
 
-    return cuda::std::pair{
-      probe_key,
-      cuda::std::pair{static_cast<size_type>(init_idx), static_cast<size_type>(step_val)}};
+    auto const init_idx_thread =
+      (hash1_thread % (extent_thread / bucket_size_thread)) * bucket_size_thread;
+    auto const step_val_thread =
+      ((hash2_thread % (extent_thread / bucket_size_thread - thread_index_type{1})) +
+       thread_index_type{1}) *
+      bucket_size_thread;
+
+    // Convert back to size_type for storage (safe since hash table indices are bounded by extent)
+    auto const init_idx = static_cast<size_type>(init_idx_thread);
+    auto const step_val = static_cast<size_type>(step_val_thread);
+
+    return cuda::std::pair{probe_key, cuda::std::pair{init_idx, step_val}};
   };
 
   // Single transform to fill both arrays using zip iterator
