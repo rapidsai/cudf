@@ -33,6 +33,7 @@ from cudf_polars.utils import config, sorting
 from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_131,
     POLARS_VERSION_LT_132,
+    POLARS_VERSION_LT_133,
     POLARS_VERSION_LT_1323,
 )
 
@@ -691,14 +692,26 @@ def _(
     elif isinstance(name, str):
         children = (translator.translate_expr(n=n, schema=schema) for n in node.input)
         if name == "log":
-            (base,) = options
-            (child,) = children
-            return expr.BinOp(
-                dtype,
-                plc.binaryop.BinaryOperator.LOG_BASE,
-                child,
-                expr.Literal(dtype, base),
-            )
+            if POLARS_VERSION_LT_133:  # pragma: no cover
+                (base,) = options
+                (child,) = children
+                return expr.BinOp(
+                    dtype,
+                    plc.binaryop.BinaryOperator.LOG_BASE,
+                    child,
+                    expr.Literal(dtype, base),
+                )
+            else:
+                (child, base) = children
+                return expr.Cast(
+                    DataType(pl.Float64()),
+                    expr.BinOp(
+                        dtype,
+                        plc.binaryop.BinaryOperator.LOG_BASE,
+                        child,
+                        expr.Literal(dtype, base.value),
+                    ),
+                )
         elif name == "pow":
             return expr.BinOp(dtype, plc.binaryop.BinaryOperator.POW, *children)
         return expr.UnaryFunction(dtype, name, options, *children)
