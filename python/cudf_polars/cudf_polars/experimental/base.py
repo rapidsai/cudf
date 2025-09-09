@@ -5,9 +5,9 @@
 from __future__ import annotations
 
 import dataclasses
-from collections import defaultdict, namedtuple
+from collections import defaultdict
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, NamedTuple, TypeVar
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterator, MutableMapping
@@ -133,8 +133,11 @@ class DataSourceInfo:
         self._unique_stats_columns.add(column)
 
 
-DataSourcePair = namedtuple("DataSourcePair", ["table_source", "column_name"])
-"""Pair of table-source and column-name information."""
+class DataSourcePair(NamedTuple):
+    """Pair of table-source and column-name information."""
+
+    table_source: DataSourceInfo
+    column_name: str
 
 
 class ColumnSourceInfo:

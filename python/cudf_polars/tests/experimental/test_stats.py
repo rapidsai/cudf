@@ -4,14 +4,12 @@
 from __future__ import annotations
 
 import math
-import re
 
 import pytest
 
 import polars as pl
 
 from cudf_polars import Translator
-from cudf_polars.experimental.explain import explain_query
 from cudf_polars.experimental.io import _clear_source_info_cache
 from cudf_polars.experimental.statistics import (
     apply_pkfk_heuristics,
@@ -19,7 +17,7 @@ from cudf_polars.experimental.statistics import (
     find_equivalence_sets,
 )
 from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
-from cudf_polars.testing.io import make_partitioned_source
+from cudf_polars.testing.io import make_lazy_frame, make_partitioned_source
 from cudf_polars.utils.config import ConfigOptions
 
 
@@ -46,26 +44,6 @@ def engine():
             "max_rows_per_partition": 1_000,
         },
     )
-
-
-def make_lazy_frame(frame, tmp_path, kind, n_files=1, n_rows=None):
-    """Returns a pl.LazyFrame from a pl.DataFrame."""
-    _clear_source_info_cache()
-
-    if kind == "parquet":
-        make_partitioned_source(
-            frame, tmp_path, fmt="parquet", n_files=n_files, row_group_size=10
-        )
-        return pl.scan_parquet(tmp_path, n_rows=n_rows)
-    elif kind == "csv":
-        make_partitioned_source(frame, tmp_path, fmt="csv", n_files=n_files)
-        return pl.scan_csv(tmp_path, n_rows=n_rows)
-    elif kind == "frame":
-        if n_rows is not None:
-            frame = frame.slice(0, n_rows)
-        return frame.lazy()
-    else:
-        raise ValueError(f"Unsupported kind: {kind}")
 
 
 def test_base_stats_dataframescan(df, engine):
@@ -211,7 +189,7 @@ def test_base_stats_parquet(
 
 
 def test_base_stats_csv(engine, tmp_path, df):
-    q = make_lazy_frame(df, tmp_path, "csv", n_files=3)
+    q = make_lazy_frame(df, "csv", path=tmp_path, n_files=3)
     ir = Translator(q._ldf.visit(), engine).translate_ir()
     stats = collect_base_stats(ir, ConfigOptions.from_polars_engine(engine))
     column_stats = stats.column_stats[ir]
@@ -429,228 +407,3 @@ def test_base_stats_join_key_info(engine):
         stats.column_stats[ir]["cust_id"].source_info.implied_unique_count.value
         == implied_unique_count
     )
-
-
-@pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
-@pytest.mark.parametrize("n_rows", [None, 3])
-def test_explain_io_then_distinct(engine, tmp_path, kind, n_rows):
-    # Create simple Distinct + Sort query
-    df = pl.DataFrame(
-        {
-            "order_id": [1, 2, 3, 4, 5, 6],
-            "customer_id": [101, 102, 101, 103, 103, 104],
-            "amount": [50.0, 75.0, 30.0, 120.0, 85.0, 40.0],
-            "year": [2023, 2023, 2023, 2024, 2024, 2024],
-        }
-    )
-    df = make_lazy_frame(df, tmp_path, kind, n_files=2, n_rows=n_rows)
-    q = df.unique(subset=["customer_id"]).sort("order_id")
-
-    # Verify the query runs correctly
-    assert_gpu_result_equal(q, engine=engine)
-
-    # Check query plan
-    repr = explain_query(q, engine, physical=False)
-    if kind == "csv":
-        # CSV will NOT provide row-count statistics unless n_rows is provided,
-        # and it will never provide unique-count statistics.
-        if n_rows is None:
-            assert re.search(r"^\s*SORT.*row_count='unknown'\s*$", repr, re.MULTILINE)
-        else:
-            assert re.search(
-                rf"^\s*SORT.*row_count=\'~{n_rows}\'\s*$", repr, re.MULTILINE
-            )
-    else:
-        assert re.search(
-            rf"^\s*SORT.*row_count=\'~{q.collect().height}\'\s*$", repr, re.MULTILINE
-        )
-
-
-@pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
-def test_explain_io_then_join(engine, tmp_path, kind):
-    # Create simple Join + Sort query
-    sales = pl.DataFrame(
-        {
-            "order_id": [1, 2, 3, 4, 5, 6],
-            "customer_id": [101, 102, 101, 103, 102, 101],
-            "amount": [50.0, 75.0, 30.0, 120.0, 85.0, 40.0],
-            "product": ["A", "B", "A", "C", "B", "A"],
-        }
-    )
-    sales = make_lazy_frame(sales, tmp_path / f"sales_{kind}", kind)
-    customers = pl.DataFrame(
-        {
-            "customer_id": [101, 102, 103],
-            "customer_name": ["Alice", "Bob", "Charlie"],
-            "region": ["North", "South", "North"],
-        }
-    )
-    customers = make_lazy_frame(customers, tmp_path / f"customers_{kind}", kind)
-    q = sales.join(customers, on="customer_id", how="inner").sort("customer_id")
-
-    # Verify the query runs correctly
-    assert_gpu_result_equal(q, engine=engine)
-
-    # Check the query plan
-    repr = explain_query(q, engine, physical=False)
-    if kind == "csv":
-        assert re.search(r"^\s*SORT.*row_count='unknown'\s*$", repr, re.MULTILINE)
-    else:
-        assert re.search(
-            rf"^\s*SORT.*row_count=\'~{q.collect().height}\'\s*$", repr, re.MULTILINE
-        )
-
-
-@pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
-def test_explain_io_then_join_then_groupby(engine, tmp_path, kind):
-    # Create simple Join + GroupBy + Sort query
-    sales = pl.DataFrame(
-        {
-            "order_id": [1, 2, 3, 4, 5, 6],
-            "customer_id": [101, 102, 101, 103, 102, 101],
-            "amount": [50.0, 75.0, 30.0, 120.0, 85.0, 40.0],
-            "product": ["A", "B", "A", "C", "B", "A"],
-        }
-    )
-    sales = make_lazy_frame(sales, tmp_path / f"sales_{kind}", kind)
-    customers = pl.DataFrame(
-        {
-            "customer_id": [101, 102, 103],
-            "customer_name": ["Alice", "Bob", "Charlie"],
-            "region": ["North", "South", "North"],
-        }
-    )
-    customers = make_lazy_frame(customers, tmp_path / f"customers_{kind}", kind)
-    q_join = sales.join(customers, on="customer_id", how="inner")
-    q_gb = q_join.group_by("customer_id").agg(
-        [
-            pl.col("amount").sum().alias("total_amount"),
-            pl.col("order_id").count().alias("order_count"),
-            pl.col("customer_name").first().alias("name"),
-            pl.col("region").first().alias("region"),
-        ]
-    )
-    q = q_gb.sort("customer_id")
-
-    # Verify the query runs correctly
-    assert_gpu_result_equal(q, engine=engine)
-
-    # Check the query plan
-    repr = explain_query(q, engine, physical=False)
-    if kind == "csv":
-        assert re.search(r"^\s*SORT.*row_count='unknown'\s*$", repr, re.MULTILINE)
-    else:
-        join_count = q_join.collect().height
-        gb_count = q_gb.collect().height
-        final_count = q.collect().height
-        assert re.search(
-            rf"^\s*GROUPBY.*row_count=\'~{gb_count}\'\s*$", repr, re.MULTILINE
-        )
-        assert re.search(
-            rf"^\s*JOIN Inner.*row_count=\'~{join_count}\'\s*$", repr, re.MULTILINE
-        )
-        assert re.search(
-            rf"^\s*SORT.*row_count=\'~{final_count}\'\s*$", repr, re.MULTILINE
-        )
-
-
-@pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
-def test_explain_io_then_concat_then_groupby(engine, tmp_path, kind):
-    # Create first table - sales data from 2023
-    sales_2023 = pl.DataFrame(
-        {
-            "order_id": [1, 2, 3],
-            "customer_id": [101, 102, 101],
-            "amount": [50.0, 75.0, 30.0],
-            "year": [2023, 2023, 2023],
-        }
-    )
-    df_2023 = make_lazy_frame(sales_2023, tmp_path / f"sales_2023.{kind}", kind)
-
-    # Create second table - sales data from 2024
-    sales_2024 = pl.DataFrame(
-        {
-            "order_id": [4, 5, 6],
-            "customer_id": [103, 103, 104],
-            "amount": [120.0, 85.0, 40.0],
-            "year": [2024, 2024, 2024],
-        }
-    )
-    df_2024 = make_lazy_frame(sales_2024, tmp_path / f"sales_2024.{kind}", kind)
-
-    # Create second table - sales data from 2025
-    sales_2025 = pl.DataFrame(
-        {
-            "order_id": [7, 8, 9],
-            "customer_id": [105, 109, 106],
-            "amount": [10.0, 50.0, 100.0],
-            "year": [2025, 2025, 2025],
-        }
-    )
-    df_2025 = make_lazy_frame(sales_2025, tmp_path / f"sales_2025.{kind}", kind)
-
-    def _gb(df):
-        return df.group_by("customer_id").agg(
-            [
-                pl.col("amount").sum().alias("total_amount"),
-                pl.col("order_id").count().alias("order_count"),
-                pl.col("year").min().alias("first_year"),
-                pl.col("year").max().alias("last_year"),
-            ]
-        )
-
-    # Group by customer_id after concatenation
-    q_concat_1 = pl.concat([df_2023, df_2024])
-    q_gb_1 = _gb(q_concat_1)
-    q_1 = q_gb_1.sort("customer_id").head(2)
-    q_gb_2 = _gb(df_2025)
-    q_concat_2 = pl.concat([q_gb_1, q_gb_2])
-    q_2 = q_concat_2.sort("customer_id").head(2)
-
-    # Verify the query runs correctly
-    assert_gpu_result_equal(q_1, engine=engine)
-    assert_gpu_result_equal(q_2, engine=engine)
-
-    # Check query plan q_1
-    repr = explain_query(q_1, engine, physical=False)
-    if kind == "csv":
-        assert re.search(r"^\s*SORT.*row_count='unknown'\s*$", repr, re.MULTILINE)
-    else:
-        concat_count_1 = q_concat_1.collect().height
-        gb_count_1 = q_gb_1.collect().height
-        final_count_1 = q_1.collect().height
-        assert re.search(
-            rf"^\s*UNION.*row_count=\'~{concat_count_1}\'\s*$", repr, re.MULTILINE
-        )
-        assert re.search(
-            rf"^\s*GROUPBY.*row_count=\'~{gb_count_1}\'\s*$", repr, re.MULTILINE
-        )
-        assert re.search(
-            rf"^\s*SORT.*row_count=\'~{final_count_1}\'\s*$", repr, re.MULTILINE
-        )
-
-    # Check query plan q_2
-    repr = explain_query(q_2, engine, physical=False)
-    if kind == "csv":
-        assert re.search(r"^\s*SORT.*row_count='unknown'\s*$", repr, re.MULTILINE)
-    else:
-        concat_count_1 = q_concat_1.collect().height
-        concat_count_2 = q_concat_2.collect().height
-        gb_count_1 = q_gb_1.collect().height
-        gb_count_2 = q_gb_2.collect().height
-        final_count_2 = q_2.collect().height
-        assert re.search(
-            rf"^\s*UNION.*row_count=\'~{concat_count_1}\'\s*$", repr, re.MULTILINE
-        )
-        assert re.search(
-            rf"^\s*UNION.*row_count=\'~{concat_count_2}\'\s*$", repr, re.MULTILINE
-        )
-        assert re.search(
-            rf"^\s*GROUPBY.*row_count=\'~{gb_count_1}\'\s*$", repr, re.MULTILINE
-        )
-        assert re.search(
-            rf"^\s*GROUPBY.*row_count=\'~{gb_count_2}\'\s*$", repr, re.MULTILINE
-        )
-        assert re.search(
-            rf"^\s*SORT.*row_count=\'~{final_count_2}\'\s*$", repr, re.MULTILINE
-        )
