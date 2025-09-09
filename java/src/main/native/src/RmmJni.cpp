@@ -1093,7 +1093,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocFromPinnedPool(JNIEnv* env,
     void* ret = pool->allocate(size);
     return reinterpret_cast<jlong>(ret);
   }
-  JNI_TRY_END(env, 0)
+  JNI_CATCH_BEGIN(env, 0)
   catch (...) { return -1; }  // Catch and suppress all exceptions.
   // The return value of -1 indicates that the allocation failed.
   // This is different from the return value of 0, which indicates that the allocation succeeded

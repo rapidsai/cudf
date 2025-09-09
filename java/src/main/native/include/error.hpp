@@ -239,11 +239,11 @@ inline void jni_cuda_check(JNIEnv* const env, cudaError_t cuda_status)
 // Define try-catch macros which can be patched to something else if needed.
 // Typically, JNI_TRY/JNI_CATCH should be used in every JNI function.
 // The JNI_CATCH macro consists of several smaller catch macros to allow inserting more catch
-// blocks if needed. The macro JNI_TRY_END must always be called before any catch block, and
-// CATCH_STD_EXCEPTION must always be called last.
-#define JNI_TRY                   try {
-#define JNI_TRY_END(env, ret_val) }  // no-op by default
+// blocks if needed. The macro JNI_CATCH_BEGIN must always be called before any catch block,
+// and CATCH_STD_EXCEPTION must always be called last.
+#define JNI_TRY                       try {
+#define JNI_CATCH_BEGIN(env, ret_val) }  // no-op by default
 #define JNI_CATCH(env, ret_val)         \
-  JNI_TRY_END(env, ret_val)             \
+  JNI_CATCH_BEGIN(env, ret_val)         \
   CATCH_SPECIAL_EXCEPTION(env, ret_val) \
   CATCH_STD_EXCEPTION(env, ret_val)
