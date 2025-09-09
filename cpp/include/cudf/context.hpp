@@ -30,7 +30,7 @@ enum class init_flags : std::uint32_t {
   INIT_JIT_CACHE = 1 << 1,
   /// @brief All initialization steps (default behavior)
   ALL = LOAD_NVCOMP | INIT_JIT_CACHE
-}; 
+};
 
 /// @brief Bitwise OR operator for init_flags
 constexpr init_flags operator|(init_flags lhs, init_flags rhs) noexcept
