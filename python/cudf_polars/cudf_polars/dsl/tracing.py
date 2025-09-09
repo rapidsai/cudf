@@ -17,6 +17,7 @@ import rmm
 import rmm.statistics
 
 import cudf_polars.containers
+from cudf_polars.utils.config import get_device_handle
 
 try:
     import structlog
@@ -24,6 +25,14 @@ except ImportError:
     HAS_STRUCTLOG = False
 else:
     HAS_STRUCTLOG = True
+
+try:
+    import pynvml
+except ImportError:
+    HAS_PYNVML = False
+else:
+    HAS_PYNVML = True
+
 
 LOG_TRACES = HAS_STRUCTLOG and os.environ.get("CUDF_POLARS_LOG_TRACES", "0") in {
     "1",
@@ -48,6 +57,9 @@ def make_snaphot(
     node_type: type[ir.IR],
     frames: list[cudf_polars.containers.DataFrame],
     extra: dict[str, Any] | None = None,
+    *,
+    pid: int,
+    device_handle: Any | None = None,
     phase: Literal["input", "output"] = "input",
 ) -> dict:
     """
@@ -64,6 +76,10 @@ def make_snaphot(
         ``IR.do_evaluate``.
     extra
         Extra information to log.
+    pid
+        The ID of the current process. Used for NVML memory usage.
+    device_handle
+        The pynvml device handle. Used for NVML memory usage.
     phase
         The phase of the evaluation. Either "input" or "output".
     """
@@ -98,6 +114,13 @@ def make_snaphot(
     if extra:
         d.update(extra)
 
+    if device_handle is not None:
+        processes = pynvml.nvmlDeviceGetComputeRunningProcesses(device_handle)
+        for proc in processes:
+            if proc.pid == pid:
+                d[f"nvml_current_bytes_{phase}"] = proc.usedGpuMemory
+                break
+
     return d
 
 
@@ -115,6 +138,14 @@ def log_do_evaluate(
     func
         The ``IR.do_evaluate`` method to wrap.
     """
+    if HAS_PYNVML:
+        # do this just once
+        pynvml.nvmlInit()
+        maybe_handle = get_device_handle()
+    else:
+        maybe_handle = None
+
+    pid = os.getpid()
 
     @functools.wraps(func)
     def wrapper(
@@ -130,7 +161,9 @@ def log_do_evaluate(
                 if isinstance(arg, cudf_polars.containers.DataFrame)
             ]
 
-            before = make_snaphot(cls, frames, phase="input")
+            before = make_snaphot(
+                cls, frames, phase="input", device_handle=maybe_handle, pid=pid
+            )
 
             # The types here aren't 100% correct.
             # We know that each IR.do_evaluate node is a
@@ -142,7 +175,12 @@ def log_do_evaluate(
             stop = time.monotonic_ns()
 
             after = make_snaphot(
-                cls, [result], phase="output", extra={"start": start, "stop": stop}
+                cls,
+                [result],
+                phase="output",
+                extra={"start": start, "stop": stop},
+                device_handle=maybe_handle,
+                pid=pid,
             )
             record = before | after
             log.info("Execute IR", **record)

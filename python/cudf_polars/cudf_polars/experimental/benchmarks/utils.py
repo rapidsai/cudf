@@ -94,6 +94,8 @@ class TraceRecord:
     rmm_peak_count_output: int | None = None
     rmm_total_bytes_output: int | None = None
     rmm_total_count_output: int | None = None
+    nvml_current_bytes_input: int | None = None
+    nvml_current_bytes_output: int | None = None
 
 
 @dataclasses.dataclass

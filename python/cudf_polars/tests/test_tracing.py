@@ -38,6 +38,8 @@ def test_trace_basic(log_output, monkeypatch) -> None:
     scan.pop("rmm_peak_bytes_output")
     scan.pop("rmm_peak_count_input")
     scan.pop("rmm_peak_count_output")
+    scan.pop("nvml_current_bytes_input")
+    scan.pop("nvml_current_bytes_output")
 
     assert scan == {
         "count_frames_input": 0,

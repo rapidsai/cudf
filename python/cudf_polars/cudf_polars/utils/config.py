@@ -28,7 +28,7 @@ import importlib.util
 import json
 import os
 import warnings
-from typing import TYPE_CHECKING, Literal, TypeVar
+from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -56,8 +56,7 @@ def _env_get_int(name: str, default: int) -> int:
         return default  # pragma: no cover
 
 
-def get_total_device_memory() -> int | None:
-    """Return the total memory of the current device."""
+def get_device_handle() -> Any:
     import pynvml
 
     try:
@@ -73,11 +72,22 @@ def get_total_device_memory() -> int | None:
                 handle = pynvml.nvmlDeviceGetDeviceHandleFromMigDeviceHandle(handle)
         else:
             handle = pynvml.nvmlDeviceGetHandleByIndex(int(index))
-
-        return pynvml.nvmlDeviceGetMemoryInfo(handle).total
-
     except pynvml.NVMLError_NotSupported:  # pragma: no cover
         # System doesn't have proper "GPU memory".
+        return None
+    else:
+        return handle
+
+
+def get_total_device_memory() -> int | None:
+    """Return the total memory of the current device."""
+    import pynvml
+
+    maybe_handle = get_device_handle()
+
+    if maybe_handle is not None:
+        return pynvml.nvmlDeviceGetMemoryInfo(maybe_handle).total
+    else:  # pragma: no cover
         return None
 
 
