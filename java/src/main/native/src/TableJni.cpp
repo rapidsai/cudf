@@ -765,7 +765,8 @@ jlongArray join_gather_maps(
 {
   JNI_NULL_CHECK(env, j_left_keys, "left_table is null", NULL);
   JNI_NULL_CHECK(env, j_right_keys, "right_table is null", NULL);
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto left_keys  = reinterpret_cast<cudf::table_view const*>(j_left_keys);
     auto right_keys = reinterpret_cast<cudf::table_view const*>(j_right_keys);
@@ -785,7 +786,8 @@ jlongArray hash_join_gather_maps(JNIEnv* env,
 {
   JNI_NULL_CHECK(env, j_left_keys, "left table is null", NULL);
   JNI_NULL_CHECK(env, j_right_hash_join, "hash join is null", NULL);
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto left_keys = reinterpret_cast<cudf::table_view const*>(j_left_keys);
     auto hash_join = reinterpret_cast<cudf::hash_join const*>(j_right_hash_join);
@@ -802,7 +804,8 @@ jlongArray cond_join_gather_maps(
   JNI_NULL_CHECK(env, j_left_table, "left_table is null", NULL);
   JNI_NULL_CHECK(env, j_right_table, "right_table is null", NULL);
   JNI_NULL_CHECK(env, j_condition, "condition is null", NULL);
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto left_table  = reinterpret_cast<cudf::table_view const*>(j_left_table);
     auto right_table = reinterpret_cast<cudf::table_view const*>(j_right_table);
@@ -820,7 +823,8 @@ jlongArray join_gather_single_map(
 {
   JNI_NULL_CHECK(env, j_left_keys, "left_table is null", NULL);
   JNI_NULL_CHECK(env, j_right_keys, "right_table is null", NULL);
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto left_keys  = reinterpret_cast<cudf::table_view const*>(j_left_keys);
     auto right_keys = reinterpret_cast<cudf::table_view const*>(j_right_keys);
@@ -839,7 +843,8 @@ jlongArray cond_join_gather_single_map(
   JNI_NULL_CHECK(env, j_left_table, "left_table is null", NULL);
   JNI_NULL_CHECK(env, j_right_table, "right_table is null", NULL);
   JNI_NULL_CHECK(env, j_condition, "condition is null", NULL);
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto left_table  = reinterpret_cast<cudf::table_view const*>(j_left_table);
     auto right_table = reinterpret_cast<cudf::table_view const*>(j_right_table);
@@ -865,7 +870,8 @@ jlong mixed_join_size(JNIEnv* env,
   JNI_NULL_CHECK(env, j_left_condition, "left condition table is null", 0);
   JNI_NULL_CHECK(env, j_right_condition, "right condition table is null", 0);
   JNI_NULL_CHECK(env, j_condition, "condition is null", 0);
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto const left_keys       = reinterpret_cast<cudf::table_view const*>(j_left_keys);
     auto const right_keys      = reinterpret_cast<cudf::table_view const*>(j_right_keys);
@@ -899,7 +905,8 @@ jlongArray mixed_join_gather_maps(JNIEnv* env,
   JNI_NULL_CHECK(env, j_left_condition, "left condition table is null", 0);
   JNI_NULL_CHECK(env, j_right_condition, "right condition table is null", 0);
   JNI_NULL_CHECK(env, j_condition, "condition is null", 0);
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto const left_keys       = reinterpret_cast<cudf::table_view const*>(j_left_keys);
     auto const right_keys      = reinterpret_cast<cudf::table_view const*>(j_right_keys);
@@ -934,7 +941,8 @@ jlongArray mixed_join_gather_single_map(JNIEnv* env,
   JNI_NULL_CHECK(env, j_left_condition, "left condition table is null", 0);
   JNI_NULL_CHECK(env, j_right_condition, "right condition table is null", 0);
   JNI_NULL_CHECK(env, j_condition, "condition is null", 0);
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto const left_keys       = reinterpret_cast<cudf::table_view const*>(j_left_keys);
     auto const right_keys      = reinterpret_cast<cudf::table_view const*>(j_right_keys);
@@ -1079,7 +1087,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_removeNullMasksIfNeeded(J
                                                                                jlong j_table_view)
 {
   JNI_NULL_CHECK(env, j_table_view, "table view handle is null", 0);
-  try {
+  JNI_TRY
+  {
     cudf::table_view* tview = reinterpret_cast<cudf::table_view*>(j_table_view);
     cudf::table_view result = cudf::jni::remove_validity_if_needed(tview);
     cudf::table m_tbl(result);
@@ -1098,7 +1107,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_createCudfTableView(JNIEnv* en
 {
   JNI_NULL_CHECK(env, j_cudf_columns, "columns are null", 0);
 
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     cudf::jni::native_jpointerArray<cudf::column_view> n_cudf_columns(env, j_cudf_columns);
 
@@ -1113,7 +1123,8 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_deleteCudfTable(JNIEnv* env,
                                                                  jlong j_cudf_table_view)
 {
   JNI_NULL_CHECK(env, j_cudf_table_view, "table view handle is null", );
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     delete reinterpret_cast<cudf::table_view*>(j_cudf_table_view);
   }
@@ -1127,7 +1138,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_columnViewsFromPacked(JNI
 {
   // The GPU data address can be null when the table is empty, so it is not null-checked here.
   JNI_NULL_CHECK(env, buffer_obj, "metadata is null", nullptr);
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     void const* metadata_address = env->GetDirectBufferAddress(buffer_obj);
     JNI_NULL_CHECK(env, metadata_address, "metadata buffer address is null", nullptr);
