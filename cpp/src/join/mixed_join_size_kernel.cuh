@@ -77,17 +77,7 @@ __device__ __forceinline__ auto standalone_count(
       return count;
     }
 
-    // Move to next bucket using precomputed step
     probe_idx = (probe_idx + step) % extent;
-
-    // Detect full cycle completion
-    if (probe_idx == static_cast<std::size_t>(hash_idx.first)) {
-      // Handle outer join logic: non-matching rows are counted as 1 match
-      if ((join_type == join_kind::LEFT_JOIN || join_type == join_kind::FULL_JOIN) && count == 0) {
-        return 1;
-      }
-      return count;
-    }
   }
 }
 

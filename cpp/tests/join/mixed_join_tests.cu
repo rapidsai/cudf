@@ -1084,3 +1084,91 @@ TYPED_TEST(MixedLeftAntiJoinTest, MixedLeftAntiJoinGatherMap)
              left_one_greater_right_one,
              {0, 1, 3, 4, 5, 6, 9});
 }
+
+TYPED_TEST(MixedInnerJoinTest, AtomicCounterRaceConditionRegression)
+{
+  using T = TypeParam;
+
+  constexpr int left_size  = 5000;
+  constexpr int right_size = 20;
+
+  std::vector<T> left_col0(left_size);
+  std::vector<T> left_col1(left_size);
+
+  for (int i = 0; i < left_size; ++i) {
+    left_col0[i] = static_cast<T>(i % 10);
+    left_col1[i] = static_cast<T>(i % 20);
+  }
+
+  std::vector<T> right_col0(right_size);
+  std::vector<T> right_col1(right_size);
+  for (int i = 0; i < right_size; ++i) {
+    right_col0[i] = static_cast<T>(i % 10);
+    right_col1[i] = static_cast<T>(i);
+  }
+
+  auto const col_ref_left  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
+  auto const col_ref_right = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
+  auto condition =
+    cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col_ref_left, col_ref_right);
+
+  ColumnVector<T> left_data                        = {left_col0, left_col1};
+  ColumnVector<T> right_data                       = {right_col0, right_col1};
+  std::vector<cudf::size_type> equality_columns    = {0};
+  std::vector<cudf::size_type> conditional_columns = {1};
+
+  auto [left_wrappers,
+        right_wrappers,
+        left_columns,
+        right_columns,
+        left_equality,
+        right_equality,
+        left_conditional,
+        right_conditional] =
+    this->parse_input(left_data, right_data, equality_columns, conditional_columns);
+
+  auto expected_size =
+    this->join_size(left_equality, right_equality, left_conditional, right_conditional, condition);
+
+  auto result =
+    this->join(left_equality, right_equality, left_conditional, right_conditional, condition);
+
+  EXPECT_EQ(result.first->size(), expected_size);
+  EXPECT_EQ(result.second->size(), expected_size);
+  EXPECT_GT(expected_size, 0);
+
+  auto to_sorted_pairs = [](const PairJoinReturn& join_result) {
+    std::vector<std::pair<cudf::size_type, cudf::size_type>> result_pairs;
+    for (size_t i = 0; i < join_result.first->size(); ++i) {
+      result_pairs.emplace_back(join_result.first->element(i, cudf::get_default_stream()),
+                                join_result.second->element(i, cudf::get_default_stream()));
+    }
+    std::sort(result_pairs.begin(), result_pairs.end());
+    return result_pairs;
+  };
+
+  auto result2 =
+    this->join(left_equality, right_equality, left_conditional, right_conditional, condition);
+  auto result3 =
+    this->join(left_equality, right_equality, left_conditional, right_conditional, condition);
+
+  EXPECT_EQ(result.first->size(), result2.first->size());
+  EXPECT_EQ(result.first->size(), result3.first->size());
+
+  auto pairs1 = to_sorted_pairs(result);
+  auto pairs2 = to_sorted_pairs(result2);
+  auto pairs3 = to_sorted_pairs(result3);
+
+  EXPECT_TRUE(std::equal(pairs1.begin(), pairs1.end(), pairs2.begin()));
+  EXPECT_TRUE(std::equal(pairs1.begin(), pairs1.end(), pairs3.begin()));
+
+  for (size_t i = 0; i < result.first->size(); ++i) {
+    auto left_idx  = result.first->element(i, cudf::get_default_stream());
+    auto right_idx = result.second->element(i, cudf::get_default_stream());
+
+    EXPECT_GE(left_idx, 0);
+    EXPECT_LT(left_idx, left_size);
+    EXPECT_GE(right_idx, 0);
+    EXPECT_LT(right_idx, right_size);
+  }
+}
