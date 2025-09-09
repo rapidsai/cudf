@@ -1768,10 +1768,6 @@ class Join(IR):
 
         Notes
         -----
-        For a left join, the polars result preserves the order of the
-        left keys, and is stable wrt the right keys. For all other
-        joins, there is no order obligation.
-
         When ``primary`` is specified, the pair of gather maps is stably sorted by
         the original row order of the primary side, breaking ties by the other side.
         """
@@ -1910,11 +1906,6 @@ class Join(IR):
                     rg,
                     right_policy,
                     primary="left" if maintain_order.startswith("left") else "right",
-                )
-            elif how in ("Left", "Right"):
-                # preserve left order even when no explicit maintain_order is set.
-                lg, rg = cls._reorder_maps(
-                    left.num_rows, lg, left_policy, right.num_rows, rg, right_policy
                 )
             if coalesce:
                 if how == "Full":
