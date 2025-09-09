@@ -345,8 +345,9 @@ def test_datetime_has_null_test_pyarrow():
 
 def test_error_values_datetime():
     s = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
-    with pytest.raises(NotImplementedError, match="cupy does not support"):
-        s.values
+    result = s.values
+    expected = cp.array([1, 2, 3]).view("datetime64[ns]")
+    assert_eq(result, expected)
 
 
 def test_ndim():
