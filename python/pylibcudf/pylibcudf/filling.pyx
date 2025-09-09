@@ -51,6 +51,8 @@ cpdef Column fill(
         The index at which to stop filling.
     value : Scalar
         The value to fill with.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -94,6 +96,8 @@ cpdef void fill_in_place(
         The index at which to stop filling.
     value : Scalar
         The value to fill with.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -125,6 +129,8 @@ cpdef Column sequence(size_type size, Scalar init, Scalar step, Stream stream=No
         The initial value of the sequence
     step : Scalar
         The step of the sequence
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -167,6 +173,8 @@ cpdef Table repeat(
     count : Union[Column, size_type]
         Integer value to repeat each row by or
         non-nullable column of an integral type
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -214,6 +222,8 @@ cpdef Column calendrical_month_sequence(
         The initial timestamp
     months : size_type
         Months to increment
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
