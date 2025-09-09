@@ -312,8 +312,10 @@ class StringFunction(Expr):
                 for child in self.children
             ]
 
+            non_unit_sizes = [c.size for c in columns if c.size != 1]
             broadcasted = broadcast(
-                *columns, target_length=max(col.size for col in columns)
+                *columns,
+                target_length=max(non_unit_sizes) if non_unit_sizes else None,
             )
 
             delimiter, ignore_nulls = self.options
