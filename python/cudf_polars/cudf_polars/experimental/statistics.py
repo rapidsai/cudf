@@ -559,12 +559,13 @@ def _update_distinct_stats(
     unique_counts = [child_column_stats[k].unique_count.value for k in key_names]
     known_unique_count = sum(c for c in unique_counts if c is not None)
     unknown_unique_count = sum(c is None for c in unique_counts)
-    if unknown_unique_count == len(unique_counts):
-        # No unique-count estimates, so use the child row-count.
+    if unknown_unique_count > 0:
+        # Use the child row-count to be conservative.
+        # TODO: Should we use a different heuristic here? For example,
+        # we could assume each unknown key introduces a factor of 3.
         stats.row_count[ir] = ColumnStat[int](child_row_count)
     else:
-        # Guess each unknown key introduces a factor of 3
-        unique_count = known_unique_count * 3**unknown_unique_count
+        unique_count = known_unique_count
         if child_row_count is not None:
             # Don't allow the unique-count to exceed the child row-count.
             unique_count = min(child_row_count, unique_count)
