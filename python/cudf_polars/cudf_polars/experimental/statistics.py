@@ -547,15 +547,20 @@ def _(ir: Scan, stats: StatsCollector, config_options: ConfigOptions) -> None:
             column_stats.unique_count = column_stats.source_info.implied_unique_count
 
 
-def _update_distinct_stats(
-    ir: Distinct | GroupBy,
-    stats: StatsCollector,
-    key_names: list[str],
+@update_column_stats.register(Distinct)
+@update_column_stats.register(GroupBy)
+def _(
+    ir: Distinct | GroupBy, stats: StatsCollector, config_options: ConfigOptions
 ) -> None:
-    """Update statistics for a Distinct or GroupBy node."""
+    # Update statistics for a Distinct or GroupBy node.
     (child,) = ir.children
     child_column_stats = stats.column_stats[child]
     child_row_count = stats.row_count[child].value
+    key_names = (
+        list(ir.subset or ir.schema)
+        if isinstance(ir, Distinct)
+        else [n.name for n in ir.keys]
+    )
     unique_counts = [child_column_stats[k].unique_count.value for k in key_names]
     known_unique_count = sum(c for c in unique_counts if c is not None)
     unknown_unique_count = sum(c is None for c in unique_counts)
@@ -572,16 +577,6 @@ def _update_distinct_stats(
         stats.row_count[ir] = ColumnStat[int](unique_count)
 
     copy_child_unique_counts(stats.column_stats[ir])
-
-
-@update_column_stats.register(Distinct)
-def _(ir: Distinct, stats: StatsCollector, config_options: ConfigOptions) -> None:
-    _update_distinct_stats(ir, stats, list(ir.subset or ir.schema))
-
-
-@update_column_stats.register(GroupBy)
-def _(ir: GroupBy, stats: StatsCollector, config_options: ConfigOptions) -> None:
-    _update_distinct_stats(ir, stats, [n.name for n in ir.keys])
 
 
 @update_column_stats.register(Join)
