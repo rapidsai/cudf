@@ -148,7 +148,6 @@ class ColumnSourceInfo:
     ----------
     table_source_pairs
         Sequence of DataSourcePair objects.
-        There must be at least one element in the provided sequence.
         Union operations will result in multiple elements.
 
     Notes
@@ -166,7 +165,6 @@ class ColumnSourceInfo:
     """Unique-value count implied by join heuristics."""
 
     def __init__(self, *table_source_pairs: DataSourcePair) -> None:
-        assert len(table_source_pairs), "table_source_pairs cannot be empty."
         self.table_source_pairs = list(table_source_pairs)
         self.implied_unique_count = ColumnStat[int](None)
 
@@ -181,19 +179,18 @@ class ColumnSourceInfo:
     @property
     def row_count(self) -> ColumnStat[int]:
         """Data source row-count estimate."""
-        if len(self.table_source_pairs) == 1:
-            # Return only table-source row-count estimate.
-            return self.table_source_pairs[0].table_source.row_count
-        else:
-            # Return the sum of multiple table-source row-count estimates.
-            return ColumnStat[int](
-                sum(
-                    value
-                    for pair in self.table_source_pairs
-                    if (value := pair.table_source.row_count.value) is not None
-                )
-                or None
+        return ColumnStat[int](
+            # Use sum of table-source row-count estimates.
+            value=sum(
+                value
+                for pair in self.table_source_pairs
+                if (value := pair.table_source.row_count.value) is not None
             )
+            or None,
+            # Row-count may be exact if there is only one table source.
+            exact=len(self.table_source_pairs) == 1
+            and self.table_source_pairs[0].table_source.row_count.exact,
+        )
 
     def unique_stats(self, *, force: bool = False) -> UniqueStats:
         """
@@ -222,8 +219,11 @@ class ColumnSourceInfo:
         """Return the average column size for a single file."""
         # We don't need to handle concatenated statistics for ``storage_size``.
         # Just return the storage size of the first table source.
-        table_source, column_name = self.table_source_pairs[0]
-        return table_source.storage_size(column_name)
+        if self.table_source_pairs:
+            table_source, column_name = self.table_source_pairs[0]
+            return table_source.storage_size(column_name)
+        else:  # pragma: no cover; We never call this for empty table sources.
+            return ColumnStat[int]()
 
     def add_unique_stats_column(self, column: str | None = None) -> None:
         """Add a column needing unique-value information."""
@@ -265,9 +265,7 @@ class ColumnStats:
     ) -> None:
         self.name = name
         self.children = children
-        self.source_info = source_info or ColumnSourceInfo(
-            DataSourcePair(DataSourceInfo(), name)
-        )
+        self.source_info = source_info or ColumnSourceInfo()
         self.unique_count = unique_count or ColumnStat[int](None)
 
     def new_parent(
