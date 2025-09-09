@@ -207,7 +207,7 @@ class TemporalBaseColumn(ColumnBase):
 
         col = self
         if col.has_nulls():
-            col = col.fillna(self._PANDAS_NA_VALUE)
+            raise ValueError("cupy does not support NaT.")
         return cp.asarray(col.data).view(dtype)
 
     @functools.cached_property

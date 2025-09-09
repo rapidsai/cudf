@@ -82,7 +82,6 @@ rapids-logger "Run narwhals tests for cuDF Pandas"
 # test_offset_by_date_pandas: https://github.com/rapidsai/cudf/issues/19418
 # test_select_boolean_cols and test_select_boolean_cols_multi_group_by: https://github.com/rapidsai/cudf/issues/19421
 # test_to_datetime_pd_preserves_pyarrow_backend_dtype: https://github.com/rapidsai/cudf/issues/19422
-# test_pandas_numpy_nat: cupy[int64].view(datetime64[ns]) doesn't view NaT correctly
 TESTS_THAT_NEED_CUDF_FIX=" \
 test_is_finite_expr or \
 test_is_finite_series or \
@@ -95,8 +94,7 @@ test_anyh_kleene or \
 test_offset_by_date_pandas or \
 test_select_boolean_cols or \
 test_select_boolean_cols_multi_group_by or \
-test_to_datetime_pd_preserves_pyarrow_backend_dtype or \
-test_pandas_numpy_nat \
+test_to_datetime_pd_preserves_pyarrow_backend_dtype \
 "
 
 # test_array_dunder_with_copy: https://github.com/rapidsai/cudf/issues/18248#issuecomment-2719234741
