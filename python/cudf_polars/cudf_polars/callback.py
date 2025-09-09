@@ -23,6 +23,7 @@ import rmm
 import rmm.statistics
 from rmm._cuda import gpu
 
+import cudf_polars.dsl.tracing
 from cudf_polars.dsl.tracing import CUDF_POLARS_NVTX_DOMAIN
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.utils.config import _env_get_int, get_total_device_memory
@@ -135,9 +136,13 @@ def set_memory_resource(
             ),
         )
     rmm.mr.set_current_device_resource(mr)
-    rmm.statistics.enable_statistics()
+    if cudf_polars.dsl.tracing.LOG_TRACES:
+        ctx = rmm.statistics.statistics()
+    else:
+        ctx = contextlib.nullcontext()
     try:
-        yield mr
+        with ctx:
+            yield mr
     finally:
         rmm.mr.set_current_device_resource(previous)
 
