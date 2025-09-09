@@ -47,13 +47,35 @@ timeout 90m bash python/cudf/cudf/pandas/scripts/run-pandas-tests.sh \
   --dist worksteal \
   --report-log="${PANDAS_TESTS_BRANCH}.json" 2>&1
 
-SUMMARY_FILE_NAME=${PANDAS_TESTS_BRANCH}-${RAPIDS_FULL_VERSION}-results.json
+SUMMARY_FILE_NAME=${PANDAS_TESTS_BRANCH}-results.json
 # summarize the results and save them to artifacts:
-python python/cudf/cudf/pandas/scripts/summarize-test-results.py --output json pandas-testing/"${PANDAS_TESTS_BRANCH}.json" > "pandas-testing/${SUMMARY_FILE_NAME}"
-RAPIDS_ARTIFACTS_DIR=${RAPIDS_ARTIFACTS_DIR:-"${PWD}/artifacts"}
-mkdir -p "${RAPIDS_ARTIFACTS_DIR}"
-mv pandas-testing/"${SUMMARY_FILE_NAME}" "${RAPIDS_ARTIFACTS_DIR}"/
-rapids-upload-to-s3 "${RAPIDS_ARTIFACTS_DIR}"/"${SUMMARY_FILE_NAME}" "${RAPIDS_ARTIFACTS_DIR}"
-mv "${RAPIDS_ARTIFACTS_DIR}"/"${SUMMARY_FILE_NAME}" "${RAPIDS_ARTIFACTS_DIR}"/${PANDAS_TESTS_BRANCH}-results.json
+python python/cudf/cudf/pandas/scripts/summarize-test-results.py --output json pandas-testing/"${PANDAS_TESTS_BRANCH}.json" > "./${SUMMARY_FILE_NAME}"
+
+# Exit early if running tests for main branch
+if [[ "${PANDAS_TESTS_BRANCH}" == "main" ]]; then
+    rapids-logger "Exiting early for main branch testing: ${EXITCODE}"
+    exit ${EXITCODE}
+fi
+
+
+MAIN_RUN_ID=$(
+    gh run list                       \
+        -w "Pandas Test Job"          \
+        -b branch-25.10               \
+        --repo 'rapidsai/cudf'        \
+        --status success              \
+        --limit 7                     \
+        --json 'createdAt,databaseId' \
+        --jq 'sort_by(.createdAt) | reverse | .[0] | .databaseId'
+)
+rapids-logger "Fetching latest available results from nightly: ${MAIN_RUN_ID}"
+gh run download                  \
+    --repo 'rapidsai/cudf'        \
+    --name main-results.json \
+    $MAIN_RUN_ID
+
+# Compute the diff and prepare job summary:
+python ci/cudf_pandas_scripts/pandas-tests/job-summary.py main-results.json pr-results.json "${RAPIDS_FULL_VERSION}" >> "$GITHUB_STEP_SUMMARY"
+
 rapids-logger "Test script exiting with value: $EXITCODE"
 exit ${EXITCODE}
