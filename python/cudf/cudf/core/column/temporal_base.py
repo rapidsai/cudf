@@ -205,10 +205,9 @@ class TemporalBaseColumn(ColumnBase):
         if len(self) == 0:
             return cp.empty(0, dtype=self._UNDERLYING_DTYPE).view(dtype)
 
-        col = self
-        if col.has_nulls():
+        if self.has_nulls():
             raise ValueError("cupy does not support NaT.")
-        return cp.asarray(col.data).view(dtype)
+        return cp.asarray(self.data).view(dtype)
 
     @functools.cached_property
     def time_unit(self) -> str:
