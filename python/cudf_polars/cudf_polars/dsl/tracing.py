@@ -25,7 +25,6 @@ except ImportError:
 else:
     HAS_STRUCTLOG = True
 
-# Question: should this be toggleable at runtime?
 LOG_TRACES = HAS_STRUCTLOG and os.environ.get("CUDF_POLARS_LOG_TRACES", "0") in {
     "1",
     "true",
@@ -52,14 +51,17 @@ def make_snaphot(
     phase: Literal["input", "output"] = "input",
 ) -> dict:
     """
-    Log the evaluation of an IR node.
+    Collect statistics about the evaluation of an IR node.
 
     Parameters
     ----------
     node_type
         The type of the IR node.
     frames
-        The frames being evaluated.
+        The list of DataFrames to capture information for. For ``phase="input"``,
+        this is typically the dataframes passed to ``IR.do_evaluate``. For
+        ``phase="output"``, this is typically the DataFrame returned from
+        ``IR.do_evaluate``.
     extra
         Extra information to log.
     phase
@@ -124,17 +126,20 @@ def log_do_evaluate(
             frames = [
                 arg
                 for arg in list(args) + list(kwargs.values())
+                # TODO: See if this isinstance can be avoided.
+                # Seems like `_non_child_args` gets us close...
                 if isinstance(arg, cudf_polars.containers.DataFrame)
             ]
 
             before = make_snaphot(cls, frames, phase="input")
 
-            # TODO: fix these types! Want some way to say
-            #     Callable[ir.IR, *P.args, **P.kwargs], cudf_polars.containers.DataFrame]
-            # i.e. the first arg is an IR, it returns a DataFrame, and does
-            # whatever for the remaining args/kwargs.
+            # The types here aren't 100% correct.
+            # We know that each IR.do_evaluate node is a
+            # `Callable[[ir.Ir, <some other stuff>], cudf_polars.containers.DataFrame]`
+            # but I'm not sure how to express that in a type annotation.
+
             start = time.monotonic_ns()
-            result = func(cls, *args, **kwargs)  # type: ignore
+            result = func(cls, *args, **kwargs)  # type: ignore[arg-type]
             stop = time.monotonic_ns()
 
             after = make_snaphot(
@@ -145,6 +150,6 @@ def log_do_evaluate(
 
             return result
         else:
-            return func(cls, *args, **kwargs)  # type: ignore
+            return func(cls, *args, **kwargs)  # type: ignore[arg-type]
 
     return wrapper  # type: ignore
