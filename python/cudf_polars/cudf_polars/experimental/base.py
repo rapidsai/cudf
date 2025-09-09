@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import dataclasses
-from abc import ABC, abstractmethod, abstractproperty
 from collections import defaultdict
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Generic, NamedTuple, TypeVar
@@ -96,7 +95,7 @@ class UniqueStats:
     fraction: ColumnStat[float] = dataclasses.field(default_factory=ColumnStat[float])
 
 
-class DataSourceInfo(ABC):
+class DataSourceInfo:
     """
     Table data source information.
 
@@ -110,13 +109,14 @@ class DataSourceInfo(ABC):
 
     _unique_stats_columns: set[str]
 
-    @abstractproperty
-    def row_count(self) -> ColumnStat[int]:
+    @property
+    def row_count(self) -> ColumnStat[int]:  # pragma: no cover
         """Data source row-count estimate."""
+        raise NotImplementedError("Sub-class must implement row_count.")
 
-    @abstractmethod
-    def unique_stats(self, column: str) -> UniqueStats:
+    def unique_stats(self, column: str) -> UniqueStats:  # pragma: no cover
         """Return unique-value statistics for a column."""
+        raise NotImplementedError("Sub-class must implement unique_stats.")
 
     def storage_size(self, column: str) -> ColumnStat[int]:
         """Return the average column size for a single file."""
