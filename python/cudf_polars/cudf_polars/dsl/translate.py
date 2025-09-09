@@ -60,6 +60,7 @@ class Translator:
         self.visitor = visitor
         self.config_options = config.ConfigOptions.from_polars_engine(engine)
         self.errors: list[Exception] = []
+        self._cache_nodes: dict[int, ir.Cache] = {}
 
     def translate_ir(self, *, n: int | None = None) -> ir.IR:
         """
@@ -278,12 +279,17 @@ def _(node: pl_ir.Cache, translator: Translator, schema: Schema) -> ir.IR:
         refcount = node.cache_hits
     else:
         refcount = None
-    return ir.Cache(
-        schema,
-        node.id_,
-        refcount,
-        translator.translate_ir(n=node.input),
-    )
+
+    # Make sure Cache nodes with the same id_
+    # are actually the same object.
+    if node.id_ not in translator._cache_nodes:
+        translator._cache_nodes[node.id_] = ir.Cache(
+            schema,
+            node.id_,
+            refcount,
+            translator.translate_ir(n=node.input),
+        )
+    return translator._cache_nodes[node.id_]
 
 
 @_translate_ir.register
@@ -748,10 +754,37 @@ def _(
         return replace([named_post_agg.value], replacements)[0]
     elif isinstance(node.options, pl_expr.WindowMapping):
         # pl.col("a").over(...)
+        agg = translator.translate_expr(n=node.function, schema=schema)
+        name_gen = unique_names(schema)
+        aggs, post = decompose_single_agg(
+            expr.NamedExpr(next(name_gen), agg),
+            name_gen,
+            is_top=True,
+            context=ExecutionContext.WINDOW,
+        )
+
+        mapping = node.options.kind
+        has_order_by = node.order_by is not None
+        descending = bool(getattr(node, "order_by_descending", False))
+        nulls_last = bool(getattr(node, "order_by_nulls_last", False))
+
+        if has_order_by or descending or nulls_last:
+            raise NotImplementedError(
+                f"over(order_by) not supported yet: "
+                f"{node.order_by=}, {descending=}, {nulls_last=}"
+            )
+
+        if mapping != "groups_to_rows":
+            raise NotImplementedError(
+                f"over(mapping_strategy) not supported yet: {mapping=}; "
+                f"expected 'groups_to_rows'"
+            )
+
         return expr.GroupedRollingWindow(
             dtype,
-            node.options,
-            translator.translate_expr(n=node.function, schema=schema),
+            (mapping, has_order_by, descending, nulls_last),
+            [agg for agg, _ in aggs],
+            post,
             *(translator.translate_expr(n=n, schema=schema) for n in node.partition_by),
         )
     assert_never(node.options)

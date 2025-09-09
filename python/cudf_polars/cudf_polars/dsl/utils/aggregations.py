@@ -89,6 +89,17 @@ def decompose_single_agg(
     """
     agg = named_expr.value
     name = named_expr.name
+    if isinstance(agg, expr.UnaryFunction) and agg.name == "rank":
+        if context != ExecutionContext.WINDOW:
+            raise NotImplementedError(
+                "rank is not supported in groupby or rolling context"
+            )
+        # Ensure Polars semantics for dtype:
+        # - average -> Float64
+        # - min/max/dense/ordinal -> IDX_DTYPE (UInt32/UInt64)
+        return [(named_expr, True)], named_expr.reconstruct(
+            expr.Cast(agg.dtype, expr.Col(agg.dtype, name))
+        )
     if isinstance(agg, expr.UnaryFunction) and agg.name == "null_count":
         (child,) = agg.children
 
@@ -131,6 +142,15 @@ def decompose_single_agg(
         return [(named_expr, True)], named_expr.reconstruct(expr.Col(agg.dtype, name))
     if isinstance(agg, (expr.Literal, expr.LiteralColumn)):
         return [], named_expr
+    if (
+        is_top
+        and isinstance(agg, expr.UnaryFunction)
+        and agg.name == "fill_null_with_strategy"
+    ):
+        strategy, _ = agg.options
+        raise NotImplementedError(
+            f"fill_null_with_strategy({strategy!r}) is not supported in groupby aggregations"
+        )
     if isinstance(agg, expr.Agg):
         if agg.name == "quantile":
             # Second child the requested quantile (which is asserted
@@ -158,12 +178,30 @@ def decompose_single_agg(
         is_median = agg.name == "median"
         is_quantile = agg.name == "quantile"
 
+        # quantile agg on decimal: unsupported -> keep dtype Decimal
+        # mean/median on decimal: Polars returns float -> pre-cast
+        decimal_unsupported = False
+        if plc.traits.is_fixed_point(child_dtype):
+            if is_quantile:
+                decimal_unsupported = True
+            elif agg.name in {"mean", "median"}:
+                tid = agg.dtype.plc.id()
+                if tid in {plc.TypeId.FLOAT32, plc.TypeId.FLOAT64}:
+                    cast_to = (
+                        DataType(pl.Float64)
+                        if tid == plc.TypeId.FLOAT64
+                        else DataType(pl.Float32)
+                    )
+                    child = expr.Cast(cast_to, child)
+                    child_dtype = child.dtype.plc
+
         is_group_quantile_supported = plc.traits.is_integral(
             child_dtype
         ) or plc.traits.is_floating_point(child_dtype)
 
         unsupported = (
-            (is_median or is_quantile) and not is_group_quantile_supported
+            decimal_unsupported
+            or ((is_median or is_quantile) and not is_group_quantile_supported)
         ) or (not plc.aggregation.is_valid_aggregation(child_dtype, req))
         if unsupported:
             return [], named_expr.reconstruct(expr.Literal(child.dtype, None))
@@ -172,11 +210,12 @@ def decompose_single_agg(
             # The aggregation is just reconstructed with the new
             # (potentially masked) child. This is safe because we recursed
             # to ensure there are no nested aggregations.
-            return (
-                [(named_expr.reconstruct(agg.reconstruct([child])), True)],
-                named_expr.reconstruct(expr.Col(agg.dtype, name)),
-            )
-        elif agg.name == "sum":
+
+        # rebuild the agg with the transformed child
+        new_children = [child] if not is_quantile else [child, agg.children[1]]
+        named_expr = named_expr.reconstruct(agg.reconstruct(new_children))
+
+        if agg.name == "sum":
             col = (
                 expr.Cast(agg.dtype, expr.Col(DataType(pl.datatypes.Int64()), name))
                 if (
@@ -190,7 +229,10 @@ def decompose_single_agg(
             # - ROLLING: sum(all-null window) => null; sum(empty window) => 0 (fill only if empty)
             #
             # Must post-process because libcudf returns null for both empty and all-null windows/groups
-            if not POLARS_VERSION_LT_1323 or context == ExecutionContext.GROUPBY:
+            if not POLARS_VERSION_LT_1323 or context in {
+                ExecutionContext.GROUPBY,
+                ExecutionContext.WINDOW,
+            }:
                 # GROUPBY: always fill top-level nulls with 0
                 return [(named_expr, True)], expr.NamedExpr(
                     name, replace_nulls(col, 0, is_top=is_top)
@@ -222,9 +264,9 @@ def decompose_single_agg(
                 return [(named_expr, True), (win_len, True)], expr.NamedExpr(
                     name, post_ternary_expr
                 )
-        elif agg.name == "mean":
+        elif agg.name in {"mean", "median", "quantile", "std", "var"}:
             post_agg_col: expr.Expr = expr.Col(
-                DataType(pl.Float64), name
+                DataType(pl.Float64()), name
             )  # libcudf promotes to float64
             if agg.dtype.plc.id() == plc.TypeId.FLOAT32:
                 # Cast back to float32 to match Polars
@@ -235,7 +277,49 @@ def decompose_single_agg(
                 expr.Col(agg.dtype, name)
             )
     if isinstance(agg, expr.Ternary):
-        raise NotImplementedError("Ternary inside groupby")
+        when, then, otherwise = agg.children
+
+        when_aggs, when_post = decompose_single_agg(
+            expr.NamedExpr(next(name_generator), when),
+            name_generator,
+            is_top=False,
+            context=context,
+        )
+        then_aggs, then_post = decompose_single_agg(
+            expr.NamedExpr(next(name_generator), then),
+            name_generator,
+            is_top=False,
+            context=context,
+        )
+        otherwise_aggs, otherwise_post = decompose_single_agg(
+            expr.NamedExpr(next(name_generator), otherwise),
+            name_generator,
+            is_top=False,
+            context=context,
+        )
+
+        when_has = any(h for _, h in when_aggs)
+        then_has = any(h for _, h in then_aggs)
+        otherwise_has = any(h for _, h in otherwise_aggs)
+
+        if is_top and not (when_has or then_has or otherwise_has):
+            raise NotImplementedError(
+                "Broadcasted ternary with list output in groupby is not supported"
+            )
+
+        for post, has in (
+            (when_post, when_has),
+            (then_post, then_has),
+            (otherwise_post, otherwise_has),
+        ):
+            if is_top and not has and not isinstance(post.value, expr.Literal):
+                raise NotImplementedError(
+                    "Broadcasting aggregated expressions in groupby/rolling"
+                )
+
+        return [*when_aggs, *then_aggs, *otherwise_aggs], named_expr.reconstruct(
+            agg.reconstruct([when_post.value, then_post.value, otherwise_post.value])
+        )
     if not agg.is_pointwise and isinstance(agg, expr.BooleanFunction):
         raise NotImplementedError(
             f"Non pointwise boolean function {agg.name!r} not supported in groupby or rolling context"

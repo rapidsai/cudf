@@ -680,6 +680,7 @@ if cudf.core._compat.PANDAS_GE_210:
         slow_to_fast=_Unusable(),
         additional_attributes={
             "_pa_array": _FastSlowAttribute("_pa_array", private=True),
+            "__array__": _FastSlowAttribute("__array__", private=True),
         },
     )
 
@@ -702,6 +703,7 @@ ArrowStringArray = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "_pa_array": _FastSlowAttribute("_pa_array", private=True),
+        "__array__": _FastSlowAttribute("__array__", private=True),
     },
 )
 
@@ -1132,7 +1134,8 @@ def _find_user_frame():
     frame = inspect.currentframe()
     while frame:
         modname = frame.f_globals.get("__name__", "")
-        if modname == "__main__" or not modname.startswith("cudf."):
+        # TODO: Remove "nvtx." entry once we cross nvtx-0.2.11 as minimum version
+        if modname == "__main__" or not modname.startswith(("cudf.", "nvtx.")):
             return frame
         frame = frame.f_back
     raise RuntimeError("Could not find the user's frame.")
@@ -1898,6 +1901,7 @@ ArrowExtensionArray = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "_pa_array": _FastSlowAttribute("_pa_array", private=True),
+        "__array__": _FastSlowAttribute("__array__", private=True),
     },
 )
 

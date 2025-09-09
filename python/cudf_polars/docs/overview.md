@@ -417,11 +417,25 @@ datasource (e.g. a Parquet dataset or in-memory `DataFrame`).
   **aggregated** column sampling via sub-classing. For example,
   The `ParquetSourceInfo` sub-class uses caching to avoid
   redundant file-system access.
+- `ColumnSourceInfo`: This class wraps a `DataSourceInfo` object.
+Since `DataSourceInfo` tracks information for an entire table, we use
+`ColumnSourceInfo` to provide a single-column view of the object.
 - `ColumnStats`: This class is used to group together the "base"
-`DataSourceInfo` reference and the current `UniqueStats` estimates
+`ColumnSourceInfo` reference and the local unique-count estimate
 for a specific IR + column combination. We bundle these references
 together to simplify the design and maintenance of `StatsCollector`.
-**NOTE:** The current `UniqueStats` estimates are not yet populated.
+**NOTE:** The local unique-count estimate is not yet populated.
+- `JoinKey`: This class is used to define a set of columns being
+joined on and the estimated unique-value count of the key.
+- `JoinInfo`: This class is used to define the necessary data
+structures for applying join heuristics to our query plan.
+Each object contains the following attributes:
+  - `JoinInfo.key_map`: Returns a mapping between distinct
+  `JoinKey` objects that are joined on in the query plan.
+  - `JoinInfo.col_map`: Returns a mapping between distinct
+  `ColumnStats` objects that are joined on in the query plan.
+  - `JoinInfo.join_map`: Returns a mapping between each IR node
+  and the associated `JoinKey` objects.
 - `StatsCollector`: This class is used to collect and store
 statistics for all IR nodes within a single query. The statistics
 attached to each IR node refer to the **output** columns of the
@@ -433,6 +447,7 @@ Each object has two important attributes:
   **NOTE:** This attribute is not yet populated.
   - `StatsCollector.column_stats`: Returns a mapping between each IR
   node and the `dict[str, ColumnStats]` mapping for that node.
+  - `StatsCollector.join_info`: Returns a `JoinInfo` object.
 
 ## Collecting and using statistics
 

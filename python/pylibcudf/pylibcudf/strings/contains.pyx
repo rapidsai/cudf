@@ -19,7 +19,8 @@ __all__ = ["contains_re", "count_re", "like", "matches_re"]
 
 cpdef Column contains_re(
     Column input,
-    RegexProgram prog
+    RegexProgram prog,
+    Stream stream=None
 ):
     """Returns a boolean column identifying rows which match the given
     regex_program object.
@@ -40,19 +41,22 @@ cpdef Column contains_re(
     """
 
     cdef unique_ptr[column] result
+    stream = _get_stream(stream)
 
     with nogil:
         result = cpp_contains.contains_re(
             input.view(),
-            prog.c_obj.get()[0]
+            prog.c_obj.get()[0],
+            stream.view()
         )
 
-    return Column.from_libcudf(move(result))
+    return Column.from_libcudf(move(result), stream)
 
 
 cpdef Column count_re(
     Column input,
-    RegexProgram prog
+    RegexProgram prog,
+    Stream stream=None
 ):
     """Returns the number of times the given regex_program's pattern
     matches in each string.
@@ -73,19 +77,22 @@ cpdef Column count_re(
     """
 
     cdef unique_ptr[column] result
+    stream = _get_stream(stream)
 
     with nogil:
         result = cpp_contains.count_re(
             input.view(),
-            prog.c_obj.get()[0]
+            prog.c_obj.get()[0],
+            stream.view()
         )
 
-    return Column.from_libcudf(move(result))
+    return Column.from_libcudf(move(result), stream)
 
 
 cpdef Column matches_re(
     Column input,
-    RegexProgram prog
+    RegexProgram prog,
+    Stream stream=None
 ):
     """Returns a boolean column identifying rows which
     matching the given regex_program object but only at
@@ -107,17 +114,24 @@ cpdef Column matches_re(
     """
 
     cdef unique_ptr[column] result
+    stream = _get_stream(stream)
 
     with nogil:
         result = cpp_contains.matches_re(
             input.view(),
-            prog.c_obj.get()[0]
+            prog.c_obj.get()[0],
+            stream.view()
         )
 
-    return Column.from_libcudf(move(result))
+    return Column.from_libcudf(move(result), stream)
 
 
-cpdef Column like(Column input, ColumnOrScalar pattern, Scalar escape_character=None):
+cpdef Column like(
+    Column input,
+    ColumnOrScalar pattern,
+    Scalar escape_character=None,
+    Stream stream=None
+):
     """
     Returns a boolean column identifying rows which
     match the given like pattern.
@@ -140,10 +154,9 @@ cpdef Column like(Column input, ColumnOrScalar pattern, Scalar escape_character=
         New column of boolean results for each string
     """
     cdef unique_ptr[column] result
-    cdef Stream stream
+    stream = _get_stream(stream)
 
     if escape_character is None:
-        stream = _get_stream(None)
         escape_character = Scalar.from_libcudf(
             cpp_make_string_scalar("".encode(), stream.view())
         )
@@ -158,7 +171,8 @@ cpdef Column like(Column input, ColumnOrScalar pattern, Scalar escape_character=
             result = cpp_contains.like(
                 input.view(),
                 pattern.view(),
-                dereference(c_escape_character)
+                dereference(c_escape_character),
+                stream.view()
             )
     elif ColumnOrScalar is Scalar:
         c_pattern = <const string_scalar*>(pattern.c_obj.get())
@@ -166,9 +180,10 @@ cpdef Column like(Column input, ColumnOrScalar pattern, Scalar escape_character=
             result = cpp_contains.like(
                 input.view(),
                 dereference(c_pattern),
-                dereference(c_escape_character)
+                dereference(c_escape_character),
+                stream.view()
             )
     else:
         raise ValueError("pattern must be a Column or a Scalar")
 
-    return Column.from_libcudf(move(result))
+    return Column.from_libcudf(move(result), stream)

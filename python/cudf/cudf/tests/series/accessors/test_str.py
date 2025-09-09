@@ -2296,6 +2296,14 @@ def test_string_replace_zero_length(ps_gs, pat):
     assert_eq(expect, got)
 
 
+@pytest.mark.parametrize("n", [-1, 0, 1])
+def test_string_replace_n(n):
+    data = ["a,b,c", "d,e,f,g"]
+    expect = pd.Series(data).str.replace(pat=",", repl="_", n=n)
+    got = cudf.Series(data).str.replace(pat=",", repl="_", n=n)
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize(
     "pat,regex",
     [

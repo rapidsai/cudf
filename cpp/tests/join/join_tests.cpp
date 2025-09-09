@@ -282,10 +282,10 @@ TEST_P(JoinParameterizedTest, InvalidInput)
   cudf::table_view right({right_first_col, right_second_col, right_third_col});
 
   EXPECT_THROW(inner_join(left, right, {0, 1}, {0, 1, 2}, cudf::null_equality::EQUAL, algo),
-               cudf::logic_error);
+               std::invalid_argument);
 
   EXPECT_THROW(inner_join(left, right, {}, {0, 1, 2}, cudf::null_equality::EQUAL, algo),
-               cudf::logic_error);
+               std::invalid_argument);
 }
 
 TEST_P(JoinParameterizedTest, EmptySentinelRepro)
@@ -954,10 +954,9 @@ TEST_F(JoinTest, PartitionedInnerJoinWithNulls)
   cudf::sort_merge_join obj(t1.select(right_on), cudf::sorted::NO, compare_nulls, stream);
   auto match_context = obj.inner_join_match_context(
     t0.select(left_on), cudf::sorted::NO, stream, cudf::get_current_device_resource_ref());
-  auto partition_context = cudf::sort_merge_join::partition_context{std::move(match_context), 0, 0};
+  auto partition_context = cudf::join_partition_context{std::move(match_context), 0, 0};
 
-  auto join_and_gather = [&t0, &t1, &obj, stream](
-                           cudf::sort_merge_join::partition_context const& cxt) {
+  auto join_and_gather = [&t0, &t1, &obj, stream](cudf::join_partition_context const& cxt) {
     auto const [left_join_indices, right_join_indices] =
       obj.partitioned_inner_join(cxt, stream, cudf::get_current_device_resource_ref());
 
@@ -1967,6 +1966,346 @@ TEST_F(JoinTest, HashJoinLargeOutputSize)
     tview, cudf::nullable_join::NO, cudf::null_equality::UNEQUAL, desired_load_factor);
   std::size_t output_size = hash_join.inner_join_size(tview);
   EXPECT_EQ(col_size * col_size, output_size);
+}
+
+TEST_F(JoinTest, HashJoinInnerMatchContext)
+{
+  // Test inner join match context functionality with multiple matches and nulls
+  // Use the same test data as SortMergeInnerJoinSizePerRowWithNulls for consistency
+  column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
+  strcol_wrapper col0_1({"s1", "s1", "s0", "s4", "s0"}, {true, true, false, true, true});
+  column_wrapper<int32_t> col0_2{{0, 1, 2, 4, 1}};
+
+  column_wrapper<int32_t> col1_0{{2, 2, 0, 4, 3}};
+  strcol_wrapper col1_1({"s1", "s0", "s1", "s2", "s1"}, {true, false, true, true, true});
+  column_wrapper<int32_t> col1_2{{1, 0, 1, 2, 1}, {true, false, true, true, true}};
+
+  CVector cols0, cols1;
+  cols0.emplace_back(col0_0.release());
+  cols0.emplace_back(col0_1.release());
+  cols0.emplace_back(col0_2.release());
+  cols1.emplace_back(col1_0.release());
+  cols1.emplace_back(col1_1.release());
+  cols1.emplace_back(col1_2.release());
+
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
+
+  // Test single column join with null_equality::EQUAL
+  {
+    cudf::hash_join hash_join(t1.select({0}), cudf::null_equality::EQUAL);
+    auto match_context = hash_join.inner_join_match_context(t0.select({0}));
+
+    // Check the match counts for each row
+    std::vector<cudf::size_type> h_match_counts(t0.num_rows());
+    CUDF_CUDA_TRY(cudaMemcpy(h_match_counts.data(),
+                             match_context._match_counts->data(),
+                             sizeof(cudf::size_type) * t0.num_rows(),
+                             cudaMemcpyDeviceToHost));
+
+    // Expected: Row 0(3)=1 match, Row 1(1)=0 matches, Row 2(2)=2 matches, Row 3(0)=1 match, Row
+    // 4(2)=2 matches
+    std::vector<cudf::size_type> expected_counts = {1, 0, 2, 1, 2};
+    EXPECT_EQ(h_match_counts, expected_counts);
+
+    // Verify total matches equals inner join size
+    cudf::size_type total_matches =
+      std::accumulate(h_match_counts.begin(), h_match_counts.end(), 0);
+    auto inner_join_size = hash_join.inner_join_size(t0.select({0}));
+    EXPECT_EQ(total_matches, inner_join_size);
+  }
+
+  // Test multi-column join with null_equality::EQUAL
+  {
+    cudf::hash_join hash_join(t1.select({0, 1}), cudf::null_equality::EQUAL);
+    auto match_context = hash_join.inner_join_match_context(t0.select({0, 1}));
+
+    std::vector<cudf::size_type> h_match_counts(t0.num_rows());
+    CUDF_CUDA_TRY(cudaMemcpy(h_match_counts.data(),
+                             match_context._match_counts->data(),
+                             sizeof(cudf::size_type) * t0.num_rows(),
+                             cudaMemcpyDeviceToHost));
+
+    // Expected: Row 0(3,s1)=1 match, Row 1(1,s1)=0 matches, Row 2(2,null)=1 match, Row 3(0,s4)=0
+    // matches, Row 4(2,s0)=0 matches
+    std::vector<cudf::size_type> expected_counts = {1, 0, 1, 0, 0};
+    EXPECT_EQ(h_match_counts, expected_counts);
+  }
+
+  // Test single column join with null_equality::UNEQUAL
+  {
+    cudf::hash_join hash_join(t1.select({0}), cudf::null_equality::UNEQUAL);
+    auto match_context = hash_join.inner_join_match_context(t0.select({0}));
+
+    std::vector<cudf::size_type> h_match_counts(t0.num_rows());
+    CUDF_CUDA_TRY(cudaMemcpy(h_match_counts.data(),
+                             match_context._match_counts->data(),
+                             sizeof(cudf::size_type) * t0.num_rows(),
+                             cudaMemcpyDeviceToHost));
+
+    // Same as EQUAL for single column since nulls don't affect the integer column matching
+    std::vector<cudf::size_type> expected_counts = {1, 0, 2, 1, 2};
+    EXPECT_EQ(h_match_counts, expected_counts);
+  }
+
+  // Test multi-column join with null_equality::UNEQUAL
+  {
+    cudf::hash_join hash_join(t1.select({0, 1}), cudf::null_equality::UNEQUAL);
+    auto match_context = hash_join.inner_join_match_context(t0.select({0, 1}));
+
+    std::vector<cudf::size_type> h_match_counts(t0.num_rows());
+    CUDF_CUDA_TRY(cudaMemcpy(h_match_counts.data(),
+                             match_context._match_counts->data(),
+                             sizeof(cudf::size_type) * t0.num_rows(),
+                             cudaMemcpyDeviceToHost));
+
+    // With UNEQUAL, rows with nulls should not match: Row 0(3,s1)=1 match, others=0 matches
+    std::vector<cudf::size_type> expected_counts = {1, 0, 0, 0, 0};
+    EXPECT_EQ(h_match_counts, expected_counts);
+  }
+}
+
+TEST_F(JoinTest, HashJoinLeftMatchContext)
+{
+  // Test left join match context functionality with comprehensive null handling
+  column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
+  strcol_wrapper col0_1({"s1", "s1", "s0", "s4", "s0"}, {true, true, false, true, true});
+
+  column_wrapper<int32_t> col1_0{{2, 2, 0, 4, 3}};
+  strcol_wrapper col1_1({"s1", "s0", "s1", "s2", "s1"}, {true, false, true, true, true});
+
+  CVector cols0, cols1;
+  cols0.emplace_back(col0_0.release());
+  cols0.emplace_back(col0_1.release());
+  cols1.emplace_back(col1_0.release());
+  cols1.emplace_back(col1_1.release());
+
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
+
+  // Test single column join - for left join, every row should have at least 1 match
+  {
+    cudf::hash_join hash_join(t1.select({0}), cudf::null_equality::EQUAL);
+    auto match_context = hash_join.left_join_match_context(t0.select({0}));
+
+    std::vector<cudf::size_type> h_match_counts(t0.num_rows());
+    CUDF_CUDA_TRY(cudaMemcpy(h_match_counts.data(),
+                             match_context._match_counts->data(),
+                             sizeof(cudf::size_type) * t0.num_rows(),
+                             cudaMemcpyDeviceToHost));
+
+    // For left join: Row 0(3)=1 match, Row 1(1)=1 match(null), Row 2(2)=2 matches, Row 3(0)=1
+    // match, Row 4(2)=2 matches
+    std::vector<cudf::size_type> expected_counts = {1, 1, 2, 1, 2};
+    EXPECT_EQ(h_match_counts, expected_counts);
+
+    // Verify total matches equals left join size
+    cudf::size_type total_matches =
+      std::accumulate(h_match_counts.begin(), h_match_counts.end(), 0);
+    auto left_join_size = hash_join.left_join_size(t0.select({0}));
+    EXPECT_EQ(total_matches, left_join_size);
+  }
+
+  // Test multi-column join with null_equality::EQUAL
+  {
+    cudf::hash_join hash_join(t1.select({0, 1}), cudf::null_equality::EQUAL);
+    auto match_context = hash_join.left_join_match_context(t0.select({0, 1}));
+
+    std::vector<cudf::size_type> h_match_counts(t0.num_rows());
+    CUDF_CUDA_TRY(cudaMemcpy(h_match_counts.data(),
+                             match_context._match_counts->data(),
+                             sizeof(cudf::size_type) * t0.num_rows(),
+                             cudaMemcpyDeviceToHost));
+
+    // For left join, all rows get at least 1 match: Row 0(3,s1)=1 match, others=1 match (null)
+    std::vector<cudf::size_type> expected_counts = {1, 1, 1, 1, 1};
+    EXPECT_EQ(h_match_counts, expected_counts);
+  }
+
+  // Test multi-column join with null_equality::UNEQUAL
+  {
+    cudf::hash_join hash_join(t1.select({0, 1}), cudf::null_equality::UNEQUAL);
+    auto match_context = hash_join.left_join_match_context(t0.select({0, 1}));
+
+    std::vector<cudf::size_type> h_match_counts(t0.num_rows());
+    CUDF_CUDA_TRY(cudaMemcpy(h_match_counts.data(),
+                             match_context._match_counts->data(),
+                             sizeof(cudf::size_type) * t0.num_rows(),
+                             cudaMemcpyDeviceToHost));
+
+    // For left join with UNEQUAL, all rows still get at least 1 match (nulls for unmatched)
+    std::vector<cudf::size_type> expected_counts = {1, 1, 1, 1, 1};
+    EXPECT_EQ(h_match_counts, expected_counts);
+  }
+}
+
+TEST_F(JoinTest, HashJoinFullMatchContext)
+{
+  // Test full join match context functionality with same comprehensive data
+  column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
+  strcol_wrapper col0_1({"s1", "s1", "s0", "s4", "s0"}, {true, true, false, true, true});
+
+  column_wrapper<int32_t> col1_0{{2, 2, 0, 4, 3}};
+  strcol_wrapper col1_1({"s1", "s0", "s1", "s2", "s1"}, {true, false, true, true, true});
+
+  CVector cols0, cols1;
+  cols0.emplace_back(col0_0.release());
+  cols0.emplace_back(col0_1.release());
+  cols1.emplace_back(col1_0.release());
+  cols1.emplace_back(col1_1.release());
+
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
+
+  // Test single column join - for full join probe side, every row should have at least 1 match
+  {
+    cudf::hash_join hash_join(t1.select({0}), cudf::null_equality::EQUAL);
+    auto match_context = hash_join.full_join_match_context(t0.select({0}));
+
+    std::vector<cudf::size_type> h_match_counts(t0.num_rows());
+    CUDF_CUDA_TRY(cudaMemcpy(h_match_counts.data(),
+                             match_context._match_counts->data(),
+                             sizeof(cudf::size_type) * t0.num_rows(),
+                             cudaMemcpyDeviceToHost));
+
+    // For full join: Row 0(3)=1 match, Row 1(1)=1 match(null), Row 2(2)=2 matches, Row 3(0)=1
+    // match, Row 4(2)=2 matches
+    std::vector<cudf::size_type> expected_counts = {1, 1, 2, 1, 2};
+    EXPECT_EQ(h_match_counts, expected_counts);
+  }
+
+  // Test multi-column join
+  {
+    cudf::hash_join hash_join(t1.select({0, 1}), cudf::null_equality::EQUAL);
+    auto match_context = hash_join.full_join_match_context(t0.select({0, 1}));
+
+    std::vector<cudf::size_type> h_match_counts(t0.num_rows());
+    CUDF_CUDA_TRY(cudaMemcpy(h_match_counts.data(),
+                             match_context._match_counts->data(),
+                             sizeof(cudf::size_type) * t0.num_rows(),
+                             cudaMemcpyDeviceToHost));
+
+    // For full join, all rows get at least 1 match
+    std::vector<cudf::size_type> expected_counts = {1, 1, 1, 1, 1};
+    EXPECT_EQ(h_match_counts, expected_counts);
+  }
+}
+
+TEST_F(JoinTest, HashJoinMatchContextEmptyBuild)
+{
+  // Test match context with empty build table
+  column_wrapper<int32_t> col0_0{{3, 1, 2}};
+  column_wrapper<int32_t> col1_0{};  // Empty
+
+  CVector cols0, cols1;
+  cols0.emplace_back(col0_0.release());
+  cols1.emplace_back(col1_0.release());
+
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
+
+  cudf::hash_join hash_join(t1, cudf::null_equality::EQUAL);
+
+  // Test inner join match context
+  {
+    auto match_context = hash_join.inner_join_match_context(t0);
+    std::vector<cudf::size_type> h_match_counts(t0.num_rows());
+    CUDF_CUDA_TRY(cudaMemcpy(h_match_counts.data(),
+                             match_context._match_counts->data(),
+                             sizeof(cudf::size_type) * t0.num_rows(),
+                             cudaMemcpyDeviceToHost));
+
+    // All should be 0 for inner join with empty build table
+    std::vector<cudf::size_type> expected_counts = {0, 0, 0};
+    EXPECT_EQ(h_match_counts, expected_counts);
+  }
+
+  // Test left join match context
+  {
+    auto match_context = hash_join.left_join_match_context(t0);
+    std::vector<cudf::size_type> h_match_counts(t0.num_rows());
+    CUDF_CUDA_TRY(cudaMemcpy(h_match_counts.data(),
+                             match_context._match_counts->data(),
+                             sizeof(cudf::size_type) * t0.num_rows(),
+                             cudaMemcpyDeviceToHost));
+
+    // All should be 1 for left join (null matches)
+    std::vector<cudf::size_type> expected_counts = {1, 1, 1};
+    EXPECT_EQ(h_match_counts, expected_counts);
+  }
+
+  // Test full join match context
+  {
+    auto match_context = hash_join.full_join_match_context(t0);
+    std::vector<cudf::size_type> h_match_counts(t0.num_rows());
+    CUDF_CUDA_TRY(cudaMemcpy(h_match_counts.data(),
+                             match_context._match_counts->data(),
+                             sizeof(cudf::size_type) * t0.num_rows(),
+                             cudaMemcpyDeviceToHost));
+
+    // All should be 1 for full join (null matches)
+    std::vector<cudf::size_type> expected_counts = {1, 1, 1};
+    EXPECT_EQ(h_match_counts, expected_counts);
+  }
+}
+
+TEST_F(JoinTest, HashJoinMatchContextDuplicatesAndEdgeCases)
+{
+  // Test with duplicate keys to ensure multiple matches work correctly
+  column_wrapper<int32_t> col0_0{{1, 1, 2, 2, 3}};
+  strcol_wrapper col0_1({"a", "a", "b", "b", "c"});
+
+  column_wrapper<int32_t> col1_0{{1, 1, 1, 2, 4}};
+  strcol_wrapper col1_1({"a", "a", "a", "b", "d"});
+
+  CVector cols0, cols1;
+  cols0.emplace_back(col0_0.release());
+  cols0.emplace_back(col0_1.release());
+  cols1.emplace_back(col1_0.release());
+  cols1.emplace_back(col1_1.release());
+
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
+
+  // Test inner join with multiple matches per row
+  {
+    cudf::hash_join hash_join(t1.select({0}), cudf::null_equality::EQUAL);
+    auto match_context = hash_join.inner_join_match_context(t0.select({0}));
+
+    std::vector<cudf::size_type> h_match_counts(t0.num_rows());
+    CUDF_CUDA_TRY(cudaMemcpy(h_match_counts.data(),
+                             match_context._match_counts->data(),
+                             sizeof(cudf::size_type) * t0.num_rows(),
+                             cudaMemcpyDeviceToHost));
+
+    // Row 0(1)=3 matches, Row 1(1)=3 matches, Row 2(2)=1 match, Row 3(2)=1 match, Row 4(3)=0
+    // matches
+    std::vector<cudf::size_type> expected_counts = {3, 3, 1, 1, 0};
+    EXPECT_EQ(h_match_counts, expected_counts);
+
+    // Verify total matches
+    cudf::size_type total_matches =
+      std::accumulate(h_match_counts.begin(), h_match_counts.end(), 0);
+    auto inner_join_size = hash_join.inner_join_size(t0.select({0}));
+    EXPECT_EQ(total_matches, inner_join_size);
+  }
+
+  // Test multi-column join
+  {
+    cudf::hash_join hash_join(t1.select({0, 1}), cudf::null_equality::EQUAL);
+    auto match_context = hash_join.inner_join_match_context(t0.select({0, 1}));
+
+    std::vector<cudf::size_type> h_match_counts(t0.num_rows());
+    CUDF_CUDA_TRY(cudaMemcpy(h_match_counts.data(),
+                             match_context._match_counts->data(),
+                             sizeof(cudf::size_type) * t0.num_rows(),
+                             cudaMemcpyDeviceToHost));
+
+    // Row 0(1,a)=3 matches, Row 1(1,a)=3 matches, Row 2(2,b)=1 match, Row 3(2,b)=1 match, Row
+    // 4(3,c)=0 matches
+    std::vector<cudf::size_type> expected_counts = {3, 3, 1, 1, 0};
+    EXPECT_EQ(h_match_counts, expected_counts);
+  }
 }
 
 struct JoinDictionaryTest : public cudf::test::BaseFixture {};
