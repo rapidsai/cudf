@@ -149,7 +149,7 @@ def test_join_conditional(reverse, max_rows_per_partition):
         executor_options={
             "max_rows_per_partition": max_rows_per_partition,
             "scheduler": DEFAULT_SCHEDULER,
-            "fallback_mode": "silent",
+            "fallback_mode": "warn",
         },
     )
     left = pl.LazyFrame({"x": range(15), "y": [1, 2, 3] * 5})
@@ -157,7 +157,13 @@ def test_join_conditional(reverse, max_rows_per_partition):
     if reverse:
         left, right = right, left
     q = left.join_where(right, pl.col("y") < pl.col("yy"))
-    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+    if max_rows_per_partition == 3:
+        with pytest.warns(
+            UserWarning, match="ConditionalJoin not supported for multiple partitions."
+        ):
+            assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+    else:
+        assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
 @pytest.mark.parametrize("zlice", [(0, 2), (2, 2), (-2, None)])
@@ -170,7 +176,7 @@ def test_join_and_slice(zlice):
             "broadcast_join_limit": 100,
             "scheduler": DEFAULT_SCHEDULER,
             "shuffle_method": "tasks",
-            "fallback_mode": "warn" if zlice[0] == 0 else "silent",
+            "fallback_mode": "warn",
         },
     )
     left = pl.LazyFrame(
@@ -190,11 +196,24 @@ def test_join_and_slice(zlice):
     q = left.join(right, on="a", how="inner").slice(*zlice)
     # Check that we get the correct row count
     # See: https://github.com/rapidsai/cudf/issues/19153
-    assert q.collect(engine=engine).height == q.collect().height
+    if zlice in {(2, 2), (-2, None)}:
+        with pytest.warns(
+            UserWarning, match="This slice not supported for multiple partitions."
+        ):
+            assert q.collect(engine=engine).height == q.collect().height
+    else:
+        assert q.collect(engine=engine).height == q.collect().height
 
     # Need sort to match order after a join
     q = left.join(right, on="a", how="inner").sort(pl.col("a")).slice(*zlice)
-    assert_gpu_result_equal(q, engine=engine)
+    if zlice == (2, 2):
+        with pytest.warns(
+            UserWarning,
+            match="Sort does not support a multi-partition slice with an offset.",
+        ):
+            assert_gpu_result_equal(q, engine=engine)
+    else:
+        assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize(

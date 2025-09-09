@@ -12,7 +12,7 @@ from cudf_polars.dsl.ir import ConditionalJoin, Join, Slice
 from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.experimental.repartition import Repartition
-from cudf_polars.experimental.shuffle import Shuffle, _partition_dataframe
+from cudf_polars.experimental.shuffle import Shuffle, _hash_partition_dataframe
 from cudf_polars.experimental.utils import _concat, _fallback_inform, _lower_ir_fallback
 
 if TYPE_CHECKING:
@@ -363,10 +363,12 @@ def _(
         for part_out in range(out_size):
             if split_large:
                 graph[(split_name, part_out)] = (
-                    _partition_dataframe,
+                    _hash_partition_dataframe,
                     (large_name, part_out),
-                    large_on,
+                    part_out,
                     small_size,
+                    None,
+                    large_on,
                 )
 
             _concat_list = []

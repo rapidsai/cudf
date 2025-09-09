@@ -4,6 +4,7 @@ from libcpp.memory cimport unique_ptr
 from pylibcudf.column cimport Column
 from pylibcudf.libcudf.nvtext.wordpiece_tokenize cimport wordpiece_vocabulary
 from pylibcudf.libcudf.types cimport size_type
+from rmm.pylibrmm.stream cimport Stream
 
 cdef class WordPieceVocabulary:
     cdef unique_ptr[wordpiece_vocabulary] c_obj
@@ -11,5 +12,6 @@ cdef class WordPieceVocabulary:
 cpdef Column wordpiece_tokenize(
     Column input,
     WordPieceVocabulary vocabulary,
-    size_type max_words_per_row
+    size_type max_words_per_row,
+    Stream stream=*
 )

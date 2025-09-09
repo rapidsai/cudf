@@ -1661,6 +1661,19 @@ class Join(IR):
     - maintain_order: which DataFrame row order to preserve, if any
     """
 
+    SWAPPED_ORDER: ClassVar[
+        dict[
+            Literal["none", "left", "right", "left_right", "right_left"],
+            Literal["none", "left", "right", "left_right", "right_left"],
+        ]
+    ] = {
+        "none": "none",
+        "left": "right",
+        "right": "left",
+        "left_right": "right_left",
+        "right_left": "left_right",
+    }
+
     def __init__(
         self,
         schema: Schema,
@@ -1881,44 +1894,23 @@ class Join(IR):
             table = plc.copying.gather(left.table, lg, left_policy)
             result = DataFrame.from_table(table, left.column_names, left.dtypes)
         else:
-            swapped = False
             if how == "Right":
                 # Right join is a left join with the tables swapped
                 left, right = right, left
                 left_on, right_on = right_on, left_on
-                swapped = True
-            if swapped:
-                effective_order = {
-                    "none": "none",
-                    "left": "right",
-                    "right": "left",
-                    "left_right": "right_left",
-                    "right_left": "left_right",
-                }.get(maintain_order, "none")
-            else:
-                effective_order = maintain_order
+                maintain_order = Join.SWAPPED_ORDER[maintain_order]
+
             lg, rg = join_fn(left_on.table, right_on.table, null_equality)
-            if how in ("Inner", "Left", "Right", "Full") and effective_order != "none":
-                if effective_order in ("left", "left_right"):
-                    lg, rg = cls._reorder_maps(
-                        left.num_rows,
-                        lg,
-                        left_policy,
-                        right.num_rows,
-                        rg,
-                        right_policy,
-                        primary="left",
-                    )
-                elif effective_order in ("right", "right_left"):
-                    lg, rg = cls._reorder_maps(
-                        left.num_rows,
-                        lg,
-                        left_policy,
-                        right.num_rows,
-                        rg,
-                        right_policy,
-                        primary="right",
-                    )
+            if how in ("Inner", "Left", "Right", "Full") and maintain_order != "none":
+                lg, rg = cls._reorder_maps(
+                    left.num_rows,
+                    lg,
+                    left_policy,
+                    right.num_rows,
+                    rg,
+                    right_policy,
+                    primary="left" if maintain_order.startswith("left") else "right",
+                )
             elif how in ("Left", "Right"):
                 # preserve left order even when no explicit maintain_order is set.
                 lg, rg = cls._reorder_maps(
@@ -2260,9 +2252,13 @@ class MergeSorted(IR):
     """Key that is sorted."""
 
     def __init__(self, schema: Schema, key: str, left: IR, right: IR):
-        assert isinstance(left, Sort)
-        assert isinstance(right, Sort)
-        assert left.order == right.order
+        # Children must be Sort or Repartition(Sort).
+        # The Repartition(Sort) case happens during fallback.
+        left_sort_child = left if isinstance(left, Sort) else left.children[0]
+        right_sort_child = right if isinstance(right, Sort) else right.children[0]
+        assert isinstance(left_sort_child, Sort)
+        assert isinstance(right_sort_child, Sort)
+        assert left_sort_child.order == right_sort_child.order
         assert len(left.schema.keys()) <= len(right.schema.keys())
         self.schema = schema
         self.key = key

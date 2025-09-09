@@ -126,7 +126,8 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
     offsets = as_column(offsets)
     ngroups = len(offsets) - 1
 
-    output = column_empty(ngroups, dtype=return_type, for_numba=True)
+    output = column_empty(ngroups, dtype=return_type)
+    output = output.set_mask(None)
     launch_args = [
         offsets,
         output,
