@@ -18,11 +18,36 @@
 
 #include <cudf/utilities/export.hpp>
 
+#include <cstdint>
+
 namespace CUDF_EXPORT cudf {
 
+/// @brief Flags for controlling initialization steps
+enum class init_flags : std::uint32_t {
+  /// @brief Load the nvCOMP library during initialization
+  LOAD_NVCOMP = 1 << 0,
+  /// @brief Initialize the JIT program cache during initialization
+  INIT_JIT_CACHE = 1 << 1,
+  /// @brief All initialization steps (default behavior)
+  ALL = LOAD_NVCOMP | INIT_JIT_CACHE
+}; 
+
+/// @brief Bitwise OR operator for init_flags
+constexpr init_flags operator|(init_flags lhs, init_flags rhs) noexcept
+{
+  return static_cast<init_flags>(static_cast<std::uint32_t>(lhs) | static_cast<std::uint32_t>(rhs));
+}
+
+/// @brief Check if a flag is set
+constexpr bool has_flag(init_flags flags, init_flags flag) noexcept
+{
+  return (flags | flag) == flags;
+}
+
 /// @brief initialize the cudf global context
+/// @param flags Optional flags to control which initialization steps to perform.
 /// @throws std::runtime_error if the context is already initialized
-void initialize();
+void initialize(init_flags flags = init_flags::INIT_JIT_CACHE);
 
 /// @brief de-initialize the cudf global context
 /// @throws std::runtime_error if the context is already de-initialized
