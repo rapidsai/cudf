@@ -188,16 +188,9 @@ inline void jni_cuda_check(JNIEnv* const env, cudaError_t cuda_status)
     }                                                                                 \
   }
 
-// Define a try-catch macros which can be patched to something else if needed.
-// Note that JNI_CATCH_FIRST must be called first in any try-catch block to allow special handling
-// if needed when it is replaced by more complex code.
-// Typically, JNI_TRY should be used in every JNI function while JNI_CATCH_FIRST should be used
-#define JNI_TRY         try
-#define JNI_CATCH_FIRST catch
-
 // Catch the commonly known exceptions.
 #define CATCH_SPECIAL_EXCEPTION(env, ret_val)                                                    \
-  JNI_CATCH_FIRST(rmm::out_of_memory const& e)                                                   \
+  catch (rmm::out_of_memory const& e)                                                            \
   {                                                                                              \
     JNI_EXCEPTION_OCCURRED_CHECK(env, ret_val);                                                  \
     auto const what =                                                                            \
@@ -243,8 +236,16 @@ inline void jni_cuda_check(JNIEnv* const env, cudaError_t cuda_status)
       env, cudf::jni::CUDF_EXCEPTION_CLASS, e.what(), nullptr, ret_val);                    \
   }
 
+// Define a try-catch macros which can be patched to something else if needed.
+// Note that JNI_CATCH_FIRST must be called first in any try-catch block to allow special handling
+// if needed when it is replaced by more complex code.
+// Typically, JNI_TRY/JNI_CATCH should be used in every JNI function.
+#define JNI_TRY                        try
+#define JNI_CATCH_FIRST(env, ret_val)  // no-op by default
+
 // Separate special exceptions handling from std::exception to allow catching more special
 // exceptions in some situations by inserting additional catch blocks in between.
 #define JNI_CATCH(env, ret_val)         \
+  JNI_CATCH_FIRST(env, ret_val)         \
   CATCH_SPECIAL_EXCEPTION(env, ret_val) \
   CATCH_STD_EXCEPTION(env, ret_val)
