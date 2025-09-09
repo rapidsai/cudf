@@ -462,7 +462,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_ColumnVector_deleteCudfColumn(JNIEnv*
     cudf::jni::auto_set_device(env);
     delete reinterpret_cast<cudf::column*>(handle);
   }
-  JNI_CATCH(env, )
+  JNI_CATCH(env, );
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_ColumnVector_setNativeNullCountColumn(JNIEnv* env,

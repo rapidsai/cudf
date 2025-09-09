@@ -2714,89 +2714,107 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_makeStructView(JNIEnv* en
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_nansToNulls(JNIEnv* env,
                                                                    jobject j_object,
-                                                                   jlong handle){
+                                                                   jlong handle)
+{
   JNI_NULL_CHECK(env, handle, "native view handle is null", 0)
 
-    JNI_TRY{cudf::jni::auto_set_device(env);
-auto const input = *reinterpret_cast<cudf::column_view*>(handle);
-// get a new null mask by setting all the nans to null
-auto [new_nullmask, new_null_count] = cudf::nans_to_nulls(input);
-// create a column_view which is a no-copy wrapper around the original column without the null
-// mask
-auto const input_without_nullmask =
-  cudf::column_view(input.type(),
-                    input.size(),
-                    input.head<void>(),
-                    nullptr,
-                    0,
-                    input.offset(),
-                    std::vector<cudf::column_view>{input.child_begin(), input.child_end()});
-// create a column by deep copying `input_without_nullmask`.
-auto deep_copy = std::make_unique<cudf::column>(input_without_nullmask);
-deep_copy->set_null_mask(std::move(*new_nullmask), new_null_count);
-return release_as_jlong(deep_copy);
-}
-JNI_CATCH(env, 0)
+  JNI_TRY
+  {
+    cudf::jni::auto_set_device(env);
+    auto const input = *reinterpret_cast<cudf::column_view*>(handle);
+    // get a new null mask by setting all the nans to null
+    auto [new_nullmask, new_null_count] = cudf::nans_to_nulls(input);
+    // create a column_view which is a no-copy wrapper around the original column without the null
+    // mask
+    auto const input_without_nullmask =
+      cudf::column_view(input.type(),
+                        input.size(),
+                        input.head<void>(),
+                        nullptr,
+                        0,
+                        input.offset(),
+                        std::vector<cudf::column_view>{input.child_begin(), input.child_end()});
+    // create a column by deep copying `input_without_nullmask`.
+    auto deep_copy = std::make_unique<cudf::column>(input_without_nullmask);
+    deep_copy->set_null_mask(std::move(*new_nullmask), new_null_count);
+    return release_as_jlong(deep_copy);
+  }
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_isFloat(JNIEnv* env,
                                                                jobject j_object,
-                                                               jlong handle){
+                                                               jlong handle)
+{
   JNI_NULL_CHECK(env, handle, "native view handle is null", 0)
 
-    JNI_TRY{cudf::jni::auto_set_device(env);
-cudf::column_view* view = reinterpret_cast<cudf::column_view*>(handle);
-return release_as_jlong(cudf::strings::is_float(*view));
-}
-JNI_CATCH(env, 0)
+  JNI_TRY
+  {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view* view = reinterpret_cast<cudf::column_view*>(handle);
+    return release_as_jlong(cudf::strings::is_float(*view));
+  }
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_isInteger(JNIEnv* env,
                                                                  jobject j_object,
-                                                                 jlong handle){
+                                                                 jlong handle)
+{
   JNI_NULL_CHECK(env, handle, "native view handle is null", 0)
 
-    JNI_TRY{cudf::jni::auto_set_device(env);
-cudf::column_view* view = reinterpret_cast<cudf::column_view*>(handle);
-return release_as_jlong(cudf::strings::is_integer(*view));
-}
-JNI_CATCH(env, 0)
+  JNI_TRY
+  {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view* view = reinterpret_cast<cudf::column_view*>(handle);
+    return release_as_jlong(cudf::strings::is_integer(*view));
+  }
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_isFixedPoint(
-  JNIEnv* env, jobject, jlong handle, jint j_dtype, jint scale){
+  JNIEnv* env, jobject, jlong handle, jint j_dtype, jint scale)
+{
   JNI_NULL_CHECK(env, handle, "native view handle is null", 0)
 
-    JNI_TRY{cudf::jni::auto_set_device(env);
-cudf::column_view* view  = reinterpret_cast<cudf::column_view*>(handle);
-cudf::data_type fp_dtype = cudf::jni::make_data_type(j_dtype, scale);
-return release_as_jlong(cudf::strings::is_fixed_point(*view, fp_dtype));
-}
-JNI_CATCH(env, 0)
+  JNI_TRY
+  {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view* view  = reinterpret_cast<cudf::column_view*>(handle);
+    cudf::data_type fp_dtype = cudf::jni::make_data_type(j_dtype, scale);
+    return release_as_jlong(cudf::strings::is_fixed_point(*view, fp_dtype));
+  }
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_isIntegerWithType(
-  JNIEnv* env, jobject, jlong handle, jint j_dtype, jint scale){
+  JNIEnv* env, jobject, jlong handle, jint j_dtype, jint scale)
+{
   JNI_NULL_CHECK(env, handle, "native view handle is null", 0)
 
-    JNI_TRY{cudf::jni::auto_set_device(env);
-cudf::column_view* view   = reinterpret_cast<cudf::column_view*>(handle);
-cudf::data_type int_dtype = cudf::jni::make_data_type(j_dtype, scale);
-return release_as_jlong(cudf::strings::is_integer(*view, int_dtype));
-}
-JNI_CATCH(env, 0)
+  JNI_TRY
+  {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view* view   = reinterpret_cast<cudf::column_view*>(handle);
+    cudf::data_type int_dtype = cudf::jni::make_data_type(j_dtype, scale);
+    return release_as_jlong(cudf::strings::is_integer(*view, int_dtype));
+  }
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_copyColumnViewToCV(JNIEnv* env,
                                                                           jobject j_object,
-                                                                          jlong handle){
+                                                                          jlong handle)
+{
   JNI_NULL_CHECK(env, handle, "native view handle is null", 0)
 
-    JNI_TRY{cudf::jni::auto_set_device(env);
-cudf::column_view* view = reinterpret_cast<cudf::column_view*>(handle);
-return ptr_as_jlong(new cudf::column(*view));
-}
-JNI_CATCH(env, 0)
+  JNI_TRY
+  {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view* view = reinterpret_cast<cudf::column_view*>(handle);
+    return ptr_as_jlong(new cudf::column(*view));
+  }
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL
@@ -2833,7 +2851,7 @@ Java_ai_rapids_cudf_ColumnView_getJSONObject(JNIEnv* env,
     }();
     return release_as_jlong(result_col_ptr);
   }
-  JNI_CATCH(env, 0)
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringConcatenationListElementsSepCol(

@@ -2303,7 +2303,7 @@ Java_ai_rapids_cudf_Table_writeParquetBufferBegin(JNIEnv* env,
       std::move(writer_ptr), std::move(data_sink), std::move(stats));
     return ptr_as_jlong(ret);
   }
-  JNI_CATCH(env, 0)
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT long JNICALL
@@ -2384,7 +2384,7 @@ Java_ai_rapids_cudf_Table_writeParquetFileBegin(JNIEnv* env,
       new cudf::jni::native_parquet_writer_handle(std::move(writer_ptr), nullptr, std::move(stats));
     return ptr_as_jlong(ret);
   }
-  JNI_CATCH(env, 0)
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeParquetChunk(
@@ -2408,7 +2408,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeParquetChunk(
     cudf::jni::auto_set_device(env);
     state->writer->write(tview);
   }
-  JNI_CATCH(env, )
+  JNI_CATCH(env, );
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeParquetEnd(JNIEnv* env, jclass, jlong j_state)
@@ -2424,7 +2424,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeParquetEnd(JNIEnv* env, jc
     cudf::jni::auto_set_device(env);
     state->writer->close();
   }
-  JNI_CATCH(env, )
+  JNI_CATCH(env, );
 }
 
 JNIEXPORT jlongArray JNICALL
@@ -2603,7 +2603,7 @@ Java_ai_rapids_cudf_Table_writeORCBufferBegin(JNIEnv* env,
       std::move(writer_ptr), std::move(data_sink), std::move(stats));
     return ptr_as_jlong(ret);
   }
-  JNI_CATCH(env, 0)
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCFileBegin(JNIEnv* env,
@@ -2677,7 +2677,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCFileBegin(JNIEnv* env,
       new cudf::jni::native_orc_writer_handle(std::move(writer_ptr), nullptr, std::move(stats));
     return ptr_as_jlong(ret);
   }
-  JNI_CATCH(env, 0)
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeORCChunk(
@@ -2701,7 +2701,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeORCChunk(
     cudf::jni::auto_set_device(env);
     state->writer->write(tview);
   }
-  JNI_CATCH(env, )
+  JNI_CATCH(env, );
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeORCEnd(JNIEnv* env, jclass, jlong j_state)
@@ -2717,7 +2717,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeORCEnd(JNIEnv* env, jclass
     cudf::jni::auto_set_device(env);
     state->writer->close();
   }
-  JNI_CATCH(env, )
+  JNI_CATCH(env, );
 }
 
 JNIEXPORT jdoubleArray JNICALL Java_ai_rapids_cudf_TableWriter_getWriteStatistics(JNIEnv* env,
@@ -2742,7 +2742,7 @@ JNIEXPORT jdoubleArray JNICALL Java_ai_rapids_cudf_TableWriter_getWriteStatistic
 
     return output.get_jArray();
   }
-  JNI_CATCH(env, nullptr)
+  JNI_CATCH(env, nullptr);
 }
 
 JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeArrowIPCBufferBegin(
@@ -2762,7 +2762,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeArrowIPCBufferBegin(
       new cudf::jni::native_arrow_ipc_writer_handle(col_names.as_cpp_vector(), data_sink);
     return ptr_as_jlong(ret);
   }
-  JNI_CATCH(env, 0)
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeArrowIPCFileBegin(JNIEnv* env,
@@ -2782,7 +2782,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeArrowIPCFileBegin(JNIEnv* 
       new cudf::jni::native_arrow_ipc_writer_handle(col_names.as_cpp_vector(), output_path.get());
     return ptr_as_jlong(ret);
   }
-  JNI_CATCH(env, 0)
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_convertCudfToArrowTable(JNIEnv* env,
@@ -2815,7 +2815,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_convertCudfToArrowTable(JNIEnv
 
     return ptr_as_jlong(new result_t{result});
   }
-  JNI_CATCH(env, 0)
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeArrowIPCArrowChunk(
@@ -2834,7 +2834,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeArrowIPCArrowChunk(
     cudf::jni::auto_set_device(env);
     state->write(*handle, max_chunk);
   }
-  JNI_CATCH(env, )
+  JNI_CATCH(env, );
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeArrowIPCEnd(JNIEnv* env,
@@ -2851,7 +2851,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeArrowIPCEnd(JNIEnv* env,
     cudf::jni::auto_set_device(env);
     state->close();
   }
-  JNI_CATCH(env, )
+  JNI_CATCH(env, );
 }
 
 JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_readArrowIPCFileBegin(JNIEnv* env,
@@ -2865,7 +2865,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_readArrowIPCFileBegin(JNIEnv* e
     cudf::jni::native_jstring input_path(env, j_input_path);
     return ptr_as_jlong(new cudf::jni::native_arrow_ipc_reader_handle(input_path.get()));
   }
-  JNI_CATCH(env, 0)
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_readArrowIPCBufferBegin(JNIEnv* env,
@@ -2880,7 +2880,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_readArrowIPCBufferBegin(JNIEnv*
       new cudf::jni::jni_arrow_input_stream(env, provider));
     return ptr_as_jlong(new cudf::jni::native_arrow_ipc_reader_handle(data_source));
   }
-  JNI_CATCH(env, 0)
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readArrowIPCChunkToArrowTable(JNIEnv* env,
@@ -2901,7 +2901,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readArrowIPCChunkToArrowTable(
     auto result = state->next(row_target);
     return result ? ptr_as_jlong(new std::shared_ptr<arrow::Table>{result}) : 0;
   }
-  JNI_CATCH(env, 0)
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_closeArrowTable(JNIEnv* env,
@@ -2916,7 +2916,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_closeArrowTable(JNIEnv* env,
     cudf::jni::auto_set_device(env);
     delete handle;
   }
-  JNI_CATCH(env, )
+  JNI_CATCH(env, );
 }
 
 JNIEXPORT jlongArray JNICALL
@@ -2946,7 +2946,7 @@ Java_ai_rapids_cudf_Table_convertArrowTableToCudf(JNIEnv* env, jclass, jlong arr
 
     return convert_table_for_return(env, ret);
   }
-  JNI_CATCH(env, 0)
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_readArrowIPCEnd(JNIEnv* env, jclass, jlong j_state)
@@ -2961,7 +2961,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_readArrowIPCEnd(JNIEnv* env, jc
     cudf::jni::auto_set_device(env);
     state->close();
   }
-  JNI_CATCH(env, )
+  JNI_CATCH(env, );
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftJoinGatherMaps(
