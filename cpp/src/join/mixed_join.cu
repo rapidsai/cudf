@@ -69,7 +69,7 @@ namespace {
  */
 template <typename HashProbe>
 std::pair<rmm::device_uvector<cuco::pair<hash_value_type, size_type>>,
-          rmm::device_uvector<cuda::std::pair<size_type, size_type>>>
+          rmm::device_uvector<cuda::std::pair<uint32_t, uint32_t>>>
 precompute_mixed_join_data(mixed_join_hash_table_t const& hash_table,
                            HashProbe const& hash_probe,
                            size_type probe_table_num_rows,
@@ -79,7 +79,7 @@ precompute_mixed_join_data(mixed_join_hash_table_t const& hash_table,
   auto input_pairs =
     rmm::device_uvector<cuco::pair<hash_value_type, size_type>>(probe_table_num_rows, stream, mr);
   auto hash_indices =
-    rmm::device_uvector<cuda::std::pair<size_type, size_type>>(probe_table_num_rows, stream, mr);
+    rmm::device_uvector<cuda::std::pair<uint32_t, uint32_t>>(probe_table_num_rows, stream, mr);
 
   auto const extent                        = hash_table.capacity();
   auto const probe_hash_fn                 = hash_table.hash_function();
@@ -93,23 +93,10 @@ precompute_mixed_join_data(mixed_join_hash_table_t const& hash_table,
     auto const hash1_val = cuda::std::get<0>(probe_hash_fn)(probe_key);
     auto const hash2_val = cuda::std::get<1>(probe_hash_fn)(probe_key);
 
-    // Double hashing logic using thread_index_type for overflow prevention
-    // Convert to thread_index_type (int64_t) for intermediate calculations
-    auto const extent_thread      = static_cast<thread_index_type>(extent);
-    auto const bucket_size_thread = static_cast<thread_index_type>(bucket_size);
-    auto const hash1_thread       = static_cast<thread_index_type>(hash1_val);
-    auto const hash2_thread       = static_cast<thread_index_type>(hash2_val);
-
-    auto const init_idx_thread =
-      (hash1_thread % (extent_thread / bucket_size_thread)) * bucket_size_thread;
-    auto const step_val_thread =
-      ((hash2_thread % (extent_thread / bucket_size_thread - thread_index_type{1})) +
-       thread_index_type{1}) *
-      bucket_size_thread;
-
-    // Convert back to size_type for storage (safe since hash table indices are bounded by extent)
-    auto const init_idx = static_cast<size_type>(init_idx_thread);
-    auto const step_val = static_cast<size_type>(step_val_thread);
+    auto const init_idx = static_cast<uint32_t>(
+      (static_cast<std::size_t>(hash1_val) % (extent / bucket_size)) * bucket_size);
+    auto const step_val = static_cast<uint32_t>(
+      ((static_cast<std::size_t>(hash2_val) % (extent / bucket_size - 1)) + 1) * bucket_size);
 
     return cuda::std::pair{probe_key, cuda::std::pair{init_idx, step_val}};
   };

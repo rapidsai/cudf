@@ -50,7 +50,7 @@ __device__ __forceinline__ void retrieve(
   pair_expression_equality<has_nulls> const& key_equal,
   cuco::pair<hash_value_type, cudf::size_type> const* input_probe_begin,
   cuco::pair<hash_value_type, cudf::size_type> const* input_probe_end,
-  cuda::std::pair<cudf::size_type, cudf::size_type> const* input_hash_begin,
+  cuda::std::pair<uint32_t, uint32_t> const* input_hash_begin,
   cudf::size_type* output_probe,
   cudf::size_type* output_match,
   cuda::atomic_ref<std::size_t, cuda::thread_scope_device> atomic_counter) noexcept
@@ -69,8 +69,8 @@ __device__ __forceinline__ void retrieve(
 
   auto const warp    = cg::tiled_partition<warp_size>(block);
   auto const warp_id = warp.meta_group_rank();
-  auto const stride  = static_cast<thread_index_type>(block_size);
-  auto idx           = static_cast<thread_index_type>(threadIdx.x);
+  auto const stride  = block_size;
+  auto idx           = threadIdx.x;
 
   __shared__ cudf::size_type probe_output_buffer[num_warps][buffer_size];
   __shared__ cudf::size_type match_output_buffer[num_warps][buffer_size];
@@ -91,15 +91,14 @@ __device__ __forceinline__ void retrieve(
     offset = warp_group.shfl(offset, 0);
 
     for (auto i = rank; i < count; i += warp_group.size()) {
-      auto const output_index =
-        static_cast<thread_index_type>(offset) + static_cast<thread_index_type>(i);
+      auto const output_index        = offset + i;
       *(output_probe + output_index) = probe_output_buffer[warp_id][i];
       *(output_match + output_index) = match_output_buffer[warp_id][i];
     }
   };
 
-  while (warp.any(idx < static_cast<thread_index_type>(n))) {
-    bool active_flag       = idx < static_cast<thread_index_type>(n);
+  while (warp.any(idx < n)) {
+    bool active_flag       = idx < n;
     auto const active_warp = cg::binary_partition<warp_size>(warp, active_flag);
 
     if (active_flag) {
@@ -107,8 +106,8 @@ __device__ __forceinline__ void retrieve(
       auto const& hash_idx  = *(input_hash_begin + idx);
 
       auto const extent     = hash_table_storage.size();
-      auto current_slot_idx = static_cast<thread_index_type>(hash_idx.first);
-      auto const step       = static_cast<thread_index_type>(hash_idx.second);
+      auto current_slot_idx = hash_idx.first;
+      auto const step       = hash_idx.second;
 
       bool running                      = true;
       [[maybe_unused]] bool found_match = false;
@@ -117,7 +116,7 @@ __device__ __forceinline__ void retrieve(
         if (running) {
           auto const bucket_slots = *reinterpret_cast<
             cuda::std::array<cuco::pair<hash_value_type, cudf::size_type>, 2> const*>(
-            hash_table_storage.data() + static_cast<std::size_t>(current_slot_idx));
+            hash_table_storage.data() + current_slot_idx);
 
           auto const first_slot_is_empty  = bucket_slots[0].second == cudf::detail::JoinNoneValue;
           auto const second_slot_is_empty = bucket_slots[1].second == cudf::detail::JoinNoneValue;
@@ -141,8 +140,7 @@ __device__ __forceinline__ void retrieve(
               probe_output_buffer[warp_id][output_idx] = probe_row_index;
               match_output_buffer[warp_id][output_idx] = bucket_slots[0].second;
               if (second_equals) {
-                auto const second_idx =
-                  static_cast<thread_index_type>(output_idx) + thread_index_type{1};
+                auto const second_idx                    = output_idx + 1;
                 probe_output_buffer[warp_id][second_idx] = probe_row_index;
                 match_output_buffer[warp_id][second_idx] = bucket_slots[1].second;
               }
@@ -178,9 +176,8 @@ __device__ __forceinline__ void retrieve(
           active_warp.sync();
         }
 
-        auto const extent_thread = static_cast<thread_index_type>(extent);
-        current_slot_idx         = (current_slot_idx + step) % extent_thread;
-        if (current_slot_idx == static_cast<thread_index_type>(hash_idx.first)) { running = false; }
+        current_slot_idx = (current_slot_idx + step) % extent;
+        if (current_slot_idx == hash_idx.first) { running = false; }
       }
     }
 
@@ -202,7 +199,7 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
              row_equality equality_probe,
              cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
              cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
-             cuda::std::pair<cudf::size_type, cudf::size_type> const* hash_indices,
+             cuda::std::pair<uint32_t, uint32_t> const* hash_indices,
              size_type* join_output_l,
              size_type* join_output_r,
              cudf::ast::detail::expression_device_view device_expression_data,
@@ -230,14 +227,10 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
 
   cuda::atomic_ref<std::size_t, cuda::thread_scope_device> atomic_counter{*global_counter};
 
-  auto const block_begin_offset_thread = static_cast<thread_index_type>(block.group_index().x) *
-                                         static_cast<thread_index_type>(DEFAULT_JOIN_BLOCK_SIZE);
-  auto const block_end_offset_thread = cuda::std::min(
-    static_cast<thread_index_type>(outer_num_rows),
-    block_begin_offset_thread + static_cast<thread_index_type>(DEFAULT_JOIN_BLOCK_SIZE));
-
-  auto const block_begin_offset = static_cast<cudf::size_type>(block_begin_offset_thread);
-  auto const block_end_offset   = static_cast<cudf::size_type>(block_end_offset_thread);
+  auto const block_begin_offset =
+    static_cast<cudf::size_type>(block.group_index().x * DEFAULT_JOIN_BLOCK_SIZE);
+  auto const block_end_offset = cuda::std::min(
+    outer_num_rows, block_begin_offset + static_cast<cudf::size_type>(DEFAULT_JOIN_BLOCK_SIZE));
 
   if (block_begin_offset < block_end_offset) {
     if (join_type == join_kind::LEFT_JOIN || join_type == join_kind::FULL_JOIN) {
@@ -272,7 +265,7 @@ void launch_mixed_join(
   row_equality equality_probe,
   cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
   cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
-  cuda::std::pair<cudf::size_type, cudf::size_type> const* hash_indices,
+  cuda::std::pair<uint32_t, uint32_t> const* hash_indices,
   size_type* join_output_l,
   size_type* join_output_r,
   cudf::ast::detail::expression_device_view device_expression_data,

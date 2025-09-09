@@ -44,7 +44,7 @@ __device__ __forceinline__ auto standalone_count(
   pair_expression_equality<has_nulls> const& key_equal,
   cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
   cuco::pair<hash_value_type, cudf::size_type> const& probe_key,
-  cuda::std::pair<cudf::size_type, cudf::size_type> const& hash_idx,
+  cuda::std::pair<uint32_t, uint32_t> const& hash_idx,
   join_kind join_type) noexcept
 {
   cudf::size_type count = 0;
@@ -89,7 +89,7 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) compute_mixed_join_o
   row_equality equality_probe,
   cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
   cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
-  cuda::std::pair<cudf::size_type, cudf::size_type> const* hash_indices,
+  cuda::std::pair<uint32_t, uint32_t> const* hash_indices,
   ast::detail::expression_device_view device_expression_data,
   bool swap_tables,
   size_t* d_total_count)
@@ -151,7 +151,7 @@ std::size_t launch_compute_mixed_join_output_size(
   row_equality equality_probe,
   cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
   cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
-  cuda::std::pair<cudf::size_type, cudf::size_type> const* hash_indices,
+  cuda::std::pair<uint32_t, uint32_t> const* hash_indices,
   ast::detail::expression_device_view device_expression_data,
   bool swap_tables,
   detail::grid_1d const& config,

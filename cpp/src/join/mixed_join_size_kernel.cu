@@ -27,7 +27,7 @@ template std::size_t launch_compute_mixed_join_output_size<false>(
   row_equality equality_probe,
   cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
   cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
-  cuda::std::pair<cudf::size_type, cudf::size_type> const* hash_indices,
+  cuda::std::pair<uint32_t, uint32_t> const* hash_indices,
   ast::detail::expression_device_view device_expression_data,
   bool swap_tables,
   detail::grid_1d const& config,
