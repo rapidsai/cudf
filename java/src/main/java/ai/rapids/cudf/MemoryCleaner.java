@@ -232,13 +232,16 @@ public final class MemoryCleaner {
 
     @Override
     public void run() {
-      while(!stopFlag) {
-        cleanCollected();
+      try {
+        while (!stopFlag) {
+          cleanCollected();
+        }
+      } finally {
+        stopped = true;
       }
-      stopped = true;
     }
 
-    void stopLoops() {
+    void stopGracefully() {
       stopFlag = true;
       while (!stopped) {
         try {
@@ -285,7 +288,7 @@ public final class MemoryCleaner {
 
     public void cleanAtShutdown() {
       // stop cleaner thread first
-      ct.stopLoops();
+      ct.stopGracefully();
 
       // set the device for the current thread
       if (defaultGpu >= 0) {
@@ -298,7 +301,9 @@ public final class MemoryCleaner {
       // clean up anything that got collected
       ct.cleanCollected();
 
-      // check the remaining references
+      // Check the remaining references. Here only closes non-RMM resources
+      // MUST call `cleanAllRmmBlockers` first to close RMM resources, or
+      // core dump occurs.
       for (CleanerWeakReference cwr : MemoryCleaner.all.values()) {
         cwr.clean();
       }
