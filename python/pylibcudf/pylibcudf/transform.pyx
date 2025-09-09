@@ -46,6 +46,8 @@ cpdef tuple[gpumemoryview, int] nans_to_nulls(
     ----------
     input : Column
         Column to produce new mask from.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -75,6 +77,8 @@ cpdef Column compute_column(Table input, Expression expr, Stream stream=None):
         Table used for expression evaluation
     expr : Expression
         Expression to evaluate
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -102,6 +106,8 @@ cpdef tuple[gpumemoryview, int] bools_to_mask(
     ----------
     input : Column
         Column to produce new mask from.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -137,6 +143,8 @@ cpdef Column mask_to_bools(
         Position of the bit from which the conversion should start
     end_bit : int
         Position of the bit before which the conversion should stop
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -182,6 +190,8 @@ cpdef Column transform(list[Column] inputs,
     is_null_aware: NullAware
         If `NO`, the UDF gets non-nullable parameters
         If `YES`, the UDF gets nullable parameters
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -220,6 +230,8 @@ cpdef tuple[Table, Column] encode(Table input, Stream stream=None):
     ----------
     input : Table
         Table containing values to be encoded
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -254,6 +266,8 @@ cpdef Table one_hot_encode(
         Column containing values to be encoded.
     categories : Column
         Column containing categories
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
