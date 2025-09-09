@@ -351,10 +351,9 @@ std::unique_ptr<column> compute_column_jit(table_view const& table,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
 {
-  cudf::detail::row_ir::ast_converter converter;
   cudf::detail::row_ir::ast_args ast_args{.table = table};
-  auto args =
-    converter.compute_column(cudf::detail::row_ir::target::CUDA, expr, ast_args, stream, mr);
+  auto args = cudf::detail::row_ir::ast_converter::compute_column(
+    cudf::detail::row_ir::target::CUDA, expr, ast_args, stream, mr);
 
   return cudf::transform(args.columns,
                          args.udf,

@@ -7,6 +7,11 @@ import cudf
 from cudf.testing import assert_eq
 
 
+def test_dropna_bad_how():
+    with pytest.raises(ValueError):
+        cudf.Index([1]).dropna(how="foo")
+
+
 @pytest.mark.parametrize(
     "data, dtype",
     [

@@ -31,15 +31,20 @@ namespace CUDF_EXPORT cudf {
 namespace detail {
 namespace row_ir {
 
-/// @brief The base class for all IR nodes.
-/// This class defines the interface for IR nodes, which can be instantiated and used to generate
-/// code. Each IR node represents a specific operation or value in the program. They represent a
-/// single-static-assignment (SSA) variable in the program IR. It is separate from the AST as it
-/// contains more detailed program information and analysis that would be needed to instantiate the
-/// program and generate correct and robust code.
+/**
+ * @brief The base class for all IR nodes
+ *
+ * This class defines the interface for IR nodes, which can be instantiated and used to generate
+ * code. Each IR node represents a specific operation or value in the program. They represent a
+ * single-static-assignment (SSA) variable in the program IR. It is separate from the AST as it
+ * contains more detailed program information and analysis that would be needed to instantiate the
+ * program and generate correct and robust code.
+ */
 struct node;
 
-/// @brief A converter that converts AST expressions to IR nodes and CUDA UDFs.
+/**
+ * @brief A converter that converts AST expressions to IR nodes and CUDA UDFs.
+ */
 struct ast_converter;
 
 }  // namespace row_ir
@@ -296,7 +301,9 @@ class literal : public expression {
   std::reference_wrapper<expression const> accept(
     detail::expression_transformer& visitor) const override;
 
-  /// @copydoc expression::accept
+  /**
+   * @copydoc expression::accept
+   */
   [[nodiscard]] std::unique_ptr<cudf::detail::row_ir::node> accept(
     cudf::detail::row_ir::ast_converter& visitor) const override;
 
@@ -406,7 +413,9 @@ class column_reference : public expression {
     return (table_source == table_reference::LEFT ? left : right).column(column_index).has_nulls();
   }
 
-  /// @copydoc expression::accept
+  /**
+   * @copydoc expression::accept
+   */
   [[nodiscard]] std::unique_ptr<cudf::detail::row_ir::node> accept(
     cudf::detail::row_ir::ast_converter& visitor) const override;
 
@@ -476,7 +485,9 @@ class operation : public expression {
                                        table_view const& right,
                                        rmm::cuda_stream_view stream) const override;
 
-  /// @copydoc expression::accept
+  /**
+   * @copydoc expression::accept
+   */
   [[nodiscard]] std::unique_ptr<cudf::detail::row_ir::node> accept(
     cudf::detail::row_ir::ast_converter& visitor) const override;
 
@@ -523,7 +534,9 @@ class column_name_reference : public expression {
     return true;
   }
 
-  /// @copydoc expression::accept
+  /**
+   * @copydoc expression::accept
+   */
   [[nodiscard]] std::unique_ptr<cudf::detail::row_ir::node> accept(
     cudf::detail::row_ir::ast_converter& visitor) const override;
 

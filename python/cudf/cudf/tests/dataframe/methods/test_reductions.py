@@ -181,3 +181,72 @@ def test_dataframe_axis_0_preserve_column_type_in_index(columns):
     result = cudf_df.sum(axis=0)
     expected = pd_df.sum(axis=0)
     assert_eq(result, expected, check_index_type=True)
+
+
+def test_dataframe_reduction_error():
+    gdf = cudf.DataFrame(
+        {
+            "a": cudf.Series([1, 2, 3], dtype="float"),
+            "d": cudf.Series([10, 20, 30], dtype="timedelta64[ns]"),
+        }
+    )
+
+    with pytest.raises(TypeError):
+        gdf.sum()
+
+
+def test_mean_timeseries(numeric_only):
+    gdf = cudf.datasets.timeseries()
+    if not numeric_only:
+        gdf = gdf.select_dtypes(include="number")
+    pdf = gdf.to_pandas()
+
+    expected = pdf.mean(numeric_only=numeric_only)
+    actual = gdf.mean(numeric_only=numeric_only)
+
+    assert_eq(expected, actual)
+
+
+def test_std_different_dtypes(numeric_only):
+    gdf = cudf.DataFrame(
+        {
+            "a": [1, 2, 3, 4, 5],
+            "b": ["a", "b", "c", "d", "e"],
+            "c": [1.0, 2.0, 3.0, 4.0, 5.0],
+        }
+    )
+    if not numeric_only:
+        gdf = gdf.select_dtypes(include="number")
+    pdf = gdf.to_pandas()
+
+    expected = pdf.std(numeric_only=numeric_only)
+    actual = gdf.std(numeric_only=numeric_only)
+
+    assert_eq(expected, actual)
+
+
+def test_empty_numeric_only():
+    gdf = cudf.DataFrame(
+        {
+            "id": ["a", "a", "a", "b", "b", "b", "c", "c", "c"],
+            "val1": ["v", "n", "k", "l", "m", "i", "y", "r", "w"],
+            "val2": ["d", "d", "d", "e", "e", "e", "f", "f", "f"],
+        }
+    )
+    pdf = gdf.to_pandas()
+    expected = pdf.prod(numeric_only=True)
+    actual = gdf.prod(numeric_only=True)
+    assert_eq(expected, actual, check_dtype=True)
+
+
+@pytest.mark.parametrize(
+    "op",
+    ["count", "kurt", "kurtosis", "skew"],
+)
+def test_dataframe_axis1_unsupported_ops(op):
+    df = cudf.DataFrame({"a": [1, 2, 3], "b": [8, 9, 10]})
+
+    with pytest.raises(
+        NotImplementedError, match="Only axis=0 is currently supported."
+    ):
+        getattr(df, op)(axis=1)

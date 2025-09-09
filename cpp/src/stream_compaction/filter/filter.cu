@@ -293,7 +293,7 @@ std::vector<std::unique_ptr<column>> filter_operation(
                      // broadcast scalar columns
                      auto tiled = cudf::tile(cudf::table_view{{column}}, num_selected, stream, mr);
                      auto tiled_columns = tiled->release();
-                     return std::move(tiled_columns[0]);
+                     return std::move(tiled_columns.front());
                    } else {
                      auto d_column = cudf::column_device_view::create(column, stream);
                      return filter_column(
@@ -338,6 +338,26 @@ std::vector<std::unique_ptr<column>> filter(std::vector<column_view> const& pred
   return filtered;
 }
 
+std::unique_ptr<table> filter(table_view const& predicate_table,
+                              ast::expression const& predicate_expr,
+                              table_view const& filter_table,
+                              rmm::cuda_stream_view stream,
+                              rmm::device_async_resource_ref mr)
+{
+  cudf::detail::row_ir::ast_args ast_args{.table = predicate_table};
+  auto args = cudf::detail::row_ir::ast_converter::filter(
+    cudf::detail::row_ir::target::CUDA, predicate_expr, ast_args, filter_table, stream, mr);
+
+  return std::make_unique<table>(cudf::detail::filter(args.predicate_columns,
+                                                      args.predicate_udf,
+                                                      args.filter_columns,
+                                                      args.is_ptx,
+                                                      args.user_data,
+                                                      args.is_null_aware,
+                                                      stream,
+                                                      mr));
+}
+
 }  // namespace detail
 
 std::vector<std::unique_ptr<column>> filter(std::vector<column_view> const& predicate_columns,
@@ -360,19 +380,8 @@ std::unique_ptr<table> filter(table_view const& predicate_table,
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr)
 {
-  cudf::detail::row_ir::ast_converter converter;
-  cudf::detail::row_ir::ast_args ast_args{.table = predicate_table};
-  auto args = converter.filter(
-    cudf::detail::row_ir::target::CUDA, predicate_expr, ast_args, filter_table, stream, mr);
-
-  return std::make_unique<table>(cudf::filter(args.predicate_columns,
-                                              args.predicate_udf,
-                                              args.filter_columns,
-                                              args.is_ptx,
-                                              args.user_data,
-                                              args.is_null_aware,
-                                              stream,
-                                              mr));
+  CUDF_FUNC_RANGE();
+  return detail::filter(predicate_table, predicate_expr, filter_table, stream, mr);
 }
 
 }  // namespace cudf
