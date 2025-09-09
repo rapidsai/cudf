@@ -35,6 +35,8 @@ from cudf.utils.utils import is_na_like
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
+    import cupy as cp
+
     from cudf._typing import (
         ColumnBinaryOperand,
         ColumnLike,
@@ -439,6 +441,14 @@ class StringColumn(ColumnBase):
                 col = self.copy(deep=True)
                 col._dtype = CUDF_STRING_DTYPE
         return col
+
+    @property
+    def values(self) -> cp.ndarray:
+        """
+        Return a CuPy representation of the Column.
+        """
+        # dask checks for a TypeError instead of NotImplementedError
+        raise TypeError(f"cupy does not support {self.dtype}")
 
     def to_pandas(
         self,
