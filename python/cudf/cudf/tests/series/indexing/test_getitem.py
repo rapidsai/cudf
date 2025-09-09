@@ -1,12 +1,15 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing import assert_eq
+from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
 
 
 @pytest.mark.parametrize(
@@ -265,3 +268,209 @@ def test_categorical_masking():
     assert len(expect_masked) == len(got_masked)
     assert got_masked.null_count == 0
     assert_eq(got_masked, expect_masked)
+
+
+@pytest.mark.parametrize(
+    "i1, i2, i3",
+    (
+        [
+            (slice(None, 12), slice(3, None), slice(None, None, 2)),
+            (range(12), range(3, 12), range(0, 9, 2)),
+            (np.arange(12), np.arange(3, 12), np.arange(0, 9, 2)),
+            (list(range(12)), list(range(3, 12)), list(range(0, 9, 2))),
+            (
+                pd.Series(range(12)),
+                pd.Series(range(3, 12)),
+                pd.Series(range(0, 9, 2)),
+            ),
+            (
+                cudf.Series(range(12)),
+                cudf.Series(range(3, 12)),
+                cudf.Series(range(0, 9, 2)),
+            ),
+            (
+                [i in range(12) for i in range(20)],
+                [i in range(3, 12) for i in range(12)],
+                [i in range(0, 9, 2) for i in range(9)],
+            ),
+            (
+                np.array([i in range(12) for i in range(20)], dtype=bool),
+                np.array([i in range(3, 12) for i in range(12)], dtype=bool),
+                np.array([i in range(0, 9, 2) for i in range(9)], dtype=bool),
+            ),
+        ]
+    ),
+    ids=(
+        [
+            "slice",
+            "range",
+            "numpy.array",
+            "list",
+            "pandas.Series",
+            "Series",
+            "list[bool]",
+            "numpy.array[bool]",
+        ]
+    ),
+)
+def test_series_indexing(i1, i2, i3):
+    a1 = np.arange(20)
+    series = cudf.Series(a1)
+
+    # Indexing
+    sr1 = series.iloc[i1]
+    assert sr1.null_count == 0
+    np.testing.assert_equal(sr1.to_numpy(), a1[:12])
+
+    sr2 = sr1.iloc[i2]
+    assert sr2.null_count == 0
+    np.testing.assert_equal(sr2.to_numpy(), a1[3:12])
+
+    # Index with stride
+    sr3 = sr2.iloc[i3]
+    assert sr3.null_count == 0
+    np.testing.assert_equal(sr3.to_numpy(), a1[3:12:2])
+
+    # Integer indexing
+    if isinstance(i1, range):
+        for i in i1:  # Python int-s
+            assert series[i] == a1[i]
+    if isinstance(i1, np.ndarray) and i1.dtype == "i":
+        for i in i1:  # numpy integers
+            assert series[i] == a1[i]
+
+
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
+@pytest.mark.parametrize(
+    "arg",
+    [
+        1,
+        -1,
+        "b",
+        np.int32(1),
+        np.uint32(1),
+        np.int8(1),
+        np.uint8(1),
+        np.int16(1),
+        np.uint16(1),
+        np.int64(1),
+        np.uint64(1),
+    ],
+)
+def test_series_get_item_iloc_defer(arg):
+    # Indexing for non-numeric dtype Index
+    ps = pd.Series([1, 2, 3], index=pd.Index(["a", "b", "c"]))
+    gs = cudf.from_pandas(ps)
+
+    arg_not_str = not isinstance(arg, str)
+    with expect_warning_if(arg_not_str):
+        expect = ps[arg]
+    with expect_warning_if(arg_not_str):
+        got = gs[arg]
+
+    assert_eq(expect, got)
+
+
+def test_series_indexing_large_size():
+    n_elem = 100_000
+    gsr = cudf.Series(cp.ones(n_elem))
+    gsr[0] = None
+    got = gsr[gsr.isna()]
+    expect = cudf.Series([None], dtype="float64")
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("psr", [pd.Series([1, 2, 3], index=["a", "b", "c"])])
+@pytest.mark.parametrize(
+    "arg", ["b", ["a", "c"], slice(1, 2, 1), [True, False, True]]
+)
+def test_series_get_item(psr, arg):
+    gsr = cudf.from_pandas(psr)
+
+    expect = psr[arg]
+    got = gsr[arg]
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3, 4],
+        [1.0, 2.0, 3.0, 4.0],
+        ["one", "two", "three", "four"],
+        pd.Series(["a", "b", "c", "d"], dtype="category"),
+        pd.Series(pd.date_range("2010-01-01", "2010-01-04")),
+    ],
+)
+@pytest.mark.parametrize(
+    "mask_vals",
+    [
+        [True, True, True, True],
+        [False, False, False, False],
+        [True, False, True, False],
+        [True, False, False, True],
+    ],
+)
+@pytest.mark.parametrize(
+    "mask_class", [list, np.array, pd.Series, cudf.Series]
+)
+@pytest.mark.parametrize("nulls", ["one", "some", "all", "none"])
+def test_series_apply_boolean_mask(data, mask_vals, mask_class, nulls):
+    rng = np.random.default_rng(seed=0)
+    psr = pd.Series(data)
+
+    if len(data) > 0:
+        if nulls == "one":
+            p = rng.integers(0, 4)
+            psr[p] = None
+        elif nulls == "some":
+            p1, p2 = rng.integers(0, 4, (2,))
+            psr[p1] = None
+            psr[p2] = None
+        elif nulls == "all":
+            psr[:] = None
+
+    gsr = cudf.from_pandas(psr)
+
+    # TODO: from_pandas(psr) has dtype "float64"
+    # when psr has dtype "object" and is all None
+    if psr.dtype == "object" and nulls == "all":
+        gsr = cudf.Series([None, None, None, None], dtype="object")
+
+    mask = mask_class(mask_vals)
+    if isinstance(mask, cudf.Series):
+        expect = psr[mask.to_pandas()]
+    else:
+        expect = psr[mask]
+    got = gsr[mask]
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("key", [5, -10, "0", "a", np.array(5), np.array("a")])
+def test_loc_bad_key_type(key):
+    psr = pd.Series([1, 2, 3])
+    gsr = cudf.from_pandas(psr)
+    assert_exceptions_equal(lambda: psr[key], lambda: gsr[key])
+    assert_exceptions_equal(lambda: psr.loc[key], lambda: gsr.loc[key])
+
+
+@pytest.mark.parametrize("key", ["b", 1.0, np.array("b")])
+def test_loc_bad_key_type_string_index(key):
+    psr = pd.Series([1, 2, 3], index=["a", "1", "c"])
+    gsr = cudf.from_pandas(psr)
+    assert_exceptions_equal(lambda: psr[key], lambda: gsr[key])
+    assert_exceptions_equal(lambda: psr.loc[key], lambda: gsr.loc[key])
+
+
+def test_loc_zero_dim_array():
+    psr = pd.Series([1, 2, 3])
+    gsr = cudf.from_pandas(psr)
+
+    assert_eq(psr[np.array(0)], gsr[np.array(0)])
+    assert_eq(psr[np.array([0])[0]], gsr[np.array([0])[0]])

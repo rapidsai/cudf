@@ -2861,3 +2861,22 @@ def test_concat_with_axis():
         pd.concat([pdgz2, pdgz1]),
         check_index_type=True,
     )
+
+
+@pytest.mark.parametrize(
+    "objs",
+    [
+        [pd.RangeIndex(0, 10), pd.RangeIndex(10, 20)],
+        [pd.RangeIndex(10, 20), pd.RangeIndex(22, 40), pd.RangeIndex(50, 60)],
+        [pd.RangeIndex(10, 20, 2), pd.RangeIndex(20, 40, 2)],
+    ],
+)
+def test_range_index_concat(objs):
+    cudf_objs = [cudf.from_pandas(obj) for obj in objs]
+
+    actual = cudf.concat(cudf_objs)
+
+    expected = objs[0]
+    for obj in objs[1:]:
+        expected = expected.append(obj)
+    assert_eq(expected, actual)
