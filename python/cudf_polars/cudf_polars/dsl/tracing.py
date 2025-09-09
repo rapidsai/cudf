@@ -98,7 +98,6 @@ def make_snaphot(
     if extra:
         d.update(extra)
 
-    # log.info("Execute IR", **d)
     return d
 
 
