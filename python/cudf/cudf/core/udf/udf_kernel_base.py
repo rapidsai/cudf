@@ -18,10 +18,9 @@ from cudf.core.udf.utils import (
     _generate_cache_key,
     _masked_array_type_from_col,
     _supported_cols_from_frame,
-    compile_udf,
     precompiled as kernel_cache,
 )
-from cudf.utils._numba import _CUDFNumbaConfig
+from cudf.utils._numba import _CUDFNumbaConfig, compile_udf
 from cudf.utils.performance_tracking import _performance_tracking
 
 

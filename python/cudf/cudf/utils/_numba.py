@@ -1,12 +1,13 @@
 # Copyright (c) 2023-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
-import numba
-from numba import config as numba_config
-from packaging import version
 from pickle import dumps
-import cachetools
 
+import cachetools
+import numba
+from numba import config as numba_config, cuda
+from numba.np import numpy_support
+from packaging import version
 
 # This cache is keyed on the (signature, code, closure variables) of UDFs, so
 # it can hit for distinct functions that are similar. The lru_cache wrapping
@@ -39,8 +40,6 @@ class _CUDFNumbaConfig:
             numba_config.CAPTURED_ERRORS = self.CAPTURED_ERRORS
 
 
-
-
 def make_cache_key(udf, sig):
     """
     Build a cache key for a user defined function. Used to avoid
@@ -57,7 +56,6 @@ def make_cache_key(udf, sig):
         cvarbytes = b""
 
     return names, constants, codebytes, cvarbytes, sig
-
 
 
 def compile_udf(udf, type_signature):
@@ -100,8 +98,7 @@ def compile_udf(udf, type_signature):
     ptx_code, return_type = cuda.compile_ptx_for_current_device(
         udf, type_signature, device=True
     )
-    breakpoint()
-    if not isinstance(return_type, MaskedType):
+    if return_type.is_internal:
         output_type = numpy_support.as_dtype(return_type).type
     else:
         output_type = return_type
@@ -111,4 +108,3 @@ def compile_udf(udf, type_signature):
     _udf_code_cache[key] = res
 
     return res
-

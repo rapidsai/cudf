@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import functools
 import os
-from pickle import dumps
 from typing import TYPE_CHECKING
 
 import cachetools
@@ -21,7 +20,6 @@ import rmm
 
 from cudf._lib import strings_udf
 from cudf.core.buffer import as_buffer
-from cudf.core.udf.masked_typing import MaskedType
 from cudf.core.udf.nrt_utils import nrt_enabled
 from cudf.core.udf.strings_typing import (
     NRT_decref,
@@ -29,6 +27,7 @@ from cudf.core.udf.strings_typing import (
     str_view_arg_handler,
     string_view,
 )
+from cudf.utils._numba import make_cache_key
 from cudf.utils.dtypes import (
     BOOL_TYPES,
     CUDF_STRING_DTYPE,
@@ -38,7 +37,6 @@ from cudf.utils.dtypes import (
     STRING_TYPES,
     TIMEDELTA_TYPES,
 )
-from cudf.core.udf._compile_udf import compile_udf, make_cache_key
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -63,7 +61,6 @@ LIBCUDF_BITMASK_TYPE = numpy_support.from_dtype(SIZE_TYPE_DTYPE)
 MASK_BITSIZE = SIZE_TYPE_DTYPE.itemsize * 8
 
 precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
-
 
 
 UDF_SHIM_FILE = os.path.join(
@@ -138,7 +135,6 @@ register_model(Row)(models.RecordModel)
 def _mask_get(mask, pos):
     """Return the validity of mask[pos] as a word."""
     return (mask[pos // MASK_BITSIZE] >> (pos % MASK_BITSIZE)) & 1
-
 
 
 def _generate_cache_key(frame, func: Callable, args, suffix="__APPLY_UDF"):
