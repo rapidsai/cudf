@@ -30,6 +30,12 @@ hybrid_scan_reader::hybrid_scan_reader(cudf::host_span<uint8_t const> footer_byt
 {
 }
 
+hybrid_scan_reader::hybrid_scan_reader(FileMetaData const& parquet_metadata,
+                                       parquet_reader_options const& options)
+  : _impl{std::make_unique<detail::hybrid_scan_reader_impl>(parquet_metadata, options)}
+{
+}
+
 hybrid_scan_reader::~hybrid_scan_reader() = default;
 
 [[nodiscard]] text::byte_range_info hybrid_scan_reader::page_index_byte_range() const

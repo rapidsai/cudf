@@ -16,17 +16,17 @@
 
 #include "contains_table_impl.cuh"
 
-#include <cudf/table/primitive_row_operators.cuh>
+#include <cudf/detail/row_operator/primitive_row_operators.cuh>
 
 namespace cudf::detail {
 
 // Explicit instantiation for perform_contains with primitive row operations
-using primitive_hasher_adapter_type =
-  hasher_adapter<cudf::row::primitive::row_hasher<>, cudf::row::primitive::row_hasher<>>;
+using primitive_hasher_adapter_type = hasher_adapter<cudf::detail::row::primitive::row_hasher<>,
+                                                     cudf::detail::row::primitive::row_hasher<>>;
 
 using primitive_comparator_adapter_type =
-  comparator_adapter<cudf::row::primitive::row_equality_comparator,
-                     cudf::row::primitive::row_equality_comparator>;
+  comparator_adapter<cudf::detail::row::primitive::row_equality_comparator,
+                     cudf::detail::row::primitive::row_equality_comparator>;
 
 template void perform_contains(
   table_view const& haystack,

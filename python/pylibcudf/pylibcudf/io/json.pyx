@@ -829,7 +829,7 @@ cpdef TableWithMetadata read_json_from_string_column(
     cdef unique_ptr[column] c_join_string_column
     cdef column_contents c_contents
     cdef table_with_metadata c_result
-    cdef Stream s = _get_stream(stream)
+    stream = _get_stream(stream)
 
     # Join the string column into a single string
     with nogil:
@@ -837,14 +837,15 @@ cpdef TableWithMetadata read_json_from_string_column(
             cpp_combine.join_strings(
                 input.view(),
                 dereference(c_separator),
-                dereference(c_narep)
+                dereference(c_narep),
+                stream.view()
             )
         )
         c_contents = c_join_string_column.get().release()
 
     # Create a new source from the joined string data
     cdef SourceInfo joined_source = SourceInfo(
-            [DeviceBuffer.c_from_unique_ptr(move(c_contents.data))])
+            [DeviceBuffer.c_from_unique_ptr(move(c_contents.data), stream)])
 
     # Create new options using the joined string as source
     cdef JsonReaderOptions options = (
@@ -860,9 +861,9 @@ cpdef TableWithMetadata read_json_from_string_column(
 
     # Read JSON from the joined string
     with nogil:
-        c_result = move(cpp_read_json(options.c_obj, s.view()))
+        c_result = move(cpp_read_json(options.c_obj, stream.view()))
 
-    return TableWithMetadata.from_libcudf(c_result, s)
+    return TableWithMetadata.from_libcudf(c_result, stream)
 
 cdef class JsonWriterOptions:
     """
