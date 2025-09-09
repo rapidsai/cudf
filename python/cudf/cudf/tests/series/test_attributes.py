@@ -1,6 +1,7 @@
 # Copyright (c) 2023-2025, NVIDIA CORPORATION.
 import re
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -372,3 +373,58 @@ def test_series_multiindex():
     ps.index = pdfIndex
     gs.index = cudf.from_pandas(pdfIndex)
     assert_eq(ps, gs)
+
+
+def test_series_shape():
+    ps = pd.Series([1, 2, 3, 4])
+    cs = cudf.Series([1, 2, 3, 4])
+
+    assert ps.shape == cs.shape
+
+
+def test_series_shape_empty():
+    ps = pd.Series([], dtype="float64")
+    cs = cudf.Series([], dtype="float64")
+
+    assert ps.shape == cs.shape
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 4],
+        [],
+        [5.0, 7.0, 8.0],
+        pd.Categorical(["a", "b", "c"]),
+        ["m", "a", "d", "v"],
+    ],
+)
+def test_series_values_host_property(data):
+    pds = pd.Series(data=data, dtype=None if data else float)
+    gds = cudf.Series(data=data, dtype=None if data else float)
+
+    np.testing.assert_array_equal(pds.values, gds.values_host)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 4],
+        [],
+        [5.0, 7.0, 8.0],
+        pytest.param(
+            pd.Categorical(["a", "b", "c"]),
+            marks=pytest.mark.xfail(raises=NotImplementedError),
+        ),
+        pytest.param(
+            ["m", "a", "d", "v"],
+            marks=pytest.mark.xfail(raises=TypeError),
+        ),
+    ],
+)
+def test_series_values_property(data):
+    pds = pd.Series(data=data, dtype=None if data else float)
+    gds = cudf.from_pandas(pds)
+    gds_vals = gds.values
+    assert isinstance(gds_vals, cp.ndarray)
+    np.testing.assert_array_equal(gds_vals.get(), pds.values)

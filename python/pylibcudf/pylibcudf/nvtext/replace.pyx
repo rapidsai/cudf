@@ -25,6 +25,7 @@ cpdef Column replace_tokens(
     Column targets,
     Column replacements,
     Scalar delimiter=None,
+    Stream stream=None
 ):
     """
     Replaces specified tokens with corresponding replacement strings.
@@ -42,6 +43,8 @@ cpdef Column replace_tokens(
     delimiter : Scalar, optional
         Characters used to separate each string into tokens.
         The default of empty string will identify tokens using whitespace.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -49,9 +52,8 @@ cpdef Column replace_tokens(
         New strings column with replaced strings
     """
     cdef unique_ptr[column] c_result
-    cdef Stream stream
+    stream = _get_stream(stream)
     if delimiter is None:
-        stream = _get_stream(None)
         delimiter = Scalar.from_libcudf(
             cpp_make_string_scalar("".encode(), stream.view())
         )
@@ -61,15 +63,17 @@ cpdef Column replace_tokens(
             targets.view(),
             replacements.view(),
             dereference(<const string_scalar*>delimiter.get()),
+            stream.view()
         )
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream)
 
 
 cpdef Column filter_tokens(
     Column input,
     size_type min_token_length,
     Scalar replacement=None,
-    Scalar delimiter=None
+    Scalar delimiter=None,
+    Stream stream=None
 ):
     """
     Removes tokens whose lengths are less than a specified number of characters.
@@ -88,20 +92,21 @@ cpdef Column filter_tokens(
     delimiter : Scalar, optional
         Characters used to separate each string into tokens.
         The default of empty string will identify tokens using whitespace.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
+
     Returns
     -------
     Column
         New strings column of filtered strings
     """
     cdef unique_ptr[column] c_result
-    cdef Stream stream
+    stream = _get_stream(stream)
     if delimiter is None:
-        stream = _get_stream(None)
         delimiter = Scalar.from_libcudf(
             cpp_make_string_scalar("".encode(), stream.view())
         )
     if replacement is None:
-        stream = _get_stream(None)
         replacement = Scalar.from_libcudf(
             cpp_make_string_scalar("".encode(), stream.view())
         )
@@ -112,6 +117,7 @@ cpdef Column filter_tokens(
             min_token_length,
             dereference(<const string_scalar*>replacement.get()),
             dereference(<const string_scalar*>delimiter.get()),
+            stream.view()
         )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream)
