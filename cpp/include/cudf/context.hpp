@@ -33,12 +33,18 @@ enum class init_flags : std::uint32_t {
 };
 
 /// @brief Bitwise OR operator for init_flags
+/// @param lhs The left-hand side of the operator
+/// @param rhs The right-hand side of the operator
+/// @return The result of the bitwise OR operation
 constexpr init_flags operator|(init_flags lhs, init_flags rhs) noexcept
 {
   return static_cast<init_flags>(static_cast<std::uint32_t>(lhs) | static_cast<std::uint32_t>(rhs));
 }
 
 /// @brief Check if a flag is set
+/// @param flags The flags to check against
+/// @param flag The specific flag to check for
+/// @return true if all bits in `flag` are set in `flags`, false otherwise
 constexpr bool has_flag(init_flags flags, init_flags flag) noexcept
 {
   return (flags | flag) == flags;
