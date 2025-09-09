@@ -419,7 +419,7 @@ def test_series_values_host_property(data):
         ),
         pytest.param(
             ["m", "a", "d", "v"],
-            marks=pytest.mark.xfail(raises=NotImplementedError),
+            marks=pytest.mark.xfail(raises=TypeError),
         ),
     ],
 )
