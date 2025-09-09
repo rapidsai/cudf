@@ -444,20 +444,19 @@ def copy_child_unique_counts(column_stats_mapping: dict[str, ColumnStats]) -> No
         Mapping of column names to ColumnStats objects.
     """
     for column_stats in column_stats_mapping.values():
-        if len(column_stats.children) == 1:
-            column_stats.unique_count = column_stats.children[0].unique_count
-        else:
-            column_stats.unique_count = ColumnStat[int](
-                # Assume we get the maximum child unique-count estimate
-                max(
-                    (
-                        cs.unique_count.value
-                        for cs in column_stats.children
-                        if cs.unique_count.value is not None
-                    ),
-                    default=None,
-                )
-            )
+        column_stats.unique_count = ColumnStat[int](
+            # Assume we get the maximum child unique-count estimate
+            value=max(
+                (
+                    cs.unique_count.value
+                    for cs in column_stats.children
+                    if cs.unique_count.value is not None
+                ),
+                default=None,
+            ),
+            exact=len(column_stats.children) == 1
+            and column_stats.children[0].unique_count.exact,
+        )
 
 
 @update_column_stats.register(IR)
@@ -582,16 +581,14 @@ def _(
 @update_column_stats.register(Join)
 def _(ir: Join, stats: StatsCollector, config_options: ConfigOptions) -> None:
     # Apply basic join-cardinality estimation.
-    try:
-        left_rows, right_rows = known_child_row_counts(ir, stats)
-    except ValueError:
-        # One or more children have an unknown row-count estimate.
-        stats.row_count[ir] = ColumnStat[int](None)
-    else:
+    child_row_counts = known_child_row_counts(ir, stats)
+    if len(child_row_counts) == 2:
         # Both children have row-count estimates.
-        join_key_implied_unique_count = max(
-            # Use PK-FK join unique-count estimates in case
-            # directly-sampled statistics are missing.
+
+        # Use the PK-FK unique-count estimate for the join key.
+        # Otherwise, use the maximum unique-count estimate from the children.
+        unique_count_estimate = max(
+            # Join-based estimate (higher priority).
             [
                 u.implied_unique_count
                 for u in stats.join_info.join_map[ir]
@@ -599,12 +596,21 @@ def _(ir: Join, stats: StatsCollector, config_options: ConfigOptions) -> None:
             ],
             default=None,
         )
-        if join_key_implied_unique_count is not None:
+        # TODO: Use local unique-count statistics if the implied unique-count
+        # estimates are missing. This never happens for now, but it will happen
+        # if/when we add a config option to disable PK-FK heuristics.
+
+        # Calculate the output row-count estimate.
+        left_rows, right_rows = child_row_counts
+        if unique_count_estimate is not None:
             stats.row_count[ir] = ColumnStat[int](
-                max(1, (left_rows * right_rows) // join_key_implied_unique_count)
+                max(1, (left_rows * right_rows) // unique_count_estimate)
             )
-        else:  # pragma: no cover; We always have pk-fk heuristics (for now).
+        else:  # pragma: no cover; We always have a unique-count estimate (for now).
             stats.row_count[ir] = ColumnStat[int](max((1, left_rows, right_rows)))
+    else:
+        # One or more children have an unknown row-count estimate.
+        stats.row_count[ir] = ColumnStat[int](None)
 
     copy_child_unique_counts(stats.column_stats[ir])
 
