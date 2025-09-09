@@ -3217,8 +3217,13 @@ class IndexedFrame(Frame):
 
     @_performance_tracking
     def bfill(
-        self, value=None, axis=None, inplace=None, limit=None, limit_area=None
-    ):
+        self,
+        value=None,
+        axis=None,
+        inplace: bool = False,
+        limit=None,
+        limit_area=None,
+    ) -> Self | None:
         """
         Synonym for :meth:`Series.fillna` with ``method='bfill'``.
 
@@ -3240,7 +3245,9 @@ class IndexedFrame(Frame):
             )
 
     @_performance_tracking
-    def backfill(self, value=None, axis=None, inplace=None, limit=None):
+    def backfill(
+        self, value=None, axis=None, inplace: bool = False, limit=None
+    ) -> Self | None:
         """
         Synonym for :meth:`Series.fillna` with ``method='bfill'``.
 
@@ -3264,7 +3271,7 @@ class IndexedFrame(Frame):
         self,
         value=None,
         axis=None,
-        inplace=None,
+        inplace: bool = False,
         limit=None,
         limit_area: Literal["inside", "outside", None] = None,
     ):
@@ -3289,7 +3296,7 @@ class IndexedFrame(Frame):
             )
 
     @_performance_tracking
-    def pad(self, value=None, axis=None, inplace=None, limit=None):
+    def pad(self, value=None, axis=None, inplace: bool = False, limit=None):
         """
         Synonym for :meth:`Series.fillna` with ``method='ffill'``.
 
