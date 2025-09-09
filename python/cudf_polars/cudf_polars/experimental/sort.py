@@ -211,7 +211,7 @@ def _sort_boundaries_graph(
     column_order: Sequence[plc.types.Order],
     null_order: Sequence[plc.types.NullOrder],
     count: int,
-) -> tuple[tuple[str, int], MutableMapping[Any, Any]]:
+) -> tuple[str, MutableMapping[Any, Any]]:
     """Graph to get the boundaries from all partitions."""
     local_boundaries_name = f"sort-boundaries_local-{name_in}"
     concat_boundaries_name = f"sort-boundaries-concat-{name_in}"
@@ -229,15 +229,15 @@ def _sort_boundaries_graph(
         )
         _concat_list.append((local_boundaries_name, part_id))
 
-    graph[(concat_boundaries_name, 0)] = (_concat, *_concat_list)
-    graph[(global_boundaries_name, 0)] = (
+    graph[concat_boundaries_name] = (_concat, *_concat_list)
+    graph[global_boundaries_name] = (
         _get_final_sort_boundaries,
-        (concat_boundaries_name, 0),
+        concat_boundaries_name,
         column_order,
         null_order,
         count,
     )
-    return (global_boundaries_name, 0), graph
+    return global_boundaries_name, graph
 
 
 class SortedShuffleOptions(TypedDict):
