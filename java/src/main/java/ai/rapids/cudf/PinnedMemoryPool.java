@@ -241,7 +241,7 @@ public final class PinnedMemoryPool implements AutoCloseable {
    */
   private synchronized HostMemoryBuffer tryAllocateInternal(long bytes) {
     long allocated = Rmm.allocFromPinnedPool(this.poolHandle, bytes);
-    if (allocated == 0) {
+    if (allocated == -1) {
       return null;
     } else {
       return new HostMemoryBuffer(allocated, bytes,
