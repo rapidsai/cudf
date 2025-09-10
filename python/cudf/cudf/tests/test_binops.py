@@ -2296,12 +2296,7 @@ def test_empty_column(binary_op, data, scalar):
         lambda: cudf.DataFrame(
             [[1, 2, 3, 4], [5, 6, 7, 8], [10, 11, 12, 13], [14, 15, 16, 17]]
         ),
-        pytest.param(
-            lambda: cudf.DataFrame([[1, None, None, 4], [5, 6, 7, None]]),
-            marks=pytest_xfail(
-                reason="Cannot access Frame.values if frame contains nulls"
-            ),
-        ),
+        lambda: cudf.DataFrame([[1, None, None, 4], [5, 6, 7, None]]),
         lambda: cudf.DataFrame(
             [
                 [1.2, 2.3, 3.4, 4.5],
