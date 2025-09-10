@@ -175,14 +175,14 @@ cdef class ChunkedPack:
         -------
         New ChunkedPack object.
         """
-        cdef DeviceMemoryResource c_mr = _get_memory_resource(temp_mr)
+        temp_mr = _get_memory_resource(temp_mr)
         cdef unique_ptr[chunked_pack] obj = chunked_pack.create(
-            input.view(), user_buffer_size, stream.view(), c_mr.get_mr()
+            input.view(), user_buffer_size, stream.view(), temp_mr.get_mr()
         )
 
         cdef ChunkedPack out = ChunkedPack.__new__(ChunkedPack)
         out.table = input
-        out.mr = c_mr
+        out.mr = temp_mr
         out.stream = stream
         out.c_obj = move(obj)
         return out
