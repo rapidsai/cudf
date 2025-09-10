@@ -187,18 +187,13 @@ void generate_depth_remappings(
   // Transfer chunk data, coalescing adjacent chunks
   std::vector<std::future<size_t>> read_tasks;
   for (size_t chunk = begin_chunk; chunk < end_chunk;) {
-    size_t const io_offset   = column_chunk_offsets[chunk];
-    size_t io_size           = chunks[chunk].compressed_size;
-    size_t next_chunk        = chunk + 1;
-    bool const is_compressed = (chunks[chunk].codec != Compression::UNCOMPRESSED);
+    size_t const io_offset = column_chunk_offsets[chunk];
+    size_t io_size         = chunks[chunk].compressed_size;
+    size_t next_chunk      = chunk + 1;
     while (next_chunk < end_chunk) {
-      size_t const next_offset      = column_chunk_offsets[next_chunk];
-      bool const is_next_compressed = (chunks[next_chunk].codec != Compression::UNCOMPRESSED);
-      if (next_offset != io_offset + io_size || is_next_compressed != is_compressed ||
+      size_t const next_offset = column_chunk_offsets[next_chunk];
+      if (next_offset != io_offset + io_size ||
           chunk_source_map[chunk] != chunk_source_map[next_chunk]) {
-        // Can't merge if not contiguous or mixing compressed and uncompressed
-        // Not coalescing uncompressed with compressed chunks is so that compressed buffers can be
-        // freed earlier (immediately after decompression stage) to limit peak memory requirements
         break;
       }
       io_size += chunks[next_chunk].compressed_size;
