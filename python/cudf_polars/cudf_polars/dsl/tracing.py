@@ -44,14 +44,14 @@ nvtx_annotate_cudf_polars = functools.partial(
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Sequence
 
     from cudf_polars.dsl import ir
 
 
 def make_snaphot(
     node_type: type[ir.IR],
-    frames: list[cudf_polars.containers.DataFrame],
+    frames: Sequence[cudf_polars.containers.DataFrame],
     extra: dict[str, Any] | None = None,
     *,
     pid: int,
@@ -142,7 +142,9 @@ def log_do_evaluate(
 
     @functools.wraps(func)
     def wrapper(
-        cls: type[ir.IR], *args: Any, **kwargs: Any
+        cls: type[ir.IR],
+        *args: P.args,
+        **kwargs: P.kwargs,
     ) -> cudf_polars.containers.DataFrame:
         if LOG_TRACES:
             log = structlog.get_logger()
