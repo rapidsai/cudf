@@ -336,6 +336,14 @@ files:
       - numpy_run
       - test_python_common
       - test_python_cudf_polars
+  py_trace_cudf_polars:
+    output: pyproject
+    pyproject_dir: python/cudf_polars
+    extras:
+      table: project.optional-dependencies
+      key: trace
+    includes:
+      - depends_on_structlog
   py_build_dask_cudf:
     output: pyproject
     pyproject_dir: python/dask_cudf
@@ -891,6 +899,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - rich
+          - structlog
   test_python_narwhals:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -1211,3 +1220,8 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - narwhals==2.0.1
+  depends_on_structlog:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - structlog
