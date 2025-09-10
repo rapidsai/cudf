@@ -626,14 +626,17 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocInternal(JNIEnv* env,
 }
 
 JNIEXPORT void JNICALL
-Java_ai_rapids_cudf_Rmm_free(JNIEnv* env, jclass clazz, jlong ptr, jlong size, jlong stream){
-  JNI_TRY{cudf::jni::auto_set_device(env);
-rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref();
-void* cptr                        = reinterpret_cast<void*>(ptr);
-auto c_stream                     = rmm::cuda_stream_view(reinterpret_cast<cudaStream_t>(stream));
-mr.deallocate_async(cptr, size, rmm::CUDA_ALLOCATION_ALIGNMENT, c_stream);
-}
-JNI_CATCH(env, )
+Java_ai_rapids_cudf_Rmm_free(JNIEnv* env, jclass clazz, jlong ptr, jlong size, jlong stream)
+{
+  JNI_TRY
+  {
+    cudf::jni::auto_set_device(env);
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref();
+    void* cptr                        = reinterpret_cast<void*>(ptr);
+    auto c_stream = rmm::cuda_stream_view(reinterpret_cast<cudaStream_t>(stream));
+    mr.deallocate_async(cptr, size, rmm::CUDA_ALLOCATION_ALIGNMENT, c_stream);
+  }
+  JNI_CATCH(env, );
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_freeDeviceBuffer(JNIEnv* env,
