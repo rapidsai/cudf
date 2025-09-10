@@ -26,6 +26,7 @@ def column_to_string_view_array(plc_Column strings_col):
     with nogil:
         c_buffer = move(cpp_to_string_view_array(input_view))
 
+    # TODO: Is it OK to use the default stream here?
     return DeviceBuffer.c_from_unique_ptr(move(c_buffer))
 
 
