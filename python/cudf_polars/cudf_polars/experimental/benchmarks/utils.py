@@ -55,9 +55,9 @@ try:
     import structlog.processors
     import structlog.stdlib
 except ImportError:
-    HAS_STRUCTLOG = False
+    _HAS_STRUCTLOG = False
 else:
-    HAS_STRUCTLOG = True
+    _HAS_STRUCTLOG = True
 
 
 ExecutorType = Literal["in-memory", "streaming", "cpu"]
@@ -841,7 +841,7 @@ def run_polars(
 
         records[q_id] = []
         for i in range(args.iterations):
-            if HAS_STRUCTLOG and run_config.collect_traces:
+            if _HAS_STRUCTLOG and run_config.collect_traces:
                 setup_logging(q_id, i)
                 if client is not None:
                     client.run(setup_logging, q_id, i)
@@ -892,7 +892,7 @@ def run_polars(
     run_config = dataclasses.replace(run_config, records=dict(records))
 
     # consolidate logs
-    if HAS_STRUCTLOG and run_config.collect_traces:
+    if _HAS_STRUCTLOG and run_config.collect_traces:
 
         def gather_logs() -> str:
             logger = logging.getLogger()
@@ -964,8 +964,8 @@ def run_polars(
 
 
 def setup_logging(query_id: int, iteration: int) -> None:  # noqa: D103
-    assert HAS_STRUCTLOG
-    if HAS_STRUCTLOG:
+    assert _HAS_STRUCTLOG
+    if _HAS_STRUCTLOG:
         # structlog uses contextvars to propagate context down to where log records
         # are emitted. Ideally, we'd just set the contextvars here using
         # structlog.bind_contextvars; for the distributed scheduler we would need

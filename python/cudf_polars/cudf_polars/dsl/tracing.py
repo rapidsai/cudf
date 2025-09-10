@@ -23,12 +23,12 @@ from cudf_polars.utils.config import get_device_handle
 try:
     import structlog
 except ImportError:
-    HAS_STRUCTLOG = False
+    _HAS_STRUCTLOG = False
 else:
-    HAS_STRUCTLOG = True
+    _HAS_STRUCTLOG = True
 
 
-LOG_TRACES = HAS_STRUCTLOG and os.environ.get("CUDF_POLARS_LOG_TRACES", "0") in {
+LOG_TRACES = _HAS_STRUCTLOG and os.environ.get("CUDF_POLARS_LOG_TRACES", "0") in {
     "1",
     "true",
     "y",
