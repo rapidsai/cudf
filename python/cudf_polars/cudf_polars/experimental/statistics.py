@@ -293,6 +293,8 @@ def _(
     child_column_stats = stats.column_stats.get(child, {})
     key_names = ir.subset or ir.schema
     _update_unique_stats_columns(child_column_stats, list(key_names), config_options)
+    # TODO: We need to update unique-stats columns for a Distinct
+    # Expr node within a Select (not just for a Distinct IR node).
     return _default_initialize_column_stats(ir, stats, config_options)
 
 

@@ -357,14 +357,14 @@ def get_executor_options(
         benchmark
         and benchmark.__name__ == "PDSHQueries"
         and run_config.executor == "streaming"
-        and run_config.statistics_planning
+        # Only use the unique_fraction config if statistics_planning is disabled
+        and not run_config.statistics_planning
     ):
         executor_options["unique_fraction"] = {
-            # NOTE: Statistics should make this config unnecessary
-            "c_custkey": 0.05,  # We get 1.0 from statistics?
-            "l_orderkey": 1.0,  # We get 0.249987 from statistics?
-            "l_partkey": 0.1,  # We get 0.999394 from statistics?
-            "o_custkey": 0.25,  # We get 0.998362 from statistics?
+            "c_custkey": 0.05,
+            "l_orderkey": 1.0,
+            "l_partkey": 0.1,
+            "o_custkey": 0.25,
         }
 
     return executor_options
