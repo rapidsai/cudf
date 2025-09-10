@@ -12,6 +12,7 @@ from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 from rmm.pylibrmm.stream cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.interop cimport (
@@ -29,7 +30,7 @@ from pylibcudf.libcudf.table.table cimport table
 
 from .column cimport Column
 from .types cimport DataType
-from .utils cimport _get_stream
+from .utils cimport _get_stream, _get_memory_resource
 from pylibcudf._interop_helpers cimport (
     _release_schema,
     _release_array,
@@ -159,7 +160,11 @@ cdef class Table:
         return table_view(c_columns)
 
     @staticmethod
-    cdef Table from_libcudf(unique_ptr[table] libcudf_tbl, Stream stream=None):
+    cdef Table from_libcudf(
+        unique_ptr[table] libcudf_tbl,
+        Stream stream=None,
+        DeviceMemoryResource mr=None
+    ):
         """Create a Table from a libcudf table.
 
         This method is for pylibcudf's functions to use to ingest outputs of
@@ -170,8 +175,9 @@ cdef class Table:
 
         cdef vector[unique_ptr[column]].size_type i
         stream = _get_stream(stream)
+        cdef DeviceMemoryResource c_mr = _get_memory_resource(mr)
         return Table([
-            Column.from_libcudf(move(c_columns[i]), stream)
+            Column.from_libcudf(move(c_columns[i]), stream, c_mr)
             for i in range(c_columns.size())
         ])
 
