@@ -134,19 +134,20 @@ def log_do_evaluate(
     func
         The ``IR.do_evaluate`` method to wrap.
     """
-    # do this just once
-    pynvml.nvmlInit()
-    maybe_handle = get_device_handle()
+    if not LOG_TRACES:
+        return func
+    else:
 
-    pid = os.getpid()
-
-    @functools.wraps(func)
-    def wrapper(
-        cls: type[ir.IR],
-        *args: P.args,
-        **kwargs: P.kwargs,
-    ) -> cudf_polars.containers.DataFrame:
-        if LOG_TRACES:
+        @functools.wraps(func)
+        def wrapper(
+            cls: type[ir.IR],
+            *args: P.args,
+            **kwargs: P.kwargs,
+        ) -> cudf_polars.containers.DataFrame:
+            # do this just once
+            pynvml.nvmlInit()
+            maybe_handle = get_device_handle()
+            pid = os.getpid()
             log = structlog.get_logger()
             frames = [
                 arg
@@ -181,7 +182,5 @@ def log_do_evaluate(
             log.info("Execute IR", **record)
 
             return result
-        else:
-            return func(cls, *args, **kwargs)  # type: ignore[arg-type]
 
-    return wrapper  # type: ignore[return-value]
+        return wrapper  # type: ignore[return-value]

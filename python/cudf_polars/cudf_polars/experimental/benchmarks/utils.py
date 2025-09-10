@@ -64,41 +64,6 @@ ExecutorType = Literal["in-memory", "streaming", "cpu"]
 
 
 @dataclasses.dataclass
-class TraceRecord:
-    """Trace record for a single run of a single PDS-H query."""
-
-    query_id: int
-    iteration: int
-    type: str
-    count_frames_input: int
-    count_frames_output: int
-    frames_input: list[dict[str, int]]
-    frames_output: list[dict[str, int]]
-    total_bytes_input: int
-    total_bytes_output: int
-    event: str
-    process: int
-    thread: int
-    timestamp: str
-    start: int
-    stop: int
-    rmm_current_bytes_input: int | None = None
-    rmm_current_count_input: int | None = None
-    rmm_peak_bytes_input: int | None = None
-    rmm_peak_count_input: int | None = None
-    rmm_total_bytes_input: int | None = None
-    rmm_total_count_input: int | None = None
-    rmm_current_bytes_output: int | None = None
-    rmm_current_count_output: int | None = None
-    rmm_peak_bytes_output: int | None = None
-    rmm_peak_count_output: int | None = None
-    rmm_total_bytes_output: int | None = None
-    rmm_total_count_output: int | None = None
-    nvml_current_bytes_input: int | None = None
-    nvml_current_bytes_output: int | None = None
-
-
-@dataclasses.dataclass
 class Record:
     """Results for a single run of a single PDS-H query."""
 
@@ -106,7 +71,7 @@ class Record:
     iteration: int
     duration: float
     shuffle_stats: dict[str, dict[str, int | float]] | None = None
-    traces: list[TraceRecord] | None = None
+    traces: list[dict[str, Any]] | None = None
 
     @classmethod
     def new(
@@ -115,19 +80,15 @@ class Record:
         iteration: int,
         duration: float,
         shuffle_stats: dict[str, dict[str, int | float]] | None = None,
-        traces: list[dict] | None = None,
+        traces: list[dict[str, Any]] | None = None,
     ) -> Record:
         """Create a Record from plain data."""
-        if traces is not None:
-            traces_parsed = [TraceRecord(**log) for log in traces]
-        else:
-            traces_parsed = None
         return cls(
             query=query,
             iteration=iteration,
             duration=duration,
             shuffle_stats=shuffle_stats,
-            traces=traces_parsed,
+            traces=traces,
         )
 
 
@@ -925,13 +886,7 @@ def run_polars(
             ]
             run_records = run_config.records[query_id]
             assert len(by_iteration) == len(run_records)  # same number of iterations
-            all_traces = [
-                [
-                    TraceRecord(**{k: v for k, v in log.items() if k not in {"level"}})
-                    for log in iteration
-                ]
-                for iteration in by_iteration
-            ]
+            all_traces = [list(iteration) for iteration in by_iteration]
 
             new_records = [
                 dataclasses.replace(record, traces=traces)
