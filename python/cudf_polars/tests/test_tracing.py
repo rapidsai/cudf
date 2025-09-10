@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 import polars as pl
@@ -22,11 +24,22 @@ def fixture_configure_structlog(log_output):
     structlog.configure(processors=[log_output])
 
 
-def test_trace_basic(log_output, monkeypatch) -> None:
-    monkeypatch.setattr(cudf_polars.dsl.tracing, "LOG_TRACES", True)
+@pytest.mark.parametrize("log_traces", [True, False])
+def test_trace_basic(
+    log_output: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    log_traces: bool,
+) -> None:
+    monkeypatch.setattr(cudf_polars.dsl.tracing, "LOG_TRACES", log_traces)
     q = pl.DataFrame({"a": [1, 2, 3]}).lazy().select(pl.col("a").sum())
     q.collect(engine="gpu")
     entries = log_output.entries
+
+    if not log_traces:
+        assert len(entries) == 0
+        return
+
     assert len(entries) == 2
 
     scan, select = entries

@@ -11,6 +11,7 @@ import time
 from typing import TYPE_CHECKING, Any, Literal
 
 import nvtx
+import pynvml
 from typing_extensions import ParamSpec
 
 import rmm
@@ -25,13 +26,6 @@ except ImportError:
     HAS_STRUCTLOG = False
 else:
     HAS_STRUCTLOG = True
-
-try:
-    import pynvml
-except ImportError:
-    HAS_PYNVML = False
-else:
-    HAS_PYNVML = True
 
 
 LOG_TRACES = HAS_STRUCTLOG and os.environ.get("CUDF_POLARS_LOG_TRACES", "0") in {
@@ -138,12 +132,9 @@ def log_do_evaluate(
     func
         The ``IR.do_evaluate`` method to wrap.
     """
-    if HAS_PYNVML:
-        # do this just once
-        pynvml.nvmlInit()
-        maybe_handle = get_device_handle()
-    else:
-        maybe_handle = None
+    # do this just once
+    pynvml.nvmlInit()
+    maybe_handle = get_device_handle()
 
     pid = os.getpid()
 
