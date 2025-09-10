@@ -702,20 +702,19 @@ dependencies:
               cuda: "12.*"
               cuda_suffixed: "true"
             packages:
-              - nvidia-cuda-nvcc-cu12
-              - nvidia-cuda-nvrtc-cu12
+              - cuda-toolkit[nvcc,nvrtc]==12.*
           - matrix:
               cuda: "13.*"
               cuda_suffixed: "true"
             packages:
-              - nvidia-cuda-nvcc-cu13
-              - nvidia-cuda-nvrtc-cu13
+              - cuda-toolkit[nvcc,nvrtc]==13.*
           - {matrix: null, packages: []}
   run_cudf_polars:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - nvidia-ml-py
+          # 'nvidia-ml-py' provides the 'pynvml' module
+          - &nvidia_ml_py nvidia-ml-py>=12
           - packaging
           - polars>=1.28,<1.33
     specific:
@@ -729,14 +728,12 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - rapids-dask-dependency==25.10.*,>=0.0.0a0
-          - nvidia-ml-py
+          - *nvidia_ml_py
   run_dask_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          # 'nvidia-ml-py' provides the 'pynvml' module, since v12.560.30
-          # ref: https://github.com/conda-forge/nvidia-ml-py-feedstock/pull/24
-          - nvidia-ml-py>=12.560.30
+          - *nvidia_ml_py
           - rapids-dask-dependency==25.10.*,>=0.0.0a0
   run_custreamz:
     common:

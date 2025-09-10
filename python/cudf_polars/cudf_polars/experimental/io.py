@@ -23,6 +23,7 @@ from cudf_polars.experimental.base import (
     ColumnStat,
     ColumnStats,
     DataSourceInfo,
+    DataSourcePair,
     PartitionInfo,
     UniqueStats,
     get_key_name,
@@ -700,6 +701,7 @@ class ParquetSourceInfo(DataSourceInfo):
         self.paths = paths
         self.max_footer_samples = max_footer_samples
         self.max_row_group_samples = max_row_group_samples
+        self._unique_stats_columns = set()
         # Helper attributes
         self._key_columns: set[str] = set()  # Used to fuse lazy row-group sampling
         self._unique_stats: dict[str, UniqueStats] = {}
@@ -802,6 +804,7 @@ class ParquetSourceInfo(DataSourceInfo):
 
     def add_unique_stats_column(self, column: str) -> None:
         """Add a column needing unique-value information."""
+        self._unique_stats_columns.add(column)
         if column not in self._key_columns and column not in self._unique_stats:
             self._key_columns.add(column)
 
@@ -830,7 +833,7 @@ def _extract_scan_stats(
         return {
             name: ColumnStats(
                 name=name,
-                source_info=ColumnSourceInfo(table_source_info, name),
+                source_info=ColumnSourceInfo(DataSourcePair(table_source_info, name)),
             )
             for name in ir.schema
         }
@@ -852,6 +855,7 @@ class DataFrameSourceInfo(DataSourceInfo):
     def __init__(self, df: Any):
         self._df = df
         self._key_columns: set[str] = set()
+        self._unique_stats_columns = set()
         self._unique_stats: dict[str, UniqueStats] = {}
 
     @functools.cached_property
@@ -883,7 +887,7 @@ def _extract_dataframescan_stats(ir: DataFrameScan) -> dict[str, ColumnStats]:
     return {
         name: ColumnStats(
             name=name,
-            source_info=ColumnSourceInfo(table_source_info, name),
+            source_info=ColumnSourceInfo(DataSourcePair(table_source_info, name)),
         )
         for name in ir.schema
     }
