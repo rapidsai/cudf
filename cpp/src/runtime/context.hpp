@@ -19,9 +19,12 @@
 #include <cudf/context.hpp>
 #include <cudf/utilities/export.hpp>
 
+#include <cstdint>
 #include <memory>
 
 namespace cudf {
+
+enum class init_flags : std::uint32_t;
 
 namespace jit {
 class program_cache;
@@ -35,7 +38,7 @@ class context {
   std::unique_ptr<jit::program_cache> _program_cache;
 
  public:
-  context();
+  context(init_flags flags = init_flags::INIT_JIT_CACHE);
   context(context const&)            = delete;
   context& operator=(context const&) = delete;
   context(context&&)                 = delete;

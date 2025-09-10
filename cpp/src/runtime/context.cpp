@@ -26,12 +26,20 @@
 
 namespace cudf {
 
-context::context() : _program_cache{std::make_unique<jit::program_cache>()}
+context::context(init_flags flags) : _program_cache{nullptr}
 {
-  io::detail::nvcomp::load_nvcomp_library();
+  if (has_flag(flags, init_flags::INIT_JIT_CACHE)) {
+    _program_cache = std::make_unique<jit::program_cache>();
+  }
+
+  if (has_flag(flags, init_flags::LOAD_NVCOMP)) { io::detail::nvcomp::load_nvcomp_library(); }
 }
 
-jit::program_cache& context::program_cache() { return *_program_cache; }
+jit::program_cache& context::program_cache()
+{
+  CUDF_EXPECTS(_program_cache != nullptr, "JIT cache not initialized", std::runtime_error);
+  return *_program_cache;
+}
 
 std::unique_ptr<context>& get_context_ptr_ref()
 {
@@ -50,11 +58,11 @@ context& get_context()
 
 namespace CUDF_EXPORT cudf {
 
-void initialize()
+void initialize(init_flags flags)
 {
   CUDF_EXPECTS(
     get_context_ptr_ref() == nullptr, "context is already initialized", std::runtime_error);
-  get_context_ptr_ref() = std::make_unique<context>();
+  get_context_ptr_ref() = std::make_unique<context>(flags);
 }
 
 void deinitialize()
