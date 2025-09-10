@@ -174,8 +174,9 @@ def test_explain_logical_plan_wide_table():
 
 @pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
 @pytest.mark.parametrize("n_rows", [None, 3])
-def test_explain_logical_io_then_distinct(engine, tmp_path, kind, n_rows):
-    # Create simple Distinct + Sort query
+@pytest.mark.parametrize("select", [True, False])
+def test_explain_logical_io_then_distinct(engine, tmp_path, kind, n_rows, select):
+    # Create simple Distinct or Select(unique) + Sort query
     df = pl.DataFrame(
         {
             "order_id": [1, 2, 3, 4, 5, 6],
@@ -185,7 +186,10 @@ def test_explain_logical_io_then_distinct(engine, tmp_path, kind, n_rows):
         }
     )
     df = make_lazy_frame(df, kind, path=tmp_path, n_files=2, n_rows=n_rows)
-    q = df.unique(subset=["customer_id"]).sort("order_id")
+    if select:
+        q = df.select(pl.col("customer_id").unique()).sort("customer_id")
+    else:
+        q = df.unique(subset=["customer_id"]).sort("order_id")
 
     # Verify the query runs correctly
     assert_gpu_result_equal(q, engine=engine)
@@ -205,6 +209,30 @@ def test_explain_logical_io_then_distinct(engine, tmp_path, kind, n_rows):
         assert re.search(
             rf"^\s*SORT.*row_count=\'~{q.collect().height}\'\s*$", repr, re.MULTILINE
         )
+
+
+@pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
+def test_explain_logical_agg(engine, tmp_path, kind):
+    # Create simple aggregation query
+    df = pl.DataFrame(
+        {
+            "order_id": [1, 2, 3, 4, 5, 6],
+            "customer_id": [101, 102, 101, 103, 103, 104],
+            "amount": [50.0, 75.0, 30.0, 120.0, 85.0, 40.0],
+            "year": [2023, 2023, 2023, 2024, 2024, 2024],
+        }
+    )
+    df = make_lazy_frame(df, kind, path=tmp_path, n_files=2)
+    q = df.select(pl.sum("customer_id"))
+
+    # Verify the query runs correctly
+    assert_gpu_result_equal(q, engine=engine)
+
+    # Check query plan - We should know that sum produces a single row.
+    repr = explain_query(q, engine, physical=False)
+    assert re.search(
+        rf"^\s*SELECT.*row_count=\'~{q.collect().height}\'\s*$", repr, re.MULTILINE
+    )
 
 
 @pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])

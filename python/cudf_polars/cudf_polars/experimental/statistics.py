@@ -8,6 +8,7 @@ from __future__ import annotations
 import itertools
 from typing import TYPE_CHECKING, TypeVar
 
+from cudf_polars.dsl.expr import Agg, UnaryFunction
 from cudf_polars.dsl.ir import (
     IR,
     DataFrameScan,
@@ -16,10 +17,11 @@ from cudf_polars.dsl.ir import (
     HConcat,
     Join,
     Scan,
+    Select,
     Sort,
     Union,
 )
-from cudf_polars.dsl.traversal import post_traversal
+from cudf_polars.dsl.traversal import post_traversal, traversal
 from cudf_polars.experimental.base import (
     ColumnSourceInfo,
     ColumnStat,
@@ -31,6 +33,8 @@ from cudf_polars.experimental.dispatch import (
     initialize_column_stats,
     update_column_stats,
 )
+from cudf_polars.experimental.expressions import _SUPPORTED_AGGS
+from cudf_polars.experimental.utils import _leaf_column_names
 from cudf_polars.utils import conversion
 
 if TYPE_CHECKING:
@@ -287,8 +291,6 @@ def _(
     child_column_stats = stats.column_stats.get(child, {})
     key_names = ir.subset or ir.schema
     _update_unique_stats_columns(child_column_stats, list(key_names))
-    # TODO: We need to update unique-stats columns for a Distinct
-    # Expr node within a Select (not just for a Distinct IR node).
     return _default_initialize_column_stats(ir, stats, config_options)
 
 
@@ -405,6 +407,49 @@ def _(
     return _extract_dataframescan_stats(ir, config_options)
 
 
+@initialize_column_stats.register(Select)
+def _(
+    ir: Select, stats: StatsCollector, config_options: ConfigOptions
+) -> dict[str, ColumnStats]:
+    (child,) = ir.children
+    column_stats: dict[str, ColumnStats] = {}
+    unique_stats_columns: list[str] = []
+    child_column_stats = stats.column_stats.get(child, {})
+    for ne in ir.exprs:
+        if leaf_columns := _leaf_column_names(ne.value):
+            # New column is based on 1+ child columns.
+            # Inherit the source information from the child columns.
+            children = tuple(
+                child_column_stats.get(col, ColumnStats(name=col))
+                for col in leaf_columns
+            )
+            column_stats[ne.name] = ColumnStats(
+                name=ne.name,
+                children=children,
+                source_info=ColumnSourceInfo(
+                    *itertools.chain.from_iterable(
+                        cs.source_info.table_source_pairs for cs in children
+                    )
+                ),
+            )
+        else:
+            # New column is based on 0 child columns.
+            # We don't have any source information to inherit.
+            column_stats[ne.name] = ColumnStats(name=ne.name)
+
+        if any(
+            isinstance(expr, UnaryFunction) and expr.name == "unique"
+            for expr in traversal([ne.value])
+        ):
+            # Make sure the leaf column is marked as a unique-stats column.
+            unique_stats_columns.extend(list(leaf_columns))
+
+    if unique_stats_columns:
+        _update_unique_stats_columns(stats.column_stats[child], unique_stats_columns)
+
+    return column_stats
+
+
 def known_child_row_counts(ir: IR, stats: StatsCollector) -> list[int]:
     """
     Get all non-null row-count estimates for the children of and IR node.
@@ -447,16 +492,14 @@ def copy_child_unique_counts(column_stats_mapping: dict[str, ColumnStats]) -> No
     for column_stats in column_stats_mapping.values():
         column_stats.unique_count = ColumnStat[int](
             # Assume we get the maximum child unique-count estimate
-            value=max(
+            max(
                 (
                     cs.unique_count.value
                     for cs in column_stats.children
                     if cs.unique_count.value is not None
                 ),
                 default=None,
-            ),
-            exact=len(column_stats.children) == 1
-            and column_stats.children[0].unique_count.exact,
+            )
         )
 
 
@@ -545,6 +588,44 @@ def _(ir: Scan, stats: StatsCollector, config_options: ConfigOptions) -> None:
                 )
         else:
             column_stats.unique_count = column_stats.source_info.implied_unique_count
+
+
+@update_column_stats.register(Select)
+def _(ir: Select, stats: StatsCollector, config_options: ConfigOptions) -> None:
+    # Update statistics for a Select node.
+
+    # Start by copying the child unique-count estimates.
+    copy_child_unique_counts(stats.column_stats[ir])
+
+    # Now update the row-count estimate.
+    (child,) = ir.children
+    child_row_count = stats.row_count.get(child, ColumnStat[int](None)).value
+    row_count_estimates: list[int | None] = []
+    for ne in ir.exprs:
+        child_column_stats = stats.column_stats[ir][ne.name].children
+        if isinstance(ne.value, Agg) and ne.value.name in _SUPPORTED_AGGS:
+            # This aggregation outputs a single row.
+            row_count_estimates.append(1)
+            stats.column_stats[ir][ne.name].unique_count = ColumnStat[int](
+                value=1, exact=True
+            )
+        elif (
+            len(child_column_stats) == 1
+            and any(
+                isinstance(expr, UnaryFunction) and expr.name == "unique"
+                for expr in traversal([ne.value])
+            )
+            and (value := child_column_stats[0].unique_count.value) is not None
+        ):
+            # We are doing a Select(unique) operation.
+            row_count_estimates.append(value)
+        else:
+            # Fallback case - use the child row-count estimate.
+            row_count_estimates.append(child_row_count)
+
+    stats.row_count[ir] = ColumnStat[int](
+        max((rc for rc in row_count_estimates if rc is not None), default=None),
+    )
 
 
 @update_column_stats.register(Distinct)
