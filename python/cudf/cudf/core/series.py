@@ -780,9 +780,9 @@ class Series(SingleColumnFrame, IndexedFrame):
         index=None,
         columns=None,
         level=None,
-        inplace=False,
-        errors="raise",
-    ):
+        inplace: bool = False,
+        errors: Literal["ignore", "raise"] = "raise",
+    ) -> Self | None:
         if axis == 1:
             raise ValueError("No axis named 1 for object type Series")
         # Ignore columns for Series
@@ -1136,7 +1136,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         return NotImplemented
 
     @_performance_tracking
-    def map(self, arg, na_action=None) -> "Series":
+    def map(self, arg, na_action: None | Literal["ignore"] = None) -> Self:
         """
         Map values of Series according to input correspondence.
 
@@ -1195,6 +1195,10 @@ class Series(SingleColumnFrame, IndexedFrame):
             Please note map currently only supports fixed-width numeric
             type functions.
         """
+        if not (na_action is None or na_action == "ignore"):
+            raise ValueError("na_action must either be 'ignore' or None")
+        elif na_action == "ignore":
+            raise NotImplementedError(f"{na_action=} is not supported")
         if isinstance(arg, dict):
             if hasattr(arg, "__missing__"):
                 raise NotImplementedError(
@@ -1663,7 +1667,12 @@ class Series(SingleColumnFrame, IndexedFrame):
         return self._mimic_inplace(result, inplace=inplace)
 
     @_performance_tracking
-    def drop_duplicates(self, keep="first", inplace=False, ignore_index=False):
+    def drop_duplicates(
+        self,
+        keep: Literal["first", "last", False] = "first",
+        inplace: bool = False,
+        ignore_index: bool = False,
+    ) -> Self | None:
         """
         Return Series with duplicate values removed.
 
@@ -2262,11 +2271,11 @@ class Series(SingleColumnFrame, IndexedFrame):
         self,
         to_replace=None,
         value=no_default,
-        inplace=False,
+        inplace: bool = False,
         limit=None,
-        regex=False,
+        regex: bool = False,
         method=no_default,
-    ):
+    ) -> Self | None:
         if is_dict_like(to_replace) and value not in {None, no_default}:
             raise ValueError(
                 "Series.replace cannot use dict-like to_replace and non-None "

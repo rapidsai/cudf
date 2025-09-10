@@ -227,6 +227,8 @@ class Frame(BinaryOperand, Scannable, Serializable):
     def _mimic_inplace(
         self, result: Self, inplace: bool = False
     ) -> Self | None:
+        if not isinstance(inplace, bool):
+            raise TypeError("inplace must be a boolean")
         if inplace:
             for col in self._column_names:
                 if col in result._data:

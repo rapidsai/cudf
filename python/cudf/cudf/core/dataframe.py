@@ -3078,11 +3078,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     def set_index(
         self,
         keys,
-        drop=True,
-        append=False,
-        inplace=False,
-        verify_integrity=False,
-    ):
+        drop: bool = True,
+        append: bool = False,
+        inplace: bool = False,
+        verify_integrity: bool = False,
+    ) -> Self | None:
         """Return a new DataFrame with a new index
 
         Parameters
@@ -3177,6 +3177,13 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             keys = [keys]
         if len(keys) == 0:
             raise ValueError("No valid columns to be added to index.")
+        if not isinstance(drop, bool):
+            raise TypeError("drop must be a boolean")
+        if not isinstance(append, bool):
+            raise TypeError("append must be a boolean")
+        if not isinstance(inplace, bool):
+            raise TypeError("inplace must be a boolean")
+
         if append:
             keys = [self.index, *keys]
 
@@ -3640,10 +3647,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     def drop_duplicates(
         self,
         subset=None,
-        keep="first",
-        inplace=False,
-        ignore_index=False,
-    ):
+        keep: Literal["first", "last", False] = "first",
+        inplace: bool = False,
+        ignore_index: bool = False,
+    ) -> Self | None:
         """
         Return DataFrame with duplicate rows removed.
 
@@ -6134,7 +6141,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         method="linear",
         axis=0,
         limit=None,
-        inplace=False,
+        inplace: bool = False,
         limit_direction=None,
         limit_area=None,
         downcast=None,
