@@ -1905,6 +1905,13 @@ ArrowExtensionArray = make_final_proxy_type(
     },
 )
 
+FrozenList = make_final_proxy_type(
+    "FrozenList",
+    _Unusable,
+    pd.core.indexes.frozen.FrozenList,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+)
 
 # The following are subclasses of `pandas.core.base.PandasObj`,
 # excluding subclasses defined in `pandas.core.internals`.  These are
@@ -1913,7 +1920,6 @@ ArrowExtensionArray = make_final_proxy_type(
 
 _PANDAS_OBJ_FINAL_TYPES = [
     pd.core.arrays.sparse.array.SparseArray,
-    pd.core.indexes.frozen.FrozenList,
     pd.core.indexes.category.CategoricalIndex,
     pd.core.indexes.datetimelike.DatetimeTimedeltaMixin,
     pd.core.indexes.datetimelike.DatetimeIndexOpsMixin,
