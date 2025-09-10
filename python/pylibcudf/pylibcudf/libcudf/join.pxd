@@ -105,7 +105,7 @@ cdef extern from "cudf/join/conditional_join.hpp" namespace "cudf" nogil:
         const table_view left,
         const table_view right,
         const expression binary_predicate,
-        output_size_data_type output_size_data,
+        optional[size_t] output_size,
         cuda_stream_view stream
     ) except +libcudf_exception_handler
 
@@ -120,7 +120,7 @@ cdef extern from "cudf/join/conditional_join.hpp" namespace "cudf" nogil:
         const table_view left,
         const table_view right,
         const expression binary_predicate,
-        output_size_data_type output_size_data,
+        optional[size_t] output_size,
         cuda_stream_view stream
     ) except +libcudf_exception_handler
 
@@ -142,7 +142,7 @@ cdef extern from "cudf/join/conditional_join.hpp" namespace "cudf" nogil:
         const table_view left,
         const table_view right,
         const expression binary_predicate,
-        output_size_data_type output_size_data,
+        optional[size_t] output_size,
         cuda_stream_view stream
     ) except +libcudf_exception_handler
 
@@ -157,7 +157,7 @@ cdef extern from "cudf/join/conditional_join.hpp" namespace "cudf" nogil:
         const table_view left,
         const table_view right,
         const expression binary_predicate,
-        output_size_data_type output_size_data,
+        optional[size_t] output_size,
         cuda_stream_view stream
     ) except +libcudf_exception_handler
 
