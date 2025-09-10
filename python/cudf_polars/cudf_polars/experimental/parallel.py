@@ -28,13 +28,14 @@ from cudf_polars.dsl.ir import (
     Union,
 )
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
-from cudf_polars.experimental.base import PartitionInfo, get_key_name
+from cudf_polars.experimental.base import PartitionInfo, StatsCollector, get_key_name
 from cudf_polars.experimental.dispatch import (
     generate_ir_tasks,
     lower_ir_node,
 )
 from cudf_polars.experimental.io import _clear_source_info_cache
 from cudf_polars.experimental.repartition import Repartition
+from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import _concat, _contains_over, _lower_ir_fallback
 
 if TYPE_CHECKING:
@@ -42,7 +43,7 @@ if TYPE_CHECKING:
     from typing import Any
 
     from cudf_polars.containers import DataFrame
-    from cudf_polars.experimental.dispatch import LowerIRTransformer
+    from cudf_polars.experimental.dispatch import LowerIRTransformer, State
     from cudf_polars.utils.config import ConfigOptions
 
 
@@ -84,9 +85,16 @@ def lower_ir_graph(
     --------
     lower_ir_node
     """
-    mapper: LowerIRTransformer = CachingVisitor(
-        lower_ir_node, state={"config_options": config_options}
+    assert config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'lower_ir_graph'"
     )
+    if config_options.executor.statistics_planning_options.enable:
+        stats = collect_statistics(ir, config_options)
+    else:
+        stats = StatsCollector()
+
+    state: State = {"config_options": config_options, "stats": stats}
+    mapper: LowerIRTransformer = CachingVisitor(lower_ir_node, state=state)
     return mapper(ir)
 
 
@@ -369,6 +377,14 @@ def _(
 
     new_node = ir.reconstruct([child])
     partition_info[new_node] = partition_info[child]
+
+    # # EXPERIMENTAL: Repartition to 80% after a filter.
+    # if partition_info[child].count > 1:
+    #     # Repartition after the filter
+    #     new_node = Repartition(new_node.schema, new_node)
+    #     new_count = max(1, int(partition_info[child].count * 0.8))
+    #     partition_info[new_node] = PartitionInfo(count=new_count)
+
     return new_node, partition_info
 
 

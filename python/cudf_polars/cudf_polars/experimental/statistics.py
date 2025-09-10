@@ -71,7 +71,11 @@ def collect_statistics(root: IR, config_options: ConfigOptions) -> StatsCollecto
     # during this step. However, we will use Parquet metadata to
     # estimate the row-count for each table source. This metadata
     # is cached in the DataSourceInfo object for each table.
-    apply_pkfk_heuristics(stats.join_info)
+    assert config_options.executor.name == "streaming", (
+        "Only streaming executor is supported in collect_statistics"
+    )
+    if config_options.executor.statistics_planning_options.use_join_heuristics:
+        apply_pkfk_heuristics(stats.join_info)
 
     # Update statistics for each node.
     # Here we set local row-count and unique-value statistics
@@ -334,6 +338,9 @@ def _(
             primary_child_stats[p_key.name],
             other_child_stats[o_key.name],
         )
+        # Add key columns to set of unique-stats columns.
+        primary_child_stats[p_key.name].source_info.add_unique_stats_column()
+        other_child_stats[o_key.name].source_info.add_unique_stats_column()
 
     return column_stats
 
@@ -401,7 +408,7 @@ def _(
 ) -> dict[str, ColumnStats]:
     from cudf_polars.experimental.io import _extract_dataframescan_stats
 
-    return _extract_dataframescan_stats(ir)
+    return _extract_dataframescan_stats(ir, config_options)
 
 
 def known_child_row_counts(ir: IR, stats: StatsCollector) -> list[int]:

@@ -14,6 +14,7 @@ from cudf_polars.experimental.io import _clear_source_info_cache
 from cudf_polars.experimental.statistics import (
     apply_pkfk_heuristics,
     collect_base_stats,
+    collect_statistics,
     find_equivalence_sets,
 )
 from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
@@ -42,6 +43,7 @@ def engine():
             "shuffle_method": "tasks",
             "target_partition_size": 10_000,
             "max_rows_per_partition": 1_000,
+            "statistics_planning_options": {"enable": True},
         },
     )
 
@@ -219,6 +221,7 @@ def test_base_stats_parquet_groupby(
         executor_options={
             "target_partition_size": 10_000,
             "scheduler": DEFAULT_SCHEDULER,
+            "statistics_planning_options": {"enable": True},
         },
         parquet_options={
             "max_footer_samples": max_footer_samples,
@@ -407,3 +410,12 @@ def test_base_stats_join_key_info(engine):
         stats.column_stats[ir]["cust_id"].source_info.implied_unique_count.value
         == implied_unique_count
     )
+
+    # Check basic collect_statistics behavior
+    stats = collect_statistics(ir, config_options)
+    local_unique_count = stats.column_stats[ir]["cust_id"].unique_count.value
+    source_unique_count = (
+        stats.column_stats[ir]["cust_id"].source_info.unique_stats().count.value
+    )
+    assert local_unique_count == source_unique_count
+    assert stats.row_count[ir].value == q.collect().height

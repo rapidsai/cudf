@@ -463,3 +463,14 @@ def test_validate_executor() -> None:
 def test_default_executor() -> None:
     config = ConfigOptions.from_polars_engine(pl.GPUEngine())
     assert config.executor.name == "streaming"
+
+
+@pytest.mark.parametrize("option", ["enable", "use_join_heuristics", "use_sampling"])
+def test_validate_statistics_planning_options(option: str) -> None:
+    with pytest.raises(TypeError, match=f"{option} must be"):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={"statistics_planning_options": {option: object()}},
+            )
+        )

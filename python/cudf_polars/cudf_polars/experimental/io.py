@@ -35,6 +35,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import NamedExpr
+    from cudf_polars.experimental.base import StatsCollector
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.typing import Schema
     from cudf_polars.utils.config import (
@@ -109,7 +110,9 @@ class ScanPartitionPlan:
         self.flavor = flavor
 
     @staticmethod
-    def from_scan(ir: Scan, config_options: ConfigOptions) -> ScanPartitionPlan:
+    def from_scan(
+        ir: Scan, stats: StatsCollector, config_options: ConfigOptions
+    ) -> ScanPartitionPlan:
         """Extract the partitioning plan of a Scan operation."""
         if ir.typ == "parquet":
             # TODO: Use system info to set default blocksize
@@ -118,7 +121,9 @@ class ScanPartitionPlan:
             )
 
             blocksize: int = config_options.executor.target_partition_size
-            column_stats = _extract_scan_stats(ir, config_options)
+            column_stats = stats.column_stats.get(
+                ir, _extract_scan_stats(ir, config_options)
+            )
             column_sizes: list[int] = []
             for cs in column_stats.values():
                 storage_size = cs.source_info.storage_size
@@ -298,7 +303,7 @@ def _(
         and ir.skip_rows == 0
         and ir.row_index is None
     ):
-        plan = ScanPartitionPlan.from_scan(ir, config_options)
+        plan = ScanPartitionPlan.from_scan(ir, rec.state["stats"], config_options)
         paths = list(ir.paths)
         if plan.flavor == ScanPartitionFlavor.SPLIT_FILES:
             # Disable chunked reader when splitting files
@@ -690,6 +695,8 @@ class ParquetSourceInfo(DataSourceInfo):
         Maximum number of file footers to sample metadata from.
     max_row_group_samples
         Maximum number of row-groups to sample data from.
+    use_sampling
+        Whether to use sampling to estimate unique-value statistics.
     """
 
     def __init__(
@@ -697,10 +704,12 @@ class ParquetSourceInfo(DataSourceInfo):
         paths: tuple[str, ...],
         max_footer_samples: int,
         max_row_group_samples: int,
+        use_sampling: bool,  # noqa: FBT001
     ):
         self.paths = paths
         self.max_footer_samples = max_footer_samples
         self.max_row_group_samples = max_row_group_samples
+        self.use_sampling = use_sampling
         self._unique_stats_columns = set()
         # Helper attributes
         self._key_columns: set[str] = set()  # Used to fuse lazy row-group sampling
@@ -719,7 +728,7 @@ class ParquetSourceInfo(DataSourceInfo):
     def _sample_row_groups(self) -> None:
         """Estimate unique-value statistics from a row-group sample."""
         sample_paths = self.metadata.sample_paths
-        if not sample_paths or self.max_row_group_samples < 1:
+        if not sample_paths or not self.use_sampling or self.max_row_group_samples < 1:
             # No row-groups to sample from
             return
 
@@ -814,9 +823,12 @@ def _sample_pq_stats(
     paths: tuple[str, ...],
     max_footer_samples: int,
     max_row_group_samples: int,
+    use_sampling: bool,  # noqa: FBT001
 ) -> ParquetSourceInfo:
     """Return Parquet datasource information."""
-    return ParquetSourceInfo(paths, max_footer_samples, max_row_group_samples)
+    return ParquetSourceInfo(
+        paths, max_footer_samples, max_row_group_samples, use_sampling
+    )
 
 
 def _extract_scan_stats(
@@ -825,10 +837,14 @@ def _extract_scan_stats(
 ) -> dict[str, ColumnStats]:
     """Extract base ColumnStats for a Scan node."""
     if ir.typ == "parquet":
+        assert config_options.executor.name == "streaming", (
+            "Only streaming executor is supported in _extract_scan_stats"
+        )
         table_source_info = _sample_pq_stats(
             tuple(ir.paths),
             config_options.parquet_options.max_footer_samples,
             config_options.parquet_options.max_row_group_samples,
+            config_options.executor.statistics_planning_options.use_sampling,
         )
         return {
             name: ColumnStats(
@@ -850,10 +866,17 @@ class DataFrameSourceInfo(DataSourceInfo):
     ----------
     df
         In-memory DataFrame source.
+    use_sampling
+        Whether to use sampling to estimate unique-value statistics.
     """
 
-    def __init__(self, df: Any):
+    def __init__(
+        self,
+        df: Any,
+        use_sampling: bool,  # noqa: FBT001
+    ):
         self._df = df
+        self._use_sampling = use_sampling
         self._key_columns: set[str] = set()
         self._unique_stats_columns = set()
         self._unique_stats: dict[str, UniqueStats] = {}
@@ -864,7 +887,7 @@ class DataFrameSourceInfo(DataSourceInfo):
         return ColumnStat[int](value=self._df.height(), exact=True)
 
     def _update_unique_stats(self, column: str) -> None:
-        if column not in self._unique_stats:
+        if column not in self._unique_stats and self._use_sampling:
             row_count = self.row_count.value
             unique_count = (
                 self._df.get_column(column).approx_n_unique() if row_count else 0
@@ -881,9 +904,15 @@ class DataFrameSourceInfo(DataSourceInfo):
         return self._unique_stats.get(column, UniqueStats())
 
 
-def _extract_dataframescan_stats(ir: DataFrameScan) -> dict[str, ColumnStats]:
+def _extract_dataframescan_stats(
+    ir: DataFrameScan, config_options: ConfigOptions
+) -> dict[str, ColumnStats]:
     """Extract base ColumnStats for a DataFrameScan node."""
-    table_source_info = DataFrameSourceInfo(ir.df)
+    assert config_options.executor.name == "streaming", (
+        "Only streaming executor is supported in _extract_dataframescan_stats"
+    )
+    use_sampling = config_options.executor.statistics_planning_options.use_sampling
+    table_source_info = DataFrameSourceInfo(ir.df, use_sampling)
     return {
         name: ColumnStats(
             name=name,

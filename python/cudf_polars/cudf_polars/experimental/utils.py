@@ -4,16 +4,19 @@
 
 from __future__ import annotations
 
+import math
 import operator
 import warnings
 from functools import reduce
 from itertools import chain
 from typing import TYPE_CHECKING
 
+import pylibcudf as plc
+
 from cudf_polars.dsl.expr import Col, Expr, GroupedRollingWindow, UnaryFunction
 from cudf_polars.dsl.ir import Union
 from cudf_polars.dsl.traversal import traversal
-from cudf_polars.experimental.base import PartitionInfo
+from cudf_polars.experimental.base import ColumnStat, PartitionInfo
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping, Sequence
@@ -21,6 +24,7 @@ if TYPE_CHECKING:
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import Expr
     from cudf_polars.dsl.ir import IR
+    from cudf_polars.experimental.base import ColumnStats, StatsCollector
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.utils.config import ConfigOptions
 
@@ -101,16 +105,75 @@ def _leaf_column_names(expr: Expr) -> tuple[str, ...]:
         return ()
 
 
+def _estimate_ideal_partition_count(
+    ir: IR,
+    stats: StatsCollector,
+    config_options: ConfigOptions,
+) -> int | None:
+    """Estimate the ideal number of partitions for a query node."""
+    assert config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in '_estimate_ideal_partition_count'"
+    )
+    row_count = stats.row_count.get(ir, ColumnStat[int](None))
+    if (
+        row_count.value is None
+        or config_options.executor.statistics_planning_options.enable
+    ):
+        return None
+
+    size = 0
+    column_stats = stats.column_stats.get(ir, {})
+    for col, dtype in ir.schema.items():
+        if col in column_stats:
+            # if (itemsize := column_stats[col].source_info.storage_size.value) is None:
+            try:
+                itemsize = plc.types.size_of(dtype.plc)
+            except RuntimeError:
+                # Pylibcudf will raise a RuntimeError for non fixed-width types.
+                # Default to 32 bytes for these cases. This is basically a
+                # complete guess, but may be better than nothing.
+                itemsize = 32
+            size += row_count.value * itemsize
+        else:
+            return None
+
+    target_partition_size = config_options.executor.target_partition_size
+    return max(1, math.ceil(size / target_partition_size))
+
+
 def _get_unique_fractions(
     column_names: Sequence[str],
     user_unique_fractions: dict[str, float],
+    *,
+    row_count: ColumnStat[int] | None = None,
+    column_stats: dict[str, ColumnStats] | None = None,
 ) -> dict[str, float]:
     """Return unique-fraction statistics subset."""
-    return {
-        c: max(min(f, 1.0), 0.00001)
-        for c, f in user_unique_fractions.items()
-        if c in column_names
-    }
+    unique_fractions: dict[str, float] = {}
+    column_stats = column_stats or {}
+    row_count = row_count or ColumnStat[int](None)
+    if isinstance(row_count.value, int) and row_count.value > 0:
+        for c in set(column_names).intersection(column_stats):
+            if (unique_count := column_stats[c].unique_count.value) is not None:
+                # Use unique_count_estimate (if available)
+                unique_fractions[c] = max(
+                    min(1.0, unique_count / row_count.value),
+                    0.00001,
+                )
+
+    # # Debug write to file
+    # with open("unique_fractions.txt", "a") as f:
+    #     f.write(f"{unique_fractions}\n")
+
+    # Update with user-provided unique-fractions
+    unique_fractions.update(
+        {
+            c: max(min(f, 1.0), 0.00001)
+            for c, f in user_unique_fractions.items()
+            if c in column_names
+        }
+    )
+    return unique_fractions
 
 
 def _contains_over(exprs: Sequence[Expr]) -> bool:

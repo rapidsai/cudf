@@ -36,6 +36,7 @@ def test_unique(df, keep, subset, maintain_order, cardinality):
             "scheduler": DEFAULT_SCHEDULER,
             "unique_fraction": cardinality,
             "fallback_mode": "warn",
+            "statistics_planning_options": {"enable": False},
         },
     )
 

@@ -205,6 +205,7 @@ class RunConfig:
     rapidsmpf_spill: bool
     spill_device: float
     query_set: str
+    statistics_planning: bool
 
     def __post_init__(self) -> None:  # noqa: D105
         if self.gather_shuffle_stats and self.shuffle != "rapidsmpf":
@@ -274,6 +275,7 @@ class RunConfig:
             rapidsmpf_spill=args.rapidsmpf_spill,
             max_rows_per_partition=args.max_rows_per_partition,
             query_set=args.query_set,
+            statistics_planning=args.statistics_planning,
         )
 
     def serialize(self, engine: pl.GPUEngine | None) -> dict:
@@ -300,6 +302,7 @@ class RunConfig:
                 print(f"blocksize: {self.blocksize}")
                 print(f"shuffle_method: {self.shuffle}")
                 print(f"broadcast_join_limit: {self.broadcast_join_limit}")
+                print(f"statistics_planning: {self.statistics_planning}")
                 if self.scheduler == "distributed":
                     print(f"n_workers: {self.n_workers}")
                     print(f"threads: {self.threads}")
@@ -347,17 +350,21 @@ def get_executor_options(
         executor_options["rapidsmpf_spill"] = run_config.rapidsmpf_spill
     if run_config.scheduler == "distributed":
         executor_options["scheduler"] = "distributed"
+    if run_config.statistics_planning:
+        executor_options["statistics_planning_options"] = {"enable": True}
 
     if (
         benchmark
         and benchmark.__name__ == "PDSHQueries"
         and run_config.executor == "streaming"
+        and run_config.statistics_planning
     ):
         executor_options["unique_fraction"] = {
-            "c_custkey": 0.05,
-            "l_orderkey": 1.0,
-            "l_partkey": 0.1,
-            "o_custkey": 0.25,
+            # NOTE: Statistics should make this config unnecessary
+            "c_custkey": 0.05,  # We get 1.0 from statistics?
+            "l_orderkey": 1.0,  # We get 0.249987 from statistics?
+            "l_partkey": 0.1,  # We get 0.999394 from statistics?
+            "o_custkey": 0.25,  # We get 0.998362 from statistics?
         }
 
     return executor_options
@@ -406,7 +413,6 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
         "protocol": args.protocol,
         "rmm_pool_size": args.rmm_pool_size,
         "rmm_async": args.rmm_async,
-        "rmm_release_threshold": args.rmm_release_threshold,
         "threads_per_worker": run_config.threads,
     }
 
@@ -627,15 +633,6 @@ def parse_args(
             Default: 0.5 (50%% of GPU memory)"""),
     )
     parser.add_argument(
-        "--rmm-release-threshold",
-        default=None,
-        type=float,
-        help=textwrap.dedent("""\
-            Passed to dask_cuda.LocalCUDACluster to control the release
-            threshold for RMM pool memory.
-            Default: None (no release threshold)"""),
-    )
-    parser.add_argument(
         "--rmm-async",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -713,6 +710,12 @@ def parse_args(
         choices=["duckdb", "cpu"],
         default="duckdb",
         help="Which engine to use as the baseline for validation.",
+    )
+    parser.add_argument(
+        "--statistics-planning",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Enable statistics planning.",
     )
     return parser.parse_args(args)
 
