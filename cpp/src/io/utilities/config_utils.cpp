@@ -86,12 +86,10 @@ bool has_integrated_memory()
 {
   // Check if we can detect integrated memory through CUDA properties
   int device_count = 0;
-  if (cudaGetDeviceCount(&device_count) != cudaSuccess || device_count == 0) {
-    return false;
-  }
+  if (cudaGetDeviceCount(&device_count) != cudaSuccess || device_count == 0) { return false; }
 
   // Use cudaDevAttrIntegrated to directly check if the device has integrated memory
-  int is_integrated = 0;
+  int is_integrated  = 0;
   cudaError_t result = cudaDeviceGetAttribute(&is_integrated, cudaDevAttrIntegrated, 0);
 
   return result == cudaSuccess && is_integrated != 0;
@@ -109,5 +107,5 @@ bool is_enabled()
   CUDF_FAIL("Invalid LIBCUDF_INTEGRATED_MEMORY_ENABLED value: " + policy);
 }
 
-}  // namespace integrated_memory
+}  // namespace integrated_optimizations
 }  // namespace cudf::io

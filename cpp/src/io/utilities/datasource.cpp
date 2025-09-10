@@ -179,7 +179,6 @@ class file_source : public kvikio_source<kvikio::FileHandle> {
  */
 class integrated_memory_file_source : public file_source {
  public:
-
   explicit integrated_memory_file_source(char const* filepath) : file_source(filepath) {}
 
   std::future<size_t> device_read_async(size_t offset,
@@ -188,7 +187,7 @@ class integrated_memory_file_source : public file_source {
                                         rmm::cuda_stream_view stream) override
   {
     stream.synchronize();
-   return host_read_async(offset, size, dst);
+    return host_read_async(offset, size, dst);
   }
 
   size_t device_read(size_t offset,
@@ -208,15 +207,9 @@ class integrated_memory_file_source : public file_source {
     return host_read(offset, size);
   }
 
-  [[nodiscard]] bool supports_device_read() const override
-  {
-    return true;
-  }
+  [[nodiscard]] bool supports_device_read() const override { return true; }
 
-  [[nodiscard]] bool is_device_read_preferred(size_t size) const override
-  {
-    return true;
-  }
+  [[nodiscard]] bool is_device_read_preferred(size_t size) const override { return true; }
 };
 
 /**
