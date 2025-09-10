@@ -144,6 +144,10 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/operations/test_group_by.py::test_group_by_series_lit_22103[True]": "Incorrect broadcasting of literals in groupby-agg",
     "tests/unit/operations/test_join.py::test_cross_join_slice_pushdown": "Need to implement slice pushdown for cross joins",
     "tests/unit/operations/test_join.py::test_join_filter_pushdown_iejoin": "Row order differs due to multiple matches per left row index; join results are correct but unsorted",
+    # We match the behavior of the polars[cpu] streaming engine (it makes doesn't make any ordering gaurantees either when maintain_order is none).
+    # But this test does because the test is run with the polars[cpu] in-memory engine, which still preserves the order of the left dataframe
+    # when maintain order is none.
+    "tests/unit/operations/test_join.py::test_join_preserve_order_left": "polars[gpu] makes no ordering guarantees when maintain_order is none",
     "tests/unit/operations/namespaces/string/test_pad.py::test_str_zfill_unicode_not_respected": "polars doesn't add zeros for unicode characters.",
     "tests/unit/sql/test_cast.py::test_cast_errors[values0-values::uint8-conversion from `f64` to `u64` failed]": "Casting that raises not supported on GPU",
     "tests/unit/sql/test_cast.py::test_cast_errors[values1-values::uint4-conversion from `i64` to `u32` failed]": "Casting that raises not supported on GPU",
