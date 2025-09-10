@@ -83,3 +83,42 @@ shape: (3, 3)
 │ Scan               ┆ 813   ┆ 233993 │
 └────────────────────┴───────┴────────┘
 ```
+
+## Tracing
+
+cudf-polars can optionally trace execution of the various nodes of each node in
+the query plan by setting the environment variable ``CUDF_POLARS_TRACE`` to a
+true value ("1", "true", "y", "yes") before starting your process. This will
+capture and log information about each node before and after it executes, including information on
+
+- The type of the node being executed (e.g. `Scan`, `Select`, `Join`, `Groupby`, etc.)
+- The shape and size (in memory) of each input and output DataFrame
+- The GPU memory usage, as reported by [nvml], before and after executing the ndoe
+- A start and stop clock, which can be used to measure the duration of the node's execution
+
+The implementation uses [structlog] to build log records. You can configure the
+output using structlog's [configuration][structlog-configure] and enrich the
+records with [context variables][structlog-context].
+
+
+```python
+df = pl.DataFrame({"a": ["a", "a", "b"], "b": [1, 2, 3]}).lazy()
+df.group_by("a").agg(pl.col("b").min().alias("min"), pl.col("b").max().alias("max")).collect(engine="gpu")
+2025-09-10 07:44:01 [info     ] Execute IR      count_frames_input=0 count_frames_output=1 ... type=DataFrameScan
+2025-09-10 07:44:01 [info     ] Execute IR      count_frames_input=1 count_frames_output=1 ... type=GroupBy
+shape: (2, 3)
+┌─────┬─────┬─────┐
+│ a   ┆ min ┆ max │
+│ --- ┆ --- ┆ --- │
+│ str ┆ i64 ┆ i64 │
+╞═════╪═════╪═════╡
+│ b   ┆ 3   ┆ 3   │
+│ a   ┆ 1   ┆ 2   │
+└─────┴─────┴─────┘
+```
+
+[nvml]: https://developer.nvidia.com/management-library-nvml
+[rmm-stats]: https://docs.rapids.ai/api/rmm/stable/guide/#memory-statistics-and-profiling
+[structlog]: https://www.structlog.org/
+[structlog-configure](https://www.structlog.org/en/stable/configuration.html)
+[structlog-context](https://www.structlog.org/en/stable/contextvars.html)

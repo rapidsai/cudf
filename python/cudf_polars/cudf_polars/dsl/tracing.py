@@ -28,7 +28,9 @@ else:
     _HAS_STRUCTLOG = True
 
 
-LOG_TRACES = _HAS_STRUCTLOG and os.environ.get("CUDF_POLARS_LOG_TRACES", "0") in {
+LOG_TRACES = _HAS_STRUCTLOG and os.environ.get(
+    "CUDF_POLARS_LOG_TRACES", "0"
+).lower() in {
     "1",
     "true",
     "y",
