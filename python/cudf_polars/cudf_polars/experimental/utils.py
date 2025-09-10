@@ -109,7 +109,27 @@ def _get_unique_fractions(
     row_count: ColumnStat[int] | None = None,
     column_stats: dict[str, ColumnStats] | None = None,
 ) -> dict[str, float]:
-    """Return unique-fraction statistics subset."""
+    """
+    Return unique-fraction statistics subset.
+
+    Parameters
+    ----------
+    column_names
+        The column names to get unique-fractions for.
+    user_unique_fractions
+        The user-provided unique-fraction dictionary.
+    row_count
+        Row-count statistics. This will be None if
+        statistics planning is not enabled.
+    column_stats
+        The column statistics. This will be None if
+        statistics planning is not enabled.
+
+    Returns
+    -------
+    unique_fractions
+        The final unique-fraction dictionary.
+    """
     unique_fractions: dict[str, float] = {}
     column_stats = column_stats or {}
     row_count = row_count or ColumnStat[int](None)

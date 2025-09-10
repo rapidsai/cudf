@@ -35,7 +35,7 @@ def engine():
             "shuffle_method": "tasks",
             "target_partition_size": 10_000,
             "max_rows_per_partition": 1_000,
-            "statistics_planning_options": {"enable": True},
+            "stats_planning_options": {"enable": True},
         },
     )
 

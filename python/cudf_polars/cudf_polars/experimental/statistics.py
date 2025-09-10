@@ -56,6 +56,11 @@ def collect_statistics(root: IR, config_options: ConfigOptions) -> StatsCollecto
     -------
     A StatsCollector object with populated column statistics.
     """
+    assert config_options.executor.name == "streaming", (
+        "Only streaming executor is supported in collect_statistics"
+    )
+    stats_planning_options = config_options.executor.stats_planning_options
+
     # Start with base statistics.
     # Here we build an outline of the statistics that will be
     # collected before any real data is sampled. We will not
@@ -71,10 +76,7 @@ def collect_statistics(root: IR, config_options: ConfigOptions) -> StatsCollecto
     # during this step. However, we will use Parquet metadata to
     # estimate the row-count for each table source. This metadata
     # is cached in the DataSourceInfo object for each table.
-    assert config_options.executor.name == "streaming", (
-        "Only streaming executor is supported in collect_statistics"
-    )
-    if config_options.executor.statistics_planning_options.use_join_heuristics:
+    if stats_planning_options.use_join_heuristics:
         apply_pkfk_heuristics(stats.join_info)
 
     # Update statistics for each node.
@@ -251,18 +253,10 @@ def apply_pkfk_heuristics(join_info: JoinInfo) -> None:
 def _update_unique_stats_columns(
     child_column_stats: dict[str, ColumnStats],
     key_names: Sequence[str],
-    config_options: ConfigOptions,
 ) -> None:
     """Update set of unique-stats columns in datasource."""
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'add_source_stats'"
-    )
-    unique_fraction = config_options.executor.unique_fraction
     for name in key_names:
-        if (
-            name not in unique_fraction
-            and (column_stats := child_column_stats.get(name)) is not None
-        ):
+        if (column_stats := child_column_stats.get(name)) is not None:
             column_stats.source_info.add_unique_stats_column()
 
 
@@ -292,7 +286,7 @@ def _(
     (child,) = ir.children
     child_column_stats = stats.column_stats.get(child, {})
     key_names = ir.subset or ir.schema
-    _update_unique_stats_columns(child_column_stats, list(key_names), config_options)
+    _update_unique_stats_columns(child_column_stats, list(key_names))
     # TODO: We need to update unique-stats columns for a Distinct
     # Expr node within a Select (not just for a Distinct IR node).
     return _default_initialize_column_stats(ir, stats, config_options)
@@ -355,9 +349,7 @@ def _(
     child_column_stats = stats.column_stats.get(child, {})
 
     # Update set of source columns we may lazily sample
-    _update_unique_stats_columns(
-        child_column_stats, [n.name for n in ir.keys], config_options
-    )
+    _update_unique_stats_columns(child_column_stats, [n.name for n in ir.keys])
     return _default_initialize_column_stats(ir, stats, config_options)
 
 

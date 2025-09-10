@@ -41,6 +41,7 @@ if TYPE_CHECKING:
     from cudf_polars.utils.config import (
         ConfigOptions,
         ParquetOptions,
+        StatsPlanningOptions,
         StreamingExecutor,
     )
 
@@ -704,12 +705,12 @@ class ParquetSourceInfo(DataSourceInfo):
         paths: tuple[str, ...],
         max_footer_samples: int,
         max_row_group_samples: int,
-        use_sampling: bool,  # noqa: FBT001
+        stats_planning_options: StatsPlanningOptions,
     ):
         self.paths = paths
         self.max_footer_samples = max_footer_samples
         self.max_row_group_samples = max_row_group_samples
-        self.use_sampling = use_sampling
+        self._stats_planning_options = stats_planning_options
         self._unique_stats_columns = set()
         # Helper attributes
         self._key_columns: set[str] = set()  # Used to fuse lazy row-group sampling
@@ -727,9 +728,12 @@ class ParquetSourceInfo(DataSourceInfo):
 
     def _sample_row_groups(self) -> None:
         """Estimate unique-value statistics from a row-group sample."""
-        sample_paths = self.metadata.sample_paths
-        if not sample_paths or not self.use_sampling or self.max_row_group_samples < 1:
-            # No row-groups to sample from
+        if (
+            self.max_row_group_samples < 1
+            or not self._stats_planning_options.use_sampling
+            or not (sample_paths := self.metadata.sample_paths)
+        ):
+            # No sampling allowed or no row-groups to sample from
             return
 
         column_names = self.metadata.column_names
@@ -823,11 +827,14 @@ def _sample_pq_stats(
     paths: tuple[str, ...],
     max_footer_samples: int,
     max_row_group_samples: int,
-    use_sampling: bool,  # noqa: FBT001
+    stats_planning_options: StatsPlanningOptions,
 ) -> ParquetSourceInfo:
     """Return Parquet datasource information."""
     return ParquetSourceInfo(
-        paths, max_footer_samples, max_row_group_samples, use_sampling
+        paths,
+        max_footer_samples,
+        max_row_group_samples,
+        stats_planning_options,
     )
 
 
@@ -844,7 +851,7 @@ def _extract_scan_stats(
             tuple(ir.paths),
             config_options.parquet_options.max_footer_samples,
             config_options.parquet_options.max_row_group_samples,
-            config_options.executor.statistics_planning_options.use_sampling,
+            config_options.executor.stats_planning_options,
         )
         return {
             name: ColumnStats(
@@ -873,10 +880,10 @@ class DataFrameSourceInfo(DataSourceInfo):
     def __init__(
         self,
         df: Any,
-        use_sampling: bool,  # noqa: FBT001
+        stats_planning_options: StatsPlanningOptions,
     ):
         self._df = df
-        self._use_sampling = use_sampling
+        self._stats_planning_options = stats_planning_options
         self._key_columns: set[str] = set()
         self._unique_stats_columns = set()
         self._unique_stats: dict[str, UniqueStats] = {}
@@ -887,7 +894,10 @@ class DataFrameSourceInfo(DataSourceInfo):
         return ColumnStat[int](value=self._df.height(), exact=True)
 
     def _update_unique_stats(self, column: str) -> None:
-        if column not in self._unique_stats and self._use_sampling:
+        if (
+            column not in self._unique_stats
+            and self._stats_planning_options.use_sampling
+        ):
             row_count = self.row_count.value
             unique_count = (
                 self._df.get_column(column).approx_n_unique() if row_count else 0
@@ -911,8 +921,10 @@ def _extract_dataframescan_stats(
     assert config_options.executor.name == "streaming", (
         "Only streaming executor is supported in _extract_dataframescan_stats"
     )
-    use_sampling = config_options.executor.statistics_planning_options.use_sampling
-    table_source_info = DataFrameSourceInfo(ir.df, use_sampling)
+    table_source_info = DataFrameSourceInfo(
+        ir.df,
+        config_options.executor.stats_planning_options,
+    )
     return {
         name: ColumnStats(
             name=name,

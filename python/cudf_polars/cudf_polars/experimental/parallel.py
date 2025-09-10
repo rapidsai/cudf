@@ -88,10 +88,10 @@ def lower_ir_graph(
     assert config_options.executor.name == "streaming", (
         "'in-memory' executor not supported in 'lower_ir_graph'"
     )
-    if config_options.executor.statistics_planning_options.enable:
+    if config_options.executor.stats_planning_options.enable:
         stats = collect_statistics(ir, config_options)
     else:
-        stats = StatsCollector()
+        stats = StatsCollector()  # "Empty" stats collector
 
     state: State = {"config_options": config_options, "stats": stats}
     mapper: LowerIRTransformer = CachingVisitor(lower_ir_node, state=state)

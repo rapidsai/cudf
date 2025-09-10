@@ -44,7 +44,7 @@ __all__ = [
     "ParquetOptions",
     "Scheduler",
     "ShuffleMethod",
-    "StatisticsPlanningOptions",
+    "StatsPlanningOptions",
     "StreamingExecutor",
     "StreamingFallbackMode",
 ]
@@ -291,7 +291,7 @@ def default_blocksize(scheduler: str) -> int:
 
 
 @dataclasses.dataclass(frozen=True)
-class StatisticsPlanningOptions:
+class StatsPlanningOptions:
     """
     Configuration for statistics-based query planning.
 
@@ -304,14 +304,18 @@ class StatisticsPlanningOptions:
         Whether to use estimated column statistics to create
         the physical plan. Default is False.
         The other parameters of this class control the specific
-        "kinds" of statistics to use.
+        "kinds" of statistics to use. This parameter is ignored
+        when the collect_statistics API is called directly.
     use_join_heuristics
         Whether to use join heuristics to estimate row-count
-        and unique-count statistics (when enable=True).
-        Default is True.
+        and unique-count statistics. Default is True.
+        These statistics are used to create the physical plan
+        when enable=True.
     use_sampling
         Whether to sample real data to estimate unique-value
-        statistics (when enable=True). Default is True.
+        statistics. Default is True.
+        These statistics are used to create the physical plan
+        when enable=True.
     """
 
     _env_prefix = "CUDF_POLARS__STATISTICS_PLANNING"
@@ -415,9 +419,9 @@ class StreamingExecutor:
         rather than a single file. By default, this will be set to True for
         the 'distributed' scheduler and False otherwise. The 'distrubuted'
         scheduler does not currently support ``sink_to_directory=False``.
-    statistics_planning_options
+    stats_planning_options
         Options controlling statistics-based query planning. See
-        :class:`~cudf_polars.utils.config.StatisticsPlanningOptions` for more.
+        :class:`~cudf_polars.utils.config.StatsPlanningOptions` for more.
 
     Notes
     -----
@@ -486,8 +490,8 @@ class StreamingExecutor:
             f"{_env_prefix}__SINK_TO_DIRECTORY", _bool_converter, default=None
         )
     )
-    statistics_planning_options: StatisticsPlanningOptions = dataclasses.field(
-        default_factory=StatisticsPlanningOptions
+    stats_planning_options: StatsPlanningOptions = dataclasses.field(
+        default_factory=StatsPlanningOptions
     )
 
     def __post_init__(self) -> None:  # noqa: D105
@@ -538,12 +542,12 @@ class StreamingExecutor:
         object.__setattr__(self, "scheduler", Scheduler(self.scheduler))
         object.__setattr__(self, "shuffle_method", ShuffleMethod(self.shuffle_method))
 
-        # Make sure statistics_planning_options is a dataclass
-        if isinstance(self.statistics_planning_options, dict):
+        # Make sure stats_planning_options is a dataclass
+        if isinstance(self.stats_planning_options, dict):
             object.__setattr__(
                 self,
-                "statistics_planning_options",
-                StatisticsPlanningOptions(**self.statistics_planning_options),
+                "stats_planning_options",
+                StatsPlanningOptions(**self.stats_planning_options),
             )
 
         if self.scheduler == "distributed":
@@ -584,7 +588,7 @@ class StreamingExecutor:
         # to json and hash that.
         d = dataclasses.asdict(self)
         d["unique_fraction"] = json.dumps(d["unique_fraction"])
-        d["statistics_planning_options"] = json.dumps(d["statistics_planning_options"])
+        d["stats_planning_options"] = json.dumps(d["stats_planning_options"])
         return hash(tuple(sorted(d.items())))
 
 

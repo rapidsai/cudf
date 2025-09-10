@@ -59,8 +59,14 @@ def explain_query(
         lowered_ir, partition_info = lower_ir_graph(ir, config)
         return _repr_ir_tree(lowered_ir, partition_info)
     else:
-        # Include row-count statistics for the logical plan
-        return _repr_ir_tree(ir, stats=collect_statistics(ir, config))
+        if (
+            config.executor.name == "streaming"
+            and config.executor.stats_planning_options.enable
+        ):
+            # Include row-count statistics for the logical plan
+            return _repr_ir_tree(ir, stats=collect_statistics(ir, config))
+        else:
+            return _repr_ir_tree(ir)
 
 
 def _repr_ir_tree(
