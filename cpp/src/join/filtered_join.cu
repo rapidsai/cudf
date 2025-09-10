@@ -289,10 +289,10 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> distinct_filtered_join::se
   cudf::scoped_range range{"distinct_filtered_join::semi_anti_join"};
   auto const has_any_nulls = has_nested_nulls(probe) || _build_props.has_nulls;
 
-  nvtxRangePushA("distinct_filtered_join::semi_anti_join::preprocessed_probe");
-  auto const preprocessed_probe =
-    cudf::experimental::row::equality::preprocessed_table::create(probe, stream);
-  nvtxRangePop();
+  auto const preprocessed_probe = [&probe, stream] {
+    cudf::scoped_range range{"distinct_filtered_join::semi_anti_join::preprocessed_probe"};
+    return cudf::experimental::row::equality::preprocessed_table::create(probe, stream);
+  }();
 
   if (cudf::is_primitive_row_op_compatible(_build)) {
     auto const d_build_probe_comparator = primitive_row_comparator{

@@ -54,14 +54,6 @@ namespace {
 // they were modified in https://github.com/rapidsai/cudf/pull/7454. This
 // helper function allows us to avoid rewriting all our tests in terms of
 // gather maps.
-/*
-template <std::unique_ptr<rmm::device_uvector<cudf::size_type>> (*join_impl)(
-cudf::table_view const& left_keys,
-cudf::table_view const& right_keys,
-cudf::null_equality compare_nulls,
-rmm::cuda_stream_view stream,
-rmm::device_async_resource_ref mr)>
-*/
 template <typename Func>
 std::unique_ptr<cudf::table> join_and_gather(
   Func join_impl,
