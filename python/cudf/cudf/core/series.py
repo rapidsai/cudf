@@ -3225,9 +3225,11 @@ class Series(SingleColumnFrame, IndexedFrame):
         percentiles=None,
         include=None,
         exclude=None,
-    ):
+    ) -> Self:
         """{docstring}"""
-        if cudf.get_option("mode.pandas_compatible"):
+        if cudf.get_option("mode.pandas_compatible") and not (
+            is_dtype_obj_numeric(self.dtype) and self.dtype.kind != "b"
+        ):
             raise NotImplementedError(
                 "cudf.Series.describe is not implemented in "
                 "pandas compatibility mode."
@@ -3249,15 +3251,19 @@ class Series(SingleColumnFrame, IndexedFrame):
             # pandas defaults
             percentiles = np.array([0.25, 0.5, 0.75])
 
-        dtype = "str"
+        dtype: Dtype | None = "str"
         if self.dtype.kind == "b":
             data = _describe_categorical(self, percentiles)
-        elif is_dtype_obj_numeric(self._column.dtype):
+        elif is_dtype_obj_numeric(self.dtype):
             data = _describe_numeric(self, percentiles)
-            dtype = None
-        elif self._column.dtype.kind == "m":
+            dtype = (
+                pd.Float64Dtype()
+                if is_pandas_nullable_extension_dtype(self.dtype)
+                else None
+            )
+        elif self.dtype.kind == "m":
             data = _describe_timedelta(self, percentiles)
-        elif self._column.dtype.kind == "M":
+        elif self.dtype.kind == "M":
             data = _describe_timestamp(self, percentiles)
         else:
             data = _describe_categorical(self, percentiles)
