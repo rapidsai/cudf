@@ -36,6 +36,8 @@ def test_unique(df, keep, subset, maintain_order, cardinality):
             "scheduler": DEFAULT_SCHEDULER,
             "unique_fraction": cardinality,
             "fallback_mode": "warn",
+            # We are using unique_fraction to control the algorithm,
+            # so we need to disable statistics planning.
             "stats_planning_options": {"enable": False},
         },
     )

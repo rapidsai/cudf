@@ -696,8 +696,8 @@ class ParquetSourceInfo(DataSourceInfo):
         Maximum number of file footers to sample metadata from.
     max_row_group_samples
         Maximum number of row-groups to sample data from.
-    use_sampling
-        Whether to use sampling to estimate unique-value statistics.
+    stats_planning_options
+        Statistics planning options.
     """
 
     def __init__(
@@ -873,8 +873,8 @@ class DataFrameSourceInfo(DataSourceInfo):
     ----------
     df
         In-memory DataFrame source.
-    use_sampling
-        Whether to use sampling to estimate unique-value statistics.
+    stats_planning_options
+        Statistics planning options.
     """
 
     def __init__(
