@@ -175,6 +175,51 @@ class file_source : public kvikio_source<kvikio::FileHandle> {
 };
 
 /**
+ * @brief A class representing a file source optimized for systems with integrated memory.
+ */
+class integrated_memory_file_source : public file_source {
+ public:
+
+  explicit integrated_memory_file_source(char const* filepath) : file_source(filepath) {}
+
+  std::future<size_t> device_read_async(size_t offset,
+                                        size_t size,
+                                        uint8_t* dst,
+                                        rmm::cuda_stream_view stream) override
+  {
+    stream.synchronize();
+   return host_read_async(offset, size, dst);
+  }
+
+  size_t device_read(size_t offset,
+                     size_t size,
+                     uint8_t* dst,
+                     rmm::cuda_stream_view stream) override
+  {
+    stream.synchronize();
+    return host_read(offset, size, dst);
+  }
+
+  std::unique_ptr<datasource::buffer> device_read(size_t offset,
+                                                  size_t size,
+                                                  rmm::cuda_stream_view stream) override
+  {
+    stream.synchronize();
+    return host_read(offset, size);
+  }
+
+  [[nodiscard]] bool supports_device_read() const override
+  {
+    return true;
+  }
+
+  [[nodiscard]] bool is_device_read_preferred(size_t size) const override
+  {
+    return true;
+  }
+};
+
+/**
  * @brief Implementation class for reading from a file using memory mapped access.
  *
  * Unlike Arrow's memory mapped IO class, this implementation allows memory mapping a subset of the
@@ -418,6 +463,8 @@ std::unique_ptr<datasource> datasource::create(std::string const& filepath,
     CUDF_FAIL("Invalid LIBCUDF_MMAP_ENABLED value: " + policy);
   }();
 
+  auto const use_integrated_optimizations = integrated_optimizations::is_enabled();
+
   if (remote_file_source::could_be_remote_url(filepath)) {
     try {
       return std::make_unique<remote_file_source>(filepath.c_str());
@@ -434,6 +481,9 @@ std::unique_ptr<datasource> datasource::create(std::string const& filepath,
     }
   } else if (use_memory_mapping) {
     return std::make_unique<memory_mapped_source>(filepath.c_str(), offset, max_size_estimate);
+  } else if (use_integrated_optimizations) {
+    // Use integrated memory file source for systems with integrated memory
+    return std::make_unique<integrated_memory_file_source>(filepath.c_str());
   } else {
     // `file_source` reads the file directly, without memory mapping
     return std::make_unique<file_source>(filepath.c_str());

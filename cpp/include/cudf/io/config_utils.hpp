@@ -45,5 +45,14 @@ bool is_all_enabled();
 bool is_stable_enabled();
 
 }  // namespace nvcomp_integration
+
+namespace integrated_optimizations {
+
+/**
+ * @brief Returns true if integrated memory optimizations should be used.
+ */
+bool is_enabled();
+
+}  // namespace integrated_optimizations
 }  // namespace io
 }  // namespace CUDF_EXPORT cudf

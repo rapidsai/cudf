@@ -20,6 +20,8 @@
 
 #include <kvikio/defaults.hpp>
 
+#include <cuda_runtime.h>
+
 #include <string>
 
 namespace cudf::io {
@@ -71,4 +73,41 @@ bool is_all_enabled() { return get_env_policy() == usage_policy::ALWAYS; }
 bool is_stable_enabled() { return is_all_enabled() or get_env_policy() == usage_policy::STABLE; }
 
 }  // namespace nvcomp_integration
+
+namespace integrated_optimizations {
+
+namespace {
+/**
+ * @brief Detects if the current system has integrated/unified memory.
+ *
+ * @return true if the system has integrated memory, false otherwise
+ */
+bool has_integrated_memory()
+{
+  // Check if we can detect integrated memory through CUDA properties
+  int device_count = 0;
+  if (cudaGetDeviceCount(&device_count) != cudaSuccess || device_count == 0) {
+    return false;
+  }
+
+  // Use cudaDevAttrIntegrated to directly check if the device has integrated memory
+  int is_integrated = 0;
+  cudaError_t result = cudaDeviceGetAttribute(&is_integrated, cudaDevAttrIntegrated, 0);
+
+  return result == cudaSuccess && is_integrated != 0;
+}
+}  // namespace
+
+bool is_enabled()
+{
+  auto const policy = getenv_or("LIBCUDF_INTEGRATED_MEMORY_ENABLED", std::string{"AUTO"});
+
+  if (policy == "ON") { return true; }
+  if (policy == "OFF") { return false; }
+  if (policy == "AUTO") { return has_integrated_memory(); }
+
+  CUDF_FAIL("Invalid LIBCUDF_INTEGRATED_MEMORY_ENABLED value: " + policy);
+}
+
+}  // namespace integrated_memory
 }  // namespace cudf::io
