@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/table/experimental/row_operators.cuh>
+#include <cudf/detail/row_operator/row_operators.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -48,7 +48,7 @@ std::unique_ptr<cudf::column> two_table_equality(cudf::table_view lhs,
                                                  PhysicalElementComparator comparator);
 template <typename PhysicalElementComparator>
 std::unique_ptr<cudf::column> sorted_order(
-  std::shared_ptr<cudf::experimental::row::lexicographic::preprocessed_table> preprocessed_input,
+  std::shared_ptr<cudf::detail::row::lexicographic::preprocessed_table> preprocessed_input,
   cudf::size_type num_rows,
   bool has_nested,
   PhysicalElementComparator comparator,
@@ -66,14 +66,14 @@ TYPED_TEST(TypedTableViewTest, TestLexicographicalComparatorTwoTables)
 
   auto const expected = cudf::test::fixed_width_column_wrapper<bool>{{1, 1, 0, 1}};
   auto const got      = two_table_comparison(
-    lhs, rhs, column_order, cudf::experimental::row::lexicographic::physical_element_comparator{});
+    lhs, rhs, column_order, cudf::detail::row::lexicographic::physical_element_comparator{});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 
-  auto const sorting_got = two_table_comparison(
-    lhs,
-    rhs,
-    column_order,
-    cudf::experimental::row::lexicographic::sorting_physical_element_comparator{});
+  auto const sorting_got =
+    two_table_comparison(lhs,
+                         rhs,
+                         column_order,
+                         cudf::detail::row::lexicographic::sorting_physical_element_comparator{});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, sorting_got->view());
 }
 
@@ -86,16 +86,14 @@ TYPED_TEST(TypedTableViewTest, TestLexicographicalComparatorSameTable)
   auto const input_table  = cudf::table_view{{col1}};
 
   auto const expected = cudf::test::fixed_width_column_wrapper<bool>{{0, 0, 0, 0}};
-  auto const got =
-    self_comparison(input_table,
-                    column_order,
-                    cudf::experimental::row::lexicographic::physical_element_comparator{});
+  auto const got      = self_comparison(
+    input_table, column_order, cudf::detail::row::lexicographic::physical_element_comparator{});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 
   auto const sorting_got =
     self_comparison(input_table,
                     column_order,
-                    cudf::experimental::row::lexicographic::sorting_physical_element_comparator{});
+                    cudf::detail::row::lexicographic::sorting_physical_element_comparator{});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, sorting_got->view());
 }
 
@@ -123,21 +121,21 @@ TYPED_TEST(TypedTableViewTest, TestSortSameTableFromTwoTables)
     auto const expected_lhs = int32s_col{3, 1, 4, 0, 2};
     test_sort(preprocessed_lhs,
               lhs,
-              cudf::experimental::row::lexicographic::physical_element_comparator{},
+              cudf::detail::row::lexicographic::physical_element_comparator{},
               expected_lhs);
     test_sort(preprocessed_lhs,
               lhs,
-              cudf::experimental::row::lexicographic::sorting_physical_element_comparator{},
+              cudf::detail::row::lexicographic::sorting_physical_element_comparator{},
               expected_lhs);
 
     auto const expected_empty_rhs = int32s_col{};
     test_sort(preprocessed_empty_rhs,
               empty_rhs,
-              cudf::experimental::row::lexicographic::physical_element_comparator{},
+              cudf::detail::row::lexicographic::physical_element_comparator{},
               expected_empty_rhs);
     test_sort(preprocessed_empty_rhs,
               empty_rhs,
-              cudf::experimental::row::lexicographic::sorting_physical_element_comparator{},
+              cudf::detail::row::lexicographic::sorting_physical_element_comparator{},
               expected_empty_rhs);
   };
 
@@ -146,13 +144,13 @@ TYPED_TEST(TypedTableViewTest, TestSortSameTableFromTwoTables)
   // produce exactly the same result.
   {
     auto const [preprocessed_lhs, preprocessed_empty_rhs] =
-      cudf::experimental::row::lexicographic::preprocessed_table::create(
+      cudf::detail::row::lexicographic::preprocessed_table::create(
         lhs, empty_rhs, std::vector{cudf::order::ASCENDING}, {}, stream);
     test_sort_two_tables(preprocessed_lhs, preprocessed_empty_rhs);
   }
   {
     auto const [preprocessed_empty_rhs, preprocessed_lhs] =
-      cudf::experimental::row::lexicographic::preprocessed_table::create(
+      cudf::detail::row::lexicographic::preprocessed_table::create(
         empty_rhs, lhs, std::vector{cudf::order::ASCENDING}, {}, stream);
     test_sort_two_tables(preprocessed_lhs, preprocessed_empty_rhs);
   }
@@ -201,23 +199,23 @@ TYPED_TEST(TypedTableViewTest, TestSortSameTableFromTwoTablesWithListsOfStructs)
     auto const expected_lhs = int32s_col{1, 0};
     test_sort(preprocessed_lhs,
               lhs,
-              cudf::experimental::row::lexicographic::sorting_physical_element_comparator{},
+              cudf::detail::row::lexicographic::sorting_physical_element_comparator{},
               expected_lhs);
 
     auto const expected_empty_rhs = int32s_col{};
     test_sort(preprocessed_empty_rhs,
               empty_rhs,
-              cudf::experimental::row::lexicographic::sorting_physical_element_comparator{},
+              cudf::detail::row::lexicographic::sorting_physical_element_comparator{},
               expected_empty_rhs);
 
     EXPECT_THROW(test_sort(preprocessed_lhs,
                            lhs,
-                           cudf::experimental::row::lexicographic::physical_element_comparator{},
+                           cudf::detail::row::lexicographic::physical_element_comparator{},
                            expected_lhs),
                  cudf::logic_error);
     EXPECT_THROW(test_sort(preprocessed_empty_rhs,
                            empty_rhs,
-                           cudf::experimental::row::lexicographic::physical_element_comparator{},
+                           cudf::detail::row::lexicographic::physical_element_comparator{},
                            expected_empty_rhs),
                  cudf::logic_error);
   };
@@ -227,13 +225,13 @@ TYPED_TEST(TypedTableViewTest, TestSortSameTableFromTwoTablesWithListsOfStructs)
   // produce exactly the same result.
   {
     auto const [preprocessed_lhs, preprocessed_empty_rhs] =
-      cudf::experimental::row::lexicographic::preprocessed_table::create(
+      cudf::detail::row::lexicographic::preprocessed_table::create(
         lhs, empty_rhs, std::vector{cudf::order::ASCENDING}, {}, stream);
     test_sort_two_tables(preprocessed_lhs, preprocessed_empty_rhs);
   }
   {
     auto const [preprocessed_empty_rhs, preprocessed_lhs] =
-      cudf::experimental::row::lexicographic::preprocessed_table::create(
+      cudf::detail::row::lexicographic::preprocessed_table::create(
         empty_rhs, lhs, std::vector{cudf::order::ASCENDING}, {}, stream);
     test_sort_two_tables(preprocessed_lhs, preprocessed_empty_rhs);
   }
@@ -257,15 +255,15 @@ TYPED_TEST(NaNTableViewTest, TestLexicographicalComparatorTwoTableNaNCase)
 
   auto const expected = cudf::test::fixed_width_column_wrapper<bool>{{0, 0, 0, 0}};
   auto const got      = two_table_comparison(
-    lhs, rhs, column_order, cudf::experimental::row::lexicographic::physical_element_comparator{});
+    lhs, rhs, column_order, cudf::detail::row::lexicographic::physical_element_comparator{});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 
   auto const sorting_expected = cudf::test::fixed_width_column_wrapper<bool>{{0, 1, 0, 0}};
-  auto const sorting_got      = two_table_comparison(
-    lhs,
-    rhs,
-    column_order,
-    cudf::experimental::row::lexicographic::sorting_physical_element_comparator{});
+  auto const sorting_got =
+    two_table_comparison(lhs,
+                         rhs,
+                         column_order,
+                         cudf::detail::row::lexicographic::sorting_physical_element_comparator{});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(sorting_expected, sorting_got->view());
 }
 
@@ -282,14 +280,11 @@ TYPED_TEST(NaNTableViewTest, TestEqualityComparatorTwoTableNaNCase)
 
   auto const expected = cudf::test::fixed_width_column_wrapper<bool>{{0, 0, 0, 1}};
   auto const got      = two_table_equality(
-    lhs, rhs, column_order, cudf::experimental::row::equality::physical_equality_comparator{});
+    lhs, rhs, column_order, cudf::detail::row::equality::physical_equality_comparator{});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 
   auto const nan_equal_expected = cudf::test::fixed_width_column_wrapper<bool>{{1, 0, 0, 1}};
-  auto const nan_equal_got =
-    two_table_equality(lhs,
-                       rhs,
-                       column_order,
-                       cudf::experimental::row::equality::nan_equal_physical_equality_comparator{});
+  auto const nan_equal_got      = two_table_equality(
+    lhs, rhs, column_order, cudf::detail::row::equality::nan_equal_physical_equality_comparator{});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(nan_equal_expected, nan_equal_got->view());
 }

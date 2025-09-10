@@ -26,6 +26,7 @@ cpdef Column replace_re(
     Replacement replacement=None,
     size_type max_replace_count=-1,
     regex_flags flags=regex_flags.DEFAULT,
+    Stream stream=None,
 ):
     """
     For each string, replaces any character sequence matching the given patterns
@@ -60,11 +61,10 @@ cpdef Column replace_re(
     """
     cdef unique_ptr[column] c_result
     cdef vector[string] c_patterns
-    cdef Stream stream
+    stream = _get_stream(stream)
 
     if Patterns is RegexProgram and Replacement is Scalar:
         if replacement is None:
-            stream = _get_stream(None)
             replacement = Scalar.from_libcudf(
                 cpp_make_string_scalar("".encode(), stream.view())
             )
@@ -74,11 +74,12 @@ cpdef Column replace_re(
                     input.view(),
                     patterns.c_obj.get()[0],
                     dereference(<string_scalar*>(replacement.get())),
-                    max_replace_count
+                    max_replace_count,
+                    stream.view()
                 )
             )
 
-        return Column.from_libcudf(move(c_result))
+        return Column.from_libcudf(move(c_result), stream)
     elif Patterns is list and Replacement is Column:
         c_patterns.reserve(len(patterns))
         for pattern in patterns:
@@ -91,10 +92,11 @@ cpdef Column replace_re(
                     c_patterns,
                     replacement.view(),
                     flags,
+                    stream.view()
                 )
             )
 
-        return Column.from_libcudf(move(c_result))
+        return Column.from_libcudf(move(c_result), stream)
     else:
         raise TypeError("Must pass either a RegexProgram and a Scalar or a list")
 
@@ -102,7 +104,8 @@ cpdef Column replace_re(
 cpdef Column replace_with_backrefs(
     Column input,
     RegexProgram prog,
-    str replacement
+    str replacement,
+    Stream stream=None
 ):
     """
     For each string, replaces any character sequence matching the given regex
@@ -127,6 +130,7 @@ cpdef Column replace_with_backrefs(
         New strings column.
     """
     cdef unique_ptr[column] c_result
+    stream = _get_stream(stream)
     cdef string c_replacement = replacement.encode()
 
     with nogil:
@@ -134,6 +138,7 @@ cpdef Column replace_with_backrefs(
             input.view(),
             prog.c_obj.get()[0],
             c_replacement,
+            stream.view()
         )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream)

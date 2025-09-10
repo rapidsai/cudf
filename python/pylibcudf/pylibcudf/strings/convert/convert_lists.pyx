@@ -24,7 +24,8 @@ __all__ = ["format_list_column"]
 cpdef Column format_list_column(
     Column input,
     Scalar na_rep=None,
-    Column separators=None
+    Column separators=None,
+    Stream stream=None
 ):
     """
     Convert a list column of strings into a formatted strings column.
@@ -44,16 +45,19 @@ cpdef Column format_list_column(
         Strings to use for enclosing list components and separating elements.
         Default, ``,``, ``[``, ``]``
 
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
+
     Returns
     -------
     Column
         New strings column
     """
     cdef unique_ptr[column] c_result
-    cdef Stream stream
+
+    stream = _get_stream(stream)
 
     if na_rep is None:
-        stream = _get_stream(None)
         na_rep = Scalar.from_libcudf(
             cpp_make_string_scalar("".encode(), stream.view())
         )
@@ -69,7 +73,8 @@ cpdef Column format_list_column(
         c_result = cpp_convert_lists.format_list_column(
             input.view(),
             dereference(c_na_rep),
-            separators.view()
+            separators.view(),
+            stream.view()
         )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream)

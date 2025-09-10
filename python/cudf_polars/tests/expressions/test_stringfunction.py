@@ -868,3 +868,10 @@ def test_len_bytes(ldf):
 def test_len_chars(ldf):
     q = ldf.select(pl.col("a").str.len_chars())
     assert_gpu_result_equal(q)
+
+
+def test_string_concat_empty_frame():
+    lf = pl.LazyFrame({"a": pl.Series([], dtype=pl.String)})
+    q = lf.select(pl.lit(", ") + pl.col("a"))
+
+    assert_gpu_result_equal(q)

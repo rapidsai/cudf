@@ -74,6 +74,14 @@ except ImportError as e:
 __all__ = ["Column", "ListColumnView", "is_c_contiguous"]
 
 
+cdef is_iterable(obj):
+    try:
+        iter(obj)
+    except Exception:
+        return False
+    return True
+
+
 cdef class _ArrowColumnHolder:
     """A holder for an Arrow column for gpumemoryview lifetime management."""
     cdef unique_ptr[arrow_column] col
@@ -1034,8 +1042,31 @@ cdef class Column:
           (in bytes) can exceed the maximum 32-bit integer value. In that case,
           the offsets column is automatically promoted to use 64-bit integers.
         """
+        if not is_iterable(obj):
+            raise ValueError(f"{obj=} is not iterable")
 
-        obj = list(obj)
+        if (
+            hasattr(obj, "__cuda_array_interface__")
+            or hasattr(obj, "__array_interface__")
+        ):
+            raise TypeError(
+                "Object has __cuda_array_interface__ or __array_interface__. "
+                "Please call Column.from_array(obj)."
+            )
+
+        if (
+            hasattr(obj, "__arrow_c_array__")
+            or hasattr(obj, "__arrow_c_device_array__")
+            or hasattr(obj, "__arrow_c_stream__")
+            or hasattr(obj, "__arrow_c_device_stream__")
+        ):
+            raise TypeError(
+                "Object implements the Arrow C data interface protocol. "
+                "Please call Column.from_arrow(obj)."
+            )
+
+        if not isinstance(obj, (list, tuple)):
+            obj = list(obj)
 
         if not obj:
             if dtype is None:
@@ -1203,12 +1234,13 @@ cdef class Column:
         """The children of the column."""
         return self._children
 
-    cpdef Column copy(self):
+    cpdef Column copy(self, Stream stream=None):
         """Create a copy of the column."""
         cdef unique_ptr[column] c_result
+        stream = _get_stream(stream)
         with nogil:
-            c_result = make_unique[column](self.view())
-        return Column.from_libcudf(move(c_result))
+            c_result = make_unique[column](self.view(), stream.view())
+        return Column.from_libcudf(move(c_result), stream)
 
     cpdef uint64_t device_buffer_size(self):
         """
@@ -1310,7 +1342,7 @@ cdef class ListColumnView:
 
     cpdef offsets(self):
         """The offsets column of the underlying list column."""
-        return self._column.child(1)
+        return self._column.child(0)
 
     cdef lists_column_view view(self) nogil:
         """Generate a libcudf lists_column_view to pass to libcudf algorithms.
