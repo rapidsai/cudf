@@ -43,6 +43,7 @@ from ..fast_slow_proxy import (
     _FastSlowAttribute,
     _FunctionProxy,
     _maybe_wrap_result,
+    _State,
     _Unusable,
     is_proxy_object,
     make_final_proxy_type as _make_final_proxy_type,
@@ -280,6 +281,16 @@ def _DataFrame__dtypes(self):
     result = _maybe_wrap_result(
         result._fsproxy_slow.apply(_DataFrame_dtypes_apply_func), None
     )
+    result.force_state(_State.SLOW)
+    return result
+
+
+def _DataFrame_columns(self):
+    result = _fast_slow_function_call(
+        lambda self: self.columns,
+        self,
+    )[0]
+    result.force_state(_State.SLOW)
     return result
 
 
@@ -299,6 +310,7 @@ DataFrame = make_final_proxy_type(
         "_ipython_canary_method_should_not_exist_": ignore_ipython_canary_check,
         "dtypes": property(_DataFrame__dtypes),
         "__iter__": custom_iter,
+        "columns": property(_DataFrame_columns),
     },
 )
 

@@ -458,6 +458,8 @@ class _FastSlowProxyMeta(type):
     _fsproxy_slow_dir: list
     _fsproxy_slow_type: type
     _fsproxy_fast_type: type
+    # Transfer blocking flag - None for no blocking, _State.FAST to block fast->slow, _State.SLOW to block slow->fast
+    _fsproxy_transfer_block: _State | None = None
 
     @property
     def _fsproxy_slow(self) -> type:
@@ -489,6 +491,24 @@ class _FastSlowProxyMeta(type):
             return issubclass(type(__instance), self)
         return False
 
+    @classmethod
+    def set_transfer_blocking(cls, transfer_block: _State | None = None):
+        """Set transfer blocking flag for all instances of this proxy type.
+
+        Parameters
+        ----------
+        transfer_block : _State | None
+            None: No blocking (default)
+            _State.FAST: Block fast-to-slow transfers only
+            _State.SLOW: Block slow-to-fast transfers only
+        """
+        cls._fsproxy_transfer_block = transfer_block
+
+    @classmethod
+    def get_transfer_blocking(cls):
+        """Get current transfer blocking flag."""
+        return getattr(cls, "_fsproxy_transfer_block", None)
+
 
 class _FastSlowProxy:
     """
@@ -503,6 +523,8 @@ class _FastSlowProxy:
     """
 
     _fsproxy_wrapped: Any
+    # Instance-level transfer blocking flag
+    _fsproxy_instance_transfer_block: _State | None = None
 
     def _fsproxy_fast_to_slow(self) -> Any:
         """
@@ -510,6 +532,12 @@ class _FastSlowProxy:
         corresponding "slow" object. Otherwise, returns the wrapped
         object as-is.
         """
+        # # Check for transfer blocking
+        # class_block = getattr(type(self), '_fsproxy_transfer_block', None)
+        # instance_block = getattr(self, '_fsproxy_instance_transfer_block', None)
+
+        # if class_block is _State.FAST or instance_block is _State.FAST:
+        #     raise RuntimeError("Fast-to-slow transfer is blocked")
         raise NotImplementedError("Abstract base class")
 
     def _fsproxy_slow_to_fast(self) -> Any:
@@ -518,6 +546,12 @@ class _FastSlowProxy:
         corresponding "fast" object. Otherwise, returns the wrapped
         object as-is.
         """
+        # # Check for transfer blocking
+        # class_block = getattr(type(self), '_fsproxy_transfer_block', None)
+        # instance_block = getattr(self, '_fsproxy_instance_transfer_block', None)
+
+        # if class_block is _State.SLOW or instance_block is _State.SLOW:
+        #     raise RuntimeError("Slow-to-fast transfer is blocked")
         raise NotImplementedError("Abstract base class")
 
     @property
@@ -527,6 +561,17 @@ class _FastSlowProxy:
         type, replaces it with the corresponding "fast" object before
         returning it.
         """
+        # Check for transfer blocking before attempting conversion
+        instance_block = getattr(
+            self, "_fsproxy_instance_transfer_block", None
+        )
+
+        if (
+            instance_block is _State.SLOW
+            and self._fsproxy_state is _State.SLOW
+        ):
+            raise RuntimeError("Slow-to-fast transfer is blocked")
+
         self._fsproxy_wrapped = self._fsproxy_slow_to_fast()
         return self._fsproxy_wrapped
 
@@ -537,8 +582,54 @@ class _FastSlowProxy:
         type, replaces it with the corresponding "slow" object before
         returning it.
         """
+        # Check for transfer blocking before attempting conversion
+        instance_block = getattr(
+            self, "_fsproxy_instance_transfer_block", None
+        )
+
+        if (
+            instance_block is _State.FAST
+            and self._fsproxy_state is _State.FAST
+        ):
+            raise RuntimeError("Fast-to-slow transfer is blocked")
+
         self._fsproxy_wrapped = self._fsproxy_fast_to_slow()
         return self._fsproxy_wrapped
+
+    def set_transfer_blocking(self, transfer_block: _State | None = None):
+        """Set transfer blocking flag for this specific instance.
+
+        Parameters
+        ----------
+        transfer_block : _State | None
+            None: No blocking (default)
+            _State.FAST: Block fast-to-slow transfers only
+            _State.SLOW: Block slow-to-fast transfers only
+        """
+        self._fsproxy_instance_transfer_block = transfer_block
+
+    def get_transfer_blocking(self):
+        """Get current instance-level transfer blocking flag."""
+        return getattr(self, "_fsproxy_instance_transfer_block", None)
+
+    def force_state(self, state: _State):
+        """Force the proxy to a specific state (FAST or SLOW) and block opposite transfers."""
+        if state == _State.FAST:
+            # Force to fast state and block fast-to-slow transfers
+            self._fsproxy_wrapped = self._fsproxy_slow_to_fast()
+            self.set_transfer_blocking(_State.FAST)
+        elif state == _State.SLOW:
+            # Force to slow state and block slow-to-fast transfers
+            self._fsproxy_wrapped = self._fsproxy_fast_to_slow()
+            self.set_transfer_blocking(_State.SLOW)
+        else:
+            raise ValueError(
+                f"Invalid state: {state}. Must be _State.FAST or _State.SLOW"
+            )
+
+    def unblock_transfers(self):
+        """Remove all transfer blocking for this instance."""
+        self.set_transfer_blocking(None)
 
     def __dir__(self):
         # Try to return the cached dir of the slow object, but if it
@@ -577,7 +668,7 @@ class _FinalProxy(_FastSlowProxy):
         cls
             The proxy type
         value
-            The value to wrap up
+            The value to wrap
         func
             The function called that constructed value
 
