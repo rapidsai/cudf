@@ -361,7 +361,11 @@ class NumericalColumn(NumericalBaseColumn):
                 and rhs.null_count > 0
             ):
                 res = res.fillna(lhs.to_py())
-        elif cudf.get_option("mode.pandas_compatible") and op in cmp_ops:
+        elif (
+            cudf.get_option("mode.pandas_compatible")
+            and op in cmp_ops
+            and not is_pandas_nullable_extension_dtype(self.dtype)
+        ):
             res = res.fillna(op == "__ne__")
         return res
 
