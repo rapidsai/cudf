@@ -680,6 +680,7 @@ if cudf.core._compat.PANDAS_GE_210:
         slow_to_fast=_Unusable(),
         additional_attributes={
             "_pa_array": _FastSlowAttribute("_pa_array", private=True),
+            "__array__": _FastSlowAttribute("__array__", private=True),
         },
     )
 
@@ -702,6 +703,7 @@ ArrowStringArray = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "_pa_array": _FastSlowAttribute("_pa_array", private=True),
+        "__array__": _FastSlowAttribute("__array__", private=True),
     },
 )
 
@@ -1899,9 +1901,17 @@ ArrowExtensionArray = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "_pa_array": _FastSlowAttribute("_pa_array", private=True),
+        "__array__": _FastSlowAttribute("__array__", private=True),
     },
 )
 
+FrozenList = make_final_proxy_type(
+    "FrozenList",
+    _Unusable,
+    pd.core.indexes.frozen.FrozenList,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+)
 
 # The following are subclasses of `pandas.core.base.PandasObj`,
 # excluding subclasses defined in `pandas.core.internals`.  These are
@@ -1910,7 +1920,6 @@ ArrowExtensionArray = make_final_proxy_type(
 
 _PANDAS_OBJ_FINAL_TYPES = [
     pd.core.arrays.sparse.array.SparseArray,
-    pd.core.indexes.frozen.FrozenList,
     pd.core.indexes.category.CategoricalIndex,
     pd.core.indexes.datetimelike.DatetimeTimedeltaMixin,
     pd.core.indexes.datetimelike.DatetimeIndexOpsMixin,

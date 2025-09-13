@@ -78,3 +78,21 @@ def test_no_cols_head(index):
     head_pdf = pdf.head()
 
     assert_eq(head_pdf, head_gdf)
+
+
+@pytest.mark.parametrize("n", [-10, -2, 0, 1])
+def test_empty_df_head_tail_index(n):
+    df = cudf.DataFrame()
+    pdf = pd.DataFrame()
+    assert_eq(df.head(n).index.values, pdf.head(n).index.values)
+    assert_eq(df.tail(n).index.values, pdf.tail(n).index.values)
+
+    df = cudf.DataFrame({"a": [11, 2, 33, 44, 55]})
+    pdf = pd.DataFrame({"a": [11, 2, 33, 44, 55]})
+    assert_eq(df.head(n).index.values, pdf.head(n).index.values)
+    assert_eq(df.tail(n).index.values, pdf.tail(n).index.values)
+
+    df = cudf.DataFrame(index=[1, 2, 3])
+    pdf = pd.DataFrame(index=[1, 2, 3])
+    assert_eq(df.head(n).index.values, pdf.head(n).index.values)
+    assert_eq(df.tail(n).index.values, pdf.tail(n).index.values)

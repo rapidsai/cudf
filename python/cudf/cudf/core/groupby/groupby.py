@@ -1593,7 +1593,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                         [plc.types.NullOrder.AFTER],
                     )
                     indices = ColumnBase.from_pylibcudf(plc_table.columns()[0])
-                indices = cp.asarray(indices.data_array_view(mode="read"))
+                indices = indices.data_array_view(mode="read")
             # Which indices are we going to want?
             want = np.arange(samples_per_group.sum(), dtype=SIZE_TYPE_DTYPE)
             scan = np.empty_like(samples_per_group)
@@ -1702,6 +1702,10 @@ class GroupBy(Serializable, Reducible, Scannable):
                 column_names, aggs_per_column = aggs.keys(), aggs.values()
                 columns = tuple(self.obj._data[col] for col in column_names)
             else:
+                if isinstance(aggs, list) and len(aggs) != len(set(aggs)):
+                    raise pd.errors.SpecificationError(
+                        "Function names must be unique if there is no new column names assigned"
+                    )
                 values = self.grouping.values
                 column_names = values._column_names
                 columns = values._columns
@@ -2194,12 +2198,22 @@ class GroupBy(Serializable, Reducible, Scannable):
         <https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.rolling.html>`_
 
         """
+        warnings.warn(
+            "apply_grouped is deprecated and will be "
+            "removed in a future release. Please use `apply` "
+            "or use a custom numba kernel instead or refer "
+            "to the UDF guidelines for more information "
+            "https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html",
+            FutureWarning,
+        )
         if not callable(function):
             raise TypeError(f"type {type(function)} is not callable")
 
         _, offsets, _, grouped_values = self._grouped()
         kwargs.update({"chunks": offsets})
-        return grouped_values.apply_chunks(function, **kwargs)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            return grouped_values.apply_chunks(function, **kwargs)
 
     @_performance_tracking
     def _broadcast(self, values: Series) -> Series:
