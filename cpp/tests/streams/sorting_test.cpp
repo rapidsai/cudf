@@ -132,4 +132,15 @@ TEST_F(SortingTest, StableSegmentedSortByKey)
     values, keys, segment_offsets, {}, {}, cudf::test::get_default_stream());
 }
 
+TEST_F(SortingTest, TopK)
+{
+  auto stream = cudf::test::get_default_stream();
+  cudf::test::fixed_width_column_wrapper<int32_t> const input{10, 20, 30, 40, 50};
+  cudf::top_k(input, 2, cudf::order::ASCENDING, stream);
+  cudf::top_k_order(input, 2, cudf::order::ASCENDING, stream);
+  cudf::test::fixed_width_column_wrapper<int32_t> const offsets{0, 5};
+  cudf::segmented_top_k(input, offsets, 2, cudf::order::ASCENDING, stream);
+  cudf::segmented_top_k_order(input, offsets, 2, cudf::order::ASCENDING, stream);
+}
+
 CUDF_TEST_PROGRAM_MAIN()
