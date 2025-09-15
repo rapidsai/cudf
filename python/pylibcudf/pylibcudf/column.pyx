@@ -562,7 +562,7 @@ cdef class Column:
     @staticmethod
     cdef Column from_libcudf(
         unique_ptr[column] libcudf_col,
-        Stream stream=None,
+        Stream stream,
         DeviceMemoryResource mr=None
     ):
         """Create a Column from a libcudf column.

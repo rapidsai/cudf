@@ -406,6 +406,7 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
         "protocol": args.protocol,
         "rmm_pool_size": args.rmm_pool_size,
         "rmm_async": args.rmm_async,
+        "rmm_release_threshold": args.rmm_release_threshold,
         "threads_per_worker": run_config.threads,
     }
 
@@ -624,6 +625,15 @@ def parse_args(
         help=textwrap.dedent("""\
             Fraction of total GPU memory to allocate for RMM pool.
             Default: 0.5 (50%% of GPU memory)"""),
+    )
+    parser.add_argument(
+        "--rmm-release-threshold",
+        default=None,
+        type=float,
+        help=textwrap.dedent("""\
+            Passed to dask_cuda.LocalCUDACluster to control the release
+            threshold for RMM pool memory.
+            Default: None (no release threshold)"""),
     )
     parser.add_argument(
         "--rmm-async",

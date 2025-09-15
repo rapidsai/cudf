@@ -59,7 +59,7 @@ cdef class Column:
     @staticmethod
     cdef Column from_libcudf(
         unique_ptr[column] libcudf_col,
-        Stream stream=*,
+        Stream stream,
         DeviceMemoryResource mr=*
     )
 
