@@ -28,6 +28,7 @@
 #include <cuco/roaring_bitmap.cuh>
 #include <cuda/functional>
 #include <thrust/host_vector.h>
+#include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/scatter.h>
 #include <thrust/sequence.h>
 
@@ -140,13 +141,11 @@ std::unique_ptr<cudf::column> build_row_mask_column(
   cuco::experimental::roaring_bitmap<cuda::std::uint64_t> roaring_bitmap(
     deletion_vector.data(), {}, stream);
 
-  auto row_mask_iter = static_cast<bool*>(row_mask.data());
+  // Iterator to negate and store the output value from `contains_async`
+  auto row_mask_iter = thrust::make_transform_output_iterator(
+    static_cast<bool*>(row_mask.data()), [] __device__(auto b) { return not b; });
   roaring_bitmap.contains_async(
     row_index_column.begin<size_t>(), row_index_column.end<size_t>(), row_mask_iter, stream);
-  thrust::for_each(rmm::exec_policy_nosync(stream),
-                   row_mask_iter,
-                   row_mask_iter + num_rows,
-                   [] __device__(auto& b) { b = not b; });
 
   return std::make_unique<cudf::column>(
     cudf::data_type{cudf::type_id::BOOL8}, num_rows, std::move(row_mask), rmm::device_buffer{}, 0);
