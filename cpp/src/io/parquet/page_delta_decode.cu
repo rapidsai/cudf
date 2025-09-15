@@ -351,7 +351,7 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
     // Update offsets for all list depth levels
     if (has_repetition) { update_list_offsets_for_pruned_pages<decode_delta_binary_block_size>(s); }
     page.num_nulls = page.nesting[s->col.max_nesting_depth - 1].batch_size;
-    page.num_nulls -= (not has_repetition) ? s->first_row : 0;
+    page.num_nulls -= has_repetition ? 0 : s->first_row;
     page.num_valids = 0;
     return;
   }
@@ -519,7 +519,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
         s, initial_str_offsets, pages[page_idx]);
     }
     page->num_nulls = page->nesting[s->col.max_nesting_depth - 1].batch_size;
-    page->num_nulls -= (not has_repetition) ? s->first_row : 0;
+    page->num_nulls -= has_repetition ? 0 : s->first_row;
     page->num_valids = 0;
 
     return;
@@ -729,7 +729,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
         s, initial_str_offsets, pages[page_idx]);
     }
     page->num_nulls = page->nesting[s->col.max_nesting_depth - 1].batch_size;
-    page->num_nulls -= (not has_repetition) ? s->first_row : 0;
+    page->num_nulls -= has_repetition ? 0 : s->first_row;  
     page->num_valids = 0;
 
     return;
