@@ -12,6 +12,8 @@ import pytest
 
 import polars as pl
 
+import cudf_polars.testing.asserts
+
 structlog = pytest.importorskip("structlog")
 
 
@@ -42,10 +44,12 @@ def test_trace_basic(
     q.collect(engine="gpu")
     """)
 
+    env = {
+        "CUDF_POLARS__EXECUTOR": cudf_polars.testing.asserts.DEFAULT_EXECUTOR,
+    }
+
     if log_traces:
-        env = {"CUDF_POLARS_LOG_TRACES": "1"}
-    else:
-        env = {}
+        env["CUDF_POLARS_LOG_TRACES"] = "1"
 
     result = subprocess.check_output([sys.executable, "-c", code], env=env)
     # Just ensure that the default structlog output is in the result
