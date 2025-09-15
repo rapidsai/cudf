@@ -218,6 +218,9 @@ def make_final_proxy_type(
             else _State.SLOW
         )
 
+    # if len(bases) > 0 and hasattr(bases[0], "_fsproxy_slow_type"):
+    #     slow_dir = list(set(dir(slow_type)) | set(dir(bases[0]._fsproxy_slow_type)))
+    # else:
     slow_dir = dir(slow_type)
     cls_dict = {
         "__init__": __init__,
