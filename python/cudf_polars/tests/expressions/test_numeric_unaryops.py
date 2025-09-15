@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from decimal import Decimal
 
 import pytest
 
@@ -155,3 +156,28 @@ def test_rank_unsupported(ldf: pl.LazyFrame, method: str, seed: int) -> None:
     expr = pl.col("a").rank(method=method, seed=seed)
     q = ldf.select(expr)
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_lazy_decimal_round_scale_change():
+    df = pl.LazyFrame(
+        {
+            "foo": [
+                Decimal("1.00"),
+                Decimal("2.00"),
+                Decimal("3.00"),
+            ],
+            "bar": [
+                Decimal("0.10"),
+                Decimal("0.20"),
+                Decimal("0.30"),
+            ],
+        },
+        schema={
+            "foo": pl.Decimal(precision=15, scale=2),
+            "bar": pl.Decimal(precision=15, scale=2),
+        },
+    )
+
+    q = df.select((pl.col("foo") * (1 - pl.col("bar"))).sum().round(2).round(2))
+
+    assert_gpu_result_equal(q)
