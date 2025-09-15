@@ -73,7 +73,7 @@ std::unique_ptr<cudf::column> compute_row_index_column(
   auto row_group_span_offsets =
     cudf::detail::make_host_vector<size_type>(num_row_groups + 1, stream);
   row_group_span_offsets[0] = 0;
-  thrust::inclusive_scan(
+  std::inclusive_scan(
     row_group_num_rows.begin(), row_group_num_rows.end(), row_group_span_offsets.begin() + 1);
 
   auto row_indices      = rmm::device_buffer(num_rows * sizeof(size_t), stream, mr);
