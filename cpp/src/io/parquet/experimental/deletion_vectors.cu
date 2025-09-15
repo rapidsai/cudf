@@ -43,6 +43,7 @@ namespace {
  * @param row_group_num_rows Host span of number of rows in each row group
  * @param num_rows Total number of table rows
  * @param stream CUDA stream for kernel launches and data transfers
+ * @param mr Device memory resource to allocate device memory for the row index column
  *
  * @return UINT64 column containing row indices
  */
