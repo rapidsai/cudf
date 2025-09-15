@@ -3682,7 +3682,7 @@ class DatetimeIndex(Index):
         return self._column.astype(np.dtype(np.int64)).values
 
     @property
-    def inferred_freq(self) -> DateOffset | None:
+    def inferred_freq(self) -> DateOffset | MonthEnd | YearEnd | None:
         timestamp_to_timedelta = {
             plc.DataType(plc.TypeId.TIMESTAMP_NANOSECONDS): plc.DataType(
                 plc.TypeId.DURATION_NANOSECONDS
@@ -3720,7 +3720,24 @@ class DatetimeIndex(Index):
 
         uniques = ColumnBase.from_pylibcudf(offset).unique()
         if len(uniques) != 1:
-            return None
+            # could be month end or year end
+            # for years, we could have either 365 or 366 days
+            # for months, we could have 28, 29, 30 or 31 days
+            # any other number of unique values and we give up
+            if len(uniques) > 4:
+                return None
+            else:
+                # handle month end and year end cases
+                # TODO: perf? should one be done first
+                if self.is_month_end.all():
+                    return cudf.DateOffset._from_freqstr("ME")
+                elif self.is_year_end.all():
+                    return cudf.DateOffset._from_freqstr("YE")
+                else:
+                    # YE-JAN, etc
+                    raise NotImplementedError(
+                        "Anchored freq not supported in inference"
+                    )
         else:
             freq = uniques.to_arrow().to_pylist()[0]
             cmps = freq.components
