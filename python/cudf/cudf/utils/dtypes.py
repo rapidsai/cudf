@@ -136,6 +136,9 @@ def cudf_dtype_from_pa_type(typ: pa.DataType) -> DtypeObj:
         return cudf.core.dtypes.Decimal128Dtype.from_arrow(typ)
     elif pa.types.is_large_string(typ) or pa.types.is_string(typ):
         return CUDF_STRING_DTYPE
+    elif pa.types.is_timestamp(typ):
+        # Preserve Arrow timestamp frequencies and timezones
+        return pd.ArrowDtype(typ)
     else:
         return cudf.api.types.pandas_dtype(typ.to_pandas_dtype())
 

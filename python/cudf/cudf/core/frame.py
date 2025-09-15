@@ -404,6 +404,16 @@ class Frame(BinaryOperand, Scannable, Serializable):
     def astype(
         self, dtype: dict[Hashable, DtypeObj], copy: bool | None = None
     ) -> Self:
+        # Check if all columns already have the requested dtype
+        if not copy:
+            all_same_dtype = all(
+                col.dtype == dtype.get(col_name, col.dtype)
+                for col_name, col in self._column_labels_and_values
+            )
+            if all_same_dtype:
+                # When copy=False and all dtypes are already correct, return self
+                return self
+
         casted = (
             col.astype(dtype.get(col_name, col.dtype), copy=copy)
             for col_name, col in self._column_labels_and_values
