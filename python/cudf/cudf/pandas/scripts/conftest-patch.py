@@ -42,24 +42,28 @@ def patch_testing_functions():
 def _patch_pandas_config_registration():
     """
     Patch pandas config option registration to handle duplicate registrations gracefully.
-    
-    This fixes the issue where pandas config options (like 'chained_assignment') 
-    get registered multiple times when running with cudf.pandas, causing 
+
+    This fixes the issue where pandas config options (like 'chained_assignment')
+    get registered multiple times when running with cudf.pandas, causing
     OptionError: Option 'X' has already been registered failures.
-    
+
     The fix allows the tests/config/test_config.py tests to pass by ignoring
     duplicate registration attempts while preserving other error handling.
     """
     try:
         import pandas._config.config as pandas_config
-        
+
         # Store the original register_option function
         original_register_option = pandas_config.register_option
-        
-        def safe_register_option(name, default_value, description, validator=None):
+
+        def safe_register_option(
+            name, default_value, description, validator=None
+        ):
             """Safely register a pandas config option, ignoring if already registered."""
             try:
-                return original_register_option(name, default_value, description, validator)
+                return original_register_option(
+                    name, default_value, description, validator
+                )
             except Exception as e:
                 if "already been registered" in str(e):
                     # Option already exists, this is fine - just ignore
@@ -67,10 +71,10 @@ def _patch_pandas_config_registration():
                 else:
                     # Re-raise other exceptions
                     raise e
-        
+
         # Replace the register_option function
         pandas_config.register_option = safe_register_option
-        
+
     except ImportError:
         # pandas._config.config not available, skip patching
         pass
