@@ -439,8 +439,10 @@ ArrowDtype = make_final_proxy_type(
     fast_to_slow=lambda fast: fast,
     slow_to_fast=lambda slow: slow,
     additional_attributes={
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
         "pyarrow_dtype": _FastSlowAttribute("pyarrow_dtype"),
+        
     },
 )
 
