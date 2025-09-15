@@ -110,8 +110,10 @@ test_pandas_object_series \
 
 # test_dtypes: With cudf.pandas loaded, to_pandas() preserves Arrow dtypes like list and struct, so pandas
 # columns aren't object anymore. The test expects object, causing a mismatch.
+# test_explode_multiple_cols[pandas-l1-more_columns0-expected0] matches pandas now so needs a skip in the test
 TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_PANDAS=" \
-test_dtypes \
+test_dtypes or \
+test_explode_multiple_cols \
 "
 
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 NARWHALS_DEFAULT_CONSTRUCTORS=pandas python -m pytest \
