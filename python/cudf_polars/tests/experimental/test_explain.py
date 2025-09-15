@@ -9,7 +9,7 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.experimental.explain import explain_query
+from cudf_polars.experimental.explain import _fmt_row_count, explain_query
 from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
 from cudf_polars.testing.io import make_lazy_frame, make_partitioned_source
 
@@ -172,6 +172,14 @@ def test_explain_logical_plan_wide_table():
     assert "DATAFRAMESCAN ('col0', 'col1', 'col2', '...', 'col18', 'col19')" in plan
 
 
+def teset_fmt_row_count():
+    assert _fmt_row_count(None) == ""
+    assert _fmt_row_count(0) == "0"
+    assert _fmt_row_count(1000) == "1K"
+    assert _fmt_row_count(1_234_000) == "1.23M"
+    assert _fmt_row_count(1_250_000_000) == "1.25B"
+
+
 @pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
 @pytest.mark.parametrize("n_rows", [None, 3])
 @pytest.mark.parametrize("select", [True, False])
@@ -202,13 +210,13 @@ def test_explain_logical_io_then_distinct(engine, tmp_path, kind, n_rows, select
         if n_rows is None:
             assert re.search(r"^\s*SORT.*row_count='unknown'\s*$", repr, re.MULTILINE)
         else:
+            value = _fmt_row_count(n_rows)
             assert re.search(
-                rf"^\s*SORT.*row_count=\'~{n_rows}\'\s*$", repr, re.MULTILINE
+                rf"^\s*SORT.*row_count=\'~{value}\'\s*$", repr, re.MULTILINE
             )
     else:
-        assert re.search(
-            rf"^\s*SORT.*row_count=\'~{q.collect().height}\'\s*$", repr, re.MULTILINE
-        )
+        value = _fmt_row_count(q.collect().height)
+        assert re.search(rf"^\s*SORT.*row_count=\'~{value}\'\s*$", repr, re.MULTILINE)
 
 
 @pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
@@ -265,9 +273,8 @@ def test_explain_logical_io_then_join(engine, tmp_path, kind):
     if kind == "csv":
         assert re.search(r"^\s*SORT.*row_count='unknown'\s*$", repr, re.MULTILINE)
     else:
-        assert re.search(
-            rf"^\s*SORT.*row_count=\'~{q.collect().height}\'\s*$", repr, re.MULTILINE
-        )
+        value = _fmt_row_count(q.collect().height)
+        assert re.search(rf"^\s*SORT.*row_count=\'~{value}\'\s*$", repr, re.MULTILINE)
 
 
 @pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
@@ -309,9 +316,9 @@ def test_explain_logical_io_then_join_then_groupby(engine, tmp_path, kind):
     if kind == "csv":
         assert re.search(r"^\s*SORT.*row_count='unknown'\s*$", repr, re.MULTILINE)
     else:
-        join_count = q_join.collect().height
-        gb_count = q_gb.collect().height
-        final_count = q.collect().height
+        join_count = _fmt_row_count(q_join.collect().height)
+        gb_count = _fmt_row_count(q_gb.collect().height)
+        final_count = _fmt_row_count(q.collect().height)
         assert re.search(
             rf"^\s*GROUPBY.*row_count=\'~{gb_count}\'\s*$", repr, re.MULTILINE
         )
@@ -385,9 +392,9 @@ def test_explain_logical_io_then_concat_then_groupby(engine, tmp_path, kind):
     if kind == "csv":
         assert re.search(r"^\s*SORT.*row_count='unknown'\s*$", repr, re.MULTILINE)
     else:
-        concat_count_1 = q_concat_1.collect().height
-        gb_count_1 = q_gb_1.collect().height
-        final_count_1 = q_1.collect().height
+        concat_count_1 = _fmt_row_count(q_concat_1.collect().height)
+        gb_count_1 = _fmt_row_count(q_gb_1.collect().height)
+        final_count_1 = _fmt_row_count(q_1.collect().height)
         assert re.search(
             rf"^\s*UNION.*row_count=\'~{concat_count_1}\'\s*$", repr, re.MULTILINE
         )
@@ -403,11 +410,11 @@ def test_explain_logical_io_then_concat_then_groupby(engine, tmp_path, kind):
     if kind == "csv":
         assert re.search(r"^\s*SORT.*row_count='unknown'\s*$", repr, re.MULTILINE)
     else:
-        concat_count_1 = q_concat_1.collect().height
-        concat_count_2 = q_concat_2.collect().height
-        gb_count_1 = q_gb_1.collect().height
-        gb_count_2 = q_gb_2.collect().height
-        final_count_2 = q_2.collect().height
+        concat_count_1 = _fmt_row_count(q_concat_1.collect().height)
+        concat_count_2 = _fmt_row_count(q_concat_2.collect().height)
+        gb_count_1 = _fmt_row_count(q_gb_1.collect().height)
+        gb_count_2 = _fmt_row_count(q_gb_2.collect().height)
+        final_count_2 = _fmt_row_count(q_2.collect().height)
         assert re.search(
             rf"^\s*UNION.*row_count=\'~{concat_count_1}\'\s*$", repr, re.MULTILINE
         )
