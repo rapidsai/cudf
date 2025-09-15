@@ -47,7 +47,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
              row_hash const hash_probe,
              row_equality const equality_probe,
              join_kind const join_type,
-             cudf::detail::mixed_multimap_type::device_view hash_table_view,
+             cudf::detail::mixed_multimap_type::ref_type<cuco::count_tag> hash_table_ref,
              size_type* join_output_l,
              size_type* join_output_r,
              cudf::ast::detail::expression_device_view device_expression_data,
@@ -73,15 +73,13 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
     left_table, right_table, device_expression_data);
 
-  auto const empty_key_sentinel = hash_table_view.get_empty_key_sentinel();
-  make_pair_function pair_func{hash_probe, empty_key_sentinel};
+  // For multiset, use the empty key from the pair definition
+  auto pairs = pair_fn{hash_probe};
 
   if (outer_row_index < outer_num_rows) {
-    // Figure out the number of elements for this key.
-    cg::thread_block_tile<1> this_thread = cg::this_thread();
-    // Figure out the number of elements for this key.
-    auto query_pair = pair_func(outer_row_index);
-    auto equality   = pair_expression_equality<has_nulls>{
+    /*
+    auto query_pair = pairs(outer_row_index);
+    auto equality   = multiset_expression_equality<has_nulls>{
       evaluator, thread_intermediate_storage, swap_tables, equality_probe};
 
     auto probe_key_begin       = thrust::make_discard_iterator();
@@ -92,22 +90,21 @@ CUDF_KERNEL void __launch_bounds__(block_size)
                                              : join_output_r + join_result_offsets[outer_row_index];
 
     if (join_type == join_kind::LEFT_JOIN || join_type == join_kind::FULL_JOIN) {
-      hash_table_view.pair_retrieve_outer(this_thread,
-                                          query_pair,
-                                          probe_key_begin,
-                                          probe_value_begin,
-                                          contained_key_begin,
-                                          contained_value_begin,
-                                          equality);
+      hash_table_view.retrieve_outer(query_pair,
+                                     probe_key_begin,
+                                     probe_value_begin,
+                                     contained_key_begin,
+                                     contained_value_begin,
+                                     equality);
     } else {
-      hash_table_view.pair_retrieve(this_thread,
-                                    query_pair,
-                                    probe_key_begin,
-                                    probe_value_begin,
-                                    contained_key_begin,
-                                    contained_value_begin,
-                                    equality);
+      hash_table_view.retrieve(query_pair,
+                              probe_key_begin,
+                              probe_value_begin,
+                              contained_key_begin,
+                              contained_value_begin,
+                              equality);
     }
+    */
   }
 }
 
@@ -119,7 +116,7 @@ void launch_mixed_join(table_device_view left_table,
                        row_hash const hash_probe,
                        row_equality const equality_probe,
                        join_kind const join_type,
-                       cudf::detail::mixed_multimap_type::device_view hash_table_view,
+                       cudf::detail::mixed_multimap_type::ref_type<cuco::count_tag> hash_table_ref,
                        size_type* join_output_l,
                        size_type* join_output_r,
                        cudf::ast::detail::expression_device_view device_expression_data,
@@ -138,7 +135,7 @@ void launch_mixed_join(table_device_view left_table,
       hash_probe,
       equality_probe,
       join_type,
-      hash_table_view,
+      hash_table_ref,
       join_output_l,
       join_output_r,
       device_expression_data,

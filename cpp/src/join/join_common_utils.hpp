@@ -32,15 +32,49 @@ using pair_type = cuco::pair<hash_value_type, size_type>;
 
 using hash_type = cuco::murmurhash3_32<hash_value_type>;
 
-// Multimap type used for mixed joins. TODO: This is a temporary alias used
-// until the mixed joins are converted to using CGs properly. Right now it's
-// using a cooperative group of size 1.
-using mixed_multimap_type =
-  cuco::static_multimap<hash_value_type,
-                        size_type,
+/**
+ * @brief A custom comparator used for the mixed join multiset insertion
+ */
+struct mixed_join_always_not_equal {
+  __device__ constexpr bool operator()(pair_type const&, pair_type const&) const noexcept
+  {
+    // multiset always insert
+    return false;
+  }
+};
+
+struct mixed_join_hasher1 {
+  __device__ constexpr hash_value_type operator()(pair_type const& key) const noexcept
+  {
+    return key.first;
+  }
+};
+
+struct mixed_join_hasher2 {
+  mixed_join_hasher2(hash_value_type seed) : _hash{seed} {}
+
+  __device__ constexpr hash_value_type operator()(pair_type const& key) const noexcept
+  {
+    return _hash(key.first);
+  }
+
+ private:
+  hash_type _hash;
+};
+
+// Multiset type used for mixed joins, following the same pattern as hash joins
+// Uses CG size of 1 to match the original mixed_multimap_type behavior
+using mixed_multiset_type =
+  cuco::static_multiset<pair_type,
+                        cuco::extent<std::size_t>,
                         cuda::thread_scope_device,
+                        mixed_join_always_not_equal,
+                        cuco::double_hashing<1, mixed_join_hasher1, mixed_join_hasher2>,
                         cudf::detail::cuco_allocator<char>,
-                        cuco::legacy::double_hashing<1, hash_type, hash_type>>;
+                        cuco::storage<2>>;
+
+// Legacy alias for compatibility during migration
+using mixed_multimap_type = mixed_multiset_type;
 
 /**
  * @brief Remaps a hash value to avoid collisions with sentinel values.
@@ -74,7 +108,7 @@ class make_pair_function {
   {
     // Compute the hash value of row `i`
     auto row_hash_value = remap_sentinel_hash(_hash(i), _empty_key_sentinel);
-    return cuco::make_pair(row_hash_value, T{i});
+    return cuco::pair{row_hash_value, T{i}};
   }
 
  private:

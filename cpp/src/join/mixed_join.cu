@@ -129,13 +129,19 @@ mixed_join(
   auto probe_view = table_device_view::create(probe, stream);
   auto build_view = table_device_view::create(build, stream);
 
-  // Don't use multimap_type because we want a CG size of 1.
+  // Create hash table with computed size following hash join pattern
+  auto const hash_table_size = compute_hash_table_size(build.num_rows());
   mixed_multimap_type hash_table{
-    compute_hash_table_size(build.num_rows()),
-    cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
-    cuco::empty_value{cudf::detail::JoinNoneValue},
-    stream.value(),
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream}};
+    cuco::extent{hash_table_size},
+    cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
+    cuco::empty_key{
+      cuco::pair{std::numeric_limits<hash_value_type>::max(), cudf::detail::JoinNoneValue}},
+    {},
+    {},
+    {},
+    {},
+    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
+    stream.value()};
 
   // TODO: To add support for nested columns we will need to flatten in many
   // places. However, this probably isn't worth adding any time soon since we
@@ -150,7 +156,7 @@ mixed_join(
                         compare_nulls,
                         static_cast<bitmask_type const*>(row_bitmask.data()),
                         stream);
-  auto hash_table_view = hash_table.get_device_view();
+  auto hash_table_ref = hash_table.ref(cuco::count_tag{});
 
   auto left_conditional_view  = table_device_view::create(left_conditional, stream);
   auto right_conditional_view = table_device_view::create(right_conditional, stream);
@@ -196,7 +202,7 @@ mixed_join(
                                                               hash_probe,
                                                               equality_probe,
                                                               kernel_join_type,
-                                                              hash_table_view,
+                                                              hash_table_ref,
                                                               parser.device_expression_data,
                                                               swap_tables,
                                                               mutable_matches_per_row_span,
@@ -212,7 +218,7 @@ mixed_join(
                                                                hash_probe,
                                                                equality_probe,
                                                                kernel_join_type,
-                                                               hash_table_view,
+                                                               hash_table_ref,
                                                                parser.device_expression_data,
                                                                swap_tables,
                                                                mutable_matches_per_row_span,
@@ -256,7 +262,7 @@ mixed_join(
                             hash_probe,
                             equality_probe,
                             kernel_join_type,
-                            hash_table_view,
+                            hash_table_ref,
                             join_output_l,
                             join_output_r,
                             parser.device_expression_data,
@@ -273,7 +279,7 @@ mixed_join(
                              hash_probe,
                              equality_probe,
                              kernel_join_type,
-                             hash_table_view,
+                             hash_table_ref,
                              join_output_l,
                              join_output_r,
                              parser.device_expression_data,
@@ -388,13 +394,19 @@ compute_mixed_join_output_size(table_view const& left_equality,
   auto probe_view = table_device_view::create(probe, stream);
   auto build_view = table_device_view::create(build, stream);
 
-  // Don't use multimap_type because we want a CG size of 1.
+  // Create hash table with computed size following hash join pattern
+  auto const hash_table_size = compute_hash_table_size(build.num_rows());
   mixed_multimap_type hash_table{
-    compute_hash_table_size(build.num_rows()),
-    cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
-    cuco::empty_value{cudf::detail::JoinNoneValue},
-    stream.value(),
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream}};
+    cuco::extent{hash_table_size},
+    cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
+    cuco::empty_key{
+      cuco::pair{std::numeric_limits<hash_value_type>::max(), cudf::detail::JoinNoneValue}},
+    {},
+    {},
+    {},
+    {},
+    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
+    stream.value()};
 
   // TODO: To add support for nested columns we will need to flatten in many
   // places. However, this probably isn't worth adding any time soon since we
@@ -408,7 +420,7 @@ compute_mixed_join_output_size(table_view const& left_equality,
                         compare_nulls,
                         static_cast<bitmask_type const*>(row_bitmask.data()),
                         stream);
-  auto hash_table_view = hash_table.get_device_view();
+  auto hash_table_ref = hash_table.ref(cuco::count_tag{});
 
   auto left_conditional_view  = table_device_view::create(left_conditional, stream);
   auto right_conditional_view = table_device_view::create(right_conditional, stream);
@@ -436,7 +448,7 @@ compute_mixed_join_output_size(table_view const& left_equality,
                                                          hash_probe,
                                                          equality_probe,
                                                          join_type,
-                                                         hash_table_view,
+                                                         hash_table_ref,
                                                          parser.device_expression_data,
                                                          swap_tables,
                                                          matches_per_row_span,
@@ -452,7 +464,7 @@ compute_mixed_join_output_size(table_view const& left_equality,
                                                           hash_probe,
                                                           equality_probe,
                                                           join_type,
-                                                          hash_table_view,
+                                                          hash_table_ref,
                                                           parser.device_expression_data,
                                                           swap_tables,
                                                           matches_per_row_span,

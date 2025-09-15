@@ -38,19 +38,19 @@ namespace detail {
 namespace cg = cooperative_groups;
 
 template <int block_size, bool has_nulls>
-CUDF_KERNEL void __launch_bounds__(block_size)
-  compute_mixed_join_output_size(table_device_view left_table,
-                                 table_device_view right_table,
-                                 table_device_view probe,
-                                 table_device_view build,
-                                 row_hash const hash_probe,
-                                 row_equality const equality_probe,
-                                 join_kind const join_type,
-                                 cudf::detail::mixed_multimap_type::device_view hash_table_view,
-                                 ast::detail::expression_device_view device_expression_data,
-                                 bool const swap_tables,
-                                 std::size_t* output_size,
-                                 cudf::device_span<cudf::size_type> matches_per_row)
+CUDF_KERNEL void __launch_bounds__(block_size) compute_mixed_join_output_size(
+  table_device_view left_table,
+  table_device_view right_table,
+  table_device_view probe,
+  table_device_view build,
+  row_hash const hash_probe,
+  row_equality const equality_probe,
+  join_kind const join_type,
+  cudf::detail::mixed_multimap_type::ref_type<cuco::count_tag> hash_table_ref,
+  ast::detail::expression_device_view device_expression_data,
+  bool const swap_tables,
+  std::size_t* output_size,
+  cudf::device_span<cudf::size_type> matches_per_row)
 {
   // The (required) extern storage of the shared memory array leads to
   // conflicting declarations between different templates. The easiest
@@ -72,24 +72,23 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
     left_table, right_table, device_expression_data);
 
-  auto const empty_key_sentinel = hash_table_view.get_empty_key_sentinel();
-  make_pair_function pair_func{hash_probe, empty_key_sentinel};
+  // For multiset, use the empty key from the pair definition
+  auto pairs = pair_fn{hash_probe};
 
   // Figure out the number of elements for this key.
   cg::thread_block_tile<1> this_thread = cg::this_thread();
   // TODO: Address asymmetry in operator.
-  auto count_equality = pair_expression_equality<has_nulls>{
+  auto count_equality = multiset_expression_equality<has_nulls>{
     evaluator, thread_intermediate_storage, swap_tables, equality_probe};
+  auto count_ref = hash_table_ref.rebind_key_eq(count_equality);
 
   for (auto outer_row_index = start_idx; outer_row_index < outer_num_rows;
        outer_row_index += stride) {
-    auto query_pair = pair_func(outer_row_index);
-    if (join_type == join_kind::LEFT_JOIN || join_type == join_kind::FULL_JOIN) {
-      matches_per_row[outer_row_index] =
-        hash_table_view.pair_count_outer(this_thread, query_pair, count_equality);
-    } else {
-      matches_per_row[outer_row_index] =
-        hash_table_view.pair_count(this_thread, query_pair, count_equality);
+    auto query_pair                  = pairs(outer_row_index);
+    matches_per_row[outer_row_index] = count_ref.count(query_pair);
+    if ((join_type == join_kind::LEFT_JOIN || join_type == join_kind::FULL_JOIN) &&
+        matches_per_row[outer_row_index] == 0) {
+      ++matches_per_row[outer_row_index];
     }
     thread_counter += matches_per_row[outer_row_index];
   }
@@ -114,7 +113,7 @@ std::size_t launch_compute_mixed_join_output_size(
   row_hash const hash_probe,
   row_equality const equality_probe,
   join_kind const join_type,
-  cudf::detail::mixed_multimap_type::device_view hash_table_view,
+  cudf::detail::mixed_multimap_type::ref_type<cuco::count_tag> hash_table_ref,
   ast::detail::expression_device_view device_expression_data,
   bool const swap_tables,
   cudf::device_span<cudf::size_type> matches_per_row,
@@ -135,7 +134,7 @@ std::size_t launch_compute_mixed_join_output_size(
       hash_probe,
       equality_probe,
       join_type,
-      hash_table_view,
+      hash_table_ref,
       device_expression_data,
       swap_tables,
       size.data(),

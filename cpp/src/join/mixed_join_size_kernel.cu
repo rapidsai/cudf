@@ -28,7 +28,7 @@ template std::size_t launch_compute_mixed_join_output_size<false>(
   row_hash const hash_probe,
   row_equality const equality_probe,
   join_kind const join_type,
-  cudf::detail::mixed_multimap_type::device_view hash_table_view,
+  cudf::detail::mixed_multimap_type::ref_type<cuco::count_tag> hash_table_ref,
   ast::detail::expression_device_view device_expression_data,
   bool const swap_tables,
   cudf::device_span<cudf::size_type> matches_per_row,
