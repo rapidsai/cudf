@@ -50,12 +50,13 @@ std::unique_ptr<cudf::column> compute_row_index_column(
   cudf::host_span<size_t const> row_group_offsets,
   cudf::host_span<size_type const> row_group_num_rows,
   size_type num_rows,
-  rmm::cuda_stream_view stream)
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   auto const num_row_groups = static_cast<size_type>(row_group_num_rows.size());
 
   if (row_group_offsets.empty()) {
-    auto row_indices      = rmm::device_buffer(num_rows * sizeof(size_t), stream);
+    auto row_indices      = rmm::device_buffer(num_rows * sizeof(size_t), stream, mr);
     auto row_indices_iter = static_cast<size_t*>(row_indices.data());
     thrust::sequence(
       rmm::exec_policy_nosync(stream), row_indices_iter, row_indices_iter + num_rows, 0);
@@ -74,8 +75,7 @@ std::unique_ptr<cudf::column> compute_row_index_column(
   thrust::inclusive_scan(
     row_group_num_rows.begin(), row_group_num_rows.end(), row_group_span_offsets.begin() + 1);
 
-  auto row_indices =
-    rmm::device_buffer(num_rows * sizeof(size_t), stream, cudf::get_current_device_resource_ref());
+  auto row_indices      = rmm::device_buffer(num_rows * sizeof(size_t), stream, mr);
   auto row_indices_iter = static_cast<size_t*>(row_indices.data());
   thrust::fill(rmm::exec_policy_nosync(stream), row_indices_iter, row_indices_iter + num_rows, 1);
 
@@ -181,7 +181,7 @@ table_with_metadata read_parquet_and_apply_deletion_vector(
 
   // Compute a row index column from the specified row group offsets and counts
   auto row_index_column =
-    compute_row_index_column(row_group_offsets, row_group_num_rows, num_rows, stream);
+    compute_row_index_column(row_group_offsets, row_group_num_rows, num_rows, stream, mr);
 
   // Prepend row index column to the table columns
   auto index_and_table_columns = std::vector<std::unique_ptr<cudf::column>>{};
