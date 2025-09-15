@@ -2,7 +2,6 @@
 
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
-from libcpp.string cimport string
 from libc.stdint cimport uint64_t
 
 from rmm.librmm.device_buffer cimport device_buffer
