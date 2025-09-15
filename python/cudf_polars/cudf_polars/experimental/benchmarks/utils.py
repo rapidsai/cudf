@@ -205,7 +205,7 @@ class RunConfig:
     rapidsmpf_spill: bool
     spill_device: float
     query_set: str
-    statistics_planning: bool
+    stats_planning: bool
 
     def __post_init__(self) -> None:  # noqa: D105
         if self.gather_shuffle_stats and self.shuffle != "rapidsmpf":
@@ -275,7 +275,7 @@ class RunConfig:
             rapidsmpf_spill=args.rapidsmpf_spill,
             max_rows_per_partition=args.max_rows_per_partition,
             query_set=args.query_set,
-            statistics_planning=args.statistics_planning,
+            stats_planning=args.stats_planning,
         )
 
     def serialize(self, engine: pl.GPUEngine | None) -> dict:
@@ -302,7 +302,7 @@ class RunConfig:
                 print(f"blocksize: {self.blocksize}")
                 print(f"shuffle_method: {self.shuffle}")
                 print(f"broadcast_join_limit: {self.broadcast_join_limit}")
-                print(f"statistics_planning: {self.statistics_planning}")
+                print(f"stats_planning: {self.stats_planning}")
                 if self.scheduler == "distributed":
                     print(f"n_workers: {self.n_workers}")
                     print(f"threads: {self.threads}")
@@ -350,15 +350,15 @@ def get_executor_options(
         executor_options["rapidsmpf_spill"] = run_config.rapidsmpf_spill
     if run_config.scheduler == "distributed":
         executor_options["scheduler"] = "distributed"
-    if run_config.statistics_planning:
+    if run_config.stats_planning:
         executor_options["stats_planning_options"] = {"enable": True}
 
     if (
         benchmark
         and benchmark.__name__ == "PDSHQueries"
         and run_config.executor == "streaming"
-        # Only use the unique_fraction config if statistics_planning is disabled
-        and not run_config.statistics_planning
+        # Only use the unique_fraction config if stats_planning is disabled
+        and not run_config.stats_planning
     ):
         executor_options["unique_fraction"] = {
             "c_custkey": 0.05,
@@ -382,7 +382,7 @@ def print_query_plan(
         if args.explain_logical:
             print(f"\nQuery {q_id} - Logical plan\n")
             print(q.explain())
-        elif args.explain:
+        if args.explain:
             print(f"\nQuery {q_id} - Physical plan\n")
             print(q.show_graph(engine="streaming", plan_stage="physical"))
     elif CUDF_POLARS_AVAILABLE:
@@ -390,7 +390,7 @@ def print_query_plan(
         if args.explain_logical:
             print(f"\nQuery {q_id} - Logical plan\n")
             print(explain_query(q, engine, physical=False))
-        elif args.explain:
+        if args.explain:
             print(f"\nQuery {q_id} - Physical plan\n")
             print(explain_query(q, engine))
     else:
@@ -712,7 +712,7 @@ def parse_args(
         help="Which engine to use as the baseline for validation.",
     )
     parser.add_argument(
-        "--statistics-planning",
+        "--stats-planning",
         action=argparse.BooleanOptionalAction,
         default=False,
         help="Enable statistics planning.",
