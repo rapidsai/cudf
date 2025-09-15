@@ -1339,6 +1339,7 @@ void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
   };
 
   if (min_row > 0) {
+    // Chunked read. For non-string non-list is faster if we use 256 threads instead of 128
     switch (kernel_mask) {
       case decode_kernel_mask::FIXED_WIDTH_NO_DICT:
         launch_kernel(int_tag_t<256>{}, kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_NO_DICT>{});
@@ -1348,7 +1349,7 @@ void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
                       kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_NO_DICT_NESTED>{});
         break;
       case decode_kernel_mask::FIXED_WIDTH_NO_DICT_LIST:
-        launch_kernel(int_tag_t<256>{},
+        launch_kernel(int_tag_t<128>{},
                       kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_NO_DICT_LIST>{});
         break;
       case decode_kernel_mask::FIXED_WIDTH_DICT:
@@ -1359,7 +1360,7 @@ void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
                       kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_DICT_NESTED>{});
         break;
       case decode_kernel_mask::FIXED_WIDTH_DICT_LIST:
-        launch_kernel(int_tag_t<256>{}, kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_DICT_LIST>{});
+        launch_kernel(int_tag_t<128>{}, kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_DICT_LIST>{});
         break;
       case decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_FLAT:
         launch_kernel(int_tag_t<256>{},
@@ -1370,7 +1371,7 @@ void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
                       kernel_tag_t<decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED>{});
         break;
       case decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_LIST:
-        launch_kernel(int_tag_t<256>{},
+        launch_kernel(int_tag_t<128>{},
                       kernel_tag_t<decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_LIST>{});
         break;
       case decode_kernel_mask::BOOLEAN:
@@ -1380,7 +1381,7 @@ void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
         launch_kernel(int_tag_t<256>{}, kernel_tag_t<decode_kernel_mask::BOOLEAN_NESTED>{});
         break;
       case decode_kernel_mask::BOOLEAN_LIST:
-        launch_kernel(int_tag_t<256>{}, kernel_tag_t<decode_kernel_mask::BOOLEAN_LIST>{});
+        launch_kernel(int_tag_t<128>{}, kernel_tag_t<decode_kernel_mask::BOOLEAN_LIST>{});
         break;
       case decode_kernel_mask::STRING:
         launch_kernel(int_tag_t<128>{}, kernel_tag_t<decode_kernel_mask::STRING>{});
@@ -1414,6 +1415,7 @@ void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
       default: CUDF_EXPECTS(false, "Kernel type not handled by this function"); break;
     }
   } else {
+    // Non-chunked read. For strings is faster if we use 64 threads instead of 128
     switch (kernel_mask) {
       case decode_kernel_mask::FIXED_WIDTH_NO_DICT:
         launch_kernel(int_tag_t<128>{}, kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_NO_DICT>{});
