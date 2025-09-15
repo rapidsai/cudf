@@ -442,7 +442,6 @@ ArrowDtype = make_final_proxy_type(
         "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
         "pyarrow_dtype": _FastSlowAttribute("pyarrow_dtype"),
-        
     },
 )
 
