@@ -41,23 +41,22 @@ cpdef Table partition(Column input, Scalar delimiter=None, Stream stream=None):
     cdef const string_scalar* c_delimiter = <const string_scalar*>(
         delimiter.c_obj.get()
     )
-    cdef Stream stream_local
 
-    stream_local = _get_stream(stream)
+    stream = _get_stream(stream)
 
     if delimiter is None:
         delimiter = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), stream_local.view())
+            cpp_make_string_scalar("".encode(), stream.view())
         )
 
     with nogil:
         c_result = cpp_partition.partition(
             input.view(),
             dereference(c_delimiter),
-            stream_local.view()
+            stream.view()
         )
 
-    return Table.from_libcudf(move(c_result), stream_local)
+    return Table.from_libcudf(move(c_result), stream)
 
 cpdef Table rpartition(Column input, Scalar delimiter=None, Stream stream=None):
     """
@@ -83,20 +82,19 @@ cpdef Table rpartition(Column input, Scalar delimiter=None, Stream stream=None):
     cdef const string_scalar* c_delimiter = <const string_scalar*>(
         delimiter.c_obj.get()
     )
-    cdef Stream stream_local
 
-    stream_local = _get_stream(stream)
+    stream = _get_stream(stream)
 
     if delimiter is None:
         delimiter = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), stream_local.view())
+            cpp_make_string_scalar("".encode(), stream.view())
         )
 
     with nogil:
         c_result = cpp_partition.rpartition(
             input.view(),
             dereference(c_delimiter),
-            stream_local.view()
+            stream.view()
         )
 
-    return Table.from_libcudf(move(c_result), stream_local)
+    return Table.from_libcudf(move(c_result), stream)
