@@ -34,14 +34,14 @@ def test_df_apply_chunks(chunksize):
 
     expect_out1 = extra2 * in1 - extra1 * in2 + in3
     expect_out2 = np.arange(len(df)) % chunksize
-
-    outdf = df.apply_chunks(
-        kernel,
-        incols=["in1", "in2", "in3"],
-        outcols=dict(out1=np.float64, out2=np.int32),
-        kwargs=dict(extra1=extra1, extra2=extra2),
-        chunks=chunksize,
-    )
+    with pytest.warns(FutureWarning):
+        outdf = df.apply_chunks(
+            kernel,
+            incols=["in1", "in2", "in3"],
+            outcols=dict(out1=np.float64, out2=np.int32),
+            kwargs=dict(extra1=extra1, extra2=extra2),
+            chunks=chunksize,
+        )
 
     got_out1 = outdf["out1"]
     got_out2 = outdf["out2"]
@@ -77,13 +77,14 @@ def test_df_apply_custom_chunks():
         ]
     )
 
-    outdf = df.apply_chunks(
-        kernel,
-        incols=["in1", "in2", "in3"],
-        outcols=dict(out1=np.float64, out2=np.int32),
-        kwargs=dict(extra1=extra1, extra2=extra2),
-        chunks=chunks,
-    )
+    with pytest.warns(FutureWarning):
+        outdf = df.apply_chunks(
+            kernel,
+            incols=["in1", "in2", "in3"],
+            outcols=dict(out1=np.float64, out2=np.int32),
+            kwargs=dict(extra1=extra1, extra2=extra2),
+            chunks=chunks,
+        )
 
     got_out1 = outdf["out1"]
     got_out2 = outdf["out2"]
@@ -124,15 +125,16 @@ def test_df_apply_custom_chunks_blkct_tpb(blkct, tpb):
         ]
     )
 
-    outdf = df.apply_chunks(
-        kernel,
-        incols=["in1", "in2", "in3"],
-        outcols=dict(out1=np.float64, out2=np.int32),
-        kwargs=dict(extra1=extra1, extra2=extra2),
-        chunks=chunks,
-        blkct=blkct,
-        tpb=tpb,
-    )
+    with pytest.warns(FutureWarning):
+        outdf = df.apply_chunks(
+            kernel,
+            incols=["in1", "in2", "in3"],
+            outcols=dict(out1=np.float64, out2=np.int32),
+            kwargs=dict(extra1=extra1, extra2=extra2),
+            chunks=chunks,
+            blkct=blkct,
+            tpb=tpb,
+        )
 
     got_out1 = outdf["out1"]
     got_out2 = outdf["out2"]
@@ -171,13 +173,13 @@ def test_df_apply_chunks_incols_mapping(chunksize):
             "out2": np.arange(len(df)) % chunksize,
         }
     )
-
-    outdf = df.apply_chunks(
-        kernel,
-        incols={"in1": "q", "in2": "p", "in3": "r"},
-        outcols=dict(out1=np.float64, out2=np.int64),
-        kwargs=dict(extra1=extra1, extra2=extra2),
-        chunks=chunksize,
-    )
+    with pytest.warns(FutureWarning):
+        outdf = df.apply_chunks(
+            kernel,
+            incols={"in1": "q", "in2": "p", "in3": "r"},
+            outcols=dict(out1=np.float64, out2=np.int64),
+            kwargs=dict(extra1=extra1, extra2=extra2),
+            chunks=chunksize,
+        )
 
     assert_eq(outdf[["out1", "out2"]], expected_out)

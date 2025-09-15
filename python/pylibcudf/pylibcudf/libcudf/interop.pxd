@@ -23,15 +23,7 @@ cdef extern from "dlpack/dlpack.h" nogil:
 cdef extern from "cudf/interop.hpp" nogil:
     # https://arrow.apache.org/docs/format/CDataInterface.html#structure-definitions
     cdef struct ArrowSchema:
-        const char* format
-        const char* name
-        const char* metadata
-        int64_t flags
-        int64_t n_children
-        ArrowSchema** children
-        ArrowSchema* dictionary
         void (*release)(ArrowSchema*) noexcept
-        void* private_data
 
     cdef struct ArrowArray:
         int64_t length
@@ -40,10 +32,7 @@ cdef extern from "cudf/interop.hpp" nogil:
         int64_t n_buffers
         int64_t n_children
         const void** buffers
-        ArrowArray** children
-        ArrowArray* dictionary
         void (*release)(ArrowArray*) noexcept
-        void* private_data
 
     cdef struct ArrowArrayStream:
         void (*release)(ArrowArrayStream*) noexcept

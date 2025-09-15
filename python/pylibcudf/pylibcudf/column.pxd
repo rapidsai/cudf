@@ -1,30 +1,9 @@
 # Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
-from cpython.ref cimport PyObject, Py_INCREF
-from cpython.list cimport PyList_New, PyList_SET_ITEM
-from cpython.long cimport (
-    PyLong_FromLongLong,
-    PyLong_FromLong,
-    PyLong_FromUnsignedLong,
-    PyLong_FromUnsignedLongLong,
-)
-from cpython.float cimport PyFloat_FromDouble
-from cpython.unicode cimport PyUnicode_DecodeUTF8
-
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 from libcpp.string cimport string
-from libc.stdint cimport (
-    uintptr_t,
-    uint64_t,
-    uint32_t,
-    uint16_t,
-    uint8_t,
-    int64_t,
-    int32_t,
-    int16_t,
-    int8_t,
-)
+from libc.stdint cimport uint64_t
 
 from rmm.librmm.device_buffer cimport device_buffer
 from rmm.pylibrmm.stream cimport Stream
@@ -105,7 +84,7 @@ cdef class Column:
     cpdef gpumemoryview data(self)
     cpdef gpumemoryview null_mask(self)
     cpdef list children(self)
-    cpdef Column copy(self)
+    cpdef Column copy(self, Stream stream=*)
     cpdef uint64_t device_buffer_size(self)
     cpdef Column with_mask(self, gpumemoryview, size_type)
 

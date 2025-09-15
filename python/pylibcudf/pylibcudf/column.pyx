@@ -2,19 +2,37 @@
 
 from cython.operator cimport dereference
 
-from cpython.pycapsule cimport (
-    PyCapsule_GetPointer,
-    PyCapsule_New,
+from cpython.float cimport PyFloat_FromDouble
+from cpython.list cimport PyList_New, PyList_SetItem
+from cpython.long cimport (
+    PyLong_FromLong,
+    PyLong_FromLongLong,
+    PyLong_FromUnsignedLong,
+    PyLong_FromUnsignedLongLong,
 )
+from cpython.pycapsule cimport PyCapsule_GetPointer, PyCapsule_New
+from cpython.ref cimport Py_INCREF
+from cpython.unicode cimport PyUnicode_DecodeUTF8
 
 from libc.stddef cimport size_t
-
+from libc.stdint cimport (
+    int8_t,
+    int16_t,
+    int32_t,
+    int64_t,
+    uint8_t,
+    uint16_t,
+    uint32_t,
+    uint64_t,
+    uintptr_t,
+)
 from libcpp.limits cimport numeric_limits
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
 
 from pylibcudf.libcudf.column.column cimport column, column_contents
 from pylibcudf.libcudf.column.column_factories cimport make_column_from_scalar
+from pylibcudf.libcudf.copying cimport get_element
 from pylibcudf.libcudf.interop cimport (
     ArrowArray,
     ArrowArrayStream,
@@ -22,49 +40,50 @@ from pylibcudf.libcudf.interop cimport (
     ArrowDeviceArray,
     arrow_column,
     column_metadata,
-    to_arrow_host_raw,
-    to_arrow_device_raw,
-    to_arrow_schema_raw,
     release_arrow_array_raw,
+    to_arrow_device_raw,
+    to_arrow_host_raw,
+    to_arrow_schema_raw,
 )
 from pylibcudf.libcudf.null_mask cimport bitmask_allocation_size_bytes
 from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.strings.strings_column_view cimport strings_column_view
-from pylibcudf.libcudf.types cimport size_type, size_of as cpp_size_of, bitmask_type
+from pylibcudf.libcudf.types cimport bitmask_type, size_of as cpp_size_of, size_type
 from pylibcudf.libcudf.utilities.traits cimport is_fixed_width
-from pylibcudf.libcudf.copying cimport get_element
-
 
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 from rmm.pylibrmm.stream cimport Stream
 
-from .gpumemoryview cimport gpumemoryview
-from .filling cimport sequence
-from .gpumemoryview cimport gpumemoryview
-from .scalar cimport Scalar
-from .traits cimport (
-    is_fixed_width as plc_is_fixed_width,
-    is_nested,
-)
-from .types cimport DataType, size_of, type_id
 from ._interop_helpers cimport (
-    _release_schema,
+    _metadata_to_libcudf,
     _release_array,
     _release_device_array,
-    _metadata_to_libcudf,
+    _release_schema,
 )
+from ._interop_helpers import ArrowLike, ColumnMetadata
+from .filling cimport sequence
+from .gpumemoryview cimport gpumemoryview
+from .gpumemoryview import _datatype_from_dtype_desc
+from .scalar cimport Scalar
+from .traits cimport is_fixed_width as plc_is_fixed_width, is_nested
+from .types cimport DataType, size_of, type_id
 from .utils cimport _get_stream
 
-from .gpumemoryview import _datatype_from_dtype_desc
-from ._interop_helpers import ArrowLike, ColumnMetadata
-
 import array
-from itertools import accumulate
 import functools
 import operator
+from itertools import accumulate
 from typing import Iterable
 
 __all__ = ["Column", "ListColumnView", "is_c_contiguous"]
+
+
+cdef is_iterable(obj):
+    try:
+        iter(obj)
+    except Exception:
+        return False
+    return True
 
 
 cdef class _ArrowColumnHolder:
@@ -1001,8 +1020,31 @@ cdef class Column:
           (in bytes) can exceed the maximum 32-bit integer value. In that case,
           the offsets column is automatically promoted to use 64-bit integers.
         """
+        if not is_iterable(obj):
+            raise ValueError(f"{obj=} is not iterable")
 
-        obj = list(obj)
+        if (
+            hasattr(obj, "__cuda_array_interface__")
+            or hasattr(obj, "__array_interface__")
+        ):
+            raise TypeError(
+                "Object has __cuda_array_interface__ or __array_interface__. "
+                "Please call Column.from_array(obj)."
+            )
+
+        if (
+            hasattr(obj, "__arrow_c_array__")
+            or hasattr(obj, "__arrow_c_device_array__")
+            or hasattr(obj, "__arrow_c_stream__")
+            or hasattr(obj, "__arrow_c_device_stream__")
+        ):
+            raise TypeError(
+                "Object implements the Arrow C data interface protocol. "
+                "Please call Column.from_arrow(obj)."
+            )
+
+        if not isinstance(obj, (list, tuple)):
+            obj = list(obj)
 
         if not obj:
             if dtype is None:
@@ -1091,7 +1133,7 @@ cdef class Column:
         with nogil:
             raw_host_array_ptr = to_arrow_host_raw(self.view())
         try:
-            return _arrow_to_pylist(dtype, raw_host_array_ptr)
+            return _arrow_to_pylist_impl(dtype, raw_host_array_ptr)
         finally:
             if raw_host_array_ptr != NULL:
                 with nogil:
@@ -1197,12 +1239,13 @@ cdef class Column:
         """The children of the column."""
         return self._children
 
-    cpdef Column copy(self):
+    cpdef Column copy(self, Stream stream=None):
         """Create a copy of the column."""
         cdef unique_ptr[column] c_result
+        stream = _get_stream(stream)
         with nogil:
-            c_result = make_unique[column](self.view())
-        return Column.from_libcudf(move(c_result))
+            c_result = make_unique[column](self.view(), stream.view())
+        return Column.from_libcudf(move(c_result), stream)
 
     cpdef uint64_t device_buffer_size(self):
         """
@@ -1304,7 +1347,7 @@ cdef class ListColumnView:
 
     cpdef offsets(self):
         """The offsets column of the underlying list column."""
-        return self._column.child(1)
+        return self._column.child(0)
 
     cdef lists_column_view view(self) nogil:
         """Generate a libcudf lists_column_view to pass to libcudf algorithms.
@@ -1349,7 +1392,7 @@ def is_c_contiguous(
     return True
 
 
-cdef bint _is_valid(const uint8_t* null_bitmap, size_t bit_index):
+cdef inline bint _is_valid(const uint8_t* null_bitmap, size_t bit_index):
     # Example:
     # - column = [2, None, 3, 1, None, 5, None, 7, 8, None]
     # - index  = [0, 1,    2, 3, 4,    5, 6,    7, 8, 9]
@@ -1360,6 +1403,19 @@ cdef bint _is_valid(const uint8_t* null_bitmap, size_t bit_index):
     # - row 2 -> valid -> 1
     # - row 3 -> valid -> 1
     # - row 4 -> null  -> 0
+    # - row 5 -> valid -> 1
+    # - row 6 -> null  -> 0
+    # - row 7 -> valid -> 1
+    # - row 8 -> valid -> 1
+    # - row 9 -> null  -> 0
+    #
+    # Build the bitmap:
+    # - index     0,1,2,3,4,5,6,7       76543210 (row_index -> bit_index)
+    # - Byte 0 = [1,0,1,1,0,1,0,1] -> 0b10101101
+    # - Byte 1 = [1,0,0,0,0,0,0,0] -> 0b00000001
+    #
+    # Check the 7th element:
+    # row_index = 6
     # - row 5 -> valid -> 1
     # - row 6 -> null  -> 0
     # - row 7 -> valid -> 1
@@ -1388,222 +1444,127 @@ cdef bint _is_valid(const uint8_t* null_bitmap, size_t bit_index):
         return 1
     return ((null_bitmap[bit_index >> 3] >> (bit_index & 7)) & 1) != 0
 
-cdef void _set_item(list out, Py_ssize_t i, object obj):
-    # SET_ITEM macro "steals" a reference to obj, so we INCREF it first.
+
+cdef inline void _set_item(list out, int64_t i, object obj) except *:
+    # https://docs.python.org/3/c-api/list.html#c.PyList_SetItem
     Py_INCREF(obj)
-    PyList_SET_ITEM(out, i, obj)
+    PyList_SetItem(out, i, obj)
 
-cdef list _arrow_to_pylist_bool8(ArrowArray* arr):
+
+cdef list _arrow_to_pylist_impl(type_id dtype, ArrowArray* arr):
     cdef size_t n = <size_t>arr.length
-    cdef list out = <list>PyList_New(<Py_ssize_t>n)
+    cdef list out = <list>PyList_New(n)
     if out is None:
-        raise MemoryError("Unable to create new python List")
-
-    cdef const void** buffers = arr.buffers
-    cdef int64_t offset = arr.offset
-    cdef const uint8_t* null_bm = NULL
-    cdef const uint8_t* data_bm = NULL
-    cdef size_t i, bit_index
-    cdef object val
+        raise MemoryError("Unable to create new python list")
 
     if n == 0:
         return out
 
-    if arr.n_buffers >= 1 and buffers[0] != NULL and arr.null_count != 0:
-        null_bm = <const uint8_t*>buffers[0]
-
-    if arr.n_buffers < 2 or buffers[1] == NULL:
-        for i in range(n):
-            _set_item(out, <Py_ssize_t>i, None)
-        return out
-
-    data_bm = <const uint8_t*>buffers[1]
-
-    for i in range(n):
-        bit_index = <size_t>(offset + <int64_t>i)
-        if not _is_valid(null_bm, bit_index):
-            _set_item(out, <Py_ssize_t>i, None)
-            continue
-
-        val = ((data_bm[bit_index >> 3] >> (bit_index & 7)) & 1) != 0
-        _set_item(out, <Py_ssize_t>i, val)
-
-    return out
-
-
-cdef list _arrow_to_pylist_string(ArrowArray* arr):
-    cdef size_t n = <size_t>arr.length
-    cdef list out = <list>PyList_New(<Py_ssize_t>n)
-    if out is None:
-        raise MemoryError("Unable to create new python List")
-
-    # buffers[0] = null-bitmap (optional)
-    # buffers[1] = int32 offsets
-    # buffers[2] = char* data
     cdef const void** buffers = arr.buffers
     cdef int64_t offset = arr.offset
+    cdef size_t bit_index
+    cdef int64_t i, N = n
     cdef const uint8_t* null_bm = NULL
-    cdef const int32_t* offs = NULL
-    cdef const char* data = NULL
-    cdef size_t i, bit_index
-    cdef object s
-
-    if n == 0:
-        return out
+    cdef const char* numeric_base = NULL
+    cdef size_t item_size = 0
+    cdef const uint8_t* bool_base = NULL
+    cdef const int32_t* str_offsets = NULL
+    cdef const char* str_base = NULL
+    cdef bint is_bool = dtype == type_id.BOOL8
+    cdef bint is_string = dtype == type_id.STRING
+    cdef bint check_valid = arr.null_count != 0
 
     if arr.n_buffers >= 1 and buffers[0] != NULL and arr.null_count != 0:
         null_bm = <const uint8_t*>buffers[0]
 
-    if arr.n_buffers < 3 or buffers[1] == NULL or buffers[2] == NULL:
-        for i in range(n):
-            _set_item(out, <Py_ssize_t>i, None)
-        return out
-
-    offs = <const int32_t*>buffers[1]
-    data = <const char*>buffers[2]
-    offs = offs + <Py_ssize_t>offset
-
-    for i in range(n):
-        bit_index = <size_t>(offset + <int64_t>i)
-        if not _is_valid(null_bm, bit_index):
-            _set_item(out, <Py_ssize_t>i, None)
-            continue
-
-        s = PyUnicode_DecodeUTF8(data + offs[i],
-                                 <Py_ssize_t>(offs[i + 1] - offs[i]),
-                                 NULL)
-        if s is None:
-            raise MemoryError("Unable to create a python type from C type")
-        _set_item(out, <Py_ssize_t>i, s)
-
-    return out
-
-
-cdef list _arrow_to_pylist_numeric(type_id dtype, ArrowArray* arr):
-    cdef size_t n = <size_t>arr.length
-    cdef list out = <list>PyList_New(<Py_ssize_t>n)
-    if out is None:
-        raise MemoryError("Unable to create new python List")
-
-    cdef const void** buffers = arr.buffers
-    cdef int64_t offset = arr.offset
-    cdef const uint8_t* null_bm = NULL
-    cdef size_t i, bit_index
-    cdef size_t item_size
-    cdef object obj
-
-    if n == 0:
-        return out
-
-    if arr.n_buffers >= 1 and buffers[0] != NULL and arr.null_count != 0:
-        null_bm = <const uint8_t*>buffers[0]
-
-    if arr.n_buffers < 2 or buffers[1] == NULL:
-        for i in range(n):
-            _set_item(out, <Py_ssize_t>i, None)
-        return out
-
-    if dtype == type_id.INT8 or dtype == type_id.UINT8:
-        item_size = sizeof(uint8_t)
-    elif dtype == type_id.INT16  or dtype == type_id.UINT16:
-        item_size = sizeof(uint16_t)
-    elif dtype == type_id.INT32  or dtype == type_id.UINT32:
-        item_size = sizeof(uint32_t)
-    elif dtype == type_id.INT64  or dtype == type_id.UINT64:
-        item_size = sizeof(uint64_t)
-    elif dtype == type_id.FLOAT32:
-        item_size = sizeof(float)
-    elif dtype == type_id.FLOAT64:
-        item_size = sizeof(double)
-    else:
-        raise NotImplementedError(f"Column with {dtype=} not supported")
-
-    cdef const char* base = <const char*>buffers[1] + item_size * <size_t>offset
-
-    if null_bm is NULL:
-        for i in range(n):
-            if dtype == type_id.INT8:
-                obj = PyLong_FromLong(<long>(<const int8_t*>base)[i])
-            elif dtype == type_id.INT16:
-                obj = PyLong_FromLong(<long>(<const int16_t*>base)[i])
-            elif dtype == type_id.INT32:
-                obj = PyLong_FromLong(<long>(<const int32_t*>base)[i])
-            elif dtype == type_id.INT64:
-                obj = PyLong_FromLongLong(<long long>(<const int64_t*>base)[i])
-            elif dtype == type_id.UINT8:
-                obj = PyLong_FromUnsignedLong(<unsigned long>(<const uint8_t*>base)[i])
-            elif dtype == type_id.UINT16:
-                obj = PyLong_FromUnsignedLong(<unsigned long>(<const uint16_t*>base)[i])
-            elif dtype == type_id.UINT32:
-                obj = PyLong_FromUnsignedLong(<unsigned long>(<const uint32_t*>base)[i])
-            elif dtype == type_id.UINT64:
-                obj = PyLong_FromUnsignedLongLong(
-                    <unsigned long long>(<const uint64_t*>base)[i]
-                )
-            elif dtype == type_id.FLOAT32:
-                obj = PyFloat_FromDouble(<double>(<const float*>base)[i])
-            else:
-                obj = PyFloat_FromDouble((<const double*>base)[i])
-
-            if obj is None:
-                raise MemoryError("Unable to create a python value from a C value")
-            _set_item(out, <Py_ssize_t>i, obj)
-        return out
-
-    for i in range(n):
-        bit_index = <size_t>(offset + <int64_t>i)
-        if not _is_valid(null_bm, bit_index):
-            _set_item(out, <Py_ssize_t>i, None)
-            continue
-
-        if dtype == type_id.INT8:
-            obj = PyLong_FromLong(<long>(<const int8_t*>base)[i])
-        elif dtype == type_id.INT16:
-            obj = PyLong_FromLong(<long>(<const int16_t*>base)[i])
-        elif dtype == type_id.INT32:
-            obj = PyLong_FromLong(<long>(<const int32_t*>base)[i])
-        elif dtype == type_id.INT64:
-            obj = PyLong_FromLongLong(
-                <long long>(<const int64_t*>base)[i]
-            )
-        elif dtype == type_id.UINT8:
-            obj = PyLong_FromUnsignedLong(
-                <unsigned long>(<const uint8_t*>base)[i]
-            )
-        elif dtype == type_id.UINT16:
-            obj = PyLong_FromUnsignedLong(
-                <unsigned long>(<const uint16_t*>base)[i]
-            )
-        elif dtype == type_id.UINT32:
-            obj = PyLong_FromUnsignedLong(
-                <unsigned long>(<const uint32_t*>base)[i]
-            )
-        elif dtype == type_id.UINT64:
-            obj = PyLong_FromUnsignedLongLong(
-                <unsigned long long>(<const uint64_t*>base)[i]
-            )
-        elif dtype == type_id.FLOAT32:
-            obj = PyFloat_FromDouble(<double>(<const float*>base)[i])
-        else:
-            obj = PyFloat_FromDouble((<const double*>base)[i])
-
-        if obj is None:
-            raise MemoryError("Unable to create a python value from a C value")
-        _set_item(out, <Py_ssize_t>i, obj)
-
-    return out
-
-
-cdef list _arrow_to_pylist(type_id dtype, ArrowArray* arr):
     if dtype in (
         type_id.INT8, type_id.INT16, type_id.INT32, type_id.INT64,
         type_id.UINT8, type_id.UINT16, type_id.UINT32, type_id.UINT64,
-        type_id.FLOAT32, type_id.FLOAT64,
+        type_id.FLOAT32, type_id.FLOAT64, type_id.BOOL8, type_id.STRING
     ):
-        return _arrow_to_pylist_numeric(dtype, arr)
-    elif dtype == type_id.BOOL8:
-        return _arrow_to_pylist_bool8(arr)
-    elif dtype == type_id.STRING:
-        return _arrow_to_pylist_string(arr)
+        if is_string:
+            if arr.n_buffers < 3 or buffers[1] == NULL or buffers[2] == NULL:
+                for i in range(N):
+                    _set_item(out, i, None)
+                return out
+        else:
+            if arr.n_buffers < 2 or buffers[1] == NULL:
+                for i in range(N):
+                    _set_item(out, i, None)
+                return out
+
+        if is_bool:
+            bool_base = <const uint8_t*>buffers[1]
+        elif is_string:
+            str_base = <const char*>buffers[2]
+            str_offsets = <const int32_t*>buffers[1] + offset
+        else:
+            if dtype == type_id.INT8 or dtype == type_id.UINT8:
+                item_size = sizeof(uint8_t)
+            elif dtype == type_id.INT16 or dtype == type_id.UINT16:
+                item_size = sizeof(uint16_t)
+            elif dtype == type_id.INT32 or dtype == type_id.UINT32:
+                item_size = sizeof(uint32_t)
+            elif dtype == type_id.INT64 or dtype == type_id.UINT64:
+                item_size = sizeof(uint64_t)
+            elif dtype == type_id.FLOAT32:
+                item_size = sizeof(float)
+            else:
+                item_size = sizeof(double)
+            numeric_base = <const char*>buffers[1] + item_size * <size_t>offset
+
+        for i in range(N):
+            bit_index = offset + <int64_t>i
+            if check_valid and not _is_valid(null_bm, bit_index):
+                _set_item(out, i, None)
+            else:
+                if is_bool:
+                    obj = ((bool_base[bit_index >> 3] >> (bit_index & 7)) & 1) != 0
+                elif is_string:
+                    obj = PyUnicode_DecodeUTF8(
+                        str_base + str_offsets[i],
+                        str_offsets[i + 1] - str_offsets[i],
+                        NULL,
+                    )
+                    if obj is None:
+                        raise MemoryError("Unable to convert string dtype to python")
+                else:
+                    if dtype == type_id.INT8:
+                        obj = PyLong_FromLong(<long>(<const int8_t*>numeric_base)[i])
+                    elif dtype == type_id.INT16:
+                        obj = PyLong_FromLong(<long>(<const int16_t*>numeric_base)[i])
+                    elif dtype == type_id.INT32:
+                        obj = PyLong_FromLong(<long>(<const int32_t*>numeric_base)[i])
+                    elif dtype == type_id.INT64:
+                        obj = PyLong_FromLongLong(
+                            <long long>(<const int64_t*>numeric_base)[i]
+                        )
+                    elif dtype == type_id.UINT8:
+                        obj = PyLong_FromUnsignedLong(
+                            <unsigned long>(<const uint8_t*>numeric_base)[i]
+                        )
+                    elif dtype == type_id.UINT16:
+                        obj = PyLong_FromUnsignedLong(
+                            <unsigned long>(<const uint16_t*>numeric_base)[i]
+                        )
+                    elif dtype == type_id.UINT32:
+                        obj = PyLong_FromUnsignedLong(<unsigned long>(
+                            <const uint32_t*>numeric_base)[i]
+                        )
+                    elif dtype == type_id.UINT64:
+                        obj = PyLong_FromUnsignedLongLong(
+                            <unsigned long long>(<const uint64_t*>numeric_base)[i]
+                        )
+                    elif dtype == type_id.FLOAT32:
+                        obj = PyFloat_FromDouble(
+                            <double>(<const float*>numeric_base)[i]
+                        )
+                    else:
+                        obj = PyFloat_FromDouble((<const double*>numeric_base)[i])
+                    if obj is None:
+                        raise MemoryError("Unable to convert numeric dtype to python")
+                _set_item(out, i, obj)
+        return out
+
     else:
-        raise NotImplementedError(f"Column with {dtype=} not supported")
+        raise NotImplementedError(f"Column with dtype={dtype} not supported")

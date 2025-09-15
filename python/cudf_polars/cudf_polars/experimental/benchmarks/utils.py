@@ -14,6 +14,7 @@ import statistics
 import sys
 import textwrap
 import time
+import traceback
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Literal, assert_never
@@ -405,6 +406,7 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
         "protocol": args.protocol,
         "rmm_pool_size": args.rmm_pool_size,
         "rmm_async": args.rmm_async,
+        "rmm_release_threshold": args.rmm_release_threshold,
         "threads_per_worker": run_config.threads,
     }
 
@@ -625,6 +627,15 @@ def parse_args(
             Default: 0.5 (50%% of GPU memory)"""),
     )
     parser.add_argument(
+        "--rmm-release-threshold",
+        default=None,
+        type=float,
+        help=textwrap.dedent("""\
+            Passed to dask_cuda.LocalCUDACluster to control the release
+            threshold for RMM pool memory.
+            Default: None (no release threshold)"""),
+    )
+    parser.add_argument(
         "--rmm-async",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -716,6 +727,7 @@ def run_polars(
     vars(args).update({"query_set": benchmark.name})
     run_config = RunConfig.from_args(args)
     validation_failures: list[int] = []
+    query_failures: list[tuple[int, int]] = []
 
     client = initialize_dask_cluster(run_config, args)  # type: ignore
 
@@ -743,8 +755,13 @@ def run_polars(
         for i in range(args.iterations):
             t0 = time.monotonic()
 
-            result = execute_query(q_id, i, q, run_config, args, engine)
-
+            try:
+                result = execute_query(q_id, i, q, run_config, args, engine)
+            except Exception:
+                print(f"❌ query={q_id} iteration={i} failed!")
+                print(traceback.format_exc())
+                query_failures.append((q_id, i))
+                continue
             if run_config.shuffle == "rapidsmpf" and run_config.gather_shuffle_stats:
                 from rapidsmpf.integrations.dask.shuffler import (
                     clear_shuffle_statistics,
@@ -794,5 +811,9 @@ def run_polars(
             )
         else:
             print("All validated queries passed.")
+
     args.output.write(json.dumps(run_config.serialize(engine=engine)))
     args.output.write("\n")
+
+    if query_failures or validation_failures:
+        sys.exit(1)
