@@ -50,7 +50,7 @@ constexpr bool has_flag(init_flags flags, init_flags flag) noexcept
   return (flags | flag) == flags;
 }
 
-/// @brief initialize the cudf global context
+/// @brief Initialize the cudf global context
 /// @param flags Optional flags to control which initialization steps to perform.
 /// @throws std::runtime_error if the context is already initialized
 void initialize(init_flags flags = init_flags::INIT_JIT_CACHE);
