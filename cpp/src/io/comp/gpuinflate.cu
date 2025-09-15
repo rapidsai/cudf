@@ -1212,10 +1212,15 @@ CUDF_KERNEL void __launch_bounds__(1024)
 }
 
 enum class task_type { DECOMPRESSION, COMPRESSION };
-// Relative cost of the trivial cases (incompressible data)
-constexpr double trivial_case_cost_ratio = 0.1;
 
-CUDF_HOST_DEVICE double cost_factor(size_t input_size, size_t output_size, task_type task_type)
+class cost_model {
+  private:
+// Relative cost of the trivial cases (incompressible data)
+static constexpr double trivial_case_cost_ratio = 0.1;
+static constexpr double host_constant_overhead = 5000;
+static constexpr double cost_decay_exponent = 4;
+
+static CUDF_HOST_DEVICE double cost_factor(size_t input_size, size_t output_size, task_type task_type)
 {
   if (task_type == task_type::DECOMPRESSION) {
     auto const compression_ratio = std::max(1., static_cast<double>(output_size) / input_size);
@@ -1223,19 +1228,20 @@ CUDF_HOST_DEVICE double cost_factor(size_t input_size, size_t output_size, task_
     // meaning that the cost of decompressing the block is the same as the cost of copying it. The
     // cost factor asymptotes to one as the compression ratio increases, meaning that the cost
     // approaches the base cost of decompressing (which is a lot higher than the copy cost)
-    return 1. - (1. - trivial_case_cost_ratio) / cuda::std::pow(compression_ratio, 4);
+    return 1. - (1. - trivial_case_cost_ratio) / cuda::std::pow(compression_ratio, cost_decay_exponent);
   } else {
     // We don't know the compression ratio for compression, so use a constant cost factor
     return 1.;
   }
 }
 
-CUDF_HOST_DEVICE double task_device_cost(size_t input_size, size_t output_size, task_type task_type)
+public:
+static CUDF_HOST_DEVICE double task_device_cost(size_t input_size, size_t output_size, task_type task_type)
 {
   return cost_factor(input_size, output_size, task_type) * input_size;
 }
 
-CUDF_HOST_DEVICE double task_host_cost(size_t input_size,
+static CUDF_HOST_DEVICE double task_host_cost(size_t input_size,
                                        size_t output_size,
                                        double device_host_ratio,
                                        task_type task_type)
@@ -1243,12 +1249,11 @@ CUDF_HOST_DEVICE double task_host_cost(size_t input_size,
   // Cost to copy the block to host and back; NOTE: assumes that the copy throughput is the same as
   // the decompression/compression throughput when the data is incompressible
   auto const copy_cost = trivial_case_cost_ratio * (input_size + output_size);
-  // Constant factor to account for the synchronization overhead
-  constexpr double constant_overhead = 5000;
   return (cost_factor(input_size, output_size, task_type) * input_size + copy_cost) /
            device_host_ratio +
-         constant_overhead;
+           host_constant_overhead;
 }
+};
 
 sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const> inputs,
                                    device_span<device_span<uint8_t> const> outputs,
@@ -1267,7 +1272,7 @@ sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const>
                     thrust::make_counting_iterator<std::size_t>(inputs.size()),
                     costs.begin(),
                     [inputs, outputs, task_type] __device__(std::size_t i) {
-                      return task_device_cost(inputs[i].size(), outputs[i].size(), task_type);
+                      return cost_model::task_device_cost(inputs[i].size(), outputs[i].size(), task_type);
                     });
 
   thrust::sort(rmm::exec_policy_nosync(stream),
@@ -1322,7 +1327,7 @@ sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const>
     for (size_t i = 0; i < h_inputs.size(); ++i) {
       // Device cost reflects the latency of the kernel, so we use the cost of the most expensive
       // remaining task, which is the first one after the split
-      auto const device_cost = task_device_cost(h_inputs[i].size(), h_outputs[i].size(), task);
+      auto const device_cost = cost_model::task_device_cost(h_inputs[i].size(), h_outputs[i].size(), task);
       // Total cost is host cost (all previous tasks) + device cost (most expensive remaining task)
       total_costs.push_back(total_host_cost + device_cost);
 
@@ -1332,7 +1337,7 @@ sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const>
 
       // Host cost includes the cost of all previous tasks, so it grows with the index
       total_host_cost +=
-        task_host_cost(h_inputs[i].size(), h_outputs[i].size(), hybrid_mode_cost_ratio, task);
+        cost_model::task_host_cost(h_inputs[i].size(), h_outputs[i].size(), hybrid_mode_cost_ratio, task);
     }
 
     // Find the index at which the sum of host and device cost is minimal. Because the device cost
