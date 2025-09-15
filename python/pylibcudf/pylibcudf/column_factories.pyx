@@ -28,7 +28,7 @@ __all__ = [
     "make_timestamp_column",
 ]
 
-cpdef Column make_empty_column(MakeEmptyColumnOperand type_or_id):
+cpdef Column make_empty_column(MakeEmptyColumnOperand type_or_id, Stream stream=None):
     """Creates an empty column of the specified type.
 
     For details, see :cpp:func::`make_empty_column`.
@@ -45,6 +45,7 @@ cpdef Column make_empty_column(MakeEmptyColumnOperand type_or_id):
     """
     cdef unique_ptr[column] result
     cdef type_id id
+    stream = _get_stream(stream)
 
     if MakeEmptyColumnOperand is object:
         if isinstance(type_or_id, TypeId):
@@ -65,7 +66,7 @@ cpdef Column make_empty_column(MakeEmptyColumnOperand type_or_id):
         raise TypeError(
             "Must pass a TypeId or DataType"
         )
-    return Column.from_libcudf(move(result))
+    return Column.from_libcudf(move(result), stream)
 
 
 cpdef Column make_numeric_column(
