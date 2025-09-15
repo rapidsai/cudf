@@ -253,4 +253,5 @@ cpdef Column normalize_nans_and_zeros(
     if not inplace:
         return Column.from_libcudf(move(c_result), stream)
 
+# Test comment
 ReplacePolicy.__str__ = ReplacePolicy.__repr__
