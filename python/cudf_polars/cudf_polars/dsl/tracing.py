@@ -57,7 +57,7 @@ def make_snaphot(
     pid: int,
     device_handle: Any | None = None,
     phase: Literal["input", "output"] = "input",
-) -> dict:
+) -> dict:  # pragma: no cover; requires CUDF_POLARS_LOG_TRACES=1
     """
     Collect statistics about the evaluation of an IR node.
 
