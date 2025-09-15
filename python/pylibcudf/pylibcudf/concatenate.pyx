@@ -41,7 +41,7 @@ cpdef concatenate(list objects, Stream stream=None, DeviceMemoryResource mr=None
     cdef vector[column_view] c_columns
     cdef vector[table_view] c_tables
     stream = _get_stream(stream)
-    cdef DeviceMemoryResource c_mr = _get_memory_resource(mr)
+    mr = _get_memory_resource(mr)
 
     cdef unique_ptr[column] c_col_result
     cdef unique_ptr[table] c_tbl_result
@@ -52,17 +52,17 @@ cpdef concatenate(list objects, Stream stream=None, DeviceMemoryResource mr=None
 
         with nogil:
             c_tbl_result = cpp_concatenate.concatenate(
-                c_tables, stream.view(), c_mr.get_mr()
+                c_tables, stream.view(), mr.get_mr()
             )
-        return Table.from_libcudf(move(c_tbl_result), stream, c_mr)
+        return Table.from_libcudf(move(c_tbl_result), stream, mr)
     elif isinstance(objects[0], Column):
         for column in objects:
             c_columns.push_back((<Column?>column).view())
 
         with nogil:
             c_col_result = cpp_concatenate.concatenate(
-                c_columns, stream.view(), c_mr.get_mr()
+                c_columns, stream.view(), mr.get_mr()
             )
-        return Column.from_libcudf(move(c_col_result), stream, c_mr)
+        return Column.from_libcudf(move(c_col_result), stream, mr)
     else:
         raise ValueError("input must be a list of Columns or Tables")

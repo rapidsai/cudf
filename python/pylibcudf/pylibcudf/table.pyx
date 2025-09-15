@@ -175,9 +175,9 @@ cdef class Table:
 
         cdef vector[unique_ptr[column]].size_type i
         stream = _get_stream(stream)
-        cdef DeviceMemoryResource c_mr = _get_memory_resource(mr)
+        mr = _get_memory_resource(mr)
         return Table([
-            Column.from_libcudf(move(c_columns[i]), stream, c_mr)
+            Column.from_libcudf(move(c_columns[i]), stream, mr)
             for i in range(c_columns.size())
         ])
 

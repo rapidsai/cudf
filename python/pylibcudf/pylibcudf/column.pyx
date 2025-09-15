@@ -579,24 +579,24 @@ cdef class Column:
         cdef column_contents contents = libcudf_col.get().release()
 
         stream = _get_stream(stream)
-        cdef DeviceMemoryResource c_mr = _get_memory_resource(mr)
+        mr = _get_memory_resource(mr)
         # Note that when converting to cudf Column objects we'll need to pull
         # out the base object.
         cdef gpumemoryview data = gpumemoryview(
-            DeviceBuffer.c_from_unique_ptr(move(contents.data), stream, c_mr)
+            DeviceBuffer.c_from_unique_ptr(move(contents.data), stream, mr)
         )
 
         cdef gpumemoryview mask = None
         if null_count > 0:
             mask = gpumemoryview(
-                DeviceBuffer.c_from_unique_ptr(move(contents.null_mask), stream, c_mr)
+                DeviceBuffer.c_from_unique_ptr(move(contents.null_mask), stream, mr)
             )
 
         children = []
         if contents.children.size() != 0:
             for i in range(contents.children.size()):
                 children.append(
-                    Column.from_libcudf(move(contents.children[i]), stream, c_mr)
+                    Column.from_libcudf(move(contents.children[i]), stream, mr)
                 )
 
         return Column(
