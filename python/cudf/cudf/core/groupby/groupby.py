@@ -1702,6 +1702,10 @@ class GroupBy(Serializable, Reducible, Scannable):
                 column_names, aggs_per_column = aggs.keys(), aggs.values()
                 columns = tuple(self.obj._data[col] for col in column_names)
             else:
+                if isinstance(aggs, list) and len(aggs) != len(set(aggs)):
+                    raise pd.errors.SpecificationError(
+                        "Function names must be unique if there is no new column names assigned"
+                    )
                 values = self.grouping.values
                 column_names = values._column_names
                 columns = values._columns
