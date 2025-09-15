@@ -32,6 +32,8 @@
 #include <thrust/scatter.h>
 #include <thrust/sequence.h>
 
+#include <numeric>
+
 namespace cudf::io::parquet::experimental {
 
 namespace {
