@@ -1,34 +1,26 @@
 # Documentation for config - https://github.com/actions/labeler#common-examples
 
 Python:
-  - changed-files:
-      any-glob-to-any-file:
-        - 'python/**'
-        - 'notebooks/**'
+  - 'python/**'
+  - 'notebooks/**'
+
 cudf.pandas:
-  - changed-files:
-      any-glob-to-any-file:
-        - 'python/cudf/cudf/pandas/**'
-        - 'python/cudf/cudf_pandas_tests/**'
+  - 'python/cudf/cudf/pandas/**'
+  - 'python/cudf/cudf_pandas_tests/**'
+
 cudf-polars:
-  - changed-files:
-      any-glob-to-any-file:
-        - 'python/cudf_polars/**'
+  - 'python/cudf_polars/**'
+
 pylibcudf:
-  - changed-files:
-      any-glob-to-any-file:
-        - 'python/pylibcudf/**'
+  - 'python/pylibcudf/**'
+
 libcudf:
-  - changed-files:
-      any-glob-to-any-file:
-        - 'cpp/**'
+  - 'cpp/**'
+
 CMake:
-  - changed-files:
-      any-glob-to-any-file:
-        - '**/CMakeLists.txt'
-        - '**/cmake/**'
-        - '**/*.cmake'
+  - '**/CMakeLists.txt'
+  - '**/cmake/**'
+  - '**/*.cmake'
+
 Java:
-  - changed-files:
-      any-glob-to-any-file:
-        - 'java/**'
+  - 'java/**'
