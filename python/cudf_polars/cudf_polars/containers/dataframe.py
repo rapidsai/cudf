@@ -107,20 +107,12 @@ class DataFrame:
         ]
         table_with_metadata = _ObjectWithArrowMetadata(self.table, metadata)
         df = pl.DataFrame(table_with_metadata)
-        df = df.rename(name_map).with_columns(
+        return df.rename(name_map).with_columns(
             pl.col(c.name).set_sorted(descending=c.order == plc.types.Order.DESCENDING)
             if c.is_sorted
             else pl.col(c.name)
             for c in self.columns
         )
-        cast_list = []
-        for c in self.columns:
-            pl_dtype = c.dtype.polars
-            if isinstance(pl_dtype, pl.Decimal):
-                cast_list.append(pl.col(c.name).cast(pl_dtype))
-        if cast_list:
-            df = df.with_columns(cast_list)
-        return df
 
     @cached_property
     def column_names_set(self) -> frozenset[str]:
