@@ -729,7 +729,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
         s, initial_str_offsets, pages[page_idx]);
     }
     page->num_nulls = page->nesting[s->col.max_nesting_depth - 1].batch_size;
-    page->num_nulls -= has_repetition ? 0 : s->first_row;  
+    page->num_nulls -= has_repetition ? 0 : s->first_row;
     page->num_valids = 0;
 
     return;
