@@ -3263,7 +3263,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             data = _describe_categorical(self, percentiles)
         elif is_dtype_obj_numeric(self.dtype):
             data = _describe_numeric(self, percentiles)
-            if isinstance(self.dtype, pa.ArrowDtype):
+            if isinstance(self.dtype, pd.ArrowDtype):
                 dtype = pd.ArrowDtype(pa.float64())
             elif is_pandas_nullable_extension_dtype(self.dtype):
                 dtype = pd.Float64Dtype()
