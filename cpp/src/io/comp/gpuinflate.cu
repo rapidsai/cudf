@@ -1251,6 +1251,7 @@ class cost_model {
                                                 double device_host_ratio,
                                                 task_type task_type)
   {
+    CUDF_EXPECTS(device_host_ratio > 0, "device_host_ratio must be > 0");
     // Cost to copy the block to host and back; NOTE: assumes that the copy throughput is the same
     // as the decompression/compression throughput when the data is incompressible
     auto const copy_cost = trivial_case_cost_ratio * (input_size + output_size);
@@ -1273,8 +1274,8 @@ sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const>
   // Precompute costs to avoid repeated computation during sorting
   rmm::device_uvector<double> costs(inputs.size(), stream, mr);
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::make_counting_iterator<std::size_t>(0),
-                    thrust::make_counting_iterator<std::size_t>(inputs.size()),
+                    thrust::counting_iterator<std::size_t>(0),
+                    thrust::counting_iterator<std::size_t>(inputs.size()),
                     costs.begin(),
                     [inputs, outputs, task_type] __device__(std::size_t i) {
                       return cost_model::task_device_cost(
@@ -1413,7 +1414,7 @@ void copy_results_to_original_order(device_span<codec_exec_result const> sorted_
                   original_results.begin());
 }
 
-[[nodiscard]] size_t split_compression_tasks(device_span<device_span<uint8_t const> const> inputs,
+size_t split_compression_tasks(device_span<device_span<uint8_t const> const> inputs,
                                              device_span<device_span<uint8_t> const> outputs,
                                              host_engine_state host_state,
                                              size_t auto_mode_threshold,
@@ -1429,7 +1430,7 @@ void copy_results_to_original_order(device_span<codec_exec_result const> sorted_
                      stream);
 }
 
-[[nodiscard]] size_t split_decompression_tasks(device_span<device_span<uint8_t const> const> inputs,
+size_t split_decompression_tasks(device_span<device_span<uint8_t const> const> inputs,
                                                device_span<device_span<uint8_t> const> outputs,
                                                host_engine_state host_state,
                                                size_t auto_mode_threshold,
