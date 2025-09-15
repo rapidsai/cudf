@@ -43,10 +43,10 @@
 namespace cudf {
 namespace detail {
 
-template <typename T, typename Op, size_t N = sizeof(T)>
+template <typename T, typename Op>
 struct genericAtomicOperationImpl;
 
-template <typename T, typename Op, size_t N>
+template <typename T, typename Op>
 struct genericAtomicOperationImpl {
   __forceinline__ __device__ T operator()(T* addr, T const& update_value, Op op)
   {
@@ -63,8 +63,8 @@ struct genericAtomicOperationImpl {
 };
 
 // Optimized specializations using native atomic operations
-template <typename T, size_t N>
-struct genericAtomicOperationImpl<T, DeviceSum, N> {
+template <typename T>
+struct genericAtomicOperationImpl<T, DeviceSum> {
   __forceinline__ __device__ T operator()(T* addr, T const& update_value, DeviceSum op)
     requires(cuda::std::is_arithmetic_v<T> && !cuda::std::is_same_v<T, bool>)
   {
@@ -87,8 +87,8 @@ struct genericAtomicOperationImpl<T, DeviceSum, N> {
   }
 };
 
-template <typename T, size_t N>
-struct genericAtomicOperationImpl<T, DeviceMin, N> {
+template <typename T>
+struct genericAtomicOperationImpl<T, DeviceMin> {
   __forceinline__ __device__ T operator()(T* addr, T const& update_value, DeviceMin op)
     requires(cuda::std::is_integral_v<T> && !cuda::std::is_same_v<T, bool>)
   {
@@ -111,8 +111,8 @@ struct genericAtomicOperationImpl<T, DeviceMin, N> {
   }
 };
 
-template <typename T, size_t N>
-struct genericAtomicOperationImpl<T, DeviceMax, N> {
+template <typename T>
+struct genericAtomicOperationImpl<T, DeviceMax> {
   __forceinline__ __device__ T operator()(T* addr, T const& update_value, DeviceMax op)
     requires(cuda::std::is_integral_v<T> && !cuda::std::is_same_v<T, bool>)
   {
@@ -137,7 +137,7 @@ struct genericAtomicOperationImpl<T, DeviceMax, N> {
 
 // -----------------------------------------------------------------------
 // the implementation of `typesAtomicCASImpl`
-template <typename T, size_t N = sizeof(T)>
+template <typename T>
 struct typesAtomicCASImpl {
   __forceinline__ __device__ T operator()(T* addr, T const& compare, T const& update_value)
   {
