@@ -3534,7 +3534,10 @@ class DatetimeIndex(Index):
 
         was_pd_index = isinstance(data, pd.DatetimeIndex)
         data = as_column(data)
-
+        if data.dtype.kind == "b":
+            raise ValueError(
+                "Boolean data cannot be converted to a DatetimeIndex"
+            )
         if dtype is not None:
             dtype = cudf.dtype(dtype)
             if dtype.kind != "M":

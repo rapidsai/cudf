@@ -119,6 +119,8 @@ cpdef Column concatenate_rows(Table input, Stream stream=None):
     ----------
     input : Table
         The input table
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -184,6 +186,8 @@ cpdef Column contains(Column input, ColumnOrScalar search_key, Stream stream=Non
         The input column.
     search_key : Union[Column, Scalar]
         The search key.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -220,6 +224,8 @@ cpdef Column contains_nulls(Column input, Stream stream=None):
     ----------
     input : Column
         The input column.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -294,6 +300,8 @@ cpdef Column reverse(Column input, Stream stream=None):
     ----------
     input : Column
         The input column.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -404,6 +412,8 @@ cpdef Column count_elements(Column input, Stream stream=None):
     ----------
     input : Column
         The input column
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -701,6 +711,8 @@ cpdef Column apply_boolean_mask(Column input, Column boolean_mask, Stream stream
         The input column.
     boolean_mask : Column
         The boolean mask.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
