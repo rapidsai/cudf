@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,7 +35,6 @@
 namespace cudf {
 namespace detail {
 
-// Another test comment
 std::unique_ptr<table> gather(table_view const& source_table,
                               column_view const& gather_map,
                               out_of_bounds_policy bounds_policy,
