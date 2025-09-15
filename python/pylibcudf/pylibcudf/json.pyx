@@ -16,6 +16,7 @@ from .utils cimport _get_stream
 
 __all__ = ["GetJsonObjectOptions", "get_json_object"]
 
+# Test comment
 cdef class GetJsonObjectOptions:
     """Settings for ``get_json_object()``"""
     def __init__(
