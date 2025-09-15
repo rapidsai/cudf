@@ -534,6 +534,7 @@ class aggregate_reader_metadata {
                  std::optional<std::vector<std::string>> const& filter_columns_names,
                  bool include_index,
                  bool strings_to_categorical,
+                 bool allow_missing_columns,
                  type_id timestamp_type_id);
 };
 

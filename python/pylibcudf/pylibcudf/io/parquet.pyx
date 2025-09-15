@@ -225,6 +225,22 @@ cdef class ParquetReaderOptionsBuilder:
         self.c_obj.allow_mismatched_pq_schemas(val)
         return self
 
+    cpdef ParquetReaderOptionsBuilder allow_missing_columns(self, bool val):
+        """
+        Sets to enable/disable reading of non-existent projected columns.
+
+        Parameters
+        ----------
+        val : bool
+            Boolean indicating whether to allow reading non-existent projected columns.
+
+        Returns
+        -------
+        ParquetReaderOptionsBuilder
+        """
+        self.c_obj.allow_missing_columns(val)
+        return self
+
     cpdef ParquetReaderOptionsBuilder use_arrow_schema(self, bool val):
         """
         Sets to enable/disable use of arrow schema to read.

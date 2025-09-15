@@ -35,6 +35,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         bool is_enabled_use_pandas_metadata() except +libcudf_exception_handler
         bool is_enabled_arrow_schema() except +libcudf_exception_handler
         bool is_enabled_allow_mismatched_pq_schemas() except +libcudf_exception_handler
+        bool is_enabled_allow_missing_columns() except +libcudf_exception_handler
         # setter
 
         void set_filter(expression &filter) except +libcudf_exception_handler
@@ -46,6 +47,9 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         void set_skip_rows(int64_t val) except +libcudf_exception_handler
         void enable_use_arrow_schema(bool val) except +libcudf_exception_handler
         void enable_allow_mismatched_pq_schemas(
+            bool val
+        ) except +libcudf_exception_handler
+        void enable_allow_missing_columns(
             bool val
         ) except +libcudf_exception_handler
         void enable_use_pandas_metadata(bool val) except +libcudf_exception_handler
@@ -77,6 +81,9 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
             bool val
         ) except +libcudf_exception_handler
         parquet_reader_options_builder& allow_mismatched_pq_schemas(
+            bool val
+        ) except +libcudf_exception_handler
+        parquet_reader_options_builder& allow_missing_columns(
             bool val
         ) except +libcudf_exception_handler
         parquet_reader_options_builder& timestamp_type(

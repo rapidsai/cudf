@@ -24,7 +24,6 @@
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <iostream>
 #include <memory>
 #include <optional>
 #include <string>
@@ -99,6 +98,8 @@ class parquet_reader_options {
   bool _use_arrow_schema = true;
   // Whether to allow reading matching select columns from mismatched Parquet files.
   bool _allow_mismatched_pq_schemas = false;
+  // Whether to allow reading non-existent projected columns
+  bool _allow_missing_columns = false;
   // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
 
@@ -173,6 +174,14 @@ class parquet_reader_options {
   {
     return _allow_mismatched_pq_schemas;
   }
+
+  /**
+   * @brief Returns boolean depending on whether to allow readning non-existent projected columns.
+   *
+   * @return `true` if non-existent projected columns will be allowed while reading.
+   *
+   */
+  [[nodiscard]] bool is_enabled_allow_missing_columns() const { return _allow_missing_columns; }
 
   /**
    * @brief Returns optional tree of metadata.
@@ -330,6 +339,14 @@ class parquet_reader_options {
   void enable_allow_mismatched_pq_schemas(bool val) { _allow_mismatched_pq_schemas = val; }
 
   /**
+   * @brief Sets to enable/disable reading of non-existent projected columns.
+   *
+   * @param val Boolean indicating whether to allow reading non-existent projected columns.
+   *
+   */
+  void enable_allow_missing_columns(bool val) { _allow_missing_columns = val; }
+
+  /**
    * @brief Sets reader column schema.
    *
    * @param val Tree of schema nodes to enable/disable conversion of binary to string columns.
@@ -466,6 +483,19 @@ class parquet_reader_options_builder {
   parquet_reader_options_builder& allow_mismatched_pq_schemas(bool val)
   {
     options._allow_mismatched_pq_schemas = val;
+    return *this;
+  }
+
+  /**
+   * @brief Sets to enable/disable reading of non-existent projected columns.
+   *
+   * @param val Boolean indicating whether to allow reading non-existent projected columns.
+   *
+   * @return this for chaining.
+   */
+  parquet_reader_options_builder& allow_missing_columns(bool val)
+  {
+    options._allow_missing_columns = val;
     return *this;
   }
 

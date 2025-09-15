@@ -646,9 +646,31 @@ def test_parquet_reader_select_nonexistent_column_error():
     buf = BytesIO()
     df.to_parquet(buf)
     with pytest.raises(
-        ValueError, match="Encountered non existent column in selected path"
+        ValueError, match="Encountered non-existent column in selected path"
     ):
         cudf.read_parquet(buf, columns=["a", "d"])
+
+
+def test_parquet_reader_allow_select_nonexistent_column():
+    df = cudf.DataFrame(
+        {
+            "a": [1, 2, 3, 4, 5, 6],
+            "b": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            "c": ["a", "b", "c", "d", "e", "f"],
+        }
+    )
+    buf = BytesIO()
+    df.to_parquet(buf)
+
+    expect = cudf.DataFrame(
+        {
+            "a": [1, 2, 3, 4, 5, 6],
+        }
+    )
+    got = cudf.read_parquet(
+        buf, columns=["a", "d"], allow_missing_columns=True
+    )
+    assert_eq(expect, got)
 
 
 def test_parquet_reader_invalids(tmp_path):
