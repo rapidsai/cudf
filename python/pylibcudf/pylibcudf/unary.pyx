@@ -37,6 +37,8 @@ cpdef Column unary_operation(Column input, unary_operator op, Stream stream=None
         The column to operate on.
     op : UnaryOperator
         The operation to perform.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -62,6 +64,8 @@ cpdef Column is_null(Column input, Stream stream=None):
     ----------
     input : Column
         The column to check.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -87,6 +91,8 @@ cpdef Column is_valid(Column input, Stream stream=None):
     ----------
     input : Column
         The column to check.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -114,6 +120,8 @@ cpdef Column cast(Column input, DataType data_type, Stream stream=None):
         The column to check.
     data_type : DataType
         The data type to cast to.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -139,6 +147,8 @@ cpdef Column is_nan(Column input, Stream stream=None):
     ----------
     input : Column
         The column to check.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -164,6 +174,8 @@ cpdef Column is_not_nan(Column input, Stream stream=None):
     ----------
     input : Column
         The column to check.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------

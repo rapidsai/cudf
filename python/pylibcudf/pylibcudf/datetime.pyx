@@ -60,6 +60,8 @@ cpdef Column extract_datetime_component(
         The column to extract the component from.
     component : DatetimeComponent
         The datetime component to extract.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -90,6 +92,8 @@ cpdef Column ceil_datetimes(
         The column of input datetime values.
     freq : rounding_frequency
         The frequency to round up to.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -120,6 +124,8 @@ cpdef Column floor_datetimes(
         The column of input datetime values.
     freq : rounding_frequency
         The frequency to round down to.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -150,6 +156,8 @@ cpdef Column round_datetimes(
         The column of input datetime values.
     freq : rounding_frequency
         The frequency to round to.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -182,6 +190,8 @@ cpdef Column add_calendrical_months(
         The column of input timestamp values.
     months : ColumnOrScalar
         The number of months to add.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -216,6 +226,8 @@ cpdef Column day_of_year(Column input, Stream stream=None):
     ----------
     input : Column
         The column of input datetime values.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -240,6 +252,8 @@ cpdef Column is_leap_year(Column input, Stream stream=None):
     ----------
     input : Column
         The column of input datetime values.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -265,6 +279,8 @@ cpdef Column last_day_of_month(Column input, Stream stream=None):
     ----------
     input : Column
         The column of input datetime values.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -291,6 +307,8 @@ cpdef Column extract_quarter(Column input, Stream stream=None):
     ----------
     input : Column
         The column of input datetime values.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -315,6 +333,8 @@ cpdef Column days_in_month(Column input, Stream stream=None):
     ----------
     input : Column
         The column of input datetime values.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------

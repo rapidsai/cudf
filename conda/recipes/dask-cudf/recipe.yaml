@@ -34,9 +34,8 @@ requirements:
   run:
     - python
     - cudf =${{ version }}
-    # 'nvidia-ml-py' provides the 'pynvml' module, since v12.560.30
-    # ref: https://github.com/conda-forge/nvidia-ml-py-feedstock/pull/24
-    - nvidia-ml-py>=12.560.30
+    # 'nvidia-ml-py' provides the 'pynvml' module
+    - nvidia-ml-py>=12
     - rapids-dask-dependency =${{ minor_version }}
     - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
 

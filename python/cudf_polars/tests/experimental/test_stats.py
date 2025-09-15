@@ -17,7 +17,7 @@ from cudf_polars.experimental.statistics import (
     find_equivalence_sets,
 )
 from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
-from cudf_polars.testing.io import make_partitioned_source
+from cudf_polars.testing.io import make_lazy_frame, make_partitioned_source
 from cudf_polars.utils.config import ConfigOptions
 
 
@@ -32,17 +32,23 @@ def df():
     )
 
 
-def test_base_stats_dataframescan(df):
-    row_count = df.height
-    q = pl.LazyFrame(df)
-    engine = pl.GPUEngine(
+@pytest.fixture(scope="module")
+def engine():
+    return pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
         executor_options={
-            "max_rows_per_partition": 1_000,
             "scheduler": DEFAULT_SCHEDULER,
+            "shuffle_method": "tasks",
+            "target_partition_size": 10_000,
+            "max_rows_per_partition": 1_000,
         },
     )
+
+
+def test_base_stats_dataframescan(df, engine):
+    row_count = df.height
+    q = pl.LazyFrame(df)
     ir = Translator(q._ldf.visit(), engine).translate_ir()
     stats = collect_base_stats(ir, ConfigOptions.from_polars_engine(engine))
     column_stats = stats.column_stats[ir]
@@ -51,9 +57,9 @@ def test_base_stats_dataframescan(df):
     source_info_x = column_stats["x"].source_info
     source_info_y = column_stats["y"].source_info
     source_info_z = column_stats["z"].source_info
-    table_source_info = source_info_x.table_source_info
-    assert table_source_info is source_info_y.table_source_info
-    assert table_source_info is source_info_z.table_source_info
+    table_source_info = source_info_x.table_source_pairs[0].table_source
+    assert table_source_info is source_info_y.table_source_pairs[0].table_source
+    assert table_source_info is source_info_z.table_source_pairs[0].table_source
     assert source_info_x.row_count.value == row_count
     assert source_info_x.row_count.exact
 
@@ -131,9 +137,9 @@ def test_base_stats_parquet(
     source_info_x = column_stats["x"].source_info
     source_info_y = column_stats["y"].source_info
     source_info_z = column_stats["z"].source_info
-    table_source_info = source_info_x.table_source_info
-    assert table_source_info is source_info_y.table_source_info
-    assert table_source_info is source_info_z.table_source_info
+    table_source_info = source_info_x.table_source_pairs[0].table_source
+    assert table_source_info is source_info_y.table_source_pairs[0].table_source
+    assert table_source_info is source_info_z.table_source_pairs[0].table_source
     if max_footer_samples:
         assert source_info_x.row_count.value == df.height
         assert source_info_x.row_count.exact
@@ -182,17 +188,8 @@ def test_base_stats_parquet(
         assert set(table_source_info._unique_stats) == {"x", "y", "z"}
 
 
-def test_base_stats_csv(tmp_path, df):
-    make_partitioned_source(df, tmp_path, "csv", n_files=3)
-    q = pl.scan_csv(tmp_path)
-    engine = pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "target_partition_size": 10_000,
-            "scheduler": DEFAULT_SCHEDULER,
-        },
-    )
+def test_base_stats_csv(engine, tmp_path, df):
+    q = make_lazy_frame(df, "csv", path=tmp_path, n_files=3)
     ir = Translator(q._ldf.visit(), engine).translate_ir()
     stats = collect_base_stats(ir, ConfigOptions.from_polars_engine(engine))
     column_stats = stats.column_stats[ir]
@@ -273,15 +270,7 @@ def test_base_stats_parquet_groupby(
 
 
 @pytest.mark.parametrize("how", ["inner", "left", "right"])
-def test_base_stats_join(how):
-    engine = pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "scheduler": DEFAULT_SCHEDULER,
-            "shuffle_method": "tasks",
-        },
-    )
+def test_base_stats_join(how, engine):
     left = pl.LazyFrame(
         {
             "x": range(15),
@@ -318,15 +307,7 @@ def test_base_stats_join(how):
         assert ir_column_stats["z"].source_info.row_count.value == right_count
 
 
-def test_base_stats_union():
-    engine = pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "scheduler": DEFAULT_SCHEDULER,
-            "shuffle_method": "tasks",
-        },
-    )
+def test_base_stats_union(engine):
     left = pl.LazyFrame(
         {
             "x": range(15),
@@ -347,23 +328,13 @@ def test_base_stats_union():
     stats = collect_base_stats(ir, ConfigOptions.from_polars_engine(engine))
     column_stats = stats.column_stats[ir]
 
-    # We lose source info after a Union, but we
-    # can set accurate row-count and unique-value
-    # estimates for the current IR in #19392
+    # Source row-count estimate is the sum of the two sources
     source_info_x = column_stats["x"].source_info
-    assert source_info_x.row_count.value is None
+    assert source_info_x.row_count.value == 24
 
 
-def test_base_stats_distinct(df):
+def test_base_stats_distinct(engine, df):
     row_count = df.height
-    engine = pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "scheduler": DEFAULT_SCHEDULER,
-            "shuffle_method": "tasks",
-        },
-    )
     q = pl.LazyFrame(df).unique(subset=["y"])
     ir = Translator(q._ldf.visit(), engine).translate_ir()
     stats = collect_base_stats(ir, ConfigOptions.from_polars_engine(engine))
@@ -374,16 +345,7 @@ def test_base_stats_distinct(df):
     assert source_info_y.row_count.exact
 
 
-def test_base_stats_join_key_info():
-    engine = pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "scheduler": DEFAULT_SCHEDULER,
-            "shuffle_method": "tasks",
-        },
-    )
-
+def test_base_stats_join_key_info(engine):
     # Customers table (PK: cust_id)
     customers = pl.LazyFrame(
         {

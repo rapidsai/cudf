@@ -33,10 +33,8 @@ __all__ = [
     "left_semi_join",
     "mixed_full_join",
     "mixed_inner_join",
-    "mixed_inner_join_size",
     "mixed_left_anti_join",
     "mixed_left_join",
-    "mixed_left_join_size",
     "mixed_left_semi_join",
 ]
 
@@ -258,6 +256,8 @@ cpdef Table cross_join(Table left, Table right, Stream stream=None):
         The left table to join.
     right: Table
         The right table to join.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -518,7 +518,7 @@ cpdef tuple mixed_inner_join(
         join.
     """
     cdef cpp_join.gather_map_pair_type c_result
-    cdef optional[size_t] empty_optional
+    cdef cpp_join.output_size_data_type empty_optional
 
     stream = _get_stream(stream)
 
@@ -537,55 +537,6 @@ cpdef tuple mixed_inner_join(
         _column_from_gather_map(move(c_result.first), stream),
         _column_from_gather_map(move(c_result.second), stream),
     )
-
-cpdef size_t mixed_inner_join_size(
-    Table left_keys,
-    Table right_keys,
-    Table left_conditional,
-    Table right_conditional,
-    Expression binary_predicate,
-    null_equality nulls_equal,
-    Stream stream=None
-):
-    """Get the size of a mixed inner join between two tables.
-
-    For details, see :cpp:func:`mixed_inner_join_size`.
-
-    Parameters
-    ----------
-    left_keys : Table
-        The left table to use for the equality join.
-    right_keys : Table
-        The right table to use for the equality join.
-    left_conditional : Table
-        The left table to use for the conditional join.
-    right_conditional : Table
-        The right table to use for the conditional join.
-    binary_predicate : Expression
-        Condition to join on.
-    nulls_equal : NullEquality
-        Should nulls compare equal in the equality join?
-
-    Returns
-    -------
-    int
-        The number of rows that would be produced by the join.
-    """
-    cdef size_t result
-
-    stream = _get_stream(stream)
-
-    with nogil:
-        result = cpp_join.mixed_inner_join_size(
-            left_keys.view(),
-            right_keys.view(),
-            left_conditional.view(),
-            right_conditional.view(),
-            dereference(binary_predicate.c_obj.get()),
-            nulls_equal,
-            stream.view()
-        )
-    return result
 
 
 cpdef tuple mixed_left_join(
@@ -623,7 +574,7 @@ cpdef tuple mixed_left_join(
         join.
     """
     cdef cpp_join.gather_map_pair_type c_result
-    cdef optional[size_t] empty_optional
+    cdef cpp_join.output_size_data_type empty_optional
 
     stream = _get_stream(stream)
 
@@ -642,55 +593,6 @@ cpdef tuple mixed_left_join(
         _column_from_gather_map(move(c_result.first), stream),
         _column_from_gather_map(move(c_result.second), stream),
     )
-
-cpdef size_t mixed_left_join_size(
-    Table left_keys,
-    Table right_keys,
-    Table left_conditional,
-    Table right_conditional,
-    Expression binary_predicate,
-    null_equality nulls_equal,
-    Stream stream=None
-):
-    """Get the size of a mixed left join between two tables.
-
-    For details, see :cpp:func:`mixed_left_join_size`.
-
-    Parameters
-    ----------
-    left_keys : Table
-        The left table to use for the equality join.
-    right_keys : Table
-        The right table to use for the equality join.
-    left_conditional : Table
-        The left table to use for the conditional join.
-    right_conditional : Table
-        The right table to use for the conditional join.
-    binary_predicate : Expression
-        Condition to join on.
-    nulls_equal : NullEquality
-        Should nulls compare equal in the equality join?
-
-    Returns
-    -------
-    int
-        The number of rows that would be produced by the join.
-    """
-    cdef size_t result
-
-    stream = _get_stream(stream)
-
-    with nogil:
-        result = cpp_join.mixed_left_join_size(
-            left_keys.view(),
-            right_keys.view(),
-            left_conditional.view(),
-            right_conditional.view(),
-            dereference(binary_predicate.c_obj.get()),
-            nulls_equal,
-            stream.view()
-        )
-    return result
 
 
 cpdef tuple mixed_full_join(
@@ -728,7 +630,7 @@ cpdef tuple mixed_full_join(
         join.
     """
     cdef cpp_join.gather_map_pair_type c_result
-    cdef optional[size_t] empty_optional
+    cdef cpp_join.output_size_data_type empty_optional
 
     stream = _get_stream(stream)
 

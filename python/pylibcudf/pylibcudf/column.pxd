@@ -56,7 +56,10 @@ cdef class Column:
     cdef mutable_column_view mutable_view(self) nogil
 
     @staticmethod
-    cdef Column from_libcudf(unique_ptr[column] libcudf_col, Stream stream=*)
+    cdef Column from_libcudf(
+        unique_ptr[column] libcudf_col,
+        Stream stream,
+    )
 
     @staticmethod
     cdef Column from_column_view(const column_view& cv, Column owner)
@@ -82,7 +85,7 @@ cdef class Column:
     cpdef gpumemoryview data(self)
     cpdef gpumemoryview null_mask(self)
     cpdef list children(self)
-    cpdef Column copy(self)
+    cpdef Column copy(self, Stream stream=*)
     cpdef uint64_t device_buffer_size(self)
     cpdef Column with_mask(self, gpumemoryview, size_type)
 
