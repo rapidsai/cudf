@@ -136,7 +136,7 @@ def log_do_evaluate(
     """
     if not LOG_TRACES:
         return func
-    else:
+    else:  # pragma: no cover; requires CUDF_POLARS_LOG_TRACES=1
 
         @functools.wraps(func)
         def wrapper(

@@ -136,7 +136,9 @@ def set_memory_resource(
             ),
         )
     rmm.mr.set_current_device_resource(mr)
-    if cudf_polars.dsl.tracing.LOG_TRACES:
+    if (
+        cudf_polars.dsl.tracing.LOG_TRACES
+    ):  # pragma: no cover; requires CUDF_POLARS_LOG_TRACES=1
         ctx = rmm.statistics.statistics()
     else:
         ctx = contextlib.nullcontext()
