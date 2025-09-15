@@ -56,7 +56,10 @@ cdef class Column:
     cdef mutable_column_view mutable_view(self) nogil
 
     @staticmethod
-    cdef Column from_libcudf(unique_ptr[column] libcudf_col, Stream stream=*)
+    cdef Column from_libcudf(
+        unique_ptr[column] libcudf_col,
+        Stream stream,
+    )
 
     @staticmethod
     cdef Column from_column_view(const column_view& cv, Column owner)
