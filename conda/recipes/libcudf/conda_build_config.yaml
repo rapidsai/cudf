@@ -16,6 +16,9 @@ c_stdlib_version:
 cmake_version:
   - ">=3.30.4"
 
+croaring_version:
+  - ">=4.3.11"
+
 dlpack_version:
   - ">=0.8,<1.0"
 

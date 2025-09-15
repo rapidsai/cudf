@@ -44,5 +44,5 @@ function(find_and_configure_croaring VERSION)
 
 endfunction()
 
-set(croaring_VERSION_cudf "4.3.10")
+set(croaring_VERSION_cudf "4.3.11")
 find_and_configure_croaring(${croaring_VERSION_cudf})

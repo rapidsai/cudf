@@ -751,6 +751,7 @@ dependencies:
       - output_types: conda
         packages:
           - *cmake_ver
+          - croaring>=4.3.11
           - cuda-sanitizer-api
   # packages we want in the 'test_cpp' group in 'files', for CI, but which
   # shouldn't be added to 'all' for building a development environment
