@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """
@@ -20,7 +20,6 @@ from cudf_polars.utils.versions import _ensure_polars_version
 _ensure_polars_version()
 del _ensure_polars_version
 
-# Last test
 __all__: list[str] = [
     "Translator",
     "__git_commit__",
