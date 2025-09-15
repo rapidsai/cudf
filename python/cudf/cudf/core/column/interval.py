@@ -71,36 +71,8 @@ class IntervalColumn(StructColumn):
             struct_arrow = pa.array([], typ.storage_type)
         return pa.ExtensionArray.from_storage(typ, struct_arrow)
 
-    @classmethod
-    def from_struct_column(
-        cls,
-        struct_column: StructColumn,
-        closed: Literal["left", "right", "both", "neither"] = "right",
-    ) -> Self:
-        first_field_name = next(iter(struct_column.dtype.fields.keys()))
-        return cls(
-            data=None,
-            size=struct_column.size,
-            dtype=IntervalDtype(
-                struct_column.dtype.fields[first_field_name], closed
-            ),
-            mask=struct_column.base_mask,
-            offset=struct_column.offset,
-            null_count=struct_column.null_count,
-            children=struct_column.base_children,  # type: ignore[arg-type]
-        )
-
     def copy(self, deep: bool = True) -> Self:
-        struct_copy = super().copy(deep=deep)
-        return IntervalColumn(  # type: ignore[return-value]
-            data=None,
-            size=struct_copy.size,
-            dtype=IntervalDtype(self.dtype.subtype, self.dtype.closed),
-            mask=struct_copy.base_mask,
-            offset=struct_copy.offset,
-            null_count=struct_copy.null_count,
-            children=struct_copy.base_children,  # type: ignore[arg-type]
-        )
+        return super().copy(deep=deep)._with_type_metadata(self.dtype)  # type: ignore[return-value]
 
     @functools.cached_property
     def is_empty(self) -> ColumnBase:

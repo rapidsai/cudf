@@ -338,11 +338,11 @@ def sink_to_str(sink):
     for comparison
     """
     if isinstance(sink, (str, os.PathLike)):
-        with open(sink, "r") as f:
+        with open(sink, "r", encoding="utf-8") as f:
             str_result = f.read()
     elif isinstance(sink, io.BytesIO):
         sink.seek(0)
-        str_result = sink.read().decode()
+        str_result = sink.read().decode("utf-8")
     else:
         sink.seek(0)
         str_result = sink.read()
