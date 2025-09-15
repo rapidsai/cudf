@@ -3523,7 +3523,10 @@ class DatetimeIndex(Index):
 
         name = _getdefault_name(data, name=name)
         data = as_column(data)
-
+        if data.dtype.kind == "b":
+            raise ValueError(
+                "Boolean data cannot be converted to a DatetimeIndex"
+            )
         if dtype is not None:
             dtype = cudf.dtype(dtype)
             if dtype.kind != "M":
