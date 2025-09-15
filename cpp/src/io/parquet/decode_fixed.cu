@@ -28,6 +28,9 @@ namespace cudf::io::parquet::detail {
 
 namespace {
 
+// Max block size supported for the parquet decode, assuming 64 registers per thread.
+static constexpr int max_decode_block_size = 1024;
+
 // Unlike cub's algorithm, this provides warp-wide and block-wide results simultaneously.
 // Also, this provides the ability to compute warp_bits & lane_mask manually, which we need for
 // lists.
@@ -1008,7 +1011,7 @@ constexpr bool is_split_decode()
  * @param error_code Error code to set if an error is encountered
  */
 template <typename level_t, int decode_block_size_t, decode_kernel_mask kernel_mask_t>
-CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 1024 / decode_block_size_t)
+CUDF_KERNEL void __launch_bounds__(decode_block_size_t, max_decode_block_size / decode_block_size_t)
   decode_page_data_generic(PageInfo* pages,
                            device_span<ColumnChunkDesc const> chunks,
                            size_t min_row,
@@ -1340,152 +1343,186 @@ void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
 
   if (min_row > 0) {
     // Chunked read. For non-string non-list is faster if we use 256 threads instead of 128
+    static constexpr int default_block_size = 128;
+    static_assert(max_decode_block_size % default_block_size == 0,
+                  "max_decode_block_size must be multiple of default_block_size");
+    static constexpr int wide_block_size = 256;
+    static_assert(max_decode_block_size % wide_block_size == 0,
+                  "max_decode_block_size must be multiple of wide_block_size");
     switch (kernel_mask) {
       case decode_kernel_mask::FIXED_WIDTH_NO_DICT:
-        launch_kernel(int_tag_t<256>{}, kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_NO_DICT>{});
+        launch_kernel(int_tag_t<wide_block_size>{},
+                      kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_NO_DICT>{});
         break;
       case decode_kernel_mask::FIXED_WIDTH_NO_DICT_NESTED:
-        launch_kernel(int_tag_t<256>{},
+        launch_kernel(int_tag_t<wide_block_size>{},
                       kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_NO_DICT_NESTED>{});
         break;
       case decode_kernel_mask::FIXED_WIDTH_NO_DICT_LIST:
-        launch_kernel(int_tag_t<128>{},
+        launch_kernel(int_tag_t<default_block_size>{},
                       kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_NO_DICT_LIST>{});
         break;
       case decode_kernel_mask::FIXED_WIDTH_DICT:
-        launch_kernel(int_tag_t<256>{}, kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_DICT>{});
+        launch_kernel(int_tag_t<wide_block_size>{},
+                      kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_DICT>{});
         break;
       case decode_kernel_mask::FIXED_WIDTH_DICT_NESTED:
-        launch_kernel(int_tag_t<256>{},
+        launch_kernel(int_tag_t<wide_block_size>{},
                       kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_DICT_NESTED>{});
         break;
       case decode_kernel_mask::FIXED_WIDTH_DICT_LIST:
-        launch_kernel(int_tag_t<128>{}, kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_DICT_LIST>{});
+        launch_kernel(int_tag_t<default_block_size>{},
+                      kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_DICT_LIST>{});
         break;
       case decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_FLAT:
-        launch_kernel(int_tag_t<256>{},
+        launch_kernel(int_tag_t<wide_block_size>{},
                       kernel_tag_t<decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_FLAT>{});
         break;
       case decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED:
-        launch_kernel(int_tag_t<256>{},
+        launch_kernel(int_tag_t<wide_block_size>{},
                       kernel_tag_t<decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED>{});
         break;
       case decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_LIST:
-        launch_kernel(int_tag_t<128>{},
+        launch_kernel(int_tag_t<default_block_size>{},
                       kernel_tag_t<decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_LIST>{});
         break;
       case decode_kernel_mask::BOOLEAN:
-        launch_kernel(int_tag_t<256>{}, kernel_tag_t<decode_kernel_mask::BOOLEAN>{});
+        launch_kernel(int_tag_t<default_block_size>{}, kernel_tag_t<decode_kernel_mask::BOOLEAN>{});
         break;
       case decode_kernel_mask::BOOLEAN_NESTED:
-        launch_kernel(int_tag_t<256>{}, kernel_tag_t<decode_kernel_mask::BOOLEAN_NESTED>{});
+        launch_kernel(int_tag_t<default_block_size>{},
+                      kernel_tag_t<decode_kernel_mask::BOOLEAN_NESTED>{});
         break;
       case decode_kernel_mask::BOOLEAN_LIST:
-        launch_kernel(int_tag_t<128>{}, kernel_tag_t<decode_kernel_mask::BOOLEAN_LIST>{});
+        launch_kernel(int_tag_t<default_block_size>{},
+                      kernel_tag_t<decode_kernel_mask::BOOLEAN_LIST>{});
         break;
       case decode_kernel_mask::STRING:
-        launch_kernel(int_tag_t<128>{}, kernel_tag_t<decode_kernel_mask::STRING>{});
+        launch_kernel(int_tag_t<default_block_size>{}, kernel_tag_t<decode_kernel_mask::STRING>{});
         break;
       case decode_kernel_mask::STRING_NESTED:
-        launch_kernel(int_tag_t<128>{}, kernel_tag_t<decode_kernel_mask::STRING_NESTED>{});
+        launch_kernel(int_tag_t<default_block_size>{},
+                      kernel_tag_t<decode_kernel_mask::STRING_NESTED>{});
         break;
       case decode_kernel_mask::STRING_LIST:
-        launch_kernel(int_tag_t<128>{}, kernel_tag_t<decode_kernel_mask::STRING_LIST>{});
+        launch_kernel(int_tag_t<default_block_size>{},
+                      kernel_tag_t<decode_kernel_mask::STRING_LIST>{});
         break;
       case decode_kernel_mask::STRING_DICT:
-        launch_kernel(int_tag_t<128>{}, kernel_tag_t<decode_kernel_mask::STRING_DICT>{});
+        launch_kernel(int_tag_t<default_block_size>{},
+                      kernel_tag_t<decode_kernel_mask::STRING_DICT>{});
         break;
       case decode_kernel_mask::STRING_DICT_NESTED:
-        launch_kernel(int_tag_t<128>{}, kernel_tag_t<decode_kernel_mask::STRING_DICT_NESTED>{});
+        launch_kernel(int_tag_t<default_block_size>{},
+                      kernel_tag_t<decode_kernel_mask::STRING_DICT_NESTED>{});
         break;
       case decode_kernel_mask::STRING_DICT_LIST:
-        launch_kernel(int_tag_t<128>{}, kernel_tag_t<decode_kernel_mask::STRING_DICT_LIST>{});
+        launch_kernel(int_tag_t<default_block_size>{},
+                      kernel_tag_t<decode_kernel_mask::STRING_DICT_LIST>{});
         break;
       case decode_kernel_mask::STRING_STREAM_SPLIT:
-        launch_kernel(int_tag_t<128>{}, kernel_tag_t<decode_kernel_mask::STRING_STREAM_SPLIT>{});
+        launch_kernel(int_tag_t<default_block_size>{},
+                      kernel_tag_t<decode_kernel_mask::STRING_STREAM_SPLIT>{});
         break;
       case decode_kernel_mask::STRING_STREAM_SPLIT_NESTED:
-        launch_kernel(int_tag_t<128>{},
+        launch_kernel(int_tag_t<default_block_size>{},
                       kernel_tag_t<decode_kernel_mask::STRING_STREAM_SPLIT_NESTED>{});
         break;
       case decode_kernel_mask::STRING_STREAM_SPLIT_LIST:
-        launch_kernel(int_tag_t<128>{},
+        launch_kernel(int_tag_t<default_block_size>{},
                       kernel_tag_t<decode_kernel_mask::STRING_STREAM_SPLIT_LIST>{});
         break;
       default: CUDF_EXPECTS(false, "Kernel type not handled by this function"); break;
     }
   } else {
     // Non-chunked read. For strings is faster if we use 64 threads instead of 128
+    static constexpr int default_block_size = 128;
+    static_assert(max_decode_block_size % default_block_size == 0,
+                  "max_decode_block_size must be multiple of default_block_size");
+    static constexpr int string_block_size = 64;
+    static_assert(max_decode_block_size % string_block_size == 0,
+                  "max_decode_block_size must be multiple of string_block_size");
     switch (kernel_mask) {
       case decode_kernel_mask::FIXED_WIDTH_NO_DICT:
-        launch_kernel(int_tag_t<128>{}, kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_NO_DICT>{});
+        launch_kernel(int_tag_t<default_block_size>{},
+                      kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_NO_DICT>{});
         break;
       case decode_kernel_mask::FIXED_WIDTH_NO_DICT_NESTED:
-        launch_kernel(int_tag_t<128>{},
+        launch_kernel(int_tag_t<default_block_size>{},
                       kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_NO_DICT_NESTED>{});
         break;
       case decode_kernel_mask::FIXED_WIDTH_NO_DICT_LIST:
-        launch_kernel(int_tag_t<128>{},
+        launch_kernel(int_tag_t<default_block_size>{},
                       kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_NO_DICT_LIST>{});
         break;
       case decode_kernel_mask::FIXED_WIDTH_DICT:
-        launch_kernel(int_tag_t<128>{}, kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_DICT>{});
+        launch_kernel(int_tag_t<default_block_size>{},
+                      kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_DICT>{});
         break;
       case decode_kernel_mask::FIXED_WIDTH_DICT_NESTED:
-        launch_kernel(int_tag_t<128>{},
+        launch_kernel(int_tag_t<default_block_size>{},
                       kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_DICT_NESTED>{});
         break;
       case decode_kernel_mask::FIXED_WIDTH_DICT_LIST:
-        launch_kernel(int_tag_t<128>{}, kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_DICT_LIST>{});
+        launch_kernel(int_tag_t<default_block_size>{},
+                      kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_DICT_LIST>{});
         break;
       case decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_FLAT:
-        launch_kernel(int_tag_t<128>{},
+        launch_kernel(int_tag_t<default_block_size>{},
                       kernel_tag_t<decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_FLAT>{});
         break;
       case decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED:
-        launch_kernel(int_tag_t<128>{},
+        launch_kernel(int_tag_t<default_block_size>{},
                       kernel_tag_t<decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED>{});
         break;
       case decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_LIST:
-        launch_kernel(int_tag_t<128>{},
+        launch_kernel(int_tag_t<default_block_size>{},
                       kernel_tag_t<decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_LIST>{});
         break;
       case decode_kernel_mask::BOOLEAN:
-        launch_kernel(int_tag_t<128>{}, kernel_tag_t<decode_kernel_mask::BOOLEAN>{});
+        launch_kernel(int_tag_t<default_block_size>{}, kernel_tag_t<decode_kernel_mask::BOOLEAN>{});
         break;
       case decode_kernel_mask::BOOLEAN_NESTED:
-        launch_kernel(int_tag_t<128>{}, kernel_tag_t<decode_kernel_mask::BOOLEAN_NESTED>{});
+        launch_kernel(int_tag_t<default_block_size>{},
+                      kernel_tag_t<decode_kernel_mask::BOOLEAN_NESTED>{});
         break;
       case decode_kernel_mask::BOOLEAN_LIST:
-        launch_kernel(int_tag_t<128>{}, kernel_tag_t<decode_kernel_mask::BOOLEAN_LIST>{});
+        launch_kernel(int_tag_t<default_block_size>{},
+                      kernel_tag_t<decode_kernel_mask::BOOLEAN_LIST>{});
         break;
       case decode_kernel_mask::STRING:
-        launch_kernel(int_tag_t<64>{}, kernel_tag_t<decode_kernel_mask::STRING>{});
+        launch_kernel(int_tag_t<string_block_size>{}, kernel_tag_t<decode_kernel_mask::STRING>{});
         break;
       case decode_kernel_mask::STRING_NESTED:
-        launch_kernel(int_tag_t<64>{}, kernel_tag_t<decode_kernel_mask::STRING_NESTED>{});
+        launch_kernel(int_tag_t<string_block_size>{},
+                      kernel_tag_t<decode_kernel_mask::STRING_NESTED>{});
         break;
       case decode_kernel_mask::STRING_LIST:
-        launch_kernel(int_tag_t<64>{}, kernel_tag_t<decode_kernel_mask::STRING_LIST>{});
+        launch_kernel(int_tag_t<string_block_size>{},
+                      kernel_tag_t<decode_kernel_mask::STRING_LIST>{});
         break;
       case decode_kernel_mask::STRING_DICT:
-        launch_kernel(int_tag_t<128>{}, kernel_tag_t<decode_kernel_mask::STRING_DICT>{});
+        launch_kernel(int_tag_t<default_block_size>{},
+                      kernel_tag_t<decode_kernel_mask::STRING_DICT>{});
         break;
       case decode_kernel_mask::STRING_DICT_NESTED:
-        launch_kernel(int_tag_t<128>{}, kernel_tag_t<decode_kernel_mask::STRING_DICT_NESTED>{});
+        launch_kernel(int_tag_t<default_block_size>{},
+                      kernel_tag_t<decode_kernel_mask::STRING_DICT_NESTED>{});
         break;
       case decode_kernel_mask::STRING_DICT_LIST:
-        launch_kernel(int_tag_t<128>{}, kernel_tag_t<decode_kernel_mask::STRING_DICT_LIST>{});
+        launch_kernel(int_tag_t<default_block_size>{},
+                      kernel_tag_t<decode_kernel_mask::STRING_DICT_LIST>{});
         break;
       case decode_kernel_mask::STRING_STREAM_SPLIT:
-        launch_kernel(int_tag_t<64>{}, kernel_tag_t<decode_kernel_mask::STRING_STREAM_SPLIT>{});
+        launch_kernel(int_tag_t<string_block_size>{},
+                      kernel_tag_t<decode_kernel_mask::STRING_STREAM_SPLIT>{});
         break;
       case decode_kernel_mask::STRING_STREAM_SPLIT_NESTED:
-        launch_kernel(int_tag_t<64>{},
+        launch_kernel(int_tag_t<string_block_size>{},
                       kernel_tag_t<decode_kernel_mask::STRING_STREAM_SPLIT_NESTED>{});
         break;
       case decode_kernel_mask::STRING_STREAM_SPLIT_LIST:
-        launch_kernel(int_tag_t<64>{},
+        launch_kernel(int_tag_t<string_block_size>{},
                       kernel_tag_t<decode_kernel_mask::STRING_STREAM_SPLIT_LIST>{});
         break;
       default: CUDF_EXPECTS(false, "Kernel type not handled by this function"); break;
