@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import operator
-from typing import TYPE_CHECKING, Any, Literal, TypedDict
+from typing import TYPE_CHECKING, Any, Concatenate, Literal, TypeVar, TypedDict
 
 import pylibcudf as plc
 from rmm.pylibrmm.stream import DEFAULT_STREAM
@@ -19,7 +19,7 @@ from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.experimental.utils import _concat
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping, Sequence
+    from collections.abc import Callable, MutableMapping, Sequence
 
     from cudf_polars.containers import DataType
     from cudf_polars.dsl.expr import NamedExpr
@@ -39,7 +39,7 @@ class ShuffleOptions(TypedDict):
     on: Sequence[str]
     column_names: Sequence[str]
     dtypes: Sequence[DataType]
-    cluster_kind: str
+    cluster_kind: Literal["dask", "single"]
 
 
 # Experimental rapidsmpf shuffler integration
@@ -126,7 +126,8 @@ class Shuffle(IR):
 
     Notes
     -----
-    Only hash-based partitioning is supported (for now).
+    Only hash-based partitioning is supported (for now).  See
+    `ShuffleSorted` for sorting-based shuffling.
     """
 
     __slots__ = ("keys", "shuffle_method")
@@ -163,43 +164,47 @@ class Shuffle(IR):
 
 
 @nvtx_annotate_cudf_polars(message="Shuffle")
-def _partition_dataframe(
+def _hash_partition_dataframe(
     df: DataFrame,
-    keys: tuple[NamedExpr, ...],
-    count: int,
+    partition_id: int,  # Used only by sorted shuffling
+    partition_count: int,
+    options: MutableMapping[str, Any] | None,  # No options required
+    on: tuple[NamedExpr, ...],
 ) -> dict[int, DataFrame]:
     """
-    Partition an input DataFrame for shuffling.
-
-    Notes
-    -----
-    This utility only supports hash partitioning (for now).
+    Partition an input DataFrame for hash-based shuffling.
 
     Parameters
     ----------
     df
         DataFrame to partition.
-    keys
-        Shuffle key(s).
-    count
+    partition_id
+        Partition index (unused for hash partitioning).
+    partition_count
         Total number of output partitions.
+    options
+        Options (unused for hash partitioning).
+    on
+        Expressions used for the hash partitioning.
 
     Returns
     -------
     A dictionary mapping between int partition indices and
     DataFrame fragments.
     """
+    assert not options, f"Expected no options, got: {options}"
+
     if df.num_rows == 0:
         # Fast path for empty DataFrame
-        return dict.fromkeys(range(count), df)
+        return dict.fromkeys(range(partition_count), df)
 
     # Hash the specified keys to calculate the output
     # partition for each row
     partition_map = plc.binaryop.binary_operation(
         plc.hashing.murmurhash3_x86_32(
-            DataFrame([expr.evaluate(df) for expr in keys]).table
+            DataFrame([expr.evaluate(df) for expr in on]).table
         ),
-        plc.Scalar.from_py(count, plc.DataType(plc.TypeId.UINT32)),
+        plc.Scalar.from_py(partition_count, plc.DataType(plc.TypeId.UINT32)),
         plc.binaryop.BinaryOperator.PYMOD,
         plc.types.DataType(plc.types.TypeId.UINT32),
     )
@@ -208,8 +213,9 @@ def _partition_dataframe(
     t, offsets = plc.partitioning.partition(
         df.table,
         partition_map,
-        count,
+        partition_count,
     )
+    splits = offsets[1:-1]
 
     # Split and return the partitioned result
     return {
@@ -218,16 +224,25 @@ def _partition_dataframe(
             df.column_names,
             df.dtypes,
         )
-        for i, split in enumerate(plc.copying.split(t, offsets[1:-1]))
+        for i, split in enumerate(plc.copying.split(t, splits))
     }
+
+
+# When dropping Python 3.10, can use _simple_shuffle_graph[OPT_T](...)
+OPT_T = TypeVar("OPT_T")
 
 
 def _simple_shuffle_graph(
     name_in: str,
     name_out: str,
-    keys: tuple[NamedExpr, ...],
     count_in: int,
     count_out: int,
+    _partition_dataframe_func: Callable[
+        Concatenate[DataFrame, int, int, OPT_T, ...],
+        MutableMapping[int, DataFrame],
+    ],
+    options: OPT_T,
+    *other: Any,
 ) -> MutableMapping[Any, Any]:
     """Make a simple all-to-all shuffle graph."""
     split_name = f"split-{name_out}"
@@ -238,10 +253,12 @@ def _simple_shuffle_graph(
         _concat_list = []
         for part_in in range(count_in):
             graph[(split_name, part_in)] = (
-                _partition_dataframe,
+                _partition_dataframe_func,
                 (name_in, part_in),
-                keys,
+                part_in,
                 count_out,
+                options,
+                *other,
             )
             _concat_list.append((inter_name, part_out, part_in))
             graph[_concat_list[-1]] = (
@@ -330,7 +347,9 @@ def _(
     return _simple_shuffle_graph(
         get_key_name(ir.children[0]),
         get_key_name(ir),
-        ir.keys,
         partition_info[ir.children[0]].count,
         partition_info[ir].count,
+        _hash_partition_dataframe,
+        None,
+        ir.keys,
     )

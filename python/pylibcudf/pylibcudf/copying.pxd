@@ -45,7 +45,7 @@ cpdef Table scatter(
     TableOrListOfScalars source, Column scatter_map, Table target_table, Stream stream=*
 )
 
-cpdef ColumnOrTable empty_like(ColumnOrTable input)
+cpdef ColumnOrTable empty_like(ColumnOrTable input, Stream stream=*)
 
 cpdef Column allocate_like(
     Column input_column, mask_allocation_policy policy, size=*, Stream stream=*

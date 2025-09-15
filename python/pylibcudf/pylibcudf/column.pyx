@@ -559,7 +559,10 @@ cdef class Column:
         )
 
     @staticmethod
-    cdef Column from_libcudf(unique_ptr[column] libcudf_col, Stream stream=None):
+    cdef Column from_libcudf(
+        unique_ptr[column] libcudf_col,
+        Stream stream,
+    ):
         """Create a Column from a libcudf column.
 
         This method is for pylibcudf's functions to use to ingest outputs of
@@ -1200,12 +1203,13 @@ cdef class Column:
         """The children of the column."""
         return self._children
 
-    cpdef Column copy(self):
+    cpdef Column copy(self, Stream stream=None):
         """Create a copy of the column."""
         cdef unique_ptr[column] c_result
+        stream = _get_stream(stream)
         with nogil:
-            c_result = make_unique[column](self.view())
-        return Column.from_libcudf(move(c_result))
+            c_result = make_unique[column](self.view(), stream.view())
+        return Column.from_libcudf(move(c_result), stream)
 
     cpdef uint64_t device_buffer_size(self):
         """

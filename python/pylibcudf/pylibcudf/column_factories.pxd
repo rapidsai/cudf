@@ -16,7 +16,8 @@ ctypedef fused MaskArg:
 
 
 cpdef Column make_empty_column(
-    MakeEmptyColumnOperand type_or_id
+    MakeEmptyColumnOperand type_or_id,
+    Stream stream=*,
 )
 
 cpdef Column make_numeric_column(
