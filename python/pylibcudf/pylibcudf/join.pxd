@@ -2,6 +2,7 @@
 
 from pylibcudf.libcudf.types cimport null_equality
 from rmm.pylibrmm.stream cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from .column cimport Column
 from .expressions cimport Expression
@@ -43,7 +44,9 @@ cpdef Column left_anti_join(
     Stream stream=*
 )
 
-cpdef Table cross_join(Table left, Table right, Stream stream=*)
+cpdef Table cross_join(
+    Table left, Table right, Stream stream=*, DeviceMemoryResource mr=*
+)
 
 cpdef tuple conditional_inner_join(
     Table left,

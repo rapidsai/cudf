@@ -1,6 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 from rmm.pylibrmm import Stream
+from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 
 from pylibcudf.column import Column
 from pylibcudf.expressions import Expression
@@ -38,7 +39,10 @@ def left_anti_join(
     stream: Stream | None = None,
 ) -> Column: ...
 def cross_join(
-    left: Table, right: Table, stream: Stream | None = None
+    left: Table,
+    right: Table,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Table: ...
 def conditional_inner_join(
     left: Table,

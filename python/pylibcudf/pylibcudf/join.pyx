@@ -13,11 +13,12 @@ from pylibcudf.libcudf.types cimport null_equality
 
 from rmm.librmm.device_buffer cimport device_buffer
 from rmm.pylibrmm.stream cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from .column cimport Column
 from .expressions cimport Expression
 from .table cimport Table
-from .utils cimport _get_stream
+from .utils cimport _get_stream, _get_memory_resource
 
 __all__ = [
     "conditional_full_join",
@@ -38,8 +39,12 @@ __all__ = [
     "mixed_left_semi_join",
 ]
 
-cdef Column _column_from_gather_map(cpp_join.gather_map_type gather_map, Stream stream):
+cdef Column _column_from_gather_map(
+    cpp_join.gather_map_type gather_map, Stream stream, DeviceMemoryResource mr=None
+):
     # helper to convert a gather map to a Column
+    if mr is None:
+        mr = _get_memory_resource(mr)
     return Column.from_libcudf(
         move(
             make_unique[column](
@@ -48,7 +53,8 @@ cdef Column _column_from_gather_map(cpp_join.gather_map_type gather_map, Stream 
                 0
             )
         ),
-        stream
+        stream,
+        mr
     )
 
 
@@ -245,7 +251,9 @@ cpdef Column left_anti_join(
     return _column_from_gather_map(move(c_result), stream)
 
 
-cpdef Table cross_join(Table left, Table right, Stream stream=None):
+cpdef Table cross_join(
+    Table left, Table right, Stream stream=None, DeviceMemoryResource mr=None
+):
     """Perform a cross join on two tables.
 
     For details see :cpp:func:`cross_join`.
@@ -258,6 +266,8 @@ cpdef Table cross_join(Table left, Table right, Stream stream=None):
         The right table to join.
     stream : Stream | None
         CUDA stream on which to perform the operation.
+    mr : DeviceMemoryResource | None
+        Device memory resource used to allocate the returned table's device memory.
 
     Returns
     -------
@@ -267,10 +277,11 @@ cpdef Table cross_join(Table left, Table right, Stream stream=None):
     cdef unique_ptr[table] result
 
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         result = cpp_join.cross_join(left.view(), right.view(), stream.view())
-    return Table.from_libcudf(move(result), stream)
+    return Table.from_libcudf(move(result), stream, mr)
 
 
 cpdef tuple conditional_inner_join(
