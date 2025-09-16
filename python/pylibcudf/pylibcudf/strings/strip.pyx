@@ -20,7 +20,8 @@ __all__ = ["strip"]
 cpdef Column strip(
     Column input,
     side_type side=side_type.BOTH,
-    Scalar to_strip=None
+    Scalar to_strip=None,
+    Stream stream=None
 ):
     """Removes the specified characters from the beginning
     or end (or both) of each string.
@@ -43,10 +44,9 @@ cpdef Column strip(
     pylibcudf.Column
         New strings column.
     """
-    cdef Stream stream
+    stream = _get_stream(stream)
 
     if to_strip is None:
-        stream = _get_stream(None)
         to_strip = Scalar.from_libcudf(
             cpp_make_string_scalar("".encode(), stream.view())
         )
@@ -59,7 +59,8 @@ cpdef Column strip(
         c_result = cpp_strip.strip(
             input.view(),
             side,
-            dereference(cpp_to_strip)
+            dereference(cpp_to_strip),
+            stream.view()
         )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream)
