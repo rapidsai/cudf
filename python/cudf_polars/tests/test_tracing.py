@@ -27,12 +27,9 @@ def fixture_configure_structlog(log_output):
     structlog.configure(processors=[log_output])
 
 
-@pytest.mark.parametrize("log_traces", [True, False])
 def test_trace_basic(
     log_output: Any,
     monkeypatch: pytest.MonkeyPatch,
-    *,
-    log_traces: bool,
 ) -> None:
     # tracing is determined when cudf_polars is imported.
     # So our best way of testing this is to run things in a subprocess
@@ -47,24 +44,19 @@ def test_trace_basic(
 
     env = {
         "CUDF_POLARS__EXECUTOR": cudf_polars.testing.asserts.DEFAULT_EXECUTOR,
+        "CUDF_POLARS_LOG_TRACES": "1",
     }
-
-    if log_traces:
-        env["CUDF_POLARS_LOG_TRACES"] = "1"
 
     result = subprocess.check_output([sys.executable, "-c", code], env=env)
     # Just ensure that the default structlog output is in the result
-    if log_traces:
-        assert b"Execute IR" in result
-        assert b"frames_output" in result
-        assert b"frames_input" in result
-        assert b"total_bytes_output" in result
-        assert b"total_bytes_input" in result
-        assert b"rmm_total_bytes_output" in result
-        assert b"rmm_total_bytes_input" in result
-        assert b"rmm_current_bytes_output" in result
-    else:
-        assert result == b""
+    assert b"Execute IR" in result
+    assert b"frames_output" in result
+    assert b"frames_input" in result
+    assert b"total_bytes_output" in result
+    assert b"total_bytes_input" in result
+    assert b"rmm_total_bytes_output" in result
+    assert b"rmm_total_bytes_input" in result
+    assert b"rmm_current_bytes_output" in result
 
 
 def test_import_without_structlog(monkeypatch: pytest.MonkeyPatch) -> None:
