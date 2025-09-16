@@ -1246,10 +1246,10 @@ class cost_model {
     return cost_factor(input_size, output_size, task_type) * input_size;
   }
 
-  static CUDF_HOST_DEVICE double task_host_cost(size_t input_size,
-                                                size_t output_size,
-                                                double device_host_ratio,
-                                                task_type task_type)
+  static double task_host_cost(size_t input_size,
+                                        size_t output_size,
+                                        double device_host_ratio,
+                                        task_type task_type)
   {
     CUDF_EXPECTS(device_host_ratio > 0, "device_host_ratio must be > 0");
     // Cost to copy the block to host and back; NOTE: assumes that the copy throughput is the same
