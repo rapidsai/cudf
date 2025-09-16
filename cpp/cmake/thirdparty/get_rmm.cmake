@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -15,8 +15,7 @@
 # This function finds rmm and sets any additional necessary environment variables.
 function(find_and_configure_rmm)
   include(${rapids-cmake-dir}/cpm/rmm.cmake)
-  include(${rapids-cmake-dir}/cpm/package_override.cmake)
-  rapids_cpm_package_override("${CMAKE_CURRENT_FUNCTION_LIST_DIR}/rmm_override.json")
+
   # Find or install RMM
   rapids_cpm_rmm(BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-exports)
 
