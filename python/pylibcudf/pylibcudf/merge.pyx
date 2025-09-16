@@ -9,9 +9,10 @@ from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport null_order, order, size_type
 
 from rmm.pylibrmm.stream cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from .table cimport Table
-from .utils cimport _get_stream
+from .utils cimport _get_stream, _get_memory_resource
 
 __all__ = ["merge"]
 
@@ -20,7 +21,8 @@ cpdef Table merge (
     list key_cols,
     list column_order,
     list null_precedence,
-    Stream stream=None
+    Stream stream=None,
+    DeviceMemoryResource mr=None
 ):
     """Merge a set of sorted tables.
 
@@ -38,6 +40,8 @@ cpdef Table merge (
         Whether nulls should come before or after non-nulls.
     stream : Stream | None
         CUDA stream on which to perform the operation.
+    mr : DeviceMemoryResource | None
+        Device memory resource used to allocate the returned table's device memory.
 
     Returns
     -------
@@ -54,6 +58,7 @@ cpdef Table merge (
 
     cdef unique_ptr[table] c_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_merge.merge(
@@ -63,4 +68,4 @@ cpdef Table merge (
             c_null_precedence,
             stream.view()
         )
-    return Table.from_libcudf(move(c_result), stream)
+    return Table.from_libcudf(move(c_result), stream, mr)
