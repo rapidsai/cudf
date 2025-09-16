@@ -1485,28 +1485,29 @@ void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
   };
 
   if (min_row == 0) {
+    // Not skipping anything for any pages
     non_skip_launch(launch_type::NO_ROW_CHECK_LAUNCH);
   } else {
     // String kernels are slower when split between skip/non-skip
     // Instead only one launch using default width
     switch (kernel_mask) {
       case decode_kernel_mask::STRING:
-        launch_kernel(launch_type::SKIP_ROWS_LAUNCH,
+        launch_kernel(launch_type::NO_ROW_CHECK_LAUNCH,
                       int_tag_t<default_block_size>{},
                       kernel_tag_t<decode_kernel_mask::STRING>{});
         return;
       case decode_kernel_mask::STRING_NESTED:
-        launch_kernel(launch_type::SKIP_ROWS_LAUNCH,
+        launch_kernel(launch_type::NO_ROW_CHECK_LAUNCH,
                       int_tag_t<default_block_size>{},
                       kernel_tag_t<decode_kernel_mask::STRING_NESTED>{});
         return;
       case decode_kernel_mask::STRING_STREAM_SPLIT:
-        launch_kernel(launch_type::SKIP_ROWS_LAUNCH,
+        launch_kernel(launch_type::NO_ROW_CHECK_LAUNCH,
                       int_tag_t<default_block_size>{},
                       kernel_tag_t<decode_kernel_mask::STRING_STREAM_SPLIT>{});
         return;
       case decode_kernel_mask::STRING_STREAM_SPLIT_NESTED:
-        launch_kernel(launch_type::SKIP_ROWS_LAUNCH,
+        launch_kernel(launch_type::NO_ROW_CHECK_LAUNCH,
                       int_tag_t<default_block_size>{},
                       kernel_tag_t<decode_kernel_mask::STRING_STREAM_SPLIT_NESTED>{});
         return;
@@ -1514,7 +1515,7 @@ void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
     }
 
     // We are doing a skip-rows read, but some pages may need to skip and not others.
-    // Do both skip and non-skip launches, will bail early for the wrong one
+    // Do both skip and non-skip launches, will bail early on a page if it's the wrong one
     non_skip_launch(launch_type::NO_SKIP_ROWS_LAUNCH);
 
     // Skip read. For non-strings is faster if we use 256 threads instead of 128
