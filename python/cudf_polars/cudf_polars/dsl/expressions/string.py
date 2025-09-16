@@ -254,8 +254,6 @@ class StringFunction(Expr):
             format, _, exact, cache = self.options
             if cache:
                 raise NotImplementedError("Strptime cache is a CPU feature")
-            if format is None:
-                raise NotImplementedError("Strptime format is required")
             if not exact:
                 raise NotImplementedError("Strptime does not support exact=False")
         elif self.name in {
@@ -760,6 +758,22 @@ class StringFunction(Expr):
             # TODO: ignores ambiguous
             format, strict, _, _ = self.options
             col = self.children[0].evaluate(df, context=context)
+            if format is None:
+                # Polars begins inference with the first non null value
+                plc_col = col.obj
+                int_range = plc.column.Column.from_iterable_of_py(range(col.size))
+                boolmask = plc.unary.is_valid(plc_col)
+
+                table = plc.stream_compaction.apply_boolean_mask(
+                    plc.Table([int_range]), boolmask
+                )
+                filtered = table.columns()[0]
+                first_element = plc.copying.get_element(filtered, 0).to_py()
+                first_valid_data = plc.copying.get_element(plc_col, first_element).to_py()
+                breakpoint()
+
+
+#Column(DataType data_type, size_type size, gpumemoryview data, gpumemoryview mask, size_type null_count, size_type offset, list children)
 
             is_timestamps = plc.strings.convert.convert_datetime.is_timestamp(
                 col.obj, format
