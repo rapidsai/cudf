@@ -1013,7 +1013,6 @@ constexpr bool is_split_decode()
  * @param num_rows Maximum number of rows to read
  * @param page_mask Boolean vector indicating which pages need to be decoded
  * @param initial_str_offsets Vector to store the initial offsets for large nested string cols
- * @param type_of_launch The type of run# checks we should do for this decode launch
  * @param error_code Error code to set if an error is encountered
  */
 template <typename level_t, int decode_block_size_t, decode_kernel_mask kernel_mask_t>
@@ -1024,7 +1023,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, max_decode_block_size / 
                            size_t num_rows,
                            cudf::device_span<bool const> page_mask,
                            cudf::device_span<size_t> initial_str_offsets,
-                           launch_type type_of_launch,
                            kernel_error::pointer error_code)
 {
   constexpr bool has_dict_t     = has_dict<kernel_mask_t>();
@@ -1053,16 +1051,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, max_decode_block_size / 
   PageInfo* pp          = &pages[page_idx];
 
   if (!(BitAnd(pages[page_idx].kernel_mask, kernel_mask_t))) { return; }
-
-  // Bail early if page row number is out of bounds for this launch
-  size_t const page_start_row = chunks[pp->chunk_idx].start_row + pp->chunk_row;
-  if ((type_of_launch == launch_type::SKIP_ROWS_LAUNCH) && (page_start_row >= min_row)) {
-    // The block size is for skipping rows, but we aren't skipping: bail
-    return;
-  } else if ((type_of_launch == launch_type::NO_SKIP_ROWS_LAUNCH) && (page_start_row < min_row)) {
-    // The block size is for not skipping rows, but we are skipping: bail
-    return;
-  }
 
   // must come after the kernel mask check
   [[maybe_unused]] null_count_back_copier _{s, t};
@@ -1330,7 +1318,7 @@ void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
                       rmm::cuda_stream_view stream)
 {
   // No template parameters on lambdas until C++20, so use type tags instead
-  auto launch_kernel = [&](launch_type type_of_launch, auto block_size_tag, auto kernel_mask_tag) {
+  auto launch_kernel = [&](auto block_size_tag, auto kernel_mask_tag) {
     constexpr int decode_block_size   = decltype(block_size_tag)::value;
     constexpr decode_kernel_mask mask = decltype(kernel_mask_tag)::value;
 
@@ -1345,7 +1333,6 @@ void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
                                                      num_rows,
                                                      page_mask,
                                                      initial_str_offsets,
-                                                     type_of_launch,
                                                      error_code);
     } else {
       decode_page_data_generic<uint16_t, decode_block_size, mask>
@@ -1355,7 +1342,6 @@ void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
                                                      num_rows,
                                                      page_mask,
                                                      initial_str_offsets,
-                                                     type_of_launch,
                                                      error_code);
     }
   };
@@ -1367,191 +1353,146 @@ void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
                 "max_decode_block_size must be multiple of default_block_size");
   switch (kernel_mask) {
     case decode_kernel_mask::BOOLEAN:
-      launch_kernel(launch_type::NO_ROW_CHECK_LAUNCH,
-                    int_tag_t<default_block_size>{},
-                    kernel_tag_t<decode_kernel_mask::BOOLEAN>{});
+      launch_kernel(int_tag_t<default_block_size>{}, kernel_tag_t<decode_kernel_mask::BOOLEAN>{});
       return;
     case decode_kernel_mask::BOOLEAN_NESTED:
-      launch_kernel(launch_type::NO_ROW_CHECK_LAUNCH,
-                    int_tag_t<default_block_size>{},
+      launch_kernel(int_tag_t<default_block_size>{},
                     kernel_tag_t<decode_kernel_mask::BOOLEAN_NESTED>{});
       return;
     case decode_kernel_mask::BOOLEAN_LIST:
-      launch_kernel(launch_type::NO_ROW_CHECK_LAUNCH,
-                    int_tag_t<default_block_size>{},
+      launch_kernel(int_tag_t<default_block_size>{},
                     kernel_tag_t<decode_kernel_mask::BOOLEAN_LIST>{});
       return;
     case decode_kernel_mask::STRING_DICT:
-      launch_kernel(launch_type::NO_ROW_CHECK_LAUNCH,
-                    int_tag_t<default_block_size>{},
+      launch_kernel(int_tag_t<default_block_size>{},
                     kernel_tag_t<decode_kernel_mask::STRING_DICT>{});
       return;
     case decode_kernel_mask::STRING_DICT_NESTED:
-      launch_kernel(launch_type::NO_ROW_CHECK_LAUNCH,
-                    int_tag_t<default_block_size>{},
+      launch_kernel(int_tag_t<default_block_size>{},
                     kernel_tag_t<decode_kernel_mask::STRING_DICT_NESTED>{});
       return;
     case decode_kernel_mask::STRING_DICT_LIST:
-      launch_kernel(launch_type::NO_ROW_CHECK_LAUNCH,
-                    int_tag_t<default_block_size>{},
+      launch_kernel(int_tag_t<default_block_size>{},
                     kernel_tag_t<decode_kernel_mask::STRING_DICT_LIST>{});
       return;
     case decode_kernel_mask::FIXED_WIDTH_NO_DICT_LIST:
-      launch_kernel(launch_type::NO_ROW_CHECK_LAUNCH,
-                    int_tag_t<default_block_size>{},
+      launch_kernel(int_tag_t<default_block_size>{},
                     kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_NO_DICT_LIST>{});
       return;
     case decode_kernel_mask::FIXED_WIDTH_DICT_LIST:
-      launch_kernel(launch_type::NO_ROW_CHECK_LAUNCH,
-                    int_tag_t<default_block_size>{},
+      launch_kernel(int_tag_t<default_block_size>{},
                     kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_DICT_LIST>{});
       return;
     case decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_LIST:
-      launch_kernel(launch_type::NO_ROW_CHECK_LAUNCH,
-                    int_tag_t<default_block_size>{},
+      launch_kernel(int_tag_t<default_block_size>{},
                     kernel_tag_t<decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_LIST>{});
       return;
     case decode_kernel_mask::STRING_LIST:
-      launch_kernel(launch_type::NO_ROW_CHECK_LAUNCH,
-                    int_tag_t<default_block_size>{},
+      launch_kernel(int_tag_t<default_block_size>{},
                     kernel_tag_t<decode_kernel_mask::STRING_LIST>{});
       return;
     case decode_kernel_mask::STRING_STREAM_SPLIT_LIST:
-      launch_kernel(launch_type::NO_ROW_CHECK_LAUNCH,
-                    int_tag_t<default_block_size>{},
+      launch_kernel(int_tag_t<default_block_size>{},
                     kernel_tag_t<decode_kernel_mask::STRING_STREAM_SPLIT_LIST>{});
       return;
     default: break;
   }
 
-  auto non_skip_launch = [&](launch_type type_of_launch) {
+  if (min_row == 0) {
+    // Not skipping anything for any pages
     // Non-skip-rows read. For strings is faster if we use 64 threads instead of 128
     static constexpr int string_block_size = 64;
     static_assert(max_decode_block_size % string_block_size == 0,
                   "max_decode_block_size must be multiple of string_block_size");
     switch (kernel_mask) {
       case decode_kernel_mask::FIXED_WIDTH_NO_DICT:
-        launch_kernel(type_of_launch,
-                      int_tag_t<default_block_size>{},
+        launch_kernel(int_tag_t<default_block_size>{},
                       kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_NO_DICT>{});
         break;
       case decode_kernel_mask::FIXED_WIDTH_NO_DICT_NESTED:
-        launch_kernel(type_of_launch,
-                      int_tag_t<default_block_size>{},
+        launch_kernel(int_tag_t<default_block_size>{},
                       kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_NO_DICT_NESTED>{});
         break;
       case decode_kernel_mask::FIXED_WIDTH_DICT:
-        launch_kernel(type_of_launch,
-                      int_tag_t<default_block_size>{},
+        launch_kernel(int_tag_t<default_block_size>{},
                       kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_DICT>{});
         break;
       case decode_kernel_mask::FIXED_WIDTH_DICT_NESTED:
-        launch_kernel(type_of_launch,
-                      int_tag_t<default_block_size>{},
+        launch_kernel(int_tag_t<default_block_size>{},
                       kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_DICT_NESTED>{});
         break;
       case decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_FLAT:
-        launch_kernel(type_of_launch,
-                      int_tag_t<default_block_size>{},
+        launch_kernel(int_tag_t<default_block_size>{},
                       kernel_tag_t<decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_FLAT>{});
         break;
       case decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED:
-        launch_kernel(type_of_launch,
-                      int_tag_t<default_block_size>{},
+        launch_kernel(int_tag_t<default_block_size>{},
                       kernel_tag_t<decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED>{});
         break;
       case decode_kernel_mask::STRING:
-        launch_kernel(type_of_launch,
-                      int_tag_t<string_block_size>{},
-                      kernel_tag_t<decode_kernel_mask::STRING>{});
+        launch_kernel(int_tag_t<string_block_size>{}, kernel_tag_t<decode_kernel_mask::STRING>{});
         break;
       case decode_kernel_mask::STRING_NESTED:
-        launch_kernel(type_of_launch,
-                      int_tag_t<string_block_size>{},
+        launch_kernel(int_tag_t<string_block_size>{},
                       kernel_tag_t<decode_kernel_mask::STRING_NESTED>{});
         break;
       case decode_kernel_mask::STRING_STREAM_SPLIT:
-        launch_kernel(type_of_launch,
-                      int_tag_t<string_block_size>{},
+        launch_kernel(int_tag_t<string_block_size>{},
                       kernel_tag_t<decode_kernel_mask::STRING_STREAM_SPLIT>{});
         break;
       case decode_kernel_mask::STRING_STREAM_SPLIT_NESTED:
-        launch_kernel(type_of_launch,
-                      int_tag_t<string_block_size>{},
+        launch_kernel(int_tag_t<string_block_size>{},
                       kernel_tag_t<decode_kernel_mask::STRING_STREAM_SPLIT_NESTED>{});
         break;
       default: CUDF_EXPECTS(false, "Kernel type not handled by this function"); break;
     }
-  };
-
-  if (min_row == 0) {
-    // Not skipping anything for any pages
-    non_skip_launch(launch_type::NO_ROW_CHECK_LAUNCH);
   } else {
-    // String kernels are slower when split between skip/non-skip
-    // Instead only one launch using default width
-    switch (kernel_mask) {
-      case decode_kernel_mask::STRING:
-        launch_kernel(launch_type::NO_ROW_CHECK_LAUNCH,
-                      int_tag_t<default_block_size>{},
-                      kernel_tag_t<decode_kernel_mask::STRING>{});
-        return;
-      case decode_kernel_mask::STRING_NESTED:
-        launch_kernel(launch_type::NO_ROW_CHECK_LAUNCH,
-                      int_tag_t<default_block_size>{},
-                      kernel_tag_t<decode_kernel_mask::STRING_NESTED>{});
-        return;
-      case decode_kernel_mask::STRING_STREAM_SPLIT:
-        launch_kernel(launch_type::NO_ROW_CHECK_LAUNCH,
-                      int_tag_t<default_block_size>{},
-                      kernel_tag_t<decode_kernel_mask::STRING_STREAM_SPLIT>{});
-        return;
-      case decode_kernel_mask::STRING_STREAM_SPLIT_NESTED:
-        launch_kernel(launch_type::NO_ROW_CHECK_LAUNCH,
-                      int_tag_t<default_block_size>{},
-                      kernel_tag_t<decode_kernel_mask::STRING_STREAM_SPLIT_NESTED>{});
-        return;
-      default: break;
-    }
-
     // We are doing a skip-rows read, but some pages may need to skip and not others.
-    // Do both skip and non-skip launches, will bail early on a page if it's the wrong one
-    non_skip_launch(launch_type::NO_SKIP_ROWS_LAUNCH);
-
-    // Skip read. For non-strings is faster if we use 256 threads instead of 128
+    // However, having different block sizes for different pages is a bad idea, as
+    // it will likely yield per SM utilization.
+    // The best performance is to use the wide launch for all pages, except 128 for strings.
     static constexpr int wide_block_size = 256;
     static_assert(max_decode_block_size % wide_block_size == 0,
                   "max_decode_block_size must be multiple of wide_block_size");
     switch (kernel_mask) {
       case decode_kernel_mask::FIXED_WIDTH_NO_DICT:
-        launch_kernel(launch_type::SKIP_ROWS_LAUNCH,
-                      int_tag_t<wide_block_size>{},
+        launch_kernel(int_tag_t<wide_block_size>{},
                       kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_NO_DICT>{});
         break;
       case decode_kernel_mask::FIXED_WIDTH_NO_DICT_NESTED:
-        launch_kernel(launch_type::SKIP_ROWS_LAUNCH,
-                      int_tag_t<wide_block_size>{},
+        launch_kernel(int_tag_t<wide_block_size>{},
                       kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_NO_DICT_NESTED>{});
         break;
       case decode_kernel_mask::FIXED_WIDTH_DICT:
-        launch_kernel(launch_type::SKIP_ROWS_LAUNCH,
-                      int_tag_t<wide_block_size>{},
+        launch_kernel(int_tag_t<wide_block_size>{},
                       kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_DICT>{});
         break;
       case decode_kernel_mask::FIXED_WIDTH_DICT_NESTED:
-        launch_kernel(launch_type::SKIP_ROWS_LAUNCH,
-                      int_tag_t<wide_block_size>{},
+        launch_kernel(int_tag_t<wide_block_size>{},
                       kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_DICT_NESTED>{});
         break;
       case decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_FLAT:
-        launch_kernel(launch_type::SKIP_ROWS_LAUNCH,
-                      int_tag_t<wide_block_size>{},
+        launch_kernel(int_tag_t<wide_block_size>{},
                       kernel_tag_t<decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_FLAT>{});
         break;
       case decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED:
-        launch_kernel(launch_type::SKIP_ROWS_LAUNCH,
-                      int_tag_t<wide_block_size>{},
+        launch_kernel(int_tag_t<wide_block_size>{},
                       kernel_tag_t<decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED>{});
+        break;
+      case decode_kernel_mask::STRING:
+        launch_kernel(int_tag_t<default_block_size>{}, kernel_tag_t<decode_kernel_mask::STRING>{});
+        break;
+      case decode_kernel_mask::STRING_NESTED:
+        launch_kernel(int_tag_t<default_block_size>{},
+                      kernel_tag_t<decode_kernel_mask::STRING_NESTED>{});
+        break;
+      case decode_kernel_mask::STRING_STREAM_SPLIT:
+        launch_kernel(int_tag_t<default_block_size>{},
+                      kernel_tag_t<decode_kernel_mask::STRING_STREAM_SPLIT>{});
+        break;
+      case decode_kernel_mask::STRING_STREAM_SPLIT_NESTED:
+        launch_kernel(int_tag_t<default_block_size>{},
+                      kernel_tag_t<decode_kernel_mask::STRING_STREAM_SPLIT_NESTED>{});
         break;
       default: CUDF_EXPECTS(false, "Kernel type not handled by this function"); break;
     }
