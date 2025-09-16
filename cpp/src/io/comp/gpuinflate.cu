@@ -1247,9 +1247,9 @@ class cost_model {
   }
 
   static double task_host_cost(size_t input_size,
-                                        size_t output_size,
-                                        double device_host_ratio,
-                                        task_type task_type)
+                               size_t output_size,
+                               double device_host_ratio,
+                               task_type task_type)
   {
     CUDF_EXPECTS(device_host_ratio > 0, "device_host_ratio must be > 0");
     // Cost to copy the block to host and back; NOTE: assumes that the copy throughput is the same
@@ -1263,8 +1263,8 @@ class cost_model {
 
 sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const> inputs,
                                    device_span<device_span<uint8_t> const> outputs,
-                                   rmm::cuda_stream_view stream,
                                    task_type task_type,
+                                   rmm::cuda_stream_view stream,
                                    rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
@@ -1274,12 +1274,13 @@ sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const>
   // Precompute costs to avoid repeated computation during sorting
   rmm::device_uvector<double> costs(inputs.size(), stream, mr);
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::counting_iterator<std::size_t>(0),
-                    thrust::counting_iterator<std::size_t>(inputs.size()),
+                    thrust::make_zip_iterator(thrust::make_tuple(inputs.begin(), outputs.begin())),
+                    thrust::make_zip_iterator(thrust::make_tuple(inputs.end(), outputs.end())),
                     costs.begin(),
-                    [inputs, outputs, task_type] __device__(std::size_t i) {
-                      return cost_model::task_device_cost(
-                        inputs[i].size(), outputs[i].size(), task_type);
+                    [task_type] __device__(auto const& input_output_pair) {
+                      auto const& input  = thrust::get<0>(input_output_pair);
+                      auto const& output = thrust::get<1>(input_output_pair);
+                      return cost_model::task_device_cost(input.size(), output.size(), task_type);
                     });
 
   thrust::sort(rmm::exec_policy_nosync(stream),
@@ -1392,7 +1393,7 @@ sorted_codec_parameters sort_decompression_tasks(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  return sort_tasks(inputs, outputs, stream, task_type::DECOMPRESSION, mr);
+  return sort_tasks(inputs, outputs, task_type::DECOMPRESSION, stream, mr);
 }
 
 sorted_codec_parameters sort_compression_tasks(device_span<device_span<uint8_t const> const> inputs,
@@ -1400,7 +1401,7 @@ sorted_codec_parameters sort_compression_tasks(device_span<device_span<uint8_t c
                                                rmm::cuda_stream_view stream,
                                                rmm::device_async_resource_ref mr)
 {
-  return sort_tasks(inputs, outputs, stream, task_type::COMPRESSION, mr);
+  return sort_tasks(inputs, outputs, task_type::COMPRESSION, stream, mr);
 }
 
 void copy_results_to_original_order(device_span<codec_exec_result const> sorted_results,
@@ -1416,11 +1417,11 @@ void copy_results_to_original_order(device_span<codec_exec_result const> sorted_
 }
 
 size_t split_compression_tasks(device_span<device_span<uint8_t const> const> inputs,
-                                             device_span<device_span<uint8_t> const> outputs,
-                                             host_engine_state host_state,
-                                             size_t auto_mode_threshold,
-                                             size_t hybrid_mode_cost_ratio,
-                                             rmm::cuda_stream_view stream)
+                               device_span<device_span<uint8_t> const> outputs,
+                               host_engine_state host_state,
+                               size_t auto_mode_threshold,
+                               size_t hybrid_mode_cost_ratio,
+                               rmm::cuda_stream_view stream)
 {
   return split_tasks(inputs,
                      outputs,
@@ -1432,11 +1433,11 @@ size_t split_compression_tasks(device_span<device_span<uint8_t const> const> inp
 }
 
 size_t split_decompression_tasks(device_span<device_span<uint8_t const> const> inputs,
-                                               device_span<device_span<uint8_t> const> outputs,
-                                               host_engine_state host_state,
-                                               size_t auto_mode_threshold,
-                                               size_t hybrid_mode_cost_ratio,
-                                               rmm::cuda_stream_view stream)
+                                 device_span<device_span<uint8_t> const> outputs,
+                                 host_engine_state host_state,
+                                 size_t auto_mode_threshold,
+                                 size_t hybrid_mode_cost_ratio,
+                                 rmm::cuda_stream_view stream)
 {
   return split_tasks(inputs,
                      outputs,
