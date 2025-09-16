@@ -520,13 +520,11 @@ void hybrid_scan_reader_impl::setup_chunking_for_filter_columns(
 
   select_columns(read_columns_mode::FILTER_COLUMNS, options);
 
-  auto data_page_mask = (mask_data_pages == use_data_page_mask::YES)
-                          ? _extended_metadata->compute_data_page_mask(row_mask,
-                                                                       row_group_indices,
-                                                                       _input_columns,
-                                                                       _rows_processed_so_far,
-                                                                       _stream)
-                          : std::vector<std::vector<bool>>{};
+  auto data_page_mask =
+    (mask_data_pages == use_data_page_mask::YES)
+      ? _extended_metadata->compute_data_page_mask(
+          row_mask, row_group_indices, _input_columns, _rows_processed_so_far, _stream)
+      : std::vector<std::vector<bool>>{};
 
   prepare_data(
     read_mode::CHUNKED_READ, row_group_indices, std::move(column_chunk_buffers), data_page_mask);
@@ -573,13 +571,11 @@ void hybrid_scan_reader_impl::setup_chunking_for_payload_columns(
 
   select_columns(read_columns_mode::PAYLOAD_COLUMNS, options);
 
-  auto data_page_mask = (mask_data_pages == use_data_page_mask::YES)
-                          ? _extended_metadata->compute_data_page_mask(row_mask,
-                                                                       row_group_indices,
-                                                                       _input_columns,
-                                                                       _rows_processed_so_far,
-                                                                       _stream)
-                          : std::vector<std::vector<bool>>{};
+  auto data_page_mask =
+    (mask_data_pages == use_data_page_mask::YES)
+      ? _extended_metadata->compute_data_page_mask(
+          row_mask, row_group_indices, _input_columns, _rows_processed_so_far, _stream)
+      : std::vector<std::vector<bool>>{};
 
   prepare_data(
     read_mode::CHUNKED_READ, row_group_indices, std::move(column_chunk_buffers), data_page_mask);
