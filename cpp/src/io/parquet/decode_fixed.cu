@@ -31,6 +31,11 @@ namespace {
 // Max block size supported for the parquet decode, assuming 64 registers per thread.
 static constexpr int max_decode_block_size = 1024;
 
+/**
+ * @brief Enum specifying what type of run# checks we should do for a decode launch.
+ */
+enum class launch_type { SKIP_ROWS_LAUNCH, NO_SKIP_ROWS_LAUNCH, NO_ROW_CHECK_LAUNCH };
+
 // Unlike cub's algorithm, this provides warp-wide and block-wide results simultaneously.
 // Also, this provides the ability to compute warp_bits & lane_mask manually, which we need for
 // lists.
@@ -995,11 +1000,6 @@ constexpr bool is_split_decode()
 }
 
 /**
- * @brief Enum specifying what type of run# checks we should do for a decode launch.
- */
-enum class launch_type { SKIP_ROWS_LAUNCH, NO_SKIP_ROWS_LAUNCH, NO_ROW_CHECK_LAUNCH };
-
-/**
  * @brief Kernel for computing fixed width non dictionary column data stored in the pages
  *
  * This function will write the page data and the page data's validity to the
@@ -1424,8 +1424,8 @@ void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
     default: break;
   }
 
-  auto non_chunked_launch = [&](launch_type type_of_launch) {
-    // Non-chunked read. For strings is faster if we use 64 threads instead of 128
+  auto non_skip_launch = [&](launch_type type_of_launch) {
+    // Non-skip-rows read. For strings is faster if we use 64 threads instead of 128
     static constexpr int string_block_size = 64;
     static_assert(max_decode_block_size % string_block_size == 0,
                   "max_decode_block_size must be multiple of string_block_size");
@@ -1485,7 +1485,7 @@ void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
   };
 
   if (min_row == 0) {
-    non_chunked_launch(launch_type::NO_ROW_CHECK_LAUNCH);
+    non_skip_launch(launch_type::NO_ROW_CHECK_LAUNCH);
   } else {
     // String kernels are slower when split between skip/non-skip
     // Instead only one launch using default width
@@ -1513,10 +1513,11 @@ void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
       default: break;
     }
 
-    // Do both chunked and non-chunked launches, will bail early for the wrong one
-    non_chunked_launch(launch_type::NO_SKIP_ROWS_LAUNCH);
+    // We are doing a skip-rows read, but some pages may need to skip and not others.
+    // Do both skip and non-skip launches, will bail early for the wrong one
+    non_skip_launch(launch_type::NO_SKIP_ROWS_LAUNCH);
 
-    // Chunked read. For non-strings is faster if we use 256 threads instead of 128
+    // Skip read. For non-strings is faster if we use 256 threads instead of 128
     static constexpr int wide_block_size = 256;
     static_assert(max_decode_block_size % wide_block_size == 0,
                   "max_decode_block_size must be multiple of wide_block_size");
