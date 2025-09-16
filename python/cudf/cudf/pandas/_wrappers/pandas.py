@@ -429,6 +429,22 @@ SparseDtype = make_final_proxy_type(
     },
 )
 
+# Special caseing `ArrowDtype` as it is not yet added to `cudf` namespace
+# both fast and slow paths are `pd.ArrowDtype`
+ArrowDtype = make_final_proxy_type(
+    "ArrowDtype",
+    pd.ArrowDtype,
+    pd.ArrowDtype,
+    bases=(pd.api.extensions.ExtensionDtype,),
+    fast_to_slow=lambda fast: fast,
+    slow_to_fast=lambda slow: slow,
+    additional_attributes={
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
+        "__hash__": _FastSlowAttribute("__hash__"),
+        "pyarrow_dtype": _FastSlowAttribute("pyarrow_dtype"),
+    },
+)
+
 SparseArray = make_final_proxy_type(
     "SparseDtype",
     _Unusable,
