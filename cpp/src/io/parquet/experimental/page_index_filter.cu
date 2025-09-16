@@ -701,7 +701,6 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask
   CUDF_EXPECTS(row_mask.type().id() == cudf::type_id::BOOL8,
                "Input row bitmask should be of type BOOL8");
 
-  auto const total_rows  = row_mask.size();
   auto const num_columns = input_columns.size();
 
   // Collect column schema indices from the input columns.
@@ -794,7 +793,7 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask
   std::for_each(
     thrust::counting_iterator<size_t>(0),
     thrust::counting_iterator(num_columns),
-    [&](auto const col_idx) {
+    [&, total_rows](auto const col_idx) {
       // Construct a row indices mapping based on page row counts and offsets
       auto const total_pages_in_this_column = page_row_counts[col_idx].size();
 
