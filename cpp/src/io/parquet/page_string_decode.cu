@@ -720,8 +720,6 @@ CUDF_KERNEL void __launch_bounds__(delta_preproc_block_size)
       // check if we need to store values from the index
       if (t == 0 && is_page_contained(s, min_row, num_rows)) {
         pp->str_bytes = pp->str_bytes_from_index;
-        // record the full size so that we don't have to recompute every chunk.
-        // if (all_values) { pp->str_bytes_all = pp->str_bytes; }
       }
       return;
     }
@@ -741,9 +739,6 @@ CUDF_KERNEL void __launch_bounds__(delta_preproc_block_size)
       if (start_value > 0) { pp->temp_string_size = temp_bytes; }
     }
   }
-
-  // record the full size so that we don't have to recompute every chunk.
-  if (t == 0 && all_values) { pp->str_bytes_all = pp->str_bytes; }
 }
 
 /**
@@ -801,9 +796,6 @@ CUDF_KERNEL void __launch_bounds__(delta_length_block_size)
     // check if we need to store values from the index
     if (t == 0 && is_page_contained(s, min_row, num_rows)) {
       pp->str_bytes = pp->str_bytes_from_index;
-
-      // record the full size so that we don't have to recompute every chunk.
-      // if (all_values) { pp->str_bytes_all = pp->str_bytes; }
     }
     return;
   }
@@ -858,9 +850,6 @@ CUDF_KERNEL void __launch_bounds__(delta_length_block_size)
     if (t == 0) {
       total_bytes += warp_sum;
       pp->str_bytes = total_bytes;
-
-      // record the full size so that we don't have to recompute every chunk.
-      // if (all_values) { pp->str_bytes_all = pp->str_bytes; }
     }
   }
 }
@@ -915,8 +904,6 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
     if (t == 0 && is_page_contained(s, min_row, num_rows)) {
       pp->str_bytes = pp->str_bytes_from_index;
     }
-    // record the full size so that we don't have to recompute every chunk.
-    // if (all_values) { pp->str_bytes_all = pp->str_bytes; }
     return;
   }
 
@@ -967,8 +954,6 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   if (t == 0) {
     // TODO check for overflow
     pp->str_bytes = str_bytes;
-    // record the full size so that we don't have to recompute every chunk.
-    // if (all_values) { pp->str_bytes_all = pp->str_bytes; }
 
     // only need temp space for delta
     pp->temp_string_size = 0;
@@ -1044,10 +1029,6 @@ void ComputePageStringSizesPass1(cudf::detail::hostdevice_span<PageInfo> pages,
 void ComputePageStringSizesPass2(cudf::detail::hostdevice_span<PageInfo> pages,
                                  cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
                                  rmm::device_uvector<uint8_t>& temp_string_buf,
-                                 size_t min_row,
-                                 size_t num_rows,
-                                 int level_type_size,
-                                 uint32_t kernel_mask,
                                  rmm::cuda_stream_view stream)
 {
   // check for needed temp space for DELTA_BYTE_ARRAY

@@ -639,14 +639,7 @@ void reader_impl::preprocess_chunk_strings(row_range const& read_info)
                                 _pass_itm_data->level_type_size,
                                 _stream);
   }
-  ComputePageStringSizesPass2(subpass.pages,
-                              pass.chunks,
-                              subpass.delta_temp_buf,
-                              read_info.skip_rows,
-                              read_info.num_rows,
-                              pass.level_type_size,
-                              subpass.kernel_mask,
-                              _stream);
+  ComputePageStringSizesPass2(subpass.pages, pass.chunks, subpass.delta_temp_buf, _stream);
 }
 
 table_with_metadata reader_impl::read_chunk_internal(read_mode mode)
