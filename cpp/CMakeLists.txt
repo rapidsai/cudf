@@ -578,11 +578,14 @@ add_library(
   src/io/utilities/type_inference.cu
   src/io/utilities/trie.cu
   src/jit/cache.cpp
+  src/jit/helpers.cpp
   src/jit/parser.cpp
+  src/jit/row_ir.cpp
   src/jit/util.cpp
   src/join/conditional_join.cu
   src/join/cross_join.cu
   src/join/distinct_hash_join.cu
+  src/join/filtered_join.cu
   src/join/hash_join.cu
   src/join/join.cu
   src/join/join_utils.cu
