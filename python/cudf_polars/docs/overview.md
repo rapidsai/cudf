@@ -416,7 +416,8 @@ engine = pl.GPUEngine(
             "io_partitioning": True,
             "reduction_planning": True,
             "use_join_heuristics": True,
-            "use_sampling": False
+            "use_sampling": False,
+            "default_selectivity": 0.5,
         }
     }
 )
@@ -451,6 +452,11 @@ The available configuration options are:
   unique-value statistics. These statistics may only be collected when they are
   actually needed for query planning. This can also be set via the
   `CUDF_POLARS__STATISTICS_PLANNING__USE_SAMPLING` environment variable.
+
+- **`default_selectivity`** (default: `0.8`): The default selectivity of a
+  predicate, used for estimating how much a filter operation will reduce the
+  number of rows. This can also be set via the
+  `CUDF_POLARS__STATISTICS_PLANNING__DEFAULT_SELECTIVITY` environment variable.
 
 For example, to enable reduction planning via environment variables:
 

@@ -319,6 +319,9 @@ class StatsPlanningOptions:
         statistics. Default is True.
         These statistics may only be collected when they are
         actually needed for query planning.
+    default_selectivity
+        The default selectivity of a predicate.
+        Default is 0.8.
     """
 
     _env_prefix = "CUDF_POLARS__STATISTICS_PLANNING"
@@ -343,6 +346,11 @@ class StatsPlanningOptions:
             f"{_env_prefix}__USE_SAMPLING", _bool_converter, default=True
         )
     )
+    default_selectivity: float = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__DEFAULT_SELECTIVITY", float, default=0.8
+        )
+    )
 
     def __post_init__(self) -> None:  # noqa: D105
         if not isinstance(self.io_partitioning, bool):
@@ -353,6 +361,8 @@ class StatsPlanningOptions:
             raise TypeError("use_join_heuristics must be a bool")
         if not isinstance(self.use_sampling, bool):
             raise TypeError("use_sampling must be a bool")
+        if not isinstance(self.default_selectivity, float):
+            raise TypeError("default_selectivity must be a float")
 
 
 @dataclasses.dataclass(frozen=True, eq=True)

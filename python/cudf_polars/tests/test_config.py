@@ -467,7 +467,13 @@ def test_default_executor() -> None:
 
 @pytest.mark.parametrize(
     "option",
-    ["io_partitioning", "reduction_planning", "use_join_heuristics", "use_sampling"],
+    [
+        "io_partitioning",
+        "reduction_planning",
+        "use_join_heuristics",
+        "use_sampling",
+        "default_selectivity",
+    ],
 )
 def test_validate_stats_planning_options(option: str) -> None:
     with pytest.raises(TypeError, match=f"{option} must be"):

@@ -35,7 +35,10 @@ def engine():
             "shuffle_method": "tasks",
             "target_partition_size": 10_000,
             "max_rows_per_partition": 1_000,
-            "stats_planning_options": {"reduction_planning": True},
+            "stats_planning_options": {
+                "reduction_planning": True,
+                "default_selectivity": 0.5,
+            },
         },
     )
 
@@ -214,6 +217,33 @@ def test_explain_logical_io_then_distinct(engine, tmp_path, kind, n_rows, select
             assert re.search(
                 rf"^\s*SORT.*row_count=\'~{value}\'\s*$", repr, re.MULTILINE
             )
+    else:
+        value = _fmt_row_count(q.collect().height)
+        assert re.search(rf"^\s*SORT.*row_count=\'~{value}\'\s*$", repr, re.MULTILINE)
+
+
+@pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
+@pytest.mark.parametrize("n_rows", [None, 4])
+def test_explain_logical_io_then_filter(engine, tmp_path, kind, n_rows):
+    # Create simple Distinct or Select(unique) + Sort query.
+    # NOTE: This test depends on a "default_selectivity" of 0.5
+    # and a very-specific DataFrame and predicate.
+    df = pl.DataFrame(
+        {
+            "order_id": [1, 2, 3, 4, 5, 6, 7, 8],
+            "customer_id": [101, 102, 101, 103, 104, 104, 105, 106],
+        }
+    )
+    df = make_lazy_frame(df, kind, path=tmp_path, n_files=2, n_rows=n_rows)
+    q = df.filter(pl.col("customer_id") < 102).sort("order_id")
+
+    # Verify the query runs correctly
+    assert_gpu_result_equal(q, engine=engine)
+
+    # Check query plan
+    repr = explain_query(q, engine, physical=False)
+    if kind == "csv" and n_rows is None:
+        assert re.search(r"^\s*SORT.*row_count='unknown'\s*$", repr, re.MULTILINE)
     else:
         value = _fmt_row_count(q.collect().height)
         assert re.search(rf"^\s*SORT.*row_count=\'~{value}\'\s*$", repr, re.MULTILINE)

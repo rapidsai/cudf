@@ -13,6 +13,7 @@ from cudf_polars.dsl.ir import (
     IR,
     DataFrameScan,
     Distinct,
+    Filter,
     GroupBy,
     HConcat,
     Join,
@@ -40,6 +41,7 @@ from cudf_polars.utils import conversion
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
+    from cudf_polars.dsl.expr import Expr
     from cudf_polars.experimental.base import JoinInfo
     from cudf_polars.typing import Slice as Zlice
     from cudf_polars.utils.config import ConfigOptions, StatsPlanningOptions
@@ -515,6 +517,41 @@ def apply_slice(num_rows: int, zlice: Zlice | None) -> int:
     return e - s
 
 
+def apply_predicate_selectivity(
+    ir: IR,
+    stats: StatsCollector,
+    predicate: Expr,
+    config_options: ConfigOptions,
+) -> None:
+    """
+    Apply selectivity to a column statistics.
+
+    Parameters
+    ----------
+    ir
+        IR node containing a predicate.
+    stats
+        The StatsCollector object to update.
+    predicate
+        The predicate expression.
+    config_options
+        GPUEngine configuration options.
+    """
+    assert config_options.executor.name == "streaming", (
+        "Only streaming executor is supported in update_column_stats"
+    )
+    # TODO: Use predicate to generate a better selectivity estimate. Default is 0.8
+    selectivity = config_options.executor.stats_planning_options.default_selectivity
+    if selectivity < 1.0 and (row_count := stats.row_count[ir].value) is not None:
+        row_count = max(1, int(row_count * selectivity))
+        stats.row_count[ir] = ColumnStat[int](row_count)
+        for column_stats in stats.column_stats[ir].values():
+            if (unique_count := column_stats.unique_count.value) is not None:
+                column_stats.unique_count = ColumnStat[int](
+                    min(max(1, int(unique_count * selectivity)), row_count)
+                )
+
+
 def copy_child_unique_counts(column_stats_mapping: dict[str, ColumnStats]) -> None:
     """
     Copy unique-count estimates from children to parent.
@@ -567,6 +604,9 @@ def _(ir: IR, stats: StatsCollector, config_options: ConfigOptions) -> None:
             )
         )
 
+    if isinstance(ir, Filter):
+        apply_predicate_selectivity(ir, stats, ir.mask.value, config_options)
+
 
 @update_column_stats.register(DataFrameScan)
 def _(ir: DataFrameScan, stats: StatsCollector, config_options: ConfigOptions) -> None:
@@ -593,7 +633,6 @@ def _(ir: DataFrameScan, stats: StatsCollector, config_options: ConfigOptions) -
 def _(ir: Scan, stats: StatsCollector, config_options: ConfigOptions) -> None:
     # Use datasource row-count estimate.
     if stats.column_stats[ir]:
-        # TODO: Apply predicate selectivity
         stats.row_count[ir] = next(
             iter(stats.column_stats[ir].values())
         ).source_info.row_count
@@ -623,6 +662,9 @@ def _(ir: Scan, stats: StatsCollector, config_options: ConfigOptions) -> None:
                 )
         else:
             column_stats.unique_count = column_stats.source_info.implied_unique_count
+
+    if ir.predicate is not None and ir.n_rows == -1:
+        apply_predicate_selectivity(ir, stats, ir.predicate.value, config_options)
 
 
 @update_column_stats.register(Select)
