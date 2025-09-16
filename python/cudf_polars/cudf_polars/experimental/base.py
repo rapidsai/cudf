@@ -7,7 +7,7 @@ from __future__ import annotations
 import dataclasses
 from collections import defaultdict
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, NamedTuple, TypeVar
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterator, MutableMapping
@@ -107,21 +107,36 @@ class DataSourceInfo:
     sampling of the underlying datasource.
     """
 
-    @property
-    def row_count(self) -> ColumnStat[int]:
-        """Data source row-count estimate."""
-        return ColumnStat[int]()  # pragma: no cover
+    _unique_stats_columns: set[str]
 
-    def unique_stats(self, column: str) -> UniqueStats:
+    @property
+    def row_count(self) -> ColumnStat[int]:  # pragma: no cover
+        """Data source row-count estimate."""
+        raise NotImplementedError("Sub-class must implement row_count.")
+
+    def unique_stats(self, column: str) -> UniqueStats:  # pragma: no cover
         """Return unique-value statistics for a column."""
-        return UniqueStats()  # pragma: no cover
+        raise NotImplementedError("Sub-class must implement unique_stats.")
 
     def storage_size(self, column: str) -> ColumnStat[int]:
         """Return the average column size for a single file."""
         return ColumnStat[int]()
 
+    @property
+    def unique_stats_columns(self) -> set[str]:
+        """Return the set of columns needing unique-value information."""
+        return self._unique_stats_columns
+
     def add_unique_stats_column(self, column: str) -> None:
         """Add a column needing unique-value information."""
+        self._unique_stats_columns.add(column)
+
+
+class DataSourcePair(NamedTuple):
+    """Pair of table-source and column-name information."""
+
+    table_source: DataSourceInfo
+    column_name: str
 
 
 class ColumnSourceInfo:
@@ -130,10 +145,9 @@ class ColumnSourceInfo:
 
     Parameters
     ----------
-    table_source_info
-        Table data source information.
-    column_name
-        Column name in the data source.
+    table_source_pairs
+        Sequence of DataSourcePair objects.
+        Union operations will result in multiple elements.
 
     Notes
     -----
@@ -142,27 +156,40 @@ class ColumnSourceInfo:
     """
 
     __slots__ = (
-        "_allow_unique_sampling",
-        "column_name",
         "implied_unique_count",
-        "table_source_info",
+        "table_source_pairs",
     )
-    table_source_info: DataSourceInfo
-    column_name: str
+    table_source_pairs: list[DataSourcePair]
     implied_unique_count: ColumnStat[int]
     """Unique-value count implied by join heuristics."""
-    _allow_unique_sampling: bool
 
-    def __init__(self, table_source_info: DataSourceInfo, column_name: str) -> None:
-        self.table_source_info = table_source_info
-        self.column_name = column_name
+    def __init__(self, *table_source_pairs: DataSourcePair) -> None:
+        self.table_source_pairs = list(table_source_pairs)
         self.implied_unique_count = ColumnStat[int](None)
-        self._allow_unique_sampling = False
+
+    @property
+    def is_unique_stats_column(self) -> bool:
+        """Return whether this column requires unique-value information."""
+        return any(
+            pair.column_name in pair.table_source.unique_stats_columns
+            for pair in self.table_source_pairs
+        )
 
     @property
     def row_count(self) -> ColumnStat[int]:
         """Data source row-count estimate."""
-        return self.table_source_info.row_count
+        return ColumnStat[int](
+            # Use sum of table-source row-count estimates.
+            value=sum(
+                value
+                for pair in self.table_source_pairs
+                if (value := pair.table_source.row_count.value) is not None
+            )
+            or None,
+            # Row-count may be exact if there is only one table source.
+            exact=len(self.table_source_pairs) == 1
+            and self.table_source_pairs[0].table_source.row_count.exact,
+        )
 
     def unique_stats(self, *, force: bool = False) -> UniqueStats:
         """
@@ -174,26 +201,34 @@ class ColumnSourceInfo:
             If True, return unique-value statistics even if the column
             wasn't marked as needing unique-value information.
         """
-        return (
-            self.table_source_info.unique_stats(self.column_name)
+        if (force or self.is_unique_stats_column) and len(self.table_source_pairs) == 1:
+            # Single table source.
+            # TODO: Handle multiple tables sources if/when necessary.
+            # We may never need to do this if the source unique-value
+            # statistics are only "used" by the Scan/DataFrameScan nodes.
+            table_source, column_name = self.table_source_pairs[0]
+            return table_source.unique_stats(column_name)
+        else:
             # Avoid sampling unique-stats if this column
-            # wasn't marked as needing unique-stats.
-            if force or self._allow_unique_sampling
-            else UniqueStats()
-        )
+            # wasn't marked as "needing" unique-stats.
+            return UniqueStats()
 
     @property
     def storage_size(self) -> ColumnStat[int]:
         """Return the average column size for a single file."""
-        return self.table_source_info.storage_size(self.column_name)
+        # We don't need to handle concatenated statistics for ``storage_size``.
+        # Just return the storage size of the first table source.
+        if self.table_source_pairs:
+            table_source, column_name = self.table_source_pairs[0]
+            return table_source.storage_size(column_name)
+        else:  # pragma: no cover; We never call this for empty table sources.
+            return ColumnStat[int]()
 
     def add_unique_stats_column(self, column: str | None = None) -> None:
         """Add a column needing unique-value information."""
-        if column in (None, self.column_name):
-            self._allow_unique_sampling = True
-        return self.table_source_info.add_unique_stats_column(
-            column or self.column_name
-        )
+        # We must call add_unique_stats_column for ALL table sources.
+        for table_source, column_name in self.table_source_pairs:
+            table_source.add_unique_stats_column(column or column_name)
 
 
 class ColumnStats:
@@ -229,7 +264,7 @@ class ColumnStats:
     ) -> None:
         self.name = name
         self.children = children
-        self.source_info = source_info or ColumnSourceInfo(DataSourceInfo(), name)
+        self.source_info = source_info or ColumnSourceInfo()
         self.unique_count = unique_count or ColumnStat[int](None)
 
     def new_parent(
