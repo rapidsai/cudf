@@ -46,6 +46,7 @@ using parquet::detail::row_group_info;
  */
 struct metadata : private metadata_base {
   explicit metadata(cudf::host_span<uint8_t const> footer_bytes);
+  explicit metadata(FileMetaData const& other) { static_cast<FileMetaData&>(*this) = other; }
   metadata_base get_file_metadata() && { return std::move(*this); }
 };
 
@@ -91,6 +92,22 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
   aggregate_reader_metadata(cudf::host_span<uint8_t const> footer_bytes,
                             bool use_arrow_schema,
                             bool has_cols_from_mismatched_srcs);
+
+  /**
+   * @brief Constructor for aggregate_reader_metadata
+   *
+   * @param parquet_metadata Pre-populated Parquet file metadata
+   * @param use_arrow_schema Whether to use Arrow schema
+   * @param has_cols_from_mismatched_srcs Whether to have columns from mismatched sources
+   */
+  aggregate_reader_metadata(FileMetaData const& parquet_metadata,
+                            bool use_arrow_schema,
+                            bool has_cols_from_mismatched_srcs);
+
+  /**
+   * @brief Initialize the internal variables
+   */
+  void initialize_internals(bool use_arrow_schema, bool has_cols_from_mismatched_srcs);
 
   /**
    * @brief Fetch the byte range of the page index in the Parquet file
@@ -266,8 +283,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    *
    * @param row_mask Boolean column indicating which rows need to be read after page-pruning
    * @param row_group_indices Input row groups indices
-   * @param output_dtypes Datatypes of output columns
-   * @param output_column_schemas schema indices of output columns
+   * @param input_columns Input column information
    * @param row_mask_offset Offset into the row mask column for the current pass
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
@@ -277,8 +293,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
   [[nodiscard]] std::vector<std::vector<bool>> compute_data_page_mask(
     cudf::column_view row_mask,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
-    cudf::host_span<cudf::data_type const> output_dtypes,
-    cudf::host_span<cudf::size_type const> output_column_schemas,
+    cudf::host_span<input_column_info const> input_columns,
     cudf::size_type row_mask_offset,
     rmm::cuda_stream_view stream) const;
 };

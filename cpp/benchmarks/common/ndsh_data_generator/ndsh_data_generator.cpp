@@ -19,12 +19,13 @@
 #include "random_column_generator.hpp"
 #include "table_helpers.hpp"
 
+#include <benchmarks/common/nvtx_ranges.hpp>
+
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/ast/detail/operators.cuh>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/binaryop.hpp>
-#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/sorting.hpp>
@@ -156,7 +157,7 @@ std::unique_ptr<cudf::table> generate_orders_independent(double scale_factor,
                                                          rmm::cuda_stream_view stream,
                                                          rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   cudf::size_type const o_num_rows = scale_factor * 1'500'000;
 
   // Generate the `o_orderkey` column
@@ -280,7 +281,7 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(cudf::table_view const& o
                                                        rmm::cuda_stream_view stream,
                                                        rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   auto const o_num_rows = orders_independent.num_rows();
   // Generate the `lineitem` table. For each row in the `orders` table,
   // we have a random number (between 1 and 7) of rows in the `lineitem` table
@@ -450,7 +451,7 @@ std::unique_ptr<cudf::table> generate_orders_dependent(cudf::table_view const& l
                                                        rmm::cuda_stream_view stream,
                                                        rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   auto const l_linestatus_mask = lineitem_partial.column(0);
   auto const l_orderkey        = lineitem_partial.column(1);
   auto const l_extendedprice   = lineitem_partial.column(6);
@@ -543,7 +544,7 @@ std::unique_ptr<cudf::table> generate_partsupp(double scale_factor,
                                                rmm::cuda_stream_view stream,
                                                rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   // Define the number of rows in the `part` and `partsupp` tables
   cudf::size_type const p_num_rows  = scale_factor * 200'000;
   cudf::size_type const ps_num_rows = scale_factor * 800'000;
@@ -591,7 +592,7 @@ std::unique_ptr<cudf::table> generate_part(double scale_factor,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   cudf::size_type const num_rows = scale_factor * 200'000;
 
   // Generate the `p_partkey` column
@@ -717,7 +718,7 @@ generate_orders_lineitem_part(double scale_factor,
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   // Generate a table with the independent columns of the `orders` table
   auto orders_independent = generate_orders_independent(scale_factor, stream, mr);
 
@@ -784,7 +785,7 @@ std::unique_ptr<cudf::table> generate_supplier(double scale_factor,
                                                rmm::cuda_stream_view stream,
                                                rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   // Calculate the number of rows based on the scale factor
   cudf::size_type const num_rows = scale_factor * 10'000;
 
@@ -845,7 +846,7 @@ std::unique_ptr<cudf::table> generate_customer(double scale_factor,
                                                rmm::cuda_stream_view stream,
                                                rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   // Calculate the number of rows based on the scale factor
   cudf::size_type const num_rows = scale_factor * 150'000;
 
@@ -912,7 +913,7 @@ std::unique_ptr<cudf::table> generate_customer(double scale_factor,
 std::unique_ptr<cudf::table> generate_nation(rmm::cuda_stream_view stream,
                                              rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   // Define the number of rows
   constexpr cudf::size_type num_rows = 25;
 
@@ -952,7 +953,7 @@ std::unique_ptr<cudf::table> generate_nation(rmm::cuda_stream_view stream,
 std::unique_ptr<cudf::table> generate_region(rmm::cuda_stream_view stream,
                                              rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   // Define the number of rows
   constexpr cudf::size_type num_rows = 5;
 

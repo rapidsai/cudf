@@ -1,4 +1,5 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
+import decimal
 import string
 
 import numpy as np
@@ -97,3 +98,72 @@ def test_dataframe_transpose(
 
     assert_eq(expect, got_function.to_pandas(nullable=nullable))
     assert_eq(expect, got_property.to_pandas(nullable=nullable))
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"col": [{"a": 1.1}, {"a": 2.1}, {"a": 10.0}, {"a": 11.2323}, None]},
+        {"a": [[{"b": 567}], None] * 10},
+        {"a": [decimal.Decimal(10), decimal.Decimal(20), None]},
+    ],
+)
+def test_dataframe_transpose_complex_types(data):
+    gdf = cudf.DataFrame(data)
+    pdf = gdf.to_pandas()
+
+    expected = pdf.T
+    actual = gdf.T
+
+    assert_eq(expected, actual)
+
+
+def test_dataframe_transpose_category():
+    pdf = pd.DataFrame(
+        {
+            "a": pd.Series(["a", "b", "c"], dtype="category"),
+            "b": pd.Series(["a", "b", "c"], dtype="category"),
+        }
+    )
+
+    gdf = cudf.DataFrame.from_pandas(pdf)
+
+    got_function = gdf.transpose()
+    got_property = gdf.T
+
+    expect = pdf.transpose()
+
+    assert_eq(expect, got_function.to_pandas())
+    assert_eq(expect, got_property.to_pandas())
+
+
+def test_transpose_multiindex_columns_from_pandas():
+    rng = np.random.default_rng(seed=0)
+    pdf = pd.DataFrame(rng.random(size=(7, 5)))
+    gdf = cudf.from_pandas(pdf)
+    pdfIndex = pd.MultiIndex(
+        [
+            ["a", "b", "c"],
+            ["house", "store", "forest"],
+            ["clouds", "clear", "storm"],
+            ["fire", "smoke", "clear"],
+            [
+                np.datetime64("2001-01-01", "ns"),
+                np.datetime64("2002-01-01", "ns"),
+                np.datetime64("2003-01-01", "ns"),
+            ],
+        ],
+        [
+            [0, 0, 0, 0, 1, 1, 2],
+            [1, 1, 1, 1, 0, 0, 2],
+            [0, 0, 2, 2, 2, 0, 1],
+            [0, 0, 0, 1, 2, 0, 1],
+            [1, 0, 1, 2, 0, 0, 1],
+        ],
+    )
+    pdfIndex.names = ["alpha", "location", "weather", "sign", "timestamp"]
+    gdfIndex = cudf.from_pandas(pdfIndex)
+    pdf.index = pdfIndex
+    gdf.index = gdfIndex
+    assert_eq(gdf, pdf)
+    assert_eq(gdf.T, pdf.T)

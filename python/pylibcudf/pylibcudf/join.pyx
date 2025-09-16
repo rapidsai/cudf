@@ -256,6 +256,8 @@ cpdef Table cross_join(Table left, Table right, Stream stream=None):
         The left table to join.
     right: Table
         The right table to join.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------

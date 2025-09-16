@@ -32,6 +32,8 @@
 #include <concepts>
 #include <vector>
 
+namespace {
+
 template <typename T>
 struct benchmark_data;
 
@@ -82,7 +84,7 @@ bool boolean_from_string(std::string_view str)
 }
 
 template <typename key_type>
-static void BM_filter_min_max(nvbench::state& state)
+void BM_filter_min_max(nvbench::state& state)
 {
   auto const num_rows    = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const engine_name = state.get_string("engine");
@@ -126,10 +128,10 @@ static void BM_filter_min_max(nvbench::state& state)
     tree.push(cudf::ast::operation{cudf::ast::ast_operator::LOGICAL_AND, filter_min, filter_max});
   }
 
-  std::vector<cudf::column_view> filter_inputs;
-  filter_inputs.push_back(column->view());
-  filter_inputs.push_back(min_scalar_column->view());
-  filter_inputs.push_back(max_scalar_column->view());
+  std::vector<cudf::column_view> predicate_columns;
+  predicate_columns.push_back(column->view());
+  predicate_columns.push_back(min_scalar_column->view());
+  predicate_columns.push_back(max_scalar_column->view());
 
   // Use the number of bytes read from global memory
   state.add_global_memory_reads<key_type>(static_cast<size_t>(num_rows));
@@ -147,8 +149,14 @@ static void BM_filter_min_max(nvbench::state& state)
           cudf::apply_boolean_mask(input_table, filter_boolean->view(), stream, mr);
       } break;
       case engine_type::JIT: {
-        auto result = cudf::filter(
-          filter_inputs, udf, false, std::nullopt, std::vector{true, false, false}, stream, mr);
+        auto result = cudf::filter(predicate_columns,
+                                   udf,
+                                   std::vector{predicate_columns[0]},
+                                   false,
+                                   std::nullopt,
+                                   cudf::null_aware::NO,
+                                   stream,
+                                   mr);
       } break;
       default: CUDF_UNREACHABLE("Unrecognised engine type requested");
     }
@@ -162,6 +170,7 @@ static void BM_filter_min_max(nvbench::state& state)
     .add_string_axis("engine", {"ast", "jit"})                                  \
     .add_int64_axis("num_rows", {100'000, 1'000'000, 10'000'000, 100'000'000})  \
     .add_string_axis("nullable", {"true", "false"})
+}  // namespace
 
 FILTER_BENCHMARK_DEFINE(filter_min_max_int32, int32_t);
 FILTER_BENCHMARK_DEFINE(filter_min_max_int64, int64_t);

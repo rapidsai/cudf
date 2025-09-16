@@ -7,6 +7,17 @@ import cudf
 from cudf.utils.dtypes import cudf_dtype_to_pa_type
 
 
+def test_listdtype_hash():
+    a = cudf.ListDtype("int64")
+    b = cudf.ListDtype("int64")
+
+    assert hash(a) == hash(b)
+
+    c = cudf.ListDtype("int32")
+
+    assert hash(a) != hash(c)
+
+
 def test_list_dtype_pyarrow_round_trip(all_supported_types_as_str, request):
     request.applymarker(
         pytest.mark.xfail(

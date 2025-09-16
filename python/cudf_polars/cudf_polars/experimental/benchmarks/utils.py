@@ -14,6 +14,7 @@ import statistics
 import sys
 import textwrap
 import time
+import traceback
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Literal, assert_never
@@ -52,6 +53,7 @@ class Record:
 
     query: int
     duration: float
+    shuffle_stats: dict[str, dict[str, int | float]] | None = None
 
 
 @dataclasses.dataclass
@@ -187,7 +189,8 @@ class RunConfig:
     records: dict[int, list[Record]] = dataclasses.field(default_factory=dict)
     dataset_path: Path
     scale_factor: int | float
-    shuffle: str | None = None
+    shuffle: Literal["rapidsmpf", "tasks"] | None = None
+    gather_shuffle_stats: bool = False
     broadcast_join_limit: int | None = None
     blocksize: int | None = None
     max_rows_per_partition: int | None = None
@@ -202,6 +205,12 @@ class RunConfig:
     rapidsmpf_spill: bool
     spill_device: float
     query_set: str
+
+    def __post_init__(self) -> None:  # noqa: D105
+        if self.gather_shuffle_stats and self.shuffle != "rapidsmpf":
+            raise ValueError(
+                "gather_shuffle_stats is only supported when shuffle='rapidsmpf'."
+            )
 
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> RunConfig:
@@ -251,6 +260,7 @@ class RunConfig:
             scheduler=scheduler,
             n_workers=args.n_workers,
             shuffle=args.shuffle,
+            gather_shuffle_stats=args.rapidsmpf_dask_statistics,
             broadcast_join_limit=args.broadcast_join_limit,
             dataset_path=path,
             scale_factor=scale_factor,
@@ -396,6 +406,7 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
         "protocol": args.protocol,
         "rmm_pool_size": args.rmm_pool_size,
         "rmm_async": args.rmm_async,
+        "rmm_release_threshold": args.rmm_release_threshold,
         "threads_per_worker": run_config.threads,
     }
 
@@ -413,7 +424,9 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
                 options=Options(
                     {
                         "dask_spill_device": str(run_config.spill_device),
-                        "dask_statistics": str(args.rapidsmpf_oom_protection),
+                        "dask_statistics": str(args.rapidsmpf_dask_statistics),
+                        "dask_print_statistics": str(args.rapidsmpf_print_statistics),
+                        "oom_protection": str(args.rapidsmpf_oom_protection),
                     }
                 ),
             )
@@ -614,6 +627,15 @@ def parse_args(
             Default: 0.5 (50%% of GPU memory)"""),
     )
     parser.add_argument(
+        "--rmm-release-threshold",
+        default=None,
+        type=float,
+        help=textwrap.dedent("""\
+            Passed to dask_cuda.LocalCUDACluster to control the release
+            threshold for RMM pool memory.
+            Default: None (no release threshold)"""),
+    )
+    parser.add_argument(
         "--rmm-async",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -624,6 +646,18 @@ def parse_args(
         action=argparse.BooleanOptionalAction,
         default=False,
         help="Use rapidsmpf CUDA managed memory-based OOM protection.",
+    )
+    parser.add_argument(
+        "--rapidsmpf-dask-statistics",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Collect rapidsmpf shuffle statistics. The output will be stored in the 'shuffle_stats' field of each record.",
+    )
+    parser.add_argument(
+        "--rapidsmpf-print-statistics",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Print rapidsmpf shuffle statistics on each Dask worker upon completion.",
     )
     parser.add_argument(
         "--rapidsmpf-spill",
@@ -693,6 +727,7 @@ def run_polars(
     vars(args).update({"query_set": benchmark.name})
     run_config = RunConfig.from_args(args)
     validation_failures: list[int] = []
+    query_failures: list[tuple[int, int]] = []
 
     client = initialize_dask_cluster(run_config, args)  # type: ignore
 
@@ -720,7 +755,23 @@ def run_polars(
         for i in range(args.iterations):
             t0 = time.monotonic()
 
-            result = execute_query(q_id, i, q, run_config, args, engine)
+            try:
+                result = execute_query(q_id, i, q, run_config, args, engine)
+            except Exception:
+                print(f"❌ query={q_id} iteration={i} failed!")
+                print(traceback.format_exc())
+                query_failures.append((q_id, i))
+                continue
+            if run_config.shuffle == "rapidsmpf" and run_config.gather_shuffle_stats:
+                from rapidsmpf.integrations.dask.shuffler import (
+                    clear_shuffle_statistics,
+                    gather_shuffle_statistics,
+                )
+
+                shuffle_stats = gather_shuffle_statistics(client)  # type: ignore[arg-type]
+                clear_shuffle_statistics(client)  # type: ignore[arg-type]
+            else:
+                shuffle_stats = None
 
             if args.validate and run_config.executor != "cpu":
                 try:
@@ -736,7 +787,7 @@ def run_polars(
                     print(f"❌ Query {q_id} failed validation!\n{e}")
 
             t1 = time.monotonic()
-            record = Record(query=q_id, duration=t1 - t0)
+            record = Record(query=q_id, duration=t1 - t0, shuffle_stats=shuffle_stats)
             if args.print_results:
                 print(result)
 
@@ -760,5 +811,9 @@ def run_polars(
             )
         else:
             print("All validated queries passed.")
+
     args.output.write(json.dumps(run_config.serialize(engine=engine)))
     args.output.write("\n")
+
+    if query_failures or validation_failures:
+        sys.exit(1)

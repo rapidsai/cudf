@@ -91,6 +91,7 @@ endfunction()
 
 # No need to install Arrow libs when only the final test executables are shipped.
 set(CUDF_EXCLUDE_ARROW_FROM_ALL ON)
+set(CUDF_ENABLE_ARROW_COMPUTE ON)
 include(../cmake/thirdparty/get_arrow.cmake)
 
 # ##################################################################################################
@@ -365,8 +366,8 @@ ConfigureTest(TYPE_INFERENCE_TEST io/type_inference_test.cu)
 # ##################################################################################################
 # * sort tests ------------------------------------------------------------------------------------
 ConfigureTest(
-  SORT_TEST sort/segmented_sort_tests.cpp sort/sort_nested_types_tests.cpp sort/sort_test.cpp
-  sort/stable_sort_tests.cpp sort/rank_test.cpp
+  SORT_TEST sort/rank_test.cpp sort/segmented_sort_tests.cpp sort/sort_nested_types_tests.cpp
+  sort/sort_test.cpp sort/stable_sort_tests.cpp sort/top_k_tests.cpp
   GPUS 1
   PERCENT 70
 )
@@ -699,6 +700,8 @@ ConfigureTest(LABEL_BINS_TEST labeling/label_bins_tests.cpp)
 # * jit tests ----------------------------------------------------------------------------------
 ConfigureTest(JIT_PARSER_TEST jit/parse_ptx_function.cpp)
 target_include_directories(JIT_PARSER_TEST PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>")
+
+ConfigureTest(ROW_IR_TEST jit/row_ir.cpp)
 
 # ##################################################################################################
 # * stream testing ---------------------------------------------------------------------------------

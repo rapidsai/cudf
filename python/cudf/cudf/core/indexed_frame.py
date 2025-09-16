@@ -594,11 +594,11 @@ class IndexedFrame(Frame):
         self,
         to_replace=None,
         value=no_default,
-        inplace=False,
+        inplace: bool = False,
         limit=None,
-        regex=False,
+        regex: bool = False,
         method=no_default,
-    ):
+    ) -> Self | None:
         """Replace values given in ``to_replace`` with ``value``.
 
         Parameters
@@ -1880,7 +1880,7 @@ class IndexedFrame(Frame):
         method="linear",
         axis=0,
         limit=None,
-        inplace=False,
+        inplace: bool = False,
         limit_direction=None,
         limit_area=None,
         downcast=None,
@@ -1930,13 +1930,18 @@ class IndexedFrame(Frame):
         elif method not in {"linear", "values", "index"}:
             raise ValueError(f"Interpolation method `{method}` not found")
 
+        if not isinstance(inplace, bool):
+            raise ValueError("inplace must be a boolean")
+        elif inplace is True:
+            raise NotImplementedError("inplace is not supported")
+
         data = self
 
         if not isinstance(data.index, cudf.RangeIndex):
             perm_sort = data.index.argsort()
             data = data._gather(
                 GatherMap.from_column_unchecked(
-                    as_column(perm_sort),
+                    as_column(perm_sort),  # type: ignore[arg-type]
                     len(data),
                     nullify=False,
                 )
@@ -1970,7 +1975,7 @@ class IndexedFrame(Frame):
             # TODO: This should be a scatter, avoiding an argsort.
             else result._gather(
                 GatherMap.from_column_unchecked(
-                    as_column(perm_sort.argsort()),
+                    as_column(perm_sort.argsort()),  # type: ignore[arg-type]
                     len(result),
                     nullify=False,
                 )
@@ -2983,9 +2988,9 @@ class IndexedFrame(Frame):
     def drop_duplicates(
         self,
         subset=None,
-        keep="first",
-        nulls_are_equal=True,
-        ignore_index=False,
+        keep: Literal["first", "last", False] = "first",
+        nulls_are_equal: bool = True,
+        ignore_index: bool = False,
     ):
         """
         Drop duplicate rows in frame.
@@ -3212,8 +3217,13 @@ class IndexedFrame(Frame):
 
     @_performance_tracking
     def bfill(
-        self, value=None, axis=None, inplace=None, limit=None, limit_area=None
-    ):
+        self,
+        value=None,
+        axis=None,
+        inplace: bool = False,
+        limit=None,
+        limit_area=None,
+    ) -> Self | None:
         """
         Synonym for :meth:`Series.fillna` with ``method='bfill'``.
 
@@ -3235,7 +3245,9 @@ class IndexedFrame(Frame):
             )
 
     @_performance_tracking
-    def backfill(self, value=None, axis=None, inplace=None, limit=None):
+    def backfill(
+        self, value=None, axis=None, inplace: bool = False, limit=None
+    ) -> Self | None:
         """
         Synonym for :meth:`Series.fillna` with ``method='bfill'``.
 
@@ -3259,7 +3271,7 @@ class IndexedFrame(Frame):
         self,
         value=None,
         axis=None,
-        inplace=None,
+        inplace: bool = False,
         limit=None,
         limit_area: Literal["inside", "outside", None] = None,
     ):
@@ -3284,7 +3296,7 @@ class IndexedFrame(Frame):
             )
 
     @_performance_tracking
-    def pad(self, value=None, axis=None, inplace=None, limit=None):
+    def pad(self, value=None, axis=None, inplace: bool = False, limit=None):
         """
         Synonym for :meth:`Series.fillna` with ``method='ffill'``.
 
@@ -4225,7 +4237,7 @@ class IndexedFrame(Frame):
              name        toy       born
         0  Alfred  Batmobile 1940-04-25
         """
-        if axis == 0:
+        if axis in [0, "index"]:
             result = self._drop_na_rows(how=how, subset=subset, thresh=thresh)
             if ignore_index:
                 result.index = RangeIndex(len(result))
@@ -4935,7 +4947,7 @@ class IndexedFrame(Frame):
     def astype(
         self,
         dtype: Dtype | dict[Hashable, Dtype],
-        copy: bool = False,
+        copy: bool | None = None,
         errors: Literal["raise", "ignore"] = "raise",
     ) -> Self:
         """Cast the object to the given dtype.
@@ -5073,9 +5085,9 @@ class IndexedFrame(Frame):
         index=None,
         columns=None,
         level=None,
-        inplace=False,
-        errors="raise",
-    ):
+        inplace: bool = False,
+        errors: Literal["ignore", "raise"] = "raise",
+    ) -> Self | None:
         """Drop specified labels from rows or columns.
 
         Remove rows or columns by specifying label names and corresponding
@@ -5256,7 +5268,9 @@ class IndexedFrame(Frame):
                 "'index' or 'columns'"
             )
 
-        if inplace:
+        if not isinstance(inplace, bool):
+            raise ValueError("inplace must be a boolean")
+        elif inplace:
             out = self
         else:
             out = self.copy()
@@ -5275,6 +5289,7 @@ class IndexedFrame(Frame):
 
         if not inplace:
             return out
+        return None
 
     @_performance_tracking
     def _explode(self, explode_column: Any, ignore_index: bool):
@@ -6821,30 +6836,43 @@ def _append_new_row_inplace(col: ColumnBase, value: ScalarLike) -> None:
     """Append a scalar `value` to the end of `col` inplace.
     Cast to common type if possible
     """
-    val_col = as_column(value, dtype=col.dtype if value is None else None)
-    if (
-        cudf.get_option("mode.pandas_compatible")
-        and is_pandas_nullable_extension_dtype(col.dtype)
-        and val_col.dtype.kind == "f"
-    ):
-        # If the column is a pandas nullable extension type, we need to
-        # convert the nans to a nullable type as well.
-        val_col = val_col.nans_to_nulls()
-        if len(val_col) == val_col.null_count:
-            # If the column is all nulls, we can use the column dtype
-            # to avoid unnecessary casting.
-            val_col = val_col.astype(col.dtype)
-    to_type = find_common_type([val_col.dtype, col.dtype])
-    if (
-        cudf.get_option("mode.pandas_compatible")
-        and is_string_dtype(to_type)
-        and is_mixed_with_object_dtype(val_col, col)
-    ):
-        raise MixedTypeError("Cannot append mixed types")
-    if cudf.get_option("mode.pandas_compatible") and val_col.can_cast_safely(
-        col.dtype
-    ):
+    val_col = as_column(
+        value,
+        dtype=col.dtype
+        if (
+            cudf.utils.utils._is_null_host_scalar(value)
+            or value in {None, np.nan}
+        )
+        else None,
+    )
+    if val_col.dtype.kind != "f" and val_col.can_cast_safely(col.dtype):
+        # If the value can be cast to the column dtype, do so
+        val_col = val_col.astype(col.dtype)
         to_type = col.dtype
+    else:
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and is_pandas_nullable_extension_dtype(col.dtype)
+            and val_col.dtype.kind == "f"
+        ):
+            # If the column is a pandas nullable extension type, we need to
+            # convert the nans to a nullable type as well.
+            val_col = val_col.nans_to_nulls()
+            if len(val_col) == val_col.null_count:
+                # If the column is all nulls, we can use the column dtype
+                # to avoid unnecessary casting.
+                val_col = val_col.astype(col.dtype)
+        to_type = find_common_type([val_col.dtype, col.dtype])
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and is_string_dtype(to_type)
+            and is_mixed_with_object_dtype(val_col, col)
+        ):
+            raise MixedTypeError("Cannot append mixed types")
+        if cudf.get_option(
+            "mode.pandas_compatible"
+        ) and val_col.can_cast_safely(col.dtype):
+            to_type = col.dtype
     val_col = val_col.astype(to_type)
     old_col = col.astype(to_type)
     res_col = concat_columns([old_col, val_col])._with_type_metadata(to_type)

@@ -164,7 +164,10 @@ __device__ void decode_fixed_width_values(
           // Reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS
           // TIME_MILLIS is the only duration type stored as int32:
           // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#deprecated-time-convertedtype
-          read_fixed_width_value_fast(s, sb, src_pos, static_cast<uint32_t*>(dst));
+          auto const dst_ptr = static_cast<uint32_t*>(dst);
+          read_fixed_width_value_fast(s, sb, src_pos, dst_ptr);
+          // zero out most significant bytes
+          cuda::std::memset(dst_ptr + 1, 0, sizeof(int32_t));
         } else if (s->ts_scale) {
           read_int64_timestamp(s, sb, src_pos, static_cast<int64_t*>(dst));
         } else {
@@ -1047,7 +1050,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   // Exit super early for simple types if the page does not need to be decoded
   if constexpr (not has_lists_t and not has_strings_t and not has_nesting_t) {
     if (not page_mask[page_idx]) {
-      pp->num_nulls  = pp->num_rows;
+      pp->num_nulls  = pp->nesting[s->col.max_nesting_depth - 1].batch_size;
       pp->num_valids = 0;
       // Set s->nesting info = nullptr to bypass `null_count_back_copier` at return
       s->nesting_info = nullptr;
@@ -1068,15 +1071,18 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
 
   // Write list and/or string offsets and exit if the page does not need to be decoded
   if (not page_mask[page_idx]) {
-    pp->num_nulls  = pp->num_rows;
-    pp->num_valids = 0;
-    // Update offsets for all list depth levels
+    //  Update offsets for all list depth levels
     if constexpr (has_lists_t) { update_list_offsets_for_pruned_pages<decode_block_size_t>(s); }
     // Update string offsets or write string sizes for small and large strings respectively
     if constexpr (has_strings_t) {
       update_string_offsets_for_pruned_pages<decode_block_size_t, has_lists_t>(
         s, initial_str_offsets, pages[page_idx]);
     }
+    // Must be set after computing above list and string offsets
+    pp->num_nulls = pp->nesting[s->col.max_nesting_depth - 1].batch_size;
+    if constexpr (not has_lists_t) { pp->num_nulls -= s->first_row; }
+    pp->num_valids = 0;
+
     return;
   }
 
@@ -1148,9 +1154,10 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   // - valid_count: number of non-null values we have decoded so far. In each iteration of the
   //   loop below, we look at the number of valid items (which could be all for non-nullable),
   //   and valid_count is that running count.
-  int processed_count         = 0;
-  int valid_count             = 0;
-  size_t string_output_offset = 0;
+  int processed_count             = 0;
+  int valid_count                 = 0;
+  size_t string_output_offset     = 0;
+  int const init_valid_map_offset = s->nesting_info[s->col.max_nesting_depth - 1].valid_map_offset;
 
   // Skip ahead in the decoding so that we don't repeat work (skipped_leaf_values = 0 for non-lists)
   auto const skipped_leaf_values = s->page.skipped_leaf_values;
@@ -1251,6 +1258,21 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
     block.sync();
 
     valid_count = next_valid_count;
+  }
+
+  // Zero-fill null positions after decoding valid values
+  if (should_process_nulls) {
+    uint32_t const dtype_len = has_strings_t ? sizeof(cudf::size_type) : s->dtype_len;
+    int const num_values     = [&]() {
+      if constexpr (has_lists_t) {
+        auto const& ni = s->nesting_info[s->col.max_nesting_depth - 1];
+        return ni.valid_map_offset - init_valid_map_offset;
+      } else {
+        return s->num_rows;
+      }
+    }();
+    zero_fill_null_positions_shared<decode_block_size_t>(
+      s, dtype_len, init_valid_map_offset, num_values, t);
   }
 
   if constexpr (has_strings_t) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,10 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/row_operator/row_operators.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/search.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -68,12 +68,12 @@ std::unique_ptr<column> search_ordered(table_view const& haystack,
   auto const& matched_haystack = matched.second.front();
   auto const& matched_needles  = matched.second.back();
 
-  auto const comparator = cudf::experimental::row::lexicographic::two_table_comparator(
+  auto const comparator = cudf::detail::row::lexicographic::two_table_comparator(
     matched_haystack, matched_needles, column_order, null_precedence, stream);
   auto const has_nulls = has_nested_nulls(matched_haystack) or has_nested_nulls(matched_needles);
 
-  auto const haystack_it = cudf::experimental::row::lhs_iterator(0);
-  auto const needles_it  = cudf::experimental::row::rhs_iterator(0);
+  auto const haystack_it = cudf::detail::row::lhs_iterator(0);
+  auto const needles_it  = cudf::detail::row::rhs_iterator(0);
 
   if (cudf::detail::has_nested_columns(haystack) || cudf::detail::has_nested_columns(needles)) {
     auto const d_comparator = comparator.less<true>(nullate::DYNAMIC{has_nulls});
