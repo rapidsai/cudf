@@ -221,6 +221,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    */
   [[nodiscard]] table_with_metadata materialize_payload_columns_chunk(
     cudf::column_view const& row_mask, rmm::cuda_stream_view stream);
+
   /**
    * @copydoc cudf::io::experimental::hybrid_scan::has_next_table_chunk
    */
