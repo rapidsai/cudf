@@ -6,8 +6,6 @@ import os
 
 import pytest
 
-DISTRIBUTED_CLUSTER_KEY = pytest.StashKey[dict]()
-
 
 @pytest.fixture(params=[False, True], ids=["no_nulls", "nulls"], scope="session")
 def with_nulls(request):
@@ -43,6 +41,43 @@ def pytest_addoption(parser):
     )
 
 
+@pytest.fixture(scope="session", autouse=True)
+def dask_cluster(pytestconfig, worker_id):
+    if (
+        pytestconfig.getoption("--scheduler") == "distributed"
+        and pytestconfig.getoption("--executor") == "streaming"
+    ):
+        worker_count = int(os.environ.get("PYTEST_XDIST_WORKER_COUNT", "0"))
+        from dask import config
+        from dask_cuda import LocalCUDACluster
+
+        # Avoid "Sending large graph of size ..." warnings
+        # (We expect these for tests using literal/random arrays)
+        config.set({"distributed.admin.large-graph-warning-threshold": "20MB"})
+        if worker_count > 0:
+            # Avoid port conflicts with multiple test runners
+            worker_index = int(worker_id.removeprefix("gw"))
+            scheduler_port = 8800 + worker_index
+            dashboard_address = 8900 + worker_index
+        else:
+            scheduler_port = None
+            dashboard_address = None
+
+        n_workers = int(os.environ.get("CUDF_POLARS_NUM_WORKERS", "1"))
+
+        with (
+            LocalCUDACluster(
+                n_workers=n_workers,
+                scheduler_port=scheduler_port,
+                dashboard_address=dashboard_address,
+            ) as cluster,
+            cluster.get_client(),
+        ):
+            yield
+    else:
+        yield
+
+
 def pytest_configure(config):
     import cudf_polars.testing.asserts
 
@@ -57,33 +92,3 @@ def pytest_configure(config):
     cudf_polars.testing.asserts.DEFAULT_BLOCKSIZE_MODE = config.getoption(
         "--blocksize-mode"
     )
-
-
-def pytest_sessionstart(session):
-    if (
-        session.config.getoption("--scheduler") == "distributed"
-        and session.config.getoption("--executor") == "streaming"
-    ):
-        from dask import config
-        from dask.distributed import Client
-        from dask_cuda import LocalCUDACluster
-
-        # Avoid "Sending large graph of size ..." warnings
-        # (We expect these for tests using literal/random arrays)
-        config.set({"distributed.admin.large-graph-warning-threshold": "20MB"})
-
-        n_workers = int(os.environ.get("CUDF_POLARS_NUM_WORKERS", "1"))
-        cluster = LocalCUDACluster(n_workers=n_workers)
-        client = Client(cluster)
-        session.stash[DISTRIBUTED_CLUSTER_KEY] = {"cluster": cluster, "client": client}
-
-
-def pytest_sessionfinish(session):
-    if DISTRIBUTED_CLUSTER_KEY in session.stash:
-        cluster_info = session.stash[DISTRIBUTED_CLUSTER_KEY]
-        client = cluster_info.get("client")
-        cluster = cluster_info.get("cluster")
-        if client is not None:
-            client.shutdown()
-        if cluster is not None:
-            cluster.close()
