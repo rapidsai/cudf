@@ -27,7 +27,7 @@
 
 namespace cudf {
 
-context::context() : _program_cache{nullptr}
+context::context(init_flags flags) : _program_cache{nullptr}
 {
   if (has_flag(flags, init_flags::INIT_JIT_CACHE)) {
     _program_cache = std::make_unique<jit::program_cache>();
