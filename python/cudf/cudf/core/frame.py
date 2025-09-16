@@ -69,6 +69,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
     def __init__(self, data: ColumnAccessor | MutableMapping[Any, ColumnBase]):
         self._data = ColumnAccessor(data)
+        self._attrs = {}
 
     @property
     def _num_columns(self) -> int:
@@ -100,6 +101,44 @@ class Frame(BinaryOperand, Scannable, Serializable):
     @property
     def ndim(self) -> int:
         raise NotImplementedError
+
+    @property
+    def attrs(self) -> dict[Hashable, Any]:
+        """
+        Dictionary of global attributes of this dataset.
+
+        See Also
+        --------
+        DataFrame.flags : Global flags applying to this object.
+
+        Notes
+        -----
+        Many operations that create new datasets will copy ``attrs``. Copies
+        are always deep so that changing ``attrs`` will only affect the
+        present dataset. ``cudf.concat`` copies ``attrs`` only if all input
+        datasets have the same ``attrs``.
+
+        Examples
+        --------
+        For Series:
+
+        >>> ser = cudf.Series([1, 2, 3])
+        >>> ser.attrs = {"A": [10, 20, 30]}
+        >>> ser.attrs
+        {'A': [10, 20, 30]}
+
+        For DataFrame:
+
+        >>> df = cudf.DataFrame({'A': [1, 2], 'B': [3, 4]})
+        >>> df.attrs = {"A": [10, 20, 30]}
+        >>> df.attrs
+        {'A': [10, 20, 30]}
+        """
+        return self._attrs
+
+    @attrs.setter
+    def attrs(self, value: Mapping[Hashable, Any]) -> None:
+        self._attrs = dict(value)
 
     @_performance_tracking
     def serialize(self):

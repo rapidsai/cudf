@@ -299,6 +299,7 @@ DataFrame = make_final_proxy_type(
         "_ipython_canary_method_should_not_exist_": ignore_ipython_canary_check,
         "dtypes": property(_DataFrame__dtypes),
         "__iter__": custom_iter,
+        "attrs": _FastSlowAttribute("attrs"),
     },
 )
 
@@ -346,6 +347,7 @@ Series = make_final_proxy_type(
         "_constructor_expanddim": _FastSlowAttribute("_constructor_expanddim"),
         "_accessors": set(),
         "dtype": property(_Series_dtype),
+        "attrs": _FastSlowAttribute("attrs"),
     },
 )
 

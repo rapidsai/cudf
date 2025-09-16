@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import functools
 import inspect
 import itertools
@@ -1196,10 +1197,13 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         data: MutableMapping,
         index: Index | None = None,
         columns: Any = None,
+        attrs: dict | None = None,
     ) -> Self:
         out = super()._from_data(data=data, index=index)
         if columns is not None:
             out.columns = columns
+        if attrs is not None:
+            out._attrs = attrs
         return out
 
     # The `constructor*` properties are used by `dask` (and `dask_cudf`)
@@ -5651,6 +5655,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         out_df = pd.DataFrame(out_data, index=out_index)
         out_df.columns = self._data.to_pandas_index
+        out_df.attrs = self.attrs
 
         return out_df
 
@@ -5706,6 +5711,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             df = cls._from_data(data, index)
             # Checks duplicate columns and sets column metadata
             df.columns = dataframe.columns
+            df._attrs = copy.deepcopy(dataframe.attrs)
             return df
         else:
             raise TypeError(

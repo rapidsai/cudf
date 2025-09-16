@@ -512,11 +512,12 @@ class Series(SingleColumnFrame, IndexedFrame):
             data = {}
         if dtype is not None:
             dtype = cudf.dtype(dtype)
-
+        atts = {}
         if isinstance(data, (pd.Series, pd.Index, Index, Series)):
             if copy and not isinstance(data, (pd.Series, pd.Index)):
                 data = data.copy(deep=True)
             name_from_data = data.name
+            atts = getattr(data, "attrs", {})
             column = as_column(data, nan_as_null=nan_as_null, dtype=dtype)
             if isinstance(data, (pd.Series, Series)):
                 index_from_data = ensure_index(data.index)
@@ -589,6 +590,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             reindexed = self.reindex(index=second_index, copy=False)
             self._data = reindexed._data
             self._index = second_index
+        self._attrs = atts
 
     @classmethod
     @_performance_tracking
@@ -609,10 +611,13 @@ class Series(SingleColumnFrame, IndexedFrame):
         data: MutableMapping,
         index: Index | None = None,
         name: Any = no_default,
+        attrs: dict | None = None,
     ) -> Series:
         out = super()._from_data(data=data, index=index)
         if name is not no_default:
             out.name = name
+        if attrs is not None:
+            out._attrs = attrs
         return out
 
     @_performance_tracking
@@ -995,12 +1000,14 @@ class Series(SingleColumnFrame, IndexedFrame):
             if name is no_default:
                 name = 0 if self.name is None else self.name
             data[name] = data.pop(self.name)
-            return self._constructor_expanddim._from_data(data, index)
+            return self._constructor_expanddim._from_data(
+                data, index, attrs=self.attrs
+            )
         # For ``name`` behavior, see:
         # https://github.com/pandas-dev/pandas/issues/44575
         # ``name`` has to be ignored when `drop=True`
         return self._mimic_inplace(
-            Series._from_data(data, index, self.name),
+            Series._from_data(data, index, self.name, attrs=self.attrs),
             inplace=inplace,
         )
 
@@ -1953,11 +1960,13 @@ class Series(SingleColumnFrame, IndexedFrame):
             index = self.index.to_pandas()
         else:
             index = None  # type: ignore[assignment]
-        return pd.Series(
+        res = pd.Series(
             self._column.to_pandas(nullable=nullable, arrow_type=arrow_type),
             index=index,
             name=self.name,
         )
+        res.attrs = self.attrs
+        return res
 
     @property  # type: ignore
     @_performance_tracking
@@ -3495,7 +3504,9 @@ class Series(SingleColumnFrame, IndexedFrame):
                 ".rename does not currently support relabeling the index."
             )
         out_data = self._data.copy(deep=copy)
-        return Series._from_data(out_data, self.index, name=index)
+        return Series._from_data(
+            out_data, self.index, name=index, attrs=self.attrs
+        )
 
     @_performance_tracking
     def add_prefix(self, prefix, axis=None):
@@ -3505,6 +3516,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             # TODO: Change to deep=False when copy-on-write is default
             data=self._data.copy(deep=True),
             index=prefix + self.index.astype(str),
+            attrs=self.attrs,
         )
 
     @_performance_tracking
@@ -3515,6 +3527,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             # TODO: Change to deep=False when copy-on-write is default
             data=self._data.copy(deep=True),
             index=self.index.astype(str) + suffix,
+            attrs=self.attrs,
         )
 
     @_performance_tracking
@@ -4458,7 +4471,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         """
         ca = ColumnAccessor(self.series._column.isocalendar(), verify=False)
         return self.series._constructor_expanddim._from_data(
-            ca, index=self.series.index
+            ca, index=self.series.index, attrs=self.series.attrs
         )
 
     @property  # type: ignore

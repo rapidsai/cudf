@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import copy
 import itertools
 import operator
 import textwrap
@@ -315,6 +316,7 @@ class IndexedFrame(Frame):
         cls,
         data: MutableMapping,
         index: Index | None = None,
+        attrs: dict | None = None,
     ):
         out = super()._from_data(data)
         if index is None:
@@ -325,12 +327,15 @@ class IndexedFrame(Frame):
                 f"index must be a cudf.Index not {type(index).__name__}"
             )
         out._index = index
+        if attrs is not None:
+            out._attrs = attrs
         return out
 
     @_performance_tracking
     def _from_data_like_self(self, data: MutableMapping):
         out = super()._from_data_like_self(data)
         out.index = self.index
+        out._attrs = copy.deepcopy(self._attrs)
         return out
 
     @_performance_tracking
@@ -4817,6 +4822,7 @@ class IndexedFrame(Frame):
                 **ca_attributes,
             ),
             index=out_index,
+            attrs=self.attrs,
         )
 
     def _make_operands_and_index_for_binop(
