@@ -391,10 +391,68 @@ likely to change in the future.
 :::
 
 The `cudf-polars` streaming executor (enabled by default) may use
-estimated column statistics to transform translated logical-plan
-IR nodes into the final "physical-plan" IR nodes.
+estimated column statistics to help transform translated logical-plan
+IR nodes into the final "physical-plan" IR nodes. This will only
+happen for queries that read from in-memory or Parquet data, and
+only when statistics planning is enabled (see the following
+section for more details).
 
-## Storing statistics
+## Configuration
+
+The statistics-based query planning behavior can be controlled through
+the `StatsPlanningOptions` configuration class. These options can be
+configured either through the `stats_planning_options` parameter of the
+streaming executor, or via environment variables with the prefix
+`CUDF_POLARS__STATISTICS_PLANNING__`.
+
+```python
+import polars as pl
+
+# Configure via GPUEngine
+engine = pl.GPUEngine(
+    executor="streaming",
+    executor_options={
+        "stats_planning_options": {
+            "enable": True,
+            "use_join_heuristics": True,
+            "use_sampling": False
+        }
+    }
+)
+
+result = query.collect(engine=engine)
+```
+
+:::{note}
+Column statistics are currently supported for queries that originate
+from Parquet or in-memory DataFrame objects.
+:::
+
+The available configuration options are:
+
+- **`enable`** (default: `False`): Whether to use estimated column statistics
+  to create the physical plan. When disabled, the other parameters in this
+  class are ignored. This can also be set via the
+  `CUDF_POLARS__STATISTICS_PLANNING__ENABLE` environment variable.
+
+- **`use_join_heuristics`** (default: `True`): Whether to use join heuristics
+  to estimate row-count and unique-count statistics. These statistics are used
+  to create the physical plan when `enable=True`. This can also be set via the
+  `CUDF_POLARS__STATISTICS_PLANNING__USE_JOIN_HEURISTICS` environment variable.
+
+- **`use_sampling`** (default: `True`): Whether to sample real data to estimate
+  unique-value statistics. These statistics are used to create the physical plan
+  when `enable=True`. This can also be set via the
+  `CUDF_POLARS__STATISTICS_PLANNING__USE_SAMPLING` environment variable.
+
+For example, to enable statistics-based planning via environment variables:
+
+```bash
+export CUDF_POLARS__STATISTICS_PLANNING__ENABLE=True
+export CUDF_POLARS__STATISTICS_PLANNING__USE_SAMPLING=False
+```
+
+## How it works: Storing statistics
 
 The following classes are used to store column statistics (listed
 in order of decreasing granularity):
@@ -449,39 +507,62 @@ Each object has two important attributes:
   node and the `dict[str, ColumnStats]` mapping for that node.
   - `StatsCollector.join_info`: Returns a `JoinInfo` object.
 
-## Collecting and using statistics
+## How it works: Collecting statistics
 
-:::{note}
-Column-statistics collection is under active development.
-The existing APIs only support the sampling of base
-datasource statistics. The current row-count and unique-value
-statistics for each IR node are not populated by any traversal
-logic yet.
-:::
+The top-level API for collecting statistics is
+`cudf_polars.experimental.statistics.collect_statistics`. This
+function performs the following steps:
 
-### Collecting base statistics
+1. **Collect base statistics**: We build an outline of the statistics that
+   will be collected before any real data is sampled. No Parquet metadata
+   reading or unique-value sampling occurs during this step.
 
-The top-level API for sampling base datasource statistics is
-`cudf_polars.experimental.statistics.collect_base_stats`. This
-function calls into the `initialize_column_stats` single-dispatch
-function to collect a `dict[str, ColumnStats]` mapping for each
-IR node in the logical plan.
+   The top-level API for this "base-statistics" step is
+   `cudf_polars.experimental.statistics.collect_base_stats`. This
+   function calls into the `initialize_column_stats` single-dispatch
+   function to collect a `dict[str, ColumnStats]` mapping for each
+   IR node in the logical plan.
 
-The IR-specific logic for each `initialize_column_stats` dispatch is
-relatively simple, because the only goal is to collect and propagate
-the underlying `DataSourceInfo` reference and child-`ColumnStats`
-references for each column. This means that `Scan` and `DataFrameScan`
-are the only IR classes needing specialized sampling logic. All other
-IR classes are typically propagating reference from child-IR nodes.
+   The IR-specific logic for each `initialize_column_stats` dispatch is
+   relatively simple, because the only goal is to initialize and propagate
+   the underlying `DataSourceInfo` reference and child-`ColumnStats`
+   references for each column.
 
-### Using base statistics
+   This means that most IR classes simply need to propagate reference
+   from child-IR nodes. However, `Scan` and `DataFrameScan` objects
+   must initialize the root `DataSourceInfo` objects. In order to
+   avoid redundant unique-value sampling during later steps, we
+   also need any IR node containing a unique-value reduction (e.g.
+   `Distinct`, `GroupBy`, and `Select(unique)`) to update
+   `unique_stats_columns` for each of its `DataSourceInfo` references.
+
+2. **Apply PK-FK heuristics** (if enabled): We use primary key-foreign key heuristics
+   to estimate the unique count for each join key. Parquet metadata is used to
+   estimate row counts for each table source during this step, but no unique-value
+   sampling is performed yet.
+
+3. **Update statistics for each node**: We set local row-count and unique-value
+   statistics on each node in the IR graph. This step performs unique-value
+   sampling, but only for columns within the `unique_stats_columns` set for
+   the corresponding `DataSourceInfo` object (populated during the first step).
+   Whenever a datasource object has non-empty `unique_stats_columns`, all
+   columns in that set are sampled at the same time (to minimize file-system
+   operations).
+
+## How it works: Using statistics
 
 Base `DataSourceInfo` references are currently used to calculate
 the partition count when a Parquet-based `Scan` node is lowered
-by the `cudf-polars` streaming executor.
+by the `cudf-polars` streaming executor. This behavior does **not**
+currently depend on the `StatsPlanningOptions` configuration.
 
-In the future, these statistics will also be used for
-parallel-algorithm selection and intermediate repartitioning.
+If the `StatsPlanningOptions.enable` configuration is set to `True`,
+cudf-polars will use unique-value and row-count statistics to
+estimate the ideal output-partition count for reduction operations
+like `Distinct`, `GroupBy`, and `Select(unique)`. If column statistics
+is **not** enabled, the user-provided `unique_fraction` configuration
+may be necessary for reductions on high-cardinality columns. Otherwise,
+the default tree-reduction algorithm may have insufficient GPU memory.
 
 # Containers
 
