@@ -6,14 +6,18 @@ from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.strings cimport repeat as cpp_repeat
 from pylibcudf.libcudf.types cimport size_type
 
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
-from ..utils cimport _get_stream
+from ..utils cimport _get_stream, _get_memory_resource
 
 __all__ = ["repeat_strings"]
 
 cpdef Column repeat_strings(
-    Column input, ColumnorSizeType repeat_times, Stream stream=None
+    Column input,
+    ColumnorSizeType repeat_times,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Repeat each string in the given strings column by the numbers
@@ -30,6 +34,8 @@ cpdef Column repeat_strings(
         for each row are repeated.
     stream : Stream | None
         CUDA stream on which to perform the operation.
+    mr : DeviceMemoryResource | None
+        Device memory resource used to allocate the returned column's device memory.
 
     Returns
     -------
@@ -38,6 +44,7 @@ cpdef Column repeat_strings(
     """
     cdef unique_ptr[column] c_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     if ColumnorSizeType is Column:
         with nogil:
@@ -56,4 +63,4 @@ cpdef Column repeat_strings(
     else:
         raise ValueError("repeat_times must be size_type or integer")
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)
