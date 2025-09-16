@@ -409,6 +409,42 @@ class ModuleAccelerator(ModuleAcceleratorBase):
                 del sys.modules[mod]
         self._denylist = (*slow_module.__path__, *fast_module.__path__)
 
+        # Optionally extend the denylist with user-provided modules/paths.
+        # This allows disabling acceleration when code is executing inside
+        # specific third-party libraries (e.g., xarray) that expect the
+        # real pandas module at import/use time.
+        extra_deny = os.environ.get("CUDF_PANDAS_DENYLIST", "").strip()
+        if extra_deny:
+            extra_paths: list[str] = []
+            for token in (t.strip() for t in extra_deny.split(",")):
+                if not token:
+                    continue
+                try:
+                    mod = importlib.import_module(token)
+                except Exception:
+                    # If it's not an importable module, treat it as a filesystem path.
+                    try:
+                        p = pathlib.Path(token).resolve()
+                        # Only add if it exists to avoid accidental matches
+                        if p.exists():
+                            extra_paths.append(str(p))
+                    except Exception:
+                        # Ignore malformed entries
+                        pass
+                else:
+                    # Prefer module __path__ (packages). Fallback to file's parent (modules).
+                    mod_path = getattr(mod, "__path__", None)
+                    if mod_path:
+                        extra_paths.extend([str(path) for path in mod_path])
+                    else:
+                        mod_file = getattr(mod, "__file__", None)
+                        if mod_file:
+                            extra_paths.append(
+                                str(pathlib.Path(mod_file).resolve().parent)
+                            )
+            if extra_paths:
+                self._denylist = (*self._denylist, *tuple(extra_paths))
+
         # This initialization does not need to be protected since a given instance is
         # always being created on a given thread.
         self._disable_count = defaultdict(int)
