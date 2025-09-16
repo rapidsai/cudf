@@ -1,4 +1,5 @@
 # Copyright (c) 2023-2025, NVIDIA CORPORATION.
+import array
 import datetime
 import decimal
 import types
@@ -730,7 +731,9 @@ def test_to_from_arrow_nulls(all_supported_types_as_str):
     # number of bytes, so only check the first byte in this case
     np.testing.assert_array_equal(
         np.asarray(s1.buffers()[0]).view("u1")[0],
-        gs1._column.mask_array_view(mode="read").copy_to_host().view("u1")[0],
+        cp.asarray(gs1._column.to_pylibcudf(mode="read").null_mask())
+        .get()
+        .view("u1")[0],
     )
     assert pa.Array.equals(s1, gs1.to_arrow())
 
@@ -741,7 +744,9 @@ def test_to_from_arrow_nulls(all_supported_types_as_str):
     # number of bytes, so only check the first byte in this case
     np.testing.assert_array_equal(
         np.asarray(s2.buffers()[0]).view("u1")[0],
-        gs2._column.mask_array_view(mode="read").copy_to_host().view("u1")[0],
+        cp.asarray(gs2._column.to_pylibcudf(mode="read").null_mask())
+        .get()
+        .view("u1")[0],
     )
     assert pa.Array.equals(s2, gs2.to_arrow())
 
@@ -1501,3 +1506,100 @@ def test_categorical_interval_pandas_roundtrip():
     expected = pd.Series(pd.interval_range(0, 5)).astype("category")
     result = cudf.Series.from_pandas(expected).to_pandas()
     assert_eq(result, expected)
+
+
+def test_from_arrow_missing_categorical():
+    pd_cat = pd.Categorical(["a", "b", "c"], categories=["a", "b"])
+    pa_cat = pa.array(pd_cat, from_pandas=True)
+    gd_cat = cudf.Series(pa_cat)
+
+    assert isinstance(gd_cat, cudf.Series)
+    assert_eq(
+        pd.Series(pa_cat.to_pandas()),  # PyArrow returns a pd.Categorical
+        gd_cat.to_pandas(),
+    )
+
+
+def test_from_python_array(numeric_types_as_str):
+    rng = np.random.default_rng(seed=0)
+    np_arr = rng.integers(0, 100, 10).astype(numeric_types_as_str)
+    data = memoryview(np_arr)
+    data = array.array(data.format, data)
+
+    gs = cudf.Series(data)
+
+    np.testing.assert_equal(gs.to_numpy(), np_arr)
+
+
+def test_as_column_types():
+    col = as_column(cudf.Series([], dtype="float64"))
+    assert_eq(col.dtype, np.dtype("float64"))
+    gds = cudf.Series._from_column(col)
+    pds = pd.Series(pd.Series([], dtype="float64"))
+
+    assert_eq(pds, gds)
+
+    col = as_column(
+        cudf.Series([], dtype="float64"), dtype=np.dtype(np.float32)
+    )
+    assert_eq(col.dtype, np.dtype("float32"))
+    gds = cudf.Series._from_column(col)
+    pds = pd.Series(pd.Series([], dtype="float32"))
+
+    assert_eq(pds, gds)
+
+    col = as_column(cudf.Series([], dtype="float64"), dtype=cudf.dtype("str"))
+    assert_eq(col.dtype, np.dtype("object"))
+    gds = cudf.Series._from_column(col)
+    pds = pd.Series(pd.Series([], dtype="str"))
+
+    assert_eq(pds, gds)
+
+    col = as_column(cudf.Series([], dtype="float64"), dtype=cudf.dtype("str"))
+    assert_eq(col.dtype, np.dtype("object"))
+    gds = cudf.Series._from_column(col)
+    pds = pd.Series(pd.Series([], dtype="object"))
+
+    assert_eq(pds, gds)
+
+    pds = pd.Series(np.array([1, 2, 3]), dtype="float32")
+    gds = cudf.Series._from_column(
+        as_column(np.array([1, 2, 3]), dtype=np.dtype(np.float32))
+    )
+
+    assert_eq(pds, gds)
+
+    pds = pd.Series([1, 2, 3], dtype="float32")
+    gds = cudf.Series([1, 2, 3], dtype="float32")
+
+    assert_eq(pds, gds)
+
+    pds = pd.Series([], dtype="float64")
+    gds = cudf.Series._from_column(as_column(pds))
+    assert_eq(pds, gds)
+
+    pds = pd.Series([1, 2, 4], dtype="int64")
+    gds = cudf.Series._from_column(
+        as_column(cudf.Series([1, 2, 4]), dtype="int64")
+    )
+
+    assert_eq(pds, gds)
+
+    pds = pd.Series([1.2, 18.0, 9.0], dtype="float32")
+    gds = cudf.Series._from_column(
+        as_column(cudf.Series([1.2, 18.0, 9.0]), dtype=np.dtype(np.float32))
+    )
+
+    assert_eq(pds, gds)
+
+    pds = pd.Series([1.2, 18.0, 9.0], dtype="str")
+    gds = cudf.Series._from_column(
+        as_column(cudf.Series([1.2, 18.0, 9.0]), dtype=cudf.dtype("str"))
+    )
+
+    assert_eq(pds, gds)
+
+    pds = pd.Series(pd.Index(["1", "18", "9"]), dtype="int")
+    gds = cudf.Series(cudf.Index(["1", "18", "9"]), dtype="int")
+
+    assert_eq(pds, gds)

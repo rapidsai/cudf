@@ -862,3 +862,172 @@ def test_categorical_setitem_with_nan():
         [1, np.nan, np.nan, np.nan, np.nan, None], nan_as_null=False
     ).astype(gs.dtype)
     assert_eq(gs, expected_series)
+
+
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
+@pytest.mark.parametrize(
+    "key, value",
+    [
+        (0, 4),
+        (1, 4),
+        ([0, 1], 4),
+        ([0, 1], [4, 5]),
+        (slice(0, 2), [4, 5]),
+        (slice(1, None), [4, 5, 6, 7]),
+        ([], 1),
+        ([], []),
+        (slice(None, None), 1),
+        (slice(-1, -3), 7),
+    ],
+)
+@pytest.mark.parametrize("nulls", ["none", "some", "all"])
+def test_series_setitem_basics(key, value, nulls):
+    psr = pd.Series([1, 2, 3, 4, 5])
+    if nulls == "some":
+        psr[[0, 4]] = None
+    elif nulls == "all":
+        psr[:] = None
+    gsr = cudf.from_pandas(psr)
+    with expect_warning_if(
+        isinstance(value, list) and len(value) == 0 and nulls == "none"
+    ):
+        psr[key] = value
+    with expect_warning_if(
+        isinstance(value, list) and len(value) == 0 and not len(key) == 0
+    ):
+        gsr[key] = value
+    assert_eq(psr, gsr, check_dtype=False)
+
+
+def test_series_setitem_null():
+    gsr = cudf.Series([1, 2, 3, 4])
+    gsr[0] = None
+
+    expect = cudf.Series([None, 2, 3, 4])
+    got = gsr
+    assert_eq(expect, got)
+
+    gsr = cudf.Series([None, 2, 3, 4])
+    gsr[0] = 1
+
+    expect = cudf.Series([1, 2, 3, 4])
+    got = gsr
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "key, value",
+    [
+        (0, 0.5),
+        ([0, 1], 0.5),
+        ([0, 1], [0.5, 2.5]),
+        (slice(0, 2), [0.5, 0.25]),
+    ],
+)
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
+)
+def test_series_setitem_dtype(key, value):
+    psr = pd.Series([1, 2, 3], dtype="int32")
+    gsr = cudf.from_pandas(psr)
+
+    with pytest.warns(FutureWarning):
+        psr[key] = value
+    with pytest.warns(FutureWarning):
+        gsr[key] = value
+
+    assert_eq(psr, gsr)
+
+
+def test_series_setitem_datetime():
+    psr = pd.Series(["2001", "2002", "2003"], dtype="datetime64[ns]")
+    gsr = cudf.from_pandas(psr)
+
+    psr[0] = np.datetime64("2005")
+    gsr[0] = np.datetime64("2005")
+
+    assert_eq(psr, gsr)
+
+
+def test_series_setitem_datetime_coerced():
+    psr = pd.Series(["2001", "2002", "2003"], dtype="datetime64[ns]")
+    gsr = cudf.from_pandas(psr)
+
+    psr[0] = "2005"
+    gsr[0] = "2005"
+
+    assert_eq(psr, gsr)
+
+
+def test_series_setitem_categorical():
+    psr = pd.Series(["a", "b", "a", "c", "d"], dtype="category")
+    gsr = cudf.from_pandas(psr)
+
+    psr[0] = "d"
+    gsr[0] = "d"
+    assert_eq(psr, gsr)
+
+    psr = psr.cat.add_categories(["e"])
+    gsr = gsr.cat.add_categories(["e"])
+    psr[0] = "e"
+    gsr[0] = "e"
+    assert_eq(psr, gsr)
+
+    psr[[0, 1]] = "b"
+    gsr[[0, 1]] = "b"
+    assert_eq(psr, gsr)
+
+    psr[0:3] = "e"
+    gsr[0:3] = "e"
+    assert_eq(psr, gsr)
+
+
+@pytest.mark.parametrize(
+    "key, value",
+    [
+        (0, "d"),
+        (0, "g"),
+        ([0, 1], "g"),
+        ([0, 1], None),
+        (slice(None, 2), "g"),
+        (slice(None, 2), ["g", None]),
+    ],
+)
+def test_series_setitem_string(key, value):
+    psr = pd.Series(["a", "b", "c", "d", "e"])
+    gsr = cudf.from_pandas(psr)
+    psr[key] = value
+    gsr[key] = value
+    assert_eq(psr, gsr)
+
+    psr = pd.Series(["a", None, "c", "d", "e"])
+    gsr = cudf.from_pandas(psr)
+    psr[key] = value
+    gsr[key] = value
+    assert_eq(psr, gsr)
+
+
+def test_out_of_bounds_indexing():
+    psr = pd.Series([1, 2, 3])
+    gsr = cudf.from_pandas(psr)
+
+    assert_exceptions_equal(
+        lambda: psr[[0, 1, 9]],
+        lambda: gsr[[0, 1, 9]],
+    )
+    assert_exceptions_equal(
+        lambda: psr[[0, 1, -4]],
+        lambda: gsr[[0, 1, -4]],
+    )
+    assert_exceptions_equal(
+        lambda: psr.__setitem__([0, 1, 9], 2),
+        lambda: gsr.__setitem__([0, 1, 9], 2),
+    )
+    assert_exceptions_equal(
+        lambda: psr.__setitem__([0, 1, -4], 2),
+        lambda: gsr.__setitem__([0, 1, -4], 2),
+    )

@@ -83,9 +83,9 @@ TEST_F(RowIRCudaCodeGenTest, SetOutput)
     auto code = set_output_0.generate_code(ctx, target_info, info);
 
     auto expected_code =
-      "int32_t tmp_0 = in_0;\n"
-      "int32_t tmp_1 = tmp_0;"
-      "\n*out_0 = tmp_1;";
+      R"***(int32_t tmp_0 = in_0;
+int32_t tmp_1 = tmp_0;
+*out_0 = tmp_1;)***";
 
     EXPECT_EQ(code, expected_code);
   }
@@ -97,9 +97,9 @@ TEST_F(RowIRCudaCodeGenTest, SetOutput)
     auto code = set_output_1.generate_code(ctx, target_info, info);
 
     auto expected_code =
-      "float tmp_0 = in_1;\n"
-      "float tmp_1 = tmp_0;"
-      "\n*out_1 = tmp_1;";
+      R"***(float tmp_0 = in_1;
+float tmp_1 = tmp_0;
+*out_1 = tmp_1;)***";
 
     EXPECT_EQ(code, expected_code);
   }
@@ -124,10 +124,8 @@ TEST_F(RowIRCudaCodeGenTest, UnaryOperation)
     auto code = op.generate_code(ctx, target_info, info);
 
     auto expected_code =
-      "int32_t tmp_0 = in_0;\n"
-      "int32_t tmp_1 = "
-      "cudf::ast::detail::operator_functor<cudf::ast::ast_operator::IDENTITY, "
-      "false>{}(tmp_0);";
+      R"***(int32_t tmp_0 = in_0;
+int32_t tmp_1 = cudf::ast::detail::operator_functor<cudf::ast::ast_operator::IDENTITY, false>{}(tmp_0);)***";
 
     EXPECT_EQ(code, expected_code);
   }
@@ -140,9 +138,8 @@ TEST_F(RowIRCudaCodeGenTest, UnaryOperation)
     auto null_code = op.generate_code(ctx, target_info, info);
 
     auto expected_null_code =
-      "numeric::decimal32 tmp_0 = in_1;\n"
-      "numeric::decimal32 tmp_1 = "
-      "cudf::ast::detail::operator_functor<cudf::ast::ast_operator::IDENTITY, false>{}(tmp_0);";
+      R"***(numeric::decimal32 tmp_0 = in_1;
+numeric::decimal32 tmp_1 = cudf::ast::detail::operator_functor<cudf::ast::ast_operator::IDENTITY, false>{}(tmp_0);)***";
 
     EXPECT_EQ(null_code, expected_null_code);
   }
@@ -167,11 +164,9 @@ TEST_F(RowIRCudaCodeGenTest, BinaryOperation)
     auto code = op.generate_code(ctx, target_info, info);
 
     auto expected_code =
-      "int32_t tmp_0 = in_0;\n"
-      "int32_t tmp_1 = in_0;\n"
-      "int32_t tmp_2 = "
-      "cudf::ast::detail::operator_functor<cudf::ast::ast_operator::ADD, "
-      "false>{}(tmp_0, tmp_1);";
+      R"***(int32_t tmp_0 = in_0;
+int32_t tmp_1 = in_0;
+int32_t tmp_2 = cudf::ast::detail::operator_functor<cudf::ast::ast_operator::ADD, false>{}(tmp_0, tmp_1);)***";
 
     EXPECT_EQ(code, expected_code);
   }
@@ -184,10 +179,9 @@ TEST_F(RowIRCudaCodeGenTest, BinaryOperation)
     auto null_code = op.generate_code(ctx, target_info, info);
 
     auto expected_null_code =
-      "numeric::decimal32 tmp_0 = in_1;\n"
-      "numeric::decimal32 tmp_1 = in_1;\n"
-      "numeric::decimal32 tmp_2 = "
-      "cudf::ast::detail::operator_functor<cudf::ast::ast_operator::ADD, false>{}(tmp_0, tmp_1);";
+      R"***(numeric::decimal32 tmp_0 = in_1;
+numeric::decimal32 tmp_1 = in_1;
+numeric::decimal32 tmp_2 = cudf::ast::detail::operator_functor<cudf::ast::ast_operator::ADD, false>{}(tmp_0, tmp_1);)***";
 
     EXPECT_EQ(null_code, expected_null_code);
   }
@@ -238,21 +232,16 @@ TEST_F(RowIRCudaCodeGenTest, VectorLengthOperation)
     auto code = expr_ir->generate_code(ctx, target_info, info);
 
     auto expected_code =
-      "double tmp_0 = in_0;\n"
-      "double tmp_1 = in_0;\n"
-      "double tmp_2 = "
-      "cudf::ast::detail::operator_functor<cudf::ast::ast_operator::MUL, false>{}(tmp_0, tmp_1);\n"
-      "double tmp_3 = in_1;\n"
-      "double tmp_4 = in_1;\n"
-      "double tmp_5 = "
-      "cudf::ast::detail::operator_functor<cudf::ast::ast_operator::MUL, false>{}(tmp_3, "
-      "tmp_4);\n"
-      "double tmp_6 = "
-      "cudf::ast::detail::operator_functor<cudf::ast::ast_operator::ADD, false>{}(tmp_2, tmp_5);\n"
-      "double tmp_7 = "
-      "cudf::ast::detail::operator_functor<cudf::ast::ast_operator::SQRT, false>{}(tmp_6);\n"
-      "double tmp_8 = tmp_7;\n"
-      "*out_0 = tmp_8;";
+      R"***(double tmp_0 = in_0;
+double tmp_1 = in_0;
+double tmp_2 = cudf::ast::detail::operator_functor<cudf::ast::ast_operator::MUL, false>{}(tmp_0, tmp_1);
+double tmp_3 = in_1;
+double tmp_4 = in_1;
+double tmp_5 = cudf::ast::detail::operator_functor<cudf::ast::ast_operator::MUL, false>{}(tmp_3, tmp_4);
+double tmp_6 = cudf::ast::detail::operator_functor<cudf::ast::ast_operator::ADD, false>{}(tmp_2, tmp_5);
+double tmp_7 = cudf::ast::detail::operator_functor<cudf::ast::ast_operator::SQRT, false>{}(tmp_6);
+double tmp_8 = tmp_7;
+*out_0 = tmp_8;)***";
 
     EXPECT_EQ(code, expected_code);
   }

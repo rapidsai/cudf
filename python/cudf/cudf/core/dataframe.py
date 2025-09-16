@@ -56,7 +56,6 @@ from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
     StringColumn,
-    StructColumn,
     as_column,
     column_empty,
     concat_columns,
@@ -3079,11 +3078,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     def set_index(
         self,
         keys,
-        drop=True,
-        append=False,
-        inplace=False,
-        verify_integrity=False,
-    ):
+        drop: bool = True,
+        append: bool = False,
+        inplace: bool = False,
+        verify_integrity: bool = False,
+    ) -> Self | None:
         """Return a new DataFrame with a new index
 
         Parameters
@@ -3178,6 +3177,13 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             keys = [keys]
         if len(keys) == 0:
             raise ValueError("No valid columns to be added to index.")
+        if not isinstance(drop, bool):
+            raise TypeError("drop must be a boolean")
+        if not isinstance(append, bool):
+            raise TypeError("append must be a boolean")
+        if not isinstance(inplace, bool):
+            raise TypeError("inplace must be a boolean")
+
         if append:
             keys = [self.index, *keys]
 
@@ -3641,10 +3647,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     def drop_duplicates(
         self,
         subset=None,
-        keep="first",
-        inplace=False,
-        ignore_index=False,
-    ):
+        keep: Literal["first", "last", False] = "first",
+        inplace: bool = False,
+        ignore_index: bool = False,
+    ) -> Self | None:
         """
         Return DataFrame with duplicate rows removed.
 
@@ -5052,93 +5058,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         return DataFrame._from_data(result, index=self.index)
 
     @_performance_tracking
-    @applyutils.doc_apply()
-    def apply_rows(
-        self,
-        func,
-        incols,
-        outcols,
-        kwargs,
-        pessimistic_nulls=True,
-        cache_key=None,
-    ):
-        """
-        Apply a row-wise user defined function.
-
-        Parameters
-        ----------
-        {params}
-
-        Examples
-        --------
-        The user function should loop over the columns and set the output for
-        each row. Loop execution order is arbitrary, so each iteration of
-        the loop **MUST** be independent of each other.
-
-        When ``func`` is invoked, the array args corresponding to the
-        input/output are strided so as to improve GPU parallelism.
-        The loop in the function resembles serial code, but executes
-        concurrently in multiple threads.
-
-        >>> import cudf
-        >>> import numpy as np
-        >>> df = cudf.DataFrame()
-        >>> nelem = 3
-        >>> df['in1'] = np.arange(nelem)
-        >>> df['in2'] = np.arange(nelem)
-        >>> df['in3'] = np.arange(nelem)
-
-        Define input columns for the kernel
-
-        >>> in1 = df['in1']
-        >>> in2 = df['in2']
-        >>> in3 = df['in3']
-        >>> def kernel(in1, in2, in3, out1, out2, kwarg1, kwarg2):
-        ...     for i, (x, y, z) in enumerate(zip(in1, in2, in3)):
-        ...         out1[i] = kwarg2 * x - kwarg1 * y
-        ...         out2[i] = y - kwarg1 * z
-
-        Call ``.apply_rows`` with the name of the input columns, the name and
-        dtype of the output columns, and, optionally, a dict of extra
-        arguments.
-
-        >>> df.apply_rows(kernel,
-        ...               incols=['in1', 'in2', 'in3'],
-        ...               outcols=dict(out1=np.float64, out2=np.float64),
-        ...               kwargs=dict(kwarg1=3, kwarg2=4))
-           in1  in2  in3 out1 out2
-        0    0    0    0  0.0  0.0
-        1    1    1    1  1.0 -2.0
-        2    2    2    2  2.0 -4.0
-        """
-        warnings.warn(
-            "DataFrame.apply_rows is deprecated and will be "
-            "removed in a future release. Please use `apply` "
-            "or use a custom numba kernel instead or refer "
-            "to the UDF guidelines for more information "
-            "https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html",
-            FutureWarning,
-        )
-        for col in incols:
-            current_col_dtype = self._data[col].dtype
-            if current_col_dtype == CUDF_STRING_DTYPE or isinstance(
-                current_col_dtype, CategoricalDtype
-            ):
-                raise TypeError(
-                    "User defined functions are currently not "
-                    "supported on Series with dtypes `str` and `category`."
-                )
-        return applyutils.apply_rows(
-            self,
-            func,
-            incols,
-            outcols,
-            kwargs,
-            pessimistic_nulls,
-            cache_key=cache_key,
-        )
-
-    @_performance_tracking
     @applyutils.doc_applychunks()
     def apply_chunks(
         self,
@@ -5157,7 +5076,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         Parameters
         ----------
         {params}
-        {params_chunks}
 
         Examples
         --------
@@ -5188,8 +5106,16 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         See Also
         --------
-        DataFrame.apply_rows
+        DataFrame.apply
         """
+        warnings.warn(
+            "DataFrame.apply_chunks is deprecated and will be "
+            "removed in a future release. Please use `apply` "
+            "or use a custom numba kernel instead or refer "
+            "to the UDF guidelines for more information "
+            "https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html",
+            FutureWarning,
+        )
         if kwargs is None:
             kwargs = {}
         if chunks is None:
@@ -6215,7 +6141,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         method="linear",
         axis=0,
         limit=None,
-        inplace=False,
+        inplace: bool = False,
         limit_direction=None,
         limit_area=None,
         downcast=None,
@@ -7848,14 +7774,34 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 "requires field name to be string. Non-string column names "
                 "will be casted to string as the field name."
             )
-        fields = {str(name): dtype for name, dtype in self._dtypes}
-        col = StructColumn(
-            data=None,
-            dtype=StructDtype(fields=fields),
-            children=tuple(col.copy(deep=True) for col in self._columns),
-            size=len(self),
-            offset=0,
+        dtype = StructDtype(
+            fields={str(name): dtype for name, dtype in self._dtypes}
         )
+        if self._num_columns == 0:
+            col = column_empty(len(self), dtype=dtype)
+        else:
+            first_null_count = self._columns[0].null_count
+            children = (
+                col.copy(deep=True).to_pylibcudf(mode="read")
+                for col in self._columns
+            )
+            if all(
+                col.null_count == first_null_count for col in self._columns
+            ):
+                plc_column = plc.Column.struct_from_children(children)
+            else:
+                plc_column = plc.Column(
+                    plc.DataType(plc.TypeId.STRUCT),
+                    len(self),
+                    None,
+                    None,
+                    0,
+                    0,
+                    list(children),
+                )
+            col = ColumnBase.from_pylibcudf(plc_column)._with_type_metadata(
+                dtype
+            )
         return Series._from_column(
             col,
             index=self.index,

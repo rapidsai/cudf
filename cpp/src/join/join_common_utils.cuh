@@ -19,9 +19,9 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/row_operator/row_operators.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -94,8 +94,8 @@ class pair_equality {
   template <typename LhsPair, typename RhsPair>
   __device__ __forceinline__ bool operator()(LhsPair const& lhs, RhsPair const& rhs) const noexcept
   {
-    using experimental::row::lhs_index_type;
-    using experimental::row::rhs_index_type;
+    using detail::row::lhs_index_type;
+    using detail::row::rhs_index_type;
 
     return lhs.first == rhs.first and
            _check_row_equality(lhs_index_type{rhs.second}, rhs_index_type{lhs.second});
@@ -131,10 +131,10 @@ get_trivial_left_join_indices(table_view const& left,
  * @tparam MultimapType The type of the hash table
  *
  * @param build Table of columns used to build join hash.
- * @param preprocessed_build shared_ptr to cudf::experimental::row::equality::preprocessed_table
+ * @param preprocessed_build shared_ptr to cudf::detail::row::equality::preprocessed_table
  * for build
  * @param hash_table Build hash table.
- * @param has_nulls Flag to denote if build or probe tables have nested nulls
+ * @param has_nested_nulls Flag to denote if build or probe tables have nested nulls
  * @param nulls_equal Flag to denote nulls are equal or not.
  * @param bitmask Bitmask to denote whether a row is valid.
  * @param stream CUDA stream used for device memory operations and kernel launches.
@@ -142,7 +142,7 @@ get_trivial_left_join_indices(table_view const& left,
 template <typename HashTable>
 void build_join_hash_table(
   cudf::table_view const& build,
-  std::shared_ptr<experimental::row::equality::preprocessed_table> const& preprocessed_build,
+  std::shared_ptr<detail::row::equality::preprocessed_table> const& preprocessed_build,
   HashTable& hash_table,
   bool has_nested_nulls,
   null_equality nulls_equal,
@@ -156,19 +156,19 @@ void build_join_hash_table(
     auto const iter = cudf::detail::make_counting_transform_iterator(0, pair_fn{d_hasher});
 
     if (nulls_equal == cudf::null_equality::EQUAL or not nullable(build)) {
-      hash_table.insert_async(iter, iter + build.num_rows(), stream.value());
+      hash_table.insert(iter, iter + build.num_rows(), stream.value());
     } else {
       auto const stencil = thrust::counting_iterator<size_type>{0};
       auto const pred    = row_is_valid{bitmask};
 
       // insert valid rows
-      hash_table.insert_if_async(iter, iter + build.num_rows(), stencil, pred, stream.value());
+      hash_table.insert_if(iter, iter + build.num_rows(), stencil, pred, stream.value());
     }
   };
 
   auto const nulls = nullate::DYNAMIC{has_nested_nulls};
 
-  auto const row_hash = experimental::row::hash::row_hasher{preprocessed_build};
+  auto const row_hash = detail::row::hash::row_hasher{preprocessed_build};
   auto const d_hasher = row_hash.device_hasher(nulls);
 
   insert_rows(build, d_hasher);

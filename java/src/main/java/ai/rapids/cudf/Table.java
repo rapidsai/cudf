@@ -444,11 +444,13 @@ public final class Table implements AutoCloseable {
   private static native long[] readORC(String[] filterColumnNames,
                                        String filePath, long address, long length,
                                        boolean usingNumPyTypes, int timeUnit,
-                                       String[] decimal128Columns) throws CudfException;
+                                       String[] decimal128Columns,
+                                       boolean ignoreTimezoneInStripeFooter) throws CudfException;
 
   private static native long[] readORCFromDataSource(String[] filterColumnNames,
                                                      boolean usingNumPyTypes, int timeUnit,
                                                      String[] decimal128Columns,
+                                                     boolean ignoreTimezoneInStripeFooter,
                                                      long dataSourceHandle) throws CudfException;
 
   /**
@@ -736,31 +738,31 @@ public final class Table implements AutoCloseable {
                                                                          long condition,
                                                                          long rowCount) throws CudfException;
 
-  private static native long mixedLeftJoinRowCount(long leftKeysTable, long rightKeysTable,
-                                                   long leftConditionTable, long rightConditionTable,
-                                                   long condition, boolean compareNullsEqual);
+  private static native long[] mixedLeftJoinSize(long leftKeysTable, long rightKeysTable,
+                                                 long leftConditionTable, long rightConditionTable,
+                                                 long condition, boolean compareNullsEqual);
 
   private static native long[] mixedLeftJoinGatherMaps(long leftKeysTable, long rightKeysTable,
                                                        long leftConditionTable, long rightConditionTable,
                                                        long condition, boolean compareNullsEqual);
 
-  private static native long[] mixedLeftJoinGatherMapsWithCount(long leftKeysTable, long rightKeysTable,
-                                                                long leftConditionTable, long rightConditionTable,
-                                                                long condition, boolean compareNullsEqual,
-                                                                long outputRowCount);
+  private static native long[] mixedLeftJoinGatherMapsWithSize(long leftKeysTable, long rightKeysTable,
+                                                               long leftConditionTable, long rightConditionTable,
+                                                               long condition, boolean compareNullsEqual,
+                                                               long outputRowCount, long matchesColumnView);
 
-  private static native long mixedInnerJoinRowCount(long leftKeysTable, long rightKeysTable,
-                                                    long leftConditionTable, long rightConditionTable,
-                                                    long condition, boolean compareNullsEqual);
+  private static native long[] mixedInnerJoinSize(long leftKeysTable, long rightKeysTable,
+                                                  long leftConditionTable, long rightConditionTable,
+                                                  long condition, boolean compareNullsEqual);
 
   private static native long[] mixedInnerJoinGatherMaps(long leftKeysTable, long rightKeysTable,
                                                         long leftConditionTable, long rightConditionTable,
                                                         long condition, boolean compareNullsEqual);
 
-  private static native long[] mixedInnerJoinGatherMapsWithCount(long leftKeysTable, long rightKeysTable,
-                                                                 long leftConditionTable, long rightConditionTable,
-                                                                 long condition, boolean compareNullsEqual,
-                                                                 long outputRowCount);
+  private static native long[] mixedInnerJoinGatherMapsWithSize(long leftKeysTable, long rightKeysTable,
+                                                               long leftConditionTable, long rightConditionTable,
+                                                               long condition, boolean compareNullsEqual,
+                                                               long outputRowCount, long matchesColumnView);
 
   private static native long[] mixedFullJoinGatherMaps(long leftKeysTable, long rightKeysTable,
                                                        long leftConditionTable, long rightConditionTable,
@@ -1583,7 +1585,7 @@ public final class Table implements AutoCloseable {
     return new Table(readORC(opts.getIncludeColumnNames(),
         path.getAbsolutePath(), 0, 0,
         opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId(),
-        opts.getDecimal128Columns()));
+        opts.getDecimal128Columns(), opts.ignoreTimezoneInStripeFooter()));
   }
 
   /**
@@ -1652,7 +1654,7 @@ public final class Table implements AutoCloseable {
     return new Table(readORC(opts.getIncludeColumnNames(),
         null, buffer.getAddress() + offset, len,
         opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId(),
-        opts.getDecimal128Columns()));
+        opts.getDecimal128Columns(), opts.ignoreTimezoneInStripeFooter()));
   }
 
   public static Table readORC(ORCOptions opts, DataSource ds) {
@@ -1660,7 +1662,8 @@ public final class Table implements AutoCloseable {
     try {
       return new Table(readORCFromDataSource(opts.getIncludeColumnNames(),
               opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId(),
-              opts.getDecimal128Columns(), dataSourceHandle));
+              opts.getDecimal128Columns(), opts.ignoreTimezoneInStripeFooter(),
+              dataSourceHandle));
     } finally {
       DataSourceHelper.destroyWrapperDataSource(dataSourceHandle);
     }
@@ -3094,26 +3097,31 @@ public final class Table implements AutoCloseable {
   }
 
   /**
-   * Computes the number of rows resulting from a left join between two tables using a mix of
-   * equality and inequality conditions. The entire join condition is assumed to be a logical AND
-   * of the equality condition and inequality condition.
-   *
+   * Computes output size information for a left join between two tables using a mix of equality
+   * and inequality conditions. The entire join condition is assumed to be a logical AND of the
+   * equality condition and inequality condition.
+   * NOTE: It is the responsibility of the caller to close the resulting size information object
+   * or native resources can be leaked!
    * @param leftKeys the left table's key columns for the equality condition
    * @param rightKeys the right table's key columns for the equality condition
    * @param leftConditional the left table's columns needed to evaluate the inequality condition
    * @param rightConditional the right table's columns needed to evaluate the inequality condition
    * @param condition the inequality condition of the join
    * @param nullEquality whether nulls should compare as equal
-   * @return row count of the join result
+   * @return size information for the join
    */
-  public static long mixedLeftJoinRowCount(Table leftKeys, Table rightKeys,
-                                           Table leftConditional, Table rightConditional,
-                                           CompiledExpression condition,
-                                           NullEquality nullEquality) {
-    return mixedLeftJoinRowCount(
-        leftKeys.getNativeView(), rightKeys.getNativeView(),
-        leftConditional.getNativeView(), rightConditional.getNativeView(),
-        condition.getNativeHandle(), nullEquality == NullEquality.EQUAL);
+  public static MixedJoinSize mixedLeftJoinSize(Table leftKeys, Table rightKeys,
+                                                Table leftConditional, Table rightConditional,
+                                                CompiledExpression condition,
+                                                NullEquality nullEquality) {
+    long[] mixedSizeInfo = mixedLeftJoinSize(
+            leftKeys.getNativeView(), rightKeys.getNativeView(),
+            leftConditional.getNativeView(), rightConditional.getNativeView(),
+            condition.getNativeHandle(), nullEquality == NullEquality.EQUAL);
+    assert mixedSizeInfo.length == 2;
+    long outputRowCount = mixedSizeInfo[0];
+    long matchesColumnHandle = mixedSizeInfo[1];
+    return new MixedJoinSize(outputRowCount, new ColumnVector(matchesColumnHandle));
   }
 
   /**
@@ -3154,8 +3162,8 @@ public final class Table implements AutoCloseable {
    *
    * It is the responsibility of the caller to close the resulting gather map instances.
    *
-   * This interface allows passing the row count from
-   * {@link #mixedLeftJoinRowCount(Table, Table, Table, Table, CompiledExpression, NullEquality)}
+   * This interface allows passing the size result from
+   * {@link #mixedLeftJoinSize(Table, Table, Table, Table, CompiledExpression, NullEquality)}
    * when the output size was computed previously.
    *
    * @param leftKeys the left table's key columns for the equality condition
@@ -3164,20 +3172,20 @@ public final class Table implements AutoCloseable {
    * @param rightConditional the right table's columns needed to evaluate the inequality condition
    * @param condition the inequality condition of the join
    * @param nullEquality whether nulls should compare as equal
-   * @param outputRowCount number of output rows in the join result
+   * @param joinSize mixed join size result
    * @return left and right table gather maps
    */
   public static GatherMap[] mixedLeftJoinGatherMaps(Table leftKeys, Table rightKeys,
                                                     Table leftConditional, Table rightConditional,
                                                     CompiledExpression condition,
                                                     NullEquality nullEquality,
-                                                    long outputRowCount) {
-    long[] gatherMapData = mixedLeftJoinGatherMapsWithCount(
-        leftKeys.getNativeView(), rightKeys.getNativeView(),
-        leftConditional.getNativeView(), rightConditional.getNativeView(),
-        condition.getNativeHandle(),
-        nullEquality == NullEquality.EQUAL,
-        outputRowCount);
+                                                    MixedJoinSize joinSize) {
+    long[] gatherMapData = mixedLeftJoinGatherMapsWithSize(
+            leftKeys.getNativeView(), rightKeys.getNativeView(),
+            leftConditional.getNativeView(), rightConditional.getNativeView(),
+            condition.getNativeHandle(),
+            nullEquality == NullEquality.EQUAL,
+            joinSize.getOutputRowCount(), joinSize.getMatches().getNativeView());
     return buildJoinGatherMaps(gatherMapData);
   }
 
@@ -3356,26 +3364,31 @@ public final class Table implements AutoCloseable {
   }
 
   /**
-   * Computes the number of rows resulting from an inner join between two tables using a mix of
-   * equality and inequality conditions. The entire join condition is assumed to be a logical AND
-   * of the equality condition and inequality condition.
-   *
+   * Computes output size information for an inner join between two tables using a mix of equality
+   * and inequality conditions. The entire join condition is assumed to be a logical AND of the
+   * equality condition and inequality condition.
+   * NOTE: It is the responsibility of the caller to close the resulting size information object
+   * or native resources can be leaked!
    * @param leftKeys the left table's key columns for the equality condition
    * @param rightKeys the right table's key columns for the equality condition
    * @param leftConditional the left table's columns needed to evaluate the inequality condition
    * @param rightConditional the right table's columns needed to evaluate the inequality condition
    * @param condition the inequality condition of the join
    * @param nullEquality whether nulls should compare as equal
-   * @return row count of the join result
+   * @return size information for the join
    */
-  public static long mixedInnerJoinRowCount(Table leftKeys, Table rightKeys,
-                                            Table leftConditional, Table rightConditional,
-                                            CompiledExpression condition,
-                                            NullEquality nullEquality) {
-    return mixedInnerJoinRowCount(
+  public static MixedJoinSize mixedInnerJoinSize(Table leftKeys, Table rightKeys,
+                                                 Table leftConditional, Table rightConditional,
+                                                 CompiledExpression condition,
+                                                 NullEquality nullEquality) {
+    long[] mixedSizeInfo = mixedInnerJoinSize(
         leftKeys.getNativeView(), rightKeys.getNativeView(),
         leftConditional.getNativeView(), rightConditional.getNativeView(),
         condition.getNativeHandle(), nullEquality == NullEquality.EQUAL);
+    assert mixedSizeInfo.length == 2;
+    long outputRowCount = mixedSizeInfo[0];
+    long matchesColumnHandle = mixedSizeInfo[1];
+    return new MixedJoinSize(outputRowCount, new ColumnVector(matchesColumnHandle));
   }
 
   /**
@@ -3417,7 +3430,7 @@ public final class Table implements AutoCloseable {
    * It is the responsibility of the caller to close the resulting gather map instances.
    *
    * This interface allows passing the size result from
-   * {@link #mixedInnerJoinRowCount(Table, Table, Table, Table, CompiledExpression, NullEquality)}
+   * {@link #mixedInnerJoinSize(Table, Table, Table, Table, CompiledExpression, NullEquality)}
    * when the output size was computed previously.
    *
    * @param leftKeys the left table's key columns for the equality condition
@@ -3426,20 +3439,20 @@ public final class Table implements AutoCloseable {
    * @param rightConditional the right table's columns needed to evaluate the inequality condition
    * @param condition the inequality condition of the join
    * @param nullEquality whether nulls should compare as equal
-   * @param outputRowCount number of output rows in the join result
+   * @param joinSize mixed join size result
    * @return left and right table gather maps
    */
   public static GatherMap[] mixedInnerJoinGatherMaps(Table leftKeys, Table rightKeys,
                                                      Table leftConditional, Table rightConditional,
                                                      CompiledExpression condition,
                                                      NullEquality nullEquality,
-                                                     long outputRowCount) {
-    long[] gatherMapData = mixedInnerJoinGatherMapsWithCount(
+                                                     MixedJoinSize joinSize) {
+    long[] gatherMapData = mixedInnerJoinGatherMapsWithSize(
         leftKeys.getNativeView(), rightKeys.getNativeView(),
         leftConditional.getNativeView(), rightConditional.getNativeView(),
         condition.getNativeHandle(),
         nullEquality == NullEquality.EQUAL,
-        outputRowCount);
+        joinSize.getOutputRowCount(), joinSize.getMatches().getNativeView());
     return buildJoinGatherMaps(gatherMapData);
   }
 
