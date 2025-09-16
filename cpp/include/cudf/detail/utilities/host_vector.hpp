@@ -103,28 +103,25 @@ class rmm_host_allocator {
    */
   rmm_host_allocator() = delete;
 
+#if CCCL_MAJOR_VERSION > 3 || (CCCL_MAJOR_VERSION == 3 && CCCL_MINOR_VERSION >= 1)
+  template <class... Properties>
+  using async_host_resource_ref = cuda::mr::resource_ref<cuda::mr::host_accessible, Properties...>;
+#else
+  template <class... Properties>
+  using async_host_resource_ref =
+    cuda::mr::async_resource_ref<cuda::mr::host_accessible, Properties...>;
+#endif
+
   /**
    * @brief Construct from a `cudf::host_async_resource_ref`
    */
-#if CCCL_MAJOR_VERSION > 3 || (CCCL_MAJOR_VERSION == 3 && CCCL_MINOR_VERSION >= 1)
   template <class... Properties>
-  rmm_host_allocator(cuda::mr::resource_ref<cuda::mr::host_accessible, Properties...> _mr,
-                     rmm::cuda_stream_view _stream)
+  rmm_host_allocator(async_host_resource_ref<Properties...> _mr, rmm::cuda_stream_view _stream)
     : mr(_mr),
       stream(_stream),
       _is_device_accessible{contains_property<cuda::mr::device_accessible, Properties...>}
   {
   }
-#else
-  template <class... Properties>
-  rmm_host_allocator(cuda::mr::async_resource_ref<cuda::mr::host_accessible, Properties...> _mr,
-                     rmm::cuda_stream_view _stream)
-    : mr(_mr),
-      stream(_stream),
-      _is_device_accessible{contains_property<cuda::mr::device_accessible, Properties...>}
-  {
-  }
-#endif
 
   /**
    * @brief This method allocates storage for objects in host memory.

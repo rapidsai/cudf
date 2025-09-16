@@ -141,6 +141,8 @@ class fixed_pinned_pool_memory_resource {
   {
   }
 
+  // BEGIN CCCL >=3.1.0 COMPATIBILITY APIS
+
   void* allocate_sync(std::size_t bytes, std::size_t alignment)
   {
     return this->allocate(bytes, alignment);
@@ -160,6 +162,8 @@ class fixed_pinned_pool_memory_resource {
   {
     return this->deallocate_async(ptr, bytes, alignment, stream);
   }
+
+  // END CCCL >=3.1.0 COMPATIBILITY APIS
 };
 
 static_assert(cuda::mr::resource_with<fixed_pinned_pool_memory_resource,
@@ -275,6 +279,8 @@ class new_delete_memory_resource {
   friend void get_property(new_delete_memory_resource const&, cuda::mr::host_accessible) noexcept {}
   // NOLINTEND
 
+  // BEGIN CCCL >=3.1.0 COMPATIBILITY APIS
+
   void* allocate_sync(std::size_t bytes, std::size_t alignment)
   {
     return this->allocate(bytes, alignment);
@@ -294,6 +300,8 @@ class new_delete_memory_resource {
   {
     return this->deallocate_async(ptr, bytes, alignment, stream);
   }
+
+  // END CCCL >=3.1.0 COMPATIBILITY APIS
 };
 
 static_assert(cuda::mr::resource_with<new_delete_memory_resource, cuda::mr::host_accessible>,
