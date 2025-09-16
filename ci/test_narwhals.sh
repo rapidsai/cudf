@@ -31,7 +31,7 @@ python -c "import narwhals; print(narwhals.show_versions())"
 # test_fill_null_strategies_with_limit_as_none[cudf]: Narwhals passes inplace=None instead of a bool
 # test_fill_null_series_limit_as_none[cudf]: Narwhals passes inplace=None instead of a bool
 TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF=" \
-test_to_numpy[cudf] \
+test_to_numpy[cudf] or \
 test_fill_null_strategies_with_limit_as_none[cudf] or \
 test_fill_null_series_limit_as_none[cudf] \
 "
