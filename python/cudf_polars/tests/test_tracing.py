@@ -39,15 +39,14 @@ def test_trace_basic(
     # to control the environment and isolate it from the rest of the test suite.
     code = textwrap.dedent("""\
     import polars as pl
+    import rmm
 
     q = pl.DataFrame({"a": [1, 2, 3]}).lazy().select(pl.col("a").sum())
-    q.collect(engine="gpu")
+    q.collect(engine=pl.GPUEngine(memory_resource=rmm.mr.CudaAsyncMemoryResource()))
     """)
 
     env = {
         "CUDF_POLARS__EXECUTOR": cudf_polars.testing.asserts.DEFAULT_EXECUTOR,
-        # Avoid occasional OOM errors when running this in a subprocess.
-        "POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY": "0",
     }
 
     if log_traces:
