@@ -32,7 +32,7 @@ from rmm.pylibrmm.stream cimport Stream
 
 from .gpumemoryview cimport gpumemoryview
 from .table cimport Table
-from .utils cimport _get_stream
+from .utils cimport _get_stream, _get_memory_resource
 
 
 __all__ = [
@@ -155,7 +155,7 @@ cdef class ChunkedPack:
         Table input,
         size_t user_buffer_size,
         Stream stream,
-        DeviceMemoryResource temp_mr,
+        DeviceMemoryResource temp_mr=None,
     ):
         """
         Create a chunked packer.
@@ -168,13 +168,14 @@ cdef class ChunkedPack:
             Size of the staging buffer to pack into, must be at least 1MB.
         stream : Stream | None
             Stream used for device memory operations and kernel launches.
-        temp_mr
+        temp_mr : DeviceMemoryResource | None
             Memory resource for scratch allocations.
 
         Returns
         -------
         New ChunkedPack object.
         """
+        temp_mr = _get_memory_resource(temp_mr)
         cdef unique_ptr[chunked_pack] obj = chunked_pack.create(
             input.view(), user_buffer_size, stream.view(), temp_mr.get_mr()
         )
