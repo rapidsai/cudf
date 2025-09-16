@@ -22,7 +22,7 @@ from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.dsl.utils.windows import offsets_to_windows, range_window_bounds
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Generator, Sequence
 
     from cudf_polars.typing import ClosedInterval, Duration
 
@@ -78,13 +78,15 @@ def to_request(
     return plc.rolling.RollingRequest(col.obj, min_periods, value.agg_request)
 
 
-def _by_exprs(b: Expr | tuple) -> list[Expr]:
+def _by_exprs(b: Expr | tuple) -> Generator[Expr]:
     if isinstance(b, Expr):
-        return [b]
-    if isinstance(b, tuple):  # pragma: no cover; tests cover this path when
+        yield b
+    elif isinstance(b, tuple):  # pragma: no cover; tests cover this path when
         # run with the distributed scheduler only
-        return [e for item in b for e in _by_exprs(item)]
-    return [expr.Literal(DataType(pl.Int64()), b)]  # pragma: no cover
+        for item in b:
+            yield from _by_exprs(item)
+    else:
+        yield expr.Literal(DataType(pl.Int64()), b)  # pragma: no cover
 
 
 class RollingWindow(Expr):
@@ -264,7 +266,8 @@ class GroupedRollingWindow(Expr):
             )
         )
 
-    def _sorted_grouper(self, by_cols_for_scan: list[Column]) -> plc.groupby.GroupBy:
+    @staticmethod
+    def _sorted_grouper(by_cols_for_scan: list[Column]) -> plc.groupby.GroupBy:
         return plc.groupby.GroupBy(
             plc.Table([c.obj for c in by_cols_for_scan]),
             null_handling=plc.types.NullPolicy.INCLUDE,
@@ -598,7 +601,7 @@ class GroupedRollingWindow(Expr):
                         value_desc=desc,
                     )
                     by_cols_for_scan = self._gather_columns(by_cols, order_index)
-                    local = self._sorted_grouper(by_cols_for_scan)
+                    local = GroupedRollingWindow._sorted_grouper(by_cols_for_scan)
                     names, dtypes, tables = self._apply_unary_op(
                         RankOp(
                             named_exprs=[ne],
