@@ -283,8 +283,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    *
    * @param row_mask Boolean column indicating which rows need to be read after page-pruning
    * @param row_group_indices Input row groups indices
-   * @param output_dtypes Datatypes of output columns
-   * @param output_column_schemas schema indices of output columns
+   * @param input_columns Input column information
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return A vector of boolean vectors indicating which data pages need to be decoded to produce
@@ -293,8 +292,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
   [[nodiscard]] std::vector<std::vector<bool>> compute_data_page_mask(
     cudf::column_view row_mask,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
-    cudf::host_span<cudf::data_type const> output_dtypes,
-    cudf::host_span<cudf::size_type const> output_column_schemas,
+    cudf::host_span<input_column_info const> input_columns,
     rmm::cuda_stream_view stream) const;
 };
 

@@ -193,16 +193,16 @@ namespace {
 }
 
 /**
- * @brief Compute if the page index is present in all parquet data sources for all output columns
+ * @brief Compute if the page index is present in all parquet data sources for all columns
  */
 [[nodiscard]] bool compute_has_page_index(
   cudf::host_span<metadata_base const> file_metadatas,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
-  cudf::host_span<size_type const> output_column_schemas)
+  cudf::host_span<size_type const> column_schema_indices)
 {
   // For all output columns, check all parquet data sources
   return std::all_of(
-    output_column_schemas.begin(), output_column_schemas.end(), [&](auto const schema_idx) {
+    column_schema_indices.begin(), column_schema_indices.end(), [&](auto const schema_idx) {
       // For all parquet data sources
       return std::all_of(
         thrust::counting_iterator<size_t>(0),
@@ -223,6 +223,7 @@ namespace {
         });
     });
 }
+
 /**
  * @brief Construct a vector of all required data pages from the page row counts
  */
@@ -691,20 +692,28 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
 std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask(
   cudf::column_view row_mask,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
-  cudf::host_span<cudf::data_type const> output_dtypes,
-  cudf::host_span<cudf::size_type const> output_column_schemas,
+  cudf::host_span<input_column_info const> input_columns,
   rmm::cuda_stream_view stream) const
 {
+  CUDF_FUNC_RANGE();
+
   CUDF_EXPECTS(row_mask.type().id() == cudf::type_id::BOOL8,
                "Input row bitmask should be of type BOOL8");
 
   auto const total_rows  = row_mask.size();
-  auto const num_columns = output_dtypes.size();
+  auto const num_columns = input_columns.size();
 
+  // Collect column schema indices from the input columns. Note: We can't use
+  // `output_column_schemas` here in case of lists and structs.
+  auto column_schema_indices = std::vector<size_type>(input_columns.size());
+  std::transform(
+    input_columns.begin(), input_columns.end(), column_schema_indices.begin(), [](auto const& col) {
+      return col.schema_idx;
+    });
   auto const has_page_index =
-    compute_has_page_index(per_file_metadata, row_group_indices, output_column_schemas);
+    compute_has_page_index(per_file_metadata, row_group_indices, column_schema_indices);
 
-  // TODO: Don't use page pruning in case of lists and structs until we support them
+  // Return early if page index is not present
   if (not has_page_index) {
     CUDF_LOG_WARN("Encountered missing Parquet page index for one or more output columns");
     return {};  // An empty data page mask indicates all pages are required
@@ -719,7 +728,7 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask
   col_chunk_page_offsets.reserve(num_columns);
 
   if (num_columns == 1) {
-    auto const schema_idx = output_column_schemas[0];
+    auto const schema_idx = column_schema_indices.front();
     auto [counts, offsets, chunk_offsets] =
       make_page_row_counts_and_offsets(per_file_metadata, row_group_indices, schema_idx, stream);
     page_row_counts.emplace_back(std::move(counts));
@@ -738,9 +747,10 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask
                   [&](auto const col_idx) {
                     page_row_counts_and_offsets_tasks.emplace_back(
                       cudf::detail::host_worker_pool().submit_task([&, col_idx = col_idx] {
-                        auto const schema_idx = output_column_schemas[col_idx];
-                        return make_page_row_counts_and_offsets(
-                          per_file_metadata, row_group_indices, schema_idx, streams[col_idx]);
+                        return make_page_row_counts_and_offsets(per_file_metadata,
+                                                                row_group_indices,
+                                                                column_schema_indices[col_idx],
+                                                                streams[col_idx]);
                       }));
                   });
 

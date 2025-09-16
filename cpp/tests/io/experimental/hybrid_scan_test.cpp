@@ -363,55 +363,176 @@ TEST_F(HybridScanTest, PruneDataPagesOnlyAndScanAllColumns)
   }
 }
 
-TEST_F(HybridScanTest, MaterializeListPayloadColumn)
+TEST_F(HybridScanTest, MaterializeMixedPayloadColumns)
 {
-  srand(0xc0ffee);
-  using T = uint32_t;
+  std::mt19937 gen(0xcaffe);
 
   // Parquet buffer
   std::vector<char> parquet_buffer;
   {
     auto constexpr num_rows = num_ordered_rows;
-    // int32_t column
-    auto col0 = testdata::ascending<T>();
-    // string column
+
+    // Validity helpers
+    std::bernoulli_distribution bn(0.7f);
+    auto valids =
+      cudf::detail::make_counting_transform_iterator(0, [&](int index) { return bn(gen); });
+    auto list_valids =
+      cudf::detail::make_counting_transform_iterator(0, [&](int index) { return index % 100; });
+    auto struct_valids_iter =
+      cudf::detail::make_counting_transform_iterator(0, [&](int index) { return index % 121; });
+    std::vector<bool> struct_valids(num_rows);
+    std::copy(struct_valids_iter, struct_valids_iter + num_rows, struct_valids.begin());
+
+    // str and list<str> helpers
+    std::vector<std::string> strings{
+      "abc", "x", "bananas", "gpu", "minty", "backspace", "", "cayenne", "turbine", "soft"};
+    std::uniform_int_distribution<int> uni(0, strings.size() - 1);
+    auto string_iter = cudf::detail::make_counting_transform_iterator(
+      0, [&](cudf::size_type idx) { return strings[uni(gen)]; });
+
+    // uint32_t(non-nullable)
+    auto col0 = testdata::ascending<uint32_t>();
+    // str(non-nullable)
     auto col1 = testdata::ascending<cudf::string_view>();
-    // list<bool> column
+
+    // list<bool(nullable)>(nullable)
     auto bools_iter =
       cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
     auto bools_col =
-      cudf::test::fixed_width_column_wrapper<bool>(bools_iter, bools_iter + num_rows);
+      cudf::test::fixed_width_column_wrapper<bool>(bools_iter, bools_iter + num_rows, valids);
     auto offsets_iter = thrust::counting_iterator<int32_t>(0);
     auto offsets_col =
       cudf::test::fixed_width_column_wrapper<int32_t>(offsets_iter, offsets_iter + num_rows + 1);
-    auto col2 = cudf::make_lists_column(
-      num_rows, offsets_col.release(), bools_col.release(), 0, rmm::device_buffer{});
+    auto [null_mask, null_count] =
+      cudf::test::detail::make_null_mask(list_valids, list_valids + num_rows);
+    auto _col2 = cudf::make_lists_column(
+      num_rows, offsets_col.release(), bools_col.release(), null_count, std::move(null_mask));
+    auto col2 = cudf::purge_nonempty_nulls(*_col2);
+
+    // list<list<bool(nullable)>(nullable)>(nullable)
+    auto col3 = make_parquet_list_list_col<bool>(0, num_rows, 5, 8, true);
+
+    // list<str(nullable)>(must be non-nullable)
+    auto const make_list_str_column = [&](bool is_nullable) {
+      constexpr int string_per_row  = 3;
+      constexpr int num_string_rows = num_rows * string_per_row;
+      cudf::test::strings_column_wrapper string_col{
+        string_iter, string_iter + num_string_rows, valids};
+      auto offset_iter = cudf::detail::make_counting_transform_iterator(
+        0, [](cudf::size_type idx) { return idx * string_per_row; });
+      cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets(offset_iter,
+                                                                      offset_iter + num_rows + 1);
+      auto [null_mask, null_count] = [&]() {
+        if (is_nullable) {
+          return cudf::test::detail::make_null_mask(valids, valids + num_rows);
+        } else {
+          return std::make_pair(rmm::device_buffer{}, 0);
+        }
+      }();
+      return cudf::make_lists_column(
+        num_rows, offsets.release(), string_col.release(), null_count, std::move(null_mask));
+    };
+
+    // str(nullable)
+    auto col4 = cudf::test::strings_column_wrapper{string_iter, string_iter + num_rows, valids};
+
+    // list<str(nullable)>(non-nullable)
+    auto col5 = make_list_str_column(false);
+
+    // list<str(nullable)>(nullable)
+    auto col6 = make_list_str_column(true);
+
+    // struct<list<str(nullable)>(nullable), int(nullable), float(nullable)>(nullable)
+    auto values    = thrust::make_counting_iterator(0);
+    auto col7_list = make_list_str_column(true);
+    cudf::test::fixed_width_column_wrapper<int> col7_ints(values, values + num_rows, valids);
+    cudf::test::fixed_width_column_wrapper<float> col7_floats(values, values + num_rows, valids);
+    std::vector<std::unique_ptr<cudf::column>> col7_children;
+    col7_children.push_back(std::move(col7_list));
+    col7_children.push_back(col7_ints.release());
+    col7_children.push_back(col7_floats.release());
+    cudf::test::structs_column_wrapper _col7(std::move(col7_children), struct_valids);
+    auto col7 = cudf::purge_nonempty_nulls(_col7);
+
+    // struct<str(nullable), bool(nullable)>(nullable)
+    auto col8_str = cudf::test::strings_column_wrapper{string_iter, string_iter + num_rows, valids};
+    cudf::test::fixed_width_column_wrapper<bool> col8_bools(values, values + num_rows, valids);
+    std::vector<std::unique_ptr<cudf::column>> col8_children;
+    col8_children.push_back(col8_str.release());
+    col8_children.push_back(col8_bools.release());
+    cudf::test::structs_column_wrapper _col8(std::move(col8_children), struct_valids);
+    auto col8 = cudf::purge_nonempty_nulls(_col8);
+
+    // list<list<str(nullable)>(nullable)>(nullable)
+    constexpr int string_per_row  = 3;
+    constexpr int lists_per_list  = 2;
+    constexpr int num_string_rows = num_rows * string_per_row * lists_per_list;
+    cudf::test::strings_column_wrapper string_col{
+      string_iter, string_iter + num_string_rows, valids};
+    auto offset_iter = cudf::detail::make_counting_transform_iterator(
+      0, [](cudf::size_type idx) { return idx * string_per_row; });
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> list_offsets(
+      offset_iter, offset_iter + (num_rows * lists_per_list) + 1);
+    std::tie(null_mask, null_count) =
+      cudf::test::detail::make_null_mask(list_valids, list_valids + (num_rows * lists_per_list));
+
+    auto _list_col = cudf::make_lists_column(num_rows * lists_per_list,
+                                             list_offsets.release(),
+                                             string_col.release(),
+                                             null_count,
+                                             std::move(null_mask));
+    auto list_col  = cudf::purge_nonempty_nulls(*_list_col);
+
+    auto list_list_offsets_iter = cudf::detail::make_counting_transform_iterator(
+      0, [](cudf::size_type idx) { return idx * lists_per_list; });
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> list_list_offsets(
+      list_list_offsets_iter, list_list_offsets_iter + num_rows + 1);
+    auto list_list_valids =
+      cudf::detail::make_counting_transform_iterator(0, [&](int index) { return index % 80; });
+    std::tie(null_mask, null_count) =
+      cudf::test::detail::make_null_mask(list_list_valids, list_list_valids + num_rows);
+
+    auto _col9 = cudf::make_lists_column(
+      num_rows, list_list_offsets.release(), std::move(list_col), null_count, std::move(null_mask));
+
+    auto col9 = cudf::purge_nonempty_nulls(*_col9);
 
     // Input table
-    auto table = cudf::table_view{{col0, col1, *col2}};
+    auto constexpr num_concat = 3;
+    auto table =
+      cudf::table_view{{col0, col1, *col2, *col3, col4, *col5, *col6, *col7, *col8, *col9}};
+    auto expected = cudf::concatenate(std::vector<table_view>(num_concat, table));
+    table         = expected->view();
     cudf::io::table_input_metadata expected_metadata(table);
     expected_metadata.column_metadata[0].set_name("col0");
     expected_metadata.column_metadata[1].set_name("col1");
     expected_metadata.column_metadata[2].set_name("col2");
-
+    expected_metadata.column_metadata[3].set_name("col3");
+    expected_metadata.column_metadata[4].set_name("col4");
+    expected_metadata.column_metadata[5].set_name("col5");
+    expected_metadata.column_metadata[6].set_name("col6");
+    expected_metadata.column_metadata[7].set_name("col7");
+    expected_metadata.column_metadata[8].set_name("col8");
+    expected_metadata.column_metadata[9].set_name("col9");
     // Write to parquet buffer
     cudf::io::parquet_writer_options out_opts =
       cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&parquet_buffer}, table)
         .metadata(std::move(expected_metadata))
-        .row_group_size_rows(page_size_for_ordered_tests)
-        .max_page_size_rows(page_size_for_ordered_tests / 5)
+        .row_group_size_rows(num_rows)
+        .max_page_size_rows(page_size_for_ordered_tests)
         .compression(cudf::io::compression_type::AUTO)
         .dictionary_policy(cudf::io::dictionary_policy::ALWAYS)
         .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN);
     cudf::io::write_parquet(out_opts);
   }
 
-  // Filtering AST - table[0] < 100
+  // Filtering AST - table[0] >= 100
   auto constexpr num_filter_columns = 1;
   auto literal_value                = cudf::numeric_scalar<uint32_t>(100);
   auto literal                      = cudf::ast::literal(literal_value);
   auto col_ref_0                    = cudf::ast::column_name_reference("col0");
-  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+  auto filter_expression =
+    cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col_ref_0, literal);
 
   auto stream     = cudf::get_default_stream();
   auto mr         = cudf::get_current_device_resource_ref();
@@ -434,6 +555,7 @@ TEST_F(HybridScanTest, MaterializeListPayloadColumn)
         .filter(filter_expression);
     auto [expected_tbl, expected_meta] = cudf::io::read_parquet(options, stream);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}), read_filter_table->view());
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({1, 2}), read_payload_table->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({1, 2, 3, 4, 5, 6, 7, 8, 9}),
+                                       read_payload_table->view());
   }
 }

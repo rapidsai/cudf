@@ -128,7 +128,8 @@ void codec_stats::add_pages(host_span<ColumnChunkDesc const> chunks,
                             page_selection selection,
                             host_span<bool const> page_mask)
 {
-  // Create a page mask iterator that defaults to true if the page_mask is empty
+  // TODO: Use a thrust::counting_transform_iterator instead when we are able to avoid decompressing
+  // the list column page in `compute_page_sizes_kernel`
   auto page_mask_iter = thrust::make_constant_iterator(true);
 
   // Zip iterator for iterating over pages and the page mask
