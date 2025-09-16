@@ -171,7 +171,7 @@ cpdef Table scatter(
     return Table.from_libcudf(move(c_result), stream)
 
 
-cpdef ColumnOrTable empty_like(ColumnOrTable input):
+cpdef ColumnOrTable empty_like(ColumnOrTable input, Stream stream=None):
     """Create an empty column or table with the same type as ``input``.
 
     For details, see :cpp:func:`empty_like`.
@@ -180,6 +180,8 @@ cpdef ColumnOrTable empty_like(ColumnOrTable input):
     ----------
     input : Union[Column, Table]
         The column or table to use as a template for the output.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -188,14 +190,15 @@ cpdef ColumnOrTable empty_like(ColumnOrTable input):
     """
     cdef unique_ptr[table] c_tbl_result
     cdef unique_ptr[column] c_col_result
+    stream = _get_stream(stream)
     if ColumnOrTable is Column:
         with nogil:
             c_col_result = cpp_copying.empty_like(input.view())
-        return Column.from_libcudf(move(c_col_result))
+        return Column.from_libcudf(move(c_col_result), stream)
     else:
         with nogil:
             c_tbl_result = cpp_copying.empty_like(input.view())
-        return Table.from_libcudf(move(c_tbl_result))
+        return Table.from_libcudf(move(c_tbl_result), stream)
 
 
 cpdef Column allocate_like(
