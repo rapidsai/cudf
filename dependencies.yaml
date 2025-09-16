@@ -773,7 +773,7 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - cmake>=3.30.4,<4.0.0
+          - *cmake_ver
           - ninja
           - maven
           - openjdk=8.*
