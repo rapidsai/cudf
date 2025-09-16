@@ -835,9 +835,8 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask
         }));
     });
 
-  std::for_each(data_page_mask_tasks.begin(), data_page_mask_tasks.end(), [](auto& task) {
-    task.get();
-  });
+  std::for_each(
+    data_page_mask_tasks.begin(), data_page_mask_tasks.end(), [](auto& task) { task.get(); });
 
   // Total number of input pages across all columns
   auto const total_pages = std::accumulate(
