@@ -1274,8 +1274,8 @@ sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const>
   // Precompute costs to avoid repeated computation during sorting
   rmm::device_uvector<double> costs(inputs.size(), stream, mr);
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::make_zip_iterator(thrust::make_tuple(inputs.begin(), outputs.begin())),
-                    thrust::make_zip_iterator(thrust::make_tuple(inputs.end(), outputs.end())),
+                    thrust::make_zip_iterator(inputs.begin(), outputs.begin()),
+                    thrust::make_zip_iterator(inputs.end(), outputs.end()),
                     costs.begin(),
                     [task_type] __device__(auto const& input_output_pair) {
                       auto const& input  = thrust::get<0>(input_output_pair);
