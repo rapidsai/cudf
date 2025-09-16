@@ -432,9 +432,10 @@ def _(
                     )
                 ),
             )
-        else:
+        else:  # pragma: no cover
             # New column is based on 0 child columns.
             # We don't have any source information to inherit.
+            # TODO: Do something smart for a Literal source?
             column_stats[ne.name] = ColumnStats(name=ne.name)
 
         if any(

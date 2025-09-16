@@ -172,12 +172,12 @@ def test_explain_logical_plan_wide_table():
     assert "DATAFRAMESCAN ('col0', 'col1', 'col2', '...', 'col18', 'col19')" in plan
 
 
-def teset_fmt_row_count():
+def test_fmt_row_count():
     assert _fmt_row_count(None) == ""
     assert _fmt_row_count(0) == "0"
-    assert _fmt_row_count(1000) == "1K"
-    assert _fmt_row_count(1_234_000) == "1.23M"
-    assert _fmt_row_count(1_250_000_000) == "1.25B"
+    assert _fmt_row_count(1000) == "1 K"
+    assert _fmt_row_count(1_234_000) == "1.23 M"
+    assert _fmt_row_count(1_250_000_000) == "1.25 B"
 
 
 @pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
