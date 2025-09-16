@@ -338,7 +338,6 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    * @param column_chunk_buffers Device buffers containing column chunk data
    * @param data_page_mask Input data page mask from page-pruning step for the current pass
-   * @param options Parquet reader options
    */
   void handle_chunking(read_mode mode,
                        std::vector<rmm::device_buffer> column_chunk_buffers,
