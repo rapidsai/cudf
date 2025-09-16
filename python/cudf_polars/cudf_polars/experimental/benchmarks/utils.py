@@ -919,7 +919,15 @@ def run_polars(
 
 
 def setup_logging(query_id: int, iteration: int) -> None:  # noqa: D103
-    assert _HAS_STRUCTLOG
+    import cudf_polars.dsl.tracing
+
+    if not cudf_polars.dsl.tracing.LOG_TRACES:
+        msg = (
+            "Tracing requested via --collect-traces, but tracking is not enabled. "
+            "Verify that 'CUDF_POLARS_LOG_TRACES' is set and structlog is installed."
+        )
+        raise RuntimeError(msg)
+
     if _HAS_STRUCTLOG:
         # structlog uses contextvars to propagate context down to where log records
         # are emitted. Ideally, we'd just set the contextvars here using

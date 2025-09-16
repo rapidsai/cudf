@@ -46,6 +46,8 @@ def test_trace_basic(
 
     env = {
         "CUDF_POLARS__EXECUTOR": cudf_polars.testing.asserts.DEFAULT_EXECUTOR,
+        # Avoid occasional OOM errors when running this in a subprocess.
+        "POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY": "0",
     }
 
     if log_traces:
