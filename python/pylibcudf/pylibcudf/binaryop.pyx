@@ -12,12 +12,13 @@ from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.binaryop import \
     binary_operator as BinaryOperator  # no-cython-lint
 
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 from .column cimport Column
 from .scalar cimport Scalar
 from .types cimport DataType
-from .utils cimport _get_stream
+from .utils cimport _get_stream, _get_memory_resource
 
 __all__ = ["BinaryOperator", "binary_operation", "is_supported_operation"]
 
@@ -26,7 +27,8 @@ cpdef Column binary_operation(
     RightBinaryOperand rhs,
     binary_operator op,
     DataType output_type,
-    Stream stream=None
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Perform a binary operation between a column and another column or scalar.
 
@@ -49,6 +51,8 @@ cpdef Column binary_operation(
         The data type to use for the output.
     stream : Stream | None
         CUDA stream on which to perform the operation.
+    mr : DeviceMemoryResource | None
+        Device memory resource used to allocate the returned column's device memory.
 
     Returns
     -------
@@ -57,6 +61,7 @@ cpdef Column binary_operation(
     """
     cdef unique_ptr[column] result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     if LeftBinaryOperand is Column and RightBinaryOperand is Column:
         with nogil:
@@ -88,7 +93,7 @@ cpdef Column binary_operation(
     else:
         raise ValueError(f"Invalid arguments {lhs} and {rhs}")
 
-    return Column.from_libcudf(move(result), stream)
+    return Column.from_libcudf(move(result), stream, mr)
 
 
 cpdef bool is_supported_operation(
