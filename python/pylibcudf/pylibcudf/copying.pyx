@@ -32,12 +32,13 @@ from pylibcudf.libcudf.copying import \
 from pylibcudf.libcudf.copying import \
     sample_with_replacement as SampleWithReplacement  # no-cython-lint
 
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 from .column cimport Column
 from .scalar cimport Scalar
 from .table cimport Table
-from .utils cimport _as_vector, _get_stream
+from .utils cimport _as_vector, _get_stream, _get_memory_resource
 
 
 __all__ = [
@@ -62,7 +63,8 @@ cpdef Table gather(
     Table source_table,
     Column gather_map,
     out_of_bounds_policy bounds_policy,
-    Stream stream=None
+    Stream stream=None,
+    DeviceMemoryResource mr=None
 ):
     """Select rows from source_table according to the provided gather_map.
 
@@ -92,6 +94,7 @@ cpdef Table gather(
     """
     cdef unique_ptr[table] c_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_copying.gather(
@@ -101,14 +104,15 @@ cpdef Table gather(
             stream.view()
         )
 
-    return Table.from_libcudf(move(c_result), stream)
+    return Table.from_libcudf(move(c_result), stream, mr)
 
 
 cpdef Table scatter(
     TableOrListOfScalars source,
     Column scatter_map,
     Table target_table,
-    Stream stream=None
+    Stream stream=None,
+    DeviceMemoryResource mr=None
 ):
     """Scatter from source into target_table according to scatter_map.
 
@@ -150,6 +154,7 @@ cpdef Table scatter(
     cdef unique_ptr[table] c_result
     cdef vector[reference_wrapper[const scalar]] source_scalars
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     if TableOrListOfScalars is Table:
         with nogil:
@@ -168,10 +173,12 @@ cpdef Table scatter(
                 target_table.view(),
                 stream.view()
             )
-    return Table.from_libcudf(move(c_result), stream)
+    return Table.from_libcudf(move(c_result), stream, mr)
 
 
-cpdef ColumnOrTable empty_like(ColumnOrTable input, Stream stream=None):
+cpdef ColumnOrTable empty_like(
+    ColumnOrTable input, Stream stream=None, DeviceMemoryResource mr=None
+):
     """Create an empty column or table with the same type as ``input``.
 
     For details, see :cpp:func:`empty_like`.
@@ -191,18 +198,23 @@ cpdef ColumnOrTable empty_like(ColumnOrTable input, Stream stream=None):
     cdef unique_ptr[table] c_tbl_result
     cdef unique_ptr[column] c_col_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
     if ColumnOrTable is Column:
         with nogil:
             c_col_result = cpp_copying.empty_like(input.view())
-        return Column.from_libcudf(move(c_col_result), stream)
+        return Column.from_libcudf(move(c_col_result), stream, mr)
     else:
         with nogil:
             c_tbl_result = cpp_copying.empty_like(input.view())
-        return Table.from_libcudf(move(c_tbl_result), stream)
+        return Table.from_libcudf(move(c_tbl_result), stream, mr)
 
 
 cpdef Column allocate_like(
-    Column input_column, mask_allocation_policy policy, size=None, Stream stream=None
+    Column input_column,
+    mask_allocation_policy policy,
+    size=None,
+    Stream stream=None,
+    DeviceMemoryResource mr=None
 ):
     """Allocate a column with the same type as input_column.
 
@@ -229,6 +241,7 @@ cpdef Column allocate_like(
     cdef unique_ptr[column] c_result
     cdef size_type c_size = size if size is not None else input_column.size()
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_copying.allocate_like(
@@ -238,7 +251,7 @@ cpdef Column allocate_like(
                 stream.view()
             )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 
 cpdef Column copy_range_in_place(
@@ -305,7 +318,8 @@ cpdef Column copy_range(
     size_type input_begin,
     size_type input_end,
     size_type target_begin,
-    Stream stream=None
+    Stream stream=None,
+    DeviceMemoryResource mr=None
 ):
     """Copy a range of elements from input_column to target_column.
 
@@ -341,6 +355,7 @@ cpdef Column copy_range(
     """
     cdef unique_ptr[column] c_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_copying.copy_range(
@@ -352,11 +367,15 @@ cpdef Column copy_range(
             stream.view()
         )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 
 cpdef Column shift(
-    Column input, size_type offset, Scalar fill_value, Stream stream=None
+    Column input,
+    size_type offset,
+    Scalar fill_value,
+    Stream stream=None,
+    DeviceMemoryResource mr=None
 ):
     """Shift the elements of input by offset.
 
@@ -387,6 +406,7 @@ cpdef Column shift(
     """
     cdef unique_ptr[column] c_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_copying.shift(
@@ -395,7 +415,7 @@ cpdef Column shift(
                 dereference(fill_value.c_obj),
                 stream.view()
             )
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 
 cpdef list slice(ColumnOrTable input, list indices, Stream stream=None):
@@ -496,7 +516,8 @@ cpdef Column copy_if_else(
     LeftCopyIfElseOperand lhs,
     RightCopyIfElseOperand rhs,
     Column boolean_mask,
-    Stream stream=None
+    Stream stream=None,
+    DeviceMemoryResource mr=None
 ):
     """Copy elements from lhs or rhs into a new column according to boolean_mask.
 
@@ -531,6 +552,7 @@ cpdef Column copy_if_else(
     """
     cdef unique_ptr[column] result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     if LeftCopyIfElseOperand is Column and RightCopyIfElseOperand is Column:
         with nogil:
@@ -559,14 +581,15 @@ cpdef Column copy_if_else(
                 stream.view()
             )
 
-    return Column.from_libcudf(move(result), stream)
+    return Column.from_libcudf(move(result), stream, mr)
 
 
 cpdef Table boolean_mask_scatter(
     TableOrListOfScalars input,
     Table target,
     Column boolean_mask,
-    Stream stream=None
+    Stream stream=None,
+    DeviceMemoryResource mr=None
 ):
     """Scatter rows from input into target according to boolean_mask.
 
@@ -604,6 +627,7 @@ cpdef Table boolean_mask_scatter(
     cdef unique_ptr[table] result
     cdef vector[reference_wrapper[const scalar]] source_scalars
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     if TableOrListOfScalars is Table:
         with nogil:
@@ -623,7 +647,7 @@ cpdef Table boolean_mask_scatter(
                 stream.view()
             )
 
-    return Table.from_libcudf(move(result), stream)
+    return Table.from_libcudf(move(result), stream, mr)
 
 
 cpdef Scalar get_element(Column input_column, size_type index, Stream stream=None):
