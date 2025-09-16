@@ -24,8 +24,6 @@
 
 namespace cudf {
 
-enum class init_flags : std::uint32_t;
-
 namespace jit {
 class program_cache;
 }
