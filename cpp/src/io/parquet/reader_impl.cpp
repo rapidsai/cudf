@@ -916,7 +916,6 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
       auto const is_page_out_of_bounds =
         (page_start_row < table_start_row and page_end_row < table_start_row) or
         (page_start_row > table_end_row and page_end_row > table_end_row);
-
       if (is_page_out_of_bounds) { return; }
 
       // The page is either completely or partially within the table row bounds
