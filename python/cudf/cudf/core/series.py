@@ -1045,7 +1045,9 @@ class Series(SingleColumnFrame, IndexedFrame):
         13   <NA>
         15      d
         """
-        return self._to_frame(name=name, index=self.index)
+        res = self._to_frame(name=name, index=self.index)
+        res._attrs = self.attrs
+        return res
 
     @_performance_tracking
     def memory_usage(self, index: bool = True, deep: bool = False) -> int:  # type: ignore[override]
@@ -1857,7 +1859,7 @@ class Series(SingleColumnFrame, IndexedFrame):
                 "'left', 'right', or 'neither'."
             )
         return self._from_column(
-            lmask & rmask, name=self.name, index=self.index
+            lmask & rmask, name=self.name, index=self.index, attrs=self.attrs
         )
 
     @_performance_tracking
@@ -2668,7 +2670,9 @@ class Series(SingleColumnFrame, IndexedFrame):
             val_counts = val_counts[val_counts == val_counts.iloc[0]]
 
         return Series._from_column(
-            val_counts.index.sort_values()._column, name=self.name
+            val_counts.index.sort_values()._column,
+            name=self.name,
+            attrs=self.attrs,
         )
 
     @_performance_tracking
@@ -2958,7 +2962,10 @@ class Series(SingleColumnFrame, IndexedFrame):
             )
 
         return Series._from_column(
-            self._column.isin(values), name=self.name, index=self.index
+            self._column.isin(values),
+            name=self.name,
+            index=self.index,
+            attrs=self.attrs,
         )
 
     @_performance_tracking
@@ -2998,7 +3005,7 @@ class Series(SingleColumnFrame, IndexedFrame):
                     "cudf does not support ExtensionArrays"
                 )
             return res.values
-        return Series._from_column(res, name=self.name)
+        return Series._from_column(res, name=self.name, attrs=self.attrs)
 
     @_performance_tracking
     def value_counts(
@@ -3235,6 +3242,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             result,
             name=self.name,
             index=cudf.Index(np_array_q) if quant_index else None,
+            attrs=self.attrs,
         )
 
     @docutils.doc_describe()
@@ -3321,7 +3329,9 @@ class Series(SingleColumnFrame, IndexedFrame):
         dtype: int32
         """
         return type(self)._from_column(
-            self._column.digitize(bins, right), name=self.name
+            self._column.digitize(bins, right),
+            name=self.name,
+            attrs=self.attrs,
         )
 
     @_performance_tracking
@@ -3720,6 +3730,7 @@ class Series(SingleColumnFrame, IndexedFrame):
                 self._column.where(cond, other, inplace),
                 index=self.index,
                 name=self.name,
+                attrs=self.attrs,
             ),
             inplace=inplace,
         )

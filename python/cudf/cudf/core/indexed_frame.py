@@ -378,7 +378,7 @@ class IndexedFrame(Frame):
                 index.name = index_names[0]
 
         data = dict(zip(column_names, data_columns, strict=True))
-        frame = type(self)._from_data(data, index)
+        frame = type(self)._from_data(data, index, attrs=self.attrs)
         return frame._copy_type_metadata(self)
 
     def __round__(self, digits=0):
@@ -568,6 +568,7 @@ class IndexedFrame(Frame):
             self._data.copy(deep=deep),
             # Indexes are immutable so copies can always be shallow.
             self.index.copy(deep=False),
+            attrs=copy.deepcopy(self.attrs) if deep else self._attrs,
         )
 
     @_performance_tracking

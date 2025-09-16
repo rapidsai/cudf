@@ -275,6 +275,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
                         result._data[col], inplace=True
                     )
             self._data = result._data
+            self._attrs = result._attrs
             return None
         else:
             return result
