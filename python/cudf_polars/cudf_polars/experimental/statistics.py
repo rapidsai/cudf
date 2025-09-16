@@ -708,7 +708,7 @@ def _(ir: Join, stats: StatsCollector, config_options: ConfigOptions) -> None:
             # Join-based estimate (higher priority).
             [
                 u.implied_unique_count
-                for u in stats.join_info.join_map[ir]
+                for u in stats.join_info.join_map.get(ir, [])
                 if u.implied_unique_count is not None
             ],
             default=None,
@@ -738,7 +738,7 @@ def _(ir: Union, stats: StatsCollector, config_options: ConfigOptions) -> None:
     row_counts = known_child_row_counts(ir, stats)
     stats.row_count[ir] = ColumnStat[int](sum(row_counts) or None)
     # Add up unique counts (NOTE: This is probably very conservative).
-    for column_stats in stats.column_stats[ir].values():
+    for column_stats in stats.column_stats.get(ir, {}).values():
         column_stats.unique_count = ColumnStat[int](
             sum(
                 (
