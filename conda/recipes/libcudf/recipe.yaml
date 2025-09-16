@@ -135,6 +135,7 @@ outputs:
           - cuda-nvrtc
           - cuda-nvtx
           - cuda-version
+          - croaring
           - flatbuffers
           - libcufile
           - libcurand
@@ -175,6 +176,7 @@ outputs:
           - cuda-nvrtc
           - cuda-nvtx
           - cuda-version
+          - croaring
           - flatbuffers
           - libcufile
           - libcurand
@@ -245,6 +247,7 @@ outputs:
           - cuda-nvrtc
           - cuda-nvtx
           - cuda-version
+          - croaring
           - flatbuffers
           - libcufile
           - libcurand
@@ -300,7 +303,6 @@ outputs:
           - libkvikio
           - librdkafka
           - librmm
-          - libroaring
           - libzlib
           - libnvcomp
     about:
