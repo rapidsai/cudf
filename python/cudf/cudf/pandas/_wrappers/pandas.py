@@ -1109,20 +1109,46 @@ ExcelWriter = make_final_proxy_type(
 
 try:
     from pandas.io.formats.style import Styler as pd_Styler  # isort: skip
+    from pandas.io.formats.style import StylerRenderer as pd_StylerRenderer
+
+    StylerRenderer = make_final_proxy_type(
+        "StylerRenderer",
+        _Unusable,
+        pd_StylerRenderer,
+        fast_to_slow=_Unusable(),
+        slow_to_fast=_Unusable(),
+    )
 
     Styler = make_final_proxy_type(
         "Styler",
         _Unusable,
         pd_Styler,
+        bases=(StylerRenderer,),
         fast_to_slow=_Unusable(),
         slow_to_fast=_Unusable(),
         additional_attributes={
             "css": _FastSlowAttribute("css"),
             "ctx": _FastSlowAttribute("ctx"),
-            "index": _FastSlowAttribute("ctx"),
+            "index": _FastSlowAttribute("index"),
             "data": _FastSlowAttribute("data"),
-            "_display_funcs": _FastSlowAttribute("_display_funcs"),
+            "_display_funcs": _FastSlowAttribute(
+                "_display_funcs", private=True
+            ),
             "table_styles": _FastSlowAttribute("table_styles"),
+            "columns": _FastSlowAttribute("columns"),
+            "caption": _FastSlowAttribute("caption"),
+            "_todo": _FastSlowAttribute("_todo", private=True),
+            "ctx_columns": _FastSlowAttribute("ctx_columns"),
+            "ctx_index": _FastSlowAttribute("ctx_index"),
+            "_display_funcs_index": _FastSlowAttribute(
+                "_display_funcs_index", private=True
+            ),
+            "uuid": _FastSlowAttribute("uuid"),
+            "hide_index_": _FastSlowAttribute("hide_index_"),
+            "hide_index_names": _FastSlowAttribute("hide_index_names"),
+            "hide_columns_": _FastSlowAttribute("hide_columns_"),
+            "hide_column_names": _FastSlowAttribute("hide_column_names"),
+            "table_attributes": _FastSlowAttribute("table_attributes"),
         },
     )
 except ImportError:
