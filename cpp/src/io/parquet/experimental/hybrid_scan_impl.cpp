@@ -520,12 +520,10 @@ void hybrid_scan_reader_impl::setup_chunking_for_filter_columns(
 
   select_columns(read_columns_mode::FILTER_COLUMNS, options);
 
-  auto output_dtypes  = get_output_types(_output_buffers_template);
   auto data_page_mask = (mask_data_pages == use_data_page_mask::YES)
                           ? _extended_metadata->compute_data_page_mask(row_mask,
                                                                        row_group_indices,
-                                                                       output_dtypes,
-                                                                       _output_column_schemas,
+                                                                       _input_columns,
                                                                        _rows_processed_so_far,
                                                                        _stream)
                           : std::vector<std::vector<bool>>{};
@@ -575,12 +573,10 @@ void hybrid_scan_reader_impl::setup_chunking_for_payload_columns(
 
   select_columns(read_columns_mode::PAYLOAD_COLUMNS, options);
 
-  auto output_dtypes  = get_output_types(_output_buffers_template);
   auto data_page_mask = (mask_data_pages == use_data_page_mask::YES)
                           ? _extended_metadata->compute_data_page_mask(row_mask,
                                                                        row_group_indices,
-                                                                       output_dtypes,
-                                                                       _output_column_schemas,
+                                                                       _input_columns,
                                                                        _rows_processed_so_far,
                                                                        _stream)
                           : std::vector<std::vector<bool>>{};
