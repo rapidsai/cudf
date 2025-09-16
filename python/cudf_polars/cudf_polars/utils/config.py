@@ -300,29 +300,37 @@ class StatsPlanningOptions:
 
     Parameters
     ----------
-    enable
-        Whether to use estimated column statistics to create
-        the physical plan. Default is False.
-        The other parameters of this class control the specific
-        "kinds" of statistics to use. This parameter is ignored
-        when the collect_statistics API is called directly.
+    io_partitioning
+        Whether to use estimated file-size statistics to calculate
+        the ideal input-partition count for IO operations.
+        Default is True.
+    reduction_planning
+        Whether to use estimated column statistics to calculate
+        the output-partition count for reduction operations
+        like `Distinct`, `GroupBy`, and `Select(unique)`.
+        Default is False.
     use_join_heuristics
         Whether to use join heuristics to estimate row-count
         and unique-count statistics. Default is True.
-        These statistics are used to create the physical plan
-        when enable=True.
+        These statistics may only be collected when they are
+        actually needed for query planning.
     use_sampling
         Whether to sample real data to estimate unique-value
         statistics. Default is True.
-        These statistics are used to create the physical plan
-        when enable=True.
+        These statistics may only be collected when they are
+        actually needed for query planning.
     """
 
     _env_prefix = "CUDF_POLARS__STATISTICS_PLANNING"
 
-    enable: bool = dataclasses.field(
+    io_partitioning: bool = dataclasses.field(
         default_factory=_make_default_factory(
-            f"{_env_prefix}__ENABLE", _bool_converter, default=False
+            f"{_env_prefix}__IO_PARTITIONING", _bool_converter, default=True
+        )
+    )
+    reduction_planning: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__REDUCTION_PLANNING", _bool_converter, default=False
         )
     )
     use_join_heuristics: bool = dataclasses.field(
@@ -337,8 +345,10 @@ class StatsPlanningOptions:
     )
 
     def __post_init__(self) -> None:  # noqa: D105
-        if not isinstance(self.enable, bool):
-            raise TypeError("enable must be a bool")
+        if not isinstance(self.io_partitioning, bool):
+            raise TypeError("io_partitioning must be a bool")
+        if not isinstance(self.reduction_planning, bool):
+            raise TypeError("reduction_planning must be a bool")
         if not isinstance(self.use_join_heuristics, bool):
             raise TypeError("use_join_heuristics must be a bool")
         if not isinstance(self.use_sampling, bool):

@@ -43,7 +43,7 @@ def engine():
             "shuffle_method": "tasks",
             "target_partition_size": 10_000,
             "max_rows_per_partition": 1_000,
-            "stats_planning_options": {"enable": True},
+            "stats_planning_options": {"reduction_planning": True},
         },
     )
 
@@ -221,7 +221,7 @@ def test_base_stats_parquet_groupby(
         executor_options={
             "target_partition_size": 10_000,
             "scheduler": DEFAULT_SCHEDULER,
-            "stats_planning_options": {"enable": True},
+            "stats_planning_options": {"reduction_planning": True},
         },
         parquet_options={
             "max_footer_samples": max_footer_samples,

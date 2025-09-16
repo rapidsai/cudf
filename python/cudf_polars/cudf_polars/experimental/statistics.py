@@ -42,7 +42,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.experimental.base import JoinInfo
     from cudf_polars.typing import Slice as Zlice
-    from cudf_polars.utils.config import ConfigOptions
+    from cudf_polars.utils.config import ConfigOptions, StatsPlanningOptions
 
 
 def collect_statistics(root: IR, config_options: ConfigOptions) -> StatsCollector:
@@ -64,36 +64,41 @@ def collect_statistics(root: IR, config_options: ConfigOptions) -> StatsCollecto
         "Only streaming executor is supported in collect_statistics"
     )
     stats_planning_options = config_options.executor.stats_planning_options
+    need_local_statistics = using_local_statistics(stats_planning_options)
+    if need_local_statistics or stats_planning_options.io_partitioning:
+        # Start with base statistics.
+        # Here we build an outline of the statistics that will be
+        # collected before any real data is sampled. We will not
+        # read any Parquet metadata or sample any unique-value
+        # statistics during this step.
+        # (That said, Polars does it's own metadata sampling
+        # before we ever get the logical plan in cudf-polars)
+        stats = collect_base_stats(root, config_options)
 
-    # Start with base statistics.
-    # Here we build an outline of the statistics that will be
-    # collected before any real data is sampled. We will not
-    # read any Parquet metadata or sample any unique-value
-    # statistics during this step.
-    # (That said, Polars does it's own metadata sampling
-    # before we ever get the logical plan in cudf-polars)
-    stats = collect_base_stats(root, config_options)
+        # Avoid collecting local statistics unless we are using them.
+        if need_local_statistics:
+            # Apply PK-FK heuristics.
+            # Here we use PK-FK heuristics to estimate the unique count
+            # for each join key. We will not do any unique-value sampling
+            # during this step. However, we will use Parquet metadata to
+            # estimate the row-count for each table source. This metadata
+            # is cached in the DataSourceInfo object for each table.
+            if stats_planning_options.use_join_heuristics:
+                apply_pkfk_heuristics(stats.join_info)
 
-    # Apply PK-FK heuristics.
-    # Here we use PK-FK heuristics to estimate the unique count
-    # for each join key. We will not do any unique-value sampling
-    # during this step. However, we will use Parquet metadata to
-    # estimate the row-count for each table source. This metadata
-    # is cached in the DataSourceInfo object for each table.
-    if stats_planning_options.use_join_heuristics:
-        apply_pkfk_heuristics(stats.join_info)
+            # Update statistics for each node.
+            # Here we set local row-count and unique-value statistics
+            # on each node in the IR graph. We DO perform unique-value
+            # sampling during this step. However, we only sample columns
+            # that have been marked as needing unique-value statistics
+            # during the `collect_base_stats` step. We always sample ALL
+            # "marked" columns within the same table source at once.
+            for node in post_traversal([root]):
+                update_column_stats(node, stats, config_options)
 
-    # Update statistics for each node.
-    # Here we set local row-count and unique-value statistics
-    # on each node in the IR graph. We DO perform unique-value
-    # sampling during this step. However, we only sample columns
-    # that have been marked as needing unique-value statistics
-    # during the `collect_base_stats` step. We always sample ALL
-    # "marked" columns within the same table source at once.
-    for node in post_traversal([root]):
-        update_column_stats(node, stats, config_options)
+        return stats
 
-    return stats
+    return StatsCollector()
 
 
 def collect_base_stats(root: IR, config_options: ConfigOptions) -> StatsCollector:
@@ -118,14 +123,43 @@ def collect_base_stats(root: IR, config_options: ConfigOptions) -> StatsCollecto
     outline of the statistics that will be collected before any
     real data is sampled.
     """
+    assert config_options.executor.name == "streaming", (
+        "Only streaming executor is supported in collect_statistics"
+    )
+    stats_planning_options = config_options.executor.stats_planning_options
+    need_local_statistics = using_local_statistics(stats_planning_options)
+    need_join_info = (
+        need_local_statistics and stats_planning_options.use_join_heuristics
+    )
+
     stats: StatsCollector = StatsCollector()
     for node in post_traversal([root]):
         # Initialize column statistics from datasource information
-        stats.column_stats[node] = initialize_column_stats(node, stats, config_options)
+        if need_local_statistics or (
+            stats_planning_options.io_partitioning
+            and isinstance(node, (Scan, DataFrameScan))
+        ):
+            stats.column_stats[node] = initialize_column_stats(
+                node, stats, config_options
+            )
         # Initialize join information
-        if isinstance(node, Join):
+        if need_join_info and isinstance(node, Join):
             initialize_join_info(node, stats)
     return stats
+
+
+def using_local_statistics(stats_planning_options: StatsPlanningOptions) -> bool:
+    """
+    Check if we are using local statistics for query planning.
+
+    Notes
+    -----
+    This function is used to check if we are using local statistics
+    for query-planning purposes. For now, this only returns True
+    when `reduction_planning=True`. We do not consider `io_partitioning`
+    here because it only depends on datasource statistics.
+    """
+    return stats_planning_options.reduction_planning
 
 
 def initialize_join_info(node: Join, stats: StatsCollector) -> None:

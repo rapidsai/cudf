@@ -465,7 +465,10 @@ def test_default_executor() -> None:
     assert config.executor.name == "streaming"
 
 
-@pytest.mark.parametrize("option", ["enable", "use_join_heuristics", "use_sampling"])
+@pytest.mark.parametrize(
+    "option",
+    ["io_partitioning", "reduction_planning", "use_join_heuristics", "use_sampling"],
+)
 def test_validate_stats_planning_options(option: str) -> None:
     with pytest.raises(TypeError, match=f"{option} must be"):
         ConfigOptions.from_polars_engine(

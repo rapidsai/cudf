@@ -19,7 +19,9 @@ from cudf_polars.dsl.ir import (
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.experimental.base import ColumnStat
 from cudf_polars.experimental.parallel import lower_ir_graph
-from cudf_polars.experimental.statistics import collect_statistics
+from cudf_polars.experimental.statistics import (
+    collect_statistics,
+)
 from cudf_polars.utils.config import ConfigOptions
 
 if TYPE_CHECKING:
@@ -59,10 +61,7 @@ def explain_query(
         lowered_ir, partition_info = lower_ir_graph(ir, config)
         return _repr_ir_tree(lowered_ir, partition_info)
     else:
-        if (
-            config.executor.name == "streaming"
-            and config.executor.stats_planning_options.enable
-        ):
+        if config.executor.name == "streaming":
             # Include row-count statistics for the logical plan
             return _repr_ir_tree(ir, stats=collect_statistics(ir, config))
         else:

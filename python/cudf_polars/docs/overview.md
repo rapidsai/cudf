@@ -413,7 +413,8 @@ engine = pl.GPUEngine(
     executor="streaming",
     executor_options={
         "stats_planning_options": {
-            "enable": True,
+            "io_partitioning": True,
+            "reduction_planning": True,
             "use_join_heuristics": True,
             "use_sampling": False
         }
@@ -430,26 +431,31 @@ from Parquet or in-memory DataFrame objects.
 
 The available configuration options are:
 
-- **`enable`** (default: `False`): Whether to use estimated column statistics
-  to create the physical plan. When disabled, the other parameters in this
-  class are ignored. This can also be set via the
-  `CUDF_POLARS__STATISTICS_PLANNING__ENABLE` environment variable.
+- **`io_partitioning`** (default: `True`): Whether to use estimated file-size
+  statistics to calculate the ideal input-partition count for IO operations.
+  This can also be set via the
+  `CUDF_POLARS__STATISTICS_PLANNING__IO_PARTITIONING` environment variable.
+
+- **`reduction_planning`** (default: `False`): Whether to use estimated column
+  statistics to calculate the output-partition count for reduction operations
+  like `Distinct`, `GroupBy`, and `Select(unique)`. This can also be set via the
+  `CUDF_POLARS__STATISTICS_PLANNING__REDUCTION_PLANNING` environment variable.
 
 - **`use_join_heuristics`** (default: `True`): Whether to use join heuristics
-  to estimate row-count and unique-count statistics. These statistics are used
-  to create the physical plan when `enable=True`. This can also be set via the
-  `CUDF_POLARS__STATISTICS_PLANNING__USE_JOIN_HEURISTICS` environment variable.
+  to estimate row-count and unique-count statistics. These statistics may only
+  be collected when they are actually needed for query planning. This can also
+  be set via the `CUDF_POLARS__STATISTICS_PLANNING__USE_JOIN_HEURISTICS`
+  environment variable.
 
 - **`use_sampling`** (default: `True`): Whether to sample real data to estimate
-  unique-value statistics. These statistics are used to create the physical plan
-  when `enable=True`. This can also be set via the
+  unique-value statistics. These statistics may only be collected when they are
+  actually needed for query planning. This can also be set via the
   `CUDF_POLARS__STATISTICS_PLANNING__USE_SAMPLING` environment variable.
 
-For example, to enable statistics-based planning via environment variables:
+For example, to enable reduction planning via environment variables:
 
 ```bash
-export CUDF_POLARS__STATISTICS_PLANNING__ENABLE=True
-export CUDF_POLARS__STATISTICS_PLANNING__USE_SAMPLING=False
+export CUDF_POLARS__STATISTICS_PLANNING__REDUCTION_PLANNING=True
 ```
 
 ## How it works: Storing statistics

@@ -122,9 +122,7 @@ class ScanPartitionPlan:
             )
 
             blocksize: int = config_options.executor.target_partition_size
-            column_stats = stats.column_stats.get(
-                ir, _extract_scan_stats(ir, config_options)
-            )
+            column_stats = stats.column_stats.get(ir, {})
             column_sizes: list[int] = []
             for cs in column_stats.values():
                 storage_size = cs.source_info.storage_size

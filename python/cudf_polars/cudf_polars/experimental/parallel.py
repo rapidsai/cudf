@@ -28,7 +28,7 @@ from cudf_polars.dsl.ir import (
     Union,
 )
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
-from cudf_polars.experimental.base import PartitionInfo, StatsCollector, get_key_name
+from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import (
     generate_ir_tasks,
     lower_ir_node,
@@ -85,15 +85,10 @@ def lower_ir_graph(
     --------
     lower_ir_node
     """
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'lower_ir_graph'"
-    )
-    if config_options.executor.stats_planning_options.enable:
-        stats = collect_statistics(ir, config_options)
-    else:
-        stats = StatsCollector()  # "Empty" stats collector
-
-    state: State = {"config_options": config_options, "stats": stats}
+    state: State = {
+        "config_options": config_options,
+        "stats": collect_statistics(ir, config_options),
+    }
     mapper: LowerIRTransformer = CachingVisitor(lower_ir_node, state=state)
     return mapper(ir)
 

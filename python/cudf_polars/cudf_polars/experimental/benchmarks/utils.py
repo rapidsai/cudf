@@ -351,7 +351,7 @@ def get_executor_options(
     if run_config.scheduler == "distributed":
         executor_options["scheduler"] = "distributed"
     if run_config.stats_planning:
-        executor_options["stats_planning_options"] = {"enable": True}
+        executor_options["stats_planning_options"] = {"reduction_planning": True}
 
     if (
         benchmark
