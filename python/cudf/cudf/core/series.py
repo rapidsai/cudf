@@ -600,9 +600,10 @@ class Series(SingleColumnFrame, IndexedFrame):
         *,
         name: Hashable = None,
         index: Index | None = None,
+        attrs: dict | None = None,
     ) -> Self:
         ca = ColumnAccessor({name: column}, verify=False)
-        return cls._from_data(ca, index=index)
+        return cls._from_data(ca, index=index, attrs=attrs)
 
     @classmethod
     @_performance_tracking
@@ -5154,7 +5155,7 @@ class TimedeltaProperties(BaseDatelikeProperties):
         """
         ca = ColumnAccessor(self.series._column.components, verify=False)
         return self.series._constructor_expanddim._from_data(
-            ca, index=self.series.index
+            ca, index=self.series.index, attrs=self.series.attrs
         )
 
     def total_seconds(self) -> Series:

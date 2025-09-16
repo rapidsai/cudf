@@ -6629,12 +6629,14 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             )
             source = self._get_columns_by_label(numeric_cols)
             if source.empty:
-                return Series(
+                res = Series(
                     index=self._data.to_pandas_index[:0]
                     if axis == 0
                     else source.index,
                     dtype="float64",
                 )
+                res._attrs = self._attrs
+                return res
         if (
             axis == 2
             and op in {"kurtosis", "skew"}
@@ -6740,7 +6742,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     new_dtype = get_dtype_of_same_kind(common_dtype, res_dtype)
                     res = res.astype(new_dtype)
 
-                return Series._from_column(res, index=idx)
+                return Series._from_column(res, index=idx, attrs=self.attrs)
 
     @_performance_tracking
     def _scan(
@@ -7022,10 +7024,13 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             result = as_column(result, dtype=result_dtype)
             if mask is not None:
                 result = result.set_mask(mask._column.as_mask())
-            return Series._from_column(result, index=self.index)
+            return Series._from_column(
+                result, index=self.index, attrs=self.attrs
+            )
         else:
             result_df = DataFrame(result, index=self.index)
             result_df._set_columns_like(prepared._data)
+            result_df._attrs = self.attrs
             return result_df
 
     @_performance_tracking
