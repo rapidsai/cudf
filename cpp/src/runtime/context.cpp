@@ -17,6 +17,7 @@
 #include "runtime/context.hpp"
 
 #include "io/comp/nvcomp_adapter.hpp"
+#include "io/utilities/getenv_or.hpp"
 #include "jit/cache.hpp"
 
 #include <cudf/context.hpp>
@@ -26,13 +27,16 @@
 
 namespace cudf {
 
-context::context(init_flags flags) : _program_cache{nullptr}
+context::context() : _program_cache{nullptr}
 {
   if (has_flag(flags, init_flags::INIT_JIT_CACHE)) {
     _program_cache = std::make_unique<jit::program_cache>();
   }
 
   if (has_flag(flags, init_flags::LOAD_NVCOMP)) { io::detail::nvcomp::load_nvcomp_library(); }
+  
+  auto dump_codegen_flag = getenv_or("LIBCUDF_JIT_DUMP_CODEGEN", std::string{"OFF"});
+  _dump_codegen          = (dump_codegen_flag == "ON" || dump_codegen_flag == "1");
 }
 
 jit::program_cache& context::program_cache()
@@ -40,6 +44,8 @@ jit::program_cache& context::program_cache()
   CUDF_EXPECTS(_program_cache != nullptr, "JIT cache not initialized", std::runtime_error);
   return *_program_cache;
 }
+
+bool context::dump_codegen() const { return _dump_codegen; }
 
 std::unique_ptr<context>& get_context_ptr_ref()
 {
