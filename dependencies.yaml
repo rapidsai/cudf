@@ -891,6 +891,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - rich
+          - pytest-httpserver
   test_python_narwhals:
     common:
       - output_types: [conda, requirements, pyproject]

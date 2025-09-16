@@ -6,6 +6,7 @@ import decimal
 from typing import TYPE_CHECKING
 
 import pytest
+from werkzeug import Response
 
 import polars as pl
 
@@ -17,6 +18,9 @@ from cudf_polars.testing.io import make_partitioned_source
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    from pytest_httpserver import HTTPServer
+    from werkzeug import Request
 
 
 NO_CHUNK_ENGINE = pl.GPUEngine(raise_on_fail=True, parquet_options={"chunked": False})
@@ -489,11 +493,70 @@ def test_scan_from_file_uri(tmp_path: Path) -> None:
     assert_ir_translation_raises(q, NotImplementedError)
 
 
-def test_scan_parquet_remote_https():
-    q = pl.scan_parquet("https://www.timestored.com/data/sample/titanic.parquet")
+@pytest.mark.parametrize("chunked", [False, True])
+def test_scan_parquet_remote(
+    tmp_path: Path, df: pl.DataFrame, httpserver: HTTPServer, *, chunked: bool
+) -> None:
+    path = tmp_path / "foo.parquet"
+    df.write_parquet(path)
+    bytes_ = path.read_bytes()
+    size = len(bytes_)
+
+    def head_handler(_: Request) -> Response:
+        return Response(
+            status=200,
+            headers={
+                "Content-Type": "parquet",
+                "Accept-Ranges": "bytes",
+                "Content-Length": size,
+            },
+        )
+
+    def get_handler(req: Request) -> Response:
+        # parse bytes=200-500 for example (the actual data)
+        start, end = map(int, req.headers["Range"][6:].split("-"))
+        mv = memoryview(bytes_)[start : end + 1]
+        return Response(
+            mv.tobytes(),
+            status=200,
+            headers={
+                "Content-Type": "parquet",
+                "Accept-Ranges": "bytes",
+                "Content-Length": len(mv),
+                "Content-Range": f"bytes {start}-{end - 1}/{size}",
+            },
+        )
+
+    httpserver.expect_request(path, method="HEAD").respond_with_handler(head_handler)
+    httpserver.expect_request(path, method="GET").respond_with_handler(get_handler)
+
+    q = pl.scan_parquet(path)
+
+    assert_gpu_result_equal(
+        q, engine=pl.GPUEngine(raise_on_fail=True, parquet_options={"chunked": chunked})
+    )
+
+
+def test_scan_ndjson_remote(
+    tmp_path: Path, df: pl.LazyFrame, httpserver: HTTPServer
+) -> None:
+    path = tmp_path / "foo.jsonl"
+    df.write_ndjson(path)
+    bytes_ = path.read_bytes()
+    size = len(bytes_)
+
+    def get_handler(_: Request) -> Response:
+        return Response(
+            bytes_,
+            status=200,
+            headers={
+                "Content-Type": "ndjson",
+                "Content-Length": size,
+            },
+        )
+
+    httpserver.expect_request(path, method="HEAD").respond_with_handler(get_handler)
+    httpserver.expect_request(path, method="GET").respond_with_handler(get_handler)
+
+    q = pl.scan_ndjson(path)
     assert_gpu_result_equal(q)
-
-
-def test_scan_csv_remote_https():
-    q = pl.scan_csv("https://www.timestored.com/data/sample/titanic.csv")
-    assert_ir_translation_raises(q, NotImplementedError)
