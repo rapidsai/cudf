@@ -19,12 +19,13 @@ from pylibcudf.libcudf.interop cimport (
 from pylibcudf.libcudf.table.table cimport table
 
 from rmm.pylibrmm.stream cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from .column cimport Column
 from .scalar cimport Scalar
 from .table cimport Table
 from .types cimport DataType
-from .utils cimport _get_stream
+from .utils cimport _get_stream, _get_memory_resource
 from ._interop_helpers import ColumnMetadata
 
 try:
@@ -136,7 +137,9 @@ if pa is not None:
         return plc_object.to_arrow(metadata=metadata)
 
 
-cpdef Table from_dlpack(object managed_tensor, Stream stream=None):
+cpdef Table from_dlpack(
+    object managed_tensor, Stream stream=None, DeviceMemoryResource mr=None
+):
     """
     Convert a DLPack DLTensor into a cudf table.
 
@@ -148,6 +151,8 @@ cpdef Table from_dlpack(object managed_tensor, Stream stream=None):
         A 1D or 2D column-major (Fortran order) tensor.
     stream : Stream | None
         CUDA stream on which to perform the operation.
+    mr : DeviceMemoryResource | None
+        Device memory resource used to allocate the returned table's device memory.
 
     Returns
     -------
@@ -164,6 +169,7 @@ cpdef Table from_dlpack(object managed_tensor, Stream stream=None):
         raise ValueError("PyCapsule object contained a NULL pointer")
     PyCapsule_SetName(managed_tensor, "used_dltensor")
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     # Note: A copy is always performed when converting the dlpack
     # data to a libcudf table. We also delete the dlpack_tensor pointer
@@ -173,7 +179,7 @@ cpdef Table from_dlpack(object managed_tensor, Stream stream=None):
     with nogil:
         c_result = cpp_from_dlpack(dlpack_tensor, stream.view())
 
-    cdef Table result = Table.from_libcudf(move(c_result), stream)
+    cdef Table result = Table.from_libcudf(move(c_result), stream, mr)
     dlpack_tensor.deleter(dlpack_tensor)
     return result
 
