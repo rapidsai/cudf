@@ -940,9 +940,9 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
       CUDF_EXPECTS(std::cmp_greater_equal(start_row, 0) and std::cmp_less_equal(end_row, num_rows),
                    "Invalid row bounds");
 
-      auto& input_col = _input_columns[chunk_idx % num_columns];
-      auto const max_depth  = input_col.nesting_depth();
-      auto* cols      = &_output_buffers;
+      auto& input_col      = _input_columns[chunk_idx % num_columns];
+      auto const max_depth = input_col.nesting_depth();
+      auto* cols           = &_output_buffers;
 
       for (size_t l_idx = 0; l_idx < max_depth; l_idx++) {
         auto& out_buf = (*cols)[input_col.nesting[l_idx]];
