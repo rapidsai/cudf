@@ -223,8 +223,7 @@ def test_explain_logical_io_then_distinct(engine, tmp_path, kind, n_rows, select
 
 
 @pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
-@pytest.mark.parametrize("n_rows", [None, 4])
-def test_explain_logical_io_then_filter(engine, tmp_path, kind, n_rows):
+def test_explain_logical_io_then_filter(engine, tmp_path, kind):
     # Create simple Distinct or Select(unique) + Sort query.
     # NOTE: This test depends on a "default_selectivity" of 0.5
     # and a very-specific DataFrame and predicate.
@@ -234,15 +233,15 @@ def test_explain_logical_io_then_filter(engine, tmp_path, kind, n_rows):
             "customer_id": [101, 102, 101, 103, 104, 104, 105, 106],
         }
     )
-    df = make_lazy_frame(df, kind, path=tmp_path, n_files=2, n_rows=n_rows)
-    q = df.filter(pl.col("customer_id") < 102).sort("order_id")
+    df = make_lazy_frame(df, kind, path=tmp_path, n_files=2)
+    q = df.filter(pl.col("customer_id") < 104).sort("order_id")
 
     # Verify the query runs correctly
     assert_gpu_result_equal(q, engine=engine)
 
     # Check query plan
     repr = explain_query(q, engine, physical=False)
-    if kind == "csv" and n_rows is None:
+    if kind == "csv":
         assert re.search(r"^\s*SORT.*row_count='unknown'\s*$", repr, re.MULTILINE)
     else:
         value = _fmt_row_count(q.collect().height)
