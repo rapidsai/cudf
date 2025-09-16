@@ -38,16 +38,84 @@ namespace detail {
 
 namespace cg = cooperative_groups;
 
-template <cudf::size_type block_size, bool has_nulls>
-CUDF_KERNEL void __launch_bounds__(block_size)
+/**
+ * @brief Optimized retrieve implementation using precomputed matches per row
+ *
+ * This implementation uses precomputed match counts to avoid expensive atomic
+ * operations and directly fills output arrays based on known match positions.
+ *
+ * @tparam is_outer Boolean flag indicating whether outer join semantics should be used
+ * @tparam has_nulls Whether the input tables may contain nulls
+ */
+template <bool is_outer, bool has_nulls>
+__device__ __forceinline__ void retrieve_matches(
+  cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
+  pair_expression_equality<has_nulls> const& key_equal,
+  cuco::pair<hash_value_type, cudf::size_type> const& probe_key,
+  cuda::std::pair<uint32_t, uint32_t> const& hash_idx,
+  cudf::size_type* probe_output,
+  cudf::size_type* match_output) noexcept
+{
+  auto const extent          = hash_table_storage.size();
+  auto const* data           = hash_table_storage.data();
+  auto probe_idx             = static_cast<std::size_t>(hash_idx.first);   // initial probe index
+  auto const step            = static_cast<std::size_t>(hash_idx.second);  // step size
+  auto const probe_row_index = probe_key.second;
+
+  cudf::size_type output_idx = 0;
+  bool found_match           = false;
+
+  while (true) {
+    auto const bucket_slots =
+      *reinterpret_cast<cuda::std::array<cuco::pair<hash_value_type, cudf::size_type>, 2> const*>(
+        data + probe_idx);
+
+    // Check for empty slots and key equality
+    auto const first_slot_is_empty  = bucket_slots[0].second == cudf::detail::JoinNoneValue;
+    auto const second_slot_is_empty = bucket_slots[1].second == cudf::detail::JoinNoneValue;
+    auto const first_slot_equals =
+      (not first_slot_is_empty and key_equal(probe_key, bucket_slots[0]));
+    auto const second_slot_equals =
+      (not second_slot_is_empty and key_equal(probe_key, bucket_slots[1]));
+
+    if (first_slot_equals) {
+      probe_output[output_idx] = probe_row_index;
+      match_output[output_idx] = bucket_slots[0].second;
+      output_idx++;
+      found_match = true;
+    }
+
+    if (second_slot_equals) {
+      probe_output[output_idx] = probe_row_index;
+      match_output[output_idx] = bucket_slots[1].second;
+      output_idx++;
+      found_match = true;
+    }
+
+    // Exit if we find an empty slot
+    if (first_slot_is_empty or second_slot_is_empty) { break; }
+
+    probe_idx = (probe_idx + step) % extent;
+  }
+
+  // Handle outer join logic for non-matching rows
+  if constexpr (is_outer) {
+    if (not found_match) {
+      probe_output[0] = probe_row_index;
+      match_output[0] = cudf::detail::JoinNoneValue;
+    }
+  }
+}
+
+template <bool has_nulls>
+CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
   mixed_join(table_device_view left_table,
              table_device_view right_table,
-             table_device_view probe,
-             table_device_view build,
-             row_hash const hash_probe,
-             row_equality const equality_probe,
              join_kind const join_type,
-             cudf::detail::mixed_multimap_type::ref_type<cuco::count_tag> hash_table_ref,
+             row_equality const equality_probe,
+             cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
+             cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
+             cuda::std::pair<uint32_t, uint32_t> const* hash_indices,
              size_type* join_output_l,
              size_type* join_output_r,
              cudf::ast::detail::expression_device_view device_expression_data,
@@ -68,74 +136,69 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   cudf::size_type const right_num_rows = right_table.num_rows();
   auto const outer_num_rows            = (swap_tables ? right_num_rows : left_num_rows);
 
-  cudf::size_type outer_row_index = threadIdx.x + blockIdx.x * block_size;
+  auto const start_idx = cudf::detail::grid_1d::global_thread_id();
+  auto const stride    = cudf::detail::grid_1d::grid_stride();
 
-  auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
-    left_table, right_table, device_expression_data);
+  auto const evaluator = cudf::ast::detail::expression_evaluator<has_nulls>{
+    left_table, right_table, device_expression_data};
 
-  // For multiset, use the empty key from the pair definition
-  auto pairs = pair_fn{hash_probe};
+  auto const equality = pair_expression_equality<has_nulls>{
+    evaluator, thread_intermediate_storage, swap_tables, equality_probe};
 
-  if (outer_row_index < outer_num_rows) {
-    /*
-    auto query_pair = pairs(outer_row_index);
-    auto equality   = multiset_expression_equality<has_nulls>{
-      evaluator, thread_intermediate_storage, swap_tables, equality_probe};
-
-    auto probe_key_begin       = thrust::make_discard_iterator();
-    auto probe_value_begin     = swap_tables ? join_output_r + join_result_offsets[outer_row_index]
-                                             : join_output_l + join_result_offsets[outer_row_index];
-    auto contained_key_begin   = thrust::make_discard_iterator();
-    auto contained_value_begin = swap_tables ? join_output_l + join_result_offsets[outer_row_index]
-                                             : join_output_r + join_result_offsets[outer_row_index];
+  // Process each row and write matches to precomputed output positions
+  for (auto outer_row_index = start_idx; outer_row_index < outer_num_rows;
+       outer_row_index += stride) {
+    auto const& probe_key    = input_pairs[outer_row_index];
+    auto const& hash_idx     = hash_indices[outer_row_index];
+    auto const output_offset = join_result_offsets[outer_row_index];
 
     if (join_type == join_kind::LEFT_JOIN || join_type == join_kind::FULL_JOIN) {
-      hash_table_view.retrieve_outer(query_pair,
-                                     probe_key_begin,
-                                     probe_value_begin,
-                                     contained_key_begin,
-                                     contained_value_begin,
-                                     equality);
+      retrieve_matches<true>(
+        hash_table_storage,
+        equality,
+        probe_key,
+        hash_idx,
+        swap_tables ? join_output_r + output_offset : join_output_l + output_offset,
+        swap_tables ? join_output_l + output_offset : join_output_r + output_offset);
     } else {
-      hash_table_view.retrieve(query_pair,
-                              probe_key_begin,
-                              probe_value_begin,
-                              contained_key_begin,
-                              contained_value_begin,
-                              equality);
+      retrieve_matches<false>(
+        hash_table_storage,
+        equality,
+        probe_key,
+        hash_idx,
+        swap_tables ? join_output_r + output_offset : join_output_l + output_offset,
+        swap_tables ? join_output_l + output_offset : join_output_r + output_offset);
     }
-    */
   }
 }
 
 template <bool has_nulls>
-void launch_mixed_join(table_device_view left_table,
-                       table_device_view right_table,
-                       table_device_view probe,
-                       table_device_view build,
-                       row_hash const hash_probe,
-                       row_equality const equality_probe,
-                       join_kind const join_type,
-                       cudf::detail::mixed_multimap_type::ref_type<cuco::count_tag> hash_table_ref,
-                       size_type* join_output_l,
-                       size_type* join_output_r,
-                       cudf::ast::detail::expression_device_view device_expression_data,
-                       cudf::size_type const* join_result_offsets,
-                       bool const swap_tables,
-                       detail::grid_1d const config,
-                       int64_t shmem_size_per_block,
-                       rmm::cuda_stream_view stream)
+void launch_mixed_join(
+  table_device_view left_table,
+  table_device_view right_table,
+  join_kind const join_type,
+  row_equality const equality_probe,
+  cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
+  cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
+  cuda::std::pair<uint32_t, uint32_t> const* hash_indices,
+  size_type* join_output_l,
+  size_type* join_output_r,
+  cudf::ast::detail::expression_device_view device_expression_data,
+  cudf::size_type const* join_result_offsets,
+  bool const swap_tables,
+  detail::grid_1d const config,
+  int64_t shmem_size_per_block,
+  rmm::cuda_stream_view stream)
 {
-  mixed_join<DEFAULT_JOIN_BLOCK_SIZE, has_nulls>
+  mixed_join<has_nulls>
     <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
       left_table,
       right_table,
-      probe,
-      build,
-      hash_probe,
-      equality_probe,
       join_type,
-      hash_table_ref,
+      equality_probe,
+      hash_table_storage,
+      input_pairs,
+      hash_indices,
       join_output_l,
       join_output_r,
       device_expression_data,

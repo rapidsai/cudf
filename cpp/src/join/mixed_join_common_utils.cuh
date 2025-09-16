@@ -119,8 +119,8 @@ template <bool has_nulls>
 struct pair_expression_equality : public expression_equality<has_nulls> {
   using expression_equality<has_nulls>::expression_equality;
 
-  __device__ __forceinline__ bool operator()(pair_type const& build_row,
-                                             pair_type const& probe_row) const noexcept
+  __device__ __forceinline__ bool operator()(pair_type const& left_row,
+                                             pair_type const& right_row) const noexcept
   {
     using cudf::detail::row::lhs_index_type;
     using cudf::detail::row::rhs_index_type;
@@ -131,10 +131,10 @@ struct pair_expression_equality : public expression_equality<has_nulls> {
     // 2. The contents of the columns involved in the equality condition are equal.
     // 3. The predicate evaluated on the relevant columns (already encoded in the evaluator)
     // evaluates to true.
-    if ((probe_row.first == build_row.first) &&
-        this->equality_probe(lhs_index_type{probe_row.second}, rhs_index_type{build_row.second})) {
-      auto const lrow_idx = this->swap_tables ? build_row.second : probe_row.second;
-      auto const rrow_idx = this->swap_tables ? probe_row.second : build_row.second;
+    if ((left_row.first == right_row.first) &&
+        this->equality_probe(lhs_index_type{left_row.second}, rhs_index_type{right_row.second})) {
+      auto const lrow_idx = this->swap_tables ? right_row.second : left_row.second;
+      auto const rrow_idx = this->swap_tables ? left_row.second : right_row.second;
       this->evaluator.evaluate(
         output_dest, lrow_idx, rrow_idx, 0, this->thread_intermediate_storage);
       return (output_dest.is_valid() && output_dest.value());

@@ -71,22 +71,20 @@ namespace detail {
  */
 
 template <bool has_nulls>
-std::size_t launch_compute_mixed_join_output_size(
-  cudf::table_device_view left_table,
-  cudf::table_device_view right_table,
-  cudf::table_device_view probe,
-  cudf::table_device_view build,
-  row_hash const hash_probe,
-  row_equality const equality_probe,
-  join_kind const join_type,
-  cudf::detail::mixed_multimap_type::ref_type<cuco::count_tag> hash_table_ref,
+void launch_compute_mixed_join_output_size(
+  table_device_view left_table,
+  table_device_view right_table,
+  join_kind join_type,
+  row_equality equality_probe,
+  cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
+  cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
+  cuda::std::pair<uint32_t, uint32_t> const* hash_indices,
   ast::detail::expression_device_view device_expression_data,
-  bool const swap_tables,
+  bool swap_tables,
   cudf::device_span<cudf::size_type> matches_per_row,
-  detail::grid_1d const config,
+  detail::grid_1d const& config,
   int64_t shmem_size_per_block,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);
+  rmm::cuda_stream_view stream);
 
 }  // namespace detail
 }  // namespace CUDF_EXPORT cudf
