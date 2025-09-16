@@ -302,13 +302,16 @@ auto chunked_hybrid_scan(
       }
     };
 
-  auto const row_group_split = current_row_group_indices.size() / 2;
-  CUDF_EXPECTS(row_group_split > 0, "At least 2 row groups needed to split the read");
-  materialize_filter_columns(
-    cudf::host_span<cudf::size_type const>{current_row_group_indices.begin(), row_group_split});
-  materialize_filter_columns(
-    cudf::host_span<cudf::size_type const>{current_row_group_indices.begin() + row_group_split,
-                                           current_row_group_indices.size() - row_group_split});
+  if (current_row_group_indices.size() > 1) {
+    auto const row_group_split = current_row_group_indices.size() / 2;
+    materialize_filter_columns(
+      cudf::host_span<cudf::size_type const>{current_row_group_indices.begin(), row_group_split});
+    materialize_filter_columns(
+      cudf::host_span<cudf::size_type const>{current_row_group_indices.begin() + row_group_split,
+                                             current_row_group_indices.size() - row_group_split});
+  } else {
+    materialize_filter_columns(current_row_group_indices);
+  }
 
   auto filter_table = concatenate_tables(std::move(tables), stream);
 
@@ -341,11 +344,16 @@ auto chunked_hybrid_scan(
       }
     };
 
-  materialize_payload_columns(
-    cudf::host_span<cudf::size_type const>{current_row_group_indices.begin(), row_group_split});
-  materialize_payload_columns(
-    cudf::host_span<cudf::size_type const>{current_row_group_indices.begin() + row_group_split,
-                                           current_row_group_indices.size() - row_group_split});
+  if (current_row_group_indices.size() > 1) {
+    auto const row_group_split = current_row_group_indices.size() / 2;
+    materialize_payload_columns(
+      cudf::host_span<cudf::size_type const>{current_row_group_indices.begin(), row_group_split});
+    materialize_payload_columns(
+      cudf::host_span<cudf::size_type const>{current_row_group_indices.begin() + row_group_split,
+                                             current_row_group_indices.size() - row_group_split});
+  } else {
+    materialize_payload_columns(current_row_group_indices);
+  }
 
   auto payload_table = concatenate_tables(std::move(tables), stream);
 
@@ -388,7 +396,18 @@ TEST_F(HybridScanTest, PruneRowGroupsOnlyAndScanAllColumns)
   auto [read_filter_table, read_payload_table, read_filter_meta, read_payload_meta, row_mask] =
     hybrid_scan(parquet_buffer, filter_expression, num_filter_columns, {}, stream, mr, aligned_mr);
 
+  // Read parquet using the chunked hybrid scan reader
+  auto [read_filter_table_chunked,
+        read_payload_table_chunked,
+        read_filter_meta_chunked,
+        read_payload_meta_chunked,
+        row_mask_chunked] =
+    chunked_hybrid_scan(
+      parquet_buffer, filter_expression, num_filter_columns, {}, stream, mr, aligned_mr);
+
   CUDF_EXPECTS(read_filter_table->num_rows() == read_payload_table->num_rows(),
+               "Filter and payload tables should have the same number of rows");
+  CUDF_EXPECTS(read_filter_table_chunked->num_rows() == read_payload_table_chunked->num_rows(),
                "Filter and payload tables should have the same number of rows");
 
   // Check equivalence (equal without checking nullability) with the parquet file read with the
@@ -400,7 +419,11 @@ TEST_F(HybridScanTest, PruneRowGroupsOnlyAndScanAllColumns)
         .filter(filter_expression);
     auto [expected_tbl, expected_meta] = read_parquet(options, stream);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}), read_filter_table->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}),
+                                       read_filter_table_chunked->view());
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({1, 2}), read_payload_table->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({1, 2}),
+                                       read_payload_table_chunked->view());
   }
 }
 
@@ -437,16 +460,35 @@ TEST_F(HybridScanTest, PruneRowGroupsOnlyAndScanSelectColumns)
                   stream,
                   mr,
                   aligned_mr);
+    // Read parquet using the chunked hybrid scan reader
+    auto [read_filter_table_chunked,
+          read_payload_table_chunked,
+          read_filter_meta_chunked,
+          read_payload_meta_chunked,
+          row_mask_chunked] = chunked_hybrid_scan(parquet_buffer,
+                                                  filter_expression,
+                                                  num_filter_columns,
+                                                  payload_column_names,
+                                                  stream,
+                                                  mr,
+                                                  aligned_mr);
 
     CUDF_EXPECTS(read_filter_table->num_rows() == read_payload_table->num_rows(),
                  "Filter and payload tables should have the same number of rows");
+    CUDF_EXPECTS(read_filter_table_chunked->num_rows() == read_payload_table_chunked->num_rows(),
+                 "Filter and payload tables should have the same number of rows");
+
     cudf::io::parquet_reader_options const options =
       cudf::io::parquet_reader_options::builder(
         cudf::io::source_info(cudf::host_span<char>(parquet_buffer.data(), parquet_buffer.size())))
         .filter(filter_expression);
     auto [expected_tbl, expected_meta] = read_parquet(options, stream);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}), read_filter_table->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}),
+                                       read_filter_table_chunked->view());
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({2}), read_payload_table->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({2}),
+                                       read_payload_table_chunked->view());
   }
 
   {
@@ -500,7 +542,17 @@ TEST_F(HybridScanTest, PruneDataPagesOnlyAndScanAllColumns)
   auto [read_filter_table, read_payload_table, read_filter_meta, read_payload_meta, row_mask] =
     hybrid_scan(buffer, filter_expression, num_filter_columns, {}, stream, mr, aligned_mr);
 
+  // Read parquet using the chunked hybrid scan reader
+  auto [read_filter_table_chunked,
+        read_payload_table_chunked,
+        read_filter_meta_chunked,
+        read_payload_meta_chunked,
+        row_mask_chunked] =
+    chunked_hybrid_scan(buffer, filter_expression, num_filter_columns, {}, stream, mr, aligned_mr);
+
   CUDF_EXPECTS(read_filter_table->num_rows() == read_payload_table->num_rows(),
+               "Filter and payload tables should have the same number of rows");
+  CUDF_EXPECTS(read_filter_table_chunked->num_rows() == read_payload_table_chunked->num_rows(),
                "Filter and payload tables should have the same number of rows");
 
   // Check equivalence (equal without checking nullability) with the parquet file read with the
@@ -512,7 +564,11 @@ TEST_F(HybridScanTest, PruneDataPagesOnlyAndScanAllColumns)
         .filter(filter_expression);
     auto [expected_tbl, expected_meta] = read_parquet(options, stream);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}), read_filter_table->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}),
+                                       read_filter_table_chunked->view());
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({1, 2}), read_payload_table->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({1, 2}),
+                                       read_payload_table_chunked->view());
   }
 
   // Check equivalence (equal without checking nullability) with the original table with the
@@ -712,6 +768,15 @@ TEST_F(HybridScanTest, MaterializeMixedPayloadColumns)
   auto [read_filter_table, read_payload_table, read_filter_meta, read_payload_meta, row_mask] =
     hybrid_scan(parquet_buffer, filter_expression, num_filter_columns, {}, stream, mr, aligned_mr);
 
+  // Read parquet using the chunked hybrid scan reader
+  auto [read_filter_table_chunked,
+        read_payload_table_chunked,
+        read_filter_meta_chunked,
+        read_payload_meta_chunked,
+        row_mask_chunked] =
+    chunked_hybrid_scan(
+      parquet_buffer, filter_expression, num_filter_columns, {}, stream, mr, aligned_mr);
+
   CUDF_EXPECTS(read_filter_table->num_rows() == read_payload_table->num_rows(),
                "Filter and payload tables should have the same number of rows");
 
@@ -724,77 +789,11 @@ TEST_F(HybridScanTest, MaterializeMixedPayloadColumns)
         .filter(filter_expression);
     auto [expected_tbl, expected_meta] = cudf::io::read_parquet(options, stream);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}), read_filter_table->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}),
+                                       read_filter_table_chunked->view());
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({1, 2, 3, 4, 5, 6, 7, 8, 9}),
                                        read_payload_table->view());
-  }
-}
-
-TEST_F(HybridScanTest, ChunkedHybridScanBasics)
-{
-  srand(0xc0ffee);
-
-  // Helper to test chunked hybrid scan reader
-  auto const test_chunked_hybrid_scan = [&](std::vector<char> const& parquet_buffer,
-                                            cudf::ast::operation const& filter_expression,
-                                            cudf::size_type num_filter_columns) {
-    auto stream     = cudf::get_default_stream();
-    auto mr         = cudf::get_current_device_resource_ref();
-    auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
-      cudf::get_current_device_resource(), bloom_filter_alignment);
-
-    // Read parquet using the hybrid scan reader
-    auto [read_filter_table, read_payload_table, read_filter_meta, read_payload_meta, row_mask] =
-      chunked_hybrid_scan(
-        parquet_buffer, filter_expression, num_filter_columns, {}, stream, mr, aligned_mr);
-
-    CUDF_EXPECTS(read_filter_table->num_rows() == read_payload_table->num_rows(),
-                 "Filter and payload tables should have the same number of rows");
-
-    // Check equivalence (equal without checking nullability) with the parquet file read with the
-    // original reader
-    cudf::io::parquet_reader_options const options =
-      cudf::io::parquet_reader_options::builder(cudf::io::source_info(cudf::host_span<char const>(
-                                                  parquet_buffer.data(), parquet_buffer.size())))
-        .filter(filter_expression);
-    auto [expected_tbl, expected_meta] = cudf::io::read_parquet(options, stream);
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}), read_filter_table->view());
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({1, 2}), read_payload_table->view());
-  };
-
-  // A table with several row groups each containing a single page per column. The data page and row
-  // group stats are identical so only row groups can be pruned using stats
-  {
-    using T                   = uint32_t;
-    auto constexpr num_concat = 1;
-    auto parquet_buffer       = create_parquet_with_stats<T, num_concat>().second;
-
-    // Filtering AST - table[0] < 100
-    auto constexpr num_filter_columns = 1;
-    auto literal_value                = cudf::numeric_scalar<T>(100);
-    auto literal                      = cudf::ast::literal(literal_value);
-    auto col_ref_0                    = cudf::ast::column_name_reference("col0");
-    auto filter_expression =
-      cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
-
-    test_chunked_hybrid_scan(parquet_buffer, filter_expression, num_filter_columns);
-  }
-
-  // A table concatenated with itself results in a parquet file with a row group per concatenated
-  // table, each containing multiple pages per column. All row groups will be identical so only data
-  // pages can be pruned using page index stats
-  {
-    using T                   = cudf::duration_ms;
-    auto constexpr num_concat = 2;
-    auto parquet_buffer       = create_parquet_with_stats<T, num_concat>().second;
-
-    // Filtering AST - table[0] < 100
-    auto constexpr num_filter_columns = 1;
-    auto literal_value                = cudf::duration_scalar<T>(T{100});
-    auto literal                      = cudf::ast::literal(literal_value);
-    auto col_ref_0                    = cudf::ast::column_name_reference("col0");
-    auto filter_expression =
-      cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
-
-    test_chunked_hybrid_scan(parquet_buffer, filter_expression, num_filter_columns);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({1, 2, 3, 4, 5, 6, 7, 8, 9}),
+                                       read_payload_table_chunked->view());
   }
 }
