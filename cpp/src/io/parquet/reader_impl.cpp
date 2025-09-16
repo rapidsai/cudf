@@ -35,19 +35,6 @@
 
 namespace cudf::io::parquet::detail {
 
-namespace {
-// Tests the passed in logical type for a FIXED_LENGTH_BYTE_ARRAY column to see if it should
-// be treated as a string. Currently the only logical type that has special handling is DECIMAL.
-// Other valid types in the future would be UUID (still treated as string) and FLOAT16 (which
-// for now would also be treated as a string).
-inline bool is_treat_fixed_length_as_string(std::optional<LogicalType> const& logical_type)
-{
-  if (!logical_type.has_value()) { return true; }
-  return logical_type->type != LogicalType::DECIMAL;
-}
-
-}  // namespace
-
 void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_rows)
 {
   CUDF_FUNC_RANGE();
@@ -634,7 +621,9 @@ void reader_impl::preprocess_chunk_strings(row_range const& read_info)
   // we may need to (re)compute string sizes.
   // string sizes were computed in the page preprocess step for the subpass if we are doing an
   // output chunked read, but contains the size for all strings, not necessarily just the rows that
-  // may have been selected for an output chunk.
+  // may have been selected for an output chunk. so, if we didn't compute the sizes at all, or
+  // if we are actually doing a chunked subpass (reading anything other than all the rows in the
+  // entire pass) we need to recompute
   bool full_string_sizes_computed = _output_chunk_read_limit > 0;
   bool const need_string_size_recompute =
     (!full_string_sizes_computed) ||
@@ -646,12 +635,10 @@ void reader_impl::preprocess_chunk_strings(row_range const& read_info)
                                 read_info.skip_rows,
                                 read_info.num_rows,
                                 subpass.kernel_mask,
-                                _stream,
                                 false,
-                                _pass_itm_data->level_type_size);
+                                _pass_itm_data->level_type_size,
+                                _stream);
   }
-
-  //
   ComputePageStringSizesPass2(subpass.pages,
                               pass.chunks,
                               subpass.delta_temp_buf,

@@ -761,21 +761,30 @@ void compute_page_sizes(cudf::detail::hostdevice_span<PageInfo> pages,
                         int level_type_size,
                         rmm::cuda_stream_view stream);
 
-void ComputePageStringBounds(cudf::detail::hostdevice_span<PageInfo> pages,
-                             cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-                             size_t min_row,
-                             size_t num_rows,
-                             int level_type_size,
-                             rmm::cuda_stream_view stream);
-
+/**
+ * @brief Compute string page output size information.
+ *
+ * String columns need accurate data size information to preallocate memory in the column buffer to
+ * store the char data. This calls a kernel to calculate information needed by the string decoding
+ * kernel. On exit, the `str_bytes`, `num_nulls`, and `num_valids` fields of the
+ * PageInfo struct are updated. This call ignores non-string pages.
+ *
+ * @param[in,out] pages All pages to be decoded
+ * @param[in] chunks All chunks to be decoded
+ * @param[out] temp_string_buf Temporary space needed for decoding DELTA_BYTE_ARRAY strings
+ * @param[in] min_rows crop all rows below min_row
+ * @param[in] num_rows Maximum number of rows to read
+ * @param[in] kernel_mask Mask of kernels to run
+ * @param[in] stream CUDA stream to use
+ */
 void ComputePageStringSizesPass1(cudf::detail::hostdevice_span<PageInfo> pages,
                                  cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
                                  size_t min_row,
                                  size_t num_rows,
                                  uint32_t kernel_mask,
-                                 rmm::cuda_stream_view stream,
                                  bool all_values,
-                                 int level_type_size);
+                                 int level_type_size,
+                                 rmm::cuda_stream_view stream);
 
 /**
  * @brief Compute string page output size information.

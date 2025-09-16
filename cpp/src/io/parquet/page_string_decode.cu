@@ -665,6 +665,8 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size) gpuComputeStringPageBo
  * @param chunks All chunks to be decoded
  * @param min_rows crop all rows below min_row
  * @param num_rows Maximum number of rows to read
+ * @param all_values A bool which forces the kernel to compute sizes for all rows regardless of
+ * other settings and records the result in the PageInfo::str_bytes_all field
  */
 CUDF_KERNEL void __launch_bounds__(delta_preproc_block_size)
   gpuComputeDeltaPageStringSizes(PageInfo* pages,
@@ -719,7 +721,7 @@ CUDF_KERNEL void __launch_bounds__(delta_preproc_block_size)
       if (t == 0 && is_page_contained(s, min_row, num_rows)) {
         pp->str_bytes = pp->str_bytes_from_index;
         // record the full size so that we don't have to recompute every chunk.
-        if (all_values) { pp->str_bytes_all = pp->str_bytes; }
+        // if (all_values) { pp->str_bytes_all = pp->str_bytes; }
       }
       return;
     }
@@ -757,6 +759,8 @@ CUDF_KERNEL void __launch_bounds__(delta_preproc_block_size)
  * @param chunks All chunks to be decoded
  * @param min_rows crop all rows below min_row
  * @param num_rows Maximum number of rows to read
+ * @param all_values A bool which forces the kernel to compute sizes for all rows regardless of
+ * other settings
  */
 CUDF_KERNEL void __launch_bounds__(delta_length_block_size)
   gpuComputeDeltaLengthPageStringSizes(PageInfo* pages,
@@ -799,7 +803,7 @@ CUDF_KERNEL void __launch_bounds__(delta_length_block_size)
       pp->str_bytes = pp->str_bytes_from_index;
 
       // record the full size so that we don't have to recompute every chunk.
-      if (all_values) { pp->str_bytes_all = pp->str_bytes; }
+      // if (all_values) { pp->str_bytes_all = pp->str_bytes; }
     }
     return;
   }
@@ -856,7 +860,7 @@ CUDF_KERNEL void __launch_bounds__(delta_length_block_size)
       pp->str_bytes = total_bytes;
 
       // record the full size so that we don't have to recompute every chunk.
-      if (all_values) { pp->str_bytes_all = pp->str_bytes; }
+      // if (all_values) { pp->str_bytes_all = pp->str_bytes; }
     }
   }
 }
@@ -865,12 +869,15 @@ CUDF_KERNEL void __launch_bounds__(delta_length_block_size)
  * @brief Kernel for computing string page output size information.
  *
  * This call ignores non-string columns. On exit the `str_bytes` field of the `PageInfo` struct will
- * be populated.
+ * be populated. If `all_values` is passed as true, the `str_bytes_all` field of the `PageInfo`
+ * struct will also be set with the full size of all strings in the page.
  *
  * @param pages All pages to be decoded
  * @param chunks All chunks to be decoded
  * @param min_rows crop all rows below min_row
  * @param num_rows Maximum number of rows to read
+ * @param all_values A bool which forces the kernel to compute sizes for all rows regardless of
+ * other settings
  */
 CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   gpuComputePageStringSizes(PageInfo* pages,
@@ -909,7 +916,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
       pp->str_bytes = pp->str_bytes_from_index;
     }
     // record the full size so that we don't have to recompute every chunk.
-    if (all_values) { pp->str_bytes_all = pp->str_bytes; }
+    // if (all_values) { pp->str_bytes_all = pp->str_bytes; }
     return;
   }
 
@@ -961,7 +968,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
     // TODO check for overflow
     pp->str_bytes = str_bytes;
     // record the full size so that we don't have to recompute every chunk.
-    if (all_values) { pp->str_bytes_all = pp->str_bytes; }
+    // if (all_values) { pp->str_bytes_all = pp->str_bytes; }
 
     // only need temp space for delta
     pp->temp_string_size = 0;
@@ -983,14 +990,17 @@ struct page_tform_functor {
 
 }  // anonymous namespace
 
+/**
+ * @copydoc cudf::io::parquet::detail::ComputePageStringSizesPass1
+ */
 void ComputePageStringSizesPass1(cudf::detail::hostdevice_span<PageInfo> pages,
                                  cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
                                  size_t min_row,
                                  size_t num_rows,
                                  uint32_t kernel_mask,
-                                 rmm::cuda_stream_view stream,
                                  bool all_values,
-                                 int level_type_size)
+                                 int level_type_size,
+                                 rmm::cuda_stream_view stream)
 {
   dim3 const dim_block(preprocess_block_size, 1);
   dim3 const dim_grid(pages.size(), 1);  // 1 threadblock per page
@@ -1029,7 +1039,7 @@ void ComputePageStringSizesPass1(cudf::detail::hostdevice_span<PageInfo> pages,
 }
 
 /**
- * @copydoc cudf::io::parquet::detail::ComputePageStringSizes
+ * @copydoc cudf::io::parquet::detail::ComputePageStringSizesPass2
  */
 void ComputePageStringSizesPass2(cudf::detail::hostdevice_span<PageInfo> pages,
                                  cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
@@ -1040,44 +1050,6 @@ void ComputePageStringSizesPass2(cudf::detail::hostdevice_span<PageInfo> pages,
                                  uint32_t kernel_mask,
                                  rmm::cuda_stream_view stream)
 {
-  /*
-    dim3 const dim_block(preprocess_block_size, 1);
-    dim3 const dim_grid(pages.size(), 1);  // 1 threadblock per page
-    if (level_type_size == 1) {
-      gpuComputeStringPageBounds<uint8_t>
-        <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
-    } else {
-      gpuComputeStringPageBounds<uint16_t>
-        <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
-    }
-    */
-
-  // kernel mask may contain other kernels we don't need to count
-  /*
-  int const count_mask = kernel_mask & STRINGS_MASK;
-  int const nkernels   = std::bitset<32>(count_mask).count();
-  auto const streams   = cudf::detail::fork_streams(stream, nkernels);
-
-  int s_idx = 0;
-  if (BitAnd(kernel_mask, decode_kernel_mask::DELTA_BYTE_ARRAY) != 0) {
-    dim3 dim_delta(delta_preproc_block_size, 1);
-    gpuComputeDeltaPageStringSizes<<<dim_grid, dim_delta, 0, streams[s_idx++].value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows);
-  }
-  if (BitAnd(kernel_mask, decode_kernel_mask::DELTA_LENGTH_BA) != 0) {
-    dim3 dim_delta(delta_length_block_size, 1);
-    gpuComputeDeltaLengthPageStringSizes<<<dim_grid, dim_delta, 0, streams[s_idx++].value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows);
-  }
-  if (BitAnd(kernel_mask, STRINGS_MASK_NON_DELTA) != 0) {
-    gpuComputePageStringSizes<<<dim_grid, dim_block, 0, streams[s_idx++].value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows);
-  }
-
-  // synchronize the streams
-  cudf::detail::join_streams(streams, stream);
-  */
-
   // check for needed temp space for DELTA_BYTE_ARRAY
   auto const need_sizes =
     thrust::any_of(rmm::exec_policy(stream),

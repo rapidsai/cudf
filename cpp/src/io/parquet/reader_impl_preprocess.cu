@@ -508,6 +508,10 @@ void reader_impl::generate_list_column_row_counts(is_estimate_row_counts is_esti
   _stream.synchronize();
 }
 
+struct set_str_bytes_all {
+  __device__ void operator()(PageInfo& p) { p.str_bytes_all = p.str_bytes; }
+};
+
 void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_limit)
 {
   CUDF_FUNC_RANGE();
@@ -558,7 +562,6 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
                        0,  // 0-max size_t. process all possible rows
                        std::numeric_limits<size_t>::max(),
                        true,  // compute num_rows
-                       // false,  // chunk_read_limit > 0,  // compute string sizes
                        _pass_itm_data->level_type_size,
                        _stream);
   }
@@ -596,24 +599,29 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
                      update_subpass_chunk_row{pass.pages, subpass.pages, subpass.page_src_index});
   }
 
-  // compute string sizes if necessary. if we are doing output, we need to know
+  // compute string sizes if necessary. if we are doing chunking, we need to know
   // the sizes of all strings so we can properly compute chunk boundaries.
-  auto const has_flba = std::any_of(pass.chunks.begin(), pass.chunks.end(), [](auto const& chunk) {
-    return chunk.physical_type == Type::FIXED_LEN_BYTE_ARRAY and
-           is_treat_fixed_length_as_string(chunk.logical_type);
-  });
   if ((chunk_read_limit > 0) && (subpass.kernel_mask & STRINGS_MASK)) {
-    // if we have the page index, str_bytes will already be computed
-    if (!_has_page_index /*|| uses_custom_row_bounds(mode) || has_flba*/) {
+    auto const has_flba =
+      std::any_of(pass.chunks.begin(), pass.chunks.end(), [](auto const& chunk) {
+        return chunk.physical_type == Type::FIXED_LEN_BYTE_ARRAY and
+               is_treat_fixed_length_as_string(chunk.logical_type);
+      });
+    if (!_has_page_index || has_flba) {
       ComputePageStringSizesPass1(subpass.pages,
                                   pass.chunks,
                                   pass.skip_rows,
                                   pass.num_rows,
                                   subpass.kernel_mask,
-                                  _stream,
                                   true,
-                                  _pass_itm_data->level_type_size);
+                                  _pass_itm_data->level_type_size,
+                                  _stream);
     }
+    // set str_bytes_all
+    thrust::for_each(rmm::exec_policy_nosync(_stream),
+                     subpass.pages.device_begin(),
+                     subpass.pages.device_end(),
+                     set_str_bytes_all{});
   }
 
   // retrieve pages back
