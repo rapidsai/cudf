@@ -7,6 +7,8 @@
 from __future__ import annotations
 
 import functools
+import re
+from datetime import datetime
 from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -758,9 +760,9 @@ class StringFunction(Expr):
             # TODO: ignores ambiguous
             format, strict, _, _ = self.options
             col = self.children[0].evaluate(df, context=context)
+            plc_col = col.obj
             if format is None:
                 # Polars begins inference with the first non null value
-                plc_col = col.obj
                 int_range = plc.column.Column.from_iterable_of_py(range(col.size))
                 boolmask = plc.unary.is_valid(plc_col)
 
@@ -769,17 +771,19 @@ class StringFunction(Expr):
                 )
                 filtered = table.columns()[0]
                 first_element = plc.copying.get_element(filtered, 0).to_py()
-                first_valid_data = plc.copying.get_element(plc_col, first_element).to_py()
-                breakpoint()
+                first_valid_data = plc.copying.get_element(
+                    plc_col, first_element
+                ).to_py()
 
-
-#Column(DataType data_type, size_type size, gpumemoryview data, gpumemoryview mask, size_type null_count, size_type offset, list children)
+                format = _infer_datetime_format(first_valid_data)
+                if not format:
+                    raise InvalidOperationError(
+                        "Unable to infer datetime format from data"
+                    )
 
             is_timestamps = plc.strings.convert.convert_datetime.is_timestamp(
-                col.obj, format
+                plc_col, format
             )
-
-            plc_col = col.obj
             if strict:
                 if not plc.reduce.reduce(
                     is_timestamps,
@@ -858,3 +862,139 @@ class StringFunction(Expr):
         raise NotImplementedError(
             f"StringFunction {self.name}"
         )  # pragma: no cover; handled by init raising
+
+
+def _infer_datetime_format(val):
+    # port of parts of infer.rs and patterns.rs from polars rust
+
+    # Define regexes for pattern inference
+    DATETIME_DMY_RE = re.compile(
+        r"""
+        ^
+        ['"]?
+        (\d{1,2})
+        [-/\.]
+        (?P<month>[01]?\d{1})
+        [-/\.]
+        (\d{4,})
+        (
+            [T\ ]
+            (\d{1,2})
+            :?
+            (\d{1,2})
+            (
+                :?
+                (\d{1,2})
+                (
+                    \.(\d{1,9})
+                )?
+            )?
+        )?
+        ['"]?
+        $
+    """,
+        re.VERBOSE,
+    )
+
+    DATETIME_YMD_RE = re.compile(
+        r"""
+        ^
+        ['"]?
+        (\d{4,})
+        [-/\.]
+        (?P<month>[01]?\d{1})
+        [-/\.]
+        (\d{1,2})
+        (
+            [T\ ]
+            (\d{1,2})
+            :?
+            (\d{1,2})
+            (
+                :?
+                (\d{1,2})
+                (
+                    \.(\d{1,9})
+                )?
+            )?
+        )?
+        ['"]?
+        $
+    """,
+        re.VERBOSE,
+    )
+
+    DATETIME_YMDZ_RE = re.compile(
+        r"""
+        ^
+        ['"]?
+        (\d{4,})
+        [-/\.]
+        (?P<month>[01]?\d{1})
+        [-/\.]
+        (\d{1,2})
+        [T\ ]
+        (\d{2})
+        :?
+        (\d{2})
+        (
+            :?
+            (\d{2})
+            (
+                \.(\d{1,9})
+            )?
+        )?
+        (
+            [+-](\d{2})(:?(\d{2}))? | Z
+        )
+        ['"]?
+        $
+    """,
+        re.VERBOSE,
+    )
+
+    # Candidate format strings for each pattern
+    PATTERN_FORMATS = {
+        "DATETIME_DMY": [
+            "%d-%m-%Y",
+            "%d/%m/%Y",
+            "%d.%m.%Y",
+            "%d-%m-%Y %H:%M:%S",
+            "%d/%m/%Y %H:%M:%S",
+            "%d.%m.%Y %H:%M:%S",
+        ],
+        "DATETIME_YMD": [
+            "%Y-%m-%d",
+            "%Y/%m/%d",
+            "%Y.%m.%d",
+            "%Y-%m-%d %H:%M:%S",
+            "%Y/%m/%d %H:%M:%S",
+            "%Y.%m.%d %H:%M:%S",
+            "%Y-%m-%dT%H:%M:%S",
+        ],
+        "DATETIME_YMDZ": [
+            "%Y-%m-%dT%H:%M:%S%z",
+            "%Y-%m-%dT%H:%M:%S.%f%z",
+            "%Y-%m-%d %H:%M:%S%z",
+        ],
+    }
+    for pattern_name, regex in [
+        ("DATETIME_DMY", DATETIME_DMY_RE),
+        ("DATETIME_YMD", DATETIME_YMD_RE),
+        ("DATETIME_YMDZ", DATETIME_YMDZ_RE),
+    ]:
+        m = regex.match(val)
+        if m:
+            month = int(m.group("month"))
+            if not (1 <= month <= 12):
+                continue
+            # Step 2: Try parsing with each candidate format
+            for fmt in PATTERN_FORMATS[pattern_name]:
+                try:
+                    # For timezone-aware formats, add default UTC if 'Z' is present
+                    value = val.replace("Z", "+0000") if "%z" in fmt else val
+                    datetime.strptime(value, fmt)
+                    return fmt
+                except ValueError:
+                    continue
+    return None

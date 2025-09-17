@@ -280,7 +280,7 @@ def test_to_datetime(values, has_invalid_row, cache, strict, format, exact):
             exact=exact,
         )
     )
-    if cache or format is None or not exact:
+    if cache or not exact:
         assert_ir_translation_raises(q, NotImplementedError)
     elif strict and has_invalid_row:
         assert_collect_raises(
