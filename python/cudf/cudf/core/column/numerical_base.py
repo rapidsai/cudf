@@ -103,7 +103,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         V = self.var()
 
         if V == 0:
-            return 0
+            return np.float64(0)
 
         term_one_section_one = (n * (n + 1)) / ((n - 1) * (n - 2) * (n - 3))
         term_one_section_two = m4_numerator / (V**2)
@@ -128,7 +128,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         m2 = self.var(ddof=0)
 
         if m2 == 0:
-            return 0
+            return np.float64(0)
 
         unbiased_coef = ((n * (n - 1)) ** 0.5) / (n - 2)
         skew = unbiased_coef * m3 / (m2 ** (3 / 2))
