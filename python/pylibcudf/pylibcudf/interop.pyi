@@ -56,4 +56,8 @@ def from_dlpack(
     stream: Stream | None = None,
     mr: DeviceMemoryResource | None = None,
 ) -> Table: ...
-def to_dlpack(input: Table, stream: Stream | None = None) -> Any: ...
+def to_dlpack(
+    input: Table,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> Any: ...

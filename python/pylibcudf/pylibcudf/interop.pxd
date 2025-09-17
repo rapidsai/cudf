@@ -8,4 +8,4 @@ cpdef Table from_dlpack(
     object managed_tensor, Stream stream=*, DeviceMemoryResource mr=*
 )
 
-cpdef object to_dlpack(Table input, Stream stream=*)
+cpdef object to_dlpack(Table input, Stream stream=*, DeviceMemoryResource mr=*)

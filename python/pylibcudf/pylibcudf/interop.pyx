@@ -184,7 +184,7 @@ cpdef Table from_dlpack(
     return result
 
 
-cpdef object to_dlpack(Table input, Stream stream=None):
+cpdef object to_dlpack(Table input, Stream stream=None, DeviceMemoryResource mr=None):
     """
     Convert a cudf table into a DLPack DLTensor.
 
@@ -196,6 +196,9 @@ cpdef object to_dlpack(Table input, Stream stream=None):
         A 1D or 2D column-major (Fortran order) tensor.
     stream : Stream | None
         CUDA stream on which to perform the operation.
+    mr : DeviceMemoryResource | None
+        Device memory resource used to allocate the returned DLPack tensor's device
+        memory.
 
     Returns
     -------
@@ -210,9 +213,10 @@ cpdef object to_dlpack(Table input, Stream stream=None):
             )
     cdef DLManagedTensor *dlpack_tensor
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
-        dlpack_tensor = cpp_to_dlpack(input.view(), stream.view())
+        dlpack_tensor = cpp_to_dlpack(input.view(), stream.view(), mr.c_obj)
 
     return PyCapsule_New(
         dlpack_tensor,
