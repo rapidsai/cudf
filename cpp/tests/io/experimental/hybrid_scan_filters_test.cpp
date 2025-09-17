@@ -443,9 +443,8 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictBasic)
   srand(0xcafe);
   using T = uint32_t;
 
-  // A table not concated with itself with result in a parquet file with several row groups each
-  // with a single page. Since there is only one page per row group, the page and row group stats
-  // are identical and we can only prune row groups.
+  // A table with several row groups each containing a single page per column. The data page and row
+  // group stats are identical so only row groups can be pruned using stats
   auto constexpr num_concat = 1;
   auto const buffer         = std::get<1>(create_parquet_with_stats<T, num_concat>());
   auto stream               = cudf::get_default_stream();

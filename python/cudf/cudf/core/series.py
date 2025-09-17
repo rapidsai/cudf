@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import cupy
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from typing_extensions import Self, assert_never
 
 import pylibcudf as plc  # noqa: TC002
@@ -72,8 +73,6 @@ from cudf.utils.utils import _EQUALITY_OPS, _is_same_name
 if TYPE_CHECKING:
     from collections.abc import Hashable, MutableMapping
 
-    import pyarrow as pa
-
     from cudf._typing import (
         DataFrameOrSeries,
         Dtype,
@@ -89,7 +88,7 @@ def _format_percentile_names(percentiles):
 
 def _describe_numeric(obj, percentiles):
     # Helper for Series.describe with numerical data.
-    data = {
+    return {
         "count": obj.count(),
         "mean": obj.mean(),
         "std": obj.std(),
@@ -103,7 +102,6 @@ def _describe_numeric(obj, percentiles):
         ),
         "max": obj.max(),
     }
-    return {k: round(v, 6) for k, v in data.items()}
 
 
 def _describe_timetype(obj, percentiles, typ):
@@ -3234,9 +3232,11 @@ class Series(SingleColumnFrame, IndexedFrame):
         percentiles=None,
         include=None,
         exclude=None,
-    ):
+    ) -> Self:
         """{docstring}"""
-        if cudf.get_option("mode.pandas_compatible"):
+        if cudf.get_option("mode.pandas_compatible") and not (
+            is_dtype_obj_numeric(self.dtype) and self.dtype.kind != "b"
+        ):
             raise NotImplementedError(
                 "cudf.Series.describe is not implemented in "
                 "pandas compatibility mode."
@@ -3258,15 +3258,20 @@ class Series(SingleColumnFrame, IndexedFrame):
             # pandas defaults
             percentiles = np.array([0.25, 0.5, 0.75])
 
-        dtype = "str"
+        dtype: Dtype | None = "str"
         if self.dtype.kind == "b":
             data = _describe_categorical(self, percentiles)
-        elif is_dtype_obj_numeric(self._column.dtype):
+        elif is_dtype_obj_numeric(self.dtype):
             data = _describe_numeric(self, percentiles)
-            dtype = None
-        elif self._column.dtype.kind == "m":
+            if isinstance(self.dtype, pd.ArrowDtype):
+                dtype = pd.ArrowDtype(pa.float64())
+            elif is_pandas_nullable_extension_dtype(self.dtype):
+                dtype = pd.Float64Dtype()
+            else:
+                dtype = None
+        elif self.dtype.kind == "m":
             data = _describe_timedelta(self, percentiles)
-        elif self._column.dtype.kind == "M":
+        elif self.dtype.kind == "M":
             data = _describe_timestamp(self, percentiles)
         else:
             data = _describe_categorical(self, percentiles)

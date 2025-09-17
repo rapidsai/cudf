@@ -89,11 +89,14 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   // Write list offsets and exit if the page does not need to be decoded
   if (not page_mask[page_idx]) {
-    auto& page      = pages[page_idx];
-    page.num_nulls  = page.num_rows;
-    page.num_valids = 0;
+    auto& page = pages[page_idx];
     // Update offsets for all list depth levels
     if (has_repetition) { update_list_offsets_for_pruned_pages<decode_block_size>(s); }
+
+    // Must be set after computing above list offsets
+    page.num_nulls = page.nesting[s->col.max_nesting_depth - 1].batch_size;
+    page.num_nulls -= has_repetition ? 0 : s->first_row;
+    page.num_valids = 0;
     return;
   }
 
@@ -285,9 +288,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   // Write list offsets and exit if the page does not need to be decoded
   if (not page_mask[page_idx]) {
-    auto& page      = pages[page_idx];
-    page.num_nulls  = page.num_rows;
-    page.num_valids = 0;
+    auto& page = pages[page_idx];
 
     // Update offsets for all list depth levels
     if (has_repetition) { update_list_offsets_for_pruned_pages<decode_block_size>(s); }
@@ -301,11 +302,13 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       s->col.logical_type.has_value() and s->col.logical_type->type == LogicalType::DECIMAL;
     if (dtype == Type::FIXED_LEN_BYTE_ARRAY or (dtype == Type::BYTE_ARRAY and not is_decimal)) {
       // Initial string offset
-      auto const initial_value = s->page.str_offset;
+      auto const initial_value = page.str_offset;
+
+      // We must use the batch size from the nesting info (the size of the page for this batch)
+      auto value_count = page.nesting[s->col.max_nesting_depth - 1].batch_size;
 
       // If no repetition we haven't calculated start/end bounds and instead just skipped
       // values until we reach first_row. account for that here.
-      auto value_count = s->page.num_input_values;
       if (not has_repetition) { value_count -= s->first_row; }
 
       auto& ni    = s->nesting_info[s->col.max_nesting_depth - 1];
@@ -316,6 +319,11 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
         offptr[idx] = initial_value;
       }
     }
+
+    page.num_nulls = page.nesting[s->col.max_nesting_depth - 1].batch_size;
+    page.num_nulls -= has_repetition ? 0 : s->first_row;
+    page.num_valids = 0;
+
     return;
   }
 
