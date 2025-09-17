@@ -864,10 +864,8 @@ class StringFunction(Expr):
         )  # pragma: no cover; handled by init raising
 
 
-def _infer_datetime_format(val):
+def _infer_datetime_format(val: str) -> str | None:
     # port of parts of infer.rs and patterns.rs from polars rust
-
-    # Define regexes for pattern inference
     DATETIME_DMY_RE = re.compile(
         r"""
         ^
@@ -952,8 +950,6 @@ def _infer_datetime_format(val):
     """,
         re.VERBOSE,
     )
-
-    # Candidate format strings for each pattern
     PATTERN_FORMATS = {
         "DATETIME_DMY": [
             "%d-%m-%Y",
@@ -988,13 +984,11 @@ def _infer_datetime_format(val):
             month = int(m.group("month"))
             if not (1 <= month <= 12):
                 continue
-            # Step 2: Try parsing with each candidate format
             for fmt in PATTERN_FORMATS[pattern_name]:
                 try:
-                    # For timezone-aware formats, add default UTC if 'Z' is present
-                    value = val.replace("Z", "+0000") if "%z" in fmt else val
-                    datetime.strptime(value, fmt)
-                    return fmt
-                except ValueError:
+                    datetime.strptime(val, fmt)
+                except ValueError:  # noqa: PERF203
                     continue
+                else:
+                    return fmt
     return None
