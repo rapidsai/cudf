@@ -1049,7 +1049,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
 
   // Exit super early for simple types if the page does not need to be decoded
   if constexpr (not has_lists_t and not has_strings_t and not has_nesting_t) {
-    if (not page_mask[page_idx]) {
+    if (not page_mask[page_idx] && ((s->col.max_nesting_depth - 1) < pp->nesting_info_size)) {
       pp->num_nulls  = pp->nesting[s->col.max_nesting_depth - 1].batch_size;
       pp->num_valids = 0;
       // Set s->nesting info = nullptr to bypass `null_count_back_copier` at return
