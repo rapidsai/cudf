@@ -110,8 +110,11 @@ test_pandas_object_series \
 
 # test_dtypes: With cudf.pandas loaded, to_pandas() preserves Arrow dtypes like list and struct, so pandas
 # columns aren't object anymore. The test expects object, causing a mismatch.
+# test_get_dtype_backend: We now preserve arrow extension dtypes
+# (e.g. bool[pyarrow], duration[ns][pyarrow]).
 TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_PANDAS=" \
-test_dtypes \
+test_dtypes or \
+(test_get_dtype_backend and pyarrow and (pandas or modin)) \
 "
 
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 NARWHALS_DEFAULT_CONSTRUCTORS=pandas python -m pytest \
