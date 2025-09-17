@@ -1170,6 +1170,13 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
         initialize_string_descriptors<is_calc_sizes_only::YES>(s, sb, skipped_leaf_values, block);
         if (t == 0) { s->dict_pos = processed_count; }
         block.sync();
+      } else if constexpr (has_bools_t) {
+        if (bools_are_rle_stream) {
+          skip_decode<rolling_buf_size>(bool_stream, skipped_leaf_values, t);
+        } else {
+          if (t == 0) { s->dict_pos = skipped_leaf_values; }
+        }
+        block.sync();
       }
     }
   }
