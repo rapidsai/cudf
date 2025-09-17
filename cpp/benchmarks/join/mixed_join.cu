@@ -20,32 +20,23 @@
 
 auto const num_keys = 2;
 
-// Helper function to create complex AST expressions with multiple operators
 void create_complex_ast_expression(cudf::ast::tree& tree, cudf::size_type num_operators)
 {
   CUDF_EXPECTS(num_operators > 0, "Number of operators must be greater than 0");
 
   // For mixed joins, the conditional tables only have 1 column each (column 0)
   // So we'll create multiple comparisons of the same column to stress the AST evaluation
-
-  // Create column references - we only have column 0 available in conditional tables
-  tree.push(cudf::ast::column_reference(0));  // index 0: left col 0
+  tree.push(cudf::ast::column_reference(0));
   tree.push(
     cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT));  // index 1: right col 0
 
-  // Create first comparison: left_col_0 == right_col_0
   tree.push(cudf::ast::operation(cudf::ast::ast_operator::EQUAL, tree.at(0), tree.at(1)));
 
   if (num_operators == 1) { return; }
 
-  // For multiple operators, create additional comparisons of the same columns
-  // This will create expressions like: (col0_L == col0_R) && (col0_L == col0_R) && ...
-  // While this may seem redundant, it stresses the AST evaluation with multiple operators
   for (cudf::size_type i = 1; i < num_operators; i++) {
-    // Create another comparison of the same columns
     tree.push(cudf::ast::operation(cudf::ast::ast_operator::EQUAL, tree.at(0), tree.at(1)));
 
-    // Combine with previous result using LOGICAL_AND
     tree.push(cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND,
                                    tree.at(tree.size() - 2),  // previous result
                                    tree.back()));             // current comparison
