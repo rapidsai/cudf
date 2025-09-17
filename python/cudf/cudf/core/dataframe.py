@@ -8086,7 +8086,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             raise NotImplementedError("axis parameter is not supported yet.")
         counts = [col.distinct_count(dropna=dropna) for col in self._columns]
         res = self._constructor_sliced(
-            counts, index=self._data.to_pandas_index
+            counts,
+            index=self._data.to_pandas_index,
+            dtype="float64" if len(counts) == 0 else None,
         )
         res._attrs = self.attrs
         return res
