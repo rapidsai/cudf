@@ -1241,13 +1241,16 @@ std::vector<std::vector<size_type>> aggregate_reader_metadata::apply_byte_bounds
         }
       }();
 
-      // Check if it is within the specified byte range
-      if (std::cmp_greater_equal(row_group_file_offset, bytes_to_skip) and
-          (bytes_to_read.has_value()
-             ? std::cmp_less(row_group_file_offset, bytes_to_skip + bytes_to_read.value())
-             : true)) {
-        filtered_row_group_indices.front().emplace_back(rg_idx);
-      }
+      // Check if the row group starts within the byte range: row group file offset is >=
+      // bytes_to_skip AND (bytes_to_read is not specified OR the max byte offset overflows
+      // size_t OR row group file offset is < bytes_to_skip + bytes_to_read)
+      auto const is_within_byte_range =
+        std::cmp_greater_equal(row_group_file_offset, bytes_to_skip) and
+        (not bytes_to_read.has_value() or
+         (std::numeric_limits<size_t>::max() - bytes_to_read.value() <= bytes_to_skip) or
+         std::cmp_less(row_group_file_offset, bytes_to_skip + bytes_to_read.value()));
+
+      if (is_within_byte_range) { filtered_row_group_indices.front().emplace_back(rg_idx); }
     });
 
   return filtered_row_group_indices;
