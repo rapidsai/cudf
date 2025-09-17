@@ -10,14 +10,20 @@ from pylibcudf.libcudf.strings.split cimport partition as cpp_partition
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.scalar cimport Scalar
 from pylibcudf.table cimport Table
-from pylibcudf.utils cimport _get_stream
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 from cython.operator import dereference
 
 __all__ = ["partition", "rpartition"]
 
-cpdef Table partition(Column input, Scalar delimiter=None, Stream stream=None):
+cpdef Table partition(
+    Column input,
+    Scalar delimiter=None,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
+):
     """
     Returns a set of 3 columns by splitting each string using the
     specified delimiter.
@@ -43,6 +49,7 @@ cpdef Table partition(Column input, Scalar delimiter=None, Stream stream=None):
     )
 
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     if delimiter is None:
         delimiter = Scalar.from_libcudf(
@@ -56,9 +63,14 @@ cpdef Table partition(Column input, Scalar delimiter=None, Stream stream=None):
             stream.view()
         )
 
-    return Table.from_libcudf(move(c_result), stream)
+    return Table.from_libcudf(move(c_result), stream, mr)
 
-cpdef Table rpartition(Column input, Scalar delimiter=None, Stream stream=None):
+cpdef Table rpartition(
+    Column input,
+    Scalar delimiter=None,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
+):
     """
     Returns a set of 3 columns by splitting each string using the
     specified delimiter starting from the end of each string.
@@ -84,6 +96,7 @@ cpdef Table rpartition(Column input, Scalar delimiter=None, Stream stream=None):
     )
 
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     if delimiter is None:
         delimiter = Scalar.from_libcudf(
@@ -97,4 +110,4 @@ cpdef Table rpartition(Column input, Scalar delimiter=None, Stream stream=None):
             stream.view()
         )
 
-    return Table.from_libcudf(move(c_result), stream)
+    return Table.from_libcudf(move(c_result), stream, mr)

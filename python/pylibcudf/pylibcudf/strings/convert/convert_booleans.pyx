@@ -9,14 +9,17 @@ from pylibcudf.libcudf.strings.convert cimport (
     convert_booleans as cpp_convert_booleans,
 )
 from pylibcudf.scalar cimport Scalar
-from pylibcudf.utils cimport _get_stream
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
 
 from cython.operator import dereference
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 __all__ = ["from_booleans", "to_booleans"]
 
-cpdef Column to_booleans(Column input, Scalar true_string, Stream stream=None):
+cpdef Column to_booleans(
+    Column input, Scalar true_string, Stream stream=None, DeviceMemoryResource mr=None
+):
     """
     Returns a new bool column by parsing boolean values from the strings
     in the provided strings column.
@@ -44,6 +47,7 @@ cpdef Column to_booleans(Column input, Scalar true_string, Stream stream=None):
         true_string.c_obj.get()
     )
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_convert_booleans.to_booleans(
@@ -52,10 +56,14 @@ cpdef Column to_booleans(Column input, Scalar true_string, Stream stream=None):
             stream.view()
         )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 cpdef Column from_booleans(
-    Column booleans, Scalar true_string, Scalar false_string, Stream stream=None
+    Column booleans,
+    Scalar true_string,
+    Scalar false_string,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Returns a new strings column converting the boolean values from the
@@ -90,6 +98,7 @@ cpdef Column from_booleans(
         false_string.c_obj.get()
     )
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_convert_booleans.from_booleans(
@@ -99,4 +108,4 @@ cpdef Column from_booleans(
             stream.view()
         )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)

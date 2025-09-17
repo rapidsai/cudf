@@ -12,7 +12,8 @@ from pylibcudf.libcudf.scalar.scalar_factories cimport (
 from pylibcudf.libcudf.strings cimport strip as cpp_strip
 from pylibcudf.scalar cimport Scalar
 from pylibcudf.strings.side_type cimport side_type
-from pylibcudf.utils cimport _get_stream
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 __all__ = ["strip"]
@@ -21,7 +22,8 @@ cpdef Column strip(
     Column input,
     side_type side=side_type.BOTH,
     Scalar to_strip=None,
-    Stream stream=None
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Removes the specified characters from the beginning
     or end (or both) of each string.
@@ -45,6 +47,7 @@ cpdef Column strip(
         New strings column.
     """
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     if to_strip is None:
         to_strip = Scalar.from_libcudf(
@@ -63,4 +66,4 @@ cpdef Column strip(
             stream.view()
         )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)

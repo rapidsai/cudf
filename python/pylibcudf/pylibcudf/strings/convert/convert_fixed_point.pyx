@@ -8,14 +8,16 @@ from pylibcudf.libcudf.strings.convert cimport (
     convert_fixed_point as cpp_fixed_point,
 )
 from pylibcudf.types cimport DataType, type_id
-from pylibcudf.utils cimport _get_stream
-
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 __all__ = ["from_fixed_point", "is_fixed_point", "to_fixed_point"]
 
 
-cpdef Column to_fixed_point(Column input, DataType output_type, Stream stream=None):
+cpdef Column to_fixed_point(
+    Column input, DataType output_type, Stream stream=None, DeviceMemoryResource mr=None
+):
     """
     Returns a new fixed-point column parsing decimal values from the
     provided strings column.
@@ -40,6 +42,7 @@ cpdef Column to_fixed_point(Column input, DataType output_type, Stream stream=No
     """
     cdef unique_ptr[column] c_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_fixed_point.to_fixed_point(
@@ -48,9 +51,11 @@ cpdef Column to_fixed_point(Column input, DataType output_type, Stream stream=No
             stream.view()
         )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)
 
-cpdef Column from_fixed_point(Column input, Stream stream=None):
+cpdef Column from_fixed_point(
+    Column input, Stream stream=None, DeviceMemoryResource mr=None
+):
     """
     Returns a new strings column converting the fixed-point values
     into a strings column.
@@ -72,14 +77,18 @@ cpdef Column from_fixed_point(Column input, Stream stream=None):
     """
     cdef unique_ptr[column] c_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_fixed_point.from_fixed_point(input.view(), stream.view())
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 cpdef Column is_fixed_point(
-    Column input, DataType decimal_type=None, Stream stream=None
+    Column input,
+    DataType decimal_type=None,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Returns a boolean column identifying strings in which all
@@ -106,6 +115,7 @@ cpdef Column is_fixed_point(
     """
     cdef unique_ptr[column] c_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     if decimal_type is None:
         decimal_type = DataType(type_id.DECIMAL64)
@@ -117,4 +127,4 @@ cpdef Column is_fixed_point(
             stream.view()
         )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)

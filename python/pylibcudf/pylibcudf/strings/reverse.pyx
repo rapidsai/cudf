@@ -5,12 +5,13 @@ from libcpp.utility cimport move
 from pylibcudf.column cimport Column
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.strings cimport reverse as cpp_reverse
-from pylibcudf.utils cimport _get_stream
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 __all__ = ["reverse"]
 
-cpdef Column reverse(Column input, Stream stream=None):
+cpdef Column reverse(Column input, Stream stream=None, DeviceMemoryResource mr=None):
     """Reverses the characters within each string.
 
     Any null string entries return corresponding null output column entries.
@@ -31,7 +32,8 @@ cpdef Column reverse(Column input, Stream stream=None):
     """
     cdef unique_ptr[column] c_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
     with nogil:
         c_result = cpp_reverse.reverse(input.view(), stream.view())
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)
