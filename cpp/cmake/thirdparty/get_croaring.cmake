@@ -30,7 +30,7 @@ function(find_and_configure_roaring VERSION)
             "ROARING_DISABLE_AVX2 ON"
             "ROARING_DISABLE_AVX512 ON"
   )
-  if (roaring_ADDED)
+  if(roaring_ADDED)
     set_target_properties(roaring PROPERTIES POSITION_INDEPENDENT_CODE ON)
   endif()
 
