@@ -693,6 +693,7 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask
   cudf::column_view row_mask,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   cudf::host_span<input_column_info const> input_columns,
+  cudf::size_type row_mask_offset,
   rmm::cuda_stream_view stream) const
 {
   CUDF_FUNC_RANGE();
@@ -700,11 +701,9 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask
   CUDF_EXPECTS(row_mask.type().id() == cudf::type_id::BOOL8,
                "Input row bitmask should be of type BOOL8");
 
-  auto const total_rows  = row_mask.size();
   auto const num_columns = input_columns.size();
 
-  // Collect column schema indices from the input columns. Note: We can't use
-  // `output_column_schemas` here in case of lists and structs.
+  // Collect column schema indices from the input columns.
   auto column_schema_indices = std::vector<size_type>(input_columns.size());
   std::transform(
     input_columns.begin(), input_columns.end(), column_schema_indices.begin(), [](auto const& col) {
@@ -765,15 +764,18 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask
                   });
   }
 
-  CUDF_EXPECTS(page_row_offsets.back().back() == total_rows,
+  auto const total_rows = page_row_offsets.back().back();
+
+  CUDF_EXPECTS(row_mask_offset + total_rows <= row_mask.size(),
                "Mismatch in total rows in input row mask and row groups",
                std::invalid_argument);
 
   // Return if all rows are required or all are invalid.
-  if (row_mask.null_count() == row_mask.size() or thrust::all_of(rmm::exec_policy(stream),
-                                                                 row_mask.begin<bool>(),
-                                                                 row_mask.end<bool>(),
-                                                                 cuda::std::identity{})) {
+  if (row_mask.null_count(row_mask_offset, row_mask_offset + total_rows) == total_rows or
+      thrust::all_of(rmm::exec_policy(stream),
+                     row_mask.begin<bool>() + row_mask_offset,
+                     row_mask.begin<bool>() + row_mask_offset + total_rows,
+                     cuda::std::identity{})) {
     return all_required_data_pages(page_row_counts);
   }
 
@@ -791,7 +793,7 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask
   std::for_each(
     thrust::counting_iterator<size_t>(0),
     thrust::counting_iterator(num_columns),
-    [&](auto const col_idx) {
+    [&, total_rows](auto const col_idx) {
       // Construct a row indices mapping based on page row counts and offsets
       auto const total_pages_in_this_column = page_row_counts[col_idx].size();
 
@@ -806,7 +808,7 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask
         rmm::exec_policy_nosync(stream),
         page_indices.begin(),
         page_indices.end(),
-        thrust::counting_iterator<size_type>(0),
+        thrust::counting_iterator<size_type>(row_mask_offset),
         select_page_indices.begin(),
         is_row_required_fn{row_mask.nullable(), row_mask.null_mask(), row_mask.data<bool>()});
 
