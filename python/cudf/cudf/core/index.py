@@ -3759,13 +3759,18 @@ class DatetimeIndex(Index):
 
             return cudf.DateOffset(**kwds)
 
-    def _get_slice_frequency(self, passed_slice=None):
+    def _get_slice_frequency(self, slc=None):
+        if slc.step in (1, None):
+            # no change in freq
+            return self._freq
+        if slc == slice(None, None, None):
+            return self._freq
         if self._freq is None:
             return None
         else:
-            if passed_slice:
+            if slc:
                 # fastpath: dont introspect
-                new_freq = passed_slice.step * pd.Timedelta(
+                new_freq = slc.step * pd.Timedelta(
                     self._freq._maybe_as_fast_pandas_offset()
                 )
                 return cudf.DateOffset._from_freqstr(

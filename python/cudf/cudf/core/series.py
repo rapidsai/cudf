@@ -1280,7 +1280,7 @@ class Series(SingleColumnFrame, IndexedFrame):
 
         if isinstance(result.index, cudf.DatetimeIndex):
             result.index._freq = (
-                result.index._get_slice_frequency()
+                result.index._get_slice_frequency(spec.key)
                 if isinstance(spec, indexing_utils.SliceIndexer)
                 else None
             )
