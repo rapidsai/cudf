@@ -732,6 +732,18 @@ class _CallableProxyMixin:
         )
         return result
 
+    @property
+    def __code__(self):
+        return self._fsproxy_slow.__code__
+
+    @property
+    def __defaults__(self):
+        return self._fsproxy_slow.__defaults__
+
+    @property
+    def __kwdefaults__(self):
+        return self._fsproxy_slow.__kwdefaults__
+
 
 class _FunctionProxy(_CallableProxyMixin):
     """

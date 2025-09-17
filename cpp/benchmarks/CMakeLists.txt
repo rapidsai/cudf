@@ -175,7 +175,6 @@ ConfigureNVBench(NDSH_Q10_NVBENCH ndsh/q10.cpp ndsh/utilities.cpp)
 
 # ##################################################################################################
 # * filter benchmark -------------------------------------------------------------------
-
 ConfigureNVBench(FILTER_NVBENCH filter/minmax_filter.cpp)
 
 # ##################################################################################################
@@ -268,11 +267,6 @@ ConfigureNVBench(FILL_NVBENCH filling/repeat.cpp)
 
 # ##################################################################################################
 # * groupby benchmark -----------------------------------------------------------------------------
-ConfigureBench(
-  GROUPBY_BENCH groupby/group_sum.cpp groupby/group_nth.cpp groupby/group_shift.cpp
-  groupby/group_struct_values.cpp groupby/group_no_requests.cpp groupby/group_scan.cpp
-)
-
 ConfigureNVBench(
   GROUPBY_NVBENCH
   groupby/group_complex_keys.cpp
@@ -280,9 +274,15 @@ ConfigureNVBench(
   groupby/group_m2_var_std.cpp
   groupby/group_max.cpp
   groupby/group_max_multithreaded.cpp
+  groupby/group_no_requests.cpp
+  groupby/group_nth.cpp
   groupby/group_nunique.cpp
   groupby/group_rank.cpp
+  groupby/group_scan.cpp
+  groupby/group_shift.cpp
   groupby/group_struct_keys.cpp
+  groupby/group_struct_values.cpp
+  groupby/group_sum.cpp
 )
 
 # ##################################################################################################
