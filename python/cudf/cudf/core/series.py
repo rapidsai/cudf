@@ -614,11 +614,9 @@ class Series(SingleColumnFrame, IndexedFrame):
         name: Any = no_default,
         attrs: dict | None = None,
     ) -> Series:
-        out = super()._from_data(data=data, index=index)
+        out = super()._from_data(data=data, index=index, attrs=attrs)
         if name is not no_default:
             out.name = name
-        if attrs is not None:
-            out._attrs = attrs
         return out
 
     @_performance_tracking

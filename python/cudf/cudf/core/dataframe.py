@@ -1190,20 +1190,19 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         if dtype:
             self._data = self.astype(dtype)._data
+        self._attrs = {}
 
     @classmethod
-    def _from_data(
+    def _from_data(  # type: ignore[override]
         cls,
         data: MutableMapping,
         index: Index | None = None,
         columns: Any = None,
         attrs: dict | None = None,
     ) -> Self:
-        out = super()._from_data(data=data, index=index)
+        out = super()._from_data(data=data, index=index, attrs=attrs)
         if columns is not None:
             out.columns = columns
-        if attrs is not None:
-            out._attrs = attrs
         return out
 
     # The `constructor*` properties are used by `dask` (and `dask_cudf`)
@@ -8086,9 +8085,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         if axis != 0:
             raise NotImplementedError("axis parameter is not supported yet.")
         counts = [col.distinct_count(dropna=dropna) for col in self._columns]
-        return self._constructor_sliced(
-            counts, index=self._data.to_pandas_index, attrs=self.attrs
+        res = self._constructor_sliced(
+            counts, index=self._data.to_pandas_index
         )
+        res._attrs = self.attrs
+        return res
 
     def _sample_axis_1(
         self,

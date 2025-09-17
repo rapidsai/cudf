@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import copy
 import datetime
 import itertools
 import operator
@@ -318,9 +317,7 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
 
     @_performance_tracking
     def _from_data_like_self(self, data: MutableMapping) -> Self:
-        res = _index_from_data(data, self.name)
-        res._attrs = copy.deepcopy(self._attrs)
-        return res
+        return _index_from_data(data, self.name)
 
     @_performance_tracking
     def to_pylibcudf(self, copy=False) -> tuple[plc.Column, dict]:

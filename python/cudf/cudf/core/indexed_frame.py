@@ -301,7 +301,7 @@ class IndexedFrame(Frame):
                 f"match length of index ({len(index)})"
             )
         self._index = index
-        self._attrs = {}
+        self._attrs: dict[Hashable, Any] = {}
 
     @property
     def _num_rows(self) -> int:
@@ -351,7 +351,7 @@ class IndexedFrame(Frame):
         self._attrs = dict(value)
 
     @classmethod
-    def _from_data(
+    def _from_data(  # type: ignore[override]
         cls,
         data: MutableMapping,
         index: Index | None = None,
@@ -366,8 +366,7 @@ class IndexedFrame(Frame):
                 f"index must be a cudf.Index not {type(index).__name__}"
             )
         out._index = index
-        if attrs is not None:
-            out._attrs = attrs
+        out._attrs = {} if attrs is None else attrs
         return out
 
     @_performance_tracking
