@@ -9,13 +9,20 @@ from pylibcudf.libcudf.nvtext.edit_distance cimport (
     edit_distance_matrix as cpp_edit_distance_matrix,
 )
 
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
-from ..utils cimport _get_stream
+from ..column cimport Column
+from ..utils cimport _get_stream, _get_memory_resource
 
 __all__ = ["edit_distance", "edit_distance_matrix"]
 
-cpdef Column edit_distance(Column input, Column targets, Stream stream=None):
+cpdef Column edit_distance(
+    Column input,
+    Column targets,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
+):
     """
     Returns the edit distance between individual strings in two strings columns
 
@@ -39,14 +46,19 @@ cpdef Column edit_distance(Column input, Column targets, Stream stream=None):
     cdef column_view c_targets = targets.view()
     cdef unique_ptr[column] c_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_edit_distance(c_strings, c_targets, stream.view())
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 
-cpdef Column edit_distance_matrix(Column input, Stream stream=None):
+cpdef Column edit_distance_matrix(
+    Column input,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
+):
     """
     Returns the edit distance between all strings in the input strings column
 
@@ -67,8 +79,9 @@ cpdef Column edit_distance_matrix(Column input, Stream stream=None):
     cdef column_view c_strings = input.view()
     cdef unique_ptr[column] c_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_edit_distance_matrix(c_strings, stream.view())
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)
