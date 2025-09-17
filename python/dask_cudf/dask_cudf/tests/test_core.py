@@ -369,7 +369,7 @@ def test_repartition_timeseries(start, stop):
         partition_freq=start,
         dtypes={"x": int, "y": float},
     )
-    gdf = pdf.map_partitions(cudf.DataFrame.from_pandas)
+    gdf = pdf.map_partitions(cudf.DataFrame)
 
     a = pdf.repartition(freq=stop)
     b = gdf.repartition(freq=stop)
@@ -384,7 +384,7 @@ def test_repartition_simple_divisions(start, stop):
     pdf = pd.DataFrame({"x": range(100)})
 
     pdf = dd.from_pandas(pdf, npartitions=start)
-    gdf = pdf.map_partitions(cudf.DataFrame.from_pandas)
+    gdf = pdf.map_partitions(cudf.DataFrame)
 
     a = pdf.repartition(npartitions=stop)
     b = gdf.repartition(npartitions=stop)
