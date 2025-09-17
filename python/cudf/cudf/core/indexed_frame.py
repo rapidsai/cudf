@@ -1937,6 +1937,15 @@ class IndexedFrame(Frame):
 
         data = self
 
+        if limit is not None:
+            raise NotImplementedError("limit is not supported")
+        if limit_direction is not None:
+            raise NotImplementedError("limit_direction is not supported")
+        if limit_area is not None:
+            raise NotImplementedError("limit_area is not supported")
+        if downcast is not None:
+            raise NotImplementedError("downcast is not supported")
+
         if not isinstance(data.index, cudf.RangeIndex):
             perm_sort = data.index.argsort()
             data = data._gather(
