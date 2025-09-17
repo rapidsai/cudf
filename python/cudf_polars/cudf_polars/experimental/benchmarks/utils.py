@@ -865,8 +865,6 @@ def run_polars(
             all_logs = gather_logs()
 
         parsed_logs = [json.loads(log) for log in all_logs.splitlines() if log]
-        # Some other log records can end up in here. Filter those out.
-        parsed_logs = [log for log in parsed_logs if log["event"] == "Execute IR"]
         # Now we want to augment the existing Records with the trace data.
 
         def group_key(x: dict) -> int:
