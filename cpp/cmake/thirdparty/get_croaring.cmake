@@ -16,7 +16,7 @@
 function(find_and_configure_roaring VERSION)
   rapids_cpm_find(
     roaring ${VERSION}
-    GLOBAL_TARGETS roaring
+    GLOBAL_TARGETS croaring
     CPM_ARGS
     GIT_REPOSITORY https://github.com/RoaringBitmap/CRoaring.git
     GIT_TAG v${VERSION}
