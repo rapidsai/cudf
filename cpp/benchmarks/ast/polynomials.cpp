@@ -30,12 +30,28 @@
 
 #include <random>
 
+namespace {
+
+enum class engine_type : uint8_t { AST = 0, JIT = 1 };
+
+engine_type engine_from_string(std::string_view str)
+{
+  if (str == "ast") {
+    return engine_type::AST;
+  } else if (str == "jit") {
+    return engine_type::JIT;
+  } else {
+    CUDF_FAIL("unrecognized engine enum: " + std::string(str));
+  }
+}
+
 template <typename key_type>
-static void BM_ast_polynomials(nvbench::state& state)
+void BM_ast_polynomials(nvbench::state& state)
 {
   auto const num_rows         = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const order            = static_cast<cudf::size_type>(state.get_int64("order"));
   auto const null_probability = state.get_float64("null_probability");
+  auto const engine           = engine_from_string(state.get_string("engine"));
 
   CUDF_EXPECTS(order > 0, "Polynomial order must be greater than 0");
 
@@ -80,7 +96,18 @@ static void BM_ast_polynomials(nvbench::state& state)
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     cudf::scoped_range range{"benchmark_iteration"};
-    cudf::compute_column(*table, tree.back(), launch.get_stream().get_stream());
+
+    switch (engine) {
+      case engine_type::AST: {
+        cudf::compute_column(*table, tree.back(), launch.get_stream().get_stream());
+        break;
+      }
+      case engine_type::JIT: {
+        cudf::compute_column_jit(*table, tree.back(), launch.get_stream().get_stream());
+        break;
+      }
+      default: CUDF_FAIL("Invalid engine type");
+    }
   });
 }
 
@@ -90,7 +117,10 @@ static void BM_ast_polynomials(nvbench::state& state)
     .set_name(#name)                                                             \
     .add_int64_axis("num_rows", {100'000, 1'000'000, 10'000'000, 100'000'000})   \
     .add_int64_axis("order", {1, 2, 4, 8, 16, 32})                               \
-    .add_float64_axis("null_probability", {0.01})
+    .add_float64_axis("null_probability", {0.01})                                \
+    .add_string_axis("engine", {"ast", "jit"})
+
+}  // namespace
 
 AST_POLYNOMIAL_BENCHMARK_DEFINE(ast_polynomials_float32, float);
 

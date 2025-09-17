@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import cupy
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from typing_extensions import Self, assert_never
 
 import pylibcudf as plc  # noqa: TC002
@@ -72,8 +73,6 @@ from cudf.utils.utils import _EQUALITY_OPS, _is_same_name
 if TYPE_CHECKING:
     from collections.abc import Hashable, MutableMapping
 
-    import pyarrow as pa
-
     from cudf._typing import (
         DataFrameOrSeries,
         Dtype,
@@ -89,7 +88,7 @@ def _format_percentile_names(percentiles):
 
 def _describe_numeric(obj, percentiles):
     # Helper for Series.describe with numerical data.
-    data = {
+    return {
         "count": obj.count(),
         "mean": obj.mean(),
         "std": obj.std(),
@@ -103,7 +102,6 @@ def _describe_numeric(obj, percentiles):
         ),
         "max": obj.max(),
     }
-    return {k: round(v, 6) for k, v in data.items()}
 
 
 def _describe_timetype(obj, percentiles, typ):
@@ -780,9 +778,9 @@ class Series(SingleColumnFrame, IndexedFrame):
         index=None,
         columns=None,
         level=None,
-        inplace=False,
-        errors="raise",
-    ):
+        inplace: bool = False,
+        errors: Literal["ignore", "raise"] = "raise",
+    ) -> Self | None:
         if axis == 1:
             raise ValueError("No axis named 1 for object type Series")
         # Ignore columns for Series
@@ -1136,7 +1134,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         return NotImplemented
 
     @_performance_tracking
-    def map(self, arg, na_action=None) -> "Series":
+    def map(self, arg, na_action: None | Literal["ignore"] = None) -> Self:
         """
         Map values of Series according to input correspondence.
 
@@ -1195,6 +1193,10 @@ class Series(SingleColumnFrame, IndexedFrame):
             Please note map currently only supports fixed-width numeric
             type functions.
         """
+        if not (na_action is None or na_action == "ignore"):
+            raise ValueError("na_action must either be 'ignore' or None")
+        elif na_action == "ignore":
+            raise NotImplementedError(f"{na_action=} is not supported")
         if isinstance(arg, dict):
             if hasattr(arg, "__missing__"):
                 raise NotImplementedError(
@@ -1663,7 +1665,12 @@ class Series(SingleColumnFrame, IndexedFrame):
         return self._mimic_inplace(result, inplace=inplace)
 
     @_performance_tracking
-    def drop_duplicates(self, keep="first", inplace=False, ignore_index=False):
+    def drop_duplicates(
+        self,
+        keep: Literal["first", "last", False] = "first",
+        inplace: bool = False,
+        ignore_index: bool = False,
+    ) -> Self | None:
         """
         Return Series with duplicate values removed.
 
@@ -2262,11 +2269,11 @@ class Series(SingleColumnFrame, IndexedFrame):
         self,
         to_replace=None,
         value=no_default,
-        inplace=False,
+        inplace: bool = False,
         limit=None,
-        regex=False,
+        regex: bool = False,
         method=no_default,
-    ):
+    ) -> Self | None:
         if is_dict_like(to_replace) and value not in {None, no_default}:
             raise ValueError(
                 "Series.replace cannot use dict-like to_replace and non-None "
@@ -3225,9 +3232,11 @@ class Series(SingleColumnFrame, IndexedFrame):
         percentiles=None,
         include=None,
         exclude=None,
-    ):
+    ) -> Self:
         """{docstring}"""
-        if cudf.get_option("mode.pandas_compatible"):
+        if cudf.get_option("mode.pandas_compatible") and not (
+            is_dtype_obj_numeric(self.dtype) and self.dtype.kind != "b"
+        ):
             raise NotImplementedError(
                 "cudf.Series.describe is not implemented in "
                 "pandas compatibility mode."
@@ -3249,15 +3258,20 @@ class Series(SingleColumnFrame, IndexedFrame):
             # pandas defaults
             percentiles = np.array([0.25, 0.5, 0.75])
 
-        dtype = "str"
+        dtype: Dtype | None = "str"
         if self.dtype.kind == "b":
             data = _describe_categorical(self, percentiles)
-        elif is_dtype_obj_numeric(self._column.dtype):
+        elif is_dtype_obj_numeric(self.dtype):
             data = _describe_numeric(self, percentiles)
-            dtype = None
-        elif self._column.dtype.kind == "m":
+            if isinstance(self.dtype, pd.ArrowDtype):
+                dtype = pd.ArrowDtype(pa.float64())
+            elif is_pandas_nullable_extension_dtype(self.dtype):
+                dtype = pd.Float64Dtype()
+            else:
+                dtype = None
+        elif self.dtype.kind == "m":
             data = _describe_timedelta(self, percentiles)
-        elif self._column.dtype.kind == "M":
+        elif self.dtype.kind == "M":
             data = _describe_timestamp(self, percentiles)
         else:
             data = _describe_categorical(self, percentiles)

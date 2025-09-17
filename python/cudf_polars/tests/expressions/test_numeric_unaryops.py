@@ -122,7 +122,7 @@ def test_null_count():
 @pytest.mark.parametrize("descending", [False, True])
 def test_rank_supported(request, ldf: pl.LazyFrame, method: str, *, descending: bool):
     request.applymarker(
-        pytest.mark.xfail(condition=POLARS_VERSION_LT_132, reason="nested loop join")
+        pytest.mark.xfail(condition=POLARS_VERSION_LT_132, reason="rank unsupported")
     )
     expr = pl.col("a").rank(method=method, descending=descending)
     q = ldf.select(expr)
@@ -136,7 +136,7 @@ def test_rank_methods_with_nulls_or_ties(
     request, ldf: pl.LazyFrame, method: str, *, descending: bool, test: str
 ) -> None:
     request.applymarker(
-        pytest.mark.xfail(condition=POLARS_VERSION_LT_132, reason="nested loop join")
+        pytest.mark.xfail(condition=POLARS_VERSION_LT_132, reason="rank unsupported")
     )
 
     base = pl.col("a")
