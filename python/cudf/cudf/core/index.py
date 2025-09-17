@@ -3727,6 +3727,8 @@ class DatetimeIndex(Index):
             if len(uniques) > 4:
                 return None
             else:
+                # length between 1 and 4, small host copy
+
                 # handle month end and year end cases
                 # TODO: perf? should one be done first
                 if self.is_month_end.all():
@@ -3734,10 +3736,18 @@ class DatetimeIndex(Index):
                 elif self.is_year_end.all():
                     return cudf.DateOffset._from_freqstr("YE")
                 else:
-                    # YE-JAN, etc
-                    raise NotImplementedError(
-                        "Anchored freq not supported in inference"
-                    )
+                    uniques_host = uniques.to_arrow().to_pylist()
+                    if all(
+                        x
+                        in {pd.Timedelta("365 days"), pd.Timedelta("366 days")}
+                        for x in uniques_host
+                    ):
+                        # YE-JAN, etc
+                        raise NotImplementedError(
+                            "Anchored freq not supported in inference"
+                        )
+                    else:
+                        return None
         else:
             freq = uniques.to_arrow().to_pylist()[0]
             cmps = freq.components
