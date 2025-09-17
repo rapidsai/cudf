@@ -3292,12 +3292,14 @@ class Series(SingleColumnFrame, IndexedFrame):
         else:
             data = _describe_categorical(self, percentiles)
 
-        return Series(
+        res = Series(
             data=data.values(),
             index=data.keys(),
             dtype=dtype,
             name=self.name,
         )
+        res._attrs = self.attrs
+        return res
 
     @_performance_tracking
     def digitize(self, bins: np.ndarray, right: bool = False) -> Self:
