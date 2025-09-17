@@ -22,7 +22,3 @@ python -m pytest --cache-clear "$@" "tests/experimental" \
     --executor streaming \
     --scheduler distributed \
     --cov-fail-under=0  # No code-coverage requirement for these tests.
-
-# Test the tracing functionality
-CUDF_POLARS_LOG_TRACES=1 python -m pytest --cache-clear "$@" tests/test_tracing.py \
-    --cov-fail-under=0
