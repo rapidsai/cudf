@@ -16,6 +16,7 @@
 
 #include "runtime/context.hpp"
 
+#include "io/utilities/getenv_or.hpp"
 #include "jit/cache.hpp"
 
 #include <cudf/context.hpp>
@@ -25,9 +26,15 @@
 
 namespace cudf {
 
-context::context() : _program_cache{std::make_unique<jit::program_cache>()} {}
+context::context() : _program_cache{std::make_unique<jit::program_cache>()}
+{
+  auto dump_codegen_flag = getenv_or("LIBCUDF_JIT_DUMP_CODEGEN", std::string{"OFF"});
+  _dump_codegen          = (dump_codegen_flag == "ON" || dump_codegen_flag == "1");
+}
 
 jit::program_cache& context::program_cache() { return *_program_cache; }
+
+bool context::dump_codegen() const { return _dump_codegen; }
 
 std::unique_ptr<context>& get_context_ptr_ref()
 {

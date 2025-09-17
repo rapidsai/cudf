@@ -680,8 +680,7 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask
 
   auto const num_columns = input_columns.size();
 
-  // Collect column schema indices from the input columns. Note: We can't use
-  // `output_column_schemas` here in case of lists and structs.
+  // Collect column schema indices from the input columns.
   auto column_schema_indices = std::vector<size_type>(input_columns.size());
   std::transform(
     input_columns.begin(), input_columns.end(), column_schema_indices.begin(), [](auto const& col) {
@@ -743,6 +742,7 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask
   }
 
   auto const total_rows = page_row_offsets.back().back();
+
   CUDF_EXPECTS(row_mask_offset + total_rows <= row_mask.size(),
                "Mismatch in total rows in input row mask and row groups",
                std::invalid_argument);

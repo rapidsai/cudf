@@ -738,17 +738,17 @@ static __device__ void update_list_offsets_for_pruned_pages(page_state_s* state)
   auto const tid               = cg::this_thread_block().thread_rank();
 
   // Iterate by depth and store offset(s) to the list location(s)
-  for (int depth = tid; depth < max_depth; depth += block_size) {
+  for (int depth = 0; depth < max_depth; depth++) {
     auto& nesting_info = state->nesting_info[depth];
     // If we're -not- at a leaf column and we're within nesting/row bounds and we have a valid
     // data_out pointer, it implies this is a list column, so emit an offset for the current nesting
     // level equal to current length of the next nesting level
     if (in_nesting_bounds and nesting_info.data_out != nullptr) {
       auto const& next_nesting_info = state->nesting_info[depth + 1];
-      int const idx                 = nesting_info.value_count;
-      cudf::size_type const offset =
-        next_nesting_info.value_count + next_nesting_info.page_start_value;
-      (reinterpret_cast<cudf::size_type*>(nesting_info.data_out))[idx] = offset;
+      auto const offset             = next_nesting_info.page_start_value;
+      for (int idx = tid; idx < state->page.nesting[depth].batch_size; idx += block_size) {
+        (reinterpret_cast<cudf::size_type*>(nesting_info.data_out))[idx] = offset;
+      }
     }
   }
 }
