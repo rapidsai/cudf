@@ -900,6 +900,7 @@ dependencies:
               - pytest-env
               - sqlframe
               - ibis-framework[duckdb]
+              - duckdb<1.4.0
   depends_on_libcudf:
     common:
       - output_types: conda
