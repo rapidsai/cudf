@@ -26,7 +26,8 @@ def test_table_to_arrow(table_data):
     plc_tbl, _ = table_data
     expect = plc_tbl.tbl
     got = expect.to_arrow()
-    # Normally the order is expect, got
-    # but assert_table_eq takes the pyarrow
-    # table as it's first argument
+    # The order of `got` and `expect` is reversed here
+    # because in almost all pylibcudf tests the `expect`
+    # is a pyarrow object while `got` is a pylibcudf object,
+    # whereas in this case those types are reversed.
     assert_table_eq(got, expect)
