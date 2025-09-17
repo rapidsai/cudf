@@ -15,7 +15,7 @@
 # Use CPM to clone CRoaring and set up the necessary targets and include directories.
 function(find_and_configure_croaring VERSION)
   rapids_cpm_find(
-    croaring ${VERSION}
+    roaring ${VERSION}
     GLOBAL_TARGETS croaring
     CPM_ARGS
     GIT_REPOSITORY https://github.com/RoaringBitmap/CRoaring.git
