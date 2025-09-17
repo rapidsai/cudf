@@ -43,7 +43,8 @@ def engine():
     )
 
 
-def test_explain_logical_plan(tmp_path, df):
+@pytest.mark.parametrize("executor", ["streaming", "in-memory"])
+def test_explain_logical_plan(tmp_path, df, executor):
     make_partitioned_source(df, tmp_path, fmt="parquet", n_files=2)
 
     q = (
@@ -58,7 +59,7 @@ def test_explain_logical_plan(tmp_path, df):
         .select(pl.col("sum_xz"))
     )
 
-    engine = pl.GPUEngine(executor="streaming", raise_on_fail=True)
+    engine = pl.GPUEngine(executor=executor, raise_on_fail=True)
     plan = explain_query(q, engine, physical=False)
 
     assert "SCAN PARQUET" in plan
@@ -234,7 +235,12 @@ def test_explain_logical_io_then_filter(engine, tmp_path, kind):
         }
     )
     df = make_lazy_frame(df, kind, path=tmp_path, n_files=2)
-    q = df.filter(pl.col("customer_id") < 104).sort("order_id")
+    # Include `unique` to improve code coverage
+    q = (
+        df.filter(pl.col("customer_id") < 104)
+        .unique(subset=["order_id"])
+        .sort("order_id")
+    )
 
     # Verify the query runs correctly
     assert_gpu_result_equal(q, engine=engine)
