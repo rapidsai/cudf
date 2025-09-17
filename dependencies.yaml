@@ -1207,6 +1207,7 @@ dependencies:
       - output_types: conda
         packages:
           - cudf-polars==25.10.*,>=0.0.0a0
+          - pytest-httpserver
   depends_on_narwhals:
     common:
       - output_types: [conda, requirements, pyproject]

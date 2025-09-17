@@ -333,7 +333,7 @@ class Scan(IR):
         if (
             any(str(p).startswith("https:/") for p in self.paths)
             and POLARS_VERSION_LT_131
-        ):
+        ):  # pragma: no cover; no test yet
             raise NotImplementedError("Read from https")
         if any(
             str(p).startswith("file:/" if POLARS_VERSION_LT_131 else "file://")
