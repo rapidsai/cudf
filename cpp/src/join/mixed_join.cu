@@ -50,7 +50,7 @@ namespace {
 template <typename HashProbe>
 std::pair<rmm::device_uvector<cuco::pair<hash_value_type, size_type>>,
           rmm::device_uvector<cuda::std::pair<uint32_t, uint32_t>>>
-precompute_mixed_join_data(mixed_multimap_type const& hash_table,
+precompute_mixed_join_data(mixed_multiset_type const& hash_table,
                            HashProbe const& hash_probe,
                            size_type probe_table_num_rows,
                            rmm::cuda_stream_view stream,
@@ -63,7 +63,7 @@ precompute_mixed_join_data(mixed_multimap_type const& hash_table,
 
   auto const extent                        = hash_table.capacity();
   auto const probe_hash_fn                 = hash_table.hash_function();
-  static constexpr std::size_t bucket_size = mixed_multimap_type::bucket_size;
+  static constexpr std::size_t bucket_size = mixed_multiset_type::bucket_size;
 
   // Functor to pre-compute both input pairs and initial slots and step sizes for double hashing.
   auto precompute_fn = [=] __device__(size_type i) {
@@ -176,7 +176,7 @@ mixed_join(
 
   // Create hash table with computed size following hash join pattern
   auto const hash_table_size = compute_hash_table_size(build.num_rows());
-  mixed_multimap_type hash_table{
+  mixed_multiset_type hash_table{
     cuco::extent{hash_table_size},
     cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
     cuco::empty_key{
@@ -444,7 +444,7 @@ compute_mixed_join_output_size(table_view const& left_equality,
 
   // Create hash table with computed size following hash join pattern
   auto const hash_table_size = compute_hash_table_size(build.num_rows());
-  mixed_multimap_type hash_table{
+  mixed_multiset_type hash_table{
     cuco::extent{hash_table_size},
     cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
     cuco::empty_key{
