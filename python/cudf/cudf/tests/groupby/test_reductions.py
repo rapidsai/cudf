@@ -105,7 +105,7 @@ def test_groupby_level_zero(groupby_reduction_methods, request):
         )
     )
     pdf = pd.DataFrame({"x": [1, 2, 3]}, index=[2, 5, 5])
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     pdg = pdf.groupby(level=0)
     gdg = gdf.groupby(level=0)
     pdresult = getattr(pdg, groupby_reduction_methods)()
@@ -124,7 +124,7 @@ def test_groupby_series_level_zero(groupby_reduction_methods, request):
         )
     )
     pdf = pd.Series([1, 2, 3], index=[2, 5, 5])
-    gdf = cudf.Series.from_pandas(pdf)
+    gdf = cudf.Series(pdf)
     pdg = pdf.groupby(level=0)
     gdg = gdf.groupby(level=0)
     pdresult = getattr(pdg, groupby_reduction_methods)()
@@ -134,7 +134,7 @@ def test_groupby_series_level_zero(groupby_reduction_methods, request):
 
 def test_groupby_column_name():
     pdf = pd.DataFrame({"xx": [1.0, 2.0, 3.0], "yy": [1, 2, 3]})
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     g = gdf.groupby("yy")
     p = pdf.groupby("yy")
     gxx = g["xx"].sum()
@@ -168,7 +168,7 @@ def test_groupby_column_name():
 
 def test_groupby_column_numeral():
     pdf = pd.DataFrame({0: [1.0, 2.0, 3.0], 1: [1, 2, 3]})
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     p = pdf.groupby(1)
     g = gdf.groupby(1)
     pxx = p[0].sum()
@@ -176,7 +176,7 @@ def test_groupby_column_numeral():
     assert_groupby_results_equal(pxx, gxx)
 
     pdf = pd.DataFrame({0.5: [1.0, 2.0, 3.0], 1.5: [1, 2, 3]})
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     p = pdf.groupby(1.5)
     g = gdf.groupby(1.5)
     pxx = p[0.5].sum()
@@ -199,7 +199,7 @@ def test_groupby_column_numeral():
 )
 def test_groupby_external_series(series):
     pdf = pd.DataFrame({"x": [1.0, 2.0, 3.0], "y": [1, 2, 1]})
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     pxx = pdf.groupby(pd.Series(series)).x.sum()
     gxx = gdf.groupby(cudf.Series(series)).x.sum()
     assert_groupby_results_equal(pxx, gxx)
@@ -208,7 +208,7 @@ def test_groupby_external_series(series):
 @pytest.mark.parametrize("series", [[0.0, 1.0], [1.0, 1.0, 1.0, 1.0]])
 def test_groupby_external_series_incorrect_length(series):
     pdf = pd.DataFrame({"x": [1.0, 2.0, 3.0], "y": [1, 2, 1]})
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     pxx = pdf.groupby(pd.Series(series)).x.sum()
     gxx = gdf.groupby(cudf.Series(series)).x.sum()
     assert_groupby_results_equal(pxx, gxx)
@@ -459,7 +459,7 @@ def test_groupby_quantile(request, interpolation, q):
     # Pandas>0.25 now casts NaN in quantile operations as a float64
     # # so we are filling with zeros.
     pdf = pd.DataFrame(raw_data).fillna(0)
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
 
     pdg = pdf.groupby("x")
     gdg = gdf.groupby("x")
@@ -476,7 +476,7 @@ def test_groupby_std():
         "y": [None, 1, 2, 3, 4, None, 6, 7, 8, 9],
     }
     pdf = pd.DataFrame(raw_data)
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     pdg = pdf.groupby("x")
     gdg = gdf.groupby("x")
     pdresult = pdg.std()
@@ -996,7 +996,7 @@ def test_multiindex_multiple_groupby():
             "x": rng.normal(size=5),
         }
     )
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     pdg = pdf.groupby(["a", "b"], sort=True).sum()
     gdg = gdf.groupby(["a", "b"], sort=True).sum()
     assert_eq(pdg, gdg)

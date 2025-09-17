@@ -3593,9 +3593,9 @@ class _Grouping(Serializable):
                 elif isinstance(by, Grouper):
                     self._handle_grouper(by)
                 elif isinstance(by, pd.Series):
-                    self._handle_series(Series.from_pandas(by))
+                    self._handle_series(Series(by))
                 elif isinstance(by, pd.Index):
-                    self._handle_index(Index.from_pandas(by))
+                    self._handle_index(Index(by))
                 else:
                     try:
                         self._handle_label(by)

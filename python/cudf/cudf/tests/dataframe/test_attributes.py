@@ -178,7 +178,7 @@ def test_column_assignment():
 
 def test_ndim():
     pdf = pd.DataFrame({"x": range(5), "y": range(5, 10)})
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     assert pdf.ndim == gdf.ndim
 
 
@@ -322,7 +322,7 @@ def test_cudf_arrow_array_error():
 def test_string_index(index):
     rng = np.random.default_rng(seed=0)
     pdf = pd.DataFrame(rng.random(size=(5, 5)))
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     pdf.index = index
     gdf.index = index
     assert_eq(pdf, gdf)
@@ -460,7 +460,7 @@ def test_dataframe_dir_and_getattr():
 
 def test_dataframe_shape():
     pdf = pd.DataFrame({"a": [0, 1, 2, 3], "b": [0.1, 0.2, None, 0.3]})
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
 
     assert pdf.shape == gdf.shape
 
@@ -525,7 +525,7 @@ def test_unary_operators(func):
 )
 def test_df_values_property(data):
     pdf = pd.DataFrame.from_dict(data)
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
 
     pmtr = pdf.values
     gmtr = gdf.values.get()

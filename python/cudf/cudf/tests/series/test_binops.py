@@ -1071,7 +1071,7 @@ def test_str_series_compare_str(comparison_op):
         ["a", "b", None, "d", "e", None], dtype="string"
     )
     expect = comparison_op(str_series_cmp_data, "a")
-    got = comparison_op(cudf.Series.from_pandas(str_series_cmp_data), "a")
+    got = comparison_op(cudf.Series(str_series_cmp_data), "a")
 
     assert_eq(expect, got.to_pandas(nullable=True))
 
@@ -1081,7 +1081,7 @@ def test_str_series_compare_str_reflected(comparison_op):
         ["a", "b", None, "d", "e", None], dtype="string"
     )
     expect = comparison_op("a", str_series_cmp_data)
-    got = comparison_op("a", cudf.Series.from_pandas(str_series_cmp_data))
+    got = comparison_op("a", cudf.Series(str_series_cmp_data))
 
     assert_eq(expect, got.to_pandas(nullable=True))
 
@@ -1094,9 +1094,7 @@ def test_str_series_compare_num(comparison_op, cmp_scalar):
         ["a", "b", None, "d", "e", None], dtype="string"
     )
     expect = comparison_op(str_series_cmp_data, cmp_scalar)
-    got = comparison_op(
-        cudf.Series.from_pandas(str_series_cmp_data), cmp_scalar
-    )
+    got = comparison_op(cudf.Series(str_series_cmp_data), cmp_scalar)
 
     assert_eq(expect, got.to_pandas(nullable=True))
 
@@ -1109,9 +1107,7 @@ def test_str_series_compare_num_reflected(comparison_op, cmp_scalar):
         ["a", "b", None, "d", "e", None], dtype="string"
     )
     expect = comparison_op(cmp_scalar, str_series_cmp_data)
-    got = comparison_op(
-        cmp_scalar, cudf.Series.from_pandas(str_series_cmp_data)
-    )
+    got = comparison_op(cmp_scalar, cudf.Series(str_series_cmp_data))
 
     assert_eq(expect, got.to_pandas(nullable=True))
 
@@ -3015,8 +3011,8 @@ def test_cat_non_cat_compare_ops(
         dtype=pd.CategoricalDtype(categories=data_right, ordered=ordered),
     )
 
-    cudf_non_cat = cudf.Series.from_pandas(pd_non_cat)
-    cudf_cat = cudf.Series.from_pandas(pd_cat)
+    cudf_non_cat = cudf.Series(pd_non_cat)
+    cudf_cat = cudf.Series(pd_cat)
 
     if (
         not ordered and comparison_op not in {operator.eq, operator.ne}
