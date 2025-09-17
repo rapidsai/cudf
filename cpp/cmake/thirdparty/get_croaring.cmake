@@ -13,10 +13,10 @@
 # =============================================================================
 
 # Use CPM to clone CRoaring and set up the necessary targets and include directories.
-function(find_and_configure_croaring VERSION)
+function(find_and_configure_roaring VERSION)
   rapids_cpm_find(
-    croaring ${VERSION}
-    GLOBAL_TARGETS croaring
+    roaring ${VERSION}
+    GLOBAL_TARGETS roaring
     CPM_ARGS
     GIT_REPOSITORY https://github.com/RoaringBitmap/CRoaring.git
     GIT_TAG v${VERSION}
@@ -30,19 +30,18 @@ function(find_and_configure_croaring VERSION)
             "ROARING_DISABLE_AVX2 ON"
             "ROARING_DISABLE_AVX512 ON"
   )
-  if(croaring_ADDED)
-    # Position independent code to link the static library
-    target_compile_options(roaring PRIVATE -fPIC)
+  if (roaring_ADDED)
+    set_target_properties(roaring PROPERTIES POSITION_INDEPENDENT_CODE ON)
   endif()
 
-  if(DEFINED croaring_SOURCE_DIR)
-    set(croaring_INCLUDE_DIR
-        "${croaring_SOURCE_DIR}"
+  if(DEFINED roaring_SOURCE_DIR)
+    set(roaring_INCLUDE_DIR
+        "${roaring_SOURCE_DIR}"
         PARENT_SCOPE
     )
   endif()
 
 endfunction()
 
-set(croaring_VERSION_cudf "4.3.11")
-find_and_configure_croaring(${croaring_VERSION_cudf})
+set(roaring_VERSION_cudf "4.3.11")
+find_and_configure_roaring(${roaring_VERSION_cudf})

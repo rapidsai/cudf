@@ -16,7 +16,6 @@ dependencies:
 - clang==20.1.4
 - cmake>=3.30.4
 - cramjam
-- croaring>=4.3.11
 - cuda-cudart-dev
 - cuda-nvcc
 - cuda-nvrtc-dev

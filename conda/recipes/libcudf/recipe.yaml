@@ -73,7 +73,6 @@ cache:
         then:
           - libcufile-dev
       - cuda-version =${{ cuda_version }}
-      - croaring ${{ croaring_version }}
       - libnvcomp-dev ${{ nvcomp_version }}
       - dlpack ${{ dlpack_version }}
       - librdkafka ${{ librdkafka_version }}
@@ -135,7 +134,6 @@ outputs:
           - cuda-nvrtc
           - cuda-nvtx
           - cuda-version
-          - croaring
           - flatbuffers
           - libcufile
           - libcurand
@@ -176,7 +174,6 @@ outputs:
           - cuda-nvrtc
           - cuda-nvtx
           - cuda-version
-          - croaring
           - flatbuffers
           - libcufile
           - libcurand
@@ -247,7 +244,6 @@ outputs:
           - cuda-nvrtc
           - cuda-nvtx
           - cuda-version
-          - croaring
           - flatbuffers
           - libcufile
           - libcurand
