@@ -301,6 +301,7 @@ cdef class TableInputMetadata:
             for i in range(self.c_obj.column_metadata.size())
         ]
 
+
 cdef class TableWithMetadata:
     """A container holding a table and its associated metadata
     (e.g. column names)
@@ -467,8 +468,6 @@ cdef class SourceInfo:
         A homogeneous list of sources to read from. Mixing
         different types of sources will raise a `ValueError`.
     """
-    # Regular expression that match remote file paths supported by libcudf
-    _is_remote_file_pattern = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", re.IGNORECASE)
 
     def __init__(self, list sources):
         if not sources:
@@ -483,7 +482,7 @@ cdef class SourceInfo:
             for src in sources:
                 if not isinstance(src, (os.PathLike, str)):
                     raise ValueError("All sources must be of the same type!")
-                if not (os.path.isfile(src) or self._is_remote_file_pattern.match(src)):
+                if not (os.path.isfile(src) or SourceInfo.is_remote_uri(src)):
                     raise FileNotFoundError(
                         errno.ENOENT, os.strerror(errno.ENOENT), src
                     )
@@ -537,6 +536,13 @@ cdef class SourceInfo:
                              "bytes, io.BytesIO, io.StringIO, or a Datasource")
 
         self.c_obj = source_info(host_span[host_span[const_byte]](self._hspans))
+
+    @staticmethod
+    def _is_remote_uri(path: str | os.PathLike) -> bool:
+        # Regular expression that match remote file paths supported by libcudf
+        return re.compile(
+            r"^[a-zA-Z][a-zA-Z0-9+.\-]*://", re.IGNORECASE
+        ).match(str(path)) is not None
 
     def _init_byte_like_sources(self, list sources, type expected_type):
         cdef const unsigned char[::1] c_buffer

@@ -16,7 +16,6 @@ from __future__ import annotations
 import itertools
 import json
 import random
-import re
 import time
 from functools import cache
 from pathlib import Path
@@ -269,10 +268,6 @@ class Scan(IR):
     PARQUET_DEFAULT_CHUNK_SIZE: int = 0  # unlimited
     PARQUET_DEFAULT_PASS_LIMIT: int = 16 * 1024**3  # 16GiB
 
-    @staticmethod
-    def _is_url(p: str) -> bool:
-        return re.match(r"^[a-zA-Z][a-zA-Z0-9+.\-]*://", str(p)) is not None
-
     def __init__(
         self,
         schema: Schema,
@@ -341,7 +336,7 @@ class Scan(IR):
         ):
             raise NotImplementedError("Read from file URI")
         if self.typ == "csv":
-            if any(self._is_url(p) for p in self.paths):
+            if any(plc.io.SourceInfo._is_remote_uri(p) for p in self.paths):
                 # cannot because we do some file introspection
                 raise NotImplementedError(
                     "Reading CSV from remote is not yet supported"
