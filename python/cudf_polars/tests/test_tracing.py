@@ -34,12 +34,16 @@ def test_trace_basic(
     # tracing is determined when cudf_polars is imported.
     # So our best way of testing this is to run things in a subprocess
     # to control the environment and isolate it from the rest of the test suite.
+    # Make sure to set the initial pool size to 0 to avoid large allocations
+    # causing OOM errors.
     code = textwrap.dedent("""\
     import polars as pl
     import rmm
 
     q = pl.DataFrame({"a": [1, 2, 3]}).lazy().select(pl.col("a").sum())
-    q.collect(engine=pl.GPUEngine(memory_resource=rmm.mr.CudaAsyncMemoryResource()))
+    q.collect(engine=pl.GPUEngine(memory_resource=rmm.mr.CudaAsyncMemoryResource(
+        initial_pool_size=0,
+    )))
     """)
 
     env = {
