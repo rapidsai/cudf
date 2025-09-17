@@ -177,7 +177,7 @@ cpdef Table from_dlpack(
     # TODO: https://github.com/rapidsai/cudf/issues/10874
     # TODO: https://github.com/rapidsai/cudf/issues/10849
     with nogil:
-        c_result = cpp_from_dlpack(dlpack_tensor, stream.view())
+        c_result = cpp_from_dlpack(dlpack_tensor, stream.view(), mr.c_obj)
 
     cdef Table result = Table.from_libcudf(move(c_result), stream, mr)
     dlpack_tensor.deleter(dlpack_tensor)
