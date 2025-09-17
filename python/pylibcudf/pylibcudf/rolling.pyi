@@ -55,4 +55,5 @@ def make_range_windows(
     preceding: RangeWindowType,
     following: RangeWindowType,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> tuple[Column, Column]: ...

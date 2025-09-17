@@ -83,4 +83,5 @@ cpdef tuple make_range_windows(
     PrecedingRangeWindowType preceding,
     FollowingRangeWindowType following,
     Stream stream = *,
+    DeviceMemoryResource mr = *,
 )
