@@ -514,23 +514,39 @@ def test_scan_parquet_remote(
 
     def get_handler(req: Request) -> Response:
         # parse bytes=200-500 for example (the actual data)
-        start, end = map(int, req.headers["Range"][6:].split("-"))
-        mv = memoryview(bytes_)[start : end + 1]
+        rng = req.headers.get("Range")
+        if rng and rng.startswith("bytes="):
+            start, end = map(int, req.headers["Range"][6:].split("-"))
+            mv = memoryview(bytes_)[start : end + 1]
+            return Response(
+                mv.tobytes(),
+                status=206,
+                headers={
+                    "Content-Type": "parquet",
+                    "Accept-Ranges": "bytes",
+                    "Content-Length": len(mv),
+                    "Content-Range": f"bytes {start}-{end}/{size}",
+                },
+            )
         return Response(
-            mv.tobytes(),
+            bytes_,
             status=200,
             headers={
                 "Content-Type": "parquet",
                 "Accept-Ranges": "bytes",
-                "Content-Length": len(mv),
-                "Content-Range": f"bytes {start}-{end - 1}/{size}",
+                "Content-Length": size,
             },
         )
 
-    httpserver.expect_request(path, method="HEAD").respond_with_handler(head_handler)
-    httpserver.expect_request(path, method="GET").respond_with_handler(get_handler)
+    server_path = "/foo.parquet"
+    httpserver.expect_request(server_path, method="HEAD").respond_with_handler(
+        head_handler
+    )
+    httpserver.expect_request(server_path, method="GET").respond_with_handler(
+        get_handler
+    )
 
-    q = pl.scan_parquet(path)
+    q = pl.scan_parquet(httpserver.url_for(server_path))
 
     assert_gpu_result_equal(
         q, engine=pl.GPUEngine(raise_on_fail=True, parquet_options={"chunked": chunked})
@@ -545,6 +561,15 @@ def test_scan_ndjson_remote(
     bytes_ = path.read_bytes()
     size = len(bytes_)
 
+    def head_handler(_: Request) -> Response:
+        return Response(
+            status=200,
+            headers={
+                "Content-Type": "ndjson",
+                "Content-Length": size,
+            },
+        )
+
     def get_handler(_: Request) -> Response:
         return Response(
             bytes_,
@@ -555,8 +580,13 @@ def test_scan_ndjson_remote(
             },
         )
 
-    httpserver.expect_request(path, method="HEAD").respond_with_handler(get_handler)
-    httpserver.expect_request(path, method="GET").respond_with_handler(get_handler)
+    server_path = "/foo.jsonl"
+    httpserver.expect_request(server_path, method="HEAD").respond_with_handler(
+        head_handler
+    )
+    httpserver.expect_request(server_path, method="GET").respond_with_handler(
+        get_handler
+    )
 
-    q = pl.scan_ndjson(path)
+    q = pl.scan_ndjson(httpserver.url_for(server_path))
     assert_gpu_result_equal(q)

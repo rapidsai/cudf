@@ -482,7 +482,7 @@ cdef class SourceInfo:
             for src in sources:
                 if not isinstance(src, (os.PathLike, str)):
                     raise ValueError("All sources must be of the same type!")
-                if not (os.path.isfile(src) or SourceInfo.is_remote_uri(src)):
+                if not (os.path.isfile(src) or SourceInfo._is_remote_uri(src)):
                     raise FileNotFoundError(
                         errno.ENOENT, os.strerror(errno.ENOENT), src
                     )
