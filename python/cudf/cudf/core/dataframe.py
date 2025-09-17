@@ -6318,7 +6318,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 return Series._from_column(
                     result._columns[0], name=q, index=result.index
                 )
-        else:
+        elif method == "single":
             # Ensure that qs is non-scalar so that we always get a column back.
             interpolation = interpolation or "linear"
             result = {}
@@ -6341,6 +6341,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 result.index = data_df.keys()
                 result.name = q
                 return result
+        else:
+            raise ValueError(f"Invalid method: {method}")
 
         result.index = Index(list(map(float, qs)), dtype="float64")
         return result
