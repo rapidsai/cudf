@@ -317,10 +317,6 @@ class IndexedFrame(Frame):
         """
         Dictionary of global attributes of this dataset.
 
-        See Also
-        --------
-        DataFrame.flags : Global flags applying to this object.
-
         Notes
         -----
         Many operations that create new datasets will copy ``attrs``. Copies
@@ -332,6 +328,7 @@ class IndexedFrame(Frame):
         --------
         For Series:
 
+        >>> import cudf
         >>> ser = cudf.Series([1, 2, 3])
         >>> ser.attrs = {"A": [10, 20, 30]}
         >>> ser.attrs
