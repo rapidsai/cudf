@@ -60,7 +60,7 @@ def convert_to_rmm(frame):
         {
             "stream": DEFAULT_STREAM,
             "device_mr": rmm.mr.get_current_device_resource(),
-            "staging_device_buffer": rmm.DeviceBuffer(size=2**20),
+            "staging_device_buffer": rmm.DeviceBuffer(size=2**5),
         },
     ],
 )
