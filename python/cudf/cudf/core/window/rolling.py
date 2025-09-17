@@ -222,6 +222,8 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         step: int | None = None,
         method: str = "single",
     ) -> None:
+        if not isinstance(center, bool):
+            raise ValueError("center must be a boolean")
         self.center = center
         if axis != 0:
             warnings.warn(
@@ -517,6 +519,8 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
                 raise ValueError("window cannot be zero or negative")
             if min_periods is None:
                 return window, window
+            elif not is_integer(min_periods):
+                raise ValueError("min_periods must be an integer")
             else:
                 return window, min_periods
         elif isinstance(window, BaseIndexer):
