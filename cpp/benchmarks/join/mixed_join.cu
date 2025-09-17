@@ -20,9 +20,9 @@
 
 auto const num_keys = 2;
 
-void create_complex_ast_expression(cudf::ast::tree& tree, cudf::size_type num_operators)
+void create_complex_ast_expression(cudf::ast::tree& tree, cudf::size_type ast_levels)
 {
-  CUDF_EXPECTS(num_operators > 0, "Number of operators must be greater than 0");
+  CUDF_EXPECTS(ast_levels > 0, "Number of AST levels must be greater than 0");
 
   // For mixed joins, the conditional tables only have 1 column each (column 0)
   // So we'll create multiple comparisons of the same column to stress the AST evaluation
@@ -31,9 +31,12 @@ void create_complex_ast_expression(cudf::ast::tree& tree, cudf::size_type num_op
 
   tree.push(cudf::ast::operation(cudf::ast::ast_operator::EQUAL, tree.at(0), tree.at(1)));
 
-  if (num_operators == 1) { return; }
+  if (ast_levels == 1) { return; }
 
-  for (cudf::size_type i = 1; i < num_operators; i++) {
+  // For multiple levels, create additional comparisons of the same columns
+  // This will create expressions like: (col0_L == col0_R) && (col0_L == col0_R) && ...
+  // Total operators created: (2 * ast_levels - 1) = ast_levels EQUAL + (ast_levels-1) LOGICAL_AND
+  for (cudf::size_type i = 1; i < ast_levels; i++) {
     tree.push(cudf::ast::operation(cudf::ast::ast_operator::EQUAL, tree.at(0), tree.at(1)));
 
     tree.push(cudf::ast::operation(
@@ -167,17 +170,17 @@ void nvbench_mixed_inner_join_complex_ast(nvbench::state& state,
                                                              nvbench::enum_type<NullEquality>,
                                                              nvbench::enum_type<DataType>>)
 {
-  auto const num_ast_operators = static_cast<cudf::size_type>(state.get_int64("ast_operators"));
+  auto const ast_levels = static_cast<cudf::size_type>(state.get_int64("ast_levels"));
 
-  auto join = [num_ast_operators](cudf::table_view const& left_equality_input,
-                                  cudf::table_view const& right_equality_input,
-                                  cudf::table_view const& left_conditional_input,
-                                  cudf::table_view const& right_conditional_input,
-                                  cudf::ast::operation binary_pred,
-                                  cudf::null_equality compare_nulls) {
-    // Create complex AST expression with multiple operators
+  auto join = [ast_levels](cudf::table_view const& left_equality_input,
+                           cudf::table_view const& right_equality_input,
+                           cudf::table_view const& left_conditional_input,
+                           cudf::table_view const& right_conditional_input,
+                           cudf::ast::operation binary_pred,
+                           cudf::null_equality compare_nulls) {
+    // Create complex AST expression with multiple levels
     cudf::ast::tree tree;
-    create_complex_ast_expression(tree, num_ast_operators);
+    create_complex_ast_expression(tree, ast_levels);
 
     return cudf::mixed_inner_join(left_equality_input,
                                   right_equality_input,
@@ -208,7 +211,7 @@ NVBENCH_BENCH_TYPES(nvbench_mixed_inner_join_complex_ast,
   .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
   .add_int64_axis("right_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("ast_operators", {1, 5, 10});
+  .add_int64_axis("ast_levels", {1, 5, 10});
 
 NVBENCH_BENCH_TYPES(nvbench_mixed_left_join,
                     NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
