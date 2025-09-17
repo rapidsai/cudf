@@ -3340,7 +3340,7 @@ TEST_F(ParquetReaderTest, ByteBoundsOnly)
 
 TEST_F(ParquetReaderTest, ByteBoundsAndFilters)
 {
-  using T                      = int64_t;
+  using T                      = uint64_t;
   auto const [table, filepath] = create_parquet_typed_with_stats<T>("ByteBounds.parquet");
 
   // Note: Currently the row groups start at the following byte offsets: 4, 2040, 4048, 6032
@@ -3400,7 +3400,7 @@ TEST_F(ParquetReaderTest, ByteBoundsAndFilters)
   // Only read row group 1 as only it starts in [1500, 3000) byte range
   {
     auto col_ref_0     = cudf::ast::column_reference(0);
-    auto literal_value = cudf::numeric_scalar<T>(10000);
+    auto literal_value = cudf::numeric_scalar<T>(8000);
     auto literal       = cudf::ast::literal(literal_value);
     auto filter_expression =
       cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
