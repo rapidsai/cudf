@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 import gzip
 import os
@@ -158,8 +158,10 @@ def test_read_csv_compression_file_list(tmp_path):
         with gzip.open(fn, "wb") as fp:
             fp.write(lines.encode("utf-8"))
 
-    ddf_cpu = dd.read_csv(files, compression="gzip").compute()
-    ddf_gpu = dask_cudf.read_csv(files, compression="gzip").compute()
+    ddf_cpu = dd.read_csv(files, compression="gzip", blocksize=None).compute()
+    ddf_gpu = dask_cudf.read_csv(
+        files, compression="gzip", blocksize=None
+    ).compute()
 
     dd.assert_eq(ddf_cpu, ddf_gpu)
 
