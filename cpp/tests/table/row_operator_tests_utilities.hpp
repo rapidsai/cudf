@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,18 +15,17 @@
  */
 #pragma once
 
-#include <cudf/table/experimental/row_operators.cuh>
+#include <cudf/detail/row_operator/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 #include <vector>
 
-using physical_comparator_t = cudf::experimental::row::lexicographic::physical_element_comparator;
-using sorting_comparator_t =
-  cudf::experimental::row::lexicographic::sorting_physical_element_comparator;
-using physical_equality_t = cudf::experimental::row::equality::physical_equality_comparator;
-using nan_equality_t = cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
+using physical_comparator_t = cudf::detail::row::lexicographic::physical_element_comparator;
+using sorting_comparator_t  = cudf::detail::row::lexicographic::sorting_physical_element_comparator;
+using physical_equality_t   = cudf::detail::row::equality::physical_equality_comparator;
+using nan_equality_t        = cudf::detail::row::equality::nan_equal_physical_equality_comparator;
 
 template <typename PhysicalElementComparator>
 std::unique_ptr<cudf::column> self_comparison(cudf::table_view input,
@@ -44,7 +43,7 @@ std::unique_ptr<cudf::column> two_table_equality(cudf::table_view lhs,
                                                  PhysicalElementComparator comparator);
 template <typename PhysicalElementComparator>
 std::unique_ptr<cudf::column> sorted_order(
-  std::shared_ptr<cudf::experimental::row::lexicographic::preprocessed_table> preprocessed_input,
+  std::shared_ptr<cudf::detail::row::lexicographic::preprocessed_table> preprocessed_input,
   cudf::size_type num_rows,
   bool has_nested,
   PhysicalElementComparator comparator,

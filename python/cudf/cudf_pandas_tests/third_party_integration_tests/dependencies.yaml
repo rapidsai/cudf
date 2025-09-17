@@ -283,6 +283,7 @@ dependencies:
           - pip
           - pip:
               - ibis-framework[duckdb]
+              - duckdb<1.4.0
   test_hvplot:
     common:
       - output_types: conda

@@ -366,7 +366,7 @@ cpdef read_parquet(ParquetReaderOptions options, Stream stream = None):
     ----------
     options: ParquetReaderOptions
         Settings for controlling reading behavior
-    stream: Stream
+    stream : Stream | None
         CUDA stream used for device memory operations and kernel launches
     """
     cdef Stream s = _get_stream(stream)
@@ -436,7 +436,7 @@ cdef class ChunkedParquetWriter:
         ----------
         options: ChunkedParquetWriterOptions
             Settings for controlling writing behavior
-        stream: Stream
+        stream : Stream | None
             CUDA stream used for device memory operations and kernel launches
 
         Returns
@@ -1011,7 +1011,7 @@ cpdef memoryview write_parquet(ParquetWriterOptions options, Stream stream = Non
     ----------
     options : ParquetWriterOptions
         Settings for controlling writing behavior
-    stream: Stream
+    stream : Stream | None
         CUDA stream used for device memory operations and kernel launches
 
     Returns

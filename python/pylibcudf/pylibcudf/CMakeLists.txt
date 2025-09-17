@@ -22,7 +22,6 @@ set(cython_sources
     copying.pyx
     datetime.pyx
     decimal_division.pyx
-    experimental.pyx
     expressions.pyx
     filling.pyx
     gpumemoryview.pyx
@@ -37,6 +36,7 @@ set(cython_sources
     merge.pyx
     null_mask.pyx
     partitioning.pyx
+    prefetch.pyx
     quantiles.pyx
     reduce.pyx
     replace.pyx

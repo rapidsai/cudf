@@ -89,10 +89,16 @@ def decompose_single_agg(
     """
     agg = named_expr.value
     name = named_expr.name
-    if isinstance(agg, expr.UnaryFunction) and agg.name in {"rank"}:
-        name = agg.name
-        raise NotImplementedError(
-            f"UnaryFunction {name=} not supported in groupby context"
+    if isinstance(agg, expr.UnaryFunction) and agg.name == "rank":
+        if context != ExecutionContext.WINDOW:
+            raise NotImplementedError(
+                "rank is not supported in groupby or rolling context"
+            )
+        # Ensure Polars semantics for dtype:
+        # - average -> Float64
+        # - min/max/dense/ordinal -> IDX_DTYPE (UInt32/UInt64)
+        return [(named_expr, True)], named_expr.reconstruct(
+            expr.Cast(agg.dtype, expr.Col(agg.dtype, name))
         )
     if isinstance(agg, expr.UnaryFunction) and agg.name == "null_count":
         (child,) = agg.children
@@ -223,7 +229,10 @@ def decompose_single_agg(
             # - ROLLING: sum(all-null window) => null; sum(empty window) => 0 (fill only if empty)
             #
             # Must post-process because libcudf returns null for both empty and all-null windows/groups
-            if not POLARS_VERSION_LT_1323 or context == ExecutionContext.GROUPBY:
+            if not POLARS_VERSION_LT_1323 or context in {
+                ExecutionContext.GROUPBY,
+                ExecutionContext.WINDOW,
+            }:
                 # GROUPBY: always fill top-level nulls with 0
                 return [(named_expr, True)], expr.NamedExpr(
                     name, replace_nulls(col, 0, is_top=is_top)
