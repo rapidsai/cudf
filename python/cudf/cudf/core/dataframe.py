@@ -1358,10 +1358,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         inputs.
         """
         if col_is_scalar:
-            series = Series._from_data(ca, index=self.index)
+            series = Series._from_data(ca, index=self.index, attrs=self.attrs)
             return series._getitem_preprocessed(spec)
         if ca.names != self._column_names:
-            frame = self._from_data(ca, index=self.index)
+            frame = self._from_data(ca, index=self.index, attrs=self.attrs)
         else:
             frame = self
         if isinstance(spec, indexing_utils.MapIndexer):
@@ -1389,6 +1389,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )
                 result.index = result_index
                 result.name = new_name
+                result._attrs = frame.attrs
                 return result
             except TypeError:
                 if get_option("mode.pandas_compatible"):
@@ -1485,7 +1486,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     and all(n == "" for n in out._column_names[0])
                 )
             ):
-                out = self._constructor_sliced._from_data(out._data)
+                out = self._constructor_sliced._from_data(
+                    out._data, attrs=self.attrs
+                )
                 out._data.multiindex = False
                 out.index = self.index
                 out.name = arg
@@ -5059,7 +5062,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             apply_sr = Series._from_column(col)
             result[name] = apply_sr.apply(_func)._column
 
-        return DataFrame._from_data(result, index=self.index)
+        return DataFrame._from_data(result, index=self.index, attrs=self.attrs)
 
     @_performance_tracking
     @applyutils.doc_applychunks()
@@ -6302,7 +6305,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             if q_is_number:
                 result = result.transpose()
                 return Series._from_column(
-                    result._columns[0], name=q, index=result.index
+                    result._columns[0],
+                    name=q,
+                    index=result.index,
+                    attrs=self.attrs,
                 )
         else:
             # Ensure that qs is non-scalar so that we always get a column back.
@@ -6320,7 +6326,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     if len(res) == 0:
                         res = column_empty(row_count=len(qs), dtype=ser.dtype)
                     result[k] = res
-            result = DataFrame._from_data(result)
+            result = DataFrame._from_data(result, attrs=self.attrs)
 
             if q_is_number and numeric_only:
                 result = result.fillna(np.nan).iloc[0]
@@ -6468,7 +6474,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             )
 
         # TODO: Update this logic to properly preserve MultiIndex columns.
-        return DataFrame._from_data(result, self.index)
+        return DataFrame._from_data(result, self.index, attrs=self.attrs)
 
     #
     # Stats
@@ -6580,6 +6586,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 ]
             ),
             index=Index(self._column_names),
+            attrs=self.attrs,
         )
 
     _SUPPORT_AXIS_LOOKUP = {
@@ -7724,6 +7731,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         cols = self._data.to_pandas_index
         df = DataFrame(cupy.asfortranarray(cov), index=cols)
         df._set_columns_like(self._data)
+        df._attrs = self.attrs
         return df
 
     def corr(
@@ -7767,6 +7775,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         cols = self._data.to_pandas_index
         df = DataFrame(cupy.asfortranarray(corr), index=cols)
         df._set_columns_like(self._data)
+        df._attrs = self.attrs
         return df
 
     @_performance_tracking
@@ -8078,7 +8087,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             raise NotImplementedError("axis parameter is not supported yet.")
         counts = [col.distinct_count(dropna=dropna) for col in self._columns]
         return self._constructor_sliced(
-            counts, index=self._data.to_pandas_index
+            counts, index=self._data.to_pandas_index, attrs=self.attrs
         )
 
     def _sample_axis_1(

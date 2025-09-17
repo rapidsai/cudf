@@ -301,6 +301,7 @@ class IndexedFrame(Frame):
                 f"match length of index ({len(index)})"
             )
         self._index = index
+        self._attrs = {}
 
     @property
     def _num_rows(self) -> int:
@@ -310,6 +311,44 @@ class IndexedFrame(Frame):
     @property
     def _index_names(self) -> tuple[Any, ...]:  # TODO: Tuple[str]?
         return self.index._column_names
+
+    @property
+    def attrs(self) -> dict[Hashable, Any]:
+        """
+        Dictionary of global attributes of this dataset.
+
+        See Also
+        --------
+        DataFrame.flags : Global flags applying to this object.
+
+        Notes
+        -----
+        Many operations that create new datasets will copy ``attrs``. Copies
+        are always deep so that changing ``attrs`` will only affect the
+        present dataset. ``cudf.concat`` copies ``attrs`` only if all input
+        datasets have the same ``attrs``.
+
+        Examples
+        --------
+        For Series:
+
+        >>> ser = cudf.Series([1, 2, 3])
+        >>> ser.attrs = {"A": [10, 20, 30]}
+        >>> ser.attrs
+        {'A': [10, 20, 30]}
+
+        For DataFrame:
+
+        >>> df = cudf.DataFrame({'A': [1, 2], 'B': [3, 4]})
+        >>> df.attrs = {"A": [10, 20, 30]}
+        >>> df.attrs
+        {'A': [10, 20, 30]}
+        """
+        return self._attrs
+
+    @attrs.setter
+    def attrs(self, value: Mapping[Hashable, Any]) -> None:
+        self._attrs = dict(value)
 
     @classmethod
     def _from_data(
@@ -392,6 +431,7 @@ class IndexedFrame(Frame):
     ) -> Self | None:
         if inplace:
             self._index = result.index
+            self._attrs = result._attrs
         return super()._mimic_inplace(result, inplace)
 
     @_performance_tracking
@@ -3168,7 +3208,9 @@ class IndexedFrame(Frame):
             pa_scalar_to_plc_scalar(pa.scalar(False)),
             bounds_check=False,
         )
-        return cudf.Series._from_column(result, index=self.index, name=name)
+        return cudf.Series._from_column(
+            result, index=self.index, name=name, attrs=self.attrs
+        )
 
     @_performance_tracking
     def _empty_like(self, keep_index: bool = True) -> Self:
@@ -3477,7 +3519,9 @@ class IndexedFrame(Frame):
             col = as_column(ans_col, retty)
 
         col.set_base_mask(ans_mask.as_mask())
-        result = cudf.Series._from_column(col, index=self.index)
+        result = cudf.Series._from_column(
+            col, index=self.index, attrs=self.attrs
+        )
 
         return result
 
@@ -3838,6 +3882,7 @@ class IndexedFrame(Frame):
                 rangeindex=rangeindex,
             ),
             index=index,
+            attrs=self.attrs,
         )
 
         result.fillna(fill_value, inplace=True)
@@ -6780,13 +6825,17 @@ def _drop_rows_by_labels(
 
         if isinstance(obj, cudf.Series):
             return obj.__class__._from_data(
-                join_res.iloc[:, idx_nlv:]._data, index=midx, name=obj.name
+                join_res.iloc[:, idx_nlv:]._data,
+                index=midx,
+                name=obj.name,
+                attrs=obj.attrs,
             )
         else:
             return obj.__class__._from_data(
                 join_res.iloc[:, idx_nlv:]._data,
                 index=midx,
                 columns=obj._data.to_pandas_index,
+                attrs=obj.attrs,
             )
 
     else:
@@ -6808,6 +6857,7 @@ def _drop_rows_by_labels(
         # but we need to preserve the type of
         # index being returned, Hence this type-cast.
         res.index = res.index.astype(orig_index_type)
+        res._attrs = obj.attrs
         return res
 
 
