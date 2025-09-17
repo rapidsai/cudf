@@ -43,8 +43,7 @@ cdef Column _column_from_gather_map(
     cpp_join.gather_map_type gather_map, Stream stream, DeviceMemoryResource mr=None
 ):
     # helper to convert a gather map to a Column
-    if mr is None:
-        mr = _get_memory_resource(mr)
+    mr = _get_memory_resource(mr)
     return Column.from_libcudf(
         move(
             make_unique[column](
