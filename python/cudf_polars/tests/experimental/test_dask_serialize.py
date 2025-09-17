@@ -60,7 +60,7 @@ def convert_to_rmm(frame):
         {
             "stream": DEFAULT_STREAM,
             "device_mr": rmm.mr.get_current_device_resource(),
-            "staging_device_buffer": rmm.DeviceBuffer(size=2**5),
+            "staging_device_buffer": rmm.DeviceBuffer(size=2**20),
         },
     ],
 )
@@ -97,14 +97,14 @@ def test_dask_serialization_roundtrip(polars_tbl, protocol, context):
 
 def test_dask_serialization_error():
     df = DataFrame.from_polars(pl.DataFrame({"a": [1, 2, 3]}))
-    staging_buffer = rmm.DeviceBuffer(size=2**4)
+
     header, frames = serialize(
         df,
         on_error="message",
         serializers=["dask"],
         context={
             "device_mr": rmm.mr.get_current_device_resource(),
-            "staging_device_buffer": staging_buffer,
+            "staging_device_buffer": rmm.DeviceBuffer(size=2**20),
         },
     )
     assert header == {"serializer": "error"}
@@ -116,7 +116,7 @@ def test_dask_serialization_error():
         serializers=["dask"],
         context={
             "stream": DEFAULT_STREAM,
-            "staging_device_buffer": staging_buffer,
+            "staging_device_buffer": rmm.DeviceBuffer(size=2**20),
         },
     )
     assert header == {"serializer": "error"}
