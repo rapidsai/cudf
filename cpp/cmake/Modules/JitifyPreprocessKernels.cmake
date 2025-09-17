@@ -48,7 +48,7 @@ function(jit_preprocess_files)
         $<TARGET_FILE:jitify_preprocess> ${ARG_FILE} -o ${ARG_OUTPUT_DIR} -i -std=c++20
         -remove-unused-globals -D_FILE_OFFSET_BITS=64 -D__CUDACC_RTC__ -DCUDF_RUNTIME_JIT
         -I${CUDF_SOURCE_DIR}/include -I${CUDF_SOURCE_DIR}/src ${includes}
-        --no-preinclude-workarounds --no-replace-pragma-once --diag-suppress=47
+        --no-preinclude-workarounds --no-replace-pragma-once --diag-suppress=47 --device-int128
       COMMENT "Custom command to JIT-compile files."
     )
   endforeach()
