@@ -11,8 +11,6 @@ import pandas as pd
 import pyarrow as pa
 from typing_extensions import Self
 
-import pylibcudf as plc
-
 import cudf
 from cudf.api.types import is_scalar
 from cudf.core.column import column
@@ -32,6 +30,8 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, MutableSequence, Sequence
 
     import cupy as cp
+
+    import pylibcudf as plc
 
     from cudf._typing import (
         ColumnBinaryOperand,
@@ -244,7 +244,7 @@ class CategoricalColumn(column.ColumnBase):
         if end <= begin or begin >= self.size:
             return self if inplace else self.copy()
 
-        fill_code = self._encode(plc.interop.to_arrow(fill_value))
+        fill_code = self._encode(fill_value.to_arrow())
         result = self if inplace else self.copy()
         result.codes._fill(
             pa_scalar_to_plc_scalar(pa.scalar(fill_code)),

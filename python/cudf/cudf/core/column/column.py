@@ -884,7 +884,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
           4
         ]
         """
-        return plc.interop.to_arrow(self.to_pylibcudf(mode="read"))
+        return self.to_pylibcudf(mode="read").to_arrow()
 
     @classmethod
     def from_arrow(cls, array: pa.Array) -> ColumnBase:
@@ -1169,7 +1169,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 self.to_pylibcudf(mode="read"),
                 index,
             )
-        py_element = plc.interop.to_arrow(plc_scalar)
+        py_element = plc_scalar.to_arrow()
         if not py_element.is_valid:
             return self._PANDAS_NA_VALUE
         # Calling .as_py() on a pyarrow.StructScalar with duplicate field names

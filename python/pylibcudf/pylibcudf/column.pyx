@@ -349,11 +349,11 @@ cdef class Column:
         self,
         metadata: ColumnMetadata | str | None = None
     ) -> ArrowLike:
-        """Create a PyArrow array from a pylibcudf column.
+        """Create a pyarrow array from a pylibcudf column.
 
         Parameters
         ----------
-        metadata : list
+        metadata : ColumnMetadata | str | None
             The metadata to attach to the columns of the table.
 
         Returns
