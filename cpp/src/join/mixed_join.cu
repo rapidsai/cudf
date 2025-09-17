@@ -283,7 +283,7 @@ mixed_join(
                          join_result_offsets.begin());
 
   // Get total count from scan result: last offset + last matches_per_row
-  if (outer_num_rows > 0) {
+  if (outer_num_rows > 0 && !output_size_data.has_value()) {
     auto const last_offset  = join_result_offsets.element(outer_num_rows - 1, stream);
     auto const last_matches = matches_per_row->element(outer_num_rows - 1, stream);
     join_size               = last_offset + last_matches;
