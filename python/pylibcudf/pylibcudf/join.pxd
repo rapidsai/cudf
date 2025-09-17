@@ -13,35 +13,40 @@ cpdef tuple inner_join(
     Table left_keys,
     Table right_keys,
     null_equality nulls_equal,
-    Stream stream=*
+    Stream stream=*,
+    DeviceMemoryResource mr=*,
 )
 
 cpdef tuple left_join(
     Table left_keys,
     Table right_keys,
     null_equality nulls_equal,
-    Stream stream=*
+    Stream stream=*,
+    DeviceMemoryResource mr=*,
 )
 
 cpdef tuple full_join(
     Table left_keys,
     Table right_keys,
     null_equality nulls_equal,
-    Stream stream=*
+    Stream stream=*,
+    DeviceMemoryResource mr=*,
 )
 
 cpdef Column left_semi_join(
     Table left_keys,
     Table right_keys,
     null_equality nulls_equal,
-    Stream stream=*
+    Stream stream=*,
+    DeviceMemoryResource mr=*,
 )
 
 cpdef Column left_anti_join(
     Table left_keys,
     Table right_keys,
     null_equality nulls_equal,
-    Stream stream=*
+    Stream stream=*,
+    DeviceMemoryResource mr=*,
 )
 
 cpdef Table cross_join(
@@ -52,35 +57,40 @@ cpdef tuple conditional_inner_join(
     Table left,
     Table right,
     Expression binary_predicate,
-    Stream stream=*
+    Stream stream=*,
+    DeviceMemoryResource mr=*,
 )
 
 cpdef tuple conditional_left_join(
     Table left,
     Table right,
     Expression binary_predicate,
-    Stream stream=*
+    Stream stream=*,
+    DeviceMemoryResource mr=*,
 )
 
 cpdef tuple conditional_full_join(
     Table left,
     Table right,
     Expression binary_predicate,
-    Stream stream=*
+    Stream stream=*,
+    DeviceMemoryResource mr=*,
 )
 
 cpdef Column conditional_left_semi_join(
     Table left,
     Table right,
     Expression binary_predicate,
-    Stream stream=*
+    Stream stream=*,
+    DeviceMemoryResource mr=*,
 )
 
 cpdef Column conditional_left_anti_join(
     Table left,
     Table right,
     Expression binary_predicate,
-    Stream stream=*
+    Stream stream=*,
+    DeviceMemoryResource mr=*,
 )
 
 cpdef tuple mixed_inner_join(
@@ -90,7 +100,8 @@ cpdef tuple mixed_inner_join(
     Table right_conditional,
     Expression binary_predicate,
     null_equality nulls_equal,
-    Stream stream=*
+    Stream stream=*,
+    DeviceMemoryResource mr=*,
 )
 
 cpdef tuple mixed_left_join(
@@ -100,7 +111,8 @@ cpdef tuple mixed_left_join(
     Table right_conditional,
     Expression binary_predicate,
     null_equality nulls_equal,
-    Stream stream=*
+    Stream stream=*,
+    DeviceMemoryResource mr=*,
 )
 
 cpdef tuple mixed_full_join(
@@ -110,7 +122,8 @@ cpdef tuple mixed_full_join(
     Table right_conditional,
     Expression binary_predicate,
     null_equality nulls_equal,
-    Stream stream=*
+    Stream stream=*,
+    DeviceMemoryResource mr=*,
 )
 
 cpdef Column mixed_left_semi_join(
@@ -120,7 +133,8 @@ cpdef Column mixed_left_semi_join(
     Table right_conditional,
     Expression binary_predicate,
     null_equality nulls_equal,
-    Stream stream=*
+    Stream stream=*,
+    DeviceMemoryResource mr=*,
 )
 
 cpdef Column mixed_left_anti_join(
@@ -130,5 +144,6 @@ cpdef Column mixed_left_anti_join(
     Table right_conditional,
     Expression binary_predicate,
     null_equality nulls_equal,
-    Stream stream=*
+    Stream stream=*,
+    DeviceMemoryResource mr=*,
 )

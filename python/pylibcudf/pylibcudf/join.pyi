@@ -13,30 +13,35 @@ def inner_join(
     right_keys: Table,
     nulls_equal: NullEquality,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> tuple[Column, Column]: ...
 def left_join(
     left_keys: Table,
     right_keys: Table,
     nulls_equal: NullEquality,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> tuple[Column, Column]: ...
 def full_join(
     left_keys: Table,
     right_keys: Table,
     nulls_equal: NullEquality,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> tuple[Column, Column]: ...
 def left_semi_join(
     left_keys: Table,
     right_keys: Table,
     nulls_equal: NullEquality,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
 def left_anti_join(
     left_keys: Table,
     right_keys: Table,
     nulls_equal: NullEquality,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
 def cross_join(
     left: Table,
@@ -49,30 +54,35 @@ def conditional_inner_join(
     right: Table,
     binary_predicate: Expression,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> tuple[Column, Column]: ...
 def conditional_left_join(
     left: Table,
     right: Table,
     binary_predicate: Expression,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> tuple[Column, Column]: ...
 def conditional_full_join(
     left: Table,
     right: Table,
     binary_predicate: Expression,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> tuple[Column, Column]: ...
 def conditional_left_semi_join(
     left: Table,
     right: Table,
     binary_predicate: Expression,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
 def conditional_left_anti_join(
     left: Table,
     right: Table,
     binary_predicate: Expression,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
 def mixed_inner_join(
     left_keys: Table,
@@ -82,6 +92,7 @@ def mixed_inner_join(
     binary_predicate: Expression,
     nulls_equal: NullEquality,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> tuple[Column, Column]: ...
 def mixed_left_join(
     left_keys: Table,
@@ -91,6 +102,7 @@ def mixed_left_join(
     binary_predicate: Expression,
     nulls_equal: NullEquality,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> tuple[Column, Column]: ...
 def mixed_full_join(
     left_keys: Table,
@@ -100,6 +112,7 @@ def mixed_full_join(
     binary_predicate: Expression,
     nulls_equal: NullEquality,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> tuple[Column, Column]: ...
 def mixed_left_semi_join(
     left_keys: Table,
@@ -109,6 +122,7 @@ def mixed_left_semi_join(
     binary_predicate: Expression,
     nulls_equal: NullEquality,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
 def mixed_left_anti_join(
     left_keys: Table,
@@ -118,4 +132,5 @@ def mixed_left_anti_join(
     binary_predicate: Expression,
     nulls_equal: NullEquality,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
