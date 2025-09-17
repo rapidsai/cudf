@@ -563,5 +563,5 @@ NVBENCH_BENCH(BM_sv_sort)
 NVBENCH_BENCH(BM_sv_gather)
   .set_name("sv_gather")
   .add_int64_axis("num_rows", {100'000, 1'000'000, 10'000'000})
-  .add_int64_axis("width", {6, 12, 24, 48})
+  .add_int64_axis("width", {6, 12, 24, 48, 64})
   .add_int64_axis("map_rows", {10'000, 100'000});
