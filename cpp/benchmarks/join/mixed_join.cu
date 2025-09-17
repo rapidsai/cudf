@@ -27,8 +27,7 @@ void create_complex_ast_expression(cudf::ast::tree& tree, cudf::size_type num_op
   // For mixed joins, the conditional tables only have 1 column each (column 0)
   // So we'll create multiple comparisons of the same column to stress the AST evaluation
   tree.push(cudf::ast::column_reference(0));
-  tree.push(
-    cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT));  // index 1: right col 0
+  tree.push(cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT));
 
   tree.push(cudf::ast::operation(cudf::ast::ast_operator::EQUAL, tree.at(0), tree.at(1)));
 
@@ -37,9 +36,8 @@ void create_complex_ast_expression(cudf::ast::tree& tree, cudf::size_type num_op
   for (cudf::size_type i = 1; i < num_operators; i++) {
     tree.push(cudf::ast::operation(cudf::ast::ast_operator::EQUAL, tree.at(0), tree.at(1)));
 
-    tree.push(cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND,
-                                   tree.at(tree.size() - 2),  // previous result
-                                   tree.back()));             // current comparison
+    tree.push(cudf::ast::operation(
+      cudf::ast::ast_operator::LOGICAL_AND, tree.at(tree.size() - 2), tree.back()));
   }
 }
 
