@@ -518,20 +518,19 @@ static void BM_sv_gather(nvbench::state& state)
   if (std::getenv(BM_ARROWSTRINGVIEW)) {
     auto [d_items, data_buffer] = create_sv_array(col_view, stream);
 
-    auto begin = map_view.begin<int32_t>();
-    // auto end    = map_view.end<int32_t>();
-    // auto input  = d_items.data();
-    // auto output = rmm::device_uvector<ArrowBinaryView>(map_view.size(), stream);
+    auto const begin  = map_view.begin<int32_t>();
+    auto const result = gather_sv_array(d_items, data_buffer, begin, map_rows, stream);
+    auto gather_size  = result.first.size() * sizeof(ArrowBinaryView) + result.second.size();
+    state.add_global_memory_reads(gather_size);
+    state.add_global_memory_writes(gather_size);
 
-    state.add_global_memory_writes(map_rows * sizeof(ArrowBinaryView));
-    state.add_global_memory_reads(map_rows * sizeof(ArrowBinaryView));
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-      // thrust::gather(rmm::exec_policy(stream), begin, end, input, output.begin());
       gather_sv_array(d_items, data_buffer, begin, map_rows, stream);
     });
   } else {
-    auto result = cudf::gather(
+    auto const result = cudf::gather(
       cudf::table_view({col_view}), map_view, cudf::out_of_bounds_policy::DONT_CHECK, stream);
+
     state.add_global_memory_reads(result->alloc_size());
     state.add_global_memory_writes(result->alloc_size());
 
