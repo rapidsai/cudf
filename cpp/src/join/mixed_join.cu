@@ -208,8 +208,8 @@ mixed_join(
   // whichever table is larger rather than always using the left table.
   detail::grid_1d const config(outer_num_rows, DEFAULT_JOIN_BLOCK_SIZE);
   auto const shmem_size_per_block = parser.shmem_per_thread * config.num_threads_per_block;
-  join_kind const kernel_join_type =
-    join_type == join_kind::FULL_JOIN ? join_kind::LEFT_JOIN : join_type;
+  bool const is_outer_join =
+    (join_type == join_kind::LEFT_JOIN || join_type == join_kind::FULL_JOIN);
 
   // If the join size data was not provided as an input, compute it here.
   std::size_t join_size = 0;
@@ -244,33 +244,33 @@ mixed_join(
     matches_per_row_span = cudf::device_span<size_type const>{
       matches_per_row->begin(), static_cast<std::size_t>(outer_num_rows)};
     if (has_nulls) {
-      launch_compute_mixed_join_output_size<true>(*left_conditional_view,
-                                                  *right_conditional_view,
-                                                  kernel_join_type,
-                                                  equality_probe,
-                                                  hash_table_storage,
-                                                  input_pairs.data(),
-                                                  hash_indices.data(),
-                                                  parser.device_expression_data,
-                                                  swap_tables,
-                                                  mutable_matches_per_row_span,
-                                                  config,
-                                                  shmem_size_per_block,
-                                                  stream);
+      launch_mixed_join_count<true>(*left_conditional_view,
+                                    *right_conditional_view,
+                                    is_outer_join,
+                                    swap_tables,
+                                    equality_probe,
+                                    hash_table_storage,
+                                    input_pairs.data(),
+                                    hash_indices.data(),
+                                    parser.device_expression_data,
+                                    mutable_matches_per_row_span,
+                                    config,
+                                    shmem_size_per_block,
+                                    stream);
     } else {
-      launch_compute_mixed_join_output_size<false>(*left_conditional_view,
-                                                   *right_conditional_view,
-                                                   kernel_join_type,
-                                                   equality_probe,
-                                                   hash_table_storage,
-                                                   input_pairs.data(),
-                                                   hash_indices.data(),
-                                                   parser.device_expression_data,
-                                                   swap_tables,
-                                                   mutable_matches_per_row_span,
-                                                   config,
-                                                   shmem_size_per_block,
-                                                   stream);
+      launch_mixed_join_count<false>(*left_conditional_view,
+                                     *right_conditional_view,
+                                     is_outer_join,
+                                     swap_tables,
+                                     equality_probe,
+                                     hash_table_storage,
+                                     input_pairs.data(),
+                                     hash_indices.data(),
+                                     parser.device_expression_data,
+                                     mutable_matches_per_row_span,
+                                     config,
+                                     shmem_size_per_block,
+                                     stream);
     }
   }
 
@@ -309,32 +309,32 @@ mixed_join(
   if (has_nulls) {
     launch_mixed_join<true>(*left_conditional_view,
                             *right_conditional_view,
-                            kernel_join_type,
+                            is_outer_join,
+                            swap_tables,
                             equality_probe,
                             hash_table_storage,
                             input_pairs.data(),
                             hash_indices.data(),
+                            parser.device_expression_data,
                             join_output_l,
                             join_output_r,
-                            parser.device_expression_data,
                             join_result_offsets.data(),
-                            swap_tables,
                             config,
                             shmem_size_per_block,
                             stream);
   } else {
     launch_mixed_join<false>(*left_conditional_view,
                              *right_conditional_view,
-                             kernel_join_type,
+                             is_outer_join,
+                             swap_tables,
                              equality_probe,
                              hash_table_storage,
                              input_pairs.data(),
                              hash_indices.data(),
+                             parser.device_expression_data,
                              join_output_l,
                              join_output_r,
-                             parser.device_expression_data,
                              join_result_offsets.data(),
-                             swap_tables,
                              config,
                              shmem_size_per_block,
                              stream);
@@ -490,35 +490,38 @@ compute_mixed_join_output_size(table_view const& left_equality,
   auto [input_pairs, hash_indices] =
     precompute_mixed_join_data(hash_table, hash_probe, outer_num_rows, stream, mr);
 
+  bool const is_outer_join =
+    (join_type == join_kind::LEFT_JOIN || join_type == join_kind::FULL_JOIN);
+
   // Compute matches per row without getting the total count
   if (has_nulls) {
-    launch_compute_mixed_join_output_size<true>(*left_conditional_view,
-                                                *right_conditional_view,
-                                                join_type,
-                                                equality_probe,
-                                                hash_table_storage,
-                                                input_pairs.data(),
-                                                hash_indices.data(),
-                                                parser.device_expression_data,
-                                                swap_tables,
-                                                matches_per_row_span,
-                                                config,
-                                                shmem_size_per_block,
-                                                stream);
+    launch_mixed_join_count<true>(*left_conditional_view,
+                                  *right_conditional_view,
+                                  is_outer_join,
+                                  swap_tables,
+                                  equality_probe,
+                                  hash_table_storage,
+                                  input_pairs.data(),
+                                  hash_indices.data(),
+                                  parser.device_expression_data,
+                                  matches_per_row_span,
+                                  config,
+                                  shmem_size_per_block,
+                                  stream);
   } else {
-    launch_compute_mixed_join_output_size<false>(*left_conditional_view,
-                                                 *right_conditional_view,
-                                                 join_type,
-                                                 equality_probe,
-                                                 hash_table_storage,
-                                                 input_pairs.data(),
-                                                 hash_indices.data(),
-                                                 parser.device_expression_data,
-                                                 swap_tables,
-                                                 matches_per_row_span,
-                                                 config,
-                                                 shmem_size_per_block,
-                                                 stream);
+    launch_mixed_join_count<false>(*left_conditional_view,
+                                   *right_conditional_view,
+                                   is_outer_join,
+                                   swap_tables,
+                                   equality_probe,
+                                   hash_table_storage,
+                                   input_pairs.data(),
+                                   hash_indices.data(),
+                                   parser.device_expression_data,
+                                   matches_per_row_span,
+                                   config,
+                                   shmem_size_per_block,
+                                   stream);
   }
 
   // Use thrust::reduce to get the total count from matches_per_row

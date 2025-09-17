@@ -20,18 +20,18 @@
 namespace cudf {
 namespace detail {
 
-template void launch_compute_mixed_join_output_size<false>(
+template void launch_mixed_join_count<false>(
   cudf::table_device_view left_table,
   cudf::table_device_view right_table,
-  join_kind join_type,
+  bool is_outer_join,
+  bool swap_tables,
   row_equality equality_probe,
   cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
   cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
   cuda::std::pair<uint32_t, uint32_t> const* hash_indices,
   ast::detail::expression_device_view device_expression_data,
-  bool swap_tables,
   cudf::device_span<cudf::size_type> matches_per_row,
-  detail::grid_1d const& config,
+  detail::grid_1d config,
   int64_t shmem_size_per_block,
   rmm::cuda_stream_view stream);
 

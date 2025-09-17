@@ -22,21 +22,13 @@
 #include "mixed_join_kernel.hpp"
 
 #include <cudf/ast/detail/expression_evaluator.cuh>
-#include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/table/table_device_view.cuh>
-#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
-
-#include <cooperative_groups.h>
-#include <cub/cub.cuh>
-#include <thrust/iterator/discard_iterator.h>
 
 namespace cudf {
 namespace detail {
-
-namespace cg = cooperative_groups;
 
 /**
  * @brief Optimized retrieve implementation using precomputed matches per row
@@ -111,16 +103,16 @@ template <bool has_nulls>
 CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
   mixed_join(table_device_view left_table,
              table_device_view right_table,
-             join_kind const join_type,
-             row_equality const equality_probe,
+             bool is_outer_join,
+             bool swap_tables,
+             row_equality equality_probe,
              cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
              cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
              cuda::std::pair<uint32_t, uint32_t> const* hash_indices,
+             cudf::ast::detail::expression_device_view device_expression_data,
              size_type* join_output_l,
              size_type* join_output_r,
-             cudf::ast::detail::expression_device_view device_expression_data,
-             cudf::size_type const* join_result_offsets,
-             bool const swap_tables)
+             cudf::size_type const* join_result_offsets)
 {
   // Normally the casting of a shared memory array is used to create multiple
   // arrays of different types from the shared memory buffer, but here it is
@@ -152,7 +144,7 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
     auto const& hash_idx     = hash_indices[outer_row_index];
     auto const output_offset = join_result_offsets[outer_row_index];
 
-    if (join_type == join_kind::LEFT_JOIN || join_type == join_kind::FULL_JOIN) {
+    if (is_outer_join) {
       retrieve_matches<true>(
         hash_table_storage,
         equality,
@@ -176,17 +168,17 @@ template <bool has_nulls>
 void launch_mixed_join(
   table_device_view left_table,
   table_device_view right_table,
-  join_kind const join_type,
-  row_equality const equality_probe,
+  bool is_outer_join,
+  bool swap_tables,
+  row_equality equality_probe,
   cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
   cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
   cuda::std::pair<uint32_t, uint32_t> const* hash_indices,
+  cudf::ast::detail::expression_device_view device_expression_data,
   size_type* join_output_l,
   size_type* join_output_r,
-  cudf::ast::detail::expression_device_view device_expression_data,
   cudf::size_type const* join_result_offsets,
-  bool const swap_tables,
-  detail::grid_1d const config,
+  detail::grid_1d config,
   int64_t shmem_size_per_block,
   rmm::cuda_stream_view stream)
 {
@@ -194,16 +186,16 @@ void launch_mixed_join(
     <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
       left_table,
       right_table,
-      join_type,
+      is_outer_join,
+      swap_tables,
       equality_probe,
       hash_table_storage,
       input_pairs,
       hash_indices,
+      device_expression_data,
       join_output_l,
       join_output_r,
-      device_expression_data,
-      join_result_offsets,
-      swap_tables);
+      join_result_offsets);
 }
 
 }  // namespace detail

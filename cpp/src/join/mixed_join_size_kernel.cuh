@@ -21,21 +21,12 @@
 #include "mixed_join_common_utils.cuh"
 
 #include <cudf/ast/detail/expression_evaluator.cuh>
-#include <cudf/ast/detail/expression_parser.hpp>
-#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/table/table_device_view.cuh>
-#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <rmm/exec_policy.hpp>
-
-#include <cuda/std/cstdint>
 #include <cuda/std/utility>
-#include <thrust/reduce.h>
-
-#include <limits>
 
 namespace cudf::detail {
 
@@ -51,7 +42,7 @@ __device__ __forceinline__ auto standalone_count(
   cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
   cuco::pair<hash_value_type, cudf::size_type> const& probe_key,
   cuda::std::pair<uint32_t, uint32_t> const& hash_idx,
-  join_kind join_type) noexcept
+  bool is_outer_join) noexcept
 {
   cudf::size_type count = 0;
   auto const extent     = hash_table_storage.size();
@@ -77,9 +68,7 @@ __device__ __forceinline__ auto standalone_count(
     // Exit if we find an empty slot
     if (first_slot_is_empty or second_slot_is_empty) {
       // Handle outer join logic: non-matching rows are counted as 1 match
-      if ((join_type == join_kind::LEFT_JOIN || join_type == join_kind::FULL_JOIN) && count == 0) {
-        return 1;
-      }
+      if (is_outer_join && count == 0) { return 1; }
       return count;
     }
 
@@ -88,16 +77,16 @@ __device__ __forceinline__ auto standalone_count(
 }
 
 template <bool has_nulls>
-CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) compute_mixed_join_output_size(
+CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) mixed_join_count(
   table_device_view left_table,
   table_device_view right_table,
-  join_kind join_type,
+  bool is_outer_join,
+  bool swap_tables,
   row_equality equality_probe,
   cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
   cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
   cuda::std::pair<uint32_t, uint32_t> const* hash_indices,
   ast::detail::expression_device_view device_expression_data,
-  bool swap_tables,
   cudf::device_span<cudf::size_type> matches_per_row)
 {
   // The (required) extern storage of the shared memory array leads to
@@ -130,39 +119,39 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE) compute_mixed_join_o
     auto const& hash_idx  = hash_indices[outer_row_index];
 
     auto match_count =
-      standalone_count(count_equality, hash_table_storage, probe_key, hash_idx, join_type);
+      standalone_count(count_equality, hash_table_storage, probe_key, hash_idx, is_outer_join);
 
     matches_per_row[outer_row_index] = match_count;
   }
 }
 
 template <bool has_nulls>
-void launch_compute_mixed_join_output_size(
+void launch_mixed_join_count(
   table_device_view left_table,
   table_device_view right_table,
-  join_kind join_type,
+  bool is_outer_join,
+  bool swap_tables,
   row_equality equality_probe,
   cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
   cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
   cuda::std::pair<uint32_t, uint32_t> const* hash_indices,
   ast::detail::expression_device_view device_expression_data,
-  bool swap_tables,
   cudf::device_span<cudf::size_type> matches_per_row,
-  detail::grid_1d const& config,
+  detail::grid_1d config,
   int64_t shmem_size_per_block,
   rmm::cuda_stream_view stream)
 {
-  compute_mixed_join_output_size<has_nulls>
+  mixed_join_count<has_nulls>
     <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
       left_table,
       right_table,
-      join_type,
+      is_outer_join,
+      swap_tables,
       equality_probe,
       hash_table_storage,
       input_pairs,
       hash_indices,
       device_expression_data,
-      swap_tables,
       matches_per_row);
 }
 

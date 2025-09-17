@@ -21,19 +21,12 @@
 #include "mixed_join_common_utils.cuh"
 
 #include <cudf/ast/detail/expression_evaluator.cuh>
-#include <cudf/ast/detail/expression_parser.hpp>
-#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
-
-#include <cooperative_groups.h>
-#include <cub/cub.cuh>
-#include <thrust/iterator/discard_iterator.h>
 
 namespace CUDF_EXPORT cudf {
 namespace detail {
@@ -71,18 +64,18 @@ namespace detail {
  */
 
 template <bool has_nulls>
-void launch_compute_mixed_join_output_size(
+void launch_mixed_join_count(
   table_device_view left_table,
   table_device_view right_table,
-  join_kind join_type,
+  bool is_outer_join,
+  bool swap_tables,
   row_equality equality_probe,
   cudf::device_span<cuco::pair<hash_value_type, cudf::size_type>> hash_table_storage,
   cuco::pair<hash_value_type, cudf::size_type> const* input_pairs,
   cuda::std::pair<uint32_t, uint32_t> const* hash_indices,
   ast::detail::expression_device_view device_expression_data,
-  bool swap_tables,
   cudf::device_span<cudf::size_type> matches_per_row,
-  detail::grid_1d const& config,
+  detail::grid_1d config,
   int64_t shmem_size_per_block,
   rmm::cuda_stream_view stream);
 
