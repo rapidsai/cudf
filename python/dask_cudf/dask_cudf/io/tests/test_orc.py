@@ -2,6 +2,7 @@
 
 import glob
 import os
+from contextlib import nullcontext
 from datetime import datetime, timezone
 
 import pytest
@@ -49,11 +50,21 @@ def test_filelist_read_orc_defaults():
 @pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
 @pytest.mark.parametrize("columns", [["time", "date"], ["time"]])
 def test_read_orc_cols(engine, columns):
-    df1 = cudf.read_orc(sample_orc, engine=engine, columns=columns)
+    if engine == "pyarrow":
+        ctx = pytest.warns(
+            UserWarning, match="Using CPU via PyArrow to read ORC dataset."
+        )
+    else:
+        ctx = nullcontext()
 
-    df2 = dask_cudf.read_orc(sample_orc, engine=engine, columns=columns)
+    with ctx:
+        df1 = cudf.read_orc(sample_orc, engine=engine, columns=columns)
 
-    dd.assert_eq(df1, df2, check_index=False)
+    with ctx:
+        df2 = dask_cudf.read_orc(sample_orc, engine=engine, columns=columns)
+
+    with ctx:
+        dd.assert_eq(df1, df2, check_index=False)
 
 
 @pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
