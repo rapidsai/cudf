@@ -12,12 +12,13 @@ from pylibcudf.libcudf.quantiles cimport (
 )
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.types cimport null_order, order, sorted
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 from .column cimport Column
 from .table cimport Table
 from .types cimport interpolation
-from .utils cimport _get_stream
+from .utils cimport _get_stream, _get_memory_resource
 
 __all__ = ["quantile", "quantiles"]
 
@@ -27,7 +28,8 @@ cpdef Column quantile(
     interpolation interp = interpolation.LINEAR,
     Column ordered_indices = None,
     bool exact=True,
-    Stream stream=None
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Computes quantiles with interpolation.
 
@@ -72,6 +74,7 @@ cpdef Column quantile(
         ordered_indices_view = ordered_indices.view()
 
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_quantile(
@@ -83,7 +86,7 @@ cpdef Column quantile(
             stream.view(),
         )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 
 cpdef Table quantiles(
@@ -93,7 +96,8 @@ cpdef Table quantiles(
     sorted is_input_sorted = sorted.NO,
     list column_order = None,
     list null_precedence = None,
-    Stream stream=None
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Computes row quantiles with interpolation.
 
@@ -151,6 +155,7 @@ cpdef Table quantiles(
         null_precedence_vec = null_precedence
 
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_quantiles(
@@ -163,4 +168,4 @@ cpdef Table quantiles(
             stream.view(),
         )
 
-    return Table.from_libcudf(move(c_result), stream)
+    return Table.from_libcudf(move(c_result), stream, mr)
