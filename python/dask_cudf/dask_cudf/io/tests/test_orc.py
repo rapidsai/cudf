@@ -90,9 +90,18 @@ def test_read_orc_cols(engine, columns):
     ],
 )
 def test_read_orc_filtered(tmpdir, engine, predicate, expected_len):
-    df = dask_cudf.read_orc(sample_orc, engine=engine, filters=predicate)
+    if engine == "pyarrow":
+        ctx = pytest.warns(
+            UserWarning, match="Using CPU via PyArrow to read ORC dataset."
+        )
+    else:
+        ctx = nullcontext()
 
-    dd.assert_eq(len(df), expected_len)
+    with ctx:
+        df = dask_cudf.read_orc(sample_orc, engine=engine, filters=predicate)
+
+    with ctx:
+        dd.assert_eq(len(df), expected_len)
 
 
 def test_read_orc_first_file_empty(tmpdir):
