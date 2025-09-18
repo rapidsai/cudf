@@ -22,11 +22,9 @@ def test_list_dtype_roundtrip():
     assert plc_type == plc.types.DataType(plc.types.TypeId.LIST)
 
     with pytest.raises(ValueError):
-        plc.interop.to_arrow(plc_type)
+        plc_type.to_arrow()
 
-    arrow_type = plc.interop.to_arrow(
-        plc_type, value_type=list_type.value_type
-    )
+    arrow_type = plc_type.to_arrow(value_type=list_type.value_type)
     assert arrow_type == list_type
 
 
@@ -37,19 +35,18 @@ def test_struct_dtype_roundtrip():
     assert plc_type == plc.types.DataType(plc.types.TypeId.STRUCT)
 
     with pytest.raises(ValueError):
-        plc.interop.to_arrow(plc_type)
+        plc_type.to_arrow()
 
-    arrow_type = plc.interop.to_arrow(
-        plc_type,
+    arrow_type = plc_type.to_arrow(
         fields=[struct_type.field(i) for i in range(struct_type.num_fields)],
     )
     assert arrow_type == struct_type
 
 
 def test_table_with_nested_dtype_to_arrow():
-    pa_array = pa.array([[{"": 1}]])
-    plc_table = plc.Table([plc.Column.from_arrow(pa_array)])
-    result = plc.interop.to_arrow(plc_table)
+    result = plc.Table(
+        [plc.Column.from_arrow(pa.array([[{"": 1}]]))]
+    ).to_arrow()
     expected_schema = pa.schema(
         [
             pa.field(
@@ -75,11 +72,9 @@ def test_decimal128_roundtrip():
     assert plc_type.id() == plc.types.TypeId.DECIMAL128
 
     with pytest.raises(ValueError):
-        plc.interop.to_arrow(plc_type)
+        plc_type.to_arrow()
 
-    arrow_type = plc.interop.to_arrow(
-        plc_type, precision=decimal_type.precision
-    )
+    arrow_type = plc_type.to_arrow(precision=decimal_type.precision)
     assert arrow_type == decimal_type
 
 
@@ -94,9 +89,9 @@ def test_decimal_other(data_type):
     precision = 3
 
     with pytest.raises(ValueError):
-        plc.interop.to_arrow(data_type)
+        data_type.to_arrow()
 
-    arrow_type = plc.interop.to_arrow(data_type, precision=precision)
+    arrow_type = data_type.to_arrow(precision=precision)
     assert arrow_type == pa.decimal128(precision, 0)
 
 
@@ -121,8 +116,8 @@ def test_decimal_respect_metadata_precision(plc_type, request):
     plc_column = plc.unary.cast(
         plc.Column.from_arrow(expected), plc.DataType(plc_type, scale=-scale)
     )
-    result = plc.interop.to_arrow(
-        plc_column, metadata=plc.interop.ColumnMetadata(precision=precision)
+    result = plc_column.to_arrow(
+        metadata=plc.interop.ColumnMetadata(precision=precision)
     )
     if parse(pa.__version__) >= parse("19.0.0"):
         if plc_type == plc.TypeId.DECIMAL64:
@@ -143,8 +138,7 @@ def test_decimal_precision_metadata_out_of_range(precision):
         plc.DataType(plc.TypeId.DECIMAL128, scale=-scale),
     )
     with pytest.raises(TypeError):
-        plc.interop.to_arrow(
-            plc_column,
+        plc_column.to_arrow(
             metadata=plc.interop.ColumnMetadata(precision=precision),
         )
 
