@@ -56,13 +56,21 @@ from ._interop_helpers cimport (
 from .utils cimport _get_stream, _get_memory_resource
 
 from .gpumemoryview import _datatype_from_dtype_desc
-from ._interop_helpers import ArrowLike, ColumnMetadata
+from ._interop_helpers import ArrowLike, ColumnMetadata, _ObjectWithArrowMetadata
 
 import array
 from itertools import accumulate
 import functools
 import operator
 from typing import Iterable
+
+try:
+    import pyarrow as pa
+    pa_err = None
+except ImportError as e:
+    pa = None
+    pa_err = e
+
 
 __all__ = ["Column", "ListColumnView", "is_c_contiguous"]
 
@@ -337,12 +345,38 @@ cdef class Column:
         self._children = children
         self._num_children = len(children)
 
+    def to_arrow(
+        self,
+        metadata: ColumnMetadata | str | None = None
+    ) -> ArrowLike:
+        """Create a PyArrow array from a pylibcudf column.
+
+        Parameters
+        ----------
+        metadata : list
+            The metadata to attach to the columns of the table.
+
+        Returns
+        -------
+        pyarrow.Array
+        """
+        if pa_err is not None:
+            raise RuntimeError(
+                "pyarrow was not found on your system. Please "
+                "pip install pylibcudf with the [pyarrow] extra for a "
+                "compatible pyarrow version."
+            ) from pa_err
+        # TODO: Once the arrow C device interface registers more
+        # types that it supports, we can call pa.array(self) if
+        # no metadata is passed.
+        return pa.array(_ObjectWithArrowMetadata(self, metadata))
+
     @staticmethod
     def from_arrow(
         obj: ArrowLike,
         dtype: DataType | None = None,
         Stream stream=None
-    ) -> Column:
+    ) -> ArrowLike:
         """
         Create a Column from an Arrow-like object using the Arrow C Data Interface.
 

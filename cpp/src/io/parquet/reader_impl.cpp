@@ -34,6 +34,7 @@
 #include <bitset>
 #include <limits>
 #include <numeric>
+#include <utility>
 
 namespace cudf::io::parquet::detail {
 
@@ -452,7 +453,7 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
   page_nesting_decode.device_to_host_async(_stream);
 
   // Invalidate output buffer nullmasks at row indices spanned by pruned pages
-  update_output_nullmasks_for_pruned_pages(host_page_mask);
+  update_output_nullmasks_for_pruned_pages(host_page_mask, skip_rows, num_rows);
 
   // Copy over initial string offsets from device
   auto h_initial_str_offsets = cudf::detail::make_host_vector_async(initial_str_offsets, _stream);
@@ -886,7 +887,9 @@ bool reader_impl::has_next()
   return has_more_work() or is_first_output_chunk();
 }
 
-void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool const> page_mask)
+void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool const> page_mask,
+                                                           size_t skip_rows,
+                                                           size_t num_rows)
 {
   auto const& subpass    = _pass_itm_data->subpass;
   auto const& pages      = subpass->pages;
@@ -909,13 +912,46 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
 
   std::for_each(
     page_and_mask_begin, page_and_mask_begin + pages.size(), [&](auto const& page_and_mask_pair) {
-      // Return early if the page is valid
+      // Return early if the page is valid - Note: dictionary pages are always valid
       if (thrust::get<1>(page_and_mask_pair)) { return; }
 
-      auto const& page     = thrust::get<0>(page_and_mask_pair);
-      auto const chunk_idx = page.chunk_idx;
-      auto const start_row = chunks[chunk_idx].start_row + page.chunk_row;
-      auto const end_row   = start_row + page.num_rows;
+      // Get the current page
+      auto const& page = thrust::get<0>(page_and_mask_pair);
+
+      // Table row bounds
+      auto const table_start_row = skip_rows;
+      auto const table_end_row   = skip_rows + num_rows;
+
+      // Current page row bounds
+      auto const chunk_idx      = page.chunk_idx;
+      auto const page_start_row = chunks[chunk_idx].start_row + page.chunk_row;
+      auto const page_end_row   = page_start_row + page.num_rows;
+
+      auto const is_page_out_of_bounds =
+        (page_start_row < table_start_row and page_end_row < table_start_row) or
+        (page_start_row > table_end_row and page_end_row > table_end_row);
+      if (is_page_out_of_bounds) { return; }
+
+      // The page is either completely or partially within the table row bounds
+      auto const [start_row, end_row] = [&]() -> std::pair<size_type, size_type> {
+        // Page is completely within the table row bounds
+        if (page_start_row >= table_start_row and page_end_row <= table_end_row) {
+          return {page_start_row - table_start_row, page_end_row - table_start_row};
+        }
+        // Page starts earlier but ends within the table row bounds
+        else if (page_start_row < table_start_row) {
+          return {0, page_end_row - table_start_row};
+        }
+        // Page starts within the table row bounds but ends after
+        else {
+          return {page_start_row - table_start_row, num_rows};
+        }
+      }();
+
+      // Make sure the row bounds are valid
+      CUDF_EXPECTS(std::cmp_greater_equal(start_row, 0) and std::cmp_less_equal(end_row, num_rows),
+                   "Invalid row bounds");
+
       auto& input_col      = _input_columns[chunk_idx % num_columns];
       auto const max_depth = input_col.nesting_depth();
       auto* cols           = &_output_buffers;
