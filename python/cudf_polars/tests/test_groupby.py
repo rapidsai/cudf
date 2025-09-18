@@ -419,3 +419,8 @@ def test_groupby_rank_raises(df: pl.LazyFrame) -> None:
     q = df.group_by("key1").agg(pl.col("int").rank())
 
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_groupby_fill_null_with_mean_unsupported(df: pl.LazyFrame) -> None:
+    q = df.group_by("key1").agg(pl.col("int").fill_null(strategy="mean"))
+    assert_ir_translation_raises(q, NotImplementedError)

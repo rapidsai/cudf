@@ -381,7 +381,7 @@ def test_rank_over_with_null_group_keys(
         ),
     ],
 )
-def test_fill_over_scenarios(
+def test_fill_over(
     df: pl.LazyFrame,
     strategy: str,
     order_by: None | list[str | pl.Expr],
@@ -389,4 +389,7 @@ def test_fill_over_scenarios(
     expr: pl.Expr,
 ) -> None:
     q = df.select(expr.fill_null(strategy=strategy).over(group_key, order_by=order_by))
-    assert_gpu_result_equal(q)
+    if POLARS_VERSION_LT_132:
+        assert_ir_translation_raises(q, NotImplementedError)
+    else:
+        assert_gpu_result_equal(q)
