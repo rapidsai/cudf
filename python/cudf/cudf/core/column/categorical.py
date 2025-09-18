@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
     import cupy as cp
 
-    import pylibcudf as plc
+    from pylibcudf import Scalar as plc_Scalar
 
     from cudf._typing import (
         ColumnBinaryOperand,
@@ -236,7 +236,7 @@ class CategoricalColumn(column.ColumnBase):
 
     def _fill(
         self,
-        fill_value: plc.Scalar,
+        fill_value: plc_Scalar,
         begin: int,
         end: int,
         inplace: bool = False,
@@ -420,7 +420,7 @@ class CategoricalColumn(column.ColumnBase):
 
     def _cast_self_and_other_for_where(
         self, other: ScalarLike | ColumnBase, inplace: bool
-    ) -> tuple[ColumnBase, plc.Scalar | ColumnBase]:
+    ) -> tuple[ColumnBase, plc_Scalar | ColumnBase]:
         if is_scalar(other):
             try:
                 other = self._encode(other)
@@ -615,7 +615,7 @@ class CategoricalColumn(column.ColumnBase):
 
     def _validate_fillna_value(
         self, fill_value: ScalarLike | ColumnLike
-    ) -> plc.Scalar | ColumnBase:
+    ) -> plc_Scalar | ColumnBase:
         """Align fill_value for .fillna based on column type."""
         if is_scalar(fill_value):
             if fill_value != _DEFAULT_CATEGORICAL_VALUE:
