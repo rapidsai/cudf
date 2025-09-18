@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "hybrid_scan_utils.hpp"
+#include "common_utils.hpp"
 #include "io_source.hpp"
 #include "timer.hpp"
 

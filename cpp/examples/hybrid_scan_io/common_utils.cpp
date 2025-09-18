@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "hybrid_scan_utils.hpp"
+#include "common_utils.hpp"
 
 #include <cudf/ast/expressions.hpp>
 #include <cudf/concatenate.hpp>
@@ -33,8 +33,8 @@
 #include <string>
 
 /**
- * @file hybrid_scan_utils.cpp
- * @brief Definitions for utilities for `hybrid_scan` example
+ * @file common_utils.cpp
+ * @brief Definitions for utilities for `hybrid_scan_io` example
  */
 
 std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_pool_used)

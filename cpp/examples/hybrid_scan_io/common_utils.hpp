@@ -26,8 +26,8 @@
 #include <string>
 
 /**
- * @file hybrid_scan_utils.hpp
- * @brief Utilities for `hybrid_scan` example
+ * @file common_utils.hpp
+ * @brief Utilities for `hybrid_scan_io` example
  */
 
 /**
