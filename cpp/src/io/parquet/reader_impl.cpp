@@ -36,7 +36,10 @@
 
 namespace cudf::io::parquet::detail {
 
-void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_rows, cudf::device_span<bool const> page_mask)
+void reader_impl::decode_page_data(read_mode mode,
+                                   size_t skip_rows,
+                                   size_t num_rows,
+                                   cudf::device_span<bool const> page_mask)
 {
   CUDF_FUNC_RANGE();
 
@@ -595,7 +598,8 @@ void reader_impl::populate_metadata(table_metadata& out_metadata)
                                      out_metadata.per_file_user_data[0].end()};
 }
 
-void reader_impl::preprocess_chunk_strings(row_range const& read_info, cudf::device_span<bool const> page_mask)
+void reader_impl::preprocess_chunk_strings(row_range const& read_info,
+                                           cudf::device_span<bool const> page_mask)
 {
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
@@ -615,14 +619,14 @@ void reader_impl::preprocess_chunk_strings(row_range const& read_info, cudf::dev
 
   if (need_string_size_recompute) {
     compute_page_string_sizes_pass1(subpass.pages,
-                                  pass.chunks,
-                                  page_mask,
-                                  read_info.skip_rows,
-                                  read_info.num_rows,
-                                  subpass.kernel_mask,
-                                  false,
-                                  _pass_itm_data->level_type_size,
-                                  _stream);
+                                    pass.chunks,
+                                    page_mask,
+                                    read_info.skip_rows,
+                                    read_info.num_rows,
+                                    subpass.kernel_mask,
+                                    false,
+                                    _pass_itm_data->level_type_size,
+                                    _stream);
   }
   compute_page_string_sizes_pass2(subpass.pages, pass.chunks, subpass.delta_temp_buf, _stream);
 }
@@ -684,7 +688,7 @@ table_with_metadata reader_impl::read_chunk_internal(read_mode mode)
                        false,  // num_rows is already computed
                        pass.level_type_size,
                        _stream);
-  }  
+  }
 
   // preprocess strings
   preprocess_chunk_strings(read_info, page_mask);

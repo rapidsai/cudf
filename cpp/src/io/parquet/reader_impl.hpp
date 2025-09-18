@@ -177,7 +177,8 @@ class reader_impl {
    */
   void setup_next_subpass(read_mode mode);
 
-  void preprocess_chunk_strings(row_range const& read_info, cudf::device_span<bool const> page_mask);
+  void preprocess_chunk_strings(row_range const& read_info,
+                                cudf::device_span<bool const> page_mask);
 
   /**
    * @brief Copies over the relevant page mask information for the subpass
@@ -307,7 +308,10 @@ class reader_impl {
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows Number of rows to decode
    */
-  void decode_page_data(read_mode mode, size_t skip_rows, size_t num_rows, cudf::device_span<bool const> page_mask);
+  void decode_page_data(read_mode mode,
+                        size_t skip_rows,
+                        size_t num_rows,
+                        cudf::device_span<bool const> page_mask);
 
   /**
    * @brief Invalidate output buffer nullmask for rows spanned by the pruned pages

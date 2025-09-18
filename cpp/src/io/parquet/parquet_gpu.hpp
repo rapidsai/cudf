@@ -779,14 +779,14 @@ void compute_page_sizes(cudf::detail::hostdevice_span<PageInfo> pages,
  * @param[in] stream CUDA stream to use
  */
 void compute_page_string_sizes_pass1(cudf::detail::hostdevice_span<PageInfo> pages,
-                                 cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-                                 cudf::device_span<bool const> page_mask,
-                                 size_t min_row,
-                                 size_t num_rows,
-                                 uint32_t kernel_mask,
-                                 bool all_values,
-                                 int level_type_size,
-                                 rmm::cuda_stream_view stream);
+                                     cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                                     cudf::device_span<bool const> page_mask,
+                                     size_t min_row,
+                                     size_t num_rows,
+                                     uint32_t kernel_mask,
+                                     bool all_values,
+                                     int level_type_size,
+                                     rmm::cuda_stream_view stream);
 
 /**
  * @brief Compute temp string information for decoding.
