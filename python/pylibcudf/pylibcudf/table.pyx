@@ -74,7 +74,17 @@ cdef class Table:
         self,
         metadata: list[ColumnMetadata | str] | None = None
     ) -> ArrowLike:
-        """Create a PyArrow table from a pylibcudf table."""
+        """Create a pyarrow table from a pylibcudf table.
+
+        Parameters
+        ----------
+        metadata : list[ColumnMetadata | str] | None
+            The metadata to attach to the columns of the table.
+
+        Returns
+        -------
+        pyarrow.Table
+        """
         if pa_err is not None:
             raise RuntimeError(
                 "pyarrow was not found on your system. Please "
