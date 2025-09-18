@@ -192,7 +192,7 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - cudf==25.10.*,>=0.0.0a0
+          - cudf==25.12.*,>=0.0.0a0
           - pandas
           - pytest
           - pytest-xdist
@@ -268,13 +268,13 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - cuml==25.10.*,>=0.0.0a0
+          - cuml==25.12.*,>=0.0.0a0
           - scikit-learn
   test_cugraph:
     common:
       - output_types: conda
         packages:
-          - cugraph==25.10.*,>=0.0.0a0
+          - cugraph==25.12.*,>=0.0.0a0
           - networkx
   test_ibis:
     common:
@@ -283,6 +283,7 @@ dependencies:
           - pip
           - pip:
               - ibis-framework[duckdb]
+              - duckdb<1.4.0
   test_hvplot:
     common:
       - output_types: conda
