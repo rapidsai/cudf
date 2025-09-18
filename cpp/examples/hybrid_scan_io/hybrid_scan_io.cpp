@@ -302,7 +302,7 @@ void inline print_usage()
     << std::endl
     << "Usage: hybrid_scan <input parquet file> <column name> <literal> <io source type> "
        "<output parquet file>\n"
-    << "Note: Both the column name and literal must be of `string` type. The constructed filter "
+    << "Note: Both the column name and literal must be of `string` type. The constructed filter\n"
        "expression will be of the form <column name> == <literal>\n"
     << "Available IO source types: HOST_BUFFER, PINNED_BUFFER (Default) \n\n"
     << "Example: hybrid_scan example.parquet string_col 0000001 PINNED_BUFFER output.parquet \n\n";
