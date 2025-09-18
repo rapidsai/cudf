@@ -21,6 +21,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
+#include <cudf/join/join.hpp>
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -57,12 +58,23 @@ std::unique_ptr<cudf::table> combine_tables(std::unique_ptr<cudf::table> filter_
   return table;
 }
 
-/**
- * @brief Fetches a host span of Parquet footer bytes from the input buffer span
- *
- * @param buffer Input buffer span
- * @return A host span of the footer bytes
- */
+void check_tables_equal(cudf::table_view const& lhs_table, cudf::table_view const& rhs_table)
+{
+  try {
+    // Left anti-join the original and transcoded tables
+    // identical tables should not throw an exception and
+    // return an empty indices vector
+    auto const indices = cudf::left_anti_join(lhs_table, rhs_table, cudf::null_equality::EQUAL);
+
+    // No exception thrown, check indices
+    auto const valid = indices->size() == 0;
+    std::cout << "Tables identical: " << std::boolalpha << valid << "\n\n";
+  } catch (std::exception& e) {
+    std::cerr << e.what() << std::endl << std::endl;
+    throw std::runtime_error("Tables identical: false\n\n");
+  }
+}
+
 cudf::host_span<uint8_t const> fetch_footer_bytes(cudf::host_span<uint8_t const> buffer)
 {
   CUDF_FUNC_RANGE();
@@ -89,13 +101,6 @@ cudf::host_span<uint8_t const> fetch_footer_bytes(cudf::host_span<uint8_t const>
                                         ender->footer_len);
 }
 
-/**
- * @brief Fetches a host span of Parquet PageIndexbytes from the input buffer span
- *
- * @param buffer Input buffer span
- * @param page_index_bytes Byte range of `PageIndex` to fetch
- * @return A host span of the PageIndex bytes
- */
 cudf::host_span<uint8_t const> fetch_page_index_bytes(
   cudf::host_span<uint8_t const> buffer, cudf::io::text::byte_range_info const page_index_bytes)
 {
@@ -104,16 +109,6 @@ cudf::host_span<uint8_t const> fetch_page_index_bytes(
     page_index_bytes.size());
 }
 
-/**
- * @brief Fetches a list of byte ranges from a host buffer into a vector of device buffers
- *
- * @param host_buffer Host buffer span
- * @param byte_ranges Byte ranges to fetch
- * @param stream CUDA stream
- * @param mr Device memory resource to create device buffers with
- *
- * @return Vector of device buffers
- */
 std::vector<rmm::device_buffer> fetch_byte_ranges(
   cudf::host_span<uint8_t const> host_buffer,
   cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,

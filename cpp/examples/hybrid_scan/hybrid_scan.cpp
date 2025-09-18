@@ -14,11 +14,9 @@
  * limitations under the License.
  */
 
-#include "../utilities/io_source.hpp"
-#include "../utilities/mr_utils.hpp"
-#include "../utilities/table_utils.hpp"
-#include "../utilities/timer.hpp"
 #include "hybrid_scan_utils.hpp"
+#include "io_source.hpp"
+#include "timer.hpp"
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -53,7 +51,7 @@ namespace {
  * @param io_source io source to read
  * @return cudf::io::table_with_metadata
  */
-cudf::io::table_with_metadata read_parquet(cudf::examples::io_source const& io_source,
+cudf::io::table_with_metadata read_parquet(io_source const& io_source,
                                            cudf::ast::operation const& filter_expression,
                                            rmm::cuda_stream_view stream)
 {
@@ -111,7 +109,7 @@ enum class parquet_filter_type : uint8_t {
  * @return Tuple of filter table, payload table, filter metadata, payload metadata, and the final
  *         row validity column
  */
-auto hybrid_scan(cudf::examples::io_source const& io_source,
+auto hybrid_scan(io_source const& io_source,
                  cudf::ast::operation const& filter_expression,
                  std::unordered_set<parquet_filter_type> const& filters,
                  rmm::cuda_stream_view stream,
@@ -125,7 +123,7 @@ auto hybrid_scan(cudf::examples::io_source const& io_source,
   auto const file_buffer_span = io_source.get_host_buffer_span();
 
   std::cout << "\nREADER: Setup, metadata and page index...\n";
-  cudf::examples::timer timer;
+  timer timer;
 
   // Fetch footer bytes and setup reader
   auto const footer_buffer = fetch_footer_bytes(file_buffer_span);
@@ -329,11 +327,11 @@ int main(int argc, char const** argv)
   auto output_filepath = std::string{"output.parquet"};
   auto column_name     = std::string{"col_a"};
   auto literal_value   = std::string{"100"};
-  auto io_source_type  = cudf::examples::io_source_type::PINNED_BUFFER;
+  auto io_source_type  = io_source_type::PINNED_BUFFER;
 
   switch (argc) {
     case 6: output_filepath = argv[5]; [[fallthrough]];
-    case 5: io_source_type = cudf::examples::get_io_source_type(argv[4]); [[fallthrough]];
+    case 5: io_source_type = get_io_source_type(argv[4]); [[fallthrough]];
     case 4: literal_value = argv[3]; [[fallthrough]];
     case 3: column_name = argv[2]; [[fallthrough]];
     case 2:  // Check if instead of input_paths, the first argument is `-h` or `--help`
@@ -353,7 +351,7 @@ int main(int argc, char const** argv)
   // Initialize mr, default stream and stream pool
   auto constexpr is_pool_used = true;
   auto stream                 = cudf::get_default_stream();
-  auto resource               = cudf::examples::create_memory_resource(is_pool_used);
+  auto resource               = create_memory_resource(is_pool_used);
   auto stats_mr =
     rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>(resource.get());
   rmm::mr::set_current_device_resource(&stats_mr);
@@ -366,7 +364,7 @@ int main(int argc, char const** argv)
     cudf::ast::operation(cudf::ast::ast_operator::EQUAL, column_reference, literal);
 
   // Create io source
-  auto const data_source = cudf::examples::io_source{input_filepath, io_source_type, stream};
+  auto const data_source = io_source{input_filepath, io_source_type, stream};
 
   // Read with legacy reader without timing
   {
@@ -387,7 +385,7 @@ int main(int argc, char const** argv)
     filters.insert(parquet_filter_type::PAYLOAD_COLUMN_PAGES_WITH_ROW_MASK);
   }
 
-  cudf::examples::timer timer;
+  timer timer;
   std::cout << "Reading " << input_filepath << " with next-gen parquet reader...\n";
   timer.reset();
   auto [table_next_gen_reader, row_mask] =
@@ -404,7 +402,7 @@ int main(int argc, char const** argv)
   write_parquet(table_next_gen_reader->view(), metadata, "next_gen_" + output_filepath, stream);
 
   // Check for validity
-  cudf::examples::check_tables_equal(table_next_gen_reader->view(), table_main_reader->view());
+  check_tables_equal(table_next_gen_reader->view(), table_main_reader->view());
 
   return 0;
 }

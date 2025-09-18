@@ -4442,7 +4442,7 @@ def test_parquet_reader_mismatched_nullability_structs(tmp_path):
 
 @pytest.mark.skipif(
     pa.__version__ == "19.0.0",
-    reason="https://github.com/rapidsai/cudf/issues/17806",
+    reason="https://github.com/apache/arrow/issues/45283",
 )
 @pytest.mark.parametrize(
     "stats_fname,bloom_filter_fname",

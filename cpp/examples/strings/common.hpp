@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 #pragma once
-
-#include "../utilities/mr_utils.hpp"
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
@@ -55,6 +53,29 @@ std::unique_ptr<cudf::column> redact_strings(cudf::column_view const& names,
                                              cudf::column_view const& visibilities);
 
 /**
+ * @brief Create CUDA memory resource
+ */
+auto make_cuda_mr() { return std::make_shared<rmm::mr::cuda_memory_resource>(); }
+
+/**
+ * @brief Create a pool device memory resource
+ */
+auto make_pool_mr()
+{
+  return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
+    make_cuda_mr(), rmm::percent_of_free_device_memory(50));
+}
+
+/**
+ * @brief Create memory resource for libcudf functions
+ */
+std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(std::string const& name)
+{
+  if (name == "pool") { return make_pool_mr(); }
+  return make_cuda_mr();
+}
+
+/**
  * @brief Main for strings examples
  *
  * Command line parameters:
@@ -71,7 +92,7 @@ int main(int argc, char const** argv)
   }
 
   auto const mr_name = std::string{argc > 2 ? std::string(argv[2]) : std::string("cuda")};
-  auto resource      = cudf::examples::create_memory_resource(mr_name);
+  auto resource      = create_memory_resource(mr_name);
   cudf::set_current_device_resource(resource.get());
 
   auto const csv_file   = std::string{argv[1]};

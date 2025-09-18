@@ -52,6 +52,14 @@ std::unique_ptr<cudf::table> combine_tables(std::unique_ptr<cudf::table> filter_
                                             std::unique_ptr<cudf::table> payload_table);
 
 /**
+ * @brief Check if two tables are identical, throw an error otherwise
+ *
+ * @param lhs_table View to lhs table
+ * @param rhs_table View to rhs table
+ */
+void check_tables_equal(cudf::table_view const& lhs_table, cudf::table_view const& rhs_table);
+
+/**
  * @brief Fetches a host span of Parquet footer bytes from the input buffer span
  *
  * @param buffer Input buffer span
