@@ -17,27 +17,18 @@
 #pragma once
 
 #include <cudf/ast/expressions.hpp>
+#include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
 
-#include <memory>
 #include <string>
 
 /**
- * @file common_utils.hpp
- * @brief Common utilities for `hybrid_scan` example
+ * @file hybrid_scan_utils.hpp
+ * @brief Utilities for `hybrid_scan` example
  */
-
-/**
- * @brief Create memory resource for libcudf functions
- *
- * @param pool Whether to use a pool memory resource.
- * @return Memory resource instance
- */
-std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_pool_used);
 
 /**
  * @brief Create a filter expression of the form `column_name == literal` for string type point
@@ -48,7 +39,7 @@ std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_
  * @return Filter expression
  */
 cudf::ast::operation create_filter_expression(std::string const& column_name,
-                                              std::string const& literal);
+                                              std::string const& literal_value);
 
 /**
  * @brief Combine columns from filter and payload tables into a single table
@@ -59,3 +50,36 @@ cudf::ast::operation create_filter_expression(std::string const& column_name,
  */
 std::unique_ptr<cudf::table> combine_tables(std::unique_ptr<cudf::table> filter_table,
                                             std::unique_ptr<cudf::table> payload_table);
+
+/**
+ * @brief Fetches a host span of Parquet footer bytes from the input buffer span
+ *
+ * @param buffer Input buffer span
+ * @return A host span of the footer bytes
+ */
+cudf::host_span<uint8_t const> fetch_footer_bytes(cudf::host_span<uint8_t const> buffer);
+/**
+ * @brief Fetches a host span of Parquet PageIndexbytes from the input buffer span
+ *
+ * @param buffer Input buffer span
+ * @param page_index_bytes Byte range of `PageIndex` to fetch
+ * @return A host span of the PageIndex bytes
+ */
+cudf::host_span<uint8_t const> fetch_page_index_bytes(
+  cudf::host_span<uint8_t const> buffer, cudf::io::text::byte_range_info const page_index_bytes);
+
+/**
+ * @brief Fetches a list of byte ranges from a host buffer into a vector of device buffers
+ *
+ * @param host_buffer Host buffer span
+ * @param byte_ranges Byte ranges to fetch
+ * @param stream CUDA stream
+ * @param mr Device memory resource to create device buffers with
+ *
+ * @return Vector of device buffers
+ */
+std::vector<rmm::device_buffer> fetch_byte_ranges(
+  cudf::host_span<uint8_t const> host_buffer,
+  cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);

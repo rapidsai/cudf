@@ -14,16 +14,15 @@
  * limitations under the License.
  */
 
+#include "../utilities/io_source.hpp"
+#include "../utilities/mr_utils.hpp"
 #include "../utilities/table_utils.hpp"
 #include "../utilities/timer.hpp"
-#include "common_utils.hpp"
-#include "io_source.hpp"
+#include "hybrid_scan_utils.hpp"
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/experimental/hybrid_scan.hpp>
-#include <cudf/io/parquet.hpp>
-#include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
 
@@ -54,7 +53,7 @@ namespace {
  * @param io_source io source to read
  * @return cudf::io::table_with_metadata
  */
-cudf::io::table_with_metadata read_parquet(io_source const& io_source,
+cudf::io::table_with_metadata read_parquet(cudf::examples::io_source const& io_source,
                                            cudf::ast::operation const& filter_expression,
                                            rmm::cuda_stream_view stream)
 {
@@ -101,91 +100,6 @@ enum class parquet_filter_type : uint8_t {
 };
 
 /**
- * @brief Fetches a host span of Parquet footer bytes from the input buffer span
- *
- * @param buffer Input buffer span
- * @return A host span of the footer bytes
- */
-cudf::host_span<uint8_t const> fetch_footer_bytes(cudf::host_span<uint8_t const> buffer)
-{
-  CUDF_FUNC_RANGE();
-
-  using namespace cudf::io::parquet;
-
-  constexpr auto header_len = sizeof(file_header_s);
-  constexpr auto ender_len  = sizeof(file_ender_s);
-  size_t const len          = buffer.size();
-
-  auto const header_buffer = cudf::host_span<uint8_t const>(buffer.data(), header_len);
-  auto const header        = reinterpret_cast<file_header_s const*>(header_buffer.data());
-  auto const ender_buffer =
-    cudf::host_span<uint8_t const>(buffer.data() + len - ender_len, ender_len);
-  auto const ender = reinterpret_cast<file_ender_s const*>(ender_buffer.data());
-  CUDF_EXPECTS(len > header_len + ender_len, "Incorrect data source");
-  constexpr uint32_t parquet_magic = (('P' << 0) | ('A' << 8) | ('R' << 16) | ('1' << 24));
-  CUDF_EXPECTS(header->magic == parquet_magic && ender->magic == parquet_magic,
-               "Corrupted header or footer");
-  CUDF_EXPECTS(ender->footer_len != 0 && ender->footer_len <= (len - header_len - ender_len),
-               "Incorrect footer length");
-
-  return cudf::host_span<uint8_t const>(buffer.data() + len - ender->footer_len - ender_len,
-                                        ender->footer_len);
-}
-
-/**
- * @brief Fetches a host span of Parquet PageIndexbytes from the input buffer span
- *
- * @param buffer Input buffer span
- * @param page_index_bytes Byte range of `PageIndex` to fetch
- * @return A host span of the PageIndex bytes
- */
-cudf::host_span<uint8_t const> fetch_page_index_bytes(
-  cudf::host_span<uint8_t const> buffer, cudf::io::text::byte_range_info const page_index_bytes)
-{
-  return cudf::host_span<uint8_t const>(
-    reinterpret_cast<uint8_t const*>(buffer.data()) + page_index_bytes.offset(),
-    page_index_bytes.size());
-}
-
-/**
- * @brief Fetches a list of byte ranges from a host buffer into a vector of device buffers
- *
- * @param host_buffer Host buffer span
- * @param byte_ranges Byte ranges to fetch
- * @param stream CUDA stream
- * @param mr Device memory resource to create device buffers with
- *
- * @return Vector of device buffers
- */
-std::vector<rmm::device_buffer> fetch_byte_ranges(
-  cudf::host_span<uint8_t const> host_buffer,
-  cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-
-  std::vector<rmm::device_buffer> buffers{};
-  buffers.reserve(byte_ranges.size());
-
-  std::transform(
-    byte_ranges.begin(),
-    byte_ranges.end(),
-    std::back_inserter(buffers),
-    [&](auto const& byte_range) {
-      auto const chunk_offset = host_buffer.data() + byte_range.offset();
-      auto const chunk_size   = byte_range.size();
-      auto buffer             = rmm::device_buffer(chunk_size, stream, mr);
-      CUDF_CUDA_TRY(cudaMemcpyAsync(
-        buffer.data(), chunk_offset, chunk_size, cudaMemcpyHostToDevice, stream.value()));
-      return buffer;
-    });
-
-  stream.synchronize_no_throw();
-  return buffers;
-}
-
-/**
  * @brief Read parquet file with the next-gen parquet reader
  *
  * @param io_source io source to read
@@ -197,7 +111,7 @@ std::vector<rmm::device_buffer> fetch_byte_ranges(
  * @return Tuple of filter table, payload table, filter metadata, payload metadata, and the final
  *         row validity column
  */
-auto hybrid_scan(io_source const& io_source,
+auto hybrid_scan(cudf::examples::io_source const& io_source,
                  cudf::ast::operation const& filter_expression,
                  std::unordered_set<parquet_filter_type> const& filters,
                  rmm::cuda_stream_view stream,
@@ -208,7 +122,7 @@ auto hybrid_scan(io_source const& io_source,
   auto options = cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
 
   // Input file buffer span
-  auto const file_buffer_span = io_source.get_buffer_span();
+  auto const file_buffer_span = io_source.get_host_buffer_span();
 
   std::cout << "\nREADER: Setup, metadata and page index...\n";
   cudf::examples::timer timer;
@@ -332,12 +246,13 @@ auto hybrid_scan(io_source const& io_source,
     fetch_byte_ranges(file_buffer_span, filter_column_chunk_byte_ranges, stream, mr);
 
   // Materialize the table with only the filter columns
+  auto row_mask_mutable_view = row_mask->mutable_view();
   auto filter_table =
     reader
       ->materialize_filter_columns(
         current_row_group_indices,
         std::move(filter_column_chunk_buffers),
-        row_mask->mutable_view(),
+        row_mask_mutable_view,
         prune_filter_data_pages ? use_data_page_mask::YES : use_data_page_mask::NO,
         options,
         stream)
@@ -414,11 +329,11 @@ int main(int argc, char const** argv)
   auto output_filepath = std::string{"output.parquet"};
   auto column_name     = std::string{"col_a"};
   auto literal_value   = std::string{"100"};
-  auto io_source_type  = io_source_type::PINNED_BUFFER;
+  auto io_source_type  = cudf::examples::io_source_type::PINNED_BUFFER;
 
   switch (argc) {
     case 6: output_filepath = argv[5]; [[fallthrough]];
-    case 5: io_source_type = get_io_source_type(argv[4]); [[fallthrough]];
+    case 5: io_source_type = cudf::examples::get_io_source_type(argv[4]); [[fallthrough]];
     case 4: literal_value = argv[3]; [[fallthrough]];
     case 3: column_name = argv[2]; [[fallthrough]];
     case 2:  // Check if instead of input_paths, the first argument is `-h` or `--help`
@@ -438,7 +353,7 @@ int main(int argc, char const** argv)
   // Initialize mr, default stream and stream pool
   auto constexpr is_pool_used = true;
   auto stream                 = cudf::get_default_stream();
-  auto resource               = create_memory_resource(is_pool_used);
+  auto resource               = cudf::examples::create_memory_resource(is_pool_used);
   auto stats_mr =
     rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>(resource.get());
   rmm::mr::set_current_device_resource(&stats_mr);
@@ -451,7 +366,7 @@ int main(int argc, char const** argv)
     cudf::ast::operation(cudf::ast::ast_operator::EQUAL, column_reference, literal);
 
   // Create io source
-  auto const data_source = io_source{input_filepath, io_source_type, stream};
+  auto const data_source = cudf::examples::io_source{input_filepath, io_source_type, stream};
 
   // Read with legacy reader without timing
   {

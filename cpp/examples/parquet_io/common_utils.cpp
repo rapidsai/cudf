@@ -35,16 +35,6 @@
  *
  */
 
-std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_pool_used)
-{
-  auto cuda_mr = std::make_shared<rmm::mr::cuda_memory_resource>();
-  if (is_pool_used) {
-    return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-      cuda_mr, rmm::percent_of_free_device_memory(50));
-  }
-  return cuda_mr;
-}
-
 cudf::io::column_encoding get_encoding_type(std::string name)
 {
   using encoding_type = cudf::io::column_encoding;

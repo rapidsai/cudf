@@ -18,7 +18,7 @@ include(../fetch_dependencies.cmake)
 include(rapids-cmake)
 rapids_cmake_build_type("Release")
 
-add_library(hybrid_scan_utils OBJECT common_utils.cpp io_source.cpp)
+add_library(hybrid_scan_utils OBJECT hybrid_scan_utils.cpp)
 target_compile_features(hybrid_scan_utils PRIVATE cxx_std_20)
 target_link_libraries(hybrid_scan_utils PRIVATE cudf::cudf)
 

@@ -32,14 +32,6 @@
  */
 
 /**
- * @brief Create memory resource for libcudf functions
- *
- * @param pool Whether to use a pool memory resource.
- * @return Memory resource instance
- */
-std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_pool_used);
-
-/**
  * @brief Get encoding type from the keyword
  *
  * @param name encoding keyword name

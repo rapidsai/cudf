@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "common.hpp"
+#include "../utilities/mr_utils.hpp"
 #include "groupby_results.hpp"
 
 #include <cudf/column/column.hpp>
@@ -114,7 +114,7 @@ int main(int argc, char const** argv)
   std::cout << "Threads: " << thread_count << std::endl;
 
   auto const mr_name = std::string("pool");
-  auto resource      = create_memory_resource(mr_name);
+  auto resource      = cudf::examples::create_memory_resource(mr_name);
   auto stats_mr =
     rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>(resource.get());
   rmm::mr::set_current_device_resource(&stats_mr);

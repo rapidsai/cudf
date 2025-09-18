@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "../utilities/mr_utils.hpp"
 #include "../utilities/table_utils.hpp"
 #include "../utilities/timer.hpp"
 #include "common_utils.hpp"
@@ -139,7 +140,7 @@ int main(int argc, char const** argv)
 
   // Create and use a memory pool
   bool is_pool_used = true;
-  auto resource     = create_memory_resource(is_pool_used);
+  auto resource     = cudf::examples::create_memory_resource(is_pool_used);
   cudf::set_current_device_resource(resource.get());
 
   // Read input parquet file
