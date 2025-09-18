@@ -57,7 +57,6 @@ class filtered_join {
    * @brief Properties of the build table used in the join operation
    */
   struct build_properties {
-    bool has_nulls;           ///< True if nested nulls are present in build table
     bool has_nested_columns;  ///< True if the build table contains nested columns
   };
 

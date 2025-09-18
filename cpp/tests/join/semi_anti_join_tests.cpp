@@ -317,18 +317,18 @@ TEST_F(JoinTest, AntiJoinWithStructsAndNullsOnOneSide)
   auto left_col0 = [] {
     column_wrapper<int32_t> child1{{1, null}, cudf::test::iterators::null_at(1)};
     column_wrapper<int32_t> child2{11, 12};
-    return cudf::test::structs_column_wrapper{{child1, child2}};
+    return cudf::test::structs_column_wrapper{{child1, child2}, {true, true}};
   }();
   auto right_col0 = [] {
     column_wrapper<int32_t> child1{1, 2, 3, 4};
     column_wrapper<int32_t> child2{11, 12, 13, 14};
-    return cudf::test::structs_column_wrapper{{child1, child2}};
+    return cudf::test::structs_column_wrapper{{child1, child2}, {true, true, true, true}};
   }();
 
   auto left  = cudf::table_view{{left_col0}};
   auto right = cudf::table_view{{right_col0}};
 
-  auto result               = left_anti_join(left, right, {0}, {0}, cudf::null_equality::UNEQUAL);
+  auto result               = left_anti_join(left, right, {0}, {0});
   auto expected_indices_col = column_wrapper<cudf::size_type>{1};
   auto expected             = cudf::gather(left, expected_indices_col);
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*expected, *result);
