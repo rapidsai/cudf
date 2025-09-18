@@ -57,7 +57,7 @@ def test_merge():
     not at_least_n_gpus(2), reason="Machine does not have two GPUs"
 )
 def test_ucx_seriesgroupby():
-    pytest.importorskip("ucp")
+    pytest.importorskip("distributed_ucxx")
 
     # Repro Issue#3913
     with dask_cuda.LocalCUDACluster(n_workers=2, protocol="ucx") as cluster:
