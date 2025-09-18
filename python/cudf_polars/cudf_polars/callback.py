@@ -148,10 +148,10 @@ def set_memory_resource(
     # to RMM's memory resources. We need to ensure that all of the buffers
     # allocated during the lifetime of memory resource (either the new one
     # we create here, or the statistics wrapped around it) are freed *before*
-    # the previous MR is restored.
+    # we drop this MR (and the previous MR is restored).
     #
     # Normally, this is fine, but Exceptions raised while the MR is active
-    # present a challenge: Python keeps a reference to # the Python frame
+    # present a challenge: Python keeps a reference to the Python frame
     # with the locals, which might include buffers allocated on the MR.
     # We don't handle the exception here: we want to propagate it to
     # the user / polars. But we do need to restore the previous MR before
@@ -172,12 +172,6 @@ def set_memory_resource(
     finally:
         ctx.__exit__(None, None, None)
         print("restoring mr", previous)
-        rmm.mr.set_current_device_resource(previous)
-
-    try:
-        with ctx:
-            yield mr
-    finally:
         rmm.mr.set_current_device_resource(previous)
 
 
