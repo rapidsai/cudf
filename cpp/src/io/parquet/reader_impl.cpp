@@ -564,7 +564,8 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
     _options{options.get_timestamp_type(),
              options.get_skip_rows(),
              options.get_num_rows(),
-             options.get_row_groups()},
+             options.get_row_groups(),
+             options.get_use_jit_filter()},
     _sources{std::move(sources)},
     _pass_page_mask{cudf::detail::make_host_vector<bool>(0, _stream)},
     _subpass_page_mask{cudf::detail::make_host_vector<bool>(0, _stream)},
@@ -793,6 +794,8 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
                                                  table_metadata& out_metadata,
                                                  std::vector<std::unique_ptr<column>>& out_columns)
 {
+  CUDF_FUNC_RANGE();
+
   // Create empty columns as needed (this can happen if we've ended up with no actual data to read)
   for (size_t i = out_columns.size(); i < _output_buffers.size(); ++i) {
     if (!_output_metadata) {
@@ -828,7 +831,9 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
 
     if (_num_filter_only_columns > 0) { out_metadata.schema_info.resize(output_count); }
 
-    if (!cudf::get_context().use_jit()) {
+    bool use_jit = cudf::get_context().use_jit() || _options.use_jit_filter;
+
+    if (!use_jit) {
       auto predicate = cudf::detail::compute_column(*read_table,
                                                     _expr_conv.get_converted_expr().value().get(),
                                                     _stream,

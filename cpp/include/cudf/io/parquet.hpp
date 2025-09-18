@@ -101,6 +101,8 @@ class parquet_reader_options {
   bool _allow_mismatched_pq_schemas = false;
   // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
+  // Whether to use JIT compilation for filtering
+  bool _use_jit_filter = false;
 
   std::optional<std::vector<reader_column_schema>> _reader_column_schema;
 
@@ -226,6 +228,13 @@ class parquet_reader_options {
    * @return Timestamp type used to cast timestamp columns
    */
   [[nodiscard]] data_type get_timestamp_type() const { return _timestamp_type; }
+
+  /**
+   * @brief Returns whether to use JIT compilation for filtering.
+   *
+   * @return `true` if JIT compilation should used for filtering
+   */
+  [[nodiscard]] bool get_use_jit_filter() const { return _use_jit_filter; }
 
   /**
    * @brief Sets the names of columns to be read from all input sources.
@@ -514,6 +523,18 @@ class parquet_reader_options_builder {
   parquet_reader_options_builder& timestamp_type(data_type type)
   {
     options._timestamp_type = type;
+    return *this;
+  }
+
+  /**
+   * @brief Enable/disable use of JIT for filter step.
+   *
+   * @param use_jit_filter Boolean value whether to use JIT filter
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& use_jit_filter(bool use_jit_filter)
+  {
+    options._use_jit_filter = use_jit_filter;
     return *this;
   }
 

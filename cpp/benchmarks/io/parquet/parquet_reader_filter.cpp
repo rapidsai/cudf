@@ -1,0 +1,309 @@
+/*
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/io/cuio_common.hpp>
+#include <benchmarks/io/nvbench_helpers.hpp>
+
+#include <cudf_test/column_wrapper.hpp>
+
+#include <cudf/binaryop.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/detail/sequence.hpp>
+#include <cudf/io/parquet.hpp>
+#include <cudf/strings/utilities.hpp>
+#include <cudf/utilities/default_stream.hpp>
+
+#include <nvbench/nvbench.cuh>
+
+template <typename DataType>
+struct filter_generator {
+  decltype(auto) operator()(float selectivity,
+                            cudf::size_type num_rows,
+                            cudf::size_type row_width,
+                            bool nullable,
+                            cudf::size_type num_predicates) = delete;
+};
+
+template <typename DataType>
+  requires(std::is_same_v<DataType, int32_t> || std::is_same_v<DataType, int64_t> ||
+           std::is_same_v<DataType, float> || std::is_same_v<DataType, double>)
+struct filter_generator<DataType> {
+  decltype(auto) operator()(float selectivity,
+                            cudf::size_type num_rows,
+                            cudf::size_type row_width,
+                            bool nullable,
+                            cudf::size_type num_predicates)
+  {
+    auto min        = static_cast<DataType>(0);
+    auto max        = static_cast<DataType>(num_rows);
+    auto filter_min = min;
+    auto filter_max = static_cast<DataType>(filter_min + (max - min) * selectivity);
+    auto filter_step =
+      static_cast<DataType>((filter_max - filter_min) / static_cast<DataType>(num_predicates));
+
+    std::vector<cudf::numeric_scalar<DataType>> filter_min_scalars;
+    std::vector<cudf::numeric_scalar<DataType>> filter_max_scalars;
+
+    for (cudf::size_type i = 0; i < num_predicates; i++) {
+      // std::cout << "Filter " << i << ": [" << filter_min + i * filter_step << ", " << filter_max
+      //           << "]" << std::endl;
+      auto min = static_cast<DataType>(filter_min + i * filter_step);
+      filter_min_scalars.push_back(cudf::numeric_scalar<DataType>(min));
+      filter_max_scalars.push_back(cudf::numeric_scalar<DataType>(filter_max));
+    }
+
+    cudf::ast::tree expr;
+    auto& col_ref = expr.push(cudf::ast::column_reference(0));
+
+    for (cudf::size_type i = 0; i < num_predicates; i++) {
+      auto* prev_cond       = (i == 0) ? nullptr : &expr.back();
+      auto& filter_min_lit  = expr.push(cudf::ast::literal(filter_min_scalars[i]));
+      auto& filter_max_lit  = expr.push(cudf::ast::literal(filter_max_scalars[i]));
+      auto& min_filter_cond = expr.push(
+        cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col_ref, filter_min_lit));
+      auto& max_filter_cond = expr.push(
+        cudf::ast::operation(cudf::ast::ast_operator::LESS_EQUAL, col_ref, filter_max_lit));
+      auto& cond = expr.push(cudf::ast::operation(
+        cudf::ast::ast_operator::LOGICAL_AND, min_filter_cond, max_filter_cond));
+
+      if (i != 0) {
+        expr.push(cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_OR, *prev_cond, cond));
+      }
+    }
+
+    auto& cond = expr.back();
+
+    auto filter_column_it = cudf::detail::make_counting_transform_iterator(
+      0, [](auto i) { return static_cast<DataType>(i); });
+    auto filter_column = cudf::test::fixed_width_column_wrapper<DataType>(
+                           filter_column_it, filter_column_it + num_rows)
+                           .release();
+
+    auto [null_mask, null_count] = create_random_null_mask(num_rows, nullable ? 0.3 : 0);
+
+    // std::cout << "NULL COUNT: " << null_count << std::endl;
+    filter_column->set_null_mask(null_mask, null_count);
+
+    return std::make_tuple(std::move(filter_column),
+                           [filter_min_scalars = std::move(filter_min_scalars),
+                            filter_max_scalars = std::move(filter_max_scalars),
+                            expr               = std::move(expr),
+                            cond               = std::ref(cond)]() mutable { return cond; });
+  }
+};
+
+template <typename DataType>
+  requires(std::is_same_v<DataType, cudf::string_view>)
+struct filter_generator<DataType> {
+  decltype(auto) operator()(float selectivity,
+                            cudf::size_type num_rows,
+                            cudf::size_type row_width,
+                            bool nullable,
+                            cudf::size_type num_predicates)
+  {
+    std::array<char const*, 10> matches{"A MATCH",
+                                        "ANOTHER MATCH",
+                                        "YET ANOTHER MATCH",
+                                        "MATCHY MATCHY",
+                                        "MATCHES ALL THE WAY DOWN",
+                                        "MATCHING IS FUN",
+                                        "MATCHBOX",
+                                        "MATCHSTICK",
+                                        "MATCHMAKER",
+                                        "MATCHLESS"};
+
+    std::vector<char const*> selected_matches;
+    for (cudf::size_type i = 0; i < num_predicates; i++) {
+      selected_matches.emplace_back(matches[i % (sizeof(matches) / sizeof(matches[0]))]);
+    }
+
+    std::vector<cudf::string_scalar> match_scalars;
+    for (cudf::size_type i = 0; i < num_predicates; i++) {
+      match_scalars.emplace_back(selected_matches[i]);
+    }
+
+    auto match_it = cudf::detail::make_counting_transform_iterator(
+      0, [&](auto i) { return matches[i % std::size(matches)]; });
+    cudf::test::strings_column_wrapper match_col =
+      cudf::test::strings_column_wrapper(match_it, match_it + num_rows);
+
+    auto num_selected = static_cast<cudf::size_type>(num_rows * selectivity);
+
+    auto indices = cudf::detail::sequence(num_rows,
+                                          cudf::numeric_scalar<cudf::size_type>{0},
+                                          cudf::get_default_stream(),
+                                          cudf::get_current_device_resource_ref());
+
+    auto copy_mask = cudf::binary_operation(indices->view(),
+                                            cudf::numeric_scalar<cudf::size_type>{num_selected},
+                                            cudf::binary_operator::LESS,
+                                            cudf::data_type{cudf::type_id::BOOL8});
+
+    auto profile = data_profile();
+    profile.set_null_probability(nullable ? std::optional{0.3} : std::nullopt);
+    profile.set_distribution_params(
+      cudf::type_id::STRING, distribution_id::UNIFORM, row_width, row_width);
+    auto column = create_random_column(cudf::type_to_id<DataType>(), row_count{num_rows}, profile);
+
+    auto result = cudf::copy_if_else(match_col, column->view(), copy_mask->view());
+
+    cudf::ast::tree expr;
+    auto& col_ref = expr.push(cudf::ast::column_reference(0));
+
+    for (cudf::size_type i = 0; i < num_predicates; i++) {
+      auto& match_lit = expr.push(cudf::ast::literal(match_scalars[i]));
+      auto& cond =
+        expr.push(cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref, match_lit));
+
+      if (i == 0) continue;
+
+      expr.push(cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_OR, expr.back(), cond));
+    }
+
+    auto& cond = expr.back();
+
+    return std::make_tuple(std::move(result),
+                           [match_scalars = std::move(match_scalars),
+                            expr          = std::move(expr),
+                            cond          = std::ref(cond)]() mutable { return cond; });
+  }
+};
+
+// [ ] will onnly be beneficial for multi-column tables and complex types
+template <typename DataType>
+void BM_parquet_read_filter(nvbench::state& state)
+{
+  auto const num_rows  = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const row_width = static_cast<cudf::size_type>(state.get_int64_or_default("row_width", 1));
+  auto const num_predicates = static_cast<cudf::size_type>(state.get_int64("num_predicates"));
+  auto const selectivity    = static_cast<float>(state.get_float64("selectivity"));
+  auto const nullable       = state.get_string("nullable") == "true";
+  auto const use_jit        = state.get_string("executor") == "jit";
+  auto const num_input_cols = static_cast<cudf::size_type>(state.get_int64("num_cols"));
+
+  CUDF_EXPECTS(num_input_cols >= 1, "Invalid number of input columns");
+  CUDF_EXPECTS(selectivity > 0.0F && selectivity <= 1.0F, "Invalid selectivity");
+  CUDF_EXPECTS(num_predicates >= 0 && num_predicates <= 100'000, "Invalid number of predicates");
+
+  auto const num_copy_only_cols = num_input_cols - 1;
+
+  auto [filter_column, filter_func] =
+    filter_generator<DataType>()(selectivity, num_rows, row_width, nullable, num_predicates);
+  auto copy_only_dtypes = cycle_dtypes(
+    {cudf::type_id::BOOL8, cudf::type_id::FLOAT32, cudf::type_id::FLOAT64, cudf::type_id::STRING},
+    num_copy_only_cols);
+
+  std::vector<std::unique_ptr<cudf::column>> copy_only_cols;
+
+  for (cudf::size_type i = 0; i < num_copy_only_cols; i++) {
+    auto profile = data_profile();
+    profile.set_null_probability(std::nullopt);
+    auto col       = create_random_column(copy_only_dtypes[i], row_count{num_rows}, profile);
+    auto null_mask = cudf::copy_bitmask(filter_column->view());
+    col->set_null_mask(null_mask, filter_column->null_count());
+    copy_only_cols.push_back(std::move(col));
+  }
+
+  std::vector<cudf::column_view> table_columns;
+  table_columns.push_back(filter_column->view());
+
+  for (const auto& col : copy_only_cols) {
+    table_columns.push_back(col->view());
+  }
+
+  // for (auto& col : table_columns) {
+  //   std::cout << "Copy-only column " << col.size() << " rows" << std::endl;
+  // }
+
+  auto table = cudf::table_view{table_columns};
+
+  // std::cout << " input Num rows: " << table.num_rows() << ", Num cols: " << table.num_columns()
+  //           << "\n";
+
+  std::vector<char> parquet_buffer;
+
+  cudf::io::table_input_metadata expected_metadata(table);
+  for (auto i = 0; i < table.num_columns(); i++) {
+    expected_metadata.column_metadata[i].set_name("col" + std::to_string(i));
+  }
+
+  cudf::io::parquet_writer_options write_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&parquet_buffer}, table)
+      .metadata(expected_metadata)
+      .compression(cudf::io::compression_type::AUTO)
+      .dictionary_policy(cudf::io::dictionary_policy::ALWAYS)
+      .stats_level(cudf::io::statistics_freq::STATISTICS_NONE);
+  cudf::io::write_parquet(write_opts);
+
+  // std::cout << "written " << parquet_buffer.size() << " bytes\n";
+
+  cudf::io::parquet_reader_options read_opts =
+    cudf::io::parquet_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<char>{parquet_buffer.data(), parquet_buffer.size()}})
+      .filter(filter_func())
+      .use_jit_filter(use_jit);
+
+  // pre-warm JIT cache
+  if (use_jit) { cudf::io::read_parquet(read_opts); }
+
+  auto mem_stats_logger = cudf::memory_stats_logger();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
+  state.exec(
+    nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
+      try_drop_l3_cache();
+
+      timer.start();
+      auto const result = cudf::io::read_parquet(read_opts);
+      timer.stop();
+
+      // std::cout << "Num rows: " << result.tbl->num_rows()
+      //           << ", Num cols: " << result.tbl->num_columns() << "\n";
+      CUDF_EXPECTS(result.tbl->num_columns() == num_input_cols, "Unexpected number of columns");
+    });
+
+  if constexpr (std::is_same_v<DataType, cudf::string_view>) {
+    state.add_global_memory_reads<char>(num_rows * static_cast<size_t>(row_width));
+    state.add_global_memory_writes<char>(static_cast<size_t>(num_rows * selectivity) * row_width);
+  } else {
+    state.add_global_memory_reads<DataType>(num_rows);
+    state.add_global_memory_writes<DataType>(static_cast<size_t>(num_rows * selectivity));
+  }
+}
+
+#define PARQUET_READER_FILTER_BENCHMARK_DEFINE(name, type)                  \
+  void name(nvbench::state& state) { BM_parquet_read_filter<type>(state); } \
+                                                                            \
+  NVBENCH_BENCH(name)                                                       \
+    .add_string_axis("io_type", {"DEVICE_BUFFER"})                          \
+    .add_int64_axis("num_predicates", {4, 16})                              \
+    .add_int64_axis("num_cols", {32})                                       \
+    .add_int64_axis("num_rows", {100'000, 1'000'000, 10'000'000})           \
+    .add_float64_axis("selectivity", {0.5, 0.8})                            \
+    .add_string_axis("nullable", {"true"})                                  \
+    .add_string_axis("executor", {"jit", "ast"})
+
+PARQUET_READER_FILTER_BENCHMARK_DEFINE(parquet_read_filter_i32, int32_t);
+
+PARQUET_READER_FILTER_BENCHMARK_DEFINE(parquet_read_filter_f32, float);
+
+PARQUET_READER_FILTER_BENCHMARK_DEFINE(parquet_read_filter_i64, int64_t);
+
+PARQUET_READER_FILTER_BENCHMARK_DEFINE(parquet_read_filter_f64, double);
+
+PARQUET_READER_FILTER_BENCHMARK_DEFINE(parquet_read_filter_string, cudf::string_view)
+  .add_int64_axis("row_width", {8, 256});
