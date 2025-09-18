@@ -31,11 +31,6 @@ namespace {
 // Max block size supported for the parquet decode, assuming 64 registers per thread.
 static constexpr int max_decode_block_size = 1024;
 
-/**
- * @brief Enum specifying what type of run# checks we should do for a decode launch.
- */
-enum class launch_type { SKIP_ROWS_LAUNCH, NO_SKIP_ROWS_LAUNCH, NO_ROW_CHECK_LAUNCH };
-
 // Unlike cub's algorithm, this provides warp-wide and block-wide results simultaneously.
 // Also, this provides the ability to compute warp_bits & lane_mask manually, which we need for
 // lists.
@@ -1058,7 +1053,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, max_decode_block_size / 
   // Exit super early for simple types if the page does not need to be decoded
   if constexpr (not has_lists_t and not has_strings_t and not has_nesting_t) {
     if (not page_mask[page_idx]) {
-      pp->num_nulls  = pp->num_rows;
+      pp->num_nulls  = pp->nesting[s->col.max_nesting_depth - 1].batch_size;
       pp->num_valids = 0;
       // Set s->nesting info = nullptr to bypass `null_count_back_copier` at return
       s->nesting_info = nullptr;
@@ -1079,15 +1074,18 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, max_decode_block_size / 
 
   // Write list and/or string offsets and exit if the page does not need to be decoded
   if (not page_mask[page_idx]) {
-    pp->num_nulls  = pp->num_rows;
-    pp->num_valids = 0;
-    // Update offsets for all list depth levels
+    //  Update offsets for all list depth levels
     if constexpr (has_lists_t) { update_list_offsets_for_pruned_pages<decode_block_size_t>(s); }
     // Update string offsets or write string sizes for small and large strings respectively
     if constexpr (has_strings_t) {
       update_string_offsets_for_pruned_pages<decode_block_size_t, has_lists_t>(
         s, initial_str_offsets, pages[page_idx]);
     }
+    // Must be set after computing above list and string offsets
+    pp->num_nulls = pp->nesting[s->col.max_nesting_depth - 1].batch_size;
+    if constexpr (not has_lists_t) { pp->num_nulls -= s->first_row; }
+    pp->num_valids = 0;
+
     return;
   }
 
