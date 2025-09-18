@@ -913,11 +913,9 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
       auto const page_start_row = chunks[chunk_idx].start_row + page.chunk_row;
       auto const page_end_row   = page_start_row + page.num_rows;
 
-      // Check if the page is completely outside the table row bounds and return early if so
       auto const is_page_out_of_bounds =
         (page_start_row < table_start_row and page_end_row < table_start_row) or
         (page_start_row > table_end_row and page_end_row > table_end_row);
-
       if (is_page_out_of_bounds) { return; }
 
       // The page is either completely or partially within the table row bounds
@@ -947,13 +945,7 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
       for (size_t l_idx = 0; l_idx < max_depth; l_idx++) {
         auto& out_buf = (*cols)[input_col.nesting[l_idx]];
         cols          = &out_buf.children;
-        // If the current column is a list child column, increment the null count by the number of
-        // nulls in this page
-        if (out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) {
-          // TODO: For completeness, clear the corresponding null mask bits as well. Requires
-          // computing the bit range using cumulative page infos
-          continue;
-        }
+        if (out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) { continue; }
         // Add the nullmask and bit bounds to corresponding lists
         null_masks.emplace_back(out_buf.null_mask());
         begin_bits.emplace_back(start_row);

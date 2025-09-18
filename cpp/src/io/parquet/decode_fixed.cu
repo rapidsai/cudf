@@ -1050,27 +1050,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   // Exit super early for simple types if the page does not need to be decoded
   if constexpr (not has_lists_t and not has_strings_t and not has_nesting_t) {
     if (not page_mask[page_idx]) {
-      auto const page_num_rows = [=]() {
-        auto const& col             = chunks[pp->chunk_idx];
-        size_t const page_start_row = col.start_row + pp->chunk_row;
-
-        auto const max_row = min_row + num_rows;
-
-        // if we are totally outside the range of the input, do nothing
-        if ((page_start_row > max_row) || (page_start_row + pp->num_rows < min_row)) {
-          return size_t{0};
-        }
-        // otherwise
-        else {
-          auto const first_row     = page_start_row >= min_row ? 0 : min_row - page_start_row;
-          auto const max_page_rows = pp->num_rows - first_row;
-          return (page_start_row + first_row) + max_page_rows <= max_row
-                   ? max_page_rows
-                   : max_row - (page_start_row + first_row);
-        }
-      }();
-
-      pp->num_nulls  = page_num_rows;
+      pp->num_nulls  = pp->nesting[s->col.max_nesting_depth - 1].batch_size;
       pp->num_valids = 0;
       // Set s->nesting info = nullptr to bypass `null_count_back_copier` at return
       s->nesting_info = nullptr;

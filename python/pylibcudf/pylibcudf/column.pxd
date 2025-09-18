@@ -6,6 +6,7 @@ from libc.stdint cimport uint64_t
 
 from rmm.librmm.device_buffer cimport device_buffer
 from rmm.pylibrmm.stream cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport (
     column_view,
@@ -59,6 +60,7 @@ cdef class Column:
     cdef Column from_libcudf(
         unique_ptr[column] libcudf_col,
         Stream stream,
+        DeviceMemoryResource mr=*
     )
 
     @staticmethod

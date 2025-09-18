@@ -430,8 +430,8 @@ hybrid_scan_reader_impl::payload_column_chunks_byte_ranges(
 
 table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
-  std::vector<rmm::device_buffer> column_chunk_buffers,
-  cudf::mutable_column_view row_mask,
+  std::vector<rmm::device_buffer>&& column_chunk_buffers,
+  cudf::mutable_column_view& row_mask,
   use_data_page_mask mask_data_pages,
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
@@ -454,7 +454,7 @@ table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns(
   auto data_page_mask =
     (mask_data_pages == use_data_page_mask::YES)
       ? _extended_metadata->compute_data_page_mask(
-          row_mask, row_group_indices, _input_columns, _rows_processed_so_far, _stream)
+          row_mask, row_group_indices, _input_columns, _rows_processed_so_far, stream)
       : std::vector<std::vector<bool>>{};
 
   prepare_data(
@@ -465,8 +465,8 @@ table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns(
 
 table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
-  std::vector<rmm::device_buffer> column_chunk_buffers,
-  cudf::column_view row_mask,
+  std::vector<rmm::device_buffer>&& column_chunk_buffers,
+  cudf::column_view const& row_mask,
   use_data_page_mask mask_data_pages,
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
@@ -484,7 +484,7 @@ table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns(
   auto data_page_mask =
     (mask_data_pages == use_data_page_mask::YES)
       ? _extended_metadata->compute_data_page_mask(
-          row_mask, row_group_indices, _input_columns, _rows_processed_so_far, _stream)
+          row_mask, row_group_indices, _input_columns, _rows_processed_so_far, stream)
       : std::vector<std::vector<bool>>{};
 
   prepare_data(
@@ -497,9 +497,9 @@ void hybrid_scan_reader_impl::setup_chunking_for_filter_columns(
   std::size_t chunk_read_limit,
   std::size_t pass_read_limit,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
-  cudf::column_view row_mask,
+  cudf::column_view const& row_mask,
   use_data_page_mask mask_data_pages,
-  std::vector<rmm::device_buffer> column_chunk_buffers,
+  std::vector<rmm::device_buffer>&& column_chunk_buffers,
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
@@ -531,7 +531,7 @@ void hybrid_scan_reader_impl::setup_chunking_for_filter_columns(
 }
 
 table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns_chunk(
-  cudf::mutable_column_view row_mask, rmm::cuda_stream_view stream)
+  cudf::mutable_column_view& row_mask, rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(_file_preprocessed, "Chunking for filter columns not yet setup");
 
@@ -553,9 +553,9 @@ void hybrid_scan_reader_impl::setup_chunking_for_payload_columns(
   std::size_t chunk_read_limit,
   std::size_t pass_read_limit,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
-  cudf::column_view row_mask,
+  cudf::column_view const& row_mask,
   use_data_page_mask mask_data_pages,
-  std::vector<rmm::device_buffer> column_chunk_buffers,
+  std::vector<rmm::device_buffer>&& column_chunk_buffers,
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
@@ -582,7 +582,7 @@ void hybrid_scan_reader_impl::setup_chunking_for_payload_columns(
 }
 
 table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns_chunk(
-  cudf::column_view row_mask, rmm::cuda_stream_view stream)
+  cudf::column_view const& row_mask, rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(_file_preprocessed, "Chunking for payload columns not yet setup");
 
@@ -655,7 +655,7 @@ void hybrid_scan_reader_impl::initialize_options(
 void hybrid_scan_reader_impl::prepare_data(
   read_mode mode,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
-  std::vector<rmm::device_buffer> column_chunk_buffers,
+  std::vector<rmm::device_buffer>&& column_chunk_buffers,
   cudf::host_span<std::vector<bool> const> data_page_mask)
 {
   // if we have not preprocessed at the whole-file level, do that now
