@@ -55,7 +55,7 @@ def _create_polars_column_metadata(
 # This is also defined in pylibcudf.interop
 class _ObjectWithArrowMetadata:
     def __init__(
-        self, obj: plc.Table, metadata: list[plc.interop.ColumnMetadata]
+        self, obj: plc.Table | plc.Column, metadata: list[plc.interop.ColumnMetadata]
     ) -> None:
         self.obj = obj
         self.metadata = metadata

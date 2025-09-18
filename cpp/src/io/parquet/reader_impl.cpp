@@ -32,10 +32,11 @@
 #include <bitset>
 #include <limits>
 #include <numeric>
+#include <utility>
 
 namespace cudf::io::parquet::detail {
 
-void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_rows)
+void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_rows, cudf::device_span<bool const> page_mask)
 {
   CUDF_FUNC_RANGE();
 
@@ -178,23 +179,6 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
       }
     }
   }
-
-  // Use the `_subpass_page_mask` derived from `_page_mask` if non empty, otherwise set all pages in
-  // this subpass to be decoded
-  auto host_page_mask = [&]() {
-    if (_subpass_page_mask.empty()) {
-      auto page_mask = cudf::detail::make_host_vector<bool>(subpass.pages.size(), _stream);
-      std::fill(page_mask.begin(), page_mask.end(), true);
-      return page_mask;
-    } else {
-      return _subpass_page_mask;
-    }
-  }();
-
-  CUDF_EXPECTS(host_page_mask.size() == subpass.pages.size(),
-               "Page mask size must be equal to the number of pages in the subpass");
-
-  auto page_mask = cudf::detail::make_device_uvector_async(host_page_mask, _stream, _mr);
 
   // Create an empty device vector to store the initial str offset for large string columns from for
   // string decoders.
@@ -415,7 +399,7 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
   page_nesting_decode.device_to_host_async(_stream);
 
   // Invalidate output buffer nullmasks at row indices spanned by pruned pages
-  update_output_nullmasks_for_pruned_pages(host_page_mask);
+  update_output_nullmasks_for_pruned_pages(_subpass_page_mask, skip_rows, num_rows);
 
   // Copy over initial string offsets from device
   auto h_initial_str_offsets = cudf::detail::make_host_vector_async(initial_str_offsets, _stream);
@@ -611,7 +595,7 @@ void reader_impl::populate_metadata(table_metadata& out_metadata)
                                      out_metadata.per_file_user_data[0].end()};
 }
 
-void reader_impl::preprocess_chunk_strings(row_range const& read_info)
+void reader_impl::preprocess_chunk_strings(row_range const& read_info, cudf::device_span<bool const> page_mask)
 {
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
@@ -630,16 +614,17 @@ void reader_impl::preprocess_chunk_strings(row_range const& read_info)
     ((pass.skip_rows != read_info.skip_rows) || (pass.num_rows != read_info.num_rows));
 
   if (need_string_size_recompute) {
-    ComputePageStringSizesPass1(subpass.pages,
-                                pass.chunks,
-                                read_info.skip_rows,
-                                read_info.num_rows,
-                                subpass.kernel_mask,
-                                false,
-                                _pass_itm_data->level_type_size,
-                                _stream);
+    compute_page_string_sizes_pass1(subpass.pages,
+                                  pass.chunks,
+                                  page_mask,
+                                  read_info.skip_rows,
+                                  read_info.num_rows,
+                                  subpass.kernel_mask,
+                                  false,
+                                  _pass_itm_data->level_type_size,
+                                  _stream);
   }
-  ComputePageStringSizesPass2(subpass.pages, pass.chunks, subpass.delta_temp_buf, _stream);
+  compute_page_string_sizes_pass2(subpass.pages, pass.chunks, subpass.delta_temp_buf, _stream);
 }
 
 table_with_metadata reader_impl::read_chunk_internal(read_mode mode)
@@ -682,6 +667,10 @@ table_with_metadata reader_impl::read_chunk_internal(read_mode mode)
   auto& subpass         = *pass.subpass;
   auto const& read_info = subpass.output_chunk_read_info[subpass.current_output_chunk];
 
+  CUDF_EXPECTS(_subpass_page_mask.size() == subpass.pages.size(),
+               "Page mask size must be equal to the number of pages in the subpass");
+  auto page_mask = cudf::detail::make_device_uvector_async(_subpass_page_mask, _stream, _mr);
+
   // computes:
   // PageNestingInfo::batch_size for each level of nesting, for each page, taking row bounds into
   // account. PageInfo::skipped_values, which tells us where to start decoding in the input to
@@ -695,16 +684,16 @@ table_with_metadata reader_impl::read_chunk_internal(read_mode mode)
                        false,  // num_rows is already computed
                        pass.level_type_size,
                        _stream);
-  }
+  }  
 
   // preprocess strings
-  preprocess_chunk_strings(read_info);
+  preprocess_chunk_strings(read_info, page_mask);
 
   // Allocate memory buffers for the output columns.
   allocate_columns(mode, read_info.skip_rows, read_info.num_rows);
 
   // Parse data into the output buffers.
-  decode_page_data(mode, read_info.skip_rows, read_info.num_rows);
+  decode_page_data(mode, read_info.skip_rows, read_info.num_rows, page_mask);
 
   // Create the final output cudf columns.
   for (size_t i = 0; i < _output_buffers.size(); ++i) {
@@ -888,7 +877,9 @@ bool reader_impl::has_next()
   return has_more_work() or is_first_output_chunk();
 }
 
-void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool const> page_mask)
+void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool const> page_mask,
+                                                           size_t skip_rows,
+                                                           size_t num_rows)
 {
   auto const& subpass    = _pass_itm_data->subpass;
   auto const& pages      = subpass->pages;
@@ -911,21 +902,53 @@ void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool 
 
   std::for_each(
     page_and_mask_begin, page_and_mask_begin + pages.size(), [&](auto const& page_and_mask_pair) {
-      // Return early if the page is valid
+      // Return early if the page is valid - Note: dictionary pages are always valid
       if (thrust::get<1>(page_and_mask_pair)) { return; }
 
-      auto const& page     = thrust::get<0>(page_and_mask_pair);
-      auto const chunk_idx = page.chunk_idx;
-      auto const start_row = chunks[chunk_idx].start_row + page.chunk_row;
-      auto const end_row   = start_row + page.num_rows;
+      // Get the current page
+      auto const& page = thrust::get<0>(page_and_mask_pair);
+
+      // Table row bounds
+      auto const table_start_row = skip_rows;
+      auto const table_end_row   = skip_rows + num_rows;
+
+      // Current page row bounds
+      auto const chunk_idx      = page.chunk_idx;
+      auto const page_start_row = chunks[chunk_idx].start_row + page.chunk_row;
+      auto const page_end_row   = page_start_row + page.num_rows;
+
+      auto const is_page_out_of_bounds =
+        (page_start_row < table_start_row and page_end_row < table_start_row) or
+        (page_start_row > table_end_row and page_end_row > table_end_row);
+      if (is_page_out_of_bounds) { return; }
+
+      // The page is either completely or partially within the table row bounds
+      auto const [start_row, end_row] = [&]() -> std::pair<size_type, size_type> {
+        // Page is completely within the table row bounds
+        if (page_start_row >= table_start_row and page_end_row <= table_end_row) {
+          return {page_start_row - table_start_row, page_end_row - table_start_row};
+        }
+        // Page starts earlier but ends within the table row bounds
+        else if (page_start_row < table_start_row) {
+          return {0, page_end_row - table_start_row};
+        }
+        // Page starts within the table row bounds but ends after
+        else {
+          return {page_start_row - table_start_row, num_rows};
+        }
+      }();
+
+      // Make sure the row bounds are valid
+      CUDF_EXPECTS(std::cmp_greater_equal(start_row, 0) and std::cmp_less_equal(end_row, num_rows),
+                   "Invalid row bounds");
+
       auto& input_col      = _input_columns[chunk_idx % num_columns];
-      auto max_depth       = input_col.nesting_depth();
+      auto const max_depth = input_col.nesting_depth();
       auto* cols           = &_output_buffers;
 
       for (size_t l_idx = 0; l_idx < max_depth; l_idx++) {
         auto& out_buf = (*cols)[input_col.nesting[l_idx]];
         cols          = &out_buf.children;
-        // Continue if the current column is a list column
         if (out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) { continue; }
         // Add the nullmask and bit bounds to corresponding lists
         null_masks.emplace_back(out_buf.null_mask());

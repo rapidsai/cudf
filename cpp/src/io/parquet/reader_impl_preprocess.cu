@@ -608,14 +608,15 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
                is_treat_fixed_length_as_string(chunk.logical_type);
       });
     if (!_has_page_index || has_flba) {
-      ComputePageStringSizesPass1(subpass.pages,
-                                  pass.chunks,
-                                  pass.skip_rows,
-                                  pass.num_rows,
-                                  subpass.kernel_mask,
-                                  true,
-                                  _pass_itm_data->level_type_size,
-                                  _stream);
+      compute_page_string_sizes_pass1(subpass.pages,
+                                      pass.chunks,
+                                      {},
+                                      pass.skip_rows,
+                                      pass.num_rows,
+                                      subpass.kernel_mask,
+                                      true,
+                                      _pass_itm_data->level_type_size,
+                                      _stream);
     }
     // set str_bytes_all
     thrust::for_each(rmm::exec_policy_nosync(_stream),

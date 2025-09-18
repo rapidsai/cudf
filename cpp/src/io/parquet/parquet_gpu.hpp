@@ -329,7 +329,7 @@ struct PageInfo {
   int32_t num_rows;           // number of rows in this page
   bool is_num_rows_adjusted;  // Flag to indicate if the number of rows of this page have been
                               // adjusted to compensate for the list row size estimates.
-  // the next four are calculated in gpuComputePageStringSizes
+  // the next four are calculated in compute_page_string_sizes_kernel
   int32_t num_nulls;       // number of null values (V2 header), but recalculated for string cols
   int32_t num_valids;      // number of non-null values, taking into account skip_rows/num_rows
   int32_t start_val;       // index of first value of the string data stream to use
@@ -771,14 +771,16 @@ void compute_page_sizes(cudf::detail::hostdevice_span<PageInfo> pages,
  *
  * @param[in,out] pages All pages to be decoded
  * @param[in] chunks All chunks to be decoded
+ * @param[in] page_mask Boolean vector indicating if a page needs to be decoded or is pruned
  * @param[out] temp_string_buf Temporary space needed for decoding DELTA_BYTE_ARRAY strings
  * @param[in] min_rows crop all rows below min_row
  * @param[in] num_rows Maximum number of rows to read
  * @param[in] kernel_mask Mask of kernels to run
  * @param[in] stream CUDA stream to use
  */
-void ComputePageStringSizesPass1(cudf::detail::hostdevice_span<PageInfo> pages,
+void compute_page_string_sizes_pass1(cudf::detail::hostdevice_span<PageInfo> pages,
                                  cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                                 cudf::device_span<bool const> page_mask,
                                  size_t min_row,
                                  size_t num_rows,
                                  uint32_t kernel_mask,
@@ -789,7 +791,7 @@ void ComputePageStringSizesPass1(cudf::detail::hostdevice_span<PageInfo> pages,
 /**
  * @brief Compute temp string information for decoding.
  *
- * Using string size information computed in ComputePageStringSizesPass1, this function
+ * Using string size information computed in compute_page_string_sizes_pass1, this function
  * allocates the temp string buffer and sets the appropriate offsets into the buffer for
  * all relevant string pages.
  *
@@ -798,10 +800,10 @@ void ComputePageStringSizesPass1(cudf::detail::hostdevice_span<PageInfo> pages,
  * @param[out] temp_string_buf Temporary space needed for decoding DELTA_BYTE_ARRAY strings
  * @param[in] stream CUDA stream to use
  */
-void ComputePageStringSizesPass2(cudf::detail::hostdevice_span<PageInfo> pages,
-                                 cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-                                 rmm::device_uvector<uint8_t>& temp_string_buf,
-                                 rmm::cuda_stream_view stream);
+void compute_page_string_sizes_pass2(cudf::detail::hostdevice_span<PageInfo> pages,
+                                     cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                                     rmm::device_uvector<uint8_t>& temp_string_buf,
+                                     rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for reading the column data stored in the pages
