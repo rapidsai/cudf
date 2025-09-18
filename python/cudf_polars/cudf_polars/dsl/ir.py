@@ -1738,7 +1738,7 @@ class Join(IR):
         rg: plc.Column,
         right_policy: plc.copying.OutOfBoundsPolicy,
         *,
-        primary: Literal["left", "right"] = "left",
+        left_primary: bool = True,
     ) -> list[plc.Column]:
         """
         Reorder gather maps to satisfy polars join order restrictions.
@@ -1757,9 +1757,9 @@ class Join(IR):
             Right gather map
         right_policy
             Nullify policy for right map
-        primary
-            Which input's row order to preserve first: "left" or "right".
-            Defaults to "left".
+        left_primary
+            Whether to preserve the left input row order first.
+            Defaults to True.
 
         Returns
         -------
@@ -1768,8 +1768,9 @@ class Join(IR):
 
         Notes
         -----
-        When ``primary`` is specified, the pair of gather maps is stably sorted by
-        the original row order of the primary side, breaking ties by the other side.
+        When ``left_primary`` is True, the pair of gather maps is stably sorted by
+        the original row order of the left side, breaking ties by the right side.
+        And vice versa when ``left_primary`` is False.
         """
         init = plc.Scalar.from_py(0, plc.types.SIZE_TYPE)
         step = plc.Scalar.from_py(1, plc.types.SIZE_TYPE)
@@ -1783,7 +1784,7 @@ class Join(IR):
 
         keys = (
             plc.Table([left_order_col, right_order_col])
-            if primary == "left"
+            if left_primary
             else plc.Table([right_order_col, left_order_col])
         )
 
@@ -1905,7 +1906,7 @@ class Join(IR):
                     right.num_rows,
                     rg,
                     right_policy,
-                    primary="left" if maintain_order.startswith("left") else "right",
+                    left_primary=maintain_order.startswith("left"),
                 )
             if coalesce:
                 if how == "Full":

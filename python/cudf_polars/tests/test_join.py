@@ -240,7 +240,7 @@ def test_join_maintain_order_with_coalesce(left, right, maintain_order, how):
     ],
 )
 def test_join_maintain_order_with_slice(left, right, maintain_order, how, zlice):
-    # Needed to disable slice pushdown to make the test deterministic. We want to materialize
+    # Need to disable slice pushdown to make the test deterministic. We want to materialize
     # the full join result and then slice
     q = left.join(right, on="a", how=how, maintain_order=maintain_order).slice(*zlice)
     assert_gpu_result_equal(
