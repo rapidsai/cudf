@@ -789,40 +789,6 @@ TEST_F(HybridScanTest, MaterializeMixedPayloadColumns)
         .filter(filter_expression);
     auto [expected_tbl, expected_meta] = cudf::io::read_parquet(options, stream);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}), read_filter_table->view());
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({1, 2, 3, 4, 5, 6, 7, 8, 9}),
-                                       read_payload_table->view());
-  }
-}
-
-TEST_F(HybridScanTest, ChunkedHybridScanBasics)
-{
-  srand(0xc0ffee);
-
-  // Helper to test chunked hybrid scan reader
-  auto const test_chunked_hybrid_scan = [&](std::vector<char> const& parquet_buffer,
-                                            cudf::ast::operation const& filter_expression,
-                                            cudf::size_type num_filter_columns) {
-    auto stream     = cudf::get_default_stream();
-    auto mr         = cudf::get_current_device_resource_ref();
-    auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
-      cudf::get_current_device_resource(), bloom_filter_alignment);
-
-    // Read parquet using the hybrid scan reader
-    auto [read_filter_table, read_payload_table, read_filter_meta, read_payload_meta, row_mask] =
-      chunked_hybrid_scan(
-        parquet_buffer, filter_expression, num_filter_columns, {}, stream, mr, aligned_mr);
-
-    CUDF_EXPECTS(read_filter_table->num_rows() == read_payload_table->num_rows(),
-                 "Filter and payload tables should have the same number of rows");
-
-    // Check equivalence (equal without checking nullability) with the parquet file read with the
-    // original reader
-    cudf::io::parquet_reader_options const options =
-      cudf::io::parquet_reader_options::builder(cudf::io::source_info(cudf::host_span<char const>(
-                                                  parquet_buffer.data(), parquet_buffer.size())))
-        .filter(filter_expression);
-    auto [expected_tbl, expected_meta] = cudf::io::read_parquet(options, stream);
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}), read_filter_table->view());
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}),
                                        read_filter_table_chunked->view());
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({1, 2, 3, 4, 5, 6, 7, 8, 9}),

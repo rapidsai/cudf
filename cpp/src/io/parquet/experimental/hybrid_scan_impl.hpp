@@ -350,7 +350,6 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    * A 'pass' is defined as a subset of row groups read out of the globally
    * requested set of all row groups.
    *
-   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    * @param column_chunk_buffers Device buffers containing column chunk data
    */
   void setup_next_pass(std::vector<rmm::device_buffer> column_chunk_buffers);
