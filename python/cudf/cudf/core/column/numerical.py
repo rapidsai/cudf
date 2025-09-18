@@ -130,13 +130,12 @@ class NumericalColumn(NumericalBaseColumn):
         """
         Return a CuPy representation of the NumericalColumn.
         """
-        if is_pandas_nullable_extension_dtype(self.dtype):
-            dtype = getattr(self.dtype, "numpy_dtype", self.dtype)
-        else:
-            dtype = self.dtype
+        dtype = self.dtype
+        if is_pandas_nullable_extension_dtype(dtype):
+            dtype = getattr(dtype, "numpy_dtype", dtype)
 
         if len(self) == 0:
-            return cp.empty(0, dtype=self.dtype)
+            return cp.empty(0, dtype=dtype)
 
         col = self
         if col.has_nulls():

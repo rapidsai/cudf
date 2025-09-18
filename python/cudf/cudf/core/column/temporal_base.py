@@ -192,6 +192,10 @@ class TemporalBaseColumn(ColumnBase):
                 return NotImplemented
         return NotImplemented
 
+    @functools.cached_property
+    def time_unit(self) -> str:
+        return np.datetime_data(self.dtype)[0]
+
     @property
     def values(self) -> cp.ndarray:
         """
@@ -208,10 +212,6 @@ class TemporalBaseColumn(ColumnBase):
         if self.has_nulls():
             raise ValueError("cupy does not support NaT.")
         return cp.asarray(self.data).view(dtype)
-
-    @functools.cached_property
-    def time_unit(self) -> str:
-        return np.datetime_data(self.dtype)[0]
 
     def element_indexing(self, index: int) -> ScalarLike:
         result = super().element_indexing(index)
