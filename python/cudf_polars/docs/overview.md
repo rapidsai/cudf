@@ -434,7 +434,7 @@ The available configuration options are:
 
 - **`use_io_partitioning`** (default: `True`): Whether to use estimated file-size
   statistics to calculate the ideal input-partition count for IO operations.
-  This can also be set via the
+  This option currently applies to Parquet data only. This option can also be set via the
   `CUDF_POLARS__EXECUTOR__STATS_PLANNING__USE_IO_PARTITIONING` environment variable.
 
 - **`use_reduction_planning`** (default: `False`): Whether to use estimated column
@@ -444,15 +444,17 @@ The available configuration options are:
 
 - **`use_join_heuristics`** (default: `True`): Whether to use join heuristics
   to estimate row-count and unique-count statistics. These statistics may only
-  be collected when they are actually needed for query planning. This can also
-  be set via the `CUDF_POLARS__EXECUTOR__STATS_PLANNING__USE_JOIN_HEURISTICS`
-  environment variable.
+  be collected when they are actually needed for query planning. These statistics
+  may only be collected when they are actually needed for query planning and when
+  row-count statistics are available for the underlying datasource (e.g. Parquet
+  and in-memory LazyFrame data). This option can also be set via the `CUDF_POLARS__EXECUTOR__STATS_PLANNING__USE_JOIN_HEURISTICS` environment variable.
 
 - **`use_sampling`** (default: `True`): Whether to sample real data to estimate
   unique-value statistics. These statistics may only be collected when they are
   actually needed for query planning and if the underlying datasource supports
-  sampling (e.g. Parquet and in-memory LazyFrame data). This can also be set via
-  the `CUDF_POLARS__EXECUTOR__STATS_PLANNING__USE_SAMPLING` environment variable.
+  sampling (e.g. Parquet and in-memory LazyFrame data). This option can also be
+  set via the
+  `CUDF_POLARS__EXECUTOR__STATS_PLANNING__USE_SAMPLING` environment variable.
 
 - **`default_selectivity`** (default: `0.8`): The default selectivity of a
   predicate, used for estimating how much a filter operation will reduce the

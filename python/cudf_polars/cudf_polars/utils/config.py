@@ -303,6 +303,7 @@ class StatsPlanningOptions:
     use_io_partitioning
         Whether to use estimated file-size statistics to calculate
         the ideal input-partition count for IO operations.
+        This option currently applies to Parquet data only.
         Default is True.
     use_reduction_planning
         Whether to use estimated column statistics to calculate
@@ -313,14 +314,16 @@ class StatsPlanningOptions:
         Whether to use join heuristics to estimate row-count
         and unique-count statistics. Default is True.
         These statistics may only be collected when they are
-        actually needed for query planning.
+        actually needed for query planning and when row-count
+        statistics are available for the underlying datasource
+        (e.g. Parquet and in-memory LazyFrame data).
     use_sampling
         Whether to sample real data to estimate unique-value
         statistics. Default is True.
         These statistics may only be collected when they are
         actually needed for query planning, and when the
-        underlying datasource supports sampling (currently
-        Parquet and in-memory LazyFrame data).
+        underlying datasource supports sampling (e.g. Parquet
+        and in-memory LazyFrame data).
     default_selectivity
         The default selectivity of a predicate.
         Default is 0.8.
