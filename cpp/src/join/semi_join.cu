@@ -22,6 +22,7 @@
 #include <cudf/detail/search.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/join/join.hpp>
+#include <cudf/join/filtered_join.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -61,6 +62,12 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
     thrust::sequence(rmm::exec_policy(stream), result->begin(), result->end());
     return result;
   }
+
+  cudf::filtered_join obj(right_keys, compare_nulls, cudf::set_as_build_table::RIGHT, stream);
+  if(kind == join_kind::LEFT_SEMI_JOIN) {
+    return obj.semi_join(left_keys, stream, mr);
+  }
+  return obj.anti_join(left_keys, stream, mr);
 
   // Materialize a `flagged` boolean array to generate a gather map.
   // Previously, the gather map was generated directly without this array but by calling to
