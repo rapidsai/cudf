@@ -317,12 +317,12 @@ TEST_F(JoinTest, AntiJoinWithStructsAndNullsOnOneSide)
   auto left_col0 = [] {
     column_wrapper<int32_t> child1{{1, null}, cudf::test::iterators::null_at(1)};
     column_wrapper<int32_t> child2{11, 12};
-    return cudf::test::structs_column_wrapper{{child1, child2}, {true, true}};
+    return cudf::test::structs_column_wrapper{{child1, child2}};
   }();
   auto right_col0 = [] {
     column_wrapper<int32_t> child1{1, 2, 3, 4};
     column_wrapper<int32_t> child2{11, 12, 13, 14};
-    return cudf::test::structs_column_wrapper{{child1, child2}, {true, true, true, true}};
+    return cudf::test::structs_column_wrapper{{child1, child2}};
   }();
 
   auto left  = cudf::table_view{{left_col0}};
