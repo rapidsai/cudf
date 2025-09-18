@@ -328,6 +328,17 @@ class IndexedFrame(Frame):
         return out
 
     @_performance_tracking
+    def _get_columns_by_label(self, labels) -> Self:
+        """
+        Returns columns of the Frame specified by `labels`.
+
+        Akin to cudf.DataFrame(...).loc[:, labels]
+        """
+        return self._from_data(
+            self._data.select_by_label(labels), index=self.index
+        )
+
+    @_performance_tracking
     def _from_data_like_self(self, data: MutableMapping):
         out = super()._from_data_like_self(data)
         out.index = self.index
@@ -594,11 +605,11 @@ class IndexedFrame(Frame):
         self,
         to_replace=None,
         value=no_default,
-        inplace=False,
+        inplace: bool = False,
         limit=None,
-        regex=False,
+        regex: bool = False,
         method=no_default,
-    ):
+    ) -> Self | None:
         """Replace values given in ``to_replace`` with ``value``.
 
         Parameters
@@ -1880,7 +1891,7 @@ class IndexedFrame(Frame):
         method="linear",
         axis=0,
         limit=None,
-        inplace=False,
+        inplace: bool = False,
         limit_direction=None,
         limit_area=None,
         downcast=None,
@@ -1930,13 +1941,27 @@ class IndexedFrame(Frame):
         elif method not in {"linear", "values", "index"}:
             raise ValueError(f"Interpolation method `{method}` not found")
 
+        if not isinstance(inplace, bool):
+            raise ValueError("inplace must be a boolean")
+        elif inplace is True:
+            raise NotImplementedError("inplace is not supported")
+
         data = self
+
+        if limit is not None:
+            raise NotImplementedError("limit is not supported")
+        if limit_direction is not None:
+            raise NotImplementedError("limit_direction is not supported")
+        if limit_area is not None:
+            raise NotImplementedError("limit_area is not supported")
+        if downcast is not None:
+            raise NotImplementedError("downcast is not supported")
 
         if not isinstance(data.index, cudf.RangeIndex):
             perm_sort = data.index.argsort()
             data = data._gather(
                 GatherMap.from_column_unchecked(
-                    as_column(perm_sort),
+                    as_column(perm_sort),  # type: ignore[arg-type]
                     len(data),
                     nullify=False,
                 )
@@ -1970,7 +1995,7 @@ class IndexedFrame(Frame):
             # TODO: This should be a scatter, avoiding an argsort.
             else result._gather(
                 GatherMap.from_column_unchecked(
-                    as_column(perm_sort.argsort()),
+                    as_column(perm_sort.argsort()),  # type: ignore[arg-type]
                     len(result),
                     nullify=False,
                 )
@@ -2983,9 +3008,9 @@ class IndexedFrame(Frame):
     def drop_duplicates(
         self,
         subset=None,
-        keep="first",
-        nulls_are_equal=True,
-        ignore_index=False,
+        keep: Literal["first", "last", False] = "first",
+        nulls_are_equal: bool = True,
+        ignore_index: bool = False,
     ):
         """
         Drop duplicate rows in frame.
@@ -3212,8 +3237,13 @@ class IndexedFrame(Frame):
 
     @_performance_tracking
     def bfill(
-        self, value=None, axis=None, inplace=None, limit=None, limit_area=None
-    ):
+        self,
+        value=None,
+        axis=None,
+        inplace: bool = False,
+        limit=None,
+        limit_area=None,
+    ) -> Self | None:
         """
         Synonym for :meth:`Series.fillna` with ``method='bfill'``.
 
@@ -3235,7 +3265,9 @@ class IndexedFrame(Frame):
             )
 
     @_performance_tracking
-    def backfill(self, value=None, axis=None, inplace=None, limit=None):
+    def backfill(
+        self, value=None, axis=None, inplace: bool = False, limit=None
+    ) -> Self | None:
         """
         Synonym for :meth:`Series.fillna` with ``method='bfill'``.
 
@@ -3259,7 +3291,7 @@ class IndexedFrame(Frame):
         self,
         value=None,
         axis=None,
-        inplace=None,
+        inplace: bool = False,
         limit=None,
         limit_area: Literal["inside", "outside", None] = None,
     ):
@@ -3284,7 +3316,7 @@ class IndexedFrame(Frame):
             )
 
     @_performance_tracking
-    def pad(self, value=None, axis=None, inplace=None, limit=None):
+    def pad(self, value=None, axis=None, inplace: bool = False, limit=None):
         """
         Synonym for :meth:`Series.fillna` with ``method='ffill'``.
 
@@ -5073,9 +5105,9 @@ class IndexedFrame(Frame):
         index=None,
         columns=None,
         level=None,
-        inplace=False,
-        errors="raise",
-    ):
+        inplace: bool = False,
+        errors: Literal["ignore", "raise"] = "raise",
+    ) -> Self | None:
         """Drop specified labels from rows or columns.
 
         Remove rows or columns by specifying label names and corresponding
@@ -5256,7 +5288,9 @@ class IndexedFrame(Frame):
                 "'index' or 'columns'"
             )
 
-        if inplace:
+        if not isinstance(inplace, bool):
+            raise ValueError("inplace must be a boolean")
+        elif inplace:
             out = self
         else:
             out = self.copy()
@@ -5275,6 +5309,7 @@ class IndexedFrame(Frame):
 
         if not inplace:
             return out
+        return None
 
     @_performance_tracking
     def _explode(self, explode_column: Any, ignore_index: bool):
@@ -6456,6 +6491,14 @@ class IndexedFrame(Frame):
         if not (convert_floating and convert_integer):
             return self.copy()
         else:
+            if (
+                cudf.get_option("mode.pandas_compatible")
+                and dtype_backend is None
+            ):
+                raise NotImplementedError(
+                    "The `dtype_backend` argument is not supported in "
+                    "pandas_compatible mode."
+                )
             cols = []
             for col in self._columns:
                 if col.dtype.kind == "f":

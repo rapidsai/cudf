@@ -123,14 +123,10 @@ class ApplyKernelCompilerBase:
         # Get input columns
         if isinstance(self.incols, dict):
             inputs = {
-                v: df[k]._column.data_array_view(mode="read")
-                for (k, v) in self.incols.items()
+                v: df[k]._column.values for (k, v) in self.incols.items()
             }
         else:
-            inputs = {
-                k: df[k]._column.data_array_view(mode="read")
-                for k in self.incols
-            }
+            inputs = {k: df[k]._column.values for k in self.incols}
         # Allocate output columns
         outputs = {
             k: cp.empty(len(df), dtype=np.dtype(dt))

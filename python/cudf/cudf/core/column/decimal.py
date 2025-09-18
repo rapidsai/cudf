@@ -255,12 +255,15 @@ class DecimalBaseColumn(NumericalBaseColumn):
         }:
             if isinstance(rhs, (int, Decimal)):
                 rhs = _to_plc_scalar(rhs, self.dtype)
-            return binaryop.binaryop(
+            result = binaryop.binaryop(
                 lhs,
                 rhs,
                 op,
                 get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
             )
+            if cudf.get_option("mode.pandas_compatible"):
+                result = result.fillna(op == "__ne__")
+            return result
         else:
             raise TypeError(
                 f"{op} not supported for the following dtypes: "

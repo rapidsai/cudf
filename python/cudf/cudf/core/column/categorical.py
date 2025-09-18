@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import warnings
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pandas as pd
@@ -30,8 +30,6 @@ from cudf.utils.utils import _is_null_host_scalar
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, MutableSequence, Sequence
-
-    import cupy as cp
 
     from cudf._typing import (
         ColumnBinaryOperand,
@@ -391,29 +389,10 @@ class CategoricalColumn(column.ColumnBase):
             ordered=self.ordered,
         )
 
-    @property
-    def values_host(self) -> np.ndarray:
-        """
-        Return a numpy representation of the CategoricalColumn.
-        """
-        return self.to_pandas().values
-
-    @property
-    def values(self):
-        """
-        Return a CuPy representation of the CategoricalColumn.
-        """
-        raise NotImplementedError("cudf.Categorical is not yet implemented")
-
     def clip(self, lo: ScalarLike, hi: ScalarLike) -> Self:
         return (
             self.astype(self.categories.dtype).clip(lo, hi).astype(self.dtype)  # type: ignore[return-value]
         )
-
-    def data_array_view(
-        self, *, mode: Literal["write", "read"] = "write"
-    ) -> cp.ndarray:
-        return self.codes.data_array_view(mode=mode)
 
     def unique(self) -> Self:
         return self.codes.unique()._with_type_metadata(self.dtype)  # type: ignore[return-value]
