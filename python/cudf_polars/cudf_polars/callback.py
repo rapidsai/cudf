@@ -172,7 +172,6 @@ def set_memory_resource(
         raise
     finally:
         ctx.__exit__(None, None, None)
-        print("restoring mr", previous)
         rmm.mr.set_current_device_resource(previous)
 
 
