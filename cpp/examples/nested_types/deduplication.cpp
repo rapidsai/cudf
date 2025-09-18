@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "../utilities/mr_utils.hpp"
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
@@ -25,12 +27,6 @@
 #include <cudf/sorting.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table_view.hpp>
-
-#include <rmm/cuda_device.hpp>
-#include <rmm/mr/device/cuda_memory_resource.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
-#include <rmm/mr/device/owning_wrapper.hpp>
-#include <rmm/mr/device/pool_memory_resource.hpp>
 
 #include <iostream>
 #include <string>
@@ -48,22 +44,6 @@
  * so as to enable sorting
  *
  */
-
-/**
- * @brief Create memory resource for libcudf functions
- *
- * @param pool Whether to use a pool memory resource.
- * @return Memory resource instance
- */
-std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool pool)
-{
-  auto cuda_mr = std::make_shared<rmm::mr::cuda_memory_resource>();
-  if (pool) {
-    return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-      cuda_mr, rmm::percent_of_free_device_memory(50));
-  }
-  return cuda_mr;
-}
 
 /**
  * @brief Read JSON input from file
@@ -191,7 +171,7 @@ int main(int argc, char const** argv)
   }
 
   auto pool     = mr_name == "pool";
-  auto resource = create_memory_resource(pool);
+  auto resource = cudf::examples::create_memory_resource(pool);
   cudf::set_current_device_resource(resource.get());
 
   std::cout << "Reading " << input_filepath << "..." << std::endl;

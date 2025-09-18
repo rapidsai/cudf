@@ -15,6 +15,8 @@
  */
 #pragma once
 
+#include "../utilities/mr_utils.hpp"
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
@@ -48,37 +50,6 @@
  */
 std::tuple<std::unique_ptr<cudf::column>, std::vector<int32_t>> transform(
   cudf::table_view const& table);
-
-/**
- * @brief Create CUDA memory resource
- */
-auto make_cuda_mr() { return std::make_shared<rmm::mr::cuda_memory_resource>(); }
-
-/**
- * @brief Create a pool device memory resource
- */
-auto make_pool_mr()
-{
-  return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-    make_cuda_mr(), rmm::percent_of_free_device_memory(50));
-}
-
-auto make_async_mr() { return std::make_shared<rmm::mr::cuda_async_memory_resource>(); }
-
-/**
- * @brief Create memory resource for libcudf functions
- */
-std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(std::string const& name)
-{
-  if (name == "pool" || name == "pool-stats") {
-    return make_pool_mr();
-  } else if (name == "async" || name == "async-stats") {
-    return make_async_mr();
-  } else if (name == "cuda" || name == "cuda-stats") {
-    return make_cuda_mr();
-  }
-  CUDF_FAIL("Unrecognized memory resource name: " + name, std::invalid_argument);
-}
 
 void write_csv(cudf::table_view const& tbl_view,
                std::string const& file_path,
@@ -116,7 +87,7 @@ int main(int argc, char const** argv)
     std::string{argc > 4 ? std::string(argv[4]) : std::string("cuda")};
   auto const enable_stats = memory_resource_name.ends_with("-stats");
 
-  auto resource = create_memory_resource(memory_resource_name);
+  auto resource = cudf::examples::create_memory_resource(memory_resource_name);
   auto stream   = cudf::get_default_stream();
 
   rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource> stats_adaptor{

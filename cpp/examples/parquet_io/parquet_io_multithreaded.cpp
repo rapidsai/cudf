@@ -14,9 +14,11 @@
  * limitations under the License.
  */
 
+#include "../utilities/io_source.hpp"
+#include "../utilities/mr_utils.hpp"
+#include "../utilities/table_utils.hpp"
 #include "../utilities/timer.hpp"
-#include "common_utils.hpp"
-#include "io_source.hpp"
+#include "parquet_io_utils.hpp"
 
 #include <cudf/concatenate.hpp>
 #include <cudf/io/parquet.hpp>
@@ -65,7 +67,7 @@ enum class read_mode {
  */
 template <read_mode read_mode>
 struct read_fn {
-  std::vector<io_source> const& input_sources;
+  std::vector<cudf::examples::io_source> const& input_sources;
   std::vector<table_t>& tables;
   int const thread_id;
   int const thread_count;
@@ -114,9 +116,10 @@ struct read_fn {
  * @return Vector of read tables.
  */
 template <read_mode read_mode>
-std::vector<table_t> read_parquet_multithreaded(std::vector<io_source> const& input_sources,
-                                                int32_t thread_count,
-                                                rmm::cuda_stream_pool& stream_pool)
+std::vector<table_t> read_parquet_multithreaded(
+  std::vector<cudf::examples::io_source> const& input_sources,
+  int32_t thread_count,
+  rmm::cuda_stream_pool& stream_pool)
 {
   // Tables read by each thread
   std::vector<table_t> tables(thread_count);
@@ -252,11 +255,12 @@ void print_usage()
  *
  * @return Vector of input sources for the given paths
  */
-std::vector<io_source> extract_input_sources(std::string const& paths,
-                                             int32_t input_multiplier,
-                                             int32_t thread_count,
-                                             io_source_type io_source_type,
-                                             rmm::cuda_stream_view stream)
+std::vector<cudf::examples::io_source> extract_input_sources(
+  std::string const& paths,
+  int32_t input_multiplier,
+  int32_t thread_count,
+  cudf::examples::io_source_type io_source_type,
+  rmm::cuda_stream_view stream)
 {
   // Get the delimited paths to directory and/or files.
   std::vector<std::string> const delimited_paths = [&]() {
@@ -318,14 +322,15 @@ std::vector<io_source> extract_input_sources(std::string const& paths,
   }
 
   // Vector of io sources
-  std::vector<io_source> input_sources;
+  std::vector<cudf::examples::io_source> input_sources;
   input_sources.reserve(parquet_files.size());
   // Transform input files to the specified io sources
-  std::transform(
-    parquet_files.begin(),
-    parquet_files.end(),
-    std::back_inserter(input_sources),
-    [&](auto const& file_name) { return io_source{file_name, io_source_type, stream}; });
+  std::transform(parquet_files.begin(),
+                 parquet_files.end(),
+                 std::back_inserter(input_sources),
+                 [&](auto const& file_name) {
+                   return cudf::examples::io_source{file_name, io_source_type, stream};
+                 });
   stream.synchronize();
   return input_sources;
 }
@@ -336,19 +341,19 @@ std::vector<io_source> extract_input_sources(std::string const& paths,
 int32_t main(int argc, char const** argv)
 {
   // Set arguments to defaults
-  std::string input_paths       = "example.parquet";
-  int32_t input_multiplier      = 1;
-  int32_t num_reads             = 1;
-  int32_t thread_count          = 1;
-  io_source_type io_source_type = io_source_type::PINNED_BUFFER;
-  bool write_and_validate       = false;
+  std::string input_paths                       = "example.parquet";
+  int32_t input_multiplier                      = 1;
+  int32_t num_reads                             = 1;
+  int32_t thread_count                          = 1;
+  cudf::examples::io_source_type io_source_type = cudf::examples::io_source_type::PINNED_BUFFER;
+  bool write_and_validate                       = false;
 
   // Set to the provided args
   switch (argc) {
     case 7: write_and_validate = get_boolean(argv[6]); [[fallthrough]];
     case 6: thread_count = std::max(thread_count, std::stoi(std::string{argv[5]})); [[fallthrough]];
     case 5: num_reads = std::max(1, std::stoi(argv[4])); [[fallthrough]];
-    case 4: io_source_type = get_io_source_type(argv[3]); [[fallthrough]];
+    case 4: io_source_type = cudf::examples::get_io_source_type(argv[3]); [[fallthrough]];
     case 3:
       input_multiplier = std::max(input_multiplier, std::stoi(std::string{argv[2]}));
       [[fallthrough]];
@@ -364,7 +369,7 @@ int32_t main(int argc, char const** argv)
 
   // Initialize mr, default stream and stream pool
   auto const is_pool_used = true;
-  auto resource           = create_memory_resource(is_pool_used);
+  auto resource           = cudf::examples::create_memory_resource(is_pool_used);
   auto default_stream     = cudf::get_default_stream();
   auto stream_pool        = rmm::cuda_stream_pool(thread_count);
   auto stats_mr =
@@ -389,7 +394,7 @@ int32_t main(int argc, char const** argv)
               << " threads and discarding output "
                  "tables..\n";
 
-    if (io_source_type == io_source_type::FILEPATH) {
+    if (io_source_type == cudf::examples::io_source_type::FILEPATH) {
       std::cout << "Note that the first read may include times for nvcomp, cufile loading and RMM "
                    "growth.\n\n";
     }
@@ -452,7 +457,7 @@ int32_t main(int argc, char const** argv)
     default_stream.synchronize();
 
     // Check if the tables are identical
-    check_tables_equal(input_table->view(), transcoded_table->view());
+    cudf::examples::check_tables_equal(input_table->view(), transcoded_table->view());
 
     // Remove the created temp directory and parquet data
     std::filesystem::remove_all(output_path);

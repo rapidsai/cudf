@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,9 +14,10 @@
  * limitations under the License.
  */
 
+#include "../utilities/mr_utils.hpp"
+#include "../utilities/table_utils.hpp"
 #include "../utilities/timer.hpp"
-#include "common_utils.hpp"
-#include "io_source.hpp"
+#include "parquet_io_utils.hpp"
 
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/types.hpp>
@@ -139,7 +140,7 @@ int main(int argc, char const** argv)
 
   // Create and use a memory pool
   bool is_pool_used = true;
-  auto resource     = create_memory_resource(is_pool_used);
+  auto resource     = cudf::examples::create_memory_resource(is_pool_used);
   cudf::set_current_device_resource(resource.get());
 
   // Read input parquet file
@@ -170,7 +171,7 @@ int main(int argc, char const** argv)
   timer.print_elapsed_millis();
 
   // Check for validity
-  check_tables_equal(input->view(), transcoded_input->view());
+  cudf::examples::check_tables_equal(input->view(), transcoded_input->view());
 
   return 0;
 }

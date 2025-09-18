@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,14 +32,6 @@
  */
 
 /**
- * @brief Create memory resource for libcudf functions
- *
- * @param pool Whether to use a pool memory resource.
- * @return Memory resource instance
- */
-std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_pool_used);
-
-/**
  * @brief Get encoding type from the keyword
  *
  * @param name encoding keyword name
@@ -62,14 +54,6 @@ std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_
  * @return true or false
  */
 [[nodiscard]] bool get_boolean(std::string input);
-
-/**
- * @brief Check if two tables are identical, throw an error otherwise
- *
- * @param lhs_table View to lhs table
- * @param rhs_table View to rhs table
- */
-void check_tables_equal(cudf::table_view const& lhs_table, cudf::table_view const& rhs_table);
 
 /**
  * @brief Concatenate a vector of tables and return the resultant table

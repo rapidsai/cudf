@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "common_utils.hpp"
+#include "parquet_io_utils.hpp"
 
 #include <cudf/concatenate.hpp>
 #include <cudf/io/types.hpp>
@@ -34,16 +34,6 @@
  * @brief Definitions for common utilities for `parquet_io` examples
  *
  */
-
-std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_pool_used)
-{
-  auto cuda_mr = std::make_shared<rmm::mr::cuda_memory_resource>();
-  if (is_pool_used) {
-    return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-      cuda_mr, rmm::percent_of_free_device_memory(50));
-  }
-  return cuda_mr;
-}
 
 cudf::io::column_encoding get_encoding_type(std::string name)
 {
@@ -92,23 +82,6 @@ bool get_boolean(std::string input)
 
   // Check if the input string matches to any of the following
   return input == "ON" or input == "TRUE" or input == "YES" or input == "Y" or input == "T";
-}
-
-void check_tables_equal(cudf::table_view const& lhs_table, cudf::table_view const& rhs_table)
-{
-  try {
-    // Left anti-join the original and transcoded tables
-    // identical tables should not throw an exception and
-    // return an empty indices vector
-    auto const indices = cudf::left_anti_join(lhs_table, rhs_table, cudf::null_equality::EQUAL);
-
-    // No exception thrown, check indices
-    auto const valid = indices->size() == 0;
-    std::cout << "Tables identical: " << valid << "\n\n";
-  } catch (std::exception& e) {
-    std::cerr << e.what() << std::endl << std::endl;
-    throw std::runtime_error("Tables identical: false\n\n");
-  }
 }
 
 std::unique_ptr<cudf::table> concatenate_tables(std::vector<std::unique_ptr<cudf::table>> tables,
