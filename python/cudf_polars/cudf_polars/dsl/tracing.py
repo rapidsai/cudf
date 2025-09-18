@@ -17,7 +17,6 @@ from typing_extensions import ParamSpec
 import rmm
 import rmm.statistics
 
-import cudf_polars.containers
 from cudf_polars.utils.config import get_device_handle
 
 try:
@@ -46,6 +45,7 @@ nvtx_annotate_cudf_polars = functools.partial(
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
+    import cudf_polars.containers
     from cudf_polars.dsl import ir
 
 
@@ -149,13 +149,12 @@ def log_do_evaluate(
             maybe_handle = get_device_handle()
             pid = os.getpid()
             log = structlog.get_logger()
-            frames = [
-                arg
-                for arg in list(args) + list(kwargs.values())
-                # TODO: See if this isinstance can be avoided.
-                # Seems like `_non_child_args` gets us close...
-                if isinstance(arg, cudf_polars.containers.DataFrame)
-            ]
+
+            # By convention, all non-dataframe arguments (non_child) come first.
+            # Anything remaining is a dataframe.
+            frames: list[cudf_polars.containers.DataFrame] = (
+                list(args) + list(kwargs.values())
+            )[len(cls._non_child) :]  # type: ignore[assignment]
 
             before = make_snaphot(
                 cls, frames, phase="input", device_handle=maybe_handle, pid=pid
