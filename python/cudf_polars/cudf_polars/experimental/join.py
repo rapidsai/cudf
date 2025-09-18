@@ -51,14 +51,12 @@ class RMPFJoinIntegration:
         """Return the shuffler integration."""
         return RMPFIntegration()
 
-    @classmethod
+    @staticmethod
     def join_partition(
-        cls,
-        bcast_side: Literal["left", "right", "none"],
         left_input: int | DataFrame,
         right_input: int | DataFrame,
-        part_id: int,
-        n_worker_tasks: int,
+        bcast_side: Literal["left", "right", "none"],
+        bcast_count: int | None,
         options: Any,
     ) -> DataFrame:
         """
@@ -66,86 +64,40 @@ class RMPFJoinIntegration:
 
         Parameters
         ----------
-        ctx
-            The worker context.
-        bcast_side
-            The side of the join being broadcasted. If "none", this is
-            a regular hash join.
         left_input
-            The left-table operation id or the left partition.
-            The operation may correspond to an allgather or shuffle operation.
+            The left partition or a callable that produces
+            chunks of a broadcasted left partition.
+            The bcast_count argument corresponds to the number
+            of chunks the callable can produce.
         right_input
-            The right-table operation id or the right partition.
-            The operation may correspond to an allgather or shuffle operation.
-        part_id
-            The output partition id.
-        n_worker_tasks
-            The number of join_partition tasks to be called on this worker.
-            This information may be used for cleanup.
+            The right partition or a callable that produces
+            chunks of a broadcasted right partition.
+            The bcast_count argument corresponds to the number
+            of chunks the callable can produce.
+        bcast_side
+            The side of the join being broadcasted (if either).
+        bcast_count
+            The number of broadcasted chunks.
+            Ignored unless ``bcast_side`` is "left" or "right".
         options
-            Additional options.
+            Additional join options.
 
         Returns
         -------
-        A joined DataFrame chunk.
+        A joined DataFrame partition.
 
         Notes
         -----
         This method is used to produce a single joined table chunk.
         """
-        from rapidsmpf.integrations.core import get_shuffler
+        if bcast_side != "none":  # pragma: no cover
+            raise NotImplementedError("Broadcast join not implemented.")
 
-        if options.get("cluster_kind", "dask") == "dask":
-            from rapidsmpf.integrations.dask import get_worker_context
-
-        else:  # pragma: no cover
-            from rapidsmpf.integrations.single import get_worker_context
-
-        ctx = get_worker_context()
-
-        # Extract left side
-        left_op_id = left_input if isinstance(left_input, int) else None
-        if isinstance(left_op_id, int):
-            left_shuffler = get_shuffler(ctx, left_op_id)
-            try:
-                left = cls.get_shuffler_integration().extract_partition(
-                    part_id,
-                    left_shuffler,
-                    {
-                        "column_names": options["left_column_names"],
-                        "dtypes": options["left_dtypes"],
-                    },
-                )
-            finally:
-                if left_shuffler.finished():
-                    with ctx.lock:
-                        if left_op_id in ctx.shufflers:
-                            del ctx.shufflers[left_op_id]
-        else:
-            assert isinstance(left_input, DataFrame)
-            left = left_input
-
-        # Extract right side
-        right_op_id = right_input if isinstance(right_input, int) else None
-        if isinstance(right_op_id, int):
-            right_shuffler = get_shuffler(ctx, right_op_id)
-            try:
-                right = cls.get_shuffler_integration().extract_partition(
-                    part_id,
-                    right_shuffler,
-                    {
-                        "column_names": options["right_column_names"],
-                        "dtypes": options["right_dtypes"],
-                    },
-                )
-            finally:
-                if right_shuffler.finished():
-                    with ctx.lock:
-                        if right_op_id in ctx.shufflers:
-                            del ctx.shufflers[right_op_id]
-        else:
-            assert isinstance(right_input, DataFrame)
-            right = right_input
+        # Broadcast joins are not supported yet, so the input must be a DataFrame.
+        assert isinstance(left_input, DataFrame), "Expected DataFrame"
+        assert isinstance(right_input, DataFrame), "Expected DataFrame"
+        left = left_input
+        right = right_input
 
         non_child_args = options.get("non_child_args", ())
         return Join.do_evaluate(*non_child_args, left, right)
@@ -451,12 +403,16 @@ def _(
             partition_info[right].count,
             RMPFJoinIntegration(),
             {
-                "left_on": [ne.name for ne in ir.left_on],
-                "right_on": [ne.name for ne in ir.right_on],
-                "left_column_names": list(left.schema.keys()),
-                "right_column_names": list(right.schema.keys()),
-                "left_dtypes": list(left.schema.values()),
-                "right_dtypes": list(right.schema.values()),
+                "on": [ne.name for ne in ir.left_on],
+                "column_names": list(left.schema.keys()),
+                "dtypes": list(left.schema.values()),
+            },
+            {
+                "on": [ne.name for ne in ir.right_on],
+                "column_names": list(right.schema.keys()),
+                "dtypes": list(right.schema.values()),
+            },
+            {
                 "non_child_args": ir._non_child_args,
             },
             left_pre_shuffled=left_partitioned,
