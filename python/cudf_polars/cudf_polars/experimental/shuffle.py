@@ -59,7 +59,7 @@ class RMPFIntegration:  # pragma: no cover
         """Add cudf-polars DataFrame chunks to an RMP shuffler."""
         from rapidsmpf.integrations.cudf.partition import partition_and_pack
 
-        if options["cluster_kind"] == "dask":
+        if options.get("cluster_kind", "dask") == "dask":
             from rapidsmpf.integrations.dask import get_worker_context
 
         else:
@@ -92,7 +92,7 @@ class RMPFIntegration:  # pragma: no cover
             unspill_partitions,
         )
 
-        if options["cluster_kind"] == "dask":
+        if options.get("cluster_kind", "dask") == "dask":
             from rapidsmpf.integrations.dask import get_worker_context
 
         else:

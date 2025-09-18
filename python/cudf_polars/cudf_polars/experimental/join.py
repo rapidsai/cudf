@@ -6,13 +6,19 @@ from __future__ import annotations
 
 import operator
 from functools import reduce
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
+from cudf_polars.containers import DataFrame
+from cudf_polars.dsl.expr import Col
 from cudf_polars.dsl.ir import ConditionalJoin, Join, Slice
 from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.experimental.repartition import Repartition
-from cudf_polars.experimental.shuffle import Shuffle, _hash_partition_dataframe
+from cudf_polars.experimental.shuffle import (
+    RMPFIntegration,
+    Shuffle,
+    _hash_partition_dataframe,
+)
 from cudf_polars.experimental.utils import _concat, _fallback_inform, _lower_ir_fallback
 
 if TYPE_CHECKING:
@@ -22,6 +28,127 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.parallel import LowerIRTransformer
     from cudf_polars.utils.config import ShuffleMethod
+
+
+def _use_rapidsmpf_join(ir: Join, shuffle_method: ShuffleMethod) -> bool:
+    """Return whether RapidsMPF will be used for the join."""
+    # Don't use rapidsmpf join if the shuffle method is not "rapidsmpf"
+    # or if the keys are not "simple"
+    return shuffle_method == "rapidsmpf" and all(
+        isinstance(ne.value, Col) for ne in (ir.left_on + ir.right_on)
+    )
+
+
+class RMPFJoin(Join):
+    """Fused RapidsMPF join."""
+
+
+class RMPFJoinIntegration:
+    """RapidsMPF join integration."""
+
+    @staticmethod
+    def shuffler_integration() -> RMPFIntegration:
+        """Return the shuffler integration."""
+        return RMPFIntegration()
+
+    @classmethod
+    def join_partition(
+        cls,
+        bcast_side: Literal["left", "right", "none"],
+        left_input: int | DataFrame,
+        right_input: int | DataFrame,
+        part_id: int,
+        n_worker_tasks: int,
+        options: Any,
+    ) -> DataFrame:
+        """
+        Produce a joined DataFrame partition.
+
+        Parameters
+        ----------
+        ctx
+            The worker context.
+        bcast_side
+            The side of the join being broadcasted. If "none", this is
+            a regular hash join.
+        left_input
+            The left-table operation id or the left partition.
+            The operation may correspond to an allgather or shuffle operation.
+        right_input
+            The right-table operation id or the right partition.
+            The operation may correspond to an allgather or shuffle operation.
+        part_id
+            The output partition id.
+        n_worker_tasks
+            The number of join_partition tasks to be called on this worker.
+            This information may be used for cleanup.
+        options
+            Additional options.
+
+        Returns
+        -------
+        A joined DataFrame chunk.
+
+        Notes
+        -----
+        This method is used to produce a single joined table chunk.
+        """
+        from rapidsmpf.integrations.core import get_shuffler
+
+        if options.get("cluster_kind", "dask") == "dask":
+            from rapidsmpf.integrations.dask import get_worker_context
+
+        else:  # pragma: no cover
+            from rapidsmpf.integrations.single import get_worker_context
+
+        ctx = get_worker_context()
+
+        # Extract left side
+        left_op_id = left_input if isinstance(left_input, int) else None
+        if isinstance(left_op_id, int):
+            left_shuffler = get_shuffler(ctx, left_op_id)
+            try:
+                left = cls.shuffler_integration().extract_partition(
+                    part_id,
+                    left_shuffler,
+                    {
+                        "column_names": options["left_column_names"],
+                        "dtypes": options["left_dtypes"],
+                    },
+                )
+            finally:
+                if left_shuffler.finished():
+                    with ctx.lock:
+                        if left_op_id in ctx.shufflers:
+                            del ctx.shufflers[left_op_id]
+        else:
+            assert isinstance(left_input, DataFrame)
+            left = left_input
+
+        # Extract right side
+        right_op_id = right_input if isinstance(right_input, int) else None
+        if isinstance(right_op_id, int):
+            right_shuffler = get_shuffler(ctx, right_op_id)
+            try:
+                right = cls.shuffler_integration().extract_partition(
+                    part_id,
+                    right_shuffler,
+                    {
+                        "column_names": options["right_column_names"],
+                        "dtypes": options["right_dtypes"],
+                    },
+                )
+            finally:
+                if right_shuffler.finished():
+                    with ctx.lock:
+                        if right_op_id in ctx.shufflers:
+                            del ctx.shufflers[right_op_id]
+        else:
+            assert isinstance(right_input, DataFrame)
+            right = right_input
+
+        non_child_args = options.get("non_child_args", ())
+        return Join.do_evaluate(*non_child_args, left, right)
 
 
 def _maybe_shuffle_frame(
@@ -61,25 +188,30 @@ def _make_hash_join(
     right: IR,
     shuffle_method: ShuffleMethod,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    # Shuffle left and right dataframes (if necessary)
-    new_left = _maybe_shuffle_frame(
-        left,
-        ir.left_on,
-        partition_info,
-        shuffle_method,
-        output_count,
-    )
-    new_right = _maybe_shuffle_frame(
-        right,
-        ir.right_on,
-        partition_info,
-        shuffle_method,
-        output_count,
-    )
-    if left != new_left or right != new_right:
-        ir = ir.reconstruct([new_left, new_right])
-    left = new_left
-    right = new_right
+    if _use_rapidsmpf_join(ir, shuffle_method):
+        # Convert ir to RMPFJoin.
+        # We don't need to shuffle the children
+        ir = RMPFJoin(ir.schema, ir.left_on, ir.right_on, ir.options, left, right)
+    else:
+        # Shuffle left and right dataframes (if necessary)
+        new_left = _maybe_shuffle_frame(
+            left,
+            ir.left_on,
+            partition_info,
+            shuffle_method,
+            output_count,
+        )
+        new_right = _maybe_shuffle_frame(
+            right,
+            ir.right_on,
+            partition_info,
+            shuffle_method,
+            output_count,
+        )
+        if left != new_left or right != new_right:
+            ir = ir.reconstruct([new_left, new_right])
+        left = new_left
+        right = new_right
 
     # Record new partitioning info
     partitioned_on: tuple[NamedExpr, ...] = ()
@@ -308,7 +440,29 @@ def _(
         and partition_info[right].count == output_count
     )
 
-    if output_count == 1 or (left_partitioned and right_partitioned):
+    if isinstance(ir, RMPFJoin):
+        from rapidsmpf.integrations.dask.join import rapidsmpf_join_graph
+
+        return rapidsmpf_join_graph(
+            get_key_name(left),
+            get_key_name(right),
+            get_key_name(ir),
+            partition_info[left].count,
+            partition_info[right].count,
+            RMPFJoinIntegration(),
+            {
+                "left_on": [ne.name for ne in ir.left_on],
+                "right_on": [ne.name for ne in ir.right_on],
+                "left_column_names": list(left.schema.keys()),
+                "right_column_names": list(right.schema.keys()),
+                "left_dtypes": list(left.schema.values()),
+                "right_dtypes": list(right.schema.values()),
+                "non_child_args": ir._non_child_args,
+            },
+            left_pre_shuffled=left_partitioned,
+            right_pre_shuffled=right_partitioned,
+        )
+    elif output_count == 1 or (left_partitioned and right_partitioned):
         # Partition-wise join
         left_name = get_key_name(left)
         right_name = get_key_name(right)
