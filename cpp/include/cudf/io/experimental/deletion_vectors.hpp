@@ -37,8 +37,8 @@ namespace io::parquet::experimental {
  * row group offsets and row counts and prepends it to the table, deserializes the specified
  * roaring64 deletion vector and applies it to the read table. If the row group offsets and row
  * counts are empty, the index column is simply a sequence of UINT64 from 0 to the total number of
- * rows in the table. If the serialized bitmap data is empty, the read table (prepended with the
- * index column) is returned as is.
+ * rows in the table. If the serialized roaring64 bitmap span is empty, the read table (prepended
+ * with the index column) is returned as is.
  *
  * @ingroup io_readers
  *
