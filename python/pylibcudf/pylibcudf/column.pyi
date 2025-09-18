@@ -70,6 +70,7 @@ class Column:
     def from_rmm_buffer(
         buff: DeviceBuffer, dtype: DataType, size: int, children: list[Column]
     ) -> Column: ...
+    def to_arrow(self, metadata: list | str | None = None) -> ArrowLike: ...
     @staticmethod
     def from_arrow(
         obj: ArrowLike, dtype: DataType | None = None
