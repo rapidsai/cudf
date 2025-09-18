@@ -1564,7 +1564,8 @@ class ConditionalJoin(IR):
         tuple[
             str,
             pl_expr.Operator | Iterable[pl_expr.Operator],
-        ],
+        ]
+        | None,
         bool,
         Zlice | None,
         str,
@@ -1586,6 +1587,12 @@ class ConditionalJoin(IR):
     ) -> None:
         self.schema = schema
         self.predicate = predicate
+        # options[0] is a tuple[str, Operator, ...]
+        # The Operator class can't be pickled, but we don't use it anyway so
+        # just throw that away
+        if options[0] is not None:
+            options = (None, *options[1:])
+
         self.options = options
         self.children = (left, right)
         predicate_wrapper = self.Predicate(predicate)
