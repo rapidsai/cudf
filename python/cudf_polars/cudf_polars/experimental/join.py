@@ -47,7 +47,7 @@ class RMPFJoinIntegration:
     """RapidsMPF join integration."""
 
     @staticmethod
-    def shuffler_integration() -> RMPFIntegration:
+    def get_shuffler_integration() -> RMPFIntegration:
         """Return the shuffler integration."""
         return RMPFIntegration()
 
@@ -108,7 +108,7 @@ class RMPFJoinIntegration:
         if isinstance(left_op_id, int):
             left_shuffler = get_shuffler(ctx, left_op_id)
             try:
-                left = cls.shuffler_integration().extract_partition(
+                left = cls.get_shuffler_integration().extract_partition(
                     part_id,
                     left_shuffler,
                     {
@@ -130,7 +130,7 @@ class RMPFJoinIntegration:
         if isinstance(right_op_id, int):
             right_shuffler = get_shuffler(ctx, right_op_id)
             try:
-                right = cls.shuffler_integration().extract_partition(
+                right = cls.get_shuffler_integration().extract_partition(
                     part_id,
                     right_shuffler,
                     {
