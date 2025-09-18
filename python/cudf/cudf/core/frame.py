@@ -494,7 +494,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
         Akin to cudf.DataFrame(...).loc[:, labels]
         """
-        return self._from_data_like_self(self._data.select_by_label(labels))
+        return self._from_data(self._data.select_by_label(labels))
 
     @property
     @_performance_tracking
