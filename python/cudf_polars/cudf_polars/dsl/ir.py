@@ -1598,7 +1598,7 @@ class ConditionalJoin(IR):
             raise NotImplementedError(
                 f"Conditional join with predicate {predicate}"
             )  # pragma: no cover; polars never delivers expressions we can't handle
-        self._non_child_args = (predicate_wrapper, zlice, suffix, maintain_order)
+        self._non_child_args = (predicate_wrapper, options)
 
     @classmethod
     @nvtx_annotate_cudf_polars(message="ConditionalJoin")
@@ -1606,13 +1606,13 @@ class ConditionalJoin(IR):
     def do_evaluate(
         cls,
         predicate_wrapper: Predicate,
-        zlice: Zlice | None,
-        suffix: str,
-        maintain_order: Literal["none", "left", "right", "left_right", "right_left"],
+        options: tuple,
         left: DataFrame,
         right: DataFrame,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
+        _, _, zlice, suffix, _, _ = options
+
         lg, rg = plc.join.conditional_inner_join(
             left.table,
             right.table,
