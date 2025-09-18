@@ -538,14 +538,14 @@ def main():
     parser.add_argument(
         "--row-group-size",
         type=int,
-        default=6000,
-        help="Number of rows per row group for parquet file (default: 6000)",
+        default=500,
+        help="Number of rows per row group for parquet file (default: 500)",
     )
     parser.add_argument(
         "--data-page-size",
         type=int,
-        default=2000,
-        help="Number of rows per data page for parquet file (default: 2000)",
+        default=250,
+        help="Number of rows per data page for parquet file (default: 250)",
     )
 
     args = parser.parse_args()
