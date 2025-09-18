@@ -760,8 +760,7 @@ def _(
             expr.NamedExpr(next(name_gen), agg),
             name_gen,
             is_top=True,
-            # Follows GROUPBY semantics
-            context=ExecutionContext.GROUPBY,
+            context=ExecutionContext.WINDOW,
         )
 
         mapping = node.options.kind

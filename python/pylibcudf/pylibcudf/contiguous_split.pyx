@@ -32,6 +32,7 @@ from rmm.pylibrmm.stream cimport Stream
 
 from .gpumemoryview cimport gpumemoryview
 from .table cimport Table
+from .utils cimport _get_stream, _get_memory_resource
 
 
 __all__ = [
@@ -100,11 +101,16 @@ cdef class PackedColumns:
         out.c_obj = move(data)
         return out
 
-    cpdef tuple release(self):
+    cpdef tuple release(self, Stream stream=None):
         """Releases and returns the underlying serialized metadata and gpu data.
 
         The ownership of the memory are transferred to the returned buffers. After
         this call, `self` is empty.
+
+        Parameters
+        ----------
+        stream : Stream | None
+            CUDA stream on which to perform the operation.
 
         Returns
         -------
@@ -115,13 +121,17 @@ cdef class PackedColumns:
         """
         if not (dereference(self.c_obj).metadata and dereference(self.c_obj).gpu_data):
             raise ValueError("Cannot release empty PackedColumns")
+        stream = _get_stream(stream)
 
         return (
             memoryview(
                 HostBuffer.from_unique_ptr(move(dereference(self.c_obj).metadata))
             ),
             gpumemoryview(
-                DeviceBuffer.c_from_unique_ptr(move(dereference(self.c_obj).gpu_data))
+                DeviceBuffer.c_from_unique_ptr(
+                    move(dereference(self.c_obj).gpu_data),
+                    stream
+                )
             )
         )
 
@@ -145,7 +155,7 @@ cdef class ChunkedPack:
         Table input,
         size_t user_buffer_size,
         Stream stream,
-        DeviceMemoryResource temp_mr,
+        DeviceMemoryResource temp_mr=None,
     ):
         """
         Create a chunked packer.
@@ -156,15 +166,16 @@ cdef class ChunkedPack:
             The table to pack.
         user_buffer_size
             Size of the staging buffer to pack into, must be at least 1MB.
-        stream
+        stream : Stream | None
             Stream used for device memory operations and kernel launches.
-        temp_mr
+        temp_mr : DeviceMemoryResource | None
             Memory resource for scratch allocations.
 
         Returns
         -------
         New ChunkedPack object.
         """
+        temp_mr = _get_memory_resource(temp_mr)
         cdef unique_ptr[chunked_pack] obj = chunked_pack.create(
             input.view(), user_buffer_size, stream.view(), temp_mr.get_mr()
         )
@@ -298,11 +309,23 @@ cdef class ChunkedPack:
         )
 
 
-cpdef PackedColumns pack(Table input):
+cpdef PackedColumns pack(Table input, Stream stream=None):
     """Deep-copy a table into a serialized contiguous memory format.
 
     Later use `unpack` or `unpack_from_memoryviews` to unpack the serialized
     data back into the table.
+
+    Parameters
+    ----------
+    input : Table
+        Table to pack.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
+
+    Returns
+    -------
+    PackedColumns
+        The packed columns.
 
     Examples
     --------
@@ -314,20 +337,11 @@ cpdef PackedColumns pack(Table input):
     >>> pylibcudf.contiguous_split.unpack_from_memoryviews(metadata, gpu_data)
 
     For details, see :cpp:func:`cudf::pack`.
-
-    Parameters
-    ----------
-    input : Table
-        Table to pack.
-
-    Returns
-    -------
-    PackedColumns
-        The packed columns.
     """
     cdef unique_ptr[packed_columns] pack
+    stream = _get_stream(stream)
     with nogil:
-        pack = move(make_unique[packed_columns](cpp_pack(input.view())))
+        pack = move(make_unique[packed_columns](cpp_pack(input.view(), stream.view())))
     return PackedColumns.from_libcudf(move(pack))
 
 

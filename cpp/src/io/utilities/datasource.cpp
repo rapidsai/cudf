@@ -370,27 +370,29 @@ class user_datasource_wrapper : public datasource {
  * @brief Remote file source backed by KvikIO, which handles S3 filepaths seamlessly.
  */
 class remote_file_source : public kvikio_source<kvikio::RemoteHandle> {
-  static auto create_s3_handle(char const* filepath)
-  {
-    return kvikio::RemoteHandle{
-      std::make_unique<kvikio::S3Endpoint>(kvikio::S3Endpoint::parse_s3_url(filepath))};
-  }
-
  public:
-  explicit remote_file_source(char const* filepath) : kvikio_source{create_s3_handle(filepath)} {}
+  explicit remote_file_source(char const* filepath)
+    : kvikio_source{kvikio::RemoteHandle::open(filepath)}
+  {
+  }
 
   ~remote_file_source() override = default;
 
   /**
-   * @brief Is `url` referring to a remote file supported by KvikIO?
+   * @brief Checks if a path has a URL scheme format that could indicate a remote resource
    *
-   * For now, only S3 urls (urls starting with "s3://") are supported.
+   * @note Strictly speaking, there is no definitive way to tell if a given file path refers to a
+   * remote or local file. For instance, it is legal to have a local directory named `s3:` and its
+   * file accessed by `s3://<sub-dir>/<file-name>` (the double slash is collapsed into a single
+   * slash), coincidentally taking on the remote S3 format. Here we ignore this special case and use
+   * a more practical approach: a file path is considered remote simply if it has a RFC
+   * 3986-conformant URL scheme.
    */
-  static bool is_supported_remote_url(std::string const& url)
+  static bool could_be_remote_url(std::string const& filepath)
   {
-    // Regular expression to match "s3://"
-    static std::regex const pattern{R"(^s3://)", std::regex_constants::icase};
-    return std::regex_search(url, pattern);
+    // Regular expression to match the URL scheme conforming to RFC 3986
+    static std::regex const pattern{R"(^[a-zA-Z][a-zA-Z0-9+.-]*://)", std::regex_constants::icase};
+    return std::regex_search(filepath, pattern);
   }
 };
 #else
@@ -400,7 +402,7 @@ class remote_file_source : public kvikio_source<kvikio::RemoteHandle> {
 class remote_file_source : public file_source {
  public:
   explicit remote_file_source(char const* filepath) : file_source(filepath) {}
-  static constexpr bool is_supported_remote_url(std::string const&) { return false; }
+  static constexpr bool could_be_remote_url(std::string const&) { return false; }
 };
 #endif
 }  // namespace
@@ -417,8 +419,21 @@ std::unique_ptr<datasource> datasource::create(std::string const& filepath,
 
     CUDF_FAIL("Invalid LIBCUDF_MMAP_ENABLED value: " + policy);
   }();
-  if (remote_file_source::is_supported_remote_url(filepath)) {
-    return std::make_unique<remote_file_source>(filepath.c_str());
+
+  if (remote_file_source::could_be_remote_url(filepath)) {
+    try {
+      return std::make_unique<remote_file_source>(filepath.c_str());
+    } catch (std::exception const& ex) {
+      std::string redacted_msg;
+      try {
+        // For security reasons, redact the file path if any from KvikIO's exception message
+        redacted_msg =
+          std::regex_replace(ex.what(), std::regex{filepath}, "<redacted-remote-file-path>");
+      } catch (std::exception const& ex) {
+        redacted_msg = " unknown due to additional process error";
+      }
+      CUDF_FAIL("Error accessing the remote file. Reason: " + redacted_msg, std::runtime_error);
+    }
   } else if (use_memory_mapping) {
     return std::make_unique<memory_mapped_source>(filepath.c_str(), offset, max_size_estimate);
   } else {
