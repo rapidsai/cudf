@@ -190,6 +190,8 @@ cpdef Column md5(Table input, Stream stream=None):
     ----------
     input : Table
         The table of columns to hash
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -215,6 +217,8 @@ cpdef Column sha1(Table input, Stream stream=None):
     ----------
     input : Table
         The table of columns to hash
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -239,6 +243,8 @@ cpdef Column sha224(Table input, Stream stream=None):
     ----------
     input : Table
         The table of columns to hash
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -263,6 +269,8 @@ cpdef Column sha256(Table input, Stream stream=None):
     ----------
     input : Table
         The table of columns to hash
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -287,6 +295,8 @@ cpdef Column sha384(Table input, Stream stream=None):
     ----------
     input : Table
         The table of columns to hash
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -311,6 +321,8 @@ cpdef Column sha512(Table input, Stream stream=None):
     ----------
     input : Table
         The table of columns to hash
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------

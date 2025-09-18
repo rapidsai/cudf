@@ -54,13 +54,12 @@ cpdef Column format_list_column(
         New strings column
     """
     cdef unique_ptr[column] c_result
-    cdef Stream stream_local
 
-    stream_local = _get_stream(stream)
+    stream = _get_stream(stream)
 
     if na_rep is None:
         na_rep = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), stream_local.view())
+            cpp_make_string_scalar("".encode(), stream.view())
         )
 
     cdef const string_scalar* c_na_rep = <const string_scalar*>(
@@ -75,7 +74,7 @@ cpdef Column format_list_column(
             input.view(),
             dereference(c_na_rep),
             separators.view(),
-            stream_local.view()
+            stream.view()
         )
 
-    return Column.from_libcudf(move(c_result), stream_local)
+    return Column.from_libcudf(move(c_result), stream)

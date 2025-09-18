@@ -12,6 +12,7 @@ from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 from rmm.pylibrmm.stream cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.interop cimport (
@@ -29,14 +30,22 @@ from pylibcudf.libcudf.table.table cimport table
 
 from .column cimport Column
 from .types cimport DataType
-from .utils cimport _get_stream
+from .utils cimport _get_stream, _get_memory_resource
 from pylibcudf._interop_helpers cimport (
     _release_schema,
     _release_array,
     _release_device_array,
     _metadata_to_libcudf,
 )
-from ._interop_helpers import ArrowLike, ColumnMetadata
+from ._interop_helpers import ArrowLike, ColumnMetadata, _ObjectWithArrowMetadata
+
+try:
+    import pyarrow as pa
+    pa_err = None
+except ImportError as e:
+    pa = None
+    pa_err = e
+
 
 __all__ = ["Table"]
 
@@ -60,6 +69,22 @@ cdef class Table:
         if not all(isinstance(c, Column) for c in columns):
             raise ValueError("All columns must be pylibcudf Column objects")
         self._columns = columns
+
+    def to_arrow(
+        self,
+        metadata: list[ColumnMetadata | str] | None = None
+    ) -> ArrowLike:
+        """Create a PyArrow table from a pylibcudf table."""
+        if pa_err is not None:
+            raise RuntimeError(
+                "pyarrow was not found on your system. Please "
+                "pip install pylibcudf with the [pyarrow] extra for a "
+                "compatible pyarrow version."
+            ) from pa_err
+        # TODO: Once the arrow C device interface registers more
+        # types that it supports, we can call pa.table(self) if
+        # no metadata is passed.
+        return pa.table(_ObjectWithArrowMetadata(self, metadata))
 
     @staticmethod
     def from_arrow(obj: ArrowLike, dtype: DataType | None = None) -> Table:
@@ -159,7 +184,11 @@ cdef class Table:
         return table_view(c_columns)
 
     @staticmethod
-    cdef Table from_libcudf(unique_ptr[table] libcudf_tbl, Stream stream=None):
+    cdef Table from_libcudf(
+        unique_ptr[table] libcudf_tbl,
+        Stream stream=None,
+        DeviceMemoryResource mr=None
+    ):
         """Create a Table from a libcudf table.
 
         This method is for pylibcudf's functions to use to ingest outputs of
@@ -170,8 +199,9 @@ cdef class Table:
 
         cdef vector[unique_ptr[column]].size_type i
         stream = _get_stream(stream)
+        mr = _get_memory_resource(mr)
         return Table([
-            Column.from_libcudf(move(c_columns[i]), stream)
+            Column.from_libcudf(move(c_columns[i]), stream, mr)
             for i in range(c_columns.size())
         ])
 
