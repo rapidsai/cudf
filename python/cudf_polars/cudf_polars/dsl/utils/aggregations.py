@@ -91,10 +91,17 @@ def decompose_single_agg(
     name = named_expr.name
     if isinstance(agg, expr.UnaryFunction) and agg.name in {
         "rank",
+        "fill_null_with_strategy",
     }:
         if context != ExecutionContext.WINDOW:
             raise NotImplementedError(
                 f"{agg.name} is not supported in groupby or rolling context"
+            )
+        if agg.name == "fill_null_with_strategy" and (
+            strategy := agg.options[0]
+        ) not in {"forward", "backward"}:
+            raise NotImplementedError(
+                f"fill_null({strategy=}) not supported in a groupy or rolling context"
             )
         # Ensure Polars semantics for dtype:
         # - average -> Float64
