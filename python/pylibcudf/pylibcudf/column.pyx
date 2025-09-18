@@ -354,7 +354,7 @@ cdef class Column:
         Parameters
         ----------
         metadata : ColumnMetadata | str | None
-            The metadata to attach to the columns of the table.
+            The metadata to attach to the column.
 
         Returns
         -------
