@@ -2,6 +2,7 @@
 import datetime
 import re
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
@@ -175,8 +176,9 @@ def test_index_values():
 
 def test_index_null_values():
     gidx = cudf.Index([1.0, None, 3, 0, None])
-    with pytest.raises(ValueError):
-        gidx.values
+    result = gidx.values
+    expected = cp.array([1.0, np.nan, 3, 0, np.nan])
+    assert_eq(result, expected)
 
 
 @pytest.mark.parametrize(

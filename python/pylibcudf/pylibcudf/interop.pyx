@@ -23,8 +23,7 @@ from rmm.pylibrmm.stream cimport Stream
 from .column cimport Column
 from .scalar cimport Scalar
 from .table cimport Table
-from .types cimport DataType, type_id
-from .types import LIBCUDF_TO_ARROW_TYPES
+from .types cimport DataType
 from .utils cimport _get_stream
 from ._interop_helpers import ColumnMetadata
 
@@ -71,7 +70,7 @@ def from_arrow(pyarrow_object, *, DataType data_type=None):
 
 
 @singledispatch
-def to_arrow(plc_object, metadata=None):
+def to_arrow(plc_object, **kwargs):
     """Convert to a PyArrow object.
 
     Parameters
@@ -105,8 +104,13 @@ if pa is not None:
         return Table.from_arrow(pyarrow_object, dtype=data_type)
 
     @from_arrow.register(pa.Scalar)
-    def _from_arrow_scalar(pyarrow_object, *, DataType data_type=None):
-        return Scalar.from_arrow(pyarrow_object, dtype=data_type)
+    def _from_arrow_scalar(
+        pyarrow_object,
+        *,
+        DataType data_type=None,
+        Stream stream = None
+    ):
+        return Scalar.from_arrow(pyarrow_object, dtype=data_type, stream=stream)
 
     @from_arrow.register(pa.Array)
     def _from_arrow_column(pyarrow_object, *, DataType data_type=None):
@@ -114,70 +118,22 @@ if pa is not None:
 
     @to_arrow.register(DataType)
     def _to_arrow_datatype(plc_object, **kwargs):
-        """
-        Convert a datatype to arrow.
-
-        Translation of some types requires extra information as a keyword
-        argument. Specifically:
-
-        - When translating a decimal type, provide ``precision``
-        - When translating a struct type, provide ``fields``
-        - When translating a list type, provide the wrapped ``value_type``
-        """
-        if plc_object.id() in {
-            type_id.DECIMAL32,
-            type_id.DECIMAL64,
-            type_id.DECIMAL128
-        }:
-            if not (precision := kwargs.get("precision")):
-                raise ValueError(
-                    "Precision must be provided for decimal types"
-                )
-                # no pa.decimal32 or pa.decimal64
-            return pa.decimal128(precision, -plc_object.scale())
-        elif plc_object.id() == type_id.STRUCT:
-            if not (fields := kwargs.get("fields")):
-                raise ValueError(
-                    "Fields must be provided for struct types"
-                )
-            return pa.struct(fields)
-        elif plc_object.id() == type_id.LIST:
-            if not (value_type := kwargs.get("value_type")):
-                raise ValueError(
-                    "Value type must be provided for list types"
-                )
-            return pa.list_(value_type)
-        else:
-            try:
-                return LIBCUDF_TO_ARROW_TYPES[plc_object.id()]
-            except KeyError:
-                raise TypeError(
-                    f"Unable to convert {plc_object.id()} to arrow datatype"
-                )
-
-    class _ObjectWithArrowMetadata:
-        def __init__(self, obj, metadata=None):
-            self.obj = obj
-            self.metadata = metadata
-
-        def __arrow_c_array__(self, requested_schema=None):
-            return self.obj._to_schema(self.metadata), self.obj._to_host_array()
+        """Convert a datatype to arrow."""
+        return plc_object.to_arrow(**kwargs)
 
     @to_arrow.register(Table)
     def _to_arrow_table(plc_object, metadata=None):
         """Create a PyArrow table from a pylibcudf table."""
-        return pa.table(_ObjectWithArrowMetadata(plc_object, metadata))
+        return plc_object.to_arrow(metadata=metadata)
 
     @to_arrow.register(Column)
     def _to_arrow_array(plc_object, metadata=None):
         """Create a PyArrow array from a pylibcudf column."""
-        return pa.array(_ObjectWithArrowMetadata(plc_object, metadata))
+        return plc_object.to_arrow(metadata=metadata)
 
     @to_arrow.register(Scalar)
     def _to_arrow_scalar(plc_object, metadata=None):
-        # Note that metadata for scalars is primarily important for preserving
-        # information on nested types since names are otherwise irrelevant.
-        return to_arrow(Column.from_scalar(plc_object, 1), metadata=metadata)[0]
+        return plc_object.to_arrow(metadata=metadata)
 
 
 cpdef Table from_dlpack(object managed_tensor, Stream stream=None):
