@@ -655,48 +655,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             column = column.set_mask(mask)
         return column  # type: ignore[return-value]
 
-    def data_array_view(
-        self, *, mode: Literal["write", "read"] = "write"
-    ) -> cp.ndarray:
-        """
-        View the data as a device array object
-
-        Parameters
-        ----------
-        mode : str, default 'write'
-            Supported values are {'read', 'write'}
-            If 'write' is passed, a device array object
-            with readonly flag set to False in CAI is returned.
-            If 'read' is passed, a device array object
-            with readonly flag set to True in CAI is returned.
-            This also means, If the caller wishes to modify
-            the data returned through this view, they must
-            pass mode="write", else pass mode="read".
-
-        Returns
-        -------
-        cupy.ndarray
-        """
-        if self.data is not None:
-            if mode == "read":
-                obj = cuda_array_interface_wrapper(
-                    ptr=self.data.get_ptr(mode="read"),
-                    size=self.data.size,
-                    owner=self.data,
-                )
-            elif mode == "write":
-                obj = self.data
-            else:
-                raise ValueError(f"Unsupported mode: {mode}")
-        else:
-            obj = None
-
-        if cudf.get_option("mode.pandas_compatible"):
-            dtype = getattr(self.dtype, "numpy_dtype", self.dtype)
-        else:
-            dtype = self.dtype
-        return cp.asarray(obj).view(dtype)
-
     def __len__(self) -> int:
         return self.size
 
@@ -765,44 +723,14 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         """
         Return a numpy representation of the Column.
         """
-        if len(self) == 0:
-            return np.array([], dtype=self.dtype)
-
-        if (
-            cudf.get_option("mode.pandas_compatible")
-            and is_pandas_nullable_extension_dtype(self.dtype)
-            and self.dtype.kind in "iuf"
-            and self.has_nulls()
-        ):
-            col = self.astype(
-                np.dtype("float32")
-                if getattr(self.dtype, "numpy_dtype", self.dtype)
-                == np.dtype("float32")
-                else np.dtype("float64")
-            )
-            col = col.fillna(np.nan)
-            with acquire_spill_lock():
-                res = col.data_array_view(mode="read").get()
-            return res
-
-        if self.has_nulls():
-            raise ValueError("Column must have no nulls.")
-
-        with acquire_spill_lock():
-            return self.data_array_view(mode="read").get()
+        return self.to_pandas().to_numpy()
 
     @property
     def values(self) -> cp.ndarray:
         """
         Return a CuPy representation of the Column.
         """
-        if len(self) == 0:
-            return cp.array([], dtype=self.dtype)
-
-        if self.has_nulls():
-            raise ValueError("Column must have no nulls.")
-
-        return self.data_array_view(mode="write")
+        raise NotImplementedError(f"cupy does not support {self.dtype}")
 
     def find_and_replace(
         self,
