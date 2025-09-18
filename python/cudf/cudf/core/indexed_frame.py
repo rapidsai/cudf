@@ -2039,7 +2039,7 @@ class IndexedFrame(Frame):
         )
         return self._from_data_like_self(
             self._data._from_columns_like_self(data_columns)
-        )
+        )._copy_type_metadata(self)
 
     @_performance_tracking
     def truncate(self, before=None, after=None, axis=0, copy=True):
