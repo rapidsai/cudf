@@ -264,10 +264,12 @@ def test_split_exact_inclusive_unsupported(ldf_split):
 @pytest.mark.parametrize(
     "values, has_invalid_row",
     [
+        (["2024-01-01", "2023-12-31", "2023-06-15"], False),
         (["2024-01-01", "2023-12-31", None], False),
         (["2024-01-01", "foo", None], True),
+        (["foo", "2023-06-15"], True),
     ],
-    ids=["valid", "invalid"],
+    ids=["valid", "valid", "invalid", "invalid"],
 )
 def test_to_datetime(values, has_invalid_row, cache, strict, format, exact):
     df = pl.DataFrame({"a": values})
@@ -290,6 +292,17 @@ def test_to_datetime(values, has_invalid_row, cache, strict, format, exact):
             if POLARS_VERSION_LT_130
             else pl.exceptions.InvalidOperationError,
         )
+    elif strict is False and format is None:
+        assert_ir_translation_raises(q, NotImplementedError)
+    elif values[0] == "foo" and format is None and strict is True:
+        if strict:
+            assert_collect_raises(
+                q,
+                polars_except=pl.exceptions.InvalidOperationError,
+                cudf_except=pl.exceptions.ComputeError,
+            )
+        else:
+            assert_ir_translation_raises(q, NotImplementedError)
     else:
         assert_gpu_result_equal(q)
 

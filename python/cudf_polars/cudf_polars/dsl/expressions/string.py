@@ -253,7 +253,9 @@ class StringFunction(Expr):
             if inclusive:
                 raise NotImplementedError(f"{inclusive=} is not supported for split")
         elif self.name is StringFunction.Name.Strptime:
-            format, _, exact, cache = self.options
+            format, strict, exact, cache = self.options
+            if not format and not strict:
+                raise NotImplementedError("format inference requires strict checking")
             if cache:
                 raise NotImplementedError("Strptime cache is a CPU feature")
             if not exact:
@@ -763,17 +765,15 @@ class StringFunction(Expr):
             plc_col = col.obj
             if format is None:
                 # Polars begins inference with the first non null value
-                int_range = plc.column.Column.from_iterable_of_py(range(col.size))
-                boolmask = plc.unary.is_valid(plc_col)
-
-                table = plc.stream_compaction.apply_boolean_mask(
-                    plc.Table([int_range]), boolmask
-                )
-                filtered = table.columns()[0]
-                first_element = plc.copying.get_element(filtered, 0).to_py()
-                first_valid_data = plc.copying.get_element(
-                    plc_col, first_element
-                ).to_py()
+                if plc_col.null_mask() is not None:
+                    boolmask = plc.unary.is_valid(plc_col)
+                    table = plc.stream_compaction.apply_boolean_mask(
+                        plc.Table([plc_col]), boolmask
+                    )
+                    filtered = table.columns()[0]
+                    first_valid_data = plc.copying.get_element(filtered, 0).to_py()
+                else:
+                    first_valid_data = plc.copying.get_element(plc_col, 0).to_py()
 
                 format = _infer_datetime_format(first_valid_data)
                 if not format:
