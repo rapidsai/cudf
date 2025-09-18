@@ -167,7 +167,8 @@ def set_memory_resource(
         ctx.__enter__()
         yield mr
     except Exception as e:
-        traceback.clear_frames(e.__traceback__)
+        if cudf_polars.dsl.tracing.LOG_TRACES:
+            traceback.clear_frames(e.__traceback__)
         raise
     finally:
         ctx.__exit__(None, None, None)
