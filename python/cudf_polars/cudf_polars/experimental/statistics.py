@@ -65,9 +65,9 @@ def collect_statistics(root: IR, config_options: ConfigOptions) -> StatsCollecto
     assert config_options.executor.name == "streaming", (
         "Only streaming executor is supported in collect_statistics"
     )
-    stats_planning_options = config_options.executor.stats_planning_options
-    need_local_statistics = using_local_statistics(stats_planning_options)
-    if need_local_statistics or stats_planning_options.io_partitioning:
+    stats_planning = config_options.executor.stats_planning
+    need_local_statistics = using_local_statistics(stats_planning)
+    if need_local_statistics or stats_planning.use_io_partitioning:
         # Start with base statistics.
         # Here we build an outline of the statistics that will be
         # collected before any real data is sampled. We will not
@@ -85,7 +85,7 @@ def collect_statistics(root: IR, config_options: ConfigOptions) -> StatsCollecto
             # during this step. However, we will use Parquet metadata to
             # estimate the row-count for each table source. This metadata
             # is cached in the DataSourceInfo object for each table.
-            if stats_planning_options.use_join_heuristics:
+            if stats_planning.use_join_heuristics:
                 apply_pkfk_heuristics(stats.join_info)
 
             # Update statistics for each node.
@@ -128,17 +128,15 @@ def collect_base_stats(root: IR, config_options: ConfigOptions) -> StatsCollecto
     assert config_options.executor.name == "streaming", (
         "Only streaming executor is supported in collect_statistics"
     )
-    stats_planning_options = config_options.executor.stats_planning_options
-    need_local_statistics = using_local_statistics(stats_planning_options)
-    need_join_info = (
-        need_local_statistics and stats_planning_options.use_join_heuristics
-    )
+    stats_planning = config_options.executor.stats_planning
+    need_local_statistics = using_local_statistics(stats_planning)
+    need_join_info = need_local_statistics and stats_planning.use_join_heuristics
 
     stats: StatsCollector = StatsCollector()
     for node in post_traversal([root]):
         # Initialize column statistics from datasource information
         if need_local_statistics or (
-            stats_planning_options.io_partitioning
+            stats_planning.use_io_partitioning
             and isinstance(node, (Scan, DataFrameScan))
         ):
             stats.column_stats[node] = initialize_column_stats(
@@ -150,7 +148,7 @@ def collect_base_stats(root: IR, config_options: ConfigOptions) -> StatsCollecto
     return stats
 
 
-def using_local_statistics(stats_planning_options: StatsPlanningOptions) -> bool:
+def using_local_statistics(stats_planning: StatsPlanningOptions) -> bool:
     """
     Check if we are using local statistics for query planning.
 
@@ -158,10 +156,10 @@ def using_local_statistics(stats_planning_options: StatsPlanningOptions) -> bool
     -----
     This function is used to check if we are using local statistics
     for query-planning purposes. For now, this only returns True
-    when `reduction_planning=True`. We do not consider `io_partitioning`
+    when `use_reduction_planning=True`. We do not consider `use_io_partitioning`
     here because it only depends on datasource statistics.
     """
-    return stats_planning_options.reduction_planning
+    return stats_planning.use_reduction_planning
 
 
 def initialize_join_info(node: Join, stats: StatsCollector) -> None:
@@ -541,7 +539,7 @@ def apply_predicate_selectivity(
         "Only streaming executor is supported in update_column_stats"
     )
     # TODO: Use predicate to generate a better selectivity estimate. Default is 0.8
-    selectivity = config_options.executor.stats_planning_options.default_selectivity
+    selectivity = config_options.executor.stats_planning.default_selectivity
     if selectivity < 1.0 and (row_count := stats.row_count[ir].value) is not None:
         row_count = max(1, int(row_count * selectivity))
         stats.row_count[ir] = ColumnStat[int](row_count)

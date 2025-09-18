@@ -38,7 +38,7 @@ def test_unique(df, keep, subset, maintain_order, cardinality):
             "fallback_mode": "warn",
             # We are using unique_fraction to control the algorithm,
             # so we need to disable statistics-based reduction planning.
-            "stats_planning_options": {"reduction_planning": False},
+            "stats_planning": {"use_reduction_planning": False},
         },
     )
 

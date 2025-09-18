@@ -401,9 +401,9 @@ section for more details).
 
 The statistics-based query planning behavior can be controlled through
 the `StatsPlanningOptions` configuration class. These options can be
-configured either through the `stats_planning_options` parameter of the
+configured either through the `stats_planning` parameter of the
 streaming executor, or via environment variables with the prefix
-`CUDF_POLARS__STATISTICS_PLANNING__`.
+`CUDF_POLARS__EXECUTOR__STATS_PLANNING__`.
 
 ```python
 import polars as pl
@@ -412,9 +412,9 @@ import polars as pl
 engine = pl.GPUEngine(
     executor="streaming",
     executor_options={
-        "stats_planning_options": {
-            "io_partitioning": True,
-            "reduction_planning": True,
+        "stats_planning": {
+            "use_io_partitioning": True,
+            "use_reduction_planning": True,
             "use_join_heuristics": True,
             "use_sampling": False,
             "default_selectivity": 0.5,
@@ -432,36 +432,37 @@ from Parquet or in-memory DataFrame objects.
 
 The available configuration options are:
 
-- **`io_partitioning`** (default: `True`): Whether to use estimated file-size
+- **`use_io_partitioning`** (default: `True`): Whether to use estimated file-size
   statistics to calculate the ideal input-partition count for IO operations.
   This can also be set via the
-  `CUDF_POLARS__STATISTICS_PLANNING__IO_PARTITIONING` environment variable.
+  `CUDF_POLARS__EXECUTOR__STATS_PLANNING__USE_IO_PARTITIONING` environment variable.
 
-- **`reduction_planning`** (default: `False`): Whether to use estimated column
+- **`use_reduction_planning`** (default: `False`): Whether to use estimated column
   statistics to calculate the output-partition count for reduction operations
   like `Distinct`, `GroupBy`, and `Select(unique)`. This can also be set via the
-  `CUDF_POLARS__STATISTICS_PLANNING__REDUCTION_PLANNING` environment variable.
+  `CUDF_POLARS__EXECUTOR__STATS_PLANNING__USE_REDUCTION_PLANNING` environment variable.
 
 - **`use_join_heuristics`** (default: `True`): Whether to use join heuristics
   to estimate row-count and unique-count statistics. These statistics may only
   be collected when they are actually needed for query planning. This can also
-  be set via the `CUDF_POLARS__STATISTICS_PLANNING__USE_JOIN_HEURISTICS`
+  be set via the `CUDF_POLARS__EXECUTOR__STATS_PLANNING__USE_JOIN_HEURISTICS`
   environment variable.
 
 - **`use_sampling`** (default: `True`): Whether to sample real data to estimate
   unique-value statistics. These statistics may only be collected when they are
-  actually needed for query planning. This can also be set via the
-  `CUDF_POLARS__STATISTICS_PLANNING__USE_SAMPLING` environment variable.
+  actually needed for query planning and if the underlying datasource supports
+  sampling (e.g. Parquet and in-memory LazyFrame data). This can also be set via
+  the `CUDF_POLARS__EXECUTOR__STATS_PLANNING__USE_SAMPLING` environment variable.
 
 - **`default_selectivity`** (default: `0.8`): The default selectivity of a
   predicate, used for estimating how much a filter operation will reduce the
   number of rows. This can also be set via the
-  `CUDF_POLARS__STATISTICS_PLANNING__DEFAULT_SELECTIVITY` environment variable.
+  `CUDF_POLARS__EXECUTOR__STATS_PLANNING__DEFAULT_SELECTIVITY` environment variable.
 
 For example, to enable reduction planning via environment variables:
 
 ```bash
-export CUDF_POLARS__STATISTICS_PLANNING__REDUCTION_PLANNING=True
+export CUDF_POLARS__EXECUTOR__STATS_PLANNING__REDUCTION_PLANNING=True
 ```
 
 ## How it works: Storing statistics

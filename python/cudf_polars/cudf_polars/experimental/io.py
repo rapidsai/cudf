@@ -694,7 +694,7 @@ class ParquetSourceInfo(DataSourceInfo):
         Maximum number of file footers to sample metadata from.
     max_row_group_samples
         Maximum number of row-groups to sample data from.
-    stats_planning_options
+    stats_planning
         Statistics planning options.
     """
 
@@ -703,12 +703,12 @@ class ParquetSourceInfo(DataSourceInfo):
         paths: tuple[str, ...],
         max_footer_samples: int,
         max_row_group_samples: int,
-        stats_planning_options: StatsPlanningOptions,
+        stats_planning: StatsPlanningOptions,
     ):
         self.paths = paths
         self.max_footer_samples = max_footer_samples
         self.max_row_group_samples = max_row_group_samples
-        self._stats_planning_options = stats_planning_options
+        self._stats_planning = stats_planning
         self._unique_stats_columns = set()
         # Helper attributes
         self._key_columns: set[str] = set()  # Used to fuse lazy row-group sampling
@@ -728,7 +728,7 @@ class ParquetSourceInfo(DataSourceInfo):
         """Estimate unique-value statistics from a row-group sample."""
         if (
             self.max_row_group_samples < 1
-            or not self._stats_planning_options.use_sampling
+            or not self._stats_planning.use_sampling
             or not (sample_paths := self.metadata.sample_paths)
         ):
             # No sampling allowed or no row-groups to sample from
@@ -825,14 +825,14 @@ def _sample_pq_stats(
     paths: tuple[str, ...],
     max_footer_samples: int,
     max_row_group_samples: int,
-    stats_planning_options: StatsPlanningOptions,
+    stats_planning: StatsPlanningOptions,
 ) -> ParquetSourceInfo:
     """Return Parquet datasource information."""
     return ParquetSourceInfo(
         paths,
         max_footer_samples,
         max_row_group_samples,
-        stats_planning_options,
+        stats_planning,
     )
 
 
@@ -849,7 +849,7 @@ def _extract_scan_stats(
             tuple(ir.paths),
             config_options.parquet_options.max_footer_samples,
             config_options.parquet_options.max_row_group_samples,
-            config_options.executor.stats_planning_options,
+            config_options.executor.stats_planning,
         )
         return {
             name: ColumnStats(
@@ -871,17 +871,17 @@ class DataFrameSourceInfo(DataSourceInfo):
     ----------
     df
         In-memory DataFrame source.
-    stats_planning_options
+    stats_planning
         Statistics planning options.
     """
 
     def __init__(
         self,
         df: Any,
-        stats_planning_options: StatsPlanningOptions,
+        stats_planning: StatsPlanningOptions,
     ):
         self._df = df
-        self._stats_planning_options = stats_planning_options
+        self._stats_planning = stats_planning
         self._key_columns: set[str] = set()
         self._unique_stats_columns = set()
         self._unique_stats: dict[str, UniqueStats] = {}
@@ -892,10 +892,7 @@ class DataFrameSourceInfo(DataSourceInfo):
         return ColumnStat[int](value=self._df.height(), exact=True)
 
     def _update_unique_stats(self, column: str) -> None:
-        if (
-            column not in self._unique_stats
-            and self._stats_planning_options.use_sampling
-        ):
+        if column not in self._unique_stats and self._stats_planning.use_sampling:
             row_count = self.row_count.value
             unique_count = (
                 self._df.get_column(column).approx_n_unique() if row_count else 0
@@ -921,7 +918,7 @@ def _extract_dataframescan_stats(
     )
     table_source_info = DataFrameSourceInfo(
         ir.df,
-        config_options.executor.stats_planning_options,
+        config_options.executor.stats_planning,
     )
     return {
         name: ColumnStats(

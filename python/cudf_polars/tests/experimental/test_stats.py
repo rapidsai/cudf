@@ -43,7 +43,7 @@ def engine():
             "shuffle_method": "tasks",
             "target_partition_size": 10_000,
             "max_rows_per_partition": 1_000,
-            "stats_planning_options": {"reduction_planning": True},
+            "stats_planning": {"use_reduction_planning": True},
         },
     )
 
@@ -221,7 +221,7 @@ def test_base_stats_parquet_groupby(
         executor_options={
             "target_partition_size": 10_000,
             "scheduler": DEFAULT_SCHEDULER,
-            "stats_planning_options": {"reduction_planning": True},
+            "stats_planning": {"use_reduction_planning": True},
         },
         parquet_options={
             "max_footer_samples": max_footer_samples,
@@ -421,17 +421,17 @@ def test_base_stats_join_key_info(engine):
     assert stats.row_count[ir].value == q.collect().height
 
 
-@pytest.mark.parametrize("io_partitioning", [True, False])
-@pytest.mark.parametrize("reduction_planning", [True, False])
+@pytest.mark.parametrize("use_io_partitioning", [True, False])
+@pytest.mark.parametrize("use_reduction_planning", [True, False])
 @pytest.mark.parametrize("use_join_heuristics", [True, False])
 @pytest.mark.parametrize("use_sampling", [True, False])
 @pytest.mark.parametrize("default_selectivity", [0.5, 1.0])
 @pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
-def test_stats_planning_options(
+def test_stats_planning(
     tmp_path,
     kind,
-    io_partitioning,
-    reduction_planning,
+    use_io_partitioning,
+    use_reduction_planning,
     use_join_heuristics,
     use_sampling,
     default_selectivity,
@@ -445,9 +445,9 @@ def test_stats_planning_options(
             "shuffle_method": "tasks",
             "target_partition_size": 10_000,
             "max_rows_per_partition": 1_000,
-            "stats_planning_options": {
-                "io_partitioning": io_partitioning,
-                "reduction_planning": reduction_planning,
+            "stats_planning": {
+                "use_io_partitioning": use_io_partitioning,
+                "use_reduction_planning": use_reduction_planning,
                 "use_join_heuristics": use_join_heuristics,
                 "use_sampling": use_sampling,
                 "default_selectivity": default_selectivity,
