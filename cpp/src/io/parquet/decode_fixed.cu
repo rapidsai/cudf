@@ -31,11 +31,6 @@ namespace {
 // Max block size supported for the parquet decode, assuming 64 registers per thread.
 static constexpr int max_decode_block_size = 1024;
 
-/**
- * @brief Enum specifying what type of run# checks we should do for a decode launch.
- */
-enum class launch_type { SKIP_ROWS_LAUNCH, NO_SKIP_ROWS_LAUNCH, NO_ROW_CHECK_LAUNCH };
-
 // Unlike cub's algorithm, this provides warp-wide and block-wide results simultaneously.
 // Also, this provides the ability to compute warp_bits & lane_mask manually, which we need for
 // lists.
