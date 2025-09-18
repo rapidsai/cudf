@@ -31,7 +31,7 @@ target_link_libraries(hybrid_scan_io_utils PRIVATE cudf::cudf)
 add_executable(hybrid_scan_io hybrid_scan_io.cpp)
 target_link_libraries(
   hybrid_scan_io PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
-                      $<TARGET_OBJECTS:hybrid_scan_io_utils>
+                         $<TARGET_OBJECTS:hybrid_scan_io_utils>
 )
 target_compile_features(hybrid_scan_io PRIVATE cxx_std_20)
 install(TARGETS hybrid_scan_io DESTINATION bin/examples/libcudf/hybrid_scan_io)
