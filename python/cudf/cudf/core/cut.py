@@ -167,6 +167,10 @@ def cut(
             else:
                 mn = min(x)
                 mx = max(x)
+            if mn == mx:
+                raise NotImplementedError(
+                    "cut on homogeneous data is not supported."
+                )
             bins = np.linspace(mn, mx, bins + 1, endpoint=True)
             adj = (mx - mn) * 0.001
             if right:
