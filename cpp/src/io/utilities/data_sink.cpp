@@ -77,7 +77,7 @@ class file_sink : public data_sink {
 
     // KvikIO's `pwrite()` returns a `std::future<size_t>` so we convert it
     // to `std::future<void>`
-    return std::async(std::launch::deferred, [this, gpu_data, size, offset, stream]() -> void {
+    return std::async(std::launch::deferred, [this, gpu_data, size, offset]() -> void {
       _kvikio_file.pwrite(gpu_data, size, offset).get();
     });
   }
