@@ -245,7 +245,7 @@ class RunConfig:
         except ValueError:
             scale_factor = float(scale_factor)
 
-        if args.scale is not None:
+        if "pdsh" in name and args.scale is not None:
             # Validate the user-supplied scale factor
             sf_inf = _infer_scale_factor(name, path, args.suffix)
             rel_error = abs((scale_factor - sf_inf) / sf_inf)
@@ -603,8 +603,8 @@ def parse_args(
         "--protocol",
         default="ucx",
         type=str,
-        choices=["ucx-old", "ucx"],
-        help="Communication protocol to use for Dask: ucx (uses ucxx) or ucx-old (uses ucx-py)",
+        choices=["ucx"],
+        help="Communication protocol to use for Dask: ucx (uses ucxx)",
     )
     parser.add_argument(
         "--shuffle",
