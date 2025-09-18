@@ -18,6 +18,11 @@ include(../fetch_dependencies.cmake)
 include(rapids-cmake)
 rapids_cmake_build_type("Release")
 
+# For now, disable CMake's automatic module scanning for C++ files. There is an sccache bug in the
+# version RAPIDS uses in CI that causes it to handle the resulting -M* flags incorrectly with
+# gcc>=14. We can remove this once we upgrade to a newer sccache version.
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
+
 add_library(hybrid_scan_utils OBJECT hybrid_scan_utils.cpp io_source.cpp)
 target_compile_features(hybrid_scan_utils PRIVATE cxx_std_20)
 target_link_libraries(hybrid_scan_utils PRIVATE cudf::cudf)
@@ -29,7 +34,8 @@ target_link_libraries(
                       $<TARGET_OBJECTS:hybrid_scan_utils>
 )
 target_compile_features(hybrid_scan PRIVATE cxx_std_20)
-install(TARGETS hybrid_scan DESTINATION bin/examples/libcudf)
+install(TARGETS hybrid_scan DESTINATION bin/examples/libcudf/hybrid_scan)
 
-# Install the example.parquet file
-install(FILES ${CMAKE_CURRENT_LIST_DIR}/example.parquet DESTINATION bin/examples/libcudf)
+# Install the datagen.py file
+install(FILES ${CMAKE_CURRENT_LIST_DIR}/datagen.py DESTINATION bin/examples/libcudf/hybrid_scan)
+

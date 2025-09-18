@@ -297,12 +297,13 @@ auto hybrid_scan(io_source const& io_source,
  */
 void inline print_usage()
 {
-  std::cout << std::endl
-            << "Usage: hybrid_scan <input parquet file> <column name> <literal> <io source type> "
-               "<output parquet file>\n"
-            << "Note: Both the column name and literal must be of `string` type\n"
-            << "Available IO source types: FILEPATH, HOST_BUFFER, PINNED_BUFFER (Default) \n\n"
-            << "Example: hybrid_scan example.parquet col_a 100 output.parquet PINNED_BUFFER\n\n";
+  std::cout
+    << std::endl
+    << "Usage: hybrid_scan <input parquet file> <column name> <literal> <io source type> "
+       "<output parquet file>\n"
+    << "Note: Both the column name and literal must be of `string` type\n"
+    << "Available IO source types: HOST_BUFFER, PINNED_BUFFER (Default) \n\n"
+    << "Example: hybrid_scan example.parquet string_col 0000001 PINNED_BUFFER output.parquet \n\n";
 }
 
 }  // namespace
