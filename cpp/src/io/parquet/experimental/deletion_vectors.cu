@@ -172,8 +172,13 @@ table_with_metadata read_parquet_and_apply_deletion_vector(
     "Encountered a non-empty AST filter expression. Use a roaring64 bitmap deletion vector to "
     "filter the table instead");
 
+  // Use default mr to read parquet table and build row index column if we will be applying the
+  // deletion vector to produce a new table later
+  auto const table_mr =
+    serialized_roaring64.empty() ? mr : rmm::mr::get_current_device_resource_ref();
+
   // Read the parquet table
-  auto [table, metadata] = cudf::io::read_parquet(options, stream, mr);
+  auto [table, metadata] = cudf::io::read_parquet(options, stream, table_mr);
   auto const num_rows    = table->num_rows();
 
   CUDF_EXPECTS(
@@ -184,7 +189,7 @@ table_with_metadata read_parquet_and_apply_deletion_vector(
 
   // Compute a row index column from the specified row group offsets and counts
   auto row_index_column =
-    compute_row_index_column(row_group_offsets, row_group_num_rows, num_rows, stream, mr);
+    compute_row_index_column(row_group_offsets, row_group_num_rows, num_rows, stream, table_mr);
 
   // Prepend row index column to the table columns
   auto index_and_table_columns = std::vector<std::unique_ptr<cudf::column>>{};
@@ -217,6 +222,7 @@ table_with_metadata read_parquet_and_apply_deletion_vector(
                                           stream,
                                           cudf::get_current_device_resource_ref());
     return table_with_metadata{
+      // Supply user-provided mr to apply_boolean_mask to allocate output table's memory
       cudf::apply_boolean_mask(table_with_index->view(), row_mask->view(), stream, mr),
       std::move(metadata)};
   }
