@@ -97,6 +97,7 @@ files:
       - test_python_common
       - test_python_cudf_common
       - test_python_pylibcudf
+      - test_python_cudf_polars
       - depends_on_cudf
       - depends_on_dask_cuda
       - depends_on_pylibcudf
