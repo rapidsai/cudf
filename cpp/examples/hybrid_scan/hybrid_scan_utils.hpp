@@ -31,6 +31,14 @@
  */
 
 /**
+ * @brief Create memory resource for libcudf functions
+ *
+ * @param pool Whether to use a pool memory resource.
+ * @return Memory resource instance
+ */
+std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_pool_used);
+
+/**
  * @brief Create a filter expression of the form `column_name == literal` for string type point
  * lookups
  *
