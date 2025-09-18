@@ -16,7 +16,6 @@
 #pragma once
 
 #include <cudf/context.hpp>
-
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/pinned_memory.hpp>
