@@ -35,8 +35,7 @@ from cudf.utils.utils import is_na_like
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
-    import cupy
-    import numba.cuda
+    import cupy as cp
 
     from cudf._typing import (
         ColumnBinaryOperand,
@@ -241,11 +240,6 @@ class StringColumn(ColumnBase):
 
         raise NotImplementedError("`any` not implemented for `StringColumn`")
 
-    def data_array_view(
-        self, *, mode="write"
-    ) -> numba.cuda.devicearray.DeviceNDArray:
-        raise ValueError("Cannot get an array view of a StringColumn")
-
     @property
     def __cuda_array_interface__(self):
         raise NotImplementedError(
@@ -449,18 +443,12 @@ class StringColumn(ColumnBase):
         return col
 
     @property
-    def values_host(self) -> np.ndarray:
+    def values(self) -> cp.ndarray:
         """
-        Return a numpy representation of the StringColumn.
+        Return a CuPy representation of the Column.
         """
-        return self.to_pandas().values
-
-    @property
-    def values(self) -> cupy.ndarray:
-        """
-        Return a CuPy representation of the StringColumn.
-        """
-        raise TypeError("String arrays are not supported by cupy")
+        # dask checks for a TypeError instead of NotImplementedError
+        raise TypeError(f"cupy does not support {self.dtype}")
 
     def to_pandas(
         self,
