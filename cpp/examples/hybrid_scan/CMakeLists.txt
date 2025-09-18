@@ -38,4 +38,3 @@ install(TARGETS hybrid_scan DESTINATION bin/examples/libcudf/hybrid_scan)
 
 # Install the datagen.py file
 install(FILES ${CMAKE_CURRENT_LIST_DIR}/datagen.py DESTINATION bin/examples/libcudf/hybrid_scan)
-
