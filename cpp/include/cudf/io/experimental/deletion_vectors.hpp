@@ -33,12 +33,19 @@ namespace io::parquet::experimental {
  * @brief Reads a table from parquet source, prepends an index column to it, deserializes the
  * roaring64 deletion vector and applies it to the read table
  *
+ * Reads a table from a parquet source, builds a row index column to the table using the specified
+ * row group offsets and row counts and prepends it to the table, deserializes the specified
+ * roaring64 deletion vector and applies it to the read table. If the row group offsets and row
+ * counts are empty, the index column is simply a sequence of UINT64 from 0 to the total number of
+ * rows in the table. If the serialized bitmap data is empty, the read table (prepended with the
+ * index column) is returned as is.
+ *
  * @ingroup io_readers
  *
  * @param options Parquet reader options
  * @param serialized_roaring64 Host span of `portable` serialized roaring64 bitmap
  * @param row_group_offsets Host span of row index offsets for each row group
- * @param row_group_num_rows Number of rows in each row group
+ * @param row_group_num_rows Host span of number of rows in each row group
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the returned table
  *
