@@ -393,3 +393,8 @@ def test_fill_over(
         assert_ir_translation_raises(q, NotImplementedError)
     else:
         assert_gpu_result_equal(q)
+
+
+def test_fill_null_with_mean_over_unsupported(df: pl.LazyFrame) -> None:
+    q = df.select(pl.col("x").fill_null(strategy="mean").over("g"))
+    assert_ir_translation_raises(q, NotImplementedError)
