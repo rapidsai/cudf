@@ -3539,12 +3539,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )
 
         value = as_column(value, nan_as_null=nan_as_null)
-        if cudf.get_option("mode.pandas_compatible"):
-            dtype = value.dtype
-            if self._num_columns > 0:
-                _, first_dtype = next(self._dtypes)
-                dtype = get_dtype_of_same_kind(first_dtype, dtype)
-                value = value.astype(dtype)
         self._data.insert(name, value, loc=loc)
 
     @property  # type:ignore
@@ -6298,7 +6292,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 return Series._from_column(
                     result._columns[0], name=q, index=result.index
                 )
-        else:
+        elif method == "single":
             # Ensure that qs is non-scalar so that we always get a column back.
             interpolation = interpolation or "linear"
             result = {}
@@ -6321,6 +6315,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 result.index = data_df.keys()
                 result.name = q
                 return result
+        else:
+            raise ValueError(f"Invalid method: {method}")
 
         result.index = Index(list(map(float, qs)), dtype="float64")
         return result
@@ -7705,6 +7701,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 "numeric_only is currently not supported."
             )
 
+        if self.isna().any().any():
+            raise NotImplementedError("cupy-based cov does not support nulls")
+
         cov = cupy.cov(self.values, ddof=ddof, rowvar=False)
         cols = self._data.to_pandas_index
         df = DataFrame(cupy.asfortranarray(cov), index=cols)
@@ -7733,6 +7732,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         DataFrame
             The requested correlation matrix.
         """
+        if self.isna().any().any():
+            raise NotImplementedError("cupy-based corr does not support nulls")
+
         if method == "pearson":
             values = self.values
         elif method == "spearman":
