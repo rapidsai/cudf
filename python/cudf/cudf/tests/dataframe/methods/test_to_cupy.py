@@ -77,8 +77,9 @@ def test_dataframe_to_cupy_single_column(has_nulls, use_na_value):
     df = cudf.DataFrame({"a": data})
 
     if has_nulls and not use_na_value:
-        with pytest.raises(ValueError, match="Column must have no nulls"):
-            df.to_cupy()
+        result = df.to_cupy()
+        expected = df.fillna(np.nan).to_cupy()
+        assert_eq(result, expected)
         return
 
     na_value = 0.0 if use_na_value else None
@@ -110,11 +111,13 @@ def test_dataframe_to_cupy_null_values():
         data[~boolmask] = na
         refvalues[k] = data
 
-    # Check null value causes error
-    with pytest.raises(ValueError):
-        df.to_cupy()
-    with pytest.raises(ValueError):
-        df.to_numpy()
+    result = df.to_cupy()
+    expected = df.fillna(np.nan).to_cupy()
+    assert_eq(result, expected)
+
+    result = df.to_numpy()
+    expected = df.fillna(np.nan).to_numpy()
+    assert_eq(result, expected)
 
     for k in df.columns:
         df[k] = df[k].fillna(na)
