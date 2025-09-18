@@ -39,8 +39,9 @@
  * @file hybrid_scan.cpp
  *
  * @brief This example demonstrates the use of libcudf next-gen parquet reader to optimally read
- * a parquet file subject to a highly selective string-type point lookup filter. The same file is
- * also read using the libcudf legacy parquet reader and the read times are compared.
+ * a parquet file subject to a highly selective string-type point lookup (col_name ==
+ * literal) filter. The same file is also read using the libcudf legacy parquet reader and the read
+ * times are compared.
  */
 
 namespace {
@@ -301,7 +302,8 @@ void inline print_usage()
     << std::endl
     << "Usage: hybrid_scan <input parquet file> <column name> <literal> <io source type> "
        "<output parquet file>\n"
-    << "Note: Both the column name and literal must be of `string` type\n"
+    << "Note: Both the column name and literal must be of `string` type. The constructed filter "
+       "expression will be of the form <column name> == <literal>\n"
     << "Available IO source types: HOST_BUFFER, PINNED_BUFFER (Default) \n\n"
     << "Example: hybrid_scan example.parquet string_col 0000001 PINNED_BUFFER output.parquet \n\n";
 }
@@ -313,21 +315,23 @@ void inline print_usage()
  *
  * Command line parameters:
  * 1. parquet input file name/path (default: "example.parquet")
- * 2. column name for filter expression (default: "col_a")
- * 3. literal for filter expression (default: "100")
+ * 2. column name for filter expression (default: "string_col")
+ * 3. literal for filter expression (default: "0000001")
  * 4. io source type (default: "PINNED_BUFFER")
  * 5. parquet output file name/path (default: "output.parquet")
  *
+ * The filter expression will be of the form col_name == literal (default: string_col == 0000001)
+ *
  * Example invocation from directory `cudf/cpp/examples/hybrid_scan`:
- * ./build/hybrid_scan example.parquet col_a 100 output.parquet PINNED_BUFFER output.parquet
+ * ./build/hybrid_scan example.parquet string_col 0000001 PINNED_BUFFER output.parquet
  *
  */
 int main(int argc, char const** argv)
 {
   auto input_filepath  = std::string{"example.parquet"};
   auto output_filepath = std::string{"output.parquet"};
-  auto column_name     = std::string{"col_a"};
-  auto literal_value   = std::string{"100"};
+  auto column_name     = std::string{"string_col"};
+  auto literal_value   = std::string{"0000001"};
   auto io_source_type  = io_source_type::PINNED_BUFFER;
 
   switch (argc) {
