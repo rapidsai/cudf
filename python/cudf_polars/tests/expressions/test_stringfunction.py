@@ -282,27 +282,28 @@ def test_to_datetime(values, has_invalid_row, cache, strict, format, exact):
             exact=exact,
         )
     )
-    if cache or not exact:
+    if cache or not exact or (not strict and format is None):
+        outcome = "translation_error"
+    elif (values[0] == "foo" and format is None and strict) or (
+        strict and has_invalid_row
+    ):
+        outcome = "collect_error"
+    else:
+        outcome = "success"
+
+    if outcome == "translation_error":
         assert_ir_translation_raises(q, NotImplementedError)
-    elif strict and has_invalid_row:
+    elif outcome == "collect_error":
+        cudf_exc = (
+            pl.exceptions.ComputeError
+            if POLARS_VERSION_LT_130
+            else pl.exceptions.InvalidOperationError
+        )
         assert_collect_raises(
             q,
             polars_except=pl.exceptions.InvalidOperationError,
-            cudf_except=pl.exceptions.ComputeError
-            if POLARS_VERSION_LT_130
-            else pl.exceptions.InvalidOperationError,
+            cudf_except=cudf_exc,
         )
-    elif strict is False and format is None:
-        assert_ir_translation_raises(q, NotImplementedError)
-    elif values[0] == "foo" and format is None and strict is True:
-        if strict:
-            assert_collect_raises(
-                q,
-                polars_except=pl.exceptions.InvalidOperationError,
-                cudf_except=pl.exceptions.ComputeError,
-            )
-        else:
-            assert_ir_translation_raises(q, NotImplementedError)
     else:
         assert_gpu_result_equal(q)
 
