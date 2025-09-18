@@ -69,7 +69,6 @@ def agg_expr(request):
         pl.col("b").first(),  # libcudf doesn't support rolling first
         pl.col("b").last(),  # libcudf doesn't support rolling last
         pl.col("b").median(),  # libcudf doesn't support rolling median
-        pl.col("b").std(),  # libcudf doesn't support rolling std
         pl.col("b").quantile(0.5),  # libcudf doesn't support rolling quantile
     ],
 )
