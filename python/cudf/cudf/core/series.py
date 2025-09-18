@@ -3113,6 +3113,9 @@ class Series(SingleColumnFrame, IndexedFrame):
             res = res[res.index.notna()]
         else:
             res = self.groupby(self, dropna=dropna).count(dropna=dropna)
+            if dropna:
+                res = res[res.index.notna()]
+
             if isinstance(self.dtype, CategoricalDtype) and len(res) != len(
                 self.dtype.categories
             ):
