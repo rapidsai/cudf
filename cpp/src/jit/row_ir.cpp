@@ -220,7 +220,8 @@ void operation::instantiate(instance_context& ctx, instance_info const& info)
                                operand_types.front().scale(),
                                [](auto const& a, auto const& b) { return std::min(a, b.scale()); });
 
-  type_ = type_info{cudf::data_type{type_id, scale}};
+  auto dt = cudf::data_type{type_id};
+  type_   = type_info{cudf::is_fixed_point(dt) ? cudf::data_type{type_id, scale} : dt};
 }
 
 std::string operation::generate_code(instance_context& ctx,
