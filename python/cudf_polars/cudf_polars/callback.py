@@ -9,7 +9,6 @@ import contextlib
 import os
 import textwrap
 import time
-import traceback
 import warnings
 from functools import cache, partial
 from typing import TYPE_CHECKING, Literal, overload
@@ -144,34 +143,10 @@ def set_memory_resource(
     else:
         ctx = contextlib.nullcontext()
 
-    # There's a subtle issue around lifetimes, exceptions, and our adjustments
-    # to RMM's memory resources. We need to ensure that all of the buffers
-    # allocated during the lifetime of memory resource (either the new one
-    # we create here, or the statistics wrapped around it) are freed *before*
-    # we drop this MR (and the previous MR is restored).
-    #
-    # Normally, this is fine, but Exceptions raised while the MR is active
-    # present a challenge: Python keeps a reference to the Python frame
-    # with the locals, which might include buffers allocated on the MR.
-    # We don't handle the exception here: we want to propagate it to
-    # the user / polars. But we do need to restore the previous MR before
-    # handing control back to the caller.
-    #
-    # The solution is to clear the frames from the traceback, which will
-    # free the buffers allocated on the MR *before* our MR is destroyed.
-    # We use __enter__ / __exit__ explicitly, since we need to carefully
-    # control the order of the cleanup (clear frames, unset statistics,
-    # restore previous MR).
-
     try:
-        ctx.__enter__()
-        yield mr
-    except Exception as e:
-        if cudf_polars.dsl.tracing.LOG_TRACES:
-            traceback.clear_frames(e.__traceback__)
-        raise
+        with ctx:
+            yield mr
     finally:
-        ctx.__exit__(None, None, None)
         rmm.mr.set_current_device_resource(previous)
 
 
