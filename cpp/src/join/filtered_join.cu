@@ -129,6 +129,11 @@ void filtered_join::insert_build_table(Ref const& insert_ref, rmm::cuda_stream_v
     }
   };
 
+  // Any mismatch in nullate between probe and build row operators results in UB. Ideally, nullate
+  // should be determined by the logical OR of probe nulls and build nulls. However, since we do not
+  // know if the probe has nulls apriori, we set nullate::DYNAMIC{true} (in the case of primitive
+  // row operators) and nullate::YES (in the case of non-primitive row operators) to ensure both
+  // build and probe row operators use consistent null handling.
   if (is_primitive_row_op_compatible(_build)) {
     auto const d_build_hasher = primitive_row_hasher{nullate::DYNAMIC{true}, _preprocessed_build};
     auto const build_iter     = cudf::detail::make_counting_transform_iterator(
