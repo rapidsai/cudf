@@ -85,7 +85,11 @@ class fixed_pinned_pool_memory_resource {
   void* allocate(std::size_t bytes, std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT)
   {
     auto const result = allocate_async(bytes, alignment, stream_);
+#if CCCL_MAJOR_VERSION > 3 || (CCCL_MAJOR_VERSION == 3 && CCCL_MINOR_VERSION >= 1)
+    stream_.sync();
+#else
     stream_.wait();
+#endif
     return result;
   }
 
@@ -111,7 +115,11 @@ class fixed_pinned_pool_memory_resource {
                   std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT)
   {
     deallocate_async(ptr, bytes, alignment, stream_);
+#if CCCL_MAJOR_VERSION > 3 || (CCCL_MAJOR_VERSION == 3 && CCCL_MINOR_VERSION >= 1)
+    stream_.sync();
+#else
     stream_.wait();
+#endif
   }
 
   bool operator==(fixed_pinned_pool_memory_resource const& other) const
