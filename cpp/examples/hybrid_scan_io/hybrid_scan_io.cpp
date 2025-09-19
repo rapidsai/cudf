@@ -263,9 +263,9 @@ auto hybrid_scan(io_source const& io_source,
     filters.contains(parquet_filter_type::PAYLOAD_COLUMN_PAGES_WITH_ROW_MASK);
 
   if (prune_payload_data_pages) {
-    std::cout << "READER: Filter data pages of payload columns with page index stats...\n";
+    std::cout << "READER: Filter data pages of payload columns with row mask...\n";
   } else {
-    std::cout << "SKIP: Payload column data page filtering with page index stats...\n\n";
+    std::cout << "SKIP: Payload column data page filtering with row mask...\n\n";
   }
 
   std::cout << "READER: Materialize payload columns...\n";
