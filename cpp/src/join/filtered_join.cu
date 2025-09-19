@@ -233,6 +233,11 @@ distinct_filtered_join::distinct_filtered_join(cudf::table_view const& build,
   : filtered_join(build, compare_nulls, load_factor, stream)
 {
   cudf::scoped_range range{"distinct_filtered_join::distinct_filtered_join"};
+  // Any mismatch in nullate between probe and build row operators results in UB. Ideally, nullate
+  // should be determined by the logical OR of probe nulls and build nulls. However, since we do not
+  // know if the probe has nulls apriori, we set nullate::DYNAMIC{true} (in the case of primitive
+  // row operators) and nullate::YES (in the case of non-primitive row operators) to ensure both
+  // build and probe row operators use consistent null handling.
   if (is_primitive_row_op_compatible(build)) {
     auto const d_build_comparator = primitive_row_comparator{
       nullate::DYNAMIC{true}, _preprocessed_build, _preprocessed_build, compare_nulls};

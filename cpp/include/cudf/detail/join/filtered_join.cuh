@@ -184,7 +184,7 @@ class filtered_join {
   // Equality comparator for primitive rows
   using primitive_row_comparator = cudf::detail::row::primitive::row_equality_comparator;
 
-  // Hasher for complex row types with dynamic null handling
+  // Hasher for complex row types with compile-time null handling
   using row_hasher =
     cudf::detail::row::hash::device_row_hasher<cudf::hashing::detail::default_hash, nullate::YES>;
   // Linear probing scheme with bucket size 4 for nested data structures
