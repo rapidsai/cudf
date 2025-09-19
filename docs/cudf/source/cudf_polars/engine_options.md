@@ -87,6 +87,45 @@ environment variables with the prefix
 variable `CUDF_POLARS__PARQUET_OPTIONS__CHUNKED=0` will set the default
 `chunked` to `False`.
 
+## Memory Resource
+
+All GPU memory allocations made by cudf-polars use an RMM Memory Resource object from :mod:`rmm.mr`. You can specify
+the memory resource to use by:
+
+1. Relying on the default behavior, which creates a memory resource for you.
+2. Passing the configuration options for a Memory Resource as `memory_resource_config` in the `**kwargs` passed to {class}`polars.GPUEngine`.
+3. Passing a concrete ``MemoryResource`` instance to {class}`polars.GPUEngine`:
+
+By default, cudf-polars will create a new RMM resource for each query executed. The `POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY` environment
+variable controls whether an RMM pool with managed memory is created (true by default). Set `POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY=0` to
+disabled managed memory and use {class}`rmm.mr.CudaAsyncMemoryResource` instead.
+
+Alternatively, you can customize the pool by passing the configuration for an RMM Memory Resource object as `memory_resource_config`
+when creating your {class}`polars.GPUEngine`:
+
+```python
+memory_resource_config = {
+    "name": "rmm.mr.CudaAsyncMemory",
+    "options": {
+        "initial_pool_size": "100 MiB",
+    }
+}
+
+engine = pl.GPUEngine(memory_resource_config=memory_resource_config)
+```
+
+This lets you control things like the initial pool size or release threshold.
+
+Finally, for maximum flexibility, you can create your own Memory Resource object and pass it into the {class}`polars.GPUEngine`:
+
+```python
+import polars as pl
+import rmm
+
+mr = rmm.mr.CudaAsyncMemory()
+engine = pl.GPUEngine(memory_resource=mr)
+```
+
 ## Disabling CUDA Managed Memory
 
 By default the `in-memory` executor will use [CUDA managed memory](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#unified-memory-introduction) with RMM's pool allocator. On systems that don't support managed memory, a non-managed asynchronous pool

@@ -28,7 +28,7 @@ import importlib.util
 import json
 import os
 import warnings
-from typing import TYPE_CHECKING, Literal, TypeVar
+from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -36,6 +36,8 @@ if TYPE_CHECKING:
     from typing_extensions import Self
 
     import polars.lazyframe.engine_config
+
+    import rmm.mr
 
 
 __all__ = [
@@ -289,6 +291,64 @@ def default_blocksize(scheduler: str) -> int:
     return min(max(blocksize, 1_000_000_000), 10_000_000_000)
 
 
+# Specifying a default memory resource
+@dataclasses.dataclass(frozen=True, eq=True)
+class MemoryResourceConfig:
+    """
+    Configuration for the default memory resource.
+
+    Parameters
+    ----------
+    qualname
+        The fully qualified name of the memory resource class to use.
+    options
+        The options to pass to the memory resource class.
+
+    Examples
+    --------
+    >>> MemoryResourceConfig(
+    ...     qualname="rmm.mr.CudaAsyncMemoryResource",
+    ...     options={"initial_pool_size": 100},
+    ... )
+    """
+
+    _env_prefix = "CUDF_POLARS__MEMORY_RESOURCE_CONFIG"
+    qualname: str = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__QUALNAME",
+            str,
+            # We shouldn't reach here if qualname isn't set in the environment.
+            default=None,  # type: ignore[assignment]
+        )
+    )
+    options: dict[str, Any] | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__OPTIONS",
+            json.loads,
+            default=None,
+        )
+    )
+
+    def __post_init__(self) -> None:
+        if self.qualname.count(".") < 1:
+            raise ValueError(
+                "MemoryResourceConfig.qualname must be a fully qualified name to a class, including the module name."
+            )
+
+    def create_memory_resource(self) -> rmm.mr.DeviceMemoryResource:
+        """Create a memory resource from the configuration."""
+        module_name, class_name = self.qualname.rsplit(".", 1)
+        module = importlib.import_module(module_name)
+        cls = getattr(module, class_name)
+        return cls(**self.options or {})
+
+    def __hash__(self) -> int:
+        if self.options is None:
+            return hash((self.qualname,))
+        else:
+            return hash((self.qualname, tuple(sorted(self.options.items()))))
+
+
 @dataclasses.dataclass(frozen=True, eq=True)
 class StreamingExecutor:
     """
@@ -518,6 +578,7 @@ class StreamingExecutor:
         # to json and hash that.
         d = dataclasses.asdict(self)
         d["unique_fraction"] = json.dumps(d["unique_fraction"])
+        d["memory_resource_config"] = dataclasses.asdict(d["memory_resource_config"])
         return hash(tuple(sorted(d.items())))
 
 
@@ -563,6 +624,7 @@ class ConfigOptions:
         default_factory=StreamingExecutor
     )
     device: int | None = None
+    memory_resource_config: MemoryResourceConfig | None = None
 
     @classmethod
     def from_polars_engine(
@@ -576,6 +638,7 @@ class ConfigOptions:
             "executor_options",
             "parquet_options",
             "raise_on_fail",
+            "memory_resource_config",
         }
 
         extra_options = set(engine.config.keys()) - valid_options
@@ -590,6 +653,13 @@ class ConfigOptions:
         user_parquet_options = engine.config.get("parquet_options", {})
         # This is set in polars, and so can't be overridden by the environment
         user_raise_on_fail = engine.config.get("raise_on_fail", False)
+        user_memory_resource_config = engine.config.get("memory_resource_config", None)
+        if user_memory_resource_config is None and (
+            os.environ.get(f"{env_prefix}__MEMORY_RESOURCE_CONFIG__QUALNAME", "") != ""
+        ):
+            # This is a bit weird; we're using the presence of __QUALNAME to determine
+            # whether to rely on the environment to configure the memory resource.
+            user_memory_resource_config = MemoryResourceConfig()
 
         # Backward compatibility for "cardinality_factor"
         # TODO: Remove this in 25.10
@@ -642,4 +712,5 @@ class ConfigOptions:
             parquet_options=ParquetOptions(**user_parquet_options),
             executor=executor,
             device=engine.device,
+            memory_resource_config=user_memory_resource_config,
         )
