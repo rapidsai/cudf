@@ -325,18 +325,30 @@ class Scan(IR):
             raise NotImplementedError(
                 "Read from cloud storage"
             )  # pragma: no cover; no test yet
-        if any(
-            str(p).startswith("https:/" if POLARS_VERSION_LT_131 else "https://")
-            for p in self.paths
-        ):
+        if (
+            any(str(p).startswith("https:/") for p in self.paths)
+            and POLARS_VERSION_LT_131
+        ):  # pragma: no cover; polars passed us the wrong URI
+            # https://github.com/pola-rs/polars/issues/22766
             raise NotImplementedError("Read from https")
         if any(
             str(p).startswith("file:/" if POLARS_VERSION_LT_131 else "file://")
             for p in self.paths
         ):
-            # TODO: removing the file:// may work
             raise NotImplementedError("Read from file URI")
         if self.typ == "csv":
+            if any(plc.io.SourceInfo._is_remote_uri(p) for p in self.paths):
+                # This works fine when the file has no leading blank lines,
+                # but currently we do some file introspection
+                # to skip blanks before parsing the header.
+                # For remote files we cannot determine if leading blank lines
+                # exist, so we're punting on CSV support.
+                # TODO: Once the CSV reader supports skipping leading
+                # blank lines natively, we can remove this guard.
+                raise NotImplementedError(
+                    "Reading CSV from remote is not yet supported"
+                )
+
             if self.reader_options["skip_rows_after_header"] != 0:
                 raise NotImplementedError("Skipping rows after header in CSV reader")
             parse_options = self.reader_options["parse_options"]
