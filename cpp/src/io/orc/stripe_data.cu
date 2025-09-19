@@ -1213,11 +1213,11 @@ static __device__ int decode_decimals(orc_bytestream_s* bs,
     }
     __syncthreads();
     uint32_t num_vals_to_read = scratch->num_vals;
-    
+
     __int128_t v = 0;
     if (t >= num_vals_read and t < num_vals_to_read) {
       auto const pos = static_cast<int>(vals.i64[2 * t]);
-      v = decode_varint128(bs, pos);
+      v              = decode_varint128(bs, pos);
     }
     __syncthreads();
     if (t >= num_vals_read and t < num_vals_to_read) {
@@ -1233,7 +1233,7 @@ static __device__ int decode_decimals(orc_bytestream_s* bs,
           return (v / kPow5i[abs_scale]) >> abs_scale;
         }
       }();
-      
+
       if (dtype_id == type_id::DECIMAL32) {
         vals.i32[t] = scaled_value;
       } else if (dtype_id == type_id::DECIMAL64) {
@@ -1602,7 +1602,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   size_t const max_num_rows = s->chunk.column_num_rows;
   __shared__ run_cache_manager run_cache_manager_inst;
   cache_helper cache_helper_inst(run_cache_manager_inst);
-  
+
   __syncthreads();
   if (t == 0 and is_valid) {
     // If we have an index, seek to the initial run and update row positions
