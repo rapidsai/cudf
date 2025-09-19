@@ -328,6 +328,17 @@ class IndexedFrame(Frame):
         return out
 
     @_performance_tracking
+    def _get_columns_by_label(self, labels) -> Self:
+        """
+        Returns columns of the Frame specified by `labels`.
+
+        Akin to cudf.DataFrame(...).loc[:, labels]
+        """
+        return self._from_data(
+            self._data.select_by_label(labels), index=self.index
+        )
+
+    @_performance_tracking
     def _from_data_like_self(self, data: MutableMapping):
         out = super()._from_data_like_self(data)
         out.index = self.index
@@ -2028,7 +2039,7 @@ class IndexedFrame(Frame):
         )
         return self._from_data_like_self(
             self._data._from_columns_like_self(data_columns)
-        )
+        )._copy_type_metadata(self)
 
     @_performance_tracking
     def truncate(self, before=None, after=None, axis=0, copy=True):
@@ -6480,6 +6491,14 @@ class IndexedFrame(Frame):
         if not (convert_floating and convert_integer):
             return self.copy()
         else:
+            if (
+                cudf.get_option("mode.pandas_compatible")
+                and dtype_backend is None
+            ):
+                raise NotImplementedError(
+                    "The `dtype_backend` argument is not supported in "
+                    "pandas_compatible mode."
+                )
             cols = []
             for col in self._columns:
                 if col.dtype.kind == "f":

@@ -60,6 +60,7 @@ using int64s_col       = cudf::test::fixed_width_column_wrapper<int64_t>;
 using strings_col      = cudf::test::strings_column_wrapper;
 using structs_col      = cudf::test::structs_column_wrapper;
 using int32s_lists_col = cudf::test::lists_column_wrapper<int32_t>;
+using bools_lists_col  = cudf::test::lists_column_wrapper<bool>;
 
 auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
                 std::string const& filename,
@@ -632,6 +633,13 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithListsNoNulls)
     input_columns.emplace_back(
       std::move(cudf::gather(cudf::table_view{{template_lists}}, gather_map)->release().front()));
 
+    auto const bools_lists = bools_lists_col{bools_lists_col{},
+                                             bools_lists_col{false},
+                                             bools_lists_col{false, true},
+                                             bools_lists_col{true, true, false}};
+    input_columns.emplace_back(
+      std::move(cudf::gather(cudf::table_view{{bools_lists}}, gather_map)->release().front()));
+
     return write_file(input_columns,
                       "chunked_read_with_lists_no_null",
                       false /*nullable*/,
@@ -714,6 +722,16 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithListsHavingNulls)
     auto const gather_map = int32s_col(gather_iter, gather_iter + num_rows);
     input_columns.emplace_back(
       std::move(cudf::gather(cudf::table_view{{template_lists}}, gather_map)->release().front()));
+
+    auto const bools_lists = bools_lists_col{
+      // these will all be null
+      bools_lists_col{},
+      bools_lists_col{false},
+      bools_lists_col{false, true},
+      bools_lists_col{
+        true, true, false, true, true, false, false} /* this list will be nullified out */};
+    input_columns.emplace_back(
+      std::move(cudf::gather(cudf::table_view{{bools_lists}}, gather_map)->release().front()));
 
     return write_file(input_columns,
                       "chunked_read_with_lists_nulls",

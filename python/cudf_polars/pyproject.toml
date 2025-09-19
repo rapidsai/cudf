@@ -43,6 +43,7 @@ test = [
     "numpy>=1.23,<3.0a0",
     "pytest",
     "pytest-cov",
+    "pytest-httpserver",
     "pytest-xdist",
     "rich",
     "structlog",
