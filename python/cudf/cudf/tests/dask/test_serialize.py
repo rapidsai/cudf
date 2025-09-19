@@ -220,7 +220,7 @@ def test_serialize_multi_index():
             "x": rng.normal(size=5),
         }
     )
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     gdg = gdf.groupby(["a", "b"]).sum()
     multiindex = gdg.index
     outindex = cudf.core.multiindex.MultiIndex.deserialize(
@@ -290,7 +290,7 @@ def test_serialize_datetime():
     )
     ts = np.arange(0, len(df), dtype=np.dtype("datetime64[ms]"))
     df["timestamp"] = ts
-    gdf = cudf.DataFrame.from_pandas(df)
+    gdf = cudf.DataFrame(df)
     # (De)serialize roundtrip
     recreated = cudf.DataFrame.deserialize(*gdf.serialize())
     # Check
@@ -305,7 +305,7 @@ def test_serialize_string():
     )
     str_data = ["a", "bc", "def", "ghij", "klmno"]
     df["timestamp"] = str_data
-    gdf = cudf.DataFrame.from_pandas(df)
+    gdf = cudf.DataFrame(df)
     # (De)serialize roundtrip
     recreated = cudf.DataFrame.deserialize(*gdf.serialize())
     # Check

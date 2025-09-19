@@ -422,6 +422,11 @@ def test_scan_parquet_chunked(
     )
 
 
+@pytest.mark.xfail(
+    raises=pl.exceptions.ComputeError,
+    reason="Rate limited by Hugging Face",
+    strict=False,
+)
 def test_scan_hf_url_raises():
     q = pl.scan_csv("hf://datasets/scikit-learn/iris/Iris.csv")
     assert_ir_translation_raises(q, NotImplementedError)
