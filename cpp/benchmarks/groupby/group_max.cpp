@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,7 +51,6 @@ void groupby_max_helper(nvbench::state& state,
   auto const num_aggregations = state.get_int64("num_aggregations");
 
   auto keys_view = keys->view();
-  auto gb_obj    = cudf::groupby::groupby(cudf::table_view({keys_view, keys_view, keys_view}));
 
   std::vector<cudf::groupby::aggregation_request> requests;
   for (int64_t i = 0; i < num_aggregations; i++) {
@@ -62,8 +61,10 @@ void groupby_max_helper(nvbench::state& state,
 
   auto const mem_stats_logger = cudf::memory_stats_logger();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
-  state.exec(nvbench::exec_tag::sync,
-             [&](nvbench::launch& launch) { auto const result = gb_obj.aggregate(requests); });
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    auto gb_obj       = cudf::groupby::groupby(cudf::table_view({keys_view, keys_view, keys_view}));
+    auto const result = gb_obj.aggregate(requests);
+  });
   auto const elapsed_time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
   state.add_element_count(
     static_cast<double>(num_rows * num_aggregations) / elapsed_time / 1'000'000., "Mrows/s");
