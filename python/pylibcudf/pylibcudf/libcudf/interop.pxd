@@ -12,7 +12,7 @@ from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
 
 from rmm.librmm.cuda_stream_view cimport cuda_stream_view
-from rmm.librmm.device_memory_resource cimport device_memory_resource
+from rmm.librmm.memory_resource cimport device_memory_resource
 
 
 cdef extern from "dlpack/dlpack.h" nogil:
