@@ -41,9 +41,7 @@ def test_trace_basic(
     import rmm
 
     q = pl.DataFrame({"a": [1, 2, 3]}).lazy().select(pl.col("a").sum())
-    q.collect(engine=pl.GPUEngine(memory_resource=rmm.mr.CudaAsyncMemoryResource(
-        initial_pool_size=0,
-    )))
+    q.collect(engine=pl.GPUEngine(memory_resource=rmm.mr.ManagedMemoryResource()))
     """)
 
     env = {
