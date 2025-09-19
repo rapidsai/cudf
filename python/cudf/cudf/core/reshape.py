@@ -1039,7 +1039,7 @@ def pivot(
     result = _pivot(
         data._data.select_by_label(cols_to_select), index_data, column_data
     )
-    result._attrs = data.attrs
+    result._attrs = data.attrs  # type: ignore[has-type]
 
     # MultiIndex to Index
     if not values_is_list:
@@ -1184,7 +1184,7 @@ def unstack(df, level, fill_value=None, sort: bool = True):
             )
             columns.names = new_names
         result = _pivot(df, index, columns)
-        result._attrs = df.attrs
+        result._attrs = df.attrs  # type: ignore[has-type]
         if result.index.nlevels == 1:
             result.index = result.index.get_level_values(result.index.names[0])
         return result

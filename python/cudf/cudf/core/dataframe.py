@@ -995,13 +995,14 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         second_index = None
         second_columns = None
-
+        attrs = None
         if isinstance(data, (DataFrame, pd.DataFrame)):
             if isinstance(data, pd.DataFrame):
                 data = self.from_pandas(data, nan_as_null=nan_as_null)
             col_accessor = data._data
             index, second_index = data.index, index
             second_columns = columns
+            attrs = data.attrs
         elif isinstance(data, (Series, pd.Series)):
             if isinstance(data, pd.Series):
                 data = Series.from_pandas(data, nan_as_null=nan_as_null)
@@ -1182,7 +1183,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 label_dtype=second_columns.dtype,
             )
 
-        super().__init__(col_accessor, index=index)
+        super().__init__(col_accessor, index=index, attrs=attrs)
         if second_index is not None:
             reindexed = self.reindex(index=second_index, copy=False)
             self._data = reindexed._data
@@ -1190,7 +1191,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         if dtype:
             self._data = self.astype(dtype)._data
-        self._attrs = {}
 
     @classmethod
     def _from_data(  # type: ignore[override]

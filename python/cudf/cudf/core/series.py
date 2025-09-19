@@ -510,12 +510,12 @@ class Series(SingleColumnFrame, IndexedFrame):
             data = {}
         if dtype is not None:
             dtype = cudf.dtype(dtype)
-        atts = {}
+        atts = None
         if isinstance(data, (pd.Series, pd.Index, Index, Series)):
             if copy and not isinstance(data, (pd.Series, pd.Index)):
                 data = data.copy(deep=True)
             name_from_data = data.name
-            atts = getattr(data, "attrs", {})
+            atts = getattr(data, "attrs", None)
             column = as_column(data, nan_as_null=nan_as_null, dtype=dtype)
             if isinstance(data, (pd.Series, Series)):
                 index_from_data = ensure_index(data.index)
@@ -583,12 +583,11 @@ class Series(SingleColumnFrame, IndexedFrame):
             first_index = index
             second_index = None
 
-        super().__init__({name: column}, index=first_index)
+        super().__init__({name: column}, index=first_index, attrs=atts)
         if second_index is not None:
             reindexed = self.reindex(index=second_index, copy=False)
             self._data = reindexed._data
             self._index = second_index
-        self._attrs = atts
 
     @classmethod
     @_performance_tracking
@@ -1042,7 +1041,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         15      d
         """
         res = self._to_frame(name=name, index=self.index)
-        res._attrs = self.attrs
+        res._attrs = self.attrs  # type: ignore[has-type]
         return res
 
     @_performance_tracking

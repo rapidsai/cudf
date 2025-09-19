@@ -289,6 +289,7 @@ class IndexedFrame(Frame):
         self,
         data: ColumnAccessor | MutableMapping[Any, ColumnBase],
         index: Index,
+        attrs: dict[Hashable, Any] | None = None,
     ):
         super().__init__(data=data)
         if not isinstance(index, Index):
@@ -301,7 +302,10 @@ class IndexedFrame(Frame):
                 f"match length of index ({len(index)})"
             )
         self._index = index
-        self._attrs: dict[Hashable, Any] = {}
+        if attrs is None:
+            self._attrs = {}
+        else:
+            self._attrs = attrs
 
     @property
     def _num_rows(self) -> int:
