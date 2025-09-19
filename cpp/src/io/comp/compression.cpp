@@ -446,26 +446,27 @@ void compress(compression_type compression,
 
   // sort inputs by size, largest first
   auto const [sorted_inputs, sorted_outputs, order] =
-    sort_tasks(inputs, outputs, stream, cudf::get_current_device_resource_ref());
+    sort_compression_tasks(inputs, outputs, stream, cudf::get_current_device_resource_ref());
   auto inputs_view  = device_span<device_span<uint8_t const> const>(sorted_inputs);
   auto outputs_view = device_span<device_span<uint8_t> const>(sorted_outputs);
+
+  auto const split_idx = split_compression_tasks(
+    inputs_view,
+    outputs_view,
+    get_host_engine_state(compression),
+    getenv_or("LIBCUDF_HOST_COMPRESSION_THRESHOLD", default_host_compression_auto_threshold),
+    getenv_or("LIBCUDF_HOST_COMPRESSION_RATIO", default_host_device_compression_cost_ratio),
+    stream);
 
   auto tmp_results = cudf::detail::make_device_uvector_async<detail::codec_exec_result>(
     results, stream, cudf::get_current_device_resource_ref());
   auto results_view = device_span<codec_exec_result>(tmp_results);
 
-  auto const split_idx = detail::find_split_index(
-    inputs_view,
-    detail::get_host_engine_state(compression),
-    getenv_or("LIBCUDF_HOST_COMPRESSION_THRESHOLD", default_host_compression_auto_threshold),
-    getenv_or("LIBCUDF_HOST_COMPRESSION_RATIO", default_host_device_compression_work_ratio),
-    stream);
-
   auto const streams = cudf::detail::fork_streams(stream, 2);
   detail::device_compress(compression,
-                          inputs_view.subspan(split_idx, sorted_inputs.size() - split_idx),
-                          outputs_view.subspan(split_idx, sorted_outputs.size() - split_idx),
-                          results_view.subspan(split_idx, tmp_results.size() - split_idx),
+                          inputs_view.subspan(split_idx, inputs_view.size() - split_idx),
+                          outputs_view.subspan(split_idx, outputs_view.size() - split_idx),
+                          results_view.subspan(split_idx, results_view.size() - split_idx),
                           streams[0]);
   detail::host_compress(compression,
                         inputs_view.subspan(0, split_idx),
