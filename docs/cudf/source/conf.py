@@ -620,6 +620,7 @@ nitpick_ignore = [
     ("py:class", "typing_extensions.Self"),
     ("py:class", "np.uint32"),
     ("py:class", "np.uint64"),
+    ("py:class", "ArrowLike"),
 ]
 
 

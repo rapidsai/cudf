@@ -31,6 +31,15 @@ class ArrowLike(metaclass=_ArrowLikeMeta):
     pass
 
 
+class _ObjectWithArrowMetadata:
+    def __init__(self, obj, metadata=None):
+        self.obj = obj
+        self.metadata = metadata
+
+    def __arrow_c_array__(self, requested_schema=None):
+        return self.obj._to_schema(self.metadata), self.obj._to_host_array()
+
+
 @dataclass
 class ColumnMetadata:
     """Metadata associated with a column.

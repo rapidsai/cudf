@@ -22,6 +22,7 @@ from cudf.utils.dtypes import (
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
     find_common_type,
+    is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.utils import is_na_like
 
@@ -198,9 +199,19 @@ class TemporalBaseColumn(ColumnBase):
     @property
     def values(self) -> cp.ndarray:
         """
-        Return a CuPy representation of the DateTimeColumn.
+        Return a CuPy representation of the TemporalBaseColumn.
         """
-        raise NotImplementedError(f"cupy does not support {self.dtype}")
+        if is_pandas_nullable_extension_dtype(self.dtype):
+            dtype = getattr(self.dtype, "numpy_dtype", self.dtype)
+        else:
+            dtype = self.dtype
+
+        if len(self) == 0:
+            return cp.empty(0, dtype=self._UNDERLYING_DTYPE).view(dtype)
+
+        if self.has_nulls():
+            raise ValueError("cupy does not support NaT.")
+        return cp.asarray(self.data).view(dtype)
 
     def element_indexing(self, index: int) -> ScalarLike:
         result = super().element_indexing(index)
