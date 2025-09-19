@@ -6,6 +6,7 @@ from pylibcudf.column cimport Column
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.scalar.scalar cimport string_scalar
 from pylibcudf.libcudf.strings cimport char_types as cpp_char_types
+from pylibcudf.libcudf.strings.char_types cimport string_character_types
 from pylibcudf.scalar cimport Scalar
 from pylibcudf.utils cimport _get_stream, _get_memory_resource
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
@@ -56,7 +57,8 @@ cpdef Column all_characters_of_type(
             source_strings.view(),
             types,
             verify_types,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -105,7 +107,8 @@ cpdef Column filter_characters_of_type(
             types_to_remove,
             dereference(c_replacement),
             types_to_keep,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
