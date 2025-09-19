@@ -66,6 +66,7 @@ cpdef Table merge (
             c_key_cols,
             c_column_order,
             c_null_precedence,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
     return Table.from_libcudf(move(c_result), stream, mr)

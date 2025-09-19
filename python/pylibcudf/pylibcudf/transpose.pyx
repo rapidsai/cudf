@@ -42,7 +42,9 @@ cpdef Table transpose(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_transpose.transpose(input_table.view(), stream.view())
+        c_result = cpp_transpose.transpose(
+            input_table.view(), stream.view(), mr.get_mr()
+        )
 
     owner_table = Table(
         [Column.from_libcudf(move(c_result.first), stream, mr)] *
