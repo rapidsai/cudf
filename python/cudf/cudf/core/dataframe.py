@@ -5768,7 +5768,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             `pandas.DataFrame.from_arrow`
 
             This method does not exist in pandas but it is similar to
-            how :meth:`pyarrow.Table.to_pandas` works for PyArrow Tables i.e.
+            how :external+pyarrow:meth:`pyarrow.Table.to_pandas` works for PyArrow Tables i.e.
             it does not support automatically setting index column(s).
         """
         out = super().from_arrow(table)
