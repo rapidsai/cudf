@@ -36,5 +36,5 @@ target_link_libraries(
 target_compile_features(hybrid_scan_io PRIVATE cxx_std_20)
 install(TARGETS hybrid_scan_io DESTINATION bin/examples/libcudf/hybrid_scan_io)
 
-# Install the datagen.py file
-install(FILES ${CMAKE_CURRENT_LIST_DIR}/datagen.py DESTINATION bin/examples/libcudf/hybrid_scan_io)
+# Install the example.parquet file
+install(FILES ${CMAKE_CURRENT_LIST_DIR}/example.parquet DESTINATION bin/examples/libcudf/hybrid_scan_io)

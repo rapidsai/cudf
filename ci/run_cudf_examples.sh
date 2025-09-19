@@ -42,7 +42,6 @@ compute-sanitizer --tool memcheck parquet_io_multithreaded example.parquet 4 DEV
 popd || exit
 
 pushd hybrid_scan_io || exit
-python datagen.py --output example.parquet --rows 1000 --row-group-size 200 --data-page-size 100
 compute-sanitizer --tool memcheck hybrid_scan_io example.parquet string_col 0000001  PINNED_BUFFER output.parquet
 popd || exit
 
