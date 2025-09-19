@@ -41,19 +41,16 @@ if TYPE_CHECKING:
 
 class ListColumn(ColumnBase):
     _VALID_BINARY_OPERATIONS = {"__add__", "__radd__"}
+    _VALID_PLC_TYPES = {plc.TypeId.LIST}
 
     def __init__(
         self,
-        data: None,
+        plc_column: plc.Column,
         size: int,
         dtype: ListDtype,
-        mask: Buffer | None = None,
         offset: int = 0,
         null_count: int | None = None,
-        children: tuple[NumericalColumn, ColumnBase] = (),  # type: ignore[assignment]
-    ):
-        if data is not None:
-            raise ValueError("data must be None")
+    ) -> None:
         if (
             not cudf.get_option("mode.pandas_compatible")
             and not isinstance(dtype, ListDtype)
@@ -62,24 +59,12 @@ class ListColumn(ColumnBase):
             and not is_dtype_obj_list(dtype)
         ):
             raise ValueError("dtype must be a cudf.ListDtype")
-        if not (
-            len(children) == 2
-            and isinstance(children[0], NumericalColumn)
-            # TODO: Enforce int32_t (size_type) used in libcudf?
-            and children[0].dtype.kind == "i"
-            and isinstance(children[1], ColumnBase)
-        ):
-            raise ValueError(
-                "children must a tuple of 2 columns of (signed integer offsets, list values)"
-            )
         super().__init__(
-            data=data,
+            plc_column=plc_column,
             size=size,
             dtype=dtype,
-            mask=mask,
             offset=offset,
             null_count=null_count,
-            children=children,
         )
 
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:

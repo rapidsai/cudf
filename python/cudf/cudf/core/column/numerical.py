@@ -67,17 +67,28 @@ class NumericalColumn(NumericalBaseColumn):
     """
 
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
+    _VALID_PLC_TYPES = {
+        plc.TypeId.BOOL8,
+        plc.TypeId.FLOAT32,
+        plc.TypeId.FLOAT64,
+        plc.TypeId.INT8,
+        plc.TypeId.INT16,
+        plc.TypeId.INT32,
+        plc.TypeId.INT64,
+        plc.TypeId.UINT8,
+        plc.TypeId.UINT16,
+        plc.TypeId.UINT32,
+        plc.TypeId.UINT64,
+    }
 
     def __init__(
         self,
-        data: Buffer,
+        plc_column: plc.Column,
         size: int | None,
         dtype: np.dtype,
-        mask: Buffer | None = None,
         offset: int = 0,
         null_count: int | None = None,
-        children: tuple = (),
-    ):
+    ) -> None:
         if (
             cudf.get_option("mode.pandas_compatible")
             and dtype.kind not in "iufb"
@@ -94,13 +105,11 @@ class NumericalColumn(NumericalBaseColumn):
         if size is None:
             size = (data.size // dtype.itemsize) - offset
         super().__init__(
-            data=data,
+            plc_column=plc_column,
             size=size,
             dtype=dtype,
-            mask=mask,
             offset=offset,
             null_count=null_count,
-            children=children,
         )
 
     def _clear_cache(self):

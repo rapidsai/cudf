@@ -99,26 +99,32 @@ class DatetimeColumn(TemporalBaseColumn):
         "__radd__",
         "__rsub__",
     }
+    _VALID_PLC_TYPES = {
+        plc.TypeId.TIMESTAMP_SECONDS,
+        plc.TypeId.TIMESTAMP_MILLISECONDS,
+        plc.TypeId.TIMESTAMP_MICROSECONDS,
+        plc.TypeId.TIMESTAMP_NANOSECONDS,
+    }
 
     def __init__(
         self,
-        data: Buffer,
+        plc_column: plc.Column,
         size: int | None,
         dtype: np.dtype | pd.DatetimeTZDtype,
-        mask: Buffer | None = None,
         offset: int = 0,
         null_count: int | None = None,
-        children: tuple = (),
-    ):
+    ) -> None:
+        if size is None:
+            raise ValueError("size must be not None")
+            # size = data.size // dtype.itemsize
+            # size = size - offset
         dtype = self._validate_dtype_instance(dtype)
         super().__init__(
-            data=data,
+            plc_column=plc_column,
             size=size,
             dtype=dtype,
-            mask=mask,
             offset=offset,
             null_count=null_count,
-            children=children,
         )
 
     def _clear_cache(self) -> None:
@@ -757,26 +763,6 @@ class DatetimeColumn(TemporalBaseColumn):
 
 
 class DatetimeTZColumn(DatetimeColumn):
-    def __init__(
-        self,
-        data: Buffer,
-        size: int | None,
-        dtype: pd.DatetimeTZDtype,
-        mask: Buffer | None = None,
-        offset: int = 0,
-        null_count: int | None = None,
-        children: tuple = (),
-    ):
-        super().__init__(
-            data=data,
-            size=size,
-            dtype=dtype,
-            mask=mask,
-            offset=offset,
-            null_count=null_count,
-            children=children,
-        )
-
     def _clear_cache(self) -> None:
         super()._clear_cache()
         try:

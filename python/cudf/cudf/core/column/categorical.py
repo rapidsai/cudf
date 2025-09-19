@@ -22,6 +22,7 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
     min_signed_type,
     min_unsigned_type,
+    dtype_from_pylibcudf_column
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import _is_null_host_scalar
@@ -104,40 +105,52 @@ class CategoricalColumn(column.ColumnBase):
         "__gt__",
         "__ge__",
     }
+    # TODO: Narrow the valid integer types
+    _VALID_PLC_TYPES = {
+        plc.TypeId.INT8,
+        plc.TypeId.INT16,
+        plc.TypeId.INT32,
+        plc.TypeId.INT64,
+        plc.TypeId.UINT8,
+        plc.TypeId.UINT16,
+        plc.TypeId.UINT32,
+        plc.TypeId.UINT64
+    }
 
     def __init__(
         self,
-        data: None,
+        plc_column: plc.Column,
         size: int | None,
         dtype: CategoricalDtype,
-        mask: Buffer | None = None,
         offset: int = 0,
         null_count: int | None = None,
-        children: tuple[NumericalColumn] = (),  # type: ignore[assignment]
-    ):
-        if data is not None:
-            raise ValueError(f"{data=} must be None")
-        validate_categorical_children(children)
+    ) -> None:
         if size is None:
-            child = children[0]
-            assert child.offset == 0
-            assert child.base_mask is None
-            size = child.size
-            size = size - offset
+            raise ValueError(f"{size=} must be not None")
+            # child = children[0]
+            # assert child.offset == 0
+            # assert child.base_mask is None
+            # size = child.size
+            # size = size - offset
         if not isinstance(dtype, CategoricalDtype):
             raise ValueError(
                 f"{dtype=} must be cudf.CategoricalDtype instance."
             )
         super().__init__(
-            data=data,
+            plc_column=plc_column,
             size=size,
             dtype=dtype,
-            mask=mask,
             offset=offset,
             null_count=null_count,
-            children=children,
         )
-        self._codes = self.children[0].set_mask(self.mask)
+        # self._codes = self.children[0].set_mask(self.mask)
+        self._codes = cudf.core.column.numerical.NumericalColumn(
+            plc_column=plc_column,
+            size=size,
+            dtype=dtype_from_pylibcudf_column(plc_column),
+            offset=offset,
+            null_count=null_count,
+        )
 
     @property
     def base_size(self) -> int:

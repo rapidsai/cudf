@@ -47,19 +47,15 @@ class StructColumn(ColumnBase):
     Every column has n children, where n is
     the number of fields in the Struct Dtype.
     """
-
+    _VALID_PLC_TYPES = {plc.TypeId.STRUCT}
     def __init__(
         self,
-        data: None,
+        plc_column: plc.Column,
         size: int,
         dtype: StructDtype,
-        mask: Buffer | None = None,
         offset: int = 0,
         null_count: int | None = None,
-        children: tuple[ColumnBase, ...] = (),
-    ):
-        if data is not None:
-            raise ValueError("data must be None.")
+    ) -> None:
         dtype = self._validate_dtype_instance(dtype)
         super().__init__(
             data=data,

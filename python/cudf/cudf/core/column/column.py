@@ -141,17 +141,23 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         "max",
         "min",
     }
+    _VALID_PLC_TYPES: set[plc.TypeId]
 
     def __init__(
         self,
-        data: None | Buffer,
+        plc_column: plc.Column,
         size: int,
         dtype,
-        mask: None | Buffer = None,
         offset: int = 0,
         null_count: int | None = None,
-        children: tuple[ColumnBase, ...] = (),
     ) -> None:
+        if not (
+            isinstance(plc_column, plc.Column)
+            and plc_column.type().id() not in self._VALID_PLC_TYPES
+        ):
+            raise ValueError(
+                f"plc_column must be a pylibcudf.Column with a following type: {self._VALID_PLC_TYPES}"
+            )
         if size < 0:
             raise ValueError("size must be >=0")
         self._size = size

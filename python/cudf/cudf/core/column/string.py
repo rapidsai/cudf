@@ -90,19 +90,16 @@ class StringColumn(ColumnBase):
         "__truediv__",
         "__floordiv__",
     }
+    _VALID_PLC_TYPES = {plc.TypeId.STRING}
 
     def __init__(
         self,
-        data: Buffer,
+        plc_column: plc.Column,
         size: int | None,
         dtype: np.dtype,
-        mask: Buffer | None = None,
         offset: int = 0,
         null_count: int | None = None,
-        children: tuple[ColumnBase] = (),  # type: ignore[assignment]
     ):
-        if not isinstance(data, Buffer):
-            raise ValueError("data must be a Buffer")
         if (
             not cudf.get_option("mode.pandas_compatible")
             and dtype != CUDF_STRING_DTYPE
@@ -118,37 +115,34 @@ class StringColumn(ColumnBase):
             and dtype.kind == "U"
         ):
             dtype = CUDF_STRING_DTYPE
-        if len(children) > 1:
-            raise ValueError("StringColumn must have at most 1 offset column.")
 
         if size is None:
-            for child in children:
-                assert child.offset == 0
+            raise ValueError("size must be not None")
+            # for child in children:
+            #     assert child.offset == 0
 
-            if len(children) == 0:
-                size = 0
-            elif children[0].size == 0:
-                size = 0
-            else:
-                # one less because the last element of offsets is the number of
-                # bytes in the data buffer
-                size = children[0].size - 1
-            size = size - offset
+            # if len(children) == 0:
+            #     size = 0
+            # elif children[0].size == 0:
+            #     size = 0
+            # else:
+            #     # one less because the last element of offsets is the number of
+            #     # bytes in the data buffer
+            #     size = children[0].size - 1
+            # size = size - offset
 
-        if len(children) == 0 and size != 0:
-            # all nulls-column:
-            offsets = as_column(0, length=size + 1, dtype=SIZE_TYPE_DTYPE)
+        # if len(children) == 0 and size != 0:
+        #     # all nulls-column:
+        #     offsets = as_column(0, length=size + 1, dtype=SIZE_TYPE_DTYPE)
 
-            children = (offsets,)
+        #     children = (offsets,)
 
         super().__init__(
-            data=data,
+            plc_column=plc_column,
             size=size,
             dtype=dtype,
-            mask=mask,
             offset=offset,
             null_count=null_count,
-            children=children,
         )
 
         self._start_offset = None

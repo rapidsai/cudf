@@ -23,26 +23,22 @@ if TYPE_CHECKING:
 class IntervalColumn(StructColumn):
     def __init__(
         self,
-        data: None,
+        plc_column: plc.Column,
         size: int,
         dtype: IntervalDtype,
-        mask: Buffer | None = None,
         offset: int = 0,
         null_count: int | None = None,
-        children: tuple[ColumnBase, ColumnBase] = (),  # type: ignore[assignment]
-    ):
-        if len(children) != 2:
+    ) -> None:
+        if plc_column.num_children() != 2:
             raise ValueError(
-                "children must be a tuple of two columns (left edges, right edges)."
+                "plc_column must have of two children (left edges, right edges)."
             )
         super().__init__(
-            data=data,
+            plc_column=plc_column,
             size=size,
             dtype=dtype,
-            mask=mask,
             offset=offset,
             null_count=null_count,
-            children=children,
         )
 
     @staticmethod

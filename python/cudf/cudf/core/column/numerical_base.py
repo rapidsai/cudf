@@ -58,31 +58,6 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         "cummin",
         "cummax",
     }
-
-    def __init__(
-        self,
-        data: Buffer,
-        size: int,
-        dtype: DecimalDtype | np.dtype,
-        mask: Buffer | None = None,
-        offset: int = 0,
-        null_count: int | None = None,
-        children: tuple = (),
-    ):
-        if not isinstance(data, Buffer):
-            raise ValueError("data must be a Buffer instance.")
-        if len(children) != 0:
-            raise ValueError(f"{type(self).__name__} must have no children.")
-        super().__init__(
-            data=data,
-            size=size,
-            dtype=dtype,
-            mask=mask,
-            offset=offset,
-            null_count=null_count,
-            children=children,
-        )
-
     def _can_return_nan(self, skipna: bool | None = None) -> bool:
         return not skipna and self.has_nulls()
 

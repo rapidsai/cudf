@@ -47,35 +47,6 @@ class TemporalBaseColumn(ColumnBase):
     _NP_SCALAR: np.datetime64 | np.timedelta64
     _PD_SCALAR: pd.Timestamp | pd.Timedelta
 
-    def __init__(
-        self,
-        data: Buffer,
-        size: int | None,
-        dtype: np.dtype | pd.DatetimeTZDtype,
-        mask: Buffer | None = None,
-        offset: int = 0,
-        null_count: int | None = None,
-        children: tuple = (),
-    ):
-        if not isinstance(data, Buffer):
-            raise ValueError("data must be a Buffer.")
-        if data.size % dtype.itemsize:
-            raise ValueError("Buffer size must be divisible by element size")
-        if size is None:
-            size = data.size // dtype.itemsize
-            size = size - offset
-        if len(children) != 0:
-            raise ValueError(f"{type(self).__name__} must have no children.")
-        super().__init__(
-            data=data,
-            size=size,
-            dtype=dtype,
-            mask=mask,
-            offset=offset,
-            null_count=null_count,
-            children=children,
-        )
-
     def __contains__(self, item: np.datetime64 | np.timedelta64) -> bool:
         """
         Check if the column contains a given value.
