@@ -23,7 +23,9 @@ def test_cov():
     assert_eq(pdf.cov(), gdf.cov())
 
 
-@pytest.mark.xfail(reason="cupy-based cov does not support nulls")
+@pytest.mark.xfail(
+    raises=NotImplementedError, reason="cupy-based cov does not support nulls"
+)
 def test_cov_nans():
     pdf = pd.DataFrame(
         {
