@@ -97,7 +97,7 @@ cpdef Column compute_column(
 
     with nogil:
         c_result = cpp_transform.compute_column(
-            input.view(), dereference(expr.c_obj.get()), stream.view()
+            input.view(), dereference(expr.c_obj.get()), stream.view(), mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -173,6 +173,7 @@ cpdef Column mask_to_bools(
             begin_bit,
             end_bit,
             stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -236,6 +237,7 @@ cpdef Column transform(
             user_data,
             c_is_null_aware,
             stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -266,7 +268,7 @@ cpdef tuple[Table, Column] encode(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_transform.encode(input.view(), stream.view())
+        c_result = cpp_transform.encode(input.view(), stream.view(), mr.get_mr())
 
     return (
         Table.from_libcudf(move(c_result.first), stream, mr),
@@ -310,6 +312,7 @@ cpdef Table one_hot_encode(
             input.view(),
             categories.view(),
             stream.view(),
+            mr.get_mr()
         )
 
     owner_table = Table(
