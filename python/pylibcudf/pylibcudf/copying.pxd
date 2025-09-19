@@ -110,4 +110,9 @@ cpdef Table boolean_mask_scatter(
     DeviceMemoryResource mr=*,
 )
 
-cpdef Scalar get_element(Column input_column, size_type index, Stream stream=*)
+cpdef Scalar get_element(
+    Column input_column,
+    size_type index,
+    Stream stream=*,
+    DeviceMemoryResource mr=*
+)

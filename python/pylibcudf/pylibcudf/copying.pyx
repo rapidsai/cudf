@@ -101,7 +101,8 @@ cpdef Table gather(
             source_table.view(),
             gather_map.view(),
             bounds_policy,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Table.from_libcudf(move(c_result), stream, mr)
@@ -162,7 +163,8 @@ cpdef Table scatter(
                 source.view(),
                 scatter_map.view(),
                 target_table.view(),
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
     else:
         source_scalars = _as_vector(source)
@@ -171,7 +173,8 @@ cpdef Table scatter(
                 source_scalars,
                 scatter_map.view(),
                 target_table.view(),
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
     return Table.from_libcudf(move(c_result), stream, mr)
 
@@ -248,7 +251,8 @@ cpdef Column allocate_like(
                 input_column.view(),
                 c_size,
                 policy,
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -364,7 +368,8 @@ cpdef Column copy_range(
             input_begin,
             input_end,
             target_begin,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -413,7 +418,8 @@ cpdef Column shift(
                 input.view(),
                 offset,
                 dereference(fill_value.c_obj),
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -560,17 +566,26 @@ cpdef Column copy_if_else(
                 lhs.view(),
                 rhs.view(),
                 boolean_mask.view(),
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
     elif LeftCopyIfElseOperand is Column and RightCopyIfElseOperand is Scalar:
         with nogil:
             result = cpp_copying.copy_if_else(
-                lhs.view(), dereference(rhs.c_obj), boolean_mask.view(), stream.view()
+                lhs.view(),
+                dereference(rhs.c_obj),
+                boolean_mask.view(),
+                stream.view(),
+                mr.get_mr()
             )
     elif LeftCopyIfElseOperand is Scalar and RightCopyIfElseOperand is Column:
         with nogil:
             result = cpp_copying.copy_if_else(
-                dereference(lhs.c_obj), rhs.view(), boolean_mask.view(), stream.view()
+                dereference(lhs.c_obj),
+                rhs.view(),
+                boolean_mask.view(),
+                stream.view(),
+                mr.get_mr()
             )
     else:
         with nogil:
@@ -578,7 +593,8 @@ cpdef Column copy_if_else(
                 dereference(lhs.c_obj),
                 dereference(rhs.c_obj),
                 boolean_mask.view(),
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
 
     return Column.from_libcudf(move(result), stream, mr)
@@ -635,7 +651,8 @@ cpdef Table boolean_mask_scatter(
                 input.view(),
                 target.view(),
                 boolean_mask.view(),
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
     else:
         source_scalars = _as_vector(input)
@@ -644,13 +661,19 @@ cpdef Table boolean_mask_scatter(
                 source_scalars,
                 target.view(),
                 boolean_mask.view(),
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
 
     return Table.from_libcudf(move(result), stream, mr)
 
 
-cpdef Scalar get_element(Column input_column, size_type index, Stream stream=None):
+cpdef Scalar get_element(
+    Column input_column,
+    size_type index,
+    Stream stream=None,
+    DeviceMemoryResource mr=None
+):
     """Get the element at index from input_column.
 
     For details on the implementation, see :cpp:func:`get_element`.
@@ -676,9 +699,12 @@ cpdef Scalar get_element(Column input_column, size_type index, Stream stream=Non
     """
     cdef unique_ptr[scalar] c_output
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
-        c_output = cpp_copying.get_element(input_column.view(), index, stream.view())
+        c_output = cpp_copying.get_element(
+            input_column.view(), index, stream.view(), mr.get_mr()
+        )
 
     return Scalar.from_libcudf(move(c_output))
 

@@ -61,7 +61,11 @@ class Column:
     def from_scalar(
         scalar: Scalar, size: int, stream: Stream | None = None
     ) -> Column: ...
-    def to_scalar(self, stream: Stream | None = None) -> Scalar: ...
+    def to_scalar(
+        self,
+        stream: Stream | None = None,
+        mr: DeviceMemoryResource | None = None,
+    ) -> Scalar: ...
     @staticmethod
     def all_null_like(
         like: Column, size: int, stream: Stream | None = None
