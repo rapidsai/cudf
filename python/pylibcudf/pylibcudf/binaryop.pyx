@@ -70,7 +70,8 @@ cpdef Column binary_operation(
                 rhs.view(),
                 op,
                 output_type.c_obj,
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
     elif LeftBinaryOperand is Column and RightBinaryOperand is Scalar:
         with nogil:
@@ -79,7 +80,8 @@ cpdef Column binary_operation(
                 dereference(rhs.c_obj),
                 op,
                 output_type.c_obj,
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
     elif LeftBinaryOperand is Scalar and RightBinaryOperand is Column:
         with nogil:
@@ -88,7 +90,8 @@ cpdef Column binary_operation(
                 rhs.view(),
                 op,
                 output_type.c_obj,
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
     else:
         raise ValueError(f"Invalid arguments {lhs} and {rhs}")
