@@ -378,7 +378,9 @@ class IndexedFrame(Frame):
         Akin to cudf.DataFrame(...).loc[:, labels]
         """
         return self._from_data(
-            self._data.select_by_label(labels), index=self.index
+            self._data.select_by_label(labels),
+            index=self.index,
+            attrs=self.attrs,
         )
 
     @_performance_tracking
