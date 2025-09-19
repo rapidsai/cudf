@@ -786,7 +786,7 @@ cdef class Column:
         stream : Stream | None
             CUDA stream on which to perform the operation.
         mr : DeviceMemoryResource | None
-            The memory resource to use for allocations.
+            Device memory resource used to allocate the returned scalar's device memory.
 
         Returns
         -------

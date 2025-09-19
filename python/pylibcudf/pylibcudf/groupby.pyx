@@ -194,7 +194,9 @@ cdef class GroupBy:
         # We rely on libcudf to tell us this rather than checking the types beforehand
         # ourselves.
         with nogil:
-            c_res = dereference(self.c_obj).aggregate(c_requests, stream.view())
+            c_res = dereference(self.c_obj).aggregate(
+                c_requests, stream.view()
+            )
         return GroupBy._parse_outputs(move(c_res), stream, mr)
 
     cpdef tuple scan(
@@ -267,6 +269,7 @@ cdef class GroupBy:
         cdef vector[size_type] c_offset = offset
         cdef pair[unique_ptr[table], unique_ptr[table]] c_res
         stream = _get_stream(stream)
+        mr = _get_memory_resource(mr)
         with nogil:
             c_res = dereference(self.c_obj).shift(
                 values.view(),
@@ -349,15 +352,19 @@ cdef class GroupBy:
         stream = _get_stream(stream)
         mr = _get_memory_resource(mr)
         if values:
-            c_groups = dereference(self.c_obj).get_groups(values.view(), stream.view())
+            c_groups = dereference(self.c_obj).get_groups(
+                values.view(), stream.view(), mr.get_mr()
+            )
             return (
                 c_groups.offsets,
                 Table.from_libcudf(move(c_groups.keys), stream, mr),
                 Table.from_libcudf(move(c_groups.values), stream, mr),
             )
         else:
-            # c_groups.values is nullptr - pass empty table_view and stream
-            c_groups = dereference(self.c_obj).get_groups(empty_view, stream.view())
+            # c_groups.values is nullptr - call get_groups with empty table view
+            c_groups = dereference(self.c_obj).get_groups(
+                empty_view, stream.view(), mr.get_mr()
+            )
             return (
                 c_groups.offsets,
                 Table.from_libcudf(move(c_groups.keys), stream, mr),
