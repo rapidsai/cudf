@@ -12,6 +12,8 @@ import pytest
 from packaging.version import parse
 from utils import assert_column_eq, assert_table_eq
 
+import rmm
+
 import pylibcudf as plc
 
 
@@ -229,3 +231,25 @@ def test_column_from_arrow_stream(data):
     pa_arr = pa.chunked_array(data)
     col = plc.Column.from_arrow(pa_arr)
     assert_column_eq(pa_arr, col)
+
+
+def test_arrow_object_lifetime():
+    def f():
+        # Store a temporary so it is cached in the frame when the exception is raised
+        t = plc.interop.from_arrow(pa.Table.from_pydict({"a": [1]}))  # noqa: F841
+        raise ValueError("test exception")
+
+    # Nested try-excepts are necessary for Python to extend the lifetime of the stack
+    # frame of f enough to be problematic.
+    try:
+        try:
+            previous = rmm.mr.get_current_device_resource()
+            rmm.mr.set_current_device_resource(
+                rmm.mr.CudaAsyncMemoryResource()
+            )
+            f()
+        finally:
+            rmm.mr.set_current_device_resource(previous)
+    except ValueError:
+        # Ignore the exception. A failure in this test is a seg fault
+        pass
