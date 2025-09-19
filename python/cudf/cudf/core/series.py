@@ -10,7 +10,7 @@ from collections.abc import Mapping
 from shutil import get_terminal_size
 from typing import TYPE_CHECKING, Any, Literal
 
-import cupy
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -1090,7 +1090,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             # Assume that cupy subpackages match numpy and search the
             # corresponding cupy submodule based on the func's __module__.
             numpy_submodule = func.__module__.split(".")[1:]
-            cupy_func = cupy
+            cupy_func = cp
             for name in (*numpy_submodule, func.__name__):
                 cupy_func = getattr(cupy_func, name, None)
 
@@ -1107,7 +1107,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             out = cupy_func(*(s.values for s in args), **kwargs)
 
             # Return (host) scalar values immediately.
-            if not isinstance(out, cupy.ndarray):
+            if not isinstance(out, cp.ndarray):
                 return out
 
             # 0D array (scalar)
@@ -2950,7 +2950,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         )
 
     @_performance_tracking
-    def unique(self):
+    def unique(self) -> cp.ndarray | Self:
         """
         Returns unique values of this Series.
 
@@ -2984,6 +2984,10 @@ class Series(SingleColumnFrame, IndexedFrame):
             if is_pandas_nullable_extension_dtype(self.dtype):
                 raise NotImplementedError(
                     "cudf does not support ExtensionArrays"
+                )
+            elif self.dtype.kind in "mM":
+                raise NotImplementedError(
+                    "cuDF does not implement DatetimeArray or TimedeltaArray"
                 )
             return res.values
         return Series._from_column(res, name=self.name)
@@ -3113,6 +3117,9 @@ class Series(SingleColumnFrame, IndexedFrame):
             res = res[res.index.notna()]
         else:
             res = self.groupby(self, dropna=dropna).count(dropna=dropna)
+            if dropna:
+                res = res[res.index.notna()]
+
             if isinstance(self.dtype, CategoricalDtype) and len(res) != len(
                 self.dtype.categories
             ):
@@ -3206,7 +3213,7 @@ class Series(SingleColumnFrame, IndexedFrame):
                 np_array_q = np.asarray(q)
             except TypeError:
                 try:
-                    np_array_q = cupy.asarray(q).get()
+                    np_array_q = cp.asarray(q).get()
                 except TypeError:
                     raise TypeError(
                         f"q must be a scalar or array-like, got {type(q)}"
