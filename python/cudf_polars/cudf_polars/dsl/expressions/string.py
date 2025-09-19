@@ -960,8 +960,8 @@ def _infer_datetime_format(val: str) -> str | None:
             "%d.%m.%Y %H:%M:%S",
         ],
         "DATETIME_YMD": [
-            "%Y-%m-%d",
             "%Y/%m/%d",
+            "%Y-%m-%d",
             "%Y.%m.%d",
             "%Y-%m-%d %H:%M:%S",
             "%Y/%m/%d %H:%M:%S",
