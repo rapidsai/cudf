@@ -185,8 +185,8 @@ class filtered_join {
   using primitive_row_comparator = cudf::detail::row::primitive::row_equality_comparator;
 
   // Hasher for complex row types with dynamic null handling
-  using row_hasher = cudf::detail::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
-                                                                nullate::DYNAMIC>;
+  using row_hasher =
+    cudf::detail::row::hash::device_row_hasher<cudf::hashing::detail::default_hash, nullate::YES>;
   // Linear probing scheme with bucket size 4 for nested data structures
   using nested_probing_scheme = cuco::linear_probing<4, hash_extract_fn>;
   // Linear probing scheme with bucket size 1 for simple data
@@ -194,7 +194,7 @@ class filtered_join {
   // Equality comparator for complex rows with null handling and NaN comparison
   using row_comparator = cudf::detail::row::equality::device_row_comparator<
     true,
-    cudf::nullate::DYNAMIC,
+    cudf::nullate::YES,
     cudf::detail::row::equality::nan_equal_physical_equality_comparator>;
 
   storage_type _bucket_storage;  ///< Storage for hash table buckets

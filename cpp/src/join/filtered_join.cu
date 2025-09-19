@@ -137,8 +137,7 @@ void filtered_join::insert_build_table(Ref const& insert_ref, rmm::cuda_stream_v
     insert(build_iter);
   } else {
     auto const d_build_hasher =
-      cudf::detail::row::hash::row_hasher{_preprocessed_build}.device_hasher(
-        nullate::DYNAMIC{true});
+      cudf::detail::row::hash::row_hasher{_preprocessed_build}.device_hasher(nullate::YES{});
     auto const build_iter = cudf::detail::make_counting_transform_iterator(
       size_type{0}, key_pair_fn<lhs_index_type, row_hasher>{d_build_hasher});
 
@@ -197,7 +196,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> distinct_filtered_join::qu
     query_set(probe_iter, contains_map.begin());
   } else {
     auto const d_probe_hasher =
-      cudf::detail::row::hash::row_hasher{preprocessed_probe}.device_hasher(nullate::DYNAMIC{true});
+      cudf::detail::row::hash::row_hasher{preprocessed_probe}.device_hasher(nullate::YES{});
     auto const probe_iter = cudf::detail::make_counting_transform_iterator(
       size_type{0}, key_pair_fn<rhs_index_type, row_hasher>{d_probe_hasher});
 
@@ -247,7 +246,7 @@ distinct_filtered_join::distinct_filtered_join(cudf::table_view const& build,
   } else if (_build_props.has_nested_columns) {
     auto const d_build_comparator =
       cudf::detail::row::equality::self_comparator{_preprocessed_build}.equal_to<true>(
-        nullate::DYNAMIC{true},
+        nullate::YES{},
         compare_nulls,
         cudf::detail::row::equality::nan_equal_physical_equality_comparator{});
     cuco::static_set_ref set_ref{empty_sentinel_key,
@@ -260,7 +259,7 @@ distinct_filtered_join::distinct_filtered_join(cudf::table_view const& build,
   } else {
     auto const d_build_comparator =
       cudf::detail::row::equality::self_comparator{_preprocessed_build}.equal_to<false>(
-        nullate::DYNAMIC{true},
+        nullate::YES{},
         compare_nulls,
         cudf::detail::row::equality::nan_equal_physical_equality_comparator{});
     cuco::static_set_ref set_ref{empty_sentinel_key,
@@ -304,7 +303,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> distinct_filtered_join::se
 
     if (_build_props.has_nested_columns) {
       auto d_build_probe_nan_comparator = d_build_probe_comparator.equal_to<true>(
-        nullate::DYNAMIC{true},
+        nullate::YES{},
         _nulls_equal,
         cudf::detail::row::equality::nan_equal_physical_equality_comparator{});
       cuco::static_set_ref set_ref{empty_sentinel_key,
@@ -317,7 +316,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> distinct_filtered_join::se
         probe, preprocessed_probe, kind, query_ref, stream, mr);
     } else {
       auto d_build_probe_nan_comparator = d_build_probe_comparator.equal_to<false>(
-        nullate::DYNAMIC{true},
+        nullate::YES{},
         _nulls_equal,
         cudf::detail::row::equality::nan_equal_physical_equality_comparator{});
       cuco::static_set_ref set_ref{empty_sentinel_key,
