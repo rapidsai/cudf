@@ -218,7 +218,7 @@ def test_numeric_to_timedelta(
 )
 def test_astype_with_aliases(alias, expect_dtype):
     pd_data = pd.Series([1, 2, 0])
-    gd_data = cudf.Series.from_pandas(pd_data)
+    gd_data = cudf.Series(pd_data)
 
     assert_eq(pd_data.astype(expect_dtype), gd_data.astype(alias))
 
@@ -448,7 +448,7 @@ def test_string_timstamp_typecast_to_different_datetime_resolutions(
     data, datetime_types_as_str
 ):
     pd_sr = pd.Series(data)
-    gdf_sr = cudf.Series.from_pandas(pd_sr)
+    gdf_sr = cudf.Series(pd_sr)
 
     expect = pd_sr.values.astype(datetime_types_as_str)
     got = gdf_sr.astype(datetime_types_as_str).values_host
@@ -978,7 +978,10 @@ def test_series_astype_to_categorical_ordered(categorical_ordered):
     ordered_dtype_pd = pd.CategoricalDtype(
         categories=[1, 2, 3], ordered=categorical_ordered
     )
-    ordered_dtype_gd = cudf.CategoricalDtype.from_pandas(ordered_dtype_pd)
+    ordered_dtype_gd = cudf.CategoricalDtype(
+        categories=ordered_dtype_pd.categories,
+        ordered=ordered_dtype_pd.ordered,
+    )
     assert_eq(
         psr.astype("int32").astype(ordered_dtype_pd).astype("int32"),
         gsr.astype("int32").astype(ordered_dtype_gd).astype("int32"),
@@ -992,8 +995,14 @@ def test_series_astype_cat_ordered_to_unordered(categorical_ordered):
     pd_to_dtype = pd.CategoricalDtype(
         categories=[1, 2, 3], ordered=not categorical_ordered
     )
-    gd_dtype = cudf.CategoricalDtype.from_pandas(pd_dtype)
-    gd_to_dtype = cudf.CategoricalDtype.from_pandas(pd_to_dtype)
+    gd_dtype = cudf.CategoricalDtype(
+        categories=pd_dtype.categories,
+        ordered=pd_dtype.ordered,
+    )
+    gd_to_dtype = cudf.CategoricalDtype(
+        categories=pd_to_dtype.categories,
+        ordered=pd_to_dtype.ordered,
+    )
 
     psr = pd.Series([1, 2, 3], dtype=pd_dtype)
     gsr = cudf.Series([1, 2, 3], dtype=gd_dtype)

@@ -381,7 +381,7 @@ def test_df_sr_binop(psr, colnames, binary_op):
     data = [[3.0, 2.0, 5.0], [3.0, None, 5.0], [6.0, 7.0, np.nan]]
     data = dict(zip(colnames, data, strict=True))
 
-    gsr = cudf.Series.from_pandas(psr).astype("float64")
+    gsr = cudf.Series(psr).astype("float64")
 
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas(nullable=True)
@@ -516,9 +516,9 @@ def test_different_shapes_and_columns_with_unaligned_indices(
         {"x": [4, 5, 6, 7], "y": [1, 2, 3, 7], "z": [0, 5, 3, 7]},
         index=[0, 3, 5, 3],
     )
-    gdf1 = cudf.DataFrame.from_pandas(pdf1)
-    gdf2 = cudf.DataFrame.from_pandas(pdf2)
-    gdf3 = cudf.DataFrame.from_pandas(pdf3)
+    gdf1 = cudf.DataFrame(pdf1)
+    gdf2 = cudf.DataFrame(pdf2)
+    gdf3 = cudf.DataFrame(pdf3)
 
     pd_frame = arithmetic_op(arithmetic_op(pdf1, pdf2), pdf3)
     cd_frame = arithmetic_op(arithmetic_op(gdf1, gdf2), gdf3)
@@ -533,8 +533,8 @@ def test_different_shapes_and_columns_with_unaligned_indices(
 
     pdf1 = pd.DataFrame({"x": [1, 1]}, index=["a", "a"])
     pdf2 = pd.DataFrame({"x": [2]}, index=["a"])
-    gdf1 = cudf.DataFrame.from_pandas(pdf1)
-    gdf2 = cudf.DataFrame.from_pandas(pdf2)
+    gdf1 = cudf.DataFrame(pdf1)
+    gdf2 = cudf.DataFrame(pdf2)
     pd_frame = arithmetic_op(pdf1, pdf2)
     cd_frame = arithmetic_op(gdf1, gdf2)
 
@@ -555,7 +555,7 @@ def test_df_different_index_shape(pdf2, comparison_op):
     df1 = cudf.DataFrame([1, 2, 3], index=[1, 2, 3])
 
     pdf1 = df1.to_pandas()
-    df2 = cudf.DataFrame.from_pandas(pdf2)
+    df2 = cudf.DataFrame(pdf2)
 
     assert_exceptions_equal(
         lfunc=comparison_op,
@@ -589,8 +589,8 @@ def test_operator_func_dataframe(
 
     pdf1 = gen_df()
     pdf2 = gen_df() if other == "df" else 59.0
-    gdf1 = cudf.DataFrame.from_pandas(pdf1)
-    gdf2 = cudf.DataFrame.from_pandas(pdf2) if other == "df" else 59.0
+    gdf1 = cudf.DataFrame(pdf1)
+    gdf2 = cudf.DataFrame(pdf2) if other == "df" else 59.0
 
     got = getattr(gdf1, arithmetic_op_method)(gdf2, fill_value=fill_value)
     expect = getattr(pdf1, arithmetic_op_method)(pdf2, fill_value=fill_value)[
@@ -621,12 +621,8 @@ def test_logical_operator_func_dataframe(comparison_op_method, nulls, other):
 
     pdf1 = gen_df()
     pdf2 = gen_df() if other == "df" else 59.0
-    gdf1 = cudf.DataFrame.from_pandas(pdf1, nan_as_null=False)
-    gdf2 = (
-        cudf.DataFrame.from_pandas(pdf2, nan_as_null=False)
-        if other == "df"
-        else 59.0
-    )
+    gdf1 = cudf.DataFrame(pdf1, nan_as_null=False)
+    gdf2 = cudf.DataFrame(pdf2, nan_as_null=False) if other == "df" else 59.0
 
     got = getattr(gdf1, comparison_op_method)(gdf2)
     expect = getattr(pdf1, comparison_op_method)(pdf2)[list(got._data)]
