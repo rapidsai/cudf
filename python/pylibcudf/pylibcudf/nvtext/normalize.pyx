@@ -8,7 +8,8 @@ from pylibcudf.column cimport Column
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.nvtext cimport normalize as cpp_normalize
-from pylibcudf.utils cimport _get_stream
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 __all__ = [
@@ -36,7 +37,9 @@ cdef class CharacterNormalizer:
 
     __hash__ = None
 
-cpdef Column normalize_spaces(Column input, Stream stream=None):
+cpdef Column normalize_spaces(
+    Column input, Stream stream=None, DeviceMemoryResource mr=None
+):
     """
     Returns a new strings column by normalizing the whitespace in
     each string in the input column.
@@ -57,15 +60,19 @@ cpdef Column normalize_spaces(Column input, Stream stream=None):
     """
     cdef unique_ptr[column] c_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_normalize.normalize_spaces(input.view(), stream.view())
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 
 cpdef Column normalize_characters(
-    Column input, CharacterNormalizer normalizer, Stream stream=None
+    Column input,
+    CharacterNormalizer normalizer,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Normalizes strings characters for tokenizing.
@@ -88,6 +95,7 @@ cpdef Column normalize_characters(
     """
     cdef unique_ptr[column] c_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_normalize.normalize_characters(
@@ -96,4 +104,4 @@ cpdef Column normalize_characters(
             stream.view()
         )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)
