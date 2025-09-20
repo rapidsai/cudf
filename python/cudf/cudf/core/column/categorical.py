@@ -11,6 +11,8 @@ import pandas as pd
 import pyarrow as pa
 from typing_extensions import Self
 
+import pylibcudf as plc
+
 import cudf
 from cudf.api.types import is_scalar
 from cudf.core.column import column
@@ -18,11 +20,11 @@ from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 from cudf.utils.dtypes import (
     SIZE_TYPE_DTYPE,
     cudf_dtype_to_pa_type,
+    dtype_from_pylibcudf_column,
     find_common_type,
     is_mixed_with_object_dtype,
     min_signed_type,
     min_unsigned_type,
-    dtype_from_pylibcudf_column
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import _is_null_host_scalar
@@ -54,6 +56,7 @@ if TYPE_CHECKING:
 _DEFAULT_CATEGORICAL_VALUE = np.int8(-1)
 
 
+# TODO: This may be moveable to numerical.py
 def as_unsigned_codes(
     num_cats: int, codes: NumericalColumn
 ) -> NumericalColumn:
@@ -114,7 +117,7 @@ class CategoricalColumn(column.ColumnBase):
         plc.TypeId.UINT8,
         plc.TypeId.UINT16,
         plc.TypeId.UINT32,
-        plc.TypeId.UINT64
+        plc.TypeId.UINT64,
     }
 
     def __init__(
@@ -749,6 +752,7 @@ class CategoricalColumn(column.ColumnBase):
         else:
             codes_col = column.concat_columns(codes)  # type: ignore[arg-type]
 
+        # TODO: Isn't this already done in _with_type_metadata? Try to remove this.
         codes_col = as_unsigned_codes(
             len(cats),
             cast(cudf.core.column.numerical.NumericalColumn, codes_col),

@@ -23,7 +23,7 @@ from cudf.core._internals.timezones import (
     get_compatible_timezone,
     get_tz_data,
 )
-from cudf.core.buffer import Buffer, acquire_spill_lock
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.temporal_base import TemporalBaseColumn
 from cudf.utils.dtypes import (
@@ -811,10 +811,9 @@ class DatetimeTZColumn(DatetimeColumn):
     def _utc_time(self) -> DatetimeColumn:
         """Return UTC time as naive timestamps."""
         return DatetimeColumn(
-            data=self.base_data,  # type: ignore[arg-type]
-            dtype=_get_base_dtype(self.dtype),
-            mask=self.base_mask,  # type: ignore[arg-type]
+            plc_column=self.plc_column,
             size=self.size,
+            dtype=_get_base_dtype(self.dtype),
             offset=self.offset,
             null_count=self.null_count,
         )

@@ -46,7 +46,6 @@ if TYPE_CHECKING:
         DtypeObj,
         ScalarLike,
     )
-    from cudf.core.buffer import Buffer
     from cudf.core.column import DecimalBaseColumn
     from cudf.core.column.datetime import DatetimeColumn
     from cudf.core.column.string import StringColumn
@@ -100,10 +99,11 @@ class NumericalColumn(NumericalBaseColumn):
                 f"dtype must be a floating, integer or boolean dtype. Got: {dtype}"
             )
 
-        if data.size % dtype.itemsize:
-            raise ValueError("Buffer size must be divisible by element size")
+        # if data.size % dtype.itemsize:
+        #     raise ValueError("Buffer size must be divisible by element size")
         if size is None:
-            size = (data.size // dtype.itemsize) - offset
+            raise ValueError("size must be not None")
+            # size = (data.size // dtype.itemsize) - offset
         super().__init__(
             plc_column=plc_column,
             size=size,
@@ -520,22 +520,24 @@ class NumericalColumn(NumericalBaseColumn):
             )
 
     def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:
-        return cudf.core.column.DatetimeColumn(
-            data=self.astype(np.dtype(np.int64)).base_data,  # type: ignore[arg-type]
-            dtype=dtype,
-            mask=self.base_mask,
-            offset=self.offset,
-            size=self.size,
-        )
+        return self.cast(dtype=dtype)
+        # return cudf.core.column.DatetimeColumn(
+        #     data=self.astype(np.dtype(np.int64)).base_data,  # type: ignore[arg-type]
+        #     dtype=dtype,
+        #     mask=self.base_mask,
+        #     offset=self.offset,
+        #     size=self.size,
+        # )
 
     def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:
-        return cudf.core.column.TimeDeltaColumn(
-            data=self.astype(np.dtype(np.int64)).base_data,  # type: ignore[arg-type]
-            dtype=dtype,
-            mask=self.base_mask,
-            offset=self.offset,
-            size=self.size,
-        )
+        return self.cast(dtype=dtype)
+        # return cudf.core.column.TimeDeltaColumn(
+        #     data=self.astype(np.dtype(np.int64)).base_data,  # type: ignore[arg-type]
+        #     dtype=dtype,
+        #     mask=self.base_mask,
+        #     offset=self.offset,
+        #     size=self.size,
+        # )
 
     def as_decimal_column(self, dtype: DecimalDtype) -> DecimalBaseColumn:
         return self.cast(dtype=dtype)  # type: ignore[return-value]
@@ -898,13 +900,11 @@ class NumericalColumn(NumericalBaseColumn):
                 len(dtype.categories), self
             )
             return cudf.core.column.CategoricalColumn(
-                data=None,
-                size=self.size,
+                plc_column=codes.plc_column,
+                size=codes.size,
                 dtype=dtype,
-                mask=self.base_mask,
-                offset=self.offset,
-                null_count=self.null_count,
-                children=(codes,),
+                offset=codes.offset,
+                null_count=codes.null_count,
             )
         if cudf.get_option("mode.pandas_compatible"):
             res_dtype = get_dtype_of_same_type(dtype, self.dtype)
