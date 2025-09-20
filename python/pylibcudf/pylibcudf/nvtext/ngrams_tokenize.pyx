@@ -11,7 +11,8 @@ from pylibcudf.libcudf.nvtext.ngrams_tokenize cimport (
 from pylibcudf.libcudf.scalar.scalar cimport string_scalar
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.scalar cimport Scalar
-from pylibcudf.utils cimport _get_stream
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 __all__ = ["ngrams_tokenize"]
@@ -21,7 +22,8 @@ cpdef Column ngrams_tokenize(
     size_type ngrams,
     Scalar delimiter,
     Scalar separator,
-    Stream stream=None
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Returns a single column of strings by tokenizing the input strings column
@@ -50,6 +52,7 @@ cpdef Column ngrams_tokenize(
     """
     cdef unique_ptr[column] c_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_ngrams_tokenize(
@@ -59,4 +62,4 @@ cpdef Column ngrams_tokenize(
             dereference(<const string_scalar*>separator.get()),
             stream.view()
         )
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)
