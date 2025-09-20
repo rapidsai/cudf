@@ -15,7 +15,8 @@ from pylibcudf.libcudf.scalar.scalar_factories cimport (
     make_string_scalar as cpp_make_string_scalar,
 )
 from pylibcudf.scalar cimport Scalar
-from pylibcudf.utils cimport _get_stream
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 __all__ = ["BPEMergePairs", "byte_pair_encoding"]
@@ -37,7 +38,8 @@ cpdef Column byte_pair_encoding(
     Column input,
     BPEMergePairs merge_pairs,
     Scalar separator=None,
-    Stream stream=None
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Byte pair encode the input strings.
@@ -62,6 +64,7 @@ cpdef Column byte_pair_encoding(
     """
     cdef unique_ptr[column] c_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     if separator is None:
         separator = Scalar.from_libcudf(
@@ -78,4 +81,4 @@ cpdef Column byte_pair_encoding(
             )
         )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)
