@@ -52,18 +52,6 @@ def test_assert_column_memory_slice(arrow_arrays):
     assert_column_memory_ne(right, col)
 
 
-def test_assert_column_memory_basic_same(arrow_arrays):
-    data = cudf.core.column.ColumnBase.from_arrow(arrow_arrays)
-    buf = cudf.core.buffer.as_buffer(data.base_data)
-
-    left = cudf.core.column.build_column(buf, dtype=np.dtype(np.int8))
-    right = cudf.core.column.build_column(buf, dtype=np.dtype(np.int8))
-
-    assert_column_memory_eq(left, right)
-    with pytest.raises(AssertionError):
-        assert_column_memory_ne(left, right)
-
-
 @pytest.mark.parametrize(
     "other_data",
     [

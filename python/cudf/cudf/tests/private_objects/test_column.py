@@ -89,47 +89,6 @@ def test_column_set_equal_length_object_by_mask():
     )
 
 
-@pytest.mark.parametrize("offset", [0, 1, 15])
-@pytest.mark.parametrize("size", [50, 10, 0])
-def test_column_offset_and_size(pandas_input, offset, size):
-    col = as_column(pandas_input)
-    col = cudf.core.column.build_column(
-        data=col.base_data,
-        dtype=col.dtype,
-        mask=col.base_mask,
-        size=size,
-        offset=offset,
-        children=col.base_children,
-    )
-
-    if isinstance(col.dtype, cudf.CategoricalDtype):
-        assert col.size == col.codes.size
-        assert col.size == (col.codes.data.size / col.codes.dtype.itemsize)
-    elif cudf.api.types.is_string_dtype(col.dtype):
-        if col.size > 0:
-            assert col.size == (col.children[0].size - 1)
-            assert col.size == (
-                (col.children[0].data.size / col.children[0].dtype.itemsize)
-                - 1
-            )
-    else:
-        assert col.size == (col.data.size / col.dtype.itemsize)
-
-    got = cudf.Series._from_column(col)
-
-    if offset is None:
-        offset = 0
-    if size is None:
-        size = 100
-    else:
-        size = size + offset
-
-    slicer = slice(offset, size)
-    expect = pandas_input.iloc[slicer].reset_index(drop=True)
-
-    assert_eq(expect, got)
-
-
 def column_slicing_test(col, offset, size, cast_to_float=False):
     col_slice = col.slice(offset, offset + size)
     series = cudf.Series._from_column(col)
