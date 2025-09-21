@@ -11,7 +11,8 @@ from pylibcudf.libcudf.nvtext.wordpiece_tokenize cimport (
     wordpiece_tokenize as cpp_wordpiece_tokenize,
 )
 from pylibcudf.libcudf.types cimport size_type
-from pylibcudf.utils cimport _get_stream
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 __all__ = [
@@ -36,7 +37,8 @@ cpdef Column wordpiece_tokenize(
     Column input,
     WordPieceVocabulary vocabulary,
     size_type max_words_per_row,
-    Stream stream=None
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Returns the token ids for the input string by looking
@@ -63,6 +65,7 @@ cpdef Column wordpiece_tokenize(
     """
     cdef unique_ptr[column] c_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_wordpiece_tokenize(
@@ -72,4 +75,4 @@ cpdef Column wordpiece_tokenize(
             stream.view()
         )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)
