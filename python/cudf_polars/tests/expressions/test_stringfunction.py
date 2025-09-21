@@ -269,11 +269,12 @@ def test_split_exact_inclusive_unsupported(ldf_split):
         (["2024-13-01", "2023-12-31", "2023-06-15"], True),
         (["2024-01-01", "foo", None], True),
         (["foo", "2023-06-15"], True),
+        ([None, None, None], False),
     ],
-    ids=["valid", "valid", "invalid", "invalid", "invalid"],
+    ids=["valid", "valid", "invalid", "invalid", "invalid", "valid"],
 )
 def test_to_datetime(values, has_invalid_row, cache, strict, format, exact):
-    df = pl.DataFrame({"a": values})
+    df = pl.DataFrame({"a": pl.Series(values, dtype=pl.String())})
     q = df.lazy().select(
         pl.col("a").str.strptime(
             pl.Datetime("ns"),

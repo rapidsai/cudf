@@ -763,6 +763,14 @@ class StringFunction(Expr):
             format, strict, _, _ = self.options
             col = self.children[0].evaluate(df, context=context)
             plc_col = col.obj
+            if plc_col.null_count() == plc_col.size():
+                return Column(
+                    plc.Column.from_scalar(
+                        plc.Scalar.from_py(None, self.dtype.plc),
+                        plc_col.size(),
+                    ),
+                    self.dtype,
+                )
             if format is None:
                 # Polars begins inference with the first non null value
                 if plc_col.null_mask() is not None:
