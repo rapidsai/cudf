@@ -14,8 +14,8 @@ from typing import TYPE_CHECKING, Any
 from typing_extensions import assert_never
 
 import polars as pl
-import polars.polars as plrs
-from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
+import polars.polars_repr as plrs
+from polars.polars_repr import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 
 import pylibcudf as plc
 
@@ -723,7 +723,7 @@ def _(
         )
         named_aggs = [agg for agg, _ in aggs]
         orderby = node.options.index_column
-        orderby_dtype = schema[orderby].plc
+        orderby_dtype = schema[orderby].plc_repr
         if plc.traits.is_integral(orderby_dtype):
             # Integer orderby column is cast in implementation to int64 in polars
             orderby_dtype = plc.DataType(plc.TypeId.INT64)
@@ -919,7 +919,7 @@ def _(
     dtype: DataType,
     schema: Schema,
 ) -> expr.Expr:
-    if plc.traits.is_boolean(dtype.plc) and node.op == pl_expr.Operator.TrueDivide:
+    if plc.traits.is_boolean(dtype.plc_repr) and node.op == pl_expr.Operator.TrueDivide:
         dtype = DataType(pl.Float64())
     return expr.BinOp(
         dtype,

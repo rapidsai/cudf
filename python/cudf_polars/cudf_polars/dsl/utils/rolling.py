@@ -74,10 +74,13 @@ def rewrite_rolling(
     index_name = options.rolling.index_column
     index_dtype = schema[index_name]
     index_col = expr.Col(index_dtype, index_name)
-    if plc.traits.is_integral(index_dtype.plc) and index_dtype.id() != plc.TypeId.INT64:
+    if (
+        plc.traits.is_integral(index_dtype.plc_repr)
+        and index_dtype.id() != plc.TypeId.INT64
+    ):
         plc_index_dtype = plc.DataType(plc.TypeId.INT64)
     else:
-        plc_index_dtype = index_dtype.plc
+        plc_index_dtype = index_dtype.plc_repr
     index = expr.NamedExpr(index_name, index_col)
     temp_prefix = "_" * max(map(len, schema))
     if len(aggs) > 0:

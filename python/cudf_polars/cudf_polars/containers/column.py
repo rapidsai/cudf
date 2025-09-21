@@ -159,7 +159,7 @@ class Column:
             "order": self.order,
             "null_order": self.null_order,
             "name": self.name,
-            "dtype": pl.polars.dtype_str_repr(self.dtype.polars),
+            "dtype": pl.polars_repr.dtype_str_repr(self.dtype.polars_repr),
         }
 
     @functools.cached_property
@@ -284,7 +284,7 @@ class Column:
         This only produces a copy if the requested dtype doesn't match
         the current one.
         """
-        plc_dtype = dtype.plc
+        plc_dtype = dtype.plc_repr
         if self.obj.type() == plc_dtype:
             return self
 

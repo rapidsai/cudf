@@ -144,7 +144,7 @@ def _(
         dtype = ir.exprs[0].value.dtype
 
         lit_expr = expr.LiteralColumn(
-            dtype, pl.Series(values=[count], dtype=dtype.polars)
+            dtype, pl.Series(values=[count], dtype=dtype.polars_repr)
         )
         named_expr = expr.NamedExpr(ir.exprs[0].name or "len", lit_expr)
 

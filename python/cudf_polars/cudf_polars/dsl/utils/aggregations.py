@@ -163,7 +163,7 @@ def decompose_single_agg(
         else:
             (child,) = agg.children
         needs_masking = agg.name in {"min", "max"} and plc.traits.is_floating_point(
-            child.dtype.plc
+            child.dtype.plc_repr
         )
         if needs_masking and agg.options:
             # pl.col("a").nan_max or nan_min
@@ -177,7 +177,7 @@ def decompose_single_agg(
         if any(has_agg for _, has_agg in aggs):
             raise NotImplementedError("Nested aggs in groupby not supported")
 
-        child_dtype = child.dtype.plc
+        child_dtype = child.dtype.plc_repr
         req = agg.agg_request
         is_median = agg.name == "median"
         is_quantile = agg.name == "quantile"
@@ -189,7 +189,7 @@ def decompose_single_agg(
             if is_quantile:
                 decimal_unsupported = True
             elif agg.name in {"mean", "median"}:
-                tid = agg.dtype.plc.id()
+                tid = agg.dtype.plc_repr.id()
                 if tid in {plc.TypeId.FLOAT32, plc.TypeId.FLOAT64}:
                     cast_to = (
                         DataType(pl.Float64)
@@ -197,7 +197,7 @@ def decompose_single_agg(
                         else DataType(pl.Float32)
                     )
                     child = expr.Cast(cast_to, child)
-                    child_dtype = child.dtype.plc
+                    child_dtype = child.dtype.plc_repr
 
         is_group_quantile_supported = plc.traits.is_integral(
             child_dtype
@@ -223,7 +223,7 @@ def decompose_single_agg(
             col = (
                 expr.Cast(agg.dtype, expr.Col(DataType(pl.datatypes.Int64()), name))
                 if (
-                    plc.traits.is_integral(agg.dtype.plc)
+                    plc.traits.is_integral(agg.dtype.plc_repr)
                     and agg.dtype.id() != plc.TypeId.INT64
                 )
                 else expr.Col(agg.dtype, name)
@@ -272,7 +272,7 @@ def decompose_single_agg(
             post_agg_col: expr.Expr = expr.Col(
                 DataType(pl.Float64()), name
             )  # libcudf promotes to float64
-            if agg.dtype.plc.id() == plc.TypeId.FLOAT32:
+            if agg.dtype.plc_repr.id() == plc.TypeId.FLOAT32:
                 # Cast back to float32 to match Polars
                 post_agg_col = expr.Cast(agg.dtype, post_agg_col)
             return [(named_expr, True)], named_expr.reconstruct(post_agg_col)
