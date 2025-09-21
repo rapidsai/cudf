@@ -422,6 +422,9 @@ class MonthEnd:
     def _maybe_as_fast_pandas_offset(self):
         return pd._libs.tslibs.offsets.MonthEnd()
 
+    def __eq__(self, other):
+        return self._maybe_as_fast_pandas_offset() == other
+
 
 class YearEnd:
     def _maybe_as_fast_pandas_offset(self):
@@ -538,8 +541,10 @@ class DateOffset:
     _FREQSTR_REGEX = re.compile("([-+]?[0-9]*)([a-zA-Z]+)")
 
     def __eq__(self, other):
-        if not isinstance(other, DateOffset):
+        if not isinstance(other, (DateOffset, str)):
             return NotImplemented
+        if isinstance(other, str):
+            return self._maybe_as_fast_pandas_offset() == other
         return self.kwds == other.kwds
 
     def __init__(self, n=1, normalize=False, **kwds):
