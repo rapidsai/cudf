@@ -423,16 +423,6 @@ def test_scan_parquet_chunked(
     )
 
 
-@pytest.mark.xfail(
-    raises=pl.exceptions.ComputeError,
-    reason="Rate limited by Hugging Face",
-    strict=False,
-)
-def test_scan_hf_url_raises():
-    q = pl.scan_csv("hf://datasets/scikit-learn/iris/Iris.csv")
-    assert_ir_translation_raises(q, NotImplementedError)
-
-
 def test_select_arbitrary_order_with_row_index_column(tmp_path):
     df = pl.DataFrame({"a": [1, 2, 3]})
     df.write_parquet(tmp_path / "df.parquet")
