@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from typing import Any, Protocol, TypedDict
 
 from rmm.pylibrmm.device_buffer import DeviceBuffer
+from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 from rmm.pylibrmm.stream import Stream
 
 from pylibcudf._interop_helpers import ArrowLike
