@@ -27,6 +27,29 @@
 #include <vector>
 
 namespace CUDF_EXPORT cudf {
+
+namespace detail {
+namespace row_ir {
+
+/**
+ * @brief The base class for all IR nodes
+ *
+ * This class defines the interface for IR nodes, which can be instantiated and used to generate
+ * code. Each IR node represents a specific operation or value in the program. They represent a
+ * single-static-assignment (SSA) variable in the program IR. It is separate from the AST as it
+ * contains more detailed program information and analysis that would be needed to instantiate the
+ * program and generate correct and robust code.
+ */
+struct node;
+
+/**
+ * @brief A converter that converts AST expressions to IR nodes and CUDA UDFs.
+ */
+struct ast_converter;
+
+}  // namespace row_ir
+}  // namespace detail
+
 namespace ast {
 /**
  * @addtogroup expressions
@@ -63,6 +86,15 @@ struct expression {
    */
   virtual std::reference_wrapper<expression const> accept(
     detail::expression_transformer& visitor) const = 0;
+
+  /**
+   * @brief Accepts an `row_ir::ast_converter` class.
+   *
+   * @param visitor The `row_ir::ast_converter` converting this expression tree
+   * @return The IR node representing this expression
+   */
+  [[nodiscard]] virtual std::unique_ptr<cudf::detail::row_ir::node> accept(
+    cudf::detail::row_ir::ast_converter& visitor) const = 0;
 
   /**
    * @brief Returns true if the expression may evaluate to null.
@@ -269,6 +301,12 @@ class literal : public expression {
   std::reference_wrapper<expression const> accept(
     detail::expression_transformer& visitor) const override;
 
+  /**
+   * @copydoc expression::accept
+   */
+  [[nodiscard]] std::unique_ptr<cudf::detail::row_ir::node> accept(
+    cudf::detail::row_ir::ast_converter& visitor) const override;
+
   [[nodiscard]] bool may_evaluate_null(table_view const& left,
                                        table_view const& right,
                                        rmm::cuda_stream_view stream) const override
@@ -375,6 +413,12 @@ class column_reference : public expression {
     return (table_source == table_reference::LEFT ? left : right).column(column_index).has_nulls();
   }
 
+  /**
+   * @copydoc expression::accept
+   */
+  [[nodiscard]] std::unique_ptr<cudf::detail::row_ir::node> accept(
+    cudf::detail::row_ir::ast_converter& visitor) const override;
+
  private:
   cudf::size_type column_index;
   table_reference table_source;
@@ -441,6 +485,12 @@ class operation : public expression {
                                        table_view const& right,
                                        rmm::cuda_stream_view stream) const override;
 
+  /**
+   * @copydoc expression::accept
+   */
+  [[nodiscard]] std::unique_ptr<cudf::detail::row_ir::node> accept(
+    cudf::detail::row_ir::ast_converter& visitor) const override;
+
  private:
   ast_operator op;
   std::vector<std::reference_wrapper<expression const>> operands;
@@ -483,6 +533,12 @@ class column_name_reference : public expression {
   {
     return true;
   }
+
+  /**
+   * @copydoc expression::accept
+   */
+  [[nodiscard]] std::unique_ptr<cudf::detail::row_ir::node> accept(
+    cudf::detail::row_ir::ast_converter& visitor) const override;
 
  private:
   std::string column_name;
@@ -581,5 +637,4 @@ class tree {
 
 /** @} */  // end of group
 }  // namespace ast
-
 }  // namespace CUDF_EXPORT cudf

@@ -1,4 +1,6 @@
 # Copyright (c) 2020-2025, NVIDIA CORPORATION.
+import sys
+from decimal import Decimal
 
 import cupy as cp
 import numpy as np
@@ -7,8 +9,16 @@ import pyarrow as pa
 import pytest
 from numba import cuda
 
+import rmm
+
 import cudf
+from cudf.core._compat import (
+    PANDAS_CURRENT_SUPPORTED_VERSION,
+    PANDAS_VERSION,
+)
+from cudf.core.buffer import as_buffer
 from cudf.core.column.column import _can_values_be_equal, as_column
+from cudf.core.column.decimal import Decimal32Column, Decimal64Column
 from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal
 
@@ -303,7 +313,9 @@ def test_column_view_valid_numeric_to_numeric(data, from_dtype, to_dtype):
     gpu_data_view = gpu_data.view(to_dtype)
 
     expect = pd.Series(cpu_data_view, dtype=cpu_data_view.dtype)
-    got = cudf.Series._from_column(gpu_data_view).astype(gpu_data_view.dtype)
+    got = cudf.Series._from_column(gpu_data_view).astype(
+        gpu_data_view.dtype, copy=False
+    )
 
     gpu_ptr = gpu_data.data.get_ptr(mode="read")
     assert gpu_ptr == got._column.data.get_ptr(mode="read")
@@ -639,3 +651,100 @@ def test_build_series_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
 def test__can_values_be_equal(left, right, expected):
     assert _can_values_be_equal(left, right) is expected
     assert _can_values_be_equal(right, left) is expected
+
+
+def test_string_no_children_properties():
+    empty_col = cudf.core.column.StringColumn(
+        as_buffer(rmm.DeviceBuffer(size=0)),
+        size=0,
+        dtype=np.dtype("object"),
+        children=(),
+    )
+    assert empty_col.base_children == ()
+    assert empty_col.base_size == 0
+
+    assert empty_col.children == ()
+    assert empty_col.size == 0
+
+    assert sys.getsizeof(empty_col) >= 0  # Accounts for Python GC overhead
+
+
+def test_string_int_to_ipv4():
+    gsr = cudf.Series([0, None, 0, 698875905, 2130706433, 700776449]).astype(
+        "uint32"
+    )
+    expected = cudf.Series(
+        ["0.0.0.0", None, "0.0.0.0", "41.168.0.1", "127.0.0.1", "41.197.0.1"]
+    )
+
+    got = cudf.Series._from_column(gsr._column.int2ip())
+
+    assert_eq(expected, got)
+
+
+def test_string_int_to_ipv4_dtype_fail(numeric_types_as_str):
+    if numeric_types_as_str == "uint32":
+        pytest.skip(f"int2ip passes with {numeric_types_as_str}")
+    gsr = cudf.Series([1, 2, 3, 4, 5]).astype(numeric_types_as_str)
+    with pytest.raises(TypeError):
+        gsr._column.int2ip()
+
+
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas.",
+)
+def test_datetime_can_cast_safely():
+    sr = cudf.Series(
+        ["1679-01-01", "2000-01-31", "2261-01-01"], dtype="datetime64[ms]"
+    )
+    assert sr._column.can_cast_safely(np.dtype("datetime64[ns]"))
+
+    sr = cudf.Series(
+        ["1677-01-01", "2000-01-31", "2263-01-01"], dtype="datetime64[ms]"
+    )
+
+    assert sr._column.can_cast_safely(np.dtype("datetime64[ns]")) is False
+
+
+@pytest.mark.parametrize(
+    "data_",
+    [
+        [Decimal("1.1"), Decimal("2.2"), Decimal("3.3"), Decimal("4.4")],
+        [Decimal("-1.1"), Decimal("2.2"), Decimal("3.3"), Decimal("4.4")],
+        [1],
+        [-1],
+        [1, 2, 3, 4],
+        [42, 17, 41],
+        [1, 2, None, 4],
+        [None, None, None],
+        [],
+    ],
+)
+@pytest.mark.parametrize(
+    "typ_",
+    [
+        pa.decimal128(precision=4, scale=2),
+        pa.decimal128(precision=5, scale=3),
+        pa.decimal128(precision=6, scale=4),
+    ],
+)
+@pytest.mark.parametrize("col", [Decimal32Column, Decimal64Column])
+def test_round_trip_decimal_column(data_, typ_, col):
+    pa_arr = pa.array(data_, type=typ_)
+    col_32 = col.from_arrow(pa_arr)
+    assert pa_arr.equals(col_32.to_arrow())
+
+
+def test_from_arrow_max_precision_decimal64():
+    with pytest.raises(ValueError):
+        Decimal64Column.from_arrow(
+            pa.array([1, 2, 3], type=pa.decimal128(scale=0, precision=19))
+        )
+
+
+def test_from_arrow_max_precision_decimal32():
+    with pytest.raises(ValueError):
+        Decimal32Column.from_arrow(
+            pa.array([1, 2, 3], type=pa.decimal128(scale=0, precision=10))
+        )

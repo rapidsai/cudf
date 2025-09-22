@@ -4,6 +4,7 @@ from libc.stdint cimport uint32_t, uint64_t
 from pylibcudf.column cimport Column
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.scalar cimport Scalar
+from rmm.pylibrmm.stream cimport Stream
 
 ctypedef fused ColumnOrScalar:
     Column
@@ -14,7 +15,8 @@ cpdef Column minhash(
     uint32_t seed,
     Column a,
     Column b,
-    size_type width
+    size_type width,
+    Stream stream=*
 )
 
 cpdef Column minhash64(
@@ -22,7 +24,8 @@ cpdef Column minhash64(
     uint64_t seed,
     Column a,
     Column b,
-    size_type width
+    size_type width,
+    Stream stream=*
 )
 
 cpdef Column minhash_ngrams(
@@ -30,7 +33,8 @@ cpdef Column minhash_ngrams(
     size_type width,
     uint32_t seed,
     Column a,
-    Column b
+    Column b,
+    Stream stream=*
 )
 
 cpdef Column minhash64_ngrams(
@@ -38,5 +42,6 @@ cpdef Column minhash64_ngrams(
     size_type width,
     uint64_t seed,
     Column a,
-    Column b
+    Column b,
+    Stream stream=*
 )

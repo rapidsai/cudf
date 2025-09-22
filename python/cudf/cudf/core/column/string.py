@@ -18,6 +18,7 @@ from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column, column_empty
+from cudf.errors import MixedTypeError
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
@@ -34,8 +35,7 @@ from cudf.utils.utils import is_na_like
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
-    import cupy
-    import numba.cuda
+    import cupy as cp
 
     from cudf._typing import (
         ColumnBinaryOperand,
@@ -240,17 +240,24 @@ class StringColumn(ColumnBase):
 
         raise NotImplementedError("`any` not implemented for `StringColumn`")
 
-    def data_array_view(
-        self, *, mode="write"
-    ) -> numba.cuda.devicearray.DeviceNDArray:
-        raise ValueError("Cannot get an array view of a StringColumn")
-
     @property
     def __cuda_array_interface__(self):
         raise NotImplementedError(
             f"dtype {self.dtype} is not yet supported via "
             "`__cuda_array_interface__`"
         )
+
+    def _validate_fillna_value(
+        self, fill_value: ScalarLike | ColumnLike
+    ) -> plc.Scalar | ColumnBase:
+        """Align fill_value for .fillna based on column type."""
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and is_scalar(fill_value)
+            and fill_value is np.nan
+        ):
+            raise MixedTypeError("Cannot fill `np.nan` in string column")
+        return super()._validate_fillna_value(fill_value)
 
     def element_indexing(self, index: int):
         result = super().element_indexing(index)
@@ -436,18 +443,12 @@ class StringColumn(ColumnBase):
         return col
 
     @property
-    def values_host(self) -> np.ndarray:
+    def values(self) -> cp.ndarray:
         """
-        Return a numpy representation of the StringColumn.
+        Return a CuPy representation of the Column.
         """
-        return self.to_pandas().values
-
-    @property
-    def values(self) -> cupy.ndarray:
-        """
-        Return a CuPy representation of the StringColumn.
-        """
-        raise TypeError("String arrays are not supported by cupy")
+        # dask checks for a TypeError instead of NotImplementedError
+        raise TypeError(f"cupy does not support {self.dtype}")
 
     def to_pandas(
         self,
