@@ -93,15 +93,15 @@ All GPU memory allocations made by cudf-polars use an RMM Memory Resource object
 the memory resource to use by:
 
 1. Relying on the default behavior, which creates a memory resource for you.
-2. Passing the configuration options for a Memory Resource as `memory_resource_config` in the `**kwargs` passed to {class}`polars.GPUEngine`.
-3. Passing a concrete ``MemoryResource`` instance to {class}`polars.GPUEngine`:
+2. Passing the configuration options for a Memory Resource as `memory_resource_config` in the `**kwargs` passed to {class}`~polars.lazyframe.engine_config.GPUEngine`.
+3. Passing a concrete ``MemoryResource`` instance to {class}`~polars.lazyframe.engine_config.GPUEngine`:
 
 By default, cudf-polars will create a new RMM resource for each query executed. The `POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY` environment
 variable controls whether an RMM pool with managed memory is created (true by default). Set `POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY=0` to
 disabled managed memory and use {class}`rmm.mr.CudaAsyncMemoryResource` instead.
 
 Alternatively, you can customize the pool by passing the configuration for an RMM Memory Resource object as `memory_resource_config`
-when creating your {class}`polars.GPUEngine`:
+when creating your {class}`~polars.lazyframe.engine_config.GPUEngine`:
 
 ```python
 memory_resource_config = {
@@ -116,7 +116,7 @@ engine = pl.GPUEngine(memory_resource_config=memory_resource_config)
 
 This lets you control things like the initial pool size or release threshold.
 
-Finally, for maximum flexibility, you can create your own Memory Resource object and pass it into the {class}`polars.GPUEngine`:
+Finally, for maximum flexibility, you can create your own Memory Resource object and pass it into the {class}`~polars.lazyframe.engine_config.GPUEngine`:
 
 ```python
 import polars as pl
