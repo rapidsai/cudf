@@ -1461,6 +1461,7 @@ inline __device__ bool setup_local_page_info(page_state_s* const s,
       s->input_row_count          = 0;
       s->input_leaf_count         = 0;
 
+      // The fixed-width decode kernel ASSUMES this is always -1 for non-lists!
       s->row_index_lower_bound = -1;
     }
     // for nested hierarchies, we have run a preprocess that lets us skip directly to the values
