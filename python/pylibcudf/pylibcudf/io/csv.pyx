@@ -7,6 +7,7 @@ from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 from rmm.pylibrmm.stream cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from pylibcudf.io.types cimport SourceInfo, SinkInfo, TableWithMetadata
 
@@ -30,7 +31,7 @@ from pylibcudf.table cimport Table
 
 from pylibcudf.types cimport DataType
 
-from pylibcudf.utils cimport _get_stream
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
 
 __all__ = [
     "read_csv",
@@ -656,6 +657,7 @@ cdef class CsvReaderOptionsBuilder:
 cpdef TableWithMetadata read_csv(
     CsvReaderOptions options,
     Stream stream = None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Read from CSV format.
@@ -671,13 +673,16 @@ cpdef TableWithMetadata read_csv(
         Settings for controlling reading behavior
     stream : Stream | None
         CUDA stream used for device memory operations and kernel launches
+    mr : DeviceMemoryResource, optional
+        Device memory resource used to allocate the returned table's device memory.
     """
     cdef table_with_metadata c_result
     cdef Stream s = _get_stream(stream)
+    mr = _get_memory_resource(mr)
     with nogil:
         c_result = move(cpp_read_csv(options.c_obj, s.view()))
 
-    cdef TableWithMetadata tbl_meta = TableWithMetadata.from_libcudf(c_result, s)
+    cdef TableWithMetadata tbl_meta = TableWithMetadata.from_libcudf(c_result, s, mr)
     return tbl_meta
 
 
