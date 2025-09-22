@@ -375,7 +375,9 @@ class _SeriesLocIndexer(_FrameIndexer):
                 return indexer.key.column
         elif isinstance(arg, (cudf.MultiIndex, pd.MultiIndex)):
             if isinstance(arg, pd.MultiIndex):
-                arg = cudf.MultiIndex.from_pandas(arg)
+                arg = cudf.MultiIndex(
+                    levels=arg.levels, codes=arg.codes, names=arg.names
+                )
 
             return _indices_from_labels(self._frame, arg)
 
@@ -666,6 +668,11 @@ class Series(SingleColumnFrame, IndexedFrame):
         3     NaN
         dtype: float64
         """
+        warnings.warn(
+            "from_pandas is deprecated and will be removed in a future version. "
+            "Use the Series constructor instead.",
+            FutureWarning,
+        )
         if nan_as_null is no_default:
             nan_as_null = (
                 False if cudf.get_option("mode.pandas_compatible") else None
@@ -1754,9 +1761,7 @@ class Series(SingleColumnFrame, IndexedFrame):
     def fillna(
         self, value=None, method=None, axis=None, inplace=False, limit=None
     ):
-        if isinstance(value, pd.Series):
-            value = Series.from_pandas(value)
-        elif isinstance(value, Mapping):
+        if isinstance(value, (pd.Series, Mapping)):
             value = Series(value)
         if isinstance(value, cudf.Series):
             if not self.index.equals(value.index):
