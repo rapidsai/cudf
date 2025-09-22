@@ -19,7 +19,6 @@
 #include <cudf/context.hpp>
 #include <cudf/utilities/export.hpp>
 
-#include <cstdint>
 #include <memory>
 
 namespace cudf {
