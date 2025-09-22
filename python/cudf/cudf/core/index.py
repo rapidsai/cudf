@@ -3722,48 +3722,23 @@ class DatetimeIndex(Index):
         )
 
         uniques = ColumnBase.from_pylibcudf(offset).unique()
-        if len(uniques) != 1:
-            # could be month end or year end
-            # for years, we could have either 365 or 366 days
-            # for months, we could have 28, 29, 30 or 31 days
-            # for quarters we could
-            # any other number of unique values and we give up
-            if len(uniques) > 4:
-                return None
-            else:
-                # length between 1 and 4, small host copy
-                uniques_host = uniques.to_arrow().to_pylist()
-                if all(
-                    x in {pd.Timedelta("365 days"), pd.Timedelta("366 days")}
-                    for x in uniques_host
-                ):
-                    # Could be year end or could be an anchored year end
-                    if self.is_year_end.all():
-                        return cudf.DateOffset._from_freqstr("YE-DEC")
-                    else:
-                        raise NotImplementedError()
-                elif all(
-                    x
-                    in {
-                        pd.Timedelta("28 days"),
-                        pd.Timedelta("29 days"),
-                        pd.Timedelta("30 days"),
-                        pd.Timedelta("31 days"),
-                    }
-                    for x in uniques_host
-                ):
-                    if self.is_month_end.all():
-                        return cudf.DateOffset._from_freqstr("ME")
-                else:
-                    raise NotImplementedError()
+        if len(uniques) <= 4:
+            # inspect a small host copy for special cases
+            uniques_host = uniques.to_arrow().to_pylist()
 
-        else:
-            freq = uniques.to_arrow().to_pylist()[0]
+        if len(uniques) == 1:
+            # base case of a fixed frequency
+            freq = uniques_host[0]
+
             # special case of YS-JAN, YS-FEB, etc
+            # 365 days is allowable, but if it's the first of the month, pandas
+            # has a special freq for it, which would take more work to determine
+            # same with specifically 7 day intervals, where pandas has a unique
+            # frequency depending on the day of the week corresponding to the days
             if freq == pd.Timedelta("365 days") and not self.is_year_end.all():
-                raise NotImplementedError()
+                raise NotImplementedError("Can't infer anchored year start")
             elif freq == pd.Timedelta("7 days"):
-                raise NotImplementedError("Anchored weeks")
+                raise NotImplementedError("Can't infer anchored week")
 
             cmps = freq.components
 
@@ -3783,6 +3758,37 @@ class DatetimeIndex(Index):
                     kwds[component] = getattr(cmps, component)
 
             return cudf.DateOffset(**kwds)
+
+            # maximum unique count supported is months with 4 unique lengths
+            # bail above that for now
+        elif 1 < len(uniques) <= 4:
+            # length between 1 and 4, small host copy
+            if all(
+                x in {pd.Timedelta("365 days"), pd.Timedelta("366 days")}
+                for x in uniques_host
+            ):
+                # Could be year end or could be an anchored year end
+                if self.is_year_end.all():
+                    return cudf.DateOffset._from_freqstr("YE-DEC")
+                else:
+                    raise NotImplementedError()
+            elif all(
+                x
+                in {
+                    pd.Timedelta("28 days"),
+                    pd.Timedelta("29 days"),
+                    pd.Timedelta("30 days"),
+                    pd.Timedelta("31 days"),
+                }
+                for x in uniques_host
+            ):
+                if self.is_month_end.all():
+                    return cudf.DateOffset._from_freqstr("ME")
+            else:
+                raise NotImplementedError()
+        else:
+            return None
+        return None
 
     def _get_slice_frequency(self, slc=None):
         if slc.step in (1, None):
