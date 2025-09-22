@@ -333,6 +333,26 @@ def _(node: pl_ir.GroupBy, translator: Translator, schema: Schema) -> ir.IR:
         return rewrite_groupby(node, schema, keys, original_aggs, inp)
 
 
+_DEC_TIDS = {plc.TypeId.DECIMAL32, plc.TypeId.DECIMAL64, plc.TypeId.DECIMAL128}
+
+
+def _align_decimal_scales(
+    left: expr.Expr, right: expr.Expr
+) -> tuple[expr.Expr, expr.Expr]:
+    left_type = left.dtype.plc.id()
+    right_type = right.dtype.plc.id()
+    if left_type in _DEC_TIDS and right_type in _DEC_TIDS:
+        left_scale = left.dtype.plc.scale()
+        right_scale = right.dtype.plc.scale()
+        if left_scale != right_scale:
+            cudf_scale = min(left_scale, right_scale)
+            polars_scale = -cudf_scale if cudf_scale < 0 else cudf_scale
+            decimal128 = DataType(pl.Decimal(38, polars_scale))
+            left = expr.Cast(decimal128, left)
+            right = expr.Cast(decimal128, right)
+    return left, right
+
+
 @_translate_ir.register
 def _(node: pl_ir.Join, translator: Translator, schema: Schema) -> ir.IR:
     # Join key dtypes are dependent on the schema of the left and
@@ -380,31 +400,34 @@ def _(node: pl_ir.Join, translator: Translator, schema: Schema) -> ir.IR:
             ops = [op1, op2]
 
         dtype = DataType(pl.datatypes.Boolean())
+
+        parts = []
+        for op, left_ne, right_ne in zip(ops, left_on, right_on, strict=True):
+            left = insert_colrefs(
+                left_ne.value,
+                table_ref=plc.expressions.TableReference.LEFT,
+                name_to_index={name: i for i, name in enumerate(inp_left.schema)},
+            )
+            right = insert_colrefs(
+                right_ne.value,
+                table_ref=plc.expressions.TableReference.RIGHT,
+                name_to_index={name: i for i, name in enumerate(inp_right.schema)},
+            )
+            left, right = _align_decimal_scales(left, right)
+            parts.append(
+                expr.BinOp(
+                    dtype,
+                    expr.BinOp._MAPPING[op],
+                    left,
+                    right,
+                )
+            )
+
         predicate = functools.reduce(
             functools.partial(
                 expr.BinOp, dtype, plc.binaryop.BinaryOperator.LOGICAL_AND
             ),
-            (
-                expr.BinOp(
-                    dtype,
-                    expr.BinOp._MAPPING[op],
-                    insert_colrefs(
-                        left.value,
-                        table_ref=plc.expressions.TableReference.LEFT,
-                        name_to_index={
-                            name: i for i, name in enumerate(inp_left.schema)
-                        },
-                    ),
-                    insert_colrefs(
-                        right.value,
-                        table_ref=plc.expressions.TableReference.RIGHT,
-                        name_to_index={
-                            name: i for i, name in enumerate(inp_right.schema)
-                        },
-                    ),
-                )
-                for op, left, right in zip(ops, left_on, right_on, strict=True)
-            ),
+            parts,
         )
 
         return ir.ConditionalJoin(schema, predicate, node.options, inp_left, inp_right)
