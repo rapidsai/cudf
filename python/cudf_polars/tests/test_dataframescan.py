@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 import pytest
 
 import polars as pl
@@ -64,3 +66,14 @@ def test_can_convert_lists():
     )
 
     assert_gpu_result_equal(df)
+
+
+def test_dataframescan_with_decimals():
+    q = pl.LazyFrame(
+        {
+            "foo": [1, 2],
+            "bar": [Decimal("1.23"), Decimal("4.56")],
+        },
+        schema={"foo": pl.Int64, "bar": pl.Decimal(precision=15, scale=2)},
+    )
+    assert_gpu_result_equal(q)
