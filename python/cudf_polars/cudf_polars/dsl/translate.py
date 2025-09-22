@@ -400,12 +400,11 @@ def _(node: pl_ir.Join, translator: Translator, schema: Schema) -> ir.IR:
             ops = [op1, op2]
 
         dtype = DataType(pl.datatypes.Boolean())
-
         predicate = functools.reduce(
             functools.partial(
                 expr.BinOp, dtype, plc.binaryop.BinaryOperator.LOGICAL_AND
             ),
-            [
+            (
                 expr.BinOp(
                     dtype,
                     expr.BinOp._MAPPING[op],
@@ -427,7 +426,7 @@ def _(node: pl_ir.Join, translator: Translator, schema: Schema) -> ir.IR:
                     ),
                 )
                 for op, left_ne, right_ne in zip(ops, left_on, right_on, strict=True)
-            ],
+            ),
         )
 
         return ir.ConditionalJoin(schema, predicate, node.options, inp_left, inp_right)

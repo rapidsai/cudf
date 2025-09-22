@@ -138,14 +138,6 @@ class Agg(Expr):
     def _reduce(
         self, column: Column, *, request: plc.aggregation.Aggregation
     ) -> Column:
-        col_tid = column.obj.type().id()
-        out_tid = self.dtype.plc.id()
-        if col_tid in {
-            plc.TypeId.DECIMAL32,
-            plc.TypeId.DECIMAL64,
-            plc.TypeId.DECIMAL128,
-        } and out_tid in {plc.TypeId.FLOAT32, plc.TypeId.FLOAT64}:
-            column = column.astype(self.dtype)
         return Column(
             plc.Column.from_scalar(
                 plc.reduce.reduce(column.obj, request, self.dtype.plc),

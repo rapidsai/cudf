@@ -285,15 +285,16 @@ class Column:
         the current one.
         """
         plc_dtype = dtype.plc
-        src = self.obj.type()
-        if src.id() == plc_dtype.id():
+        if self.obj.type() == plc_dtype:
             return self
 
-        if (plc_dtype.id() == plc.TypeId.STRING) or (src.id() == plc.TypeId.STRING):
-            return Column(self._handle_string_cast(plc_dtype), dtype=dtype)
-        elif plc.traits.is_integral_not_bool(src) and plc.traits.is_timestamp(
-            plc_dtype
+        if (plc_dtype.id() == plc.TypeId.STRING) or (
+            self.obj.type().id() == plc.TypeId.STRING
         ):
+            return Column(self._handle_string_cast(plc_dtype), dtype=dtype)
+        elif plc.traits.is_integral_not_bool(
+            self.obj.type()
+        ) and plc.traits.is_timestamp(plc_dtype):
             upcasted = plc.unary.cast(self.obj, plc.DataType(plc.TypeId.INT64))
             result = plc.column.Column(
                 plc_dtype,
@@ -306,7 +307,7 @@ class Column:
             )
             return Column(result, dtype=dtype).sorted_like(self)
         elif plc.traits.is_integral_not_bool(plc_dtype) and plc.traits.is_timestamp(
-            src
+            self.obj.type()
         ):
             result = plc.column.Column(
                 plc.DataType(plc.TypeId.INT64),
@@ -322,7 +323,7 @@ class Column:
             )
         else:
             result = Column(plc.unary.cast(self.obj, plc_dtype), dtype=dtype)
-            if is_order_preserving_cast(src, plc_dtype):
+            if is_order_preserving_cast(self.obj.type(), plc_dtype):
                 return result.sorted_like(self)
             return result
 
