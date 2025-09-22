@@ -112,6 +112,7 @@ class kvikio_source : public datasource {
   {
     CUDF_EXPECTS(supports_device_read(), "Device reads are not supported for this file.");
     auto const read_size = std::min(size, this->size() - offset);
+    stream.synchronize();
     return _kvikio_handle.pread(dst, read_size, offset);
   }
 
@@ -165,6 +166,7 @@ class file_source : public kvikio_source<kvikio::FileHandle> {
   {
     CUDF_EXPECTS(supports_device_read(), "Device reads are not supported for this file.");
     auto const read_size = std::min(size, this->size() - offset);
+    stream.synchronize();
     return _kvikio_handle.pread(dst,
                                 read_size,
                                 offset,
