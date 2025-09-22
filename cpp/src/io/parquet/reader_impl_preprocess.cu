@@ -52,6 +52,10 @@ inline bool is_treat_fixed_length_as_string(std::optional<LogicalType> const& lo
   return logical_type->type != LogicalType::DECIMAL;
 }
 
+struct set_str_bytes_all {
+  __device__ void operator()(PageInfo& p) { p.str_bytes_all = p.str_bytes; }
+};
+
 }  // namespace
 
 void reader_impl::build_string_dict_indices()
@@ -508,10 +512,6 @@ void reader_impl::generate_list_column_row_counts(is_estimate_row_counts is_esti
   _stream.synchronize();
 }
 
-struct set_str_bytes_all {
-  __device__ void operator()(PageInfo& p) { p.str_bytes_all = p.str_bytes; }
-};
-
 void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_limit)
 {
   CUDF_FUNC_RANGE();
@@ -608,13 +608,14 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
                is_treat_fixed_length_as_string(chunk.logical_type);
       });
     if (!_has_page_index || has_flba) {
+      constexpr bool compute_all_string_sizes = true;
       compute_page_string_sizes_pass1(subpass.pages,
                                       pass.chunks,
                                       {},
                                       pass.skip_rows,
                                       pass.num_rows,
                                       subpass.kernel_mask,
-                                      true,
+                                      compute_all_string_sizes,
                                       _pass_itm_data->level_type_size,
                                       _stream);
     }

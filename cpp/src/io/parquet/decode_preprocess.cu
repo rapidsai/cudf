@@ -252,7 +252,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
 
   // early out optimizations:
 
-  // - if this is a flat hierarchy (no lists) and is not a string column. in this case we don't need
+  // - if this is a flat hierarchy (no lists), we don't need
   // to do the expensive work of traversing the level data to determine sizes.  we can just compute
   // it directly.
   if (!has_repetition) {

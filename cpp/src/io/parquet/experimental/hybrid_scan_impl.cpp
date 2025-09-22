@@ -718,6 +718,21 @@ table_with_metadata hybrid_scan_reader_impl::read_chunk_internal(
                "Page mask size must be equal to the number of pages in the subpass");
   auto page_mask = cudf::detail::make_device_uvector_async(_subpass_page_mask, _stream, _mr);
 
+  // computes:
+  // PageNestingInfo::batch_size for each level of nesting, for each page, taking row bounds into
+  // account. PageInfo::skipped_values, which tells us where to start decoding in the input to
+  // respect the user bounds. It is only necessary to do this second pass if uses_custom_row_bounds
+  // is set (if the user has specified artificial bounds).
+  if (uses_custom_row_bounds(mode)) {
+    compute_page_sizes(subpass.pages,
+                       pass.chunks,
+                       read_info.skip_rows,
+                       read_info.num_rows,
+                       false,  // num_rows is already computed
+                       pass.level_type_size,
+                       _stream);
+  }
+
   // preprocess strings
   preprocess_chunk_strings(read_info, page_mask);
 

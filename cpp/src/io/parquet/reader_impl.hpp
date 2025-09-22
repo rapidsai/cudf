@@ -177,6 +177,16 @@ class reader_impl {
    */
   void setup_next_subpass(read_mode mode);
 
+  /**
+   * @brief Preprocess string length and bounds information for the subpass.
+   *
+   * At the end of this process, the `str_bytes` field of the the PageInfo struct
+   * will be populated, and if applicable, the delta_temp_buf in the subpass struct will
+   * be allocated and the pages in the subpass will point into it properly.
+   *
+   * @param read_info The range of rows to be read in the subpass
+   * @param page_mask Boolean vector indicating if a page needs to be decoded or is pruned
+   */
   void preprocess_chunk_strings(row_range const& read_info,
                                 cudf::device_span<bool const> page_mask);
 
@@ -307,6 +317,7 @@ class reader_impl {
    * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows Number of rows to decode
+   * @param page_mask Boolean vector indicating if a page needs to be decoded or is pruned
    */
   void decode_page_data(read_mode mode,
                         size_t skip_rows,

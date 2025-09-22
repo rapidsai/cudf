@@ -618,13 +618,14 @@ void reader_impl::preprocess_chunk_strings(row_range const& read_info,
     ((pass.skip_rows != read_info.skip_rows) || (pass.num_rows != read_info.num_rows));
 
   if (need_string_size_recompute) {
+    constexpr bool compute_all_string_sizes = false;
     compute_page_string_sizes_pass1(subpass.pages,
                                     pass.chunks,
                                     page_mask,
                                     read_info.skip_rows,
                                     read_info.num_rows,
                                     subpass.kernel_mask,
-                                    false,
+                                    compute_all_string_sizes,
                                     _pass_itm_data->level_type_size,
                                     _stream);
   }
