@@ -82,9 +82,6 @@ filterwarnings = [
 ]
 xfail_strict = true
 
-[tool.coverage.run]
-patch = ["subprocess"]
-
 [tool.coverage.report]
 exclude_also = [
   "if TYPE_CHECKING:",
