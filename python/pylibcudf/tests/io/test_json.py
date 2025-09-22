@@ -308,7 +308,7 @@ def test_read_json_lines_byte_range(source_or_sink, chunk_size):
     tbls = []
     for tbl_w_meta in tbls_w_meta:
         if tbl_w_meta.tbl.num_rows() > 0:
-            tbls.append(plc.interop.to_arrow(tbl_w_meta.tbl))
+            tbls.append(tbl_w_meta.tbl.to_arrow())
     full_tbl = pa.concat_tables(tbls)
 
     full_tbl_plc = plc.io.TableWithMetadata(
