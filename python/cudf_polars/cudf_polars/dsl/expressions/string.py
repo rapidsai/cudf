@@ -7,6 +7,8 @@
 from __future__ import annotations
 
 import functools
+import re
+from datetime import datetime
 from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -251,11 +253,11 @@ class StringFunction(Expr):
             if inclusive:
                 raise NotImplementedError(f"{inclusive=} is not supported for split")
         elif self.name is StringFunction.Name.Strptime:
-            format, _, exact, cache = self.options
+            format, strict, exact, cache = self.options
+            if not format and not strict:
+                raise NotImplementedError("format inference requires strict checking")
             if cache:
                 raise NotImplementedError("Strptime cache is a CPU feature")
-            if format is None:
-                raise NotImplementedError("Strptime format is required")
             if not exact:
                 raise NotImplementedError("Strptime does not support exact=False")
         elif self.name in {
@@ -760,12 +762,36 @@ class StringFunction(Expr):
             # TODO: ignores ambiguous
             format, strict, _, _ = self.options
             col = self.children[0].evaluate(df, context=context)
+            plc_col = col.obj
+            if plc_col.null_count() == plc_col.size():
+                return Column(
+                    plc.Column.from_scalar(
+                        plc.Scalar.from_py(None, self.dtype.plc),
+                        plc_col.size(),
+                    ),
+                    self.dtype,
+                )
+            if format is None:
+                # Polars begins inference with the first non null value
+                if plc_col.null_mask() is not None:
+                    boolmask = plc.unary.is_valid(plc_col)
+                    table = plc.stream_compaction.apply_boolean_mask(
+                        plc.Table([plc_col]), boolmask
+                    )
+                    filtered = table.columns()[0]
+                    first_valid_data = plc.copying.get_element(filtered, 0).to_py()
+                else:
+                    first_valid_data = plc.copying.get_element(plc_col, 0).to_py()
+
+                format = _infer_datetime_format(first_valid_data)
+                if not format:
+                    raise InvalidOperationError(
+                        "Unable to infer datetime format from data"
+                    )
 
             is_timestamps = plc.strings.convert.convert_datetime.is_timestamp(
-                col.obj, format
+                plc_col, format
             )
-
-            plc_col = col.obj
             if strict:
                 if not plc.reduce.reduce(
                     is_timestamps,
@@ -844,3 +870,133 @@ class StringFunction(Expr):
         raise NotImplementedError(
             f"StringFunction {self.name}"
         )  # pragma: no cover; handled by init raising
+
+
+def _infer_datetime_format(val: str) -> str | None:
+    # port of parts of infer.rs and patterns.rs from polars rust
+    DATETIME_DMY_RE = re.compile(
+        r"""
+        ^
+        ['"]?
+        (\d{1,2})
+        [-/\.]
+        (?P<month>[01]?\d{1})
+        [-/\.]
+        (\d{4,})
+        (
+            [T\ ]
+            (\d{1,2})
+            :?
+            (\d{1,2})
+            (
+                :?
+                (\d{1,2})
+                (
+                    \.(\d{1,9})
+                )?
+            )?
+        )?
+        ['"]?
+        $
+    """,
+        re.VERBOSE,
+    )
+
+    DATETIME_YMD_RE = re.compile(
+        r"""
+        ^
+        ['"]?
+        (\d{4,})
+        [-/\.]
+        (?P<month>[01]?\d{1})
+        [-/\.]
+        (\d{1,2})
+        (
+            [T\ ]
+            (\d{1,2})
+            :?
+            (\d{1,2})
+            (
+                :?
+                (\d{1,2})
+                (
+                    \.(\d{1,9})
+                )?
+            )?
+        )?
+        ['"]?
+        $
+    """,
+        re.VERBOSE,
+    )
+
+    DATETIME_YMDZ_RE = re.compile(
+        r"""
+        ^
+        ['"]?
+        (\d{4,})
+        [-/\.]
+        (?P<month>[01]?\d{1})
+        [-/\.]
+        (\d{1,2})
+        [T\ ]
+        (\d{2})
+        :?
+        (\d{2})
+        (
+            :?
+            (\d{2})
+            (
+                \.(\d{1,9})
+            )?
+        )?
+        (
+            [+-](\d{2})(:?(\d{2}))? | Z
+        )
+        ['"]?
+        $
+    """,
+        re.VERBOSE,
+    )
+    PATTERN_FORMATS = {
+        "DATETIME_DMY": [
+            "%d-%m-%Y",
+            "%d/%m/%Y",
+            "%d.%m.%Y",
+            "%d-%m-%Y %H:%M:%S",
+            "%d/%m/%Y %H:%M:%S",
+            "%d.%m.%Y %H:%M:%S",
+        ],
+        "DATETIME_YMD": [
+            "%Y/%m/%d",
+            "%Y-%m-%d",
+            "%Y.%m.%d",
+            "%Y-%m-%d %H:%M:%S",
+            "%Y/%m/%d %H:%M:%S",
+            "%Y.%m.%d %H:%M:%S",
+            "%Y-%m-%dT%H:%M:%S",
+        ],
+        "DATETIME_YMDZ": [
+            "%Y-%m-%dT%H:%M:%S%z",
+            "%Y-%m-%dT%H:%M:%S.%f%z",
+            "%Y-%m-%d %H:%M:%S%z",
+        ],
+    }
+    for pattern_name, regex in [
+        ("DATETIME_DMY", DATETIME_DMY_RE),
+        ("DATETIME_YMD", DATETIME_YMD_RE),
+        ("DATETIME_YMDZ", DATETIME_YMDZ_RE),
+    ]:
+        m = regex.match(val)
+        if m:
+            month = int(m.group("month"))
+            if not (1 <= month <= 12):
+                continue
+            for fmt in PATTERN_FORMATS[pattern_name]:
+                try:
+                    datetime.strptime(val, fmt)
+                except ValueError:  # noqa: PERF203
+                    continue
+                else:
+                    return fmt
+    return None

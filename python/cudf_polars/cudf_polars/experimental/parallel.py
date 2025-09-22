@@ -35,6 +35,7 @@ from cudf_polars.experimental.dispatch import (
 )
 from cudf_polars.experimental.io import _clear_source_info_cache
 from cudf_polars.experimental.repartition import Repartition
+from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import _concat, _contains_over, _lower_ir_fallback
 
 if TYPE_CHECKING:
@@ -42,7 +43,7 @@ if TYPE_CHECKING:
     from typing import Any
 
     from cudf_polars.containers import DataFrame
-    from cudf_polars.experimental.dispatch import LowerIRTransformer
+    from cudf_polars.experimental.dispatch import LowerIRTransformer, State
     from cudf_polars.utils.config import ConfigOptions
 
 
@@ -84,9 +85,11 @@ def lower_ir_graph(
     --------
     lower_ir_node
     """
-    mapper: LowerIRTransformer = CachingVisitor(
-        lower_ir_node, state={"config_options": config_options}
-    )
+    state: State = {
+        "config_options": config_options,
+        "stats": collect_statistics(ir, config_options),
+    }
+    mapper: LowerIRTransformer = CachingVisitor(lower_ir_node, state=state)
     return mapper(ir)
 
 

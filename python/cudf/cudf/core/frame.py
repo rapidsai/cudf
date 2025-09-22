@@ -227,6 +227,8 @@ class Frame(BinaryOperand, Scannable, Serializable):
     def _mimic_inplace(
         self, result: Self, inplace: bool = False
     ) -> Self | None:
+        if not isinstance(inplace, bool):
+            raise TypeError("inplace must be a boolean")
         if inplace:
             for col in self._column_names:
                 if col in result._data:
@@ -492,7 +494,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
         Akin to cudf.DataFrame(...).loc[:, labels]
         """
-        return self._from_data_like_self(self._data.select_by_label(labels))
+        return self._from_data(self._data.select_by_label(labels))
 
     @property
     @_performance_tracking
@@ -619,6 +621,21 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 to_dtype = find_common_type(
                     [dtype for _, dtype in self._dtypes]
                 )
+                if to_dtype is not None and any(
+                    col.has_nulls() for col in self._columns
+                ):
+                    if to_dtype.kind == "b" or any(
+                        dtype.kind == "b"  # type: ignore[union-attr]
+                        for _, dtype in self._dtypes
+                    ):
+                        if module == cupy:
+                            raise ValueError(
+                                "Cannot convert to cupy bool array with nulls."
+                            )
+                        else:
+                            to_dtype = numpy.dtype("object")
+                    elif to_dtype.kind in "ui":
+                        to_dtype = numpy.dtype("float64")
 
             if cudf.get_option(
                 "mode.pandas_compatible"

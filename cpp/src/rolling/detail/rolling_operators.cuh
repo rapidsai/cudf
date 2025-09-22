@@ -605,6 +605,11 @@ struct corresponding_rolling_operator<InputType, aggregation::Kind::VARIANCE> {
 };
 
 template <typename InputType>
+struct corresponding_rolling_operator<InputType, aggregation::Kind::STD> {
+  using type = DeviceRollingVariance<InputType>;  // uses the variance agg
+};
+
+template <typename InputType>
 struct corresponding_rolling_operator<InputType, aggregation::Kind::LEAD> {
   using type = DeviceRollingLead<InputType>;
 };
@@ -629,6 +634,16 @@ template <typename InputType>
 struct create_rolling_operator<InputType, aggregation::Kind::VARIANCE> {
   auto operator()(size_type min_periods, rolling_aggregation const& agg)
   {
+    return DeviceRollingVariance<InputType>{
+      min_periods, dynamic_cast<cudf::detail::var_aggregation const&>(agg)._ddof};
+  }
+};
+
+template <typename InputType>
+struct create_rolling_operator<InputType, aggregation::Kind::STD> {
+  auto operator()(size_type min_periods, rolling_aggregation const& agg)
+  {
+    // uses the variance agg
     return DeviceRollingVariance<InputType>{
       min_periods, dynamic_cast<cudf::detail::var_aggregation const&>(agg)._ddof};
   }

@@ -1593,7 +1593,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                         [plc.types.NullOrder.AFTER],
                     )
                     indices = ColumnBase.from_pylibcudf(plc_table.columns()[0])
-                indices = indices.data_array_view(mode="read")
+                indices = indices.values
             # Which indices are we going to want?
             want = np.arange(samples_per_group.sum(), dtype=SIZE_TYPE_DTYPE)
             scan = np.empty_like(samples_per_group)
@@ -1702,6 +1702,10 @@ class GroupBy(Serializable, Reducible, Scannable):
                 column_names, aggs_per_column = aggs.keys(), aggs.values()
                 columns = tuple(self.obj._data[col] for col in column_names)
             else:
+                if isinstance(aggs, list) and len(aggs) != len(set(aggs)):
+                    raise pd.errors.SpecificationError(
+                        "Function names must be unique if there is no new column names assigned"
+                    )
                 values = self.grouping.values
                 column_names = values._column_names
                 columns = values._columns

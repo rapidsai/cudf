@@ -110,6 +110,17 @@ TEST_F(TransformTest, ComputeColumn)
   cudf::compute_column(table, expression, cudf::test::get_default_stream());
 }
 
+TEST_F(TransformTest, ComputeColumnJIT)
+{
+  auto c_0        = cudf::test::fixed_width_column_wrapper<cudf::size_type>{3, 20, 1, 50};
+  auto c_1        = cudf::test::fixed_width_column_wrapper<cudf::size_type>{10, 7, 20, 0};
+  auto table      = cudf::table_view{{c_0, c_1}};
+  auto col_ref_0  = cudf::ast::column_reference(0);
+  auto col_ref_1  = cudf::ast::column_reference(1);
+  auto expression = cudf::ast::operation(cudf::ast::ast_operator::ADD, col_ref_0, col_ref_1);
+  cudf::compute_column_jit(table, expression, cudf::test::get_default_stream());
+}
+
 TEST_F(TransformTest, BoolsToMask)
 {
   std::vector<bool> input({1, 0, 1, 0, 1, 0, 1, 0});
