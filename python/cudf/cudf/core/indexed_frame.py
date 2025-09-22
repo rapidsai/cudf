@@ -3850,7 +3850,10 @@ class IndexedFrame(Frame):
                     },
                     index=df.index,
                 )
+                diff = index.difference(df.index)
                 df = lhs.join(rhs, how="left", sort=True)
+                if fill_value is not NA and len(diff) > 0:
+                    df.loc[diff] = fill_value
                 # double-argsort to map back from sorted to unsorted positions
                 df = df.take(index.argsort(ascending=True).argsort())
 
@@ -3888,9 +3891,16 @@ class IndexedFrame(Frame):
             name: (
                 df._data[name].copy(deep=deep)
                 if name in df._data
-                else column_empty(
-                    dtype=dtypes.get(name, np.dtype(np.float64)),
-                    row_count=len(index),
+                else (
+                    column_empty(
+                        dtype=dtypes.get(name, np.dtype(np.float64)),
+                        row_count=len(index),
+                    ).fillna(fill_value)
+                    if fill_value is not NA
+                    else column_empty(
+                        dtype=dtypes.get(name, np.dtype(np.float64)),
+                        row_count=len(index),
+                    )
                 )
             )
             for name in names
@@ -3907,7 +3917,6 @@ class IndexedFrame(Frame):
             attrs=self.attrs,
         )
 
-        result.fillna(fill_value, inplace=True)
         return self._mimic_inplace(result, inplace=inplace)
 
     def round(self, decimals=0, how="half_even"):
