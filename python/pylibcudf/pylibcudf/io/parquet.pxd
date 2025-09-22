@@ -6,6 +6,7 @@ from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 
 from rmm.pylibrmm.stream cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from pylibcudf.expressions cimport Expression
 
@@ -63,10 +64,12 @@ cdef class ChunkedParquetReader:
     cdef unique_ptr[cpp_chunked_parquet_reader] reader
 
     cpdef bool has_next(self)
-    cpdef TableWithMetadata read_chunk(self)
+    cpdef TableWithMetadata read_chunk(self, DeviceMemoryResource mr=*)
 
 
-cpdef read_parquet(ParquetReaderOptions options, Stream stream = *)
+cpdef read_parquet(
+    ParquetReaderOptions options, Stream stream = *, DeviceMemoryResource mr=*
+)
 
 
 cdef class ChunkedParquetWriter:
