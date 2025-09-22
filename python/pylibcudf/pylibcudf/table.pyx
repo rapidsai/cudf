@@ -12,7 +12,10 @@ from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 from rmm.pylibrmm.stream cimport Stream
-from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.memory_resource cimport (
+    DeviceMemoryResource,
+    get_current_device_resource,
+)
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.interop cimport (
@@ -53,6 +56,7 @@ __all__ = ["Table"]
 cdef class _ArrowTableHolder:
     """A holder for an Arrow table for gpumemoryview lifetime management."""
     cdef unique_ptr[arrow_table] tbl
+    cdef DeviceMemoryResource mr
 
 
 cdef class Table:
@@ -147,6 +151,7 @@ cdef class Table:
             )
 
             result = _ArrowTableHolder()
+            result.mr = get_current_device_resource()
             with nogil:
                 c_result = make_unique[arrow_table](
                     move(dereference(c_schema)), move(dereference(c_array))
@@ -161,6 +166,7 @@ cdef class Table:
             )
 
             result = _ArrowTableHolder()
+            result.mr = get_current_device_resource()
             with nogil:
                 c_result = make_unique[arrow_table](move(dereference(c_stream)))
             result.tbl.swap(c_result)

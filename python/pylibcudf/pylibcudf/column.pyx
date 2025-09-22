@@ -36,7 +36,10 @@ from pylibcudf.libcudf.copying cimport get_element
 
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 from rmm.pylibrmm.stream cimport Stream
-from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.memory_resource cimport (
+    DeviceMemoryResource,
+    get_current_device_resource,
+)
 
 from .gpumemoryview cimport gpumemoryview
 from .filling cimport sequence
@@ -86,6 +89,7 @@ cdef is_iterable(obj):
 cdef class _ArrowColumnHolder:
     """A holder for an Arrow column for gpumemoryview lifetime management."""
     cdef unique_ptr[arrow_column] col
+    cdef DeviceMemoryResource mr
 
 
 cdef class OwnerWithCAI:
@@ -433,6 +437,7 @@ cdef class Column:
             )
 
             result = _ArrowColumnHolder()
+            result.mr = get_current_device_resource()
             with nogil:
                 c_result = make_unique[arrow_column](
                     move(dereference(c_schema)),
@@ -448,6 +453,7 @@ cdef class Column:
             c_array = <ArrowArray*>PyCapsule_GetPointer(h_array, "arrow_array")
 
             result = _ArrowColumnHolder()
+            result.mr = get_current_device_resource()
             with nogil:
                 c_result = make_unique[arrow_column](
                     move(dereference(c_schema)),
@@ -467,6 +473,7 @@ cdef class Column:
             )
 
             result = _ArrowColumnHolder()
+            result.mr = get_current_device_resource()
             with nogil:
                 c_result = make_unique[arrow_column](
                     move(dereference(c_arrow_stream)), stream.view()

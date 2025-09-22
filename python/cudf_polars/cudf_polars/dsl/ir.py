@@ -364,7 +364,9 @@ class Scan(IR):
         ):
             raise NotImplementedError("Read from file URI")
         if self.typ == "csv":
-            if any(plc.io.SourceInfo._is_remote_uri(p) for p in self.paths):
+            if any(
+                plc.io.SourceInfo._is_remote_uri(p) for p in self.paths
+            ):  # pragma: no cover; no test yet
                 # This works fine when the file has no leading blank lines,
                 # but currently we do some file introspection
                 # to skip blanks before parsing the header.
