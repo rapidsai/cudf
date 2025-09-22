@@ -30,9 +30,12 @@ class State(TypedDict):
     ----------
     config_options
         GPUEngine configuration options.
+    stats
+        Statistics collector.
     """
 
     config_options: ConfigOptions
+    stats: StatsCollector
 
 
 LowerIRTransformer: TypeAlias = GenericTransformer[
