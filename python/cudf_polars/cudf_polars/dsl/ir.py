@@ -26,7 +26,6 @@ from typing_extensions import assert_never
 import polars as pl
 
 import pylibcudf as plc
-from pylibcudf import expressions as plc_expr
 
 import cudf_polars.dsl.expr as expr
 from cudf_polars.containers import Column, DataFrame, DataType
@@ -1573,63 +1572,6 @@ class GroupBy(IR):
         return DataFrame(broadcasted).slice(zlice)
 
 
-def _rewrite_join_predicate_casts(
-    pred: expr.Expr, left: IR, right: IR
-) -> tuple[expr.Expr, IR, IR]:
-    left_casts: dict[str, DataType] = {}
-    right_casts: dict[str, DataType] = {}
-
-    def collect(node: expr.Expr) -> None:
-        if isinstance(node, expr.Cast):
-            (child,) = node.children
-            if isinstance(child, expr.ColRef):
-                # ColRef stores the original Col as its first child
-                (orig_col,) = child.children
-                assert isinstance(orig_col, expr.Col)
-                name = orig_col.name
-                target = node.dtype
-                if child.table_ref == plc_expr.TableReference.LEFT:
-                    left_casts.setdefault(name, target)
-                else:
-                    right_casts.setdefault(name, target)
-        for ch in getattr(node, "children", ()):
-            collect(ch)
-
-    collect(pred)
-
-    def project_casts(side_ir: IR, casts: dict[str, DataType]) -> IR:
-        if not casts:
-            return side_ir
-        selection: list[expr.NamedExpr] = []
-        new_schema = dict(side_ir.schema)
-        for col_name, dt in side_ir.schema.items():
-            if col_name in casts:
-                tgt = casts[col_name]
-                selection.append(
-                    expr.NamedExpr(col_name, expr.Cast(tgt, expr.Col(dt, col_name)))
-                )
-                new_schema[col_name] = tgt
-            else:
-                selection.append(expr.NamedExpr(col_name, expr.Col(dt, col_name)))
-        return Select(new_schema, selection, should_broadcast=False, df=side_ir)
-
-    left2 = project_casts(left, left_casts)
-    right2 = project_casts(right, right_casts)
-
-    def strip_casts(node: expr.Expr) -> expr.Expr:
-        if isinstance(node, expr.Cast):
-            (child,) = node.children
-            return strip_casts(child)
-        chs = getattr(node, "children", None)
-        if not chs:
-            return node
-        new_children = tuple(strip_casts(ch) for ch in chs)
-        return node.reconstruct(list(new_children))
-
-    pred2 = strip_casts(pred)
-    return pred2, left2, right2
-
-
 class ConditionalJoin(IR):
     """A conditional inner join of two dataframes on a predicate."""
 
@@ -1676,8 +1618,6 @@ class ConditionalJoin(IR):
         self, schema: Schema, predicate: expr.Expr, options: tuple, left: IR, right: IR
     ) -> None:
         self.schema = schema
-        # that overwrite the column's dtype, then strip the Cast from the predicate.
-        predicate, left, right = _rewrite_join_predicate_casts(predicate, left, right)
         self.predicate = predicate
         self.options = options
         self.children = (left, right)

@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+from decimal import Decimal
+
 import pytest
 
 import polars as pl
@@ -172,3 +174,18 @@ def test_cross_join_empty_right_table(request):
     )
 
     assert_gpu_result_equal(q)
+
+
+def test_cross_join_filter_with_decimal_predicate_unsupported():
+    left = pl.LazyFrame(
+        {"foo": [Decimal("1.00"), Decimal("2.50"), Decimal("3.00")]},
+        schema={"foo": pl.Decimal(15, 2)},
+    )
+    right = pl.LazyFrame(
+        {"bar": [2.00]},
+        schema={"bar": pl.Float64},
+    )
+
+    q = left.join(right, how="cross").filter(pl.col("foo") > pl.col("bar"))
+
+    assert_ir_translation_raises(q, NotImplementedError)

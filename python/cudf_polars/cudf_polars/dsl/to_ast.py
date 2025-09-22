@@ -173,98 +173,41 @@ def _(node: expr.Literal, self: Transformer) -> plc_expr.Expression:
     return plc_expr.Literal(plc.Scalar.from_py(node.value, node.dtype.plc))
 
 
-# @_to_ast.register
-# def _(node: expr.BinOp, self: Transformer) -> plc_expr.Expression:
-#     if node.op == plc.binaryop.BinaryOperator.NULL_NOT_EQUALS:
-#         return plc_expr.Operation(
-#             plc_expr.ASTOperator.NOT,
-#             self(
-#                 # Reconstruct and apply, rather than directly
-#                 # constructing the right expression so we get the
-#                 # handling of parquet special cases for free.
-#                 expr.BinOp(
-#                     node.dtype, plc.binaryop.BinaryOperator.NULL_EQUALS, *node.children
-#                 )
-#             ),
-#         )
-#     if self.state["for_parquet"]:
-#         op1_col, op2_col = (isinstance(op, expr.Col) for op in node.children)
-#         if op1_col ^ op2_col:
-#             op = node.op
-#             if op not in SUPPORTED_STATISTICS_BINOPS:
-#                 raise NotImplementedError(
-#                     f"Parquet filter binop with column doesn't support {node.op!r}"
-#                 )
-#             op1, op2 = node.children
-#             if op2_col:
-#                 (op1, op2) = (op2, op1)
-#                 op = REVERSED_COMPARISON[op]
-#             if not isinstance(op2, expr.Literal):
-#                 raise NotImplementedError(
-#                     "Parquet filter binops must have form 'col binop literal'"
-#                 )
-#             return plc_expr.Operation(BINOP_TO_ASTOP[op], self(op1), self(op2))
-#         elif op1_col and op2_col:
-#             raise NotImplementedError(
-#                 "Parquet filter binops must have one column reference not two"
-#             )
-#     return plc_expr.Operation(BINOP_TO_ASTOP[node.op], *map(self, node.children))
-
-
 @_to_ast.register
 def _(node: expr.BinOp, self: Transformer) -> plc_expr.Expression:
     if node.op == plc.binaryop.BinaryOperator.NULL_NOT_EQUALS:
         return plc_expr.Operation(
             plc_expr.ASTOperator.NOT,
             self(
+                # Reconstruct and apply, rather than directly
+                # constructing the right expression so we get the
+                # handling of parquet special cases for free.
                 expr.BinOp(
                     node.dtype, plc.binaryop.BinaryOperator.NULL_EQUALS, *node.children
                 )
             ),
         )
-
     if self.state["for_parquet"]:
-        op1, op2 = node.children
-        op1_is_col = isinstance(op1, expr.Col)
-        op2_is_col = isinstance(op2, expr.Col)
-
-        if op1_is_col ^ op2_is_col:
-            # parquet: exactly one side must be a column
-            if node.op not in SUPPORTED_STATISTICS_BINOPS:
+        op1_col, op2_col = (isinstance(op, expr.Col) for op in node.children)
+        if op1_col ^ op2_col:
+            op = node.op
+            if op not in SUPPORTED_STATISTICS_BINOPS:
                 raise NotImplementedError(
                     f"Parquet filter binop with column doesn't support {node.op!r}"
                 )
-
-            # normalize so left is the column
-            op = node.op
-            col_node, lit_node = (op1, op2)
-            if op2_is_col:
-                col_node, lit_node = (op2, op1)
+            op1, op2 = node.children
+            if op2_col:
+                (op1, op2) = (op2, op1)
                 op = REVERSED_COMPARISON[op]
-
-            if not isinstance(lit_node, expr.Literal):
+            if not isinstance(op2, expr.Literal):
                 raise NotImplementedError(
                     "Parquet filter binops must have form 'col binop literal'"
                 )
-
-            # If the column is fixed-point, coerce the literal to the column's plc dtype
-            col_plc = col_node.dtype.plc
-            if plc.traits.is_fixed_point(col_plc):
-                # rebuild the literal as a plc_expr.Literal with the column's dtype
-                coerced = plc_expr.Literal(plc.Scalar.from_py(lit_node.value, col_plc))
-                return plc_expr.Operation(BINOP_TO_ASTOP[op], self(col_node), coerced)
-
-            # otherwise, normal path
-            return plc_expr.Operation(
-                BINOP_TO_ASTOP[op], self(col_node), self(lit_node)
-            )
-
-        elif op1_is_col and op2_is_col:
+            return plc_expr.Operation(BINOP_TO_ASTOP[op], self(op1), self(op2))
+        elif op1_col and op2_col:
             raise NotImplementedError(
                 "Parquet filter binops must have one column reference not two"
             )
-
-    # non-parquet/compute path
     return plc_expr.Operation(BINOP_TO_ASTOP[node.op], *map(self, node.children))
 
 

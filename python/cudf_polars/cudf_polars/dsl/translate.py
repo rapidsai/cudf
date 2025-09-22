@@ -401,33 +401,33 @@ def _(node: pl_ir.Join, translator: Translator, schema: Schema) -> ir.IR:
 
         dtype = DataType(pl.datatypes.Boolean())
 
-        parts = []
-        for op, left_ne, right_ne in zip(ops, left_on, right_on, strict=True):
-            left = insert_colrefs(
-                left_ne.value,
-                table_ref=plc.expressions.TableReference.LEFT,
-                name_to_index={name: i for i, name in enumerate(inp_left.schema)},
-            )
-            right = insert_colrefs(
-                right_ne.value,
-                table_ref=plc.expressions.TableReference.RIGHT,
-                name_to_index={name: i for i, name in enumerate(inp_right.schema)},
-            )
-            left, right = _align_decimal_scales(left, right)
-            parts.append(
-                expr.BinOp(
-                    dtype,
-                    expr.BinOp._MAPPING[op],
-                    left,
-                    right,
-                )
-            )
-
         predicate = functools.reduce(
             functools.partial(
                 expr.BinOp, dtype, plc.binaryop.BinaryOperator.LOGICAL_AND
             ),
-            parts,
+            [
+                expr.BinOp(
+                    dtype,
+                    expr.BinOp._MAPPING[op],
+                    *_align_decimal_scales(
+                        insert_colrefs(
+                            left_ne.value,
+                            table_ref=plc.expressions.TableReference.LEFT,
+                            name_to_index={
+                                name: i for i, name in enumerate(inp_left.schema)
+                            },
+                        ),
+                        insert_colrefs(
+                            right_ne.value,
+                            table_ref=plc.expressions.TableReference.RIGHT,
+                            name_to_index={
+                                name: i for i, name in enumerate(inp_right.schema)
+                            },
+                        ),
+                    ),
+                )
+                for op, left_ne, right_ne in zip(ops, left_on, right_on, strict=True)
+            ],
         )
 
         return ir.ConditionalJoin(schema, predicate, node.options, inp_left, inp_right)
