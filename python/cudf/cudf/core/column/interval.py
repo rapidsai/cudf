@@ -116,29 +116,13 @@ class IntervalColumn(StructColumn):
     def set_closed(
         self, closed: Literal["left", "right", "both", "neither"]
     ) -> Self:
-        return IntervalColumn(  # type: ignore[return-value]
-            data=None,
-            size=self.size,
-            dtype=IntervalDtype(self.dtype.subtype, closed),
-            mask=self.base_mask,
-            offset=self.offset,
-            null_count=self.null_count,
-            children=self.base_children,  # type: ignore[arg-type]
+        return self._with_type_metadata(  # type: ignore[return-value]
+            IntervalDtype(self.dtype.subtype, closed)
         )
 
     def as_interval_column(self, dtype: IntervalDtype) -> Self:  # type: ignore[override]
         if isinstance(dtype, IntervalDtype):
-            return IntervalColumn(  # type: ignore[return-value]
-                data=None,
-                size=self.size,
-                dtype=dtype,
-                mask=self.mask,
-                offset=self.offset,
-                null_count=self.null_count,
-                children=tuple(  # type: ignore[arg-type]
-                    child.astype(dtype.subtype) for child in self.children
-                ),
-            )
+            return self._with_type_metadata(dtype)  # type: ignore[return-value]
         else:
             raise ValueError("dtype must be IntervalDtype")
 
