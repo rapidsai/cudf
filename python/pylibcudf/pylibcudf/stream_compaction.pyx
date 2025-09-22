@@ -70,7 +70,7 @@ cpdef Table drop_nulls(
 
     with nogil:
         c_result = cpp_stream_compaction.drop_nulls(
-            source_table.view(), c_keys, keep_threshold, stream.view()
+            source_table.view(), c_keys, keep_threshold, stream.view(), mr.get_mr()
         )
     return Table.from_libcudf(move(c_result), stream, mr)
 
@@ -108,7 +108,7 @@ cpdef Table drop_nans(
 
     with nogil:
         c_result = cpp_stream_compaction.drop_nans(
-            source_table.view(), c_keys, keep_threshold, stream.view()
+            source_table.view(), c_keys, keep_threshold, stream.view(), mr.get_mr()
         )
     return Table.from_libcudf(move(c_result), stream, mr)
 
@@ -142,7 +142,7 @@ cpdef Table apply_boolean_mask(
 
     with nogil:
         c_result = cpp_stream_compaction.apply_boolean_mask(
-            source_table.view(), boolean_mask.view(), stream.view()
+            source_table.view(), boolean_mask.view(), stream.view(), mr.get_mr()
         )
     return Table.from_libcudf(move(c_result), stream, mr)
 
@@ -189,7 +189,7 @@ cpdef Table unique(
 
     with nogil:
         c_result = cpp_stream_compaction.unique(
-            input.view(), c_keys, keep, nulls_equal, stream.view()
+            input.view(), c_keys, keep, nulls_equal, stream.view(), mr.get_mr()
         )
     return Table.from_libcudf(move(c_result), stream, mr)
 
@@ -234,7 +234,8 @@ cpdef Table distinct(
 
     with nogil:
         c_result = cpp_stream_compaction.distinct(
-            input.view(), c_keys, keep, nulls_equal, nans_equal, stream.view()
+            input.view(), c_keys, keep, nulls_equal, nans_equal, stream.view(),
+            mr.get_mr()
         )
     return Table.from_libcudf(move(c_result), stream, mr)
 
@@ -274,7 +275,7 @@ cpdef Column distinct_indices(
 
     with nogil:
         c_result = cpp_stream_compaction.distinct_indices(
-            input.view(), keep, nulls_equal, nans_equal, stream.view()
+            input.view(), keep, nulls_equal, nans_equal, stream.view(), mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -319,7 +320,8 @@ cpdef Table stable_distinct(
 
     with nogil:
         c_result = cpp_stream_compaction.stable_distinct(
-            input.view(), c_keys, keep, nulls_equal, nans_equal, stream.view()
+            input.view(), c_keys, keep, nulls_equal, nans_equal, stream.view(),
+            mr.get_mr()
         )
     return Table.from_libcudf(move(c_result), stream, mr)
 
