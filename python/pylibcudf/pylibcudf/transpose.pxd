@@ -2,6 +2,7 @@
 from .table cimport Table
 
 from rmm.pylibrmm.stream cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 
-cpdef Table transpose(Table input_table, Stream stream=*)
+cpdef Table transpose(Table input_table, Stream stream=*, DeviceMemoryResource mr=*)
