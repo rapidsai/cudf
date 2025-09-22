@@ -17,7 +17,7 @@ from typing_extensions import ParamSpec
 import rmm
 import rmm.statistics
 
-from cudf_polars.utils.config import get_device_handle
+from cudf_polars.utils.config import _bool_converter, get_device_handle
 
 try:
     import structlog
@@ -27,14 +27,9 @@ else:
     _HAS_STRUCTLOG = True
 
 
-LOG_TRACES = _HAS_STRUCTLOG and os.environ.get(
-    "CUDF_POLARS_LOG_TRACES", "0"
-).lower() in {
-    "1",
-    "true",
-    "y",
-    "yes",
-}
+LOG_TRACES = _HAS_STRUCTLOG and _bool_converter(
+    os.environ.get("CUDF_POLARS_LOG_TRACES", "0")
+)
 
 CUDF_POLARS_NVTX_DOMAIN = "cudf_polars"
 
