@@ -89,15 +89,19 @@ variable `CUDF_POLARS__PARQUET_OPTIONS__CHUNKED=0` will set the default
 
 ## Memory Resource
 
-All GPU memory allocations made by cudf-polars use an RMM Memory Resource object from :mod:`rmm.mr`. You can specify
+All GPU memory allocations made by cudf-polars use an RMM Memory Resource object from {mod}`rmm.mr`. You can specify
 the memory resource to use by:
 
-1. Relying on the default behavior, which creates a memory resource for you.
-2. Passing the configuration options for a Memory Resource as `memory_resource_config` in the `**kwargs` passed to {class}`~polars.lazyframe.engine_config.GPUEngine`.
-3. Passing a concrete ``MemoryResource`` instance to {class}`~polars.lazyframe.engine_config.GPUEngine`:
+1. Passing a concrete ``MemoryResource`` instance to {class}`~polars.lazyframe.engine_config.GPUEngine`:
+2. Passing the configuration options for a Memory Resource as the `memory_resource_config` keyword argument to {class}`~polars.lazyframe.engine_config.GPUEngine`.
+3. Relying on the default behavior, which creates a memory resource for you (details below).
 
-By default, cudf-polars will create a new RMM resource for each query executed. The `POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY` environment
-variable controls whether an RMM pool with managed memory is created (true by default). Set `POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY=0` to
+By default, cudf-polars will create a new RMM Memory Resource for each query executed.
+The type of that memory resource is hardware-dependent. For GPUs with coherent unified system memory,
+{class}`rmm.mr.CudaAsyncMemoryResource` is used. Otherwise, a {class}`rmm.mr.ManagedMemoryResource`
+wrapped in a {class}`rmm.mr.PoolMemoryResource` and {class}`rmm.mr.PrefetchResourceAdaptor` is used.
+
+Set `POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY=0` to
 disabled managed memory and use {class}`rmm.mr.CudaAsyncMemoryResource` instead.
 
 Alternatively, you can customize the pool by passing the configuration for an RMM Memory Resource object as `memory_resource_config`
@@ -125,6 +129,9 @@ import rmm
 mr = rmm.mr.CudaAsyncMemory()
 engine = pl.GPUEngine(memory_resource=mr)
 ```
+
+Passing a concrete Memory Resource takes precedence of passing the `memory_resource_config` options,
+which takes precedence over the default memory resource.
 
 ## Disabling CUDA Managed Memory
 
