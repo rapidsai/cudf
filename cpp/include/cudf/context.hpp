@@ -19,6 +19,7 @@
 #include <cudf/utilities/export.hpp>
 
 #include <cstdint>
+#include <type_traits>
 
 namespace CUDF_EXPORT cudf {
 
@@ -38,7 +39,8 @@ enum class init_flags : std::uint32_t {
 /// @return The result of the bitwise OR operation
 constexpr init_flags operator|(init_flags lhs, init_flags rhs) noexcept
 {
-  return static_cast<init_flags>(static_cast<std::uint32_t>(lhs) | static_cast<std::uint32_t>(rhs));
+  using underlying_t = std::underlying_type_t<init_flags>;
+  return static_cast<init_flags>(static_cast<underlying_t>(lhs) | static_cast<underlying_t>(rhs));
 }
 
 /// @brief Check if a flag is set
