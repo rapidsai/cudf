@@ -333,7 +333,7 @@ def _(node: pl_ir.GroupBy, translator: Translator, schema: Schema) -> ir.IR:
         return rewrite_groupby(node, schema, keys, original_aggs, inp)
 
 
-_DEC_TIDS = {plc.TypeId.DECIMAL32, plc.TypeId.DECIMAL64, plc.TypeId.DECIMAL128}
+_DECIMAL_TYPES = {plc.TypeId.DECIMAL32, plc.TypeId.DECIMAL64, plc.TypeId.DECIMAL128}
 
 
 def _align_decimal_scales(
@@ -341,7 +341,7 @@ def _align_decimal_scales(
 ) -> tuple[expr.Expr, expr.Expr]:
     left_type = left.dtype.plc.id()
     right_type = right.dtype.plc.id()
-    if left_type in _DEC_TIDS and right_type in _DEC_TIDS:
+    if left_type in _DECIMAL_TYPES and right_type in _DECIMAL_TYPES:
         left_scale = left.dtype.plc.scale()
         right_scale = right.dtype.plc.scale()
         if left_scale != right_scale:
