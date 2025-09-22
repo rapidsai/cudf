@@ -297,6 +297,7 @@ def test_validate_shuffle_method_defaults(
         "groupby_n_ary",
         "broadcast_join_limit",
         "rapidsmpf_spill",
+        "rapidsmpf_join",
         "sink_to_directory",
     ],
 )

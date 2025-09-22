@@ -6,9 +6,8 @@ from __future__ import annotations
 
 import operator
 from functools import reduce
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
-from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.expr import Col
 from cudf_polars.dsl.ir import ConditionalJoin, Join, Slice
 from cudf_polars.experimental.base import PartitionInfo, get_key_name
@@ -22,20 +21,29 @@ from cudf_polars.experimental.shuffle import (
 from cudf_polars.experimental.utils import _concat, _fallback_inform, _lower_ir_fallback
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping
+    from collections.abc import Callable, MutableMapping
 
+    from rapidsmpf.integrations.core import BCastJoinInfo
+
+    from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.parallel import LowerIRTransformer
     from cudf_polars.utils.config import ShuffleMethod
 
 
-def _use_rapidsmpf_join(ir: Join, shuffle_method: ShuffleMethod) -> bool:
+def _use_rapidsmpf_join(
+    ir: Join,
+    shuffle_method: ShuffleMethod,
+    rapidsmpf_join: bool,  # noqa: FBT001
+) -> bool:
     """Return whether RapidsMPF will be used for the join."""
     # Don't use rapidsmpf join if the shuffle method is not "rapidsmpf"
     # or if the keys are not "simple"
-    return shuffle_method == "rapidsmpf" and all(
-        isinstance(ne.value, Col) for ne in (ir.left_on + ir.right_on)
+    return (
+        rapidsmpf_join
+        and shuffle_method == "rapidsmpf"
+        and all(isinstance(ne.value, Col) for ne in (ir.left_on + ir.right_on))
     )
 
 
@@ -53,10 +61,9 @@ class RMPFJoinIntegration:
 
     @staticmethod
     def join_partition(
-        left_input: int | DataFrame,
-        right_input: int | DataFrame,
-        bcast_side: Literal["left", "right", "none"],
-        bcast_count: int | None,
+        left_input: Callable[[int], DataFrame],
+        right_input: Callable[[int], DataFrame],
+        bcast_info: BCastJoinInfo,
         options: Any,
     ) -> DataFrame:
         """
@@ -74,11 +81,8 @@ class RMPFJoinIntegration:
             chunks of a broadcasted right partition.
             The bcast_count argument corresponds to the number
             of chunks the callable can produce.
-        bcast_side
-            The side of the join being broadcasted (if either).
-        bcast_count
-            The number of broadcasted chunks.
-            Ignored unless ``bcast_side`` is "left" or "right".
+        bcast_info
+            The broadcast join information.
         options
             Additional join options.
 
@@ -90,17 +94,11 @@ class RMPFJoinIntegration:
         -----
         This method is used to produce a single joined table chunk.
         """
-        if bcast_side != "none":  # pragma: no cover
-            raise NotImplementedError("Broadcast join not implemented.")
-
-        # Broadcast joins are not supported yet, so the input must be a DataFrame.
-        assert isinstance(left_input, DataFrame), "Expected DataFrame"
-        assert isinstance(right_input, DataFrame), "Expected DataFrame"
-        left = left_input
-        right = right_input
-
         non_child_args = options.get("non_child_args", ())
-        return Join.do_evaluate(*non_child_args, left, right)
+        if bcast_info.bcast_side == "none":
+            return Join.do_evaluate(*non_child_args, left_input(0), right_input(0))
+        else:  # pragma: no cover
+            raise NotImplementedError("Broadcast join not implemented.")
 
 
 def _maybe_shuffle_frame(
@@ -139,8 +137,9 @@ def _make_hash_join(
     left: IR,
     right: IR,
     shuffle_method: ShuffleMethod,
+    rapidsmpf_join: bool,  # noqa: FBT001
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    if _use_rapidsmpf_join(ir, shuffle_method):
+    if _use_rapidsmpf_join(ir, shuffle_method, rapidsmpf_join):
         # Convert ir to RMPFJoin.
         # We don't need to shuffle the children
         ir = RMPFJoin(ir.schema, ir.left_on, ir.right_on, ir.options, left, right)
@@ -373,6 +372,7 @@ def _(
             left,
             right,
             config_options.executor.shuffle_method,
+            config_options.executor.rapidsmpf_join,
         )
 
 

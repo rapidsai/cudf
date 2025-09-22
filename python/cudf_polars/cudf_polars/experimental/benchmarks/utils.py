@@ -203,6 +203,7 @@ class RunConfig:
     rmm_async: bool
     rapidsmpf_oom_protection: bool
     rapidsmpf_spill: bool
+    rapidsmpf_join: bool
     spill_device: float
     query_set: str
 
@@ -272,6 +273,7 @@ class RunConfig:
             rapidsmpf_oom_protection=args.rapidsmpf_oom_protection,
             spill_device=args.spill_device,
             rapidsmpf_spill=args.rapidsmpf_spill,
+            rapidsmpf_join=args.rapidsmpf_join,
             max_rows_per_partition=args.max_rows_per_partition,
             query_set=args.query_set,
         )
@@ -307,6 +309,7 @@ class RunConfig:
                     print(f"rapidsmpf_oom_protection: {self.rapidsmpf_oom_protection}")
                     print(f"spill_device: {self.spill_device}")
                     print(f"rapidsmpf_spill: {self.rapidsmpf_spill}")
+                    print(f"rapidsmpf_join: {self.rapidsmpf_join}")
             if len(records) > 0:
                 print(f"iterations: {self.iterations}")
                 print("---------------------------------------")
@@ -345,6 +348,8 @@ def get_executor_options(
         executor_options["broadcast_join_limit"] = run_config.broadcast_join_limit
     if run_config.rapidsmpf_spill:
         executor_options["rapidsmpf_spill"] = run_config.rapidsmpf_spill
+    if run_config.rapidsmpf_join:
+        executor_options["rapidsmpf_join"] = run_config.rapidsmpf_join
     if run_config.scheduler == "distributed":
         executor_options["scheduler"] = "distributed"
 
@@ -605,6 +610,12 @@ def parse_args(
         type=str,
         choices=[None, "rapidsmpf", "tasks"],
         help="Shuffle method to use for distributed execution.",
+    )
+    parser.add_argument(
+        "--rapidsmpf-join",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Use rapidsmpf for hash-join operations.",
     )
     parser.add_argument(
         "--broadcast-join-limit",

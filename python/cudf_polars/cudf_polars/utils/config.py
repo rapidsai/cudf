@@ -355,6 +355,10 @@ class StreamingExecutor:
         The method to use for shuffling data between workers. Defaults to
         'rapidsmpf' for distributed scheduler if available (otherwise 'tasks'),
         and 'tasks' for synchronous scheduler.
+    rapidsmpf_join
+        Whether to use RapidsMPF to perform "fused" join operations
+        when ``shuffle_method='rapidsmpf'`` and ``scheduler='distributed'``.
+        Defaults to True.
     rapidsmpf_spill
         Whether to wrap task arguments and output in objects that are
         spillable by 'rapidsmpf'.
@@ -419,6 +423,11 @@ class StreamingExecutor:
             f"{_env_prefix}__SHUFFLE_METHOD",
             ShuffleMethod.__call__,
             default=ShuffleMethod.TASKS,
+        )
+    )
+    rapidsmpf_join: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__RAPIDSMPF_HASH_JOIN", _bool_converter, default=True
         )
     )
     rapidsmpf_spill: bool = dataclasses.field(
@@ -502,6 +511,8 @@ class StreamingExecutor:
             raise TypeError("broadcast_join_limit must be an int")
         if not isinstance(self.rapidsmpf_spill, bool):
             raise TypeError("rapidsmpf_spill must be bool")
+        if not isinstance(self.rapidsmpf_join, bool):
+            raise TypeError("rapidsmpf_join must be bool")
         if not isinstance(self.sink_to_directory, bool):
             raise TypeError("sink_to_directory must be bool")
 
@@ -512,6 +523,10 @@ class StreamingExecutor:
             raise ValueError(
                 "rapidsmpf_spill is not supported for the synchronous scheduler."
             )
+
+        # RapidsMPF join integration currently requires the distributed scheduler.
+        if self.scheduler == "synchronous" and self.rapidsmpf_join:
+            object.__setattr__(self, "rapidsmpf_join", False)
 
     def __hash__(self) -> int:  # noqa: D105
         # cardinality factory, a dict, isn't natively hashable. We'll dump it
