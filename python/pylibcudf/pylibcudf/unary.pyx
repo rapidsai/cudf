@@ -56,7 +56,7 @@ cpdef Column unary_operation(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_unary.unary_operation(input.view(), op, stream.view())
+        result = cpp_unary.unary_operation(input.view(), op, stream.view(), mr.get_mr())
 
     return Column.from_libcudf(move(result), stream, mr)
 
@@ -86,7 +86,7 @@ cpdef Column is_null(Column input, Stream stream=None, DeviceMemoryResource mr=N
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_unary.is_null(input.view(), stream.view())
+        result = cpp_unary.is_null(input.view(), stream.view(), mr.get_mr())
 
     return Column.from_libcudf(move(result), stream, mr)
 
@@ -116,7 +116,7 @@ cpdef Column is_valid(Column input, Stream stream=None, DeviceMemoryResource mr=
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_unary.is_valid(input.view(), stream.view())
+        result = cpp_unary.is_valid(input.view(), stream.view(), mr.get_mr())
 
     return Column.from_libcudf(move(result), stream, mr)
 
@@ -150,7 +150,9 @@ cpdef Column cast(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_unary.cast(input.view(), data_type.c_obj, stream.view())
+        result = cpp_unary.cast(
+            input.view(), data_type.c_obj, stream.view(), mr.get_mr()
+        )
 
     return Column.from_libcudf(move(result), stream, mr)
 
@@ -180,7 +182,7 @@ cpdef Column is_nan(Column input, Stream stream=None, DeviceMemoryResource mr=No
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_unary.is_nan(input.view(), stream.view())
+        result = cpp_unary.is_nan(input.view(), stream.view(), mr.get_mr())
 
     return Column.from_libcudf(move(result), stream, mr)
 
@@ -210,7 +212,7 @@ cpdef Column is_not_nan(Column input, Stream stream=None, DeviceMemoryResource m
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_unary.is_not_nan(input.view(), stream.view())
+        result = cpp_unary.is_not_nan(input.view(), stream.view(), mr.get_mr())
 
     return Column.from_libcudf(move(result), stream, mr)
 
