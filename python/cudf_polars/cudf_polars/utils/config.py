@@ -427,7 +427,7 @@ class StreamingExecutor:
     )
     rapidsmpf_join: bool = dataclasses.field(
         default_factory=_make_default_factory(
-            f"{_env_prefix}__RAPIDSMPF_HASH_JOIN", _bool_converter, default=True
+            f"{_env_prefix}__RAPIDSMPF_JOIN", _bool_converter, default=True
         )
     )
     rapidsmpf_spill: bool = dataclasses.field(

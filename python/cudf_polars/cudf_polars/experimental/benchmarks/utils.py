@@ -348,10 +348,9 @@ def get_executor_options(
         executor_options["broadcast_join_limit"] = run_config.broadcast_join_limit
     if run_config.rapidsmpf_spill:
         executor_options["rapidsmpf_spill"] = run_config.rapidsmpf_spill
-    if run_config.rapidsmpf_join:
-        executor_options["rapidsmpf_join"] = run_config.rapidsmpf_join
     if run_config.scheduler == "distributed":
         executor_options["scheduler"] = "distributed"
+    executor_options["rapidsmpf_join"] = run_config.rapidsmpf_join
 
     if (
         benchmark
