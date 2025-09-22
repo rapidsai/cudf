@@ -63,7 +63,8 @@ cpdef Column label_bins(
             left_inclusive,
             right_edges.view(),
             right_inclusive,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)

@@ -73,6 +73,7 @@ class file_sink : public data_sink {
 
     size_t const offset = _bytes_written;
     _bytes_written += size;
+    stream.synchronize();
 
     // KvikIO's `pwrite()` returns a `std::future<size_t>` so we convert it
     // to `std::future<void>`
