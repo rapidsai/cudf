@@ -13,6 +13,7 @@ files:
       - clang
       - cuda
       - cuda_version
+      - cudf_polars_trace
       - depends_on_cupy
       - depends_on_dask_cuda
       - depends_on_libkvikio
@@ -337,6 +338,7 @@ files:
       - numpy_run
       - test_python_common
       - test_python_cudf_polars
+      - cudf_polars_trace
   py_trace_cudf_polars:
     output: pyproject
     pyproject_dir: python/cudf_polars
@@ -901,7 +903,6 @@ dependencies:
         packages:
           - rich
           - pytest-httpserver
-          - structlog
   test_python_narwhals:
     common:
       - output_types: [conda, requirements, pyproject]
