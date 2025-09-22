@@ -344,7 +344,7 @@ files:
       table: project.optional-dependencies
       key: trace
     includes:
-      - depends_on_structlog
+      - cudf_polars_trace
   py_build_dask_cudf:
     output: pyproject
     pyproject_dir: python/dask_cudf
@@ -1223,7 +1223,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - narwhals==2.0.1
-  depends_on_structlog:
+  cudf_polars_trace:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
