@@ -3683,6 +3683,9 @@ class DatetimeIndex(Index):
 
     @property
     def inferred_freq(self) -> DateOffset | MonthEnd | YearEnd | None:
+        if self._freq:
+            return self._freq
+
         timestamp_to_timedelta = {
             plc.DataType(plc.TypeId.TIMESTAMP_NANOSECONDS): plc.DataType(
                 plc.TypeId.DURATION_NANOSECONDS
@@ -3723,33 +3726,45 @@ class DatetimeIndex(Index):
             # could be month end or year end
             # for years, we could have either 365 or 366 days
             # for months, we could have 28, 29, 30 or 31 days
+            # for quarters we could
             # any other number of unique values and we give up
             if len(uniques) > 4:
                 return None
             else:
                 # length between 1 and 4, small host copy
-
-                # handle month end and year end cases
-                # TODO: perf? should one be done first
-                if self.is_month_end.all():
-                    return cudf.DateOffset._from_freqstr("ME")
-                elif self.is_year_end.all():
-                    return cudf.DateOffset._from_freqstr("YE")
-                else:
-                    uniques_host = uniques.to_arrow().to_pylist()
-                    if all(
-                        x
-                        in {pd.Timedelta("365 days"), pd.Timedelta("366 days")}
-                        for x in uniques_host
-                    ):
-                        # YE-JAN, etc
-                        raise NotImplementedError(
-                            "Anchored freq not supported in inference"
-                        )
+                uniques_host = uniques.to_arrow().to_pylist()
+                if all(
+                    x in {pd.Timedelta("365 days"), pd.Timedelta("366 days")}
+                    for x in uniques_host
+                ):
+                    # Could be year end or could be an anchored year end
+                    if self.is_year_end.all():
+                        return cudf.DateOffset._from_freqstr("YE-DEC")
                     else:
-                        return None
+                        raise NotImplementedError()
+                elif all(
+                    x
+                    in {
+                        pd.Timedelta("28 days"),
+                        pd.Timedelta("29 days"),
+                        pd.Timedelta("30 days"),
+                        pd.Timedelta("31 days"),
+                    }
+                    for x in uniques_host
+                ):
+                    if self.is_month_end.all():
+                        return cudf.DateOffset._from_freqstr("ME")
+                else:
+                    raise NotImplementedError()
+
         else:
             freq = uniques.to_arrow().to_pylist()[0]
+            # special case of YS-JAN, YS-FEB, etc
+            if freq == pd.Timedelta("365 days") and not self.is_year_end.all():
+                raise NotImplementedError()
+            elif freq == pd.Timedelta("7 days"):
+                raise NotImplementedError("Anchored weeks")
+
             cmps = freq.components
 
             allowed = [
