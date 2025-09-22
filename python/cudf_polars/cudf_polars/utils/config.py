@@ -291,7 +291,6 @@ def default_blocksize(scheduler: str) -> int:
     return min(max(blocksize, 1_000_000_000), 10_000_000_000)
 
 
-# Specifying a default memory resource
 @dataclasses.dataclass(frozen=True, eq=True)
 class MemoryResourceConfig:
     """
@@ -578,7 +577,6 @@ class StreamingExecutor:
         # to json and hash that.
         d = dataclasses.asdict(self)
         d["unique_fraction"] = json.dumps(d["unique_fraction"])
-        d["memory_resource_config"] = dataclasses.asdict(d["memory_resource_config"])
         return hash(tuple(sorted(d.items())))
 
 
@@ -655,10 +653,9 @@ class ConfigOptions:
         user_raise_on_fail = engine.config.get("raise_on_fail", False)
         user_memory_resource_config = engine.config.get("memory_resource_config", None)
         if user_memory_resource_config is None and (
-            os.environ.get(f"{env_prefix}__MEMORY_RESOURCE_CONFIG__QUALNAME", "") != ""
+            os.environ.get(f"{MemoryResourceConfig._env_prefix}__QUALNAME", "") != ""
         ):
-            # This is a bit weird; we're using the presence of __QUALNAME to determine
-            # whether to rely on the environment to configure the memory resource.
+            # We'll pick up the qualname / options from the environment.
             user_memory_resource_config = MemoryResourceConfig()
 
         # Backward compatibility for "cardinality_factor"

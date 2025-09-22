@@ -120,8 +120,8 @@ def set_memory_resource(
         Memory resource to use. If `None`, calls :func:`default_memory_resource`
         to obtain an mr on the currently active device.
     memory_resource_config
-        Memory resource configuration to use. If ``None``, the default
-        memory resource is used.
+        Memory resource configuration to use when a concrete memory resource.
+        is not provided. If ``None``, the default memory resource is used.
 
     Returns
     -------
