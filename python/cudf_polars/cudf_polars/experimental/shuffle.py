@@ -149,7 +149,11 @@ class Shuffle(IR):
         self._non_child_args = (schema, keys, shuffle_method)
         self.children = (df,)
 
-    @classmethod
+    # the type-ignore is for
+    # Argument 1 to "log_do_evaluate" has incompatible type "Callable[[type[Shuffle], <snip>]"
+    #    expected Callable[[type[IR], <snip>]
+    # But Shuffle is a subclass of IR, so this is fine.
+    @classmethod  # type: ignore[arg-type]
     @log_do_evaluate
     def do_evaluate(
         cls,

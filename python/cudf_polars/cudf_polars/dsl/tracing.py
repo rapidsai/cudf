@@ -8,7 +8,7 @@ from __future__ import annotations
 import functools
 import os
 import time
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Concatenate, Literal
 
 import nvtx
 import pynvml
@@ -81,7 +81,7 @@ def make_snaphot(
     """
     ir_name = node_type.__name__
 
-    d = {
+    d: dict[str, Any] = {
         "type": ir_name,
         f"count_frames_{phase}": len(frames),
         f"frames_{phase}": [
@@ -92,7 +92,7 @@ def make_snaphot(
             for frame in frames
         ],
     }
-    d[f"total_bytes_{phase}"] = sum(x["size"] for x in d[f"frames_{phase}"])  # type: ignore[attr-defined]
+    d[f"total_bytes_{phase}"] = sum(x["size"] for x in d[f"frames_{phase}"])
 
     stats = rmm.statistics.get_statistics()
     if stats:
@@ -124,8 +124,8 @@ P = ParamSpec("P")
 
 
 def log_do_evaluate(
-    func: Callable[P, cudf_polars.containers.DataFrame],
-) -> Callable[P, cudf_polars.containers.DataFrame]:
+    func: Callable[Concatenate[type[ir.IR], P], cudf_polars.containers.DataFrame],
+) -> Callable[Concatenate[type[ir.IR], P], cudf_polars.containers.DataFrame]:
     """
     Decorator for an ``IR.do_evaluate`` method that logs information before and after evaluation.
 
@@ -160,13 +160,12 @@ def log_do_evaluate(
                 cls, frames, phase="input", device_handle=maybe_handle, pid=pid
             )
 
-            # The types here aren't 100% correct.
-            # We know that each IR.do_evaluate node is a
-            # `Callable[[ir.Ir, <some other stuff>], cudf_polars.containers.DataFrame]`
-            # but I'm not sure how to express that in a type annotation.
+            # The decorator preserves the exact signature of the original do_evaluate method.
+            # Each IR.do_evaluate method is a classmethod that takes the IR class as first
+            # argument, followed by the method-specific arguments, and returns a DataFrame.
 
             start = time.monotonic_ns()
-            result = func(cls, *args, **kwargs)  # type: ignore[arg-type]
+            result = func(cls, *args, **kwargs)
             stop = time.monotonic_ns()
 
             after = make_snaphot(
@@ -182,4 +181,4 @@ def log_do_evaluate(
 
             return result
 
-        return wrapper  # type: ignore[return-value]
+        return wrapper
