@@ -345,7 +345,7 @@ cpdef PackedColumns pack(Table input, Stream stream=None):
     return PackedColumns.from_libcudf(move(pack))
 
 
-cpdef Table unpack(PackedColumns input):
+cpdef Table unpack(PackedColumns input, DeviceMemoryResource mr=None):
     """Deserialize the result of `pack`.
 
     Copies the result of a serialized table into a table.
@@ -356,19 +356,24 @@ cpdef Table unpack(PackedColumns input):
     ----------
     input : PackedColumns
         The packed columns to unpack.
+    mr : DeviceMemoryResource, optional
+        Device memory resource used to allocate the returned table's device memory.
 
     Returns
     -------
     Table
         Copy of the packed columns.
     """
+    mr = _get_memory_resource(mr)  # For API consistency, though not used
     cdef table_view v
     with nogil:
         v = cpp_unpack(dereference(input.c_obj))
     return Table.from_table_view_of_arbitrary(v, input)
 
 
-cpdef Table unpack_from_memoryviews(memoryview metadata, gpumemoryview gpu_data):
+cpdef Table unpack_from_memoryviews(
+    memoryview metadata, gpumemoryview gpu_data, DeviceMemoryResource mr=None
+):
     """Deserialize the result of `pack`.
 
     Copies the result of a serialized table into a table.
@@ -381,16 +386,19 @@ cpdef Table unpack_from_memoryviews(memoryview metadata, gpumemoryview gpu_data)
         The packed metadata to unpack.
     gpu_data : gpumemoryview
         The packed gpu_data to unpack.
+    mr : DeviceMemoryResource, optional
+        Device memory resource used to allocate the returned table's device memory.
 
     Returns
     -------
     Table
         Copy of the packed columns.
     """
+    mr = _get_memory_resource(mr)
     if metadata.nbytes == 0:
         if gpu_data.__cuda_array_interface__["data"][0] != 0:
             raise ValueError("Expected an empty gpu_data from unpacking an empty table")
-        return Table.from_libcudf(make_unique[table](table_view()))
+        return Table.from_libcudf(make_unique[table](table_view()), stream=None, mr=mr)
 
     # Extract the raw data pointers
     cdef const uint8_t[::1] _metadata = metadata
