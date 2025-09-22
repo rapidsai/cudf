@@ -92,7 +92,7 @@ variable `CUDF_POLARS__PARQUET_OPTIONS__CHUNKED=0` will set the default
 All GPU memory allocations made by cudf-polars use an RMM Memory Resource object from {mod}`rmm.mr`. You can specify
 the memory resource to use by:
 
-1. Passing a concrete ``MemoryResource`` instance to {class}`~polars.lazyframe.engine_config.GPUEngine`:
+1. Passing a concrete ``MemoryResource`` instance to {class}`~polars.lazyframe.engine_config.GPUEngine`.
 2. Passing the configuration options for a Memory Resource as the `memory_resource_config` keyword argument to {class}`~polars.lazyframe.engine_config.GPUEngine`.
 3. Relying on the default behavior, which creates a memory resource for you (details below).
 
