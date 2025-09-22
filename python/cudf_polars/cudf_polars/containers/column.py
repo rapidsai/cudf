@@ -288,8 +288,9 @@ class Column:
         if self.obj.type() == plc_dtype:
             return self
 
-        if (plc_dtype.id() == plc.TypeId.STRING) or (
-            self.obj.type().id() == plc.TypeId.STRING
+        if (
+            plc_dtype.id() == plc.TypeId.STRING
+            or self.obj.type().id() == plc.TypeId.STRING
         ):
             return Column(self._handle_string_cast(plc_dtype), dtype=dtype)
         elif plc.traits.is_integral_not_bool(
