@@ -75,7 +75,8 @@ cpdef Column fill(
             begin,
             end,
             dereference((<Scalar> value).c_obj),
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
     return Column.from_libcudf(move(result), stream, mr)
 
@@ -160,7 +161,8 @@ cpdef Column sequence(
             c_size,
             dereference(init.c_obj),
             dereference(step.c_obj),
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
     return Column.from_libcudf(move(result), stream, mr)
 
@@ -205,14 +207,16 @@ cpdef Table repeat(
             result = cpp_repeat(
                 input_table.view(),
                 count.view(),
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
     if ColumnOrSize is size_type:
         with nogil:
             result = cpp_repeat(
                 input_table.view(),
                 count,
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
     return Table.from_libcudf(move(result), stream, mr)
 
@@ -256,6 +260,7 @@ cpdef Column calendrical_month_sequence(
             n,
             dereference(init.c_obj),
             months,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), stream, mr)
