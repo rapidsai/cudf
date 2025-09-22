@@ -212,6 +212,33 @@ class PythonScan(IR):
         raise NotImplementedError("PythonScan not implemented")
 
 
+def _align_parquet_schema(df: DataFrame, schema: Schema) -> DataFrame:
+    # TODO: Alternatively set the schema of the parquet reader to decimal128
+    plc_decimals_ids = {
+        plc.TypeId.DECIMAL32,
+        plc.TypeId.DECIMAL64,
+        plc.TypeId.DECIMAL128,
+    }
+    cast_list = []
+
+    for name, col in df.column_map.items():
+        src = col.obj.type()
+        dst = schema[name].plc
+        if (
+            src.id() in plc_decimals_ids
+            and dst.id() in plc_decimals_ids
+            and ((src.id() != dst.id()) or (src.scale != dst.scale))
+        ):
+            cast_list.append(
+                Column(plc.unary.cast(col.obj, dst), name=name, dtype=schema[name])
+            )
+
+    if cast_list:
+        df = df.with_columns(cast_list)
+
+    return df
+
+
 class Scan(IR):
     """Input from files."""
 
@@ -614,6 +641,7 @@ class Scan(IR):
                     names=names,
                     dtypes=[schema[name] for name in names],
                 )
+                df = _align_parquet_schema(df, schema)
                 if include_file_paths is not None:
                     df = Scan.add_file_paths(
                         include_file_paths, paths, chunk.num_rows_per_source, df
@@ -627,6 +655,7 @@ class Scan(IR):
                     col_names,
                     [schema[name] for name in col_names],
                 )
+                df = _align_parquet_schema(df, schema)
                 if include_file_paths is not None:
                     df = Scan.add_file_paths(
                         include_file_paths, paths, tbl_w_meta.num_rows_per_source, df
