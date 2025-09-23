@@ -374,6 +374,7 @@ def _(
         expr.is_pointwise for expr in traversal([ir.mask.value])
     ):
         # TODO: Use expression decomposition to lower Filter
+        # See: https://github.com/rapidsai/cudf/issues/20076
         return _lower_ir_fallback(
             ir, rec, msg="This filter is not supported for multiple partitions."
         )
