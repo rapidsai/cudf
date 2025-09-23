@@ -300,6 +300,7 @@ DataFrame = make_final_proxy_type(
         "dtypes": property(_DataFrame__dtypes),
         "__iter__": custom_iter,
         "attrs": _FastSlowAttribute("attrs"),
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
     },
 )
 
