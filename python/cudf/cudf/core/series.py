@@ -7,6 +7,7 @@ import inspect
 import textwrap
 import warnings
 from collections.abc import Mapping
+from copy import deepcopy
 from shutil import get_terminal_size
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -514,10 +515,10 @@ class Series(SingleColumnFrame, IndexedFrame):
             dtype = cudf.dtype(dtype)
         atts = None
         if isinstance(data, (pd.Series, pd.Index, Index, Series)):
+            atts = deepcopy(getattr(data, "attrs", None))
             if copy and not isinstance(data, (pd.Series, pd.Index)):
                 data = data.copy(deep=True)
             name_from_data = data.name
-            atts = copy.deepcopy(getattr(data, "attrs", None))
             column = as_column(data, nan_as_null=nan_as_null, dtype=dtype)
             if isinstance(data, (pd.Series, Series)):
                 index_from_data = ensure_index(data.index)
