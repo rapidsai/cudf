@@ -134,4 +134,4 @@ class DataType:
 
     def __repr__(self) -> str:
         """Representation of the DataType."""
-        return f"<DataType(polars={self.polars_type}, plc={self.id()!r})"
+        return f"<DataType(polars={self.polars_type}, plc={self.id()!r})>"
