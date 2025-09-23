@@ -109,13 +109,15 @@ void aggregate_reader_metadata::initialize_internals(bool use_arrow_schema,
   num_rows        = calc_num_rows();
   num_row_groups  = calc_num_row_groups();
 
-  // Force all leaf columns to be nullable
+  // Force all non-nullable (REQUIRED) columns to be nullable without modifying REPEATED columns to
+  // preserve list structures
   auto& schema = per_file_metadata.front().schema;
-  std::for_each(schema.begin(), schema.end(), [](auto& col) {
-    // Modifying the repetition type of lists converts them to structs, so we must skip that
-    auto const is_leaf_col =
-      not(col.type == Type::UNDEFINED or col.is_stub() or col.is_list() or col.is_struct());
-    if (is_leaf_col) { col.repetition_type = FieldRepetitionType::OPTIONAL; }
+  std::for_each(schema.begin() + 1, schema.end(), [](auto& col) {
+    // TODO: Store information of whichever column schema we modified here and restore it to
+    // `REQUIRED` if we end up not pruning any pages out of it
+    if (col.repetition_type == FieldRepetitionType::REQUIRED) {
+      col.repetition_type = FieldRepetitionType::OPTIONAL;
+    }
   });
 
   // Collect and apply arrow:schema from Parquet's key value metadata section

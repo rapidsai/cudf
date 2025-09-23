@@ -25,7 +25,7 @@ rapids_test_init()
 function(ConfigureTest CMAKE_TEST_NAME)
   set(options)
   set(one_value GPUS PERCENT STREAM_MODE)
-  set(multi_value EXTRA_LIBS)
+  set(multi_value EXTRA_LIBS EXTRA_COMPILE_DEFINITIONS)
   cmake_parse_arguments(_CUDF_TEST "${options}" "${one_value}" "${multi_value}" ${ARGN})
 
   if(NOT DEFINED _CUDF_TEST_GPUS AND NOT DEFINED _CUDF_TEST_PERCENT)
@@ -60,6 +60,7 @@ function(ConfigureTest CMAKE_TEST_NAME)
 
   target_compile_definitions(
     ${CMAKE_TEST_NAME} PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_AVOID_SORT_UNROLL=1
+                               ${_CUDF_TEST_EXTRA_COMPILE_DEFINITIONS}
   )
 
   target_link_libraries(
@@ -340,6 +341,19 @@ ConfigureTest(
   io/experimental/hybrid_scan_test.cpp
   io/parquet_common.cpp
   io/parquet_test.cpp
+)
+ConfigureTest(
+  PARQUET_DELETION_VECTORS_TEST
+  io/parquet_deletion_vectors_test.cu
+  io/parquet_common.cpp
+  io/parquet_test.cpp
+  EXTRA_LIBS
+  roaring
+  EXTRA_COMPILE_DEFINITIONS
+  DISABLENEON=1
+  ROARING_DISABLE_X64=1
+  ROARING_DISABLE_AVX=1
+  CROARING_COMPILER_SUPPORTS_AVX512=0
 )
 ConfigureTest(
   JSON_TEST io/json/json_test.cpp io/json/json_chunked_reader.cu
@@ -700,6 +714,8 @@ ConfigureTest(LABEL_BINS_TEST labeling/label_bins_tests.cpp)
 # * jit tests ----------------------------------------------------------------------------------
 ConfigureTest(JIT_PARSER_TEST jit/parse_ptx_function.cpp)
 target_include_directories(JIT_PARSER_TEST PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>")
+
+ConfigureTest(ROW_IR_TEST jit/row_ir.cpp)
 
 # ##################################################################################################
 # * stream testing ---------------------------------------------------------------------------------
