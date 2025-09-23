@@ -23,6 +23,8 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/functional>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/logical.h>
 
 #include <future>
 #include <vector>
@@ -361,7 +363,10 @@ struct get_page_nesting_size {
     // If this page is pruned and has a list parent, set the batch size for this depth to 0 to
     // reduce the required output buffer size and eliminate any non-empty nulls
     if (not page_mask[indices.page_idx] and indices.depth_idx > 0 and
-        page.nesting[indices.depth_idx - 1].type == type_id::LIST) {
+        thrust::any_of(thrust::seq,
+                       thrust::counting_iterator(0),
+                       thrust::counting_iterator(indices.depth_idx),
+                       [&](auto depth) { return page.nesting[depth].type == type_id::LIST; })) {
       page.nesting[indices.depth_idx].batch_size = 0;
     }
 
