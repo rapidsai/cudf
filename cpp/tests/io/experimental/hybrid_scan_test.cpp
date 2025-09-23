@@ -537,6 +537,78 @@ TEST_F(HybridScanTest, MaterializeStructs)
   test_hybrid_scan<num_concat, num_rows>({col0, *col1, *col2});
 }
 
+TEST_F(HybridScanTest, MaterializeListsOfStructs)
+{
+  std::mt19937 gen(0xbaLL);
+
+  auto const num_concat   = 2;
+  auto constexpr num_rows = num_ordered_rows;
+
+  // uint32_t(non-nullable)
+  auto col0 = testdata::ascending<uint32_t>();
+
+  // Validity helpers
+  std::bernoulli_distribution bn(0.7f);
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [&](int index) { return bn(gen); });
+  auto list_valids =
+    cudf::detail::make_counting_transform_iterator(0, [&](int index) { return index % 100; });
+  auto struct_valids_iter =
+    cudf::detail::make_counting_transform_iterator(0, [&](int index) { return index % 150; });
+  std::vector<bool> struct_valids(num_rows);
+  std::copy(struct_valids_iter, struct_valids_iter + num_rows, struct_valids.begin());
+
+  // list<struct<list<str(nullable)>(nullable), int(nullable),
+  // float(non-nullable)>(nullable)>(nullable)
+  auto struct1_list = make_list_str_column(gen, true, true);
+  auto values       = thrust::make_counting_iterator(0);
+  cudf::test::fixed_width_column_wrapper<float> struct1_floats(values, values + num_rows, valids);
+  std::vector<std::unique_ptr<cudf::column>> struct1_children;
+  struct1_children.push_back(std::move(struct1_list));
+  struct1_children.push_back(struct1_floats.release());
+  cudf::test::structs_column_wrapper _struct1(std::move(struct1_children), struct_valids);
+  auto struct1 = cudf::purge_nonempty_nulls(_struct1);
+
+  auto col1_offsets_iter = thrust::counting_iterator<int32_t>(0);
+  auto col1_offsets_col  = cudf::test::fixed_width_column_wrapper<int32_t>(
+    col1_offsets_iter, col1_offsets_iter + num_rows + 1);
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(list_valids, list_valids + num_rows);
+  auto col1 = cudf::make_lists_column(
+    num_rows, col1_offsets_col.release(), std::move(struct1), null_count, std::move(null_mask));
+
+  // strings helpers
+  std::vector<std::string> strings{
+    "abc", "x", "bananas", "gpu", "minty", "backspace", "", "cayenne", "turbine", "soft"};
+  std::uniform_int_distribution<int> uni(0, strings.size() - 1);
+  auto string_iter = cudf::detail::make_counting_transform_iterator(
+    0, [&](cudf::size_type idx) { return strings[uni(gen)]; });
+
+  // list<struct<str(nullable), str(non-nullable), bool(nullable)>(non-nullable)>(nullable)
+  auto struct2_str =
+    cudf::test::strings_column_wrapper{string_iter, string_iter + num_rows, valids};
+  auto struct2_str_non_nullable =
+    cudf::test::strings_column_wrapper{string_iter, string_iter + num_rows};
+  auto struct2_bool =
+    cudf::test::fixed_width_column_wrapper<bool>(values, values + num_rows, valids);
+  std::vector<std::unique_ptr<cudf::column>> struct2_children;
+  struct2_children.push_back(struct2_str.release());
+  struct2_children.push_back(struct2_str_non_nullable.release());
+  struct2_children.push_back(struct2_bool.release());
+  cudf::test::structs_column_wrapper _struct2(std::move(struct2_children));
+  auto struct2 = cudf::purge_nonempty_nulls(_struct2);
+
+  auto col2_offsets_iter = thrust::counting_iterator<int32_t>(0);
+  auto col2_offsets_col  = cudf::test::fixed_width_column_wrapper<int32_t>(
+    col2_offsets_iter, col2_offsets_iter + num_rows + 1);
+  std::tie(null_mask, null_count) =
+    cudf::test::detail::make_null_mask(list_valids, list_valids + num_rows);
+  auto col2 = cudf::make_lists_column(
+    num_rows, col2_offsets_col.release(), std::move(struct2), null_count, std::move(null_mask));
+
+  test_hybrid_scan<num_concat, num_rows>({col0, *col1, *col2});
+}
+
 TEST_F(HybridScanTest, MaterializeMixedPayloadColumns)
 {
   std::mt19937 gen(0xcaffe);
