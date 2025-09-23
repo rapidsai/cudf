@@ -214,8 +214,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return pd.NA
 
     @property
+    def itemsize(self) -> int:
+        """Itemsize of the underlying data type."""
+        return self.dtype.itemsize
+
+    @property
     def base_size(self) -> int:
-        return int(self.base_data.size / self.dtype.itemsize)  # type: ignore[union-attr]
+        return int(self.base_data.size / self.itemsize)  # type: ignore[union-attr]
 
     @property
     def dtype(self):
@@ -234,8 +239,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if self.base_data is None:
             return None
         if self._data is None:  # type: ignore[has-type]
-            start = self.offset * self.dtype.itemsize
-            end = start + self.size * self.dtype.itemsize
+            start = self.offset * self.itemsize
+            end = start + self.size * self.itemsize
             self._data = self.base_data[start:end]  # type: ignore[assignment]
         return self._data
 
@@ -1066,7 +1071,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 "Bytes viewed as str without metadata is ambiguous"
             )
 
-        if self.dtype.itemsize == dtype.itemsize:
+        if self.itemsize == dtype.itemsize:
             return build_column(
                 self.plc_column,
                 size=self.size,
@@ -1081,17 +1086,17 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     "Can not produce a view of a column with nulls"
                 )
 
-            if (self.size * self.dtype.itemsize) % dtype.itemsize:
+            if (self.size * self.itemsize) % dtype.itemsize:
                 raise ValueError(
-                    f"Can not divide {self.size * self.dtype.itemsize}"
+                    f"Can not divide {self.size * self.itemsize}"
                     + f" total bytes into {dtype} with size {dtype.itemsize}"
                 )
 
             # This assertion prevents mypy errors below.
             assert self.base_data is not None
 
-            start = self.offset * self.dtype.itemsize
-            end = start + self.size * self.dtype.itemsize
+            start = self.offset * self.itemsize
+            end = start + self.size * self.itemsize
             sliced_buffer = self.base_data[start:end]
 
             new_plc_column = plc.Column(
@@ -1886,7 +1891,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
         output = {
             "shape": (len(self),),
-            "strides": (self.dtype.itemsize,),
+            "strides": (self.itemsize,),
             "typestr": self.dtype.str,
             "data": (self.data_ptr, False),
             "version": 1,
@@ -1996,6 +2001,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
             header["subheaders"] = list(child_headers)
             frames.extend(chain(*child_frames))
+        if isinstance(self.dtype, CategoricalDtype):
+            header["codes_dtype"] = self.codes.dtype.str  # type: ignore[attr-defined]
         header["size"] = self.size
         header["null_count"] = self.null_count
         header["offset"] = self.offset
@@ -2034,8 +2041,14 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 child, frames = unpack(h, frames)
                 children.append(child)
         assert len(frames) == 0, "Deserialization did not consume all frames"
+        if "codes_dtype" in header:
+            codes_dtype = np.dtype(header["codes_dtype"])
+        else:
+            codes_dtype = None
         plc_column = plc.Column(
-            dtype_to_pylibcudf_type(dtype),
+            dtype_to_pylibcudf_type(
+                codes_dtype if isinstance(dtype, CategoricalDtype) else dtype
+            ),
             header["size"],
             plc.gpumemoryview(data) if data is not None else None,
             plc.gpumemoryview(mask) if mask is not None else None,

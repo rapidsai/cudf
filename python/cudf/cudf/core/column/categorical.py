@@ -143,8 +143,9 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     @property
-    def base_size(self) -> int:
-        return int(self.base_data.size / self.codes.dtype.itemsize)  # type: ignore[union-attr]
+    def itemsize(self) -> int:
+        """Itemsize of the underlying data type."""
+        return self.codes.dtype.itemsize
 
     def __contains__(self, item: ScalarLike) -> bool:
         try:
