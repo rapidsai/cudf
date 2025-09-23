@@ -91,7 +91,7 @@ __device__ static void scan_block_exclusive_sum(
   }
 }
 
-template <int block_size, bool has_lists_t, bool direct_copy, typename state_buf>
+template <int block_size, bool has_lists_t, copy_mode copy_mode_t, typename state_buf>
 __device__ void decode_fixed_width_values(
   page_state_s* s, state_buf* const sb, int start, int end, int t)
 {
@@ -116,7 +116,7 @@ __device__ void decode_fixed_width_values(
 
     // Index from value buffer (doesn't include nulls) to final array (has gaps for nulls)
     int const dst_pos = [&]() {
-      if constexpr (direct_copy) {
+      if constexpr (copy_mode_t == copy_mode::DIRECT) {
         return thread_pos - s->first_row;
       } else {
         int dst_pos = sb->nz_idx[rolling_index<state_buf::nz_buf_size>(thread_pos)];
@@ -188,7 +188,7 @@ __device__ void decode_fixed_width_values(
   }
 }
 
-template <int block_size, bool has_lists_t, bool direct_copy, typename state_buf>
+template <int block_size, bool has_lists_t, copy_mode copy_mode_t, typename state_buf>
 __device__ inline void decode_fixed_width_split_values(
   page_state_s* s, state_buf* const sb, int start, int end, int t)
 {
@@ -216,7 +216,7 @@ __device__ inline void decode_fixed_width_split_values(
 
     // Index from value buffer (doesn't include nulls) to final array (has gaps for nulls)
     int const dst_pos = [&]() {
-      if constexpr (direct_copy) {
+      if constexpr (copy_mode_t == copy_mode::DIRECT) {
         return thread_pos - s->first_row;
       } else {
         int dst_pos = sb->nz_idx[rolling_index<state_buf::nz_buf_size>(thread_pos)];
@@ -1193,38 +1193,38 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
     if constexpr (has_lists_t) {
       if constexpr (has_strings_t) {
         string_output_offset =
-          decode_strings<decode_block_size_t, has_lists_t, split_decode_t, false>(
+          decode_strings<decode_block_size_t, has_lists_t, split_decode_t, copy_mode::INDIRECT>(
             s, sb, valid_count, next_valid_count, t, string_output_offset);
       } else if constexpr (split_decode_t) {
-        decode_fixed_width_split_values<decode_block_size_t, has_lists_t, false>(
+        decode_fixed_width_split_values<decode_block_size_t, has_lists_t, copy_mode::INDIRECT>(
           s, sb, valid_count, next_valid_count, t);
       } else {
-        decode_fixed_width_values<decode_block_size_t, has_lists_t, false>(
+        decode_fixed_width_values<decode_block_size_t, has_lists_t, copy_mode::INDIRECT>(
           s, sb, valid_count, next_valid_count, t);
       }
     } else {
       if (!should_process_nulls) {
         if constexpr (has_strings_t) {
           string_output_offset =
-            decode_strings<decode_block_size_t, has_lists_t, split_decode_t, true>(
+            decode_strings<decode_block_size_t, has_lists_t, split_decode_t, copy_mode::DIRECT>(
               s, sb, valid_count, next_valid_count, t, string_output_offset);
         } else if constexpr (split_decode_t) {
-          decode_fixed_width_split_values<decode_block_size_t, has_lists_t, true>(
+          decode_fixed_width_split_values<decode_block_size_t, has_lists_t, copy_mode::DIRECT>(
             s, sb, valid_count, next_valid_count, t);
         } else {
-          decode_fixed_width_values<decode_block_size_t, has_lists_t, true>(
+          decode_fixed_width_values<decode_block_size_t, has_lists_t, copy_mode::DIRECT>(
             s, sb, valid_count, next_valid_count, t);
         }
       } else {
         if constexpr (has_strings_t) {
           string_output_offset =
-            decode_strings<decode_block_size_t, has_lists_t, split_decode_t, false>(
+            decode_strings<decode_block_size_t, has_lists_t, split_decode_t, copy_mode::INDIRECT>(
               s, sb, valid_count, next_valid_count, t, string_output_offset);
         } else if constexpr (split_decode_t) {
-          decode_fixed_width_split_values<decode_block_size_t, has_lists_t, false>(
+          decode_fixed_width_split_values<decode_block_size_t, has_lists_t, copy_mode::INDIRECT>(
             s, sb, valid_count, next_valid_count, t);
         } else {
-          decode_fixed_width_values<decode_block_size_t, has_lists_t, false>(
+          decode_fixed_width_values<decode_block_size_t, has_lists_t, copy_mode::INDIRECT>(
             s, sb, valid_count, next_valid_count, t);
         }
       }
