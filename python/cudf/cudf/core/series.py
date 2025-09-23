@@ -517,7 +517,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             if copy and not isinstance(data, (pd.Series, pd.Index)):
                 data = data.copy(deep=True)
             name_from_data = data.name
-            atts = getattr(data, "attrs", None)
+            atts = copy.deepcopy(getattr(data, "attrs", None))
             column = as_column(data, nan_as_null=nan_as_null, dtype=dtype)
             if isinstance(data, (pd.Series, Series)):
                 index_from_data = ensure_index(data.index)
