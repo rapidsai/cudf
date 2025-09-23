@@ -360,6 +360,12 @@ def get_executor_options(
         and run_config.executor == "streaming"
     ):
         if run_config.stats_planning:
+            # We still use the unique_fraction config when
+            # stats_planning is enabled. However, this is only
+            # an optimization (not to reduce OOM risk). In most
+            # cases, this is because the query contains a
+            # highly-selective filter operation leading to
+            # conservative unique-count statistics.
             executor_options["unique_fraction"] = {
                 "l_suppkey": 0.001,  # Query 15
                 "l_partkey": 0.1,  # Query 20
@@ -367,6 +373,8 @@ def get_executor_options(
                 "p_partkey": 0.005,  # Query 2, 17 & 20
             }
         else:
+            # If stats_planning is disabled, we NEED to use
+            # unique_fraction to reduce OOM risk.
             executor_options["unique_fraction"] = {
                 "c_custkey": 0.05,  # Query 10 & 13
                 "l_orderkey": 1.0,  # Query 18 & 21
