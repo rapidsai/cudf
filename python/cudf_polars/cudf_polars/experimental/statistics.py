@@ -717,7 +717,11 @@ def _(
         if isinstance(ir, Distinct)
         else [n.name for n in ir.keys]
     )
-    unique_counts = [child_column_stats[k].unique_count.value for k in key_names]
+    unique_counts = [
+        # k will be missing from child_column_stats if it's 'literal'
+        child_column_stats.get(k, ColumnStats(name=k)).unique_count.value
+        for k in key_names
+    ]
     known_unique_count = sum(c for c in unique_counts if c is not None)
     unknown_unique_count = sum(c is None for c in unique_counts)
     if unknown_unique_count > 0:

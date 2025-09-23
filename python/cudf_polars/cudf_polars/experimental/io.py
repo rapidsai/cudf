@@ -15,6 +15,8 @@ from enum import IntEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import polars as pl
+
 import pylibcudf as plc
 
 from cudf_polars.dsl.ir import IR, DataFrameScan, Empty, Scan, Sink, Union
@@ -894,9 +896,14 @@ class DataFrameSourceInfo(DataSourceInfo):
     def _update_unique_stats(self, column: str) -> None:
         if column not in self._unique_stats and self._stats_planning.use_sampling:
             row_count = self.row_count.value
-            unique_count = (
-                self._df.get_column(column).approx_n_unique() if row_count else 0
-            )
+            try:
+                unique_count = (
+                    self._df.get_column(column).approx_n_unique() if row_count else 0
+                )
+            except pl.exceptions.InvalidOperationError:
+                unique_count = (
+                    self._df.get_column(column).n_unique() if row_count else 0
+                )
             unique_fraction = min((unique_count / row_count), 1.0) if row_count else 1.0
             self._unique_stats[column] = UniqueStats(
                 ColumnStat[int](value=unique_count),
