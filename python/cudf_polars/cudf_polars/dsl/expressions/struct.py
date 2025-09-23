@@ -18,7 +18,7 @@ from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 if TYPE_CHECKING:
     from typing_extensions import Self
 
-    from polars.polars_repr import _expr_nodes as pl_expr
+    from polars.polars_type import _expr_nodes as pl_expr
 
     from cudf_polars.containers import DataFrame, DataType
 
@@ -91,7 +91,7 @@ class StructFunction(Expr):
             field_index = next(
                 (
                     i
-                    for i, field in enumerate(self.children[0].dtype.polars_repr.fields)
+                    for i, field in enumerate(self.children[0].dtype.polars_type.fields)
                     if field.name == self.options[0]
                 ),
                 None,
@@ -111,7 +111,7 @@ class StructFunction(Expr):
                 table,
                 [
                     (field.name, [])
-                    for field in self.children[0].dtype.polars_repr.fields
+                    for field in self.children[0].dtype.polars_type.fields
                 ],
             )
             options = (

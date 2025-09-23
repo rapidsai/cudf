@@ -102,36 +102,36 @@ def _from_polars(dtype: pl.DataType) -> plc.DataType:
 class DataType:
     """A datatype, preserving polars metadata."""
 
-    polars_repr: pl.datatypes.DataType
-    plc_repr: plc.DataType
+    polars_type: pl.datatypes.DataType
+    plc_type: plc.DataType
 
     def __init__(self, polars_dtype: pl.DataType) -> None:
-        self.polars_repr = polars_dtype
-        self.plc_repr = _from_polars(polars_dtype)
+        self.polars_type = polars_dtype
+        self.plc_type = _from_polars(polars_dtype)
 
     def id(self) -> plc.TypeId:
         """The pylibcudf.TypeId of this DataType."""
-        return self.plc_repr.id()
+        return self.plc_type.id()
 
     @property
     def children(self) -> list[DataType]:
         """The children types of this DataType."""
-        if self.plc_repr.id() == plc.TypeId.STRUCT:
-            return [DataType(field.dtype) for field in self.polars_repr.fields]
-        elif self.plc_repr.id() == plc.TypeId.LIST:
-            return [DataType(self.polars_repr.inner)]
+        if self.plc_type.id() == plc.TypeId.STRUCT:
+            return [DataType(field.dtype) for field in self.polars_type.fields]
+        elif self.plc_type.id() == plc.TypeId.LIST:
+            return [DataType(self.polars_type.inner)]
         return []
 
     def __eq__(self, other: object) -> bool:
         """Equality of DataTypes."""
         if not isinstance(other, DataType):
             return False
-        return self.polars_repr == other.polars_repr
+        return self.polars_type == other.polars_type
 
     def __hash__(self) -> int:
         """Hash of the DataType."""
-        return hash(self.polars_repr)
+        return hash(self.polars_type)
 
     def __repr__(self) -> str:
         """Representation of the DataType."""
-        return f"<DataType(polars={self.polars_repr}, plc={self.id()!r})"
+        return f"<DataType(polars={self.polars_type}, plc={self.id()!r})"

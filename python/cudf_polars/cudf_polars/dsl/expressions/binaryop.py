@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
-from polars.polars_repr import _expr_nodes as pl_expr
+from polars.polars_type import _expr_nodes as pl_expr
 
 import pylibcudf as plc
 
@@ -33,7 +33,7 @@ class BinOp(Expr):
         right: Expr,
     ) -> None:
         self.dtype = dtype
-        if plc.traits.is_boolean(self.dtype.plc_repr):
+        if plc.traits.is_boolean(self.dtype.plc_type):
             # For boolean output types, bitand and bitor implement
             # boolean logic, so translate. bitxor also does, but the
             # default behaviour is correct.
@@ -42,7 +42,7 @@ class BinOp(Expr):
         self.children = (left, right)
         self.is_pointwise = True
         if not plc.binaryop.is_supported_operation(
-            self.dtype.plc_repr, left.dtype.plc_repr, right.dtype.plc_repr, op
+            self.dtype.plc_type, left.dtype.plc_type, right.dtype.plc_type, op
         ):
             raise NotImplementedError(
                 f"Operation {op.name} not supported "
@@ -94,7 +94,7 @@ class BinOp(Expr):
                 lop = left.obj_scalar
             elif right.is_scalar:
                 rop = right.obj_scalar
-        if plc.traits.is_integral_not_bool(self.dtype.plc_repr) and self.op in {
+        if plc.traits.is_integral_not_bool(self.dtype.plc_type) and self.op in {
             plc.binaryop.BinaryOperator.FLOOR_DIV,
             plc.binaryop.BinaryOperator.PYMOD,
         }:
@@ -108,13 +108,13 @@ class BinOp(Expr):
                 rop = plc.replace.find_and_replace_all(
                     right.obj,
                     plc.Column.from_scalar(
-                        plc.Scalar.from_py(0, dtype=self.dtype.plc_repr), 1
+                        plc.Scalar.from_py(0, dtype=self.dtype.plc_type), 1
                     ),
                     plc.Column.from_scalar(
-                        plc.Scalar.from_py(None, dtype=self.dtype.plc_repr), 1
+                        plc.Scalar.from_py(None, dtype=self.dtype.plc_type), 1
                     ),
                 )
         return Column(
-            plc.binaryop.binary_operation(lop, rop, self.op, self.dtype.plc_repr),
+            plc.binaryop.binary_operation(lop, rop, self.op, self.dtype.plc_type),
             dtype=self.dtype,
         )

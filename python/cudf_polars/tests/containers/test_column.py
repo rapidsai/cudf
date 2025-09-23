@@ -18,7 +18,7 @@ def test_non_scalar_access_raises():
     dtype = DataType(pl.Int8())
     column = Column(
         plc.column_factories.make_numeric_column(
-            dtype.plc_repr, 2, plc.MaskState.ALL_VALID
+            dtype.plc_type, 2, plc.MaskState.ALL_VALID
         ),
         dtype=dtype,
     )
@@ -29,7 +29,7 @@ def test_non_scalar_access_raises():
 def test_check_sorted():
     dtype = DataType(pl.Int8())
     column = Column(
-        plc.Column.from_iterable_of_py([0, 1, 2], dtype.plc_repr),
+        plc.Column.from_iterable_of_py([0, 1, 2], dtype.plc_type),
         dtype=dtype,
     )
     assert column.check_sorted(
@@ -50,7 +50,7 @@ def test_length_leq_one_always_sorted(length):
     dtype = DataType(pl.Int8())
     column = Column(
         plc.column_factories.make_numeric_column(
-            dtype.plc_repr, length, plc.MaskState.ALL_VALID
+            dtype.plc_type, length, plc.MaskState.ALL_VALID
         ),
         dtype=dtype,
     )
@@ -78,7 +78,7 @@ def test_shallow_copy():
     dtype = DataType(pl.Int8())
     column = Column(
         plc.column_factories.make_numeric_column(
-            dtype.plc_repr, 2, plc.MaskState.ALL_VALID
+            dtype.plc_type, 2, plc.MaskState.ALL_VALID
         ),
         dtype=dtype,
     )
@@ -96,7 +96,7 @@ def test_shallow_copy():
 def test_mask_nans(typeid):
     dtype = DataType(typeid)
     column = Column(
-        plc.Column.from_iterable_of_py([0, 0, 0], dtype=dtype.plc_repr), dtype=dtype
+        plc.Column.from_iterable_of_py([0, 0, 0], dtype=dtype.plc_type), dtype=dtype
     )
     masked = column.mask_nans()
     assert column.null_count == masked.null_count
@@ -105,7 +105,7 @@ def test_mask_nans(typeid):
 def test_mask_nans_float():
     dtype = DataType(pl.Float32())
     column = Column(
-        plc.Column.from_iterable_of_py([0, 0, float("nan")], dtype=dtype.plc_repr),
+        plc.Column.from_iterable_of_py([0, 0, float("nan")], dtype=dtype.plc_type),
         dtype=dtype,
     )
     masked = column.mask_nans()
@@ -118,7 +118,7 @@ def test_slice_none_returns_self():
     dtype = DataType(pl.Int8())
     column = Column(
         plc.column_factories.make_numeric_column(
-            dtype.plc_repr, 2, plc.MaskState.ALL_VALID
+            dtype.plc_type, 2, plc.MaskState.ALL_VALID
         ),
         dtype=dtype,
     )
@@ -144,7 +144,7 @@ def test_deserialize_ctor_kwargs_list_dtype():
         "order": plc.types.Order.ASCENDING,
         "null_order": plc.types.NullOrder.AFTER,
         "name": "test",
-        "dtype": pl.polars_repr.dtype_str_repr(pl_type),
+        "dtype": pl.polars_type.dtype_str_repr(pl_type),
     }
     result = Column.deserialize_ctor_kwargs(column_kwargs)
     expected = {
@@ -161,7 +161,7 @@ def test_serialize_cache_miss():
     dtype = DataType(pl.Int8())
     column = Column(
         plc.column_factories.make_numeric_column(
-            dtype.plc_repr, 2, plc.MaskState.ALL_VALID
+            dtype.plc_type, 2, plc.MaskState.ALL_VALID
         ),
         dtype=dtype,
     )
@@ -244,6 +244,6 @@ def test_serialize_cache_miss():
 )
 def test_dtype_short_repr_to_dtype_roundtrip(dtype: pl.DataType):
     result = cudf_polars.containers.column._dtype_short_repr_to_dtype(
-        pl.polars_repr.dtype_str_repr(dtype)
+        pl.polars_type.dtype_str_repr(dtype)
     )
     assert result == dtype

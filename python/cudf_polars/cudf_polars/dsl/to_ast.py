@@ -170,7 +170,7 @@ def _(node: expr.ColRef, self: Transformer) -> plc_expr.Expression:
 
 @_to_ast.register
 def _(node: expr.Literal, self: Transformer) -> plc_expr.Expression:
-    return plc_expr.Literal(plc.Scalar.from_py(node.value, node.dtype.plc_repr))
+    return plc_expr.Literal(plc.Scalar.from_py(node.value, node.dtype.plc_type))
 
 
 @_to_ast.register
@@ -224,9 +224,9 @@ def _(node: expr.BooleanFunction, self: Transformer) -> plc_expr.Expression:
                 #
                 # the type-ignore is safe because the for plc.TypeID.LIST, we know
                 # we have a polars.List type, which has an inner attribute.
-                plc_dtype = DataType(haystack.dtype.polars_repr.inner).plc_repr  # type: ignore[attr-defined]
+                plc_dtype = DataType(haystack.dtype.polars_type.inner).plc_type  # type: ignore[attr-defined]
             else:
-                plc_dtype = haystack.dtype.plc_repr  # pragma: no cover
+                plc_dtype = haystack.dtype.plc_type  # pragma: no cover
             values = (
                 plc_expr.Literal(plc.Scalar.from_py(val, plc_dtype))
                 for val in haystack.value

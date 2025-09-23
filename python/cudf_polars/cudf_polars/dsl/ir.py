@@ -45,7 +45,7 @@ if TYPE_CHECKING:
 
     from typing_extensions import Self
 
-    from polars.polars_repr import _expr_nodes as pl_expr
+    from polars.polars_type import _expr_nodes as pl_expr
 
     from cudf_polars.containers.dataframe import NamedColumn
     from cudf_polars.typing import CSECache, ClosedInterval, Schema, Slice as Zlice
@@ -223,7 +223,7 @@ def _align_parquet_schema(df: DataFrame, schema: Schema) -> DataFrame:
 
     for name, col in df.column_map.items():
         src = col.obj.type()
-        dst = schema[name].plc
+        dst = schema[name].plc_type
         if (
             src.id() in plc_decimals_ids
             and dst.id() in plc_decimals_ids
@@ -568,7 +568,7 @@ class Scan(IR):
                         options.set_names(column_names)
                 options.set_header(header)
                 options.set_dtypes(
-                    {name: dtype.plc_repr for name, dtype in schema.items()}
+                    {name: dtype.plc_type for name, dtype in schema.items()}
                 )
                 if usecols is not None:
                     options.set_use_cols_names([str(name) for name in usecols])
@@ -667,7 +667,7 @@ class Scan(IR):
                 return df
         elif typ == "ndjson":
             json_schema: list[plc.io.json.NameAndType] = [
-                (name, typ.plc_repr, []) for name, typ in schema.items()
+                (name, typ.plc_type, []) for name, typ in schema.items()
             ]
             plc_tbl_w_meta = plc.io.json.read_json(
                 plc.io.json._setup_json_reader_options(
@@ -697,8 +697,8 @@ class Scan(IR):
             name, offset = row_index
             offset += skip_rows
             dtype = schema[name]
-            step = plc.Scalar.from_py(1, dtype.plc_repr)
-            init = plc.Scalar.from_py(offset, dtype.plc_repr)
+            step = plc.Scalar.from_py(1, dtype.plc_type)
+            init = plc.Scalar.from_py(offset, dtype.plc_type)
             index_col = Column(
                 plc.filling.sequence(df.num_rows, init, step),
                 is_sorted=plc.types.Sorted.YES,
@@ -711,7 +711,7 @@ class Scan(IR):
             if next(iter(schema)) != name:
                 df = df.select(schema)
         assert all(
-            c.obj.type() == schema[name].plc_repr for name, c in df.column_map.items()
+            c.obj.type() == schema[name].plc_type for name, c in df.column_map.items()
         )
         if predicate is None:
             return df
@@ -777,7 +777,7 @@ class Sink(IR):
         child_schema = df.schema.values()
         if kind == "Csv":
             if not all(
-                plc.io.csv.is_supported_write_csv(dtype.plc_repr)
+                plc.io.csv.is_supported_write_csv(dtype.plc_type)
                 for dtype in child_schema
             ):
                 # Nested types are unsupported in polars and libcudf
@@ -829,7 +829,7 @@ class Sink(IR):
             kind == "Json"
         ):  # pragma: no cover; options are validated on the polars side
             if not all(
-                plc.io.json.is_supported_write_json(dtype.plc_repr)
+                plc.io.json.is_supported_write_json(dtype.plc_type)
                 for dtype in child_schema
             ):
                 # Nested types are unsupported in polars and libcudf
@@ -1126,7 +1126,7 @@ class DataFrameScan(IR):
             df = df.select(projection)
         df = DataFrame.from_polars(df)
         assert all(
-            c.obj.type() == dtype.plc_repr
+            c.obj.type() == dtype.plc_type
             for c, dtype in zip(df.columns, schema.values(), strict=True)
         )
         return df
@@ -1224,7 +1224,7 @@ class Select(IR):
             dtype = DataType(pl.UInt32())  # pragma: no cover
             col = Column(
                 plc.Column.from_scalar(
-                    plc.Scalar.from_py(effective_rows, dtype.plc_repr),
+                    plc.Scalar.from_py(effective_rows, dtype.plc_type),
                     1,
                 ),
                 name=self.exprs[0].name or "len",
@@ -1326,7 +1326,7 @@ class Rolling(IR):
         self.agg_requests = tuple(agg_requests)
         if not all(
             plc.rolling.is_valid_rolling_aggregation(
-                agg.value.dtype.plc_repr, agg.value.agg_request
+                agg.value.dtype.plc_type, agg.value.agg_request
             )
             for agg in self.agg_requests
         ):
@@ -1830,7 +1830,7 @@ class Join(IR):
         if empty:
             return [
                 Column(
-                    plc.column_factories.make_empty_column(col.dtype.plc_repr),
+                    plc.column_factories.make_empty_column(col.dtype.plc_type),
                     col.dtype,
                     name=rename(col.name),
                 )
@@ -2351,7 +2351,7 @@ class MapFunction(IR):
                 index = frozenset(indices)
                 pivotees = [name for name in df.schema if name not in index]
             if not all(
-                dtypes.can_cast(df.schema[p].plc_repr, self.schema[value_name].plc_repr)
+                dtypes.can_cast(df.schema[p].plc_type, self.schema[value_name].plc_type)
                 for p in pivotees
             ):
                 raise NotImplementedError(
@@ -2438,7 +2438,7 @@ class MapFunction(IR):
                     [
                         plc.Column.from_arrow(
                             pl.Series(
-                                values=pivotees, dtype=schema[variable_name].polars_repr
+                                values=pivotees, dtype=schema[variable_name].polars_type
                             )
                         )
                     ]
@@ -2463,8 +2463,8 @@ class MapFunction(IR):
         elif name == "row_index":
             col_name, offset = options
             dtype = schema[col_name]
-            step = plc.Scalar.from_py(1, dtype.plc_repr)
-            init = plc.Scalar.from_py(offset, dtype.plc_repr)
+            step = plc.Scalar.from_py(1, dtype.plc_type)
+            init = plc.Scalar.from_py(offset, dtype.plc_type)
             index_col = Column(
                 plc.filling.sequence(df.num_rows, init, step),
                 is_sorted=plc.types.Sorted.YES,
@@ -2602,7 +2602,7 @@ class Empty(IR):
         return DataFrame(
             [
                 Column(
-                    plc.column_factories.make_empty_column(dtype.plc_repr),
+                    plc.column_factories.make_empty_column(dtype.plc_type),
                     dtype=dtype,
                     name=name,
                 )

@@ -44,7 +44,7 @@ class Literal(Expr):
         """Evaluate this expression given a dataframe for context."""
         return Column(
             plc.Column.from_scalar(
-                plc.Scalar.from_py(self.value, self.dtype.plc_repr), 1
+                plc.Scalar.from_py(self.value, self.dtype.plc_type), 1
             ),
             dtype=self.dtype,
         )
@@ -62,8 +62,8 @@ class Literal(Expr):
         else:
             # Use polars to cast instead of pylibcudf
             # since there are just Python scalars
-            casted = pl.Series(values=[self.value], dtype=self.dtype.polars_repr).cast(
-                dtype.polars_repr
+            casted = pl.Series(values=[self.value], dtype=self.dtype.polars_type).cast(
+                dtype.polars_type
             )[0]
             return Literal(dtype, casted)
 
@@ -84,7 +84,7 @@ class LiteralColumn(Expr):
         # This is stricter than necessary, but we only need this hash
         # for identity in groupby replacements so it's OK. And this
         # way we avoid doing potentially expensive compute.
-        return (type(self), self.dtype.plc_repr, id(self.value))
+        return (type(self), self.dtype.plc_type, id(self.value))
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
