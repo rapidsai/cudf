@@ -363,12 +363,18 @@ class CategoricalColumn(column.ColumnBase):
             raise NotImplementedError(f"{arrow_type=} is not supported.")
 
         if self.categories.dtype.kind == "f":
-            col = type(self)(
-                data=self.data,  # type: ignore[arg-type]
+            new_mask, new_null_count = plc.transform.bools_to_mask(
+                self.notnull().fillna(False).plc_column
+            )
+            new_plc_column = self.plc_column.with_mask(
+                new_mask, new_null_count
+            )
+            col = CategoricalColumn(
+                plc_column=new_plc_column,
                 size=self.size,
                 dtype=self.dtype,
-                mask=self.notnull().fillna(False).as_mask(),
-                children=self.children,
+                offset=self.offset,
+                null_count=new_null_count,
             )
         else:
             col = self
@@ -761,16 +767,13 @@ class CategoricalColumn(column.ColumnBase):
 
     def _with_type_metadata(self: Self, dtype: Dtype) -> Self:
         if isinstance(dtype, CategoricalDtype):
-            return type(self)(
-                data=self.data,  # type: ignore[arg-type]
+            return CategoricalColumn(
+                plc_column=self.plc_column,
                 size=self.size,
                 dtype=dtype,
-                mask=self.base_mask,
                 offset=self.offset,
                 null_count=self.null_count,
-                children=self.base_children,  # type: ignore[arg-type]
             )
-
         return self
 
     def set_categories(

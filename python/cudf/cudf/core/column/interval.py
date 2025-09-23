@@ -16,7 +16,6 @@ from cudf.utils.dtypes import is_dtype_obj_interval
 if TYPE_CHECKING:
     from typing_extensions import Self
 
-    from cudf.core.buffer import Buffer
     from cudf.core.column import ColumnBase
 
 

@@ -211,18 +211,25 @@ class ListColumn(ColumnBase):
 
     def _with_type_metadata(self: Self, dtype: Dtype) -> Self:
         if isinstance(dtype, ListDtype):
-            elements = self.base_children[1]._with_type_metadata(
-                dtype.element_type
-            )
-            return type(self)(
-                data=None,
-                dtype=dtype,
-                mask=self.base_mask,
+            return ListColumn(
+                plc_column=self.plc_column,
                 size=self.size,
+                dtype=dtype,
                 offset=self.offset,
                 null_count=self.null_count,
-                children=(self.base_children[0], elements),  # type: ignore[arg-type]
             )
+            # elements = self.base_children[1]._with_type_metadata(
+            #     dtype.element_type
+            # )
+            # return type(self)(
+            #     data=None,
+            #     dtype=dtype,
+            #     mask=self.base_mask,
+            #     size=self.size,
+            #     offset=self.offset,
+            #     null_count=self.null_count,
+            #     children=(self.base_children[0], elements),  # type: ignore[arg-type]
+            # )
         # For pandas dtypes, store them directly in the column's dtype property
         elif isinstance(dtype, pd.ArrowDtype) and isinstance(
             dtype.pyarrow_dtype, pa.ListType

@@ -4,10 +4,10 @@ from __future__ import annotations
 from functools import cached_property
 from typing import TYPE_CHECKING, Any
 
-import pylibcudf as plc
-
 import pandas as pd
 import pyarrow as pa
+
+import pylibcudf as plc
 
 import cudf
 from cudf.core.column.column import ColumnBase
@@ -213,9 +213,9 @@ class StructColumn(ColumnBase):
                 dtype=dtype,
                 offset=self.offset,
                 null_count=self.null_count,
-                children=tuple(  # type: ignore[arg-type]
-                    child.astype(dtype.subtype) for child in self.base_children
-                ),  # type: ignore[arg-type]
+                # children=tuple(  # type: ignore[arg-type]
+                #     child.astype(dtype.subtype) for child in self.base_children
+                # ),  # type: ignore[arg-type]
             )
         elif isinstance(dtype, StructDtype):
             return StructColumn(
