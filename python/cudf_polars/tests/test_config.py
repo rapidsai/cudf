@@ -109,7 +109,11 @@ def test_cudf_polars_enable_disable_managed_memory(monkeypatch, enable_managed_m
             "POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY", enable_managed_memory
         )
         result = q.collect(engine=pl.GPUEngine())
-        mr = default_memory_resource(0, bool(enable_managed_memory == "1"))
+        mr = default_memory_resource(
+            0,
+            cuda_managed_memory=bool(enable_managed_memory == "1"),
+            memory_resource_config=None,
+        )
         if enable_managed_memory == "1":
             assert isinstance(mr, rmm.mr.PrefetchResourceAdaptor)
             assert isinstance(mr.upstream_mr, rmm.mr.PoolMemoryResource)
