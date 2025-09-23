@@ -9,7 +9,7 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.experimental.explain import explain_query
+from cudf_polars.experimental.explain import _fmt_row_count, explain_query
 from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
 from cudf_polars.testing.io import make_lazy_frame, make_partitioned_source
 
@@ -35,11 +35,16 @@ def engine():
             "shuffle_method": "tasks",
             "target_partition_size": 10_000,
             "max_rows_per_partition": 1_000,
+            "stats_planning": {
+                "use_reduction_planning": True,
+                "default_selectivity": 0.5,
+            },
         },
     )
 
 
-def test_explain_logical_plan(tmp_path, df):
+@pytest.mark.parametrize("executor", ["streaming", "in-memory"])
+def test_explain_logical_plan(tmp_path, df, executor):
     make_partitioned_source(df, tmp_path, fmt="parquet", n_files=2)
 
     q = (
@@ -54,7 +59,7 @@ def test_explain_logical_plan(tmp_path, df):
         .select(pl.col("sum_xz"))
     )
 
-    engine = pl.GPUEngine(executor="streaming", raise_on_fail=True)
+    engine = pl.GPUEngine(executor=executor, raise_on_fail=True)
     plan = explain_query(q, engine, physical=False)
 
     assert "SCAN PARQUET" in plan
@@ -171,10 +176,19 @@ def test_explain_logical_plan_wide_table():
     assert "DATAFRAMESCAN ('col0', 'col1', 'col2', '...', 'col18', 'col19')" in plan
 
 
+def test_fmt_row_count():
+    assert _fmt_row_count(None) == ""
+    assert _fmt_row_count(0) == "0"
+    assert _fmt_row_count(1000) == "1 K"
+    assert _fmt_row_count(1_234_000) == "1.23 M"
+    assert _fmt_row_count(1_250_000_000) == "1.25 B"
+
+
 @pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
 @pytest.mark.parametrize("n_rows", [None, 3])
-def test_explain_logical_io_then_distinct(engine, tmp_path, kind, n_rows):
-    # Create simple Distinct + Sort query
+@pytest.mark.parametrize("select", [True, False])
+def test_explain_logical_io_then_distinct(engine, tmp_path, kind, n_rows, select):
+    # Create simple Distinct or Select(unique) + Sort query
     df = pl.DataFrame(
         {
             "order_id": [1, 2, 3, 4, 5, 6],
@@ -184,7 +198,10 @@ def test_explain_logical_io_then_distinct(engine, tmp_path, kind, n_rows):
         }
     )
     df = make_lazy_frame(df, kind, path=tmp_path, n_files=2, n_rows=n_rows)
-    q = df.unique(subset=["customer_id"]).sort("order_id")
+    if select:
+        q = df.select(pl.col("customer_id").unique()).sort("customer_id")
+    else:
+        q = df.unique(subset=["customer_id"]).sort("order_id")
 
     # Verify the query runs correctly
     assert_gpu_result_equal(q, engine=engine)
@@ -197,13 +214,68 @@ def test_explain_logical_io_then_distinct(engine, tmp_path, kind, n_rows):
         if n_rows is None:
             assert re.search(r"^\s*SORT.*row_count='unknown'\s*$", repr, re.MULTILINE)
         else:
+            value = _fmt_row_count(n_rows)
             assert re.search(
-                rf"^\s*SORT.*row_count=\'~{n_rows}\'\s*$", repr, re.MULTILINE
+                rf"^\s*SORT.*row_count=\'~{value}\'\s*$", repr, re.MULTILINE
             )
     else:
-        assert re.search(
-            rf"^\s*SORT.*row_count=\'~{q.collect().height}\'\s*$", repr, re.MULTILINE
-        )
+        value = _fmt_row_count(q.collect().height)
+        assert re.search(rf"^\s*SORT.*row_count=\'~{value}\'\s*$", repr, re.MULTILINE)
+
+
+@pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
+def test_explain_logical_io_then_filter(engine, tmp_path, kind):
+    # Create simple Distinct or Select(unique) + Sort query.
+    # NOTE: This test depends on a "default_selectivity" of 0.5
+    # and a very-specific DataFrame and predicate.
+    df = pl.DataFrame(
+        {
+            "order_id": [1, 2, 3, 4, 5, 6, 7, 8],
+            "customer_id": [101, 102, 101, 103, 104, 104, 105, 106],
+        }
+    )
+    df = make_lazy_frame(df, kind, path=tmp_path, n_files=2)
+    # Include `unique` to improve code coverage
+    q = (
+        df.filter(pl.col("customer_id") < 104)
+        .unique(subset=["order_id"])
+        .sort("order_id")
+    )
+
+    # Verify the query runs correctly
+    assert_gpu_result_equal(q, engine=engine)
+
+    # Check query plan
+    repr = explain_query(q, engine, physical=False)
+    if kind == "csv":
+        assert re.search(r"^\s*SORT.*row_count='unknown'\s*$", repr, re.MULTILINE)
+    else:
+        value = _fmt_row_count(q.collect().height)
+        assert re.search(rf"^\s*SORT.*row_count=\'~{value}\'\s*$", repr, re.MULTILINE)
+
+
+@pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
+def test_explain_logical_agg(engine, tmp_path, kind):
+    # Create simple aggregation query
+    df = pl.DataFrame(
+        {
+            "order_id": [1, 2, 3, 4, 5, 6],
+            "customer_id": [101, 102, 101, 103, 103, 104],
+            "amount": [50.0, 75.0, 30.0, 120.0, 85.0, 40.0],
+            "year": [2023, 2023, 2023, 2024, 2024, 2024],
+        }
+    )
+    df = make_lazy_frame(df, kind, path=tmp_path, n_files=2)
+    q = df.select(pl.sum("customer_id"))
+
+    # Verify the query runs correctly
+    assert_gpu_result_equal(q, engine=engine)
+
+    # Check query plan - We should know that sum produces a single row.
+    repr = explain_query(q, engine, physical=False)
+    assert re.search(
+        rf"^\s*SELECT.*row_count=\'~{q.collect().height}\'\s*$", repr, re.MULTILINE
+    )
 
 
 @pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
@@ -236,9 +308,8 @@ def test_explain_logical_io_then_join(engine, tmp_path, kind):
     if kind == "csv":
         assert re.search(r"^\s*SORT.*row_count='unknown'\s*$", repr, re.MULTILINE)
     else:
-        assert re.search(
-            rf"^\s*SORT.*row_count=\'~{q.collect().height}\'\s*$", repr, re.MULTILINE
-        )
+        value = _fmt_row_count(q.collect().height)
+        assert re.search(rf"^\s*SORT.*row_count=\'~{value}\'\s*$", repr, re.MULTILINE)
 
 
 @pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
@@ -280,9 +351,9 @@ def test_explain_logical_io_then_join_then_groupby(engine, tmp_path, kind):
     if kind == "csv":
         assert re.search(r"^\s*SORT.*row_count='unknown'\s*$", repr, re.MULTILINE)
     else:
-        join_count = q_join.collect().height
-        gb_count = q_gb.collect().height
-        final_count = q.collect().height
+        join_count = _fmt_row_count(q_join.collect().height)
+        gb_count = _fmt_row_count(q_gb.collect().height)
+        final_count = _fmt_row_count(q.collect().height)
         assert re.search(
             rf"^\s*GROUPBY.*row_count=\'~{gb_count}\'\s*$", repr, re.MULTILINE
         )
@@ -356,9 +427,9 @@ def test_explain_logical_io_then_concat_then_groupby(engine, tmp_path, kind):
     if kind == "csv":
         assert re.search(r"^\s*SORT.*row_count='unknown'\s*$", repr, re.MULTILINE)
     else:
-        concat_count_1 = q_concat_1.collect().height
-        gb_count_1 = q_gb_1.collect().height
-        final_count_1 = q_1.collect().height
+        concat_count_1 = _fmt_row_count(q_concat_1.collect().height)
+        gb_count_1 = _fmt_row_count(q_gb_1.collect().height)
+        final_count_1 = _fmt_row_count(q_1.collect().height)
         assert re.search(
             rf"^\s*UNION.*row_count=\'~{concat_count_1}\'\s*$", repr, re.MULTILINE
         )
@@ -374,11 +445,11 @@ def test_explain_logical_io_then_concat_then_groupby(engine, tmp_path, kind):
     if kind == "csv":
         assert re.search(r"^\s*SORT.*row_count='unknown'\s*$", repr, re.MULTILINE)
     else:
-        concat_count_1 = q_concat_1.collect().height
-        concat_count_2 = q_concat_2.collect().height
-        gb_count_1 = q_gb_1.collect().height
-        gb_count_2 = q_gb_2.collect().height
-        final_count_2 = q_2.collect().height
+        concat_count_1 = _fmt_row_count(q_concat_1.collect().height)
+        concat_count_2 = _fmt_row_count(q_concat_2.collect().height)
+        gb_count_1 = _fmt_row_count(q_gb_1.collect().height)
+        gb_count_2 = _fmt_row_count(q_gb_2.collect().height)
+        final_count_2 = _fmt_row_count(q_2.collect().height)
         assert re.search(
             rf"^\s*UNION.*row_count=\'~{concat_count_1}\'\s*$", repr, re.MULTILINE
         )

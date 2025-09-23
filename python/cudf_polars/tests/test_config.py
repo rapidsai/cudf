@@ -544,3 +544,23 @@ def test_memory_resource_config_from_env(monkeypatch: pytest.MonkeyPatch) -> Non
             "initial_pool_size": 123,
             "release_threshold": 456,
         }
+
+
+@pytest.mark.parametrize(
+    "option",
+    [
+        "use_io_partitioning",
+        "use_reduction_planning",
+        "use_join_heuristics",
+        "use_sampling",
+        "default_selectivity",
+    ],
+)
+def test_validate_stats_planning(option: str) -> None:
+    with pytest.raises(TypeError, match=f"{option} must be"):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={"stats_planning": {option: object()}},
+            )
+        )
