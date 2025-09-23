@@ -72,12 +72,12 @@ struct reduction_parameters {
  * The member functions provide the most common results.
  */
 struct base_reduction_function {
-  bool is_valid() const noexcept { return true; }
-  std::unique_ptr<scalar> reduce(reduction_parameters const&) const
+  [[nodiscard]] bool is_valid() const noexcept { return true; }
+  [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const&) const
   {
     CUDF_FAIL("Unsupported reduction operator", std::invalid_argument);
   }
-  std::unique_ptr<scalar> reduce_no_data(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce_no_data(reduction_parameters const& params) const
   {
     return cudf::is_nested(params.output_dtype)
              ? make_empty_scalar_like(params.col, params.stream, params.mr)
@@ -92,13 +92,13 @@ struct base_reduction_function {
  */
 template <typename Source, aggregation::Kind k>
 struct reduction_function : public base_reduction_function {
-  bool is_valid() const noexcept { return false; }
+  [[nodiscard]] bool is_valid() const noexcept { return false; }
 };
 
 template <typename Source>
   requires(cudf::is_numeric<Source>() or cudf::is_fixed_point<Source>())
 struct reduction_function<Source, cudf::aggregation::SUM> : public base_reduction_function {
-  std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
   {
     return sum(params.col, params.output_dtype, params.init, params.stream, params.mr);
   }
@@ -108,12 +108,12 @@ template <typename Source>
   requires(std::is_same_v<Source, int64_t>)  // only int64_t is supported for SUM_WITH_OVERFLOW
 struct reduction_function<Source, cudf::aggregation::SUM_WITH_OVERFLOW>
   : public base_reduction_function {
-  std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
   {
     return sum_with_overflow(
       params.col, params.output_dtype, params.init, params.stream, params.mr);
   }
-  std::unique_ptr<scalar> reduce_no_data(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce_no_data(reduction_parameters const& params) const
   {
     return sum_with_overflow(
       params.col, params.output_dtype, std::nullopt, params.stream, params.mr);
@@ -123,7 +123,7 @@ struct reduction_function<Source, cudf::aggregation::SUM_WITH_OVERFLOW>
 template <typename Source>
   requires(cudf::is_numeric<Source>() or cudf::is_fixed_point<Source>())
 struct reduction_function<Source, cudf::aggregation::PRODUCT> : public base_reduction_function {
-  std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
   {
     return product(params.col, params.output_dtype, params.init, params.stream, params.mr);
   }
@@ -131,7 +131,7 @@ struct reduction_function<Source, cudf::aggregation::PRODUCT> : public base_redu
 
 template <typename Source>
 struct reduction_function<Source, cudf::aggregation::MIN> : public base_reduction_function {
-  std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
   {
     return min(params.col, params.output_dtype, params.init, params.stream, params.mr);
   }
@@ -139,7 +139,7 @@ struct reduction_function<Source, cudf::aggregation::MIN> : public base_reductio
 
 template <typename Source>
 struct reduction_function<Source, cudf::aggregation::MAX> : public base_reduction_function {
-  std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
   {
     return max(params.col, params.output_dtype, params.init, params.stream, params.mr);
   }
@@ -148,11 +148,11 @@ struct reduction_function<Source, cudf::aggregation::MAX> : public base_reductio
 template <typename Source>
   requires(std::is_arithmetic_v<Source>)
 struct reduction_function<Source, cudf::aggregation::ANY> : public base_reduction_function {
-  std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
   {
     return any(params.col, params.output_dtype, params.init, params.stream, params.mr);
   }
-  std::unique_ptr<scalar> reduce_no_data(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce_no_data(reduction_parameters const& params) const
   {
     return std::make_unique<numeric_scalar<bool>>(false, true, params.stream, params.mr);
   }
@@ -161,11 +161,11 @@ struct reduction_function<Source, cudf::aggregation::ANY> : public base_reductio
 template <typename Source>
   requires(std::is_arithmetic_v<Source>)
 struct reduction_function<Source, cudf::aggregation::ALL> : public base_reduction_function {
-  std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
   {
     return all(params.col, params.output_dtype, params.init, params.stream, params.mr);
   }
-  std::unique_ptr<scalar> reduce_no_data(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce_no_data(reduction_parameters const& params) const
   {
     return std::make_unique<numeric_scalar<bool>>(true, true, params.stream, params.mr);
   }
@@ -175,7 +175,7 @@ template <typename Source>
   requires(cudf::is_numeric<Source>() or cudf::is_fixed_point<Source>())
 struct reduction_function<Source, cudf::aggregation::SUM_OF_SQUARES>
   : public base_reduction_function {
-  std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
   {
     return sum_of_squares(params.col, params.output_dtype, params.stream, params.mr);
   }
@@ -184,7 +184,7 @@ struct reduction_function<Source, cudf::aggregation::SUM_OF_SQUARES>
 template <typename Source>
   requires(std::is_arithmetic_v<Source>)
 struct reduction_function<Source, cudf::aggregation::MEAN> : public base_reduction_function {
-  std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
   {
     return mean(params.col, params.output_dtype, params.stream, params.mr);
   }
@@ -193,7 +193,7 @@ struct reduction_function<Source, cudf::aggregation::MEAN> : public base_reducti
 template <typename Source>
   requires(std::is_arithmetic_v<Source>)
 struct reduction_function<Source, cudf::aggregation::STD> : public base_reduction_function {
-  std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
   {
     auto std_agg = static_cast<cudf::detail::std_aggregation const&>(params.agg);
     return standard_deviation(
@@ -204,7 +204,7 @@ struct reduction_function<Source, cudf::aggregation::STD> : public base_reductio
 template <typename Source>
   requires(std::is_arithmetic_v<Source>)
 struct reduction_function<Source, cudf::aggregation::VARIANCE> : public base_reduction_function {
-  std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
   {
     auto var_agg = static_cast<cudf::detail::var_aggregation const&>(params.agg);
     return variance(params.col, params.output_dtype, var_agg._ddof, params.stream, params.mr);
@@ -214,7 +214,7 @@ struct reduction_function<Source, cudf::aggregation::VARIANCE> : public base_red
 template <typename Source>
   requires(std::is_arithmetic_v<Source> or cudf::is_fixed_point<Source>())
 struct reduction_function<Source, cudf::aggregation::MEDIAN> : public base_reduction_function {
-  std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
   {
     return quantile(
       params.col, 0.5, interpolation::LINEAR, params.output_dtype, params.stream, params.mr);
@@ -224,7 +224,7 @@ struct reduction_function<Source, cudf::aggregation::MEDIAN> : public base_reduc
 template <typename Source>
   requires(std::is_arithmetic_v<Source> or cudf::is_fixed_point<Source>())
 struct reduction_function<Source, cudf::aggregation::QUANTILE> : public base_reduction_function {
-  std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
   {
     auto qagg = static_cast<cudf::detail::quantile_aggregation const&>(params.agg);
     CUDF_EXPECTS(qagg._quantiles.size() == 1,
@@ -241,11 +241,11 @@ struct reduction_function<Source, cudf::aggregation::QUANTILE> : public base_red
 
 template <typename Source>
 struct reduction_function<Source, cudf::aggregation::COUNT_ALL> : public base_reduction_function {
-  std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
   {
     return count(params.col, null_policy::INCLUDE, params.output_dtype, params.stream, params.mr);
   }
-  std::unique_ptr<scalar> reduce_no_data(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce_no_data(reduction_parameters const& params) const
   {
     return reduce(params);
   }
@@ -253,11 +253,11 @@ struct reduction_function<Source, cudf::aggregation::COUNT_ALL> : public base_re
 
 template <typename Source>
 struct reduction_function<Source, cudf::aggregation::COUNT_VALID> : public base_reduction_function {
-  std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
   {
     return count(params.col, null_policy::EXCLUDE, params.output_dtype, params.stream, params.mr);
   }
-  std::unique_ptr<scalar> reduce_no_data(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce_no_data(reduction_parameters const& params) const
   {
     return reduce(params);
   }
@@ -265,13 +265,13 @@ struct reduction_function<Source, cudf::aggregation::COUNT_VALID> : public base_
 
 template <typename Source>
 struct reduction_function<Source, cudf::aggregation::NUNIQUE> : public base_reduction_function {
-  std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
   {
     auto nunique_agg = static_cast<cudf::detail::nunique_aggregation const&>(params.agg);
     return nunique(
       params.col, nunique_agg._null_handling, params.output_dtype, params.stream, params.mr);
   }
-  std::unique_ptr<scalar> reduce_no_data(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce_no_data(reduction_parameters const& params) const
   {
     auto const nunique_agg = static_cast<cudf::detail::nunique_aggregation const&>(params.agg);
     auto const is_empty    = params.col.is_empty();
@@ -282,7 +282,7 @@ struct reduction_function<Source, cudf::aggregation::NUNIQUE> : public base_redu
 
 template <typename Source>
 struct reduction_function<Source, cudf::aggregation::NTH_ELEMENT> : public base_reduction_function {
-  std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
   {
     auto nth_agg = static_cast<cudf::detail::nth_element_aggregation const&>(params.agg);
     return nth_element(params.col, nth_agg._n, nth_agg._null_handling, params.stream, params.mr);
@@ -291,11 +291,11 @@ struct reduction_function<Source, cudf::aggregation::NTH_ELEMENT> : public base_
 
 template <typename Source>
 struct reduction_function<Source, cudf::aggregation::HISTOGRAM> : public base_reduction_function {
-  std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
   {
     return histogram(params.col, params.stream, params.mr);
   }
-  std::unique_ptr<scalar> reduce_no_data(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce_no_data(reduction_parameters const& params) const
   {
     return std::make_unique<list_scalar>(
       std::move(*reduction::detail::make_empty_histogram_like(params.col)),
@@ -308,11 +308,11 @@ struct reduction_function<Source, cudf::aggregation::HISTOGRAM> : public base_re
 template <typename Source>
 struct reduction_function<Source, cudf::aggregation::MERGE_HISTOGRAM>
   : public base_reduction_function {
-  std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
   {
     return merge_histogram(params.col, params.stream, params.mr);
   }
-  std::unique_ptr<scalar> reduce_no_data(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce_no_data(reduction_parameters const& params) const
   {
     return std::make_unique<list_scalar>(
       std::move(*reduction::detail::make_empty_histogram_like(params.col.child(0))),
@@ -325,7 +325,7 @@ struct reduction_function<Source, cudf::aggregation::MERGE_HISTOGRAM>
 template <typename Source>
   requires(std::is_integral_v<Source>)
 struct reduction_function<Source, cudf::aggregation::BITWISE_AGG> : public base_reduction_function {
-  std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
   {
     auto bitwise_agg = static_cast<cudf::detail::bitwise_aggregation const&>(params.agg);
     return bitwise_reduction(bitwise_agg.bit_op, params.col, params.stream, params.mr);
@@ -335,12 +335,12 @@ struct reduction_function<Source, cudf::aggregation::BITWISE_AGG> : public base_
 template <typename Source>
 struct reduction_function<Source, cudf::aggregation::COLLECT_LIST>
   : public base_reduction_function {
-  std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
   {
     auto col_agg = static_cast<cudf::detail::collect_list_aggregation const&>(params.agg);
     return collect_list(params.col, col_agg._null_handling, params.stream, params.mr);
   }
-  std::unique_ptr<scalar> reduce_no_data(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce_no_data(reduction_parameters const& params) const
   {
     auto scalar = make_list_scalar(empty_like(params.col)->view(), params.stream, params.mr);
     scalar->set_valid_async(false, params.stream);
@@ -350,7 +350,7 @@ struct reduction_function<Source, cudf::aggregation::COLLECT_LIST>
 
 template <typename Source>
 struct reduction_function<Source, cudf::aggregation::COLLECT_SET> : public base_reduction_function {
-  std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
   {
     auto col_agg = static_cast<cudf::detail::collect_set_aggregation const&>(params.agg);
     return collect_set(params.col,
@@ -360,7 +360,7 @@ struct reduction_function<Source, cudf::aggregation::COLLECT_SET> : public base_
                        params.stream,
                        params.mr);
   }
-  std::unique_ptr<scalar> reduce_no_data(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce_no_data(reduction_parameters const& params) const
   {
     auto scalar = make_list_scalar(empty_like(params.col)->view(), params.stream, params.mr);
     scalar->set_valid_async(false, params.stream);
@@ -370,7 +370,7 @@ struct reduction_function<Source, cudf::aggregation::COLLECT_SET> : public base_
 
 template <typename Source>
 struct reduction_function<Source, cudf::aggregation::MERGE_LISTS> : public base_reduction_function {
-  std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
   {
     return merge_lists(params.col, params.stream, params.mr);
   }
@@ -378,7 +378,7 @@ struct reduction_function<Source, cudf::aggregation::MERGE_LISTS> : public base_
 
 template <typename Source>
 struct reduction_function<Source, cudf::aggregation::MERGE_SETS> : public base_reduction_function {
-  std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
   {
     auto col_agg = static_cast<cudf::detail::merge_sets_aggregation const&>(params.agg);
     return merge_sets(
@@ -389,7 +389,7 @@ struct reduction_function<Source, cudf::aggregation::MERGE_SETS> : public base_r
 template <typename Source>
   requires(cudf::is_numeric<Source>() or cudf::is_fixed_point<Source>())
 struct reduction_function<Source, cudf::aggregation::TDIGEST> : public base_reduction_function {
-  std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
   {
     CUDF_EXPECTS(params.output_dtype.id() == type_id::STRUCT,
                  "Tdigest aggregations expect output type to be STRUCT",
@@ -398,7 +398,7 @@ struct reduction_function<Source, cudf::aggregation::TDIGEST> : public base_redu
     return tdigest::detail::reduce_tdigest(
       params.col, td_agg.max_centroids, params.stream, params.mr);
   }
-  std::unique_ptr<scalar> reduce_no_data(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce_no_data(reduction_parameters const& params) const
   {
     return tdigest::detail::make_empty_tdigest_scalar(params.stream, params.mr);
   }
@@ -407,7 +407,7 @@ struct reduction_function<Source, cudf::aggregation::TDIGEST> : public base_redu
 template <typename Source>
 struct reduction_function<Source, cudf::aggregation::MERGE_TDIGEST>
   : public base_reduction_function {
-  std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
   {
     CUDF_EXPECTS(params.output_dtype.id() == type_id::STRUCT,
                  "Tdigest aggregations expect output type to be STRUCT",
@@ -416,7 +416,7 @@ struct reduction_function<Source, cudf::aggregation::MERGE_TDIGEST>
     return tdigest::detail::reduce_merge_tdigest(
       params.col, td_agg.max_centroids, params.stream, params.mr);
   }
-  std::unique_ptr<scalar> reduce_no_data(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce_no_data(reduction_parameters const& params) const
   {
     return tdigest::detail::make_empty_tdigest_scalar(params.stream, params.mr);
   }
@@ -424,7 +424,7 @@ struct reduction_function<Source, cudf::aggregation::MERGE_TDIGEST>
 
 template <typename Source>
 struct reduction_function<Source, cudf::aggregation::HOST_UDF> : public base_reduction_function {
-  std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
   {
     auto const& udf_base_ptr =
       dynamic_cast<cudf::detail::host_udf_aggregation const&>(params.agg).udf_ptr;
@@ -437,7 +437,7 @@ struct reduction_function<Source, cudf::aggregation::HOST_UDF> : public base_red
 
 struct reduction_functions_aggregator {
   template <typename Source, cudf::aggregation::Kind k>
-  std::unique_ptr<scalar> operator()(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> operator()(reduction_parameters const& params) const
   {
     return reduction_function<Source, k>{}.reduce(params);
   }
@@ -445,7 +445,7 @@ struct reduction_functions_aggregator {
 
 struct reduction_functions_no_data {
   template <typename Source, cudf::aggregation::Kind k>
-  std::unique_ptr<scalar> operator()(reduction_parameters const& params) const
+  [[nodiscard]] std::unique_ptr<scalar> operator()(reduction_parameters const& params) const
   {
     return reduction_function<Source, k>{}.reduce_no_data(params);
   }
@@ -453,7 +453,7 @@ struct reduction_functions_no_data {
 
 struct reduction_functions_is_valid {
   template <typename Source, cudf::aggregation::Kind k>
-  bool operator()() const
+  [[nodiscard]] bool operator()() const
   {
     return reduction_function<Source, k>{}.is_valid();
   }
