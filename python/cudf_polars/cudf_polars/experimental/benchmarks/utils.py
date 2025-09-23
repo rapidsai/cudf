@@ -244,7 +244,7 @@ class RunConfig:
         except ValueError:
             scale_factor = float(scale_factor)
 
-        if args.scale is not None:
+        if "pdsh" in name and args.scale is not None:
             # Validate the user-supplied scale factor
             sf_inf = _infer_scale_factor(name, path, args.suffix)
             rel_error = abs((scale_factor - sf_inf) / sf_inf)
@@ -406,6 +406,7 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
         "protocol": args.protocol,
         "rmm_pool_size": args.rmm_pool_size,
         "rmm_async": args.rmm_async,
+        "rmm_release_threshold": args.rmm_release_threshold,
         "threads_per_worker": run_config.threads,
     }
 
@@ -595,8 +596,8 @@ def parse_args(
         "--protocol",
         default="ucx",
         type=str,
-        choices=["ucx-old", "ucx"],
-        help="Communication protocol to use for Dask: ucx (uses ucxx) or ucx-old (uses ucx-py)",
+        choices=["ucx"],
+        help="Communication protocol to use for Dask: ucx (uses ucxx)",
     )
     parser.add_argument(
         "--shuffle",
@@ -624,6 +625,15 @@ def parse_args(
         help=textwrap.dedent("""\
             Fraction of total GPU memory to allocate for RMM pool.
             Default: 0.5 (50%% of GPU memory)"""),
+    )
+    parser.add_argument(
+        "--rmm-release-threshold",
+        default=None,
+        type=float,
+        help=textwrap.dedent("""\
+            Passed to dask_cuda.LocalCUDACluster to control the release
+            threshold for RMM pool memory.
+            Default: None (no release threshold)"""),
     )
     parser.add_argument(
         "--rmm-async",

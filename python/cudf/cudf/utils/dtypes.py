@@ -228,8 +228,17 @@ def is_mixed_with_object_dtype(lhs, rhs):
     elif isinstance(rhs.dtype, cudf.CategoricalDtype):
         return is_mixed_with_object_dtype(lhs, rhs.dtype.categories)
 
-    return (lhs.dtype == "object" and rhs.dtype != "object") or (
+    res = (lhs.dtype == "object" and rhs.dtype != "object") or (
         rhs.dtype == "object" and lhs.dtype != "object"
+    )
+    if res:
+        return res
+    return (
+        cudf.api.types.is_string_dtype(lhs.dtype)
+        and not cudf.api.types.is_string_dtype(rhs.dtype)
+    ) or (
+        cudf.api.types.is_string_dtype(rhs.dtype)
+        and not cudf.api.types.is_string_dtype(lhs.dtype)
     )
 
 

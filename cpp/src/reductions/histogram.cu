@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,9 +18,9 @@
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/row_operator/row_operators.cuh>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/structs/structs_column_view.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
@@ -121,23 +121,21 @@ compute_row_frequencies(table_view const& input,
                std::invalid_argument);
 
   auto const preprocessed_input =
-    cudf::experimental::row::hash::preprocessed_table::create(input, stream);
+    cudf::detail::row::hash::preprocessed_table::create(input, stream);
   auto const has_nulls = nullate::DYNAMIC{cudf::has_nested_nulls(input)};
 
-  auto const row_hasher = cudf::experimental::row::hash::row_hasher(preprocessed_input);
+  auto const row_hasher = cudf::detail::row::hash::row_hasher(preprocessed_input);
   auto const key_hasher = row_hasher.device_hasher(has_nulls);
-  auto const row_comp   = cudf::experimental::row::equality::self_comparator(preprocessed_input);
+  auto const row_comp   = cudf::detail::row::equality::self_comparator(preprocessed_input);
 
   // Always compare NaNs as equal.
-  using nan_equal_comparator =
-    cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
-  auto const value_comp = nan_equal_comparator{};
+  using nan_equal_comparator = cudf::detail::row::equality::nan_equal_physical_equality_comparator;
+  auto const value_comp      = nan_equal_comparator{};
   // Hard set the tparam `has_nested_columns` = false for now as we don't yet support nested columns
   auto const key_equal = row_comp.equal_to<false>(has_nulls, null_equality::EQUAL, value_comp);
 
-  using row_hash =
-    cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
-                                                     cudf::nullate::DYNAMIC>;
+  using row_hash = cudf::detail::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
+                                                              cudf::nullate::DYNAMIC>;
 
   size_t const num_rows = input.num_rows();
 

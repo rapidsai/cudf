@@ -144,3 +144,30 @@ def test_series_categorical_missing_value_count():
     actual = gs.value_counts()
 
     assert_eq(expected, actual, check_dtype=False)
+
+
+def test_numeric_alpha_value_counts():
+    pdf = pd.DataFrame(
+        {
+            "numeric": [1, 2, 3, 4, 5, 6, 1, 2, 4] * 10,
+            "alpha": ["u", "h", "d", "a", "m", "u", "h", "d", "a"] * 10,
+        }
+    )
+
+    gdf = cudf.DataFrame(
+        {
+            "numeric": [1, 2, 3, 4, 5, 6, 1, 2, 4] * 10,
+            "alpha": ["u", "h", "d", "a", "m", "u", "h", "d", "a"] * 10,
+        }
+    )
+
+    assert_eq(
+        pdf.numeric.value_counts().sort_index(),
+        gdf.numeric.value_counts().sort_index(),
+        check_dtype=False,
+    )
+    assert_eq(
+        pdf.alpha.value_counts().sort_index(),
+        gdf.alpha.value_counts().sort_index(),
+        check_dtype=False,
+    )

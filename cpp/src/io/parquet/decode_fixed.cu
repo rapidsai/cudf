@@ -983,7 +983,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   // Exit super early for simple types if the page does not need to be decoded
   if constexpr (not has_lists_t and not has_strings_t and not has_nesting_t) {
     if (not page_mask[page_idx]) {
-      pp->num_nulls  = pp->num_rows;
+      pp->num_nulls  = pp->nesting[0].batch_size;
       pp->num_valids = 0;
       // Set s->nesting info = nullptr to bypass `null_count_back_copier` at return
       s->nesting_info = nullptr;
@@ -1004,15 +1004,18 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
 
   // Write list and/or string offsets and exit if the page does not need to be decoded
   if (not page_mask[page_idx]) {
-    pp->num_nulls  = pp->num_rows;
-    pp->num_valids = 0;
-    // Update offsets for all list depth levels
+    //  Update offsets for all list depth levels
     if constexpr (has_lists_t) { update_list_offsets_for_pruned_pages<decode_block_size_t>(s); }
     // Update string offsets or write string sizes for small and large strings respectively
     if constexpr (has_strings_t) {
       update_string_offsets_for_pruned_pages<decode_block_size_t, has_lists_t>(
         s, initial_str_offsets, pages[page_idx]);
     }
+    // Must be set after computing above list and string offsets
+    pp->num_nulls = pp->nesting[s->col.max_nesting_depth - 1].batch_size;
+    if constexpr (not has_lists_t) { pp->num_nulls -= s->first_row; }
+    pp->num_valids = 0;
+
     return;
   }
 
@@ -1102,6 +1105,13 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
       } else if constexpr (has_strings_t) {
         initialize_string_descriptors<is_calc_sizes_only::YES>(s, sb, skipped_leaf_values, block);
         if (t == 0) { s->dict_pos = processed_count; }
+        block.sync();
+      } else if constexpr (has_bools_t) {
+        if (bools_are_rle_stream) {
+          skip_decode<rolling_buf_size>(bool_stream, skipped_leaf_values, t);
+        } else {
+          if (t == 0) { s->dict_pos = skipped_leaf_values; }
+        }
         block.sync();
       }
     }
