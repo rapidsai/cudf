@@ -144,7 +144,7 @@ def test_query_splitted_combine():
     df = pd.DataFrame(
         {"x": rng.integers(0, 5, size=10), "y": rng.normal(size=10)}
     )
-    gdf = DataFrame.from_pandas(df)
+    gdf = DataFrame(df)
 
     # Split the GDF
     s1 = gdf[:5]
@@ -164,7 +164,7 @@ def test_query_splitted_combine():
 
 def test_query_empty_frames():
     empty_pdf = pd.DataFrame({"a": [], "b": []})
-    empty_gdf = DataFrame.from_pandas(empty_pdf)
+    empty_gdf = DataFrame(empty_pdf)
     # Do the query
     expr = "a > 2"
     got = empty_gdf.query(expr).to_pandas()
@@ -196,7 +196,7 @@ def test_query_with_index_name(index, query):
     )
     pdf.set_index(index)
 
-    gdf = DataFrame.from_pandas(pdf)
+    gdf = DataFrame(pdf)
 
     out = gdf.query(query)
     expect = pdf.query(query)
@@ -225,7 +225,7 @@ def test_query_with_index_keyword(query):
     )
     pdf.set_index("a")
 
-    gdf = DataFrame.from_pandas(pdf)
+    gdf = DataFrame(pdf)
 
     out = gdf.query(query)
     expect = pdf.query(query)
