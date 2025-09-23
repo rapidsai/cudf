@@ -72,6 +72,9 @@ def test_unique_fallback(df):
             "scheduler": DEFAULT_SCHEDULER,
             "unique_fraction": {"y": 1.0},
             "fallback_mode": "raise",
+            # We are using unique_fraction to control the algorithm,
+            # so we need to disable statistics-based reduction planning.
+            "stats_planning": {"use_reduction_planning": False},
         },
     )
     q = df.unique(keep="first", maintain_order=True)
@@ -93,6 +96,9 @@ def test_unique_select(df, maintain_order, cardinality):
             "scheduler": DEFAULT_SCHEDULER,
             "unique_fraction": cardinality,
             "fallback_mode": "warn",
+            # We are using unique_fraction to control the algorithm,
+            # so we need to disable statistics-based reduction planning.
+            "stats_planning": {"use_reduction_planning": False},
         },
     )
 
