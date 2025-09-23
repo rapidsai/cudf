@@ -345,6 +345,7 @@ struct get_page_nesting_size {
   size_type const max_depth;
   size_t const num_pages;
   PageInfo const* const pages;
+  bool const* const page_mask;
 
   __device__ inline size_type operator()(size_t index) const
   {
@@ -355,6 +356,13 @@ struct get_page_nesting_size {
         page.flags & PAGEINFO_FLAGS_DICTIONARY ||
         indices.depth_idx >= input_cols[indices.col_idx].nesting_depth) {
       return 0;
+    }
+
+    // If this page is pruned and has a list parent, set the batch size for this depth to 0 to
+    // reduce output buffer size and non-empty nulls
+    if (not page_mask[indices.page_idx] and indices.depth_idx > 0 and
+        page.nesting[indices.depth_idx - 1].type == type_id::LIST) {
+      page.nesting[indices.depth_idx].batch_size = 0;
     }
 
     return page.nesting[indices.depth_idx].batch_size;
