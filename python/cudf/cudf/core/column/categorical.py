@@ -126,6 +126,13 @@ class CategoricalColumn(column.ColumnBase):
             raise ValueError(
                 f"{dtype=} must be cudf.CategoricalDtype instance."
             )
+        self._codes = cudf.core.column.numerical.NumericalColumn(
+            plc_column=plc_column,
+            size=size,
+            dtype=dtype_from_pylibcudf_column(plc_column),
+            offset=offset,
+            null_count=null_count,
+        )
         super().__init__(
             plc_column=plc_column,
             size=size,
@@ -134,13 +141,13 @@ class CategoricalColumn(column.ColumnBase):
             null_count=null_count,
         )
         # self._codes = self.children[0].set_mask(self.mask)
-        self._codes = cudf.core.column.numerical.NumericalColumn(
-            plc_column=plc_column,
-            size=size,
-            dtype=dtype_from_pylibcudf_column(plc_column),
-            offset=offset,
-            null_count=null_count,
-        )
+        # self._codes = cudf.core.column.numerical.NumericalColumn(
+        #     plc_column=plc_column,
+        #     size=size,
+        #     dtype=dtype_from_pylibcudf_column(plc_column),
+        #     offset=offset,
+        #     null_count=null_count,
+        # )
 
     @property
     def itemsize(self) -> int:

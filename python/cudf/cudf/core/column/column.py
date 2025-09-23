@@ -549,55 +549,56 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         pylibcudf.Column
             A new pylibcudf.Column referencing the same data.
         """
+        return self.plc_column
 
-        # TODO: Categoricals will need to be treated differently eventually.
-        # There is no 1-1 correspondence between cudf and libcudf for
-        # categoricals because cudf supports ordered and unordered categoricals
-        # while libcudf supports only unordered categoricals (see
-        # https://github.com/rapidsai/cudf/pull/8567).
-        if isinstance(self.dtype, cudf.CategoricalDtype):
-            col = self.base_children[0]
-        else:
-            col = self
+        # # TODO: Categoricals will need to be treated differently eventually.
+        # # There is no 1-1 correspondence between cudf and libcudf for
+        # # categoricals because cudf supports ordered and unordered categoricals
+        # # while libcudf supports only unordered categoricals (see
+        # # https://github.com/rapidsai/cudf/pull/8567).
+        # if isinstance(self.dtype, cudf.CategoricalDtype):
+        #     col = self.base_children[0]
+        # else:
+        #     col = self
 
-        dtype = dtype_to_pylibcudf_type(col.dtype)
+        # dtype = dtype_to_pylibcudf_type(col.dtype)
 
-        data = None
-        if col.base_data is not None:
-            cai = cuda_array_interface_wrapper(
-                ptr=col.base_data.get_ptr(mode=mode),
-                size=col.base_data.size,
-                owner=col.base_data,
-            )
-            data = plc.gpumemoryview(cai)
+        # data = None
+        # if col.base_data is not None:
+        #     cai = cuda_array_interface_wrapper(
+        #         ptr=col.base_data.get_ptr(mode=mode),
+        #         size=col.base_data.size,
+        #         owner=col.base_data,
+        #     )
+        #     data = plc.gpumemoryview(cai)
 
-        mask = None
-        if self.nullable:
-            # TODO: Are we intentionally use self's mask instead of col's?
-            # Where is the mask stored for categoricals?
-            cai = cuda_array_interface_wrapper(
-                ptr=self.base_mask.get_ptr(mode=mode),  # type: ignore[union-attr]
-                size=self.base_mask.size,  # type: ignore[union-attr]
-                owner=self.base_mask,
-            )
-            mask = plc.gpumemoryview(cai)
+        # mask = None
+        # if self.nullable:
+        #     # TODO: Are we intentionally use self's mask instead of col's?
+        #     # Where is the mask stored for categoricals?
+        #     cai = cuda_array_interface_wrapper(
+        #         ptr=self.base_mask.get_ptr(mode=mode),  # type: ignore[union-attr]
+        #         size=self.base_mask.size,  # type: ignore[union-attr]
+        #         owner=self.base_mask,
+        #     )
+        #     mask = plc.gpumemoryview(cai)
 
-        children = []
-        if col.base_children:
-            children = [
-                child_column.to_pylibcudf(mode=mode)
-                for child_column in col.base_children
-            ]
+        # children = []
+        # if col.base_children:
+        #     children = [
+        #         child_column.to_pylibcudf(mode=mode)
+        #         for child_column in col.base_children
+        #     ]
 
-        return plc.Column(
-            dtype,
-            self.size,
-            data,
-            mask,
-            self.null_count,
-            self.offset,
-            children,
-        )
+        # return plc.Column(
+        #     dtype,
+        #     self.size,
+        #     data,
+        #     mask,
+        #     self.null_count,
+        #     self.offset,
+        #     children,
+        # )
 
     @classmethod
     def from_pylibcudf(
@@ -2045,6 +2046,16 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             codes_dtype = np.dtype(header["codes_dtype"])
         else:
             codes_dtype = None
+        if "null_count" not in header:
+            # test_deserialize_cudf_23_12
+            if mask is None:
+                null_count = 0
+            else:
+                null_count = plc.null_mask.null_count(
+                    plc.gpumemoryview(mask), 0, header["size"]
+                )
+        else:
+            null_count = header["null_count"]
         plc_column = plc.Column(
             dtype_to_pylibcudf_type(
                 codes_dtype if isinstance(dtype, CategoricalDtype) else dtype
@@ -2052,8 +2063,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             header["size"],
             plc.gpumemoryview(data) if data is not None else None,
             plc.gpumemoryview(mask) if mask is not None else None,
-            header["null_count"],
-            header["offset"],
+            null_count,
+            header.get("offset", 0),
             [child.to_pylibcudf(mode="read") for child in children],
         )
         return build_column(

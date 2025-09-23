@@ -519,8 +519,28 @@ class NumericalColumn(NumericalBaseColumn):
                 ._with_type_metadata(dtype)
             )
 
+    def _as_temporal_column(self, dtype: np.dtype) -> plc.Column:
+        return plc.Column(
+            data_type=dtype_to_pylibcudf_type(dtype),
+            size=self.size,
+            data=plc.gpumemoryview(self.astype(np.dtype(np.int64)).base_data),
+            mask=plc.gpemoryview(self.base_mask)
+            if self.base_mask is not None
+            else None,
+            null_count=self.null_count,
+            offset=self.offset,
+            children=[],
+        )
+
     def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:
-        return self.cast(dtype=dtype)  # type: ignore[return-value]
+        new_plc_column = self._as_temporal_column(dtype)
+        return cudf.core.column.datetime.DatetimeColumn(
+            plc_column=new_plc_column,
+            size=new_plc_column.size(),
+            dtype=dtype,
+            offset=new_plc_column.offset(),
+            null_count=new_plc_column.null_count(),
+        )
         # return cudf.core.column.DatetimeColumn(
         #     data=self.astype(np.dtype(np.int64)).base_data,  # type: ignore[arg-type]
         #     dtype=dtype,
@@ -530,7 +550,14 @@ class NumericalColumn(NumericalBaseColumn):
         # )
 
     def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:
-        return self.cast(dtype=dtype)  # type: ignore[return-value]
+        new_plc_column = self._as_temporal_column(dtype)
+        return cudf.core.column.timedelta.TimeDeltaColumn(
+            plc_column=new_plc_column,
+            size=new_plc_column.size(),
+            dtype=dtype,
+            offset=new_plc_column.offset(),
+            null_count=new_plc_column.null_count(),
+        )
         # return cudf.core.column.TimeDeltaColumn(
         #     data=self.astype(np.dtype(np.int64)).base_data,  # type: ignore[arg-type]
         #     dtype=dtype,

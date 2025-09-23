@@ -12,6 +12,8 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
+import pylibcudf as plc
+
 import cudf
 from cudf.api.types import is_scalar
 from cudf.core.column.column import ColumnBase, as_column, column_empty
@@ -19,6 +21,7 @@ from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
+    dtype_to_pylibcudf_type,
     find_common_type,
     is_pandas_nullable_extension_dtype,
 )
@@ -28,8 +31,6 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from typing_extensions import Self
-
-    import pylibcudf as plc
 
     from cudf._typing import ColumnLike, DtypeObj, ScalarLike
     from cudf.core.column.numerical import NumericalColumn
@@ -223,7 +224,25 @@ class TemporalBaseColumn(ColumnBase):
             )
 
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
-        return self.cast(dtype=self._UNDERLYING_DTYPE).astype(dtype)  # type: ignore[return-value]
+        new_plc_column = plc.Column(
+            data_type=dtype_to_pylibcudf_type(self._UNDERLYING_DTYPE),
+            size=self.size,
+            data=plc.gpumemoryview(self.base_data),
+            mask=plc.gpemoryview(self.base_mask)
+            if self.base_mask is not None
+            else None,
+            null_count=self.null_count,
+            offset=self.offset,
+            children=[],
+        )
+        new_column = cudf.core.column.numerical.NumericalColumn(
+            plc_column=new_plc_column,
+            size=new_plc_column.size(),
+            dtype=self._UNDERLYING_DTYPE,
+            offset=new_plc_column.offset(),
+            null_count=new_plc_column.null_count(),
+        )
+        return new_column.astype(dtype)  # type: ignore[return-value]
         # col = NumericalColumn(
         #     data=self.base_data,  # type: ignore[arg-type]
         #     dtype=self._UNDERLYING_DTYPE,
