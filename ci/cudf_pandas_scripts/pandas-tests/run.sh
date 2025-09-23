@@ -68,6 +68,12 @@ MAIN_RUN_ID=$(
         --json 'createdAt,databaseId' \
         --jq 'sort_by(.createdAt) | reverse | .[0] | .databaseId'
 )
+
+if [[ -z "${MAIN_RUN_ID}" ]]; then
+    rapids-logger "No MAIN_RUN_ID found, exiting."
+    exit ${EXITCODE}
+fi
+
 rapids-logger "Fetching latest available results from nightly: ${MAIN_RUN_ID}"
 gh run download                  \
     --repo 'rapidsai/cudf'        \
