@@ -6,6 +6,7 @@ from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
 
 from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from rmm.librmm.memory_resource cimport device_memory_resource
 
 
 cdef extern from "cudf/labeling/label_bins.hpp" namespace "cudf" nogil:
@@ -19,5 +20,6 @@ cdef extern from "cudf/labeling/label_bins.hpp" namespace "cudf" nogil:
         inclusive left_inclusive,
         const column_view &right_edges,
         inclusive right_inclusive,
-        cuda_stream_view stream
+        cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler

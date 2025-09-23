@@ -1593,7 +1593,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                         [plc.types.NullOrder.AFTER],
                     )
                     indices = ColumnBase.from_pylibcudf(plc_table.columns()[0])
-                indices = indices.data_array_view(mode="read")
+                indices = indices.values
             # Which indices are we going to want?
             want = np.arange(samples_per_group.sum(), dtype=SIZE_TYPE_DTYPE)
             scan = np.empty_like(samples_per_group)
@@ -3593,9 +3593,9 @@ class _Grouping(Serializable):
                 elif isinstance(by, Grouper):
                     self._handle_grouper(by)
                 elif isinstance(by, pd.Series):
-                    self._handle_series(Series.from_pandas(by))
+                    self._handle_series(Series(by))
                 elif isinstance(by, pd.Index):
-                    self._handle_index(Index.from_pandas(by))
+                    self._handle_index(Index(by))
                 else:
                     try:
                         self._handle_label(by)

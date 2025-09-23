@@ -12,7 +12,7 @@ def test_dataframe_pop():
     pdf = pd.DataFrame(
         {"a": [1, 2, 3], "b": ["x", "y", "z"], "c": [7.0, 8.0, 9.0]}
     )
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
 
     # Test non-existing column error
     with pytest.raises(KeyError) as raises:
