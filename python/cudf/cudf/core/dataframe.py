@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import functools
 import inspect
 import itertools
@@ -994,13 +995,14 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         second_index = None
         second_columns = None
-
+        attrs = None
         if isinstance(data, (DataFrame, pd.DataFrame)):
             if isinstance(data, pd.DataFrame):
                 data = self.from_pandas(data, nan_as_null=nan_as_null)
             col_accessor = data._data
             index, second_index = data.index, index
             second_columns = columns
+            attrs = data.attrs
         elif isinstance(data, (Series, pd.Series)):
             if isinstance(data, pd.Series):
                 data = Series.from_pandas(data, nan_as_null=nan_as_null)
@@ -1181,7 +1183,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 label_dtype=second_columns.dtype,
             )
 
-        super().__init__(col_accessor, index=index)
+        super().__init__(col_accessor, index=index, attrs=attrs)
         if second_index is not None:
             reindexed = self.reindex(index=second_index, copy=False)
             self._data = reindexed._data
@@ -1191,13 +1193,14 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             self._data = self.astype(dtype)._data
 
     @classmethod
-    def _from_data(
+    def _from_data(  # type: ignore[override]
         cls,
         data: MutableMapping,
         index: Index | None = None,
         columns: Any = None,
+        attrs: dict | None = None,
     ) -> Self:
-        out = super()._from_data(data=data, index=index)
+        out = super()._from_data(data=data, index=index, attrs=attrs)
         if columns is not None:
             out.columns = columns
         return out
@@ -1354,10 +1357,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         inputs.
         """
         if col_is_scalar:
-            series = Series._from_data(ca, index=self.index)
+            series = Series._from_data(ca, index=self.index, attrs=self.attrs)
             return series._getitem_preprocessed(spec)
         if ca.names != self._column_names:
-            frame = self._from_data(ca, index=self.index)
+            frame = self._from_data(ca, index=self.index, attrs=self.attrs)
         else:
             frame = self
         if isinstance(spec, indexing_utils.MapIndexer):
@@ -1385,6 +1388,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )
                 result.index = result_index
                 result.name = new_name
+                result._attrs = frame.attrs
                 return result
             except TypeError:
                 if get_option("mode.pandas_compatible"):
@@ -1481,7 +1485,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     and all(n == "" for n in out._column_names[0])
                 )
             ):
-                out = self._constructor_sliced._from_data(out._data)
+                out = self._constructor_sliced._from_data(
+                    out._data, attrs=self.attrs
+                )
                 out._data.multiindex = False
                 out.index = self.index
                 out.name = arg
@@ -3414,17 +3420,16 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         allow_duplicates: bool = False,
         names: Hashable | Sequence[Hashable] | None = None,
     ):
+        data, index = self._reset_index(
+            level=level,
+            drop=drop,
+            col_level=col_level,
+            col_fill=col_fill,
+            allow_duplicates=allow_duplicates,
+            names=names,
+        )
         return self._mimic_inplace(
-            DataFrame._from_data(
-                *self._reset_index(
-                    level=level,
-                    drop=drop,
-                    col_level=col_level,
-                    col_fill=col_fill,
-                    allow_duplicates=allow_duplicates,
-                    names=names,
-                )
-            ),
+            DataFrame._from_data(data=data, index=index, attrs=self.attrs),
             inplace=inplace,
         )
 
@@ -3539,12 +3544,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )
 
         value = as_column(value, nan_as_null=nan_as_null)
-        if cudf.get_option("mode.pandas_compatible"):
-            dtype = value.dtype
-            if self._num_columns > 0:
-                _, first_dtype = next(self._dtypes)
-                dtype = get_dtype_of_same_kind(first_dtype, dtype)
-                value = value.astype(dtype)
         self._data.insert(name, value, loc=loc)
 
     @property  # type:ignore
@@ -4312,6 +4311,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         result = type(self)._from_data(
             ColumnAccessor(dict(enumerate(result_columns)), verify=False),
             index=Index(index),
+            attrs=self.attrs,
         )
         # Set the old index as the new column names
         result.columns = self.index
@@ -5055,7 +5055,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             apply_sr = Series._from_column(col)
             result[name] = apply_sr.apply(_func)._column
 
-        return DataFrame._from_data(result, index=self.index)
+        return DataFrame._from_data(result, index=self.index, attrs=self.attrs)
 
     @_performance_tracking
     @applyutils.doc_applychunks()
@@ -5651,6 +5651,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         out_df = pd.DataFrame(out_data, index=out_index)
         out_df.columns = self._data.to_pandas_index
+        out_df.attrs = self.attrs
 
         return out_df
 
@@ -5706,6 +5707,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             df = cls._from_data(data, index)
             # Checks duplicate columns and sets column metadata
             df.columns = dataframe.columns
+            df._attrs = copy.deepcopy(dataframe.attrs)
             return df
         else:
             raise TypeError(
@@ -6296,7 +6298,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             if q_is_number:
                 result = result.transpose()
                 return Series._from_column(
-                    result._columns[0], name=q, index=result.index
+                    result._columns[0],
+                    name=q,
+                    index=result.index,
+                    attrs=self.attrs,
                 )
         elif method == "single":
             # Ensure that qs is non-scalar so that we always get a column back.
@@ -6314,7 +6319,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     if len(res) == 0:
                         res = column_empty(row_count=len(qs), dtype=ser.dtype)
                     result[k] = res
-            result = DataFrame._from_data(result)
+            result = DataFrame._from_data(result, attrs=self.attrs)
 
             if q_is_number and numeric_only:
                 result = result.fillna(np.nan).iloc[0]
@@ -6464,7 +6469,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             )
 
         # TODO: Update this logic to properly preserve MultiIndex columns.
-        return DataFrame._from_data(result, self.index)
+        return DataFrame._from_data(result, self.index, attrs=self.attrs)
 
     #
     # Stats
@@ -6576,6 +6581,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 ]
             ),
             index=Index(self._column_names),
+            attrs=self.attrs,
         )
 
     _SUPPORT_AXIS_LOOKUP = {
@@ -6625,12 +6631,14 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             )
             source = self._get_columns_by_label(numeric_cols)
             if source.empty:
-                return Series(
+                res = Series(
                     index=self._data.to_pandas_index[:0]
                     if axis == 0
                     else source.index,
                     dtype="float64",
                 )
+                res._attrs = self._attrs
+                return res
         if (
             axis == 2
             and op in {"kurtosis", "skew"}
@@ -6736,7 +6744,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     new_dtype = get_dtype_of_same_kind(common_dtype, res_dtype)
                     res = res.astype(new_dtype)
 
-                return Series._from_column(res, index=idx)
+                return Series._from_column(res, index=idx, attrs=self.attrs)
 
     @_performance_tracking
     def _scan(
@@ -7018,10 +7026,13 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             result = as_column(result, dtype=result_dtype)
             if mask is not None:
                 result = result.set_mask(mask._column.as_mask())
-            return Series._from_column(result, index=self.index)
+            return Series._from_column(
+                result, index=self.index, attrs=self.attrs
+            )
         else:
             result_df = DataFrame(result, index=self.index)
             result_df._set_columns_like(prepared._data)
+            result_df._attrs = self.attrs
             return result_df
 
     @_performance_tracking
@@ -7642,7 +7653,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         # Construct the resulting dataframe / series
         if not has_unnamed_levels:
-            result = Series._from_column(stacked[0], index=new_index)
+            result = Series._from_column(
+                stacked[0], index=new_index, attrs=self.attrs
+            )
         else:
             if unnamed_level_values.nlevels == 1:
                 unnamed_level_values = unnamed_level_values.get_level_values(0)
@@ -7667,7 +7680,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 unnamed_level_values.names,
             )
 
-            result = DataFrame._from_data(data, index=new_index)
+            result = DataFrame._from_data(
+                data, index=new_index, attrs=self.attrs
+            )
 
         if not future_stack and dropna:
             return result.dropna(how="all")
@@ -7707,10 +7722,14 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 "numeric_only is currently not supported."
             )
 
+        if self.isna().any().any():
+            raise NotImplementedError("cupy-based cov does not support nulls")
+
         cov = cupy.cov(self.values, ddof=ddof, rowvar=False)
         cols = self._data.to_pandas_index
         df = DataFrame(cupy.asfortranarray(cov), index=cols)
         df._set_columns_like(self._data)
+        df._attrs = self.attrs
         return df
 
     def corr(
@@ -7735,6 +7754,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         DataFrame
             The requested correlation matrix.
         """
+        if self.isna().any().any():
+            raise NotImplementedError("cupy-based corr does not support nulls")
+
         if method == "pearson":
             values = self.values
         elif method == "spearman":
@@ -7754,6 +7776,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         cols = self._data.to_pandas_index
         df = DataFrame(cupy.asfortranarray(corr), index=cols)
         df._set_columns_like(self._data)
+        df._attrs = self.attrs
         return df
 
     @_performance_tracking
@@ -8064,9 +8087,13 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         if axis != 0:
             raise NotImplementedError("axis parameter is not supported yet.")
         counts = [col.distinct_count(dropna=dropna) for col in self._columns]
-        return self._constructor_sliced(
-            counts, index=self._data.to_pandas_index
+        res = self._constructor_sliced(
+            counts,
+            index=self._data.to_pandas_index,
+            dtype="float64" if len(counts) == 0 else None,
         )
+        res._attrs = self.attrs
+        return res
 
     def _sample_axis_1(
         self,

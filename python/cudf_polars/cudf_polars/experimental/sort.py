@@ -323,7 +323,6 @@ class RMPFIntegrationSortedShuffle:  # pragma: no cover
                 unspill_partitions(
                     shuffler.extract(partition_id),
                     br=context.br,
-                    stream=DEFAULT_STREAM,
                     allow_overbooking=True,
                     statistics=context.statistics,
                 ),
