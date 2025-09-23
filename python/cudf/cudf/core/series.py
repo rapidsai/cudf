@@ -513,9 +513,9 @@ class Series(SingleColumnFrame, IndexedFrame):
             data = {}
         if dtype is not None:
             dtype = cudf.dtype(dtype)
-        atts = None
+        attrs = None
         if isinstance(data, (pd.Series, pd.Index, Index, Series)):
-            atts = deepcopy(getattr(data, "attrs", None))
+            attrs = deepcopy(getattr(data, "attrs", None))
             if copy and not isinstance(data, (pd.Series, pd.Index)):
                 data = data.copy(deep=True)
             name_from_data = data.name
@@ -586,7 +586,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             first_index = index
             second_index = None
 
-        super().__init__({name: column}, index=first_index, attrs=atts)
+        super().__init__({name: column}, index=first_index, attrs=attrs)
         if second_index is not None:
             reindexed = self.reindex(index=second_index, copy=False)
             self._data = reindexed._data
