@@ -370,6 +370,14 @@ def _(
             ),
         )
 
+    if partition_info[child].count > 1 and not all(
+        expr.is_pointwise for expr in traversal([ir.mask.value])
+    ):
+        # TODO: Use expression decomposition to lower Filter
+        return _lower_ir_fallback(
+            ir, rec, msg="This filter is not supported for multiple partitions."
+        )
+
     new_node = ir.reconstruct([child])
     partition_info[new_node] = partition_info[child]
     return new_node, partition_info
