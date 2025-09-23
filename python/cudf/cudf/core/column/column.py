@@ -1084,11 +1084,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 [],
             )
             return build_column(
-                new_plc_column, 
-                size=self.size, 
+                new_plc_column,
+                size=self.size,
                 dtype=dtype,
-                offset=0, 
-                null_count=0
+                offset=0,
+                null_count=0,
             )
 
     def element_indexing(self, index: int):

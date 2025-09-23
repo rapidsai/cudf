@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, Literal
 import pandas as pd
 import pyarrow as pa
 
+import pylibcudf as plc
+
 import cudf
 from cudf.core.column.column import as_column
 from cudf.core.column.struct import StructColumn

@@ -14,7 +14,7 @@ import pylibcudf as plc
 
 import cudf
 from cudf.core._internals import binaryop
-from cudf.core.buffer import Buffer, acquire_spill_lock
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.temporal_base import TemporalBaseColumn
 from cudf.utils.dtypes import (
@@ -86,10 +86,10 @@ class TimeDeltaColumn(TemporalBaseColumn):
         "__rfloordiv__",
     }
     _VALID_PLC_TYPES = {
-        plc.TypeId.DURATION_SECONDS, 
-        plc.TypeId.DURATION_MILLISECONDS, 
-        plc.TypeId.DURATION_MICROSECONDS, 
-        plc.TypeId.DURATION_NANOSECONDS
+        plc.TypeId.DURATION_SECONDS,
+        plc.TypeId.DURATION_MILLISECONDS,
+        plc.TypeId.DURATION_MICROSECONDS,
+        plc.TypeId.DURATION_NANOSECONDS,
     }
 
     def __init__(

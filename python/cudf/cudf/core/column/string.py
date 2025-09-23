@@ -16,13 +16,12 @@ import pylibcudf as plc
 import cudf
 from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
-from cudf.core.buffer import Buffer, acquire_spill_lock
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.errors import MixedTypeError
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
-    SIZE_TYPE_DTYPE,
     dtype_to_pylibcudf_type,
     get_dtype_of_same_kind,
     is_dtype_obj_string,

@@ -35,7 +35,6 @@ if TYPE_CHECKING:
     from typing_extensions import Self
 
     from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype
-    from cudf.core.buffer import Buffer
     from cudf.core.column.string import StringColumn
 
 

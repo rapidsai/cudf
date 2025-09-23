@@ -11,7 +11,7 @@ from numba.np import numpy_support
 import pylibcudf as plc
 
 import cudf
-from cudf.core.buffer import Buffer, acquire_spill_lock
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, column_empty
 from cudf.core.missing import NA
 from cudf.core.mixins import Scannable
@@ -22,7 +22,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from cudf._typing import ScalarLike
-    from cudf.core.column.decimal import DecimalDtype
 
 
 _unaryop_map = {
@@ -58,6 +57,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         "cummin",
         "cummax",
     }
+
     def _can_return_nan(self, skipna: bool | None = None) -> bool:
         return not skipna and self.has_nulls()
 

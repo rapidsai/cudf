@@ -40,7 +40,6 @@ if TYPE_CHECKING:
     from typing_extensions import Self
 
     from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
-    from cudf.core.buffer import Buffer
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.string import StringColumn
 
@@ -320,6 +319,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
 class Decimal32Column(DecimalBaseColumn):
     _VALID_PLC_TYPES = {plc.TypeId.DECIMAL32}
+
     def __init__(
         self,
         plc_column: plc.Column,
@@ -387,6 +387,7 @@ class Decimal32Column(DecimalBaseColumn):
 
 class Decimal128Column(DecimalBaseColumn):
     _VALID_PLC_TYPES = {plc.TypeId.DECIMAL128}
+
     def __init__(
         self,
         plc_column: plc.Column,
@@ -438,6 +439,7 @@ class Decimal128Column(DecimalBaseColumn):
 
 class Decimal64Column(DecimalBaseColumn):
     _VALID_PLC_TYPES = {plc.TypeId.DECIMAL64}
+
     def __init__(
         self,
         plc_column: plc.Column,

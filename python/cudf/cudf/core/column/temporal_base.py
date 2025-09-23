@@ -14,7 +14,6 @@ import pyarrow as pa
 
 import cudf
 from cudf.api.types import is_scalar
-from cudf.core.buffer.buffer import Buffer
 from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.column.numerical import NumericalColumn
 from cudf.utils.dtypes import (
