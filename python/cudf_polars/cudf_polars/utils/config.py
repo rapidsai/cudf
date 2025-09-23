@@ -44,6 +44,7 @@ __all__ = [
     "ParquetOptions",
     "Scheduler",
     "ShuffleMethod",
+    "StatsPlanningOptions",
     "StreamingExecutor",
     "StreamingFallbackMode",
 ]
@@ -299,6 +300,86 @@ def default_blocksize(scheduler: str) -> int:
     return min(max(blocksize, 1_000_000_000), 10_000_000_000)
 
 
+@dataclasses.dataclass(frozen=True)
+class StatsPlanningOptions:
+    """
+    Configuration for statistics-based query planning.
+
+    These options can be configured via environment variables
+    with the prefix ``CUDF_POLARS__EXECUTOR__STATS_PLANNING__``.
+
+    Parameters
+    ----------
+    use_io_partitioning
+        Whether to use estimated file-size statistics to calculate
+        the ideal input-partition count for IO operations.
+        This option currently applies to Parquet data only.
+        Default is True.
+    use_reduction_planning
+        Whether to use estimated column statistics to calculate
+        the output-partition count for reduction operations
+        like `Distinct`, `GroupBy`, and `Select(unique)`.
+        Default is False.
+    use_join_heuristics
+        Whether to use join heuristics to estimate row-count
+        and unique-count statistics. Default is True.
+        These statistics may only be collected when they are
+        actually needed for query planning and when row-count
+        statistics are available for the underlying datasource
+        (e.g. Parquet and in-memory LazyFrame data).
+    use_sampling
+        Whether to sample real data to estimate unique-value
+        statistics. Default is True.
+        These statistics may only be collected when they are
+        actually needed for query planning, and when the
+        underlying datasource supports sampling (e.g. Parquet
+        and in-memory LazyFrame data).
+    default_selectivity
+        The default selectivity of a predicate.
+        Default is 0.8.
+    """
+
+    _env_prefix = "CUDF_POLARS__EXECUTOR__STATS_PLANNING"
+
+    use_io_partitioning: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__USE_IO_PARTITIONING", _bool_converter, default=True
+        )
+    )
+    use_reduction_planning: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__USE_REDUCTION_PLANNING", _bool_converter, default=False
+        )
+    )
+    use_join_heuristics: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__USE_JOIN_HEURISTICS", _bool_converter, default=True
+        )
+    )
+    use_sampling: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__USE_SAMPLING", _bool_converter, default=True
+        )
+    )
+    default_selectivity: float = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__DEFAULT_SELECTIVITY", float, default=0.8
+        )
+    )
+
+    def __post_init__(self) -> None:  # noqa: D105
+        if not isinstance(self.use_io_partitioning, bool):
+            raise TypeError("use_io_partitioning must be a bool")
+        if not isinstance(self.use_reduction_planning, bool):
+            raise TypeError("use_reduction_planning must be a bool")
+        if not isinstance(self.use_join_heuristics, bool):
+            raise TypeError("use_join_heuristics must be a bool")
+        if not isinstance(self.use_sampling, bool):
+            raise TypeError("use_sampling must be a bool")
+        if not isinstance(self.default_selectivity, float):
+            raise TypeError("default_selectivity must be a float")
+
+
 @dataclasses.dataclass(frozen=True, eq=True)
 class StreamingExecutor:
     """
@@ -373,6 +454,9 @@ class StreamingExecutor:
         rather than a single file. By default, this will be set to True for
         the 'distributed' scheduler and False otherwise. The 'distrubuted'
         scheduler does not currently support ``sink_to_directory=False``.
+    stats_planning
+        Options controlling statistics-based query planning. See
+        :class:`~cudf_polars.utils.config.StatsPlanningOptions` for more.
 
     Notes
     -----
@@ -441,6 +525,9 @@ class StreamingExecutor:
             f"{_env_prefix}__SINK_TO_DIRECTORY", _bool_converter, default=None
         )
     )
+    stats_planning: StatsPlanningOptions = dataclasses.field(
+        default_factory=StatsPlanningOptions
+    )
 
     def __post_init__(self) -> None:  # noqa: D105
         # Handle shuffle_method defaults for streaming executor
@@ -490,6 +577,14 @@ class StreamingExecutor:
         object.__setattr__(self, "scheduler", Scheduler(self.scheduler))
         object.__setattr__(self, "shuffle_method", ShuffleMethod(self.shuffle_method))
 
+        # Make sure stats_planning is a dataclass
+        if isinstance(self.stats_planning, dict):
+            object.__setattr__(
+                self,
+                "stats_planning",
+                StatsPlanningOptions(**self.stats_planning),
+            )
+
         if self.scheduler == "distributed":
             if self.sink_to_directory is False:
                 raise ValueError(
@@ -528,6 +623,7 @@ class StreamingExecutor:
         # to json and hash that.
         d = dataclasses.asdict(self)
         d["unique_fraction"] = json.dumps(d["unique_fraction"])
+        d["stats_planning"] = json.dumps(d["stats_planning"])
         return hash(tuple(sorted(d.items())))
 
 
