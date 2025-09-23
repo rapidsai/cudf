@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from typing_extensions import Self
 
     import polars.type_aliases as pl_types
-    from polars.polars_type import _expr_nodes as pl_expr
+    from polars.polars import _expr_nodes as pl_expr
 
     from cudf_polars.containers import DataFrame
 

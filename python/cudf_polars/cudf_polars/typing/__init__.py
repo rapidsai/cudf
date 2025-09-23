@@ -19,7 +19,7 @@ from typing import (
 
 import polars as pl
 import polars.datatypes
-from polars.polars_type import _expr_nodes as pl_expr, _ir_nodes as pl_ir
+from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 
 if TYPE_CHECKING:
     from collections.abc import Callable

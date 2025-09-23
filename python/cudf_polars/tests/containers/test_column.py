@@ -144,7 +144,7 @@ def test_deserialize_ctor_kwargs_list_dtype():
         "order": plc.types.Order.ASCENDING,
         "null_order": plc.types.NullOrder.AFTER,
         "name": "test",
-        "dtype": pl.polars_type.dtype_str_repr(pl_type),
+        "dtype": pl.polars.dtype_str_repr(pl_type),
     }
     result = Column.deserialize_ctor_kwargs(column_kwargs)
     expected = {
@@ -244,6 +244,6 @@ def test_serialize_cache_miss():
 )
 def test_dtype_short_repr_to_dtype_roundtrip(dtype: pl.DataType):
     result = cudf_polars.containers.column._dtype_short_repr_to_dtype(
-        pl.polars_type.dtype_str_repr(dtype)
+        pl.polars.dtype_str_repr(dtype)
     )
     assert result == dtype

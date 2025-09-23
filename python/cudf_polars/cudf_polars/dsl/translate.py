@@ -14,8 +14,8 @@ from typing import TYPE_CHECKING, Any
 from typing_extensions import assert_never
 
 import polars as pl
-import polars.polars_type as plrs
-from polars.polars_type import _expr_nodes as pl_expr, _ir_nodes as pl_ir
+import polars.polars as plrs
+from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 
 import pylibcudf as plc
 

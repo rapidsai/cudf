@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
-from polars.polars_type import _expr_nodes as pl_expr
+from polars.polars import _expr_nodes as pl_expr
 
 import pylibcudf as plc
 

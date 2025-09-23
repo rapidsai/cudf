@@ -45,7 +45,7 @@ if TYPE_CHECKING:
 
     from typing_extensions import Self
 
-    from polars.polars_type import _expr_nodes as pl_expr
+    from polars.polars import _expr_nodes as pl_expr
 
     from cudf_polars.containers.dataframe import NamedColumn
     from cudf_polars.typing import CSECache, ClosedInterval, Schema, Slice as Zlice

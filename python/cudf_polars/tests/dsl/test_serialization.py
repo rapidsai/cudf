@@ -7,7 +7,7 @@ import pickle
 
 import pytest
 
-from polars.polars_type import _expr_nodes as pl_expr
+from polars.polars import _expr_nodes as pl_expr
 
 from cudf_polars.dsl.expressions.boolean import BooleanFunction
 from cudf_polars.dsl.expressions.datetime import TemporalFunction

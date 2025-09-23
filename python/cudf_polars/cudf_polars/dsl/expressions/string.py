@@ -13,7 +13,7 @@ from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from polars.exceptions import InvalidOperationError
-from polars.polars_type import dtype_str_repr
+from polars.polars import dtype_str_repr
 
 import pylibcudf as plc
 
@@ -26,7 +26,7 @@ from cudf_polars.utils.versions import POLARS_VERSION_LT_132
 if TYPE_CHECKING:
     from typing_extensions import Self
 
-    from polars.polars_type import _expr_nodes as pl_expr
+    from polars.polars import _expr_nodes as pl_expr
 
     from cudf_polars.containers import DataFrame, DataType
 

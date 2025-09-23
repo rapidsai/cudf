@@ -159,7 +159,7 @@ class Column:
             "order": self.order,
             "null_order": self.null_order,
             "name": self.name,
-            "dtype": pl.polars_type.dtype_str_repr(self.dtype.polars_type),
+            "dtype": pl.polars.dtype_str_repr(self.dtype.polars_type),
         }
 
     @functools.cached_property
