@@ -153,7 +153,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     ) -> None:
         if not (
             isinstance(plc_column, plc.Column)
-            and plc_column.type().id() not in self._VALID_PLC_TYPES
+            and plc_column.type().id() in self._VALID_PLC_TYPES
         ):
             raise ValueError(
                 f"plc_column must be a pylibcudf.Column with the following type(s): {self._VALID_PLC_TYPES}"
@@ -174,7 +174,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             build_column(
                 plc_column=child,
                 size=child.size(),
-                dtype=dtype_from_pylibcudf_column(child.type()),
+                dtype=dtype_from_pylibcudf_column(child),
                 offset=child.offset(),
                 null_count=child.null_count(),
             )
@@ -2041,7 +2041,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             plc.gpumemoryview(mask) if mask is not None else None,
             header["null_count"],
             header["offset"],
-            children,
+            [child.to_pylibcudf(mode="read") for child in children],
         )
         return build_column(
             plc_column=plc_column,

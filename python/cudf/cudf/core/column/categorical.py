@@ -41,7 +41,6 @@ if TYPE_CHECKING:
         DtypeObj,
         ScalarLike,
     )
-    from cudf.core.buffer import Buffer
     from cudf.core.column import (
         ColumnBase,
         DatetimeColumn,
@@ -64,18 +63,6 @@ def as_unsigned_codes(
     return cast(
         cudf.core.column.numerical.NumericalColumn, codes.astype(codes_dtype)
     )
-
-
-def validate_categorical_children(children) -> None:
-    if not (
-        len(children) == 1
-        and isinstance(children[0], cudf.core.column.numerical.NumericalColumn)
-        and children[0].dtype.kind in "iu"
-    ):
-        # TODO: Enforce unsigned integer?
-        raise ValueError(
-            "Must specify exactly one child NumericalColumn of integers for representing the codes."
-        )
 
 
 class CategoricalColumn(column.ColumnBase):
@@ -157,9 +144,7 @@ class CategoricalColumn(column.ColumnBase):
 
     @property
     def base_size(self) -> int:
-        return int(
-            (self.base_children[0].size) / self.base_children[0].dtype.itemsize
-        )
+        return int(self.base_data.size / self.codes.dtype.itemsize)  # type: ignore[union-attr]
 
     def __contains__(self, item: ScalarLike) -> bool:
         try:
@@ -168,14 +153,14 @@ class CategoricalColumn(column.ColumnBase):
             return False
         return self._encode(item) in self.codes
 
-    def set_base_data(self, value):
-        if value is not None:
-            raise RuntimeError(
-                "CategoricalColumns do not use data attribute of Column, use "
-                "`set_base_children` instead"
-            )
-        else:
-            super().set_base_data(value)
+    # def set_base_data(self, value):
+    #     if value is not None:
+    #         raise RuntimeError(
+    #             "CategoricalColumns do not use data attribute of Column, use "
+    #             "`set_base_children` instead"
+    #         )
+    #     else:
+    #         super().set_base_data(value)
 
     def _process_values_for_isin(
         self, values: Sequence
@@ -183,28 +168,27 @@ class CategoricalColumn(column.ColumnBase):
         # Convert values to categorical dtype like self
         return self, column.as_column(values, dtype=self.dtype)
 
-    def set_base_mask(self, value: Buffer | None) -> None:
-        super().set_base_mask(value)
-        self._codes = self.children[0].set_mask(self.mask)
+    # def set_base_mask(self, value: Buffer | None) -> None:
+    #     super().set_base_mask(value)
+    #     #self._codes = self.children[0].set_mask(self.mask)
 
-    def set_base_children(self, value: tuple[NumericalColumn]) -> None:  # type: ignore[override]
-        super().set_base_children(value)
-        validate_categorical_children(value)
-        self._codes = value[0].set_mask(self.mask)
+    # def set_base_children(self, value: tuple[NumericalColumn]) -> None:  # type: ignore[override]
+    #     super().set_base_children(value)
+    #     #self._codes = value[0].set_mask(self.mask)
 
-    @property
-    def children(self) -> tuple[NumericalColumn]:
-        if self._children is None:
-            codes_column = self.base_children[0]
-            start = self.offset * codes_column.dtype.itemsize
-            end = start + self.size * codes_column.dtype.itemsize
-            codes_column = cudf.core.column.NumericalColumn(
-                data=codes_column.base_data[start:end],
-                dtype=codes_column.dtype,
-                size=self.size,
-            )
-            self._children = (codes_column,)
-        return self._children
+    # @property
+    # def children(self) -> tuple[NumericalColumn]:
+    #     if self._children is None:
+    #         codes_column = self.base_children[0]
+    #         start = self.offset * codes_column.dtype.itemsize
+    #         end = start + self.size * codes_column.dtype.itemsize
+    #         codes_column = cudf.core.column.NumericalColumn(
+    #             data=codes_column.base_data[start:end],
+    #             dtype=codes_column.dtype,
+    #             size=self.size,
+    #         )
+    #         self._children = (codes_column,)
+    #     return self._children
 
     @property
     def categories(self) -> ColumnBase:

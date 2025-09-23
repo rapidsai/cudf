@@ -183,14 +183,14 @@ class ListColumn(ColumnBase):
             pa_type, len(self), buffers, children=[elements]
         )
 
-    def set_base_data(self, value):
-        if value is not None:
-            raise RuntimeError(
-                "ListColumn's do not use data attribute of Column, use "
-                "`set_base_children` instead"
-            )
-        else:
-            super().set_base_data(value)
+    # def set_base_data(self, value):
+    #     if value is not None:
+    #         raise RuntimeError(
+    #             "ListColumn's do not use data attribute of Column, use "
+    #             "`set_base_children` instead"
+    #         )
+    #     else:
+    #         super().set_base_data(value)
 
     def set_base_children(self, value: tuple[NumericalColumn, ColumnBase]):  # type: ignore[override]
         super().set_base_children(value)
