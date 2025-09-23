@@ -587,7 +587,7 @@ def test_build_df_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
         data = [1, pd.NA, 3, pd.NA, 5]
 
     pd_data = pd.DataFrame.from_dict({"a": data}, dtype=pd_dtype)
-    gd_data = cudf.DataFrame.from_pandas(pd_data)
+    gd_data = cudf.DataFrame(pd_data)
 
     assert gd_data["a"].dtype == expect_dtype
 
@@ -623,7 +623,7 @@ def test_build_series_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
         data = [1, pd.NA, 3, pd.NA, 5]
 
     pd_data = pd.Series(data, dtype=pd_dtype)
-    gd_data = cudf.Series.from_pandas(pd_data)
+    gd_data = cudf.Series(pd_data)
 
     assert gd_data.dtype == expect_dtype
 

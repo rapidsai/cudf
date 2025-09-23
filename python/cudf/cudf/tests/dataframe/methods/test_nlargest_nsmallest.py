@@ -36,7 +36,7 @@ def test_dataframe_nlargest_sliced(sliceobj):
     df["b"] = rng.random(nelem)
 
     expect = df[sliceobj].nlargest(n, "a")
-    gdf = cudf.DataFrame.from_pandas(df)
+    gdf = cudf.DataFrame(df)
     got = gdf[sliceobj].nlargest(n, "a")
     assert (got.to_pandas() == expect).all().all()
 
@@ -53,7 +53,7 @@ def test_dataframe_nsmallest_sliced(sliceobj):
     df["b"] = rng.random(nelem)
 
     expect = df[sliceobj].nsmallest(n, "a")
-    gdf = cudf.DataFrame.from_pandas(df)
+    gdf = cudf.DataFrame(df)
     got = gdf[sliceobj].nsmallest(n, "a")
     assert (got.to_pandas() == expect).all().all()
 
