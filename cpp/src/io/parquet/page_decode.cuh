@@ -29,6 +29,8 @@ namespace cudf::io::parquet::detail {
 
 namespace cg = cooperative_groups;
 
+enum class copy_mode : bool { INDIRECT, DIRECT };
+
 struct page_state_s {
   CUDF_HOST_DEVICE constexpr page_state_s() noexcept {}
   uint8_t const* data_start{};

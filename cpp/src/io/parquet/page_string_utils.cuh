@@ -249,7 +249,7 @@ __device__ inline int calc_threads_per_string_log2(int avg_string_length)  // re
 template <int block_size,
           bool has_lists_t,
           bool split_decode_t,
-          bool direct_copy,
+          copy_mode copy_mode_t,
           typename state_buf>
 __device__ size_t decode_strings(
   page_state_s* s, state_buf* const sb, int start, int end, int t, size_t string_output_offset)
@@ -270,7 +270,7 @@ __device__ size_t decode_strings(
 
     // Index from value buffer (doesn't include nulls) to final array (has gaps for nulls)
     int const dst_pos = [&]() {
-      if constexpr (direct_copy) {
+      if constexpr (copy_mode_t == copy_mode::DIRECT) {
         return thread_pos - s->first_row;
       } else {
         int dst_pos = sb->nz_idx[rolling_index<state_buf::nz_buf_size>(thread_pos)];
