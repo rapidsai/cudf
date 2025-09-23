@@ -156,8 +156,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             and plc_column.type().id() not in self._VALID_PLC_TYPES
         ):
             raise ValueError(
-                f"plc_column must be a pylibcudf.Column with a following type: {self._VALID_PLC_TYPES}"
+                f"plc_column must be a pylibcudf.Column with the following type(s): {self._VALID_PLC_TYPES}"
             )
+        self.plc_column = plc_column
         if size < 0:
             raise ValueError("size must be >=0")
         self._size = size
@@ -169,9 +170,28 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         self._base_mask = None
         self._data = None
         self._children = None
-        self.set_base_children(children)
-        self.set_base_data(data)
-        self.set_base_mask(mask)
+        plc_children = tuple(
+            build_column(
+                plc_column=child,
+                size=child.size(),
+                dtype=dtype_from_pylibcudf_column(child.type()),
+                offset=child.offset(),
+                null_count=child.null_count(),
+            )
+            for child in plc_column.children()
+        )
+        self.set_base_children(plc_children)
+        # TODO: Respect data_ptr_exposed here?
+        self.set_base_data(
+            as_buffer(plc_column.data())
+            if plc_column.data() is not None
+            else None
+        )
+        self.set_base_mask(
+            as_buffer(plc_column.null_mask())
+            if plc_column.null_mask() is not None
+            else None
+        )
 
     @property
     def _PANDAS_NA_VALUE(self):
@@ -416,7 +436,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             new_mask = None
             new_null_count = 0
         new_plc_column = self.plc_column.with_mask(new_mask, new_null_count)
-        return build_column(
+        return build_column(  # type: ignore[return-value]
             plc_column=new_plc_column,
             size=self.size,
             dtype=self.dtype,
@@ -954,7 +974,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     )
                 )
             if self.dtype == CUDF_STRING_DTYPE:
-                return self._mimic_inplace(result, inplace=True)
+                return self._mimic_inplace(result, inplace=True)  # type: ignore[arg-type]
             return result  # type: ignore[return-value]
 
         if not fill_value.is_valid() and not self.nullable:
@@ -2312,7 +2332,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         null_precedence: plc.types.NullOrder,
         pct: bool,
     ) -> Self:
-        return type(self).from_pylibcudf(
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
             plc.sorting.rank(
                 self.to_pylibcudf(mode="read"),
                 method,
@@ -2599,7 +2619,7 @@ def build_column(
         return cudf.core.column.ListColumn(
             plc_column=plc_column,
             dtype=dtype,
-            size=size,
+            size=size,  # type: ignore[arg-type]
             offset=offset,
             null_count=null_count,
         )
@@ -2607,7 +2627,7 @@ def build_column(
         return cudf.core.column.IntervalColumn(
             plc_column=plc_column,
             dtype=dtype,
-            size=size,
+            size=size,  # type: ignore[arg-type]
             offset=offset,
             null_count=null_count,
         )
@@ -2615,7 +2635,7 @@ def build_column(
         return cudf.core.column.StructColumn(
             plc_column=plc_column,
             dtype=dtype,
-            size=size,
+            size=size,  # type: ignore[arg-type]
             offset=offset,
             null_count=null_count,
         )
@@ -2623,7 +2643,7 @@ def build_column(
         return cudf.core.column.Decimal64Column(
             plc_column=plc_column,
             dtype=dtype,
-            size=size,
+            size=size,  # type: ignore[arg-type]
             offset=offset,
             null_count=null_count,
         )
@@ -2631,7 +2651,7 @@ def build_column(
         return cudf.core.column.Decimal32Column(
             plc_column=plc_column,
             dtype=dtype,
-            size=size,
+            size=size,  # type: ignore[arg-type]
             offset=offset,
             null_count=null_count,
         )
@@ -2639,7 +2659,7 @@ def build_column(
         return cudf.core.column.Decimal128Column(
             plc_column=plc_column,
             dtype=dtype,
-            size=size,
+            size=size,  # type: ignore[arg-type]
             offset=offset,
             null_count=null_count,
         )

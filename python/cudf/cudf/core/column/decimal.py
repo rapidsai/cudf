@@ -110,7 +110,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
             )
         column = cls.from_pylibcudf(plc_column)
         column.dtype.precision = data.type.precision
-        return column
+        return column  # type: ignore[return-value]
 
     def element_indexing(self, index: int):
         result = super().element_indexing(index)

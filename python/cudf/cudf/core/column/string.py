@@ -1204,7 +1204,8 @@ class StringColumn(ColumnBase):
         )
         return dict(
             enumerate(
-                type(self).from_pylibcudf(col) for col in plc_table.columns()
+                type(self).from_pylibcudf(col)  # type: ignore[misc]
+                for col in plc_table.columns()
             )
         )
 

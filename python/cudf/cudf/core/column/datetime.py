@@ -646,10 +646,9 @@ class DatetimeColumn(TemporalBaseColumn):
     def _with_type_metadata(self, dtype) -> DatetimeColumn:
         if isinstance(dtype, pd.DatetimeTZDtype):
             return DatetimeTZColumn(
-                data=self.base_data,  # type: ignore[arg-type]
-                dtype=dtype,
-                mask=self.base_mask,  # type: ignore[arg-type]
+                plc_column=self.plc_column,
                 size=self.size,
+                dtype=dtype,
                 offset=self.offset,
                 null_count=self.null_count,
             )

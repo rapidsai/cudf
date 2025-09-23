@@ -520,7 +520,7 @@ class NumericalColumn(NumericalBaseColumn):
             )
 
     def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:
-        return self.cast(dtype=dtype)
+        return self.cast(dtype=dtype)  # type: ignore[return-value]
         # return cudf.core.column.DatetimeColumn(
         #     data=self.astype(np.dtype(np.int64)).base_data,  # type: ignore[arg-type]
         #     dtype=dtype,
@@ -530,7 +530,7 @@ class NumericalColumn(NumericalBaseColumn):
         # )
 
     def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:
-        return self.cast(dtype=dtype)
+        return self.cast(dtype=dtype)  # type: ignore[return-value]
         # return cudf.core.column.TimeDeltaColumn(
         #     data=self.astype(np.dtype(np.int64)).base_data,  # type: ignore[arg-type]
         #     dtype=dtype,

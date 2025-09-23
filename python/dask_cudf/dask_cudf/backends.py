@@ -110,13 +110,10 @@ def _get_non_empty_data(
             dtype=np.dtype(np.uint8),
             length=2,
         )
-        return cudf.core.column.CategoricalColumn(
-            data=None,
-            size=codes.size,
-            dtype=cudf.CategoricalDtype(
+        return codes._with_type_metadata(
+            cudf.CategoricalDtype(
                 categories=categories, ordered=s.dtype.ordered
-            ),
-            children=(codes,),  # type: ignore[arg-type]
+            )
         )
     elif isinstance(s.dtype, cudf.ListDtype):
         leaf_type = s.dtype.leaf_type

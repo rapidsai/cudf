@@ -15,7 +15,6 @@ import pyarrow as pa
 import cudf
 from cudf.api.types import is_scalar
 from cudf.core.column.column import ColumnBase, as_column, column_empty
-from cudf.core.column.numerical import NumericalColumn
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     cudf_dtype_from_pa_type,
@@ -33,6 +32,7 @@ if TYPE_CHECKING:
     import pylibcudf as plc
 
     from cudf._typing import ColumnLike, DtypeObj, ScalarLike
+    from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.string import StringColumn
 
 
@@ -223,14 +223,15 @@ class TemporalBaseColumn(ColumnBase):
             )
 
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
-        col = NumericalColumn(
-            data=self.base_data,  # type: ignore[arg-type]
-            dtype=self._UNDERLYING_DTYPE,
-            mask=self.base_mask,
-            offset=self.offset,
-            size=self.size,
-        )
-        return col.astype(dtype)  # type:ignore[return-value]
+        return self.cast(dtype=self._UNDERLYING_DTYPE).astype(dtype)  # type: ignore[return-value]
+        # col = NumericalColumn(
+        #     data=self.base_data,  # type: ignore[arg-type]
+        #     dtype=self._UNDERLYING_DTYPE,
+        #     mask=self.base_mask,
+        #     offset=self.offset,
+        #     size=self.size,
+        # )
+        # return col.astype(dtype)  # type:ignore[return-value]
 
     def ceil(self, freq: str) -> ColumnBase:
         raise NotImplementedError("ceil is currently not implemented")

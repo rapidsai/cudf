@@ -210,7 +210,7 @@ class ListColumn(ColumnBase):
 
     def _with_type_metadata(self: Self, dtype: Dtype) -> Self:
         if isinstance(dtype, ListDtype):
-            return ListColumn(
+            return ListColumn(  # type: ignore[return-value]
                 plc_column=self.plc_column,
                 size=self.size,
                 dtype=dtype,

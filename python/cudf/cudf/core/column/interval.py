@@ -7,8 +7,6 @@ from typing import TYPE_CHECKING, Literal
 import pandas as pd
 import pyarrow as pa
 
-import pylibcudf as plc
-
 import cudf
 from cudf.core.column.column import as_column
 from cudf.core.column.struct import StructColumn
@@ -17,6 +15,8 @@ from cudf.utils.dtypes import is_dtype_obj_interval
 
 if TYPE_CHECKING:
     from typing_extensions import Self
+
+    import pylibcudf as plc
 
     from cudf.core.column import ColumnBase
 
