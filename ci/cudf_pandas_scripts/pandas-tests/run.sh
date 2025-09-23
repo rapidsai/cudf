@@ -71,7 +71,7 @@ MAIN_RUN_ID=$(
 
 if [[ -z "${MAIN_RUN_ID}" ]]; then
     rapids-logger "No MAIN_RUN_ID found, exiting."
-    exit 0
+    exit ${EXITCODE}
 fi
 
 rapids-logger "Fetching latest available results from nightly: ${MAIN_RUN_ID}"
