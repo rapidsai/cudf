@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+from decimal import Decimal
+
 import pytest
 
 import polars as pl
@@ -105,4 +107,16 @@ def test_true_div_boolean_column(divisor):
 
     q = df.select(pl.col("a") / divisor)
 
+    assert_gpu_result_equal(q)
+
+
+def test_true_div_with_decimals():
+    df = pl.LazyFrame(
+        {
+            "foo": [Decimal("1.00"), Decimal("2.00"), Decimal("3.00"), None],
+            "bar": [Decimal("4.00"), Decimal("5.00"), Decimal("6.00"), Decimal("1.00")],
+        },
+        schema={"foo": pl.Decimal(15, 2), "bar": pl.Decimal(15, 2)},
+    )
+    q = df.select(pl.col("bar") / pl.col("foo"))
     assert_gpu_result_equal(q)

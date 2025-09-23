@@ -919,13 +919,30 @@ def _(
     dtype: DataType,
     schema: Schema,
 ) -> expr.Expr:
+    left = translator.translate_expr(n=node.left, schema=schema)
+    right = translator.translate_expr(n=node.right, schema=schema)
     if plc.traits.is_boolean(dtype.plc) and node.op == pl_expr.Operator.TrueDivide:
         dtype = DataType(pl.Float64())
+    if node.op == pl_expr.Operator.TrueDivide and (
+        plc.traits.is_fixed_point(left.dtype.plc)
+        or plc.traits.is_fixed_point(right.dtype.plc)
+    ):
+        f64 = DataType(pl.Float64())
+        return expr.Cast(
+            dtype,
+            expr.BinOp(
+                f64,
+                expr.BinOp._MAPPING[node.op],
+                expr.Cast(f64, left),
+                expr.Cast(f64, right),
+            ),
+        )
+
     return expr.BinOp(
         dtype,
         expr.BinOp._MAPPING[node.op],
-        translator.translate_expr(n=node.left, schema=schema),
-        translator.translate_expr(n=node.right, schema=schema),
+        left,
+        right,
     )
 
 
