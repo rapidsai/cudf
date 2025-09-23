@@ -61,15 +61,9 @@ def _nonempty_index(idx):
         values = cudf.core.column.as_column(data)
         return cudf.DatetimeIndex(values, name=idx.name)
     elif isinstance(idx, cudf.CategoricalIndex):
-        values = cudf.core.column.CategoricalColumn(
-            data=None,
-            size=None,
-            dtype=idx.dtype,
-            children=(
-                cudf.core.column.as_column([0, 0], dtype=np.dtype(np.uint8)),
-            ),
-        )
-        return cudf.CategoricalIndex(values, name=idx.name)
+        codes = cudf.core.column.as_column([0, 0], dtype=np.dtype(np.uint8))
+        column = codes._with_type_metadata(idx.dtype)
+        return cudf.CategoricalIndex._from_column(column, name=idx.name)
     elif isinstance(idx, cudf.MultiIndex):
         levels = [meta_nonempty(lev) for lev in idx.levels]
         codes = [[0, 0]] * idx.nlevels
