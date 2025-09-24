@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include "cudf/join/join.hpp"
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -129,14 +127,10 @@ TEST_F(JoinTest, TestSimple)
   auto left  = cudf::table_view{{left_col0}};
   auto right = cudf::table_view{{right_col0}};
 
-  auto result    = left_semi_join(left, right);
-  auto result_cv = cudf::column_view(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
-                                     result->size(),
-                                     result->data(),
-                                     nullptr,
-                                     0);
-  column_wrapper<cudf::size_type> expected{0, 1};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result_cv);
+  auto result = left_semi_join(left, right, {0}, {0}, cudf::null_equality::EQUAL);
+  column_wrapper<cudf::size_type> expected_column{0, 1};
+  auto expected = cudf::table_view{{expected_column}};
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, *result);
 }
 
 std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> get_saj_tables(
@@ -334,9 +328,8 @@ TEST_F(JoinTest, AntiJoinWithStructsAndNullsOnOneSide)
   auto left  = cudf::table_view{{left_col0}};
   auto right = cudf::table_view{{right_col0}};
 
-  auto result      = cudf::left_anti_join(left, right);
-  auto result_span = cudf::device_span<cudf::size_type const>{*result};
-  auto result_col  = cudf::column_view{result_span};
-  auto expected    = column_wrapper<cudf::size_type>{1};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result_col);
+  auto result               = left_anti_join(left, right, {0}, {0});
+  auto expected_indices_col = column_wrapper<cudf::size_type>{1};
+  auto expected             = cudf::gather(left, expected_indices_col);
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*expected, *result);
 }
