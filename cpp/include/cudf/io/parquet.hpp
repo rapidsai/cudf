@@ -253,7 +253,7 @@ class parquet_reader_options {
   /**
    * @brief Returns whether to use JIT compilation for filtering.
    *
-   * @return `true` if JIT compilation should used for filtering
+   * @return `true` if JIT compilation should be used for filtering
    */
   [[nodiscard]] bool is_enabled_use_jit_filter() const { return _use_jit_filter; }
 
