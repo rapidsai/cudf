@@ -723,7 +723,7 @@ def _(
         )
         named_aggs = [agg for agg, _ in aggs]
         orderby = node.options.index_column
-        orderby_dtype = schema[orderby].plc
+        orderby_dtype = schema[orderby].plc_type
         if plc.traits.is_integral(orderby_dtype):
             # Integer orderby column is cast in implementation to int64 in polars
             orderby_dtype = plc.DataType(plc.TypeId.INT64)
@@ -921,11 +921,11 @@ def _(
 ) -> expr.Expr:
     left = translator.translate_expr(n=node.left, schema=schema)
     right = translator.translate_expr(n=node.right, schema=schema)
-    if plc.traits.is_boolean(dtype.plc) and node.op == pl_expr.Operator.TrueDivide:
+    if plc.traits.is_boolean(dtype.plc_type) and node.op == pl_expr.Operator.TrueDivide:
         dtype = DataType(pl.Float64())
     if node.op == pl_expr.Operator.TrueDivide and (
-        plc.traits.is_fixed_point(left.dtype.plc)
-        or plc.traits.is_fixed_point(right.dtype.plc)
+        plc.traits.is_fixed_point(left.dtype.plc_type)
+        or plc.traits.is_fixed_point(right.dtype.plc_type)
     ):
         f64 = DataType(pl.Float64())
         return expr.Cast(

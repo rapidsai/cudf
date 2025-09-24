@@ -8,6 +8,7 @@ from pylibcudf.libcudf.types cimport (
     null_policy,
     size_type,
 )
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 from .column cimport Column
@@ -15,15 +16,26 @@ from .table cimport Table
 
 
 cpdef Table drop_nulls(
-    Table source_table, list keys, size_type keep_threshold, Stream stream = *
+    Table source_table,
+    list keys,
+    size_type keep_threshold,
+    Stream stream = *,
+    DeviceMemoryResource mr = *,
 )
 
 cpdef Table drop_nans(
-    Table source_table, list keys, size_type keep_threshold, Stream stream = *
+    Table source_table,
+    list keys,
+    size_type keep_threshold,
+    Stream stream = *,
+    DeviceMemoryResource mr = *,
 )
 
 cpdef Table apply_boolean_mask(
-    Table source_table, Column boolean_mask, Stream stream = *
+    Table source_table,
+    Column boolean_mask,
+    Stream stream = *,
+    DeviceMemoryResource mr = *,
 )
 
 cpdef Table unique(
@@ -32,6 +44,7 @@ cpdef Table unique(
     duplicate_keep_option keep,
     null_equality nulls_equal,
     Stream stream = *,
+    DeviceMemoryResource mr = *,
 )
 
 cpdef Table distinct(
@@ -41,6 +54,7 @@ cpdef Table distinct(
     null_equality nulls_equal,
     nan_equality nans_equal,
     Stream stream = *,
+    DeviceMemoryResource mr = *,
 )
 
 cpdef Column distinct_indices(
@@ -49,6 +63,7 @@ cpdef Column distinct_indices(
     null_equality nulls_equal,
     nan_equality nans_equal,
     Stream stream = *,
+    DeviceMemoryResource mr = *,
 )
 
 cpdef Table stable_distinct(
@@ -58,6 +73,7 @@ cpdef Table stable_distinct(
     null_equality nulls_equal,
     nan_equality nans_equal,
     Stream stream = *,
+    DeviceMemoryResource mr = *,
 )
 
 cpdef size_type unique_count(
