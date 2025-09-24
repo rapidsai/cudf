@@ -61,6 +61,7 @@ cpdef Column lower_bound(
             c_orders,
             c_null_precedence,
             stream.view(),
+            mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -111,6 +112,7 @@ cpdef Column upper_bound(
             c_orders,
             c_null_precedence,
             stream.view(),
+            mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -148,5 +150,6 @@ cpdef Column contains(
             haystack.view(),
             needles.view(),
             stream.view(),
+            mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), stream, mr)

@@ -64,7 +64,8 @@ cpdef tuple[Table, list] hash_partition(
             c_num_partitions,
             cpp_partitioning.hash_id.HASH_MURMUR3,
             cpp_partitioning.DEFAULT_HASH_SEED,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Table.from_libcudf(move(c_result.first), stream, mr), list(c_result.second)
@@ -111,7 +112,8 @@ cpdef tuple[Table, list] partition(
             t.view(),
             partition_map.view(),
             c_num_partitions,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Table.from_libcudf(move(c_result.first), stream, mr), list(c_result.second)
@@ -157,7 +159,11 @@ cpdef tuple[Table, list] round_robin_partition(
 
     with nogil:
         c_result = cpp_partitioning.round_robin_partition(
-            input.view(), c_num_partitions, c_start_partition, stream.view()
+            input.view(),
+            c_num_partitions,
+            c_start_partition,
+            stream.view(),
+            mr.get_mr()
         )
 
     return Table.from_libcudf(move(c_result.first), stream, mr), list(c_result.second)

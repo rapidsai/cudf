@@ -58,7 +58,9 @@ cpdef Column interleave_columns(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_interleave_columns(source_table.view(), stream.view())
+        c_result = cpp_interleave_columns(
+            source_table.view(), stream.view(), mr.get_mr()
+        )
 
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -94,7 +96,9 @@ cpdef Table tile(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_tile(source_table.view(), count, stream.view())
+        c_result = cpp_tile(
+            source_table.view(), count, stream.view(), mr.get_mr()
+        )
 
     return Table.from_libcudf(move(c_result), stream, mr)
 
