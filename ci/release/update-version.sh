@@ -88,6 +88,7 @@ done
 sed_runner "s/branch-[0-9]\+\.[0-9]\+/branch-${NEXT_SHORT_TAG}/g" ci/test_wheel_cudf_polars.sh
 sed_runner "s/branch-[0-9]\+\.[0-9]\+/branch-${NEXT_SHORT_TAG}/g" ci/test_cudf_polars_polars_tests.sh
 sed_runner "s/branch-[0-9]\+\.[0-9]\+/branch-${NEXT_SHORT_TAG}/g" ci/cudf_pandas_scripts/pandas-tests/run.sh
+sed_runner "s/branch-[0-9]\+\.[0-9]\+/branch-${NEXT_SHORT_TAG}/g" RAPIDS_BRANCH
 
 # Java files
 NEXT_FULL_JAVA_TAG="${NEXT_SHORT_TAG}.${PATCH_PEP440}-SNAPSHOT"
