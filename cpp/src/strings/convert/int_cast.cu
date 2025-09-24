@@ -103,26 +103,11 @@ std::unique_ptr<column> cast_to_integer(strings_column_view const& input,
   auto d_strings = column_device_view::create(input.parent(), stream);
   auto d_results = mutable_column_device_view::create(*results, stream);
 
-  // Shortcut conditions:
-  // - the number of characters equals the number of rows * size_of(output_type)
-  //   (also implies no nulls and not sliced)
-  // - and output_type is INT8 or UINT8
-  //   - or swap is BIG and output_type is UINT16, UINT32 or UINT64
-  // the make a direct copy of input.data into new fixed-width column
-  auto const chars_size = input.chars_size(stream);
-  auto const type_size  = static_cast<int64_t>(size_of(output_type));
-  if ((chars_size == type_size * input.size()) &&
-      ((type_size == 1) || (swap == endian::BIG && cudf::is_unsigned(output_type)))) {
-    auto src = d_strings->head();
-    auto dst = d_results->head();
-    CUDF_CUDA_TRY(cudaMemcpyAsync(dst, src, chars_size, cudaMemcpyDefault, stream.value()));
-  } else {
-    auto const type_size = static_cast<size_type>(cudf::size_of(output_type));
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator<size_type>(0),
-                       input.size(),
-                       cast_to_integer_fn{*d_strings, *d_results, swap, type_size});
-  }
+  auto const type_size = static_cast<size_type>(cudf::size_of(output_type));
+  thrust::for_each_n(rmm::exec_policy(stream),
+                     thrust::make_counting_iterator<size_type>(0),
+                     input.size(),
+                     cast_to_integer_fn{*d_strings, *d_results, swap, type_size});
 
   return results;
 }

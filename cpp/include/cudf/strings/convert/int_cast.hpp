@@ -48,9 +48,13 @@ enum class endian : bool { BIG, LITTLE };
  *
  * @code{.pseudo}
  * Example:
- * s = ['a', 'b', '', 'c', 'd']
+ * s = ['a', 'b', '', 'c', 'd', 'ab']
  * b = cast_to_integer(s)
- * b is [97, 98, 0, 99, 100]
+ * b is [97, 98, 0, 99, 100, 25185]
+ *
+ * in hex b is [0x61, 0x62, 0x0, 0x63, 0x64, 0x6261]
+ * Note that 'ab' with a=0x61 and b=0x62 is 0x6162
+ * but byte-swapped by default (endian::LITTLE) to 0x6261
  * @endcode
  *
  * Multi-byte UTF-8 characters are encoded as multiple bytes in the integer result.
@@ -58,7 +62,7 @@ enum class endian : bool { BIG, LITTLE };
  * If the input column contains strings greater than the number of bytes supported
  * by the output type, the result is undefined.
  *
- * If only equals logic is needed, use `swap==BIG` is sufficient. Otherwise
+ * If only equals logic is needed, `swap==BIG` is sufficient. Otherwise
  * use `swap==LITTLE` to ensure comparison operations work correctly.
  *
  * @throw cudf::logic_error if output_type is not integral type.
@@ -86,14 +90,17 @@ std::unique_ptr<column> cast_to_integer(
  *
  * @code{.pseudo}
  * Example:
- * b is [97, 98, 0, 99, 100]
+ * b is [97, 98, 0, 99, 100, 25185]
  * s = cast_from_integer(b)
- * s is ['a', 'b', '', 'c', 'd']
+ * s is ['a', 'b', '', 'c', 'd', 'ab']
+ *
+ * in hex b is [0x61, 0x62, 0x0, 0x63, 0x64, 0x6261]
+ * and 0x6261 is byte-swapped (endian::LITTLE) to 0x6162 to give 'ab'
  * @endcode *
  *
  * Any null entries will result in corresponding null entries in the output column.
  *
- * Ensure the `swap` parameter matches is the same value used in the `cast_to_integer` API.
+ * Ensure the `swap` parameter matches the same value used in the `cast_to_integer` API.
  *
  * @throw cudf::logic_error if integers column is not integral type.
  *
