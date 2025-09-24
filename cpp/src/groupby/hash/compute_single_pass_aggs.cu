@@ -57,7 +57,7 @@ std::pair<size_type, rmm::device_uvector<size_type>> find_fallback_blocks(
   rmm::device_scalar<size_type> d_num_fallback_blocks(stream);
 
   std::size_t storage_bytes = 0;
-  auto const select_cond    = [block_cardinality] __device__(auto const idx) {
+  auto const select_pred    = [block_cardinality] __device__(auto const idx) {
     return block_cardinality[idx] >= GROUPBY_CARDINALITY_THRESHOLD;
   };
   auto const exec_copy_if = [&](auto const storage_ptr) {
@@ -67,7 +67,7 @@ std::pair<size_type, rmm::device_uvector<size_type>> find_fallback_blocks(
                           fallback_block_ids.begin(),
                           d_num_fallback_blocks.data(),
                           grid_size,
-                          select_cond,
+                          select_pred,
                           stream.value());
   };
 
