@@ -154,18 +154,26 @@ struct global_memory_fallback_fn {
 
   __device__ void operator()(int64_t idx) const
   {
-    auto const agg_idx       = static_cast<size_type>(idx / num_fallback_rows);
-    auto const local_agg_idx = static_cast<size_type>(idx % num_fallback_rows);
-    auto const idx_in_agg    = local_agg_idx % fallback_stride;
-    auto const thread_rank   = idx_in_agg % GROUPBY_BLOCK_SIZE;
-    auto const block_idx     = fallback_blocks[idx_in_agg / GROUPBY_BLOCK_SIZE];
-    auto const row_idx       = full_stride * (local_agg_idx / fallback_stride) +
-                         GROUPBY_BLOCK_SIZE * block_idx + thread_rank;
-    if (row_idx >= num_total_rows) { return; }
+    auto const local_agg_idx  = static_cast<size_type>(idx % num_fallback_rows);
+    auto const idx_in_agg     = local_agg_idx % fallback_stride;
+    auto const thread_rank    = idx_in_agg % GROUPBY_BLOCK_SIZE;
+    auto const block_idx      = fallback_blocks[idx_in_agg / GROUPBY_BLOCK_SIZE];
+    auto const source_row_idx = full_stride * (local_agg_idx / fallback_stride) +
+                                GROUPBY_BLOCK_SIZE * block_idx + thread_rank;
+    if (source_row_idx >= num_total_rows) { return; }
 
-    if (auto const target_idx = target_indices[row_idx];
-        target_idx != cudf::detail::CUDF_SIZE_TYPE_SENTINEL) {
-      cudf::detail::aggregate_row(agg_idx, output_values, target_idx, input_values, row_idx, aggs);
+    if (auto const target_row_idx = target_indices[source_row_idx];
+        target_row_idx != cudf::detail::CUDF_SIZE_TYPE_SENTINEL) {
+      auto const agg_idx     = static_cast<size_type>(idx / num_fallback_rows);
+      auto const& source_col = input_values.column(agg_idx);
+      auto const& target_col = output_values.column(agg_idx);
+      dispatch_type_and_aggregation(source_col.type(),
+                                    aggs[agg_idx],
+                                    cudf::detail::element_aggregator{},
+                                    target_col,
+                                    target_row_idx,
+                                    source_col,
+                                    source_row_idx);
     }
   }
 };
@@ -193,12 +201,20 @@ struct compute_single_pass_aggs_fn {
 
   __device__ void operator()(int64_t idx) const
   {
-    auto const num_rows = input_values.num_rows();
-    auto const agg_idx  = static_cast<size_type>(idx / num_rows);
-    auto const row_idx  = static_cast<size_type>(idx % num_rows);
-    if (auto const target_idx = target_indices[row_idx];
-        target_idx != cudf::detail::CUDF_SIZE_TYPE_SENTINEL) {
-      cudf::detail::aggregate_row(agg_idx, output_values, target_idx, input_values, row_idx, aggs);
+    auto const num_rows       = input_values.num_rows();
+    auto const source_row_idx = static_cast<size_type>(idx % num_rows);
+    if (auto const target_row_idx = target_indices[source_row_idx];
+        target_row_idx != cudf::detail::CUDF_SIZE_TYPE_SENTINEL) {
+      auto const agg_idx     = static_cast<size_type>(idx / num_rows);
+      auto const& source_col = input_values.column(agg_idx);
+      auto const& target_col = output_values.column(agg_idx);
+      dispatch_type_and_aggregation(source_col.type(),
+                                    aggs[agg_idx],
+                                    cudf::detail::element_aggregator{},
+                                    target_col,
+                                    target_row_idx,
+                                    source_col,
+                                    source_row_idx);
     }
   }
 };
