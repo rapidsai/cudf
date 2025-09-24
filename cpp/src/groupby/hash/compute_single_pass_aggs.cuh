@@ -124,7 +124,7 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
   auto target_indices = [&] {
     auto target_indices =
       rmm::device_uvector<size_type>(num_fallback_blocks ? num_rows : 0, stream);
-    if (num_fallback_blocks) {
+    if (num_fallback_blocks > 0) {
       thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
                                  target_indices.begin(),
                                  target_indices.end(),
@@ -133,7 +133,7 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
     return target_indices;
   }();
 
-  if (num_fallback_blocks) {
+  if (num_fallback_blocks > 0) {
     // We compute number of jumping steps when using all blocks (`num_strides`).
     // Then, we use only `num_fallback_blocks` to jump the same number of steps.
     auto const fallback_stride   = GROUPBY_BLOCK_SIZE * num_fallback_blocks;
@@ -170,7 +170,7 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
     extract_populated_keys(global_set, num_rows, stream);
 
   // If there are fallback blocks, we need to transform the target indices for the fallback kernel.
-  if (num_fallback_blocks) { transform_key_indices(target_indices, key_transform_map, stream); }
+  if (num_fallback_blocks > 0) { transform_key_indices(target_indices, key_transform_map, stream); }
 
   // Now, update the target indices for computing aggregations using the shared memory kernel.
   thrust::for_each_n(
@@ -210,7 +210,7 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
   // keys. When a block reaches this cardinality limit, shared memory becomes insufficient to store
   // the temporary aggregation results. In these situations, we must fallback to a global memory
   // aggregator to process the remaining aggregation requests.
-  if (num_fallback_blocks) {
+  if (num_fallback_blocks > 0) {
     // We only execute this kernel for the fallback blocks.
     auto const fallback_stride   = GROUPBY_BLOCK_SIZE * num_fallback_blocks;
     auto const full_stride       = GROUPBY_BLOCK_SIZE * grid_size;
