@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -116,21 +116,20 @@ TYPED_TEST(NumericRangeWindowBoundsTest, BoundsConstruction)
   using range_type  = cudf::detail::range_type<OrderByType>;
   using rep_type    = cudf::detail::range_rep_type<OrderByType>;
   auto const dtype  = cudf::data_type{cudf::type_to_id<OrderByType>()};
+  auto const stream = cudf::get_default_stream();
 
   static_assert(std::is_integral_v<range_type>);
   auto range_3 = cudf::range_window_bounds::get(cudf::numeric_scalar<range_type>{3, true});
   EXPECT_FALSE(range_3.is_unbounded() &&
                "range_window_bounds constructed from scalar cannot be unbounded.");
-  EXPECT_EQ(
-    cudf::detail::range_comparable_value<OrderByType>(range_3, dtype, cudf::get_default_stream()),
-    rep_type{3});
+  EXPECT_EQ(cudf::detail::range_comparable_value<OrderByType>(range_3, dtype, stream), rep_type{3});
 
   auto range_unbounded =
     cudf::range_window_bounds::unbounded(cudf::data_type{cudf::type_to_id<range_type>()});
   EXPECT_TRUE(range_unbounded.is_unbounded() &&
               "range_window_bounds::unbounded() must return an unbounded range.");
-  EXPECT_EQ(cudf::detail::range_comparable_value<OrderByType>(
-              range_unbounded, dtype, cudf::get_default_stream()),
+  EXPECT_TRUE(range_unbounded.range_scalar().is_valid(stream));
+  EXPECT_EQ(cudf::detail::range_comparable_value<OrderByType>(range_unbounded, dtype, stream),
             rep_type{});
 }
 

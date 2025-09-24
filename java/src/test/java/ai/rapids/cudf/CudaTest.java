@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class CudaTest {
@@ -32,6 +33,15 @@ public class CudaTest {
     assert Cuda.getDriverVersion() >= 1000;
     assert Cuda.getRuntimeVersion() >= 1000;
     assertEquals(Cuda.getNativeComputeMode(), Cuda.getComputeMode().nativeId);
+
+    // test UUID
+    byte[] uuid = Cuda.getGpuUuid();
+    assertEquals(uuid.length, 16);
+    long v = 0;
+    for (int i = 0; i < uuid.length; i++) {
+      v += uuid[i];
+    }
+    assertNotEquals(0, v);
   }
 
   @Tag("noSanitizer")

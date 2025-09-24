@@ -47,10 +47,11 @@ requirements:
     - setuptools
     - cuda-version =${{ cuda_version }}
   run:
-    - nvidia-ml-py
+    # 'nvidia-ml-py' provides the 'pynvml' module
+    - nvidia-ml-py>=12
     - python
     - pylibcudf =${{ version }}
-    - polars >=1.28,<1.32
+    - polars >=1.28,<1.33
     - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
     - if: python == "3.10"
       then: typing_extensions

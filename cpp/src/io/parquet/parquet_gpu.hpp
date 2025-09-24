@@ -329,7 +329,7 @@ struct PageInfo {
   int32_t num_rows;           // number of rows in this page
   bool is_num_rows_adjusted;  // Flag to indicate if the number of rows of this page have been
                               // adjusted to compensate for the list row size estimates.
-  // the next four are calculated in gpuComputePageStringSizes
+  // the next four are calculated in compute_page_string_sizes_kernel
   int32_t num_nulls;       // number of null values (V2 header), but recalculated for string cols
   int32_t num_valids;      // number of non-null values, taking into account skip_rows/num_rows
   int32_t start_val;       // index of first value of the string data stream to use
@@ -340,6 +340,7 @@ struct PageInfo {
   Encoding encoding;       // Encoding for data or dictionary page
   Encoding definition_level_encoding;  // Encoding used for definition levels (data page)
   Encoding repetition_level_encoding;  // Encoding used for repetition levels (data page)
+  bool is_compressed;                  // Whether the page is compressed (V2 header)
 
   // for nested types, we run a preprocess step in order to determine output
   // column sizes. Because of this, we can jump directly to the position in the
@@ -772,6 +773,7 @@ void compute_page_sizes(cudf::detail::hostdevice_span<PageInfo> pages,
  *
  * @param[in,out] pages All pages to be decoded
  * @param[in] chunks All chunks to be decoded
+ * @param[in] page_mask Boolean vector indicating if a page needs to be decoded or is pruned
  * @param[out] temp_string_buf Temporary space needed for decoding DELTA_BYTE_ARRAY strings
  * @param[in] min_rows crop all rows below min_row
  * @param[in] num_rows Maximum number of rows to read
@@ -779,14 +781,15 @@ void compute_page_sizes(cudf::detail::hostdevice_span<PageInfo> pages,
  * @param[in] kernel_mask Mask of kernels to run
  * @param[in] stream CUDA stream to use
  */
-void ComputePageStringSizes(cudf::detail::hostdevice_span<PageInfo> pages,
-                            cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-                            rmm::device_uvector<uint8_t>& temp_string_buf,
-                            size_t min_row,
-                            size_t num_rows,
-                            int level_type_size,
-                            uint32_t kernel_mask,
-                            rmm::cuda_stream_view stream);
+void compute_page_string_sizes(cudf::detail::hostdevice_span<PageInfo> pages,
+                               cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                               cudf::device_span<bool const> page_mask,
+                               rmm::device_uvector<uint8_t>& temp_string_buf,
+                               size_t min_row,
+                               size_t num_rows,
+                               int level_type_size,
+                               uint32_t kernel_mask,
+                               rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for reading the column data stored in the pages

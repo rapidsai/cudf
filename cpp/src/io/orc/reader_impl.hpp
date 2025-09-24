@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -173,6 +173,7 @@ class reader_impl {
     bool use_index;            // enable or disable attempt to use row index for parsing
     bool use_np_dtypes;        // enable or disable the conversion to numpy-compatible dtypes
     std::vector<std::string> decimal128_columns;  // control decimals conversion
+    bool ignore_timezone_in_stripe_footer;        // ignore writer timezone in strip footer
 
     // User specified reading rows/stripes selection.
     int64_t const skip_rows;

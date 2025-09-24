@@ -267,7 +267,9 @@ def decref_managed_udf_string(context, builder, sig, args):
         context, builder, value=managed_ptr
     )
     fnty = ir.FunctionType(ir.VoidType(), [ir.PointerType(ir.IntType(8))])
-    fn = cgutils.get_or_insert_function(builder.module, fnty, "NRT_decref")
+    fn = cgutils.get_or_insert_function(
+        builder.module, fnty, "NRT_decref_managed_string"
+    )
     builder.call(fn, (managed.meminfo,))
 
     return

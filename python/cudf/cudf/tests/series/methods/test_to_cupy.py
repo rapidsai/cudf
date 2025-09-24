@@ -30,8 +30,21 @@ def test_series_to_cupy(
         return
 
     if has_nulls and not use_na_value:
-        with pytest.raises(ValueError, match="Column must have no nulls"):
-            sr.to_cupy()
+        if numeric_and_bool_types_as_str == "bool":
+            with pytest.raises(ValueError, match="Column must have no nulls"):
+                sr.to_cupy()
+        else:
+            result = sr.to_cupy()
+            expected = (
+                sr.astype(
+                    "float32"
+                    if numeric_and_bool_types_as_str == "float32"
+                    else "float64"
+                )
+                .fillna(np.nan)
+                .to_cupy()
+            )
+            assert_eq(result, expected)
         return
 
     na_value = {

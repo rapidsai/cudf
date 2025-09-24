@@ -11,6 +11,10 @@
 # or implied. See the License for the specific language governing permissions and limitations under
 # the License.
 # =============================================================================
+
+set(rapids-cmake-repo bdice/rapids-cmake)
+set(rapids-cmake-branch update-nvbench)
+
 file(READ "${CMAKE_CURRENT_LIST_DIR}/../VERSION" _rapids_version)
 if(_rapids_version MATCHES [[^([0-9][0-9])\.([0-9][0-9])\.([0-9][0-9])]])
   set(RAPIDS_VERSION_MAJOR "${CMAKE_MATCH_1}")
@@ -35,9 +39,10 @@ if(NOT _rapids_branch)
   )
 endif()
 
-set(rapids-cmake-version "${RAPIDS_VERSION_MAJOR_MINOR}")
-set(rapids-cmake-branch "${_rapids_branch}")
-
-set(rapids-cmake-repo bdice/rapids-cmake)
-set(rapids-cmake-branch update-nvbench)
+if(NOT rapids-cmake-version)
+  set(rapids-cmake-version "${RAPIDS_VERSION_MAJOR_MINOR}")
+endif()
+if(NOT rapids-cmake-branch)
+  set(rapids-cmake-branch "${_rapids_branch}")
+endif()
 include("${CMAKE_CURRENT_LIST_DIR}/RAPIDS.cmake")

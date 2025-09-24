@@ -47,6 +47,7 @@ if TYPE_CHECKING:
 
     from polars.polars import _expr_nodes as pl_expr
 
+    from cudf_polars.containers.dataframe import NamedColumn
     from cudf_polars.typing import CSECache, ClosedInterval, Schema, Slice as Zlice
     from cudf_polars.utils.config import ParquetOptions
     from cudf_polars.utils.timer import Timer
@@ -211,6 +212,33 @@ class PythonScan(IR):
         raise NotImplementedError("PythonScan not implemented")
 
 
+def _align_parquet_schema(df: DataFrame, schema: Schema) -> DataFrame:
+    # TODO: Alternatively set the schema of the parquet reader to decimal128
+    plc_decimals_ids = {
+        plc.TypeId.DECIMAL32,
+        plc.TypeId.DECIMAL64,
+        plc.TypeId.DECIMAL128,
+    }
+    cast_list = []
+
+    for name, col in df.column_map.items():
+        src = col.obj.type()
+        dst = schema[name].plc_type
+        if (
+            src.id() in plc_decimals_ids
+            and dst.id() in plc_decimals_ids
+            and ((src.id() != dst.id()) or (src.scale != dst.scale))
+        ):
+            cast_list.append(
+                Column(plc.unary.cast(col.obj, dst), name=name, dtype=schema[name])
+            )
+
+    if cast_list:
+        df = df.with_columns(cast_list)
+
+    return df
+
+
 class Scan(IR):
     """Input from files."""
 
@@ -324,9 +352,32 @@ class Scan(IR):
             raise NotImplementedError(
                 "Read from cloud storage"
             )  # pragma: no cover; no test yet
-        if any(str(p).startswith("https:/") for p in self.paths):
+        if (
+            any(str(p).startswith("https:/") for p in self.paths)
+            and POLARS_VERSION_LT_131
+        ):  # pragma: no cover; polars passed us the wrong URI
+            # https://github.com/pola-rs/polars/issues/22766
             raise NotImplementedError("Read from https")
+        if any(
+            str(p).startswith("file:/" if POLARS_VERSION_LT_131 else "file://")
+            for p in self.paths
+        ):
+            raise NotImplementedError("Read from file URI")
         if self.typ == "csv":
+            if any(
+                plc.io.SourceInfo._is_remote_uri(p) for p in self.paths
+            ):  # pragma: no cover; no test yet
+                # This works fine when the file has no leading blank lines,
+                # but currently we do some file introspection
+                # to skip blanks before parsing the header.
+                # For remote files we cannot determine if leading blank lines
+                # exist, so we're punting on CSV support.
+                # TODO: Once the CSV reader supports skipping leading
+                # blank lines natively, we can remove this guard.
+                raise NotImplementedError(
+                    "Reading CSV from remote is not yet supported"
+                )
+
             if self.reader_options["skip_rows_after_header"] != 0:
                 raise NotImplementedError("Skipping rows after header in CSV reader")
             parse_options = self.reader_options["parse_options"]
@@ -516,7 +567,9 @@ class Scan(IR):
                         column_names = read_csv_header(path, str(sep))
                         options.set_names(column_names)
                 options.set_header(header)
-                options.set_dtypes({name: dtype.plc for name, dtype in schema.items()})
+                options.set_dtypes(
+                    {name: dtype.plc_type for name, dtype in schema.items()}
+                )
                 if usecols is not None:
                     options.set_use_cols_names([str(name) for name in usecols])
                 options.set_na_values(null_values)
@@ -590,6 +643,7 @@ class Scan(IR):
                     names=names,
                     dtypes=[schema[name] for name in names],
                 )
+                df = _align_parquet_schema(df, schema)
                 if include_file_paths is not None:
                     df = Scan.add_file_paths(
                         include_file_paths, paths, chunk.num_rows_per_source, df
@@ -603,6 +657,7 @@ class Scan(IR):
                     col_names,
                     [schema[name] for name in col_names],
                 )
+                df = _align_parquet_schema(df, schema)
                 if include_file_paths is not None:
                     df = Scan.add_file_paths(
                         include_file_paths, paths, tbl_w_meta.num_rows_per_source, df
@@ -612,7 +667,7 @@ class Scan(IR):
                 return df
         elif typ == "ndjson":
             json_schema: list[plc.io.json.NameAndType] = [
-                (name, typ.plc, []) for name, typ in schema.items()
+                (name, typ.plc_type, []) for name, typ in schema.items()
             ]
             plc_tbl_w_meta = plc.io.json.read_json(
                 plc.io.json._setup_json_reader_options(
@@ -642,8 +697,8 @@ class Scan(IR):
             name, offset = row_index
             offset += skip_rows
             dtype = schema[name]
-            step = plc.Scalar.from_py(1, dtype.plc)
-            init = plc.Scalar.from_py(offset, dtype.plc)
+            step = plc.Scalar.from_py(1, dtype.plc_type)
+            init = plc.Scalar.from_py(offset, dtype.plc_type)
             index_col = Column(
                 plc.filling.sequence(df.num_rows, init, step),
                 is_sorted=plc.types.Sorted.YES,
@@ -656,7 +711,7 @@ class Scan(IR):
             if next(iter(schema)) != name:
                 df = df.select(schema)
         assert all(
-            c.obj.type() == schema[name].plc for name, c in df.column_map.items()
+            c.obj.type() == schema[name].plc_type for name, c in df.column_map.items()
         )
         if predicate is None:
             return df
@@ -722,7 +777,8 @@ class Sink(IR):
         child_schema = df.schema.values()
         if kind == "Csv":
             if not all(
-                plc.io.csv.is_supported_write_csv(dtype.plc) for dtype in child_schema
+                plc.io.csv.is_supported_write_csv(dtype.plc_type)
+                for dtype in child_schema
             ):
                 # Nested types are unsupported in polars and libcudf
                 raise NotImplementedError(
@@ -773,7 +829,8 @@ class Sink(IR):
             kind == "Json"
         ):  # pragma: no cover; options are validated on the polars side
             if not all(
-                plc.io.json.is_supported_write_json(dtype.plc) for dtype in child_schema
+                plc.io.json.is_supported_write_json(dtype.plc_type)
+                for dtype in child_schema
             ):
                 # Nested types are unsupported in polars and libcudf
                 raise NotImplementedError(
@@ -954,10 +1011,10 @@ class Cache(IR):
     _non_child = ("schema", "key", "refcount")
     key: int
     """The cache key."""
-    refcount: int
+    refcount: int | None
     """The number of cache hits."""
 
-    def __init__(self, schema: Schema, key: int, refcount: int, value: IR):
+    def __init__(self, schema: Schema, key: int, refcount: int | None, value: IR):
         self.schema = schema
         self.key = key
         self.refcount = refcount
@@ -979,7 +1036,7 @@ class Cache(IR):
     @classmethod
     @nvtx_annotate_cudf_polars(message="Cache")
     def do_evaluate(
-        cls, key: int, refcount: int, df: DataFrame
+        cls, key: int, refcount: int | None, df: DataFrame
     ) -> DataFrame:  # pragma: no cover; basic evaluation never calls this
         """Evaluate and return a dataframe."""
         # Our value has already been computed for us, so let's just
@@ -998,12 +1055,15 @@ class Cache(IR):
             cache[self.key] = (result, 0)
             return result
         else:
-            hits += 1
-            if hits == self.refcount:
+            if self.refcount is None:
+                return result
+
+            hits += 1  # pragma: no cover
+            if hits == self.refcount:  # pragma: no cover
                 del cache[self.key]
-            else:
+            else:  # pragma: no cover
                 cache[self.key] = (result, hits)
-            return result
+            return result  # pragma: no cover
 
 
 class DataFrameScan(IR):
@@ -1066,7 +1126,7 @@ class DataFrameScan(IR):
             df = df.select(projection)
         df = DataFrame.from_polars(df)
         assert all(
-            c.obj.type() == dtype.plc
+            c.obj.type() == dtype.plc_type
             for c, dtype in zip(df.columns, schema.values(), strict=True)
         )
         return df
@@ -1164,7 +1224,7 @@ class Select(IR):
             dtype = DataType(pl.UInt32())  # pragma: no cover
             col = Column(
                 plc.Column.from_scalar(
-                    plc.Scalar.from_py(effective_rows, dtype.plc),
+                    plc.Scalar.from_py(effective_rows, dtype.plc_type),
                     1,
                 ),
                 name=self.exprs[0].name or "len",
@@ -1266,7 +1326,7 @@ class Rolling(IR):
         self.agg_requests = tuple(agg_requests)
         if not all(
             plc.rolling.is_valid_rolling_aggregation(
-                agg.value.dtype.plc, agg.value.agg_request
+                agg.value.dtype.plc_type, agg.value.agg_request
             )
             for agg in self.agg_requests
         ):
@@ -1758,6 +1818,38 @@ class Join(IR):
             [plc.types.NullOrder.AFTER, plc.types.NullOrder.AFTER],
         ).columns()
 
+    @staticmethod
+    def _build_columns(
+        columns: Iterable[plc.Column],
+        template: Iterable[NamedColumn],
+        *,
+        left: bool = True,
+        empty: bool = False,
+        rename: Callable[[str], str] = lambda name: name,
+    ) -> list[Column]:
+        if empty:
+            return [
+                Column(
+                    plc.column_factories.make_empty_column(col.dtype.plc_type),
+                    col.dtype,
+                    name=rename(col.name),
+                )
+                for col in template
+            ]
+
+        columns = [
+            Column(new, col.dtype, name=rename(col.name))
+            for new, col in zip(columns, template, strict=True)
+        ]
+
+        if left:
+            columns = [
+                col.sorted_like(orig)
+                for col, orig in zip(columns, template, strict=True)
+            ]
+
+        return columns
+
     @classmethod
     @nvtx_annotate_cudf_polars(message="Join")
     def do_evaluate(
@@ -1780,28 +1872,32 @@ class Join(IR):
         if how == "Cross":
             # Separate implementation, since cross_join returns the
             # result, not the gather maps
-            columns = plc.join.cross_join(left.table, right.table).columns()
-            left_cols = [
-                Column(new, name=old.name, dtype=old.dtype).sorted_like(old)
-                for new, old in zip(
-                    columns[: left.num_columns], left.columns, strict=True
-                )
-            ]
-            right_cols = [
-                Column(
-                    new,
-                    name=name
+            if right.num_rows == 0:
+                left_cols = Join._build_columns([], left.columns, empty=True)
+                right_cols = Join._build_columns(
+                    [],
+                    right.columns,
+                    left=False,
+                    empty=True,
+                    rename=lambda name: name
                     if name not in left.column_names_set
                     else f"{name}{suffix}",
-                    dtype=old.dtype,
                 )
-                for new, name, old in zip(
-                    columns[left.num_columns :],
-                    right.column_names,
-                    right.columns,
-                    strict=True,
-                )
-            ]
+                return DataFrame([*left_cols, *right_cols])
+
+            columns = plc.join.cross_join(left.table, right.table).columns()
+            left_cols = Join._build_columns(
+                columns[: left.num_columns],
+                left.columns,
+            )
+            right_cols = Join._build_columns(
+                columns[left.num_columns :],
+                right.columns,
+                rename=lambda name: name
+                if name not in left.column_names_set
+                else f"{name}{suffix}",
+                left=False,
+            )
             return DataFrame([*left_cols, *right_cols]).slice(zlice)
         # TODO: Waiting on clarity based on https://github.com/pola-rs/polars/issues/17184
         left_on = DataFrame(broadcast(*(e.evaluate(left) for e in left_on_exprs)))
@@ -2164,9 +2260,13 @@ class MergeSorted(IR):
     """Key that is sorted."""
 
     def __init__(self, schema: Schema, key: str, left: IR, right: IR):
-        assert isinstance(left, Sort)
-        assert isinstance(right, Sort)
-        assert left.order == right.order
+        # Children must be Sort or Repartition(Sort).
+        # The Repartition(Sort) case happens during fallback.
+        left_sort_child = left if isinstance(left, Sort) else left.children[0]
+        right_sort_child = right if isinstance(right, Sort) else right.children[0]
+        assert isinstance(left_sort_child, Sort)
+        assert isinstance(right_sort_child, Sort)
+        assert left_sort_child.order == right_sort_child.order
         assert len(left.schema.keys()) <= len(right.schema.keys())
         self.schema = schema
         self.key = key
@@ -2251,7 +2351,7 @@ class MapFunction(IR):
                 index = frozenset(indices)
                 pivotees = [name for name in df.schema if name not in index]
             if not all(
-                dtypes.can_cast(df.schema[p].plc, self.schema[value_name].plc)
+                dtypes.can_cast(df.schema[p].plc_type, self.schema[value_name].plc_type)
                 for p in pivotees
             ):
                 raise NotImplementedError(
@@ -2338,7 +2438,7 @@ class MapFunction(IR):
                     [
                         plc.Column.from_arrow(
                             pl.Series(
-                                values=pivotees, dtype=schema[variable_name].polars
+                                values=pivotees, dtype=schema[variable_name].polars_type
                             )
                         )
                     ]
@@ -2363,8 +2463,8 @@ class MapFunction(IR):
         elif name == "row_index":
             col_name, offset = options
             dtype = schema[col_name]
-            step = plc.Scalar.from_py(1, dtype.plc)
-            init = plc.Scalar.from_py(offset, dtype.plc)
+            step = plc.Scalar.from_py(1, dtype.plc_type)
+            init = plc.Scalar.from_py(offset, dtype.plc_type)
             index_col = Column(
                 plc.filling.sequence(df.num_rows, init, step),
                 is_sorted=plc.types.Sorted.YES,
@@ -2485,18 +2585,27 @@ class HConcat(IR):
 
 
 class Empty(IR):
-    """Represents an empty DataFrame."""
+    """Represents an empty DataFrame with a known schema."""
 
-    __slots__ = ()
-    _non_child = ()
+    __slots__ = ("schema",)
+    _non_child = ("schema",)
 
-    def __init__(self) -> None:
-        self.schema = {}
-        self._non_child_args = ()
+    def __init__(self, schema: Schema):
+        self.schema = schema
+        self._non_child_args = (schema,)
         self.children = ()
 
     @classmethod
     @nvtx_annotate_cudf_polars(message="Empty")
-    def do_evaluate(cls) -> DataFrame:  # pragma: no cover
+    def do_evaluate(cls, schema: Schema) -> DataFrame:  # pragma: no cover
         """Evaluate and return a dataframe."""
-        return DataFrame([])
+        return DataFrame(
+            [
+                Column(
+                    plc.column_factories.make_empty_column(dtype.plc_type),
+                    dtype=dtype,
+                    name=name,
+                )
+                for name, dtype in schema.items()
+            ]
+        )

@@ -1,6 +1,8 @@
 # Copyright (c) 2020-2025, NVIDIA CORPORATION.
+from libc.stdint cimport int32_t
 from libcpp.memory cimport shared_ptr, unique_ptr
 from libcpp.string cimport string
+from libcpp.optional cimport optional
 from libcpp.vector cimport vector
 from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.column.column cimport column
@@ -10,6 +12,7 @@ from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
 
 from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from rmm.librmm.memory_resource cimport device_memory_resource
 
 
 cdef extern from "dlpack/dlpack.h" nogil:
@@ -36,12 +39,14 @@ cdef extern from "cudf/interop.hpp" namespace "cudf" \
         nogil:
     cdef unique_ptr[table] from_dlpack(
         const DLManagedTensor* managed_tensor,
-        cuda_stream_view stream
+        cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler
 
     DLManagedTensor* to_dlpack(
         const table_view& input,
-        cuda_stream_view stream
+        cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler
 
     cdef cppclass column_metadata:
@@ -49,6 +54,7 @@ cdef extern from "cudf/interop.hpp" namespace "cudf" \
         column_metadata(string name_) except +libcudf_exception_handler
         string name
         string timezone
+        optional[int32_t] precision
         vector[column_metadata] children_meta
 
 

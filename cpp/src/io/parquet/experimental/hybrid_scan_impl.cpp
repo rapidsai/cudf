@@ -20,7 +20,7 @@
 #include "hybrid_scan_helpers.hpp"
 #include "io/parquet/reader_impl_chunking_utils.cuh"
 
-#include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/transform.hpp>
@@ -88,6 +88,16 @@ hybrid_scan_reader_impl::hybrid_scan_reader_impl(cudf::host_span<uint8_t const> 
   _extended_metadata = static_cast<aggregate_reader_metadata*>(_metadata.get());
 }
 
+hybrid_scan_reader_impl::hybrid_scan_reader_impl(FileMetaData const& parquet_metadata,
+                                                 parquet_reader_options const& options)
+{
+  _metadata = std::make_unique<aggregate_reader_metadata>(
+    parquet_metadata,
+    options.is_enabled_use_arrow_schema(),
+    options.get_columns().has_value() and options.is_enabled_allow_mismatched_pq_schemas());
+  _extended_metadata = static_cast<aggregate_reader_metadata*>(_metadata.get());
+}
+
 FileMetaData hybrid_scan_reader_impl::parquet_metadata() const
 {
   return _extended_metadata->parquet_metadata();
@@ -137,6 +147,9 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
     _is_filter_columns_selected  = false;
   }
 
+  // Reset the rows processed so far
+  _rows_processed_so_far = 0;
+
   CUDF_EXPECTS(_input_columns.size() > 0 and _output_buffers.size() > 0, "No columns selected");
 
   // Clear the output buffers templates
@@ -169,8 +182,6 @@ std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_w
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
-  CUDF_FUNC_RANGE();
-
   CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
   CUDF_EXPECTS(options.get_filter().has_value(), "Encountered empty converted filter expression");
 
@@ -195,8 +206,6 @@ hybrid_scan_reader_impl::secondary_filters_byte_ranges(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options)
 {
-  CUDF_FUNC_RANGE();
-
   CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
   CUDF_EXPECTS(options.get_filter().has_value(), "Filter expression must not be empty");
 
@@ -230,8 +239,6 @@ hybrid_scan_reader_impl::filter_row_groups_with_dictionary_pages(
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
-  CUDF_FUNC_RANGE();
-
   CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
   CUDF_EXPECTS(options.get_filter().has_value(), "Encountered empty converted filter expression");
 
@@ -302,8 +309,6 @@ std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_w
   CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
   CUDF_EXPECTS(options.get_filter().has_value(), "Encountered empty converted filter expression");
 
-  CUDF_FUNC_RANGE();
-
   select_columns(read_columns_mode::FILTER_COLUMNS, options);
 
   table_metadata metadata;
@@ -331,8 +336,6 @@ std::unique_ptr<cudf::column> hybrid_scan_reader_impl::build_row_mask_with_page_
   CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
   CUDF_EXPECTS(options.get_filter().has_value(), "Encountered empty converted filter expression");
 
-  CUDF_FUNC_RANGE();
-
   select_columns(read_columns_mode::FILTER_COLUMNS, options);
 
   table_metadata metadata;
@@ -355,8 +358,6 @@ std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
 hybrid_scan_reader_impl::get_input_column_chunk_byte_ranges(
   cudf::host_span<std::vector<size_type> const> row_group_indices) const
 {
-  CUDF_FUNC_RANGE();
-
   // Descriptors for all the chunks that make up the selected columns
   auto const num_input_columns = _input_columns.size();
   auto const num_row_groups =
@@ -429,16 +430,14 @@ hybrid_scan_reader_impl::payload_column_chunks_byte_ranges(
 
 table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
-  std::vector<rmm::device_buffer> column_chunk_buffers,
-  cudf::mutable_column_view row_mask,
+  std::vector<rmm::device_buffer>&& column_chunk_buffers,
+  cudf::mutable_column_view& row_mask,
   use_data_page_mask mask_data_pages,
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
   CUDF_EXPECTS(options.get_filter().has_value(), "Encountered empty converted filter expression");
-
-  CUDF_FUNC_RANGE();
 
   reset_internal_state();
 
@@ -452,23 +451,22 @@ table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns(
 
   select_columns(read_columns_mode::FILTER_COLUMNS, options);
 
-  auto output_dtypes = get_output_types(_output_buffers_template);
-
   auto data_page_mask =
     (mask_data_pages == use_data_page_mask::YES)
       ? _extended_metadata->compute_data_page_mask(
-          row_mask, row_group_indices, output_dtypes, _output_column_schemas, stream)
+          row_mask, row_group_indices, _input_columns, _rows_processed_so_far, stream)
       : std::vector<std::vector<bool>>{};
 
-  prepare_data(row_group_indices, std::move(column_chunk_buffers), data_page_mask, options);
+  prepare_data(
+    read_mode::READ_ALL, row_group_indices, std::move(column_chunk_buffers), data_page_mask);
 
   return read_chunk_internal(read_mode::READ_ALL, read_columns_mode::FILTER_COLUMNS, row_mask);
 }
 
 table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
-  std::vector<rmm::device_buffer> column_chunk_buffers,
-  cudf::column_view row_mask,
+  std::vector<rmm::device_buffer>&& column_chunk_buffers,
+  cudf::column_view const& row_mask,
   use_data_page_mask mask_data_pages,
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
@@ -477,25 +475,140 @@ table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns(
   CUDF_EXPECTS(row_mask.null_count() == 0,
                "Row mask must not have any nulls when materializing payload column");
 
-  CUDF_FUNC_RANGE();
-
   reset_internal_state();
 
   initialize_options(row_group_indices, options, stream);
 
   select_columns(read_columns_mode::PAYLOAD_COLUMNS, options);
 
-  auto output_dtypes = get_output_types(_output_buffers_template);
+  auto data_page_mask =
+    (mask_data_pages == use_data_page_mask::YES)
+      ? _extended_metadata->compute_data_page_mask(
+          row_mask, row_group_indices, _input_columns, _rows_processed_so_far, stream)
+      : std::vector<std::vector<bool>>{};
+
+  prepare_data(
+    read_mode::READ_ALL, row_group_indices, std::move(column_chunk_buffers), data_page_mask);
+
+  return read_chunk_internal(read_mode::READ_ALL, read_columns_mode::PAYLOAD_COLUMNS, row_mask);
+}
+
+void hybrid_scan_reader_impl::setup_chunking_for_filter_columns(
+  std::size_t chunk_read_limit,
+  std::size_t pass_read_limit,
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  cudf::column_view const& row_mask,
+  use_data_page_mask mask_data_pages,
+  std::vector<rmm::device_buffer>&& column_chunk_buffers,
+  parquet_reader_options const& options,
+  rmm::cuda_stream_view stream)
+{
+  CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
+  CUDF_EXPECTS(options.get_filter().has_value(), "Encountered empty converted filter expression");
+
+  reset_internal_state();
+
+  table_metadata metadata;
+  populate_metadata(metadata);
+  _expr_conv = named_to_reference_converter(options.get_filter(), metadata);
+
+  CUDF_EXPECTS(_expr_conv.get_converted_expr().has_value(), "Filter expression must not be empty");
+
+  initialize_options(row_group_indices, options, stream);
+  _input_pass_read_limit   = pass_read_limit;
+  _output_chunk_read_limit = chunk_read_limit;
+
+  select_columns(read_columns_mode::FILTER_COLUMNS, options);
 
   auto data_page_mask =
     (mask_data_pages == use_data_page_mask::YES)
       ? _extended_metadata->compute_data_page_mask(
-          row_mask, row_group_indices, output_dtypes, _output_column_schemas, stream)
+          row_mask, row_group_indices, _input_columns, _rows_processed_so_far, _stream)
       : std::vector<std::vector<bool>>{};
 
-  prepare_data(row_group_indices, std::move(column_chunk_buffers), data_page_mask, options);
+  prepare_data(
+    read_mode::CHUNKED_READ, row_group_indices, std::move(column_chunk_buffers), data_page_mask);
+}
 
-  return read_chunk_internal(read_mode::READ_ALL, read_columns_mode::PAYLOAD_COLUMNS, row_mask);
+table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns_chunk(
+  cudf::mutable_column_view& row_mask, rmm::cuda_stream_view stream)
+{
+  CUDF_EXPECTS(_file_preprocessed, "Chunking for filter columns not yet setup");
+
+  // Reset the output buffers to their original states (right after reader construction).
+  // Don't need to do it if we read the file all at once.
+  if (_file_itm_data._current_input_pass < _file_itm_data.num_passes() and
+      not is_first_output_chunk()) {
+    _output_buffers.resize(0);
+    for (auto const& buff : _output_buffers_template) {
+      _output_buffers.emplace_back(cudf::io::detail::inline_column_buffer::empty_like(buff));
+    }
+  }
+
+  prepare_data(read_mode::CHUNKED_READ, {}, {}, {});
+  return read_chunk_internal(read_mode::CHUNKED_READ, read_columns_mode::FILTER_COLUMNS, row_mask);
+}
+
+void hybrid_scan_reader_impl::setup_chunking_for_payload_columns(
+  std::size_t chunk_read_limit,
+  std::size_t pass_read_limit,
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  cudf::column_view const& row_mask,
+  use_data_page_mask mask_data_pages,
+  std::vector<rmm::device_buffer>&& column_chunk_buffers,
+  parquet_reader_options const& options,
+  rmm::cuda_stream_view stream)
+{
+  CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
+  CUDF_EXPECTS(row_mask.null_count() == 0,
+               "Row mask must not have any nulls when materializing payload column");
+
+  reset_internal_state();
+
+  initialize_options(row_group_indices, options, stream);
+  _input_pass_read_limit   = pass_read_limit;
+  _output_chunk_read_limit = chunk_read_limit;
+
+  select_columns(read_columns_mode::PAYLOAD_COLUMNS, options);
+
+  auto data_page_mask =
+    (mask_data_pages == use_data_page_mask::YES)
+      ? _extended_metadata->compute_data_page_mask(
+          row_mask, row_group_indices, _input_columns, _rows_processed_so_far, _stream)
+      : std::vector<std::vector<bool>>{};
+
+  prepare_data(
+    read_mode::CHUNKED_READ, row_group_indices, std::move(column_chunk_buffers), data_page_mask);
+}
+
+table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns_chunk(
+  cudf::column_view const& row_mask, rmm::cuda_stream_view stream)
+{
+  CUDF_EXPECTS(_file_preprocessed, "Chunking for payload columns not yet setup");
+
+  // Reset the output buffers to their original states (right after reader construction).
+  // Don't need to do it if we read the file all at once.
+  if (_file_itm_data._current_input_pass < _file_itm_data.num_passes() and
+      not is_first_output_chunk()) {
+    _output_buffers.resize(0);
+    for (auto const& buff : _output_buffers_template) {
+      _output_buffers.emplace_back(cudf::io::detail::inline_column_buffer::empty_like(buff));
+    }
+  }
+  prepare_data(read_mode::CHUNKED_READ, {}, {}, {});
+  return read_chunk_internal(read_mode::CHUNKED_READ, read_columns_mode::PAYLOAD_COLUMNS, row_mask);
+}
+
+bool hybrid_scan_reader_impl::has_next_table_chunk()
+{
+  CUDF_EXPECTS(_file_preprocessed, "Chunking for filter columns not yet setup");
+  prepare_data(read_mode::CHUNKED_READ, {}, {}, {});
+
+  // current_input_pass will only be incremented to be == num_passes after
+  // the last chunk in the last subpass in the last pass has been returned
+  // if not has_more_work then check if this is the first pass in an empty
+  // table and return true so it could be read once.
+  return has_more_work() or is_first_output_chunk();
 }
 
 void hybrid_scan_reader_impl::reset_internal_state()
@@ -540,10 +653,10 @@ void hybrid_scan_reader_impl::initialize_options(
 }
 
 void hybrid_scan_reader_impl::prepare_data(
+  read_mode mode,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
-  std::vector<rmm::device_buffer> column_chunk_buffers,
-  cudf::host_span<std::vector<bool> const> data_page_mask,
-  parquet_reader_options const& options)
+  std::vector<rmm::device_buffer>&& column_chunk_buffers,
+  cudf::host_span<std::vector<bool> const> data_page_mask)
 {
   // if we have not preprocessed at the whole-file level, do that now
   if (not _file_preprocessed) {
@@ -551,13 +664,13 @@ void hybrid_scan_reader_impl::prepare_data(
     // - read row group information
     // - setup information on (parquet) chunks
     // - compute schedule of input passes
-    prepare_row_groups(row_group_indices, options);
+    prepare_row_groups(read_mode::READ_ALL, row_group_indices);
   }
 
   // handle any chunking work (ratcheting through the subpasses and chunks within
   // our current pass) if in bounds
   if (_file_itm_data._current_input_pass < _file_itm_data.num_passes()) {
-    handle_chunking(std::move(column_chunk_buffers), data_page_mask, options);
+    handle_chunking(mode, std::move(column_chunk_buffers), data_page_mask);
   }
 }
 
@@ -648,6 +761,23 @@ table_with_metadata hybrid_scan_reader_impl::read_chunk_internal(
     }
   }
 
+  out_columns =
+    cudf::structs::detail::enforce_null_consistency(std::move(out_columns), _stream, _mr);
+
+  // Check if number of rows per source should be included in output metadata.
+  if (include_output_num_rows_per_source()) {
+    // For chunked reading, compute the output number of rows per source
+    if (mode == read_mode::CHUNKED_READ) {
+      out_metadata.num_rows_per_source =
+        calculate_output_num_rows_per_source(read_info.skip_rows, read_info.num_rows);
+    }
+    // Simply move the number of rows per file if reading all at once
+    else {
+      // Move is okay here as we are reading in one go.
+      out_metadata.num_rows_per_source = std::move(_file_itm_data.num_rows_per_source);
+    }
+  }
+
   // Add empty columns if needed. Filter output columns based on filter.
   return finalize_output(read_columns_mode, out_metadata, out_columns, row_mask);
 }
@@ -706,8 +836,11 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
     auto output_table =
       cudf::detail::apply_boolean_mask(read_table->view(), *final_row_mask, _stream, _mr);
 
+    auto const mask_offset = _rows_processed_so_far;
+    _rows_processed_so_far += read_table->num_rows();
+
     // Update the input row mask to reflect the final row mask.
-    update_row_mask(final_row_mask->view(), row_mask, _stream);
+    update_row_mask(final_row_mask->view(), row_mask, mask_offset, _stream);
 
     // Return the final output table and metadata
     return {std::move(output_table), std::move(out_metadata)};
@@ -717,10 +850,18 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
     CUDF_EXPECTS(read_columns_mode == read_columns_mode::PAYLOAD_COLUMNS, "Invalid read mode");
     CUDF_EXPECTS(row_mask.type().id() == type_id::BOOL8,
                  "Predicate filter should return a boolean");
-    CUDF_EXPECTS(row_mask.size() == read_table->num_rows(),
+
+    auto const mask_offset = _rows_processed_so_far;
+    _rows_processed_so_far += read_table->num_rows();
+
+    CUDF_EXPECTS(mask_offset + read_table->num_rows() <= row_mask.size(),
                  "Encountered invalid sized row mask to apply");
+    auto effective_row_mask =
+      (read_table->num_rows() == row_mask.size())
+        ? row_mask
+        : cudf::split(row_mask, {mask_offset, mask_offset + read_table->num_rows()}, _stream)[1];
     auto output_table =
-      cudf::detail::apply_boolean_mask(read_table->view(), row_mask, _stream, _mr);
+      cudf::detail::apply_boolean_mask(read_table->view(), effective_row_mask, _stream, _mr);
     return {std::move(output_table), std::move(out_metadata)};
   }
 }
@@ -728,8 +869,6 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
 void hybrid_scan_reader_impl::set_pass_page_mask(
   cudf::host_span<std::vector<bool> const> data_page_mask)
 {
-  CUDF_FUNC_RANGE();
-
   auto const& pass   = _pass_itm_data;
   auto const& chunks = pass->chunks;
 

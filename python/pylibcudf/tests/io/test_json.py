@@ -21,7 +21,10 @@ from pylibcudf.io.types import CompressionType
 _COMMON_JSON_SOURCE_KWARGS = {"format": "json", "orient": "records"}
 
 
-@pytest.mark.parametrize("stream", [None, Stream()])
+# TODO: Reenable testing on non-default stream once we can resolve
+# https://github.com/rapidsai/cudf/issues/19900
+# @pytest.mark.parametrize("stream", [None, Stream()])
+@pytest.mark.parametrize("stream", [None])
 @pytest.mark.parametrize("rows_per_chunk", [8, 100])
 @pytest.mark.parametrize("lines", [True, False])
 def test_write_json_basic(
@@ -305,7 +308,7 @@ def test_read_json_lines_byte_range(source_or_sink, chunk_size):
     tbls = []
     for tbl_w_meta in tbls_w_meta:
         if tbl_w_meta.tbl.num_rows() > 0:
-            tbls.append(plc.interop.to_arrow(tbl_w_meta.tbl))
+            tbls.append(tbl_w_meta.tbl.to_arrow())
     full_tbl = pa.concat_tables(tbls)
 
     full_tbl_plc = plc.io.TableWithMetadata(

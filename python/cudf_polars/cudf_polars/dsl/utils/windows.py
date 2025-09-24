@@ -110,8 +110,14 @@ def duration_to_scalar(dtype: plc.DataType, value: int) -> plc.Scalar:
         return plc.Scalar.from_py(
             value // 1_000_000, plc.DataType(plc.TypeId.DURATION_MILLISECONDS)
         )
+    elif tid == plc.TypeId.TIMESTAMP_DAYS:
+        return plc.Scalar.from_py(
+            value // 86_400_000_000_000, plc.DataType(plc.TypeId.DURATION_DAYS)
+        )
     else:
-        raise NotImplementedError("Unsupported data type in rolling window offset")
+        raise NotImplementedError(
+            "Unsupported data type in rolling window offset"
+        )  # pragma: no cover; polars raises first
 
 
 def offsets_to_windows(

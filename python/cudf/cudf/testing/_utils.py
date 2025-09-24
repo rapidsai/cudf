@@ -1,7 +1,6 @@
 # Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
-import itertools
 import string
 from collections import abc
 from contextlib import contextmanager
@@ -356,12 +355,6 @@ def assert_asserters_equal(
             cudf_asserter(cudf_left, cudf_right, *args, **kwargs)
     else:
         cudf_asserter(cudf_left, cudf_right, *args, **kwargs)
-
-
-parametrize_numeric_dtypes_pairwise = pytest.mark.parametrize(
-    "left_dtype,right_dtype",
-    list(itertools.combinations_with_replacement(NUMERIC_TYPES, 2)),
-)
 
 
 @contextmanager

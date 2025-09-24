@@ -21,10 +21,9 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/detail/groupby.hpp>
-#include <cudf/detail/utilities/cuda.hpp>
+#include <cudf/detail/row_operator/row_operators.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -33,44 +32,38 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <algorithm>
 #include <memory>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
 namespace cudf::groupby::detail::hash {
 namespace {
 /**
- * @brief List of aggregation operations that can be computed with a hash-based
- * implementation.
+ * @brief List of aggregation operations that can be computed with a hash-based implementation.
+ *
+ * For single pass aggregations, the supported operations are the ones that can be atomically
+ * updated: SUM, SUM_WITH_OVERFLOW, SUM_OF_SQUARES, PRODUCT, MIN, MAX, COUNT_VALID, COUNT_ALL.
+ * For compound aggregations, the supported operations are the ones that depends on the single pass
+ * aggregations above: ARGMIN(MIN), ARGMAX(MAX), MEAN(SUM, COUNT_VALID), M2/STD/VARIANCE(M2,
+ * COUNT_VALID).
  */
-constexpr std::array<aggregation::Kind, 13> hash_aggregations{aggregation::SUM,
-                                                              aggregation::SUM_WITH_OVERFLOW,
-                                                              aggregation::PRODUCT,
-                                                              aggregation::MIN,
-                                                              aggregation::MAX,
-                                                              aggregation::COUNT_VALID,
-                                                              aggregation::COUNT_ALL,
-                                                              aggregation::ARGMIN,
-                                                              aggregation::ARGMAX,
-                                                              aggregation::SUM_OF_SQUARES,
-                                                              aggregation::MEAN,
-                                                              aggregation::STD,
-                                                              aggregation::VARIANCE};
-
-// Could be hash: SUM, PRODUCT, MIN, MAX, COUNT_VALID, COUNT_ALL, ANY, ALL,
-// Compound: MEAN(SUM, COUNT_VALID), VARIANCE, STD(MEAN (SUM, COUNT_VALID), COUNT_VALID),
-// ARGMAX, ARGMIN
-
-// TODO replace with std::find in C++20 onwards.
-template <class T, size_t N>
-constexpr bool array_contains(std::array<T, N> const& haystack, T needle)
-{
-  for (auto const& val : haystack) {
-    if (val == needle) return true;
-  }
-  return false;
-}
+const auto hash_aggregations = std::unordered_set{// Single pass aggregations:
+                                                  aggregation::SUM,
+                                                  aggregation::SUM_WITH_OVERFLOW,
+                                                  aggregation::SUM_OF_SQUARES,
+                                                  aggregation::PRODUCT,
+                                                  aggregation::MIN,
+                                                  aggregation::MAX,
+                                                  aggregation::COUNT_VALID,
+                                                  aggregation::COUNT_ALL,
+                                                  // Compound aggregations:
+                                                  aggregation::ARGMIN,
+                                                  aggregation::ARGMAX,
+                                                  aggregation::MEAN,
+                                                  aggregation::M2,
+                                                  aggregation::STD,
+                                                  aggregation::VARIANCE};
 
 /**
  * @brief Indicates whether the specified aggregation operation can be computed
@@ -80,10 +73,7 @@ constexpr bool array_contains(std::array<T, N> const& haystack, T needle)
  * @return true `t` is valid for a hash based groupby
  * @return false `t` is invalid for a hash based groupby
  */
-bool constexpr is_hash_aggregation(aggregation::Kind t)
-{
-  return array_contains(hash_aggregations, t);
-}
+bool is_hash_aggregation(aggregation::Kind t) { return hash_aggregations.contains(t); }
 
 std::unique_ptr<table> dispatch_groupby(table_view const& keys,
                                         host_span<aggregation_request const> requests,
@@ -97,9 +87,9 @@ std::unique_ptr<table> dispatch_groupby(table_view const& keys,
   auto const has_null             = nullate::DYNAMIC{cudf::has_nested_nulls(keys)};
   auto const skip_rows_with_nulls = keys_have_nulls and include_null_keys == null_policy::EXCLUDE;
 
-  auto preprocessed_keys = cudf::experimental::row::hash::preprocessed_table::create(keys, stream);
-  auto const comparator  = cudf::experimental::row::equality::self_comparator{preprocessed_keys};
-  auto const row_hash    = cudf::experimental::row::hash::row_hasher{std::move(preprocessed_keys)};
+  auto preprocessed_keys = cudf::detail::row::hash::preprocessed_table::create(keys, stream);
+  auto const comparator  = cudf::detail::row::equality::self_comparator{preprocessed_keys};
+  auto const row_hash    = cudf::detail::row::hash::row_hasher{std::move(preprocessed_keys)};
   auto const d_row_hash  = row_hash.device_hasher(has_null);
 
   if (cudf::detail::has_nested_columns(keys)) {

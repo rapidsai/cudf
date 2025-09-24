@@ -167,7 +167,7 @@ void column::set_null_count(size_type new_null_count)
 namespace {
 struct create_column_from_view {
   cudf::column_view view;
-  rmm::cuda_stream_view stream{cudf::get_default_stream()};
+  rmm::cuda_stream_view stream;
   rmm::device_async_resource_ref mr;
 
   template <typename ColumnType>
