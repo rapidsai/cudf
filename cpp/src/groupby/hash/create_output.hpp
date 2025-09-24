@@ -59,7 +59,7 @@ std::unique_ptr<table> create_results_table(size_type output_size,
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return A pair of arrays, the first one contains indices of unique keys retrieved from `key_set`
  *         and the second one maps each of these unique keys from the input keys table to its
- *         corresponding position in first output array.
+ *         corresponding position in first output array
  */
 template <typename SetType>
 std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> extract_populated_keys(
@@ -77,26 +77,26 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> extrac
  * @return A device vector mapping each input row to its key index
  */
 template <typename SetRef>
-rmm::device_uvector<size_type> compute_key_indices(bitmask_type const* row_bitmask,
-                                                   SetRef set_ref,
-                                                   size_type num_rows,
-                                                   rmm::cuda_stream_view stream);
+rmm::device_uvector<size_type> compute_matching_keys(bitmask_type const* row_bitmask,
+                                                     SetRef set_ref,
+                                                     size_type num_rows,
+                                                     rmm::cuda_stream_view stream);
 
 /**
- * @brief Transform (in-place) from the positions of the keys in the input keys table into positions
- * of these keys in the output unique keys table.
+ * @brief Transform from row indices of the keys in the input keys table into indices of these keys
+ * in the output unique keys table.
  *
  * Note that the positions (indices) of all output unique keys must be covered in the array
- * `key_index_map`. This is guaranteed as it was generated in `extract_populated_keys` function.
+ * `transform_map`. This is guaranteed as it was generated in `extract_populated_keys` function.
  *
- * @param[in,out] key_indices The indices of the keys to transform
- * @param key_index_map The mapping array from the input keys table to the output unique keys table
+ * @param input The indices of the keys to transform
+ * @param transform_map The mapping array from the input keys table to the output unique keys table
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @return A device vector mapping each input row to its output row index.
+ * @return A device vector mapping each input row to its output row index
  */
-void transform_key_indices(device_span<size_type> key_indices,
-                           device_span<size_type const> key_index_map,
-                           rmm::cuda_stream_view stream);
+rmm::device_uvector<size_type> compute_target_indices(device_span<size_type const> input,
+                                                      device_span<size_type const> transform_map,
+                                                      rmm::cuda_stream_view stream);
 
 /**
  * @brief Collect aggregation result columns from a table into a cache object.

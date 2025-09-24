@@ -38,15 +38,16 @@ std::tuple<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_globa
   rmm::device_async_resource_ref mr)
 {
   auto const num_rows = values.num_rows();
-  auto target_indices =
-    compute_key_indices(row_bitmask, key_set.ref(cuco::op::insert_and_find), num_rows, stream);
-  auto [unique_key_indices, key_transform_map] = extract_populated_keys(key_set, num_rows, stream);
-  transform_key_indices(target_indices, key_transform_map, stream);
-  key_transform_map = rmm::device_uvector<size_type>{0, stream};  // done, free up memory
+  auto matching_keys =
+    compute_matching_keys(row_bitmask, key_set.ref(cuco::op::insert_and_find), num_rows, stream);
+  auto [unique_keys, key_transform_map] = extract_populated_keys(key_set, num_rows, stream);
+  auto const target_indices = compute_target_indices(matching_keys, key_transform_map, stream);
+  matching_keys     = rmm::device_uvector<size_type>{0, stream};  // done, free up memory early
+  key_transform_map = rmm::device_uvector<size_type>{0, stream};  // done, free up memory early
 
   auto const d_values = table_device_view::create(values, stream);
   auto agg_results    = create_results_table(
-    static_cast<size_type>(unique_key_indices.size()), values, h_agg_kinds, stream, mr);
+    static_cast<size_type>(unique_keys.size()), values, h_agg_kinds, stream, mr);
   auto d_results_ptr = mutable_table_device_view::create(*agg_results, stream);
 
   thrust::for_each_n(rmm::exec_policy_nosync(stream),
@@ -55,7 +56,7 @@ std::tuple<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_globa
                      compute_single_pass_aggs_fn{
                        target_indices.begin(), d_agg_kinds.data(), *d_values, *d_results_ptr});
 
-  return {std::move(agg_results), std::move(unique_key_indices)};
+  return {std::move(agg_results), std::move(unique_keys)};
 }
 
 template std::tuple<std::unique_ptr<table>, rmm::device_uvector<size_type>>

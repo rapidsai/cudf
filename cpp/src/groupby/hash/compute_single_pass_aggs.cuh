@@ -119,18 +119,16 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
   // If all blocks fallback, just run everything using the global memory aggregation code path.
   if (num_fallback_blocks == grid_size) { return run_aggs_by_global_mem_kernel(); }
 
-  // Maps from each row to the index of its corresponding aggregation result.
-  // This is only used when there are fallback blocks.
-  auto target_indices = [&] {
-    auto target_indices =
-      rmm::device_uvector<size_type>(num_fallback_blocks ? num_rows : 0, stream);
-    if (num_fallback_blocks > 0) {
-      thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
-                                 target_indices.begin(),
-                                 target_indices.end(),
-                                 cudf::detail::CUDF_SIZE_TYPE_SENTINEL);
-    }
-    return target_indices;
+  // Maps from each row of the values table to the row index of its corresponding key in the input
+  // keys table. This is only used when there are fallback blocks.
+  auto matching_keys = [&] {
+    if (num_fallback_blocks == 0) { return rmm::device_uvector<size_type>{0, stream}; }
+    auto matching_keys = rmm::device_uvector<size_type>(num_rows, stream);
+    thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
+                               matching_keys.begin(),
+                               matching_keys.end(),
+                               cudf::detail::CUDF_SIZE_TYPE_SENTINEL);
+    return matching_keys;
   }();
 
   if (num_fallback_blocks > 0) {
@@ -151,7 +149,7 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
                         full_stride,
                         fallback_stride,
                         set_ref_insert,
-                        target_indices  = target_indices.begin(),
+                        matching_keys   = matching_keys.begin(),
                         fallback_blocks = fallback_blocks.begin(),
                         row_bitmask] __device__(auto const idx) mutable {
                          auto const idx_in_stride = idx % fallback_stride;
@@ -161,16 +159,12 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
                                               GROUPBY_BLOCK_SIZE * block_idx + thread_rank;
                          if (row_idx >= num_rows) { return; }
                          if (!row_bitmask || cudf::bit_is_set(row_bitmask, row_idx)) {
-                           target_indices[row_idx] = *set_ref_insert.insert_and_find(row_idx).first;
+                           matching_keys[row_idx] = *set_ref_insert.insert_and_find(row_idx).first;
                          }
                        });
   }
 
-  auto [unique_key_indices, key_transform_map] =
-    extract_populated_keys(global_set, num_rows, stream);
-
-  // If there are fallback blocks, we need to transform the target indices for the fallback kernel.
-  if (num_fallback_blocks > 0) { transform_key_indices(target_indices, key_transform_map, stream); }
+  auto [unique_keys, key_transform_map] = extract_populated_keys(global_set, num_rows, stream);
 
   // Now, update the target indices for computing aggregations using the shared memory kernel.
   thrust::for_each_n(
@@ -187,11 +181,18 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
         global_mapping_indices[mapping_idx] = key_transform_map[old_idx];
       }
     });
-  key_transform_map = rmm::device_uvector<size_type>{0, stream};  // done, free up memory
+  // Find the target indices for computing aggregations using the shared memory kernel.
+  // This is only used when there are fallback blocks.
+  auto const target_indices = [&] {
+    if (num_fallback_blocks == 0) { return rmm::device_uvector<size_type>{0, stream}; }
+    return compute_target_indices(matching_keys, key_transform_map, stream);
+  }();
+  matching_keys     = rmm::device_uvector<size_type>{0, stream};  // done, free up memory early
+  key_transform_map = rmm::device_uvector<size_type>{0, stream};  // done, free up memory early
 
   auto const d_spass_values = table_device_view::create(spass_values, stream);
   auto spass_results        = create_results_table(
-    static_cast<size_type>(unique_key_indices.size()), spass_values, spass_agg_kinds, stream, mr);
+    static_cast<size_type>(unique_keys.size()), spass_values, spass_agg_kinds, stream, mr);
   auto d_results_ptr = mutable_table_device_view::create(*spass_results, stream);
 
   compute_shared_memory_aggs(grid_size,
@@ -233,6 +234,6 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
   }
 
   collect_output_to_cache(spass_values, spass_aggs, spass_results, cache, stream);
-  return {std::move(unique_key_indices), has_compound_aggs};
+  return {std::move(unique_keys), has_compound_aggs};
 }
 }  // namespace cudf::groupby::detail::hash

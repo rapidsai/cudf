@@ -158,10 +158,10 @@ extract_populated_keys<nullable_global_set_t>(nullable_global_set_t const& key_s
                                               rmm::cuda_stream_view stream);
 
 template <typename SetRef>
-rmm::device_uvector<size_type> compute_key_indices(bitmask_type const* row_bitmask,
-                                                   SetRef set_ref,
-                                                   size_type num_rows,
-                                                   rmm::cuda_stream_view stream)
+rmm::device_uvector<size_type> compute_matching_keys(bitmask_type const* row_bitmask,
+                                                     SetRef set_ref,
+                                                     size_type num_rows,
+                                                     rmm::cuda_stream_view stream)
 {
   // Mapping from each row in the input key/value into the indices of the key.
   rmm::device_uvector<size_type> key_indices(num_rows, stream);
@@ -180,30 +180,32 @@ rmm::device_uvector<size_type> compute_key_indices(bitmask_type const* row_bitma
   return key_indices;
 }
 
-template rmm::device_uvector<size_type> compute_key_indices<
+template rmm::device_uvector<size_type> compute_matching_keys<
   hash_set_ref_t<cuco::insert_and_find_tag>>(bitmask_type const* row_bitmask,
                                              hash_set_ref_t<cuco::insert_and_find_tag> set_ref,
                                              size_type num_rows,
                                              rmm::cuda_stream_view stream);
 
 template rmm::device_uvector<size_type>
-compute_key_indices<nullable_hash_set_ref_t<cuco::insert_and_find_tag>>(
+compute_matching_keys<nullable_hash_set_ref_t<cuco::insert_and_find_tag>>(
   bitmask_type const* row_bitmask,
   nullable_hash_set_ref_t<cuco::insert_and_find_tag> set_ref,
   size_type num_rows,
   rmm::cuda_stream_view stream);
 
-void transform_key_indices(device_span<size_type> key_indices,
-                           device_span<size_type const> key_index_map,
-                           rmm::cuda_stream_view stream)
+rmm::device_uvector<size_type> compute_target_indices(device_span<size_type const> input,
+                                                      device_span<size_type const> transform_map,
+                                                      rmm::cuda_stream_view stream)
 {
+  rmm::device_uvector<size_type> target_indices(input.size(), stream);
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    key_indices.begin(),
-                    key_indices.end(),
-                    key_indices.begin(),
-                    [new_indices = key_index_map.begin()] __device__(size_type const idx) {
+                    input.begin(),
+                    input.end(),
+                    target_indices.begin(),
+                    [new_indices = transform_map.begin()] __device__(size_type const idx) {
                       return idx == cudf::detail::CUDF_SIZE_TYPE_SENTINEL ? idx : new_indices[idx];
                     });
+  return target_indices;
 }
 
 void collect_output_to_cache(table_view const& values,
