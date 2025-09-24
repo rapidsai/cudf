@@ -496,12 +496,7 @@ def test_unary_operators(func):
         {"A": [1.0, 2.0, 3.0], "B": [4.0, 5.0, 6.0]},
         {"A": [1, 2, 3], "B": [1.0, 2.0, 3.0]},
         {"A": np.float32(np.arange(3)), "B": np.float64(np.arange(3))},
-        pytest.param(
-            {"A": [1, None, 3], "B": [1, 2, None]},
-            marks=pytest.mark.xfail(
-                reason="Nulls not supported by values accessor"
-            ),
-        ),
+        {"A": [1, None, 3], "B": [1, 2, None]},
         pytest.param(
             {"A": [None, None, None], "B": [None, None, None]},
             marks=pytest.mark.xfail(

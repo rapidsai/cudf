@@ -37,7 +37,7 @@ class context {
   bool _use_jit      = false;
 
  public:
-  context();
+  context(init_flags flags = init_flags::INIT_JIT_CACHE);
   context(context const&)            = delete;
   context& operator=(context const&) = delete;
   context(context&&)                 = delete;
