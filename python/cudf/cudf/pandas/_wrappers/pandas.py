@@ -300,6 +300,7 @@ DataFrame = make_final_proxy_type(
         "dtypes": property(_DataFrame__dtypes),
         "__iter__": custom_iter,
         "attrs": _FastSlowAttribute("attrs"),
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
     },
 )
 
@@ -686,6 +687,8 @@ StringArray = make_final_proxy_type(
     additional_attributes={
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "__array__": _FastSlowAttribute("__array__"),
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
     },
 )
 
@@ -722,6 +725,12 @@ ArrowStringArray = make_final_proxy_type(
     additional_attributes={
         "_pa_array": _FastSlowAttribute("_pa_array", private=True),
         "__array__": _FastSlowAttribute("__array__", private=True),
+        "__invert__": _FastSlowAttribute("__invert__"),
+        "__neg__": _FastSlowAttribute("__neg__"),
+        "__pos__": _FastSlowAttribute("__pos__", private=True),
+        "__abs__": _FastSlowAttribute("__abs__"),
+        "__contains__": _FastSlowAttribute("__contains__"),
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
     },
 )
 
@@ -1938,7 +1947,7 @@ NamedAgg = make_final_proxy_type(
 )
 
 ArrowExtensionArray = make_final_proxy_type(
-    "ExtensionArray",
+    "ArrowExtensionArray",
     _Unusable,
     pd.arrays.ArrowExtensionArray,
     fast_to_slow=_Unusable(),
@@ -1946,6 +1955,12 @@ ArrowExtensionArray = make_final_proxy_type(
     additional_attributes={
         "_pa_array": _FastSlowAttribute("_pa_array", private=True),
         "__array__": _FastSlowAttribute("__array__", private=True),
+        "__invert__": _FastSlowAttribute("__invert__"),
+        "__neg__": _FastSlowAttribute("__neg__"),
+        "__pos__": _FastSlowAttribute("__pos__", private=True),
+        "__abs__": _FastSlowAttribute("__abs__"),
+        "__contains__": _FastSlowAttribute("__contains__"),
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
     },
 )
 

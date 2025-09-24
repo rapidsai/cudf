@@ -53,7 +53,7 @@ get_nanoarrow_host_tables(cudf::size_type length)
   auto list_array = get_nanoarrow_list_array<int64_t>(test_data.list_int64_data,
                                                       test_data.list_offsets,
                                                       test_data.list_int64_data_validity,
-                                                      test_data.bool_data_validity);
+                                                      test_data.list_validity);
 
   nanoarrow::UniqueArray arrow;
   NANOARROW_THROW_NOT_OK(ArrowArrayInitFromSchema(arrow.get(), schema.get(), nullptr));

@@ -167,6 +167,7 @@ def _(
     ir: Distinct, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     # Extract child partitioning
+    original_child = ir.children[0]
     child, partition_info = rec(ir.children[0])
     config_options = rec.state["config_options"]
     assert config_options.executor.name == "streaming", (
@@ -177,6 +178,8 @@ def _(
     unique_fraction_dict = _get_unique_fractions(
         tuple(subset),
         config_options.executor.unique_fraction,
+        row_count=rec.state["stats"].row_count.get(original_child),
+        column_stats=rec.state["stats"].column_stats.get(original_child),
     )
     unique_fraction = (
         max(unique_fraction_dict.values()) if unique_fraction_dict else None

@@ -7,6 +7,7 @@ from pylibcudf.libcudf.types cimport (
     size_of as cpp_size_of,
     size_type,
     type_id,
+    bitmask_type
 )
 from pylibcudf.libcudf.utilities.type_dispatcher cimport type_to_id
 
@@ -368,6 +369,8 @@ def _from_arrow(obj: pa.DataType) -> DataType:
 
 SIZE_TYPE = DataType(type_to_id[size_type]())
 SIZE_TYPE_ID = SIZE_TYPE.id()
+BITMASK_TYPE = DataType(type_to_id[bitmask_type]())
+
 
 TypeId.__str__ = TypeId.__repr__
 NanPolicy.__str__ = NanPolicy.__repr__
