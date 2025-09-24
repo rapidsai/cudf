@@ -539,7 +539,7 @@ TEST_F(HybridScanTest, MaterializeStructs)
 
 TEST_F(HybridScanTest, MaterializeListsOfStructs)
 {
-  std::mt19937 gen(0xbaLL);
+  std::mt19937 gen(0xcaLL);
 
   auto const num_concat   = 2;
   auto constexpr num_rows = num_ordered_rows;
