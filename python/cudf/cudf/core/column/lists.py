@@ -19,7 +19,6 @@ from cudf.core.column.numerical import NumericalColumn
 from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
 from cudf.utils.dtypes import (
-    SIZE_TYPE_DTYPE,
     get_dtype_of_same_kind,
     is_dtype_obj_list,
 )
@@ -263,37 +262,38 @@ class ListColumn(ColumnBase):
         Create a list column for list of column-like sequences
         """
         data_col = column_empty(0)
-        mask_col = []
+        mask_bools = []
         offset_vals = [0]
         offset = 0
 
         # Build Data, Mask & Offsets
         for data in arbitrary:
             if _is_null_host_scalar(data):
-                mask_col.append(False)
+                mask_bools.append(False)
                 offset_vals.append(offset)
             else:
-                mask_col.append(True)
+                mask_bools.append(True)
                 data_col = data_col.append(as_column(data))
                 offset += len(data)
                 offset_vals.append(offset)
 
-        offset_col = cast(
-            NumericalColumn,
-            as_column(offset_vals, dtype=SIZE_TYPE_DTYPE),
+        offset_col = plc.Column.from_iterable_of_py(
+            offset_vals, dtype=plc.DataType(plc.TypeId.INT32)
         )
-
-        # Build ListColumn
-        res = cls(
-            data=None,
-            size=len(arbitrary),
-            dtype=cudf.ListDtype(data_col.dtype),
-            mask=as_column(mask_col).as_mask(),
-            offset=0,
-            null_count=0,
-            children=(offset_col, data_col),
+        data_col = data_col.to_pylibcudf(mode="read")
+        mask, null_count = plc.transform.bools_to_mask(
+            plc.Column.from_iterable_of_py(mask_bools)
         )
-        return res
+        plc_column = plc.Column(
+            plc.DataType(plc.TypeId.LIST),
+            len(arbitrary),
+            None,
+            mask,
+            null_count,
+            0,
+            [offset_col, data_col],
+        )
+        return cls.from_pylibcudf(plc_column)  # type: ignore[return-value]
 
     def as_string_column(self, dtype) -> StringColumn:
         """
