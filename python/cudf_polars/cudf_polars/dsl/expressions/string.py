@@ -7,6 +7,8 @@
 from __future__ import annotations
 
 import functools
+import re
+from datetime import datetime
 from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -37,8 +39,10 @@ def _dtypes_for_json_decode(dtype: DataType) -> JsonDecodeType:
     """Get the dtypes for json decode."""
     if dtype.id() == plc.TypeId.STRUCT:
         return [
-            (field.name, child.plc, _dtypes_for_json_decode(child))
-            for field, child in zip(dtype.polars.fields, dtype.children, strict=True)
+            (field.name, child.plc_type, _dtypes_for_json_decode(child))
+            for field, child in zip(
+                dtype.polars_type.fields, dtype.children, strict=True
+            )
         ]
     else:
         return []
@@ -251,11 +255,11 @@ class StringFunction(Expr):
             if inclusive:
                 raise NotImplementedError(f"{inclusive=} is not supported for split")
         elif self.name is StringFunction.Name.Strptime:
-            format, _, exact, cache = self.options
+            format, strict, exact, cache = self.options
+            if not format and not strict:
+                raise NotImplementedError("format inference requires strict checking")
             if cache:
                 raise NotImplementedError("Strptime cache is a CPU feature")
-            if format is None:
-                raise NotImplementedError("Strptime format is required")
             if not exact:
                 raise NotImplementedError("Strptime does not support exact=False")
         elif self.name in {
@@ -276,7 +280,7 @@ class StringFunction(Expr):
                     and width.value is not None
                     and width.value < 0
                 ):  # pragma: no cover
-                    dtypestr = dtype_str_repr(width.dtype.polars)
+                    dtypestr = dtype_str_repr(width.dtype.polars_type)
                     raise InvalidOperationError(
                         f"conversion from `{dtypestr}` to `u64` "
                         f"failed in column 'literal' for 1 out of "
@@ -323,8 +327,10 @@ class StringFunction(Expr):
             return Column(
                 plc.strings.combine.concatenate(
                     plc.Table([col.obj for col in broadcasted]),
-                    plc.Scalar.from_py(delimiter, self.dtype.plc),
-                    None if ignore_nulls else plc.Scalar.from_py(None, self.dtype.plc),
+                    plc.Scalar.from_py(delimiter, self.dtype.plc_type),
+                    None
+                    if ignore_nulls
+                    else plc.Scalar.from_py(None, self.dtype.plc_type),
                     None,
                     plc.strings.combine.SeparatorOnNulls.NO,
                 ),
@@ -339,8 +345,8 @@ class StringFunction(Expr):
             return Column(
                 plc.strings.combine.join_strings(
                     column.obj,
-                    plc.Scalar.from_py(delimiter, self.dtype.plc),
-                    plc.Scalar.from_py(None, self.dtype.plc),
+                    plc.Scalar.from_py(delimiter, self.dtype.plc_type),
+                    plc.Scalar.from_py(None, self.dtype.plc_type),
                 ),
                 dtype=self.dtype,
             )
@@ -371,7 +377,7 @@ class StringFunction(Expr):
                 if width.value is None:
                     return Column(
                         plc.Column.from_scalar(
-                            plc.Scalar.from_py(None, self.dtype.plc),
+                            plc.Scalar.from_py(None, self.dtype.plc_type),
                             column.size,
                         ),
                         self.dtype,
@@ -439,7 +445,7 @@ class StringFunction(Expr):
             binary_or = functools.partial(
                 plc.binaryop.binary_operation,
                 op=plc.binaryop.BinaryOperator.BITWISE_OR,
-                output_type=self.dtype.plc,
+                output_type=self.dtype.plc_type,
             )
             return Column(
                 functools.reduce(binary_or, contains.columns()),
@@ -451,7 +457,7 @@ class StringFunction(Expr):
             return Column(
                 plc.unary.cast(
                     plc.strings.contains.count_re(column, self._regex_program),
-                    self.dtype.plc,
+                    self.dtype.plc_type,
                 ),
                 dtype=self.dtype,
             )
@@ -482,7 +488,7 @@ class StringFunction(Expr):
                 assert isinstance(expr, Literal)
                 plc_column = plc.strings.find.find(
                     column,
-                    plc.Scalar.from_py(expr.value, expr.dtype.plc),
+                    plc.Scalar.from_py(expr.value, expr.dtype.plc_type),
                 )
             else:
                 plc_column = plc.strings.findall.find_re(
@@ -499,7 +505,7 @@ class StringFunction(Expr):
                 )
             )
             plc_column = plc.unary.cast(
-                plc_column.with_mask(new_mask, null_count), self.dtype.plc
+                plc_column.with_mask(new_mask, null_count), self.dtype.plc_type
             )
             return Column(plc_column, dtype=self.dtype)
         elif self.name is StringFunction.Name.JsonDecode:
@@ -518,7 +524,7 @@ class StringFunction(Expr):
             (child, expr) = self.children
             column = child.evaluate(df, context=context).obj
             assert isinstance(expr, Literal)
-            json_path = plc.Scalar.from_py(expr.value, expr.dtype.plc)
+            json_path = plc.Scalar.from_py(expr.value, expr.dtype.plc_type)
             return Column(
                 plc.json.get_json_object(column, json_path),
                 dtype=self.dtype,
@@ -527,7 +533,7 @@ class StringFunction(Expr):
             column = self.children[0].evaluate(df, context=context).obj
             return Column(
                 plc.unary.cast(
-                    plc.strings.attributes.count_bytes(column), self.dtype.plc
+                    plc.strings.attributes.count_bytes(column), self.dtype.plc_type
                 ),
                 dtype=self.dtype,
             )
@@ -535,7 +541,7 @@ class StringFunction(Expr):
             column = self.children[0].evaluate(df, context=context).obj
             return Column(
                 plc.unary.cast(
-                    plc.strings.attributes.count_characters(column), self.dtype.plc
+                    plc.strings.attributes.count_characters(column), self.dtype.plc_type
                 ),
                 dtype=self.dtype,
             )
@@ -580,7 +586,7 @@ class StringFunction(Expr):
             column = child.evaluate(df, context=context)
             if n == 1 and self.name is StringFunction.Name.SplitN:
                 plc_column = plc.Column(
-                    self.dtype.plc,
+                    self.dtype.plc_type,
                     column.obj.size(),
                     None,
                     None,
@@ -590,7 +596,7 @@ class StringFunction(Expr):
                 )
             else:
                 assert isinstance(expr, Literal)
-                by = plc.Scalar.from_py(expr.value, expr.dtype.plc)
+                by = plc.Scalar.from_py(expr.value, expr.dtype.plc_type)
                 # See https://github.com/pola-rs/polars/issues/11640
                 # for SplitN vs SplitExact edge case behaviors
                 max_splits = n if is_split_n else 0
@@ -612,7 +618,7 @@ class StringFunction(Expr):
                 # TODO: Use plc.Column.struct_from_children once it is generalized
                 # to handle columns that don't share the same null_mask/null_count
                 plc_column = plc.Column(
-                    self.dtype.plc,
+                    self.dtype.plc_type,
                     ref_column.size(),
                     None,
                     None,
@@ -628,7 +634,7 @@ class StringFunction(Expr):
             child, expr = self.children
             column = child.evaluate(df, context=context).obj
             assert isinstance(expr, Literal)
-            target = plc.Scalar.from_py(expr.value, expr.dtype.plc)
+            target = plc.Scalar.from_py(expr.value, expr.dtype.plc_type)
             if self.name == StringFunction.Name.StripPrefix:
                 find = plc.strings.find.starts_with
                 start = len(expr.value)
@@ -676,14 +682,14 @@ class StringFunction(Expr):
             if self.children[1].value is None:
                 return Column(
                     plc.Column.from_scalar(
-                        plc.Scalar.from_py(None, self.dtype.plc),
+                        plc.Scalar.from_py(None, self.dtype.plc_type),
                         column.size,
                     ),
                     self.dtype,
                 )
             elif self.children[1].value == 0:
                 result = plc.Column.from_scalar(
-                    plc.Scalar.from_py("", self.dtype.plc),
+                    plc.Scalar.from_py("", self.dtype.plc_type),
                     column.size,
                 )
                 if column.obj.null_mask():
@@ -713,7 +719,7 @@ class StringFunction(Expr):
             if end is None:
                 return Column(
                     plc.Column.from_scalar(
-                        plc.Scalar.from_py(None, self.dtype.plc),
+                        plc.Scalar.from_py(None, self.dtype.plc_type),
                         column.size,
                     ),
                     self.dtype,
@@ -760,12 +766,36 @@ class StringFunction(Expr):
             # TODO: ignores ambiguous
             format, strict, _, _ = self.options
             col = self.children[0].evaluate(df, context=context)
+            plc_col = col.obj
+            if plc_col.null_count() == plc_col.size():
+                return Column(
+                    plc.Column.from_scalar(
+                        plc.Scalar.from_py(None, self.dtype.plc_type),
+                        plc_col.size(),
+                    ),
+                    self.dtype,
+                )
+            if format is None:
+                # Polars begins inference with the first non null value
+                if plc_col.null_mask() is not None:
+                    boolmask = plc.unary.is_valid(plc_col)
+                    table = plc.stream_compaction.apply_boolean_mask(
+                        plc.Table([plc_col]), boolmask
+                    )
+                    filtered = table.columns()[0]
+                    first_valid_data = plc.copying.get_element(filtered, 0).to_py()
+                else:
+                    first_valid_data = plc.copying.get_element(plc_col, 0).to_py()
+
+                format = _infer_datetime_format(first_valid_data)
+                if not format:
+                    raise InvalidOperationError(
+                        "Unable to infer datetime format from data"
+                    )
 
             is_timestamps = plc.strings.convert.convert_datetime.is_timestamp(
-                col.obj, format
+                plc_col, format
             )
-
-            plc_col = col.obj
             if strict:
                 if not plc.reduce.reduce(
                     is_timestamps,
@@ -784,7 +814,7 @@ class StringFunction(Expr):
 
             return Column(
                 plc.strings.convert.convert_datetime.to_timestamps(
-                    plc_col, self.dtype.plc, format
+                    plc_col, self.dtype.plc_type, format
                 ),
                 dtype=self.dtype,
             )
@@ -844,3 +874,133 @@ class StringFunction(Expr):
         raise NotImplementedError(
             f"StringFunction {self.name}"
         )  # pragma: no cover; handled by init raising
+
+
+def _infer_datetime_format(val: str) -> str | None:
+    # port of parts of infer.rs and patterns.rs from polars rust
+    DATETIME_DMY_RE = re.compile(
+        r"""
+        ^
+        ['"]?
+        (\d{1,2})
+        [-/\.]
+        (?P<month>[01]?\d{1})
+        [-/\.]
+        (\d{4,})
+        (
+            [T\ ]
+            (\d{1,2})
+            :?
+            (\d{1,2})
+            (
+                :?
+                (\d{1,2})
+                (
+                    \.(\d{1,9})
+                )?
+            )?
+        )?
+        ['"]?
+        $
+    """,
+        re.VERBOSE,
+    )
+
+    DATETIME_YMD_RE = re.compile(
+        r"""
+        ^
+        ['"]?
+        (\d{4,})
+        [-/\.]
+        (?P<month>[01]?\d{1})
+        [-/\.]
+        (\d{1,2})
+        (
+            [T\ ]
+            (\d{1,2})
+            :?
+            (\d{1,2})
+            (
+                :?
+                (\d{1,2})
+                (
+                    \.(\d{1,9})
+                )?
+            )?
+        )?
+        ['"]?
+        $
+    """,
+        re.VERBOSE,
+    )
+
+    DATETIME_YMDZ_RE = re.compile(
+        r"""
+        ^
+        ['"]?
+        (\d{4,})
+        [-/\.]
+        (?P<month>[01]?\d{1})
+        [-/\.]
+        (\d{1,2})
+        [T\ ]
+        (\d{2})
+        :?
+        (\d{2})
+        (
+            :?
+            (\d{2})
+            (
+                \.(\d{1,9})
+            )?
+        )?
+        (
+            [+-](\d{2})(:?(\d{2}))? | Z
+        )
+        ['"]?
+        $
+    """,
+        re.VERBOSE,
+    )
+    PATTERN_FORMATS = {
+        "DATETIME_DMY": [
+            "%d-%m-%Y",
+            "%d/%m/%Y",
+            "%d.%m.%Y",
+            "%d-%m-%Y %H:%M:%S",
+            "%d/%m/%Y %H:%M:%S",
+            "%d.%m.%Y %H:%M:%S",
+        ],
+        "DATETIME_YMD": [
+            "%Y/%m/%d",
+            "%Y-%m-%d",
+            "%Y.%m.%d",
+            "%Y-%m-%d %H:%M:%S",
+            "%Y/%m/%d %H:%M:%S",
+            "%Y.%m.%d %H:%M:%S",
+            "%Y-%m-%dT%H:%M:%S",
+        ],
+        "DATETIME_YMDZ": [
+            "%Y-%m-%dT%H:%M:%S%z",
+            "%Y-%m-%dT%H:%M:%S.%f%z",
+            "%Y-%m-%d %H:%M:%S%z",
+        ],
+    }
+    for pattern_name, regex in [
+        ("DATETIME_DMY", DATETIME_DMY_RE),
+        ("DATETIME_YMD", DATETIME_YMD_RE),
+        ("DATETIME_YMDZ", DATETIME_YMDZ_RE),
+    ]:
+        m = regex.match(val)
+        if m:
+            month = int(m.group("month"))
+            if not (1 <= month <= 12):
+                continue
+            for fmt in PATTERN_FORMATS[pattern_name]:
+                try:
+                    datetime.strptime(val, fmt)
+                except ValueError:  # noqa: PERF203
+                    continue
+                else:
+                    return fmt
+    return None
