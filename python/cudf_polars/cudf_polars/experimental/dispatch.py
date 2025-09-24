@@ -30,9 +30,12 @@ class State(TypedDict):
     ----------
     config_options
         GPUEngine configuration options.
+    stats
+        Statistics collector.
     """
 
     config_options: ConfigOptions
+    stats: StatsCollector
 
 
 LowerIRTransformer: TypeAlias = GenericTransformer[
@@ -130,5 +133,24 @@ def initialize_column_stats(
     populated ``unique_stats`` information. The purpose of this function
     is to propagate ``DataSourceInfo`` references and set ``children``
     attributes for each column of each IR node.
+    """
+    raise AssertionError(f"Unhandled type {type(ir)}")  # pragma: no cover
+
+
+@singledispatch
+def update_column_stats(
+    ir: IR, stats: StatsCollector, config_options: ConfigOptions
+) -> None:
+    """
+    Finalize local column statistics for an IR node.
+
+    Parameters
+    ----------
+    ir
+        The IR node to finalize local column statistics for.
+    stats
+        The `StatsCollector` object containing known statistics.
+    config_options
+        GPUEngine configuration options.
     """
     raise AssertionError(f"Unhandled type {type(ir)}")  # pragma: no cover

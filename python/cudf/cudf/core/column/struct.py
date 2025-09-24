@@ -198,15 +198,7 @@ class StructColumn(ColumnBase):
                 for name, col in zip(names, self.children, strict=True)
             }
         )
-        return StructColumn(  # type: ignore[return-value]
-            data=None,
-            size=self.size,
-            dtype=dtype,
-            mask=self.base_mask,
-            offset=self.offset,
-            null_count=self.null_count,
-            children=self.base_children,
-        )
+        return self._with_type_metadata(dtype)  # type: ignore[return-value]
 
     @property
     def __cuda_array_interface__(self):

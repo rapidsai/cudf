@@ -11,8 +11,6 @@ import pandas as pd
 import pyarrow as pa
 from typing_extensions import Self
 
-import pylibcudf as plc
-
 import cudf
 from cudf.api.types import is_scalar
 from cudf.core.column import column
@@ -31,7 +29,7 @@ from cudf.utils.utils import _is_null_host_scalar
 if TYPE_CHECKING:
     from collections.abc import Mapping, MutableSequence, Sequence
 
-    import numba.cuda
+    from pylibcudf import Scalar as plc_Scalar
 
     from cudf._typing import (
         ColumnBinaryOperand,
@@ -236,7 +234,7 @@ class CategoricalColumn(column.ColumnBase):
 
     def _fill(
         self,
-        fill_value: plc.Scalar,
+        fill_value: plc_Scalar,
         begin: int,
         end: int,
         inplace: bool = False,
@@ -244,7 +242,7 @@ class CategoricalColumn(column.ColumnBase):
         if end <= begin or begin >= self.size:
             return self if inplace else self.copy()
 
-        fill_code = self._encode(plc.interop.to_arrow(fill_value))
+        fill_code = self._encode(fill_value.to_arrow())
         result = self if inplace else self.copy()
         result.codes._fill(
             pa_scalar_to_plc_scalar(pa.scalar(fill_code)),
@@ -391,36 +389,17 @@ class CategoricalColumn(column.ColumnBase):
             ordered=self.ordered,
         )
 
-    @property
-    def values_host(self) -> np.ndarray:
-        """
-        Return a numpy representation of the CategoricalColumn.
-        """
-        return self.to_pandas().values
-
-    @property
-    def values(self):
-        """
-        Return a CuPy representation of the CategoricalColumn.
-        """
-        raise NotImplementedError("cudf.Categorical is not yet implemented")
-
     def clip(self, lo: ScalarLike, hi: ScalarLike) -> Self:
         return (
             self.astype(self.categories.dtype).clip(lo, hi).astype(self.dtype)  # type: ignore[return-value]
         )
-
-    def data_array_view(
-        self, *, mode="write"
-    ) -> numba.cuda.devicearray.DeviceNDArray:
-        return self.codes.data_array_view(mode=mode)
 
     def unique(self) -> Self:
         return self.codes.unique()._with_type_metadata(self.dtype)  # type: ignore[return-value]
 
     def _cast_self_and_other_for_where(
         self, other: ScalarLike | ColumnBase, inplace: bool
-    ) -> tuple[ColumnBase, plc.Scalar | ColumnBase]:
+    ) -> tuple[ColumnBase, plc_Scalar | ColumnBase]:
         if is_scalar(other):
             try:
                 other = self._encode(other)
@@ -615,7 +594,7 @@ class CategoricalColumn(column.ColumnBase):
 
     def _validate_fillna_value(
         self, fill_value: ScalarLike | ColumnLike
-    ) -> plc.Scalar | ColumnBase:
+    ) -> plc_Scalar | ColumnBase:
         """Align fill_value for .fillna based on column type."""
         if is_scalar(fill_value):
             if fill_value != _DEFAULT_CATEGORICAL_VALUE:

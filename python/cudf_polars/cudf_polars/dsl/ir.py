@@ -212,6 +212,33 @@ class PythonScan(IR):
         raise NotImplementedError("PythonScan not implemented")
 
 
+def _align_parquet_schema(df: DataFrame, schema: Schema) -> DataFrame:
+    # TODO: Alternatively set the schema of the parquet reader to decimal128
+    plc_decimals_ids = {
+        plc.TypeId.DECIMAL32,
+        plc.TypeId.DECIMAL64,
+        plc.TypeId.DECIMAL128,
+    }
+    cast_list = []
+
+    for name, col in df.column_map.items():
+        src = col.obj.type()
+        dst = schema[name].plc
+        if (
+            src.id() in plc_decimals_ids
+            and dst.id() in plc_decimals_ids
+            and ((src.id() != dst.id()) or (src.scale != dst.scale))
+        ):
+            cast_list.append(
+                Column(plc.unary.cast(col.obj, dst), name=name, dtype=schema[name])
+            )
+
+    if cast_list:
+        df = df.with_columns(cast_list)
+
+    return df
+
+
 class Scan(IR):
     """Input from files."""
 
@@ -325,18 +352,32 @@ class Scan(IR):
             raise NotImplementedError(
                 "Read from cloud storage"
             )  # pragma: no cover; no test yet
-        if any(
-            str(p).startswith("https:/" if POLARS_VERSION_LT_131 else "https://")
-            for p in self.paths
-        ):
+        if (
+            any(str(p).startswith("https:/") for p in self.paths)
+            and POLARS_VERSION_LT_131
+        ):  # pragma: no cover; polars passed us the wrong URI
+            # https://github.com/pola-rs/polars/issues/22766
             raise NotImplementedError("Read from https")
         if any(
             str(p).startswith("file:/" if POLARS_VERSION_LT_131 else "file://")
             for p in self.paths
         ):
-            # TODO: removing the file:// may work
             raise NotImplementedError("Read from file URI")
         if self.typ == "csv":
+            if any(
+                plc.io.SourceInfo._is_remote_uri(p) for p in self.paths
+            ):  # pragma: no cover; no test yet
+                # This works fine when the file has no leading blank lines,
+                # but currently we do some file introspection
+                # to skip blanks before parsing the header.
+                # For remote files we cannot determine if leading blank lines
+                # exist, so we're punting on CSV support.
+                # TODO: Once the CSV reader supports skipping leading
+                # blank lines natively, we can remove this guard.
+                raise NotImplementedError(
+                    "Reading CSV from remote is not yet supported"
+                )
+
             if self.reader_options["skip_rows_after_header"] != 0:
                 raise NotImplementedError("Skipping rows after header in CSV reader")
             parse_options = self.reader_options["parse_options"]
@@ -600,6 +641,7 @@ class Scan(IR):
                     names=names,
                     dtypes=[schema[name] for name in names],
                 )
+                df = _align_parquet_schema(df, schema)
                 if include_file_paths is not None:
                     df = Scan.add_file_paths(
                         include_file_paths, paths, chunk.num_rows_per_source, df
@@ -613,6 +655,7 @@ class Scan(IR):
                     col_names,
                     [schema[name] for name in col_names],
                 )
+                df = _align_parquet_schema(df, schema)
                 if include_file_paths is not None:
                     df = Scan.add_file_paths(
                         include_file_paths, paths, tbl_w_meta.num_rows_per_source, df
@@ -2213,9 +2256,13 @@ class MergeSorted(IR):
     """Key that is sorted."""
 
     def __init__(self, schema: Schema, key: str, left: IR, right: IR):
-        assert isinstance(left, Sort)
-        assert isinstance(right, Sort)
-        assert left.order == right.order
+        # Children must be Sort or Repartition(Sort).
+        # The Repartition(Sort) case happens during fallback.
+        left_sort_child = left if isinstance(left, Sort) else left.children[0]
+        right_sort_child = right if isinstance(right, Sort) else right.children[0]
+        assert isinstance(left_sort_child, Sort)
+        assert isinstance(right_sort_child, Sort)
+        assert left_sort_child.order == right_sort_child.order
         assert len(left.schema.keys()) <= len(right.schema.keys())
         self.schema = schema
         self.key = key

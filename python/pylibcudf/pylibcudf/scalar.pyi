@@ -9,12 +9,17 @@ from pylibcudf.types import DataType
 
 NpGeneric = type[Any]
 
+PaScalar = type[Any]
+
 class Scalar:
     def __init__(self): ...
     def type(self) -> DataType: ...
     def is_valid(self) -> bool: ...
     @staticmethod
     def empty_like(column: Column, stream: Stream | None = None) -> Scalar: ...
+    def to_arrow(
+        self, metadata: list | str | None = None, stream: Stream | None = None
+    ) -> PaScalar: ...
     @staticmethod
     def from_arrow(
         pa_val: Any,
