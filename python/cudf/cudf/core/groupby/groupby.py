@@ -1765,10 +1765,10 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         See Also
         --------
-        Series.pipe
+        cudf.Series.pipe
             Apply a function with arguments to a series.
 
-        DataFrame.pipe
+        cudf.DataFrame.pipe
             Apply a function with arguments to a dataframe.
 
         apply
@@ -3157,7 +3157,7 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
         sort: bool = True,
         ascending: bool = False,
         dropna: bool = True,
-    ) -> DataFrameOrSeries:
+    ) -> DataFrame | Series:
         """
         Return a Series or DataFrame containing counts of unique rows.
 
@@ -3593,9 +3593,9 @@ class _Grouping(Serializable):
                 elif isinstance(by, Grouper):
                     self._handle_grouper(by)
                 elif isinstance(by, pd.Series):
-                    self._handle_series(Series.from_pandas(by))
+                    self._handle_series(Series(by))
                 elif isinstance(by, pd.Index):
-                    self._handle_index(Index.from_pandas(by))
+                    self._handle_index(Index(by))
                 else:
                     try:
                         self._handle_label(by)

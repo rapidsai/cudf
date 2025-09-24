@@ -12,7 +12,7 @@ from cudf.testing import assert_eq
 @pytest.mark.parametrize("axis", [0, "index"])
 def test_dataframe_index_rename(axis):
     pdf = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
 
     expect = pdf.rename(mapper={1: 5, 2: 6}, axis=axis)
     got = gdf.rename(mapper={1: 5, 2: 6}, axis=axis)
@@ -51,7 +51,7 @@ def test_dataframe_MI_rename():
 @pytest.mark.parametrize("axis", [1, "columns"])
 def test_dataframe_column_rename(axis):
     pdf = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
 
     expect = pdf.rename(mapper=lambda name: 2 * name, axis=axis)
     got = gdf.rename(mapper=lambda name: 2 * name, axis=axis)

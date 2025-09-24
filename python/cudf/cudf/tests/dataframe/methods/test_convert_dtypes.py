@@ -36,7 +36,7 @@ def test_convert_dtypes():
             for k, v, d in zip(data.keys(), data.values(), dtypes, strict=True)
         }
     )
-    gdf = cudf.DataFrame.from_pandas(df)
+    gdf = cudf.DataFrame(df)
     expect = df[nullable_columns].convert_dtypes()
     got = gdf[nullable_columns].convert_dtypes().to_pandas(nullable=True)
     assert_eq(expect, got)

@@ -1278,8 +1278,8 @@ def test_categorical_typecast_outer_one_cat(dtype):
 def test_merge_index_on_opposite_how_column_reset_index():
     df = pd.DataFrame({"a": [1, 2, 3, 4, 5]}, index=[1, 3, 5, 7, 9])
     ser = pd.Series([1, 2], index=pd.Index([1, 2], name="a"), name="b")
-    df_cudf = cudf.DataFrame.from_pandas(df)
-    ser_cudf = cudf.Series.from_pandas(ser)
+    df_cudf = cudf.DataFrame(df)
+    ser_cudf = cudf.Series(ser)
 
     expected = pd.merge(df, ser, on="a", how="left")
     result = cudf.merge(df_cudf, ser_cudf, on="a", how="left")
