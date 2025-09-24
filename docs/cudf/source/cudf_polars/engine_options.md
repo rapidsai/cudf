@@ -24,7 +24,7 @@ through the series of operations needed to produce the final result.
 We also provide an `in-memory` executor. This executor is often faster when the
 underlying data fits comfortably in device memory, because the overhead of splitting
 inputs and executing them in batches is less beneficial at this scale. With that said,
-this executor must rely on Unified Virtual Memory (UVM) if the input and intermediate
+this executor must rely on [Unified Virtual Memory] (UVM) if the input and intermediate
 data do not fit in device memory. The `in-memory` executor can be used with
 
 ```python
@@ -96,13 +96,12 @@ the memory resource to use by:
 2. Passing the configuration options for a Memory Resource as the `memory_resource_config` keyword argument to {class}`~polars.lazyframe.engine_config.GPUEngine`.
 3. Relying on the default behavior, which creates a memory resource for you (details below).
 
-By default, cudf-polars will create a new RMM Memory Resource for each query executed.
-The type of that memory resource is hardware-dependent. For GPUs with coherent unified system memory,
-{class}`rmm.mr.CudaAsyncMemoryResource` is used. Otherwise, a {class}`rmm.mr.ManagedMemoryResource`
-wrapped in a {class}`rmm.mr.PoolMemoryResource` and {class}`rmm.mr.PrefetchResourceAdaptor` is used.
+By default, cudf-polars will create a new RMM Memory Resource for you, which is cached and reused
+for each query. The type of that memory resource is hardware-dependent. GPUs that support[Unified Virtual Memory] memory,
+use a {class}`rmm.mr.ManagedMemoryResource` wrapped in a {class}`rmm.mr.PoolMemoryResource` and {class}`rmm.mr.PrefetchResourceAdaptor`.
+Otherwise, {class}`rmm.mr.CudaAsyncMemoryResource` is used.
 
-Set `POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY=0` to
-disabled managed memory and use {class}`rmm.mr.CudaAsyncMemoryResource` instead.
+Set `POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY=0` to disabled managed memory and use {class}`rmm.mr.CudaAsyncMemoryResource` instead.
 
 Alternatively, you can customize the pool by passing the configuration for an RMM Memory Resource object as `memory_resource_config`
 when creating your {class}`~polars.lazyframe.engine_config.GPUEngine`:
@@ -120,7 +119,7 @@ engine = pl.GPUEngine(memory_resource_config=memory_resource_config)
 
 This lets you control things like the initial pool size or release threshold.
 
-Finally, for maximum flexibility, you can create your own Memory Resource object and pass it into the {class}`~polars.lazyframe.engine_config.GPUEngine`:
+Finally, for maximum flexibility, you can create your own memory resource object and pass it into the {class}`~polars.lazyframe.engine_config.GPUEngine`:
 
 ```python
 import polars as pl
@@ -130,8 +129,11 @@ mr = rmm.mr.CudaAsyncMemory()
 engine = pl.GPUEngine(memory_resource=mr)
 ```
 
-Passing a concrete Memory Resource takes precedence of passing the `memory_resource_config` options,
+Passing a concrete memory resource takes precedence of passing the `memory_resource_config` options,
 which takes precedence over the default memory resource.
+
+Note that providing a concrete memory resource isn't an option with the distributed scheduler,
+because the concrete memory resource is only valid for the process in which it was created.
 
 ## Disabling CUDA Managed Memory
 
@@ -139,3 +141,5 @@ By default the `in-memory` executor will use [CUDA managed memory](https://docs.
 allocator is used.
 Managed memory can be turned off by setting `POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY` to `0`. System requirements for managed memory can be found [here](
 https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#system-requirements-for-unified-memory).
+
+[Unified Virtual Memory]: https://developer.nvidia.com/blog/unified-memory-cuda-beginners/
