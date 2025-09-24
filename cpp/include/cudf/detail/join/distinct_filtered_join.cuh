@@ -23,11 +23,6 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
-// Forward declaration
-namespace cudf::experimental::row::equality {
-class preprocessed_table;
-}
-
 namespace cudf {
 namespace detail {
 
@@ -75,7 +70,7 @@ class distinct_filtered_join : public filtered_join {
   template <int32_t CGSize, typename Ref>
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> query_build_table(
     cudf::table_view const& probe,
-    std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> preprocessed_probe,
+    std::shared_ptr<cudf::detail::row::equality::preprocessed_table> preprocessed_probe,
     join_kind kind,
     Ref query_ref,
     rmm::cuda_stream_view stream,
