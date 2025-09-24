@@ -2,6 +2,7 @@
 
 from libcpp cimport bool
 from pylibcudf.libcudf.binaryop cimport binary_operator
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 from .column cimport Column
@@ -23,7 +24,8 @@ cpdef Column binary_operation(
     RightBinaryOperand rhs,
     binary_operator op,
     DataType output_type,
-    Stream stream=*
+    Stream stream=*,
+    DeviceMemoryResource mr=*,
 )
 
 cpdef bool is_supported_operation(
