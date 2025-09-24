@@ -412,7 +412,7 @@ class MemoryResourceConfig:
     def __post_init__(self) -> None:
         if self.qualname.count(".") < 1:
             raise ValueError(
-                "MemoryResourceConfig.qualname must be a fully qualified name to a class, including the module name."
+                f"MemoryResourceConfig.qualname '{self.qualname}' must be a fully qualified name to a class, including the module name."
             )
 
     def create_memory_resource(self) -> rmm.mr.DeviceMemoryResource:

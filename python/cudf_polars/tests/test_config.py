@@ -568,3 +568,17 @@ def test_validate_stats_planning(option: str) -> None:
                 executor_options={"stats_planning": {option: object()}},
             )
         )
+
+
+def test_memory_resource_config_raises() -> None:
+    with pytest.raises(
+        ValueError,
+        match="MemoryResourceConfig.qualname 'foo' must be a fully qualified name to a class",
+    ):
+        MemoryResourceConfig(qualname="foo")
+
+
+@pytest.mark.parametrize("options", [None, {}])
+def test_memory_resource_config_hash(options) -> None:
+    config = MemoryResourceConfig(qualname="rmm.mr.CudaMemoryResource", options=options)
+    assert hash(config) == hash(config)
