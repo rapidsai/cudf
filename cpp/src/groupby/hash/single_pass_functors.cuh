@@ -164,11 +164,11 @@ struct global_memory_fallback_fn {
 
     if (auto const target_row_idx = target_indices[source_row_idx];
         target_row_idx != cudf::detail::CUDF_SIZE_TYPE_SENTINEL) {
-      auto const agg_idx     = static_cast<size_type>(idx / num_fallback_rows);
-      auto const& source_col = input_values.column(agg_idx);
-      auto const& target_col = output_values.column(agg_idx);
+      auto const col_idx     = static_cast<size_type>(idx / num_fallback_rows);
+      auto const& source_col = input_values.column(col_idx);
+      auto const& target_col = output_values.column(col_idx);
       dispatch_type_and_aggregation(source_col.type(),
-                                    aggs[agg_idx],
+                                    aggs[col_idx],
                                     cudf::detail::element_aggregator{},
                                     target_col,
                                     target_row_idx,
@@ -205,11 +205,11 @@ struct compute_single_pass_aggs_fn {
     auto const source_row_idx = static_cast<size_type>(idx % num_rows);
     if (auto const target_row_idx = target_indices[source_row_idx];
         target_row_idx != cudf::detail::CUDF_SIZE_TYPE_SENTINEL) {
-      auto const agg_idx     = static_cast<size_type>(idx / num_rows);
-      auto const& source_col = input_values.column(agg_idx);
-      auto const& target_col = output_values.column(agg_idx);
+      auto const col_idx     = static_cast<size_type>(idx / num_rows);
+      auto const& source_col = input_values.column(col_idx);
+      auto const& target_col = output_values.column(col_idx);
       dispatch_type_and_aggregation(source_col.type(),
-                                    aggs[agg_idx],
+                                    aggs[col_idx],
                                     cudf::detail::element_aggregator{},
                                     target_col,
                                     target_row_idx,

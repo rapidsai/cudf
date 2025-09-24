@@ -49,20 +49,20 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
 {
   // Collect the single-pass aggregations that can be processed in this function.
   // The compound aggregations that require multiple passes will be handled separately later on.
-  auto const [spass_values, spass_agg_kinds, spass_aggs, has_compound_aggs] =
+  auto const [values, agg_kinds, aggs, has_compound_aggs] =
     extract_single_pass_aggs(requests, stream);
-  auto const d_spass_agg_kinds = cudf::detail::make_device_uvector_async(
-    spass_agg_kinds, stream, rmm::mr::get_current_device_resource());
-  auto const num_rows = spass_values.num_rows();
+  auto const d_agg_kinds = cudf::detail::make_device_uvector_async(
+    agg_kinds, stream, rmm::mr::get_current_device_resource());
+  auto const num_rows = values.num_rows();
 
   // Performs naive global memory aggregations when the workload is not compatible with shared
   // memory, such as when aggregating dictionary columns, when there is insufficient dynamic
   // shared memory for shared memory aggregations, or when SUM_WITH_OVERFLOW aggregations are
   // present.
   auto const run_aggs_by_global_mem_kernel = [&] {
-    auto [spass_results, unique_key_indices] = compute_global_memory_aggs(
-      row_bitmask, spass_values, global_set, spass_agg_kinds, d_spass_agg_kinds, stream, mr);
-    collect_output_to_cache(spass_values, spass_aggs, spass_results, cache, stream);
+    auto [agg_results, unique_key_indices] = compute_global_memory_aggs(
+      row_bitmask, values, global_set, agg_kinds, d_agg_kinds, stream, mr);
+    collect_output_to_cache(values, aggs, agg_results, cache, stream);
     return std::pair{std::move(unique_key_indices), has_compound_aggs};
   };
 
@@ -83,7 +83,7 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
   if (grid_size <= 0) { return run_aggs_by_global_mem_kernel(); }
 
   auto const [can_run_by_shared_mem_kernel, available_shmem_size] =
-    is_shared_memory_compatible(spass_agg_kinds, spass_values, grid_size);
+    is_shared_memory_compatible(agg_kinds, values, grid_size);
 
   if (!can_run_by_shared_mem_kernel) { return run_aggs_by_global_mem_kernel(); }
 
@@ -190,10 +190,10 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
   matching_keys     = rmm::device_uvector<size_type>{0, stream};  // done, free up memory early
   key_transform_map = rmm::device_uvector<size_type>{0, stream};  // done, free up memory early
 
-  auto const d_spass_values = table_device_view::create(spass_values, stream);
-  auto spass_results        = create_results_table(
-    static_cast<size_type>(unique_keys.size()), spass_values, spass_agg_kinds, stream, mr);
-  auto d_results_ptr = mutable_table_device_view::create(*spass_results, stream);
+  auto const d_spass_values = table_device_view::create(values, stream);
+  auto agg_results =
+    create_results_table(static_cast<size_type>(unique_keys.size()), values, agg_kinds, stream, mr);
+  auto d_results_ptr = mutable_table_device_view::create(*agg_results, stream);
 
   compute_shared_memory_aggs(grid_size,
                              available_shmem_size,
@@ -204,7 +204,7 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
                              block_cardinality.data(),
                              *d_spass_values,
                              *d_results_ptr,
-                             d_spass_agg_kinds.data(),
+                             d_agg_kinds.data(),
                              stream);
 
   // The shared memory groupby is designed so that each thread block can handle up to 128 unique
@@ -220,9 +220,9 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
 
     thrust::for_each_n(rmm::exec_policy_nosync(stream),
                        thrust::make_counting_iterator(int64_t{0}),
-                       static_cast<int64_t>(num_fallback_rows) * spass_values.num_columns(),
+                       static_cast<int64_t>(num_fallback_rows) * values.num_columns(),
                        global_memory_fallback_fn{target_indices.begin(),
-                                                 d_spass_agg_kinds.data(),
+                                                 d_agg_kinds.data(),
                                                  *d_spass_values,
                                                  *d_results_ptr,
                                                  fallback_blocks.data(),
@@ -233,7 +233,7 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
                                                  num_rows});
   }
 
-  collect_output_to_cache(spass_values, spass_aggs, spass_results, cache, stream);
+  collect_output_to_cache(values, aggs, agg_results, cache, stream);
   return {std::move(unique_keys), has_compound_aggs};
 }
 }  // namespace cudf::groupby::detail::hash
