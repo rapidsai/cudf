@@ -662,7 +662,8 @@ class StructDtype(_BaseDtype):
         StructType(struct<x: int32, y: string>)
         """
         return pa.struct(
-            {
+            # dict[str, DataType] should be compatible but pyarrow stubs are too strict
+            {  # type: ignore[arg-type]
                 k: cudf_dtype_to_pa_type(dtype)
                 for k, dtype in self.fields.items()
             }
