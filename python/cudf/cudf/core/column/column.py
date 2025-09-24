@@ -857,8 +857,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         if pa.types.is_dictionary(array.type):
             if isinstance(array, pa.Array):
-                codes = array.indices
-                dictionary = array.dictionary
+                dict_array = cast(pa.DictionaryArray, array)
+                codes = dict_array.indices
+                dictionary = dict_array.dictionary
             else:
                 codes = pa.chunked_array(
                     [chunk.indices for chunk in array.chunks],
