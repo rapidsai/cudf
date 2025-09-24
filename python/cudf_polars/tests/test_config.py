@@ -101,6 +101,7 @@ def test_invalid_memory_resource_raises(mr):
     reason="managed memory not supported",
 )
 @pytest.mark.parametrize("enable_managed_memory", ["1", "0"])
+@pytest.mark.usefixtures("clear_memory_resource_cache")
 def test_cudf_polars_enable_disable_managed_memory(monkeypatch, enable_managed_memory):
     q = pl.LazyFrame({"a": [1, 2, 3]})
 
