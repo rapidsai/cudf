@@ -56,7 +56,7 @@ namespace CUDF_EXPORT cudf {
  */
 
 /**
- * @brief Convert a DLPack DLTensor into a cudf table
+ * @brief Convert a DLPack DLManagedTensor into a cudf table
  *
  * The `device_type` of the DLTensor must be `kDLCPU`, `kDLCuda`, or
  * `kDLCUDAHost`, and `device_id` must match the current device. The `ndim`
@@ -79,11 +79,10 @@ std::unique_ptr<table> from_dlpack(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
- * @brief Convert a cudf table into a DLPack DLTensor
+ * @brief Convert a cudf table into a DLPack DLManagedTensor.
  *
- * All columns must have the same data type and this type must be numeric. The
- * columns may be nullable, but the null count must be zero. If the input table
- * is empty or has zero rows, the result will be nullptr.
+ * @note This exports DLPack <1 struct.  The newer struct is currently available
+ * for columns via Python `__dlpack__`.
  *
  * @note The `deleter` method of the returned `DLManagedTensor` must be used to
  * free the memory allocated for the tensor.

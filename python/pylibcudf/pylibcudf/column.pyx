@@ -33,7 +33,6 @@ from pylibcudf.libcudf.types cimport size_type, size_of as cpp_size_of, bitmask_
 from pylibcudf.libcudf.utilities.traits cimport is_fixed_width
 from pylibcudf.libcudf.copying cimport get_element
 
-
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 from rmm.pylibrmm.stream cimport Stream
 from rmm.pylibrmm.memory_resource cimport (
@@ -43,7 +42,7 @@ from rmm.pylibrmm.memory_resource cimport (
 
 from .gpumemoryview cimport gpumemoryview
 from .filling cimport sequence
-from .gpumemoryview cimport gpumemoryview
+from .interop cimport to_dlpack_col, _get_dlpack_device
 from .scalar cimport Scalar
 from .traits cimport (
     is_fixed_width as plc_is_fixed_width,
@@ -1338,6 +1337,20 @@ cdef class Column:
             )
 
         return self._to_schema(), self._to_device_array()
+
+    def __dlpack__(
+        self,
+        /,
+        *,
+        stream: int | Any | None = None,
+        max_version: tuple[int, int] | None = None,
+        dl_device: tuple[int, int] | None = None,
+        copy: bool | None = None,
+    ):
+        return to_dlpack_col(self, stream, max_version, dl_device, copy)
+
+    def __dlpack_device__(self):
+        return _get_dlpack_device()
 
 
 cdef class ListColumnView:

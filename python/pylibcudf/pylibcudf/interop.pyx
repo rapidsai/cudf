@@ -6,19 +6,28 @@ from cpython.pycapsule cimport (
     PyCapsule_New,
     PyCapsule_SetName,
 )
+from cpython.ref cimport Py_DECREF, Py_INCREF
+
+from libc.stdint cimport uintptr_t
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
 from functools import singledispatch
 
+from rmm.librmm cimport cuda_stream_view
+
+from pylibcudf.libcudf.utilities.default_stream cimport get_default_stream
 from pylibcudf.libcudf.interop cimport (
     DLManagedTensor,
+    DLManagedTensorVersioned,
     from_dlpack as cpp_from_dlpack,
     to_dlpack as cpp_to_dlpack,
+    to_dlpack_versioned as cpp_to_dlpack_versioned,
 )
 from pylibcudf.libcudf.table.table cimport table
 
 from rmm.pylibrmm.stream cimport Stream
+from rmm.librmm.device_buffer cimport get_current_cuda_device
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from .column cimport Column
@@ -42,6 +51,8 @@ __all__ = [
     "from_dlpack",
     "to_arrow",
     "to_dlpack",
+    "get_dlpack_device",
+    "to_dlpack_col",
 ]
 
 
@@ -225,12 +236,95 @@ cpdef object to_dlpack(Table input, Stream stream=None, DeviceMemoryResource mr=
     )
 
 
-cdef void dlmanaged_tensor_pycapsule_deleter(object pycap_obj) noexcept:
-    if PyCapsule_IsValid(pycap_obj, "used_dltensor"):
-        # we do not call a used capsule's deleter
-        return
-    cdef DLManagedTensor* dlpack_tensor = <DLManagedTensor*>PyCapsule_GetPointer(
-        pycap_obj, "dltensor"
-    )
-    if dlpack_tensor is not NULL:
-        dlpack_tensor.deleter(dlpack_tensor)
+cdef void _dltensor_delete_owner(void *ctx) noexcept nogil:
+    """Helper to delete the column owning the dlpack tensor data."""
+    with gil:
+        Py_DECREF(<object>ctx)
+
+
+cpdef _get_dlpack_device():
+    # Indicate as CUDA memory (although it could be pinned in theory).
+    return (2, get_current_cuda_device().value())
+
+
+cpdef object to_dlpack_col(
+    Column self,
+    stream=None,
+    max_version=None,
+    dl_device=None,
+    copy=None,
+):
+    cdef DLManagedTensorVersioned* dlmtensorv
+    cdef bint to_cpu = False
+    cdef cuda_stream_view.cuda_stream_view c_stream
+
+    if max_version is None or max_version[0] == 0:
+        raise BufferError("Unable to export DLPack with version <1.0.")
+
+    if dl_device is not None:
+        if dl_device == (1, 0):
+            to_cpu = True
+            if copy is None:
+                copy = True  # moving to CPU is always a copy
+            elif not copy:
+                raise BufferError("copying to CPU requires a copy.")
+
+        elif dl_device != self.__dlpack_device__:
+            raise BufferError("cudf only supports dl_device if identical or CPU.")
+
+    if self.null_count() != 0:
+        # A BufferError is nicer, so explicitly check in Python
+        # (we could convert a custom exception from C->Cython also)
+        raise BufferError("Cannot export column with nulls.")
+
+    if copy is None:
+        copy = False
+
+    if to_cpu:
+        # just ignore stream, it should match the device, cpu has none
+        # (could guess it's a GPU one, but that isn't strictly standardized)
+        c_stream = get_default_stream()
+    elif stream == -1:
+        # Passing the default stream means we don't do any synchronization
+        # (so use our stream which enforces no order between streams).
+        c_stream = get_default_stream()
+    elif stream is None or stream == 1:
+        c_stream = cuda_stream_view.cuda_stream_legacy
+    elif stream == 2:
+        c_stream = cuda_stream_view.cuda_stream_default
+    elif not isinstance(stream, int) or stream < 3:
+        raise ValueError(
+            f'On CUDA, the valid stream for the DLPack protocol is -1,'
+            f' 1, 2, or any larger value, but {stream} was provided')
+    else:
+        # User provided a custom stream.
+        c_stream = cuda_stream_view.cuda_stream_view(
+            <cuda_stream_view.cudaStream_t><uintptr_t>stream)
+
+    dlmtensorv = cpp_to_dlpack_versioned(
+        self.view(), copy, to_cpu, c_stream, _dltensor_delete_owner, <void *>self)
+    Py_INCREF(self)  # on success, dlmtensorv takes a reference to self
+    try:
+        capsule = PyCapsule_New(
+            dlmtensorv, 'dltensor_versioned', dlmanaged_tensor_pycapsule_deleter)
+    except BaseException:  # ownership not transferred to capsule
+        dlmtensorv.deleter(dlmtensorv)
+        raise
+
+    if to_cpu:
+        # Make sure data is CPU available
+        c_stream.synchronize()
+
+    return capsule
+
+
+cdef void dlmanaged_tensor_pycapsule_deleter(object capsule) noexcept:
+    """Delete the dlpack tensor stored inside the capsule (if needed)."""
+    cdef DLManagedTensorVersioned *dltensorv
+
+    if PyCapsule_IsValid(capsule, "dltensor_versioned"):
+        dltensorv = <DLManagedTensorVersioned *>PyCapsule_GetPointer(
+            capsule, "dltensor_versioned")
+        dltensorv.deleter(dltensorv)
+
+    # If the capsule was renamed, the tensor is already free'd.

@@ -278,6 +278,34 @@ class SingleColumnFrame(Frame, NotIterable):
                 "'__cuda_array_interface__'"
             )
 
+    def __dlpack__(
+        self,
+        /,
+        *,
+        stream: int | Any | None = None,
+        max_version: tuple[int, int] | None = None,
+        dl_device: tuple[int, int] | None = None,
+        copy: bool | None = None,
+    ):
+        dlpack = getattr(self._column, "__dlpack__", None)
+        if dlpack:
+            return dlpack(
+                stream=stream,
+                max_version=max_version,
+                dl_device=dl_device,
+                copy=copy,
+            )
+        else:
+            raise BufferError("Column dtype is not supported by DLPack")
+
+    @property
+    def __dlpack_device__(self):
+        dlpack_device = getattr(self._column, "__dlpack_device__", None)
+        if dlpack_device:
+            return dlpack_device
+        else:
+            raise BufferError("Column dtype is not supported by DLPack")
+
     @_performance_tracking
     def factorize(
         self, sort: bool = False, use_na_sentinel: bool = True
