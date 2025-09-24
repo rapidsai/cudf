@@ -103,6 +103,8 @@ CUDF_KERNEL void copy_shifted_bitmask(bitmask_type* __restrict__ destination,
 std::pair<std::unique_ptr<rmm::device_buffer>, size_type> get_mask_buffer(
   ArrowArray const* input, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
+  if (input->length == 0) { return {std::make_unique<rmm::device_buffer>(0, stream, mr), 0}; }
+
   auto bitmap = static_cast<uint8_t const*>(input->buffers[validity_buffer_idx]);
   if (bitmap == nullptr || input->null_count == 0) {
     return {std::make_unique<rmm::device_buffer>(0, stream, mr), 0};
