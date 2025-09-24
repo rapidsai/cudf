@@ -41,19 +41,19 @@ struct filter_generator<DataType> {
                             cudf::size_type num_rows,
                             cudf::size_type row_width,
                             bool nullable,
-                            cudf::size_type num_predicates)
+                            cudf::size_type predicate_intensity)
   {
     auto min        = static_cast<DataType>(0);
     auto max        = static_cast<DataType>(num_rows);
     auto filter_min = min;
     auto filter_max = static_cast<DataType>(filter_min + (max - min) * selectivity);
     auto filter_step =
-      static_cast<DataType>((filter_max - filter_min) / static_cast<DataType>(num_predicates));
+      static_cast<DataType>((filter_max - filter_min) / static_cast<DataType>(predicate_intensity));
 
     std::vector<cudf::numeric_scalar<DataType>> filter_min_scalars;
     std::vector<cudf::numeric_scalar<DataType>> filter_max_scalars;
 
-    for (cudf::size_type i = 0; i < num_predicates; i++) {
+    for (cudf::size_type i = 0; i < predicate_intensity; i++) {
       auto min = static_cast<DataType>(filter_min + i * filter_step);
       filter_min_scalars.push_back(cudf::numeric_scalar<DataType>(min));
       filter_max_scalars.push_back(cudf::numeric_scalar<DataType>(filter_max));
@@ -62,7 +62,7 @@ struct filter_generator<DataType> {
     cudf::ast::tree expr;
     auto& col_ref = expr.push(cudf::ast::column_reference(0));
 
-    for (cudf::size_type i = 0; i < num_predicates; i++) {
+    for (cudf::size_type i = 0; i < predicate_intensity; i++) {
       auto* prev_cond       = (i == 0) ? nullptr : &expr.back();
       auto& filter_min_lit  = expr.push(cudf::ast::literal(filter_min_scalars[i]));
       auto& filter_max_lit  = expr.push(cudf::ast::literal(filter_max_scalars[i]));
@@ -105,7 +105,7 @@ struct filter_generator<DataType> {
                             cudf::size_type num_rows,
                             cudf::size_type row_width,
                             bool nullable,
-                            cudf::size_type num_predicates)
+                            cudf::size_type predicate_intensity)
   {
     std::array<char const*, 10> matches{"A MATCH",
                                         "ANOTHER MATCH",
@@ -119,12 +119,12 @@ struct filter_generator<DataType> {
                                         "MATCHLESS"};
 
     std::vector<char const*> selected_matches;
-    for (cudf::size_type i = 0; i < num_predicates; i++) {
+    for (cudf::size_type i = 0; i < predicate_intensity; i++) {
       selected_matches.emplace_back(matches[i % (sizeof(matches) / sizeof(matches[0]))]);
     }
 
     std::vector<cudf::string_scalar> match_scalars;
-    for (cudf::size_type i = 0; i < num_predicates; i++) {
+    for (cudf::size_type i = 0; i < predicate_intensity; i++) {
       match_scalars.emplace_back(selected_matches[i]);
     }
 
@@ -156,7 +156,7 @@ struct filter_generator<DataType> {
     cudf::ast::tree expr;
     auto& col_ref = expr.push(cudf::ast::column_reference(0));
 
-    for (cudf::size_type i = 0; i < num_predicates; i++) {
+    for (cudf::size_type i = 0; i < predicate_intensity; i++) {
       auto& match_lit = expr.push(cudf::ast::literal(match_scalars[i]));
       auto& cond =
         expr.push(cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref, match_lit));
@@ -180,7 +180,8 @@ void BM_parquet_read_filter(nvbench::state& state)
 {
   auto const num_rows  = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const row_width = static_cast<cudf::size_type>(state.get_int64_or_default("row_width", 1));
-  auto const num_predicates = static_cast<cudf::size_type>(state.get_int64("num_predicates"));
+  auto const predicate_intensity =
+    static_cast<cudf::size_type>(state.get_int64("predicate_intensity"));
   auto const selectivity    = static_cast<float>(state.get_float64("selectivity"));
   auto const nullable       = state.get_string("nullable") == "true";
   auto const use_jit        = state.get_string("executor") == "jit";
@@ -188,12 +189,13 @@ void BM_parquet_read_filter(nvbench::state& state)
 
   CUDF_EXPECTS(num_input_cols >= 1, "Invalid number of input columns");
   CUDF_EXPECTS(selectivity > 0.0F && selectivity <= 1.0F, "Invalid selectivity");
-  CUDF_EXPECTS(num_predicates >= 0 && num_predicates <= 100'000, "Invalid number of predicates");
+  CUDF_EXPECTS(predicate_intensity >= 0 && predicate_intensity <= 100'000,
+               "Invalid number of predicates");
 
   auto const num_copy_only_cols = num_input_cols - 1;
 
   auto [filter_column, filter_func] =
-    filter_generator<DataType>()(selectivity, num_rows, row_width, nullable, num_predicates);
+    filter_generator<DataType>()(selectivity, num_rows, row_width, nullable, predicate_intensity);
   auto copy_only_dtypes = cycle_dtypes(
     {cudf::type_id::BOOL8, cudf::type_id::FLOAT32, cudf::type_id::FLOAT64, cudf::type_id::STRING},
     num_copy_only_cols);
@@ -242,7 +244,14 @@ void BM_parquet_read_filter(nvbench::state& state)
   // pre-warm JIT cache
   if (use_jit) { cudf::io::read_parquet(read_opts); }
 
-  auto mem_stats_logger = cudf::memory_stats_logger();
+  if constexpr (std::is_same_v<DataType, cudf::string_view>) {
+    state.add_global_memory_reads<char>(num_rows * static_cast<size_t>(row_width));
+    state.add_global_memory_writes<char>(static_cast<size_t>(num_rows * selectivity) * row_width);
+  } else {
+    state.add_global_memory_reads<DataType>(num_rows);
+    state.add_global_memory_writes<DataType>(static_cast<size_t>(num_rows * selectivity));
+  }
+
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(
     nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
@@ -254,21 +263,13 @@ void BM_parquet_read_filter(nvbench::state& state)
 
       CUDF_EXPECTS(result.tbl->num_columns() == num_input_cols, "Unexpected number of columns");
     });
-
-  if constexpr (std::is_same_v<DataType, cudf::string_view>) {
-    state.add_global_memory_reads<char>(num_rows * static_cast<size_t>(row_width));
-    state.add_global_memory_writes<char>(static_cast<size_t>(num_rows * selectivity) * row_width);
-  } else {
-    state.add_global_memory_reads<DataType>(num_rows);
-    state.add_global_memory_writes<DataType>(static_cast<size_t>(num_rows * selectivity));
-  }
 }
 
 #define PARQUET_READER_FILTER_BENCHMARK_DEFINE(name, type)                  \
   void name(nvbench::state& state) { BM_parquet_read_filter<type>(state); } \
                                                                             \
   NVBENCH_BENCH(name)                                                       \
-    .add_int64_axis("num_predicates", {4, 16})                              \
+    .add_int64_axis("predicate_intensity", {4, 16})                         \
     .add_int64_axis("num_cols", {32})                                       \
     .add_int64_axis("num_rows", {100'000, 1'000'000, 10'000'000})           \
     .add_float64_axis("selectivity", {0.5, 0.8})                            \
