@@ -22,6 +22,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/join/conditional_join.hpp>
+#include <cudf/join/filtered_join.hpp>
 #include <cudf/join/join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -841,7 +842,9 @@ struct ConditionalLeftSemiJoinTest : public ConditionalJoinSingleReturnTest<T> {
     cudf::table_view right,
     cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
   {
-    return cudf::left_semi_join(left, right, compare_nulls);
+    cudf::filtered_join obj(
+      right, compare_nulls, cudf::set_as_build_table::RIGHT, cudf::get_default_stream());
+    return obj.semi_join(left);
   }
 };
 
@@ -898,7 +901,9 @@ struct ConditionalLeftAntiJoinTest : public ConditionalJoinSingleReturnTest<T> {
     cudf::table_view right,
     cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
   {
-    return cudf::left_anti_join(left, right, compare_nulls);
+    cudf::filtered_join obj(
+      right, compare_nulls, cudf::set_as_build_table::RIGHT, cudf::get_default_stream());
+    return obj.anti_join(left);
   }
 };
 
