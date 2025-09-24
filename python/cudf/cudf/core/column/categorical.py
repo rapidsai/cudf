@@ -386,7 +386,8 @@ class CategoricalColumn(column.ColumnBase):
         return pa.DictionaryArray.from_arrays(
             self.codes.astype(signed_type).to_arrow(),
             self.categories.to_arrow(),
-            ordered=self.ordered,
+            # TODO: Investigate if self.ordered can actually be None here
+            ordered=self.ordered if self.ordered is not None else False,
         )
 
     def clip(self, lo: ScalarLike, hi: ScalarLike) -> Self:
