@@ -900,10 +900,8 @@ class DataFrameSourceInfo(DataSourceInfo):
                 unique_count = (
                     self._df.get_column(column).approx_n_unique() if row_count else 0
                 )
-            except pl.exceptions.InvalidOperationError:
-                unique_count = (
-                    self._df.get_column(column).n_unique() if row_count else 0
-                )
+            except pl.exceptions.InvalidOperationError:  # pragma: no cover
+                unique_count = self._df.get_column(column).n_unique()
             unique_fraction = min((unique_count / row_count), 1.0) if row_count else 1.0
             self._unique_stats[column] = UniqueStats(
                 ColumnStat[int](value=unique_count),
