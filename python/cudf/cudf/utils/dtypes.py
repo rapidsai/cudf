@@ -399,8 +399,8 @@ pa_decimal32type = getattr(pa, "Decimal32Type", None)
 pa_decimal64type = getattr(pa, "Decimal64Type", None)
 
 
-def pyarrow_dtype_to_cudf_dtype(dtype: pa.DataType) -> DtypeObj:
-    """Given a pyarrow dtype, converts it into the equivalent cudf pandas
+def pyarrow_dtype_to_cudf_dtype(dtype: pd.ArrowDtype) -> DtypeObj:
+    """Given a pandas ArrowDtype, converts it into the equivalent cudf pandas
     dtype.
     """
 
