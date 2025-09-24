@@ -565,7 +565,7 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
              options.get_skip_rows(),
              options.get_num_rows(),
              options.get_row_groups(),
-             options.get_use_jit_filter()},
+             options.is_enabled_use_jit_filter()},
     _sources{std::move(sources)},
     _pass_page_mask{cudf::detail::make_host_vector<bool>(0, _stream)},
     _subpass_page_mask{cudf::detail::make_host_vector<bool>(0, _stream)},
@@ -834,10 +834,8 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
     bool use_jit = cudf::get_context().use_jit() || _options.use_jit_filter;
 
     if (!use_jit) {
-      auto predicate = cudf::detail::compute_column(*read_table,
-                                                    _expr_conv.get_converted_expr().value().get(),
-                                                    _stream,
-                                                    cudf::get_current_device_resource_ref());
+      auto predicate = cudf::detail::compute_column(
+        *read_table, _expr_conv.get_converted_expr().value().get(), _stream, _mr);
       CUDF_EXPECTS(predicate->view().type().id() == type_id::BOOL8,
                    "Predicate filter should return a boolean");
       // Exclude columns present in filter only in output
@@ -848,7 +846,7 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
                                        _expr_conv.get_converted_expr().value().get(),
                                        only_output,
                                        _stream,
-                                       cudf::get_current_device_resource_ref());
+                                       _mr);
 
       return {std::move(output_table), std::move(out_metadata)};
     }

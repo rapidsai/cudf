@@ -31,13 +31,7 @@
 #include <nvbench/nvbench.cuh>
 
 template <typename DataType>
-struct filter_generator {
-  decltype(auto) operator()(float selectivity,
-                            cudf::size_type num_rows,
-                            cudf::size_type row_width,
-                            bool nullable,
-                            cudf::size_type num_predicates) = delete;
-};
+struct filter_generator;
 
 template <typename DataType>
   requires(std::is_same_v<DataType, int32_t> || std::is_same_v<DataType, int64_t> ||
@@ -60,8 +54,6 @@ struct filter_generator<DataType> {
     std::vector<cudf::numeric_scalar<DataType>> filter_max_scalars;
 
     for (cudf::size_type i = 0; i < num_predicates; i++) {
-      // std::cout << "Filter " << i << ": [" << filter_min + i * filter_step << ", " << filter_max
-      //           << "]" << std::endl;
       auto min = static_cast<DataType>(filter_min + i * filter_step);
       filter_min_scalars.push_back(cudf::numeric_scalar<DataType>(min));
       filter_max_scalars.push_back(cudf::numeric_scalar<DataType>(filter_max));
@@ -96,7 +88,6 @@ struct filter_generator<DataType> {
 
     auto [null_mask, null_count] = create_random_null_mask(num_rows, nullable ? 0.3 : 0);
 
-    // std::cout << "NULL COUNT: " << null_count << std::endl;
     filter_column->set_null_mask(null_mask, null_count);
 
     return std::make_tuple(std::move(filter_column),
@@ -184,7 +175,6 @@ struct filter_generator<DataType> {
   }
 };
 
-// [ ] will onnly be beneficial for multi-column tables and complex types
 template <typename DataType>
 void BM_parquet_read_filter(nvbench::state& state)
 {
@@ -226,14 +216,7 @@ void BM_parquet_read_filter(nvbench::state& state)
     table_columns.push_back(col->view());
   }
 
-  // for (auto& col : table_columns) {
-  //   std::cout << "Copy-only column " << col.size() << " rows" << std::endl;
-  // }
-
   auto table = cudf::table_view{table_columns};
-
-  // std::cout << " input Num rows: " << table.num_rows() << ", Num cols: " << table.num_columns()
-  //           << "\n";
 
   std::vector<char> parquet_buffer;
 
@@ -249,8 +232,6 @@ void BM_parquet_read_filter(nvbench::state& state)
       .dictionary_policy(cudf::io::dictionary_policy::ALWAYS)
       .stats_level(cudf::io::statistics_freq::STATISTICS_NONE);
   cudf::io::write_parquet(write_opts);
-
-  // std::cout << "written " << parquet_buffer.size() << " bytes\n";
 
   cudf::io::parquet_reader_options read_opts =
     cudf::io::parquet_reader_options::builder(
@@ -271,8 +252,6 @@ void BM_parquet_read_filter(nvbench::state& state)
       auto const result = cudf::io::read_parquet(read_opts);
       timer.stop();
 
-      // std::cout << "Num rows: " << result.tbl->num_rows()
-      //           << ", Num cols: " << result.tbl->num_columns() << "\n";
       CUDF_EXPECTS(result.tbl->num_columns() == num_input_cols, "Unexpected number of columns");
     });
 

@@ -31,7 +31,7 @@ context::context() : _program_cache{std::make_unique<jit::program_cache>()}
   auto dump_codegen_flag = getenv_or("LIBCUDF_JIT_DUMP_CODEGEN", std::string{"OFF"});
   _dump_codegen          = (dump_codegen_flag == "ON" || dump_codegen_flag == "1");
 
-  auto use_jit_flag = getenv_or("LIBCUDF_USE_JIT", std::string{"OFF"});
+  auto use_jit_flag = getenv_or("LIBCUDF_JIT_ENABLED", std::string{"OFF"});
   _use_jit          = (use_jit_flag == "ON" || use_jit_flag == "1");
 }
 

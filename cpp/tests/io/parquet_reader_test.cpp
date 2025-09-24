@@ -2740,10 +2740,9 @@ struct ParquetReaderPredicatePushdownTest : public ParquetReaderTest {};
 
 TYPED_TEST_SUITE(ParquetReaderPredicatePushdownTest, SupportedTestTypes);
 
-TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTyped)
+template <typename T, bool use_jit>
+void filter_typed_test()
 {
-  using T = TypeParam;
-
   auto const [src, filepath] = create_parquet_typed_with_stats<T>("FilterTyped.parquet");
   auto const written_table   = src.view();
   auto const col_name_0      = cudf::ast::column_name_reference("col0");
@@ -2762,7 +2761,8 @@ TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTyped)
     // Reading with Predicate Pushdown
     cudf::io::parquet_reader_options read_opts =
       cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
-        .filter(filter_expression);
+        .filter(filter_expression)
+        .use_jit_filter(use_jit);
     auto const result       = cudf::io::read_parquet(read_opts);
     auto const result_table = result.tbl->view();
 
@@ -2842,6 +2842,16 @@ TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTyped)
     test_predicate_pushdown(
       filter_expression, ref_filter, expected_total_row_groups, expected_stats_filtered_row_groups);
   }
+}
+
+TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTyped)
+{
+  filter_typed_test<TypeParam, false>();
+}
+
+TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTypedJIT)
+{
+  filter_typed_test<TypeParam, true>();
 }
 
 TEST_P(ParquetDecompressionTest, RoundTripBasic)
@@ -2931,7 +2941,8 @@ TEST_F(ParquetReaderTest, DISABLED_ListsWideTable)
 //////////////////////////////////////////
 // row bounds and predicate pushdown tests
 
-TEST_F(ParquetReaderTest, RowBoundsAndFilter)
+template <bool use_jit>
+void row_bounds_and_filter_test()
 {
   auto constexpr num_files                = 3;
   auto constexpr num_rows_per_file        = 100'000;
@@ -2980,6 +2991,7 @@ TEST_F(ParquetReaderTest, RowBoundsAndFilter)
                              .filter(filter_expression)
                              .skip_rows(rows_to_skip)
                              .num_rows(rows_to_read)
+                             .use_jit_filter(use_jit)
                              .build();
       return std::tuple{cudf::io::read_parquet(in_opts), std::move(expected)};
     };
@@ -3167,6 +3179,10 @@ TEST_F(ParquetReaderTest, RowBoundsAndFilter)
                 metadata.num_row_groups_after_stats_filter.value() == 3);  // RGs: {},{0,1,4},{}
   }
 }
+
+TEST_F(ParquetReaderTest, RowBoundsAndFilter) { row_bounds_and_filter_test<false>(); }
+
+TEST_F(ParquetReaderTest, RowBoundsAndFilterJIT) { row_bounds_and_filter_test<true>(); }
 
 TEST_F(ParquetReaderTest, DeviceReadAsyncThrows)
 {

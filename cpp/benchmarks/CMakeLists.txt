@@ -177,8 +177,6 @@ ConfigureNVBench(NDSH_Q10_NVBENCH ndsh/q10.cpp ndsh/utilities.cpp)
 # * filter benchmark -------------------------------------------------------------------
 ConfigureNVBench(FILTER_NVBENCH filter/minmax_filter.cpp)
 
-ConfigureNVBench(PARQUET_READER_FILTER_NVBENCH io/parquet/parquet_reader_filter.cpp)
-
 # ##################################################################################################
 # * stream_compaction benchmark -------------------------------------------------------------------
 ConfigureNVBench(
@@ -323,6 +321,11 @@ ConfigureNVBench(
 ConfigureNVBench(
   PARQUET_READER_NVBENCH io/parquet/parquet_reader_input.cpp io/parquet/parquet_reader_options.cpp
 )
+
+# ##################################################################################################
+# * parquet reader filter benchmark
+# ----------------------------------------------------------------------
+ConfigureNVBench(PARQUET_READER_FILTER_NVBENCH io/parquet/parquet_reader_filter.cpp)
 
 # ##################################################################################################
 # * parquet experimental reader benchmark

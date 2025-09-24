@@ -234,7 +234,7 @@ class parquet_reader_options {
    *
    * @return `true` if JIT compilation should used for filtering
    */
-  [[nodiscard]] bool get_use_jit_filter() const { return _use_jit_filter; }
+  [[nodiscard]] bool is_enabled_use_jit_filter() const { return _use_jit_filter; }
 
   /**
    * @brief Sets the names of columns to be read from all input sources.
