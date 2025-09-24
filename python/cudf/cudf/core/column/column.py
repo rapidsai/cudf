@@ -171,14 +171,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         self._data = None
         self._children = None
         plc_children = tuple(
-            build_column(
-                plc_column=child,
-                size=child.size(),
-                dtype=dtype_from_pylibcudf_column(child),
-                offset=child.offset(),
-                null_count=child.null_count(),
-            )
-            for child in plc_column.children()
+            type(self).from_pylibcudf(child) for child in plc_column.children()
         )
         self.set_base_children(plc_children)
         # TODO: Respect data_ptr_exposed here?

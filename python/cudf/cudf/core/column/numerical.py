@@ -524,7 +524,7 @@ class NumericalColumn(NumericalBaseColumn):
             data_type=dtype_to_pylibcudf_type(dtype),
             size=self.size,
             data=plc.gpumemoryview(self.astype(np.dtype(np.int64)).base_data),
-            mask=plc.gpemoryview(self.base_mask)
+            mask=plc.gpumemoryview(self.base_mask)
             if self.base_mask is not None
             else None,
             null_count=self.null_count,
