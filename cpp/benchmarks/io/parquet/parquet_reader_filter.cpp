@@ -268,7 +268,6 @@ void BM_parquet_read_filter(nvbench::state& state)
   void name(nvbench::state& state) { BM_parquet_read_filter<type>(state); } \
                                                                             \
   NVBENCH_BENCH(name)                                                       \
-    .add_string_axis("io_type", {"DEVICE_BUFFER"})                          \
     .add_int64_axis("num_predicates", {4, 16})                              \
     .add_int64_axis("num_cols", {32})                                       \
     .add_int64_axis("num_rows", {100'000, 1'000'000, 10'000'000})           \
