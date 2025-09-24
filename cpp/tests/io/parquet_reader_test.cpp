@@ -3010,6 +3010,8 @@ void row_bounds_and_filter_test()
     auto const [table_with_metadata, expected] =
       read_parquet_table(filter_expression, rows_to_skip, rows_to_read);
 
+    EXPECT_EQ(expected->num_rows(), table_with_metadata.tbl->num_rows());
+    EXPECT_EQ(expected->num_columns(), table_with_metadata.tbl->num_columns());
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view(), table_with_metadata.tbl->view());
 
     auto const& metadata = table_with_metadata.metadata;
@@ -3084,6 +3086,8 @@ void row_bounds_and_filter_test()
     auto const [table_with_metadata, expected] =
       read_parquet_table(filter_expression, rows_to_skip, rows_to_read);
 
+    EXPECT_EQ(expected->num_rows(), table_with_metadata.tbl->num_rows());
+    EXPECT_EQ(expected->num_columns(), table_with_metadata.tbl->num_columns());
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view(), table_with_metadata.tbl->view());
 
     auto const& metadata = table_with_metadata.metadata;
@@ -3113,6 +3117,8 @@ void row_bounds_and_filter_test()
     auto const [table_with_metadata, expected] =
       read_parquet_table(filter_expression, rows_to_skip, rows_to_read);
 
+    EXPECT_EQ(expected->num_rows(), table_with_metadata.tbl->num_rows());
+    EXPECT_EQ(expected->num_columns(), table_with_metadata.tbl->num_columns());
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view(), table_with_metadata.tbl->view());
 
     auto const& metadata = table_with_metadata.metadata;
@@ -3142,6 +3148,8 @@ void row_bounds_and_filter_test()
     auto const [table_with_metadata, expected] =
       read_parquet_table(filter_expression, rows_to_skip, rows_to_read);
 
+    EXPECT_EQ(expected->num_rows(), table_with_metadata.tbl->num_rows());
+    EXPECT_EQ(expected->num_columns(), table_with_metadata.tbl->num_columns());
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view(), table_with_metadata.tbl->view());
 
     auto const& metadata = table_with_metadata.metadata;
@@ -3171,6 +3179,8 @@ void row_bounds_and_filter_test()
     auto const [table_with_metadata, expected] =
       read_parquet_table(filter_expression, rows_to_skip, rows_to_read);
 
+    EXPECT_EQ(expected->num_rows(), table_with_metadata.tbl->num_rows());
+    EXPECT_EQ(expected->num_columns(), table_with_metadata.tbl->num_columns());
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view(), table_with_metadata.tbl->view());
 
     auto const& metadata = table_with_metadata.metadata;
