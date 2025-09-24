@@ -84,6 +84,7 @@ cpdef Column quantile(
             ordered_indices_view,
             exact,
             stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -166,6 +167,7 @@ cpdef Table quantiles(
             column_order_vec,
             null_precedence_vec,
             stream.view(),
+            mr.get_mr()
         )
 
     return Table.from_libcudf(move(c_result), stream, mr)

@@ -27,7 +27,7 @@ __all__ = [
     "CurrentRow",
     "RollingRequest",
     "Unbounded",
-    "grouped_range_rolling_window"
+    "grouped_range_rolling_window",
     "rolling_window",
 ]
 
@@ -175,7 +175,8 @@ cpdef Table grouped_range_rolling_window(
             dereference(preceding.c_obj.get()),
             dereference(following.c_obj.get()),
             crequests,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
     return Table.from_libcudf(move(result), stream, mr)
 
@@ -233,7 +234,8 @@ cpdef Column rolling_window(
                 following_window.view(),
                 min_periods,
                 dereference(c_agg),
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
     else:
         with nogil:
@@ -243,7 +245,8 @@ cpdef Column rolling_window(
                 following_window,
                 min_periods,
                 dereference(c_agg),
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
 
     return Column.from_libcudf(move(result), stream, mr)
@@ -315,7 +318,8 @@ cpdef tuple make_range_windows(
             null_order,
             dereference(preceding.c_obj.get()),
             dereference(following.c_obj.get()),
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
     return (
         Column.from_libcudf(move(result.first), stream, mr),

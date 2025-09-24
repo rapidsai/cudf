@@ -65,7 +65,8 @@ cpdef Column sorted_order(
             source_table.view(),
             c_orders,
             c_null_precedence,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -108,7 +109,8 @@ cpdef Column stable_sorted_order(
             source_table.view(),
             c_orders,
             c_null_precedence,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -160,7 +162,8 @@ cpdef Column rank(
             null_handling,
             null_precedence,
             percentage,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -247,7 +250,8 @@ cpdef Table segmented_sort_by_key(
             segment_offsets.view(),
             c_orders,
             c_null_precedence,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
     return Table.from_libcudf(move(c_result), stream, mr)
 
@@ -298,7 +302,8 @@ cpdef Table stable_segmented_sort_by_key(
             segment_offsets.view(),
             c_orders,
             c_null_precedence,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
     return Table.from_libcudf(move(c_result), stream, mr)
 
@@ -344,7 +349,8 @@ cpdef Table sort_by_key(
             keys.view(),
             c_orders,
             c_null_precedence,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
     return Table.from_libcudf(move(c_result), stream, mr)
 
@@ -390,7 +396,8 @@ cpdef Table stable_sort_by_key(
             keys.view(),
             c_orders,
             c_null_precedence,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
     return Table.from_libcudf(move(c_result), stream, mr)
 
@@ -432,7 +439,8 @@ cpdef Table sort(
             source_table.view(),
             c_orders,
             c_null_precedence,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
     return Table.from_libcudf(move(c_result), stream, mr)
 
@@ -474,7 +482,8 @@ cpdef Table stable_sort(
             source_table.view(),
             c_orders,
             c_null_precedence,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
     return Table.from_libcudf(move(c_result), stream, mr)
 
@@ -516,7 +525,8 @@ cpdef Column top_k(
             col.view(),
             k,
             sort_order,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -561,6 +571,7 @@ cpdef Column top_k_order(
             col.view(),
             k,
             sort_order,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), stream, mr)
