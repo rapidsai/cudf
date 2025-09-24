@@ -436,7 +436,7 @@ add_library(
   src/groupby/hash/compute_single_pass_aggs.cu
   src/groupby/hash/compute_single_pass_aggs_null.cu
   src/groupby/hash/create_output.cu
-  src/groupby/hash/flatten_single_pass_aggs.cpp
+  src/groupby/hash/extract_single_pass_aggs.cpp
   src/groupby/hash/groupby.cu
   src/groupby/hash/hash_compound_agg_finalizer.cu
   src/groupby/sort/aggregate.cpp

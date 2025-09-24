@@ -21,7 +21,7 @@
 #include "compute_shared_memory_aggs.hpp"
 #include "compute_single_pass_aggs.hpp"
 #include "create_output.hpp"
-#include "flatten_single_pass_aggs.hpp"
+#include "extract_single_pass_aggs.hpp"
 #include "helpers.cuh"
 #include "single_pass_functors.cuh"
 
@@ -50,7 +50,7 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
   // Collect the single-pass aggregations that can be processed in this function.
   // The compound aggregations that require multiple passes will be handled separately later on.
   auto const [spass_values, spass_agg_kinds, spass_aggs, has_compound_aggs] =
-    flatten_single_pass_aggs(requests, stream);
+    extract_single_pass_aggs(requests, stream);
   auto const d_spass_agg_kinds = cudf::detail::make_device_uvector_async(
     spass_agg_kinds, stream, rmm::mr::get_current_device_resource());
   auto const num_rows = spass_values.num_rows();

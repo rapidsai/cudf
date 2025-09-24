@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "flatten_single_pass_aggs.hpp"
+#include "extract_single_pass_aggs.hpp"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
@@ -120,7 +120,7 @@ std::tuple<table_view,
            cudf::detail::host_vector<aggregation::Kind>,
            std::vector<std::unique_ptr<aggregation>>,
            bool>
-flatten_single_pass_aggs(host_span<aggregation_request const> requests,
+extract_single_pass_aggs(host_span<aggregation_request const> requests,
                          rmm::cuda_stream_view stream)
 {
   std::vector<column_view> columns;
