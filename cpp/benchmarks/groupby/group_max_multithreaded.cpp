@@ -42,7 +42,7 @@ void bench_groupby_max_multithreaded(nvbench::state& state, nvbench::type_list<T
     return create_random_column(cudf::type_to_id<int32_t>(), row_count{num_rows}, profile);
   }();
 
-  auto const vals = [&] {
+  auto const make_values = [&]() {
     auto builder = data_profile_builder().cardinality(0).distribution(
       cudf::type_to_id<Type>(), distribution_id::UNIFORM, 0, num_rows);
     if (null_probability > 0) {
@@ -52,18 +52,20 @@ void bench_groupby_max_multithreaded(nvbench::state& state, nvbench::type_list<T
     }
     return create_random_column(
       cudf::type_to_id<Type>(), row_count{num_rows}, data_profile{builder});
-  }();
+  };
 
   auto keys_view = keys->view();
 
   auto streams = cudf::detail::fork_streams(cudf::get_default_stream(), num_threads);
   BS::thread_pool threads(num_threads);
 
+  std::vector<std::unique_ptr<cudf::column>> val_cols;
   std::vector<std::vector<cudf::groupby::aggregation_request>> requests(num_threads);
   for (auto& thread_requests : requests) {
     for (int64_t j = 0; j < num_aggregations; j++) {
       thread_requests.emplace_back();
-      thread_requests.back().values = vals->view();
+      val_cols.emplace_back(make_values());
+      thread_requests.back().values = val_cols.back()->view();
       thread_requests.back().aggregations.push_back(
         cudf::make_max_aggregation<cudf::groupby_aggregation>());
     }

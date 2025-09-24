@@ -36,7 +36,7 @@ void groupby_max_helper(nvbench::state& state,
     return create_random_column(cudf::type_to_id<int32_t>(), row_count{num_rows}, profile);
   }();
 
-  auto const vals = [&] {
+  auto const make_values = [&]() {
     auto builder = data_profile_builder().cardinality(0).distribution(
       cudf::type_to_id<Type>(), distribution_id::UNIFORM, 0, num_rows);
     if (null_probability > 0) {
@@ -46,16 +46,18 @@ void groupby_max_helper(nvbench::state& state,
     }
     return create_random_column(
       cudf::type_to_id<Type>(), row_count{num_rows}, data_profile{builder});
-  }();
+  };
 
   auto const num_aggregations = state.get_int64("num_aggregations");
 
   auto keys_view = keys->view();
 
+  std::vector<std::unique_ptr<cudf::column>> val_cols;
   std::vector<cudf::groupby::aggregation_request> requests;
   for (int64_t i = 0; i < num_aggregations; i++) {
-    requests.emplace_back(cudf::groupby::aggregation_request());
-    requests[i].values = vals->view();
+    requests.emplace_back();
+    val_cols.emplace_back(make_values());
+    requests[i].values = val_cols.back()->view();
     requests[i].aggregations.push_back(cudf::make_max_aggregation<cudf::groupby_aggregation>());
   }
 
