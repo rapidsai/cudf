@@ -165,18 +165,18 @@ def bench_construction_with_framelike(
     )
 
 
-@pytest.mark.parametrize("N", [100, 1_000_000, 100_000_000])
+@pytest.mark.parametrize("N", NUM_ROWS)
 def bench_from_arrow(benchmark, N):
     rng = numpy.random.default_rng(seed=10)
     benchmark(cudf.DataFrame, {None: pa.array(rng.random(N))})
 
 
-@pytest.mark.parametrize("N", [100, 1_000_000])
+@pytest.mark.parametrize("N", NUM_ROWS)
 def bench_construction(benchmark, N):
     benchmark(cudf.DataFrame, {None: cupy.random.rand(N)})
 
 
-@pytest.mark.parametrize("N", [100, 100_000])
+@pytest.mark.parametrize("N", NUM_ROWS)
 @pytest.mark.pandas_incompatible
 def bench_construction_numba_device_array(benchmark, N):
     benchmark(cudf.DataFrame, numba.cuda.to_device(numpy.ones((100, N))))

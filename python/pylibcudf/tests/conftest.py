@@ -119,7 +119,10 @@ def _generate_table_data(types, nrows, seed=42):
                 )
             elif isinstance(typ, pa.ListType):
                 pa_array = pa.array(
-                    [list(row_vals) for row_vals in zip(rand_arrs[0])],
+                    [
+                        list(row_vals)
+                        for row_vals in zip(rand_arrs[0], strict=True)
+                    ],
                     type=typ,
                 )
                 child_colnames.append(("", grandchild_colnames))
@@ -142,9 +145,13 @@ def _generate_table_data(types, nrows, seed=42):
 
     pa_table = pa.Table.from_pydict(table_dict)
 
-    return plc.io.TableWithMetadata(
+    # TODO: Once interop APIs support a stream we should pass one and synchronize on it
+    # to avoid syncing the default stream here.
+    plc_table = plc.io.TableWithMetadata(
         plc.Table.from_arrow(pa_table), column_names=colnames
-    ), pa_table
+    )
+    plc.utils.DEFAULT_STREAM.synchronize()
+    return plc_table, pa_table
 
 
 @pytest.fixture(scope="session", params=[0, 100])

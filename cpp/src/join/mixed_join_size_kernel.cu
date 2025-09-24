@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,10 +21,10 @@ namespace cudf {
 namespace detail {
 
 template std::size_t launch_compute_mixed_join_output_size<false>(
-  table_device_view left_table,
-  table_device_view right_table,
-  table_device_view probe,
-  table_device_view build,
+  cudf::table_device_view left_table,
+  cudf::table_device_view right_table,
+  cudf::table_device_view probe,
+  cudf::table_device_view build,
   row_hash const hash_probe,
   row_equality const equality_probe,
   join_kind const join_type,

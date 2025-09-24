@@ -655,6 +655,21 @@ kernel<<<...>>>(int_scalar.data(),...);
 int host_value = int_scalar.value();
 ```
 
+##### cudf::detail::device_scalar<T>
+Acts as a drop-in replacement for `rmm::device_scalar<T>`, with the key difference
+being the use of pinned host memory as a bounce buffer for data transfers.
+It is recommended for internal use to avoid the implicit synchronization overhead caused by
+memcpy operations on pageable host memory.
+
+```c++
+// Same as the case with rmm::device_scalar<T> above
+cudf::detail::device_scalar<int> int_scalar{42, stream, mr};
+kernel<<<...>>>(int_scalar.data(),...);
+
+// Note: This device-to-host transfer uses host-pinned bounce buffer for efficient memcpy
+int host_value = int_scalar.value();
+```
+
 #### rmm::device_vector<T>
 
 Allocates a specified number of elements of the specified type. If no initialization value is

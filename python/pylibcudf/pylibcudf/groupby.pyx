@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
 from libcpp.functional cimport reference_wrapper
@@ -16,13 +16,16 @@ from pylibcudf.libcudf.groupby cimport (
 from pylibcudf.libcudf.replace cimport replace_policy
 from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.table.table cimport table
+from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport size_type
+
+from rmm.pylibrmm.stream cimport Stream
 
 from .aggregation cimport Aggregation
 from .column cimport Column
 from .table cimport Table
 from .types cimport null_order, null_policy, order, sorted
-from .utils cimport _as_vector
+from .utils cimport _as_vector, _get_stream
 
 
 __all__ = ["GroupBy", "GroupByRequest"]
@@ -135,11 +138,12 @@ cdef class GroupBy:
 
     @staticmethod
     cdef tuple _parse_outputs(
-        pair[unique_ptr[table], vector[aggregation_result]] c_res
+        pair[unique_ptr[table], vector[aggregation_result]] c_res,
+        Stream stream
     ):
         # Convert libcudf aggregation/scan outputs into pylibcudf objects.
         # This function is for internal use only.
-        cdef Table group_keys = Table.from_libcudf(move(c_res.first))
+        cdef Table group_keys = Table.from_libcudf(move(c_res.first), stream)
 
         cdef int i, j
         cdef list results = []
@@ -148,12 +152,12 @@ cdef class GroupBy:
             inner_results = []
             for j in range(c_res.second[i].results.size()):
                 inner_results.append(
-                    Column.from_libcudf(move(c_res.second[i].results[j]))
+                    Column.from_libcudf(move(c_res.second[i].results[j]), stream)
                 )
             results.append(Table(inner_results))
         return group_keys, results
 
-    cpdef tuple aggregate(self, list requests):
+    cpdef tuple aggregate(self, list requests, Stream stream=None):
         """Compute aggregations on columns.
 
         For details, see :cpp:func:`cudf::groupby::groupby::aggregate`.
@@ -163,6 +167,8 @@ cdef class GroupBy:
         requests : List[GroupByRequest]
             The list of `~.pylibcudf.groupby.GroupByRequest` , each
             representing a set of aggregations to perform on a given column of values.
+        stream : Stream | None
+            CUDA stream on which to perform the operation.
 
         Returns
         -------
@@ -178,14 +184,15 @@ cdef class GroupBy:
             c_requests.push_back(move(request._to_libcudf_agg_request()))
 
         cdef pair[unique_ptr[table], vector[aggregation_result]] c_res
+        stream = _get_stream(stream)
         # TODO: Need to capture C++ exceptions indicating that an invalid type was used.
         # We rely on libcudf to tell us this rather than checking the types beforehand
         # ourselves.
         with nogil:
-            c_res = dereference(self.c_obj).aggregate(c_requests)
-        return GroupBy._parse_outputs(move(c_res))
+            c_res = dereference(self.c_obj).aggregate(c_requests, stream.view())
+        return GroupBy._parse_outputs(move(c_res), stream)
 
-    cpdef tuple scan(self, list requests):
+    cpdef tuple scan(self, list requests, Stream stream=None):
         """Compute scans on columns.
 
         For details, see :cpp:func:`cudf::groupby::groupby::scan`.
@@ -195,6 +202,8 @@ cdef class GroupBy:
         requests : List[GroupByRequest]
             The list of `~.pylibcudf.groupby.GroupByRequest` , each
             representing a set of aggregations to perform on a given column of values.
+        stream : Stream | None
+            CUDA stream on which to perform the operation.
 
         Returns
         -------
@@ -210,11 +219,18 @@ cdef class GroupBy:
             c_requests.push_back(move(request._to_libcudf_scan_request()))
 
         cdef pair[unique_ptr[table], vector[aggregation_result]] c_res
+        stream = _get_stream(stream)
         with nogil:
-            c_res = dereference(self.c_obj).scan(c_requests)
-        return GroupBy._parse_outputs(move(c_res))
+            c_res = dereference(self.c_obj).scan(c_requests, stream.view())
+        return GroupBy._parse_outputs(move(c_res), stream)
 
-    cpdef tuple shift(self, Table values, list offset, list fill_values):
+    cpdef tuple shift(
+        self,
+        Table values,
+        list offset,
+        list fill_values,
+        Stream stream=None
+    ):
         """Compute shifts on columns.
 
         For details, see :cpp:func:`cudf::groupby::groupby::shift`.
@@ -227,6 +243,8 @@ cdef class GroupBy:
             The offsets to shift by.
         fill_values : List[Scalar]
             The values to use to fill in missing values.
+        stream : Stream | None
+            CUDA stream on which to perform the operation.
 
         Returns
         -------
@@ -239,18 +257,25 @@ cdef class GroupBy:
 
         cdef vector[size_type] c_offset = offset
         cdef pair[unique_ptr[table], unique_ptr[table]] c_res
+        stream = _get_stream(stream)
         with nogil:
             c_res = dereference(self.c_obj).shift(
                 values.view(),
                 c_offset,
-                c_fill_values
+                c_fill_values,
+                stream.view()
             )
         return (
-            Table.from_libcudf(move(c_res.first)),
-            Table.from_libcudf(move(c_res.second)),
+            Table.from_libcudf(move(c_res.first), stream),
+            Table.from_libcudf(move(c_res.second), stream),
         )
 
-    cpdef tuple replace_nulls(self, Table value, list replace_policies):
+    cpdef tuple replace_nulls(
+        self,
+        Table value,
+        list replace_policies,
+        Stream stream=None
+    ):
         """Replace nulls in columns.
 
         For details, see :cpp:func:`cudf::groupby::groupby::replace_nulls`.
@@ -261,6 +286,8 @@ cdef class GroupBy:
             The columns to replace nulls in.
         replace_policies : List[replace_policy]
             The policies to use to replace nulls.
+        stream : Stream | None
+            CUDA stream on which to perform the operation.
 
         Returns
         -------
@@ -270,17 +297,19 @@ cdef class GroupBy:
         """
         cdef pair[unique_ptr[table], unique_ptr[table]] c_res
         cdef vector[replace_policy] c_replace_policies = replace_policies
+        stream = _get_stream(stream)
         with nogil:
             c_res = dereference(self.c_obj).replace_nulls(
                 value.view(),
-                c_replace_policies
+                c_replace_policies,
+                stream.view()
             )
         return (
-            Table.from_libcudf(move(c_res.first)),
-            Table.from_libcudf(move(c_res.second)),
+            Table.from_libcudf(move(c_res.first), stream),
+            Table.from_libcudf(move(c_res.second), stream),
         )
 
-    cpdef tuple get_groups(self, Table values=None):
+    cpdef tuple get_groups(self, Table values=None, Stream stream=None):
         """Get the grouped keys and values labels for each row.
 
         For details, see :cpp:func:`cudf::groupby::groupby::get_groups`.
@@ -290,6 +319,8 @@ cdef class GroupBy:
         values : Table, optional
             The columns to get group labels for. If not specified,
             `None` is returned for the group values.
+        stream : Stream | None
+            CUDA stream on which to perform the operation.
 
         Returns
         -------
@@ -301,18 +332,20 @@ cdef class GroupBy:
         """
 
         cdef groups c_groups
+        cdef table_view empty_view
+        stream = _get_stream(stream)
         if values:
-            c_groups = dereference(self.c_obj).get_groups(values.view())
+            c_groups = dereference(self.c_obj).get_groups(values.view(), stream.view())
             return (
                 c_groups.offsets,
-                Table.from_libcudf(move(c_groups.keys)),
-                Table.from_libcudf(move(c_groups.values)),
+                Table.from_libcudf(move(c_groups.keys), stream),
+                Table.from_libcudf(move(c_groups.values), stream),
             )
         else:
-            # c_groups.values is nullptr
-            c_groups = dereference(self.c_obj).get_groups()
+            # c_groups.values is nullptr - pass empty table_view and stream
+            c_groups = dereference(self.c_obj).get_groups(empty_view, stream.view())
             return (
                 c_groups.offsets,
-                Table.from_libcudf(move(c_groups.keys)),
+                Table.from_libcudf(move(c_groups.keys), stream),
                 None,
             )

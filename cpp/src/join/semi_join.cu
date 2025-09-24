@@ -21,6 +21,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
+#include <cudf/join/filtered_join.hpp>
 #include <cudf/join/join.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
@@ -62,33 +63,9 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
     return result;
   }
 
-  // Materialize a `flagged` boolean array to generate a gather map.
-  // Previously, the gather map was generated directly without this array but by calling to
-  // `map.contains` inside the `thrust::copy_if` kernel. However, that led to increasing register
-  // usage and reducing performance, as reported here: https://github.com/rapidsai/cudf/pull/10511.
-  auto const flagged = cudf::detail::contains(right_keys,
-                                              left_keys,
-                                              compare_nulls,
-                                              nan_equality::ALL_EQUAL,
-                                              stream,
-                                              cudf::get_current_device_resource_ref());
-
-  auto const left_num_rows = left_keys.num_rows();
-  auto gather_map =
-    std::make_unique<rmm::device_uvector<cudf::size_type>>(left_num_rows, stream, mr);
-
-  // gather_map_end will be the end of valid data in gather_map
-  auto gather_map_end =
-    thrust::copy_if(rmm::exec_policy(stream),
-                    thrust::counting_iterator<size_type>(0),
-                    thrust::counting_iterator<size_type>(left_num_rows),
-                    gather_map->begin(),
-                    [kind, d_flagged = flagged.begin()] __device__(size_type const idx) {
-                      return *(d_flagged + idx) == (kind == join_kind::LEFT_SEMI_JOIN);
-                    });
-
-  gather_map->resize(cuda::std::distance(gather_map->begin(), gather_map_end), stream);
-  return gather_map;
+  cudf::filtered_join obj(right_keys, compare_nulls, cudf::set_as_build_table::RIGHT, stream);
+  if (kind == join_kind::LEFT_SEMI_JOIN) { return obj.semi_join(left_keys, stream, mr); }
+  return obj.anti_join(left_keys, stream, mr);
 }
 
 }  // namespace detail

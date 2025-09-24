@@ -17,6 +17,6 @@ def _make_random_frame(nelem, npartitions=2, include_na=False):
     if include_na:
         df["x"][::2] = pd.NA
 
-    gdf = cudf.DataFrame.from_pandas(df)
+    gdf = cudf.DataFrame(df)
     dgf = dd.from_pandas(gdf, npartitions=npartitions)
     return df, dgf

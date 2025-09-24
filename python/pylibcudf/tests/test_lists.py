@@ -2,7 +2,6 @@
 
 import numpy as np
 import pyarrow as pa
-import pyarrow.compute as pc
 import pytest
 from utils import assert_column_eq
 
@@ -53,7 +52,9 @@ def test_concatenate_rows(test_data):
 
     got = plc.lists.concatenate_rows(plc_tbl)
 
-    expect = pa.array([pair[0] + pair[1] for pair in zip(*test_data[0])])
+    expect = pa.array(
+        [pair[0] + pair[1] for pair in zip(*test_data[0], strict=True)]
+    )
 
     assert_column_eq(expect, got)
 
@@ -161,26 +162,49 @@ def test_reverse(list_column):
     assert_column_eq(expect, got)
 
 
-# https://github.com/rapidsai/cudf/issues/19346
-@pytest.mark.flaky(reruns=5)
-def test_segmented_gather(test_data):
-    list_column1, list_column2 = test_data[0]
+@pytest.fixture
+def segmented_gather_input_data() -> list[list[str | None]]:
+    return [["a", "b"], ["c"], [], ["d", None, "e"]]
 
-    plc_column1 = plc.Column.from_arrow(pa.array(list_column1))
-    plc_column2 = plc.Column.from_arrow(pa.array(list_column2))
 
-    got = plc.lists.segmented_gather(plc_column2, plc_column1)
+@pytest.mark.parametrize(
+    "bounds_policy",
+    [
+        plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+        plc.copying.OutOfBoundsPolicy.NULLIFY,
+    ],
+    ids=["DONT_CHECK", "NULLIFY"],
+)
+def test_segmented_gather_in_bounds(
+    segmented_gather_input_data: list[list[str | None]],
+    bounds_policy: plc.copying.OutOfBoundsPolicy,
+) -> None:
+    input_column = plc.Column.from_arrow(pa.array(segmented_gather_input_data))
+    # these are all in-bounds for input_column.
+    gather_map_list = plc.Column.from_arrow(
+        pa.array([[0, 0], [0], [], [1, 2]])
+    )
+    got = plc.lists.segmented_gather(
+        input_column, gather_map_list, bounds_policy=bounds_policy
+    )
 
-    expect = pa.array([[8, 9], [14], [0], [0, 0]])
+    expect = pa.array([["a", "a"], ["c"], [], [None, "e"]])
 
     assert_column_eq(expect, got)
 
 
-def test_extract_list_element_scalar(list_column):
-    plc_column = plc.Column.from_arrow(pa.array(list_column))
+def test_segmented_gather_out_of_bounds(
+    segmented_gather_input_data: list[list[str | None]],
+) -> None:
+    input_column = plc.Column.from_arrow(pa.array(segmented_gather_input_data))
+    gather_map_list = plc.Column.from_arrow(
+        pa.array([[0, 1], [2], [], [-5, 1, 2]])
+    )
+    got = plc.lists.segmented_gather(
+        input_column, gather_map_list, plc.copying.OutOfBoundsPolicy.NULLIFY
+    )
 
-    got = plc.lists.extract_list_element(plc_column, 0)
-    expect = pc.list_element(list_column, 0)
+    expect = pa.array([["a", "b"], [None], [], [None, None, "e"]])
 
     assert_column_eq(expect, got)
 

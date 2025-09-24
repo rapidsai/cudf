@@ -45,7 +45,7 @@ namespace io::detail {
  * @param compression Compression type
  * @param uncompressed_size Size of the largest uncompressed chunk in the batch
  */
-[[nodiscard]] size_t max_compressed_size(compression_type compression, uint32_t uncompressed_size);
+[[nodiscard]] size_t max_compressed_size(compression_type compression, size_t uncompressed_size);
 
 /**
  * @brief Aggregate results of compression into a single statistics object.

@@ -52,12 +52,16 @@ def _get_device_size():
         if index and not index.isnumeric():
             # This means index is UUID. This works for both MIG and non-MIG device UUIDs.
             handle = pynvml.nvmlDeviceGetHandleByUUID(str.encode(index))
+            if pynvml.nvmlDeviceIsMigDeviceHandle(handle):
+                handle = pynvml.nvmlDeviceGetDeviceHandleFromMigDeviceHandle(
+                    handle
+                )
         else:
             # This is a device index
             handle = pynvml.nvmlDeviceGetHandleByIndex(int(index))
         return pynvml.nvmlDeviceGetMemoryInfo(handle).total
 
-    except ValueError:
+    except (ValueError, pynvml.NVMLError_NotSupported):
         # Fall back to a conservative 8GiB default
         return 8 * 1024**3
 

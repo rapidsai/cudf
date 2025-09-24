@@ -22,7 +22,7 @@ echo "libcudf-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo ${LIBCUDF_WHEELHOUSE}/lib
 # repair wheels and write to the location that artifact-uploading code expects to find them
 python -m auditwheel repair \
     --exclude libcudf.so \
-    --exclude libnvcomp.so \
+    --exclude libnvcomp.so.* \
     --exclude libkvikio.so \
     --exclude librapids_logger.so \
     --exclude librmm.so \

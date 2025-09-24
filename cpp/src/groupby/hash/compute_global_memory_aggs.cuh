@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,7 +41,6 @@ namespace cudf::groupby::detail::hash {
 template <typename SetType>
 rmm::device_uvector<cudf::size_type> compute_global_memory_aggs(
   cudf::size_type num_rows,
-  bool skip_rows_with_nulls,
   bitmask_type const* row_bitmask,
   cudf::table_view const& flattened_values,
   cudf::aggregation::Kind const* d_agg_kinds,
@@ -69,12 +68,11 @@ rmm::device_uvector<cudf::size_type> compute_global_memory_aggs(
   auto d_sparse_table = mutable_table_device_view::create(sparse_table, stream);
   auto global_set_ref = global_set.ref(cuco::op::insert_and_find);
 
-  thrust::for_each_n(
-    rmm::exec_policy_nosync(stream),
-    thrust::counting_iterator{0},
-    num_rows,
-    hash::compute_single_pass_aggs_fn{
-      global_set_ref, *d_values, *d_sparse_table, d_agg_kinds, row_bitmask, skip_rows_with_nulls});
+  thrust::for_each_n(rmm::exec_policy_nosync(stream),
+                     thrust::counting_iterator{0},
+                     num_rows,
+                     hash::compute_single_pass_aggs_fn{
+                       global_set_ref, *d_values, *d_sparse_table, d_agg_kinds, row_bitmask});
   extract_populated_keys(global_set, populated_keys, stream);
 
   // Add results back to sparse_results cache

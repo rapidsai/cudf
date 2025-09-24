@@ -18,6 +18,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/detail/join/join.hpp>
 #include <cudf/hashing.hpp>
+#include <cudf/join/join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -35,7 +36,7 @@
 #include <optional>
 
 // Forward declaration
-namespace cudf::experimental::row::equality {
+namespace cudf::detail::row::equality {
 class preprocessed_table;
 }
 
@@ -107,7 +108,7 @@ struct hash_join {
   bool const _has_nulls;  ///< true if nulls are present in either build table or any probe table
   cudf::null_equality const _nulls_equal;  ///< whether to consider nulls as equal
   cudf::table_view _build;                 ///< input table to build the hash map
-  std::shared_ptr<cudf::experimental::row::equality::preprocessed_table>
+  std::shared_ptr<cudf::detail::row::equality::preprocessed_table>
     _preprocessed_build;     ///< input table preprocssed for row operators
   hash_table_t _hash_table;  ///< hash table built on `_build`
 
@@ -188,7 +189,36 @@ struct hash_join {
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr) const;
 
+  /**
+   * @copydoc cudf::hash_join::inner_join_match_context
+   */
+  [[nodiscard]] cudf::join_match_context inner_join_match_context(
+    cudf::table_view const& probe,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
+
+  /**
+   * @copydoc cudf::hash_join::left_join_match_context
+   */
+  [[nodiscard]] cudf::join_match_context left_join_match_context(
+    cudf::table_view const& probe,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
+
+  /**
+   * @copydoc cudf::hash_join::full_join_match_context
+   */
+  [[nodiscard]] cudf::join_match_context full_join_match_context(
+    cudf::table_view const& probe,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
+
  private:
+  template <typename OutputIterator>
+  void compute_match_counts(cudf::table_view const& probe,
+                            OutputIterator output_iter,
+                            rmm::cuda_stream_view stream) const;
+
   /**
    * @brief Probes the `_hash_table` built from `_build` for tuples in `probe_table`,
    * and returns the output indices of `build_table` and `probe_table` as a combined table,

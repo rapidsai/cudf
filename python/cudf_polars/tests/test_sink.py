@@ -78,7 +78,11 @@ def test_sink_ndjson(df, tmp_path):
 @pytest.mark.parametrize("mkdir", [True, False])
 @pytest.mark.parametrize("data_page_size", [None, 256_000])
 @pytest.mark.parametrize("row_group_size", [None, 1_000])
-def test_sink_parquet(df, tmp_path, mkdir, data_page_size, row_group_size):
+@pytest.mark.parametrize("is_chunked", [False, True])
+@pytest.mark.parametrize("n_output_chunks", [1, 4, 8])
+def test_sink_parquet(
+    df, tmp_path, mkdir, data_page_size, row_group_size, is_chunked, n_output_chunks
+):
     assert_sink_result_equal(
         df,
         tmp_path / "out.parquet",
@@ -87,6 +91,10 @@ def test_sink_parquet(df, tmp_path, mkdir, data_page_size, row_group_size):
             "data_page_size": data_page_size,
             "row_group_size": row_group_size,
         },
+        engine=pl.GPUEngine(
+            raise_on_fail=True,
+            parquet_options={"chunked": is_chunked, "n_output_chunks": n_output_chunks},
+        ),
     )
 
 
@@ -131,3 +139,14 @@ def test_sink_csv_nested_data(tmp_path):
         pl.exceptions.ComputeError, match="CSV format does not support nested data"
     ):
         lf.sink_csv(path, engine=pl.GPUEngine())
+
+
+def test_chunked_sink_empty_table_to_parquet(tmp_path):
+    assert_sink_result_equal(
+        pl.LazyFrame(),
+        tmp_path / "out.parquet",
+        engine=pl.GPUEngine(
+            raise_on_fail=True,
+            parquet_options={"chunked": True, "n_output_chunks": 2},
+        ),
+    )

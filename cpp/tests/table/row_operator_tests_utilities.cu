@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,10 +34,10 @@ std::unique_ptr<cudf::column> two_table_comparison(cudf::table_view lhs,
 {
   rmm::cuda_stream_view stream{cudf::get_default_stream()};
 
-  auto const table_comparator = cudf::experimental::row::lexicographic::two_table_comparator{
-    lhs, rhs, column_order, {}, stream};
-  auto const lhs_it = cudf::experimental::row::lhs_iterator(0);
-  auto const rhs_it = cudf::experimental::row::rhs_iterator(0);
+  auto const table_comparator =
+    cudf::detail::row::lexicographic::two_table_comparator{lhs, rhs, column_order, {}, stream};
+  auto const lhs_it = cudf::detail::row::lhs_iterator(0);
+  auto const rhs_it = cudf::detail::row::rhs_iterator(0);
 
   auto output = cudf::make_numeric_column(
     cudf::data_type(cudf::type_id::BOOL8), lhs.num_rows(), cudf::mask_state::UNALLOCATED);
@@ -73,7 +73,7 @@ template std::unique_ptr<cudf::column> two_table_comparison<sorting_comparator_t
 
 template <typename PhysicalElementComparator>
 std::unique_ptr<cudf::column> sorted_order(
-  std::shared_ptr<cudf::experimental::row::lexicographic::preprocessed_table> preprocessed_input,
+  std::shared_ptr<cudf::detail::row::lexicographic::preprocessed_table> preprocessed_input,
   cudf::size_type num_rows,
   bool has_nested,
   PhysicalElementComparator comparator,
@@ -87,7 +87,7 @@ std::unique_ptr<cudf::column> sorted_order(
   thrust::sequence(rmm::exec_policy(stream), out_begin, out_begin + num_rows, 0);
 
   auto const table_comparator =
-    cudf::experimental::row::lexicographic::self_comparator{preprocessed_input};
+    cudf::detail::row::lexicographic::self_comparator{preprocessed_input};
   if (has_nested) {
     auto const comp = table_comparator.less<true>(cudf::nullate::NO{}, comparator);
     thrust::stable_sort(rmm::exec_policy(stream), out_begin, out_begin + num_rows, comp);
@@ -100,13 +100,13 @@ std::unique_ptr<cudf::column> sorted_order(
 }
 
 template std::unique_ptr<cudf::column> sorted_order<physical_comparator_t>(
-  std::shared_ptr<cudf::experimental::row::lexicographic::preprocessed_table> preprocessed_input,
+  std::shared_ptr<cudf::detail::row::lexicographic::preprocessed_table> preprocessed_input,
   cudf::size_type num_rows,
   bool has_nested,
   physical_comparator_t comparator,
   rmm::cuda_stream_view stream);
 template std::unique_ptr<cudf::column> sorted_order<sorting_comparator_t>(
-  std::shared_ptr<cudf::experimental::row::lexicographic::preprocessed_table> preprocessed_input,
+  std::shared_ptr<cudf::detail::row::lexicographic::preprocessed_table> preprocessed_input,
   cudf::size_type num_rows,
   bool has_nested,
   sorting_comparator_t comparator,
@@ -120,11 +120,10 @@ std::unique_ptr<cudf::column> two_table_equality(cudf::table_view lhs,
 {
   rmm::cuda_stream_view stream{cudf::get_default_stream()};
 
-  auto const table_comparator =
-    cudf::experimental::row::equality::two_table_comparator{lhs, rhs, stream};
+  auto const table_comparator = cudf::detail::row::equality::two_table_comparator{lhs, rhs, stream};
 
-  auto const lhs_it = cudf::experimental::row::lhs_iterator(0);
-  auto const rhs_it = cudf::experimental::row::rhs_iterator(0);
+  auto const lhs_it = cudf::detail::row::lhs_iterator(0);
+  auto const rhs_it = cudf::detail::row::rhs_iterator(0);
 
   auto output = cudf::make_numeric_column(
     cudf::data_type(cudf::type_id::BOOL8), lhs.num_rows(), cudf::mask_state::UNALLOCATED);

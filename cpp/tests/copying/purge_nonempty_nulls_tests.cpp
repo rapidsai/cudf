@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -382,10 +382,7 @@ TEST_F(PurgeNonEmptyNullsTest, UnsanitizedListOfUnsanitizedStrings)
                                              null_count,
                                              std::move(null_mask));
   EXPECT_TRUE(cudf::may_have_nonempty_nulls(*lists));
-
-  // The child column has non-empty nulls but it has already been sanitized during lists column
-  // construction.
-  EXPECT_FALSE(cudf::has_nonempty_nulls(*lists));
+  EXPECT_TRUE(cudf::has_nonempty_nulls(*lists));
 
   // Set lists nullmask, post construction.
   cudf::detail::set_null_mask(

@@ -43,7 +43,7 @@ source pandas/py-pandas/bin/activate
 4. Install cudf:
 
 ```bash
-pip install --extra-index-url=https://pypi.nvidia.com cudf-cu12  # or cudf-cu11
+pip install --extra-index-url=https://pypi.nvidia.com cudf-cu12
 ```
 
 5. Modify pandas join/group code to use `cudf.pandas` and remove the `dtype_backend` keyword argument (not supported):

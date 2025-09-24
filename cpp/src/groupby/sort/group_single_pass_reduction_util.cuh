@@ -152,7 +152,6 @@ struct group_reduction_functor<
                                         cudf::device_span<cudf::size_type const> group_labels,
                                         rmm::cuda_stream_view stream,
                                         rmm::device_async_resource_ref mr)
-
   {
     using SourceDType = device_storage_type_t<T>;
     using ResultType  = cudf::detail::target_type_t<T, K>;

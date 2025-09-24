@@ -21,6 +21,7 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/types.hpp>
@@ -446,6 +447,7 @@ TYPED_TEST(TypedStructColumnWrapperTest, ListOfStructOfList)
                             std::move(struct_of_lists_col),
                             null_count,
                             std::move(null_mask));
+  list_of_struct_of_list = cudf::purge_nonempty_nulls(list_of_struct_of_list->view());
 
   // Compare with expected values.
 
@@ -466,6 +468,7 @@ TYPED_TEST(TypedStructColumnWrapperTest, ListOfStructOfList)
                             std::move(expected_level2_struct),
                             null_count,
                             std::move(null_mask));
+  expected_level3_list = cudf::purge_nonempty_nulls(expected_level3_list->view());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*list_of_struct_of_list, *expected_level3_list);
 }
@@ -496,6 +499,7 @@ TYPED_TEST(TypedStructColumnWrapperTest, StructOfListOfStruct)
                             std::move(structs_col),
                             null_count,
                             std::move(null_mask));
+  lists_col = cudf::purge_nonempty_nulls(lists_col->view());
 
   std::vector<std::unique_ptr<cudf::column>> cols;
   cols.push_back(std::move(lists_col));
@@ -517,6 +521,7 @@ TYPED_TEST(TypedStructColumnWrapperTest, StructOfListOfStruct)
                             std::move(expected_structs_col),
                             null_count,
                             std::move(null_mask));
+  expected_lists_col = cudf::purge_nonempty_nulls(expected_lists_col->view());
 
   // Test that the lists child column is as expected.
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected_lists_col, struct_of_list_of_struct->child(0));

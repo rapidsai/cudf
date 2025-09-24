@@ -20,7 +20,6 @@
 #include <cudf_test/testing_main.hpp>
 
 #include <cudf/binaryop.hpp>
-#include <cudf/jit/runtime_support.hpp>
 #include <cudf/scalar/scalar.hpp>
 
 class BinaryopTest : public cudf::test::BaseFixture {};
@@ -61,15 +60,7 @@ TEST_F(BinaryopTest, ScalarColumn)
                          cudf::test::get_default_stream());
 }
 
-class BinaryopPTXTest : public BinaryopTest {
- protected:
-  void SetUp() override
-  {
-    if (!cudf::is_runtime_jit_supported()) {
-      GTEST_SKIP() << "Skipping tests that require runtime JIT support";
-    }
-  }
-};
+class BinaryopPTXTest : public BinaryopTest {};
 
 TEST_F(BinaryopPTXTest, ColumnColumnPTX)
 {

@@ -65,7 +65,7 @@ def test_profiler():
         "np.isclose",
         "pd.Timestamp",
     ]
-    for line_stats, call in zip(per_line_stats, calls):
+    for line_stats, call in zip(per_line_stats, calls, strict=True):
         # Check that the expected function calls were recorded.
         assert call in line_stats[1]
         # No CPU time

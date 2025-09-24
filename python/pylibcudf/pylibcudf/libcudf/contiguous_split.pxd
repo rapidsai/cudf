@@ -48,6 +48,11 @@ cdef extern from "cudf/contiguous_split.hpp" namespace "cudf" nogil:
         const table_view& input
     ) except +libcudf_exception_handler
 
+    cdef packed_columns pack (
+        const table_view& input,
+        cuda_stream_view stream,
+    ) except +libcudf_exception_handler
+
     cdef table_view unpack (
         const packed_columns& input
     ) except +libcudf_exception_handler

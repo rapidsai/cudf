@@ -108,7 +108,7 @@ def test_replace_col(data_col, col_repl_target, col_repl):
     # for targets/repls, so let's implement our own in python
 
     def replace_list(elem, targets, repls):
-        for target, repl in zip(targets, repls):
+        for target, repl in zip(targets, repls, strict=True):
             res = elem.replace(target, repl)
             if res != elem:
                 return res

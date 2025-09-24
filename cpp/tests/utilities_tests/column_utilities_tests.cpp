@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -291,17 +291,23 @@ TEST_F(ColumnUtilitiesListsTest, DifferentPhysicalStructureBeforeConstruction)
 
     auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valids.begin(), valids.end());
 
-    auto c0 = make_lists_column(
-      7, c0_offsets.release(), c0_data.release(), null_count, std::move(null_mask));
+    auto c0 = [&] {
+      auto tmp = make_lists_column(
+        7, c0_offsets.release(), c0_data.release(), null_count, std::move(null_mask));
+      return cudf::purge_nonempty_nulls(tmp->view());
+    }();
 
     cudf::test::fixed_width_column_wrapper<int> c1_offsets{0, 0, 0, 2, 2, 5, 5, 5};
     cudf::test::fixed_width_column_wrapper<int> c1_data{3, 3, 5, 5, 5};
-    auto c1 = make_lists_column(
-      7,
-      c1_offsets.release(),
-      c1_data.release(),
-      null_count,
-      std::get<0>(cudf::test::detail::make_null_mask(valids.begin(), valids.end())));
+    auto c1 = [&] {
+      auto tmp = make_lists_column(
+        7,
+        c1_offsets.release(),
+        c1_data.release(),
+        null_count,
+        std::get<0>(cudf::test::detail::make_null_mask(valids.begin(), valids.end())));
+      return cudf::purge_nonempty_nulls(tmp->view());
+    }();
 
     // properties
     CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(*c0, *c1);
@@ -325,13 +331,19 @@ TEST_F(ColumnUtilitiesListsTest, DifferentPhysicalStructureBeforeConstruction)
 
     auto [null_mask, null_count] =
       cudf::test::detail::make_null_mask(c0_l2_valids.begin(), c0_l2_valids.end());
-    auto c0_l2 = make_lists_column(
-      7, c0_l2_offsets.release(), c0_l2_data.release(), null_count, std::move(null_mask));
+    auto c0_l2 = [&] {
+      auto tmp = make_lists_column(
+        7, c0_l2_offsets.release(), c0_l2_data.release(), null_count, std::move(null_mask));
+      return cudf::purge_nonempty_nulls(tmp->view());
+    }();
 
     std::tie(null_mask, null_count) =
       cudf::test::detail::make_null_mask(level1_valids.begin(), level1_valids.end());
-    auto c0 = make_lists_column(
-      7, c0_l1_offsets.release(), std::move(c0_l2), null_count, std::move(null_mask));
+    auto c0 = [&] {
+      auto tmp = make_lists_column(
+        7, c0_l1_offsets.release(), std::move(c0_l2), null_count, std::move(null_mask));
+      return cudf::purge_nonempty_nulls(tmp->view());
+    }();
 
     cudf::test::fixed_width_column_wrapper<int> c1_l1_offsets{0, 0, 0, 2, 2, 5, 5, 5};
     cudf::test::fixed_width_column_wrapper<int> c1_l2_offsets{0, 3, 3, 3, 6, 10};
@@ -343,13 +355,19 @@ TEST_F(ColumnUtilitiesListsTest, DifferentPhysicalStructureBeforeConstruction)
 
     std::tie(null_mask, null_count) =
       cudf::test::detail::make_null_mask(c1_l2_valids.begin(), c1_l2_valids.end());
-    auto c1_l2 = make_lists_column(
-      5, c1_l2_offsets.release(), c1_l2_data.release(), null_count, std::move(null_mask));
+    auto c1_l2 = [&] {
+      auto tmp = make_lists_column(
+        5, c1_l2_offsets.release(), c1_l2_data.release(), null_count, std::move(null_mask));
+      return cudf::purge_nonempty_nulls(tmp->view());
+    }();
 
     std::tie(null_mask, null_count) =
       cudf::test::detail::make_null_mask(level1_valids.begin(), level1_valids.end());
-    auto c1 = make_lists_column(
-      7, c1_l1_offsets.release(), std::move(c1_l2), null_count, std::move(null_mask));
+    auto c1 = [&] {
+      auto tmp = make_lists_column(
+        7, c1_l1_offsets.release(), std::move(c1_l2), null_count, std::move(null_mask));
+      return cudf::purge_nonempty_nulls(tmp->view());
+    }();
 
     // properties
     CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(*c0, *c1);

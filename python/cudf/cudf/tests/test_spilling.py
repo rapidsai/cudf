@@ -791,5 +791,5 @@ def test_scatter_by_map():
     with cudf.option_context("spill", True):
         df = cudf.DataFrame(data)
         result = df.scatter_by_map(data)
-    for i, res in zip(data, result):
+    for i, res in zip(data, result, strict=True):
         assert_eq(res, cudf.DataFrame([i], index=[i]))

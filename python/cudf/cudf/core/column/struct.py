@@ -111,7 +111,10 @@ class StructColumn(ColumnBase):
             else self.dtype
         )
         pa_type = pa.struct(
-            {field: child.type for field, child in zip(dtype.fields, children)}
+            {
+                field: child.type
+                for field, child in zip(dtype.fields, children, strict=True)
+            }
         )
 
         if self.mask is not None:
@@ -190,17 +193,12 @@ class StructColumn(ColumnBase):
         but with the field names equal to `names`.
         """
         dtype = StructDtype(
-            {name: col.dtype for name, col in zip(names, self.children)}
+            {
+                name: col.dtype
+                for name, col in zip(names, self.children, strict=True)
+            }
         )
-        return StructColumn(  # type: ignore[return-value]
-            data=None,
-            size=self.size,
-            dtype=dtype,
-            mask=self.base_mask,
-            offset=self.offset,
-            null_count=self.null_count,
-            children=self.base_children,
-        )
+        return self._with_type_metadata(dtype)  # type: ignore[return-value]
 
     @property
     def __cuda_array_interface__(self):
@@ -214,7 +212,15 @@ class StructColumn(ColumnBase):
 
         # Check IntervalDtype first because it's a subclass of StructDtype
         if isinstance(dtype, IntervalDtype):
-            return IntervalColumn.from_struct_column(self, closed=dtype.closed)
+            return IntervalColumn(
+                data=None,
+                size=self.size,
+                dtype=dtype,
+                mask=self.base_mask,
+                offset=self.offset,
+                null_count=self.null_count,
+                children=self.base_children,  # type: ignore[arg-type]
+            )
         elif isinstance(dtype, StructDtype):
             return StructColumn(
                 data=None,

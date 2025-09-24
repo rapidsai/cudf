@@ -26,18 +26,24 @@ Where tests do not naturally belong to a project, for example the
 
 ## Test organization
 
-How tests are organized depends on which of the following two groups they fall into:
+Generally, the directories under `cudf/tests` describe tests of a certain object (e.g. `series/`)
+or a general topic (e.g. `reshape/`, `series/methods`), and the test files are named according to an APIs name
+(e.g. `series/methods/test_astype.py`, `reshape/test_concat.py`). Sometimes, tested operations and
+APIs do not have a singular name to correspond to the file name and are instead named by a topic as well.
+Some common examples include:
 
-1. Free functions such as `cudf.merge` that operate on classes like `DataFrame` or `Series`.
-2. Methods of the above classes.
+- `test_constructors.py`: `__init__` and `@classmethod` constructors for objects
+- `test_attributes.py`: `@property`s of objects
+- `test_binops.py`: Binary methods (e.g. `+`, `%`)
+- `test_reductions.py`: Reduction methods (e.g. `mean`, `quantile`)
 
-Tests of free functions should be grouped into files based on the
-[API sections in the documentation](https://docs.rapids.ai/api/cudf/latest/api_docs/index.html).
-This places tests of similar functionality in the same module.
-Tests of class methods should be organized in the same way, except that this organization should be within a subdirectory corresponding to the class.
-For instance, tests of `DataFrame` indexing should be placed into `dataframe/test_indexing.py`.
-In cases where tests may be shared by multiple classes sharing a common parent (e.g. `DataFrame` and `Series` both require `IndexedFrame` tests),
-the tests may be placed in a directory corresponding to the parent class.
+The organization aims to have many, specific test files that target a particular operation for a particular object;
+therefore, there may be test files with the same name but live in different directories e.g.
+
+- `series/methods/test_astype.py`, `dataframe/methods/test_astype.py`, `indexes/index/methods/test_astype.py`
+- `series/methods/test_reductions.py`, `dataframe/methods/test_reductions.py`, `groupby/test_reductions.py`
+
+When adding new tests, make a best-effort to place them in a file according to the tested object and API.
 
 ## Test contents
 

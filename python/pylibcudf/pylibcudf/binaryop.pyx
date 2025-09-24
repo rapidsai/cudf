@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from cython.operator import dereference
 
@@ -12,9 +12,13 @@ from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.binaryop import \
     binary_operator as BinaryOperator  # no-cython-lint
 
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
+
 from .column cimport Column
 from .scalar cimport Scalar
 from .types cimport DataType
+from .utils cimport _get_stream, _get_memory_resource
 
 __all__ = ["BinaryOperator", "binary_operation", "is_supported_operation"]
 
@@ -22,7 +26,9 @@ cpdef Column binary_operation(
     LeftBinaryOperand lhs,
     RightBinaryOperand rhs,
     binary_operator op,
-    DataType output_type
+    DataType output_type,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Perform a binary operation between a column and another column or scalar.
 
@@ -43,6 +49,10 @@ cpdef Column binary_operation(
         The operation to perform.
     output_type : DataType
         The data type to use for the output.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
+    mr : DeviceMemoryResource | None
+        Device memory resource used to allocate the returned column's device memory.
 
     Returns
     -------
@@ -50,6 +60,8 @@ cpdef Column binary_operation(
         The result of the binary operation
     """
     cdef unique_ptr[column] result
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     if LeftBinaryOperand is Column and RightBinaryOperand is Column:
         with nogil:
@@ -57,7 +69,9 @@ cpdef Column binary_operation(
                 lhs.view(),
                 rhs.view(),
                 op,
-                output_type.c_obj
+                output_type.c_obj,
+                stream.view(),
+                mr.get_mr()
             )
     elif LeftBinaryOperand is Column and RightBinaryOperand is Scalar:
         with nogil:
@@ -65,7 +79,9 @@ cpdef Column binary_operation(
                 lhs.view(),
                 dereference(rhs.c_obj),
                 op,
-                output_type.c_obj
+                output_type.c_obj,
+                stream.view(),
+                mr.get_mr()
             )
     elif LeftBinaryOperand is Scalar and RightBinaryOperand is Column:
         with nogil:
@@ -73,12 +89,14 @@ cpdef Column binary_operation(
                 dereference(lhs.c_obj),
                 rhs.view(),
                 op,
-                output_type.c_obj
+                output_type.c_obj,
+                stream.view(),
+                mr.get_mr()
             )
     else:
         raise ValueError(f"Invalid arguments {lhs} and {rhs}")
 
-    return Column.from_libcudf(move(result))
+    return Column.from_libcudf(move(result), stream, mr)
 
 
 cpdef bool is_supported_operation(
@@ -114,3 +132,5 @@ cpdef bool is_supported_operation(
         rhs.c_obj,
         op
     )
+
+BinaryOperator.__str__ = BinaryOperator.__repr__

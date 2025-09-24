@@ -78,11 +78,19 @@ struct corresponding_operator<aggregation::SUM> {
   using type = DeviceSum;
 };
 template <>
+struct corresponding_operator<aggregation::SUM_WITH_OVERFLOW> {
+  using type = DeviceSum;
+};
+template <>
 struct corresponding_operator<aggregation::PRODUCT> {
   using type = DeviceProduct;
 };
 template <>
 struct corresponding_operator<aggregation::SUM_OF_SQUARES> {
+  using type = DeviceSum;
+};
+template <>
+struct corresponding_operator<aggregation::M2> {
   using type = DeviceSum;
 };
 template <>

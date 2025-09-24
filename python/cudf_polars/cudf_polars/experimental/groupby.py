@@ -163,6 +163,7 @@ def _(
         return rec(Slice(ir.schema, offset, length, new_join))
 
     # Extract child partitioning
+    original_child = ir.children[0]
     child, partition_info = rec(ir.children[0])
 
     # Handle single-partition case
@@ -195,6 +196,8 @@ def _(
     if unique_fraction_dict := _get_unique_fractions(
         groupby_key_columns,
         config_options.executor.unique_fraction,
+        row_count=rec.state["stats"].row_count.get(original_child),
+        column_stats=rec.state["stats"].column_stats.get(original_child),
     ):
         # Use unique_fraction to determine output partitioning
         unique_fraction = max(unique_fraction_dict.values())

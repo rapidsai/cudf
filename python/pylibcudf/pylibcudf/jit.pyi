@@ -1,3 +1,0 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
-
-def is_runtime_jit_supported() -> bool: ...

@@ -30,7 +30,6 @@
 #include <cooperative_groups.h>
 #include <cuco/static_set_ref.cuh>
 #include <cuda/std/atomic>
-#include <cuda/std/utility>
 
 #include <algorithm>
 
@@ -41,13 +40,12 @@ __device__ void find_local_mapping(cooperative_groups::thread_block const& block
                                    cudf::size_type num_input_rows,
                                    SetType shared_set,
                                    bitmask_type const* row_bitmask,
-                                   bool skip_rows_with_nulls,
                                    cudf::size_type* cardinality,
                                    cudf::size_type* local_mapping_index,
                                    cudf::size_type* shared_set_indices)
 {
   auto const is_valid_input =
-    idx < num_input_rows and (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, idx));
+    idx < num_input_rows and (not row_bitmask or cudf::bit_is_set(row_bitmask, idx));
   auto const [result_idx, inserted] = [&]() {
     if (is_valid_input) {
       auto const result      = shared_set.insert_and_find(idx);
@@ -99,7 +97,6 @@ template <class SetRef>
 CUDF_KERNEL void mapping_indices_kernel(cudf::size_type num_input_rows,
                                         SetRef global_set,
                                         bitmask_type const* row_bitmask,
-                                        bool skip_rows_with_nulls,
                                         cudf::size_type* local_mapping_index,
                                         cudf::size_type* global_mapping_index,
                                         cudf::size_type* block_cardinality,
@@ -136,7 +133,6 @@ CUDF_KERNEL void mapping_indices_kernel(cudf::size_type num_input_rows,
                        num_input_rows,
                        shared_set,
                        row_bitmask,
-                       skip_rows_with_nulls,
                        &cardinality,
                        local_mapping_index,
                        shared_set_indices);
@@ -159,14 +155,12 @@ CUDF_KERNEL void mapping_indices_kernel(cudf::size_type num_input_rows,
 }
 
 template <class SetRef>
-cudf::size_type max_occupancy_grid_size(cudf::size_type n)
+int32_t max_active_blocks_mapping_kernel()
 {
-  cudf::size_type max_active_blocks{-1};
+  int32_t max_active_blocks{-1};
   CUDF_CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
     &max_active_blocks, mapping_indices_kernel<SetRef>, GROUPBY_BLOCK_SIZE, 0));
-  auto const grid_size  = max_active_blocks * cudf::detail::num_multiprocessors();
-  auto const num_blocks = cudf::util::div_rounding_up_safe(n, GROUPBY_BLOCK_SIZE);
-  return std::min(grid_size, num_blocks);
+  return max_active_blocks;
 }
 
 template <class SetRef>
@@ -174,7 +168,6 @@ void compute_mapping_indices(cudf::size_type grid_size,
                              cudf::size_type num,
                              SetRef global_set,
                              bitmask_type const* row_bitmask,
-                             bool skip_rows_with_nulls,
                              cudf::size_type* local_mapping_index,
                              cudf::size_type* global_mapping_index,
                              cudf::size_type* block_cardinality,
@@ -185,7 +178,6 @@ void compute_mapping_indices(cudf::size_type grid_size,
     num,
     global_set,
     row_bitmask,
-    skip_rows_with_nulls,
     local_mapping_index,
     global_mapping_index,
     block_cardinality,

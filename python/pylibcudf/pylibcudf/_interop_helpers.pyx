@@ -1,5 +1,5 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
-
+from libc.stdint cimport int32_t
 from cpython.pycapsule cimport PyCapsule_GetPointer
 
 from pylibcudf.libcudf.interop cimport (
@@ -31,6 +31,15 @@ class ArrowLike(metaclass=_ArrowLikeMeta):
     pass
 
 
+class _ObjectWithArrowMetadata:
+    def __init__(self, obj, metadata=None):
+        self.obj = obj
+        self.metadata = metadata
+
+    def __arrow_c_array__(self, requested_schema=None):
+        return self.obj._to_schema(self.metadata), self.obj._to_host_array()
+
+
 @dataclass
 class ColumnMetadata:
     """Metadata associated with a column.
@@ -39,6 +48,7 @@ class ColumnMetadata:
     """
     name: str = ""
     timezone: str = ""
+    precision: int | None = None
     children_meta: list[ColumnMetadata] = field(default_factory=list)
 
 
@@ -78,6 +88,8 @@ cdef column_metadata _metadata_to_libcudf(metadata):
     cdef column_metadata c_metadata
     c_metadata.name = metadata.name.encode()
     c_metadata.timezone = metadata.timezone.encode()
+    if metadata.precision is not None:
+        c_metadata.precision = <int32_t>metadata.precision
     for child_meta in metadata.children_meta:
         c_metadata.children_meta.push_back(_metadata_to_libcudf(child_meta))
     return c_metadata

@@ -21,19 +21,10 @@
 
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/jit/runtime_support.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 
-class TransformTest : public cudf::test::BaseFixture {
- protected:
-  void SetUp() override
-  {
-    if (!cudf::is_runtime_jit_supported()) {
-      GTEST_SKIP() << "Skipping tests that require runtime JIT support";
-    }
-  }
-};
+class TransformTest : public cudf::test::BaseFixture {};
 
 template <class dtype, class Data>
 void test_udf(char const* udf, Data data_init, cudf::size_type size, bool is_ptx)
@@ -47,6 +38,7 @@ void test_udf(char const* udf, Data data_init, cudf::size_type size, bool is_ptx
                   cudf::data_type(cudf::type_to_id<dtype>()),
                   is_ptx,
                   std::nullopt,
+                  cudf::null_aware::NO,
                   cudf::test::get_default_stream());
 }
 
@@ -116,6 +108,17 @@ TEST_F(TransformTest, ComputeColumn)
   auto col_ref_1  = cudf::ast::column_reference(1);
   auto expression = cudf::ast::operation(cudf::ast::ast_operator::ADD, col_ref_0, col_ref_1);
   cudf::compute_column(table, expression, cudf::test::get_default_stream());
+}
+
+TEST_F(TransformTest, ComputeColumnJIT)
+{
+  auto c_0        = cudf::test::fixed_width_column_wrapper<cudf::size_type>{3, 20, 1, 50};
+  auto c_1        = cudf::test::fixed_width_column_wrapper<cudf::size_type>{10, 7, 20, 0};
+  auto table      = cudf::table_view{{c_0, c_1}};
+  auto col_ref_0  = cudf::ast::column_reference(0);
+  auto col_ref_1  = cudf::ast::column_reference(1);
+  auto expression = cudf::ast::operation(cudf::ast::ast_operator::ADD, col_ref_0, col_ref_1);
+  cudf::compute_column_jit(table, expression, cudf::test::get_default_stream());
 }
 
 TEST_F(TransformTest, BoolsToMask)

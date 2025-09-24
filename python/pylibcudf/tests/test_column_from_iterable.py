@@ -4,6 +4,7 @@ import array
 import operator
 from functools import reduce
 
+import numpy as np
 import pyarrow as pa
 import pytest
 from utils import assert_column_eq
@@ -216,3 +217,17 @@ def test_from_nested_list_of_large_strings(dummy_large_string_type):
     assert col.type().id() == plc.TypeId.LIST
     assert col.children()[1].type().id() == plc.TypeId.STRING
     assert col.children()[1].children()[0].type().id() == plc.TypeId.INT64
+
+
+@pytest.mark.parametrize(
+    "arr",
+    [pa.array([1, 2], type=pa.int32()), np.array([1, 2], dtype=np.int32)],
+)
+def test_from_iterable_pyarrow_or_numpy_array(arr):
+    with pytest.raises(TypeError, match="Please call"):
+        plc.Column.from_iterable_of_py(arr)
+
+
+def test_from_iterable_plc_column():
+    with pytest.raises(ValueError, match="is not iterable"):
+        plc.Column.from_iterable_of_py(plc.Column.from_iterable_of_py([1]))

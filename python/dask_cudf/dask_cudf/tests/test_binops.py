@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2024, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 
 import operator
 
@@ -15,7 +15,7 @@ from dask_cudf.tests.utils import _make_random_frame
 
 def _make_empty_frame(npartitions=2):
     df = pd.DataFrame({"x": [], "y": []})
-    gdf = cudf.DataFrame.from_pandas(df)
+    gdf = cudf.DataFrame(df)
     dgf = dd.from_pandas(gdf, npartitions=npartitions)
     return dgf
 

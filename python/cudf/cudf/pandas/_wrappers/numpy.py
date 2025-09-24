@@ -95,7 +95,11 @@ def wrap_ndarray(cls, arr: cupy.ndarray | numpy.ndarray, constructor):
         and arr.shape == ()
         and constructor not in _CONSTRUCTORS
     ):
-        return arr.dtype.type(arr.item())
+        value = arr.item()
+        if arr.dtype.kind in "mM":
+            unit, _ = numpy.datetime_data(arr.dtype)
+            return arr.dtype.type(value, unit)
+        return arr.dtype.type(value)
     else:
         # Note, this super call means that the constructed ndarray
         # class cannot be subclassed (because then super(cls,

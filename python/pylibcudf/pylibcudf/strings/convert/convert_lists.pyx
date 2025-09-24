@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -14,6 +14,8 @@ from pylibcudf.libcudf.strings.convert cimport (
 )
 from pylibcudf.scalar cimport Scalar
 from pylibcudf.types cimport type_id
+from pylibcudf.utils cimport _get_stream
+from rmm.pylibrmm.stream cimport Stream
 
 from cython.operator import dereference
 
@@ -22,7 +24,8 @@ __all__ = ["format_list_column"]
 cpdef Column format_list_column(
     Column input,
     Scalar na_rep=None,
-    Column separators=None
+    Column separators=None,
+    Stream stream=None
 ):
     """
     Convert a list column of strings into a formatted strings column.
@@ -42,6 +45,9 @@ cpdef Column format_list_column(
         Strings to use for enclosing list components and separating elements.
         Default, ``,``, ``[``, ``]``
 
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
+
     Returns
     -------
     Column
@@ -49,9 +55,11 @@ cpdef Column format_list_column(
     """
     cdef unique_ptr[column] c_result
 
+    stream = _get_stream(stream)
+
     if na_rep is None:
         na_rep = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode())
+            cpp_make_string_scalar("".encode(), stream.view())
         )
 
     cdef const string_scalar* c_na_rep = <const string_scalar*>(
@@ -65,7 +73,8 @@ cpdef Column format_list_column(
         c_result = cpp_convert_lists.format_list_column(
             input.view(),
             dereference(c_na_rep),
-            separators.view()
+            separators.view(),
+            stream.view()
         )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream)

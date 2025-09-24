@@ -21,18 +21,20 @@ __all__ = [
 
 def can_cast(from_: plc.DataType, to: plc.DataType) -> bool:
     """
-    Can we cast (via :func:`~.pylibcudf.unary.cast`) between two datatypes.
+    Determine whether a cast between two datatypes is supported by cudf-polars.
 
     Parameters
     ----------
-    from_
+    from_ : pylibcudf.DataType
         Source datatype
-    to
+
+    to : pylibcudf.DataType
         Target datatype
 
     Returns
     -------
-    True if casting is supported, False otherwise
+    bool
+        True if the cast is supported, False otherwise.
     """
     to_is_empty = to.id() == plc.TypeId.EMPTY
     from_is_empty = from_.id() == plc.TypeId.EMPTY
@@ -60,6 +62,17 @@ def can_cast(from_: plc.DataType, to: plc.DataType) -> bool:
             to.id() == plc.TypeId.STRING
             and not from_is_empty
             and is_numeric_not_bool(from_)
+        )
+        or (
+            plc.traits.is_integral_not_bool(from_)
+            and from_.id() != plc.TypeId.UINT64  # not overflow safe
+            and not to_is_empty
+            and plc.traits.is_timestamp(to)
+        )
+        or (
+            plc.traits.is_integral_not_bool(to)
+            and not to_is_empty
+            and plc.traits.is_timestamp(from_)
         )
     )
 

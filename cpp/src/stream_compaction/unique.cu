@@ -23,10 +23,10 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/row_operator/row_operators.cuh>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/stream_compaction.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -66,7 +66,7 @@ std::unique_ptr<table> unique(table_view const& input,
   auto mutable_view = mutable_column_device_view::create(*unique_indices, stream);
   auto keys_view    = input.select(keys);
 
-  auto comp = cudf::experimental::row::equality::self_comparator(keys_view, stream);
+  auto comp = cudf::detail::row::equality::self_comparator(keys_view, stream);
 
   size_type const unique_size = [&] {
     if (cudf::detail::has_nested_columns(keys_view)) {

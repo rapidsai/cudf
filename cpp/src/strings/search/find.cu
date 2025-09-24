@@ -181,8 +181,9 @@ void find_utility(strings_column_view const& input,
   auto d_results = output.mutable_view().data<size_type>();
   if ((input.chars_size(stream) / (input.size() - input.null_count())) > AVG_CHAR_BYTES_THRESHOLD) {
     // warp-per-string runs faster for longer strings (but not shorter ones)
-    constexpr int block_size = 256;
-    cudf::detail::grid_1d grid{input.size() * cudf::detail::warp_size, block_size};
+    constexpr auto block_size             = 256;
+    constexpr thread_index_type warp_size = cudf::detail::warp_size;
+    cudf::detail::grid_1d grid{input.size() * warp_size, block_size};
     finder_warp_parallel_fn<TargetIterator, forward>
       <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
         *d_strings, target_itr, start, stop, d_results);
@@ -398,9 +399,10 @@ std::unique_ptr<column> contains_warp_parallel(strings_column_view const& input,
       rmm::exec_policy_nosync(stream), results_view.begin<bool>(), results_view.end<bool>(), true);
   } else {
     // launch warp per string
-    auto const d_strings     = column_device_view::create(input.parent(), stream);
-    constexpr int block_size = 256;
-    cudf::detail::grid_1d grid{input.size() * cudf::detail::warp_size, block_size};
+    auto const d_strings                   = column_device_view::create(input.parent(), stream);
+    constexpr thread_index_type block_size = 256;
+    constexpr thread_index_type warp_size  = cudf::detail::warp_size;
+    cudf::detail::grid_1d grid{input.size() * warp_size, block_size};
     contains_warp_parallel_fn<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
       *d_strings, d_target, results_view.data<bool>());
   }

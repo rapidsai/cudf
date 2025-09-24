@@ -732,6 +732,18 @@ class _CallableProxyMixin:
         )
         return result
 
+    @property
+    def __code__(self):
+        return self._fsproxy_slow.__code__
+
+    @property
+    def __defaults__(self):
+        return self._fsproxy_slow.__defaults__
+
+    @property
+    def __kwdefaults__(self):
+        return self._fsproxy_slow.__kwdefaults__
+
 
 class _FunctionProxy(_CallableProxyMixin):
     """
@@ -835,7 +847,10 @@ class _FastSlowAttribute:
                     raise e
 
             if _is_function_or_method(slow_attr):
-                self._attr = _MethodProxy(fast_attr, slow_attr)
+                self._attr = _MethodProxy(
+                    fast_attr,
+                    slow_attr,
+                )
             else:
                 # for anything else, use a fast-slow attribute:
                 self._attr, _ = _fast_slow_function_call(
@@ -867,6 +882,7 @@ class _FastSlowAttribute:
                     instance,
                     self._name,
                 )[0]
+
         return self._attr
 
 

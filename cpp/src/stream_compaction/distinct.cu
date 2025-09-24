@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,8 +21,8 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/row_operator/row_operators.cuh>
 #include <cudf/detail/stream_compaction.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -54,20 +54,20 @@ rmm::device_uvector<cudf::size_type> dispatch_row_equal(
   null_equality compare_nulls,
   nan_equality compare_nans,
   bool has_nulls,
-  cudf::experimental::row::equality::self_comparator row_equal,
+  cudf::detail::row::equality::self_comparator row_equal,
   Func&& func)
 {
   if (compare_nans == nan_equality::ALL_EQUAL) {
     auto const d_equal = row_equal.equal_to<HasNested>(
       nullate::DYNAMIC{has_nulls},
       compare_nulls,
-      cudf::experimental::row::equality::nan_equal_physical_equality_comparator{});
+      cudf::detail::row::equality::nan_equal_physical_equality_comparator{});
     return func(d_equal);
   } else {
-    auto const d_equal = row_equal.equal_to<HasNested>(
-      nullate::DYNAMIC{has_nulls},
-      compare_nulls,
-      cudf::experimental::row::equality::physical_equality_comparator{});
+    auto const d_equal =
+      row_equal.equal_to<HasNested>(nullate::DYNAMIC{has_nulls},
+                                    compare_nulls,
+                                    cudf::detail::row::equality::physical_equality_comparator{});
     return func(d_equal);
   }
 }
@@ -87,12 +87,12 @@ rmm::device_uvector<size_type> distinct_indices(table_view const& input,
   }
 
   auto const preprocessed_input =
-    cudf::experimental::row::hash::preprocessed_table::create(input, stream);
+    cudf::detail::row::hash::preprocessed_table::create(input, stream);
   auto const has_nulls          = nullate::DYNAMIC{cudf::has_nested_nulls(input)};
   auto const has_nested_columns = cudf::detail::has_nested_columns(input);
 
-  auto const row_hash  = cudf::experimental::row::hash::row_hasher(preprocessed_input);
-  auto const row_equal = cudf::experimental::row::equality::self_comparator(preprocessed_input);
+  auto const row_hash  = cudf::detail::row::hash::row_hasher(preprocessed_input);
+  auto const row_equal = cudf::detail::row::equality::self_comparator(preprocessed_input);
 
   auto const helper_func = [&](auto const& d_equal) {
     using RowEqual = std::decay_t<decltype(d_equal)>;

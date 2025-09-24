@@ -34,6 +34,37 @@ namespace CUDF_EXPORT cudf {
  */
 
 /**
+ * @brief Holds context information about matches between tables during a join operation.
+ *
+ * This structure stores the left table view and a device vector containing the count of
+ * matching rows in the right table for each row in the left table. Used primarily by
+ * inner_join_match_context() to track join match information.
+ */
+struct join_match_context {
+  table_view _left_table;  ///< View of the left table involved in the join operation
+  std::unique_ptr<rmm::device_uvector<size_type>>
+    _match_counts;  ///< A device vector containing the count of matching rows in the right table
+                    ///< for each row in left table
+};
+
+/**
+ * @brief Stores context information for partitioned join operations.
+ *
+ * This structure maintains context for partitioned join operations, containing the match
+ * context from a previous join operation along with the start and end indices that define
+ * the current partition of the left table being processed.
+ *
+ * Used with partitioned_inner_join() to perform large joins in smaller chunks while
+ * preserving the context from the initial match operation.
+ */
+struct join_partition_context {
+  join_match_context
+    left_table_context;      ///< The match context from a previous inner_join_match_context call
+  size_type left_start_idx;  ///< The starting row index of the current left table partition
+  size_type left_end_idx;  ///< The ending row index (exclusive) of the current left table partition
+};
+
+/**
  * @brief Returns a pair of row index vectors corresponding to an
  * inner join between the specified tables.
  *
@@ -161,6 +192,8 @@ full_join(cudf::table_view const& left_keys,
  * @brief Returns a vector of row indices corresponding to a left semi-join
  * between the specified tables.
  *
+ * @deprecated Use the object-oriented filtered_join `cudf::filtered_join::anti_join` instead
+ *
  * The returned vector contains the row indices from the left table
  * for which there is a matching row in the right table.
  *
@@ -180,7 +213,7 @@ full_join(cudf::table_view const& left_keys,
  * the result of performing a left semi join between two tables with
  * `left_keys` and `right_keys` as the join keys .
  */
-std::unique_ptr<rmm::device_uvector<size_type>> left_semi_join(
+[[deprecated]] std::unique_ptr<rmm::device_uvector<size_type>> left_semi_join(
   cudf::table_view const& left_keys,
   cudf::table_view const& right_keys,
   null_equality compare_nulls       = null_equality::EQUAL,
@@ -190,6 +223,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> left_semi_join(
 /**
  * @brief Returns a vector of row indices corresponding to a left anti join
  * between the specified tables.
+ *
+ * @deprecated Use the object-oriented filtered_join `cudf::filtered_join::semi_join` instead
  *
  * The returned vector contains the row indices from the left table
  * for which there is no matching row in the right table.
@@ -213,7 +248,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> left_semi_join(
  * the result of performing a left anti join between two tables with
  * `left_keys` and `right_keys` as the join keys .
  */
-std::unique_ptr<rmm::device_uvector<size_type>> left_anti_join(
+[[deprecated]] std::unique_ptr<rmm::device_uvector<size_type>> left_anti_join(
   cudf::table_view const& left_keys,
   cudf::table_view const& right_keys,
   null_equality compare_nulls       = null_equality::EQUAL,

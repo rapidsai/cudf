@@ -87,6 +87,7 @@ def test_slice_column(
                 pa_col.to_pylist(),
                 pa_starts_col.to_pylist(),
                 pa_stops_col.to_pylist(),
+                strict=True,
             )
         ],
         type=pa.string(),

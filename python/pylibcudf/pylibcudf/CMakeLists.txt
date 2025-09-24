@@ -21,7 +21,6 @@ set(cython_sources
     concatenate.pyx
     copying.pyx
     datetime.pyx
-    experimental.pyx
     expressions.pyx
     filling.pyx
     gpumemoryview.pyx
@@ -29,7 +28,6 @@ set(cython_sources
     hashing.pyx
     interop.pyx
     _interop_helpers.pyx
-    jit.pyx
     join.pyx
     json.pyx
     labeling.pyx
@@ -37,6 +35,7 @@ set(cython_sources
     merge.pyx
     null_mask.pyx
     partitioning.pyx
+    prefetch.pyx
     quantiles.pyx
     reduce.pyx
     replace.pyx

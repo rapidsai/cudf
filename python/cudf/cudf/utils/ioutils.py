@@ -2295,9 +2295,10 @@ def _get_remote_bytes_all(
             zip(
                 *(
                     (r, j, min(j + blocksize, s))
-                    for r, s in zip(remote_paths, sizes)
+                    for r, s in zip(remote_paths, sizes, strict=True)
                     for j in range(0, s, blocksize)
-                )
+                ),
+                strict=True,
             ),
         )
 
@@ -2306,7 +2307,9 @@ def _get_remote_bytes_all(
 
         # Construct local byte buffers
         # (Need to make sure path offsets are ordered correctly)
-        unique_count = dict(zip(*np.unique(paths, return_counts=True)))
+        unique_count = dict(
+            zip(*np.unique(paths, return_counts=True), strict=True)
+        )
         offset = np.cumsum([0] + [unique_count[p] for p in remote_paths])
         buffers = [
             functools.reduce(operator.add, chunks[offset[i] : offset[i + 1]])
@@ -2340,7 +2343,7 @@ def _get_remote_bytes_parquet(
     )
 
     buffers = []
-    for size, path in zip(sizes, remote_paths):
+    for size, path in zip(sizes, remote_paths, strict=True):
         path_data = data[path]
         buf = np.empty(size, dtype="b")
         for range_offset in path_data.keys():
@@ -2393,7 +2396,7 @@ def _update_col_struct_field_names(
     if col.children:
         children = list(col.children)
         for i, (child, names) in enumerate(
-            zip(children, child_names.values())
+            zip(children, child_names.values(), strict=True)
         ):
             children[i] = _update_col_struct_field_names(child, names)
         col.set_base_children(tuple(children))

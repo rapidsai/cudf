@@ -47,6 +47,8 @@ cudf::data_type ast_operator_return_type(ast_operator op,
  */
 cudf::size_type ast_operator_arity(ast_operator op);
 
+std::string_view ast_operator_string(ast_operator op);
+
 }  // namespace ast::detail
 
 }  // namespace CUDF_EXPORT cudf

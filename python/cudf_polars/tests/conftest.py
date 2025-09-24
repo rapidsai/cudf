@@ -18,7 +18,7 @@ def pytest_addoption(parser):
     parser.addoption(
         "--executor",
         action="store",
-        default="in-memory",
+        default="streaming",
         choices=("in-memory", "streaming"),
         help="Executor to use for GPUEngine.",
     )

@@ -430,7 +430,7 @@ cpdef TableWithMetadata read_orc(OrcReaderOptions options, Stream stream = None)
     ----------
     options: OrcReaderOptions
         Settings for controlling reading behavior
-    stream: Stream
+    stream : Stream | None
         CUDA stream used for device memory operations and kernel launches
     """
     cdef table_with_metadata c_result
@@ -632,7 +632,7 @@ cpdef void write_orc(OrcWriterOptions options, Stream stream = None):
     ----------
     options: OrcWriterOptions
         Settings for controlling writing behavior
-    stream: Stream
+    stream : Stream | None
         CUDA stream used for device memory operations and kernel launches
 
     Returns
@@ -681,7 +681,7 @@ cdef class OrcChunkedWriter:
         ----------
         options: ChunkedOrcWriterOptions
             Settings for controlling writing behavior
-        stream: Stream
+        stream : Stream | None
             CUDA stream used for device memory operations and kernel launches
 
         Returns

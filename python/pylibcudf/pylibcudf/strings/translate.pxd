@@ -1,14 +1,16 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from pylibcudf.column cimport Column
 from pylibcudf.libcudf.strings.translate cimport filter_type
 from pylibcudf.scalar cimport Scalar
+from rmm.pylibrmm.stream cimport Stream
 
 
-cpdef Column translate(Column input, dict chars_table)
+cpdef Column translate(Column input, dict chars_table, Stream stream=*)
 
 cpdef Column filter_characters(
     Column input,
     dict characters_to_filter,
     filter_type keep_characters,
-    Scalar replacement
+    Scalar replacement,
+    Stream stream=*
 )

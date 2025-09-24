@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,55 +15,51 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/quantiles.hpp>
+#include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <thrust/execution_policy.h>
 #include <thrust/tabulate.h>
 
-class Quantiles : public cudf::benchmark {};
+#include <nvbench/nvbench.cuh>
 
-static void BM_quantiles(benchmark::State& state, bool nulls)
+static void bench_quantiles(nvbench::state& state)
 {
-  using Type = int;
+  cudf::size_type const num_rows{static_cast<cudf::size_type>(state.get_int64("num_rows"))};
+  cudf::size_type const num_cols{static_cast<cudf::size_type>(state.get_int64("num_cols"))};
+  cudf::size_type const num_quantiles{
+    static_cast<cudf::size_type>(state.get_int64("num_quantiles"))};
+  bool const nulls{static_cast<bool>(state.get_int64("nulls"))};
 
-  cudf::size_type const n_rows{(cudf::size_type)state.range(0)};
-  cudf::size_type const n_cols{(cudf::size_type)state.range(1)};
-  cudf::size_type const n_quantiles{(cudf::size_type)state.range(2)};
+  auto const data_type = cudf::type_to_id<int32_t>();
 
   // Create columns with values in the range [0,100)
-  data_profile profile = data_profile_builder().cardinality(0).distribution(
-    cudf::type_to_id<Type>(), distribution_id::UNIFORM, 0, 100);
+  data_profile profile =
+    data_profile_builder().cardinality(0).distribution(data_type, distribution_id::UNIFORM, 0, 100);
   profile.set_null_probability(nulls ? std::optional{0.01}
                                      : std::nullopt);  // 1% nulls or no null mask (<0)
 
-  auto input_table = create_random_table(
-    cycle_dtypes({cudf::type_to_id<Type>()}, n_cols), row_count{n_rows}, profile);
+  auto input_table =
+    create_random_table(cycle_dtypes({data_type}, num_cols), row_count{num_rows}, profile);
   auto input = cudf::table_view(*input_table);
 
-  std::vector<double> q(n_quantiles);
-  thrust::tabulate(
-    thrust::seq, q.begin(), q.end(), [n_quantiles](auto i) { return i * (1.0f / n_quantiles); });
+  std::vector<double> q(num_quantiles);
+  thrust::tabulate(thrust::seq, q.begin(), q.end(), [num_quantiles](auto i) {
+    return i * (1.0f / num_quantiles);
+  });
 
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::get_default_stream());
+  auto stream = cudf::get_default_stream();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
 
-    auto result = cudf::quantiles(input, q);
-    // auto result = (stable) ? cudf::stable_sorted_order(input) : cudf::sorted_order(input);
-  }
+  state.exec(nvbench::exec_tag::sync,
+             [&](nvbench::launch&) { auto result = cudf::quantiles(input, q); });
 }
 
-#define QUANTILES_BENCHMARK_DEFINE(name, nulls)          \
-  BENCHMARK_DEFINE_F(Quantiles, name)                    \
-  (::benchmark::State & st) { BM_quantiles(st, nulls); } \
-  BENCHMARK_REGISTER_F(Quantiles, name)                  \
-    ->RangeMultiplier(4)                                 \
-    ->Ranges({{1 << 16, 1 << 26}, {1, 8}, {1, 12}})      \
-    ->UseManualTime()                                    \
-    ->Unit(benchmark::kMillisecond);
-
-QUANTILES_BENCHMARK_DEFINE(no_nulls, false)
-QUANTILES_BENCHMARK_DEFINE(nulls, true)
+NVBENCH_BENCH(bench_quantiles)
+  .set_name("quantiles")
+  .add_int64_power_of_two_axis("num_rows", {16, 18, 20, 22, 24, 26})
+  .add_int64_axis("num_cols", {1, 2, 4, 8})
+  .add_int64_axis("num_quantiles", {1, 4, 8, 12})
+  .add_int64_axis("nulls", {0, 1});

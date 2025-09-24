@@ -343,8 +343,9 @@ std::unique_ptr<column> like(strings_column_view const& input,
                       like_fn{*d_strings, patterns_itr, d_escape});
   } else {
     // warp-parallel for longer strings
-    constexpr auto block_size = 512;
-    auto const grid = cudf::detail::grid_1d(input.size() * cudf::detail::warp_size, block_size);
+    constexpr thread_index_type block_size = 512;
+    constexpr thread_index_type warp_size  = cudf::detail::warp_size;
+    auto const grid = cudf::detail::grid_1d(input.size() * warp_size, block_size);
     like_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
       *d_strings, patterns_itr, d_escape, results->mutable_view().data<bool>());
   }

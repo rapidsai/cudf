@@ -51,10 +51,6 @@ if [ ! -d "pandas-tests" ]; then
     cat > pandas-tests/pyproject.toml << \EOF
 [tool.pytest.ini_options]
 xfail_strict = true
-filterwarnings = [
-  # Will be fixed in numba 0.56: https://github.com/numba/numba/issues/7758
-  "ignore:`np.MachAr` is deprecated:DeprecationWarning:numba",
-]
 markers = [
   "single_cpu: tests that should run on a single cpu only",
   "slow: mark a test as slow",
@@ -155,7 +151,7 @@ PYTEST_IGNORES=("--ignore=tests/io/parser/common/test_read_errors.py"
 )
 
 
-PANDAS_CI="1" timeout 90m python -m pytest -p cudf.pandas \
+PANDAS_CI="1" python -m pytest -p cudf.pandas \
     --import-mode=importlib \
     -k "$TEST_THAT_NEED_MOTO_SERVER and $TEST_THAT_CRASH_PYTEST_WORKERS and $TEST_THAT_NEED_REASON_TO_SKIP and $TEST_THAT_USE_STRING_DTYPE_GROUPBY and $TEST_THAT_USE_WEAKREFS" \
     "${PYTEST_IGNORES[@]}" \

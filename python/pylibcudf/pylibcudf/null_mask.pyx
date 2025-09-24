@@ -8,11 +8,13 @@ from pylibcudf.gpumemoryview cimport gpumemoryview
 
 from rmm.librmm.device_buffer cimport device_buffer
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
+from rmm.pylibrmm.stream cimport Stream
 
 from pylibcudf.libcudf.types import mask_state as MaskState  # no-cython-lint
 
 from .column cimport Column
 from .table cimport Table
+from .utils cimport _get_stream
 
 __all__ = [
     "bitmask_allocation_size_bytes",
@@ -23,11 +25,11 @@ __all__ = [
     "null_count",
 ]
 
-cdef DeviceBuffer buffer_to_python(device_buffer buf):
-    return DeviceBuffer.c_from_unique_ptr(make_unique[device_buffer](move(buf)))
+cdef DeviceBuffer buffer_to_python(device_buffer buf, Stream stream):
+    return DeviceBuffer.c_from_unique_ptr(make_unique[device_buffer](move(buf)), stream)
 
 
-cpdef DeviceBuffer copy_bitmask(Column col):
+cpdef DeviceBuffer copy_bitmask(Column col, Stream stream=None):
     """Copies ``col``'s bitmask into a ``DeviceBuffer``.
 
     For details, see :cpp:func:`copy_bitmask`.
@@ -36,6 +38,8 @@ cpdef DeviceBuffer copy_bitmask(Column col):
     ----------
     col : Column
         Column whose bitmask needs to be copied
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -44,11 +48,12 @@ cpdef DeviceBuffer copy_bitmask(Column col):
         ``DeviceBuffer`` if ``col`` is not nullable
     """
     cdef device_buffer db
+    stream = _get_stream(stream)
 
     with nogil:
-        db = cpp_null_mask.copy_bitmask(col.view())
+        db = cpp_null_mask.copy_bitmask(col.view(), stream.view())
 
-    return buffer_to_python(move(db))
+    return buffer_to_python(move(db), stream)
 
 cpdef size_t bitmask_allocation_size_bytes(size_type number_of_bits):
     """
@@ -73,7 +78,8 @@ cpdef size_t bitmask_allocation_size_bytes(size_type number_of_bits):
 
 cpdef DeviceBuffer create_null_mask(
     size_type size,
-    mask_state state = mask_state.UNINITIALIZED
+    mask_state state = mask_state.UNINITIALIZED,
+    Stream stream=None
 ):
     """Creates a ``DeviceBuffer`` for use as a null value indicator bitmask of a
     ``Column``.
@@ -88,6 +94,8 @@ cpdef DeviceBuffer create_null_mask(
         The desired state of the mask. Can be one of { MaskState.UNALLOCATED,
         MaskState.UNINITIALIZED, MaskState.ALL_VALID, MaskState.ALL_NULL }
         (default MaskState.UNINITIALIZED)
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -96,14 +104,15 @@ cpdef DeviceBuffer create_null_mask(
         state
     """
     cdef device_buffer db
+    stream = _get_stream(stream)
 
     with nogil:
-        db = cpp_null_mask.create_null_mask(size, state)
+        db = cpp_null_mask.create_null_mask(size, state, stream.view())
 
-    return buffer_to_python(move(db))
+    return buffer_to_python(move(db), stream)
 
 
-cpdef tuple bitmask_and(list columns):
+cpdef tuple bitmask_and(list columns, Stream stream=None):
     """Performs bitwise AND of the bitmasks of a list of columns.
 
     For details, see :cpp:func:`bitmask_and`.
@@ -112,6 +121,8 @@ cpdef tuple bitmask_and(list columns):
     ----------
     columns : list
         The list of columns
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -120,14 +131,15 @@ cpdef tuple bitmask_and(list columns):
     """
     cdef Table c_table = Table(columns)
     cdef pair[device_buffer, size_type] c_result
+    stream = _get_stream(stream)
 
     with nogil:
-        c_result = cpp_null_mask.bitmask_and(c_table.view())
+        c_result = cpp_null_mask.bitmask_and(c_table.view(), stream.view())
 
-    return buffer_to_python(move(c_result.first)), c_result.second
+    return buffer_to_python(move(c_result.first), stream), c_result.second
 
 
-cpdef tuple bitmask_or(list columns):
+cpdef tuple bitmask_or(list columns, Stream stream=None):
     """Performs bitwise OR of the bitmasks of a list of columns.
 
     For details, see :cpp:func:`bitmask_or`.
@@ -136,6 +148,8 @@ cpdef tuple bitmask_or(list columns):
     ----------
     columns : list
         The list of columns
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -144,14 +158,20 @@ cpdef tuple bitmask_or(list columns):
     """
     cdef Table c_table = Table(columns)
     cdef pair[device_buffer, size_type] c_result
+    stream = _get_stream(stream)
 
     with nogil:
-        c_result = cpp_null_mask.bitmask_or(c_table.view())
+        c_result = cpp_null_mask.bitmask_or(c_table.view(), stream.view())
 
-    return buffer_to_python(move(c_result.first)), c_result.second
+    return buffer_to_python(move(c_result.first), stream), c_result.second
 
 
-cpdef size_type null_count(gpumemoryview bitmask, size_type start, size_type stop):
+cpdef size_type null_count(
+    gpumemoryview bitmask,
+    size_type start,
+    size_type stop,
+    Stream stream=None
+):
     """Given a validity bitmask, counts the number of null elements.
 
     For details, see :cpp:func:`null_count`.
@@ -164,11 +184,19 @@ cpdef size_type null_count(gpumemoryview bitmask, size_type start, size_type sto
         Index of the first bit to count (inclusive).
     stop : int
         Index of the last bit to count (exclusive).
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
     int
         The number of null elements in the specified range.
     """
+    stream = _get_stream(stream)
     with nogil:
-        return cpp_null_mask.null_count(<bitmask_type*>(bitmask.ptr), start, stop)
+        return cpp_null_mask.null_count(
+            <bitmask_type*>(bitmask.ptr),
+            start,
+            stop,
+            stream.view()
+        )

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,57 +15,49 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
+#include <benchmarks/common/nvbench_utilities.hpp>
 
 #include <cudf/filling.hpp>
 
-class Repeat : public cudf::benchmark {};
+#include <nvbench/nvbench.cuh>
 
-template <class TypeParam, bool nulls>
-void BM_repeat(benchmark::State& state)
+namespace {
+template <typename TypeParam>
+void nvbench_repeat(nvbench::state& state, nvbench::type_list<TypeParam>)
 {
-  auto const n_rows = static_cast<cudf::size_type>(state.range(0));
-  auto const n_cols = static_cast<cudf::size_type>(state.range(1));
+  auto const num_rows = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const num_cols = static_cast<cudf::size_type>(state.get_int64("num_cols"));
+  auto const nulls    = state.get_int64("nulls");
 
   auto const input_table =
-    create_sequence_table(cycle_dtypes({cudf::type_to_id<TypeParam>()}, n_cols),
-                          row_count{n_rows},
-                          nulls ? std::optional<double>{1.0} : std::nullopt);
+    create_sequence_table(cycle_dtypes({cudf::type_to_id<TypeParam>()}, num_cols),
+                          row_count{num_rows},
+                          nulls ? std::optional<double>{0.1} : std::nullopt);
   // Create table view
-  auto input = cudf::table_view(*input_table);
+  auto const input = input_table->view();
 
   // repeat counts
-  using sizeT                = cudf::size_type;
   data_profile const profile = data_profile_builder().cardinality(0).no_validity().distribution(
-    cudf::type_to_id<sizeT>(), distribution_id::UNIFORM, 0, 3);
-  auto repeat_count = create_random_column(cudf::type_to_id<sizeT>(), row_count{n_rows}, profile);
+    cudf::type_to_id<cudf::size_type>(), distribution_id::UNIFORM, 0, 3);
+  auto counts =
+    create_random_column(cudf::type_to_id<cudf::size_type>(), row_count{num_rows}, profile);
 
-  // warm up
-  auto output = cudf::repeat(input, *repeat_count);
+  auto output = cudf::repeat(input, counts->view());
 
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    cudf::repeat(input, *repeat_count);
-  }
+  state.add_global_memory_reads(input_table->alloc_size());
+  state.add_global_memory_writes(output->alloc_size());
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
 
-  auto data_bytes =
-    (input.num_columns() * input.num_rows() + output->num_columns() * output->num_rows()) *
-    sizeof(TypeParam);
-  auto null_bytes =
-    nulls ? input.num_columns() * cudf::bitmask_allocation_size_bytes(input.num_rows()) +
-              output->num_columns() * cudf::bitmask_allocation_size_bytes(output->num_rows())
-          : 0;
-  state.SetBytesProcessed(state.iterations() * (data_bytes + null_bytes));
+  state.exec(nvbench::exec_tag::sync,
+             [&](nvbench::launch& launch) { auto result = cudf::repeat(input, counts->view()); });
 }
+}  // namespace
 
-#define REPEAT_BENCHMARK_DEFINE(name, type, nulls)                                                \
-  BENCHMARK_DEFINE_F(Repeat, name)(::benchmark::State & state) { BM_repeat<type, nulls>(state); } \
-  BENCHMARK_REGISTER_F(Repeat, name)                                                              \
-    ->RangeMultiplier(8)                                                                          \
-    ->Ranges({{1 << 10, 1 << 26}, {1, 8}})                                                        \
-    ->UseManualTime()                                                                             \
-    ->Unit(benchmark::kMillisecond);
+using Types = nvbench::type_list<double, int32_t>;
 
-REPEAT_BENCHMARK_DEFINE(double_nulls, double, true);
-REPEAT_BENCHMARK_DEFINE(double_no_nulls, double, false);
+NVBENCH_BENCH_TYPES(nvbench_repeat, NVBENCH_TYPE_AXES(Types))
+  .set_name("repeat")
+  .set_type_axes_names({"DataType"})
+  .add_int64_power_of_two_axis("num_rows", {10, 14, 18, 22, 26})
+  .add_int64_axis("num_cols", {1, 2, 4, 8})
+  .add_int64_axis("nulls", {0, 1});

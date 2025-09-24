@@ -1,10 +1,12 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from pylibcudf.column cimport Column
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.strings cimport find as cpp_find
 from pylibcudf.scalar cimport Scalar
+from pylibcudf.utils cimport _get_stream
+from rmm.pylibrmm.stream cimport Stream
 
 from cython.operator import dereference
 
@@ -16,7 +18,8 @@ cpdef Column find(
     Column input,
     ColumnOrScalar target,
     size_type start=0,
-    size_type stop=-1
+    size_type stop=-1,
+    Stream stream=None
 ):
     """Returns a column of character position values where the target string is
     first found in each string of the provided column.
@@ -42,6 +45,8 @@ cpdef Column find(
     stop : size_type
         Last position (exclusive) to include in the search. Default of -1 will
         search to the end of the string.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -49,12 +54,14 @@ cpdef Column find(
         New integer column with character position values
     """
     cdef unique_ptr[column] result
+    stream = _get_stream(stream)
     if ColumnOrScalar is Column:
         with nogil:
             result = cpp_find.find(
                 input.view(),
                 target.view(),
-                start
+                start,
+                stream.view()
             )
     elif ColumnOrScalar is Scalar:
         with nogil:
@@ -62,19 +69,21 @@ cpdef Column find(
                 input.view(),
                 dereference(<string_scalar*>(target.c_obj.get())),
                 start,
-                stop
+                stop,
+                stream.view()
             )
     else:
         raise ValueError(f"Invalid target {target}")
 
-    return Column.from_libcudf(move(result))
+    return Column.from_libcudf(move(result), stream)
 
 
 cpdef Column rfind(
     Column input,
     Scalar target,
     size_type start=0,
-    size_type stop=-1
+    size_type stop=-1,
+    Stream stream=None
 ):
     """
     Returns a column of character position values where the target string is
@@ -93,6 +102,8 @@ cpdef Column rfind(
     stop : size_type
         Last position (exclusive) to include in the search. Default of -1 will
         search to the end of the string.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -100,19 +111,22 @@ cpdef Column rfind(
         New integer column with character position values
     """
     cdef unique_ptr[column] result
+    stream = _get_stream(stream)
     with nogil:
         result = cpp_find.rfind(
             input.view(),
             dereference(<string_scalar*>(target.c_obj.get())),
             start,
-            stop
+            stop,
+            stream.view()
         )
-    return Column.from_libcudf(move(result))
+    return Column.from_libcudf(move(result), stream)
 
 
 cpdef Column contains(
     Column input,
     ColumnOrScalar target,
+    Stream stream=None
 ):
     """
     Returns a column of boolean values for each string where true indicates the
@@ -135,6 +149,8 @@ cpdef Column contains(
         The input strings
     target : Union[Column, Scalar]
         String to search for in each string
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -142,27 +158,31 @@ cpdef Column contains(
         New boolean column with True for each string that contains the target
     """
     cdef unique_ptr[column] result
+    stream = _get_stream(stream)
     if ColumnOrScalar is Column:
         with nogil:
             result = cpp_find.contains(
                 input.view(),
-                target.view()
+                target.view(),
+                stream.view()
             )
     elif ColumnOrScalar is Scalar:
         with nogil:
             result = cpp_find.contains(
                 input.view(),
-                dereference(<string_scalar*>(target.c_obj.get()))
+                dereference(<string_scalar*>(target.c_obj.get())),
+                stream.view()
             )
     else:
         raise ValueError(f"Invalid target {target}")
 
-    return Column.from_libcudf(move(result))
+    return Column.from_libcudf(move(result), stream)
 
 
 cpdef Column starts_with(
     Column input,
     ColumnOrScalar target,
+    Stream stream=None
 ):
     """
     Returns a column of boolean values for each string where true indicates the
@@ -185,6 +205,8 @@ cpdef Column starts_with(
         The input strings
     target : Union[Column, Scalar]
         String to search for at the beginning of each string
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -192,27 +214,31 @@ cpdef Column starts_with(
         New boolean column with True for each string that starts with the target
     """
     cdef unique_ptr[column] result
+    stream = _get_stream(stream)
 
     if ColumnOrScalar is Column:
         with nogil:
             result = cpp_find.starts_with(
                 input.view(),
-                target.view()
+                target.view(),
+                stream.view()
             )
     elif ColumnOrScalar is Scalar:
         with nogil:
             result = cpp_find.starts_with(
                 input.view(),
-                dereference(<string_scalar*>(target.c_obj.get()))
+                dereference(<string_scalar*>(target.c_obj.get())),
+                stream.view()
             )
     else:
         raise ValueError(f"Invalid target {target}")
 
-    return Column.from_libcudf(move(result))
+    return Column.from_libcudf(move(result), stream)
 
 cpdef Column ends_with(
     Column input,
     ColumnOrScalar target,
+    Stream stream=None
 ):
     """
     Returns a column of boolean values for each string where true indicates the
@@ -234,6 +260,8 @@ cpdef Column ends_with(
         The input strings
     target : Union[Column, Scalar]
         String to search for at the end of each string
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     Returns
     -------
@@ -241,19 +269,22 @@ cpdef Column ends_with(
         New boolean column with True for each string that ends with the target
     """
     cdef unique_ptr[column] result
+    stream = _get_stream(stream)
     if ColumnOrScalar is Column:
         with nogil:
             result = cpp_find.ends_with(
                 input.view(),
-                target.view()
+                target.view(),
+                stream.view()
             )
     elif ColumnOrScalar is Scalar:
         with nogil:
             result = cpp_find.ends_with(
                 input.view(),
-                dereference(<string_scalar*>(target.c_obj.get()))
+                dereference(<string_scalar*>(target.c_obj.get())),
+                stream.view()
             )
     else:
         raise ValueError(f"Invalid target {target}")
 
-    return Column.from_libcudf(move(result))
+    return Column.from_libcudf(move(result), stream)

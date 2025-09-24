@@ -37,7 +37,7 @@ def test_invalid_target_length():
     columns = [
         Column(
             plc.column_factories.make_numeric_column(
-                dtype.plc, 4, plc.MaskState.ALL_VALID
+                dtype.plc_type, 4, plc.MaskState.ALL_VALID
             ),
             dtype=dtype,
             name=f"col{i}",
@@ -53,7 +53,7 @@ def test_broadcast_mismatching_column_lengths():
     columns = [
         Column(
             plc.column_factories.make_numeric_column(
-                dtype.plc, i + 1, plc.MaskState.ALL_VALID
+                dtype.plc_type, i + 1, plc.MaskState.ALL_VALID
             ),
             dtype=dtype,
             name=f"col{i}",
@@ -70,7 +70,7 @@ def test_broadcast_with_scalars(nrows):
     columns = [
         Column(
             plc.column_factories.make_numeric_column(
-                dtype.plc,
+                dtype.plc_type,
                 nrows if i == 0 else 1,
                 plc.MaskState.ALL_VALID,
             ),

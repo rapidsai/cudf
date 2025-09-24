@@ -480,3 +480,7 @@ def to_expression(str expr, tuple column_names):
         {name: ColumnReference(i) for i, name in enumerate(column_names)}
     )
     return visitor.visit(ast.parse(expr))
+
+
+ASTOperator.__str__ = ASTOperator.__repr__
+TableReference.__str__ = TableReference.__repr__

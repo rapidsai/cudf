@@ -22,6 +22,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/fixed_point/conv.hpp>
 #include <cudf/unary.hpp>
 
 #include <rmm/cuda_stream_view.hpp>

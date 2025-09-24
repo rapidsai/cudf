@@ -8,7 +8,7 @@ You will need:
    preferred configuration. Or else, use
    [rustup](https://www.rust-lang.org/tools/install)
 2. A [cudf development
-   environment](https://github.com/rapidsai/cudf/blob/branch-25.08/CONTRIBUTING.md#setting-up-your-build-environment).
+   environment](https://github.com/rapidsai/cudf/blob/branch-25.12/CONTRIBUTING.md#setting-up-your-build-environment).
    The combined devcontainer works, or whatever your favourite approach is.
 
 :::{note}
@@ -382,6 +382,202 @@ def rename(e: Expr, mapping: Mapping[str, str]) -> Expr:
     # mapper = make_recursive(_rename, state=State(mapping=mapping))
     return mapper(e)
 ```
+
+# Estimated column statistics
+
+:::{note}
+Column-statistics estimation is experimental and the details are
+likely to change in the future.
+:::
+
+The `cudf-polars` streaming executor (enabled by default) may use
+estimated column statistics to help transform translated logical-plan
+IR nodes into the final "physical-plan" IR nodes. This will only
+happen for queries that read from in-memory or Parquet data, and
+only when statistics planning is enabled (see the following
+section for more details).
+
+## Configuration
+
+The statistics-based query planning behavior can be controlled through
+the `StatsPlanningOptions` configuration class. These options can be
+configured either through the `stats_planning` parameter of the
+streaming executor, or via environment variables with the prefix
+`CUDF_POLARS__EXECUTOR__STATS_PLANNING__`.
+
+```python
+import polars as pl
+
+# Configure via GPUEngine
+engine = pl.GPUEngine(
+    executor="streaming",
+    executor_options={
+        "stats_planning": {
+            "use_io_partitioning": True,
+            "use_reduction_planning": True,
+            "use_join_heuristics": True,
+            "use_sampling": False,
+            "default_selectivity": 0.5,
+        }
+    }
+)
+
+result = query.collect(engine=engine)
+```
+
+:::{note}
+Column statistics are currently supported for queries that originate
+from Parquet or in-memory DataFrame objects.
+:::
+
+The available configuration options are:
+
+- **`use_io_partitioning`** (default: `True`): Whether to use estimated file-size
+  statistics to calculate the ideal input-partition count for IO operations.
+  This option currently applies to Parquet data only. This option can also be set via the
+  `CUDF_POLARS__EXECUTOR__STATS_PLANNING__USE_IO_PARTITIONING` environment variable.
+
+- **`use_reduction_planning`** (default: `False`): Whether to use estimated column
+  statistics to calculate the output-partition count for reduction operations
+  like `Distinct`, `GroupBy`, and `Select(unique)`. This can also be set via the
+  `CUDF_POLARS__EXECUTOR__STATS_PLANNING__USE_REDUCTION_PLANNING` environment variable.
+
+- **`use_join_heuristics`** (default: `True`): Whether to use join heuristics
+  to estimate row-count and unique-count statistics. These statistics may only
+  be collected when they are actually needed for query planning. These statistics
+  may only be collected when they are actually needed for query planning and when
+  row-count statistics are available for the underlying datasource (e.g. Parquet
+  and in-memory LazyFrame data). This option can also be set via the `CUDF_POLARS__EXECUTOR__STATS_PLANNING__USE_JOIN_HEURISTICS` environment variable.
+
+- **`use_sampling`** (default: `True`): Whether to sample real data to estimate
+  unique-value statistics. These statistics may only be collected when they are
+  actually needed for query planning and if the underlying datasource supports
+  sampling (e.g. Parquet and in-memory LazyFrame data). This option can also be
+  set via the
+  `CUDF_POLARS__EXECUTOR__STATS_PLANNING__USE_SAMPLING` environment variable.
+
+- **`default_selectivity`** (default: `0.8`): The default selectivity of a
+  predicate, used for estimating how much a filter operation will reduce the
+  number of rows. This can also be set via the
+  `CUDF_POLARS__EXECUTOR__STATS_PLANNING__DEFAULT_SELECTIVITY` environment variable.
+
+For example, to enable reduction planning via environment variables:
+
+```bash
+export CUDF_POLARS__EXECUTOR__STATS_PLANNING__REDUCTION_PLANNING=True
+```
+
+## How it works: Storing statistics
+
+The following classes are used to store column statistics (listed
+in order of decreasing granularity):
+
+- `ColumnStat`: This class is used to store an individual column
+statistic (e.g. row count or unique-value count). Each object
+has two important attributes:
+  - `ColumnStat.value`: Returns the actual column-statistic value
+  (e.g. an `int` if the statistic is a row-count) or `None` if no
+  estimate is available.
+  - `ColumnStat.exact`: Whether the statistic is known "exactly".
+- `UniqueStats`: Since we usually sample both the unique-value
+**count** and the unique-value **fraction** of a column at once,
+we use `UniqueStats` to group these `ColumnStat`s into one object.
+- `DataSourceInfo`: This class is used to sample and store
+`ColumnStat`/`UniqueStats` objects associated with a single
+datasource (e.g. a Parquet dataset or in-memory `DataFrame`).
+  - Since it can be expensive to sample datasource statistics,
+  this class is specifically designed to enable **lazy** and
+  **aggregated** column sampling via sub-classing. For example,
+  The `ParquetSourceInfo` sub-class uses caching to avoid
+  redundant file-system access.
+- `ColumnSourceInfo`: This class wraps a `DataSourceInfo` object.
+Since `DataSourceInfo` tracks information for an entire table, we use
+`ColumnSourceInfo` to provide a single-column view of the object.
+- `ColumnStats`: This class is used to group together the "base"
+`ColumnSourceInfo` reference and the local unique-count estimate
+for a specific IR + column combination. We bundle these references
+together to simplify the design and maintenance of `StatsCollector`.
+**NOTE:** The local unique-count estimate is not yet populated.
+- `JoinKey`: This class is used to define a set of columns being
+joined on and the estimated unique-value count of the key.
+- `JoinInfo`: This class is used to define the necessary data
+structures for applying join heuristics to our query plan.
+Each object contains the following attributes:
+  - `JoinInfo.key_map`: Returns a mapping between distinct
+  `JoinKey` objects that are joined on in the query plan.
+  - `JoinInfo.col_map`: Returns a mapping between distinct
+  `ColumnStats` objects that are joined on in the query plan.
+  - `JoinInfo.join_map`: Returns a mapping between each IR node
+  and the associated `JoinKey` objects.
+- `StatsCollector`: This class is used to collect and store
+statistics for all IR nodes within a single query. The statistics
+attached to each IR node refer to the **output** columns of the
+IR node in question. The `StatsCollector` class is especially important,
+because it is used to organize **all** statistics within a logical plan.
+Each object has two important attributes:
+  - `StatsCollector.row_count`: Returns a mapping between each IR
+  node and the row-count `ColumnStat` estimate for that node.
+  **NOTE:** This attribute is not yet populated.
+  - `StatsCollector.column_stats`: Returns a mapping between each IR
+  node and the `dict[str, ColumnStats]` mapping for that node.
+  - `StatsCollector.join_info`: Returns a `JoinInfo` object.
+
+## How it works: Collecting statistics
+
+The top-level API for collecting statistics is
+`cudf_polars.experimental.statistics.collect_statistics`. This
+function performs the following steps:
+
+1. **Collect base statistics**: We build an outline of the statistics that
+   will be collected before any real data is sampled. No Parquet metadata
+   reading or unique-value sampling occurs during this step.
+
+   The top-level API for this "base-statistics" step is
+   `cudf_polars.experimental.statistics.collect_base_stats`. This
+   function calls into the `initialize_column_stats` single-dispatch
+   function to collect a `dict[str, ColumnStats]` mapping for each
+   IR node in the logical plan.
+
+   The IR-specific logic for each `initialize_column_stats` dispatch is
+   relatively simple, because the only goal is to initialize and propagate
+   the underlying `DataSourceInfo` reference and child-`ColumnStats`
+   references for each column.
+
+   This means that most IR classes simply need to propagate reference
+   from child-IR nodes. However, `Scan` and `DataFrameScan` objects
+   must initialize the root `DataSourceInfo` objects. In order to
+   avoid redundant unique-value sampling during later steps, we
+   also need any IR node containing a unique-value reduction (e.g.
+   `Distinct`, `GroupBy`, and `Select(unique)`) to update
+   `unique_stats_columns` for each of its `DataSourceInfo` references.
+
+2. **Apply PK-FK heuristics** (if enabled): We use primary key-foreign key heuristics
+   to estimate the unique count for each join key. Parquet metadata is used to
+   estimate row counts for each table source during this step, but no unique-value
+   sampling is performed yet.
+
+3. **Update statistics for each node**: We set local row-count and unique-value
+   statistics on each node in the IR graph. This step performs unique-value
+   sampling, but only for columns within the `unique_stats_columns` set for
+   the corresponding `DataSourceInfo` object (populated during the first step).
+   Whenever a datasource object has non-empty `unique_stats_columns`, all
+   columns in that set are sampled at the same time (to minimize file-system
+   operations).
+
+## How it works: Using statistics
+
+Base `DataSourceInfo` references are currently used to calculate
+the partition count when a Parquet-based `Scan` node is lowered
+by the `cudf-polars` streaming executor. This behavior does **not**
+currently depend on the `StatsPlanningOptions` configuration.
+
+If the `StatsPlanningOptions.enable` configuration is set to `True`,
+cudf-polars will use unique-value and row-count statistics to
+estimate the ideal output-partition count for reduction operations
+like `Distinct`, `GroupBy`, and `Select(unique)`. If column statistics
+is **not** enabled, the user-provided `unique_fraction` configuration
+may be necessary for reductions on high-cardinality columns. Otherwise,
+the default tree-reduction algorithm may have insufficient GPU memory.
 
 # Containers
 

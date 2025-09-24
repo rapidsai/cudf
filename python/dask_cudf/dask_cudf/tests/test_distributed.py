@@ -1,6 +1,5 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
-import numba.cuda
 import pytest
 
 import dask
@@ -9,6 +8,7 @@ from dask.distributed import Client
 from distributed.utils_test import cleanup, loop, loop_in_thread  # noqa: F401
 
 import cudf
+import rmm
 from cudf.testing import assert_eq
 
 import dask_cudf
@@ -17,7 +17,7 @@ dask_cuda = pytest.importorskip("dask_cuda")
 
 
 def at_least_n_gpus(n):
-    ngpus = len(numba.cuda.gpus)
+    ngpus = rmm._cuda.gpu.getDeviceCount()
     return ngpus >= n
 
 
@@ -26,7 +26,7 @@ def test_basic(loop, delayed):  # noqa: F811
     with dask_cuda.LocalCUDACluster(loop=loop) as cluster:
         with Client(cluster):
             pdf = dask.datasets.timeseries(dtypes={"x": int}).reset_index()
-            gdf = pdf.map_partitions(cudf.DataFrame.from_pandas)
+            gdf = pdf.map_partitions(cudf.DataFrame)
             if delayed:
                 gdf = dd.from_delayed(gdf.to_delayed())
             assert_eq(pdf.head(), gdf.head())
@@ -57,7 +57,7 @@ def test_merge():
     not at_least_n_gpus(2), reason="Machine does not have two GPUs"
 )
 def test_ucx_seriesgroupby():
-    pytest.importorskip("ucp")
+    pytest.importorskip("distributed_ucxx")
 
     # Repro Issue#3913
     with dask_cuda.LocalCUDACluster(n_workers=2, protocol="ucx") as cluster:

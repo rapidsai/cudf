@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@
 
 #include <cudf/ast/detail/expression_evaluator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/table/experimental/row_operators.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -30,13 +29,12 @@
 namespace cudf {
 namespace detail {
 
-using row_hash =
-  cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
-                                                   cudf::nullate::DYNAMIC>;
+using row_hash = cudf::detail::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
+                                                            cudf::nullate::DYNAMIC>;
 
 // // This alias is used by mixed_joins, which support only non-nested types
-using row_equality = cudf::experimental::row::equality::strong_index_comparator_adapter<
-  cudf::experimental::row::equality::device_row_comparator<false, cudf::nullate::DYNAMIC>>;
+using row_equality = cudf::detail::row::equality::strong_index_comparator_adapter<
+  cudf::detail::row::equality::device_row_comparator<false, cudf::nullate::DYNAMIC>>;
 
 /**
  * @brief Equality comparator for use with cuco map methods that require expression evaluation.
@@ -77,32 +75,24 @@ template <bool has_nulls>
 struct single_expression_equality : expression_equality<has_nulls> {
   using expression_equality<has_nulls>::expression_equality;
 
-  // The parameters are build/probe rather than left/right because the operator
-  // is called by cuco's kernels with parameters in this order (note that this
-  // is an implementation detail that we should eventually stop relying on by
-  // defining operators with suitable heterogeneous typing). Rather than
-  // converting to left/right semantics, we can operate directly on build/probe
-  // until we get to the expression evaluator, which needs to convert back to
-  // left/right semantics because the conditional expression need not be
-  // commutative.
-  // TODO: The input types should really be size_type.
-  __device__ __forceinline__ bool operator()(hash_value_type const build_row_index,
-                                             hash_value_type const probe_row_index) const noexcept
+  __device__ __forceinline__ bool operator()(size_type const left_index,
+                                             size_type const right_index) const noexcept
   {
-    using cudf::experimental::row::lhs_index_type;
-    using cudf::experimental::row::rhs_index_type;
+    using cudf::detail::row::lhs_index_type;
+    using cudf::detail::row::rhs_index_type;
 
     auto output_dest = cudf::ast::detail::value_expression_result<bool, has_nulls>();
     // Two levels of checks:
     // 1. The contents of the columns involved in the equality condition are equal.
     // 2. The predicate evaluated on the relevant columns (already encoded in the evaluator)
     // evaluates to true.
-    if (this->equality_probe(lhs_index_type{probe_row_index}, rhs_index_type{build_row_index})) {
-      auto const lrow_idx = this->swap_tables ? build_row_index : probe_row_index;
-      auto const rrow_idx = this->swap_tables ? probe_row_index : build_row_index;
+    if (this->equality_probe(lhs_index_type{left_index}, rhs_index_type{right_index})) {
+      // For the AST evaluator, we need to map back to left/right table semantics
+      auto const left_table_idx  = this->swap_tables ? right_index : left_index;
+      auto const right_table_idx = this->swap_tables ? left_index : right_index;
       this->evaluator.evaluate(output_dest,
-                               static_cast<size_type>(lrow_idx),
-                               static_cast<size_type>(rrow_idx),
+                               static_cast<size_type>(left_table_idx),
+                               static_cast<size_type>(right_table_idx),
                                0,
                                this->thread_intermediate_storage);
       return (output_dest.is_valid() && output_dest.value());
@@ -129,19 +119,11 @@ template <bool has_nulls>
 struct pair_expression_equality : public expression_equality<has_nulls> {
   using expression_equality<has_nulls>::expression_equality;
 
-  // The parameters are build/probe rather than left/right because the operator
-  // is called by cuco's kernels with parameters in this order (note that this
-  // is an implementation detail that we should eventually stop relying on by
-  // defining operators with suitable heterogeneous typing). Rather than
-  // converting to left/right semantics, we can operate directly on build/probe
-  // until we get to the expression evaluator, which needs to convert back to
-  // left/right semantics because the conditional expression need not be
-  // commutative.
   __device__ __forceinline__ bool operator()(pair_type const& build_row,
                                              pair_type const& probe_row) const noexcept
   {
-    using cudf::experimental::row::lhs_index_type;
-    using cudf::experimental::row::rhs_index_type;
+    using cudf::detail::row::lhs_index_type;
+    using cudf::detail::row::rhs_index_type;
 
     auto output_dest = cudf::ast::detail::value_expression_result<bool, has_nulls>();
     // Three levels of checks:
@@ -170,8 +152,8 @@ struct double_row_equality_comparator {
 
   __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const noexcept
   {
-    using experimental::row::lhs_index_type;
-    using experimental::row::rhs_index_type;
+    using detail::row::lhs_index_type;
+    using detail::row::rhs_index_type;
 
     return equality_comparator(lhs_index_type{lhs_row_index}, rhs_index_type{rhs_row_index}) &&
            conditional_comparator(lhs_index_type{lhs_row_index}, rhs_index_type{rhs_row_index});

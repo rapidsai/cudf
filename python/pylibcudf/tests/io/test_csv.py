@@ -131,7 +131,7 @@ def test_read_csv_byte_range(table_data, chunk_size, tmp_path):
     tbls = []
     for tbl_w_meta in tbls_w_meta:
         if tbl_w_meta.tbl.num_rows() > 0:
-            tbls.append(plc.interop.to_arrow(tbl_w_meta.tbl))
+            tbls.append(tbl_w_meta.tbl.to_arrow())
     full_tbl = pa.concat_tables(tbls)
 
     full_tbl_plc = plc.io.TableWithMetadata(

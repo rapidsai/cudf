@@ -48,6 +48,12 @@ batched_args create_batched_nvcomp_args(device_span<device_span<uint8_t const> c
                                         rmm::cuda_stream_view stream);
 
 /**
+ * @brief Prepares device arrays of input pointers and sizes for use with nvCOMP temp size APIs.
+ */
+std::pair<rmm::device_uvector<void const*>, rmm::device_uvector<size_t>> create_get_temp_size_args(
+  device_span<device_span<uint8_t const> const> inputs, rmm::cuda_stream_view stream);
+
+/**
  * @brief Convert nvcomp statuses and output sizes into cuIO compression results.
  */
 void update_compression_results(device_span<nvcompStatus_t const> nvcomp_stats,

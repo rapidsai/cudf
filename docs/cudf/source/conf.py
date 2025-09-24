@@ -578,25 +578,10 @@ def on_missing_reference(app, env, node, contnode):
     return None
 
 
+# The following are erroneously warned due to
+# https://github.com/sphinx-doc/sphinx/issues/11225
 nitpick_ignore = [
-    # Erroneously warned in ParquetColumnSchema.name
-    ("py:class", "unicode"),
-    ("py:class", "SeriesOrIndex"),
-    ("py:class", "DataFrameOrSeries"),
     ("py:class", "Dtype"),
-    # The following are erroneously warned due to
-    # https://github.com/sphinx-doc/sphinx/issues/11225
-    ("py:obj", "cudf.DatetimeIndex.time"),
-    ("py:obj", "cudf.DatetimeIndex.date"),
-    ("py:obj", "cudf.Index.values_host"),
-    ("py:obj", "cudf.Index.transpose"),
-    ("py:obj", "cudf.Index.T"),
-    ("py:obj", "cudf.Index.to_flat_index"),
-    ("py:obj", "cudf.MultiIndex.to_flat_index"),
-    ("py:obj", "Series.pipe"),
-    ("py:obj", "DataFrame.pipe"),
-    ("py:meth", "pyarrow.Table.to_pandas"),
-    ("py:class", "abc.Hashable"),
     ("py:class", "cp.ndarray"),
     ("py:class", "pd.DataFrame"),
     ("py:class", "pandas.core.indexes.frozen.FrozenList"),
@@ -605,21 +590,11 @@ nitpick_ignore = [
     ("py:class", "pa.ListType"),
     ("py:class", "pa.Decimal128Type"),
     ("py:class", "ScalarLike"),
-    ("py:class", "ParentType"),
-    ("py:class", "pyarrow.lib.DataType"),
-    ("py:class", "pyarrow.lib.Table"),
-    ("py:class", "pyarrow.lib.Scalar"),
-    ("py:class", "pyarrow.lib.ChunkedArray"),
-    ("py:class", "pyarrow.lib.Array"),
     ("py:class", "StringColumn"),
     ("py:class", "ColumnLike"),
     ("py:class", "DtypeObj"),
     ("py:class", "pa.StructType"),
-    # TODO: Remove this when we figure out why typing_extensions doesn't seem
-    # to map types correctly for intersphinx
-    ("py:class", "typing_extensions.Self"),
-    ("py:class", "np.uint32"),
-    ("py:class", "np.uint64"),
+    ("py:class", "ArrowLike"),
 ]
 
 

@@ -25,6 +25,7 @@
 #include "single_pass_functors.cuh"
 
 #include <cudf/detail/aggregation/result_cache.hpp>
+#include <cudf/detail/utilities/cuda.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -45,6 +46,7 @@
 #include <vector>
 
 namespace cudf::groupby::detail::hash {
+
 /**
  * @brief Computes all aggregations from `requests` that require a single pass
  * over the data and stores the results in `sparse_results`
@@ -52,7 +54,6 @@ namespace cudf::groupby::detail::hash {
 template <typename SetType>
 rmm::device_uvector<cudf::size_type> compute_aggregations(
   int64_t num_rows,
-  bool skip_rows_with_nulls,
   bitmask_type const* row_bitmask,
   SetType& global_set,
   cudf::host_span<cudf::groupby::aggregation_request const> requests,
@@ -64,27 +65,45 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
   auto const d_agg_kinds                   = cudf::detail::make_device_uvector_async(
     agg_kinds, stream, rmm::mr::get_current_device_resource());
 
-  auto const grid_size =
-    max_occupancy_grid_size<typename SetType::ref_type<cuco::insert_and_find_tag>>(num_rows);
+  auto const grid_size = [&] {
+    auto const max_blocks_mapping =
+      max_active_blocks_mapping_kernel<typename SetType::ref_type<cuco::insert_and_find_tag>>();
+    auto const max_blocks_aggs = max_active_blocks_shmem_aggs_kernel();
+    // We launch the same grid size for both kernels, thus we need to take the minimum of the two.
+    auto const max_blocks    = std::min(max_blocks_mapping, max_blocks_aggs);
+    auto const max_grid_size = max_blocks * cudf::detail::num_multiprocessors();
+    auto const num_blocks =
+      cudf::util::div_rounding_up_safe(static_cast<size_type>(num_rows), GROUPBY_BLOCK_SIZE);
+    return std::min(max_grid_size, num_blocks);
+  }();
   auto const available_shmem_size = get_available_shared_memory_size(grid_size);
   auto const offsets_buffer_size  = compute_shmem_offsets_size(flattened_values.num_columns()) * 2;
   auto const data_buffer_size     = available_shmem_size - offsets_buffer_size;
-  auto const is_shared_memory_compatible = std::all_of(
-    requests.begin(), requests.end(), [&](cudf::groupby::aggregation_request const& request) {
-      if (cudf::is_dictionary(request.values.type())) { return false; }
-      // Ensure there is enough buffer space to store local aggregations up to the max cardinality
-      // for shared memory aggregations
-      auto const size = cudf::type_dispatcher<cudf::dispatch_storage_type>(request.values.type(),
-                                                                           size_of_functor{});
-      return data_buffer_size >= (size * GROUPBY_CARDINALITY_THRESHOLD);
+
+  // Check if any aggregation is SUM_WITH_OVERFLOW, which should always use global memory
+  auto const has_sum_with_overflow =
+    std::any_of(agg_kinds.begin(), agg_kinds.end(), [](aggregation::Kind k) {
+      return k == aggregation::SUM_WITH_OVERFLOW;
     });
 
+  auto const is_shared_memory_compatible =
+    !has_sum_with_overflow &&
+    std::all_of(
+      requests.begin(), requests.end(), [&](cudf::groupby::aggregation_request const& request) {
+        if (cudf::is_dictionary(request.values.type())) { return false; }
+        // Ensure there is enough buffer space to store local aggregations up to the max cardinality
+        // for shared memory aggregations
+        auto const size = cudf::type_dispatcher<cudf::dispatch_storage_type>(request.values.type(),
+                                                                             size_of_functor{});
+        return data_buffer_size >= (size * GROUPBY_CARDINALITY_THRESHOLD);
+      });
+
   // Performs naive global memory aggregations when the workload is not compatible with shared
-  // memory, such as when aggregating dictionary columns or when there is insufficient dynamic
-  // shared memory for shared memory aggregations.
+  // memory, such as when aggregating dictionary columns, when there is insufficient dynamic
+  // shared memory for shared memory aggregations, or when SUM_WITH_OVERFLOW aggregations are
+  // present.
   if (!is_shared_memory_compatible) {
     return compute_global_memory_aggs(num_rows,
-                                      skip_rows_with_nulls,
                                       row_bitmask,
                                       flattened_values,
                                       d_agg_kinds.data(),
@@ -113,7 +132,6 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
                           num_rows,
                           global_set_ref,
                           row_bitmask,
-                          skip_rows_with_nulls,
                           local_mapping_index.data(),
                           global_mapping_index.data(),
                           block_cardinality.data(),
@@ -147,7 +165,6 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
                              available_shmem_size,
                              num_rows,
                              row_bitmask,
-                             skip_rows_with_nulls,
                              local_mapping_index.data(),
                              global_mapping_index.data(),
                              block_cardinality.data(),
@@ -171,8 +188,7 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
                                                  d_agg_kinds.data(),
                                                  block_cardinality.data(),
                                                  stride,
-                                                 row_bitmask,
-                                                 skip_rows_with_nulls});
+                                                 row_bitmask});
     extract_populated_keys(global_set, populated_keys, stream);
   }
 

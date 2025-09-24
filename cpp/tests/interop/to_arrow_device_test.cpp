@@ -59,7 +59,7 @@ get_nanoarrow_cudf_table(cudf::size_type length)
   auto list_offsets_column = cudf::test::fixed_width_column_wrapper<int32_t>(
     test_data.list_offsets.begin(), test_data.list_offsets.end());
   auto [list_mask, list_nulls] = cudf::bools_to_mask(cudf::test::fixed_width_column_wrapper<bool>(
-    test_data.bool_data_validity.begin(), test_data.bool_data_validity.end()));
+    test_data.list_validity.begin(), test_data.list_validity.end()));
   columns.emplace_back(cudf::make_lists_column(length,
                                                list_offsets_column.release(),
                                                list_child_column.release(),

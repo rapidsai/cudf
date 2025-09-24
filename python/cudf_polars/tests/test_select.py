@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import decimal
+
 import pytest
 
 import polars as pl
@@ -25,6 +27,29 @@ def test_select():
     )
 
     assert_gpu_result_equal(query)
+
+
+def test_select_decimal():
+    ldf = pl.LazyFrame(
+        {"a": pl.Series(values=[decimal.Decimal("1.0"), None], dtype=pl.Decimal(3, 1))}
+    )
+    query = ldf.select(pl.col("a"))
+    assert_gpu_result_equal(query)
+
+
+def test_select_decimal_precision_none_result_max_precision():
+    ldf = pl.LazyFrame(
+        {
+            "a": pl.Series(
+                values=[decimal.Decimal("1.0"), None], dtype=pl.Decimal(None, 1)
+            )
+        }
+    )
+    query = ldf.select(pl.col("a"))
+    cpu_result = query.collect()
+    gpu_result = query.collect(engine="gpu")
+    assert cpu_result.schema["a"].precision is None
+    assert gpu_result.schema["a"].precision == 38
 
 
 def test_select_reduce():

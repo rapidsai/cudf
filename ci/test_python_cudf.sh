@@ -43,6 +43,7 @@ rapids-logger "pytest cudf"
 
 rapids-logger "pytest for cudf benchmarks"
 ./ci/run_cudf_pytest_benchmarks.sh \
+  --benchmark-disable \
   --numprocesses=8 \
   --dist=worksteal \
   --cov-config=.coveragerc \
@@ -52,6 +53,7 @@ rapids-logger "pytest for cudf benchmarks"
 
 rapids-logger "pytest for cudf benchmarks using pandas"
 ./ci/run_cudf_pandas_pytest_benchmarks.sh \
+  --benchmark-disable \
   --numprocesses=8 \
   --dist=worksteal \
   --cov-config=.coveragerc \

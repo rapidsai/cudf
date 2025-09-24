@@ -12,16 +12,20 @@ from cudf_polars.dsl import expr
 from cudf_polars.dsl.expr import Col, Len
 from cudf_polars.dsl.ir import Empty, HConcat, Scan, Select, Union
 from cudf_polars.dsl.traversal import traversal
-from cudf_polars.experimental.base import PartitionInfo
+from cudf_polars.experimental.base import ColumnStat, PartitionInfo
 from cudf_polars.experimental.dispatch import lower_ir_node
 from cudf_polars.experimental.expressions import decompose_expr_graph
-from cudf_polars.experimental.utils import _lower_ir_fallback
+from cudf_polars.experimental.utils import (
+    _contains_unsupported_fill_strategy,
+    _lower_ir_fallback,
+)
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.parallel import LowerIRTransformer
+    from cudf_polars.experimental.statistics import StatsCollector
     from cudf_polars.utils.config import ConfigOptions
 
 
@@ -30,6 +34,7 @@ def decompose_select(
     input_ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
+    stats: StatsCollector,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     """
     Decompose a multi-partition Select operation.
@@ -49,6 +54,8 @@ def decompose_select(
         associated partitioning information.
     config_options
         GPUEngine configuration options.
+    stats
+        Statistics collector.
 
     Returns
     -------
@@ -71,7 +78,12 @@ def decompose_select(
     for ne in select_ir.exprs:
         # Decompose this partial expression
         new_ne, partial_input_ir, _partition_info = decompose_expr_graph(
-            ne, input_ir, partition_info, config_options
+            ne,
+            input_ir,
+            partition_info,
+            config_options,
+            stats.row_count.get(select_ir.children[0], ColumnStat[int](None)),
+            stats.column_stats.get(select_ir.children[0], {}),
         )
         pi = _partition_info[partial_input_ir]
         partial_input_ir = Select(
@@ -107,6 +119,17 @@ def _(
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     child, partition_info = rec(ir.children[0])
     pi = partition_info[child]
+    if pi.count > 1 and _contains_unsupported_fill_strategy(
+        [e.value for e in ir.exprs]
+    ):
+        return _lower_ir_fallback(
+            ir.reconstruct([child]),
+            rec,
+            msg=(
+                "fill_null with strategy other than 'zero' or 'one' is not supported "
+                "for multiple partitions; falling back to in-memory evaluation."
+            ),
+        )
     if (
         pi.count == 1
         and Select._is_len_expr(ir.exprs)
@@ -121,7 +144,7 @@ def _(
         dtype = ir.exprs[0].value.dtype
 
         lit_expr = expr.LiteralColumn(
-            dtype, pl.Series(values=[count], dtype=dtype.polars)
+            dtype, pl.Series(values=[count], dtype=dtype.polars_type)
         )
         named_expr = expr.NamedExpr(ir.exprs[0].name or "len", lit_expr)
 
@@ -138,7 +161,7 @@ def _(
         isinstance(expr, (Col, Len)) for expr in traversal([e.value for e in ir.exprs])
     ):
         # Special Case: Selection does not depend on any columns.
-        new_node = ir.reconstruct([input_ir := Empty()])
+        new_node = ir.reconstruct([input_ir := Empty({})])
         partition_info[input_ir] = partition_info[new_node] = PartitionInfo(count=1)
         return new_node, partition_info
 
@@ -149,7 +172,11 @@ def _(
         try:
             # Try decomposing the underlying expressions
             return decompose_select(
-                ir, child, partition_info, rec.state["config_options"]
+                ir,
+                child,
+                partition_info,
+                rec.state["config_options"],
+                rec.state["stats"],
             )
         except NotImplementedError:
             return _lower_ir_fallback(

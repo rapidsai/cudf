@@ -20,6 +20,7 @@
 #include "io/parquet/reader_impl_helpers.hpp"
 #include "io/utilities/row_selection.hpp"
 
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/logger.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
@@ -72,10 +73,22 @@ namespace {
 
 metadata::metadata(cudf::host_span<uint8_t const> footer_bytes)
 {
+  CUDF_FUNC_RANGE();
+
   CompactProtocolReader cp(footer_bytes.data(), footer_bytes.size());
   cp.read(this);
   CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
   sanitize_schema();
+}
+
+aggregate_reader_metadata::aggregate_reader_metadata(FileMetaData const& parquet_metadata,
+                                                     bool use_arrow_schema,
+                                                     bool has_cols_from_mismatched_srcs)
+  : aggregate_reader_metadata_base({}, false, false)
+{
+  // Just copy over the FileMetaData struct to the internal metadata struct
+  per_file_metadata = std::vector<metadata_base>{metadata{parquet_metadata}.get_file_metadata()};
+  initialize_internals(use_arrow_schema, has_cols_from_mismatched_srcs);
 }
 
 aggregate_reader_metadata::aggregate_reader_metadata(cudf::host_span<uint8_t const> footer_bytes,
@@ -85,15 +98,26 @@ aggregate_reader_metadata::aggregate_reader_metadata(cudf::host_span<uint8_t con
 {
   // Re-initialize internal variables here as base class was initialized without a source
   per_file_metadata = std::vector<metadata_base>{metadata{footer_bytes}.get_file_metadata()};
-  keyval_maps       = collect_keyval_metadata();
-  schema_idx_maps   = init_schema_idx_maps(has_cols_from_mismatched_srcs);
-  num_rows          = calc_num_rows();
-  num_row_groups    = calc_num_row_groups();
+  initialize_internals(use_arrow_schema, has_cols_from_mismatched_srcs);
+}
 
-  // Force all columns to be nullable
+void aggregate_reader_metadata::initialize_internals(bool use_arrow_schema,
+                                                     bool has_cols_from_mismatched_srcs)
+{
+  keyval_maps     = collect_keyval_metadata();
+  schema_idx_maps = init_schema_idx_maps(has_cols_from_mismatched_srcs);
+  num_rows        = calc_num_rows();
+  num_row_groups  = calc_num_row_groups();
+
+  // Force all non-nullable (REQUIRED) columns to be nullable without modifying REPEATED columns to
+  // preserve list structures
   auto& schema = per_file_metadata.front().schema;
-  std::for_each(schema.begin(), schema.end(), [](auto& col) {
-    col.repetition_type = FieldRepetitionType::OPTIONAL;
+  std::for_each(schema.begin() + 1, schema.end(), [](auto& col) {
+    // TODO: Store information of whichever column schema we modified here and restore it to
+    // `REQUIRED` if we end up not pruning any pages out of it
+    if (col.repetition_type == FieldRepetitionType::REQUIRED) {
+      col.repetition_type = FieldRepetitionType::OPTIONAL;
+    }
   });
 
   // Collect and apply arrow:schema from Parquet's key value metadata section
@@ -239,15 +263,9 @@ aggregate_reader_metadata::select_payload_columns(
                                                               int schema_idx) {
     auto const& schema_elem     = get_schema(schema_idx);
     std::string const curr_path = path_till_now + schema_elem.name;
-    // If the current path is not a filter column, then add it and its children to the list of valid
-    // payload columns
-    if (filter_columns_set.count(curr_path) == 0) {
-      valid_payload_columns.push_back(curr_path);
-      // Add all children as well
-      for (auto const& child_idx : schema_elem.children_idx) {
-        add_column_path(curr_path + ".", child_idx);
-      }
-    }
+    // Add the current path to the list of valid payload columns if it is not a filter column
+    // TODO: Add children when AST filter expressions start supporting nested struct columns
+    if (filter_columns_set.count(curr_path) == 0) { valid_payload_columns.push_back(curr_path); }
   };
 
   // Add all but filter columns to valid payload columns
@@ -260,44 +278,6 @@ aggregate_reader_metadata::select_payload_columns(
   // Call the base `select_columns()` method with all but filter columns
   return select_columns(
     valid_payload_columns, {}, include_index, strings_to_categorical, timestamp_type_id);
-}
-
-std::tuple<cudf::size_type, std::vector<row_group_info>>
-aggregate_reader_metadata::select_row_groups(
-  host_span<std::vector<cudf::size_type> const> row_group_indices)
-{
-  // Hybrid scan reader does not support skip rows or num rows
-  auto rows_to_read = cudf::size_type{0};
-
-  // Vector to hold the `row_group_info` of selected row groups
-  std::vector<row_group_info> selection;
-  // Number of rows in each data source
-  std::vector<size_t> num_rows_per_source(per_file_metadata.size(), 0);
-
-  CUDF_EXPECTS(row_group_indices.size() == per_file_metadata.size(),
-               "Must specify row groups for each source");
-
-  auto total_row_groups = 0;
-  for (size_t src_idx = 0; src_idx < row_group_indices.size(); ++src_idx) {
-    auto const& fmd = per_file_metadata[src_idx];
-    for (auto const& rowgroup_idx : row_group_indices[src_idx]) {
-      CUDF_EXPECTS(rowgroup_idx >= 0 and std::cmp_less(rowgroup_idx, fmd.row_groups.size()),
-                   "Invalid rowgroup index",
-                   std::invalid_argument);
-      auto const chunk_start_row  = rows_to_read;
-      auto const num_rows_this_rg = get_row_group(rowgroup_idx, src_idx).num_rows;
-      rows_to_read += num_rows_this_rg;
-      num_rows_per_source[src_idx] += num_rows_this_rg;
-      selection.emplace_back(rowgroup_idx, rows_to_read, src_idx);
-      // if page-level indexes are present, then collect extra chunk and page info.
-      column_info_for_row_group(selection.back(), chunk_start_row);
-      total_row_groups++;
-    }
-  }
-
-  CUDF_EXPECTS(total_row_groups > 0, "No row groups added");
-
-  return {rows_to_read, std::move(selection)};
 }
 
 std::vector<std::vector<cudf::size_type>> aggregate_reader_metadata::filter_row_groups_with_stats(

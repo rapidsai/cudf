@@ -30,7 +30,7 @@ cdef class PackedColumns:
 
     @staticmethod
     cdef PackedColumns from_libcudf(unique_ptr[packed_columns] data)
-    cpdef tuple release(self)
+    cpdef tuple release(self, Stream stream=*)
 
 cdef class ChunkedPack:
     cdef unique_ptr[chunked_pack] c_obj

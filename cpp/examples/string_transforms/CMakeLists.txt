@@ -18,50 +18,75 @@ include(../fetch_dependencies.cmake)
 include(rapids-cmake)
 rapids_cmake_build_type("Release")
 
+# For now, disable CMake's automatic module scanning for C++ files. There is an sccache bug in the
+# version RAPIDS uses in CI that causes it to handle the resulting -M* flags incorrectly with
+# gcc>=14. We can remove this once we upgrade to a newer sccache version.
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
+
 list(APPEND CUDF_CUDA_FLAGS --expt-extended-lambda --expt-relaxed-constexpr)
 
-add_executable(branching branching.cpp)
-target_compile_features(branching PRIVATE cxx_std_20)
-target_compile_options(branching PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
-target_link_libraries(branching PRIVATE cudf::cudf nvtx3::nvtx3-cpp)
-install(TARGETS branching DESTINATION bin/examples/libcudf)
-
-add_executable(branching_public branching_public.cpp)
-target_compile_features(branching_public PRIVATE cxx_std_20)
-target_compile_options(branching_public PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
-target_link_libraries(branching_public PRIVATE cudf::cudf nvtx3::nvtx3-cpp)
-install(TARGETS branching_public DESTINATION bin/examples/libcudf)
-
-add_executable(int_output int_output.cpp)
-target_compile_features(int_output PRIVATE cxx_std_20)
-target_compile_options(int_output PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
-target_link_libraries(int_output PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>)
-install(TARGETS int_output DESTINATION bin/examples/libcudf)
-
-add_executable(output output.cpp)
-target_compile_features(output PRIVATE cxx_std_20)
-target_compile_options(output PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
-target_link_libraries(output PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>)
-install(TARGETS output DESTINATION bin/examples/libcudf)
-
-add_executable(output_public output_public.cpp)
-target_compile_features(output_public PRIVATE cxx_std_20)
-target_compile_options(output_public PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
-target_link_libraries(output_public PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>)
-install(TARGETS output_public DESTINATION bin/examples/libcudf)
-
-add_executable(preallocated preallocated.cpp)
-target_compile_features(preallocated PRIVATE cxx_std_20)
-target_compile_options(preallocated PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
-target_link_libraries(preallocated PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>)
-install(TARGETS preallocated DESTINATION bin/examples/libcudf)
-
-add_executable(preallocated_public preallocated_public.cpp)
-target_compile_features(preallocated_public PRIVATE cxx_std_20)
-target_compile_options(preallocated_public PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
-target_link_libraries(
-  preallocated_public PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
+add_executable(compute_checksum_jit compute_checksum_jit.cpp)
+target_compile_features(compute_checksum_jit PRIVATE cxx_std_20)
+target_compile_options(
+  compute_checksum_jit PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
 )
-install(TARGETS preallocated_public DESTINATION bin/examples/libcudf)
+target_link_libraries(
+  compute_checksum_jit PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
+)
+install(TARGETS compute_checksum_jit DESTINATION bin/examples/libcudf/string_transformers)
 
-install(FILES ${CMAKE_CURRENT_LIST_DIR}/info.csv DESTINATION bin/examples/libcudf)
+add_executable(extract_email_jit extract_email_jit.cpp)
+target_compile_features(extract_email_jit PRIVATE cxx_std_20)
+target_compile_options(extract_email_jit PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
+target_link_libraries(
+  extract_email_jit PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
+)
+install(TARGETS extract_email_jit DESTINATION bin/examples/libcudf/string_transformers)
+
+add_executable(extract_email_precompiled extract_email_precompiled.cpp)
+target_compile_features(extract_email_precompiled PRIVATE cxx_std_20)
+target_compile_options(
+  extract_email_precompiled PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
+)
+target_link_libraries(
+  extract_email_precompiled PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
+)
+install(TARGETS extract_email_precompiled DESTINATION bin/examples/libcudf/string_transformers)
+
+add_executable(format_phone_jit format_phone_jit.cpp)
+target_compile_features(format_phone_jit PRIVATE cxx_std_20)
+target_compile_options(format_phone_jit PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
+target_link_libraries(format_phone_jit PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>)
+install(TARGETS format_phone_jit DESTINATION bin/examples/libcudf/string_transformers)
+
+add_executable(format_phone_precompiled format_phone_precompiled.cpp)
+target_compile_features(format_phone_precompiled PRIVATE cxx_std_20)
+target_compile_options(
+  format_phone_precompiled PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
+)
+target_link_libraries(
+  format_phone_precompiled PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
+)
+install(TARGETS format_phone_precompiled DESTINATION bin/examples/libcudf/string_transformers)
+
+add_executable(localize_phone_jit localize_phone_jit.cpp)
+target_compile_features(localize_phone_jit PRIVATE cxx_std_20)
+target_compile_options(localize_phone_jit PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
+target_link_libraries(
+  localize_phone_jit PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
+)
+install(TARGETS localize_phone_jit DESTINATION bin/examples/libcudf/string_transformers)
+
+add_executable(localize_phone_precompiled localize_phone_precompiled.cpp)
+target_compile_features(localize_phone_precompiled PRIVATE cxx_std_20)
+target_compile_options(
+  localize_phone_precompiled PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
+)
+target_link_libraries(
+  localize_phone_precompiled PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
+)
+install(TARGETS localize_phone_precompiled DESTINATION bin/examples/libcudf/string_transformers)
+
+install(FILES ${CMAKE_CURRENT_LIST_DIR}/info.csv
+        DESTINATION bin/examples/libcudf/string_transformers
+)

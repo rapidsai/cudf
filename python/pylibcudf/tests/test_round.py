@@ -27,6 +27,6 @@ def test_round(column, round_mode, decimals):
         "half_to_even": plc.round.RoundingMethod.HALF_EVEN,
     }[round_mode]
     got = plc.round.round(column, decimals, method)
-    expect = pc.round(plc.interop.to_arrow(column), decimals, round_mode)
+    expect = pc.round(column.to_arrow(), decimals, round_mode)
 
     assert_column_eq(expect, got)

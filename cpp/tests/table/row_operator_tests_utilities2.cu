@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@ std::unique_ptr<cudf::column> self_comparison(cudf::table_view input,
   rmm::cuda_stream_view stream{cudf::get_default_stream()};
 
   auto const table_comparator =
-    cudf::experimental::row::lexicographic::self_comparator{input, column_order, {}, stream};
+    cudf::detail::row::lexicographic::self_comparator{input, column_order, {}, stream};
 
   auto output = cudf::make_numeric_column(
     cudf::data_type(cudf::type_id::BOOL8), input.num_rows(), cudf::mask_state::UNALLOCATED);

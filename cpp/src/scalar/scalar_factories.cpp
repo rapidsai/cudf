@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,25 +27,22 @@ namespace cudf {
 namespace {
 struct scalar_construction_helper {
   template <typename T,
-            typename ScalarType                                                = scalar_type_t<T>,
             std::enable_if_t<is_fixed_width<T>() and not is_fixed_point<T>()>* = nullptr>
   std::unique_ptr<scalar> operator()(rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr) const
   {
-    using Type = device_storage_type_t<T>;
-    auto s     = new ScalarType(Type{}, false, stream, mr);
-    return std::unique_ptr<scalar>(s);
+    using Type       = device_storage_type_t<T>;
+    using ScalarType = scalar_type_t<T>;
+    return std::make_unique<ScalarType>(Type{}, false, stream, mr);
   }
 
-  template <typename T,
-            typename ScalarType                    = scalar_type_t<T>,
-            std::enable_if_t<is_fixed_point<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<is_fixed_point<T>()>* = nullptr>
   std::unique_ptr<scalar> operator()(rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr) const
   {
-    using Type = device_storage_type_t<T>;
-    auto s     = new ScalarType(Type{}, numeric::scale_type{0}, false, stream, mr);
-    return std::unique_ptr<scalar>(s);
+    using Type       = device_storage_type_t<T>;
+    using ScalarType = scalar_type_t<T>;
+    return std::make_unique<ScalarType>(Type{}, numeric::scale_type{0}, false, stream, mr);
   }
 
   template <typename T, typename... Args, std::enable_if_t<not is_fixed_width<T>()>* = nullptr>

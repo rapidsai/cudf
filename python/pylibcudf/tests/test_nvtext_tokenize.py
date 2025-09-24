@@ -62,7 +62,7 @@ def test_character_tokenize(input_col):
     got = plc.nvtext.tokenize.character_tokenize(
         plc.Column.from_arrow(input_col)
     )
-    expect = pa.array(["a", "b", " ", "c", "d", ".", "e", ":", "f", ";"])
+    expect = pa.array([["a"], ["b", " ", "c"], ["d", ".", "e", ":", "f", ";"]])
     assert_column_eq(expect, got)
 
 
@@ -88,8 +88,8 @@ def test_tokenize_with_vocabulary(input_col, default_id):
         plc.Scalar.from_arrow(pa.scalar(" ")),
         default_id,
     )
-    expect_type = plc.interop.to_arrow(
-        got.type(), value_type=pa.list_(pa.int32()).value_type
+    expect_type = got.type().to_arrow(
+        value_type=pa.list_(pa.int32()).value_type
     )
     if default_id == -1:
         expect = pa.array([[0], [-1, -1], [2]], type=expect_type)

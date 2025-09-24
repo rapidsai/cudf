@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
@@ -14,6 +14,7 @@ from pylibcudf.libcudf.types cimport (
     order_info,
     sorted,
 )
+from rmm.librmm.cuda_stream_view cimport cuda_stream_view
 
 
 cdef extern from "cudf/quantiles.hpp" namespace "cudf" nogil:
@@ -24,6 +25,7 @@ cdef extern from "cudf/quantiles.hpp" namespace "cudf" nogil:
         interpolation interp,
         column_view ordered_indices,
         bool exact,
+        cuda_stream_view stream,
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[table] quantiles (
@@ -33,4 +35,5 @@ cdef extern from "cudf/quantiles.hpp" namespace "cudf" nogil:
         sorted is_input_sorted,
         vector[order] column_order,
         vector[null_order] null_precedence,
+        cuda_stream_view stream,
     ) except +libcudf_exception_handler

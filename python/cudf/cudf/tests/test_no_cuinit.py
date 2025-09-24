@@ -1,6 +1,5 @@
 # Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
-import os
 import subprocess
 import sys
 from shutil import which
@@ -40,7 +39,16 @@ def cuda_gdb(request):
         return gdb
 
 
-def test_cudf_import_no_cuinit(cuda_gdb):
+@pytest.mark.parametrize(
+    "cudf_call, should_be_initialized",
+    [
+        ("import cudf", False),
+        ("import cudf; cudf.Series([1])", True),
+    ],
+)
+def test_rapids_no_initialize_cuinit(
+    cuda_gdb, monkeypatch, cudf_call, should_be_initialized
+):
     # When RAPIDS_NO_INITIALIZE is set, importing cudf should _not_
     # create a CUDA context (i.e. cuInit should not be called).
     # Intercepting the call to cuInit programmatically is tricky since
@@ -50,62 +58,28 @@ def test_cudf_import_no_cuinit(cuda_gdb):
     # needs provide hooks that override dlsym, cuGetProcAddress, and
     # cuInit.
     # Instead, we just run under GDB and see if we hit a breakpoint
-    env = os.environ.copy()
-    env["RAPIDS_NO_INITIALIZE"] = "1"
-    output = subprocess.run(
-        [
-            cuda_gdb,
-            "-x",
-            "-",
-            "--args",
-            sys.executable,
-            "-c",
-            "import cudf",
-        ],
-        input=GDB_COMMANDS,
-        env=env,
-        capture_output=True,
-        text=True,
-        cwd="/",
-    )
+    with monkeypatch.context() as m:
+        m.setenv("RAPIDS_NO_INITIALIZE", "1")
+        output = subprocess.run(
+            [
+                cuda_gdb,
+                "-x",
+                "-",
+                "--args",
+                sys.executable,
+                "-c",
+                cudf_call,
+            ],
+            input=GDB_COMMANDS,
+            capture_output=True,
+            text=True,
+            cwd="/",
+        )
 
-    cuInit_called = output.stdout.find("in cuInit ()")
     print("Command output:\n")  # noqa: T201
     print("*** STDOUT ***")  # noqa: T201
     print(output.stdout)  # noqa: T201
     print("*** STDERR ***")  # noqa: T201
     print(output.stderr)  # noqa: T201
     assert output.returncode == 0
-    assert cuInit_called < 0
-
-
-def test_cudf_create_series_cuinit(cuda_gdb):
-    # This tests that our gdb scripting correctly identifies cuInit
-    # when it definitely should have been called.
-    env = os.environ.copy()
-    env["RAPIDS_NO_INITIALIZE"] = "1"
-    output = subprocess.run(
-        [
-            cuda_gdb,
-            "-x",
-            "-",
-            "--args",
-            sys.executable,
-            "-c",
-            "import cudf; cudf.Series([1])",
-        ],
-        input=GDB_COMMANDS,
-        env=env,
-        capture_output=True,
-        text=True,
-        cwd="/",
-    )
-
-    cuInit_called = output.stdout.find("in cuInit ()")
-    print("Command output:\n")  # noqa: T201
-    print("*** STDOUT ***")  # noqa: T201
-    print(output.stdout)  # noqa: T201
-    print("*** STDERR ***")  # noqa: T201
-    print(output.stderr)  # noqa: T201
-    assert output.returncode == 0
-    assert cuInit_called >= 0
+    assert ("in cuInit ()" in output.stdout) == should_be_initialized

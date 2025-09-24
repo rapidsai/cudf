@@ -23,17 +23,26 @@
 include_guard(GLOBAL)
 
 # This function finds arrow and sets any additional necessary environment variables.
-function(find_and_configure_arrow VERSION BUILD_STATIC EXCLUDE_FROM_ALL ENABLE_PARQUET)
+function(find_and_configure_arrow VERSION BUILD_STATIC EXCLUDE_FROM_ALL ENABLE_PARQUET
+         ENABLE_COMPUTE
+)
   if(BUILD_STATIC)
     if(TARGET arrow_static)
       set(ARROW_FOUND
           TRUE
           PARENT_SCOPE
       )
-      set(ARROW_LIBRARIES
-          arrow_static
-          PARENT_SCOPE
-      )
+      if(ENABLE_COMPUTE)
+        set(ARROW_LIBRARIES
+            arrow_static arrow_compute_static
+            PARENT_SCOPE
+        )
+      else()
+        set(ARROW_LIBRARIES
+            arrow_static
+            PARENT_SCOPE
+        )
+      endif()
       return()
     endif()
   else()
@@ -42,10 +51,17 @@ function(find_and_configure_arrow VERSION BUILD_STATIC EXCLUDE_FROM_ALL ENABLE_P
           TRUE
           PARENT_SCOPE
       )
-      set(ARROW_LIBRARIES
-          arrow_shared
-          PARENT_SCOPE
-      )
+      if(ENABLE_COMPUTE)
+        set(ARROW_LIBRARIES
+            arrow_shared arrow_compute_shared
+            PARENT_SCOPE
+        )
+      else()
+        set(ARROW_LIBRARIES
+            arrow_shared
+            PARENT_SCOPE
+        )
+      endif()
       return()
     endif()
   endif()
@@ -82,8 +98,9 @@ function(find_and_configure_arrow VERSION BUILD_STATIC EXCLUDE_FROM_ALL ENABLE_P
 
   rapids_cpm_find(
     Arrow ${VERSION}
-    GLOBAL_TARGETS arrow_shared parquet_shared arrow_acero_shared arrow_dataset_shared arrow_static
-                   parquet_static arrow_acero_static arrow_dataset_static
+    GLOBAL_TARGETS
+      arrow_shared parquet_shared arrow_acero_shared arrow_dataset_shared arrow_compute_shared
+      arrow_static parquet_static arrow_acero_static arrow_dataset_static arrow_compute_static
     CPM_ARGS
     GIT_REPOSITORY https://github.com/apache/arrow.git
     GIT_TAG apache-arrow-${VERSION}
@@ -91,6 +108,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC EXCLUDE_FROM_ALL ENABLE_P
     EXCLUDE_FROM_ALL ${EXCLUDE_FROM_ALL}
     OPTIONS "CMAKE_VERBOSE_MAKEFILE ON"
             "ARROW_ACERO ON"
+            "ARROW_COMPUTE ${ENABLE_COMPUTE}"
             "ARROW_IPC ON"
             "ARROW_DATASET ON"
             "ARROW_WITH_BACKTRACE ON"
@@ -124,9 +142,17 @@ function(find_and_configure_arrow VERSION BUILD_STATIC EXCLUDE_FROM_ALL ENABLE_P
   )
 
   if(BUILD_STATIC)
-    set(ARROW_LIBRARIES arrow_static)
+    if(ENABLE_COMPUTE)
+      set(ARROW_LIBRARIES arrow_static arrow_compute_static)
+    else()
+      set(ARROW_LIBRARIES arrow_static)
+    endif()
   else()
-    set(ARROW_LIBRARIES arrow_shared)
+    if(ENABLE_COMPUTE)
+      set(ARROW_LIBRARIES arrow_shared arrow_compute_shared)
+    else()
+      set(ARROW_LIBRARIES arrow_shared)
+    endif()
   endif()
 
   # Arrow_DIR:   set if CPM found Arrow on the system/conda/etc.
@@ -145,6 +171,9 @@ function(find_and_configure_arrow VERSION BUILD_STATIC EXCLUDE_FROM_ALL ENABLE_P
       # us
       set(ArrowDataset_DIR "${Arrow_DIR}")
       find_package(ArrowDataset REQUIRED QUIET)
+      # Set this to enable `find_package(ArrowCompute)`
+      set(ArrowCompute_DIR "${Arrow_DIR}")
+      find_package(ArrowCompute REQUIRED QUIET)
     endif()
     # Arrow_ADDED: set if CPM downloaded Arrow from Github
   elseif(Arrow_ADDED)
@@ -243,7 +272,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC EXCLUDE_FROM_ALL ENABLE_P
         BUILD Arrow
         VERSION ${VERSION}
         EXPORT_SET arrow_targets
-        GLOBAL_TARGETS arrow_shared arrow_static
+        GLOBAL_TARGETS arrow_shared arrow_static arrow_compute_static arrow_compute_shared
         NAMESPACE cudf::
         FINAL_CODE_BLOCK arrow_code_string
       )
@@ -288,6 +317,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC EXCLUDE_FROM_ALL ENABLE_P
           NAMESPACE cudf::
           FINAL_CODE_BLOCK arrow_dataset_code_string
         )
+
         set(parquet_code_string
             [=[
                 if (TARGET cudf::parquet_shared AND (NOT TARGET parquet_shared))
@@ -320,6 +350,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC EXCLUDE_FROM_ALL ENABLE_P
       rapids_export_package(BUILD Parquet cudf-exports)
       rapids_export_package(BUILD ArrowDataset cudf-exports)
     endif()
+    rapids_export_package(BUILD ArrowCompute cudf-exports)
 
     include("${rapids-cmake-dir}/export/find_package_root.cmake")
     rapids_export_find_package_root(
@@ -335,6 +366,9 @@ function(find_and_configure_arrow VERSION BUILD_STATIC EXCLUDE_FROM_ALL ENABLE_P
       EXPORT_SET cudf-exports
       CONDITION ENABLE_PARQUET
     )
+    rapids_export_find_package_root(
+      BUILD ArrowCompute [=[${CMAKE_CURRENT_LIST_DIR}]=] EXPORT_SET cudf-exports
+    )
   endif()
 
   set(ARROW_LIBRARIES
@@ -347,7 +381,7 @@ if(NOT DEFINED CUDF_VERSION_Arrow)
   set(CUDF_VERSION_Arrow
       # This version must be kept in sync with the libarrow version pinned for builds in
       # dependencies.yaml.
-      19.0.0
+      21.0.0
       CACHE STRING "The version of Arrow to find (or build)"
   )
 endif()
@@ -366,7 +400,11 @@ if(NOT DEFINED CUDF_ENABLE_ARROW_PARQUET)
   set(CUDF_ENABLE_ARROW_PARQUET OFF)
 endif()
 
+if(NOT DEFINED CUDF_ENABLE_ARROW_COMPUTE)
+  set(CUDF_ENABLE_ARROW_COMPUTE OFF)
+endif()
+
 find_and_configure_arrow(
   ${CUDF_VERSION_Arrow} ${CUDF_USE_ARROW_STATIC} ${CUDF_EXCLUDE_ARROW_FROM_ALL}
-  ${CUDF_ENABLE_ARROW_PARQUET}
+  ${CUDF_ENABLE_ARROW_PARQUET} ${CUDF_ENABLE_ARROW_COMPUTE}
 )

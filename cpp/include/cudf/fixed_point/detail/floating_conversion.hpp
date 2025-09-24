@@ -38,27 +38,27 @@ namespace detail {
  * @return The number of significant bits: the # of bits - # of leading zeroes
  */
 template <typename T,
-          CUDF_ENABLE_IF(std::is_same_v<T, uint32_t> || std::is_same_v<T, uint64_t> ||
-                         std::is_same_v<T, __uint128_t>)>
+          CUDF_ENABLE_IF(cuda::std::is_same_v<T, uint32_t> || cuda::std::is_same_v<T, uint64_t> ||
+                         cuda::std::is_same_v<T, __uint128_t>)>
 CUDF_HOST_DEVICE inline constexpr int count_significant_bits(T value)
 {
 #ifdef __CUDA_ARCH__
-  if constexpr (std::is_same_v<T, uint64_t>) {
+  if constexpr (cuda::std::is_same_v<T, uint64_t>) {
     return 64 - __clzll(static_cast<int64_t>(value));
-  } else if constexpr (std::is_same_v<T, uint32_t>) {
+  } else if constexpr (cuda::std::is_same_v<T, uint32_t>) {
     return 32 - __clz(static_cast<int32_t>(value));
-  } else if constexpr (std::is_same_v<T, __uint128_t>) {
+  } else if constexpr (cuda::std::is_same_v<T, __uint128_t>) {
     // 128 bit type, must break up into high and low components
     auto const high_bits = static_cast<int64_t>(value >> 64);
     auto const low_bits  = static_cast<int64_t>(value);
     return 128 - (__clzll(high_bits) + static_cast<int>(high_bits == 0) * __clzll(low_bits));
   }
 #else
-  if constexpr (std::is_same_v<T, uint64_t>) {
+  if constexpr (cuda::std::is_same_v<T, uint64_t>) {
     return 64 - cuda::std::countl_zero(value);
-  } else if constexpr (std::is_same_v<T, uint32_t>) {
+  } else if constexpr (cuda::std::is_same_v<T, uint32_t>) {
     return 32 - cuda::std::countl_zero(value);
-  } else if constexpr (std::is_same_v<T, __uint128_t>) {
+  } else if constexpr (cuda::std::is_same_v<T, __uint128_t>) {
     // 128 bit type, must break up into high and low components
     auto const high_bits = static_cast<uint64_t>(value >> 64);
     if (high_bits == 0) {
@@ -263,7 +263,7 @@ struct floating_converter {
     auto integer_rep = bit_cast_to_integer(floating);
 
     // Extract the currently stored (biased) exponent
-    using SignedType   = std::make_signed_t<IntegralType>;
+    using SignedType   = cuda::std::make_signed_t<IntegralType>;
     auto exponent_bits = integer_rep & exponent_mask;
     auto stored_pow2   = static_cast<SignedType>(exponent_bits >> num_stored_mantissa_bits);
 
@@ -550,13 +550,13 @@ struct shifting_constants {
   static constexpr bool is_double = cuda::std::is_same_v<FloatingType, double>;
 
   /// Integer type that can hold the value of the significand
-  using IntegerRep = std::conditional_t<is_double, uint64_t, uint32_t>;
+  using IntegerRep = cuda::std::conditional_t<is_double, uint64_t, uint32_t>;
 
   /// Num bits needed to hold the significand
   static constexpr auto num_significand_bits = cuda::std::numeric_limits<FloatingType>::digits;
 
   /// Shift data back and forth in space of a type with 2x the starting bits, to give us enough room
-  using ShiftingRep = std::conditional_t<is_double, __uint128_t, uint64_t>;
+  using ShiftingRep = cuda::std::conditional_t<is_double, __uint128_t, uint64_t>;
 
   // The significand of a float / double is 24 / 53 bits
   // However, to uniquely represent each double / float as different #'s in decimal

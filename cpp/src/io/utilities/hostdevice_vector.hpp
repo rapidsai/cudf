@@ -100,23 +100,6 @@ class hostdevice_vector {
   [[nodiscard]] T* d_end() { return device_ptr(size()); }
   [[nodiscard]] T const* d_end() const { return device_ptr(size()); }
 
-  /**
-   * @brief Returns the specified element from device memory
-   *
-   * @note This function incurs a device to host memcpy and should be used sparingly.
-   * @note This function synchronizes `stream`.
-   *
-   * @throws rmm::out_of_range exception if `element_index >= size()`
-   *
-   * @param element_index Index of the desired element
-   * @param stream The stream on which to perform the copy
-   * @return The value of the specified element
-   */
-  [[nodiscard]] T element(std::size_t element_index, rmm::cuda_stream_view stream) const
-  {
-    return d_data.element(element_index, stream);
-  }
-
   operator cudf::host_span<T>() { return host_span<T>{h_data}.subspan(0, size()); }
   operator cudf::host_span<T const>() const
   {

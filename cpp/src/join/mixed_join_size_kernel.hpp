@@ -87,5 +87,6 @@ std::size_t launch_compute_mixed_join_output_size(
   int64_t shmem_size_per_block,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
+
 }  // namespace detail
 }  // namespace CUDF_EXPORT cudf

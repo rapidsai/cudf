@@ -669,7 +669,7 @@ cpdef TableWithMetadata read_csv(
     ----------
     options: CsvReaderOptions
         Settings for controlling reading behavior
-    stream: Stream
+    stream : Stream | None
         CUDA stream used for device memory operations and kernel launches
     """
     cdef table_with_metadata c_result
@@ -875,7 +875,7 @@ cpdef void write_csv(
     ----------
     options: CsvWriterOptions
         Settings for controlling writing behavior
-    stream: Stream
+    stream : Stream | None
         CUDA stream used for device memory operations and kernel launches
     """
     cdef Stream s = _get_stream(stream)

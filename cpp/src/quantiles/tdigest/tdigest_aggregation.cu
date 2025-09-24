@@ -30,6 +30,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/fixed_point/conv.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/memory_resource.hpp>

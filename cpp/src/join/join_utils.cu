@@ -48,6 +48,12 @@ bool is_trivial_join(table_view const& left, table_view const& right, join_kind 
   // return immediately
   if ((join_kind::LEFT_SEMI_JOIN == join_type) && (0 == right.num_rows())) { return true; }
 
+  // If left semi- or anti- join, and the left table is empty, return immediately
+  if ((join_kind::LEFT_SEMI_JOIN == join_type || join_kind::LEFT_ANTI_JOIN == join_type) &&
+      (0 == left.num_rows())) {
+    return true;
+  }
+
   return false;
 }
 

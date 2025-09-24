@@ -37,7 +37,7 @@ def nrt_enabled():
     for a single kernel launch, so we use this context
     to enable it for those that we know need it.
     """
-    original_value = numba_config.CUDA_ENABLE_NRT
+    original_value = getattr(numba_config, "CUDA_ENABLE_NRT", False)
     numba_config.CUDA_ENABLE_NRT = True
     try:
         yield

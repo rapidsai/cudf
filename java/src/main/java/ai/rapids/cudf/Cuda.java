@@ -271,6 +271,16 @@ public class Cuda {
   }
 
   /**
+   * Gets the GPU UUID of the current device.
+   *
+   * @return UUID of the current device as a byte array.
+   */
+  public static byte[] getGpuUuid() {
+    return getNativeGpuUuid();
+  }
+
+
+  /**
    * Mapping: cudaMemGetInfo(size_t *free, size_t *total)
    */
   public static native CudaMemInfo memGetInfo() throws CudaException;
@@ -399,6 +409,14 @@ public class Cuda {
    * @throws CudaException on any error
    */
   static native int getNativeComputeMode() throws CudaException;
+
+  /**
+   * Gets the Gpu UUID of the current device.
+   *
+   * @return UUID of the current device as a byte array.
+   * @throws CudaException on any error
+   */
+  static native byte[] getNativeGpuUuid() throws CudaException;
 
   /**
    * Gets the major CUDA compute capability of the current device.

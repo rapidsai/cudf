@@ -164,7 +164,10 @@ __device__ void decode_fixed_width_values(
           // Reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS
           // TIME_MILLIS is the only duration type stored as int32:
           // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#deprecated-time-convertedtype
-          read_fixed_width_value_fast(s, sb, src_pos, static_cast<uint32_t*>(dst));
+          auto const dst_ptr = static_cast<uint32_t*>(dst);
+          read_fixed_width_value_fast(s, sb, src_pos, dst_ptr);
+          // zero out most significant bytes
+          cuda::std::memset(dst_ptr + 1, 0, sizeof(int32_t));
         } else if (s->ts_scale) {
           read_int64_timestamp(s, sb, src_pos, static_cast<int64_t*>(dst));
         } else {
@@ -894,32 +897,27 @@ __device__ inline bool maybe_has_nulls(page_state_s* s)
   return run_val != s->col.max_level[lvl];
 }
 
-template <int decode_block_size_t, typename state_buf>
-inline __device__ void bool_plain_decode(page_state_s* s, state_buf* sb, int t, int to_decode)
+template <typename state_buf, typename thread_group>
+inline __device__ void bool_plain_decode(page_state_s* s,
+                                         state_buf* sb,
+                                         int target_pos,
+                                         thread_group const& group)
 {
-  int pos              = s->dict_pos;
-  int const target_pos = pos + to_decode;
-  __syncthreads();  // Make sure all threads have read dict_pos before it changes at the end.
+  int const pos = s->dict_pos;
+  int const t   = group.thread_rank();
+  // Ensure all threads have the dict_pos
+  group.sync();
 
-  while (pos < target_pos) {
-    int const batch_len = min(target_pos - pos, decode_block_size_t);
+  for (auto bit_pos = pos + t; bit_pos < target_pos; bit_pos += group.size()) {
+    int const byte_offset       = bit_pos >> 3;
+    int const bit_in_byte_index = bit_pos & 7;
 
-    if (t < batch_len) {
-      int const bit_pos           = pos + t;
-      int const byte_offset       = bit_pos >> 3;
-      int const bit_in_byte_index = bit_pos & 7;
+    uint8_t const* const read_from = s->data_start + byte_offset;
+    bool const read_bit            = (*read_from) & (1 << bit_in_byte_index);
 
-      uint8_t const* const read_from = s->data_start + byte_offset;
-      bool const read_bit            = (*read_from) & (1 << bit_in_byte_index);
-
-      int const write_to_index     = rolling_index<state_buf::dict_buf_size>(bit_pos);
-      sb->dict_idx[write_to_index] = read_bit;
-    }
-
-    pos += batch_len;
+    int const write_to_index     = rolling_index<state_buf::dict_buf_size>(bit_pos);
+    sb->dict_idx[write_to_index] = read_bit;
   }
-
-  if (t == 0) { s->dict_pos = pos; }
 }
 
 template <int rolling_buf_size, typename stream_type>
@@ -1052,8 +1050,10 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   // Exit super early for simple types if the page does not need to be decoded
   if constexpr (not has_lists_t and not has_strings_t and not has_nesting_t) {
     if (not page_mask[page_idx]) {
-      pp->num_nulls  = pp->num_rows;
+      pp->num_nulls  = pp->nesting[0].batch_size;
       pp->num_valids = 0;
+      // Set s->nesting info = nullptr to bypass `null_count_back_copier` at return
+      s->nesting_info = nullptr;
       return;
     }
   }
@@ -1071,15 +1071,18 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
 
   // Write list and/or string offsets and exit if the page does not need to be decoded
   if (not page_mask[page_idx]) {
-    pp->num_nulls  = pp->num_rows;
-    pp->num_valids = 0;
-    // Update offsets for all list depth levels
+    //  Update offsets for all list depth levels
     if constexpr (has_lists_t) { update_list_offsets_for_pruned_pages<decode_block_size_t>(s); }
     // Update string offsets or write string sizes for small and large strings respectively
     if constexpr (has_strings_t) {
       update_string_offsets_for_pruned_pages<decode_block_size_t, has_lists_t>(
         s, initial_str_offsets, pages[page_idx]);
     }
+    // Must be set after computing above list and string offsets
+    pp->num_nulls = pp->nesting[s->col.max_nesting_depth - 1].batch_size;
+    if constexpr (not has_lists_t) { pp->num_nulls -= s->first_row; }
+    pp->num_valids = 0;
+
     return;
   }
 
@@ -1151,9 +1154,10 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   // - valid_count: number of non-null values we have decoded so far. In each iteration of the
   //   loop below, we look at the number of valid items (which could be all for non-nullable),
   //   and valid_count is that running count.
-  int processed_count         = 0;
-  int valid_count             = 0;
-  size_t string_output_offset = 0;
+  int processed_count             = 0;
+  int valid_count                 = 0;
+  size_t string_output_offset     = 0;
+  int const init_valid_map_offset = s->nesting_info[s->col.max_nesting_depth - 1].valid_map_offset;
 
   // Skip ahead in the decoding so that we don't repeat work (skipped_leaf_values = 0 for non-lists)
   auto const skipped_leaf_values = s->page.skipped_leaf_values;
@@ -1168,6 +1172,13 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
       } else if constexpr (has_strings_t) {
         initialize_string_descriptors<is_calc_sizes_only::YES>(s, sb, skipped_leaf_values, block);
         if (t == 0) { s->dict_pos = processed_count; }
+        block.sync();
+      } else if constexpr (has_bools_t) {
+        if (bools_are_rle_stream) {
+          skip_decode<rolling_buf_size>(bool_stream, skipped_leaf_values, t);
+        } else {
+          if (t == 0) { s->dict_pos = skipped_leaf_values; }
+        }
         block.sync();
       }
     }
@@ -1233,7 +1244,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
       if (bools_are_rle_stream) {
         bool_stream.decode_next(t, next_valid_count - valid_count);
       } else {
-        bool_plain_decode<decode_block_size_t>(s, sb, t, next_valid_count - valid_count);
+        auto const target_pos = next_valid_count + skipped_leaf_values;
+        bool_plain_decode(s, sb, target_pos, block);
+        if (t == 0) { s->dict_pos = target_pos; }
       }
       block.sync();
     }
@@ -1252,6 +1265,21 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
     block.sync();
 
     valid_count = next_valid_count;
+  }
+
+  // Zero-fill null positions after decoding valid values
+  if (should_process_nulls) {
+    uint32_t const dtype_len = has_strings_t ? sizeof(cudf::size_type) : s->dtype_len;
+    int const num_values     = [&]() {
+      if constexpr (has_lists_t) {
+        auto const& ni = s->nesting_info[s->col.max_nesting_depth - 1];
+        return ni.valid_map_offset - init_valid_map_offset;
+      } else {
+        return s->num_rows;
+      }
+    }();
+    zero_fill_null_positions_shared<decode_block_size_t>(
+      s, dtype_len, init_valid_map_offset, num_values, t);
   }
 
   if constexpr (has_strings_t) {

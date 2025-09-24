@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,9 +15,9 @@
  */
 
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/row_operator/row_operators.cuh>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/stream_compaction.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
@@ -36,7 +36,7 @@ cudf::size_type unique_count(table_view const& keys,
                              null_equality nulls_equal,
                              rmm::cuda_stream_view stream)
 {
-  auto const row_comp = cudf::experimental::row::equality::self_comparator(keys, stream);
+  auto const row_comp = cudf::detail::row::equality::self_comparator(keys, stream);
   if (cudf::detail::has_nested_columns(keys)) {
     auto const comp =
       row_comp.equal_to<true>(nullate::DYNAMIC{has_nested_nulls(keys)}, nulls_equal);
