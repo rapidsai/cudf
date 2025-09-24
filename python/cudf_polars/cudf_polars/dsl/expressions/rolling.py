@@ -137,7 +137,9 @@ class RollingWindow(Expr):
             raise NotImplementedError(
                 "Incorrect handling of empty groups for list collection"
             )
-        if not plc.rolling.is_valid_rolling_aggregation(agg.dtype.plc, agg.agg_request):
+        if not plc.rolling.is_valid_rolling_aggregation(
+            agg.dtype.plc_type, agg.agg_request
+        ):
             raise NotImplementedError(f"Unsupported rolling aggregation {agg}")
 
     def do_evaluate(  # noqa: D102
