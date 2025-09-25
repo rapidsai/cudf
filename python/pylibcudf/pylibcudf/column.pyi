@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from typing import Any, Protocol, TypedDict
 
 from rmm.pylibrmm.device_buffer import DeviceBuffer
+from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 from rmm.pylibrmm.stream import Stream
 
 from pylibcudf._interop_helpers import ArrowLike
@@ -61,7 +62,11 @@ class Column:
     def from_scalar(
         scalar: Scalar, size: int, stream: Stream | None = None
     ) -> Column: ...
-    def to_scalar(self, stream: Stream | None = None) -> Scalar: ...
+    def to_scalar(
+        self,
+        stream: Stream | None = None,
+        mr: DeviceMemoryResource | None = None,
+    ) -> Scalar: ...
     @staticmethod
     def all_null_like(
         like: Column, size: int, stream: Stream | None = None
@@ -70,6 +75,7 @@ class Column:
     def from_rmm_buffer(
         buff: DeviceBuffer, dtype: DataType, size: int, children: list[Column]
     ) -> Column: ...
+    def to_arrow(self, metadata: list | str | None = None) -> ArrowLike: ...
     @staticmethod
     def from_arrow(
         obj: ArrowLike, dtype: DataType | None = None

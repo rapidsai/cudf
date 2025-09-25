@@ -96,5 +96,6 @@ def test_tdi_asi8():
 
 def test_error_values():
     s = cudf.Series([1, 2, 3], dtype="timedelta64[ns]")
-    with pytest.raises(NotImplementedError, match="cupy does not support"):
-        s.values
+    result = s.values
+    expected = cp.array([1, 2, 3]).view("timedelta64[ns]")
+    assert_eq(result, expected)

@@ -85,7 +85,7 @@ def test_dataframe_column_name_indexing():
     df = pd.DataFrame()
     for i in range(0, 10):
         df[i] = range(nelem)
-    gdf = cudf.DataFrame.from_pandas(df)
+    gdf = cudf.DataFrame(df)
     assert_eq(gdf, df)
 
     assert_eq(gdf[gdf.columns], gdf)
@@ -179,7 +179,7 @@ def test_dataframe_apply_boolean_mask():
             "c": ["a", None, "b", "c"],
         }
     )
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     assert_eq(pdf[[True, False, True, False]], gdf[[True, False, True, False]])
 
 
@@ -297,8 +297,8 @@ def test_dataframe_boolmask(mask_shape):
     pdf_mask = pd.DataFrame(
         {col: rng.integers(0, 2, mask_shape[0]) > 0 for col in mask_shape[1]}
     )
-    gdf = cudf.DataFrame.from_pandas(pdf)
-    gdf_mask = cudf.DataFrame.from_pandas(pdf_mask)
+    gdf = cudf.DataFrame(pdf)
+    gdf_mask = cudf.DataFrame(pdf_mask)
     gdf = gdf[gdf_mask]
     pdf = pdf[pdf_mask]
 
@@ -345,7 +345,7 @@ def test_dataframe_strided_slice(arg):
         {"Val": [10, 9, 8, 7, 6, 5, 4, 3, 2]},
         index=pd.MultiIndex.from_frame(mul),
     )
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
 
     expect = pdf[arg]
     got = gdf[arg]

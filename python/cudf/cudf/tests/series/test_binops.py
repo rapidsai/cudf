@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 import cupy as cp
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 
 import cudf
@@ -447,6 +448,31 @@ def test_timedelta_series_cmpops_pandas_compatibility(comparison_op):
         got = comparison_op(gsr1, gsr2)
 
     assert_eq(expect, got)
+
+
+def test_compare_ops_numeric_to_null_pandas_compatible(comparison_op):
+    data = [None, 1, 3]
+    pser = pd.Series(data)
+    gser = cudf.Series(data)
+    expected = comparison_op(pser, 2)
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = comparison_op(gser, 2)
+    assert_eq(expected, result)
+
+
+def test_compare_ops_decimal_to_null_pandas_compatible(comparison_op):
+    data = pa.array([None, 1, 3], pa.decimal128(3, 2))
+    gser = cudf.Series(data)
+    expected = cudf.Series(
+        [
+            comparison_op == operator.ne,
+            comparison_op(1, 2),
+            comparison_op(3, 2),
+        ]
+    )
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = comparison_op(gser, 2)
+    assert_eq(expected, result)
 
 
 def test_string_equality():
@@ -1071,7 +1097,7 @@ def test_str_series_compare_str(comparison_op):
         ["a", "b", None, "d", "e", None], dtype="string"
     )
     expect = comparison_op(str_series_cmp_data, "a")
-    got = comparison_op(cudf.Series.from_pandas(str_series_cmp_data), "a")
+    got = comparison_op(cudf.Series(str_series_cmp_data), "a")
 
     assert_eq(expect, got.to_pandas(nullable=True))
 
@@ -1081,7 +1107,7 @@ def test_str_series_compare_str_reflected(comparison_op):
         ["a", "b", None, "d", "e", None], dtype="string"
     )
     expect = comparison_op("a", str_series_cmp_data)
-    got = comparison_op("a", cudf.Series.from_pandas(str_series_cmp_data))
+    got = comparison_op("a", cudf.Series(str_series_cmp_data))
 
     assert_eq(expect, got.to_pandas(nullable=True))
 
@@ -1094,9 +1120,7 @@ def test_str_series_compare_num(comparison_op, cmp_scalar):
         ["a", "b", None, "d", "e", None], dtype="string"
     )
     expect = comparison_op(str_series_cmp_data, cmp_scalar)
-    got = comparison_op(
-        cudf.Series.from_pandas(str_series_cmp_data), cmp_scalar
-    )
+    got = comparison_op(cudf.Series(str_series_cmp_data), cmp_scalar)
 
     assert_eq(expect, got.to_pandas(nullable=True))
 
@@ -1109,9 +1133,7 @@ def test_str_series_compare_num_reflected(comparison_op, cmp_scalar):
         ["a", "b", None, "d", "e", None], dtype="string"
     )
     expect = comparison_op(cmp_scalar, str_series_cmp_data)
-    got = comparison_op(
-        cmp_scalar, cudf.Series.from_pandas(str_series_cmp_data)
-    )
+    got = comparison_op(cmp_scalar, cudf.Series(str_series_cmp_data))
 
     assert_eq(expect, got.to_pandas(nullable=True))
 
@@ -3015,8 +3037,8 @@ def test_cat_non_cat_compare_ops(
         dtype=pd.CategoricalDtype(categories=data_right, ordered=ordered),
     )
 
-    cudf_non_cat = cudf.Series.from_pandas(pd_non_cat)
-    cudf_cat = cudf.Series.from_pandas(pd_cat)
+    cudf_non_cat = cudf.Series(pd_non_cat)
+    cudf_cat = cudf.Series(pd_cat)
 
     if (
         not ordered and comparison_op not in {operator.eq, operator.ne}

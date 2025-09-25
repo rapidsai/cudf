@@ -36,7 +36,10 @@ from pylibcudf.libcudf.copying cimport get_element
 
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 from rmm.pylibrmm.stream cimport Stream
-from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.memory_resource cimport (
+    DeviceMemoryResource,
+    get_current_device_resource,
+)
 
 from .gpumemoryview cimport gpumemoryview
 from .filling cimport sequence
@@ -56,13 +59,21 @@ from ._interop_helpers cimport (
 from .utils cimport _get_stream, _get_memory_resource
 
 from .gpumemoryview import _datatype_from_dtype_desc
-from ._interop_helpers import ArrowLike, ColumnMetadata
+from ._interop_helpers import ArrowLike, ColumnMetadata, _ObjectWithArrowMetadata
 
 import array
 from itertools import accumulate
 import functools
 import operator
 from typing import Iterable
+
+try:
+    import pyarrow as pa
+    pa_err = None
+except ImportError as e:
+    pa = None
+    pa_err = e
+
 
 __all__ = ["Column", "ListColumnView", "is_c_contiguous"]
 
@@ -78,6 +89,7 @@ cdef is_iterable(obj):
 cdef class _ArrowColumnHolder:
     """A holder for an Arrow column for gpumemoryview lifetime management."""
     cdef unique_ptr[arrow_column] col
+    cdef DeviceMemoryResource mr
 
 
 cdef class OwnerWithCAI:
@@ -337,12 +349,38 @@ cdef class Column:
         self._children = children
         self._num_children = len(children)
 
+    def to_arrow(
+        self,
+        metadata: ColumnMetadata | str | None = None
+    ) -> ArrowLike:
+        """Create a pyarrow array from a pylibcudf column.
+
+        Parameters
+        ----------
+        metadata : ColumnMetadata | str | None
+            The metadata to attach to the column.
+
+        Returns
+        -------
+        pyarrow.Array
+        """
+        if pa_err is not None:
+            raise RuntimeError(
+                "pyarrow was not found on your system. Please "
+                "pip install pylibcudf with the [pyarrow] extra for a "
+                "compatible pyarrow version."
+            ) from pa_err
+        # TODO: Once the arrow C device interface registers more
+        # types that it supports, we can call pa.array(self) if
+        # no metadata is passed.
+        return pa.array(_ObjectWithArrowMetadata(self, metadata))
+
     @staticmethod
     def from_arrow(
         obj: ArrowLike,
         dtype: DataType | None = None,
         Stream stream=None
-    ) -> Column:
+    ) -> ArrowLike:
         """
         Create a Column from an Arrow-like object using the Arrow C Data Interface.
 
@@ -399,6 +437,7 @@ cdef class Column:
             )
 
             result = _ArrowColumnHolder()
+            result.mr = get_current_device_resource()
             with nogil:
                 c_result = make_unique[arrow_column](
                     move(dereference(c_schema)),
@@ -414,6 +453,7 @@ cdef class Column:
             c_array = <ArrowArray*>PyCapsule_GetPointer(h_array, "arrow_array")
 
             result = _ArrowColumnHolder()
+            result.mr = get_current_device_resource()
             with nogil:
                 c_result = make_unique[arrow_column](
                     move(dereference(c_schema)),
@@ -433,6 +473,7 @@ cdef class Column:
             )
 
             result = _ArrowColumnHolder()
+            result.mr = get_current_device_resource()
             with nogil:
                 c_result = make_unique[arrow_column](
                     move(dereference(c_arrow_stream)), stream.view()
@@ -734,7 +775,7 @@ cdef class Column:
             )
         return Column.from_libcudf(move(c_result), stream)
 
-    cpdef Scalar to_scalar(self, Stream stream=None):
+    cpdef Scalar to_scalar(self, Stream stream=None, DeviceMemoryResource mr=None):
         """
         Return the first value of 1-element column as a Scalar.
 
@@ -744,6 +785,8 @@ cdef class Column:
             If the column has more than one row.
         stream : Stream | None
             CUDA stream on which to perform the operation.
+        mr : DeviceMemoryResource | None
+            The memory resource to use for allocations.
 
         Returns
         -------
@@ -756,9 +799,10 @@ cdef class Column:
         cdef column_view cv = self.view()
         cdef unique_ptr[scalar] result
         stream = _get_stream(stream)
+        mr = _get_memory_resource(mr)
 
         with nogil:
-            result = get_element(cv, 0, stream.view())
+            result = get_element(cv, 0, stream.view(), mr.get_mr())
 
         return Scalar.from_libcudf(move(result))
 
