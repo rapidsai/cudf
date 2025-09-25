@@ -530,27 +530,6 @@ host_vector<typename Container::value_type> make_pinned_vector_async(Container c
   return make_pinned_vector_async(device_span<typename Container::value_type const>{c}, stream);
 }
 
-// TODO: (jigao) this is a host 2 host
-// /**
-//  * @brief Asynchronously construct a `cudf::detail::host_vector` containing a copy of data from a
-//  * `host_span`
-//  *
-//  * @note This function does not synchronize `stream` after the copy. The returned vector use
-//  * a pinned memory resource.
-//  *
-//  * @tparam T The type of the data to copy
-//  * @param source_data The host_span of data to copy
-//  * @param stream The stream on which to perform the copy
-//  * @return The data copied to the host
-//  */
-// template <typename T>
-// host_vector<T> make_pinned_vector_async(host_span<T const> v, rmm::cuda_stream_view stream)
-// {
-//   auto result = make_pinned_vector<T>(v.size(), stream);
-//   cuda_memcpy_async<T>(result, v, stream);
-//   return result;
-// }
-
 /**
  * @brief Synchronously construct a pinned `cudf::detail::host_vector` containing a copy of data from a
  * `device_span`
