@@ -70,9 +70,8 @@ def default_memory_resource(
         ):
             # Allocating 80% of the available memory for the pool.
             # Leaving a 20% headroom to avoid OOM errors.
-            # free_memory, _ = rmm.mr.available_device_memory()
-            # free_memory = int(round(float(free_memory) * 0.80 / 256) * 256)
-            free_memory = 1_000_000_000
+            free_memory, _ = rmm.mr.available_device_memory()
+            free_memory = int(round(float(free_memory) * 0.80 / 256) * 256)
             pylibcudf.prefetch.enable()
             mr = rmm.mr.PrefetchResourceAdaptor(
                 rmm.mr.PoolMemoryResource(
