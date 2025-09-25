@@ -39,9 +39,9 @@ def test_series_isnull_isna(ps, nan_as_null):
         nan_contains.any() and not nan_contains.all() and ps.dtype == object
     ):
         with pytest.raises(MixedTypeError):
-            cudf.Series.from_pandas(ps, nan_as_null=nan_as_null)
+            cudf.Series(ps, nan_as_null=nan_as_null)
     else:
-        gs = cudf.Series.from_pandas(ps, nan_as_null=nan_as_null)
+        gs = cudf.Series(ps, nan_as_null=nan_as_null)
 
         assert_eq(ps.isnull(), gs.isnull())
         assert_eq(ps.isna(), gs.isna())
@@ -53,9 +53,9 @@ def test_series_notnull_notna(ps, nan_as_null):
         nan_contains.any() and not nan_contains.all() and ps.dtype == object
     ):
         with pytest.raises(MixedTypeError):
-            cudf.Series.from_pandas(ps, nan_as_null=nan_as_null)
+            cudf.Series(ps, nan_as_null=nan_as_null)
     else:
-        gs = cudf.Series.from_pandas(ps, nan_as_null=nan_as_null)
+        gs = cudf.Series(ps, nan_as_null=nan_as_null)
 
         assert_eq(ps.notnull(), gs.notnull())
         assert_eq(ps.notna(), gs.notna())

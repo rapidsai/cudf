@@ -270,9 +270,9 @@ def read_json(
             **kwargs,
         )
         if isinstance(pd_value, pd.DataFrame):
-            df = DataFrame.from_pandas(pd_value)
+            df = DataFrame(pd_value)
         else:
-            df = Series.from_pandas(pd_value)
+            df = Series(pd_value)
 
     if dtype is None:
         dtype = True

@@ -225,7 +225,7 @@ def test_timedelta_getitem_na():
 def test_string_table_view_creation():
     data = ["hi"] * 25 + [None] * 2027
     psr = pd.Series(data)
-    gsr = cudf.Series.from_pandas(psr)
+    gsr = cudf.Series(psr)
 
     expect = psr[:1]
     got = gsr[:1]

@@ -44,7 +44,7 @@ def test_isin_numeric(data, values):
     rng = np.random.default_rng(seed=0)
     index = rng.integers(0, 100, len(data))
     psr = pd.Series(data, index=index)
-    gsr = cudf.Series.from_pandas(psr, nan_as_null=False)
+    gsr = cudf.Series(psr, nan_as_null=False)
 
     expected = psr.isin(values)
     got = gsr.isin(values)
@@ -102,7 +102,7 @@ def test_isin_numeric(data, values):
 )
 def test_isin_datetime(data, values):
     psr = pd.Series(data)
-    gsr = cudf.Series.from_pandas(psr)
+    gsr = cudf.Series(psr)
 
     is_len_str = isinstance(next(iter(values), None), str) and len(data)
     with expect_warning_if(is_len_str):
@@ -134,7 +134,7 @@ def test_isin_datetime(data, values):
 )
 def test_isin_string(data, values):
     psr = pd.Series(data)
-    gsr = cudf.Series.from_pandas(psr)
+    gsr = cudf.Series(psr)
 
     got = gsr.isin(values)
     expected = psr.isin(values)
@@ -163,7 +163,7 @@ def test_isin_string(data, values):
 )
 def test_isin_categorical(data, values):
     psr = pd.Series(data)
-    gsr = cudf.Series.from_pandas(psr)
+    gsr = cudf.Series(psr)
 
     got = gsr.isin(values)
     expected = psr.isin(values)
