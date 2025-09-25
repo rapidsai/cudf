@@ -404,7 +404,8 @@ class Decimal32Column(DecimalBaseColumn):
             type=self.dtype.to_arrow(),
             offset=self._offset,
             length=self.size,
-            buffers=[mask_buf, data_buf],
+            # PyArrow stubs are too strict - from_buffers should accept None for missing buffers
+            buffers=[mask_buf, data_buf],  # type: ignore[list-item]
         )
 
     def _with_type_metadata(
@@ -522,7 +523,8 @@ class Decimal64Column(DecimalBaseColumn):
             type=self.dtype.to_arrow(),
             offset=self._offset,
             length=self.size,
-            buffers=[mask_buf, data_buf],
+            # PyArrow stubs are too strict - from_buffers should accept None for missing buffers
+            buffers=[mask_buf, data_buf],  # type: ignore[list-item]
         )
 
     def _with_type_metadata(
