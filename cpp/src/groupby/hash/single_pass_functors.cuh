@@ -116,6 +116,11 @@ struct initialize_shmem {
 /**
  * @brief Functor to compute single-pass aggregations and store the results into an output table,
  * executing only for rows processed by some given specific thread blocks.
+ *
+ * This functor is used for computing aggregations for some (non-contiguous) ranges of rows
+ * processed by a list of threads blocks that could not execute using the shared memory code path.
+ * We want to map from the range [0, num_fallback_rows) to the (non-contiguous) ranges of rows
+ * processed exactly by the fallback blocks.
  */
 struct global_memory_fallback_fn {
   size_type const* target_indices;
@@ -154,10 +159,22 @@ struct global_memory_fallback_fn {
 
   __device__ void operator()(int64_t idx) const
   {
-    auto const local_agg_idx  = static_cast<size_type>(idx % num_fallback_rows);
-    auto const idx_in_agg     = local_agg_idx % fallback_stride;
-    auto const thread_rank    = idx_in_agg % GROUPBY_BLOCK_SIZE;
-    auto const block_idx      = fallback_blocks[idx_in_agg / GROUPBY_BLOCK_SIZE];
+    // Local index in [0, num_fallback_rows) within the same output column/aggregation.
+    auto const local_agg_idx = static_cast<size_type>(idx % num_fallback_rows);
+
+    // Local index within the corresponding "full" segment.
+    auto const idx_in_stride = local_agg_idx % fallback_stride;
+
+    // Rank of the thread within the corresponding fallback block.
+    auto const thread_rank = idx_in_stride % GROUPBY_BLOCK_SIZE;
+
+    // The index of the fallback block that the current thread is processing.
+    auto const block_idx = fallback_blocks[idx_in_stride / GROUPBY_BLOCK_SIZE];
+
+    // Compute the row index processed by the corresponding fallback block.
+    // Here, `full_stride * (local_agg_idx / fallback_stride)` is the start offset of the
+    // current "full" segment, `GROUPBY_BLOCK_SIZE * block_idx` is the start
+    // offset of the corresponding fallback block within the "full" segment.
     auto const source_row_idx = full_stride * (local_agg_idx / fallback_stride) +
                                 GROUPBY_BLOCK_SIZE * block_idx + thread_rank;
     if (source_row_idx >= num_total_rows) { return; }
@@ -181,6 +198,8 @@ struct global_memory_fallback_fn {
 /**
  * @brief Functor to compute single-pass aggregations and store the results into an output table,
  * executing for all input rows.
+ *
+ * All rows in all aggregations are computed concurrently without any order.
  */
 struct compute_single_pass_aggs_fn {
   size_type const* target_indices;

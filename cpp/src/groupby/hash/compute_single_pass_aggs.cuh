@@ -132,16 +132,30 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
   }();
 
   if (num_fallback_blocks > 0) {
-    // We compute number of jumping steps when using all blocks (`num_strides`).
-    // Then, we use only `num_fallback_blocks` to jump the same number of steps.
-    auto const fallback_stride   = GROUPBY_BLOCK_SIZE * num_fallback_blocks;
     auto const full_stride       = GROUPBY_BLOCK_SIZE * grid_size;
     auto const num_strides       = util::div_rounding_up_safe(num_rows, full_stride);
-    auto const num_fallback_rows = num_fallback_blocks * GROUPBY_BLOCK_SIZE * num_strides;
+    auto const fallback_stride   = GROUPBY_BLOCK_SIZE * num_fallback_blocks;
+    auto const num_fallback_rows = fallback_stride * num_strides;
 
-    // Find key indices for each input row, only for the rows processed by the fallback blocks.
-    // This also insert all the missing key indices into the global set so we can have a complete
-    // set of keys for the final output.
+    // This kernel finds the matching keys for the rows processed by the fallback blocks.
+    // It also inserts all the missing keys (which were not inserted due to short-circuit in the
+    // mapping indices kernel) into the global set, so we can have a complete set of keys for the
+    // final output.
+    //
+    // Because the number of blocks is relatively small, we have to divide the input into
+    // multiple "full" segments such that each thread processes one row for each segment in a
+    // sequential manner. The length of each segment is computed as
+    // `full_stride = grid_size * GROUPBY_BLOCK_SIZE`, and the number of segments is given by
+    // `num_strides = round_up(num_rows / full_stride)`.
+    //
+    // For the fallback blocks, the number of rows processed by them is computed as
+    // `num_fallback_rows = num_fallback_blocks * GROUPBY_BLOCK_SIZE * num_strides`.
+    // This kernel has grid size of `num_fallback_rows`, and we want to map from the range
+    // [0, num_fallback_rows) to the (non-contiguous) ranges of rows processed exactly by these
+    // fallback blocks. In order to do so, we also divide such thread index range into the same
+    // number of segments but with shorter length (computed by `fallback_stride`), referred to as
+    // the "short" segments. It is guaranteed that "short" segments are always mapped one-to-one to
+    // the "full" segments.
     thrust::for_each_n(rmm::exec_policy_nosync(stream),
                        thrust::make_counting_iterator(0),
                        num_fallback_rows,
@@ -152,11 +166,24 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
                         matching_keys   = matching_keys.begin(),
                         fallback_blocks = fallback_blocks.begin(),
                         row_bitmask] __device__(auto const idx) mutable {
+                         // Local index within the corresponding "full" segment.
+                         // Since "short" segments map one-to-one to the "full" segment, here we
+                         // use the "short" segment length `fallback_stride`.
                          auto const idx_in_stride = idx % fallback_stride;
-                         auto const thread_rank   = idx_in_stride % GROUPBY_BLOCK_SIZE;
+
+                         // Rank of the thread within the corresponding fallback block.
+                         auto const thread_rank = idx_in_stride % GROUPBY_BLOCK_SIZE;
+
+                         // The index of the fallback block that the current thread is processing.
                          auto const block_idx = fallback_blocks[idx_in_stride / GROUPBY_BLOCK_SIZE];
-                         auto const row_idx   = full_stride * (idx / fallback_stride) +
+
+                         // Compute the row index processed by the corresponding fallback block.
+                         // Here, `full_stride * (idx / fallback_stride)` is the start offset of the
+                         // current "full" segment, `GROUPBY_BLOCK_SIZE * block_idx` is the start
+                         // offset of the corresponding fallback block within the "full" segment.
+                         auto const row_idx = full_stride * (idx / fallback_stride) +
                                               GROUPBY_BLOCK_SIZE * block_idx + thread_rank;
+
                          if (row_idx >= num_rows) { return; }
                          if (!row_bitmask || cudf::bit_is_set(row_bitmask, row_idx)) {
                            matching_keys[row_idx] = *set_ref_insert.insert_and_find(row_idx).first;
