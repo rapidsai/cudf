@@ -21,6 +21,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/utilities/cast_functor.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -65,8 +66,10 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
 {
   auto const binary_op     = cudf::detail::cast_functor<OutputType>(op.get_binary_op());
   auto const initial_value = init.value_or(op.template get_identity<OutputType>());
+  auto pinned_initial = cudf::detail::make_pinned_vector_async<OutputType>(1, stream);
+  pinned_initial[0] = initial_value;
   using ScalarType         = cudf::scalar_type_t<OutputType>;
-  auto result              = std::make_unique<ScalarType>(initial_value, true, stream, mr);
+  auto result = std::make_unique<ScalarType>(pinned_initial[0], true, stream, mr);
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
@@ -77,7 +80,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             result->data(),
                             num_items,
                             binary_op,
-                            initial_value,
+                            pinned_initial[0],
                             stream.value());
   d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream};
 
@@ -88,7 +91,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             result->data(),
                             num_items,
                             binary_op,
-                            initial_value,
+                            pinned_initial[0],
                             stream.value());
   return result;
 }
@@ -123,7 +126,9 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
 {
   auto const binary_op     = cudf::detail::cast_functor<OutputType>(op.get_binary_op());
   auto const initial_value = init.value_or(op.template get_identity<OutputType>());
-  auto dev_result          = cudf::detail::device_scalar<OutputType>{initial_value, stream};
+  auto pinned_initial = cudf::detail::make_pinned_vector_async<OutputType>(1, stream);
+  pinned_initial[0] = initial_value;
+  auto dev_result = cudf::detail::device_scalar<OutputType>{pinned_initial[0], stream};
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
@@ -134,7 +139,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             dev_result.data(),
                             num_items,
                             binary_op,
-                            initial_value,
+                            pinned_initial[0],
                             stream.value());
   d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream};
 
@@ -145,7 +150,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             dev_result.data(),
                             num_items,
                             binary_op,
-                            initial_value,
+                            pinned_initial[0],
                             stream.value());
 
   return std::make_unique<cudf::string_scalar>(dev_result, true, stream, mr);
@@ -185,8 +190,9 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
 {
   auto const binary_op     = cudf::detail::cast_functor<IntermediateType>(op.get_binary_op());
   auto const initial_value = op.template get_identity<IntermediateType>();
-
-  cudf::detail::device_scalar<IntermediateType> intermediate_result{initial_value, stream};
+  auto pinned_initial = cudf::detail::make_pinned_vector_async<IntermediateType>(1, stream);
+  pinned_initial[0] = initial_value;
+  cudf::detail::device_scalar<IntermediateType> intermediate_result{pinned_initial[0], stream};
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
@@ -197,7 +203,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             intermediate_result.data(),
                             num_items,
                             binary_op,
-                            initial_value,
+                            pinned_initial[0],
                             stream.value());
   d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream};
 
@@ -208,7 +214,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             intermediate_result.data(),
                             num_items,
                             binary_op,
-                            initial_value,
+                            pinned_initial[0],
                             stream.value());
 
   // compute the result value from intermediate value in device
