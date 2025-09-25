@@ -82,6 +82,7 @@ std::pair<size_type, rmm::device_uvector<size_type>> find_fallback_blocks(
                                 cudaMemcpyDefault,
                                 stream.value()));
   stream.synchronize();
+  if (num_fallback_blocks > 0) { fallback_block_ids.resize(num_fallback_blocks, stream); }
 
   return {num_fallback_blocks,
           num_fallback_blocks > 0 ? std::move(fallback_block_ids)
