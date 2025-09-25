@@ -267,7 +267,7 @@ rmm::device_uvector<typename Container::value_type> make_device_uvector(
  * @note This function does not synchronize `stream` after the copy.
  *
  * @tparam T The type of the data to copy
- * @param source_data The device data to copy
+ * @param source_data The device_span of data to copy
  * @param stream The stream on which to perform the copy
  * @return The data copied to the host
  */
@@ -307,7 +307,7 @@ std::vector<typename Container::value_type> make_std_vector_async(Container cons
  * @note This function does a synchronize on `stream` after the copy.
  *
  * @tparam T The type of the data to copy
- * @param source_data The device data to copy
+ * @param source_data The device_span of data to copy
  * @param stream The stream on which to perform the copy
  * @return The data copied to the host
  */
@@ -381,7 +381,7 @@ host_vector<T> make_empty_host_vector(size_t capacity, rmm::cuda_stream_view str
  * using a pinned memory resource.
  *
  * @tparam T The type of the data to copy
- * @param source_data The device data to copy
+ * @param source_data The device_span of data to copy
  * @param stream The stream on which to perform the copy
  * @return The data copied to the host
  */
@@ -422,7 +422,7 @@ host_vector<typename Container::value_type> make_host_vector_async(Container con
  * using a pinned memory resource.
  *
  * @tparam T The type of the data to copy
- * @param source_data The device data to copy
+ * @param source_data The device_span of data to copy
  * @param stream The stream on which to perform the copy
  * @return The data copied to the host
  */
