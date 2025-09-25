@@ -261,6 +261,7 @@ void BM_parquet_read_filter(nvbench::state& state)
       auto const result = cudf::io::read_parquet(read_opts);
       timer.stop();
 
+      
       CUDF_EXPECTS(result.tbl->num_columns() == num_input_cols, "Unexpected number of columns");
     });
 }
