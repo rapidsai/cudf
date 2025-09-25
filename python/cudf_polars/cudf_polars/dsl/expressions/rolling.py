@@ -388,10 +388,7 @@ class GroupedRollingWindow(Expr):
             [op.policy] * len(val_cols),
         )
 
-        tables = [
-            plc.Table([filled_tbl.columns()[i]])
-            for i in range(filled_tbl.num_columns())
-        ]
+        tables = [plc.Table([column]) for column in filled_tbl.columns()]
         names = [ne.name for ne in named_exprs]
         dtypes = [ne.value.dtype for ne in named_exprs]
         return names, dtypes, tables
@@ -527,9 +524,7 @@ class GroupedRollingWindow(Expr):
                 for i, c in enumerate(cols)
             ]
         else:
-            return [
-                gathered_tbl.columns()[i] for i in range(gathered_tbl.num_columns())
-            ]
+            return gathered_tbl.columns()
 
     def do_evaluate(  # noqa: D102
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
