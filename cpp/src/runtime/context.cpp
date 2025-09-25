@@ -88,8 +88,5 @@ void initialize(init_flags flags)
   }
 }
 
-void deinitialize()
-{
-  get_context_ptr_ref().reset();
-}
+void deinitialize() { get_context_ptr_ref().reset(); }
 }  // namespace CUDF_EXPORT cudf
