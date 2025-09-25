@@ -2,6 +2,7 @@
 
 from enum import IntEnum
 
+from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 from rmm.pylibrmm.stream import Stream
 
 from pylibcudf.column import Column
@@ -34,13 +35,35 @@ class UnaryOperator(IntEnum):
     NEGATE = ...
 
 def unary_operation(
-    input: Column, op: UnaryOperator, stream: Stream | None = None
+    input: Column,
+    op: UnaryOperator,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
-def is_null(input: Column, stream: Stream | None = None) -> Column: ...
-def is_valid(input: Column, stream: Stream | None = None) -> Column: ...
+def is_null(
+    input: Column,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> Column: ...
+def is_valid(
+    input: Column,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> Column: ...
 def cast(
-    input: Column, data_type: DataType, stream: Stream | None = None
+    input: Column,
+    data_type: DataType,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
-def is_nan(input: Column, stream: Stream | None = None) -> Column: ...
-def is_not_nan(input: Column, stream: Stream | None = None) -> Column: ...
+def is_nan(
+    input: Column,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> Column: ...
+def is_not_nan(
+    input: Column,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> Column: ...
 def is_supported_cast(from_: DataType, to: DataType) -> bool: ...
