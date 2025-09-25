@@ -128,7 +128,9 @@ class TemporalBaseColumn(ColumnBase):
             rhs = rhs.astype(lhs.dtype)
         return lhs, rhs
 
-    def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
+    def _normalize_binop_operand(
+        self, other: Any
+    ) -> pa.Scalar | ColumnBase | cudf.DateOffset:
         if isinstance(other, ColumnBase):
             return other
         elif self.dtype.kind == "M" and isinstance(other, cudf.DateOffset):
