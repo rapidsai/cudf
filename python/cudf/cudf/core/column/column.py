@@ -41,6 +41,7 @@ from cudf.core._internals.timezones import get_compatible_timezone
 from cudf.core.abc import Serializable
 from cudf.core.buffer import (
     Buffer,
+    ExposureTrackedBuffer,
     acquire_spill_lock,
     as_buffer,
     cuda_array_interface_wrapper,
@@ -399,14 +400,23 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 dbuf.copy_from_host(value)
                 mask = as_buffer(dbuf)
 
-        return build_column(  # type: ignore[return-value]
-            data=self.data,
-            dtype=self.dtype,
-            mask=mask,
-            size=self.size,
-            offset=0,
-            children=self.children,
+        if mask is not None:
+            new_mask: plc.gpumemoryview | None = plc.gpumemoryview(mask)
+            new_null_count = plc.null_mask.null_count(
+                new_mask,
+                0,
+                self.size,
+            )
+        else:
+            new_mask = None
+            new_null_count = 0
+        exposed = isinstance(self.data, ExposureTrackedBuffer)
+        new_plc_column = self.to_pylibcudf(mode="read").with_mask(
+            new_mask, new_null_count
         )
+        return self.from_pylibcudf(  # type: ignore[return-value]
+            new_plc_column, data_ptr_exposed=exposed
+        )._with_type_metadata(self.dtype)
 
     @property
     def null_count(self) -> int:
