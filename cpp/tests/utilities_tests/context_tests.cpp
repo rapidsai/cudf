@@ -14,13 +14,15 @@
  * limitations under the License.
  */
 
-#include <cudf/context.hpp>
 #include <cudf_test/base_fixture.hpp>
+
+#include <cudf/context.hpp>
 
 #include <gtest/gtest.h>
 
 struct ContextTest : public cudf::test::BaseFixture {
-  ~ContextTest() override {
+  ~ContextTest() override
+  {
     // Automatically deinitialize on test completion
     try {
       cudf::deinitialize();
@@ -34,10 +36,10 @@ TEST_F(ContextTest, MultipleInitializeCalls)
 {
   // First initialization with JIT cache only
   cudf::initialize(cudf::init_flags::INIT_JIT_CACHE);
-  
+
   // Second initialization with nvCOMP - should not throw
   EXPECT_NO_THROW(cudf::initialize(cudf::init_flags::LOAD_NVCOMP));
-  
+
   // Third initialization with all flags - should not throw and not reinitialize
   EXPECT_NO_THROW(cudf::initialize(cudf::init_flags::ALL));
 }
@@ -46,7 +48,7 @@ TEST_F(ContextTest, InitializeAfterDeinitialize)
 {
   cudf::initialize(cudf::init_flags::ALL);
   cudf::deinitialize();
-  
+
   // Should be able to initialize again
   EXPECT_NO_THROW(cudf::initialize(cudf::init_flags::INIT_JIT_CACHE));
 }
@@ -55,6 +57,6 @@ TEST_F(ContextTest, MultipleDeinitializeCalls)
 {
   cudf::initialize(cudf::init_flags::ALL);
   cudf::deinitialize();
-  
+
   EXPECT_NO_THROW(cudf::deinitialize());
 }
