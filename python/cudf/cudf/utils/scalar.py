@@ -53,6 +53,7 @@ def maybe_nested_pa_scalar_to_py(pa_scalar: pa.Scalar) -> Any:
         }
     elif pa.types.is_list(pa_scalar.type):
         list_scalar = cast(pa.ListScalar, pa_scalar)
-        return [maybe_nested_pa_scalar_to_py(val) for val in list_scalar]
+        # TODO: Fix pyarrow-stubs typing - ListScalar iteration should yield Scalar objects
+        return [maybe_nested_pa_scalar_to_py(val) for val in list_scalar]  # type: ignore[arg-type]
     else:
         return pa_scalar.as_py()
