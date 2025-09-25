@@ -85,7 +85,8 @@ cdef extern from "cudf/groupby.hpp" \
             vector[aggregation_result]
         ] aggregate(
             const vector[aggregation_request]& requests,
-            cuda_stream_view stream
+            cuda_stream_view stream,
+            device_memory_resource* mr
         ) except +libcudf_exception_handler
 
         pair[
@@ -93,7 +94,8 @@ cdef extern from "cudf/groupby.hpp" \
             vector[aggregation_result]
         ] scan(
             const vector[scan_request]& requests,
-            cuda_stream_view stream
+            cuda_stream_view stream,
+            device_memory_resource* mr
         ) except +libcudf_exception_handler
 
         pair[
@@ -103,7 +105,8 @@ cdef extern from "cudf/groupby.hpp" \
             const table_view values,
             const vector[size_type] offset,
             const vector[reference_wrapper[constscalar]] fill_values,
-            cuda_stream_view stream
+            cuda_stream_view stream,
+            device_memory_resource* mr
         ) except +libcudf_exception_handler
 
         groups get_groups(
@@ -115,5 +118,6 @@ cdef extern from "cudf/groupby.hpp" \
         pair[unique_ptr[table], unique_ptr[table]] replace_nulls(
             const table_view& values,
             const vector[replace_policy] replace_policy,
-            cuda_stream_view stream
+            cuda_stream_view stream,
+            device_memory_resource* mr
         ) except +libcudf_exception_handler

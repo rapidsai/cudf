@@ -195,7 +195,7 @@ cdef class GroupBy:
         # ourselves.
         with nogil:
             c_res = dereference(self.c_obj).aggregate(
-                c_requests, stream.view()
+                c_requests, stream.view(), mr.get_mr()
             )
         return GroupBy._parse_outputs(move(c_res), stream, mr)
 
@@ -231,7 +231,7 @@ cdef class GroupBy:
         stream = _get_stream(stream)
         mr = _get_memory_resource(mr)
         with nogil:
-            c_res = dereference(self.c_obj).scan(c_requests, stream.view())
+            c_res = dereference(self.c_obj).scan(c_requests, stream.view(), mr.get_mr())
         return GroupBy._parse_outputs(move(c_res), stream, mr)
 
     cpdef tuple shift(
@@ -275,7 +275,8 @@ cdef class GroupBy:
                 values.view(),
                 c_offset,
                 c_fill_values,
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
         return (
             Table.from_libcudf(move(c_res.first), stream, mr),
@@ -316,7 +317,8 @@ cdef class GroupBy:
             c_res = dereference(self.c_obj).replace_nulls(
                 value.view(),
                 c_replace_policies,
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
         return (
             Table.from_libcudf(move(c_res.first), stream, mr),
