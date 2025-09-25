@@ -372,7 +372,7 @@ class Decimal32Column(DecimalBaseColumn):
         )
 
     @classmethod
-    def from_arrow(cls, data: pa.Array) -> Self:
+    def from_arrow(cls, data: pa.Array | pa.ChunkedArray) -> Self:
         return cls._from_32_64_arrow(
             data, view_type="int32", plc_type=plc.TypeId.DECIMAL32, step=4
         )
@@ -449,7 +449,7 @@ class Decimal128Column(DecimalBaseColumn):
         )
 
     @classmethod
-    def from_arrow(cls, data: pa.Array) -> Self:
+    def from_arrow(cls, data: pa.Array | pa.ChunkedArray) -> Self:
         result = cast(Decimal128Dtype, super().from_arrow(data))
         result.dtype.precision = data.type.precision
         return result
@@ -497,7 +497,7 @@ class Decimal64Column(DecimalBaseColumn):
         )
 
     @classmethod
-    def from_arrow(cls, data: pa.Array) -> Self:
+    def from_arrow(cls, data: pa.Array | pa.ChunkedArray) -> Self:
         return cls._from_32_64_arrow(
             data, view_type="int64", plc_type=plc.TypeId.DECIMAL64, step=2
         )

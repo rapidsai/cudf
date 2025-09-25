@@ -58,7 +58,7 @@ class IntervalColumn(StructColumn):
         return dtype
 
     @classmethod
-    def from_arrow(cls, array: pa.Array) -> Self:
+    def from_arrow(cls, array: pa.Array | pa.ChunkedArray) -> Self:
         if not isinstance(array, pa.ExtensionArray):
             raise ValueError("Expected ExtensionArray for interval data")
         new_col = super().from_arrow(array.storage)
