@@ -775,7 +775,7 @@ cdef class Column:
             )
         return Column.from_libcudf(move(c_result), stream)
 
-    cpdef Scalar to_scalar(self, Stream stream=None):
+    cpdef Scalar to_scalar(self, Stream stream=None, DeviceMemoryResource mr=None):
         """
         Return the first value of 1-element column as a Scalar.
 
@@ -785,6 +785,8 @@ cdef class Column:
             If the column has more than one row.
         stream : Stream | None
             CUDA stream on which to perform the operation.
+        mr : DeviceMemoryResource | None
+            The memory resource to use for allocations.
 
         Returns
         -------
@@ -797,9 +799,10 @@ cdef class Column:
         cdef column_view cv = self.view()
         cdef unique_ptr[scalar] result
         stream = _get_stream(stream)
+        mr = _get_memory_resource(mr)
 
         with nogil:
-            result = get_element(cv, 0, stream.view())
+            result = get_element(cv, 0, stream.view(), mr.get_mr())
 
         return Scalar.from_libcudf(move(result))
 
