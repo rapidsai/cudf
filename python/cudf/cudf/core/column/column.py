@@ -812,7 +812,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
           4
         ]
         """
-        return plc.interop.to_arrow(self.to_pylibcudf(mode="read"))
+        return self.to_pylibcudf(mode="read").to_arrow()
 
     @classmethod
     def from_arrow(cls, array: pa.Array) -> ColumnBase:
@@ -1097,7 +1097,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 self.to_pylibcudf(mode="read"),
                 index,
             )
-        py_element = plc.interop.to_arrow(plc_scalar)
+        py_element = plc_scalar.to_arrow()
         if not py_element.is_valid:
             return self._PANDAS_NA_VALUE
         # Calling .as_py() on a pyarrow.StructScalar with duplicate field names
@@ -2813,7 +2813,10 @@ def as_column(
                     and dtype is None
                 ):
                     # Conversion to arrow converts IntervalDtype to StructDtype
-                    dtype = CategoricalDtype.from_pandas(arbitrary.dtype)
+                    dtype = CategoricalDtype(
+                        categories=arbitrary.dtype.categories,
+                        ordered=arbitrary.dtype.ordered,
+                    )
             result = as_column(
                 pa.array(arbitrary, from_pandas=True),
                 nan_as_null=nan_as_null,
@@ -2832,7 +2835,10 @@ def as_column(
                 # TODO: Move this to near isinstance(arbitrary.dtype.categories.dtype, pd.IntervalDtype)
                 # check above, for which merge should be working fully with pandas nullable extension dtypes.
                 result = result._with_type_metadata(
-                    CategoricalDtype.from_pandas(arbitrary.dtype)
+                    CategoricalDtype(
+                        categories=arbitrary.dtype.categories,
+                        ordered=arbitrary.dtype.ordered,
+                    )
                 )
             return result
         elif is_pandas_nullable_extension_dtype(arbitrary.dtype):

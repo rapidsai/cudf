@@ -1452,7 +1452,7 @@ def _read_parquet(
         ):
             filepaths_or_buffers = filepaths_or_buffers[0]
 
-        return DataFrame.from_pandas(
+        return DataFrame(
             pd.read_parquet(
                 filepaths_or_buffers,
                 columns=columns,
