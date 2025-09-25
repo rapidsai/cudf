@@ -386,6 +386,8 @@ void reader_impl::preprocess_file(read_mode mode)
                                  _options.row_group_indices,
                                  _options.skip_rows,
                                  _options.num_rows,
+                                 _options.skip_bytes,
+                                 _options.num_bytes,
                                  output_dtypes,
                                  _output_column_schemas,
                                  _expr_conv.get_converted_expr(),
