@@ -100,13 +100,16 @@ class DecimalBaseColumn(NumericalBaseColumn):
     @classmethod
     def _from_32_64_arrow(
         cls,
-        data: pa.Array,
+        data: pa.Array | pa.ChunkedArray,
         *,
         view_type: Literal["int32", "int64"],
         plc_type: plc.TypeId,
         step: int,
     ) -> Self:
         # Can remove when pyarrow 19 is the minimum version
+        # Handle ChunkedArray by combining chunks first
+        if isinstance(data, pa.ChunkedArray):
+            data = data.combine_chunks()
         mask_buf, data_buf = data.buffers()
         rmm_data_buffer = rmm.DeviceBuffer.to_device(
             np.frombuffer(data_buf)
