@@ -346,14 +346,9 @@ class CategoricalColumn(column.ColumnBase):
         if arrow_type:
             raise NotImplementedError(f"{arrow_type=} is not supported.")
 
-        if self.categories.dtype.kind == "f":
-            col = type(self)(
-                data=self.data,  # type: ignore[arg-type]
-                size=self.size,
-                dtype=self.dtype,
-                mask=self.notnull().fillna(False).as_mask(),
-                children=self.children,
-            )
+        if self.categories.dtype.kind == "f" and self.nullable:
+            new_mask = self.notnull().fillna(False).as_mask()
+            col = self.set_mask(new_mask)
         else:
             col = self
 
