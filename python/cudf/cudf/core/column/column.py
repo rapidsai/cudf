@@ -1172,11 +1172,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if out:
             self._mimic_inplace(out, inplace=True)
 
-    def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
-        if is_na_like(other):
-            return pa.scalar(None, type=cudf_dtype_to_pa_type(self.dtype))
-        return NotImplemented
-
     def _all_bools_with_nulls(
         self, other: ColumnBase, bool_fill_value: bool
     ) -> ColumnBase:

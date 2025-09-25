@@ -299,9 +299,7 @@ class CategoricalColumn(column.ColumnBase):
             return self._get_decategorized_column()._binaryop(other, op)
         return self.codes._binaryop(other.codes, op)
 
-    def _normalize_binop_operand(
-        self, other: ColumnBinaryOperand
-    ) -> column.ColumnBase:
+    def _normalize_binop_operand(self, other: Any) -> column.ColumnBase:
         if isinstance(other, column.ColumnBase):
             if not isinstance(other, CategoricalColumn):
                 # We'll compare self's decategorized values later

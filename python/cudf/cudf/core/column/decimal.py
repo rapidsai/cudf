@@ -35,6 +35,7 @@ from cudf.utils.dtypes import (
     pyarrow_dtype_to_cudf_dtype,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
+from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -313,7 +314,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
     def _normalize_binop_operand(
         self, other: Any
-    ) -> tuple[int | Decimal | ColumnBase, DecimalDtype]:
+    ) -> tuple[int | Decimal | ColumnBase | pa.Scalar, DecimalDtype]:
         # TODO: Once pyarrow 19 is the minimum version, we can remove the
         # passing the DecimalDtype since pyarrow scalars support decimal32/64 types
         if isinstance(other, ColumnBase):
@@ -336,7 +337,12 @@ class DecimalBaseColumn(NumericalBaseColumn):
             return other, other.dtype
         elif isinstance(other, (int, Decimal)):
             return other, self.dtype._from_decimal(Decimal(other))
-        return super()._normalize_binop_operand(other), self.dtype
+        # Inline base class functionality - check for NA-like values
+        if is_na_like(other):
+            return pa.scalar(
+                None, type=cudf_dtype_to_pa_type(self.dtype)
+            ), self.dtype
+        return NotImplemented, self.dtype
 
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
         return self.cast(dtype=dtype)  # type: ignore[return-value]
