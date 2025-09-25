@@ -4,6 +4,8 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.testing import assert_eq
+from cudf.testing._utils import assert_exceptions_equal
 
 
 def test_rangeindex_contains():
@@ -22,3 +24,33 @@ def test_range_index_is_unique_monotonic(start, stop, step):
     assert index.is_unique == index_pd.is_unique
     assert index.is_monotonic_increasing == index_pd.is_monotonic_increasing
     assert index.is_monotonic_decreasing == index_pd.is_monotonic_decreasing
+
+
+@pytest.mark.parametrize("data", [range(2), [10, 11, 12]])
+def test_index_contains_hashable(data):
+    gidx = cudf.Index(data)
+    pidx = gidx.to_pandas()
+
+    assert_exceptions_equal(
+        lambda: [] in gidx,
+        lambda: [] in pidx,
+        lfunc_args_and_kwargs=((),),
+        rfunc_args_and_kwargs=((),),
+    )
+
+
+def test_bool_rangeindex_raises():
+    assert_exceptions_equal(
+        lfunc=bool,
+        rfunc=bool,
+        lfunc_args_and_kwargs=[[pd.RangeIndex(0)]],
+        rfunc_args_and_kwargs=[[cudf.RangeIndex(0)]],
+    )
+
+
+def test_from_pandas_rangeindex():
+    idx1 = pd.RangeIndex(start=0, stop=4, step=1, name="myindex")
+    idx2 = cudf.from_pandas(idx1)
+
+    assert_eq(idx1.values, idx2.values)
+    assert idx1.name == idx2.name
