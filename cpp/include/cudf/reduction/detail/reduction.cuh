@@ -21,8 +21,6 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/utilities/cast_functor.cuh>
-#include <cudf/detail/utilities/cuda_memcpy.hpp>
-#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -68,15 +66,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
   auto const binary_op     = cudf::detail::cast_functor<OutputType>(op.get_binary_op());
   auto const initial_value = init.value_or(op.template get_identity<OutputType>());
   using ScalarType         = cudf::scalar_type_t<OutputType>;
-  
-  // Use pinned memory for initial_value to optimize host-to-device transfer
-  auto pinned_initial = cudf::detail::make_pinned_vector<OutputType>(1, stream);
-  pinned_initial[0] = initial_value;  // Assign to element zero as suggested
-  
-  // Create scalar from pinned memory using rmm::device_scalar constructor
-  rmm::device_scalar<OutputType> device_data(stream, mr);
-  cudf::detail::cuda_memcpy_async<OutputType>(cudf::device_span<OutputType>{device_data.data(), 1}, pinned_initial, stream);
-  auto result = std::make_unique<ScalarType>(std::move(device_data), true, stream, mr);
+  auto result              = std::make_unique<ScalarType>(initial_value, true, stream, mr);
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
@@ -223,13 +213,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
 
   // compute the result value from intermediate value in device
   using ScalarType = cudf::scalar_type_t<OutputType>;
-  
-  // Use pinned memory for initial OutputType{0} to optimize host-to-device transfer
-  auto pinned_initial = cudf::detail::make_pinned_vector<OutputType>(1, stream);
-  pinned_initial[0] = OutputType{0};  // Assign to element zero as suggested
-  auto result = std::make_unique<ScalarType>(stream, mr);
-  cudf::detail::cuda_memcpy_async<OutputType>(cudf::device_span<OutputType>{result->data(), 1}, pinned_initial, stream);
-  
+  auto result      = std::make_unique<ScalarType>(OutputType{0}, true, stream, mr);
   thrust::for_each_n(rmm::exec_policy(stream),
                      intermediate_result.data(),
                      1,
