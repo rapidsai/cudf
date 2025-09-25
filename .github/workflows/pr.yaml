@@ -19,28 +19,28 @@ jobs:
       - conda-cpp-build
       - cpp-linters
       - conda-cpp-checks
-      # - conda-cpp-tests
+      - conda-cpp-tests
       - conda-python-build
-      # - conda-python-cudf-tests
+      - conda-python-cudf-tests
       - conda-python-other-tests
-      # - conda-java-tests
-      # - conda-notebook-tests
-      # - docs-build
-      # - wheel-build-libcudf
-      # - wheel-build-pylibcudf
-      # - wheel-build-cudf
-      # - wheel-tests-cudf
-      # - wheel-build-cudf-polars
-      # - wheel-tests-cudf-polars
-      # - cudf-polars-polars-tests
-      # - wheel-build-dask-cudf
-      # - wheel-tests-dask-cudf
+      - conda-java-tests
+      - conda-notebook-tests
+      - docs-build
+      - wheel-build-libcudf
+      - wheel-build-pylibcudf
+      - wheel-build-cudf
+      - wheel-tests-cudf
+      - wheel-build-cudf-polars
+      - wheel-tests-cudf-polars
+      - cudf-polars-polars-tests
+      - wheel-build-dask-cudf
+      - wheel-tests-dask-cudf
       - devcontainer
-      # - unit-tests-cudf-pandas
-      # - pandas-tests
-      # - narwhals-tests
+      - unit-tests-cudf-pandas
+      - pandas-tests
+      - narwhals-tests
       - telemetry-setup
-      # - third-party-integration-tests-cudf-pandas
+      - third-party-integration-tests-cudf-pandas
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@branch-25.10
     if: always()
