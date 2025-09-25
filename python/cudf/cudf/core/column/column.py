@@ -2085,7 +2085,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         self,
         cats: ColumnBase,
         dtype: Dtype | None = None,
-        na_sentinel: pa.Scalar | None = None,
     ) -> NumericalColumn:
         """
         Convert each value in `self` into an integer code, with `cats`
@@ -2116,8 +2115,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         ]
         dtype: int8
         """
-        if na_sentinel is None or not na_sentinel.is_valid:
-            na_sentinel = pa.scalar(-1)
+        na_sentinel = pa.scalar(-1)
 
         def _return_sentinel_column():
             return as_column(na_sentinel, dtype=dtype, length=len(self))
