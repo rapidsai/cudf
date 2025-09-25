@@ -58,9 +58,13 @@ class IntervalColumn(StructColumn):
         return dtype
 
     @classmethod
-    def from_arrow(cls, data: pa.Array) -> Self:
-        new_col = super().from_arrow(data.storage)
-        return new_col._with_type_metadata(IntervalDtype.from_arrow(data.type))  # type: ignore[return-value]
+    def from_arrow(cls, array: pa.Array) -> Self:
+        if not isinstance(array, pa.ExtensionArray):
+            raise ValueError("Expected ExtensionArray for interval data")
+        new_col = super().from_arrow(array.storage)
+        return new_col._with_type_metadata(
+            IntervalDtype.from_arrow(array.type)
+        )  # type: ignore[return-value]
 
     def to_arrow(self) -> pa.Array:
         typ = self.dtype.to_arrow()
