@@ -815,7 +815,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return self.to_pylibcudf(mode="read").to_arrow()
 
     @classmethod
-    def from_arrow(cls, array: pa.Array) -> ColumnBase:
+    def from_arrow(cls, array: pa.Array | pa.ChunkedArray) -> ColumnBase:
         """
         Convert PyArrow Array/ChunkedArray to column
 
