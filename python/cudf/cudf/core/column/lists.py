@@ -199,8 +199,9 @@ class ListColumn(ColumnBase):
         return pa.ListArray.from_buffers(
             pa_type,
             len(self),
-            buffers,
-            children=[elements],  # type: ignore[arg-type]
+            # PyArrow stubs are too strict - from_buffers should accept None for missing buffers
+            buffers,  # type: ignore[arg-type]
+            children=[elements],
         )
 
     def set_base_data(self, value):
