@@ -193,11 +193,14 @@ class ListColumn(ColumnBase):
 
         if self.nullable:
             nbuf = pa.py_buffer(self.mask.memoryview())  # type: ignore[union-attr]
-            buffers = (nbuf, offsets.buffers()[1])
+            buffers = [nbuf, offsets.buffers()[1]]
         else:
-            buffers = offsets.buffers()
+            buffers = list(offsets.buffers())
         return pa.ListArray.from_buffers(
-            pa_type, len(self), buffers, children=[elements]
+            pa_type,
+            len(self),
+            buffers,
+            children=[elements],  # type: ignore[arg-type]
         )
 
     def set_base_data(self, value):
