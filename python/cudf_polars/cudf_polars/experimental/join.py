@@ -63,7 +63,7 @@ class RMPFJoinIntegration:
     def join_partition(
         left_input: Callable[[int], DataFrame],
         right_input: Callable[[int], DataFrame],
-        bcast_info: BCastJoinInfo,
+        bcast_info: BCastJoinInfo | None,
         options: Any,
     ) -> DataFrame:
         """
@@ -83,6 +83,7 @@ class RMPFJoinIntegration:
             of chunks the callable can produce.
         bcast_info
             The broadcast join information.
+            This should be None for a regular hash join.
         options
             Additional join options.
 
@@ -95,7 +96,7 @@ class RMPFJoinIntegration:
         This method is used to produce a single joined table chunk.
         """
         non_child_args = options.get("non_child_args", ())
-        if bcast_info.bcast_side == "none":
+        if bcast_info is None:
             return Join.do_evaluate(*non_child_args, left_input(0), right_input(0))
         else:  # pragma: no cover
             raise NotImplementedError("Broadcast join not implemented.")
