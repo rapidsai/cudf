@@ -718,7 +718,7 @@ def _(
         else [n.name for n in ir.keys]
     )
     unique_counts = [
-        # k will be missing from child_column_stats if it's 'literal'
+        # k will be missing from child_column_stats if it's a literal
         child_column_stats.get(k, ColumnStats(name=k)).unique_count.value
         for k in key_names
     ]

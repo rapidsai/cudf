@@ -52,7 +52,7 @@ def test_feather_reader(pdf, columns, tmp_path):
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
 def test_feather_writer(tmp_path, pdf):
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     pdf_fname = tmp_path / "pdf.feather"
     gdf_fname = tmp_path / "gdf.feather"
 
