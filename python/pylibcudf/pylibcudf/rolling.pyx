@@ -136,7 +136,7 @@ cpdef Table grouped_range_rolling_window(
         Possibly empty table of sorted keys defining groups.
     orderby
         Column defining window ranges. Must be sorted, if
-       ``group_keys`` is not empty, must be sorted groupwise.
+        ``group_keys`` is not empty, must be sorted groupwise.
     order
         Sort order of the ``orderby`` column.
     null_order
