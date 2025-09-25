@@ -433,6 +433,7 @@ ConfigureTest(
   utilities_tests/pinned_memory_tests.cpp
   utilities_tests/type_check_tests.cpp
   utilities_tests/type_list_tests.cpp
+  utilities_tests/context_tests.cpp
 )
 
 # ##################################################################################################
