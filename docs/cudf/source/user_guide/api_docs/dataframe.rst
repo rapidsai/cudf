@@ -246,6 +246,14 @@ Time Series-related
    DataFrame.shift
    DataFrame.resample
 
+
+Metadata
+~~~~~~~~
+.. autosummary::
+   :toctree: api/
+
+   DataFrame.attrs
+
 Serialization / IO / conversion
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 .. autosummary::

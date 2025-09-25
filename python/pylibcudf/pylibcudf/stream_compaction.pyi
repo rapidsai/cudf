@@ -2,6 +2,7 @@
 
 from enum import IntEnum
 
+from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 from rmm.pylibrmm.stream import Stream
 
 from pylibcudf.column import Column
@@ -19,15 +20,20 @@ def drop_nulls(
     keys: list[int],
     keep_threshold: int,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Table: ...
 def drop_nans(
     source_table: Table,
     keys: list[int],
     keep_threshold: int,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Table: ...
 def apply_boolean_mask(
-    source_table: Table, boolean_mask: Column, stream: Stream | None = None
+    source_table: Table,
+    boolean_mask: Column,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Table: ...
 def unique(
     input: Table,
@@ -35,6 +41,7 @@ def unique(
     keep: DuplicateKeepOption,
     nulls_equal: NullEquality,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Table: ...
 def distinct(
     input: Table,
@@ -43,6 +50,7 @@ def distinct(
     nulls_equal: NullEquality,
     nans_equal: NanEquality,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Table: ...
 def distinct_indices(
     input: Table,
@@ -50,6 +58,7 @@ def distinct_indices(
     nulls_equal: NullEquality,
     nans_equal: NanEquality,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
 def stable_distinct(
     input: Table,
@@ -58,6 +67,7 @@ def stable_distinct(
     nulls_equal: NullEquality,
     nans_equal: NanEquality,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Table: ...
 def unique_count(
     source: Column,

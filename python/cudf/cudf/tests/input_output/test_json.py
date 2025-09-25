@@ -51,7 +51,7 @@ def pdf(request):
 
 @pytest.fixture
 def gdf(pdf):
-    return cudf.DataFrame.from_pandas(pdf)
+    return cudf.DataFrame(pdf)
 
 
 @pytest.fixture(params=[0, 10])
@@ -169,7 +169,7 @@ def test_cudf_json_writer(pdf, lines):
     for col_name in pdf.columns:
         if "datetime" in col_name:
             pdf.drop(col_name, axis=1, inplace=True)
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     pdf_string = pdf.to_json(orient="records", lines=lines)
     gdf_string = gdf.to_json(orient="records", lines=lines, engine="cudf")
 
