@@ -20,7 +20,6 @@ from polars.exceptions import ComputeError, PerformanceWarning
 
 import pylibcudf
 import rmm
-import rmm.statistics
 from rmm._cuda import gpu
 
 import cudf_polars.dsl.tracing
