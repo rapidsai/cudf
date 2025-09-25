@@ -61,13 +61,19 @@ fi
 MAIN_RUN_ID=$(
     gh run list                       \
         -w "Pandas Test Job"          \
-        -b branch-25.10               \
+        -b branch-25.12               \
         --repo 'rapidsai/cudf'        \
         --status success              \
         --limit 7                     \
         --json 'createdAt,databaseId' \
         --jq 'sort_by(.createdAt) | reverse | .[0] | .databaseId'
 )
+
+if [[ -z "${MAIN_RUN_ID}" ]]; then
+    rapids-logger "No MAIN_RUN_ID found, exiting."
+    exit ${EXITCODE}
+fi
+
 rapids-logger "Fetching latest available results from nightly: ${MAIN_RUN_ID}"
 gh run download                  \
     --repo 'rapidsai/cudf'        \

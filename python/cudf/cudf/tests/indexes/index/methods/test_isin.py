@@ -31,7 +31,7 @@ from cudf.testing._utils import expect_warning_if
 )
 def test_isin_index(index, values):
     pidx = index
-    gidx = cudf.Index.from_pandas(pidx)
+    gidx = cudf.Index(pidx)
 
     is_dt_str = (
         next(iter(values), None) == "2019-01-01 04:00:00"

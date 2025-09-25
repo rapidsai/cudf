@@ -102,9 +102,9 @@ def dtype(arbitrary: Any) -> DtypeObj:
     elif isinstance(pd_dtype, PANDAS_NUMPY_DTYPE):
         return dtype(pd_dtype.numpy_dtype)
     elif isinstance(pd_dtype, pd.CategoricalDtype):
-        return cudf.CategoricalDtype.from_pandas(pd_dtype)
+        return CategoricalDtype(pd_dtype.categories, pd_dtype.ordered)
     elif isinstance(pd_dtype, pd.IntervalDtype):
-        return cudf.IntervalDtype.from_pandas(pd_dtype)
+        return IntervalDtype(pd_dtype.subtype, pd_dtype.closed)
     elif isinstance(pd_dtype, pd.DatetimeTZDtype):
         return pd_dtype
     else:
@@ -252,6 +252,11 @@ class CategoricalDtype(_BaseDtype):
         >>> cudf_dtype
         CategoricalDtype(categories=['b', 'a'], ordered=True, categories_dtype=object)
         """
+        warnings.warn(
+            "from_pandas is deprecated and will be removed in a future version. "
+            "Pass the pandas.CategoricalDtype categories and ordered to the CategoricalDtype constructor instead.",
+            FutureWarning,
+        )
         return CategoricalDtype(
             categories=dtype.categories, ordered=dtype.ordered
         )
@@ -286,7 +291,7 @@ class CategoricalDtype(_BaseDtype):
             raise ValueError("categories must be a list-like object")
         if len(categories) == 0 and not isinstance(
             getattr(categories, "dtype", None),
-            (cudf.IntervalDtype, pd.IntervalDtype),
+            (IntervalDtype, pd.IntervalDtype),
         ):
             dtype = CUDF_STRING_DTYPE
         else:
@@ -975,10 +980,12 @@ class IntervalDtype(StructDtype):
     def __init__(
         self,
         subtype: None | Dtype = None,
-        closed: Literal["left", "right", "neither", "both"] = "right",
+        closed: Literal["left", "right", "neither", "both", None] = "right",
     ) -> None:
         if closed in {"left", "right", "neither", "both"}:
             self.closed = closed
+        elif closed is None:
+            self.closed = "right"
         else:
             raise ValueError(f"{closed=} is not valid")
         if subtype is None:
@@ -1019,6 +1026,11 @@ class IntervalDtype(StructDtype):
 
     @classmethod
     def from_pandas(cls, pd_dtype: pd.IntervalDtype) -> Self:
+        warnings.warn(
+            "from_pandas is deprecated and will be removed in a future version. "
+            "Pass the pandas.IntervalDtype subtype and closed to the IntervalDtype constructor instead.",
+            FutureWarning,
+        )
         return cls(
             subtype=pd_dtype.subtype,
             closed="right" if pd_dtype.closed is None else pd_dtype.closed,

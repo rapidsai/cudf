@@ -402,6 +402,8 @@ class reader_impl {
     // User specified reading rows/stripes selection.
     int64_t const skip_rows;
     std::optional<int64_t> num_rows;
+    size_t skip_bytes;
+    std::optional<size_t> num_bytes;
     std::vector<std::vector<size_type>> row_group_indices;
   } _options;
 

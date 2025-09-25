@@ -36,7 +36,10 @@ from pylibcudf.libcudf.copying cimport get_element
 
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 from rmm.pylibrmm.stream cimport Stream
-from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.memory_resource cimport (
+    DeviceMemoryResource,
+    get_current_device_resource,
+)
 
 from .gpumemoryview cimport gpumemoryview
 from .filling cimport sequence
@@ -86,6 +89,7 @@ cdef is_iterable(obj):
 cdef class _ArrowColumnHolder:
     """A holder for an Arrow column for gpumemoryview lifetime management."""
     cdef unique_ptr[arrow_column] col
+    cdef DeviceMemoryResource mr
 
 
 cdef class OwnerWithCAI:
@@ -349,12 +353,12 @@ cdef class Column:
         self,
         metadata: ColumnMetadata | str | None = None
     ) -> ArrowLike:
-        """Create a PyArrow array from a pylibcudf column.
+        """Create a pyarrow array from a pylibcudf column.
 
         Parameters
         ----------
-        metadata : list
-            The metadata to attach to the columns of the table.
+        metadata : ColumnMetadata | str | None
+            The metadata to attach to the column.
 
         Returns
         -------
@@ -433,6 +437,7 @@ cdef class Column:
             )
 
             result = _ArrowColumnHolder()
+            result.mr = get_current_device_resource()
             with nogil:
                 c_result = make_unique[arrow_column](
                     move(dereference(c_schema)),
@@ -448,6 +453,7 @@ cdef class Column:
             c_array = <ArrowArray*>PyCapsule_GetPointer(h_array, "arrow_array")
 
             result = _ArrowColumnHolder()
+            result.mr = get_current_device_resource()
             with nogil:
                 c_result = make_unique[arrow_column](
                     move(dereference(c_schema)),
@@ -467,6 +473,7 @@ cdef class Column:
             )
 
             result = _ArrowColumnHolder()
+            result.mr = get_current_device_resource()
             with nogil:
                 c_result = make_unique[arrow_column](
                     move(dereference(c_arrow_stream)), stream.view()
@@ -768,7 +775,7 @@ cdef class Column:
             )
         return Column.from_libcudf(move(c_result), stream)
 
-    cpdef Scalar to_scalar(self, Stream stream=None):
+    cpdef Scalar to_scalar(self, Stream stream=None, DeviceMemoryResource mr=None):
         """
         Return the first value of 1-element column as a Scalar.
 
@@ -778,6 +785,8 @@ cdef class Column:
             If the column has more than one row.
         stream : Stream | None
             CUDA stream on which to perform the operation.
+        mr : DeviceMemoryResource | None
+            The memory resource to use for allocations.
 
         Returns
         -------
@@ -790,9 +799,10 @@ cdef class Column:
         cdef column_view cv = self.view()
         cdef unique_ptr[scalar] result
         stream = _get_stream(stream)
+        mr = _get_memory_resource(mr)
 
         with nogil:
-            result = get_element(cv, 0, stream.view())
+            result = get_element(cv, 0, stream.view(), mr.get_mr())
 
         return Scalar.from_libcudf(move(result))
 
