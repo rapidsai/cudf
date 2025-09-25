@@ -184,10 +184,12 @@ class reader_impl {
    * will be populated, and if applicable, the delta_temp_buf in the subpass struct will
    * be allocated and the pages in the subpass will point into it properly.
    *
+   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
    * @param read_info The range of rows to be read in the subpass
    * @param page_mask Boolean vector indicating if a page needs to be decoded or is pruned
    */
-  void preprocess_chunk_strings(row_range const& read_info,
+  void preprocess_chunk_strings(read_mode mode,
+                                row_range const& read_info,
                                 cudf::device_span<bool const> page_mask);
 
   /**

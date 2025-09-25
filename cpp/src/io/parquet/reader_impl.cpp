@@ -598,7 +598,8 @@ void reader_impl::populate_metadata(table_metadata& out_metadata)
                                      out_metadata.per_file_user_data[0].end()};
 }
 
-void reader_impl::preprocess_chunk_strings(row_range const& read_info,
+void reader_impl::preprocess_chunk_strings(read_mode mode,
+                                           row_range const& read_info,
                                            cudf::device_span<bool const> page_mask)
 {
   auto& pass    = *_pass_itm_data;
@@ -614,8 +615,16 @@ void reader_impl::preprocess_chunk_strings(row_range const& read_info,
   // entire pass) we need to recompute
   bool full_string_sizes_computed = _output_chunk_read_limit > 0;
   bool const need_string_size_recompute =
+    // if we haven't computed string sizes at all because we're not in the chunked read path
     (!full_string_sizes_computed) ||
-    ((pass.skip_rows != read_info.skip_rows) || (pass.num_rows != read_info.num_rows));
+    // if we are in the chunked path and we have chunked to something other than the initial row
+    // bounds
+    ((pass.skip_rows != read_info.skip_rows) || (pass.num_rows != read_info.num_rows)) ||
+    // if the user has specified skip_rows / num_rows at all. i am explicitly not calling
+    // uses_custom_row_bounds() here because it will return true at all times in the chunked
+    // read case, which we don't want. if we are doing a chunked read, but no chunking has occurred,
+    // the full size compute step is all we need.
+    ((_options.num_rows.has_value() or _options.skip_rows != 0));
 
   if (need_string_size_recompute) {
     constexpr bool compute_all_string_sizes = false;
@@ -692,7 +701,7 @@ table_with_metadata reader_impl::read_chunk_internal(read_mode mode)
   }
 
   // preprocess strings
-  preprocess_chunk_strings(read_info, page_mask);
+  preprocess_chunk_strings(mode, read_info, page_mask);
 
   // Allocate memory buffers for the output columns.
   allocate_columns(mode, read_info.skip_rows, read_info.num_rows);

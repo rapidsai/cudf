@@ -734,7 +734,7 @@ table_with_metadata hybrid_scan_reader_impl::read_chunk_internal(
   }
 
   // preprocess strings
-  preprocess_chunk_strings(read_info, page_mask);
+  preprocess_chunk_strings(mode, read_info, page_mask);
 
   // Allocate memory buffers for the output columns.
   allocate_columns(mode, read_info.skip_rows, read_info.num_rows);
