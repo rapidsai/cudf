@@ -1637,6 +1637,6 @@ cdef list _arrow_to_pylist_impl(type_id dtype, ArrowArray* arr):
         if PyErr_Occurred():
             raise
         raise NotImplementedError(
-            f"Column with dtype={TypeId(<int>dtype)} not supported"
+            f"Column with dtype={TypeId(dtype)} not supported"
         )
     return <list>list_
