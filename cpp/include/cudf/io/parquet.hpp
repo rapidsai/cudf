@@ -181,7 +181,7 @@ class parquet_reader_options {
   }
 
   /**
-   * @brief Returns boolean depending on whether to allow readning non-existent projected columns.
+   * @brief Returns boolean depending on whether to allow reading non-existent projected columns.
    *
    * @return `true` if non-existent projected columns will be allowed while reading.
    *
