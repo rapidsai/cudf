@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import copy
 import itertools
 import operator
 import textwrap
@@ -288,6 +289,7 @@ class IndexedFrame(Frame):
         self,
         data: ColumnAccessor | MutableMapping[Any, ColumnBase],
         index: Index,
+        attrs: dict[Hashable, Any] | None = None,
     ):
         super().__init__(data=data)
         if not isinstance(index, Index):
@@ -300,6 +302,10 @@ class IndexedFrame(Frame):
                 f"match length of index ({len(index)})"
             )
         self._index = index
+        if attrs is None:
+            self._attrs = {}
+        else:
+            self._attrs = attrs
 
     @property
     def _num_rows(self) -> int:
@@ -310,11 +316,47 @@ class IndexedFrame(Frame):
     def _index_names(self) -> tuple[Any, ...]:  # TODO: Tuple[str]?
         return self.index._column_names
 
+    @property
+    def attrs(self) -> dict[Hashable, Any]:
+        """
+        Dictionary of global attributes of this dataset.
+
+        Notes
+        -----
+        Many operations that create new datasets will copy ``attrs``. Copies
+        are always deep so that changing ``attrs`` will only affect the
+        present dataset. ``cudf.concat`` copies ``attrs`` only if all input
+        datasets have the same ``attrs``.
+
+        Examples
+        --------
+        For Series:
+
+        >>> import cudf
+        >>> ser = cudf.Series([1, 2, 3])
+        >>> ser.attrs = {"A": [10, 20, 30]}
+        >>> ser.attrs
+        {'A': [10, 20, 30]}
+
+        For DataFrame:
+
+        >>> df = cudf.DataFrame({'A': [1, 2], 'B': [3, 4]})
+        >>> df.attrs = {"A": [10, 20, 30]}
+        >>> df.attrs
+        {'A': [10, 20, 30]}
+        """
+        return self._attrs
+
+    @attrs.setter
+    def attrs(self, value: Mapping[Hashable, Any]) -> None:
+        self._attrs = dict(value)
+
     @classmethod
-    def _from_data(
+    def _from_data(  # type: ignore[override]
         cls,
         data: MutableMapping,
         index: Index | None = None,
+        attrs: dict | None = None,
     ):
         out = super()._from_data(data)
         if index is None:
@@ -325,12 +367,27 @@ class IndexedFrame(Frame):
                 f"index must be a cudf.Index not {type(index).__name__}"
             )
         out._index = index
+        out._attrs = {} if attrs is None else attrs
         return out
+
+    @_performance_tracking
+    def _get_columns_by_label(self, labels) -> Self:
+        """
+        Returns columns of the Frame specified by `labels`.
+
+        Akin to cudf.DataFrame(...).loc[:, labels]
+        """
+        return self._from_data(
+            self._data.select_by_label(labels),
+            index=self.index,
+            attrs=self.attrs,
+        )
 
     @_performance_tracking
     def _from_data_like_self(self, data: MutableMapping):
         out = super()._from_data_like_self(data)
         out.index = self.index
+        out._attrs = copy.deepcopy(self._attrs)
         return out
 
     @_performance_tracking
@@ -373,7 +430,7 @@ class IndexedFrame(Frame):
                 index.name = index_names[0]
 
         data = dict(zip(column_names, data_columns, strict=True))
-        frame = type(self)._from_data(data, index)
+        frame = type(self)._from_data(data, index, attrs=self.attrs)
         return frame._copy_type_metadata(self)
 
     def __round__(self, digits=0):
@@ -387,6 +444,7 @@ class IndexedFrame(Frame):
     ) -> Self | None:
         if inplace:
             self._index = result.index
+            self._attrs = result._attrs
         return super()._mimic_inplace(result, inplace)
 
     @_performance_tracking
@@ -563,6 +621,7 @@ class IndexedFrame(Frame):
             self._data.copy(deep=deep),
             # Indexes are immutable so copies can always be shallow.
             self.index.copy(deep=False),
+            attrs=copy.deepcopy(self.attrs) if deep else self._attrs,
         )
 
     @_performance_tracking
@@ -2028,7 +2087,7 @@ class IndexedFrame(Frame):
         )
         return self._from_data_like_self(
             self._data._from_columns_like_self(data_columns)
-        )
+        )._copy_type_metadata(self)
 
     @_performance_tracking
     def truncate(self, before=None, after=None, axis=0, copy=True):
@@ -3171,7 +3230,9 @@ class IndexedFrame(Frame):
             pa_scalar_to_plc_scalar(pa.scalar(False)),
             bounds_check=False,
         )
-        return cudf.Series._from_column(result, index=self.index, name=name)
+        return cudf.Series._from_column(
+            result, index=self.index, name=name, attrs=self.attrs
+        )
 
     @_performance_tracking
     def _empty_like(self, keep_index: bool = True) -> Self:
@@ -3480,7 +3541,9 @@ class IndexedFrame(Frame):
             col = as_column(ans_col, retty)
 
         col.set_base_mask(ans_mask.as_mask())
-        result = cudf.Series._from_column(col, index=self.index)
+        result = cudf.Series._from_column(
+            col, index=self.index, attrs=self.attrs
+        )
 
         return result
 
@@ -3787,7 +3850,10 @@ class IndexedFrame(Frame):
                     },
                     index=df.index,
                 )
+                diff = index.difference(df.index)
                 df = lhs.join(rhs, how="left", sort=True)
+                if fill_value is not NA and len(diff) > 0:
+                    df.loc[diff] = fill_value
                 # double-argsort to map back from sorted to unsorted positions
                 df = df.take(index.argsort(ascending=True).argsort())
 
@@ -3825,9 +3891,16 @@ class IndexedFrame(Frame):
             name: (
                 df._data[name].copy(deep=deep)
                 if name in df._data
-                else column_empty(
-                    dtype=dtypes.get(name, np.dtype(np.float64)),
-                    row_count=len(index),
+                else (
+                    column_empty(
+                        dtype=dtypes.get(name, np.dtype(np.float64)),
+                        row_count=len(index),
+                    ).fillna(fill_value)
+                    if fill_value is not NA
+                    else column_empty(
+                        dtype=dtypes.get(name, np.dtype(np.float64)),
+                        row_count=len(index),
+                    )
                 )
             )
             for name in names
@@ -3841,9 +3914,9 @@ class IndexedFrame(Frame):
                 rangeindex=rangeindex,
             ),
             index=index,
+            attrs=self.attrs,
         )
 
-        result.fillna(fill_value, inplace=True)
         return self._mimic_inplace(result, inplace=inplace)
 
     def round(self, decimals=0, how="half_even"):
@@ -4826,6 +4899,7 @@ class IndexedFrame(Frame):
                 **ca_attributes,
             ),
             index=out_index,
+            attrs=self.attrs,
         )
 
     def _make_operands_and_index_for_binop(
@@ -6480,6 +6554,14 @@ class IndexedFrame(Frame):
         if not (convert_floating and convert_integer):
             return self.copy()
         else:
+            if (
+                cudf.get_option("mode.pandas_compatible")
+                and dtype_backend is None
+            ):
+                raise NotImplementedError(
+                    "The `dtype_backend` argument is not supported in "
+                    "pandas_compatible mode."
+                )
             cols = []
             for col in self._columns:
                 if col.dtype.kind == "f":
@@ -6782,13 +6864,17 @@ def _drop_rows_by_labels(
 
         if isinstance(obj, cudf.Series):
             return obj.__class__._from_data(
-                join_res.iloc[:, idx_nlv:]._data, index=midx, name=obj.name
+                join_res.iloc[:, idx_nlv:]._data,
+                index=midx,
+                name=obj.name,
+                attrs=obj.attrs,
             )
         else:
             return obj.__class__._from_data(
                 join_res.iloc[:, idx_nlv:]._data,
                 index=midx,
                 columns=obj._data.to_pandas_index,
+                attrs=obj.attrs,
             )
 
     else:
@@ -6810,6 +6896,7 @@ def _drop_rows_by_labels(
         # but we need to preserve the type of
         # index being returned, Hence this type-cast.
         res.index = res.index.astype(orig_index_type)
+        res._attrs = obj.attrs
         return res
 
 

@@ -78,10 +78,10 @@ cuDF can be installed with conda (via [miniforge](https://github.com/conda-forge
 
 ```bash
 # CUDA 13
-conda install -c rapidsai -c conda-forge cudf=25.10 cuda-version=13.0
+conda install -c rapidsai -c conda-forge cudf=25.12 cuda-version=13.0
 
 # CUDA 12
-conda install -c rapidsai -c conda-forge cudf=25.10 cuda-version=12.9
+conda install -c rapidsai -c conda-forge cudf=25.12 cuda-version=12.9
 ```
 
 We also provide [nightly Conda packages](https://anaconda.org/rapidsai-nightly) built from the HEAD

@@ -88,7 +88,7 @@ def test_dataframe_transpose(
             data[:] = null_rep
         pdf[colname] = data
 
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
 
     got_function = gdf.transpose()
     got_property = gdf.T
@@ -126,7 +126,7 @@ def test_dataframe_transpose_category():
         }
     )
 
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
 
     got_function = gdf.transpose()
     got_property = gdf.T

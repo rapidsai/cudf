@@ -71,7 +71,7 @@ class Agg(Expr):
                 raise NotImplementedError("Only support literal quantile values")
             if options == "equiprobable":
                 raise NotImplementedError("Quantile with equiprobable interpolation")
-            if plc.traits.is_duration(child.dtype.plc):
+            if plc.traits.is_duration(child.dtype.plc_type):
                 raise NotImplementedError("Quantile with duration data type")
             req = plc.aggregation.quantile(
                 quantiles=[quantile.value], interp=Agg.interp_mapping[options]
@@ -140,7 +140,7 @@ class Agg(Expr):
     ) -> Column:
         return Column(
             plc.Column.from_scalar(
-                plc.reduce.reduce(column.obj, request, self.dtype.plc),
+                plc.reduce.reduce(column.obj, request, self.dtype.plc_type),
                 1,
             ),
             name=column.name,
@@ -151,7 +151,7 @@ class Agg(Expr):
         null_count = column.null_count if not include_nulls else 0
         return Column(
             plc.Column.from_scalar(
-                plc.Scalar.from_py(column.size - null_count, self.dtype.plc),
+                plc.Scalar.from_py(column.size - null_count, self.dtype.plc_type),
                 1,
             ),
             name=column.name,
@@ -162,7 +162,7 @@ class Agg(Expr):
         if column.size == 0 or column.null_count == column.size:
             return Column(
                 plc.Column.from_scalar(
-                    plc.Scalar.from_py(0, self.dtype.plc),
+                    plc.Scalar.from_py(0, self.dtype.plc_type),
                     1,
                 ),
                 name=column.name,
@@ -174,7 +174,7 @@ class Agg(Expr):
         if propagate_nans and column.nan_count > 0:
             return Column(
                 plc.Column.from_scalar(
-                    plc.Scalar.from_py(float("nan"), self.dtype.plc),
+                    plc.Scalar.from_py(float("nan"), self.dtype.plc_type),
                     1,
                 ),
                 name=column.name,
@@ -188,7 +188,7 @@ class Agg(Expr):
         if propagate_nans and column.nan_count > 0:
             return Column(
                 plc.Column.from_scalar(
-                    plc.Scalar.from_py(float("nan"), self.dtype.plc),
+                    plc.Scalar.from_py(float("nan"), self.dtype.plc_type),
                     1,
                 ),
                 name=column.name,
