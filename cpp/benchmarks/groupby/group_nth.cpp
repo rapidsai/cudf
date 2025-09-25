@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,27 +15,24 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/groupby/group_common.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/copying.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/sorting.hpp>
 
-class Groupby : public cudf::benchmark {};
+#include <nvbench/nvbench.cuh>
 
-void BM_pre_sorted_nth(benchmark::State& state)
+static void bench_groupby_nth(nvbench::state& state)
 {
   // const cudf::size_type num_columns{(cudf::size_type)state.range(0)};
-  cudf::size_type const column_size{(cudf::size_type)state.range(0)};
+  auto const num_rows = static_cast<cudf::size_type>(state.get_int64("num_rows"));
 
   data_profile const profile = data_profile_builder().cardinality(0).no_validity().distribution(
     cudf::type_to_id<int64_t>(), distribution_id::UNIFORM, 0, 100);
   auto keys_table =
-    create_random_table({cudf::type_to_id<int64_t>()}, row_count{column_size}, profile);
-  auto vals = create_random_column(cudf::type_to_id<int64_t>(), row_count{column_size}, profile);
+    create_random_table({cudf::type_to_id<int64_t>()}, row_count{num_rows}, profile);
+  auto vals = create_random_column(cudf::type_to_id<int64_t>(), row_count{num_rows}, profile);
 
   auto sort_order  = cudf::sorted_order(*keys_table);
   auto sorted_keys = cudf::gather(*keys_table, *sort_order);
@@ -49,17 +46,15 @@ void BM_pre_sorted_nth(benchmark::State& state)
   requests[0].aggregations.push_back(
     cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(-1));
 
-  for (auto _ : state) {
-    cuda_event_timer timer(state, true);
-    auto result = gb_obj.aggregate(requests);
-  }
+  state.add_global_memory_reads<nvbench::int8_t>(vals->alloc_size());
+  auto groups = gb_obj.get_groups();
+  state.add_global_memory_writes<nvbench::int8_t>(groups.keys->alloc_size());
+
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
+  state.exec(nvbench::exec_tag::sync,
+             [&](nvbench::launch& launch) { auto result = gb_obj.aggregate(requests); });
 }
 
-BENCHMARK_DEFINE_F(Groupby, PreSortedNth)(::benchmark::State& state) { BM_pre_sorted_nth(state); }
-
-BENCHMARK_REGISTER_F(Groupby, PreSortedNth)
-  ->UseManualTime()
-  ->Unit(benchmark::kMillisecond)
-  ->Arg(1000000)    /*   1M */
-  ->Arg(10000000)   /*  10M */
-  ->Arg(100000000); /* 100M */
+NVBENCH_BENCH(bench_groupby_nth)
+  .set_name("nth")
+  .add_int64_axis("num_rows", {100'000, 1'000'000, 10'000'000, 100'000'000});

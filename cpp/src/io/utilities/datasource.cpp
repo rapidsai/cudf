@@ -25,6 +25,8 @@
 #include <cudf/utilities/span.hpp>
 
 #include <kvikio/file_handle.hpp>
+#include <kvikio/file_utils.hpp>
+#include <kvikio/mmap.hpp>
 
 #include <rmm/device_buffer.hpp>
 
@@ -109,20 +111,9 @@ class kvikio_source : public datasource {
                                         rmm::cuda_stream_view stream) override
   {
     CUDF_EXPECTS(supports_device_read(), "Device reads are not supported for this file.");
-
     auto const read_size = std::min(size, this->size() - offset);
-
-    if constexpr (std::is_same_v<HandleT, kvikio::FileHandle>) {
-      return _kvikio_handle.pread(dst,
-                                  read_size,
-                                  offset,
-                                  kvikio::defaults::task_size(),
-                                  kvikio::defaults::gds_threshold(),
-                                  false /* not to sync_default_stream */);
-    } else {
-      // HandleT is kvikio::RemoteHandle
-      return _kvikio_handle.pread(dst, read_size, offset);
-    }
+    stream.synchronize();
+    return _kvikio_handle.pread(dst, read_size, offset);
   }
 
   size_t device_read(size_t offset,
@@ -167,6 +158,22 @@ class file_source : public kvikio_source<kvikio::FileHandle> {
       "Reading a file using kvikIO, with compatibility mode %s.",
       _kvikio_handle.get_compat_mode_manager().is_compat_mode_preferred() ? "on" : "off");
   }
+
+  std::future<size_t> device_read_async(size_t offset,
+                                        size_t size,
+                                        uint8_t* dst,
+                                        rmm::cuda_stream_view stream) override
+  {
+    CUDF_EXPECTS(supports_device_read(), "Device reads are not supported for this file.");
+    auto const read_size = std::min(size, this->size() - offset);
+    stream.synchronize();
+    return _kvikio_handle.pread(dst,
+                                read_size,
+                                offset,
+                                kvikio::defaults::task_size(),
+                                kvikio::defaults::gds_threshold(),
+                                false /* not to sync_default_stream */);
+  }
 };
 
 /**
@@ -175,117 +182,22 @@ class file_source : public kvikio_source<kvikio::FileHandle> {
  * Unlike Arrow's memory mapped IO class, this implementation allows memory mapping a subset of the
  * file where the starting offset may not be zero.
  */
-class memory_mapped_source : public file_source {
+class memory_mapped_source : public kvikio_source<kvikio::MmapHandle> {
  public:
-  explicit memory_mapped_source(char const* filepath, size_t offset, size_t max_size_estimate)
-    : file_source(filepath)
+  explicit memory_mapped_source(char const* filepath,
+                                size_t offset,
+                                [[maybe_unused]] size_t max_size_estimate)
+    : kvikio_source{kvikio::MmapHandle()}
   {
-    if (this->size() != 0) {
-      // Memory mapping is not exclusive, so we can include the whole region we expect to read
-      map(_kvikio_handle.fd(), offset, max_size_estimate);
+    // Since the superclass kvikio_source is initialized with an empty mmap handle, `this->size()`
+    // returns 0 at this point. Use `kvikio::get_file_size()` instead.
+    auto const file_size = kvikio::get_file_size(filepath);
+    if (file_size != 0) {
+      CUDF_EXPECTS(offset < file_size, "Offset is past end of file", std::overflow_error);
+      _kvikio_handle =
+        kvikio::MmapHandle(filepath, "r", std::nullopt, 0, kvikio::FileHandle::m644, MAP_SHARED);
     }
   }
-
-  ~memory_mapped_source() override
-  {
-    if (_map_addr != nullptr) { unmap(); }
-  }
-
-  std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
-  {
-    // Clamp length to available data
-    auto const read_size = std::min(size, this->size() - offset);
-
-    // If the requested range is outside of the mapped region, read from the file
-    if (offset < _map_offset or offset + read_size > (_map_offset + _map_size)) {
-      return file_source::host_read(offset, read_size);
-    }
-
-    // If the requested range is only partially within the registered region, copy to a new
-    // host buffer to make the data safe to copy to the device
-    if (_reg_addr != nullptr and
-        (offset < _reg_offset or offset + read_size > (_reg_offset + _reg_size))) {
-      auto const src = static_cast<uint8_t*>(_map_addr) + (offset - _map_offset);
-
-      return std::make_unique<owning_buffer<std::vector<uint8_t>>>(
-        std::vector<uint8_t>(src, src + read_size));
-    }
-
-    return std::make_unique<non_owning_buffer>(
-      static_cast<uint8_t*>(_map_addr) + offset - _map_offset, read_size);
-  }
-
-  std::future<std::unique_ptr<datasource::buffer>> host_read_async(size_t offset,
-                                                                   size_t size) override
-  {
-    // Use the default implementation instead of the file_source's implementation
-    return datasource::host_read_async(offset, size);
-  }
-
-  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
-  {
-    // Clamp length to available data
-    auto const read_size = std::min(size, this->size() - offset);
-
-    // If the requested range is outside of the mapped region, read from the file
-    if (offset < _map_offset or offset + read_size > (_map_offset + _map_size)) {
-      return file_source::host_read(offset, read_size, dst);
-    }
-
-    auto const src = static_cast<uint8_t*>(_map_addr) + (offset - _map_offset);
-    std::memcpy(dst, src, read_size);
-    return read_size;
-  }
-
-  std::future<size_t> host_read_async(size_t offset, size_t size, uint8_t* dst) override
-  {
-    // Use the default implementation instead of the file_source's implementation
-    return datasource::host_read_async(offset, size, dst);
-  }
-
-  [[nodiscard]] bool supports_device_read() const override { return false; }
-
-  [[nodiscard]] bool is_device_read_preferred(size_t size) const override
-  {
-    return supports_device_read();
-  }
-
- private:
-  void map(int fd, size_t offset, size_t size)
-  {
-    CUDF_EXPECTS(offset < this->size(), "Offset is past end of file", std::overflow_error);
-
-    // Offset for `mmap()` must be page aligned
-    _map_offset = offset & ~(sysconf(_SC_PAGESIZE) - 1);
-
-    if (size == 0 || (offset + size) > this->size()) { size = this->size() - offset; }
-
-    // Size for `mmap()` needs to include the page padding
-    _map_size = size + (offset - _map_offset);
-    if (_map_size == 0) { return; }
-
-    // Check if accessing a region within already mapped area
-    _map_addr = mmap(nullptr, _map_size, PROT_READ, MAP_PRIVATE, fd, _map_offset);
-    CUDF_EXPECTS(_map_addr != MAP_FAILED, "Cannot create memory mapping");
-  }
-
-  void unmap()
-  {
-    if (_map_addr != nullptr) {
-      auto const result = munmap(_map_addr, _map_size);
-      if (result != 0) { CUDF_LOG_WARN("munmap failed with %d", result); }
-      _map_addr = nullptr;
-    }
-  }
-
- private:
-  size_t _map_offset = 0;
-  size_t _map_size   = 0;
-  void* _map_addr    = nullptr;
-
-  size_t _reg_offset = 0;
-  size_t _reg_size   = 0;
-  void* _reg_addr    = nullptr;
 };
 
 /**
@@ -458,27 +370,29 @@ class user_datasource_wrapper : public datasource {
  * @brief Remote file source backed by KvikIO, which handles S3 filepaths seamlessly.
  */
 class remote_file_source : public kvikio_source<kvikio::RemoteHandle> {
-  static auto create_s3_handle(char const* filepath)
-  {
-    return kvikio::RemoteHandle{
-      std::make_unique<kvikio::S3Endpoint>(kvikio::S3Endpoint::parse_s3_url(filepath))};
-  }
-
  public:
-  explicit remote_file_source(char const* filepath) : kvikio_source{create_s3_handle(filepath)} {}
+  explicit remote_file_source(char const* filepath)
+    : kvikio_source{kvikio::RemoteHandle::open(filepath)}
+  {
+  }
 
   ~remote_file_source() override = default;
 
   /**
-   * @brief Is `url` referring to a remote file supported by KvikIO?
+   * @brief Checks if a path has a URL scheme format that could indicate a remote resource
    *
-   * For now, only S3 urls (urls starting with "s3://") are supported.
+   * @note Strictly speaking, there is no definitive way to tell if a given file path refers to a
+   * remote or local file. For instance, it is legal to have a local directory named `s3:` and its
+   * file accessed by `s3://<sub-dir>/<file-name>` (the double slash is collapsed into a single
+   * slash), coincidentally taking on the remote S3 format. Here we ignore this special case and use
+   * a more practical approach: a file path is considered remote simply if it has a RFC
+   * 3986-conformant URL scheme.
    */
-  static bool is_supported_remote_url(std::string const& url)
+  static bool could_be_remote_url(std::string const& filepath)
   {
-    // Regular expression to match "s3://"
-    static std::regex const pattern{R"(^s3://)", std::regex_constants::icase};
-    return std::regex_search(url, pattern);
+    // Regular expression to match the URL scheme conforming to RFC 3986
+    static std::regex const pattern{R"(^[a-zA-Z][a-zA-Z0-9+.-]*://)", std::regex_constants::icase};
+    return std::regex_search(filepath, pattern);
   }
 };
 #else
@@ -488,7 +402,7 @@ class remote_file_source : public kvikio_source<kvikio::RemoteHandle> {
 class remote_file_source : public file_source {
  public:
   explicit remote_file_source(char const* filepath) : file_source(filepath) {}
-  static constexpr bool is_supported_remote_url(std::string const&) { return false; }
+  static constexpr bool could_be_remote_url(std::string const&) { return false; }
 };
 #endif
 }  // namespace
@@ -505,8 +419,21 @@ std::unique_ptr<datasource> datasource::create(std::string const& filepath,
 
     CUDF_FAIL("Invalid LIBCUDF_MMAP_ENABLED value: " + policy);
   }();
-  if (remote_file_source::is_supported_remote_url(filepath)) {
-    return std::make_unique<remote_file_source>(filepath.c_str());
+
+  if (remote_file_source::could_be_remote_url(filepath)) {
+    try {
+      return std::make_unique<remote_file_source>(filepath.c_str());
+    } catch (std::exception const& ex) {
+      std::string redacted_msg;
+      try {
+        // For security reasons, redact the file path if any from KvikIO's exception message
+        redacted_msg =
+          std::regex_replace(ex.what(), std::regex{filepath}, "<redacted-remote-file-path>");
+      } catch (std::exception const& ex) {
+        redacted_msg = " unknown due to additional process error";
+      }
+      CUDF_FAIL("Error accessing the remote file. Reason: " + redacted_msg, std::runtime_error);
+    }
   } else if (use_memory_mapping) {
     return std::make_unique<memory_mapped_source>(filepath.c_str(), offset, max_size_estimate);
   } else {

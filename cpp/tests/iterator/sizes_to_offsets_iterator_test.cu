@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,10 +17,10 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/utilities/default_stream.hpp>
 
-#include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
@@ -48,7 +48,7 @@ TYPED_TEST(SizesToOffsetsIteratorTestTyped, ExclusiveScan)
   auto d_col  = cudf::test::fixed_width_column_wrapper<T>(sizes.begin(), sizes.end());
   auto d_view = cudf::column_view(d_col);
 
-  auto last   = rmm::device_scalar<LastType>(0, stream);
+  auto last   = cudf::detail::device_scalar<LastType>(0, stream);
   auto result = rmm::device_uvector<T>(d_view.size(), stream);
   auto output_itr =
     cudf::detail::make_sizes_to_offsets_iterator(result.begin(), result.end(), last.data());
@@ -80,7 +80,7 @@ TEST_F(SizesToOffsetsIteratorTest, ScanWithOverflow)
   auto d_col  = cudf::test::fixed_width_column_wrapper<int32_t>(values.begin(), values.end());
   auto d_view = cudf::column_view(d_col);
 
-  auto last   = rmm::device_scalar<int64_t>(0, stream);
+  auto last   = cudf::detail::device_scalar<int64_t>(0, stream);
   auto result = rmm::device_uvector<int32_t>(d_view.size(), stream);
   auto output_itr =
     cudf::detail::make_sizes_to_offsets_iterator(result.begin(), result.end(), last.data());

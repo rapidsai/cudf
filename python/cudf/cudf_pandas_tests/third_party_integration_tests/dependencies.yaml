@@ -161,6 +161,10 @@ dependencies:
               cuda: "12.9"
             packages:
               - cuda-version=12.9
+          - matrix:
+              cuda: "13.0"
+            packages:
+              - cuda-version=13.0
   py_version:
     specific:
       - output_types: conda
@@ -279,6 +283,7 @@ dependencies:
           - pip
           - pip:
               - ibis-framework[duckdb]
+              - duckdb<1.4.0
   test_hvplot:
     common:
       - output_types: conda

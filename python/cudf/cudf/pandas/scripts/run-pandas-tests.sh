@@ -51,10 +51,6 @@ if [ ! -d "pandas-tests" ]; then
     cat > pandas-tests/pyproject.toml << \EOF
 [tool.pytest.ini_options]
 xfail_strict = true
-filterwarnings = [
-  # Will be fixed in numba 0.56: https://github.com/numba/numba/issues/7758
-  "ignore:`np.MachAr` is deprecated:DeprecationWarning:numba",
-]
 markers = [
   "single_cpu: tests that should run on a single cpu only",
   "slow: mark a test as slow",
