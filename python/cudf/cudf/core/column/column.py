@@ -862,12 +862,18 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 dictionary = dict_array.dictionary
             else:
                 codes = pa.chunked_array(
-                    [chunk.indices for chunk in array.chunks],
+                    [
+                        cast(pa.DictionaryArray, chunk).indices
+                        for chunk in array.chunks
+                    ],
                     type=array.type.index_type,
                 )
                 dictionary = pc.unique(
                     pa.chunked_array(
-                        [chunk.dictionary for chunk in array.chunks],
+                        [
+                            cast(pa.DictionaryArray, chunk).dictionary
+                            for chunk in array.chunks
+                        ],
                         type=array.type.value_type,
                     )
                 )
