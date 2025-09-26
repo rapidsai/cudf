@@ -128,10 +128,15 @@ class Scheduler(str, enum.Enum):
       single-threaded scheduler.
     * ``Scheduler.DISTRIBUTED`` : A Dask-based distributed scheduler.
       Using this scheduler requires an active Dask cluster.
+    * ``Scheduler.RAPIDSMPF`` : The rapidsmpf streaming engine.
+      This option uses a fundamentally different execution model
+      than the "synchronous" and "distributed" task-based schedulers.
+      WARNING: This option is experimental.
     """
 
     SYNCHRONOUS = "synchronous"
     DISTRIBUTED = "distributed"
+    RAPIDSMPF = "rapidsmpf"
 
 
 class ShuffleMethod(str, enum.Enum):

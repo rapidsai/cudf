@@ -214,6 +214,29 @@ def post_process_task_graph(
     return graph
 
 
+def evaluate_rapidsmpf(
+    ir: IR,
+    config_options: ConfigOptions,
+) -> DataFrame:
+    """
+    Evaluate a streaming network.
+
+    Parameters
+    ----------
+    ir
+        Logical plan to evaluate.
+    config_options
+        GPUEngine configuration options.
+
+    Returns
+    -------
+    A cudf-polars DataFrame object.
+    """
+    from cudf_polars.experimental.rapidsmpf import evaluate_logical_plan
+
+    return evaluate_logical_plan(ir, config_options)
+
+
 def evaluate_streaming(
     ir: IR,
     config_options: ConfigOptions,
@@ -235,11 +258,17 @@ def evaluate_streaming(
     # Clear source info cache in case data was overwritten
     _clear_source_info_cache()
 
-    ir, partition_info = lower_ir_graph(ir, config_options)
+    assert config_options.executor.name == "streaming", "Executor must be streaming"
+    if config_options.executor.scheduler == "rapidsmpf":
+        # Using rapidsmpf for evaluation.
+        return evaluate_rapidsmpf(ir, config_options)
+    else:
+        # Using task graph for evaluation.
+        ir, partition_info = lower_ir_graph(ir, config_options)
 
-    graph, key = task_graph(ir, partition_info, config_options)
+        graph, key = task_graph(ir, partition_info, config_options)
 
-    return get_scheduler(config_options)(graph, key)
+        return get_scheduler(config_options)(graph, key)
 
 
 @generate_ir_tasks.register(IR)
