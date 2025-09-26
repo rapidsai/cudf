@@ -70,10 +70,10 @@ class GenState(TypedDict):
     partition_info: MutableMapping[IR, PartitionInfo]
 
 
-GenerateNetworkTransformer: TypeAlias = GenericTransformer[
+SubNetGenerator: TypeAlias = GenericTransformer[
     "IR", "tuple[dict[IR, list[Any]], dict[IR, Any]]", GenState
 ]
-"""Protocol for Generating a sub-network."""
+"""Protocol for Generating a streaming sub-network."""
 
 
 def evaluate_logical_plan(ir: IR, config_options: ConfigOptions) -> DataFrame:
@@ -195,9 +195,7 @@ def generate_network(
         "config_options": config_options,
         "partition_info": partition_info,
     }
-    mapper: GenerateNetworkTransformer = CachingVisitor(
-        generate_ir_sub_network, state=state
-    )
+    mapper: SubNetGenerator = CachingVisitor(generate_ir_sub_network, state=state)
     node_mapping, channels = mapper(ir)
     nodes = list(node_mapping.values())
     ch_out = channels[ir]
@@ -381,9 +379,7 @@ async def dataframe_scan_node(
 
 
 @generate_ir_sub_network.register(IR)
-def _(
-    ir: IR, rec: GenerateNetworkTransformer
-) -> tuple[dict[IR, list[Any]], dict[IR, Any]]:
+def _(ir: IR, rec: SubNetGenerator) -> tuple[dict[IR, list[Any]], dict[IR, Any]]:
     # Process children
     if len(ir.children) != 1:
         raise NotImplementedError(f"Unsupported IR node for rapidsmpf: {type(ir)}.")
@@ -408,7 +404,7 @@ def _(
 
 @generate_ir_sub_network.register(DataFrameScan)
 def _(
-    ir: DataFrameScan, rec: GenerateNetworkTransformer
+    ir: DataFrameScan, rec: SubNetGenerator
 ) -> tuple[dict[IR, list[Any]], dict[IR, Any]]:
     config_options = rec.state["config_options"]
     assert config_options.executor.name == "streaming", (
