@@ -24,6 +24,7 @@ import pylibcudf as plc
 import rmm
 
 import cudf
+from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_categorical_dtype,
     infer_dtype,
@@ -612,7 +613,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         )
 
     @classmethod
-    def from_cuda_array_interface(cls, arbitrary: Any) -> Self:
+    def from_cuda_array_interface(
+        cls, arbitrary: Any, data_ptr_exposed=no_default
+    ) -> Self:
         """
         Create a Column from an object implementing the CUDA array interface.
 
@@ -647,9 +650,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         else:
             mask = None
 
+        if data_ptr_exposed is no_default:
+            data_ptr_exposed = cudf.get_option("copy_on_write")
         column = ColumnBase.from_pylibcudf(
             plc.Column.from_cuda_array_interface(arbitrary),
-            data_ptr_exposed=cudf.get_option("copy_on_write"),
+            data_ptr_exposed=data_ptr_exposed,
         )
         if mask is not None:
             column = column.set_mask(mask)
@@ -2755,12 +2760,7 @@ def as_column(
             return arbitrary.astype(dtype)
         return arbitrary
     elif hasattr(arbitrary, "__cuda_array_interface__"):
-        column = ColumnBase.from_cuda_array_interface(arbitrary)
-        if nan_as_null is not False:
-            column = column.nans_to_nulls()
-        if dtype is not None:
-            column = column.astype(dtype)
-        return column
+        return _column_from_cuda_array_interface(arbitrary, nan_as_null, dtype)
     elif isinstance(arbitrary, (pa.Array, pa.ChunkedArray)):
         column = ColumnBase.from_arrow(arbitrary)
         if nan_as_null is not False:
@@ -2886,6 +2886,9 @@ def as_column(
                 arbitrary = np.asarray(arbitrary)
             else:
                 arbitrary = cp.asarray(arbitrary)
+                return _column_from_cuda_array_interface(
+                    arbitrary, nan_as_null, dtype, data_ptr_exposed=False
+                )
             return as_column(
                 arbitrary, nan_as_null=nan_as_null, dtype=dtype, length=length
             )
@@ -3251,6 +3254,19 @@ def as_column(
             ):
                 dtype = _maybe_convert_to_default_type(arbitrary.dtype)
         return as_column(arbitrary, nan_as_null=nan_as_null, dtype=dtype)
+
+
+def _column_from_cuda_array_interface(
+    arbitrary, nan_as_null, dtype, data_ptr_exposed=no_default
+):
+    column = ColumnBase.from_cuda_array_interface(
+        arbitrary, data_ptr_exposed=data_ptr_exposed
+    )
+    if nan_as_null is not False:
+        column = column.nans_to_nulls()
+    if dtype is not None:
+        column = column.astype(dtype)
+    return column
 
 
 def serialize_columns(columns: list[ColumnBase]) -> tuple[list[dict], list]:

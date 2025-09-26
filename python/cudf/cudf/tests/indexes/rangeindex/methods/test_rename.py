@@ -3,6 +3,7 @@
 import pandas as pd
 
 import cudf
+from cudf.testing import assert_eq
 
 
 def test_rename_shallow_copy():
@@ -12,4 +13,4 @@ def test_rename_shallow_copy():
 
     idx = cudf.Index([1])
     result = idx.rename("a")
-    assert idx._column is result._column
+    assert_eq(idx._column, result._column)

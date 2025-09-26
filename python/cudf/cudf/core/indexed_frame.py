@@ -620,7 +620,7 @@ class IndexedFrame(Frame):
         return self._from_data(
             self._data.copy(deep=deep),
             # Indexes are immutable so copies can always be shallow.
-            self.index.copy(deep=False),
+            self.index.copy(deep=deep),
             attrs=copy.deepcopy(self.attrs) if deep else self._attrs,
         )
 
