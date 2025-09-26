@@ -627,6 +627,17 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
                                              static_cast<size_type>(output_dtypes.size())}
       .get_stats_columns_mask();
 
+  // Return early if no columns will participate in stats based page filtering
+  if (stats_columns_mask.empty()) {
+    auto row_mask = cudf::make_numeric_column(
+      data_type{cudf::type_id::BOOL8}, total_rows, rmm::device_buffer{}, 0, stream, mr);
+    thrust::fill(rmm::exec_policy_nosync(stream),
+                 row_mask->mutable_view().begin<bool>(),
+                 row_mask->mutable_view().end<bool>(),
+                 true);
+    return row_mask;
+  }
+
   // Convert page statistics to a table
   // where min(col[i]) = columns[i*2], max(col[i])=columns[i*2+1]
   // For each column, it contains total number of rows from all row groups.

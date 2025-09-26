@@ -63,19 +63,25 @@ std::reference_wrapper<ast::expression const> stats_columns_collector::visit(
   auto const op       = expr.get_operator();
 
   if (auto* v = dynamic_cast<ast::column_reference const*>(&operands[0].get())) {
-    // First operand should be column reference, second should be literal.
-    CUDF_EXPECTS(cudf::ast::detail::ast_operator_arity(op) == 2,
-                 "Only binary operations are supported on column reference");
-    CUDF_EXPECTS(dynamic_cast<ast::literal const*>(&operands[1].get()) != nullptr,
+    // First operand should be column reference, second (if binary operation)should be literal.
+    CUDF_EXPECTS(cudf::ast::detail::ast_operator_arity(op) == 1 or
+                   cudf::ast::detail::ast_operator_arity(op) == 2,
+                 "Only unary and binary operations are supported on column reference");
+    CUDF_EXPECTS(cudf::ast::detail::ast_operator_arity(op) == 1 or
+                   dynamic_cast<ast::literal const*>(&operands[1].get()) != nullptr,
                  "Second operand of binary operation with column reference must be a literal");
     v->accept(*this);
-    // If this is a supported operation, mark the column as needed
+
+    // Return early if this is a unary operation
+    if (cudf::ast::detail::ast_operator_arity(op) == 1) { return expr; }
+
+    // Else if this is a supported binary operation, mark the column as needed
     if (op == ast_operator::EQUAL or op == ast_operator::NOT_EQUAL or op == ast_operator::LESS or
         op == ast_operator::LESS_EQUAL or op == ast_operator::GREATER or
         op == ast_operator::GREATER_EQUAL) {
       _columns_mask[v->get_column_index()] = true;
     } else {
-      CUDF_FAIL("Unsupported operation in Statistics AST");
+      CUDF_FAIL("Unsupported binary operation in Statistics AST");
     }
   } else {
     // Visit the operands and ignore any output as we only want to build the column mask
@@ -117,56 +123,65 @@ std::reference_wrapper<ast::expression const> stats_expression_converter::visit(
   auto const op       = expr.get_operator();
 
   if (auto* v = dynamic_cast<ast::column_reference const*>(&operands[0].get())) {
-    // First operand should be column reference, second should be literal.
-    CUDF_EXPECTS(cudf::ast::detail::ast_operator_arity(op) == 2,
-                 "Only binary operations are supported on column reference");
-    CUDF_EXPECTS(dynamic_cast<ast::literal const*>(&operands[1].get()) != nullptr,
+    // First operand should be column reference, second (if binary operation)should be literal.
+    CUDF_EXPECTS(cudf::ast::detail::ast_operator_arity(op) == 1 or
+                   cudf::ast::detail::ast_operator_arity(op) == 2,
+                 "Only unary and binary operations are supported on column reference");
+    CUDF_EXPECTS(cudf::ast::detail::ast_operator_arity(op) == 1 or
+                   dynamic_cast<ast::literal const*>(&operands[1].get()) != nullptr,
                  "Second operand of binary operation with column reference must be a literal");
     v->accept(*this);
-    // Push literal into the ast::tree
-    auto const& literal  = _stats_expr.push(*dynamic_cast<ast::literal const*>(&operands[1].get()));
-    auto const col_index = v->get_column_index();
-    switch (op) {
-      /* transform to stats conditions. op(col, literal)
-      col1 == val --> vmin <= val && vmax >= val
-      col1 != val --> !(vmin == val && vmax == val)
-      col1 >  val --> vmax > val
-      col1 <  val --> vmin < val
-      col1 >= val --> vmax >= val
-      col1 <= val --> vmin <= val
-      */
-      case ast_operator::EQUAL: {
-        auto const& vmin = _stats_expr.push(ast::column_reference{col_index * 2});
-        auto const& vmax = _stats_expr.push(ast::column_reference{col_index * 2 + 1});
-        _stats_expr.push(ast::operation{
-          ast::ast_operator::LOGICAL_AND,
-          _stats_expr.push(ast::operation{ast_operator::GREATER_EQUAL, vmax, literal}),
-          _stats_expr.push(ast::operation{ast_operator::LESS_EQUAL, vmin, literal})});
-        break;
-      }
-      case ast_operator::NOT_EQUAL: {
-        auto const& vmin = _stats_expr.push(ast::column_reference{col_index * 2});
-        auto const& vmax = _stats_expr.push(ast::column_reference{col_index * 2 + 1});
-        _stats_expr.push(
-          ast::operation{ast_operator::LOGICAL_OR,
-                         _stats_expr.push(ast::operation{ast_operator::NOT_EQUAL, vmin, vmax}),
-                         _stats_expr.push(ast::operation{ast_operator::NOT_EQUAL, vmax, literal})});
-        break;
-      }
-      case ast_operator::LESS: [[fallthrough]];
-      case ast_operator::LESS_EQUAL: {
-        auto const& vmin = _stats_expr.push(ast::column_reference{col_index * 2});
-        _stats_expr.push(ast::operation{op, vmin, literal});
-        break;
-      }
-      case ast_operator::GREATER: [[fallthrough]];
-      case ast_operator::GREATER_EQUAL: {
-        auto const& vmax = _stats_expr.push(ast::column_reference{col_index * 2 + 1});
-        _stats_expr.push(ast::operation{op, vmax, literal});
-        break;
-      }
-      default: CUDF_FAIL("Unsupported operation in Statistics AST");
-    };
+
+    // For unary operators, push an always true expression
+    if (cudf::ast::detail::ast_operator_arity(op) == 1) {
+      _stats_expr.push(ast::operation{ast_operator::IDENTITY, _always_true});
+    } else {
+      // Push literal into the ast::tree
+      auto const& literal =
+        _stats_expr.push(*dynamic_cast<ast::literal const*>(&operands[1].get()));
+      auto const col_index = v->get_column_index();
+      switch (op) {
+        /* transform to stats conditions. op(col, literal)
+        col1 == val --> vmin <= val && vmax >= val
+        col1 != val --> !(vmin == val && vmax == val)
+        col1 >  val --> vmax > val
+        col1 <  val --> vmin < val
+        col1 >= val --> vmax >= val
+        col1 <= val --> vmin <= val
+        */
+        case ast_operator::EQUAL: {
+          auto const& vmin = _stats_expr.push(ast::column_reference{col_index * 2});
+          auto const& vmax = _stats_expr.push(ast::column_reference{col_index * 2 + 1});
+          _stats_expr.push(ast::operation{
+            ast::ast_operator::LOGICAL_AND,
+            _stats_expr.push(ast::operation{ast_operator::GREATER_EQUAL, vmax, literal}),
+            _stats_expr.push(ast::operation{ast_operator::LESS_EQUAL, vmin, literal})});
+          break;
+        }
+        case ast_operator::NOT_EQUAL: {
+          auto const& vmin = _stats_expr.push(ast::column_reference{col_index * 2});
+          auto const& vmax = _stats_expr.push(ast::column_reference{col_index * 2 + 1});
+          _stats_expr.push(ast::operation{
+            ast_operator::LOGICAL_OR,
+            _stats_expr.push(ast::operation{ast_operator::NOT_EQUAL, vmin, vmax}),
+            _stats_expr.push(ast::operation{ast_operator::NOT_EQUAL, vmax, literal})});
+          break;
+        }
+        case ast_operator::LESS: [[fallthrough]];
+        case ast_operator::LESS_EQUAL: {
+          auto const& vmin = _stats_expr.push(ast::column_reference{col_index * 2});
+          _stats_expr.push(ast::operation{op, vmin, literal});
+          break;
+        }
+        case ast_operator::GREATER: [[fallthrough]];
+        case ast_operator::GREATER_EQUAL: {
+          auto const& vmax = _stats_expr.push(ast::column_reference{col_index * 2 + 1});
+          _stats_expr.push(ast::operation{op, vmax, literal});
+          break;
+        }
+        default: CUDF_FAIL("Unsupported binary operation in Statistics AST");
+      };
+    }
   } else {
     auto new_operands = visit_operands(operands);
     if (cudf::ast::detail::ast_operator_arity(op) == 2) {

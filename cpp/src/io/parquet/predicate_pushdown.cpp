@@ -126,6 +126,9 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
     stats_columns_collector{filter.get(), static_cast<size_type>(output_dtypes.size())}
       .get_stats_columns_mask();
 
+  // Return early if no columns will participate in stats based filtering
+  if (stats_columns_mask.empty()) { return std::nullopt; }
+
   // Converts Column chunk statistics to a table
   // where min(col[i]) = columns[i*2], max(col[i])=columns[i*2+1]
   // For each column, it contains #sources * #column_chunks_per_src rows

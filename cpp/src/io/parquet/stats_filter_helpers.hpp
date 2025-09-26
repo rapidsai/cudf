@@ -311,6 +311,8 @@ class stats_expression_converter : public stats_columns_collector {
 
  private:
   ast::tree _stats_expr;
+  cudf::numeric_scalar<bool> _always_true_scalar{true};
+  ast::literal const _always_true{_always_true_scalar};
 };
 
 }  // namespace cudf::io::parquet::detail

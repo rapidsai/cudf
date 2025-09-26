@@ -210,10 +210,12 @@ class bloom_filter_expression_converter : public equality_literals_collector {
     auto const op       = expr.get_operator();
 
     if (auto* v = dynamic_cast<ast::column_reference const*>(&operands[0].get())) {
-      // First operand should be column reference, second should be literal.
-      CUDF_EXPECTS(cudf::ast::detail::ast_operator_arity(op) == 2,
-                   "Only binary operations are supported on column reference");
-      CUDF_EXPECTS(dynamic_cast<ast::literal const*>(&operands[1].get()) != nullptr,
+      // First operand should be column reference, second (if binary operation)should be literal.
+      CUDF_EXPECTS(cudf::ast::detail::ast_operator_arity(op) == 1 or
+                     cudf::ast::detail::ast_operator_arity(op) == 2,
+                   "Only unary and binary operations are supported on column reference");
+      CUDF_EXPECTS(cudf::ast::detail::ast_operator_arity(op) == 1 or
+                     dynamic_cast<ast::literal const*>(&operands[1].get()) != nullptr,
                    "Second operand of binary operation with column reference must be a literal");
       v->accept(*this);
 
@@ -622,17 +624,20 @@ std::reference_wrapper<ast::expression const> equality_literals_collector::visit
   auto const op       = expr.get_operator();
 
   if (auto* v = dynamic_cast<ast::column_reference const*>(&operands[0].get())) {
-    // First operand should be column reference, second should be literal.
-    CUDF_EXPECTS(cudf::ast::detail::ast_operator_arity(op) == 2,
-                 "Only binary operations are supported on column reference");
-    auto const literal_ptr = dynamic_cast<ast::literal const*>(&operands[1].get());
-    CUDF_EXPECTS(literal_ptr != nullptr,
+    // First operand should be column reference, second (if binary operation)should be literal.
+    CUDF_EXPECTS(cudf::ast::detail::ast_operator_arity(op) == 1 or
+                   cudf::ast::detail::ast_operator_arity(op) == 2,
+                 "Only unary and binary operations are supported on column reference");
+    CUDF_EXPECTS(cudf::ast::detail::ast_operator_arity(op) == 1 or
+                   dynamic_cast<ast::literal const*>(&operands[1].get()) != nullptr,
                  "Second operand of binary operation with column reference must be a literal");
+
     v->accept(*this);
 
     // Push to the corresponding column's literals list iff equality predicate is seen
     if (op == ast_operator::EQUAL) {
-      auto const col_idx = v->get_column_index();
+      auto const literal_ptr = dynamic_cast<ast::literal const*>(&operands[1].get());
+      auto const col_idx     = v->get_column_index();
       _literals[col_idx].emplace_back(const_cast<ast::literal*>(literal_ptr));
     }
   } else {

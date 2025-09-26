@@ -2842,6 +2842,69 @@ void filter_typed_test()
     test_predicate_pushdown(
       filter_expression, ref_filter, expected_total_row_groups, expected_stats_filtered_row_groups);
   }
+
+  // Unary operation `IS_NULL` should not filter any row groups
+  {
+    auto constexpr expected_total_row_groups          = 4;
+    auto constexpr expected_stats_filtered_row_groups = 4;
+
+    auto const filter_expression =
+      cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, col_name_0);
+    auto const ref_filter = cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, col_ref_0);
+    test_predicate_pushdown(
+      filter_expression, ref_filter, expected_total_row_groups, expected_stats_filtered_row_groups);
+  }
+
+  // Unary operation `IS_NULL` should not affect anything when ANDing with another expression, and
+  // should short circuit when ORing with another expression
+  {
+    auto constexpr expected_total_row_groups = 4;
+
+    // Filtering AST
+    auto literal_value = []() {
+      if constexpr (cudf::is_timestamp<T>()) {
+        // table[0] < 10000 timestamp days/seconds/milliseconds/microseconds/nanoseconds
+        return cudf::timestamp_scalar<T>(T(typename T::duration(10000)));  // i (0-20,000)
+      } else if constexpr (cudf::is_duration<T>()) {
+        // table[0] < 10000 day/seconds/milliseconds/microseconds/nanoseconds
+        return cudf::duration_scalar<T>(T(10000));  // i (0-20,000)
+      } else if constexpr (std::is_same_v<T, cudf::string_view>) {
+        // table[0] < "000010000"
+        return cudf::string_scalar("000010000");  // i (0-20,000)
+      } else {
+        // table[0] < 0 or 100u
+        return cudf::numeric_scalar<T>(
+          (100 - 100 * std::is_signed_v<T>));  // i/100 (-100-100/ 0-200)
+      }
+    }();
+
+    auto const literal = cudf::ast::literal(literal_value);
+    auto const expr1   = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_name_0, literal);
+    auto const expr2   = cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, col_name_0);
+
+    auto const ref_expr1 = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+    auto const ref_expr2 = cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, col_ref_0);
+
+    // Filter expression AND unary operation
+    auto filter_expression =
+      cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, expr1, expr2);
+    auto ref_filter =
+      cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, ref_expr1, ref_expr2);
+    auto constexpr expected_filtered_row_groups_with_unary_and = 2;
+    test_predicate_pushdown(filter_expression,
+                            ref_filter,
+                            expected_total_row_groups,
+                            expected_filtered_row_groups_with_unary_and);
+
+    // Filter expression OR unary operation
+    filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_OR, expr1, expr2);
+    ref_filter = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_OR, ref_expr1, ref_expr2);
+    auto constexpr expected_filtered_row_groups_with_unary_or = 4;
+    test_predicate_pushdown(filter_expression,
+                            ref_filter,
+                            expected_total_row_groups,
+                            expected_filtered_row_groups_with_unary_or);
+  }
 }
 
 TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTyped)
