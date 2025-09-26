@@ -427,8 +427,9 @@ TEST_F(HybridScanTest, MaterializeStrings)
   std::uniform_int_distribution<int> uni(0, strings.size() - 1);
   auto string_iter = cudf::detail::make_counting_transform_iterator(
     0, [&](cudf::size_type idx) { return strings[uni(gen)]; });
+  std::bernoulli_distribution bn(0.7f);
   auto string_valids =
-    cudf::detail::make_counting_transform_iterator(0, [&](int index) { return uni(gen); });
+    cudf::detail::make_counting_transform_iterator(0, [&](int index) { return bn(gen); });
   auto col2 =
     cudf::test::strings_column_wrapper{string_iter, string_iter + num_rows, string_valids};
 

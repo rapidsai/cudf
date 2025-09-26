@@ -321,7 +321,7 @@ chunked_hybrid_scan(std::vector<char> const& buffer,
       // Setup chunking for filter columns and materialize the columns
       reader->setup_chunking_for_filter_columns(
         1024,
-        1024,
+        10240,
         row_group_indices,
         row_mask->view(),
         cudf::io::parquet::experimental::use_data_page_mask::YES,
@@ -364,7 +364,7 @@ chunked_hybrid_scan(std::vector<char> const& buffer,
       // Setup chunking for payload columns and materialize the table
       reader->setup_chunking_for_payload_columns(
         1024,
-        1024,
+        10240,
         row_group_indices,
         row_mask->view(),
         cudf::io::parquet::experimental::use_data_page_mask::YES,
