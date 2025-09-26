@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, Any
 import pandas as pd
 import pyarrow as pa
 
+import pylibcudf as plc
+
 import cudf
 from cudf.core.column.column import ColumnBase
 from cudf.core.dtypes import StructDtype
@@ -23,10 +25,7 @@ from cudf.utils.utils import _is_null_host_scalar
 if TYPE_CHECKING:
     from typing_extensions import Self
 
-    import pylibcudf as plc
-
     from cudf._typing import Dtype
-    from cudf.core.buffer import Buffer
     from cudf.core.column.string import StringColumn
 
 
@@ -48,27 +47,23 @@ class StructColumn(ColumnBase):
     the number of fields in the Struct Dtype.
     """
 
+    _VALID_PLC_TYPES = {plc.TypeId.STRUCT}
+
     def __init__(
         self,
-        data: None,
+        plc_column: plc.Column,
         size: int,
         dtype: StructDtype,
-        mask: Buffer | None = None,
         offset: int = 0,
         null_count: int | None = None,
-        children: tuple[ColumnBase, ...] = (),
-    ):
-        if data is not None:
-            raise ValueError("data must be None.")
+    ) -> None:
         dtype = self._validate_dtype_instance(dtype)
         super().__init__(
-            data=data,
+            plc_column=plc_column,
             size=size,
             dtype=dtype,
-            mask=mask,
             offset=offset,
             null_count=null_count,
-            children=children,
         )
 
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:
@@ -213,26 +208,26 @@ class StructColumn(ColumnBase):
         # Check IntervalDtype first because it's a subclass of StructDtype
         if isinstance(dtype, IntervalDtype):
             return IntervalColumn(
-                data=None,
+                plc_column=self.plc_column,
                 size=self.size,
                 dtype=dtype,
-                mask=self.base_mask,
                 offset=self.offset,
                 null_count=self.null_count,
-                children=self.base_children,  # type: ignore[arg-type]
+                # children=tuple(  # type: ignore[arg-type]
+                #     child.astype(dtype.subtype) for child in self.base_children
+                # ),  # type: ignore[arg-type]
             )
         elif isinstance(dtype, StructDtype):
             return StructColumn(
-                data=None,
-                dtype=dtype,
-                children=tuple(
-                    self.base_children[i]._with_type_metadata(dtype.fields[f])
-                    for i, f in enumerate(dtype.fields.keys())
-                ),
-                mask=self.base_mask,
+                plc_column=self.plc_column,
                 size=self.size,
+                dtype=dtype,
                 offset=self.offset,
                 null_count=self.null_count,
+                # children=tuple(
+                #     self.base_children[i]._with_type_metadata(dtype.fields[f])
+                #     for i, f in enumerate(dtype.fields.keys())
+                # ),
             )
         # For pandas dtypes, store them directly in the column's dtype property
         elif isinstance(dtype, pd.ArrowDtype) and isinstance(

@@ -14,7 +14,7 @@ import pylibcudf as plc
 
 import cudf
 from cudf.core._internals import binaryop
-from cudf.core.buffer import Buffer, acquire_spill_lock
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.temporal_base import TemporalBaseColumn
 from cudf.utils.dtypes import (
@@ -85,30 +85,36 @@ class TimeDeltaColumn(TemporalBaseColumn):
         "__rtruediv__",
         "__rfloordiv__",
     }
+    _VALID_PLC_TYPES = {
+        plc.TypeId.DURATION_SECONDS,
+        plc.TypeId.DURATION_MILLISECONDS,
+        plc.TypeId.DURATION_MICROSECONDS,
+        plc.TypeId.DURATION_NANOSECONDS,
+    }
 
     def __init__(
         self,
-        data: Buffer,
+        plc_column: plc.Column,
         size: int | None,
         dtype: np.dtype,
-        mask: Buffer | None = None,
         offset: int = 0,
         null_count: int | None = None,
-        children: tuple = (),
-    ):
+    ) -> None:
         if cudf.get_option("mode.pandas_compatible"):
             if not dtype.kind == "m":
                 raise ValueError("dtype must be a timedelta numpy dtype.")
         elif not (isinstance(dtype, np.dtype) and dtype.kind == "m"):
             raise ValueError("dtype must be a timedelta numpy dtype.")
+        if size is None:
+            raise ValueError("size must be not None")
+            # size = data.size // dtype.itemsize
+            # size = size - offset
         super().__init__(
-            data=data,
+            plc_column=plc_column,
             size=size,
             dtype=dtype,
-            mask=mask,
             offset=offset,
             null_count=null_count,
-            children=children,
         )
 
     def _clear_cache(self) -> None:

@@ -40,7 +40,6 @@ if TYPE_CHECKING:
     from typing_extensions import Self
 
     from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
-    from cudf.core.buffer import Buffer
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.string import StringColumn
 
@@ -65,30 +64,6 @@ class DecimalBaseColumn(NumericalBaseColumn):
     """Base column for decimal32, decimal64 or decimal128 columns"""
 
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
-
-    def __init__(
-        self,
-        data: Buffer,
-        size: int,
-        dtype: DecimalDtype,
-        mask: Buffer | None = None,
-        offset: int = 0,
-        null_count: int | None = None,
-        children: tuple = (),
-    ):
-        if not isinstance(size, int):
-            raise ValueError("Must specify an integer size")
-        if not isinstance(dtype, DecimalDtype):
-            raise ValueError(f"{dtype=} must be a DecimalDtype instance")
-        super().__init__(
-            data=data,
-            size=size,
-            dtype=dtype,
-            mask=mask,
-            offset=offset,
-            null_count=null_count,
-            children=children,
-        )
 
     @property
     def __cuda_array_interface__(self):
@@ -135,7 +110,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
             )
         column = cls.from_pylibcudf(plc_column)
         column.dtype.precision = data.type.precision
-        return column
+        return column  # type: ignore[return-value]
 
     def element_indexing(self, index: int):
         result = super().element_indexing(index)
@@ -343,26 +318,24 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
 
 class Decimal32Column(DecimalBaseColumn):
+    _VALID_PLC_TYPES = {plc.TypeId.DECIMAL32}
+
     def __init__(
         self,
-        data: Buffer,
+        plc_column: plc.Column,
         size: int,
         dtype: Decimal32Dtype,
-        mask: Buffer | None = None,
         offset: int = 0,
         null_count: int | None = None,
-        children: tuple = (),
-    ):
+    ) -> None:
         if not isinstance(dtype, Decimal32Dtype):
             raise ValueError(f"{dtype=} must be a Decimal32Dtype instance")
         super().__init__(
-            data=data,
+            plc_column=plc_column,
             size=size,
             dtype=dtype,
-            mask=mask,
             offset=offset,
             null_count=null_count,
-            children=children,
         )
 
     @classmethod
@@ -413,16 +386,16 @@ class Decimal32Column(DecimalBaseColumn):
 
 
 class Decimal128Column(DecimalBaseColumn):
+    _VALID_PLC_TYPES = {plc.TypeId.DECIMAL128}
+
     def __init__(
         self,
-        data: Buffer,
+        plc_column: plc.Column,
         size: int,
         dtype: Decimal128Dtype,
-        mask: Buffer | None = None,
         offset: int = 0,
         null_count: int | None = None,
-        children: tuple = (),
-    ):
+    ) -> None:
         if (
             not cudf.get_option("mode.pandas_compatible")
             and not isinstance(dtype, Decimal128Dtype)
@@ -432,13 +405,11 @@ class Decimal128Column(DecimalBaseColumn):
         ):
             raise ValueError(f"{dtype=} must be a Decimal128Dtype instance")
         super().__init__(
-            data=data,
+            plc_column=plc_column,
             size=size,
             dtype=dtype,
-            mask=mask,
             offset=offset,
             null_count=null_count,
-            children=children,
         )
 
     @classmethod
@@ -467,26 +438,24 @@ class Decimal128Column(DecimalBaseColumn):
 
 
 class Decimal64Column(DecimalBaseColumn):
+    _VALID_PLC_TYPES = {plc.TypeId.DECIMAL64}
+
     def __init__(
         self,
-        data: Buffer,
+        plc_column: plc.Column,
         size: int,
         dtype: Decimal64Dtype,
-        mask: Buffer | None = None,
         offset: int = 0,
         null_count: int | None = None,
-        children: tuple = (),
-    ):
+    ) -> None:
         if not isinstance(dtype, Decimal64Dtype):
             raise ValueError(f"{dtype=} must be a Decimal64Dtype instance")
         super().__init__(
-            data=data,
+            plc_column=plc_column,
             size=size,
             dtype=dtype,
-            mask=mask,
             offset=offset,
             null_count=null_count,
-            children=children,
         )
 
     @classmethod

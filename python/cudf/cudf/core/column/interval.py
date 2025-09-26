@@ -16,33 +16,30 @@ from cudf.utils.dtypes import is_dtype_obj_interval
 if TYPE_CHECKING:
     from typing_extensions import Self
 
-    from cudf.core.buffer import Buffer
+    import pylibcudf as plc
+
     from cudf.core.column import ColumnBase
 
 
 class IntervalColumn(StructColumn):
     def __init__(
         self,
-        data: None,
+        plc_column: plc.Column,
         size: int,
         dtype: IntervalDtype,
-        mask: Buffer | None = None,
         offset: int = 0,
         null_count: int | None = None,
-        children: tuple[ColumnBase, ColumnBase] = (),  # type: ignore[assignment]
-    ):
-        if len(children) != 2:
+    ) -> None:
+        if plc_column.num_children() != 2:
             raise ValueError(
-                "children must be a tuple of two columns (left edges, right edges)."
+                "plc_column must have of two children (left edges, right edges)."
             )
         super().__init__(
-            data=data,
+            plc_column=plc_column,
             size=size,
             dtype=dtype,
-            mask=mask,
             offset=offset,
             null_count=null_count,
-            children=children,
         )
 
     @staticmethod
@@ -120,29 +117,13 @@ class IntervalColumn(StructColumn):
     def set_closed(
         self, closed: Literal["left", "right", "both", "neither"]
     ) -> Self:
-        return IntervalColumn(  # type: ignore[return-value]
-            data=None,
-            size=self.size,
-            dtype=IntervalDtype(self.dtype.subtype, closed),
-            mask=self.base_mask,
-            offset=self.offset,
-            null_count=self.null_count,
-            children=self.base_children,  # type: ignore[arg-type]
+        return self._with_type_metadata(  # type: ignore[return-value]
+            IntervalDtype(self.dtype.subtype, closed)
         )
 
     def as_interval_column(self, dtype: IntervalDtype) -> Self:  # type: ignore[override]
         if isinstance(dtype, IntervalDtype):
-            return IntervalColumn(  # type: ignore[return-value]
-                data=None,
-                size=self.size,
-                dtype=dtype,
-                mask=self.mask,
-                offset=self.offset,
-                null_count=self.null_count,
-                children=tuple(  # type: ignore[arg-type]
-                    child.astype(dtype.subtype) for child in self.children
-                ),
-            )
+            return self._with_type_metadata(dtype)  # type: ignore[return-value]
         else:
             raise ValueError("dtype must be IntervalDtype")
 

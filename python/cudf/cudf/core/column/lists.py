@@ -19,7 +19,6 @@ from cudf.core.column.numerical import NumericalColumn
 from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
 from cudf.utils.dtypes import (
-    SIZE_TYPE_DTYPE,
     get_dtype_of_same_kind,
     is_dtype_obj_list,
 )
@@ -35,25 +34,21 @@ if TYPE_CHECKING:
     from typing_extensions import Self
 
     from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype
-    from cudf.core.buffer import Buffer
     from cudf.core.column.string import StringColumn
 
 
 class ListColumn(ColumnBase):
     _VALID_BINARY_OPERATIONS = {"__add__", "__radd__"}
+    _VALID_PLC_TYPES = {plc.TypeId.LIST}
 
     def __init__(
         self,
-        data: None,
+        plc_column: plc.Column,
         size: int,
         dtype: ListDtype,
-        mask: Buffer | None = None,
         offset: int = 0,
         null_count: int | None = None,
-        children: tuple[NumericalColumn, ColumnBase] = (),  # type: ignore[assignment]
-    ):
-        if data is not None:
-            raise ValueError("data must be None")
+    ) -> None:
         if (
             not cudf.get_option("mode.pandas_compatible")
             and not isinstance(dtype, ListDtype)
@@ -62,24 +57,12 @@ class ListColumn(ColumnBase):
             and not is_dtype_obj_list(dtype)
         ):
             raise ValueError("dtype must be a cudf.ListDtype")
-        if not (
-            len(children) == 2
-            and isinstance(children[0], NumericalColumn)
-            # TODO: Enforce int32_t (size_type) used in libcudf?
-            and children[0].dtype.kind == "i"
-            and isinstance(children[1], ColumnBase)
-        ):
-            raise ValueError(
-                "children must a tuple of 2 columns of (signed integer offsets, list values)"
-            )
         super().__init__(
-            data=data,
+            plc_column=plc_column,
             size=size,
             dtype=dtype,
-            mask=mask,
             offset=offset,
             null_count=null_count,
-            children=children,
         )
 
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:
@@ -200,14 +183,14 @@ class ListColumn(ColumnBase):
             pa_type, len(self), buffers, children=[elements]
         )
 
-    def set_base_data(self, value):
-        if value is not None:
-            raise RuntimeError(
-                "ListColumn's do not use data attribute of Column, use "
-                "`set_base_children` instead"
-            )
-        else:
-            super().set_base_data(value)
+    # def set_base_data(self, value):
+    #     if value is not None:
+    #         raise RuntimeError(
+    #             "ListColumn's do not use data attribute of Column, use "
+    #             "`set_base_children` instead"
+    #         )
+    #     else:
+    #         super().set_base_data(value)
 
     def set_base_children(self, value: tuple[NumericalColumn, ColumnBase]):  # type: ignore[override]
         super().set_base_children(value)
@@ -226,18 +209,25 @@ class ListColumn(ColumnBase):
 
     def _with_type_metadata(self: Self, dtype: Dtype) -> Self:
         if isinstance(dtype, ListDtype):
-            elements = self.base_children[1]._with_type_metadata(
-                dtype.element_type
-            )
-            return type(self)(
-                data=None,
-                dtype=dtype,
-                mask=self.base_mask,
+            return ListColumn(  # type: ignore[return-value]
+                plc_column=self.plc_column,
                 size=self.size,
+                dtype=dtype,
                 offset=self.offset,
                 null_count=self.null_count,
-                children=(self.base_children[0], elements),  # type: ignore[arg-type]
             )
+            # elements = self.base_children[1]._with_type_metadata(
+            #     dtype.element_type
+            # )
+            # return type(self)(
+            #     data=None,
+            #     dtype=dtype,
+            #     mask=self.base_mask,
+            #     size=self.size,
+            #     offset=self.offset,
+            #     null_count=self.null_count,
+            #     children=(self.base_children[0], elements),  # type: ignore[arg-type]
+            # )
         # For pandas dtypes, store them directly in the column's dtype property
         elif isinstance(dtype, pd.ArrowDtype) and isinstance(
             dtype.pyarrow_dtype, pa.ListType
@@ -263,37 +253,56 @@ class ListColumn(ColumnBase):
         Create a list column for list of column-like sequences
         """
         data_col = column_empty(0)
-        mask_col = []
+        mask_bools = []
         offset_vals = [0]
         offset = 0
 
         # Build Data, Mask & Offsets
         for data in arbitrary:
             if _is_null_host_scalar(data):
-                mask_col.append(False)
+                mask_bools.append(True)
                 offset_vals.append(offset)
             else:
-                mask_col.append(True)
+                mask_bools.append(False)
                 data_col = data_col.append(as_column(data))
                 offset += len(data)
                 offset_vals.append(offset)
 
-        offset_col = cast(
-            NumericalColumn,
-            as_column(offset_vals, dtype=SIZE_TYPE_DTYPE),
+        offset_col = plc.Column.from_iterable_of_py(
+            offset_vals, dtype=plc.DataType(plc.TypeId.INT32)
+        )
+        data_col = data_col.to_pylibcudf(mode="read")
+        mask, null_count = plc.transform.bools_to_mask(
+            plc.Column.from_iterable_of_py(mask_bools)
+        )
+        plc_column = plc.Column(
+            plc.DataType(plc.TypeId.LIST),
+            len(arbitrary),
+            None,
+            mask,
+            null_count,
+            0,
+            [offset_col, data_col],
+        )
+        return cls(
+            plc_column=plc_column,
+            size=plc_column.size(),
+            dtype=cudf.ListDtype(data_col.dtype),
+            offset=plc_column.offset(),
+            null_count=plc_column.null_count(),
         )
 
-        # Build ListColumn
-        res = cls(
-            data=None,
-            size=len(arbitrary),
-            dtype=cudf.ListDtype(data_col.dtype),
-            mask=as_column(mask_col).as_mask(),
-            offset=0,
-            null_count=0,
-            children=(offset_col, data_col),
-        )
-        return res
+        # # Build ListColumn
+        # res = cls(
+        #     data=None,
+        #     size=len(arbitrary),
+        #     dtype=cudf.ListDtype(data_col.dtype),
+        #     mask=as_column(mask_col).as_mask(),
+        #     offset=0,
+        #     null_count=0,
+        #     children=(offset_col, data_col),
+        # )
+        # return res
 
     def as_string_column(self, dtype) -> StringColumn:
         """

@@ -23,7 +23,7 @@ from cudf.core._internals.timezones import (
     get_compatible_timezone,
     get_tz_data,
 )
-from cudf.core.buffer import Buffer, acquire_spill_lock
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.temporal_base import TemporalBaseColumn
 from cudf.utils.dtypes import (
@@ -99,26 +99,32 @@ class DatetimeColumn(TemporalBaseColumn):
         "__radd__",
         "__rsub__",
     }
+    _VALID_PLC_TYPES = {
+        plc.TypeId.TIMESTAMP_SECONDS,
+        plc.TypeId.TIMESTAMP_MILLISECONDS,
+        plc.TypeId.TIMESTAMP_MICROSECONDS,
+        plc.TypeId.TIMESTAMP_NANOSECONDS,
+    }
 
     def __init__(
         self,
-        data: Buffer,
+        plc_column: plc.Column,
         size: int | None,
         dtype: np.dtype | pd.DatetimeTZDtype,
-        mask: Buffer | None = None,
         offset: int = 0,
         null_count: int | None = None,
-        children: tuple = (),
-    ):
+    ) -> None:
+        if size is None:
+            raise ValueError("size must be not None")
+            # size = data.size // dtype.itemsize
+            # size = size - offset
         dtype = self._validate_dtype_instance(dtype)
         super().__init__(
-            data=data,
+            plc_column=plc_column,
             size=size,
             dtype=dtype,
-            mask=mask,
             offset=offset,
             null_count=null_count,
-            children=children,
         )
 
     def _clear_cache(self) -> None:
@@ -640,10 +646,9 @@ class DatetimeColumn(TemporalBaseColumn):
     def _with_type_metadata(self, dtype) -> DatetimeColumn:
         if isinstance(dtype, pd.DatetimeTZDtype):
             return DatetimeTZColumn(
-                data=self.base_data,  # type: ignore[arg-type]
-                dtype=dtype,
-                mask=self.base_mask,  # type: ignore[arg-type]
+                plc_column=self.plc_column,
                 size=self.size,
+                dtype=dtype,
                 offset=self.offset,
                 null_count=self.null_count,
             )
@@ -757,26 +762,6 @@ class DatetimeColumn(TemporalBaseColumn):
 
 
 class DatetimeTZColumn(DatetimeColumn):
-    def __init__(
-        self,
-        data: Buffer,
-        size: int | None,
-        dtype: pd.DatetimeTZDtype,
-        mask: Buffer | None = None,
-        offset: int = 0,
-        null_count: int | None = None,
-        children: tuple = (),
-    ):
-        super().__init__(
-            data=data,
-            size=size,
-            dtype=dtype,
-            mask=mask,
-            offset=offset,
-            null_count=null_count,
-            children=children,
-        )
-
     def _clear_cache(self) -> None:
         super()._clear_cache()
         try:
@@ -825,10 +810,9 @@ class DatetimeTZColumn(DatetimeColumn):
     def _utc_time(self) -> DatetimeColumn:
         """Return UTC time as naive timestamps."""
         return DatetimeColumn(
-            data=self.base_data,  # type: ignore[arg-type]
-            dtype=_get_base_dtype(self.dtype),
-            mask=self.base_mask,  # type: ignore[arg-type]
+            plc_column=self.plc_column,
             size=self.size,
+            dtype=_get_base_dtype(self.dtype),
             offset=self.offset,
             null_count=self.null_count,
         )
