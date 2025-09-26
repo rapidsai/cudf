@@ -34,7 +34,13 @@ namespace cudf {
 namespace strings {
 namespace detail {
 
-struct relist;
+enum class positional : int8_t {
+  DEFAULT  = 0,  /// both begin and end are returned
+  END_ONLY = 1,  /// only end is returned
+};
+
+template <positional P>
+struct reljunk;
 
 using match_pair   = thrust::pair<cudf::size_type, cudf::size_type>;
 using match_result = cuda::std::optional<match_pair>;
@@ -187,6 +193,7 @@ class reprog_device {
    *            Specify -1 to match any virtual positions past the end of the string.
    * @return If match found, returns character positions of the matches.
    */
+  template <positional P = positional::DEFAULT>
   [[nodiscard]] __device__ inline match_result find(int32_t const thread_idx,
                                                     string_view const d_str,
                                                     string_view::const_iterator begin,
@@ -213,16 +220,6 @@ class reprog_device {
                                                        cudf::size_type const group_id) const;
 
  private:
-  struct reljunk {
-    relist* __restrict__ list1;
-    relist* __restrict__ list2;
-    int32_t starttype{};
-    char32_t startchar{};
-
-    __device__ inline reljunk(relist* list1, relist* list2, reinst const inst);
-    __device__ inline void swaplist();
-  };
-
   /**
    * @brief Returns the regex instruction object for a given id.
    */
@@ -236,8 +233,9 @@ class reprog_device {
   /**
    * @brief Executes the regex pattern on the given string.
    */
+  template <positional P>
   [[nodiscard]] __device__ inline match_result regexec(string_view const d_str,
-                                                       reljunk jnk,
+                                                       reljunk<P>& jnk,
                                                        string_view::const_iterator begin,
                                                        cudf::size_type end,
                                                        cudf::size_type const group_id = 0) const;
@@ -245,6 +243,7 @@ class reprog_device {
   /**
    * @brief Utility wrapper to setup state memory structures for calling regexec
    */
+  template <positional P = positional::DEFAULT>
   [[nodiscard]] __device__ inline match_result call_regexec(
     int32_t const thread_idx,
     string_view const d_str,
