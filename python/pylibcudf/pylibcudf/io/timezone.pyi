@@ -1,6 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-from pylibcudf.io.types import Stream
+from rmm.pylibrmm.stream import Stream
+
 from pylibcudf.table import Table
 
 def make_timezone_transition_table(

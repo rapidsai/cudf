@@ -7,6 +7,7 @@ import inspect
 import textwrap
 import warnings
 from collections.abc import Mapping
+from copy import deepcopy
 from shutil import get_terminal_size
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -375,7 +376,9 @@ class _SeriesLocIndexer(_FrameIndexer):
                 return indexer.key.column
         elif isinstance(arg, (cudf.MultiIndex, pd.MultiIndex)):
             if isinstance(arg, pd.MultiIndex):
-                arg = cudf.MultiIndex.from_pandas(arg)
+                arg = cudf.MultiIndex(
+                    levels=arg.levels, codes=arg.codes, names=arg.names
+                )
 
             return _indices_from_labels(self._frame, arg)
 
@@ -510,12 +513,12 @@ class Series(SingleColumnFrame, IndexedFrame):
             data = {}
         if dtype is not None:
             dtype = cudf.dtype(dtype)
-        atts = None
+        attrs = None
         if isinstance(data, (pd.Series, pd.Index, Index, Series)):
+            attrs = deepcopy(getattr(data, "attrs", None))
             if copy and not isinstance(data, (pd.Series, pd.Index)):
                 data = data.copy(deep=True)
             name_from_data = data.name
-            atts = getattr(data, "attrs", None)
             column = as_column(data, nan_as_null=nan_as_null, dtype=dtype)
             if isinstance(data, (pd.Series, Series)):
                 index_from_data = ensure_index(data.index)
@@ -583,7 +586,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             first_index = index
             second_index = None
 
-        super().__init__({name: column}, index=first_index, attrs=atts)
+        super().__init__({name: column}, index=first_index, attrs=attrs)
         if second_index is not None:
             reindexed = self.reindex(index=second_index, copy=False)
             self._data = reindexed._data
@@ -666,6 +669,11 @@ class Series(SingleColumnFrame, IndexedFrame):
         3     NaN
         dtype: float64
         """
+        warnings.warn(
+            "from_pandas is deprecated and will be removed in a future version. "
+            "Use the Series constructor instead.",
+            FutureWarning,
+        )
         if nan_as_null is no_default:
             nan_as_null = (
                 False if cudf.get_option("mode.pandas_compatible") else None
@@ -1754,9 +1762,7 @@ class Series(SingleColumnFrame, IndexedFrame):
     def fillna(
         self, value=None, method=None, axis=None, inplace=False, limit=None
     ):
-        if isinstance(value, pd.Series):
-            value = Series.from_pandas(value)
-        elif isinstance(value, Mapping):
+        if isinstance(value, (pd.Series, Mapping)):
             value = Series(value)
         if isinstance(value, cudf.Series):
             if not self.index.equals(value.index):

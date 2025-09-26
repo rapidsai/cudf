@@ -179,7 +179,7 @@ def test_string_set_scalar(scalar):
             "a": [1, 2, 3, 4, 5],
         }
     )
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
 
     pdf["b"] = "a"
     gdf["b"] = "a"
@@ -467,7 +467,7 @@ def test_dataframe_append_empty():
             "value": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
         }
     )
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
 
     gdf["newcol"] = 100
     pdf["newcol"] = 100
@@ -490,13 +490,9 @@ def test_dataframe_setitem_from_masked_object():
     test1_nan = cudf.Series(ary, nan_as_null=False)
     assert test1_nan.null_count == 0
 
-    test2_null = cudf.DataFrame.from_pandas(
-        pd.DataFrame({"a": ary}), nan_as_null=True
-    )
+    test2_null = cudf.DataFrame(pd.DataFrame({"a": ary}), nan_as_null=True)
     assert test2_null["a"].null_count == 20
-    test2_nan = cudf.DataFrame.from_pandas(
-        pd.DataFrame({"a": ary}), nan_as_null=False
-    )
+    test2_nan = cudf.DataFrame(pd.DataFrame({"a": ary}), nan_as_null=False)
     assert test2_nan["a"].null_count == 0
 
     gpu_ary = cp.asarray(ary)
@@ -559,7 +555,7 @@ def test_dataframe_assignment():
     pdf = pd.DataFrame()
     for col in "abc":
         pdf[col] = np.array([0, 1, 1, -2, 10])
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     gdf[gdf < 0] = 999
     pdf[pdf < 0] = 999
     assert_eq(gdf, pdf)
@@ -574,19 +570,19 @@ def test_dataframe_assignment():
 @pytest.mark.parametrize("non_list_data", [123, "abc", "zyx", "rapids", 0.8])
 def test_create_dataframe_cols_empty_data(a, b, misc_data, non_list_data):
     expected = pd.DataFrame({"a": a})
-    actual = cudf.DataFrame.from_pandas(expected)
+    actual = cudf.DataFrame(expected)
     expected["b"] = b
     actual["b"] = b
     assert_eq(actual, expected)
 
     expected = pd.DataFrame({"a": []})
-    actual = cudf.DataFrame.from_pandas(expected)
+    actual = cudf.DataFrame(expected)
     expected["b"] = misc_data
     actual["b"] = misc_data
     assert_eq(actual, expected)
 
     expected = pd.DataFrame({"a": a})
-    actual = cudf.DataFrame.from_pandas(expected)
+    actual = cudf.DataFrame(expected)
     expected["b"] = non_list_data
     actual["b"] = non_list_data
     assert_eq(actual, expected)
