@@ -12,16 +12,18 @@ from pylibcudf.gpumemoryview import gpumemoryview
 from pylibcudf.scalar import Scalar
 from pylibcudf.types import DataType
 
-class ArrayInterface(TypedDict):
+class ArrayInterfaceBase(TypedDict):
     shape: tuple[int, ...]
     typestr: str
     data: None | tuple[int, bool]
     version: int
     strides: None | tuple[int, ...]
     descr: None | list[tuple[Any, ...]]
+
+class ArrayInterface(ArrayInterfaceBase):
     mask: None | "SupportsArrayInterface"
 
-class CudaArrayInterface(ArrayInterface):
+class CudaArrayInterface(ArrayInterfaceBase):
     stream: None | int
     mask: None | "SupportsCudaArrayInterface"
 
