@@ -29,7 +29,6 @@ namespace cudf {
 
 context::context(init_flags flags) : _program_cache{nullptr}
 {
-  // Set dump_codegen flag from environment variable
   auto dump_codegen_flag = getenv_or("LIBCUDF_JIT_DUMP_CODEGEN", std::string{"OFF"});
   _dump_codegen          = (dump_codegen_flag == "ON" || dump_codegen_flag == "1");
 
@@ -58,7 +57,6 @@ void context::initialize_components(init_flags flags)
 
   if (has_flag(new_flags, init_flags::LOAD_NVCOMP)) { io::detail::nvcomp::load_nvcomp_library(); }
 
-  // Update the initialized flags
   _initialized_flags = _initialized_flags | new_flags;
 }
 
