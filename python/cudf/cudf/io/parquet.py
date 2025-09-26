@@ -2491,7 +2491,7 @@ def _process_metadata(
                     idx = Index._from_column(column_empty(0))
             else:
                 start = range_index_meta["start"] + skip_rows  # type: ignore[operator]
-                stop = range_index_meta["stop"]
+                stop = int(range_index_meta["stop"])  # type: ignore[arg-type]
                 if nrows > -1:
                     stop = start + nrows
                 idx = RangeIndex(
