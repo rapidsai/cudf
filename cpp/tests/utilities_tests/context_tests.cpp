@@ -23,24 +23,18 @@
 struct ContextTest : public cudf::test::BaseFixture {
   ~ContextTest() override
   {
-    // Automatically deinitialize on test completion
     try {
       cudf::deinitialize();
     } catch (...) {
-      // Ignore exceptions during cleanup
     }
   }
 };
 
 TEST_F(ContextTest, MultipleInitializeCalls)
 {
-  // First initialization with JIT cache only
   cudf::initialize(cudf::init_flags::INIT_JIT_CACHE);
 
-  // Second initialization with nvCOMP - should not throw
   EXPECT_NO_THROW(cudf::initialize(cudf::init_flags::LOAD_NVCOMP));
-
-  // Third initialization with all flags - should not throw and not reinitialize
   EXPECT_NO_THROW(cudf::initialize(cudf::init_flags::ALL));
 }
 
@@ -49,7 +43,6 @@ TEST_F(ContextTest, InitializeAfterDeinitialize)
   cudf::initialize(cudf::init_flags::ALL);
   cudf::deinitialize();
 
-  // Should be able to initialize again
   EXPECT_NO_THROW(cudf::initialize(cudf::init_flags::INIT_JIT_CACHE));
 }
 
