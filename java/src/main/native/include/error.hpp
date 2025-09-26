@@ -247,3 +247,50 @@ inline void jni_cuda_check(JNIEnv* const env, cudaError_t cuda_status)
   JNI_CATCH_BEGIN(env, ret_val)         \
   CATCH_SPECIAL_EXCEPTION(env, ret_val) \
   CATCH_STD_EXCEPTION(env, ret_val)
+
+// Deprecated: macros from here will be removed once spark-rapids-jni is updated to use the new
+// macros JNI_TRY/JNI_CATCH.
+#define CATCH_STD_CLASS(env, class_name, ret_val)                                                \
+  catch (const rmm::out_of_memory& e)                                                            \
+  {                                                                                              \
+    JNI_EXCEPTION_OCCURRED_CHECK(env, ret_val);                                                  \
+    auto const what =                                                                            \
+      std::string("Could not allocate native memory: ") + (e.what() == nullptr ? "" : e.what()); \
+    JNI_THROW_NEW(env, cudf::jni::OOM_ERROR_CLASS, what.c_str(), ret_val);                       \
+  }                                                                                              \
+  catch (const cudf::fatal_cuda_error& e)                                                        \
+  {                                                                                              \
+    JNI_CHECK_THROW_CUDA_EXCEPTION(                                                              \
+      env, cudf::jni::CUDA_FATAL_EXCEPTION_CLASS, e.what(), nullptr, e.error_code(), ret_val);   \
+  }                                                                                              \
+  catch (const cudf::cuda_error& e)                                                              \
+  {                                                                                              \
+    JNI_CHECK_THROW_CUDA_EXCEPTION(                                                              \
+      env, cudf::jni::CUDA_EXCEPTION_CLASS, e.what(), nullptr, e.error_code(), ret_val);         \
+  }                                                                                              \
+  catch (const cudf::data_type_error& e)                                                         \
+  {                                                                                              \
+    JNI_CHECK_THROW_CUDF_EXCEPTION(                                                              \
+      env, cudf::jni::CUDF_EXCEPTION_CLASS, e.what(), nullptr, ret_val);                         \
+  }                                                                                              \
+  catch (std::overflow_error const& e)                                                           \
+  {                                                                                              \
+    JNI_CHECK_THROW_CUDF_EXCEPTION(                                                              \
+      env, cudf::jni::CUDF_OVERFLOW_EXCEPTION_CLASS, e.what(), nullptr, ret_val);                \
+  }                                                                                              \
+  catch (const std::exception& e)                                                                \
+  {                                                                                              \
+    /* Double check whether the thrown exception is unrecoverable CUDA error or not. */          \
+    /* Like cudf::detail::throw_cuda_error, it is nearly certain that a fatal error  */          \
+    /* occurred if the second call doesn't return with cudaSuccess. */                           \
+    cudaGetLastError();                                                                          \
+    auto const last = cudaFree(0);                                                               \
+    if (cudaSuccess != last && last == cudaDeviceSynchronize()) {                                \
+      /* Throw CudaFatalException since the thrown exception is unrecoverable CUDA error */      \
+      JNI_CHECK_THROW_CUDA_EXCEPTION(                                                            \
+        env, cudf::jni::CUDA_FATAL_EXCEPTION_CLASS, e.what(), nullptr, last, ret_val);           \
+    }                                                                                            \
+    JNI_CHECK_THROW_CUDF_EXCEPTION(env, class_name, e.what(), nullptr, ret_val);                 \
+  }
+
+#define CATCH_STD(env, ret_val) CATCH_STD_CLASS(env, cudf::jni::CUDF_EXCEPTION_CLASS, ret_val)
