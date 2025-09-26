@@ -66,7 +66,8 @@ cpdef Column replace_tokens(
             targets.view(),
             replacements.view(),
             dereference(<const string_scalar*>delimiter.get()),
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -122,7 +123,8 @@ cpdef Column filter_tokens(
             min_token_length,
             dereference(<const string_scalar*>replacement.get()),
             dereference(<const string_scalar*>delimiter.get()),
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)

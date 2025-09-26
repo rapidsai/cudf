@@ -63,7 +63,8 @@ cpdef Column generate_ngrams(
             c_strings,
             ngrams,
             c_separator[0],
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -102,7 +103,8 @@ cpdef Column generate_character_ngrams(
         c_result = cpp_generate_character_ngrams(
             c_strings,
             ngrams,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -145,6 +147,7 @@ cpdef Column hash_character_ngrams(
             c_strings,
             ngrams,
             seed,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), stream, mr)

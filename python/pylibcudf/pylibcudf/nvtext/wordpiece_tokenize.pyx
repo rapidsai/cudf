@@ -25,11 +25,19 @@ cdef class WordPieceVocabulary:
 
     For details, see :cpp:class:`cudf::nvtext::wordpiece_tokenize`.
     """
-    def __cinit__(self, Column vocab, Stream stream=None):
+    def __cinit__(
+        self,
+        Column vocab,
+        Stream stream=None,
+        DeviceMemoryResource mr=None
+    ):
         cdef column_view c_vocab = vocab.view()
         stream = _get_stream(stream)
+        mr = _get_memory_resource(mr)
         with nogil:
-            self.c_obj = move(cpp_load_wordpiece_vocabulary(c_vocab, stream.view()))
+            self.c_obj = move(cpp_load_wordpiece_vocabulary(
+                c_vocab, stream.view(), mr.get_mr()
+            ))
 
     __hash__ = None
 
@@ -72,7 +80,8 @@ cpdef Column wordpiece_tokenize(
             input.view(),
             dereference(vocabulary.c_obj.get()),
             max_words_per_row,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)

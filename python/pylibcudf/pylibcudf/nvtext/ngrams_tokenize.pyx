@@ -60,6 +60,7 @@ cpdef Column ngrams_tokenize(
             ngrams,
             dereference(<const string_scalar*>delimiter.get()),
             dereference(<const string_scalar*>separator.get()),
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), stream, mr)

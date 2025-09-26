@@ -11,6 +11,7 @@ from pylibcudf.libcudf.nvtext.stemmer cimport (
     porter_stemmer_measure as cpp_porter_stemmer_measure,
 )
 from pylibcudf.libcudf.types cimport size_type
+from pylibcudf.nvtext.stemmer cimport ColumnOrSize
 from pylibcudf.utils cimport _get_stream, _get_memory_resource
 
 from pylibcudf.libcudf.nvtext.stemmer import letter_type as LetterType # no-cython-lint
@@ -94,7 +95,7 @@ cpdef Column porter_stemmer_measure(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_porter_stemmer_measure(input.view(), stream.view())
+        c_result = cpp_porter_stemmer_measure(input.view(), stream.view(), mr.get_mr())
 
     return Column.from_libcudf(move(c_result), stream, mr)
 

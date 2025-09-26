@@ -56,7 +56,8 @@ cpdef Column jaccard_index(
             c_input1,
             c_input2,
             width,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)

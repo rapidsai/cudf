@@ -71,7 +71,9 @@ cpdef Column build_suffix_array(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_build_suffix_array(input.view(), min_width, stream.view())
+        c_result = cpp_build_suffix_array(
+            input.view(), min_width, stream.view(), mr.get_mr()
+        )
 
     return _column_from_suffix_array(move(c_result), stream, mr)
 
@@ -113,7 +115,7 @@ cpdef Column resolve_duplicates(
 
     with nogil:
         c_result = cpp_resolve_duplicates(
-            input.view(), indices.view(), min_width, stream.view()
+            input.view(), indices.view(), min_width, stream.view(), mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -169,6 +171,7 @@ cpdef Column resolve_duplicates_pair(
             indices2.view(),
             min_width,
             stream.view(),
+            mr.get_mr(),
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)

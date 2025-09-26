@@ -26,11 +26,17 @@ cdef class BPEMergePairs:
 
     For details, see :cpp:class:`cudf::nvtext::bpe_merge_pairs`.
     """
-    def __cinit__(self, Column merge_pairs, Stream stream=None):
+    def __cinit__(
+        self,
+        Column merge_pairs,
+        Stream stream=None,
+        DeviceMemoryResource mr=None
+    ):
         cdef column_view c_pairs = merge_pairs.view()
         stream = _get_stream(stream)
+        mr = _get_memory_resource(mr)
         with nogil:
-            self.c_obj = move(cpp_load_merge_pairs(c_pairs, stream.view()))
+            self.c_obj = move(cpp_load_merge_pairs(c_pairs, stream.view(), mr.get_mr()))
 
     __hash__ = None
 
@@ -77,7 +83,8 @@ cpdef Column byte_pair_encoding(
                 input.view(),
                 dereference(merge_pairs.c_obj.get()),
                 dereference(<const string_scalar*>separator.c_obj.get()),
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
         )
 

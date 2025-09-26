@@ -7,7 +7,12 @@ from pylibcudf.column import Column
 from pylibcudf.scalar import Scalar
 
 class TokenizeVocabulary:
-    def __init__(self, vocab: Column, stream: Stream | None = None): ...
+    def __init__(
+        self,
+        vocab: Column,
+        stream: Stream | None = None,
+        mr: DeviceMemoryResource | None = None,
+    ): ...
 
 def tokenize_scalar(
     input: Column,

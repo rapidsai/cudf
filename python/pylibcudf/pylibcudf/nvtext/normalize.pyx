@@ -23,15 +23,23 @@ cdef class CharacterNormalizer:
 
     For details, see :cpp:class:`cudf::nvtext::character_normalizer`.
     """
-    def __cinit__(self, bool do_lower_case, Column tokens, Stream stream=None):
+    def __cinit__(
+        self,
+        bool do_lower_case,
+        Column tokens,
+        Stream stream=None,
+        DeviceMemoryResource mr=None
+    ):
         cdef column_view c_tokens = tokens.view()
         stream = _get_stream(stream)
+        mr = _get_memory_resource(mr)
         with nogil:
             self.c_obj = move(
                 cpp_normalize.create_character_normalizer(
                     do_lower_case,
                     c_tokens,
-                    stream.view()
+                    stream.view(),
+                    mr.get_mr()
                 )
             )
 
@@ -63,7 +71,9 @@ cpdef Column normalize_spaces(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_normalize.normalize_spaces(input.view(), stream.view())
+        c_result = cpp_normalize.normalize_spaces(
+            input.view(), stream.view(), mr.get_mr()
+        )
 
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -101,7 +111,8 @@ cpdef Column normalize_characters(
         c_result = cpp_normalize.normalize_characters(
             input.view(),
             dereference(normalizer.c_obj.get()),
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
