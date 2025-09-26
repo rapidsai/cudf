@@ -528,11 +528,11 @@ class DatetimeColumn(TemporalBaseColumn):
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
+        if isinstance(other, cudf.DateOffset):
+            return other._datetime_binop(self, op, reflect=reflect)  # type: ignore[attr-defined]
         other = self._normalize_binop_operand(other)
         if other is NotImplemented:
             return NotImplemented
-        elif isinstance(other, cudf.DateOffset):
-            return other._datetime_binop(self, op, reflect=reflect)  # type: ignore[attr-defined]
 
         if reflect:
             lhs = other
