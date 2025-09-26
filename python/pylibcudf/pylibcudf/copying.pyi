@@ -92,5 +92,8 @@ def boolean_mask_scatter(
     mr: DeviceMemoryResource | None = None,
 ) -> Table: ...
 def get_element(
-    input_column: Column, index: int, stream: Stream | None = None
+    input_column: Column,
+    index: int,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Scalar: ...
