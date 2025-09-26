@@ -457,6 +457,13 @@ _intersphinx_cache = {}
 
 _intersphinx_extra_prefixes = ("rmm", "rmm::mr", "mr")
 
+_external_intersphinx_aliases = {
+    "pandas": "pd",
+    "pyarrow": "pa",
+    "numpy": "np",
+    "cupy": "cp",
+}
+
 
 def _cached_intersphinx_lookup(env, node, contnode):
     """Perform an intersphinx lookup and cache the result.
@@ -515,6 +522,17 @@ def on_missing_reference(app, env, node, contnode):
         # Sphinx docs, those are pages that doxygen automatically
         # generates. Adding those would clutter the Sphinx output.
         return contnode
+
+    if node["refdomain"] in ("py",) and reftarget is not None:
+        # These replacements are needed because of
+        # https://github.com/sphinx-doc/sphinx/issues/10151
+        for module, alias in _external_intersphinx_aliases.items():
+            if f"{alias}." in node["reftarget"]:
+                node["reftarget"] = node["reftarget"].replace(alias, module)
+                if (
+                    ref := _cached_intersphinx_lookup(env, node, contnode)
+                ) is not None:
+                    return ref
 
     if node["refdomain"] in ("std", "cpp") and reftarget is not None:
         if any(toskip in reftarget for toskip in _names_to_skip_in_cpp):
@@ -582,18 +600,11 @@ def on_missing_reference(app, env, node, contnode):
 # https://github.com/sphinx-doc/sphinx/issues/11225
 nitpick_ignore = [
     ("py:class", "Dtype"),
-    ("py:class", "cp.ndarray"),
-    ("py:class", "pd.DataFrame"),
     ("py:class", "pandas.core.indexes.frozen.FrozenList"),
-    ("py:class", "pa.Array"),
-    ("py:class", "pa.Table"),
-    ("py:class", "pa.ListType"),
-    ("py:class", "pa.Decimal128Type"),
     ("py:class", "ScalarLike"),
     ("py:class", "StringColumn"),
     ("py:class", "ColumnLike"),
     ("py:class", "DtypeObj"),
-    ("py:class", "pa.StructType"),
     ("py:class", "ArrowLike"),
 ]
 
