@@ -409,7 +409,15 @@ class NumericalColumn(NumericalBaseColumn):
             if not isinstance(other, type(self)):
                 return NotImplemented
             return other
-        elif isinstance(other, (cp.ndarray, np.ndarray)) and other.ndim == 0:
+        # TODO: cupy scalars are just aliases for numpy scalars, so extracting a scalar
+        # from a cupy array would always require a D2H copy. As a result, cupy does not
+        # produce scalars without explicit casting requests
+        # https://docs.cupy.dev/en/stable/user_guide/difference.html#zero-dimensional-array
+        # The below logic for type inference relies on numpy, however, so we need to go
+        # that route for now. If possible we should find a way to avoid this.
+        if isinstance(other, cp.ndarray) and other.ndim == 0:
+            other = cp.asnumpy(other)[()]
+        elif isinstance(other, np.ndarray) and other.ndim == 0:
             other = other[()]
 
         if is_scalar(other):
@@ -444,7 +452,6 @@ class NumericalColumn(NumericalBaseColumn):
                         self.dtype,
                         np.result_type(self.dtype.numpy_dtype, other),  # noqa: TID251
                     )
-
             else:
                 common_dtype = np.result_type(self.dtype, other)  # noqa: TID251
             if common_dtype.kind in {"b", "i", "u", "f"}:  # type: ignore[union-attr]
