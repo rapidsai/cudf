@@ -10,12 +10,6 @@ else:
     libcudf.load_library()
     del libcudf
 
-import cupy
-from numba import cuda
-
-from rmm.allocators.cupy import rmm_cupy_allocator
-from rmm.allocators.numba import RMMNumbaManager
-
 from cudf import api, core, datasets, testing
 from cudf._version import __git_commit__, __version__
 from cudf.api.extensions import (
@@ -78,13 +72,104 @@ from cudf.options import (
     set_option,
 )
 
-cuda.set_memory_manager(RMMNumbaManager)
-cupy.cuda.set_allocator(rmm_cupy_allocator)
 
-del cuda
-del cupy
-del rmm_cupy_allocator
-del RMMNumbaManager
+def configure_mr():
+    """Configure all libraries to use the best available or selected rmm mr."""
+    import os
+    import warnings
+
+    import cupy
+    from numba import cuda
+
+    import pylibcudf
+    import rmm.mr
+    from rmm.allocators.cupy import rmm_cupy_allocator
+    from rmm.allocators.numba import RMMNumbaManager
+
+    if (
+        "RAPIDS_NO_INITIALIZE" in os.environ
+        or "CUDF_NO_INITIALIZE" in os.environ
+    ):
+        return
+
+    # Set up cupy and numba to use RMM for allocations
+    cuda.set_memory_manager(RMMNumbaManager)
+    cupy.cuda.set_allocator(rmm_cupy_allocator)
+
+    # Configure rmm's default allocator to be a managed pool if supported unless the
+    # user has specified otherwise.
+    try:
+        # The default mode is "managed_pool" if UVM is supported, otherwise "pool"
+        managed_memory_is_supported = (
+            pylibcudf.utils._is_concurrent_managed_access_supported()
+        )
+    except RuntimeError as e:
+        warnings.warn(str(e))
+        return
+
+    cudf_rmm_mode = os.getenv("CUDF_RMM_MODE")
+    cudf_pandas_rmm_mode = os.getenv("CUDF_PANDAS_RMM_MODE")
+    rmm_mode = cudf_pandas_rmm_mode or cudf_rmm_mode
+    if rmm_mode is None:
+        rmm_mode = "managed_pool" if managed_memory_is_supported else "pool"
+
+    # Check if a non-default memory resource is set
+    current_mr = rmm.mr.get_current_device_resource()
+    if not isinstance(current_mr, rmm.mr.CudaMemoryResource):
+        # Warn only if the user explicitly set CUDF_PANDAS_RMM_MODE or CUDF_RMM_MODE
+        if cudf_rmm_mode:
+            warnings.warn(
+                "cudf detected an already configured memory resource, ignoring "
+                f"'CUDF_RMM_MODE={rmm_mode}'",
+                UserWarning,
+            )
+        if cudf_pandas_rmm_mode:
+            warnings.warn(
+                "cudf.pandas detected an already configured memory resource, "
+                f"ignoring 'CUDF_PANDAS_RMM_MODE={rmm_mode}'",
+                UserWarning,
+            )
+        return
+
+    free_memory, _ = rmm.mr.available_device_memory()
+    free_memory = int(round(float(free_memory) * 0.80 / 256) * 256)
+    new_mr = current_mr
+
+    if rmm_mode == "pool":
+        new_mr = rmm.mr.PoolMemoryResource(
+            current_mr,
+            initial_pool_size=free_memory,
+        )
+    elif rmm_mode == "async":
+        new_mr = rmm.mr.CudaAsyncMemoryResource(initial_pool_size=free_memory)
+    elif "managed" in rmm_mode:
+        if not managed_memory_is_supported:
+            raise ValueError(
+                "Managed memory is not supported on this system, so the "
+                f"requested {rmm_mode=} is invalid."
+            )
+        if rmm_mode == "managed":
+            new_mr = rmm.mr.PrefetchResourceAdaptor(
+                rmm.mr.ManagedMemoryResource()
+            )
+        elif rmm_mode == "managed_pool":
+            new_mr = rmm.mr.PrefetchResourceAdaptor(
+                rmm.mr.PoolMemoryResource(
+                    rmm.mr.ManagedMemoryResource(),
+                    initial_pool_size=free_memory,
+                )
+            )
+        else:
+            raise ValueError(f"Unsupported {rmm_mode=}")
+        pylibcudf.prefetch.enable()
+    elif rmm_mode != "cuda":
+        raise ValueError(f"Unsupported {rmm_mode=}")
+
+    rmm.mr.set_current_device_resource(new_mr)
+
+
+configure_mr()
+
 
 __all__ = [
     "NA",
