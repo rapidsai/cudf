@@ -36,7 +36,7 @@ void groupby_max_helper(nvbench::state& state,
     return create_random_column(cudf::type_to_id<int32_t>(), row_count{num_rows}, profile);
   }();
 
-  auto const make_values = [&] {
+  auto const make_values = [&]() {
     auto builder = data_profile_builder().cardinality(0).distribution(
       cudf::type_to_id<Type>(), distribution_id::UNIFORM, 0, num_rows);
     if (null_probability > 0) {
@@ -51,7 +51,6 @@ void groupby_max_helper(nvbench::state& state,
   auto const num_aggregations = state.get_int64("num_aggregations");
 
   auto keys_view = keys->view();
-  auto gb_obj    = cudf::groupby::groupby(cudf::table_view({keys_view, keys_view, keys_view}));
 
   std::vector<std::unique_ptr<cudf::column>> val_cols;
   std::vector<cudf::groupby::aggregation_request> requests;
@@ -64,8 +63,10 @@ void groupby_max_helper(nvbench::state& state,
 
   auto const mem_stats_logger = cudf::memory_stats_logger();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
-  state.exec(nvbench::exec_tag::sync,
-             [&](nvbench::launch& launch) { auto const result = gb_obj.aggregate(requests); });
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    auto gb_obj       = cudf::groupby::groupby(cudf::table_view({keys_view, keys_view, keys_view}));
+    auto const result = gb_obj.aggregate(requests);
+  });
   auto const elapsed_time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
   state.add_element_count(
     static_cast<double>(num_rows * num_aggregations) / elapsed_time / 1'000'000., "Mrows/s");

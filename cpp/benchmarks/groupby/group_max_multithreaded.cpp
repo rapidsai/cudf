@@ -42,7 +42,7 @@ void bench_groupby_max_multithreaded(nvbench::state& state, nvbench::type_list<T
     return create_random_column(cudf::type_to_id<int32_t>(), row_count{num_rows}, profile);
   }();
 
-  auto const make_values = [&] {
+  auto const make_values = [&]() {
     auto builder = data_profile_builder().cardinality(0).distribution(
       cudf::type_to_id<Type>(), distribution_id::UNIFORM, 0, num_rows);
     if (null_probability > 0) {
@@ -55,7 +55,6 @@ void bench_groupby_max_multithreaded(nvbench::state& state, nvbench::type_list<T
   };
 
   auto keys_view = keys->view();
-  auto gb_obj    = cudf::groupby::groupby(cudf::table_view({keys_view, keys_view, keys_view}));
 
   auto streams = cudf::detail::fork_streams(cudf::get_default_stream(), num_threads);
   BS::thread_pool threads(num_threads);
@@ -75,7 +74,10 @@ void bench_groupby_max_multithreaded(nvbench::state& state, nvbench::type_list<T
   auto const mem_stats_logger = cudf::memory_stats_logger();
   state.exec(
     nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
-      auto perform_agg = [&](int64_t index) { gb_obj.aggregate(requests[index], streams[index]); };
+      auto perform_agg = [&](int64_t index) {
+        auto gb_obj = cudf::groupby::groupby(cudf::table_view({keys_view, keys_view, keys_view}));
+        gb_obj.aggregate(requests[index], streams[index]);
+      };
       timer.start();
       threads.detach_sequence(decltype(num_threads){0}, num_threads, perform_agg);
       threads.wait();

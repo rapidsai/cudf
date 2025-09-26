@@ -15,7 +15,8 @@ from pylibcudf.libcudf.scalar.scalar_factories cimport (
 )
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.scalar cimport Scalar
-from pylibcudf.utils cimport _get_stream
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 __all__ = ["filter_tokens", "replace_tokens"]
@@ -25,7 +26,8 @@ cpdef Column replace_tokens(
     Column targets,
     Column replacements,
     Scalar delimiter=None,
-    Stream stream=None
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Replaces specified tokens with corresponding replacement strings.
@@ -53,6 +55,7 @@ cpdef Column replace_tokens(
     """
     cdef unique_ptr[column] c_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
     if delimiter is None:
         delimiter = Scalar.from_libcudf(
             cpp_make_string_scalar("".encode(), stream.view())
@@ -63,9 +66,10 @@ cpdef Column replace_tokens(
             targets.view(),
             replacements.view(),
             dereference(<const string_scalar*>delimiter.get()),
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 
 cpdef Column filter_tokens(
@@ -73,7 +77,8 @@ cpdef Column filter_tokens(
     size_type min_token_length,
     Scalar replacement=None,
     Scalar delimiter=None,
-    Stream stream=None
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Removes tokens whose lengths are less than a specified number of characters.
@@ -102,6 +107,7 @@ cpdef Column filter_tokens(
     """
     cdef unique_ptr[column] c_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
     if delimiter is None:
         delimiter = Scalar.from_libcudf(
             cpp_make_string_scalar("".encode(), stream.view())
@@ -117,7 +123,8 @@ cpdef Column filter_tokens(
             min_token_length,
             dereference(<const string_scalar*>replacement.get()),
             dereference(<const string_scalar*>delimiter.get()),
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)
