@@ -17,8 +17,8 @@
 
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/join/join.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
-#include <cudf/table/primitive_row_operators.cuh>
+#include <cudf/detail/row_operator/primitive_row_operators.cuh>
+#include <cudf/detail/row_operator/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -32,18 +32,11 @@
 #include <cuco/types.cuh>
 #include <cuda/std/type_traits>
 
-#include <type_traits>
-
-// Forward declaration
-namespace cudf::experimental::row::equality {
-class preprocessed_table;
-}
-
 namespace cudf {
 namespace detail {
 
-using cudf::experimental::row::lhs_index_type;
-using cudf::experimental::row::rhs_index_type;
+using cudf::detail::row::lhs_index_type;
+using cudf::detail::row::rhs_index_type;
 
 /**
  * @brief Base class providing common functionality for filtered join operations.
@@ -57,7 +50,6 @@ class filtered_join {
    * @brief Properties of the build table used in the join operation
    */
   struct build_properties {
-    bool has_nulls;           ///< True if nested nulls are present in build table
     bool has_nested_columns;  ///< True if the build table contains nested columns
   };
 
@@ -186,25 +178,24 @@ class filtered_join {
 
   // Hasher for primitive row types
   using primitive_row_hasher =
-    cudf::row::primitive::row_hasher<cudf::hashing::detail::default_hash>;
+    cudf::detail::row::primitive::row_hasher<cudf::hashing::detail::default_hash>;
   // Linear probing scheme with bucket size 1 for primitive types
   using primitive_probing_scheme = cuco::linear_probing<1, hash_extract_fn>;
   // Equality comparator for primitive rows
-  using primitive_row_comparator = cudf::row::primitive::row_equality_comparator;
+  using primitive_row_comparator = cudf::detail::row::primitive::row_equality_comparator;
 
-  // Hasher for complex row types with dynamic null handling
+  // Hasher for complex row types with compile-time null handling
   using row_hasher =
-    cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
-                                                     nullate::DYNAMIC>;
+    cudf::detail::row::hash::device_row_hasher<cudf::hashing::detail::default_hash, nullate::YES>;
   // Linear probing scheme with bucket size 4 for nested data structures
   using nested_probing_scheme = cuco::linear_probing<4, hash_extract_fn>;
   // Linear probing scheme with bucket size 1 for simple data
   using simple_probing_scheme = cuco::linear_probing<1, hash_extract_fn>;
   // Equality comparator for complex rows with null handling and NaN comparison
-  using row_comparator = cudf::experimental::row::equality::device_row_comparator<
+  using row_comparator = cudf::detail::row::equality::device_row_comparator<
     true,
-    cudf::nullate::DYNAMIC,
-    cudf::experimental::row::equality::nan_equal_physical_equality_comparator>;
+    cudf::nullate::YES,
+    cudf::detail::row::equality::nan_equal_physical_equality_comparator>;
 
   storage_type _bucket_storage;  ///< Storage for hash table buckets
 
@@ -214,7 +205,7 @@ class filtered_join {
   build_properties _build_props;           ///< Properties of the build table
   cudf::table_view _build;                 ///< input table to build the hash map
   cudf::null_equality const _nulls_equal;  ///< whether to consider nulls as equal
-  std::shared_ptr<cudf::experimental::row::equality::preprocessed_table>
+  std::shared_ptr<cudf::detail::row::equality::preprocessed_table>
     _preprocessed_build;  ///< input table preprocssed for row operators
 
   /**

@@ -34,9 +34,10 @@ class context {
  private:
   std::unique_ptr<jit::program_cache> _program_cache;
   bool _dump_codegen = false;
+  bool _use_jit      = false;
 
  public:
-  context();
+  context(init_flags flags = init_flags::INIT_JIT_CACHE);
   context(context const&)            = delete;
   context& operator=(context const&) = delete;
   context(context&&)                 = delete;
@@ -46,6 +47,8 @@ class context {
   jit::program_cache& program_cache();
 
   [[nodiscard]] bool dump_codegen() const;
+
+  [[nodiscard]] bool use_jit() const;
 };
 
 std::unique_ptr<context>& get_context_ptr_ref();

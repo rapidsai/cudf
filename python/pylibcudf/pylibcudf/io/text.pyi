@@ -3,7 +3,17 @@
 from rmm.pylibrmm.stream import Stream
 
 from pylibcudf.column import Column
-from pylibcudf.io.text import DataChunkSource, ParseOptions
+
+class ParseOptions:
+    def __init__(
+        self,
+        *,
+        byte_range: tuple[int, int] | None = None,
+        strip_delimiters: bool = False,
+    ) -> None: ...
+
+class DataChunkSource:
+    def __init__(self, data: str) -> None: ...
 
 def make_source(data: str) -> DataChunkSource: ...
 def make_source_from_file(filename: str) -> DataChunkSource: ...
