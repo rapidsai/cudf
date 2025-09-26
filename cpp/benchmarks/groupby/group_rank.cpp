@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,11 +52,10 @@ static void nvbench_groupby_rank(nvbench::state& state,
   requests[0].values = order_by;
   requests[0].aggregations.push_back(std::move(agg));
 
-  cudf::groupby::groupby gb_obj(
-    keys, cudf::null_policy::EXCLUDE, is_sorted ? cudf::sorted::YES : cudf::sorted::NO);
-
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     rmm::cuda_stream_view stream_view{launch.get_stream()};
+    cudf::groupby::groupby gb_obj(
+      keys, cudf::null_policy::EXCLUDE, is_sorted ? cudf::sorted::YES : cudf::sorted::NO);
     // groupby scan uses sort implementation
     auto result = gb_obj.scan(requests);
   });
@@ -95,7 +94,7 @@ using methods = nvbench::enum_type_list<cudf::rank_method::AVERAGE,
 
 NVBENCH_BENCH_TYPES(nvbench_groupby_rank, NVBENCH_TYPE_AXES(methods))
   .set_type_axes_names({"rank_method"})
-  .set_name("groupby_rank")
+  .set_name("rank")
   .add_int64_axis("data_size",
                   {
                     1000000,    // 1M
