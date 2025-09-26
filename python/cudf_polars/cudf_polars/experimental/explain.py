@@ -19,7 +19,9 @@ from cudf_polars.dsl.ir import (
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.experimental.base import ColumnStat
 from cudf_polars.experimental.parallel import lower_ir_graph
-from cudf_polars.experimental.statistics import collect_statistics
+from cudf_polars.experimental.statistics import (
+    collect_statistics,
+)
 from cudf_polars.utils.config import ConfigOptions
 
 if TYPE_CHECKING:
@@ -59,8 +61,25 @@ def explain_query(
         lowered_ir, partition_info = lower_ir_graph(ir, config)
         return _repr_ir_tree(lowered_ir, partition_info)
     else:
-        # Include row-count statistics for the logical plan
-        return _repr_ir_tree(ir, stats=collect_statistics(ir, config))
+        if config.executor.name == "streaming":
+            # Include row-count statistics for the logical plan
+            return _repr_ir_tree(ir, stats=collect_statistics(ir, config))
+        else:
+            return _repr_ir_tree(ir)
+
+
+def _fmt_row_count(value: int | None) -> str:
+    """Format a row count as a readable string."""
+    if value is None:
+        return ""
+    elif value < 1_000:
+        return f"{value}"
+    elif value < 1_000_000:
+        return f"{round(value / 1_000, 2):g} K"
+    elif value < 1_000_000_000:
+        return f"{round(value / 1_000_000, 2):g} M"
+    else:
+        return f"{round(value / 1_000_000_000, 2):g} B"
 
 
 def _repr_ir_tree(
@@ -74,7 +93,9 @@ def _repr_ir_tree(
     count = partition_info[ir].count if partition_info else None
     if stats is not None:
         # Include row-count estimate (if available)
-        row_count_estimate = stats.row_count.get(ir, ColumnStat[int](None)).value
+        row_count_estimate = _fmt_row_count(
+            stats.row_count.get(ir, ColumnStat[int](None)).value
+        )
         row_count = f"~{row_count_estimate}" if row_count_estimate else "unknown"
         header = header.rstrip("\n") + f" {row_count=}\n"
     if count is not None:

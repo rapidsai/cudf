@@ -26,7 +26,7 @@ def test_rank_all_arguments(ascending, method, na_option, pct, numeric_only):
         pdf["str"] = np.array(
             ["a", "b", "c", "d", "e", "1", "2", "3", "4", "5"]
         )
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
 
     kwargs = {
         "method": method,
@@ -69,7 +69,7 @@ def test_rank_error_arguments():
         },
         index=np.array([5, 4, 3, 2, 1, 6, 7, 8, 9, 10]),
     )
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
 
     assert_exceptions_equal(
         lfunc=pdf["col1"].rank,

@@ -157,7 +157,7 @@ def test_df_astype_string_to_other(as_dtype):
     elif "float" in as_dtype:
         data = [1.0, 2.0, 3.0, np.nan]
 
-    insert_data = cudf.Series.from_pandas(pd.Series(data, dtype="str"))
+    insert_data = cudf.Series(pd.Series(data, dtype="str"))
     expect_data = cudf.Series(data, dtype=as_dtype)
 
     gdf = cudf.DataFrame()
@@ -242,7 +242,7 @@ def test_df_astype_categorical_to_other(as_dtype):
         data = [1, 2, 3, 1]
     psr = pd.Series(data, dtype="category")
     pdf = pd.DataFrame({"foo": psr, "bar": psr})
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
     assert_eq(pdf.astype(as_dtype), gdf.astype(as_dtype))
 
 
@@ -250,12 +250,15 @@ def test_df_astype_categorical_to_other(as_dtype):
 def test_df_astype_to_categorical_ordered(ordered):
     psr = pd.Series([1, 2, 3, 1], dtype="category")
     pdf = pd.DataFrame({"foo": psr, "bar": psr})
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.DataFrame(pdf)
 
     ordered_dtype_pd = pd.CategoricalDtype(
         categories=[1, 2, 3], ordered=ordered
     )
-    ordered_dtype_gd = cudf.CategoricalDtype.from_pandas(ordered_dtype_pd)
+    ordered_dtype_gd = cudf.CategoricalDtype(
+        categories=ordered_dtype_pd.categories,
+        ordered=ordered_dtype_pd.ordered,
+    )
 
     assert_eq(
         pdf.astype(ordered_dtype_pd).astype("int32"),
