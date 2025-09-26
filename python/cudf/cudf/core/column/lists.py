@@ -153,8 +153,7 @@ class ListColumn(ColumnBase):
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         # Lists only support __add__, which concatenates lists.
         reflect, op = self._check_reflected_op(op)
-        other = self._normalize_binop_operand(other)
-        if other is NotImplemented:
+        if not isinstance(other, type(self)):
             return NotImplemented
         if isinstance(other.dtype, ListDtype):
             if op == "__add__":
@@ -222,11 +221,6 @@ class ListColumn(ColumnBase):
         raise NotImplementedError(
             "Lists are not yet supported via `__cuda_array_interface__`"
         )
-
-    def _normalize_binop_operand(self, other: Any) -> ColumnBase:
-        if isinstance(other, type(self)):
-            return other
-        return NotImplemented
 
     def _with_type_metadata(self: Self, dtype: Dtype) -> Self:
         if isinstance(dtype, ListDtype):
