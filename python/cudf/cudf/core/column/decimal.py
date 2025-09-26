@@ -212,8 +212,32 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str):
         reflect, op = self._check_reflected_op(op)
-        other, other_cudf_dtype = self._normalize_binop_operand(other)  # type: ignore[assignment]
-        if other is NotImplemented:
+
+        # Inline _normalize_binop_operand functionality
+        if isinstance(other, ColumnBase):
+            if not isinstance(other, NumericalBaseColumn):
+                return NotImplemented
+            elif other.dtype.kind in "fb":
+                raise TypeError(
+                    "Decimal columns only support binary operations with "
+                    "integer numerical columns."
+                )
+            elif other.dtype.kind in "iu":
+                other = other.astype(
+                    type(self.dtype)(self.dtype.MAX_PRECISION, 0)
+                )
+            elif not isinstance(self.dtype, other.dtype.__class__):
+                # This branch occurs if we have a DecimalBaseColumn of a
+                # different size (e.g. 64 instead of 32).
+                if _same_precision_and_scale(self.dtype, other.dtype):
+                    other = other.astype(self.dtype)
+            other_cudf_dtype = other.dtype
+        elif isinstance(other, (int, Decimal)):
+            other_cudf_dtype = self.dtype._from_decimal(Decimal(other))
+        elif is_na_like(other):
+            other = pa.scalar(None, type=cudf_dtype_to_pa_type(self.dtype))
+            other_cudf_dtype = self.dtype
+        else:
             return NotImplemented
         if reflect:
             lhs_dtype = other_cudf_dtype
@@ -314,38 +338,6 @@ class DecimalBaseColumn(NumericalBaseColumn):
             "Decimal columns only support using fillna with decimal and "
             "integer values"
         )
-
-    def _normalize_binop_operand(
-        self, other: Any
-    ) -> tuple[int | Decimal | ColumnBase | pa.Scalar, DecimalDtype]:
-        # TODO: Once pyarrow 19 is the minimum version, we can remove the
-        # passing the DecimalDtype since pyarrow scalars support decimal32/64 types
-        if isinstance(other, ColumnBase):
-            if not isinstance(other, NumericalBaseColumn):
-                return NotImplemented, self.dtype
-            elif other.dtype.kind in "fb":
-                raise TypeError(
-                    "Decimal columns only support binary operations with "
-                    "integer numerical columns."
-                )
-            elif other.dtype.kind in "iu":
-                other = other.astype(
-                    type(self.dtype)(self.dtype.MAX_PRECISION, 0)
-                )
-            elif not isinstance(self.dtype, other.dtype.__class__):
-                # This branch occurs if we have a DecimalBaseColumn of a
-                # different size (e.g. 64 instead of 32).
-                if _same_precision_and_scale(self.dtype, other.dtype):
-                    other = other.astype(self.dtype)
-            return other, other.dtype
-        elif isinstance(other, (int, Decimal)):
-            return other, self.dtype._from_decimal(Decimal(other))
-        # Inline base class functionality - check for NA-like values
-        if is_na_like(other):
-            return pa.scalar(
-                None, type=cudf_dtype_to_pa_type(self.dtype)
-            ), self.dtype
-        return NotImplemented, self.dtype
 
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
         return self.cast(dtype=dtype)  # type: ignore[return-value]
