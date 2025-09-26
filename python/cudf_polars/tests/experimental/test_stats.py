@@ -14,6 +14,7 @@ from cudf_polars.experimental.io import _clear_source_info_cache
 from cudf_polars.experimental.statistics import (
     apply_pkfk_heuristics,
     collect_base_stats,
+    collect_statistics,
     find_equivalence_sets,
 )
 from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
@@ -42,6 +43,7 @@ def engine():
             "shuffle_method": "tasks",
             "target_partition_size": 10_000,
             "max_rows_per_partition": 1_000,
+            "stats_planning": {"use_reduction_planning": True},
         },
     )
 
@@ -219,6 +221,7 @@ def test_base_stats_parquet_groupby(
         executor_options={
             "target_partition_size": 10_000,
             "scheduler": DEFAULT_SCHEDULER,
+            "stats_planning": {"use_reduction_planning": True},
         },
         parquet_options={
             "max_footer_samples": max_footer_samples,
@@ -407,3 +410,81 @@ def test_base_stats_join_key_info(engine):
         stats.column_stats[ir]["cust_id"].source_info.implied_unique_count.value
         == implied_unique_count
     )
+
+    # Check basic collect_statistics behavior
+    stats = collect_statistics(ir, config_options)
+    local_unique_count = stats.column_stats[ir]["cust_id"].unique_count.value
+    source_unique_count = (
+        stats.column_stats[ir]["cust_id"].source_info.unique_stats().count.value
+    )
+    assert local_unique_count == source_unique_count
+    assert stats.row_count[ir].value == q.collect().height
+
+
+@pytest.mark.parametrize("use_io_partitioning", [True, False])
+@pytest.mark.parametrize("use_reduction_planning", [True, False])
+@pytest.mark.parametrize("use_join_heuristics", [True, False])
+@pytest.mark.parametrize("use_sampling", [True, False])
+@pytest.mark.parametrize("default_selectivity", [0.5, 1.0])
+@pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
+def test_stats_planning(
+    tmp_path,
+    kind,
+    use_io_partitioning,
+    use_reduction_planning,
+    use_join_heuristics,
+    use_sampling,
+    default_selectivity,
+):
+    # Create temporary GPU Engine
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "scheduler": DEFAULT_SCHEDULER,
+            "shuffle_method": "tasks",
+            "target_partition_size": 10_000,
+            "max_rows_per_partition": 1_000,
+            "stats_planning": {
+                "use_io_partitioning": use_io_partitioning,
+                "use_reduction_planning": use_reduction_planning,
+                "use_join_heuristics": use_join_heuristics,
+                "use_sampling": use_sampling,
+                "default_selectivity": default_selectivity,
+            },
+        },
+    )
+
+    # Define "complicated" query that uses all stats planning options
+    sales = pl.DataFrame(
+        {
+            "order_id": [1, 2, 3, 4, 5, 6],
+            "customer_id": [101, 102, 101, 103, 102, 101],
+            "amount": [50.0, 75.0, 30.0, 120.0, 85.0, 40.0],
+            "product": ["A", "B", "A", "C", "B", "A"],
+        }
+    )
+    sales = make_lazy_frame(sales, kind, path=tmp_path / f"sales_{kind}")
+    customers = pl.DataFrame(
+        {
+            "customer_id": [101, 102, 103],
+            "customer_name": ["Alice", "Bob", "Charlie"],
+            "region": ["North", "South", "North"],
+        }
+    )
+    customers = make_lazy_frame(customers, kind, path=tmp_path / f"customers_{kind}")
+    q_join = sales.filter(pl.col("amount") < 100.0).join(
+        customers, on="customer_id", how="inner"
+    )
+    q_gb = q_join.group_by("customer_id").agg(
+        [
+            pl.col("amount").sum().alias("total_amount"),
+            pl.col("order_id").count().alias("order_count"),
+            pl.col("customer_name").first().alias("name"),
+            pl.col("region").first().alias("region"),
+        ]
+    )
+    q = q_gb.sort("customer_id")
+
+    # Verify the query runs correctly
+    assert_gpu_result_equal(q, engine=engine)

@@ -91,7 +91,7 @@ class StructFunction(Expr):
             field_index = next(
                 (
                     i
-                    for i, field in enumerate(self.children[0].dtype.polars.fields)
+                    for i, field in enumerate(self.children[0].dtype.polars_type.fields)
                     if field.name == self.options[0]
                 ),
                 None,
@@ -109,7 +109,10 @@ class StructFunction(Expr):
             table = plc.Table(column.obj.children())
             metadata = plc.io.TableWithMetadata(
                 table,
-                [(field.name, []) for field in self.children[0].dtype.polars.fields],
+                [
+                    (field.name, [])
+                    for field in self.children[0].dtype.polars_type.fields
+                ],
             )
             options = (
                 plc.io.json.JsonWriterOptions.builder(target, table)

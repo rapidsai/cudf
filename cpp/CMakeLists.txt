@@ -292,6 +292,9 @@ include(cmake/thirdparty/get_cccl.cmake)
 # find rmm
 include(cmake/thirdparty/get_rmm.cmake)
 
+# find croaring
+include(cmake/thirdparty/get_croaring.cmake)
+
 # find flatbuffers
 include(cmake/thirdparty/get_flatbuffers.cmake)
 
@@ -536,6 +539,7 @@ add_library(
   src/io/parquet/compact_protocol_writer.cpp
   src/io/parquet/decode_preprocess.cu
   src/io/parquet/experimental/dictionary_page_filter.cu
+  src/io/parquet/experimental/deletion_vectors.cu
   src/io/parquet/experimental/hybrid_scan.cpp
   src/io/parquet/experimental/hybrid_scan_chunking.cu
   src/io/parquet/experimental/hybrid_scan_helpers.cpp
@@ -740,6 +744,7 @@ add_library(
   src/strings/convert/convert_ipv4.cu
   src/strings/convert/convert_urls.cu
   src/strings/convert/convert_lists.cu
+  src/strings/convert/int_cast.cu
   src/strings/copying/concatenate.cu
   src/strings/copying/copying.cu
   src/strings/copying/copy_range.cu

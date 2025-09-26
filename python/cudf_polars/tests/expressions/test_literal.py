@@ -68,7 +68,7 @@ def test_timelike_literal(timestamp, timedelta):
         adjusted=timestamp + timedelta,
         two_delta=timedelta + timedelta,
     )
-    schema = {k: DataType(v).plc for k, v in q.collect_schema().items()}
+    schema = {k: DataType(v).plc_type for k, v in q.collect_schema().items()}
     if plc.binaryop.is_supported_operation(
         schema["adjusted"],
         schema["time"],

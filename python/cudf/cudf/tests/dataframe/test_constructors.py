@@ -224,7 +224,7 @@ def test_pandas_non_contiguious():
     for col in df.columns:
         assert df[col].values.flags["C_CONTIGUOUS"] is False
 
-    gdf = cudf.DataFrame.from_pandas(df)
+    gdf = cudf.DataFrame(df)
     assert_eq(gdf.to_pandas(), df)
 
 
@@ -841,7 +841,7 @@ def test_from_records_with_index_no_shallow_copy():
 
 def test_from_pandas_preserve_column_dtype():
     df = pd.DataFrame([[1, 2]], columns=pd.Index([1, 2], dtype="int8"))
-    result = cudf.DataFrame.from_pandas(df)
+    result = cudf.DataFrame(df)
     pd.testing.assert_index_equal(result.columns, df.columns, exact=True)
 
 
@@ -1364,7 +1364,7 @@ def test_roundtrip_dataframe_plc_table():
             "b": [np.nan, None, np.nan, None],
         }
     )
-    expect = cudf.DataFrame.from_pandas(pdf)
+    expect = cudf.DataFrame(pdf)
     actual = cudf.DataFrame.from_pylibcudf(*expect.to_pylibcudf())
     assert_eq(expect, actual)
 
@@ -1824,7 +1824,7 @@ def test_from_pandas():
         }
     )
 
-    df = cudf.DataFrame.from_pandas(pdf)
+    df = cudf.DataFrame(pdf)
 
     assert tuple(df.columns) == tuple(pdf.columns)
 
@@ -1837,7 +1837,7 @@ def test_from_pandas():
 
 def test_from_pandas_ex1():
     pdf = pd.DataFrame({"a": [0, 1, 2, 3], "b": [0.1, 0.2, None, 0.3]})
-    df = cudf.DataFrame.from_pandas(pdf)
+    df = cudf.DataFrame(pdf)
 
     assert tuple(df.columns) == tuple(pdf.columns)
     assert np.all(df["a"].to_numpy() == pdf["a"])
@@ -1851,7 +1851,7 @@ def test_from_pandas_ex1():
 def test_from_pandas_with_index():
     pdf = pd.DataFrame({"a": [0, 1, 2, 3], "b": [0.1, 0.2, None, 0.3]})
     pdf = pdf.set_index(np.asarray([4, 3, 2, 1]))
-    df = cudf.DataFrame.from_pandas(pdf)
+    df = cudf.DataFrame(pdf)
 
     # Check columns
     assert_eq(df.a, pdf.a)
@@ -1931,13 +1931,13 @@ def test_from_pandas_with_multiindex():
 def test_from_pandas_with_nullable_pandas_type(dtype):
     df = pd.DataFrame({"x": [1, 2, 3]}, index=[4.0, 5.0, 6.0], dtype=dtype)
     df.columns.name = "custom_column_name"
-    gdf = cudf.DataFrame.from_pandas(df)
+    gdf = cudf.DataFrame(df)
     assert isinstance(gdf, cudf.DataFrame)
 
     assert_eq(df, gdf, check_dtype="pyarrow" not in dtype)
 
     s = df.x
-    gs = cudf.Series.from_pandas(s)
+    gs = cudf.Series(s)
     assert isinstance(gs, cudf.Series)
 
     assert_eq(s, gs, check_dtype="pyarrow" not in dtype)
