@@ -2,13 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-import os
-
 import pytest
 
 import cudf_polars.callback
-
-DISTRIBUTED_CLUSTER_KEY = pytest.StashKey[dict]()
 
 
 @pytest.fixture(params=[False, True], ids=["no_nulls", "nulls"], scope="session")
@@ -73,33 +69,3 @@ def pytest_configure(config):
     cudf_polars.testing.asserts.DEFAULT_BLOCKSIZE_MODE = config.getoption(
         "--blocksize-mode"
     )
-
-
-def pytest_sessionstart(session):
-    if (
-        session.config.getoption("--scheduler") == "distributed"
-        and session.config.getoption("--executor") == "streaming"
-    ):
-        from dask import config
-        from dask.distributed import Client
-        from dask_cuda import LocalCUDACluster
-
-        # Avoid "Sending large graph of size ..." warnings
-        # (We expect these for tests using literal/random arrays)
-        config.set({"distributed.admin.large-graph-warning-threshold": "20MB"})
-
-        n_workers = int(os.environ.get("CUDF_POLARS_NUM_WORKERS", "1"))
-        cluster = LocalCUDACluster(n_workers=n_workers)
-        client = Client(cluster)
-        session.stash[DISTRIBUTED_CLUSTER_KEY] = {"cluster": cluster, "client": client}
-
-
-def pytest_sessionfinish(session):
-    if DISTRIBUTED_CLUSTER_KEY in session.stash:
-        cluster_info = session.stash[DISTRIBUTED_CLUSTER_KEY]
-        client = cluster_info.get("client")
-        cluster = cluster_info.get("cluster")
-        if client is not None:
-            client.shutdown()
-        if cluster is not None:
-            cluster.close()
