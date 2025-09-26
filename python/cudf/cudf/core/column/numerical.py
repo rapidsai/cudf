@@ -295,7 +295,49 @@ class NumericalColumn(NumericalBaseColumn):
             out_dtype = get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
 
         reflect, op = self._check_reflected_op(op)
-        if (other := self._normalize_binop_operand(other)) is NotImplemented:
+
+        # Inline _normalize_binop_operand functionality
+        if isinstance(other, ColumnBase):
+            if not isinstance(other, type(self)):
+                return NotImplemented
+        elif isinstance(other, (cp.ndarray, np.ndarray)) and other.ndim == 0:
+            other = other[()]
+
+        if is_scalar(other) and not isinstance(other, ColumnBase):
+            if is_na_like(other):
+                other = pa.scalar(None, type=cudf_dtype_to_pa_type(self.dtype))
+            elif not isinstance(other, (int, float, complex)):
+                # Go via NumPy to get the value
+                other = np.array(other)
+                if other.dtype.kind in "uifc":
+                    other = other.item()
+
+            if not is_na_like(other):
+                # Try and match pandas and hence numpy. Deduce the common
+                # dtype via the _value_ of other, and the dtype of self on NumPy 1.x
+                # with NumPy 2, we force weak promotion even for our/NumPy scalars
+                # to match pandas 2.2.
+                if is_pandas_nullable_extension_dtype(self.dtype):
+                    if isinstance(self.dtype, pd.ArrowDtype):
+                        common_dtype = cudf.utils.dtypes.find_common_type(
+                            [self.dtype, other]
+                        )
+                    else:
+                        common_dtype = get_dtype_of_same_kind(
+                            self.dtype,
+                            np.result_type(self.dtype.numpy_dtype, other),  # noqa: TID251
+                        )
+                else:
+                    common_dtype = np.result_type(self.dtype, other)  # noqa: TID251
+                if common_dtype.kind in {"b", "i", "u", "f"}:  # type: ignore[union-attr]
+                    if self.dtype.kind == "b" and not isinstance(other, bool):
+                        common_dtype = min_signed_type(int(other))  # type: ignore[arg-type]
+                    other = pa.scalar(
+                        other, type=cudf_dtype_to_pa_type(common_dtype)
+                    )
+                else:
+                    return NotImplemented
+        elif not isinstance(other, ColumnBase):
             return NotImplemented
         other_cudf_dtype = (
             cudf_dtype_from_pa_type(other.type)
@@ -403,60 +445,6 @@ class NumericalColumn(NumericalBaseColumn):
                 self.to_pylibcudf(mode="read")
             )
             return self.set_mask(mask)
-
-    def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
-        if isinstance(other, ColumnBase):
-            if not isinstance(other, type(self)):
-                return NotImplemented
-            return other
-        elif isinstance(other, (cp.ndarray, np.ndarray)) and other.ndim == 0:
-            other = other[()]
-
-        if is_scalar(other):
-            if is_na_like(other):
-                return pa.scalar(None, type=cudf_dtype_to_pa_type(self.dtype))
-            if not isinstance(other, (int, float, complex)):
-                # Go via NumPy to get the value
-                other = np.array(other)
-                if other.dtype.kind in "uifc":
-                    other = other.item()
-
-            # Try and match pandas and hence numpy. Deduce the common
-            # dtype via the _value_ of other, and the dtype of self on NumPy 1.x
-            # with NumPy 2, we force weak promotion even for our/NumPy scalars
-            # to match pandas 2.2.
-            # Weak promotion is not at all simple:
-            # np.result_type(0, np.uint8)
-            #   => np.uint8
-            # np.result_type(np.asarray([0], dtype=np.int64), np.uint8)
-            #   => np.int64
-            # np.promote_types(np.int64(0), np.uint8)
-            #   => np.int64
-            # np.promote_types(np.asarray([0], dtype=np.int64).dtype, np.uint8)
-            #   => np.int64
-            if is_pandas_nullable_extension_dtype(self.dtype):
-                if isinstance(self.dtype, pd.ArrowDtype):
-                    common_dtype = cudf.utils.dtypes.find_common_type(
-                        [self.dtype, other]
-                    )
-                else:
-                    common_dtype = get_dtype_of_same_kind(
-                        self.dtype,
-                        np.result_type(self.dtype.numpy_dtype, other),  # noqa: TID251
-                    )
-
-            else:
-                common_dtype = np.result_type(self.dtype, other)  # noqa: TID251
-            if common_dtype.kind in {"b", "i", "u", "f"}:  # type: ignore[union-attr]
-                if self.dtype.kind == "b" and not isinstance(other, bool):
-                    common_dtype = min_signed_type(other)
-                return pa.scalar(
-                    other, type=cudf_dtype_to_pa_type(common_dtype)
-                )
-            else:
-                return NotImplemented
-        else:
-            return NotImplemented
 
     @acquire_spill_lock()
     def int2ip(self) -> StringColumn:
