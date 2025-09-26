@@ -85,7 +85,7 @@ class Column:
 
     @classmethod
     def deserialize(
-        cls, header: ColumnHeader, frames: tuple[memoryview, plc.gpumemoryview]
+        cls, header: ColumnHeader, frames: tuple[memoryview[bytes], plc.gpumemoryview]
     ) -> Self:
         """
         Create a Column from a serialized representation returned by `.serialize()`.
@@ -126,7 +126,7 @@ class Column:
 
     def serialize(
         self,
-    ) -> tuple[ColumnHeader, tuple[memoryview, plc.gpumemoryview]]:
+    ) -> tuple[ColumnHeader, tuple[memoryview[bytes], plc.gpumemoryview]]:
         """
         Serialize the Column into header and frames.
 
@@ -297,7 +297,7 @@ class Column:
             self.obj.type()
         ) and plc.traits.is_timestamp(plc_dtype):
             upcasted = plc.unary.cast(self.obj, plc.DataType(plc.TypeId.INT64))
-            result = plc.column.Column(
+            plc_col = plc.column.Column(
                 plc_dtype,
                 upcasted.size(),
                 upcasted.data(),
@@ -306,11 +306,11 @@ class Column:
                 upcasted.offset(),
                 upcasted.children(),
             )
-            return Column(result, dtype=dtype).sorted_like(self)
+            return Column(plc_col, dtype=dtype).sorted_like(self)
         elif plc.traits.is_integral_not_bool(plc_dtype) and plc.traits.is_timestamp(
             self.obj.type()
         ):
-            result = plc.column.Column(
+            plc_col = plc.column.Column(
                 plc.DataType(plc.TypeId.INT64),
                 self.obj.size(),
                 self.obj.data(),
@@ -319,7 +319,7 @@ class Column:
                 self.obj.offset(),
                 self.obj.children(),
             )
-            return Column(plc.unary.cast(result, plc_dtype), dtype=dtype).sorted_like(
+            return Column(plc.unary.cast(plc_col, plc_dtype), dtype=dtype).sorted_like(
                 self
             )
         else:
@@ -454,11 +454,13 @@ class Column:
     def nan_count(self) -> int:
         """Return the number of NaN values in the column."""
         if self.size > 0 and plc.traits.is_floating_point(self.obj.type()):
-            return plc.reduce.reduce(
-                plc.unary.is_nan(self.obj),
-                plc.aggregation.sum(),
-                plc.types.SIZE_TYPE,
-            ).to_py()
+            return int(
+                plc.reduce.reduce(
+                    plc.unary.is_nan(self.obj),
+                    plc.aggregation.sum(),
+                    plc.types.SIZE_TYPE,
+                ).to_py()
+            )
         return 0
 
     @property
