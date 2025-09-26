@@ -37,7 +37,8 @@ RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
 mkdir -p "${RAPIDS_TESTS_DIR}"
 
 timeout 90m bash python/cudf/cudf/pandas/scripts/run-pandas-tests.sh \
-  --numprocesses 6 \
+  --durations=10 \
+  --numprocesses 8 \
   --tb=line \
   --disable-warnings \
   -m "not slow and not single_cpu and not db and not network" \
