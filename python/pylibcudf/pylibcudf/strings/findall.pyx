@@ -43,7 +43,8 @@ cpdef Column findall(
         c_result = cpp_findall.findall(
             input.view(),
             pattern.c_obj.get()[0],
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -80,7 +81,8 @@ cpdef Column find_re(
         c_result = cpp_findall.find_re(
             input.view(),
             pattern.c_obj.get()[0],
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)

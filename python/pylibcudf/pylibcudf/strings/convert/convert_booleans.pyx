@@ -53,7 +53,8 @@ cpdef Column to_booleans(
         c_result = cpp_convert_booleans.to_booleans(
             input.view(),
             dereference(c_true_string),
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -105,7 +106,8 @@ cpdef Column from_booleans(
             booleans.view(),
             dereference(c_true_string),
             dereference(c_false_string),
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)

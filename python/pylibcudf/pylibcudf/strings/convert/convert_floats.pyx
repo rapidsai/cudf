@@ -50,7 +50,8 @@ cpdef Column to_floats(
         c_result = cpp_convert_floats.to_floats(
             strings.view(),
             output_type.c_obj,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -83,7 +84,9 @@ cpdef Column from_floats(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_convert_floats.from_floats(floats.view(), stream.view())
+        c_result = cpp_convert_floats.from_floats(
+            floats.view(), stream.view(), mr.get_mr()
+        )
 
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -113,6 +116,6 @@ cpdef Column is_float(Column input, Stream stream=None, DeviceMemoryResource mr=
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_convert_floats.is_float(input.view(), stream.view())
+        c_result = cpp_convert_floats.is_float(input.view(), stream.view(), mr.get_mr())
 
     return Column.from_libcudf(move(c_result), stream, mr)

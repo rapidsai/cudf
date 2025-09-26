@@ -34,6 +34,6 @@ cpdef Column reverse(Column input, Stream stream=None, DeviceMemoryResource mr=N
     stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
     with nogil:
-        c_result = cpp_reverse.reverse(input.view(), stream.view())
+        c_result = cpp_reverse.reverse(input.view(), stream.view(), mr.get_mr())
 
     return Column.from_libcudf(move(c_result), stream, mr)

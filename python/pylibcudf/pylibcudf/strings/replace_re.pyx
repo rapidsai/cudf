@@ -78,7 +78,8 @@ cpdef Column replace_re(
                     patterns.c_obj.get()[0],
                     dereference(<string_scalar*>(replacement.get())),
                     max_replace_count,
-                    stream.view()
+                    stream.view(),
+                    mr.get_mr()
                 )
             )
 
@@ -95,7 +96,8 @@ cpdef Column replace_re(
                     c_patterns,
                     replacement.view(),
                     flags,
-                    stream.view()
+                    stream.view(),
+                    mr.get_mr()
                 )
             )
 
@@ -143,7 +145,8 @@ cpdef Column replace_with_backrefs(
             input.view(),
             prog.c_obj.get()[0],
             c_replacement,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)

@@ -54,7 +54,8 @@ cpdef Column pad(
             width,
             side,
             c_fill_char,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -89,7 +90,8 @@ cpdef Column zfill(
         c_result = cpp_padding.zfill(
             input.view(),
             width,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -124,7 +126,8 @@ cpdef Column zfill_by_widths(
         c_result = cpp_padding.zfill_by_widths(
             input.view(),
             widths.view(),
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)

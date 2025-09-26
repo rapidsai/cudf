@@ -48,7 +48,8 @@ cpdef Column to_fixed_point(
         c_result = cpp_fixed_point.to_fixed_point(
             input.view(),
             output_type.c_obj,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -80,7 +81,9 @@ cpdef Column from_fixed_point(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_fixed_point.from_fixed_point(input.view(), stream.view())
+        c_result = cpp_fixed_point.from_fixed_point(
+            input.view(), stream.view(), mr.get_mr()
+        )
 
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -124,7 +127,8 @@ cpdef Column is_fixed_point(
         c_result = cpp_fixed_point.is_fixed_point(
             input.view(),
             decimal_type.c_obj,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)

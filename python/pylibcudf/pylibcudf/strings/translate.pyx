@@ -75,7 +75,8 @@ cpdef Column translate(
         c_result = cpp_translate.translate(
             input.view(),
             c_chars_table,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -131,7 +132,8 @@ cpdef Column filter_characters(
             c_characters_to_filter,
             keep_characters,
             dereference(c_replacement),
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), stream, mr)
 

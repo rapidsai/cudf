@@ -34,7 +34,7 @@ cpdef Column to_lower(Column input, Stream stream=None, DeviceMemoryResource mr=
     stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
     with nogil:
-        c_result = cpp_case.to_lower(input.view(), stream.view())
+        c_result = cpp_case.to_lower(input.view(), stream.view(), mr.get_mr())
 
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -61,7 +61,7 @@ cpdef Column to_upper(Column input, Stream stream=None, DeviceMemoryResource mr=
     stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
     with nogil:
-        c_result = cpp_case.to_upper(input.view(), stream.view())
+        c_result = cpp_case.to_upper(input.view(), stream.view(), mr.get_mr())
 
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -90,6 +90,6 @@ cpdef Column swapcase(Column input, Stream stream=None, DeviceMemoryResource mr=
     stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
     with nogil:
-        c_result = cpp_case.swapcase(input.view(), stream.view())
+        c_result = cpp_case.swapcase(input.view(), stream.view(), mr.get_mr())
 
     return Column.from_libcudf(move(c_result), stream, mr)

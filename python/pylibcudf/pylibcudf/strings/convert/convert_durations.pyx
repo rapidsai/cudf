@@ -57,7 +57,8 @@ cpdef Column to_durations(
             input.view(),
             duration_type.c_obj,
             c_format,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -102,7 +103,8 @@ cpdef Column from_durations(
         c_result = cpp_convert_durations.from_durations(
             durations.view(),
             c_format,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)

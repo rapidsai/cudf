@@ -79,7 +79,8 @@ cpdef Column slice_strings(
                 input.view(),
                 start.view(),
                 stop.view(),
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
 
     elif ColumnOrScalar is Scalar:
@@ -109,7 +110,8 @@ cpdef Column slice_strings(
                 dereference(cpp_start),
                 dereference(cpp_stop),
                 dereference(cpp_step),
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
     else:
         raise ValueError("start, stop, and step must be either Column or Scalar")

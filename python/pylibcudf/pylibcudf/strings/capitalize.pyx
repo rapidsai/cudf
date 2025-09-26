@@ -60,7 +60,8 @@ cpdef Column capitalize(
         c_result = cpp_capitalize.capitalize(
             input.view(),
             dereference(cpp_delimiters),
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -93,7 +94,9 @@ cpdef Column title(
     stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
     with nogil:
-        c_result = cpp_capitalize.title(input.view(), sequence_type, stream.view())
+        c_result = cpp_capitalize.title(
+            input.view(), sequence_type, stream.view(), mr.get_mr()
+        )
 
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -117,6 +120,6 @@ cpdef Column is_title(Column input, Stream stream=None, DeviceMemoryResource mr=
     stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
     with nogil:
-        c_result = cpp_capitalize.is_title(input.view(), stream.view())
+        c_result = cpp_capitalize.is_title(input.view(), stream.view(), mr.get_mr())
 
     return Column.from_libcudf(move(c_result), stream, mr)

@@ -47,7 +47,8 @@ cpdef Column find_multiple(
         c_result = cpp_find_multiple.find_multiple(
             input.view(),
             targets.view(),
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -87,7 +88,8 @@ cpdef Table contains_multiple(
         c_result = cpp_find_multiple.contains_multiple(
             input.view(),
             targets.view(),
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Table.from_libcudf(move(c_result), stream, mr)

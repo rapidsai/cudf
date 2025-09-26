@@ -4,6 +4,7 @@ from libcpp.utility cimport move
 from pylibcudf.column cimport Column
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.strings cimport find as cpp_find
+from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.scalar cimport Scalar
 from pylibcudf.utils cimport _get_stream, _get_memory_resource
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
@@ -64,7 +65,8 @@ cpdef Column find(
                 input.view(),
                 target.view(),
                 start,
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
     elif ColumnOrScalar is Scalar:
         with nogil:
@@ -73,7 +75,8 @@ cpdef Column find(
                 dereference(<string_scalar*>(target.c_obj.get())),
                 start,
                 stop,
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
     else:
         raise ValueError(f"Invalid target {target}")
@@ -123,7 +126,8 @@ cpdef Column rfind(
             dereference(<string_scalar*>(target.c_obj.get())),
             start,
             stop,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
     return Column.from_libcudf(move(result), stream, mr)
 
@@ -171,14 +175,16 @@ cpdef Column contains(
             result = cpp_find.contains(
                 input.view(),
                 target.view(),
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
     elif ColumnOrScalar is Scalar:
         with nogil:
             result = cpp_find.contains(
                 input.view(),
                 dereference(<string_scalar*>(target.c_obj.get())),
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
     else:
         raise ValueError(f"Invalid target {target}")
@@ -230,14 +236,16 @@ cpdef Column starts_with(
             result = cpp_find.starts_with(
                 input.view(),
                 target.view(),
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
     elif ColumnOrScalar is Scalar:
         with nogil:
             result = cpp_find.starts_with(
                 input.view(),
                 dereference(<string_scalar*>(target.c_obj.get())),
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
     else:
         raise ValueError(f"Invalid target {target}")
@@ -286,14 +294,16 @@ cpdef Column ends_with(
             result = cpp_find.ends_with(
                 input.view(),
                 target.view(),
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
     elif ColumnOrScalar is Scalar:
         with nogil:
             result = cpp_find.ends_with(
                 input.view(),
                 dereference(<string_scalar*>(target.c_obj.get())),
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
     else:
         raise ValueError(f"Invalid target {target}")

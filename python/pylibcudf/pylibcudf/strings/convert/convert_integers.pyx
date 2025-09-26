@@ -55,7 +55,8 @@ cpdef Column to_integers(
             cpp_convert_integers.to_integers(
                 input.view(),
                 output_type.c_obj,
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
         )
 
@@ -92,7 +93,8 @@ cpdef Column from_integers(
         c_result = move(
             cpp_convert_integers.from_integers(
                 integers.view(),
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
         )
 
@@ -138,7 +140,8 @@ cpdef Column is_integer(
             c_result = move(
                 cpp_convert_integers.is_integer(
                     input.view(),
-                    stream.view()
+                    stream.view(),
+                    mr.get_mr()
                 )
             )
     else:
@@ -147,7 +150,8 @@ cpdef Column is_integer(
                 cpp_convert_integers.is_integer(
                     input.view(),
                     int_type.c_obj,
-                    stream.view()
+                    stream.view(),
+                    mr.get_mr()
                 )
             )
 
@@ -188,7 +192,8 @@ cpdef Column hex_to_integers(
             cpp_convert_integers.hex_to_integers(
                 input.view(),
                 output_type.c_obj,
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
         )
 
@@ -223,7 +228,8 @@ cpdef Column is_hex(Column input, Stream stream=None, DeviceMemoryResource mr=No
         c_result = move(
             cpp_convert_integers.is_hex(
                 input.view(),
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
         )
 
@@ -260,7 +266,8 @@ cpdef Column integers_to_hex(
         c_result = move(
             cpp_convert_integers.integers_to_hex(
                 input.view(),
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
         )
 

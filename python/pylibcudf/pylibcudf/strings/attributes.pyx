@@ -35,7 +35,9 @@ cpdef Column count_characters(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_attributes.count_characters(source_strings.view(), stream.view())
+        c_result = cpp_attributes.count_characters(
+            source_strings.view(), stream.view(), mr.get_mr()
+        )
 
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -64,7 +66,9 @@ cpdef Column count_bytes(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_attributes.count_bytes(source_strings.view(), stream.view())
+        c_result = cpp_attributes.count_bytes(
+            source_strings.view(), stream.view(), mr.get_mr()
+        )
 
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -93,6 +97,8 @@ cpdef Column code_points(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_attributes.code_points(source_strings.view(), stream.view())
+        c_result = cpp_attributes.code_points(
+            source_strings.view(), stream.view(), mr.get_mr()
+        )
 
     return Column.from_libcudf(move(c_result), stream, mr)

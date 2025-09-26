@@ -63,7 +63,8 @@ cpdef Column strip(
             input.view(),
             side,
             dereference(cpp_to_strip),
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)

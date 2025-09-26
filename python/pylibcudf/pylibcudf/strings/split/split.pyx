@@ -69,7 +69,8 @@ cpdef Table split(
             strings_column.view(),
             dereference(c_delimiter),
             maxsplit,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Table.from_libcudf(move(c_result), stream, mr)
@@ -117,7 +118,8 @@ cpdef Table rsplit(
             strings_column.view(),
             dereference(c_delimiter),
             maxsplit,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Table.from_libcudf(move(c_result), stream, mr)
@@ -160,7 +162,8 @@ cpdef Column split_record(
             strings.view(),
             dereference(c_delimiter),
             maxsplit,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -205,7 +208,8 @@ cpdef Column rsplit_record(
             strings.view(),
             dereference(c_delimiter),
             maxsplit,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -247,7 +251,8 @@ cpdef Table split_re(
             input.view(),
             prog.c_obj.get()[0],
             maxsplit,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Table.from_libcudf(move(c_result), stream, mr)
@@ -289,7 +294,8 @@ cpdef Table rsplit_re(
             input.view(),
             prog.c_obj.get()[0],
             maxsplit,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Table.from_libcudf(move(c_result), stream, mr)
@@ -330,7 +336,8 @@ cpdef Column split_record_re(
             input.view(),
             prog.c_obj.get()[0],
             maxsplit,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -371,7 +378,8 @@ cpdef Column rsplit_record_re(
             input.view(),
             prog.c_obj.get()[0],
             maxsplit,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)

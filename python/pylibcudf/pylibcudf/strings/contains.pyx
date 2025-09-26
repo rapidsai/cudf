@@ -50,7 +50,8 @@ cpdef Column contains_re(
         result = cpp_contains.contains_re(
             input.view(),
             prog.c_obj.get()[0],
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(result), stream, mr)
@@ -88,7 +89,8 @@ cpdef Column count_re(
         result = cpp_contains.count_re(
             input.view(),
             prog.c_obj.get()[0],
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(result), stream, mr)
@@ -127,7 +129,8 @@ cpdef Column matches_re(
         result = cpp_contains.matches_re(
             input.view(),
             prog.c_obj.get()[0],
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(result), stream, mr)
@@ -181,7 +184,8 @@ cpdef Column like(
                 input.view(),
                 pattern.view(),
                 dereference(c_escape_character),
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
     elif ColumnOrScalar is Scalar:
         c_pattern = <const string_scalar*>(pattern.c_obj.get())
@@ -190,7 +194,8 @@ cpdef Column like(
                 input.view(),
                 dereference(c_pattern),
                 dereference(c_escape_character),
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
     else:
         raise ValueError("pattern must be a Column or a Scalar")

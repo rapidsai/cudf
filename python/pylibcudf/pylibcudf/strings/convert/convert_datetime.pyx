@@ -57,7 +57,8 @@ cpdef Column to_timestamps(
             input.view(),
             timestamp_type.c_obj,
             c_format,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -103,7 +104,8 @@ cpdef Column from_timestamps(
             timestamps.view(),
             c_format,
             input_strings_names.view(),
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -144,7 +146,8 @@ cpdef Column is_timestamp(
         c_result = cpp_convert_datetime.is_timestamp(
             input.view(),
             c_format,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)

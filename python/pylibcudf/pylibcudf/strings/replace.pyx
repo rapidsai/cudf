@@ -68,7 +68,8 @@ cpdef Column replace(
             target_str[0],
             repl_str[0],
             maxrepl,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -115,7 +116,8 @@ cpdef Column replace_multiple(
             input.view(),
             target.view(),
             repl.view(),
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -175,7 +177,8 @@ cpdef Column replace_slice(
             scalar_str[0],
             start,
             stop,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)

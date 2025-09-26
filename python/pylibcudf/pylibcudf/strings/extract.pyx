@@ -47,7 +47,8 @@ cpdef Table extract(
         c_result = cpp_extract.extract(
             input.view(),
             prog.c_obj.get()[0],
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Table.from_libcudf(move(c_result), stream, mr)
@@ -85,7 +86,8 @@ cpdef Column extract_all_record(
         c_result = cpp_extract.extract_all_record(
             input.view(),
             prog.c_obj.get()[0],
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -129,7 +131,8 @@ cpdef Column extract_single(
             input.view(),
             prog.c_obj.get()[0],
             group,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)

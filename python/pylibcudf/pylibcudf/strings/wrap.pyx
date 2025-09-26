@@ -47,7 +47,8 @@ cpdef Column wrap(
         c_result = cpp_wrap.wrap(
             input.view(),
             width,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)

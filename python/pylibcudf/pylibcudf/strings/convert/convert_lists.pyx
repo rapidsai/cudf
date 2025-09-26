@@ -77,7 +77,8 @@ cpdef Column format_list_column(
             input.view(),
             dereference(c_na_rep),
             separators.view(),
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)

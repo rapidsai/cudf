@@ -51,14 +51,16 @@ cpdef Column repeat_strings(
             c_result = cpp_repeat.repeat_strings(
                 input.view(),
                 repeat_times.view(),
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
     elif ColumnorSizeType is size_type:
         with nogil:
             c_result = cpp_repeat.repeat_strings(
                 input.view(),
                 repeat_times,
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
     else:
         raise ValueError("repeat_times must be size_type or integer")

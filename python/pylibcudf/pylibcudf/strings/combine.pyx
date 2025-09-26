@@ -94,7 +94,8 @@ cpdef Column concatenate(
                     dereference(c_narep),
                     dereference(c_col_narep),
                     separate_nulls,
-                    stream.view()
+                    stream.view(),
+                    mr.get_mr()
                 )
             )
     elif ColumnOrScalar is Scalar:
@@ -110,7 +111,8 @@ cpdef Column concatenate(
                     dereference(c_separator),
                     dereference(c_narep),
                     separate_nulls,
-                    stream.view()
+                    stream.view(),
+                    mr.get_mr()
                 )
             )
     else:
@@ -160,7 +162,8 @@ cpdef Column join_strings(
                 input.view(),
                 dereference(c_separator),
                 dereference(c_narep),
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
         )
 
@@ -233,7 +236,8 @@ cpdef Column join_list_elements(
                     dereference(c_string_narep),
                     separate_nulls,
                     empty_list_policy,
-                    stream.view()
+                    stream.view(),
+                    mr.get_mr()
                 )
             )
     elif ColumnOrScalar is Scalar:
@@ -246,7 +250,8 @@ cpdef Column join_list_elements(
                     dereference(c_separator_narep),
                     separate_nulls,
                     empty_list_policy,
-                    stream.view()
+                    stream.view(),
+                    mr.get_mr()
                 )
             )
     else:

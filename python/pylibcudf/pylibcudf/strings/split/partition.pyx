@@ -44,9 +44,6 @@ cpdef Table partition(
         New table of strings columns
     """
     cdef unique_ptr[table] c_result
-    cdef const string_scalar* c_delimiter = <const string_scalar*>(
-        delimiter.c_obj.get()
-    )
 
     stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
@@ -56,11 +53,16 @@ cpdef Table partition(
             cpp_make_string_scalar("".encode(), stream.view())
         )
 
+    cdef const string_scalar* c_delimiter = <const string_scalar*>(
+        delimiter.c_obj.get()
+    )
+
     with nogil:
         c_result = cpp_partition.partition(
             input.view(),
             dereference(c_delimiter),
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Table.from_libcudf(move(c_result), stream, mr)
@@ -91,9 +93,6 @@ cpdef Table rpartition(
        New strings columns
     """
     cdef unique_ptr[table] c_result
-    cdef const string_scalar* c_delimiter = <const string_scalar*>(
-        delimiter.c_obj.get()
-    )
 
     stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
@@ -103,11 +102,16 @@ cpdef Table rpartition(
             cpp_make_string_scalar("".encode(), stream.view())
         )
 
+    cdef const string_scalar* c_delimiter = <const string_scalar*>(
+        delimiter.c_obj.get()
+    )
+
     with nogil:
         c_result = cpp_partition.rpartition(
             input.view(),
             dereference(c_delimiter),
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Table.from_libcudf(move(c_result), stream, mr)
