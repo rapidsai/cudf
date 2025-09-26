@@ -31,10 +31,12 @@ target_link_libraries(parquet_inspect_utils PRIVATE cudf::cudf)
 add_executable(parquet_inspect parquet_inspect.cpp)
 target_link_libraries(
   parquet_inspect PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
-                     $<TARGET_OBJECTS:parquet_inspect_utils>
+                          $<TARGET_OBJECTS:parquet_inspect_utils>
 )
 target_compile_features(parquet_inspect PRIVATE cxx_std_20)
 install(TARGETS parquet_inspect DESTINATION bin/examples/libcudf/parquet_inspect)
 
 # Install the example.parquet file
-install(FILES ${CMAKE_CURRENT_LIST_DIR}/example.parquet DESTINATION bin/examples/libcudf/parquet_inspect)
+install(FILES ${CMAKE_CURRENT_LIST_DIR}/example.parquet
+        DESTINATION bin/examples/libcudf/parquet_inspect
+)
