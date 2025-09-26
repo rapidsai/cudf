@@ -278,7 +278,7 @@ class ListColumn(ColumnBase):
                 offset_vals.append(offset)
 
         offset_col = plc.Column.from_iterable_of_py(
-            offset_vals, dtype=plc.DataType(plc.TypeId.INT32)
+            offset_vals, dtype=plc.types.SIZE_TYPE
         )
         data_col = data_col.to_pylibcudf(mode="read")
         mask, null_count = plc.transform.bools_to_mask(
@@ -286,7 +286,7 @@ class ListColumn(ColumnBase):
         )
         plc_column = plc.Column(
             plc.DataType(plc.TypeId.LIST),
-            len(arbitrary),
+            len(offset_vals) - 1,
             None,
             mask,
             null_count,
