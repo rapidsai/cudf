@@ -15,7 +15,7 @@ from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase, column_empty
 from cudf.core.missing import NA
 from cudf.core.mixins import Scannable
-from cudf.core.udf.utils import compile_udf
+from cudf.utils._numba import compile_udf
 from cudf.utils.dtypes import _get_nan_for_dtype
 
 if TYPE_CHECKING:
