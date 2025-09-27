@@ -21,6 +21,15 @@ cdef extern from "cudf/reduction.hpp" namespace "cudf" nogil:
         device_memory_resource* mr
     ) except +libcudf_exception_handler
 
+    cdef unique_ptr[scalar] cpp_reduce_with_init "cudf::reduce" (
+        column_view col,
+        const reduce_aggregation& agg,
+        data_type type,
+        const scalar& init,
+        cuda_stream_view stream,
+        device_memory_resource* mr
+    ) except +libcudf_exception_handler
+
     cpdef enum class scan_type(bool):
         INCLUSIVE "cudf::scan_type::INCLUSIVE",
         EXCLUSIVE "cudf::scan_type::EXCLUSIVE",

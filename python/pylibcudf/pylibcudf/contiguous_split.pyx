@@ -309,7 +309,7 @@ cdef class ChunkedPack:
         )
 
 
-cpdef PackedColumns pack(Table input, Stream stream=None):
+cpdef PackedColumns pack(Table input, Stream stream=None, DeviceMemoryResource mr=None):
     """Deep-copy a table into a serialized contiguous memory format.
 
     Later use `unpack` or `unpack_from_memoryviews` to unpack the serialized
@@ -340,8 +340,11 @@ cpdef PackedColumns pack(Table input, Stream stream=None):
     """
     cdef unique_ptr[packed_columns] pack
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
     with nogil:
-        pack = move(make_unique[packed_columns](cpp_pack(input.view(), stream.view())))
+        pack = move(make_unique[packed_columns](
+            cpp_pack(input.view(), stream.view(), mr.get_mr())
+        ))
     return PackedColumns.from_libcudf(move(pack))
 
 

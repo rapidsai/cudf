@@ -777,7 +777,8 @@ cdef class Column:
             c_result = make_column_from_scalar(
                 dereference(c_scalar),
                 size,
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
         return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -843,7 +844,8 @@ cdef class Column:
             c_result = make_column_from_scalar(
                 dereference(slr.get()),
                 size,
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
         return Column.from_libcudf(move(c_result), stream, mr)
 
