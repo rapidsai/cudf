@@ -17,7 +17,6 @@ from cudf.api.extensions import no_default
 from cudf.api.types import is_integer, is_scalar
 from cudf.core.accessors.base_accessor import BaseAccessor
 from cudf.core.column.column import ColumnBase, as_column, column_empty
-from cudf.core.column.string import StringColumn
 from cudf.core.dtypes import ListDtype
 from cudf.options import get_option
 from cudf.utils.dtypes import (
@@ -30,6 +29,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
     from cudf._typing import ColumnLike
+    from cudf.core.column.string import StringColumn
     from cudf.core.index import Index
     from cudf.core.series import Series
 
@@ -970,9 +970,7 @@ class StringMethods(BaseAccessor):
             if regex:
                 result = self._column.replace_re(
                     list(pat),
-                    cast(
-                        StringColumn, as_column(repl, dtype=CUDF_STRING_DTYPE)
-                    ),
+                    as_column(repl, dtype=CUDF_STRING_DTYPE),  # type: ignore[arg-type]
                 )
             else:
                 result = self._column.replace_multiple(

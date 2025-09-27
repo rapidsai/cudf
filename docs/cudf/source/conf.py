@@ -523,7 +523,7 @@ def on_missing_reference(app, env, node, contnode):
         # generates. Adding those would clutter the Sphinx output.
         return contnode
 
-    if node["refdomain"] in ("py",) and reftarget is not None:
+    if node["refdomain"] == "py" and reftarget is not None:
         # These replacements are needed because of
         # https://github.com/sphinx-doc/sphinx/issues/10151
         for module, alias in _external_intersphinx_aliases.items():
