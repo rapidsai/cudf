@@ -108,5 +108,6 @@ def chunked_read_json(
     options: JsonReaderOptions,
     chunk_size: int = 100_000_000,
     stream: Stream = None,
+    mr: DeviceMemoryResource = None,
 ) -> tuple[list[Column], list[str], ChildNameToTypeMap]: ...
 def is_supported_write_json(type: DataType) -> bool: ...

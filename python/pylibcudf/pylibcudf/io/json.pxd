@@ -122,4 +122,5 @@ cpdef tuple chunked_read_json(
     JsonReaderOptions options,
     int chunk_size= *,
     Stream stream = *,
+    DeviceMemoryResource mr = *,
 )
