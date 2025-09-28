@@ -680,9 +680,9 @@ cpdef TableWithMetadata read_csv(
     cdef Stream s = _get_stream(stream)
     mr = _get_memory_resource(mr)
     with nogil:
-        c_result = move(cpp_read_csv(options.c_obj, s.view()))
+        c_result = move(cpp_read_csv(options.c_obj, s.view(), mr.get_mr()))
 
-    cdef TableWithMetadata tbl_meta = TableWithMetadata.from_libcudf(c_result, s, mr)
+    cdef TableWithMetadata tbl_meta = TableWithMetadata.from_libcudf(c_result, s)
     return tbl_meta
 
 

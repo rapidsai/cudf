@@ -79,7 +79,9 @@ cdef class JsonReaderOptionsBuilder:
     cpdef JsonReaderOptionsBuilder unquoted_control_chars(self, bool val)
     cpdef build(self)
 
-cpdef TableWithMetadata read_json(JsonReaderOptions options, Stream stream = *)
+cpdef TableWithMetadata read_json(
+    JsonReaderOptions options, Stream stream = *, DeviceMemoryResource mr = *
+)
 
 cpdef TableWithMetadata read_json_from_string_column(
     Column input,

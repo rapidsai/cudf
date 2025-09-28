@@ -159,6 +159,6 @@ cpdef TableWithMetadata read_avro(
     cdef Stream s = _get_stream(stream)
     mr = _get_memory_resource(mr)
     with nogil:
-        c_result = move(cpp_read_avro(options.c_obj, s.view()))
+        c_result = move(cpp_read_avro(options.c_obj, s.view(), mr.get_mr()))
 
-    return TableWithMetadata.from_libcudf(c_result, s, mr)
+    return TableWithMetadata.from_libcudf(c_result, s)

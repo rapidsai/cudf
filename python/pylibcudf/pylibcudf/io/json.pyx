@@ -754,7 +754,8 @@ cpdef tuple chunked_read_json(
 
 cpdef TableWithMetadata read_json(
     JsonReaderOptions options,
-    Stream stream = None
+    Stream stream = None,
+    DeviceMemoryResource mr = None
 ):
     """
     Read from JSON format.
@@ -778,8 +779,9 @@ cpdef TableWithMetadata read_json(
     """
     cdef table_with_metadata c_result
     cdef Stream s = _get_stream(stream)
+    mr = _get_memory_resource(mr)
     with nogil:
-        c_result = move(cpp_read_json(options.c_obj, s.view()))
+        c_result = move(cpp_read_json(options.c_obj, s.view(), mr.get_mr()))
 
     return TableWithMetadata.from_libcudf(c_result, s)
 

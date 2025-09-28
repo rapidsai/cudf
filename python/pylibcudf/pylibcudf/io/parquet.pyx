@@ -308,10 +308,12 @@ cdef class ChunkedParquetReader:
         self,
         ParquetReaderOptions options,
         Stream stream = None,
+        DeviceMemoryResource mr = None,
         size_t chunk_read_limit=0,
         size_t pass_read_limit=1024000000,
     ):
         self.stream = _get_stream(stream)
+        self.mr = _get_memory_resource(mr)
         with nogil:
             self.reader.reset(
                 new cpp_chunked_parquet_reader(
@@ -319,6 +321,7 @@ cdef class ChunkedParquetReader:
                     pass_read_limit,
                     options.c_obj,
                     self.stream.view(),
+                    self.mr.get_mr()
                 )
             )
 
@@ -357,7 +360,7 @@ cdef class ChunkedParquetReader:
         with nogil:
             c_result = move(self.reader.get()[0].read_chunk())
 
-        return TableWithMetadata.from_libcudf(c_result, self.stream, mr)
+        return TableWithMetadata.from_libcudf(c_result, self.stream)
 
 
 cpdef read_parquet(
@@ -383,9 +386,9 @@ cpdef read_parquet(
     cdef Stream s = _get_stream(stream)
     mr = _get_memory_resource(mr)
     with nogil:
-        c_result = move(cpp_read_parquet(options.c_obj, s.view()))
+        c_result = move(cpp_read_parquet(options.c_obj, s.view(), mr.get_mr()))
 
-    return TableWithMetadata.from_libcudf(c_result, s, mr)
+    return TableWithMetadata.from_libcudf(c_result, s)
 
 
 cdef class ChunkedParquetWriter:

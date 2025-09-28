@@ -443,9 +443,9 @@ cpdef TableWithMetadata read_orc(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = move(cpp_read_orc(options.c_obj, s.view()))
+        c_result = move(cpp_read_orc(options.c_obj, s.view(), mr.get_mr()))
 
-    return TableWithMetadata.from_libcudf(c_result, s, mr)
+    return TableWithMetadata.from_libcudf(c_result, s)
 
 
 cpdef ParsedOrcStatistics read_parsed_orc_statistics(

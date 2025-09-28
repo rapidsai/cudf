@@ -61,6 +61,7 @@ cdef class ParquetReaderOptionsBuilder:
 
 cdef class ChunkedParquetReader:
     cdef readonly Stream stream
+    cdef DeviceMemoryResource mr
     cdef unique_ptr[cpp_chunked_parquet_reader] reader
 
     cpdef bool has_next(self)

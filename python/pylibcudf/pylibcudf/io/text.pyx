@@ -207,7 +207,8 @@ cpdef Column multibyte_split(
             dereference(c_source),
             c_delimiter,
             c_options,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
