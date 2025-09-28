@@ -84,6 +84,7 @@ cpdef Column replace_nulls(
                     source_column.view(),
                     policy,
                     stream.view(),
+                    mr.get_mr()
                 )
             return Column.from_libcudf(move(c_result), stream, mr)
         else:
@@ -94,19 +95,22 @@ cpdef Column replace_nulls(
             c_result = cpp_replace.replace_nulls(
                 source_column.view(),
                 replacement.view(),
-                stream.view()
+                stream.view(),
+                mr.get_mr()
             )
         elif ReplacementType is Scalar:
             c_result = cpp_replace.replace_nulls(
                 source_column.view(),
                 dereference(replacement.c_obj),
                 stream.view(),
+                mr.get_mr()
             )
         elif ReplacementType is replace_policy:
             c_result = cpp_replace.replace_nulls(
                 source_column.view(),
                 replacement,
                 stream.view(),
+                mr.get_mr()
             )
         else:
             assert False, "Internal error. Please contact pylibcudf developers"
@@ -154,6 +158,7 @@ cpdef Column find_and_replace_all(
             values_to_replace.view(),
             replacement_values.view(),
             stream.view(),
+            mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -210,6 +215,7 @@ cpdef Column clamp(
                 dereference(lo.c_obj),
                 dereference(hi.c_obj),
                 stream.view(),
+                mr.get_mr()
             )
         else:
             c_result = cpp_replace.clamp(
@@ -219,6 +225,7 @@ cpdef Column clamp(
                 dereference(hi.c_obj),
                 dereference(hi_replace.c_obj),
                 stream.view(),
+                mr.get_mr()
             )
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -260,11 +267,13 @@ cpdef Column normalize_nans_and_zeros(
             cpp_replace.normalize_nans_and_zeros(
                 source_column.mutable_view(),
                 stream.view(),
+                mr.get_mr()
             )
         else:
             c_result = cpp_replace.normalize_nans_and_zeros(
                 source_column.view(),
                 stream.view(),
+                mr.get_mr()
             )
 
     if not inplace:

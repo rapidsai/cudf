@@ -162,7 +162,8 @@ cpdef Column get_json_object(
             col.view(),
             dereference(c_json_path),
             c_options,
-            stream.view()
+            stream.view(),
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
