@@ -26,6 +26,7 @@ cpdef Scalar reduce(
     Column col,
     Aggregation agg,
     DataType data_type,
+    Scalar init=None,
     Stream stream=None,
     DeviceMemoryResource mr=None,
 ):
@@ -58,13 +59,23 @@ cpdef Scalar reduce(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_reduce.cpp_reduce(
-            col.view(),
-            dereference(c_agg),
-            data_type.c_obj,
-            stream.view(),
-            mr.get_mr()
-        )
+        if init is not None:
+            result = cpp_reduce.cpp_reduce_with_init(
+                col.view(),
+                dereference(c_agg),
+                data_type.c_obj,
+                dereference(init.get()),
+                stream.view(),
+                mr.get_mr()
+            )
+        else:
+            result = cpp_reduce.cpp_reduce(
+                col.view(),
+                dereference(c_agg),
+                data_type.c_obj,
+                stream.view(),
+                mr.get_mr()
+            )
     return Scalar.from_libcudf(move(result))
 
 

@@ -367,7 +367,6 @@ cpdef Table unpack(PackedColumns input, DeviceMemoryResource mr=None):
     Table
         Copy of the packed columns.
     """
-    mr = _get_memory_resource(mr)  # For API consistency, though not used
     cdef table_view v
     with nogil:
         v = cpp_unpack(dereference(input.c_obj))

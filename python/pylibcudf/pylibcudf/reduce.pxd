@@ -14,6 +14,7 @@ cpdef Scalar reduce(
     Column col,
     Aggregation agg,
     DataType data_type,
+    Scalar init = *,
     Stream stream = *,
     DeviceMemoryResource mr = *,
 )
