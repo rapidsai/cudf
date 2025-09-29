@@ -405,6 +405,7 @@ class reader_impl {
     size_t skip_bytes;
     std::optional<size_t> num_bytes;
     std::vector<std::vector<size_type>> row_group_indices;
+    bool use_jit_filter = false;
   } _options;
 
   // name to reference converter to extract AST output filter
