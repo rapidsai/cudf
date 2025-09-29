@@ -277,7 +277,20 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
-        other = self._normalize_binop_operand(other)
+        if isinstance(other, column.ColumnBase):
+            if (
+                isinstance(other, CategoricalColumn)
+                and other.dtype != self.dtype
+            ):
+                raise TypeError(
+                    "Categoricals can only compare with the same type"
+                )
+            # We'll compare self's decategorized values later for non-CategoricalColumn
+        else:
+            codes = column.as_column(
+                self._encode(other), length=len(self), dtype=self.codes.dtype
+            )
+            other = codes._with_type_metadata(self.dtype)
         equality_ops = {"__eq__", "__ne__", "NULL_EQUALS", "NULL_NOT_EQUALS"}
         if not self.ordered and op not in equality_ops:
             raise TypeError(
@@ -298,23 +311,6 @@ class CategoricalColumn(column.ColumnBase):
                 return NotImplemented
             return self._get_decategorized_column()._binaryop(other, op)
         return self.codes._binaryop(other.codes, op)
-
-    def _normalize_binop_operand(
-        self, other: ColumnBinaryOperand
-    ) -> column.ColumnBase:
-        if isinstance(other, column.ColumnBase):
-            if not isinstance(other, CategoricalColumn):
-                # We'll compare self's decategorized values later
-                return other
-            if other.dtype != self.dtype:
-                raise TypeError(
-                    "Categoricals can only compare with the same type"
-                )
-            return other
-        codes = column.as_column(
-            self._encode(other), length=len(self), dtype=self.codes.dtype
-        )
-        return codes._with_type_metadata(self.dtype)
 
     def sort_values(self, ascending: bool = True, na_position="last") -> Self:
         return self.codes.sort_values(  # type: ignore[return-value]
@@ -386,7 +382,8 @@ class CategoricalColumn(column.ColumnBase):
         return pa.DictionaryArray.from_arrays(
             self.codes.astype(signed_type).to_arrow(),
             self.categories.to_arrow(),
-            ordered=self.ordered,
+            # TODO: Investigate if self.ordered can actually be None here
+            ordered=self.ordered if self.ordered is not None else False,
         )
 
     def clip(self, lo: ScalarLike, hi: ScalarLike) -> Self:
