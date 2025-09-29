@@ -88,7 +88,7 @@ struct alignas(8) relist {
     if constexpr (P == positional::DEFAULT) {
       return restate{ranges[idx * stride], inst_ids[idx * stride]};
     }
-    return restate{{0, 0}, inst_ids[idx * stride]};
+    return restate{{-1, -1}, inst_ids[idx * stride]};
   }
 
   [[nodiscard]] __device__ __forceinline__ int16_t get_size() const { return size; }
