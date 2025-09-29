@@ -243,7 +243,6 @@ class bloom_filter_expression_converter : public equality_literals_collector {
       // For all other expressions, push the `_always_true` expression
       else {
         _bloom_filter_expr.push(ast::operation{ast_operator::IDENTITY, _always_true});
-        return _bloom_filter_expr.back();
       }
     } else {
       auto new_operands = visit_operands(operands);
@@ -636,7 +635,7 @@ std::reference_wrapper<ast::expression const> equality_literals_collector::visit
   auto const op       = expr.get_operator();
 
   if (auto* v = dynamic_cast<ast::column_reference const*>(&operands[0].get())) {
-    // First operand should be column reference, second (if binary operation)should be literal.
+    // First operand should be column reference, second (if binary operation) should be literal.
     CUDF_EXPECTS(cudf::ast::detail::ast_operator_arity(op) == 1 or
                    cudf::ast::detail::ast_operator_arity(op) == 2,
                  "Only unary and binary operations are supported on column reference");
@@ -645,6 +644,9 @@ std::reference_wrapper<ast::expression const> equality_literals_collector::visit
                  "Second operand of binary operation with column reference must be a literal");
 
     v->accept(*this);
+
+    // Return early if this is a unary operation
+    if (cudf::ast::detail::ast_operator_arity(op) == 1) { return expr; }
 
     // Push to the corresponding column's literals list iff equality predicate is seen
     if (op == ast_operator::EQUAL) {

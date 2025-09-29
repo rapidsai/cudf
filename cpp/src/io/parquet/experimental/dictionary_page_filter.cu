@@ -1451,7 +1451,6 @@ class dictionary_expression_converter : public equality_literals_collector {
       // For all other expressions, push the `_always_true` expression
       else {
         _dictionary_expr.push(ast::operation{ast_operator::IDENTITY, _always_true});
-        return _dictionary_expr.back();
       }
     } else {
       auto new_operands = visit_operands(operands);
@@ -1594,18 +1593,23 @@ std::reference_wrapper<ast::expression const> dictionary_literals_collector::vis
   auto const op       = expr.get_operator();
 
   if (auto* v = dynamic_cast<ast::column_reference const*>(&operands[0].get())) {
-    // First operand should be column reference, second should be literal.
-    CUDF_EXPECTS(cudf::ast::detail::ast_operator_arity(op) == 2,
-                 "Only binary operations are supported on column reference");
-    auto const literal_ptr = dynamic_cast<ast::literal const*>(&operands[1].get());
-    CUDF_EXPECTS(literal_ptr != nullptr,
+    // First operand should be column reference, second (if binary operation) should be literal.
+    CUDF_EXPECTS(cudf::ast::detail::ast_operator_arity(op) == 1 or
+                   cudf::ast::detail::ast_operator_arity(op) == 2,
+                 "Only unary and binary operations are supported on column reference");
+    CUDF_EXPECTS(cudf::ast::detail::ast_operator_arity(op) == 1 or
+                   dynamic_cast<ast::literal const*>(&operands[1].get()) != nullptr,
                  "Second operand of binary operation with column reference must be a literal");
     v->accept(*this);
+
+    // Return early if this is a unary operation
+    if (cudf::ast::detail::ast_operator_arity(op) == 1) { return expr; }
 
     // Push to the corresponding column's literals and operators list iff EQUAL or NOT_EQUAL
     // operator is seen
     if (op == ast_operator::EQUAL or op == ast::ast_operator::NOT_EQUAL) {
-      auto const col_idx = v->get_column_index();
+      auto const literal_ptr = dynamic_cast<ast::literal const*>(&operands[1].get());
+      auto const col_idx     = v->get_column_index();
       _literals[col_idx].emplace_back(const_cast<ast::literal*>(literal_ptr));
       _operators[col_idx].emplace_back(op);
     }
