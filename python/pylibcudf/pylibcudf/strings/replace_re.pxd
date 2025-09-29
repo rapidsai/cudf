@@ -5,6 +5,7 @@ from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.scalar cimport Scalar
 from pylibcudf.strings.regex_flags cimport regex_flags
 from pylibcudf.strings.regex_program cimport RegexProgram
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 ctypedef fused Replacement:
@@ -22,12 +23,14 @@ cpdef Column replace_re(
     Replacement replacement=*,
     size_type max_replace_count=*,
     regex_flags flags=*,
-    Stream stream=*
+    Stream stream=*,
+    DeviceMemoryResource mr=*
 )
 
 cpdef Column replace_with_backrefs(
     Column input,
     RegexProgram prog,
     str replacement,
-    Stream stream=*
+    Stream stream=*,
+    DeviceMemoryResource mr=*
 )
