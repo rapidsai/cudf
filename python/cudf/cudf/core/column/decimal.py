@@ -217,12 +217,12 @@ class DecimalBaseColumn(NumericalBaseColumn):
         if isinstance(other, ColumnBase):
             if not isinstance(other, NumericalBaseColumn):
                 return NotImplemented
-            elif other.dtype.kind in "fb":
+            elif other.dtype.kind in {"f", "b"}:
                 raise TypeError(
                     "Decimal columns only support binary operations with "
                     "integer numerical columns."
                 )
-            elif other.dtype.kind in "iu":
+            elif other.dtype.kind in {"i", "u"}:
                 other = other.astype(
                     type(self.dtype)(self.dtype.MAX_PRECISION, 0)
                 )
