@@ -89,6 +89,10 @@ def dtype(arbitrary: Any) -> DtypeObj:
                 arrow_type == pa.date32()
                 or arrow_type == pa.binary()
                 or isinstance(arrow_type, pa.DictionaryType)
+            ) or (
+                cudf.get_option("mode.pandas_compatible")
+                and isinstance(arrow_type, pa.TimestampType)
+                and getattr(arrow_type, "tz", None) is not None
             ):
                 raise NotImplementedError(
                     f"cuDF does not yet support {pd_dtype}"
