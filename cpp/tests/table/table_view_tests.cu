@@ -45,7 +45,6 @@ void row_comparison(cudf::table_view input1,
 {
   rmm::cuda_stream_view stream{cudf::get_default_stream()};
 
-  // Use the new detail row operator API with proper iterators
   auto const comparator = cudf::detail::row::lexicographic::two_table_comparator{
     input1, input2, column_order, {}, stream};
   auto const lhs_it = cudf::detail::row::lhs_iterator(0);
