@@ -101,10 +101,10 @@ auto batched_decompress_get_temp_size_async(compression_type compression,
   switch (compression) {
     case compression_type::SNAPPY:
       return nvcompBatchedSnappyDecompressGetTempSizeAsync(num_chunks,
-                                                         max_uncompressed_chunk_bytes,
-                                                         nvcompBatchedSnappyDecompressDefaultOpts,
-                                                         temp_bytes,
-                                                         max_total_uncompressed_bytes);
+                                                           max_uncompressed_chunk_bytes,
+                                                           nvcompBatchedSnappyDecompressDefaultOpts,
+                                                           temp_bytes,
+                                                           max_total_uncompressed_bytes);
     case compression_type::ZSTD:
       return nvcompBatchedZstdDecompressGetTempSizeAsync(num_chunks,
                                                          max_uncompressed_chunk_bytes,
@@ -506,7 +506,7 @@ size_t batched_decompress_temp_size(compression_type compression,
                                     size_t max_uncomp_chunk_size,
                                     size_t max_total_uncomp_size)
 {
-  size_t temp_size = 0;
+  size_t temp_size                   = 0;
   nvcompStatus_t const nvcomp_status = batched_decompress_get_temp_size_async(
     compression, num_chunks, max_uncomp_chunk_size, &temp_size, max_total_uncomp_size);
   CHECK_NVCOMP_STATUS(nvcomp_status);
