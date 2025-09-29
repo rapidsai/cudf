@@ -67,16 +67,21 @@ struct reduction_parameters {
 };
 
 /**
- * @brief Base reduction function with default implementations
+ * @brief Base reduction function
  *
- * The member functions provide the most common results.
+ * The member functions provide either default or the most common results.
  */
 struct base_reduction_function {
+  /// most common result is overridden by catch-all function template below
   [[nodiscard]] bool is_valid() const noexcept { return true; }
+
+  /// overridden by derived classes to provide aggregation/type specific behavior
   [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const&) const
   {
     CUDF_FAIL("Unsupported reduction operator", std::invalid_argument);
   }
+
+  /// default behavior for most aggregation/types when no input data is available to reduce
   [[nodiscard]] std::unique_ptr<scalar> reduce_no_data(reduction_parameters const& params) const
   {
     return cudf::is_nested(params.output_dtype)
