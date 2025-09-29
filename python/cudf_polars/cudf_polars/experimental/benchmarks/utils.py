@@ -246,8 +246,8 @@ class RunConfig:
             scale_factor = float(scale_factor)
 
         skip_scale_factor_inference = (
-            "LIBCUDF_WEBHDFS_LOCAL_DIR_PATTERN" in os.environ
-        ) and ("LIBCUDF_WEBHDFS_REMOTE_DIR_PATTERN" in os.environ)
+            "LIBCUDF_IO_REROUTE_LOCAL_DIR_PATTERN" in os.environ
+        ) and ("LIBCUDF_IO_REROUTE_REMOTE_DIR_PATTERN" in os.environ)
 
         if (
             "pdsh" in name
