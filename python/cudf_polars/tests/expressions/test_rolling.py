@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -15,8 +15,8 @@ from cudf_polars.testing.asserts import (
 )
 from cudf_polars.utils.versions import POLARS_VERSION_LT_130, POLARS_VERSION_LT_132
 
-# Not public in polars yet
-RankMethod = Literal["ordinal", "dense", "min", "max", "average"]
+if TYPE_CHECKING:
+    from cudf_polars.typing import RankMethod
 
 
 @pytest.fixture
