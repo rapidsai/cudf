@@ -627,11 +627,12 @@ def parse_args(
     )
     parser.add_argument(
         "--rmm-pool-size",
-        default=0.5,
+        default=None,
         type=float,
         help=textwrap.dedent("""\
             Fraction of total GPU memory to allocate for RMM pool.
-            Default: 0.5 (50%% of GPU memory)"""),
+            Default: 0.5 (50%% of GPU memory) when --no-rmm-async,
+                     None when --rmm-async"""),
     )
     parser.add_argument(
         "--rmm-release-threshold",
@@ -727,7 +728,14 @@ def parse_args(
         default=False,
         help="Enable statistics planning.",
     )
-    return parser.parse_args(args)
+
+    parsed_args = parser.parse_args(args)
+
+    if parsed_args.rmm_pool_size is None and not parsed_args.rmm_async:
+        # The default rmm pool size depends on the rmm_async flag
+        parsed_args.rmm_pool_size = 0.5
+
+    return parsed_args
 
 
 def run_polars(
