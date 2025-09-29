@@ -398,15 +398,7 @@ void BM_parquet_read_wide_tables_mixed(nvbench::state& state)
   parquet_read_common(num_rows_written, n_col, source_sink, state);
 }
 
-using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL,
-                                            data_type::FLOAT,
-                                            data_type::BOOL8,
-                                            data_type::DECIMAL,
-                                            data_type::TIMESTAMP,
-                                            data_type::DURATION,
-                                            data_type::STRING,
-                                            data_type::LIST,
-                                            data_type::STRUCT>;
+using d_type_list = nvbench::enum_type_list<data_type::STRUCT>;
 
 NVBENCH_BENCH_TYPES(BM_parquet_read_data, NVBENCH_TYPE_AXES(d_type_list))
   .set_name("parquet_read_decode")
