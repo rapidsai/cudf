@@ -437,8 +437,16 @@ std::unique_ptr<datasource> datasource::create(std::string const& filepath,
   } else if (use_memory_mapping) {
     return std::make_unique<memory_mapped_source>(filepath.c_str(), offset, max_size_estimate);
   } else {
-    // `file_source` reads the file directly, without memory mapping
-    return std::make_unique<file_source>(filepath.c_str());
+    auto* local_dir_pattern  = getenv("LIBCUDF_WEBHDFS_LOCAL_DIR_PATTERN");
+    auto* remote_dir_pattern = getenv("LIBCUDF_WEBHDFS_REMOTE_DIR_PATTERN");
+    if (local_dir_pattern != nullptr and remote_dir_pattern != nullptr) {
+      auto remote_file_path =
+        std::regex_replace(filepath, std::regex{local_dir_pattern}, remote_dir_pattern);
+      return std::make_unique<remote_file_source>(remote_file_path.c_str());
+    } else {
+      // `file_source` reads the file directly, without memory mapping
+      return std::make_unique<file_source>(filepath.c_str());
+    }
   }
 }
 
