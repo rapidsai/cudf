@@ -50,5 +50,8 @@ cpdef PackedColumns pack(Table input)
 cpdef Table unpack(PackedColumns input, DeviceMemoryResource mr=*)
 
 cpdef Table unpack_from_memoryviews(
-    memoryview metadata, gpumemoryview gpu_data, DeviceMemoryResource mr=*
+    memoryview metadata,
+    gpumemoryview gpu_data,
+    Stream stream=*,
+    DeviceMemoryResource mr=*
 )
