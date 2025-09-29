@@ -2,6 +2,7 @@
 
 from enum import IntEnum
 
+from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 from rmm.pylibrmm.stream import Stream
 
 from pylibcudf.column import Column
@@ -24,6 +25,7 @@ def all_characters_of_type(
     types: StringCharacterTypes,
     verify_types: StringCharacterTypes,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
 def filter_characters_of_type(
     source_strings: Column,
@@ -31,4 +33,5 @@ def filter_characters_of_type(
     replacement: Scalar,
     types_to_keep: StringCharacterTypes,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
