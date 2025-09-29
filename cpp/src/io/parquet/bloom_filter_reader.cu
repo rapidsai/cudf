@@ -234,18 +234,24 @@ class bloom_filter_expression_converter : public equality_literals_collector {
         auto const& value = _bloom_filter_expr.push(ast::column_reference{col_literal_offset});
         _bloom_filter_expr.push(ast::operation{ast_operator::IDENTITY, value});
       }
-      // For all other expressions, push an always true expression
+      // For all other expressions, push and return the `_always_true` expression
       else {
-        _bloom_filter_expr.push(
-          ast::operation{ast_operator::NOT,
-                         _bloom_filter_expr.push(ast::operation{ast_operator::NOT, _always_true})});
+        _bloom_filter_expr.push(ast::operation{ast_operator::IDENTITY, _always_true});
+        // This is important as we need to propagate the `_always_true` expression to its parent
+        return _always_true;
       }
     } else {
       auto new_operands = visit_operands(operands);
       if (cudf::ast::detail::ast_operator_arity(op) == 2) {
         _bloom_filter_expr.push(ast::operation{op, new_operands.front(), new_operands.back()});
       } else if (cudf::ast::detail::ast_operator_arity(op) == 1) {
-        _bloom_filter_expr.push(ast::operation{op, new_operands.front()});
+        // If the new_operands is just a `_always_true` literal, propagate it here
+        if (auto* lit = dynamic_cast<ast::literal const*>(&new_operands.front().get());
+            lit == &_always_true) {
+          _bloom_filter_expr.push(ast::operation{ast_operator::IDENTITY, _always_true});
+        } else {
+          _bloom_filter_expr.push(ast::operation{op, new_operands.front()});
+        }
       }
     }
     return _bloom_filter_expr.back();

@@ -1440,16 +1440,24 @@ class dictionary_expression_converter : public equality_literals_collector {
           _dictionary_expr.push(ast::operation{ast_operator::IDENTITY, value});
         }
       }
-      // For all other expressions, push the `always true` expression
+      // For all other expressions, push and return the `_always_true` expression
       else {
         _dictionary_expr.push(ast::operation{ast_operator::IDENTITY, _always_true});
+        // This is important as we need to propagate the `_always_true` expression to its parent
+        return _always_true;
       }
     } else {
       auto new_operands = visit_operands(operands);
       if (cudf::ast::detail::ast_operator_arity(op) == 2) {
         _dictionary_expr.push(ast::operation{op, new_operands.front(), new_operands.back()});
       } else if (cudf::ast::detail::ast_operator_arity(op) == 1) {
-        _dictionary_expr.push(ast::operation{op, new_operands.front()});
+        // If the new_operands is just a `_always_true` literal, propagate it here
+        if (auto* lit = dynamic_cast<ast::literal const*>(&new_operands.front().get());
+            lit == &_always_true) {
+          _dictionary_expr.push(ast::operation{ast_operator::IDENTITY, _always_true});
+        } else {
+          _dictionary_expr.push(ast::operation{op, new_operands.front()});
+        }
       }
     }
     return _dictionary_expr.back();

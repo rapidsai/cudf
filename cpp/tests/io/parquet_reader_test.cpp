@@ -2851,17 +2851,18 @@ void filter_unary_operation_typed_test()
   auto [src, filepath, null_count] = [&]() {
     auto constexpr num_rows            = num_ordered_rows;
     auto constexpr row_group_size_rows = num_rows / 4;
-    auto _col0                         = testdata::ascending<T>();
+    auto _col0                         = testdata::ascending<T>().release();
     // Add nulls to col0
     std::bernoulli_distribution bn(0.7f);
     auto valids =
       cudf::detail::make_counting_transform_iterator(0, [&](int index) { return bn(gen); });
     auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valids, valids + num_rows);
-    auto col0                    = cudf::purge_nonempty_nulls(*_col0[0]);
-    auto col1                    = testdata::descending<T>();
-    auto col2                    = testdata::unordered<T>();
-    auto const written_table     = table_view{{col0, col1, col2}};
-    auto const filepath          = temp_env->get_temp_filepath("FilterUnaryOperationTyped.parquet");
+    _col0->set_null_mask(std::move(null_mask), null_count);
+    auto col0                = cudf::purge_nonempty_nulls(_col0->view());
+    auto col1                = testdata::descending<T>();
+    auto col2                = testdata::unordered<T>();
+    auto const written_table = table_view{{col0->view(), col1, col2}};
+    auto const filepath      = temp_env->get_temp_filepath("FilterUnaryOperationTyped.parquet");
     {
       cudf::io::table_input_metadata expected_metadata(written_table);
       expected_metadata.column_metadata[0].set_name("col0");
@@ -2877,16 +2878,14 @@ void filter_unary_operation_typed_test()
     }
 
     std::vector<std::unique_ptr<column>> columns;
-    columns.push_back(col0.release());
+    columns.push_back(std::move(col0));
     columns.push_back(col1.release());
     columns.push_back(col2.release());
 
-    return std::pair{cudf::table{std::move(columns)}, filepath, null_count};
+    return std::tuple{cudf::table{std::move(columns)}, filepath, null_count};
   }();
 
   auto const written_table           = src.view();
-  auto const col_name_0              = cudf::ast::column_name_reference("col0");
-  auto const col_ref_0               = cudf::ast::column_reference(0);
   auto const test_predicate_pushdown = [&](cudf::ast::operation const& filter_expression,
                                            cudf::ast::operation const& ref_filter,
                                            cudf::size_type expected_total_row_groups,
@@ -2932,6 +2931,9 @@ void filter_unary_operation_typed_test()
     EXPECT_FALSE(result.metadata.num_row_groups_after_bloom_filter.has_value());
   };
 
+  auto const col_name_0 = cudf::ast::column_name_reference("col0");
+  auto const col_ref_0  = cudf::ast::column_reference(0);
+
   // Unary operation `IS_NULL` should not filter any row groups and yield exactly `null_count` rows
   {
     auto constexpr expected_total_row_groups          = 4;
@@ -2945,6 +2947,24 @@ void filter_unary_operation_typed_test()
                             expected_total_row_groups,
                             expected_stats_filtered_row_groups,
                             null_count);
+  }
+
+  // Unary operation `NOT(IS_NULL)` should not filter any row groups and yield exactly `num_rows -
+  // null_count` rows
+  {
+    auto constexpr expected_total_row_groups          = 4;
+    auto constexpr expected_stats_filtered_row_groups = 4;
+
+    auto const is_null_expr = cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, col_name_0);
+    auto const filter_expression = cudf::ast::operation(cudf::ast::ast_operator::NOT, is_null_expr);
+    auto const is_null_ref_expr = cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, col_ref_0);
+    auto const ref_filter = cudf::ast::operation(cudf::ast::ast_operator::NOT, is_null_ref_expr);
+
+    test_predicate_pushdown(filter_expression,
+                            ref_filter,
+                            expected_total_row_groups,
+                            expected_stats_filtered_row_groups,
+                            num_ordered_rows - null_count);
   }
 
   // Unary operation `IS_NULL` should not affect anything when ANDing with another expression, and
@@ -3002,7 +3022,7 @@ void filter_unary_operation_typed_test()
 TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTyped)
 {
   filter_typed_test<TypeParam, false>();
-  filter_unary_operation_typed_test<TypeParam, false>();
+  filter_unary_operation_typed_test<TypeParam>();
 }
 
 TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTypedJIT)

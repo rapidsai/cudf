@@ -132,9 +132,11 @@ std::reference_wrapper<ast::expression const> stats_expression_converter::visit(
                  "Second operand of binary operation with column reference must be a literal");
     v->accept(*this);
 
-    // For unary operators, push an always true expression
+    // For unary operators, push and return the `_always_true` expression
     if (cudf::ast::detail::ast_operator_arity(op) == 1) {
       _stats_expr.push(ast::operation{ast_operator::IDENTITY, _always_true});
+      // This is important as we need to propagate the `_always_true` expression to its parent
+      return _always_true;
     } else {
       // Push literal into the ast::tree
       auto const& literal =
@@ -187,7 +189,13 @@ std::reference_wrapper<ast::expression const> stats_expression_converter::visit(
     if (cudf::ast::detail::ast_operator_arity(op) == 2) {
       _stats_expr.push(ast::operation{op, new_operands.front(), new_operands.back()});
     } else if (cudf::ast::detail::ast_operator_arity(op) == 1) {
-      _stats_expr.push(ast::operation{op, new_operands.front()});
+      // If the new_operands is just a `_always_true` literal, propagate it here
+      if (auto* lit = dynamic_cast<ast::literal const*>(&new_operands.front().get());
+          lit == &_always_true) {
+        _stats_expr.push(ast::operation{ast_operator::IDENTITY, _always_true});
+      } else {
+        _stats_expr.push(ast::operation{op, new_operands.front()});
+      }
     }
   }
   return _stats_expr.back();
