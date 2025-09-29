@@ -16,8 +16,8 @@
 #pragma once
 
 #include <cudf/aggregation.hpp>
+#include <cudf/detail/utilities/host_vector.hpp>
 #include <cudf/groupby.hpp>
-#include <cudf/utilities/span.hpp>
 
 #include <memory>
 #include <tuple>
