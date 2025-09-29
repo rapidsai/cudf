@@ -452,16 +452,22 @@ std::unique_ptr<datasource> datasource::create(std::string const& filepath,
     // for upstream Polars change.
     auto* local_dir_pattern  = std::getenv("LIBCUDF_IO_REROUTE_LOCAL_DIR_PATTERN");
     auto* remote_dir_pattern = std::getenv("LIBCUDF_IO_REROUTE_REMOTE_DIR_PATTERN");
+
     if (local_dir_pattern != nullptr and remote_dir_pattern != nullptr) {
       auto remote_file_path = std::regex_replace(filepath,
                                                  std::regex{local_dir_pattern},
                                                  remote_dir_pattern,
                                                  std::regex_constants::format_first_only);
-      return std::make_unique<remote_file_source>(remote_file_path.c_str());
-    } else {
-      // `file_source` reads the file directly, without memory mapping
-      return std::make_unique<file_source>(filepath.c_str());
+
+      // Create a remote file resource only when the pattern is found and replaced; otherwise, still
+      // create a local file resource
+      if (filepath != remote_file_path) {
+        return std::make_unique<remote_file_source>(remote_file_path.c_str());
+      }
     }
+
+    // `file_source` reads the file directly, without memory mapping
+    return std::make_unique<file_source>(filepath.c_str());
   }
 }
 
