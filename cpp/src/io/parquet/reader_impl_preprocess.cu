@@ -687,7 +687,10 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
   compute_output_chunks_for_subpass();
 }
 
-void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_rows)
+void reader_impl::allocate_columns(read_mode mode,
+                                   size_t skip_rows,
+                                   size_t num_rows,
+                                   cudf::device_span<bool const> page_mask)
 {
   CUDF_FUNC_RANGE();
 
@@ -779,10 +782,6 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
 
     // To keep track of the starting key of an iteration
     size_t key_start = 0;
-
-    // Copy the current page mask to the device
-    auto page_mask = cudf::detail::make_device_uvector_async(
-      _subpass_page_mask, _stream, cudf::get_current_device_resource_ref());
 
     // Loop until all keys are processed
     while (key_start < num_keys) {

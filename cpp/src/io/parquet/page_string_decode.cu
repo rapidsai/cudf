@@ -608,8 +608,8 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   if (t == 0) {
     // don't clobber these if they're already computed from the index
     if (!pp->has_page_index) {
-      s->page.num_nulls  = 0;
-      s->page.num_valids = 0;
+      pp->num_nulls  = 0;
+      pp->num_valids = 0;
     }
     // reset str_bytes to 0 in case it's already been calculated (esp needed for chunked reads).
     pp->str_bytes = 0;
@@ -676,16 +676,13 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
  * @param page_mask Page mask indicating if this column needs to be decoded
  * @param min_rows crop all rows below min_row
  * @param num_rows Maximum number of rows to read
- * @param all_values A bool which forces the kernel to compute sizes for all rows regardless of
- * other settings and records the result in the PageInfo::str_bytes_all field
  */
 CUDF_KERNEL void __launch_bounds__(delta_preproc_block_size)
   compute_delta_page_string_sizes_kernel(PageInfo* pages,
                                          device_span<ColumnChunkDesc const> chunks,
                                          device_span<bool const> page_mask,
                                          size_t min_row,
-                                         size_t num_rows,
-                                         bool all_values)
+                                         size_t num_rows)
 {
   __shared__ __align__(16) page_state_s state_g;
 
@@ -713,7 +710,7 @@ CUDF_KERNEL void __launch_bounds__(delta_preproc_block_size)
     return;
   }
 
-  auto const start_value = all_values ? 0 : pp->start_val;
+  auto const start_value = pp->start_val;
 
   // if data size is known, can short circuit here
   if (chunks[pp->chunk_idx].physical_type == Type::FIXED_LEN_BYTE_ARRAY) {
@@ -745,7 +742,7 @@ CUDF_KERNEL void __launch_bounds__(delta_preproc_block_size)
     // set up for decoding strings...can be either plain or dictionary
     uint8_t const* data      = s->data_start;
     uint8_t const* const end = s->data_end;
-    auto const end_value     = all_values ? pp->num_input_values : pp->end_val;
+    auto const end_value     = pp->end_val;
 
     auto const [len, temp_bytes] = totalDeltaByteArraySize(data, end, start_value, end_value);
 
@@ -772,16 +769,13 @@ CUDF_KERNEL void __launch_bounds__(delta_preproc_block_size)
  * @param page_mask Page mask indicating if this column needs to be decoded
  * @param min_rows crop all rows below min_row
  * @param num_rows Maximum number of rows to read
- * @param all_values A bool which forces the kernel to compute sizes for all rows regardless of
- * other settings
  */
 CUDF_KERNEL void __launch_bounds__(delta_length_block_size)
   compute_delta_length_page_string_sizes_kernel(PageInfo* pages,
                                                 device_span<ColumnChunkDesc const> chunks,
                                                 device_span<bool const> page_mask,
                                                 size_t min_row,
-                                                size_t num_rows,
-                                                bool all_values)
+                                                size_t num_rows)
 {
   using cudf::detail::warp_size;
   using WarpReduce = cub::WarpReduce<uleb128_t>;
@@ -837,8 +831,8 @@ CUDF_KERNEL void __launch_bounds__(delta_length_block_size)
   } else {
     // now process string info in the range [start_value, end_value)
     // set up for decoding strings...can be either plain or dictionary
-    auto const start_value = all_values ? 0 : pp->start_val;
-    auto const end_value   = all_values ? pp->num_input_values : pp->end_val;
+    auto const start_value = pp->start_val;
+    auto const end_value   = pp->end_val;
 
     if (t == 0) { string_lengths.init_binary_block(s->data_start, s->data_end); }
     __syncwarp();
@@ -883,24 +877,20 @@ CUDF_KERNEL void __launch_bounds__(delta_length_block_size)
  * @brief Kernel for computing string page output size information.
  *
  * This call ignores non-string columns. On exit the `str_bytes` field of the `PageInfo` struct will
- * be populated. If `all_values` is passed as true, the `str_bytes_all` field of the `PageInfo`
- * struct will also be set with the full size of all strings in the page.
+ * be populated.
  *
  * @param pages All pages to be decoded
  * @param chunks All chunks to be decoded
  * @param page_mask Page mask indicating if this column needs to be decoded
  * @param min_rows crop all rows below min_row
  * @param num_rows Maximum number of rows to read
- * @param all_values A bool which forces the kernel to compute sizes for all rows regardless of
- * other settings
  */
 CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   compute_page_string_sizes_kernel(PageInfo* pages,
                                    device_span<ColumnChunkDesc const> chunks,
                                    device_span<bool const> page_mask,
                                    size_t min_row,
-                                   size_t num_rows,
-                                   bool all_values)
+                                   size_t num_rows)
 {
   __shared__ __align__(16) page_state_s state_g;
 
@@ -952,8 +942,8 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
     uint8_t const* const end = s->data_end;
     uint8_t const* dict_base = nullptr;
     int dict_size            = 0;
-    auto const start_value   = all_values ? 0 : pp->start_val;
-    auto const end_value     = all_values ? pp->num_input_values : pp->end_val;
+    auto const start_value   = pp->start_val;
+    auto const end_value     = pp->end_val;
 
     switch (pp->encoding) {
       case Encoding::PLAIN_DICTIONARY:
@@ -1041,7 +1031,7 @@ void compute_page_string_sizes_pass1(cudf::detail::hostdevice_span<PageInfo> pag
   if (BitAnd(kernel_mask, decode_kernel_mask::DELTA_BYTE_ARRAY) != 0) {
     dim3 dim_delta(delta_preproc_block_size, 1);
     compute_delta_page_string_sizes_kernel<<<dim_grid, dim_delta, 0, streams[s_idx++].value()>>>(
-      pages.device_ptr(), chunks, page_mask, min_row, num_rows, all_values);
+      pages.device_ptr(), chunks, page_mask, min_row, num_rows);
   }
   if (BitAnd(kernel_mask, decode_kernel_mask::DELTA_LENGTH_BA) != 0) {
     dim3 dim_delta(delta_length_block_size, 1);
@@ -1049,11 +1039,11 @@ void compute_page_string_sizes_pass1(cudf::detail::hostdevice_span<PageInfo> pag
                                                     dim_delta,
                                                     0,
                                                     streams[s_idx++].value()>>>(
-      pages.device_ptr(), chunks, page_mask, min_row, num_rows, all_values);
+      pages.device_ptr(), chunks, page_mask, min_row, num_rows);
   }
   if (BitAnd(kernel_mask, STRINGS_MASK_NON_DELTA) != 0) {
     compute_page_string_sizes_kernel<<<dim_grid, dim_block, 0, streams[s_idx++].value()>>>(
-      pages.device_ptr(), chunks, page_mask, min_row, num_rows, all_values);
+      pages.device_ptr(), chunks, page_mask, min_row, num_rows);
   }
 
   // synchronize the streams
