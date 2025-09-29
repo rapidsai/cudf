@@ -31,11 +31,9 @@ def test_trace_basic(
     log_output: Any,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # tracing is determined when cudf_polars is imported.
+    # Whether tracing is enabled is determined when cudf_polars is imported.
     # So our best way of testing this is to run things in a subprocess
     # to control the environment and isolate it from the rest of the test suite.
-    # Make sure to set the initial pool size to 0 to avoid large allocations
-    # causing OOM errors.
     code = textwrap.dedent("""\
     import polars as pl
     import rmm
