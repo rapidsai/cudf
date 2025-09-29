@@ -4,6 +4,7 @@ from libcpp.map cimport map
 from libcpp.vector cimport vector
 
 from rmm.pylibrmm.stream cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from pylibcudf.io.types cimport (
     SinkInfo,
@@ -87,7 +88,8 @@ cpdef TableWithMetadata read_json_from_string_column(
     list dtypes = *,
     compression_type compression = *,
     json_recovery_mode_t recovery_mode = *,
-    Stream stream = *)
+    Stream stream = *,
+    DeviceMemoryResource mr = *)
 
 cdef class JsonWriterOptions:
     cdef json_writer_options c_obj
