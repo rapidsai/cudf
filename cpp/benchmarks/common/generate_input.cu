@@ -636,23 +636,22 @@ std::unique_ptr<cudf::column> create_distinct_rows_column(data_profile const& pr
 {
   using DeviceType = cudf::device_storage_type_t<T>;
 
-  // Bernoulli distribution
-  auto valid_dist = random_value_fn<bool>(
-    distribution_params<bool>{1. - profile.get_null_probability().value_or(0)});
-
   auto init = cudf::make_fixed_width_scalar(T{});
   auto col  = cudf::sequence(num_rows, *init);
 
-  rmm::device_uvector<bool> null_mask(0, cudf::get_default_stream());
-  null_mask = valid_dist(engine, num_rows);
-  auto [result_bitmask, null_count] =
-    cudf::detail::valid_if(null_mask.begin(),
-                           null_mask.end(),
-                           cuda::std::identity{},
-                           cudf::get_default_stream(),
-                           cudf::get_current_device_resource_ref());
-
-  col->set_null_mask(std::move(result_bitmask), null_count);
+  if (profile.get_null_probability().has_value()) {
+    auto valid_dist =
+      random_value_fn<bool>(distribution_params<bool>{1. - profile.get_null_probability().value()});
+    rmm::device_uvector<bool> null_mask(0, cudf::get_default_stream());
+    null_mask = valid_dist(engine, num_rows);
+    auto [result_bitmask, null_count] =
+      cudf::detail::valid_if(null_mask.begin(),
+                             null_mask.end(),
+                             cuda::std::identity{},
+                             cudf::get_default_stream(),
+                             cudf::get_current_device_resource_ref());
+    col->set_null_mask(std::move(result_bitmask), null_count);
+  }
 
   return std::move(cudf::sample(cudf::table_view({col->view()}), num_rows)->release()[0]);
 }
