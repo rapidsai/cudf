@@ -7,7 +7,7 @@ import os
 import pytest
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture(scope="session", autouse=True)
 def dask_cluster(pytestconfig, worker_id):
     if (
         pytestconfig.getoption("--scheduler") == "distributed"
