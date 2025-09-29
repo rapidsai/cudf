@@ -34,7 +34,10 @@ Properties
    Index.nlevels
    Index.shape
    Index.size
+   Index.transpose
+   Index.T
    Index.values
+   Index.values_host
 
 Modifying and computations
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -253,6 +256,7 @@ MultiIndex components
 .. autosummary::
    :toctree: api/
 
+   MultiIndex.to_flat_index
    MultiIndex.to_frame
    MultiIndex.droplevel
    MultiIndex.swaplevel

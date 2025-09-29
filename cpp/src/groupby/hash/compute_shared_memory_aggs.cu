@@ -102,17 +102,17 @@ __device__ void initialize_shmem_aggregations(cooperative_groups::thread_block c
   }
 }
 
-__device__ void compute_pre_aggregrations(cudf::size_type col_start,
-                                          cudf::size_type col_end,
-                                          bitmask_type const* row_bitmask,
-                                          cudf::table_device_view source,
-                                          cudf::size_type num_input_rows,
-                                          cudf::size_type* local_mapping_index,
-                                          cuda::std::byte* shmem_agg_storage,
-                                          cudf::size_type* shmem_agg_res_offsets,
-                                          cudf::size_type* shmem_agg_mask_offsets,
-                                          cudf::aggregation::Kind const* d_agg_kinds,
-                                          cudf::size_type agg_location_offset)
+__device__ void compute_pre_aggregations(cudf::size_type col_start,
+                                         cudf::size_type col_end,
+                                         bitmask_type const* row_bitmask,
+                                         cudf::table_device_view source,
+                                         cudf::size_type num_input_rows,
+                                         cudf::size_type* local_mapping_index,
+                                         cuda::std::byte* shmem_agg_storage,
+                                         cudf::size_type* shmem_agg_res_offsets,
+                                         cudf::size_type* shmem_agg_mask_offsets,
+                                         cudf::aggregation::Kind const* d_agg_kinds,
+                                         cudf::size_type agg_location_offset)
 {
   // Aggregates global memory sources to shared memory targets
   for (auto source_idx = cudf::detail::grid_1d::global_thread_id(); source_idx < num_input_rows;
@@ -243,17 +243,17 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
                                   d_agg_kinds);
     block.sync();
 
-    compute_pre_aggregrations(col_start,
-                              col_end,
-                              row_bitmask,
-                              input_values,
-                              num_rows,
-                              local_mapping_index,
-                              shmem_agg_storage,
-                              shmem_agg_res_offsets,
-                              shmem_agg_mask_offsets,
-                              d_agg_kinds,
-                              agg_location_offset);
+    compute_pre_aggregations(col_start,
+                             col_end,
+                             row_bitmask,
+                             input_values,
+                             num_rows,
+                             local_mapping_index,
+                             shmem_agg_storage,
+                             shmem_agg_res_offsets,
+                             shmem_agg_mask_offsets,
+                             d_agg_kinds,
+                             agg_location_offset);
     block.sync();
 
     compute_final_aggregations(block,
