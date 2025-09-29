@@ -820,7 +820,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return self.to_pylibcudf(mode="read").to_arrow()
 
     @classmethod
-    def from_arrow(cls, array: pa.Array) -> ColumnBase:
+    def from_arrow(cls, array: pa.Array | pa.ChunkedArray) -> ColumnBase:
         """
         Convert PyArrow Array/ChunkedArray to column
 
@@ -862,16 +862,23 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         if pa.types.is_dictionary(array.type):
             if isinstance(array, pa.Array):
-                codes = array.indices
-                dictionary = array.dictionary
+                dict_array = cast(pa.DictionaryArray, array)
+                codes: pa.Array | pa.ChunkedArray = dict_array.indices
+                dictionary: pa.Array | pa.ChunkedArray = dict_array.dictionary
             else:
                 codes = pa.chunked_array(
-                    [chunk.indices for chunk in array.chunks],
+                    [
+                        cast(pa.DictionaryArray, chunk).indices
+                        for chunk in array.chunks
+                    ],
                     type=array.type.index_type,
                 )
                 dictionary = pc.unique(
                     pa.chunked_array(
-                        [chunk.dictionary for chunk in array.chunks],
+                        [
+                            cast(pa.DictionaryArray, chunk).dictionary
+                            for chunk in array.chunks
+                        ],
                         type=array.type.value_type,
                     )
                 )
@@ -1175,11 +1182,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         if out:
             self._mimic_inplace(out, inplace=True)
-
-    def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
-        if is_na_like(other):
-            return pa.scalar(None, type=cudf_dtype_to_pa_type(self.dtype))
-        return NotImplemented
 
     def _all_bools_with_nulls(
         self, other: ColumnBase, bool_fill_value: bool
@@ -2094,7 +2096,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         self,
         cats: ColumnBase,
         dtype: Dtype | None = None,
-        na_sentinel: pa.Scalar | None = None,
     ) -> NumericalColumn:
         """
         Convert each value in `self` into an integer code, with `cats`
@@ -2125,8 +2126,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         ]
         dtype: int8
         """
-        if na_sentinel is None or not na_sentinel.is_valid:
-            na_sentinel = pa.scalar(-1)
+        na_sentinel = pa.scalar(-1)
 
         def _return_sentinel_column():
             return as_column(na_sentinel, dtype=dtype, length=len(self))

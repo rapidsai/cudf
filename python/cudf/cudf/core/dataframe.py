@@ -5895,7 +5895,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     )
 
         out = super(DataFrame, data).to_arrow()
-        metadata = pa.pandas_compat.construct_metadata(
+        # PyArrow stubs don't recognize pandas_compat attribute
+        metadata = pa.pandas_compat.construct_metadata(  # type: ignore[attr-defined]
             columns_to_convert=[self[col] for col in self._column_names],
             df=self,
             column_names=out.schema.names,

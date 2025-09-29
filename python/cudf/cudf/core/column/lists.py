@@ -152,8 +152,7 @@ class ListColumn(ColumnBase):
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         # Lists only support __add__, which concatenates lists.
         reflect, op = self._check_reflected_op(op)
-        other = self._normalize_binop_operand(other)
-        if other is NotImplemented:
+        if not isinstance(other, type(self)):
             return NotImplemented
         if isinstance(other.dtype, ListDtype):
             if op == "__add__":
@@ -192,11 +191,15 @@ class ListColumn(ColumnBase):
 
         if self.nullable:
             nbuf = pa.py_buffer(self.mask.memoryview())  # type: ignore[union-attr]
-            buffers = (nbuf, offsets.buffers()[1])
+            buffers = [nbuf, offsets.buffers()[1]]
         else:
-            buffers = offsets.buffers()
+            buffers = list(offsets.buffers())
         return pa.ListArray.from_buffers(
-            pa_type, len(self), buffers, children=[elements]
+            pa_type,
+            len(self),
+            # PyArrow stubs are too strict - from_buffers should accept None for missing buffers
+            buffers,  # type: ignore[arg-type]
+            children=[elements],
         )
 
     def set_base_data(self, value):
@@ -217,11 +220,6 @@ class ListColumn(ColumnBase):
         raise NotImplementedError(
             "Lists are not yet supported via `__cuda_array_interface__`"
         )
-
-    def _normalize_binop_operand(self, other: Any) -> ColumnBase:
-        if isinstance(other, type(self)):
-            return other
-        return NotImplemented
 
     def _with_type_metadata(self: Self, dtype: Dtype) -> Self:
         if isinstance(dtype, ListDtype):
