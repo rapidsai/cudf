@@ -192,7 +192,7 @@ std::reference_wrapper<ast::expression const> stats_expression_converter::visit(
       // If the new_operands is just a `_always_true` literal, propagate it here
       if (auto* lit = dynamic_cast<ast::literal const*>(&new_operands.front().get());
           lit == &_always_true) {
-        _stats_expr.push(ast::operation{ast_operator::IDENTITY, _always_true});
+        _stats_expr.push(ast::operation{ast_operator::IDENTITY, _stats_expr.back()});
       } else {
         _stats_expr.push(ast::operation{op, new_operands.front()});
       }

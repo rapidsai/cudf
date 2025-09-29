@@ -248,7 +248,8 @@ class bloom_filter_expression_converter : public equality_literals_collector {
         // If the new_operands is just a `_always_true` literal, propagate it here
         if (auto* lit = dynamic_cast<ast::literal const*>(&new_operands.front().get());
             lit == &_always_true) {
-          _bloom_filter_expr.push(ast::operation{ast_operator::IDENTITY, _always_true});
+          _bloom_filter_expr.push(
+            ast::operation{ast_operator::IDENTITY, _bloom_filter_expr.back()});
         } else {
           _bloom_filter_expr.push(ast::operation{op, new_operands.front()});
         }
