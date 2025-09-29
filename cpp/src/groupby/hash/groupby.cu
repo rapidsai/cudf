@@ -128,11 +128,10 @@ struct can_use_hash_groupby_fn {
     using TargetType       = cudf::detail::target_type_t<T, K>;
     using DeviceTargetType = cuda::std::
       conditional_t<uses_underlying_type<K>(), cudf::device_storage_type_t<TargetType>, TargetType>;
-    if constexpr (std::is_void_v<DeviceTargetType>) {
-      return false;
-    } else {
+    if constexpr (not std::is_void_v<DeviceTargetType>) {
       return cudf::has_atomic_support<DeviceTargetType>();
     }
+    return false;
   }
 
   template <typename T, aggregation::Kind K>
@@ -140,11 +139,8 @@ struct can_use_hash_groupby_fn {
   bool operator()() const
   {
     using TargetType = cudf::detail::target_type_t<T, K>;
-    if constexpr (std::is_void_v<TargetType>) {
-      return false;
-    } else {
-      return cudf::has_atomic_support<TargetType>();
-    }
+    if constexpr (not std::is_void_v<TargetType>) { return cudf::has_atomic_support<TargetType>(); }
+    return false;
   }
 };
 
