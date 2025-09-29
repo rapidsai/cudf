@@ -339,11 +339,11 @@ _DECIMAL_TYPES = {plc.TypeId.DECIMAL32, plc.TypeId.DECIMAL64, plc.TypeId.DECIMAL
 def _align_decimal_scales(
     left: expr.Expr, right: expr.Expr
 ) -> tuple[expr.Expr, expr.Expr]:
-    left_type = left.dtype.plc.id()
-    right_type = right.dtype.plc.id()
+    left_type = left.dtype.plc_type.id()
+    right_type = right.dtype.plc_type.id()
     if left_type in _DECIMAL_TYPES and right_type in _DECIMAL_TYPES:
-        left_scale = left.dtype.plc.scale()
-        right_scale = right.dtype.plc.scale()
+        left_scale = left.dtype.plc_type.scale()
+        right_scale = right.dtype.plc_type.scale()
         if left_scale != right_scale:
             cudf_scale = min(left_scale, right_scale)
             polars_scale = -cudf_scale if cudf_scale < 0 else cudf_scale

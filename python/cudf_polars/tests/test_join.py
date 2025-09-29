@@ -176,16 +176,44 @@ def test_cross_join_empty_right_table(request):
     assert_gpu_result_equal(q)
 
 
-def test_cross_join_filter_with_decimal_predicate_unsupported():
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.col("foo") > pl.col("bar"),
+        pl.col("foo") >= pl.col("bar"),
+        pl.col("foo") < pl.col("bar"),
+        pl.col("foo") <= pl.col("bar"),
+        pl.col("foo") == pl.col("bar"),
+        pytest.param(
+            pl.col("foo") != pl.col("bar"),
+            marks=pytest.mark.xfail(reason="nested loop join"),
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "left_dtype,right_dtype",
+    [
+        (pl.Decimal(15, 2), pl.Decimal(15, 2)),
+        (pl.Decimal(15, 4), pl.Decimal(15, 2)),
+        (pl.Decimal(15, 2), pl.Decimal(15, 4)),
+        (pl.Decimal(15, 2), pl.Float32),
+        (pl.Decimal(15, 2), pl.Float64),
+    ],
+)
+def test_cross_join_filter_with_decimals(expr, left_dtype, right_dtype):
     left = pl.LazyFrame(
         {"foo": [Decimal("1.00"), Decimal("2.50"), Decimal("3.00")]},
-        schema={"foo": pl.Decimal(15, 2)},
-    )
-    right = pl.LazyFrame(
-        {"bar": [2.00]},
-        schema={"bar": pl.Float64},
+        schema={"foo": left_dtype},
     )
 
-    q = left.join(right, how="cross").filter(pl.col("foo") > pl.col("bar"))
+    if isinstance(right_dtype, pl.Decimal):
+        right = pl.LazyFrame(
+            {"bar": [Decimal("2").scaleb(-right_dtype.scale)]},
+            schema={"bar": right_dtype},
+        )
+    else:
+        right = pl.LazyFrame({"bar": [2.0]}, schema={"bar": right_dtype})
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    q = left.join(right, how="cross").filter(expr)
+
+    assert_gpu_result_equal(q, check_row_order=False)

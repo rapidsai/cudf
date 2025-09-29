@@ -138,10 +138,12 @@ class Agg(Expr):
     def _reduce(
         self, column: Column, *, request: plc.aggregation.Aggregation
     ) -> Column:
+        obj = column.obj
+        if plc.traits.is_fixed_point(obj.type()):
+            obj = plc.unary.cast(obj, self.dtype.plc_type)
         return Column(
             plc.Column.from_scalar(
-                plc.reduce.reduce(column.obj, request, self.dtype.plc_type),
-                1,
+                plc.reduce.reduce(obj, request, self.dtype.plc_type), 1
             ),
             name=column.name,
             dtype=self.dtype,
