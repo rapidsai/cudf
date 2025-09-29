@@ -2760,7 +2760,12 @@ def as_column(
             return arbitrary.astype(dtype)
         return arbitrary
     elif hasattr(arbitrary, "__cuda_array_interface__"):
-        return _column_from_cuda_array_interface(arbitrary, nan_as_null, dtype)
+        column = ColumnBase.from_cuda_array_interface(arbitrary)
+        if nan_as_null is not False:
+            column = column.nans_to_nulls()
+        if dtype is not None:
+            column = column.astype(dtype)
+        return column
     elif isinstance(arbitrary, (pa.Array, pa.ChunkedArray)):
         column = ColumnBase.from_arrow(arbitrary)
         if nan_as_null is not False:
@@ -2886,9 +2891,16 @@ def as_column(
                 arbitrary = np.asarray(arbitrary)
             else:
                 arbitrary = cp.asarray(arbitrary)
-                return _column_from_cuda_array_interface(
-                    arbitrary, nan_as_null, dtype, data_ptr_exposed=False
+                # Explicitly passing `data_ptr_exposed` to
+                # reuse existing memory created by cupy here
+                column = ColumnBase.from_cuda_array_interface(
+                    arbitrary, data_ptr_exposed=False
                 )
+                if nan_as_null is not False:
+                    column = column.nans_to_nulls()
+                if dtype is not None:
+                    column = column.astype(dtype)
+                return column
             return as_column(
                 arbitrary, nan_as_null=nan_as_null, dtype=dtype, length=length
             )
@@ -3254,19 +3266,6 @@ def as_column(
             ):
                 dtype = _maybe_convert_to_default_type(arbitrary.dtype)
         return as_column(arbitrary, nan_as_null=nan_as_null, dtype=dtype)
-
-
-def _column_from_cuda_array_interface(
-    arbitrary, nan_as_null, dtype, data_ptr_exposed=no_default
-):
-    column = ColumnBase.from_cuda_array_interface(
-        arbitrary, data_ptr_exposed=data_ptr_exposed
-    )
-    if nan_as_null is not False:
-        column = column.nans_to_nulls()
-    if dtype is not None:
-        column = column.astype(dtype)
-    return column
 
 
 def serialize_columns(columns: list[ColumnBase]) -> tuple[list[dict], list]:

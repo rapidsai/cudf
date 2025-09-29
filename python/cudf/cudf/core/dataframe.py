@@ -3222,7 +3222,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             # label-like
             if is_scalar(col) or isinstance(col, tuple):
                 if col in self._column_names:
-                    data_to_add.append(self[col]._column.copy(deep=True))
+                    if drop and inplace:
+                        data_to_add.append(self[col]._column)
+                    else:
+                        data_to_add.append(self[col]._column.copy(deep=True))
                     names.append(col)
                     if drop:
                         to_drop.append(col)
