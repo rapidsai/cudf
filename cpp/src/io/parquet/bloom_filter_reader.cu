@@ -219,6 +219,12 @@ class bloom_filter_expression_converter : public equality_literals_collector {
                    "Second operand of binary operation with column reference must be a literal");
       v->accept(*this);
 
+      // Propagate the `_always_true` as expression to its unary operator parent
+      if (cudf::ast::detail::ast_operator_arity(op) == 1) {
+        _bloom_filter_expr.push(ast::operation{ast_operator::IDENTITY, _always_true});
+        return _always_true;
+      }
+
       if (op == ast_operator::EQUAL) {
         // Search the literal in this input column's equality literals list and add to the offset.
         auto const col_idx            = v->get_column_index();
@@ -234,11 +240,10 @@ class bloom_filter_expression_converter : public equality_literals_collector {
         auto const& value = _bloom_filter_expr.push(ast::column_reference{col_literal_offset});
         _bloom_filter_expr.push(ast::operation{ast_operator::IDENTITY, value});
       }
-      // For all other expressions, push and return the `_always_true` expression
+      // For all other expressions, push the `_always_true` expression
       else {
         _bloom_filter_expr.push(ast::operation{ast_operator::IDENTITY, _always_true});
-        // This is important as we need to propagate the `_always_true` expression to its parent
-        return _always_true;
+        return _bloom_filter_expr.back();
       }
     } else {
       auto new_operands = visit_operands(operands);
