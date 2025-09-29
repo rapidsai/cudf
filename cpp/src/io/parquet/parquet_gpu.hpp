@@ -776,6 +776,7 @@ void compute_page_sizes(cudf::detail::hostdevice_span<PageInfo> pages,
  * @param[in] min_rows crop all rows below min_row
  * @param[in] num_rows Maximum number of rows to read
  * @param[in] kernel_mask Mask of kernels to run
+ * @param[in] all_rows If true, all rows will be read, regardless of `min_row` and `num_rows`
  * @param[in] stream CUDA stream to use
  */
 void compute_page_string_sizes_pass1(cudf::detail::hostdevice_span<PageInfo> pages,
@@ -784,7 +785,7 @@ void compute_page_string_sizes_pass1(cudf::detail::hostdevice_span<PageInfo> pag
                                      size_t min_row,
                                      size_t num_rows,
                                      uint32_t kernel_mask,
-                                     bool all_values,
+                                     bool all_rows,
                                      int level_type_size,
                                      rmm::cuda_stream_view stream);
 

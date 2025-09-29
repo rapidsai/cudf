@@ -20,7 +20,7 @@ def test_select_missing_raises():
         [
             Column(
                 plc.column_factories.make_numeric_column(
-                    dtype.plc, 2, plc.MaskState.ALL_VALID
+                    dtype.plc_type, 2, plc.MaskState.ALL_VALID
                 ),
                 dtype=dtype,
                 name="a",
@@ -37,7 +37,7 @@ def test_replace_missing_raises():
         [
             Column(
                 plc.column_factories.make_numeric_column(
-                    dtype.plc, 2, plc.MaskState.ALL_VALID
+                    dtype.plc_type, 2, plc.MaskState.ALL_VALID
                 ),
                 dtype=dtype,
                 name="a",
@@ -64,7 +64,7 @@ def test_from_table_wrong_names():
 def test_unnamed_column_raise():
     dtype = DataType(pl.Int8())
     payload = plc.column_factories.make_numeric_column(
-        dtype.plc, 0, plc.MaskState.ALL_VALID
+        dtype.plc_type, 0, plc.MaskState.ALL_VALID
     )
 
     with pytest.raises(ValueError):
@@ -79,7 +79,7 @@ def test_sorted_like_raises_mismatching_names():
         [
             Column(
                 plc.column_factories.make_numeric_column(
-                    dtype.plc, 2, plc.MaskState.ALL_VALID
+                    dtype.plc_type, 2, plc.MaskState.ALL_VALID
                 ),
                 dtype=dtype,
                 name="a",
@@ -94,7 +94,9 @@ def test_sorted_like_raises_mismatching_names():
 def test_shallow_copy():
     dtype = DataType(pl.Int8())
     column = Column(
-        plc.column_factories.make_numeric_column(dtype.plc, 2, plc.MaskState.ALL_VALID),
+        plc.column_factories.make_numeric_column(
+            dtype.plc_type, 2, plc.MaskState.ALL_VALID
+        ),
         dtype=dtype,
         name="a",
     )

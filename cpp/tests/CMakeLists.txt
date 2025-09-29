@@ -415,7 +415,7 @@ ConfigureTest(
   copying/utility_tests.cpp
   copying/reverse_tests.cpp
   GPUS 1
-  PERCENT 70
+  PERCENT 100
 )
 
 # ##################################################################################################

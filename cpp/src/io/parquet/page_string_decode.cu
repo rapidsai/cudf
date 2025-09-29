@@ -587,11 +587,16 @@ __device__ thrust::pair<size_t, size_t> totalDeltaByteArraySize(uint8_t const* d
  * @param chunks All chunks to be decoded
  * @param min_rows crop all rows below min_row
  * @param num_rows Maximum number of rows to read
+ * @param all_rows If true, all rows will be read, regardless of `min_row` and `num_rows`
  * @tparam level_t Type used to store decoded repetition and definition levels
  */
 template <typename level_t>
-CUDF_KERNEL void __launch_bounds__(preprocess_block_size) compute_string_page_bounds_kernel(
-  PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
+CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
+  compute_string_page_bounds_kernel(PageInfo* pages,
+                                    device_span<ColumnChunkDesc const> chunks,
+                                    size_t min_row,
+                                    size_t num_rows,
+                                    bool all_rows)
 {
   __shared__ __align__(16) page_state_s state_g;
 
@@ -610,6 +615,11 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size) compute_string_page_bo
     pp->str_bytes = 0;
     pp->start_val = 0;
     pp->end_val   = 0;
+  }
+
+  if (all_rows) {
+    min_row  = chunks[pp->chunk_idx].start_row + pp->chunk_row;
+    num_rows = pp->num_rows;
   }
 
   // whether or not we have repetition levels (lists)
@@ -1007,7 +1017,7 @@ void compute_page_string_sizes_pass1(cudf::detail::hostdevice_span<PageInfo> pag
                                      size_t min_row,
                                      size_t num_rows,
                                      uint32_t kernel_mask,
-                                     bool all_values,
+                                     bool all_rows,
                                      int level_type_size,
                                      rmm::cuda_stream_view stream)
 {
@@ -1015,11 +1025,11 @@ void compute_page_string_sizes_pass1(cudf::detail::hostdevice_span<PageInfo> pag
   dim3 const dim_grid(pages.size(), 1);  // 1 threadblock per page
 
   if (level_type_size == 1) {
-    compute_string_page_bounds_kernel<uint8_t>
-      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
+    compute_string_page_bounds_kernel<uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
+      pages.device_ptr(), chunks, min_row, num_rows, all_rows);
   } else {
-    compute_string_page_bounds_kernel<uint16_t>
-      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
+    compute_string_page_bounds_kernel<uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
+      pages.device_ptr(), chunks, min_row, num_rows, all_rows);
   }
 
   // kernel mask may contain other kernels we don't need to count
