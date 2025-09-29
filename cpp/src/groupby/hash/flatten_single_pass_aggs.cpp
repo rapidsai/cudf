@@ -25,6 +25,7 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <algorithm>
 #include <memory>
 #include <tuple>
 #include <unordered_set>
@@ -156,11 +157,11 @@ flatten_single_pass_aggs(host_span<aggregation_request const> requests,
 std::vector<aggregation::Kind> get_simple_aggregations(groupby_aggregation const& agg,
                                                        data_type values_type)
 {
-  std::vector<aggregation::Kind> agg_kinds;
   groupby_simple_aggregations_collector collector;
-  for (auto& agg_s : agg.get_simple_aggregations(values_type, collector)) {
-    agg_kinds.push_back(agg_s->kind);
-  }
+  auto aggs = agg.get_simple_aggregations(values_type, collector);
+  std::vector<aggregation::Kind> agg_kinds;
+  std::transform(
+    aggs.begin(), aggs.end(), std::back_inserter(agg_kinds), [](auto const& a) { return a->kind; });
   return agg_kinds;
 }
 
