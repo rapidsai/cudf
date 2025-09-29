@@ -123,7 +123,7 @@ std::reference_wrapper<ast::expression const> stats_expression_converter::visit(
   auto const op       = expr.get_operator();
 
   if (auto* v = dynamic_cast<ast::column_reference const*>(&operands[0].get())) {
-    // First operand should be column reference, second (if binary operation)should be literal.
+    // First operand should be column reference, second (if binary operation) should be literal.
     CUDF_EXPECTS(cudf::ast::detail::ast_operator_arity(op) == 1 or
                    cudf::ast::detail::ast_operator_arity(op) == 2,
                  "Only unary and binary operations are supported on column reference");
