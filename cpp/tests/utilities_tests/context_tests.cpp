@@ -46,6 +46,8 @@ TEST_F(ContextTest, InitializeAfterDeinitialize)
   EXPECT_NO_THROW(cudf::initialize(cudf::init_flags::INIT_JIT_CACHE));
 }
 
+TEST_F(ContextTest, DeinitializeWithoutInitialize) { EXPECT_NO_THROW(cudf::deinitialize()); }
+
 TEST_F(ContextTest, MultipleDeinitializeCalls)
 {
   cudf::initialize(cudf::init_flags::ALL);

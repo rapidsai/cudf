@@ -51,7 +51,7 @@ void context::initialize_components(init_flags flags)
   // Only initialize components that haven't been initialized yet
   auto const new_flags = flags & ~_initialized_flags;
 
-  if (has_flag(new_flags, init_flags::INIT_JIT_CACHE) && _program_cache == nullptr) {
+  if (has_flag(new_flags, init_flags::INIT_JIT_CACHE)) {
     _program_cache = std::make_unique<jit::program_cache>();
   }
 
